@@ -1,0 +1,17 @@
+# Child repositories (managed independently)
+isnad-graph/
+noorinalabs_landing_page/
+
+# Claude Code project data
+.claude/projects/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
