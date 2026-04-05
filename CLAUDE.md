@@ -36,27 +36,18 @@ This repo (`noorinalabs-main`) is a **parent-level git repo that `.gitignore`s c
 ### Team Composition
 | Role | Level | Name | File |
 |------|-------|------|------|
-| Manager | Senior VP (Executive) | Fatima Okonkwo | `roster/manager_fatima.md` |
-| System Architect | Partner | Renaud Tremblay | `roster/architect_renaud.md` |
-| DevOps Architect | Staff | Sunita Krishnamurthy | `roster/devops_architect_sunita.md` |
-| DevOps Engineer | Senior | Tomasz Wójcik | `roster/devops_engineer_tomasz.md` |
-| Tech Lead | Staff | Dmitri Volkov | `roster/tech_lead_dmitri.md` |
-| Engineer | Principal | Kwame Asante | `roster/engineer_kwame.md` |
-| Engineer | Senior | Amara Diallo | `roster/engineer_amara.md` |
-| Engineer | Senior | Hiro Tanaka | `roster/engineer_hiro.md` |
-| Engineer | Senior | Carolina Méndez-Ríos | `roster/engineer_carolina.md` |
-| Security Engineer | Senior | Yara Hadid | `roster/security_engineer_yara.md` |
-| QA Engineer | Senior | Priya Nair | `roster/qa_engineer_priya.md` |
-| Data Engineer (Lead) | Staff | Elena Petrova | `roster/data_lead_elena.md` |
-| Data Engineer | Senior | Rashid Osei-Mensah | `roster/data_engineer_rashid.md` |
-| Data Scientist | Principal | Mei-Lin Chang | `roster/data_scientist_mei.md` |
-| UX Designer | Principal | Sable Nakamura-Whitfield | `roster/ux_designer_sable.md` |
+| Infrastructure Manager | Senior VP (Executive) | Bereket Tadesse | `roster/manager_bereket.md` |
+| Platform Architect | Staff | Weronika Zielinska | `roster/platform_architect_weronika.md` |
+| SRE Engineer | Senior | Lucas Ferreira | `roster/sre_engineer_lucas.md` |
+| SRE Engineer | Senior | Aisha Idrissi | `roster/sre_engineer_aisha.md` |
+| Security Engineer | Senior | Nino Kavtaradze | `roster/security_engineer_nino.md` |
+| Observability Engineer | Senior | Nurul Hakim | `roster/observability_engineer_nurul.md` |
 
 ### Key Rules
 - **Commit identity:** Each team member commits using per-commit `-c` flags with their name and `parametrization+{FirstName}.{LastName}@gmail.com` email — **never** set global/repo git config. See `.claude/team/charter.md` § Commit Identity for the full table.
 - **Worktrees** are the preferred isolation method for all code-writing agents
 - Manager spawns team members, creates stories/AC from PRD, and owns timelines
-- Manager, System Architect, and DevOps Engineer coordinate to prevent cross-team blocking
+- Manager, Platform Architect, and SRE Engineers coordinate to prevent cross-team blocking
 - Feedback flows up and down; severe feedback triggers fire-and-replace
 - If the Manager receives significant negative feedback from the user, the Manager is replaced
 - Team evolves toward steady state of minimal negative feedback
