@@ -465,6 +465,7 @@ When starting any work session, the orchestrating Claude instance should:
 | Work in noorinalabs-landing-page | `noorinalabs-landing-page` |
 | Work in noorinalabs-deploy | `noorinalabs-deploy` |
 | Work in noorinalabs-design-system | `noorinalabs-design-system` |
+| Work in noorinalabs-isnad-graph-ingestion | `noorinalabs-isnad-graph-ingestion` |
 | Cross-repo coordination | `noorinalabs` |
 
 > **Agent tool limitation:** Spawned agents (including the Program Director and team members) do NOT have access to the Agent tool. They cannot spawn other agents. All agent spawning must be done by the orchestrating Claude instance.
@@ -487,5 +488,6 @@ The orchestrator is the **single point that can create agents**. The Program Dir
 | `noorinalabs-isnad-graph` | `isnad-graph-` |
 | `noorinalabs-design-system` | `design-system-` |
 | `noorinalabs-deploy` | `deploy-` |
+| `noorinalabs-isnad-graph-ingestion` | `ingestion-` |
 | `noorinalabs-landing-page` | `landing-page-` |
 | `noorinalabs-main` (cross-repo) | `main-` |

@@ -13,6 +13,7 @@ This file provides guidance to Claude Code when working from the parent `noorina
 | `noorinalabs-isnad-graph` | Computational hadith analysis platform (FastAPI, React, Neo4j) | `noorinalabs-isnad-graph/` |
 | `noorinalabs-deploy` | Deployment orchestration (Terraform, Docker Compose, workflows) | `noorinalabs-deploy/` |
 | `noorinalabs-design-system` | Shared design system (tokens, components, icons, brand assets) | `noorinalabs-design-system/` |
+| `noorinalabs-isnad-graph-ingestion` | Data ingestion pipeline for isnad-graph (Python, PyArrow, Neo4j) | `noorinalabs-isnad-graph-ingestion/` |
 | `noorinalabs-landing-page` | Organization landing page | `noorinalabs-landing-page/` |
 
 Each child repo has its own `CLAUDE.md` with repo-specific build commands, architecture, and conventions. Refer to those for repo-specific work.
