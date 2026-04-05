@@ -612,9 +612,23 @@ When starting any work session, the orchestrating Claude instance should:
 | Work in noorinalabs-isnad-graph | `noorinalabs-isnad-graph` |
 | Work in noorinalabs-landing-page | `noorinalabs-landing-page` |
 | Work in noorinalabs-deploy | `noorinalabs-deploy` |
+| Work in noorinalabs-design-system | `noorinalabs-design-system` |
 | Cross-repo coordination | `noorinalabs` |
 
-> **Agent tool limitation:** Spawned agents (including the Manager, leads, and engineers) do NOT have access to the Agent tool. They cannot spawn other agents. All agent spawning must be done by the orchestrating Claude instance. Spawned agents should use SendMessage to request new agents be created, providing the full context needed for the new agent's prompt.
+> **Agent tool limitation:** Spawned agents (including the Manager, leads, and engineers) do NOT have access to the Agent tool. They cannot spawn other agents. All agent spawning must be done by the orchestrating Claude instance.
+
+### Hub-and-Spoke Orchestration Model
+
+The orchestrator is the **single point that can create agents**. Managers coordinate and plan; the orchestrator executes the spawning. This is a hub-and-spoke model, not recursive delegation.
+
+**Workflow:**
+
+1. **Orchestrator spawns one Manager per repo** — each Manager investigates, plans, creates GitHub issues, and posts to PRs.
+2. **Managers do NOT do implementation work inline.** When a Manager needs engineers (for code, reviews, or fixes), they send a **spawn request** back to the orchestrator via SendMessage. The spawn request must include full context: branch name, file paths, acceptance criteria, reviewer pairings, git identity, and any dependencies.
+3. **Orchestrator spawns engineers** on behalf of each Manager, routing results back via SendMessage.
+4. **Engineers report completion** to the orchestrator, who relays to the Manager or acts on the results.
+
+**Anti-pattern:** Giving a Manager a fat prompt that tries to do investigation + coding + PRs + reviews all inline. This bypasses the team structure and produces work without proper review gates.
 
 > **Completion reporting is mandatory:** Every spawned agent MUST send a final status message to the team lead via SendMessage before going idle. This message must include: (1) what was accomplished, (2) any issues or blockers, (3) what the team lead should do next. An agent that completes work but goes silent without reporting forces the orchestrator to reconstruct state manually, which wastes time and risks missed context.
 
