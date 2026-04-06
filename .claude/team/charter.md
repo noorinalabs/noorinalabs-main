@@ -504,7 +504,22 @@ When starting any work session, the orchestrating Claude instance should:
 1. **Shutting down implementation agents** immediately after their PR is created and confirmed. Do not leave agents idle waiting for potential follow-up work.
 2. **Shutting down manager agents** once their wave is fully merged and retro is complete.
 3. **Monitoring team size** — if the team config shows more than 10 active members, something is wrong. Shut down completed agents before spawning new ones.
-4. **End-of-session cleanup** — before ending a session, shut down all agents and run `TeamDelete` to clean up.
+4. **End-of-session cleanup** — before ending a session, run the full team teardown procedure below.
+
+#### Team Teardown Procedure
+
+`TeamDelete` does NOT terminate running agents — it only removes the config. Always follow this procedure:
+
+1. **Read the team config** to get the full member list:
+   ```bash
+   cat ~/.claude/teams/{team-name}/config.json | python3 -c "import json,sys; [print(m['name']) for m in json.load(sys.stdin).get('members',[]) if m['name']!='team-lead']"
+   ```
+2. **Send shutdown requests to every agent** via `SendMessage` with `{"type": "shutdown_request"}`. Send all in parallel (one message per agent — structured messages cannot be broadcast).
+3. **Wait for confirmations** — agents will acknowledge and terminate. Allow ~30 seconds.
+4. **Call `TeamDelete`** — this cleans up the config and directories. If it fails due to active members, edit the config to remove stale entries, then retry.
+5. **Verify cleanup** — confirm `~/.claude/teams/{team-name}/` no longer exists.
+
+**Never skip steps 1-3.** Calling `TeamDelete` without shutting down agents leaves orphan processes that consume resources and confuse the UI.
 
 Failure to manage agent lifecycle leads to resource exhaustion and duplicate agent confusion. This is a **moderate feedback event** for the orchestrator.
 
