@@ -16,14 +16,19 @@ import sys
 
 
 def is_merge_command(command: str) -> bool:
-    """Check if the command is a gh pr merge invocation (not embedded in a string)."""
-    # Strip leading whitespace and optional env variable assignments
-    # e.g. "  FOO=bar gh pr merge 123"
-    stripped = command.lstrip()
-    # Skip past any leading env variable assignments (VAR=value ...)
-    while re.match(r"[A-Za-z_][A-Za-z0-9_]*=\S*\s+", stripped):
-        stripped = re.sub(r"^[A-Za-z_][A-Za-z0-9_]*=\S*\s+", "", stripped)
-    return bool(re.match(r"gh\s+pr\s+merge\b", stripped))
+    """Check if the command is a gh pr merge invocation, including chained commands.
+
+    Handles direct invocations and commands chained with &&, ||, ;, or |.
+    """
+    # Split on shell chaining operators to check each sub-command
+    for segment in re.split(r"\s*(?:&&|\|\||\||;)\s*", command):
+        stripped = segment.lstrip()
+        # Skip past any leading env variable assignments (VAR=value ...)
+        while re.match(r"[A-Za-z_][A-Za-z0-9_]*=\S*\s+", stripped):
+            stripped = re.sub(r"^[A-Za-z_][A-Za-z0-9_]*=\S*\s+", "", stripped)
+        if re.match(r"gh\s+pr\s+merge\b", stripped):
+            return True
+    return False
 
 
 def extract_pr_number(command: str) -> str | None:
@@ -40,53 +45,31 @@ def extract_pr_number(command: str) -> str | None:
     return None
 
 
-def get_pr_reviews(pr_number: str | None) -> tuple[str | None, list[dict]]:
-    """Fetch PR author and reviews. Returns (author, reviews)."""
+def get_pr_data(pr_number: str | None) -> dict | None:
+    """Fetch all needed PR data in a single gh pr view call.
+
+    Returns dict with keys: author (login str), number, reviews, headRefName.
+    Returns None if the fetch fails.
+    """
     try:
-        # Get PR author
-        pr_cmd = ["gh", "pr", "view"]
+        cmd = ["gh", "pr", "view"]
         if pr_number:
-            pr_cmd.append(pr_number)
-        pr_cmd.extend(["--json", "author,number"])
-        pr_result = subprocess.run(
-            pr_cmd, capture_output=True, text=True, timeout=15,
-        )
-        if pr_result.returncode != 0:
-            return None, []
-
-        pr_data = json.loads(pr_result.stdout)
-        author = pr_data.get("author", {}).get("login", "")
-        number = pr_data.get("number", pr_number)
-
-        # Get reviews
-        review_cmd = ["gh", "pr", "view", str(number), "--json", "reviews"]
-        review_result = subprocess.run(
-            review_cmd, capture_output=True, text=True, timeout=15,
-        )
-        if review_result.returncode != 0:
-            return author, []
-
-        review_data = json.loads(review_result.stdout)
-        return author, review_data.get("reviews", [])
-
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
-        return None, []
-
-
-def get_pr_head_ref(pr_number: str | None) -> str | None:
-    """Fetch the PR's head ref (branch name)."""
-    try:
-        pr_cmd = ["gh", "pr", "view"]
-        if pr_number:
-            pr_cmd.append(pr_number)
-        pr_cmd.extend(["--json", "headRefName"])
+            cmd.append(pr_number)
+        cmd.extend(["--json", "author,number,reviews,headRefName"])
         result = subprocess.run(
-            pr_cmd, capture_output=True, text=True, timeout=15,
+            cmd, capture_output=True, text=True, timeout=15,
         )
         if result.returncode != 0:
             return None
+
         data = json.loads(result.stdout)
-        return data.get("headRefName")
+        return {
+            "author": data.get("author", {}).get("login", ""),
+            "number": data.get("number", pr_number),
+            "reviews": data.get("reviews", []),
+            "headRefName": data.get("headRefName", ""),
+        }
+
     except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
         return None
 
@@ -99,22 +82,9 @@ def extract_branch_author_lastname(head_ref: str) -> str | None:
     return None
 
 
-def check_comment_reviews(pr_number: str | None, branch_author_lastname: str) -> bool:
+def check_comment_reviews(pr_number: str | int, branch_author_lastname: str) -> bool:
     """Check PR comments for charter-format review comments from a different author."""
     try:
-        # We need the repo owner/name and PR number
-        pr_cmd = ["gh", "pr", "view"]
-        if pr_number:
-            pr_cmd.append(pr_number)
-        pr_cmd.extend(["--json", "number"])
-        result = subprocess.run(
-            pr_cmd, capture_output=True, text=True, timeout=15,
-        )
-        if result.returncode != 0:
-            return False
-        data = json.loads(result.stdout)
-        number = data.get("number", pr_number)
-
         # Get repo info
         repo_result = subprocess.run(
             ["gh", "repo", "view", "--json", "owner,name"],
@@ -126,9 +96,9 @@ def check_comment_reviews(pr_number: str | None, branch_author_lastname: str) ->
         owner = repo_data.get("owner", {}).get("login", "")
         repo_name = repo_data.get("name", "")
 
-        # Fetch PR comments via the issues API
+        # Fetch PR comments via the issues API with pagination
         comments_result = subprocess.run(
-            ["gh", "api", f"repos/{owner}/{repo_name}/issues/{number}/comments"],
+            ["gh", "api", f"repos/{owner}/{repo_name}/issues/{pr_number}/comments?per_page=100"],
             capture_output=True, text=True, timeout=15,
         )
         if comments_result.returncode != 0:
@@ -182,9 +152,9 @@ def main() -> None:
         sys.exit(0)
 
     pr_number = extract_pr_number(command)
-    author, reviews = get_pr_reviews(pr_number)
+    pr_data = get_pr_data(pr_number)
 
-    if author is None:
+    if pr_data is None:
         # Could not fetch PR info — allow with warning
         result = {
             "decision": "allow",
@@ -196,6 +166,11 @@ def main() -> None:
         print(json.dumps(result))
         sys.exit(0)
 
+    author = pr_data["author"]
+    reviews = pr_data["reviews"]
+    head_ref = pr_data["headRefName"]
+    number = pr_data["number"]
+
     # Check for at least one formal review from a non-author
     has_peer_review = any(
         review.get("author", {}).get("login", "") != author
@@ -206,11 +181,10 @@ def main() -> None:
         sys.exit(0)
 
     # No formal review found — check comment-based reviews
-    head_ref = get_pr_head_ref(pr_number)
     if head_ref:
         branch_author_lastname = extract_branch_author_lastname(head_ref)
         if branch_author_lastname:
-            if check_comment_reviews(pr_number, branch_author_lastname):
+            if check_comment_reviews(number, branch_author_lastname):
                 sys.exit(0)
 
     pr_display = f"#{pr_number}" if pr_number else "(current branch)"

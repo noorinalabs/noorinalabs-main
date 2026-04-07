@@ -11,26 +11,100 @@ Exit codes:
 
 import ipaddress
 import json
+import os
 import re
 import socket
 import sys
+import time
+import urllib.request
 
-# Known Cloudflare IP ranges
-CLOUDFLARE_RANGES = [
-    ipaddress.ip_network("104.16.0.0/12"),
-    ipaddress.ip_network("172.64.0.0/13"),
-    ipaddress.ip_network("103.21.244.0/22"),
-    ipaddress.ip_network("103.22.200.0/22"),
-    ipaddress.ip_network("103.31.4.0/22"),
-    ipaddress.ip_network("141.101.64.0/18"),
-    ipaddress.ip_network("108.162.192.0/18"),
-    ipaddress.ip_network("190.93.240.0/20"),
-    ipaddress.ip_network("188.114.96.0/20"),
-    ipaddress.ip_network("197.234.240.0/22"),
-    ipaddress.ip_network("198.41.128.0/17"),
-    ipaddress.ip_network("162.158.0.0/15"),
-    ipaddress.ip_network("131.0.72.0/22"),
+# Cloudflare publishes their IP ranges at these URLs
+_CF_IPV4_URL = "https://www.cloudflare.com/ips-v4"
+_CF_IPV6_URL = "https://www.cloudflare.com/ips-v6"
+
+# Local cache file (next to this script) — refreshed at most once per day
+_CACHE_DIR = os.path.dirname(os.path.abspath(__file__))
+_CACHE_FILE = os.path.join(_CACHE_DIR, ".cloudflare_ip_cache.json")
+_CACHE_MAX_AGE_SECONDS = 86400  # 24 hours
+
+# Fallback static ranges — used when fetch fails and no cache exists
+_FALLBACK_RANGES = [
+    "104.16.0.0/12",
+    "172.64.0.0/13",
+    "103.21.244.0/22",
+    "103.22.200.0/22",
+    "103.31.4.0/22",
+    "141.101.64.0/18",
+    "108.162.192.0/18",
+    "190.93.240.0/20",
+    "188.114.96.0/20",
+    "197.234.240.0/22",
+    "198.41.128.0/17",
+    "162.158.0.0/15",
+    "131.0.72.0/22",
 ]
+
+
+def _fetch_cloudflare_ranges() -> list[str]:
+    """Fetch current Cloudflare IP ranges from their published endpoints."""
+    ranges: list[str] = []
+    for url in (_CF_IPV4_URL, _CF_IPV6_URL):
+        try:
+            with urllib.request.urlopen(url, timeout=3) as resp:
+                text = resp.read().decode("utf-8")
+                for line in text.strip().splitlines():
+                    line = line.strip()
+                    if line:
+                        # Validate it parses as a network
+                        ipaddress.ip_network(line, strict=False)
+                        ranges.append(line)
+        except Exception:
+            continue
+    return ranges
+
+
+def _read_cache() -> list[str] | None:
+    """Read cached ranges if the cache exists and is fresh."""
+    try:
+        if not os.path.exists(_CACHE_FILE):
+            return None
+        age = time.time() - os.path.getmtime(_CACHE_FILE)
+        if age > _CACHE_MAX_AGE_SECONDS:
+            return None
+        with open(_CACHE_FILE) as f:
+            data = json.load(f)
+        return data.get("ranges")
+    except Exception:
+        return None
+
+
+def _write_cache(ranges: list[str]) -> None:
+    """Write ranges to the local cache file."""
+    try:
+        with open(_CACHE_FILE, "w") as f:
+            json.dump({"ranges": ranges}, f)
+    except Exception:
+        pass  # Non-fatal — cache is best-effort
+
+
+def _load_cloudflare_ranges() -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    """Load Cloudflare IP ranges: cache → fetch → fallback."""
+    # Try cache first
+    cached = _read_cache()
+    if cached:
+        return [ipaddress.ip_network(r, strict=False) for r in cached]
+
+    # Try fetching
+    fetched = _fetch_cloudflare_ranges()
+    if fetched:
+        _write_cache(fetched)
+        return [ipaddress.ip_network(r, strict=False) for r in fetched]
+
+    # Fall back to static list
+    return [ipaddress.ip_network(r, strict=False) for r in _FALLBACK_RANGES]
+
+
+CLOUDFLARE_RANGES = _load_cloudflare_ranges()
 
 
 def is_cloudflare_ip(ip_str: str) -> bool:
