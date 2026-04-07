@@ -1,5 +1,5 @@
 ---
-name: wave-end
+name: wave-wrapup
 description: Finalize a wave (review, merge, cleanup)
 ---
 
