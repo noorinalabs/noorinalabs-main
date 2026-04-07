@@ -19,6 +19,21 @@ When all work on a feature branch is complete (code committed, review done, must
 5. **Push final changes** from the review fixes.
 6. **The team merges** the PR into the deployments branch themselves — no user approval needed for PRs into deployments branches.
 
+## Review Finding Disposition
+
+Every finding from a PR review must be dispositioned before merge. No finding may be silently dropped.
+
+| Finding Type | Action Required | Blocks Merge? |
+|-------------|----------------|---------------|
+| **Must-fix** | PR originator fixes on the branch before merge | Yes |
+| **Tech-debt** | Reviewer or originator creates a GitHub Issue for each item before merge | No (but issues must exist) |
+| **Quick-fix tech-debt** | PR originator fixes immediately if minimal effort | No |
+
+**Enforcement:** The charter enforcer (Aino) verifies during PR review that:
+1. All must-fix items are resolved before approving merge
+2. All tech-debt items have corresponding GitHub Issues created
+3. Issues are labeled `tech-debt` and assigned to the appropriate team member
+
 ## Post-Merge Integration Verification
 
 **After every PR merge into a deployments branch**, the manager must verify the integrated result before merging the next PR:
