@@ -3,6 +3,34 @@
   "current_wave": "wave-c",
   "wave_started": "2026-04-07T21:45:00Z",
   "deployments_branch": "deployments/wave-c",
+  "phase_tracking": {
+    "phase_1": {
+      "name": "Foundation PRs",
+      "status": "in_progress",
+      "merged": ["IG #736", "LP #48", "ingest #5"],
+      "failing_ci": ["IG #733 (e2e — useAuth.ts type error)", "IG #734 (e2e — rebase + unused var)", "IG #735 (lint — ruff format dashboard.py)"],
+      "investigating": ["deploy #22 (plan fail — TF backend config)"],
+      "closed_issues": ["IG #708", "IG #709", "LP #44", "LP #45", "LP #47", "ingest #1"]
+    },
+    "phase_2": {
+      "name": "Auth Hardening",
+      "status": "blocked",
+      "blocked_by": ["IG #733 merge"],
+      "notes": "Cannot proceed until useAuth.ts type error is resolved and PR merged"
+    },
+    "phase_3": {
+      "name": "Org Tech-Debt",
+      "status": "ready",
+      "blocked_by": [],
+      "notes": "Aino assessing scope now"
+    },
+    "phase_4": {
+      "name": "Revenue + Polish",
+      "status": "blocked",
+      "blocked_by": ["Phase 2 completion", "deploy #22 merge"],
+      "notes": "Depends on auth hardening and TF deployment fix"
+    }
+  },
   "design-system": {
     "latest_version": "0.0.1",
     "status": "published",
@@ -17,16 +45,25 @@
     "deployments_branch": null,
     "wave_status": "in_progress",
     "blocked_by": [],
-    "open_prs": [733, 734, 735, 736],
-    "last_updated": "2026-04-07T21:45:00Z"
+    "open_prs": [733, 734, 735],
+    "merged_prs": [736],
+    "ci_status": {
+      "733": "e2e_fail — type error in useAuth.ts, fix in progress",
+      "734": "e2e_fail — needs rebase + unused var cleanup, fix in progress",
+      "735": "lint_fail — ruff format on dashboard.py, fix in progress"
+    },
+    "closed_issues": [708, 709],
+    "last_updated": "2026-04-07T23:00:00Z"
   },
   "landing-page": {
     "status": "active",
     "deployments_branch": null,
-    "wave_status": "in_progress",
+    "wave_status": "phase_1_complete",
     "blocked_by": [],
     "deploy_status": "live",
-    "last_updated": "2026-04-07T21:45:00Z"
+    "merged_prs": [48],
+    "closed_issues": [44, 45, 47],
+    "last_updated": "2026-04-07T23:00:00Z"
   },
   "deploy": {
     "status": "active",
@@ -34,14 +71,19 @@
     "wave_status": "in_progress",
     "blocked_by": [],
     "open_prs": [22],
-    "last_updated": "2026-04-07T21:45:00Z"
+    "ci_status": {
+      "22": "plan_fail — TF backend config, under investigation"
+    },
+    "last_updated": "2026-04-07T23:00:00Z"
   },
   "isnad-graph-ingestion": {
     "status": "active",
     "deployments_branch": null,
-    "wave_status": "merged_to_main",
+    "wave_status": "phase_1_complete",
     "blocked_by": [],
-    "last_updated": "2026-04-05T00:00:00Z"
+    "merged_prs": [5],
+    "closed_issues": [1],
+    "last_updated": "2026-04-07T23:00:00Z"
   },
   "isnad-ingest-platform": {
     "status": "active",

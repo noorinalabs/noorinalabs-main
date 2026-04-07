@@ -100,6 +100,20 @@ The orchestrator is the **single point that can create agents**. The Program Dir
 3. **Orchestrator spawns team members** on behalf of the Program Director, routing results back via SendMessage.
 4. **Team members report completion** to the orchestrator, who relays to the Program Director or acts on the results.
 
+### Spawn Request Delegation
+
+**When any team member requests that another agent be spawned, the orchestrator MUST honor the request immediately.** Do not redirect the requesting agent to "do it yourself" — spawned agents do not have access to the Agent tool.
+
+**Protocol:**
+1. The requesting agent names the person to spawn and provides the task context
+2. The orchestrator reads the named person's roster card to load identity and personality
+3. The orchestrator spawns the agent with the context provided by the requester
+4. The orchestrator confirms the spawn back to the requesting agent
+
+**Rationale:** Sub-agents cannot spawn other agents (Agent tool limitation). Telling them to "do it yourself" wastes round-trips and stalls execution. This was identified in Wave C when Santiago requested Nadia Boukhari 3 times before the orchestrator acted.
+
+Failing to honor a spawn request within the same response is a **minor feedback event** for the orchestrator.
+
 ### No Direct-to-Engineer Spawns
 
 **The orchestrator MUST NOT spawn engineers directly without first spawning the Program Director.** Even for "simple" or "mechanical" fixes, the team hierarchy must be followed:
