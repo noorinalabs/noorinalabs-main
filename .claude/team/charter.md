@@ -96,6 +96,13 @@ All cross-repo work is tracked on the **[Cross-Repo Wave Plan](https://github.co
 
 ### Board Maintenance Rules
 
+**Pre-wave sequencing (before kickoff):**
+- Review every open item on the board across all waves
+- Sequence to maximize developer velocity: identify parallelism, eliminate idle time, resolve dependency chains
+- Move items between waves if dependencies have shifted
+- Prioritize: live bugs > tech debt > process/hooks > auth/security > revenue features > infrastructure > polish
+- Group items by repo to minimize context-switching per agent
+
 **Wave kickoff:**
 - Verify all blockers from previous wave are resolved (Status = Done)
 - Confirm all new wave issues are on the board with correct Wave tag
