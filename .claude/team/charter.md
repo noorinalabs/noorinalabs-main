@@ -96,6 +96,10 @@ All cross-repo work is tracked on the **[Cross-Repo Wave Plan](https://github.co
 
 ### Board Maintenance Rules
 
+**Mandatory entry/exit points:**
+- **`/wave-kickoff`** is the required entry point for all wave work. It spawns Aino (charter enforcer), sets up wave context, and generates the spawn plan. Direct agent spawns without wave context will trigger a warning hook.
+- **`/wave-wrapup`** is the required exit. It runs the retro, trust update, hook/skill audit, board cleanup, and shuts down agents. No agents are shut down before wrapup completes.
+
 **Pre-wave sequencing (before kickoff):**
 - Review every open item on the board across all waves
 - Sequence to maximize developer velocity: identify parallelism, eliminate idle time, resolve dependency chains
