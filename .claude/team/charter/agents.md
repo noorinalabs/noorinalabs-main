@@ -64,7 +64,7 @@ Agents working in worktrees MUST manage lockfiles to prevent premature pruning a
 3. **Prune at wave end** — `git worktree prune` runs during `/wave-wrapup` AFTER all agents are shut down and unlocked. Never prune while agents are running.
 4. **Stale lock detection** — during `/wave-wrapup`, Aino checks for locked worktrees whose agents are no longer running. Stale locks are removed with `git worktree unlock` and logged as a warning.
 
-5. **Timeout cleanup** — worktree locks include a timestamp in their reason string. During `/wave-wrapup` or session start, any lock older than **4 hours** is considered stale and automatically removed. This handles agents that crash without unlocking.
+5. **Timeout cleanup** — worktree locks include a timestamp in their reason string. During `/wave-wrapup` or session start, any lock older than **30 minutes** is considered stale and automatically removed. This handles agents that crash without unlocking.
 
 Failing to unlock a worktree on shutdown blocks future agents from using that branch. This is a **minor feedback event**.
 
