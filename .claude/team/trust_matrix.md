@@ -17,7 +17,7 @@ All team members maintain a trust score for every other team member they interac
 - **Default:** Every pair starts at **3**.
 - **Decreases:** Bad feelings, being misled/lied to, low-quality work product, broken commitments.
 - **Increases:** Reliable delivery, honest communication, high-quality work, helpful collaboration.
-- **Updates:** This file is updated on the `CEO/0000-Trust_Matrix` branch whenever a trust-relevant interaction occurs. Changes should include a brief log entry explaining the adjustment.
+- **Updates:** This file is updated on `main` whenever a trust-relevant interaction occurs (typically during wave retros). Changes should include a brief log entry explaining the adjustment.
 - **Scope:** Trust is directional — A's trust in B may differ from B's trust in A.
 
 ## Matrix

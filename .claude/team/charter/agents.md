@@ -49,7 +49,7 @@ When starting any work session, the orchestrating Claude instance should:
 3. **The orchestrator adds** their own observations (deploy iterations, stalled agents, process gaps).
 4. **Write findings** to `.claude/team/feedback_log.md` in the relevant repo(s).
 5. **Actionable items** become charter updates, process changes, or new issues.
-6. **Trust matrix update** — update scores on `CEO/0000-Trust_Matrix` branch, add done-well/needs-improvement notes, update roster cards with performance history.
+6. **Trust matrix update** — update scores in `.claude/team/trust_matrix.md` on `main`, add done-well/needs-improvement notes, update roster cards with performance history. All changes go to `main` — no separate branches for trust data.
 7. **Hook/skill audit** — for every failure or friction point from the wave, ask: "Could a hook have prevented this? Could a skill have automated this?" Present candidates to the user. Prefer hooks over skills, skills over LLM generation. Create issues for approved implementations.
 8. **Only then** shut down agents.
 
@@ -63,6 +63,8 @@ Agents working in worktrees MUST manage lockfiles to prevent premature pruning a
 2. **Unlock on shutdown** — before an agent terminates (including shutdown_request handling), unlock: `git worktree unlock <path>`.
 3. **Prune at wave end** — `git worktree prune` runs during `/wave-wrapup` AFTER all agents are shut down and unlocked. Never prune while agents are running.
 4. **Stale lock detection** — during `/wave-wrapup`, Aino checks for locked worktrees whose agents are no longer running. Stale locks are removed with `git worktree unlock` and logged as a warning.
+
+5. **Timeout cleanup** — worktree locks include a timestamp in their reason string. During `/wave-wrapup` or session start, any lock older than **4 hours** is considered stale and automatically removed. This handles agents that crash without unlocking.
 
 Failing to unlock a worktree on shutdown blocks future agents from using that branch. This is a **minor feedback event**.
 

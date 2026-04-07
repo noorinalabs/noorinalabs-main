@@ -84,7 +84,7 @@ Each child repository has its own team with its own manager. The Program Directo
 
 ### Trust Identity Matrix
 
-Each team member maintains a directional trust score (1-5) for every other team member they interact with. Default is 3 (neutral). Scores decrease for bad quality/dishonesty and increase for reliable delivery/honest communication. The full matrix lives in `.claude/team/trust_matrix.md` on the long-running branch `CEO/0000-Trust_Matrix`.
+Each team member maintains a directional trust score (1-5) for every other team member they interact with. Default is 3 (neutral). Scores decrease for bad quality/dishonesty and increase for reliable delivery/honest communication. The full matrix lives in `.claude/team/trust_matrix.md` on `main`. All trust updates are committed directly to `main` — no separate branches.
 
 ## Steady-State Goal
 
