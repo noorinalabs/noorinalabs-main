@@ -78,6 +78,7 @@ Rows = the team member rating. Columns = the team member being rated.
 | 2026-03-16 | Yara | Tomasz | 3 | 4 | Responsive to security fix requests |
 | 2026-03-16 | Renaud | Kwame | 3 | 4 | Architecturally sound implementations |
 | 2026-04-06 | Tomasz | Kwame | 4 | 3 | Wrong-branch commit incident (Phase 15 Wave 2) |
+| 2026-04-07 | Orchestrator | Aino Virtanen | 4 | 5 | Hooks Sprint: 15 issues, 3 PRs, zero rework. Most productive single-agent sprint. |
 
 ---
 
@@ -92,7 +93,7 @@ The org was restructured in Session 3 with new repo-level teams. The matrix abov
 | Nadia Khoury (PD) | 3 | Spawned briefly for planning, delivered spawn requests competently. Neutral — limited interaction. |
 | Wanjiku Mwangi (TPM) | 3 | Not spawned this session. |
 | Santiago Ferreira (RC) | **4** ↑ | Batched brand name fix across 4 repos cleanly, all CI green, zero issues. Efficient. |
-| Aino Virtanen (SQL) | **4** ↑ | Charter decomposed cleanly (580→105 lines), comms protocol + shared state designed well, repo charters reduced 54-81%. |
+| Aino Virtanen (SQL) | **5** ↑↑ | Session 4: Charter decomposed cleanly, comms protocol well-designed. Hooks Sprint: delivered 15 issues across 3 PRs solo — 6 hooks, 10 skills, review disposition charter, skills restructure. Zero rework. Most productive single-agent sprint to date. |
 
 ### Orchestrator → isnad-graph Team
 

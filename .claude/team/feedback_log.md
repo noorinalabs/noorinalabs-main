@@ -120,3 +120,37 @@ No severe feedback warrants termination this wave. Kwame's error was a one-off p
 2. Retros skipped in every wave — need charter enforcement
 3. New service deployment has no checklist — repeated manual fixes
 4. Cross-repo secret propagation undocumented
+
+---
+
+## 2026-04-07 — Hooks Sprint Retrospective (Wrapup Ceremony)
+
+**Scope:** Issues #8–#19, #26, #27, #32 (15 issues total). PRs #20, #28, #33 — all merged to main. 8 tech-debt issues created (#21–#25, #29–#31).
+
+### Positive
+- **Aino Virtanen delivered the entire sprint solo** — 3 PRs covering 6 hooks, 10 skills, worktree lock management, review finding disposition charter, and skills restructure. Clean, methodical, zero rework.
+- **Skills restructured to subdirectory/SKILL.md format** — resolved Claude Code discovery issue. All 10 skills now functional as slash commands.
+- **PR review hook shipped** — charter-format comment-based reviews now work without `--admin`. Fixes the systemic "no PR reviews" issue from Waves 1/A/B.
+- **Review Finding Disposition codified** — all review findings must produce issues or fixes before merge. Closes the loop on tech-debt tracking.
+- **Charter decomposition paid off** — sub-documents made it tractable for a single agent to navigate and update charter rules without conflicts.
+- **Retro actually happened this time** — breaking the pattern of skipped retros from Waves 1/A/B.
+
+### Areas for Improvement
+- **8 tech-debt issues created but none addressed** — all punted to future waves. Acceptable for a focused sprint, but accumulation risk if pattern continues.
+- **Wanjiku reviewed all 3 PRs but was not spawned as a persistent agent** — reviews happened ad-hoc. For Wave C, the enforcer model (Aino stays alive) should be tested properly.
+- **No cross-repo validation** — hooks and skills were tested in noorinalabs-main only. Child repo teams have not been validated against the new hooks.
+
+### Severity Assessments
+- **Aino Virtanen** — No negative feedback. Strong positive: 15 issues closed, 3 PRs, zero rework. Trust increase warranted.
+- **Wanjiku Mwangi** — No negative feedback. Reviewed all 3 PRs promptly. Neutral-positive.
+- **Nadia Khoury** — Not spawned during sprint. Neutral.
+- **Santiago Ferreira** — Not spawned during sprint. Neutral.
+
+### No Fire/Hire Actions
+No severe feedback. Team composition stable.
+
+### Systemic Issues Status Update
+1. ~~PR reviews skipped~~ — **RESOLVED.** PR review hook (#26) now enforces charter-format reviews.
+2. ~~Retros skipped~~ — **RESOLVED this sprint.** Wave-wrapup skill now includes retro as mandatory step.
+3. New service deployment checklist — **Skill exists** (#14 /new-service-deploy) but untested in production. Deferred to Wave C.
+4. Cross-repo secret propagation — **Still undocumented.** Remains open.
