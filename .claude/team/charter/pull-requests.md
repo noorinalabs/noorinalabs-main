@@ -86,9 +86,10 @@ Before pushing a branch and creating a PR, every engineer must:
 1. **Run the repo's lint check** (`ruff check` / `npm run lint` / equivalent) — fix all errors.
 2. **Run the repo's format check** (`ruff format --check` / `npx prettier --check` / equivalent) — fix any formatting issues.
 3. **Run the repo's typecheck** (`mypy` / `npm run typecheck` / equivalent) — fix type errors.
-4. **Verify branch name** — `git branch --show-current` must match `{FirstInitial}.{LastName}/{IIII}-{issue-name}`.
+4. **Run the full test suite** — `npm run test` / `make test` / equivalent. This includes unit tests AND E2E/Playwright if the repo has them. Do NOT skip tests — content changes can break test assertions.
+5. **Verify branch name** — `git branch --show-current` must match `{FirstInitial}.{LastName}/{IIII}-{issue-name}`.
 
-Pushing code that fails lint or formatting is a **minor feedback event**.
+Pushing code that fails lint, formatting, or tests is a **minor feedback event**.
 
 ## CI Enforcement After PR Creation
 

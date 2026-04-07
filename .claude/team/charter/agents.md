@@ -55,6 +55,10 @@ When starting any work session, the orchestrating Claude instance should:
 
 Skipping retros is a **moderate feedback event** for the orchestrator.
 
+### Auto-Trigger
+
+When all PRs for a wave are merged into the deployments branch, the orchestrator must **automatically** trigger `/wave-wrapup`. Do not wait for the user to prompt this — the trigger condition (all wave PRs merged) is unambiguous.
+
 ### Team Teardown Procedure
 
 `TeamDelete` does NOT terminate running agents — it only removes the config. Always follow this procedure:

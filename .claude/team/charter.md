@@ -99,6 +99,7 @@ All cross-repo work is tracked on the **[Cross-Repo Wave Plan](https://github.co
 **Mandatory entry/exit points:**
 - **`/wave-kickoff`** is the required entry point for all wave work. It spawns Aino (charter enforcer), sets up wave context, and generates the spawn plan. Direct agent spawns without wave context will trigger a warning hook.
 - **`/wave-wrapup`** is the required exit. It runs the retro, trust update, hook/skill audit, board cleanup, and shuts down agents. No agents are shut down before wrapup completes.
+- **Aino (charter enforcer) is the last agent shut down** — only after the wave, retro, and all post-wave tasks (trust matrix, board cleanup, hook/skill audit, action item issues) are fully complete. She signals completion to the orchestrator, then receives her shutdown request.
 
 **Pre-wave sequencing (before kickoff):**
 - Review every open item on the board across all waves
