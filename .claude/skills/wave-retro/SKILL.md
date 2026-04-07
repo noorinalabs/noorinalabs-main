@@ -52,14 +52,16 @@ Structure as:
 
 ### 4. Update trust matrix
 
-Use a temporary worktree to update the trust matrix (avoids conflicts with the current working tree):
+Use a temporary worktree to update the trust matrix (avoids conflicts with the current working tree). Use `mktemp -d` to generate a unique path, preventing collisions when multiple agents run trust updates concurrently:
 
 ```bash
 git fetch origin CEO/0000-Trust_Matrix
-git worktree add /tmp/trust-matrix-update CEO/0000-Trust_Matrix
+TRUST_WORKTREE="$(mktemp -d /tmp/trust-matrix-update-XXXXXXXX)"
+rmdir "$TRUST_WORKTREE"  # git worktree add needs a non-existent path
+git worktree add "$TRUST_WORKTREE" CEO/0000-Trust_Matrix
 ```
 
-Update `/tmp/trust-matrix-update/.claude/team/trust_matrix.md` with directional trust changes based on wave performance:
+Update `$TRUST_WORKTREE/.claude/team/trust_matrix.md` with directional trust changes based on wave performance:
 - Reliable delivery, clean reviews → increase trust (+1, max 5)
 - CI failures, must-fix items, broken commitments → decrease trust (-1, min 1)
 - No significant signal → no change
@@ -67,7 +69,7 @@ Update `/tmp/trust-matrix-update/.claude/team/trust_matrix.md` with directional 
 Add change log entries with date and reason. Commit as the Manager (see `.claude/team/roster.json` for identity), push, then clean up:
 
 ```bash
-git worktree remove /tmp/trust-matrix-update
+git worktree remove "$TRUST_WORKTREE"
 ```
 
 ### 5. Append to feedback log
