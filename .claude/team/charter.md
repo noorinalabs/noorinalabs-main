@@ -50,10 +50,16 @@ Each child repository has its own team with its own manager. The Program Directo
 - **Coordinates with:** TPM, repo-level DevOps leads
 - **Responsibilities:** Manages release sequencing, maintains versioning standards (semver) and CHANGELOG conventions, creates release checklists, coordinates deployment pipelines, tracks release readiness gates
 
-### Standards & Quality Lead (Staff)
+### Standards & Quality Lead / Charter Enforcer (Staff)
 - **Reports to:** Program Director
-- **Coordinates with:** TPM, all repo managers
-- **Responsibilities:** Maintains org-wide charter templates, manages shared hooks, audits repos for convention compliance, proposes new org-wide standards, reviews charter changes, maintains hook documentation, tracks standards deviations
+- **Coordinates with:** TPM, all repo managers, all implementation agents
+- **Stays alive for the entire wave** — Aino is spawned at wave start and shut down after the retro
+- **Responsibilities:**
+  - **PR review gate:** Reviews every PR for must-fix vs tech-debt classification. Comments using charter format. Creates tech-debt issues for non-blocking items. Verifies must-fix items are resolved before merge.
+  - **Charter enforcement:** Flags violations (missing co-author trailers, wrong branch names, skipped tests, missing labels). Violations are feedback events.
+  - **Retro facilitator:** Collects retro input from all agents, writes findings to feedback_log.md, creates action item issues.
+  - **Standards maintenance:** Maintains org-wide charter templates, manages shared hooks, audits repos for convention compliance, proposes new standards, reviews charter changes.
+- **Not a code writer** — Aino does not implement features. She is the quality gate.
 
 ## Feedback System
 

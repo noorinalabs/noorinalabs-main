@@ -88,3 +88,35 @@ Track all feedback events here. Format:
 
 ### No Fire/Hire Actions
 No severe feedback warrants termination this wave. Kwame's error was a one-off process mistake, not a pattern.
+
+---
+
+## Session 4 Retrospectives (2026-04-06/07)
+
+### Wave 1 Retro
+- **Managers stalled** (Maeve, Nadia B) — went idle, stopped merging PRs. Orchestrator bypassed them. **Moderate feedback** for both managers.
+- **No PR reviews** — charter violation. All PRs merged without peer review across 3 repos.
+- **Publish workflow dual trigger** — design-system fired twice, caused E409. Should have been caught in review.
+- **Tests not run before PRs** — landing-page CI broke because content changes didn't match test assertions. Led to new charter rule.
+- **Positive:** 17 issues resolved, 9 parallel agents zero conflicts, DevOps chain executed cleanly.
+
+### Wave A Retro
+- **No PR reviews** — continued pattern. Charter violation.
+- **Playwright local tarball in lockfile** — worktree agent packed local design-system tarball into package-lock.json. CI couldn't resolve. Required fix cycle.
+- **No retro conducted** — agents shut down before retro. Charter violation by orchestrator. **Minor self-feedback.**
+- **Positive:** 6 agents parallel, zero conflicts, charter decomposed cleanly, brand fix batched efficiently.
+
+### Wave B Retro
+- **4 deploy iterations for noorinalabs.com** — VPS_HOST → Cloudflare IP, no GHCR image, no docker login, Caddy not restarted. Each fixable with a checklist.
+- **GH Packages visibility rabbit hole** — org setting blocked public packages, needed classic PAT workaround.
+- **RBAC/session PR merge conflict** — expected but required rebase cycle.
+- **No PR reviews** — third wave in a row. Systemic issue.
+- **No retro** — second wave in a row. Systemic issue.
+- **Missing secrets in landing-page repo** — VPS_HOST, DEPLOY_SSH_PRIVATE_KEY not propagated.
+- **Positive:** Site went live, RBAC + sessions delivered cleanly, DS re-integration finally working.
+
+### Systemic Issues Identified
+1. PR reviews skipped in every wave — need persistent enforcer agent
+2. Retros skipped in every wave — need charter enforcement
+3. New service deployment has no checklist — repeated manual fixes
+4. Cross-repo secret propagation undocumented
