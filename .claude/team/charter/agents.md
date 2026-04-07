@@ -55,6 +55,17 @@ When starting any work session, the orchestrating Claude instance should:
 
 Skipping retros is a **moderate feedback event** for the orchestrator.
 
+### Worktree Lock Management
+
+Agents working in worktrees MUST manage lockfiles to prevent premature pruning and ghost locks:
+
+1. **Lock on spawn** — when an agent starts in a worktree, lock it: `git worktree lock <path> --reason "agent:<agent-name> started:<timestamp>"`. This prevents `git worktree prune` from removing the worktree while the agent is active.
+2. **Unlock on shutdown** — before an agent terminates (including shutdown_request handling), unlock: `git worktree unlock <path>`.
+3. **Prune at wave end** — `git worktree prune` runs during `/wave-wrapup` AFTER all agents are shut down and unlocked. Never prune while agents are running.
+4. **Stale lock detection** — during `/wave-wrapup`, Aino checks for locked worktrees whose agents are no longer running. Stale locks are removed with `git worktree unlock` and logged as a warning.
+
+Failing to unlock a worktree on shutdown blocks future agents from using that branch. This is a **minor feedback event**.
+
 ### Auto-Trigger
 
 When all PRs for a wave are merged into the deployments branch, the orchestrator must **automatically** trigger `/wave-wrapup`. Do not wait for the user to prompt this — the trigger condition (all wave PRs merged) is unambiguous.
