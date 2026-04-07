@@ -77,3 +77,95 @@ Rows = the team member rating. Columns = the team member being rated.
 | 2026-03-16 | Yara | Sunita | 3 | 4 | Infrastructure design is security-conscious |
 | 2026-03-16 | Yara | Tomasz | 3 | 4 | Responsive to security fix requests |
 | 2026-03-16 | Renaud | Kwame | 3 | 4 | Architecturally sound implementations |
+| 2026-04-06 | Tomasz | Kwame | 4 | 3 | Wrong-branch commit incident (Phase 15 Wave 2) |
+
+---
+
+## Session 4 Trust Updates (2026-04-06/07)
+
+The org was restructured in Session 3 with new repo-level teams. The matrix above covers the legacy isnad-graph team. Below are trust entries for the **current multi-repo team structure**, rated by the orchestrator based on Session 4 interactions.
+
+### Orchestrator → Org-Level Team
+
+| Rated | Score | Reason |
+|-------|-------|--------|
+| Nadia Khoury (PD) | 3 | Spawned briefly for planning, delivered spawn requests competently. Neutral — limited interaction. |
+| Wanjiku Mwangi (TPM) | 3 | Not spawned this session. |
+| Santiago Ferreira (RC) | **4** ↑ | Batched brand name fix across 4 repos cleanly, all CI green, zero issues. Efficient. |
+| Aino Virtanen (SQL) | **4** ↑ | Charter decomposed cleanly (580→105 lines), comms protocol + shared state designed well, repo charters reduced 54-81%. |
+
+### Orchestrator → isnad-graph Team
+
+| Rated | Score | Reason |
+|-------|-------|--------|
+| Nadia Boukhari (Mgr) | **2** ↓ | Manager stalled — went idle, stopped merging PRs. Required orchestrator to bypass. Did not proactively coordinate. |
+| Arjun Raghavan | **4** ↑ | Two clean deliveries: path traversal optimization (Wave 1), RBAC enforcement (Wave B, complex full-stack, handled merge conflict rebase promptly). |
+| Jelani Mwangi | **4** ↑ | Pipeline.yml delivered quickly and cleanly. Critical path item. |
+| Linh Pham | 3 | B2 upload/download + deploy.yml delivered. Neutral. |
+| Anya Kowalczyk | **4** ↑ | Session hardening: 4 priorities implemented, proper scoping with follow-up issues created for deferred work. All CI green. |
+| Nneka Obi | **4** ↑ | Two clean deliveries (docs #680, OAuth fix #713). Fast, precise. |
+| Mateo Salazar | **4** ↑ | Full-stack corpus API delivery. Clean, all CI green. |
+| Ingrid Lindqvist | **4** ↑ | Two clean deliveries (setTimeout fix #665, search width fix #699). Fast, precise. |
+| Marisol Vega-Cruz | 3 | Playwright E2E (19 tests) delivered, but local tarball in lockfile caused CI issue. Good work offset by process issue. Neutral. |
+| Ravi Wickramasinghe | 3 | DS integration delivered but package not installable in CI — partially external issue. Neutral. |
+| Idris Yusuf | 3 | Not spawned this session. |
+| Farhan Malik | 3 | Not spawned this session. |
+| Aisling Brennan | 3 | Not spawned this session. |
+| Thandiwe Moyo | 3 | Not spawned this session. |
+
+### Orchestrator → design-system Team
+
+| Rated | Score | Reason |
+|-------|-------|--------|
+| Maeve Callahan (Mgr) | **2** ↓ | Manager stalled — went idle, stopped merging PRs despite being notified. Cross-review PRs sat open until orchestrator merged directly. |
+| Keanu Tama | **4** ↑ | Three clean deliveries: CI/coverage (#16), publish config (#18), GH Packages verification (#23). Consistent. |
+| Kofi Mensah | 3 | Usage docs delivered clean. Single interaction. Neutral. |
+| Beren Yildiz | 3 | Not spawned this session. |
+| Others | 3 | Not spawned this session. |
+
+### Orchestrator → landing-page Team
+
+| Rated | Score | Reason |
+|-------|-------|--------|
+| Marcia Vasquez-Paredes (Mgr) | 3 | Managed LP Wave 1 adequately, merged PRs, handled conflict on #24. Neutral — didn't stall like other managers. |
+| Kofi Mensah-Williams | 3 | Multiple deliveries (tests, Dockerfile, deploy pipeline, DS re-integration). Solid but some CI fixes needed. Neutral. |
+| Anika Diop-Sarr | 3 | Content PRs delivered with good quality but caused test failures (didn't run tests before push). Neutral — offset by content quality. |
+| Cédric Novák | 3 | Not spawned this session. |
+| Nazia Rahman | 3 | Not spawned this session. |
+
+### Orchestrator → deploy Team
+
+| Rated | Score | Reason |
+|-------|-------|--------|
+| Bereket Tadesse | **4** ↑ | TF remote state, deployment docs, and landing page infra — all clean deliveries. Reliable. |
+| Lucas Ferreira | 3 | TF CI/CD delivered clean. Single interaction. Neutral. |
+
+---
+
+## Session 4 — Individual Performance Notes
+
+### Done Well / Needs Improvement
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Nadia Khoury** (PD) | Delivered spawn requests with full context, good issue assignment choices | Limited interaction — needs to be more proactive in cross-repo coordination during waves |
+| **Santiago Ferreira** (RC) | Batched 4 repos into one efficient agent run, all CI green, zero rework | None this session |
+| **Aino Virtanen** (SQL) | Charter decompose was excellent — preserved all content, clean structure. Comms protocol well-designed. | Needs to be present during waves as enforcer (new role established) |
+| **Nadia Boukhari** (IG Mgr) | Initial issue assignment and spawn requests were well-structured | **Stalled during execution** — went idle, stopped merging PRs, did not proactively coordinate. Must stay active and merge PRs promptly. Must run post-merge verification. |
+| **Arjun Raghavan** | Complex RBAC implementation was backward-compatible. Handled merge conflict rebase quickly. | None this session |
+| **Jelani Mwangi** | Fast, clean delivery on critical-path pipeline.yml | None this session |
+| **Linh Pham** | B2 scripts and deploy.yml delivered | None this session |
+| **Anya Kowalczyk** | Excellent scoping discipline — implemented 4 priorities, created 3 follow-up issues for deferred work. All CI green. | None this session |
+| **Nneka Obi** | Two deliveries, both fast and clean | None this session |
+| **Mateo Salazar** | Full-stack delivery (backend + frontend) in single PR, clean | None this session |
+| **Ingrid Lindqvist** | Two precise fixes, fast turnaround | None this session |
+| **Marisol Vega-Cruz** | 19 Playwright tests with good mock strategy | **package-lock.json contained local tarball path** — must verify lockfile doesn't contain /tmp/ or file:/ references before pushing |
+| **Ravi Wickramasinghe** | DS integration code was correct | External blocker (GH Packages visibility) was outside control, but should have flagged earlier |
+| **Maeve Callahan** (DS Mgr) | Initial wave planning was fine | **Stalled during execution** — went idle, did not merge reviewed PRs, required orchestrator bypass. Same issue as Nadia B. Must stay active. |
+| **Keanu Tama** | Three consecutive clean deliveries across the session. Consistent. | None this session |
+| **Kofi Mensah** (DS) | Usage docs were thorough and well-structured | None this session |
+| **Marcia Vasquez-Paredes** (LP Mgr) | Managed wave adequately, handled merge conflict on PR #24, merged PRs proactively | None this session |
+| **Kofi Mensah-Williams** (LP) | Multiple deliveries, solid work | Some CI fixes needed post-PR — should run full test suite before pushing |
+| **Anika Diop-Sarr** | Content quality was excellent, pitch deck copy was strong | **Did not run tests before pushing** — content changes broke unit test assertions. Must run `npm test` before creating PR. |
+| **Bereket Tadesse** (Deploy Mgr) | Three clean deliveries, reliable | None this session |
+| **Lucas Ferreira** | TF CI/CD workflow well-structured | None this session |

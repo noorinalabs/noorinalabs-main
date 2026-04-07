@@ -48,3 +48,10 @@ Calm and methodical. Speaks in complete, considered sentences and rarely interru
 | Maintenance | █████████░ 9/10 |
 | Operational | ██████████ 10/10 |
 | Documentation | █████████░ 9/10 |
+
+## Performance History
+
+### Session 4 (2026-04-06)
+- **Done well:** Three clean deliveries — TF remote state, deployment docs (4 runbook files), landing page infra (Docker Compose + Caddyfile + deploy workflow). Reliable.
+- **Needs improvement:** None
+- **Trust:** 3 → 4 (from orchestrator)

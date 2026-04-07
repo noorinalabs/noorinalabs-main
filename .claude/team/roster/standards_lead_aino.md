@@ -48,3 +48,10 @@ Precise and economical. Every word earns its place — she writes the way Finns 
 | Maintenance | █████████░ 9/10 |
 | Operational | ████████░░ 8/10 |
 | Documentation | ██████████ 10/10 |
+
+## Performance History
+
+### Session 4 (2026-04-06)
+- **Done well:** Charter decomposed cleanly (580→105 lines, 9 sub-docs). Comms protocol + shared state + dependency contracts well-designed. Repo charters reduced 54-81%.
+- **Needs improvement:** None. New persistent enforcer role established.
+- **Trust:** 3 → 4 (from orchestrator)
