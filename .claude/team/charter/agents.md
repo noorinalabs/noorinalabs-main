@@ -100,6 +100,19 @@ The orchestrator is the **single point that can create agents**. The Program Dir
 3. **Orchestrator spawns team members** on behalf of the Program Director, routing results back via SendMessage.
 4. **Team members report completion** to the orchestrator, who relays to the Program Director or acts on the results.
 
+### No Direct-to-Engineer Spawns
+
+**The orchestrator MUST NOT spawn engineers directly without first spawning the Program Director.** Even for "simple" or "mechanical" fixes, the team hierarchy must be followed:
+
+1. Spawn the Program Director
+2. PD coordinates with the relevant repo manager(s)
+3. Repo managers request engineer spawns via the PD
+4. Orchestrator spawns engineers on behalf of the PD
+
+**Rationale:** Bypassing the hierarchy loses manager visibility, skips peer review coordination, and undermines accountability. This was identified as a recurring pattern in Waves 1/A/B ("lead layer bypassed entirely") and repeated in Wave C Phase 1. The only exception is if the user explicitly authorizes a direct spawn.
+
+Spawning engineers without the PD is a **moderate feedback event** for the orchestrator.
+
 ## Agent Naming with Repo Prefix
 
 All spawned agents MUST be named `{repo-name}-{persona-firstname}` (e.g., `main-nadia`, `main-wanjiku`, `main-santiago`). The repo prefix identifies which repo's team the agent belongs to, enabling clear routing in multi-repo sessions. Use the short repo name (without the `noorinalabs-` prefix) for brevity:
