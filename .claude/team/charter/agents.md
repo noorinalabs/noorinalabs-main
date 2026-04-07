@@ -49,7 +49,9 @@ When starting any work session, the orchestrating Claude instance should:
 3. **The orchestrator adds** their own observations (deploy iterations, stalled agents, process gaps).
 4. **Write findings** to `.claude/team/feedback_log.md` in the relevant repo(s).
 5. **Actionable items** become charter updates, process changes, or new issues.
-6. **Only then** shut down agents.
+6. **Trust matrix update** — update scores on `CEO/0000-Trust_Matrix` branch, add done-well/needs-improvement notes, update roster cards with performance history.
+7. **Hook/skill audit** — for every failure or friction point from the wave, ask: "Could a hook have prevented this? Could a skill have automated this?" Present candidates to the user. Prefer hooks over skills, skills over LLM generation. Create issues for approved implementations.
+8. **Only then** shut down agents.
 
 Skipping retros is a **moderate feedback event** for the orchestrator.
 
