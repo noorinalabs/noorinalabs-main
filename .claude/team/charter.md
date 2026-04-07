@@ -92,7 +92,27 @@ The team should evolve through feedback cycles toward a steady state of little t
 
 ## Cross-Repo Wave Plan
 
-All cross-repo work is tracked on the **[Cross-Repo Wave Plan](https://github.com/orgs/noorinalabs/projects/2)** GitHub Project board. Issues are tagged by Wave (A-F) with dependency ordering. Before starting a new wave, check the project board to verify all blockers from the previous wave are resolved.
+All cross-repo work is tracked on the **[Cross-Repo Wave Plan](https://github.com/orgs/noorinalabs/projects/2)** GitHub Project board. Issues are tagged by Wave with dependency ordering. The board is the **single source of truth** for cross-repo sequencing.
+
+### Board Maintenance Rules
+
+**Wave kickoff:**
+- Verify all blockers from previous wave are resolved (Status = Done)
+- Confirm all new wave issues are on the board with correct Wave tag
+- Set in-progress issues to "In Progress" status
+- New issues created during a wave must be added to the board immediately
+
+**Wave wrapup:**
+- Mark all completed issues as "Done"
+- Verify no open issues remain in the current wave
+- Update `cross-repo-status.json` with latest state
+- Add any new issues discovered during the wave to the board with appropriate Wave tag
+
+**Ongoing:**
+- Every new GitHub issue across any repo should be evaluated for board inclusion
+- The board must always reflect current reality — no stale items
+- If an issue is closed, its board status must be updated to Done
+- If an issue is moved between waves, update its Wave tag
 
 ## Sub-Documents
 
