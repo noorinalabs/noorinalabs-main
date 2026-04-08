@@ -13,14 +13,16 @@ All agents share a single GitHub user account. **`gh pr review --approve` is blo
 Requestor: <PR author name>
 Requestee: <reviewer name>
 RequestOrReplied: Approved | Changes Requested
+TechDebt: none | #15, #16, ...
 ```
 
-The `Requestor` must differ from the branch author (validated by the merge hook). This is enforced by the `block_gh_pr_review.py` PreToolUse hook and validated by `validate_pr_review.py` at merge time.
+- The `Requestor` must differ from the branch author (validated by the merge hook). This is enforced by the `block_gh_pr_review.py` PreToolUse hook and validated by `validate_pr_review.py` at merge time.
+- The `TechDebt:` line is **mandatory** on every review. If the reviewer found non-blocking observations, they MUST create `tech-debt` labeled issues BEFORE posting the review, then list the issue numbers. If no tech-debt was found, write `TechDebt: none`. This is enforced by the `validate_pr_review.py` PreToolUse hook at merge time.
 
 ## PR Review Workflow for Deployments Branch PRs
 
 1. **Create the PR** targeting `deployments/phase{N}/wave-{M}`.
-2. **Notify a reviewer** — the PR creator must notify at least one other team member to review the PR. Use SendMessage or a GitHub comment to notify. **A PR MUST NOT be merged without at least one peer review.** For waves with fewer than 4 engineers, the manager's review counts but must include a substantive review comment (not just "LGTM").
+2. **Notify reviewers** — the PR creator must notify at least **two** other team members to review the PR. Use SendMessage or a GitHub comment to notify. **A PR MUST NOT be merged without at least two peer reviews from distinct non-authors.** For waves with fewer than 4 engineers, the manager's review counts but must include a substantive review comment (not just "LGTM"). This is enforced by the `validate_pr_review.py` PreToolUse hook.
 3. **Reviewer performs the review** and posts a comment-based review on the PR with:
    - **Must-fix items** — blocks merge; the submitter must resolve before proceeding.
    - **Tech debt items** — does not block merge; tracked as GitHub Issues.

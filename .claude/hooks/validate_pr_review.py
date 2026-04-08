@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: Require PR review comment before merge.
+"""PreToolUse hook: Require TWO PR review comments before merge.
 
-Blocks `gh pr merge` unless the PR has at least one review from a non-author,
-or a charter-format comment-based review from a different team member.
+Blocks `gh pr merge` unless the PR has at least two reviews from distinct
+non-authors, using either formal GitHub reviews or charter-format
+comment-based reviews from different team members.
 
 Exit codes:
-  0 — allow (not a merge command, or review exists)
-  2 — block (no peer review found)
+  0 — allow (not a merge command, or two reviews exist)
+  2 — block (fewer than two peer reviews found)
 """
 
 import json
@@ -82,8 +83,23 @@ def extract_branch_author_lastname(head_ref: str) -> str | None:
     return None
 
 
-def check_comment_reviews(pr_number: str | int, branch_author_lastname: str) -> bool:
-    """Check PR comments for charter-format review comments from a different author."""
+class CommentReviewResult:
+    """Result of checking PR comments for charter-format reviews."""
+
+    def __init__(self) -> None:
+        self.reviewers: set[str] = set()
+        self.reviews_missing_tech_debt: list[str] = []  # reviewer names missing TechDebt line
+
+
+def check_comment_reviews(
+    pr_number: str | int, branch_author_lastname: str,
+) -> CommentReviewResult:
+    """Check PR comments for charter-format review comments from different authors.
+
+    Returns a CommentReviewResult with distinct reviewer last names and any
+    reviews missing the mandatory TechDebt: attestation line.
+    """
+    result = CommentReviewResult()
     try:
         # Get repo info
         repo_result = subprocess.run(
@@ -91,7 +107,7 @@ def check_comment_reviews(pr_number: str | int, branch_author_lastname: str) -> 
             capture_output=True, text=True, timeout=15,
         )
         if repo_result.returncode != 0:
-            return False
+            return result
         repo_data = json.loads(repo_result.stdout)
         owner = repo_data.get("owner", {}).get("login", "")
         repo_name = repo_data.get("name", "")
@@ -102,34 +118,42 @@ def check_comment_reviews(pr_number: str | int, branch_author_lastname: str) -> 
             capture_output=True, text=True, timeout=15,
         )
         if comments_result.returncode != 0:
-            return False
+            return result
 
         comments = json.loads(comments_result.stdout)
         for comment in comments:
             body = comment.get("body", "")
-            # Check for charter-format review: must contain Requestor:, Requestee:, RequestOrReplied:
-            has_requestor = re.search(r"Requestor:\s*(\S+)", body)
-            has_requestee = re.search(r"Requestee:", body)
+            # Check for charter-format review: must contain Requestee: and RequestOrReplied:
+            # Handles markdown bold (**Requestee:**) and plain text (Requestee:)
+            has_requestee = re.search(r"\*{0,2}Requestee:\*{0,2}\s*(.+)", body)
             has_request_or_replied = re.search(r"RequestOrReplied:", body)
 
-            if has_requestor and has_requestee and has_request_or_replied:
-                # Extract Requestor name (format: Firstname.Lastname)
-                requestor_name = has_requestor.group(1)
-                # Extract last name from Firstname.Lastname
-                parts = requestor_name.split(".")
+            if has_requestee and has_request_or_replied:
+                # Extract Requestee name (the reviewer)
+                requestee_raw = has_requestee.group(1).strip()
+                # Strip markdown bold markers and parenthetical role descriptions
+                requestee_raw = requestee_raw.strip("*").strip()
+                requestee_name = re.sub(r"\s*\(.*?\)\s*$", "", requestee_raw).strip()
+                # Extract last name — handle "Firstname Lastname" and "Firstname.Lastname"
+                parts = re.split(r"[\s.]+", requestee_name)
                 if len(parts) >= 2:
-                    requestor_lastname = parts[-1]
+                    reviewer_lastname = parts[-1]
                 else:
-                    requestor_lastname = requestor_name
+                    reviewer_lastname = requestee_name
 
-                # Compare last names case-insensitively — must differ
-                if requestor_lastname.lower() != branch_author_lastname.lower():
-                    return True
+                # Reviewer must differ from branch author
+                if reviewer_lastname.lower() != branch_author_lastname.lower():
+                    result.reviewers.add(reviewer_lastname.lower())
 
-        return False
+                # Check for mandatory TechDebt: attestation line
+                has_tech_debt = re.search(r"\*{0,2}TechDebt:\*{0,2}\s*\S+", body)
+                if not has_tech_debt:
+                    result.reviews_missing_tech_debt.append(requestee_name)
+
+        return result
 
     except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
-        return False
+        return result
 
 
 def main() -> None:
@@ -171,37 +195,66 @@ def main() -> None:
     head_ref = pr_data["headRefName"]
     number = pr_data["number"]
 
-    # Check for at least one formal review from a non-author
-    has_peer_review = any(
-        review.get("author", {}).get("login", "") != author
-        for review in reviews
-    )
+    # Collect distinct non-author reviewers from formal GitHub reviews
+    formal_reviewers: set[str] = set()
+    for review in reviews:
+        login = review.get("author", {}).get("login", "")
+        if login and login != author:
+            formal_reviewers.add(login.lower())
 
-    if has_peer_review:
-        sys.exit(0)
-
-    # No formal review found — check comment-based reviews
+    # Collect distinct non-author reviewers from comment-based reviews
+    comment_review_result = CommentReviewResult()
+    branch_author_lastname = None
     if head_ref:
         branch_author_lastname = extract_branch_author_lastname(head_ref)
         if branch_author_lastname:
-            if check_comment_reviews(number, branch_author_lastname):
-                sys.exit(0)
+            comment_review_result = check_comment_reviews(number, branch_author_lastname)
+
+    # Total distinct reviewers (formal + comment-based)
+    total_distinct = len(formal_reviewers) + len(comment_review_result.reviewers)
 
     pr_display = f"#{pr_number}" if pr_number else "(current branch)"
-    result = {
-        "decision": "block",
-        "reason": (
-            f"BLOCKED: PR {pr_display} has no peer review. "
-            "At least one review from a non-author is required before merge.\n"
-            "Charter § Pull Requests requires comment-based peer review for all merges.\n"
-            "Use `gh pr comment <PR#> --body '...'` with charter format:\n"
-            "  Requestor: <branch author>  Requestee: <reviewer>  "
-            "RequestOrReplied: Approved\n"
-            "Pass `--admin` for emergency overrides only."
-        ),
-    }
-    print(json.dumps(result))
-    sys.exit(2)
+
+    # Check reviewer count first
+    if total_distinct < 2:
+        found = total_distinct
+        result = {
+            "decision": "block",
+            "reason": (
+                f"BLOCKED: PR {pr_display} has {found}/2 required peer reviews. "
+                "At least TWO reviews from distinct non-authors are required before merge.\n"
+                "Charter § Pull Requests requires two comment-based peer reviews for all merges.\n"
+                "Use `gh pr comment <PR#> --body '...'` with charter format:\n"
+                "  Requestor: <branch author>  Requestee: <reviewer>  "
+                "RequestOrReplied: Approved  TechDebt: none | #issue, ...\n"
+                "Pass `--admin` for emergency overrides only."
+            ),
+        }
+        print(json.dumps(result))
+        sys.exit(2)
+
+    # Check TechDebt attestation on all comment-based reviews
+    missing = comment_review_result.reviews_missing_tech_debt
+    if missing:
+        names = ", ".join(missing)
+        result = {
+            "decision": "block",
+            "reason": (
+                f"BLOCKED: PR {pr_display} has review(s) missing the mandatory "
+                f"TechDebt: attestation line.\n"
+                f"Reviewers without TechDebt line: {names}\n"
+                "Charter § Pull Requests requires every review to include:\n"
+                "  TechDebt: none        (if no tech-debt found)\n"
+                "  TechDebt: #15, #16    (if issues were filed)\n"
+                "Reviewer must create tech-debt labeled issues for all non-blocking "
+                "findings BEFORE posting the review.\n"
+                "Pass `--admin` for emergency overrides only."
+            ),
+        }
+        print(json.dumps(result))
+        sys.exit(2)
+
+    sys.exit(0)
 
 
 if __name__ == "__main__":
