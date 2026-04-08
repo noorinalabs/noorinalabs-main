@@ -19,6 +19,14 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# Logs
+*.log
+
+# Temp / Cache
+tmp/
+temp/
+.cache/
+
 # Editor files
 *.swp
 *.swo
