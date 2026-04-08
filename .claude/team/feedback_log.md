@@ -218,3 +218,96 @@ No severe feedback. Team composition stable.
 1. **Pre-shutdown retro gate** — add a hook or checklist that blocks agent shutdown until retro is complete. Rationale: retro has been skipped in 3 of the last 4 waves despite charter mandate.
 2. **Scaffold alignment commit before parallel branches** — when 3+ agents will work in the same repo, merge a "shared infrastructure" commit first (DB session module, config structure, etc.) to reduce conflicts. Rationale: all 3 user-service PRs independently refactored the same circular import.
 3. **Pre-fill Requestor/Requestee in review prompts** — always provide the exact `gh pr comment` command with correct field values in agent prompts. Rationale: 100% error rate when agents filled these themselves.
+
+---
+
+## 2026-04-08 — User Service Extraction Phase 3 Wave 1 Retrospective
+
+**Scope:** 12 PRs merged across 6 repos (user-service: 6, main: 2, IG/deploy/LP/DS: 1 each). 14 issues closed. Meta-issue: noorinalabs-main#48.
+
+### Per-Engineer Assessments
+
+#### Anya Kowalczyk (Tech Lead)
+- PRs: US #28 (scaffold), US #30 (subscriptions)
+- CI failures: 0
+- Must-fix items received: 2 (webhook auth, missing migration)
+- Reviews given: 2 (PR #29, PR #27)
+- Assessment: Scaffold was clean and prevented Phase 2's merge conflict pattern. Webhook security gap caught and fixed with HMAC-SHA256. Clean rebase after 3 PRs merged. Reported aiosqlite venv issue affecting all agents.
+- Severity: **None** — strong delivery
+
+#### Mateo Salazar (Engineer)
+- PRs: US #31 (sessions)
+- CI failures: 0
+- Must-fix items received: 3 (refresh token not returned, service-commits pattern, migration chain)
+- Reviews given: 2 (PR #30 found 5 issues; PR #32 caught critical Fernet key data-loss risk)
+- Assessment: Solid delivery. Design issues caught in review. His reviews of others were the strongest this wave. Also reported branch freshness hook interaction with worktrees.
+- Severity: **Minor** — design issues caught in review
+
+#### Idris Yusuf (Security Engineer)
+- PRs: US #29 (email verification), US #32 (2FA/TOTP)
+- CI failures: 0
+- Must-fix items received: 10 total (SMTP TLS, 2 missing migrations, router prefix, uuid typing, test approach, Fernet key, valid_window, recovery code consumption, max_length)
+- Reviews given: 1 (PR #31 — thorough, approved)
+- Assessment: Fastest delivery but highest must-fix count. SMTP TLS misconfiguration (production failure) and Fernet key random fallback (data loss) are critical issues from a security engineer. All fixed promptly when flagged.
+- Severity: **Moderate** — 10 must-fix items including 2 critical security issues. Speed over quality pattern.
+
+#### Santiago Ferreira (Release Coordinator)
+- PRs: US #27, IG #766, Deploy #44, LP #51, DS #34, Main #55 (6 PRs)
+- CI failures: 0
+- Must-fix items received: 0
+- Reviews given: 2 (PR #28, PR #54)
+- Assessment: Exemplary batch execution. Zero review findings. Timely second reviews.
+- Severity: **None** — exemplary
+
+#### Aino Virtanen (Standards & Quality Lead)
+- PRs: Main #54 (hook fix)
+- CI failures: 0
+- Must-fix items received: 0
+- Reviews given: 7+ (all feature PRs, scaffold, all .gitignore PRs)
+- Assessment: Caught every significant issue across all PRs. Hook fix thorough (13 test cases). Initial review format wrong (7 re-posts needed). Reported validate_commit_identity.py friction with gh commands.
+- Severity: **Minor** — review format errors caused merge delays
+
+#### Nadia Khoury (Program Director)
+- PRs: None (coordination)
+- Assessment: Comprehensive execution plan. Helped unblock merges with 6 second reviews. First message delivery failed (re-sent). Identified Idris sequential chain as critical path risk.
+- Severity: **None** — strong coordination
+
+#### Orchestrator (self-assessment)
+- Applied Phase 2 lessons: scaffold-first ✓, pre-filled review assignments ✓, worktree isolation ✓, retro before shutdown ✓
+- Review format not precise enough — should have included exact `gh pr comment` template
+- 2-review gate not planned for — tried to merge with 1 review multiple times
+- Severity: **Minor**
+
+### Top 3 Going Well
+1. **Scaffold alignment worked** — 4 parallel agents, minimal merge conflicts
+2. **Review cycle caught real bugs** — SMTP TLS, webhook auth, Fernet key data loss, refresh token flaw
+3. **Phase 2 lessons all applied** — pre-filled reviews, scaffold-first, worktree isolation, retro enforced
+
+### Top 3 Pain Points
+1. **Review format friction** — all initial reviews wrong format, 7+ re-posts, multiple merge attempts blocked (~15 min lost)
+2. **2-review gate bottleneck** — only 1 reviewer planned per PR, ad-hoc second reviewer assignments delayed merges
+3. **validate_commit_identity.py false positives** — blocked legitimate gh pr create, gh pr comment, and test commands throughout the wave (PR #54 fixed this)
+
+### Agent-Reported Issues (from retro input)
+- Branch freshness hook blocks PR creation in worktrees (Mateo)
+- aiosqlite missing from venv due to pyproject.toml dependency group mismatch (Anya)
+- Sequential review rounds wasteful — coordinate reviewers for single consolidated pass (Anya)
+- Router prefix convention (/api/v1/ vs bare) needs standardization (Mateo, Aino)
+- Lighter review gate for ops/infra PRs (Santiago)
+- Idris sequential chain (#8→#10) was critical path — could have parallelized by branching both from main (Nadia)
+
+### Proposed Process Changes
+1. **Include exact `gh pr comment` template in all review prompts** — copy-paste-ready with correct fields. Rationale: 100% format error rate.
+2. **Assign 2 reviewers per PR at wave kickoff** — pre-plan both in agent prompts. Rationale: every PR needed ad-hoc second reviewer.
+3. **Scaffold should set migration chain base** — stub migration as known chain point. Rationale: all 4 feature PRs pointed down_revision at 0001.
+4. **Standardize router prefix convention** — document whether routers use /api/v1/ or bare prefix. Rationale: inconsistency flagged on 3 of 4 PRs.
+5. **Add `make dev` target for venv setup** — runs `uv sync --extra dev`. Rationale: aiosqlite/pytest missing in worktrees.
+
+### Trust Matrix Changes
+| Member | Old | New | Reason |
+|--------|-----|-----|--------|
+| Santiago Ferreira | 4 | **5** ↑ | Exemplary batch efficiency |
+| Idris Yusuf | 4 | **3** ↓ | 10 must-fix items, 2 critical security issues |
+
+### Fire/Hire Actions
+None. Idris received moderate feedback — single-wave pattern, will monitor.
