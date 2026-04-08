@@ -83,12 +83,17 @@ def extract_branch_author_lastname(head_ref: str) -> str | None:
     return None
 
 
+PROJECT_NUMBER = 2
+ORG = "noorinalabs"
+
+
 class CommentReviewResult:
     """Result of checking PR comments for charter-format reviews."""
 
     def __init__(self) -> None:
         self.reviewers: set[str] = set()
         self.reviews_missing_tech_debt: list[str] = []  # reviewer names missing TechDebt line
+        self.tech_debt_issue_numbers: list[str] = []  # issue numbers from TechDebt: lines
 
 
 def check_comment_reviews(
@@ -146,14 +151,39 @@ def check_comment_reviews(
                     result.reviewers.add(reviewer_lastname.lower())
 
                 # Check for mandatory TechDebt: attestation line
-                has_tech_debt = re.search(r"\*{0,2}TechDebt:\*{0,2}\s*\S+", body)
+                has_tech_debt = re.search(r"\*{0,2}TechDebt:\*{0,2}\s*(.+)", body)
                 if not has_tech_debt:
                     result.reviews_missing_tech_debt.append(requestee_name)
+                else:
+                    td_value = has_tech_debt.group(1).strip().strip("*").strip()
+                    if td_value.lower() != "none":
+                        # Extract issue numbers (#15, #16, etc.)
+                        issue_nums = re.findall(r"#(\d+)", td_value)
+                        result.tech_debt_issue_numbers.extend(issue_nums)
 
         return result
 
     except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
         return result
+
+
+def ensure_issues_on_board(repo: str, issue_numbers: list[str]) -> None:
+    """Best-effort add tech-debt issues to the project board."""
+    for num in issue_numbers:
+        url = f"https://github.com/{ORG}/{repo}/issues/{num}"
+        try:
+            subprocess.run(
+                [
+                    "gh", "project", "item-add", str(PROJECT_NUMBER),
+                    "--owner", ORG,
+                    "--url", url,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass  # Best-effort — don't block merge on board failures
 
 
 def main() -> None:
@@ -253,6 +283,23 @@ def main() -> None:
         }
         print(json.dumps(result))
         sys.exit(2)
+
+    # All checks passed — ensure any referenced tech-debt issues are on the board
+    td_issues = comment_review_result.tech_debt_issue_numbers
+    if td_issues:
+        # Determine the repo from the PR's head ref or current directory
+        repo_name = ""
+        try:
+            repo_result = subprocess.run(
+                ["gh", "repo", "view", "--json", "name"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if repo_result.returncode == 0:
+                repo_name = json.loads(repo_result.stdout).get("name", "")
+        except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
+            pass
+        if repo_name:
+            ensure_issues_on_board(repo_name, td_issues)
 
     sys.exit(0)
 
