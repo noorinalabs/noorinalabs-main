@@ -51,31 +51,46 @@ The following charter rules are enforced automatically via Claude Code hooks in 
 - **Manual steps remaining:** None — the hook queries `gh pr view` for reviews automatically. Use `--admin` flag for emergency overrides.
 - **Emergency override:** Pass `--admin` to `gh pr merge`, or remove the hook entry.
 
-## Hook 8: Validate Branch Freshness (`validate_branch_freshness.py`)
+## Hook 8: Block `gh pr review` (`block_gh_pr_review.py`)
+
+- **What it automates:** Blocks `gh pr review` commands (--approve, --request-changes, etc.) since all agents share one GitHub user and API-based reviews always fail with "cannot approve your own pull request".
+- **Augments:** [Pull Requests](pull-requests.md) § Comment-Based Reviews. Redirects agents to use `gh pr comment` with the charter review format (Requestor/Requestee/RequestOrReplied fields).
+- **Manual steps remaining:** None — the hook blocks and provides the correct format.
+- **Emergency override:** Remove the hook entry from `.claude/settings.json`.
+
+## Hook 9: Validate Branch Freshness (`validate_branch_freshness.py`)
 
 - **What it automates:** Blocks `gh pr create` if the feature branch is behind the base branch. Prevents merge conflicts from stale branches.
 - **Augments:** [Branching](branching.md) workflow. Session 4 had RBAC and session hardening PRs conflict because neither was rebased.
 - **Manual steps remaining:** None — the hook runs `git fetch` and `git merge-base --is-ancestor` automatically.
 - **Emergency override:** Remove the hook entry from `.claude/settings.json`.
 
-## Hook 9: Validate VPS_HOST (`validate_vps_host.py`)
+## Hook 10: Validate VPS_HOST (`validate_vps_host.py`)
 
 - **What it automates:** Blocks `gh variable set VPS_HOST` if the value resolves to a Cloudflare IP range. Also warns if a hostname is used instead of a direct IP.
 - **Augments:** Deployment safety. Session 4 had VPS_HOST set to a Cloudflare-proxied domain, causing SSH timeout on deploy.
 - **Manual steps remaining:** None — the hook resolves the hostname and checks against known Cloudflare ranges.
 - **Emergency override:** Remove the hook entry from `.claude/settings.json`.
 
-## Hook 10: Warn GHCR Image (`warn_ghcr_image.py`)
+## Hook 11: Warn GHCR Image (`warn_ghcr_image.py`)
 
 - **What it automates:** Warns (does not block) when `gh workflow run` triggers a deploy-related workflow and the expected GHCR image may not exist.
 - **Augments:** Deployment safety. Session 4 had deploy-all triggered before the landing page GHCR image was built.
 - **Manual steps remaining:** None — the hook checks `gh api` for the image. This is a warning only since deploy workflows sometimes build the image.
 - **Emergency override:** Not needed (warning only). Remove the hook entry to suppress.
 
-## Hook 11: Validate Wave Context (`validate_wave_context.py`)
+## Hook 12: Validate Wave Context (`validate_wave_context.py`)
 
 - **What it automates:** Warns when agents are spawned without an active wave context in `cross-repo-status.json`. Ensures `/wave-kickoff` is run before agent work begins.
 - **Augments:** [Agent Lifecycle](agents.md) wave management. Session 4 had the orchestrator bypass the team structure entirely.
 - **Matcher:** `Agent` (not `Bash`) — fires on Agent tool calls.
 - **Manual steps remaining:** Run `/wave-kickoff` to set the wave context. The hook is a warning, not a block.
 - **Emergency override:** Not needed (warning only). Remove the hook entry to suppress.
+
+## Hook 13: Auto-Add Issues to Project Board (`auto_add_issue_to_board.py`)
+
+- **What it automates:** After `gh issue create` runs, detects the new issue URL in stdout and runs `gh project item-add` to add it to the Cross-Repo Wave Plan board (project #2).
+- **Type:** PostToolUse (advisory, non-blocking).
+- **Augments:** Cross-Repo Wave Plan § Board Maintenance Rules — "New issues created during a wave must be added to the board immediately."
+- **Manual steps remaining:** None — fully automated.
+- **Emergency override:** Remove the hook entry from `.claude/settings.json`.

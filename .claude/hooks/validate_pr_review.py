@@ -193,10 +193,11 @@ def main() -> None:
         "reason": (
             f"BLOCKED: PR {pr_display} has no peer review. "
             "At least one review from a non-author is required before merge.\n"
-            "Charter § Pull Requests requires peer review for all merges.\n"
-            "Use `gh pr review` to add a review, or pass `--admin` for emergency overrides.\n"
-            "Comment-based reviews are also accepted: post a comment with "
-            "Requestor:, Requestee:, and RequestOrReplied: fields."
+            "Charter § Pull Requests requires comment-based peer review for all merges.\n"
+            "Use `gh pr comment <PR#> --body '...'` with charter format:\n"
+            "  Requestor: <branch author>  Requestee: <reviewer>  "
+            "RequestOrReplied: Approved\n"
+            "Pass `--admin` for emergency overrides only."
         ),
     }
     print(json.dumps(result))

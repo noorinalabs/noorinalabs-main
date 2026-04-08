@@ -4,11 +4,24 @@ When all work on a feature branch is complete (code committed, review done, must
 
 **PR ownership:** Only the team member who implemented the work creates the PR. The Program Director must NOT create duplicate PRs for the same branch.
 
+## Comment-Based Reviews (Mandatory)
+
+All agents share a single GitHub user account. **`gh pr review --approve` is blocked** — it always fails with "cannot approve your own pull request". All PR reviews MUST use comment-based reviews instead.
+
+**Review format** (posted via `gh pr comment`):
+```
+Requestor: <PR author name>
+Requestee: <reviewer name>
+RequestOrReplied: Approved | Changes Requested
+```
+
+The `Requestor` must differ from the branch author (validated by the merge hook). This is enforced by the `block_gh_pr_review.py` PreToolUse hook and validated by `validate_pr_review.py` at merge time.
+
 ## PR Review Workflow for Deployments Branch PRs
 
 1. **Create the PR** targeting `deployments/phase{N}/wave-{M}`.
 2. **Notify a reviewer** — the PR creator must notify at least one other team member to review the PR. Use SendMessage or a GitHub comment to notify. **A PR MUST NOT be merged without at least one peer review.** For waves with fewer than 4 engineers, the manager's review counts but must include a substantive review comment (not just "LGTM").
-3. **Reviewer performs the review** and posts a comment on the PR with:
+3. **Reviewer performs the review** and posts a comment-based review on the PR with:
    - **Must-fix items** — blocks merge; the submitter must resolve before proceeding.
    - **Tech debt items** — does not block merge; tracked as GitHub Issues.
    - The reviewer then **notifies the PR creator** (via SendMessage or mention) that the review is complete and what action is needed.
