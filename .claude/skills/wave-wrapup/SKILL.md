@@ -185,6 +185,52 @@ gh pr create --base main --head "deployments/phase{P}/wave-{M}" \
 
 **Do NOT merge to main without user approval.** This is a significant action that affects all downstream repos.
 
+### 12. Memory-to-automation audit
+
+Examine all memory files in the project memory directory for entries that describe behaviors, rules, or patterns that could be codified as a **hook**, **skill**, or **charter update** instead of remaining as soft memory.
+
+**Process:**
+
+1. **Read all memory files:**
+   ```bash
+   ls ~/.claude/projects/*/memory/*.md
+   ```
+
+2. **For each memory file**, classify it:
+   | Category | Criteria | Action |
+   |----------|----------|--------|
+   | **Hook candidate** | Describes a rule that should be enforced automatically (e.g., "always do X before Y", "never do Z") | Create the hook, add to settings.json, create GH issue for bookkeeping |
+   | **Skill candidate** | Describes a repeatable multi-step workflow (e.g., "when doing X, follow these steps") | Create the skill in `.claude/skills/`, create GH issue |
+   | **Charter update** | Describes a process rule or convention that should be documented for all agents | Update the relevant charter section, create GH issue |
+   | **Keep as memory** | User-specific context, preferences, or project state that doesn't fit the above | Leave as-is |
+
+3. **For each hook/skill/charter candidate:**
+   a. Create a GitHub Issue describing the automation opportunity
+   b. **Assign to the best-fit team member** based on the charter mapping:
+      - Hooks and charter updates → Aino Virtanen (Standards & Quality Lead)
+      - Skills → Aino Virtanen or the domain expert for that workflow
+      - Code changes → the relevant repo's tech lead
+   c. **Spawn or message that person** with the issue details and full context
+   d. Wait for them to confirm completion
+   e. Once confirmed: verify the implementation (hook works, skill invokes, charter reads correctly)
+   f. Push changes and close the issue
+   g. **Delete or update the memory file** — if the memory's content is now fully captured in a hook/skill/charter, remove it. If partially captured, update it to reference the new automation.
+
+4. **Report what was converted:**
+   ```
+   **Memory-to-Automation Audit**
+
+   | Memory File | Classification | Action Taken | Issue |
+   |-------------|---------------|--------------|-------|
+   | feedback_x.md | Hook | Created validate_x.py | #N |
+   | project_y.md | Keep | No action | — |
+   | ...         | ...           | ...          | ...   |
+   ```
+
+**Why:** Memory files accumulate rules and patterns that should be enforced automatically. If a memory says "always do X", that's a hook. If it says "follow these steps for Y", that's a skill. Leaving these as memories means they only work when the LLM happens to load them — hooks and skills are deterministic.
+
+**Designated owner:** Aino Virtanen handles most conversions (hooks, charter, standards). The orchestrator spawns her with the audit list and she reports back when done.
+
 ## What remains manual
 
 - User must approve merge sequence before any PR is merged
@@ -192,3 +238,4 @@ gh pr create --base main --head "deployments/phase{P}/wave-{M}" \
 - Deferred issues need user decision on next-wave placement
 - Final-wave merge to main requires explicit user approval
 - `/wave-retro` must be run separately after wrapup completes
+- Memory audit classifications are proposed — user can override keep/convert decisions
