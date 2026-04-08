@@ -6,28 +6,32 @@
   "phase_tracking": {
     "phase_1": {
       "name": "Foundation PRs",
-      "status": "in_progress",
-      "merged": ["IG #736", "LP #48", "ingest #5"],
-      "failing_ci": ["IG #733 (e2e — useAuth.ts type error)", "IG #734 (e2e — rebase + unused var)", "IG #735 (lint — ruff format dashboard.py)"],
-      "investigating": ["deploy #22 (plan fail — TF backend config)"],
-      "closed_issues": ["IG #708", "IG #709", "LP #44", "LP #45", "LP #47", "ingest #1"]
+      "status": "complete",
+      "merged": ["IG #736", "IG #735", "IG #733", "LP #48", "ingest #5"],
+      "open": ["IG #734 (e2e Playwright fix needed — #740/#741)", "deploy #22 (rebase onto fixed main)"],
+      "closed_issues": ["IG #708", "IG #709", "IG #714", "IG #729", "LP #44", "LP #45", "LP #47", "ingest #1"]
     },
     "phase_2": {
       "name": "Auth Hardening",
-      "status": "blocked",
-      "blocked_by": ["IG #733 merge"],
-      "notes": "Cannot proceed until useAuth.ts type error is resolved and PR merged"
+      "status": "ready",
+      "blocked_by": [],
+      "issues": ["IG #727", "IG #728", "IG #731"],
+      "notes": "Unblocked — IG #733 merged"
     },
     "phase_3": {
       "name": "Org Tech-Debt",
-      "status": "ready",
+      "status": "in_progress",
       "blocked_by": [],
-      "notes": "Aino assessing scope now"
+      "completed": ["#23", "#24", "#25", "#29", "#30", "#31", "#42", "#44"],
+      "remaining": ["#21 (Tier 3 — hook dispatcher, subsumes #22)", "#41 (PD persistence)"],
+      "merged_prs": ["#43 (Tier 1+2)", "#45 (spawn delegation)"],
+      "notes": "Tier 1+2 merged. Tier 3 deferred to separate PR."
     },
     "phase_4": {
       "name": "Revenue + Polish",
       "status": "blocked",
       "blocked_by": ["Phase 2 completion", "deploy #22 merge"],
+      "issues": ["IG #716", "IG #722", "LP #43", "deploy #20"],
       "notes": "Depends on auth hardening and TF deployment fix"
     }
   },
@@ -37,23 +41,21 @@
     "deployments_branch": null,
     "wave_status": "no_wave_c_items",
     "blocked_by": [],
-    "last_updated": "2026-04-07T21:45:00Z"
+    "last_updated": "2026-04-07T23:40:00Z"
   },
   "isnad-graph": {
     "latest_deploy": null,
     "status": "active",
     "deployments_branch": null,
-    "wave_status": "in_progress",
+    "wave_status": "phase_1_complete",
     "blocked_by": [],
-    "open_prs": [733, 734, 735],
-    "merged_prs": [736],
+    "open_prs": [734],
+    "merged_prs": [736, 735, 733],
     "ci_status": {
-      "733": "e2e_fail — type error in useAuth.ts, fix in progress",
-      "734": "e2e_fail — needs rebase + unused var cleanup, fix in progress",
-      "735": "lint_fail — ruff format on dashboard.py, fix in progress"
+      "734": "e2e_fail — Playwright navigation element not found (issue #740/#741)"
     },
-    "closed_issues": [708, 709],
-    "last_updated": "2026-04-07T23:00:00Z"
+    "closed_issues": [708, 709, 714, 729],
+    "last_updated": "2026-04-07T23:40:00Z"
   },
   "landing-page": {
     "status": "active",
@@ -63,7 +65,7 @@
     "deploy_status": "live",
     "merged_prs": [48],
     "closed_issues": [44, 45, 47],
-    "last_updated": "2026-04-07T23:00:00Z"
+    "last_updated": "2026-04-07T23:40:00Z"
   },
   "deploy": {
     "status": "active",
@@ -71,10 +73,13 @@
     "wave_status": "in_progress",
     "blocked_by": [],
     "open_prs": [22],
+    "merged_prs": [25],
     "ci_status": {
-      "22": "plan_fail — TF backend config, under investigation"
+      "22": "needs rebase onto fixed main (PR #25 merged — TF backend + secrets fixed)",
+      "25": "merged — TF backend syntax + workflow secrets + job-level env"
     },
-    "last_updated": "2026-04-07T23:00:00Z"
+    "new_issues": [26],
+    "last_updated": "2026-04-07T23:40:00Z"
   },
   "isnad-graph-ingestion": {
     "status": "active",
@@ -83,13 +88,13 @@
     "blocked_by": [],
     "merged_prs": [5],
     "closed_issues": [1],
-    "last_updated": "2026-04-07T23:00:00Z"
+    "last_updated": "2026-04-07T23:40:00Z"
   },
   "isnad-ingest-platform": {
     "status": "active",
     "deployments_branch": null,
-    "wave_status": "in_progress",
+    "wave_status": "phase_1_complete",
     "blocked_by": [],
-    "last_updated": "2026-04-07T21:45:00Z"
+    "last_updated": "2026-04-07T23:40:00Z"
   }
 }
