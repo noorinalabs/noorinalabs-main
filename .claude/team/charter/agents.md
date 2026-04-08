@@ -55,6 +55,29 @@ When starting any work session, the orchestrating Claude instance should:
 
 Skipping retros is a **moderate feedback event** for the orchestrator.
 
+### Per-Repo Worktree Isolation (Child Repos)
+
+**The Agent tool's `isolation: "worktree"` only isolates the parent repo (`noorinalabs-main`). Child repos inside the worktree still share their original working directory.** This means two agents spawned with worktree isolation can still clobber each other's branches inside a child repo.
+
+**Rule:** When spawning a code-writing agent for a child repo, the orchestrator MUST include **explicit per-repo worktree setup** in the agent's prompt:
+
+```bash
+# In the agent's prompt — BEFORE any code work:
+cd /home/parameterization/code/noorinalabs-main/{child-repo}
+git worktree add /tmp/{agent-name} origin/{branch-name}
+# All work happens in /tmp/{agent-name}, NOT the main directory
+```
+
+**Orchestrator checklist for code-writing agent prompts:**
+1. Include `git worktree add /tmp/{agent-name} {base}` as the first setup step
+2. Tell the agent to `cd /tmp/{agent-name}` and work exclusively there
+3. Tell the agent to `git worktree remove /tmp/{agent-name}` on completion (or the orchestrator cleans up)
+4. **Never** instruct two agents to work in the same child repo directory
+
+**Why:** In Wave C Phase 2, two agents sharing the isnad-graph directory cross-contaminated commits — session management code mixed with email verification code, requiring multiple cleanup pushes and blocking CI. This rule prevents that failure mode.
+
+Spawning a code-writing agent without per-repo worktree setup is a **moderate feedback event** for the orchestrator.
+
 ### Worktree Lock Management
 
 Agents working in worktrees MUST manage lockfiles to prevent premature pruning and ghost locks:
