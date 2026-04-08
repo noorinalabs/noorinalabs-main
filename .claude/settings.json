@@ -120,6 +120,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "SendMessage",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/block_shutdown_without_retro.py",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
