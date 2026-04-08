@@ -170,3 +170,44 @@ The org was restructured in Session 3 with new repo-level teams. The matrix abov
 | **Anika Diop-Sarr** | Content quality was excellent, pitch deck copy was strong | **Did not run tests before pushing** — content changes broke unit test assertions. Must run `npm test` before creating PR. |
 | **Bereket Tadesse** (Deploy Mgr) | Three clean deliveries, reliable | None this session |
 | **Lucas Ferreira** | TF CI/CD workflow well-structured | None this session |
+
+---
+
+## Session 5 Trust Updates (2026-04-08) — User Service Extraction Phase 2
+
+### Orchestrator → Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Nadia Khoury (PD) | 3 | **4** ↑ | Comprehensive execution plan with correct parallelism, dependency ordering, merge sequencing, and tech-debt bundling. Stayed alive through entire wave. Valuable process observations. |
+
+### Orchestrator → User-Service Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Anya Kowalczyk (Tech Lead) | 4 | **5** ↑ | Critical path delivery (JWT + JWKS), largest isnad-graph cleanup (-2220 lines), caught HS256 security issue in peer review. Zero CI failures across 2 repos. Strongest Phase 2 contributor. |
+| Mateo Salazar (Engineer) | 4 | 4 | Clean OAuth delivery (23 tests), clean USER node cleanup. Minor divergence on DB session pattern caused merge conflict. Solid but no change warranted. |
+| Idris Yusuf (Security Engineer) | 3 | **4** ↑ | Good RBAC implementation (27 tests), thorough security reviews. HS256 fallback was caught in review and fixed promptly. False positive on PR #763 was a process error, not a judgment failure. Net positive. |
+
+### Orchestrator → isnad-graph Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Nadia Boukhari (Mgr) | 2 | **3** ↑ | Improvement from Session 4 — both reviews were thorough and timely, no stalling. Restored to neutral. |
+
+### Orchestrator Self-Assessment
+
+| Issue | Severity | Action |
+|-------|----------|--------|
+| Skipped retro before agent shutdown (3rd occurrence) | **Moderate** | Must implement pre-shutdown retro gate. Feedback memory saved. |
+| Requestor/Requestee not pre-filled in prompts | **Minor** | Feedback memory saved. Always pre-fill in future prompts. |
+
+### Done Well / Needs Improvement (Phase 2)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Nadia Khoury** (PD) | Execution plan, tech-debt bundling decisions, process observations | None this phase |
+| **Anya Kowalczyk** | Critical path delivery, security review catch, largest cleanup PR | None this phase |
+| **Mateo Salazar** | Clean OAuth, thorough USER node cleanup | DB session placement diverged from team pattern (dependencies.py vs database.py) |
+| **Idris Yusuf** | RBAC implementation, prompt must-fix response | False positive on PR #763 review (grepped wrong tree), HS256 fallback in initial implementation |
+| **Nadia Boukhari** | Timely reviews, no stalling | None this phase (improved) |

@@ -154,3 +154,67 @@ No severe feedback. Team composition stable.
 2. ~~Retros skipped~~ — **RESOLVED this sprint.** Wave-wrapup skill now includes retro as mandatory step.
 3. New service deployment checklist — **Skill exists** (#14 /new-service-deploy) but untested in production. Deferred to Wave C.
 4. Cross-repo secret propagation — **Still undocumented.** Remains open.
+
+---
+
+## 2026-04-08 — User Service Extraction Phase 2 Retrospective
+
+**Scope:** 5 PRs merged across 2 repos (user-service: 3, isnad-graph: 2). 7 issues closed, 2 tech-debt filed. Meta-issue: noorinalabs-main#48.
+
+### Per-Engineer Assessments
+
+#### Anya Kowalczyk (Tech Lead)
+- PRs: US #22 (JWT + 3 tech-debt), IG #760 (replace require_auth)
+- CI failures: 0
+- Must-fix items received: 0
+- Tech-debt bundled: 3 (US #16, #17, Deploy #39)
+- Assessment: Delivered the critical path item (JWT) cleanly with 20 tests. Followed up with the largest isnad-graph change (-2220 lines) in IG #754. Caught the HS256 fallback security issue in Idris's PR. Strongest contributor this phase.
+- Severity: **None** — exemplary performance
+- Reviews given: 2 (PR #23 approved, PR #24 changes requested with valid security finding)
+
+#### Mateo Salazar (Engineer)
+- PRs: US #23 (OAuth providers), IG #763 (remove USER nodes)
+- CI failures: 0
+- Must-fix items received: 0
+- Assessment: Clean OAuth implementation with 23 tests. Moved `get_db_session` to `dependencies.py` instead of `database.py` (diverged from Anya's pattern) — caused merge conflict but not a quality issue. USER node cleanup was thorough.
+- Severity: **None** — solid delivery
+- Reviews given: 2 (PR #22 approved, PR #24 approved)
+
+#### Idris Yusuf (Security Engineer)
+- PRs: US #24 (User CRUD + RBAC)
+- CI failures: 0
+- Must-fix items received: 1 (HS256 fallback — valid finding from Anya, fixed promptly)
+- Assessment: Good RBAC implementation with 27 tests. HS256 fallback was a legitimate security concern caught in review — responded quickly with correct fix (RS256-only + RSA test keys). Security reviews of PRs #22 and #23 were thorough. False positive on PR #763 (flagged already-removed USER node references) — corrected after clarification.
+- Severity: **Minor** — HS256 fallback was a design misjudgment caught in review (system working as intended). False positive in #763 review was a process error (grepped wrong tree).
+- Reviews given: 3 (PR #22 approved, PR #23 approved, PR #763 initially changes-requested then corrected to approved)
+
+#### Nadia Khoury (Program Director)
+- PRs: None (coordination role)
+- Assessment: Delivered a comprehensive execution plan with correct parallelism, dependency ordering, review assignments, and merge sequencing. Tech-debt bundling decisions were sound. Process observations (Requestor/Requestee swap, scaffold alignment) were valuable. Stayed alive through the entire wave as required.
+- Severity: **None** — strong coordination
+
+#### Nadia Boukhari (isnad-graph Manager — review role only)
+- PRs: None
+- Reviews given: 2 (PR #760 approved, PR #763 approved)
+- Assessment: Both reviews were thorough and timely. No stalling issues this session (improvement from Session 4 where she went idle).
+- Severity: **None** — improved from prior wave
+
+#### Orchestrator (self-assessment)
+- **Skipped retro before shutting down agents** — charter violation. Agents were terminated before collecting retro input, updating trust matrix, or writing feedback log. **Moderate self-feedback.** This is a repeated pattern (Waves A, B, and now Phase 2).
+- **Requestor/Requestee format not pre-filled in agent prompts** — all 3 review agents swapped the fields, blocking the first merge attempt. Should have included correct examples in the prompt.
+- **Positive:** Merge conflict resolution was clean and followed the planned sequence. Caught Idris's false positive review on PR #763 by verifying against `origin/main`. Proactively fixed review format on all 3 PRs.
+
+### Top 3 Going Well
+1. **Wave 1 parallelism** — 3 agents delivering simultaneously in the same repo with worktree isolation, zero branch collisions
+2. **Review cycle caught real security issue** — HS256 fallback identified and fixed before merge (system working as designed)
+3. **Net code reduction** — isnad-graph shed ~2200+ lines of auth code, cleanly migrated to user-service
+
+### Top 3 Pain Points
+1. **Retro skipped (again)** — orchestrator shut down agents before running retro. Third occurrence. Needs a hook or hard gate.
+2. **Requestor/Requestee format swapped by all agents** — the charter format is counterintuitive. All 6 initial reviews had it backwards.
+3. **Parallel agents touching shared files (database.py, config.py, main.py, pyproject.toml)** — created predictable merge conflicts that required manual resolution
+
+### Proposed Process Changes
+1. **Pre-shutdown retro gate** — add a hook or checklist that blocks agent shutdown until retro is complete. Rationale: retro has been skipped in 3 of the last 4 waves despite charter mandate.
+2. **Scaffold alignment commit before parallel branches** — when 3+ agents will work in the same repo, merge a "shared infrastructure" commit first (DB session module, config structure, etc.) to reduce conflicts. Rationale: all 3 user-service PRs independently refactored the same circular import.
+3. **Pre-fill Requestor/Requestee in review prompts** — always provide the exact `gh pr comment` command with correct field values in agent prompts. Rationale: 100% error rate when agents filled these themselves.
