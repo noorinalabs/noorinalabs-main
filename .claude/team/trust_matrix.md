@@ -254,3 +254,25 @@ The org was restructured in Session 3 with new repo-level teams. The matrix abov
 | **Anya Kowalczyk** | -866 lines clean removal, bundled 3 issues, fast fix cycle | Verification stub URLs guessed instead of verified |
 | **Mateo Salazar** | 3 deliveries, read user-service routes before coding, clean base64 fix | Logout/logoutAll regression — identical behavior not caught before review |
 | **Lucas Ferreira** | Clean Caddyfile delivery, immediate fix when flagged | None this wave |
+
+---
+
+## Session 7 Trust Updates (2026-04-10) — Phase 2 Wave 1 (Post-Extraction Stabilization)
+
+### Orchestrator → Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Wanjiku Mwangi (TPM) | 3 | **4** ↑ | 3 PRs (2 bug fixes + dispatcher consolidation), zero must-fix items, all reviews approved on first pass. Dispatcher reduced 12 process spawns to 1. Strongest contributor this wave. |
+| Santiago Ferreira (RC) | 5 | 5 | 2 clean PRs (CI workflow + release tagging). CI had pre-existing lint failure (not introduced by his code). Already at max. |
+| Aino Virtanen (SQL) | 5 | 5 | 1 PR (label naming hook), reviewed all 7 PRs as second reviewer, all approved. Already at max. |
+| Nadia Khoury (PD) | 4 | 4 | 1 PR (Redis health check security fix in deploy), clean delivery. Coordination role adequate. No change. |
+
+### Done Well / Needs Improvement (Phase 2 Wave 1)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Wanjiku Mwangi** | 3 PRs covering critical bug fixes and major tech-debt (dispatcher). All clean, zero must-fix. | None this wave |
+| **Santiago Ferreira** | CI workflow for hooks (new infrastructure), release tagging cadence (process formalization). Both well-documented. | Pre-existing lint issues not caught before merge — CI introduced by his PR fails on his own branch |
+| **Aino Virtanen** | Label naming convention hook, 7 reviews as second reviewer. Consistent quality gate. | None this wave |
+| **Nadia Khoury** | Redis health check fix (security), coordination of wave execution | None this wave |

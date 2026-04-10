@@ -497,3 +497,69 @@ None. Cleanest wave to date — zero must-fix items across 8 PRs.
 
 ### Fire/Hire Actions
 None. All team members performed well. Minor feedback items only.
+
+---
+
+## 2026-04-10 — Phase 2 Wave 1 Retrospective (Post-Extraction Stabilization)
+
+**Scope:** 7 PRs merged across 2 repos (main: 6, deploy: 1). 7 issues closed (Main #61, #63, #40, #59, #38, #21, Deploy #41). 1 issue remains open (Main #62 — user-action-required, production data migration).
+
+### Per-Engineer Assessments
+
+#### Wanjiku Mwangi (TPM)
+- PRs: Main #68 (validate_review_comment_format --repo fix), Main #69 (branch freshness worktree CWD fix), Main #73 (Bash hook dispatcher consolidation)
+- CI failures: 1 (PR #73 — pre-existing ruff I001 import sorting in validate_commit_identity.py and validate_wave_context.py, not introduced by her code)
+- Must-fix items received: 0
+- Reviews given: 2 (PR #70 first reviewer, PR #71 first reviewer)
+- Assessment: Strongest contributor this wave — 3 PRs covering 2 critical bug fixes and the largest tech-debt item (dispatcher reduces 12 process spawns to 1). All code was clean; the CI failure is pre-existing lint in other files. Dispatcher architecture (importlib dynamic loading, sys.exit interception, fail-open) is well-designed.
+- Severity: **None** — exemplary delivery
+
+#### Santiago Ferreira (RC)
+- PRs: Main #72 (CI workflow for hooks + auto_set_env_test.py false positive fix), Main #71 (release tagging cadence)
+- CI failures: 1 (PR #72 — same pre-existing ruff I001 lint issue; ironic since this PR introduced the CI workflow that exposed it)
+- Must-fix items received: 0
+- Reviews given: 3 (PR #68 first reviewer, PR #69 first reviewer, PR #73 first reviewer)
+- Assessment: Two solid deliveries. CI workflow is well-scoped (ruff lint+format, mypy, smoke tests). Release tagging cadence formalizes a missing process. The auto_set_env_test.py fix (heredoc stripping) resolves a real false positive. CI failure is pre-existing code — his workflow correctly caught it.
+- Severity: **None** — clean delivery
+
+#### Aino Virtanen (SQL)
+- PRs: Main #70 (label naming convention hook)
+- CI failures: 0
+- Must-fix items received: 0
+- Reviews given: 7 (second reviewer on all 7 PRs across both repos)
+- Assessment: Label naming hook correctly distinguishes assignee labels (UPPER_SNAKE_CASE) from category labels (kebab-case). Reviewed every PR in the wave as second reviewer — all approved on first pass. Consistent quality gate.
+- Severity: **None** — exemplary quality gate work
+
+#### Nadia Khoury (PD)
+- PRs: Deploy #58 (Redis health check password exposure fix)
+- CI failures: 0
+- Must-fix items received: 0
+- Reviews given: 0 (coordination role)
+- Assessment: Security fix was clean — REDISCLI_AUTH env var instead of -a flag prevents password exposure in /proc/*/cmdline. Both redis and user-redis services updated consistently. Wave coordination adequate.
+- Severity: **None** — clean delivery
+
+### Top 3 Going Well
+1. **Zero must-fix items across all 7 PRs** — every PR approved on first review pass by both reviewers. Cleanest wave alongside Phase 4.
+2. **Dispatcher consolidation shipped** — 12 Bash hook process spawns reduced to 1, major developer experience improvement without breaking individual hook testability.
+3. **All Phase 4 pain points addressed** — branch freshness worktree bug (#63), review comment --repo bug (#61), label naming (#40), CI for hooks (#38), release tagging (#59) — systematic tech-debt clearance.
+
+### Top 3 Pain Points
+1. **CI failures from pre-existing lint** — Santiago's new CI workflow (PR #72) correctly exposed ruff I001 import sorting issues in 2 hooks (validate_commit_identity.py, validate_wave_context.py), but these weren't fixed before merge. Both PR #72 and PR #73 show CI failure on main.
+2. **Main #62 remains open** — production data migration requires manual user action. Cannot be resolved by the team. Labeled user-action-required.
+3. **No CI existed before this wave** — hooks had no automated quality gate until PR #72. All prior hook PRs were reviewed manually only.
+
+### Proposed Process Changes
+1. **Fix pre-existing lint before merging CI workflow** — when introducing a new CI check, fix all existing violations in the same PR or a predecessor PR. Rationale: PR #72 introduced CI that immediately failed on pre-existing code, meaning CI is red on main.
+2. **Add ruff import sorting fix to tech-debt backlog** — file issue for the 3 I001 violations in validate_commit_identity.py and validate_wave_context.py. Rationale: CI is currently failing on main.
+3. **Dispatcher should be default pattern for new hook types** — if Agent or SendMessage hooks accumulate, consolidate early. Rationale: Wanjiku's dispatcher proved the pattern works; don't wait for 12 hooks to accumulate again.
+
+### Trust Matrix Changes
+| Member | Old | New | Reason |
+|--------|-----|-----|--------|
+| Wanjiku Mwangi (TPM) | 3 | **4** ↑ | 3 PRs, zero must-fix, dispatcher consolidation. Strongest wave contributor. |
+| Santiago Ferreira (RC) | 5 | 5 | 2 clean PRs. Already at max. |
+| Aino Virtanen (SQL) | 5 | 5 | 7 reviews, label hook. Already at max. |
+| Nadia Khoury (PD) | 4 | 4 | Clean security fix. Adequate coordination. No change. |
+
+### Fire/Hire Actions
+None. All team members performed well. Zero must-fix items across 7 PRs.
