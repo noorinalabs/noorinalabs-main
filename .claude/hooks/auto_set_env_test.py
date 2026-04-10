@@ -26,11 +26,24 @@ def main() -> None:
 
     command = input_data.get("tool_input", {}).get("command", "")
 
-    # Match pytest, uv run pytest, or make test commands
-    is_test_cmd = bool(
-        re.search(r"\bpytest\b", command)
-        or re.search(r"\bmake\s+test\b", command)
-    )
+    # Strip heredoc content to avoid false positives on text inside --body
+    # or issue descriptions that mention "pytest"
+    stripped = re.sub(r"<<'?EOF'?\s*\n.*?\nEOF", "", command, flags=re.DOTALL)
+    # Also strip single-quoted and double-quoted strings (body text, etc.)
+    stripped = re.sub(r"'[^']*'", "''", stripped)
+    stripped = re.sub(r'"[^"]*"', '""', stripped)
+
+    # Match pytest/uv run pytest/make test as actual commands, not inside text.
+    # Check each sub-command in a chained pipeline.
+    is_test_cmd = False
+    for segment in re.split(r"\s*(?:&&|\|\||\||;)\s*", stripped):
+        seg = segment.strip()
+        # Skip env var assignments at the front
+        while re.match(r"[A-Za-z_][A-Za-z0-9_]*=\S*\s+", seg):
+            seg = re.sub(r"^[A-Za-z_][A-Za-z0-9_]*=\S*\s+", "", seg)
+        if re.match(r"(?:uv\s+run\s+)?pytest\b", seg) or re.match(r"make\s+test\b", seg):
+            is_test_cmd = True
+            break
 
     if not is_test_cmd:
         sys.exit(0)

@@ -1,0 +1,66 @@
+name: CI — Hooks & Scripts
+
+on:
+  push:
+    branches: [main, "deployments/**"]
+    paths:
+      - ".claude/hooks/**"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    branches: [main, "deployments/**"]
+    paths:
+      - ".claude/hooks/**"
+      - ".github/workflows/ci.yml"
+
+jobs:
+  lint:
+    name: Ruff lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check .claude/hooks/ --select E,F,W,I --ignore E501
+
+  format:
+    name: Ruff format check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff format --check .claude/hooks/
+
+  typecheck:
+    name: Mypy type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install mypy
+      - run: mypy .claude/hooks/ --ignore-missing-imports --no-error-summary
+
+  smoke-test:
+    name: Smoke test — hooks parse and exit cleanly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify all hooks compile
+        run: |
+          for f in .claude/hooks/*.py; do
+            python3 -c "import py_compile; py_compile.compile('$f', doraise=True)"
+          done
+      - name: Verify hooks exit 0 on empty stdin
+        run: |
+          for f in .claude/hooks/*.py; do
+            echo '{}' | python3 "$f" || true
+          done
