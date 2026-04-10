@@ -106,6 +106,26 @@ All Bash-matcher hooks are consolidated into a **single dispatcher** (`bash_disp
 
 **Why:** Phase 2 Wave 1 PR #73 consolidated 12 individual Bash-matcher hooks into this pattern, reducing process spawns from 12 to 1 per Bash call.
 
+## Dispatcher Consolidation Policy
+
+When hooks sharing the same matcher type (Bash, Agent, SendMessage, etc.) accumulate beyond **3**, they must be consolidated into a dispatcher immediately. Do not wait for hook sprawl to become a performance problem.
+
+**Threshold:** >3 hooks of the same matcher type triggers mandatory consolidation.
+
+**Pattern to follow:** The Bash hook dispatcher (`bash_dispatcher.py`) is the reference implementation. Key properties any new dispatcher must preserve:
+- Dynamic module loading via `importlib.util` — individual hooks remain standalone and independently testable
+- Single entry in `.claude/settings.json` per matcher type — the dispatcher is the only registered hook
+- Fail-open on individual hook crashes — log a warning, continue to the next hook
+- Short-circuit on block — if any hook returns a blocking result, skip subsequent hooks
+- Intercept `sys.exit` calls from individual hooks to prevent dispatcher termination
+
+**When to apply:**
+- Before adding a 4th hook of the same matcher type, consolidate the existing hooks into a dispatcher first
+- When reviewing PRs that add new hooks, verify the hook count and flag if consolidation is needed
+- This applies to all matcher types: Bash, Agent, SendMessage, PreToolUse, PostToolUse
+
+**Why:** Phase 2 Wave 1 accumulated 12 Bash-matcher hooks before consolidation (PR #73). Each hook spawned a separate Python process per Bash call — 12 process spawns for every command. Consolidation reduced this to 1. Apply the pattern proactively to avoid repeating this accumulation.
+
 ## Hook 13: Auto-Add Issues to Project Board (`auto_add_issue_to_board.py`)
 
 - **What it automates:** After `gh issue create` runs, detects the new issue URL in stdout and runs `gh project item-add` to add it to the Cross-Repo Wave Plan board (project #2).
