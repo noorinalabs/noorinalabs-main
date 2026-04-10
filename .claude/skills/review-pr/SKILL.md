@@ -10,10 +10,10 @@ Review a pull request following the team charter.
 1. Fetch PR diff: `gh pr diff {number}`
 2. Check CI status: `gh pr checks {number}` — report if failing
 3. Review for: correctness, error handling, test coverage, ruff/mypy compliance
-4. Post review comment using charter format:
+4. Post review comment using charter format (Requestor = PR author, Requestee = reviewer):
    ```
-   Requestor: Dmitri.Volkov
-   Requestee: {PR author from charter}
+   Requestor: {PR author from charter — the person who requested the review}
+   Requestee: {your name — the reviewer doing the review}
    RequestOrReplied: Request
 
    **Review: {LGTM or issues}**

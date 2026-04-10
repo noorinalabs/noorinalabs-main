@@ -74,6 +74,18 @@ When a feature spans multiple repositories:
 5. TPM tracks cross-repo dependencies and timeline risks
 6. Release Coordinator manages deployment sequencing across repos
 
+## Bug Report Workflow
+
+When the user reports a bug, broken behavior, or missing feature in conversation, execute the full issue-to-PR lifecycle automatically — no explicit request needed:
+
+1. **File the GitHub issue** — correct repo, validate labels exist first (hook enforced)
+2. **Label for current wave** — check which wave is in progress and apply the wave label
+3. **Add to project board** — add the issue to the GitHub Project (project 2, `gh project item-add 2 --owner noorinalabs --url <url>`)
+4. **Fix the bug** — spawn a team member if needed, work through the fix in a worktree
+5. **Create a PR** — link it back to the issue, follow charter conventions (2 reviewers, branch naming, commit identity)
+
+This is the default behavior for all bug reports. Filing alone is never sufficient.
+
 ## Shared Conventions
 
 - All repos use **GitHub Flow** (feature branches off `main`, PRs for merge)
