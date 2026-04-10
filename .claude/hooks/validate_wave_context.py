@@ -9,8 +9,8 @@ Exit codes:
 """
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 _STATUS_PATH = Path(__file__).resolve().parent.parent.parent / "cross-repo-status.json"
 
