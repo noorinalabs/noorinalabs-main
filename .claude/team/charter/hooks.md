@@ -30,10 +30,14 @@ The following charter rules are enforced automatically via Claude Code hooks in 
 - **Manual steps remaining:** None — the hook blocks and instructs the user to prepend `ENVIRONMENT=test`.
 - **Emergency override:** Remove the hook entry from `.claude/settings.json`.
 
-## Hook 5: Validate Labels Before `gh issue create` (`validate_labels.py`)
+## Hook 5: Validate Labels (`validate_labels.py`)
 
-- **What it automates:** GitHub Label Hygiene — validates that all `--label` values exist in the repository before `gh issue create` runs.
-- **Augments:** The label hygiene section. The manual rule to run `gh label list` first is now enforced automatically.
+- **What it automates:**
+  1. **Label existence** — validates that all `--label` values exist in the repository before `gh issue create` runs.
+  2. **Label naming convention** — validates that new labels created via `gh label create` follow the naming convention:
+     - **Assignee labels** (all uppercase): must match `^[A-Z][A-Z0-9_-]+$` (e.g., `WANJIKU_MWANGI`)
+     - **All other labels**: must match `^[a-z][a-z0-9-]*$` (kebab-case, e.g., `tech-debt`, `p2-wave-1`, `bug`)
+- **Augments:** The label hygiene section and the new Label Naming Convention.
 - **Manual steps remaining:** None — the hook fetches labels and validates automatically.
 - **Emergency override:** Remove the hook entry from `.claude/settings.json`. If `gh label list` is unavailable (network issue), the hook allows the command with a warning.
 

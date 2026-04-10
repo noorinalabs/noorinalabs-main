@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: Validate labels before gh issue create.
+"""PreToolUse hook: Validate labels for gh issue create and gh label create.
 
-Extracts --label values from `gh issue create` commands and verifies each
-label exists in the repository. Blocks execution if any label is missing.
+1. For `gh issue create` — verifies each --label exists in the repository.
+2. For `gh label create` — enforces naming convention:
+   - Assignee labels (all uppercase): must match ^[A-Z][A-Z0-9_-]+$
+   - All other labels: must match ^[a-z][a-z0-9-]+$ (kebab-case)
+   - Wave/phase labels (e.g., p2-wave-1): allowed as kebab-case
 
 Exit codes:
-  0 — allow (not gh issue create, or all labels exist)
-  2 — block (missing labels detected)
+  0 — allow (not a label command, or all checks pass)
+  2 — block (missing labels or naming convention violation)
 """
 
 import json
 import re
 import subprocess
 import sys
+
+# Patterns for label naming convention
+ASSIGNEE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_-]+$")
+KEBAB_CASE_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
 
 
 def get_existing_labels() -> set[str]:
@@ -49,31 +56,63 @@ def extract_labels(command: str) -> list[str]:
     return labels
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
+def extract_label_create_name(command: str) -> str | None:
+    """Extract the label name from a gh label create command.
 
-    tool_name = input_data.get("tool_name", "")
-    if tool_name != "Bash":
-        sys.exit(0)
+    Handles: gh label create "name", gh label create 'name', gh label create name
+    """
+    match = re.search(
+        r"\bgh\s+label\s+create\s+[\"']([^\"']+)[\"']",
+        command,
+    )
+    if match:
+        return match.group(1).strip()
+    match = re.search(
+        r"\bgh\s+label\s+create\s+(\S+)",
+        command,
+    )
+    if match:
+        name = match.group(1).strip()
+        # Exclude flags like --color, --description
+        if name.startswith("-"):
+            return None
+        return name
+    return None
 
-    command = input_data.get("tool_input", {}).get("command", "")
 
-    # Only match gh issue create commands
-    if not re.search(r"\bgh\s+issue\s+create\b", command):
-        sys.exit(0)
+def validate_label_convention(label_name: str) -> str | None:
+    """Validate label name against naming convention.
 
-    # Extract labels from the command
+    Returns None if valid, or an error message if invalid.
+    """
+    # Check if it looks like an assignee label (starts with uppercase)
+    if label_name[0].isupper():
+        if ASSIGNEE_PATTERN.match(label_name):
+            return None
+        return (
+            f"Assignee label '{label_name}' must be UPPER_SNAKE_CASE "
+            f"(pattern: ^[A-Z][A-Z0-9_-]+$). "
+            f"Example: WANJIKU_MWANGI, SANTIAGO_FERREIRA"
+        )
+
+    # All other labels must be kebab-case
+    if KEBAB_CASE_PATTERN.match(label_name):
+        return None
+    return (
+        f"Label '{label_name}' must be kebab-case "
+        f"(pattern: ^[a-z][a-z0-9-]*$). "
+        f"Example: tech-debt, p2-wave-1, bug"
+    )
+
+
+def handle_issue_create(command: str) -> None:
+    """Validate labels exist before gh issue create."""
     labels = extract_labels(command)
     if not labels:
         sys.exit(0)
 
-    # Fetch existing labels
     existing = get_existing_labels()
     if not existing:
-        # If we can't fetch labels (network issue, etc.), allow with a warning
         result = {
             "decision": "allow",
             "systemMessage": (
@@ -84,12 +123,10 @@ def main() -> None:
         print(json.dumps(result))
         sys.exit(0)
 
-    # Check for missing labels
     missing = [label for label in labels if label not in existing]
     if not missing:
         sys.exit(0)
 
-    # Build helpful error with gh label create suggestions
     suggestions = "\n".join(
         f'  gh label create "{label}"' for label in missing
     )
@@ -103,6 +140,52 @@ def main() -> None:
     }
     print(json.dumps(result))
     sys.exit(2)
+
+
+def handle_label_create(command: str) -> None:
+    """Validate naming convention for gh label create."""
+    label_name = extract_label_create_name(command)
+    if not label_name:
+        sys.exit(0)
+
+    error = validate_label_convention(label_name)
+    if error is None:
+        sys.exit(0)
+
+    result = {
+        "decision": "block",
+        "reason": (
+            f"BLOCKED: Label naming convention violation.\n{error}\n\n"
+            "Convention: assignee labels use UPPER_SNAKE_CASE, "
+            "all other labels use kebab-case.\n"
+            "See charter § Label Naming Convention."
+        ),
+    }
+    print(json.dumps(result))
+    sys.exit(2)
+
+
+def main() -> None:
+    try:
+        input_data = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        sys.exit(0)
+
+    tool_name = input_data.get("tool_name", "")
+    if tool_name != "Bash":
+        sys.exit(0)
+
+    command = input_data.get("tool_input", {}).get("command", "")
+
+    # Check for gh label create (naming convention enforcement)
+    if re.search(r"\bgh\s+label\s+create\b", command):
+        handle_label_create(command)
+
+    # Check for gh issue create (label existence validation)
+    if re.search(r"\bgh\s+issue\s+create\b", command):
+        handle_issue_create(command)
+
+    sys.exit(0)
 
 
 if __name__ == "__main__":
