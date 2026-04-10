@@ -314,6 +314,94 @@ None. Idris received moderate feedback — single-wave pattern, will monitor.
 
 ---
 
+## 2026-04-09/10 — User Service Extraction Phase 4 Retrospective (Final Phase)
+
+**Scope:** 8 PRs merged across 4 repos (isnad-graph: 3, deploy: 3, user-service: 1, main: 1). 8 issues closed (US #11, IG #758, #759, #769, Deploy #33, #49, #53, Main #58). 2 new issues filed (Main #61). Meta-issue: noorinalabs-main#48.
+
+**This phase completes the user-service extraction.** isnad-graph has zero auth-provider code — it is purely a JWT consumer via JWKS.
+
+### Per-Engineer Assessments
+
+#### Mateo Salazar (Engineer)
+- PRs: US #42 (data migration script)
+- CI failures: 0
+- Must-fix items received: 0
+- Assessment: Clean delivery of the critical-path migration script — CLI with dry-run, idempotent, 32 tests, verification step. Well-scoped and production-ready.
+- Severity: **None**
+
+#### Ingrid Lindqvist (Engineer)
+- PRs: IG #772 (Trivy SHA fix), IG #773 (15 cross-service auth integration tests)
+- CI failures: 0
+- Must-fix items received: 0
+- Assessment: Fast delivery — both PRs up before any other Wave 1 agent. Integration tests cover all 6 scenarios with real RSA keys and mock JWKS. Solid test infrastructure.
+- Severity: **None**
+
+#### Santiago Ferreira (Release Coordinator)
+- PRs: Deploy #54 (Caddy bare-path fix), Deploy #55 (migration runbook), Deploy #56 (.claude alignment)
+- CI failures: 0
+- Must-fix items received: 0
+- Assessment: Three clean deliveries across both waves. Runbook is comprehensive (10 sections with commands and timelines). Roster cards and hooks copied correctly. Script path mismatch with Mateo's migration script was a coordination gap, not a quality issue.
+- Severity: **None** — exemplary
+
+#### Anya Kowalczyk (Tech Lead)
+- PRs: IG #774 (remove src/auth/ directory)
+- CI failures: 0
+- Must-fix items received: 0
+- Assessment: Clean execution of the final auth extraction. Only 3 files / 136 lines remained (earlier waves had done the heavy lifting). Consolidated JWKS validation into src/api/auth.py, updated 18 import sites. 496 tests pass. Reported branch freshness hook issue with worktrees.
+- Severity: **None**
+
+#### Aino Virtanen (Standards & Quality Lead)
+- PRs: Main #60 (validate_pr_review.py --repo fix)
+- Reviews given: 7 (all Wave 1 + Wave 2 PRs)
+- Assessment: Fixed the cross-repo review hook that blocked every merge in Wave 2. Every PR she reviewed was approved on first pass — team produced clean work. Identified the identical bug in validate_review_comment_format.py (filed as Main #61).
+- Severity: **None** — exemplary
+
+#### Nadia Khoury (Program Director)
+- PRs: None (coordination)
+- Reviews given: 8 (all PRs as second reviewer)
+- Assessment: Two-wave structure was the right call. Caught runbook/script path mismatch in review. Review load was unbalanced (8 of 8 PRs) — should distribute more.
+- Severity: **None**
+
+#### Orchestrator (self-assessment)
+- Duplicate review requests sent to Aino (she'd already reviewed before messages arrived) — visibility gap
+- Stale Wave 1 Santiago agent created duplicate PR #57 — should have confirmed shutdown before spawning Wave 2 agent
+- Did NOT skip retro ✓ (second consecutive wave)
+- Severity: **Minor** — duplicate agent/PR was cleaned up with no impact
+
+### Top 3 Going Well
+1. **Incremental extraction strategy validated** — auth removal was trivial because earlier waves had already gutted the heavy code
+2. **Zero must-fix items across all 8 PRs** — cleanest wave to date, every PR approved on first review
+3. **Tech-debt cleared** — 6 items resolved alongside core work without slowing down
+
+### Top 3 Pain Points
+1. **Branch freshness hook doesn't respect worktree CWD** — checks parent repo instead of child repo in worktrees (Anya burned 3 PR creation attempts)
+2. **validate_review_comment_format.py has same --repo bug** as validate_pr_review.py (Main #61) — Aino had to bypass for all reviews
+3. **Runbook/script path mismatch** — parallel PRs referencing each other had no shared contract for entry point
+
+### Agent-Reported Issues
+- Branch freshness hook should detect git repo from command context, not process CWD (Anya)
+- Audit all hooks for cross-repo --repo bug pattern, not just one-off fixes (Aino)
+- Repo alignment (.claude, hooks, roster) should be Phase 0 prerequisite (Santiago)
+- Cross-PR interface contracts needed when two agents reference each other's output (Nadia)
+- Cap single reviewer at 4-5 PRs per wave (Nadia)
+
+### Proposed Process Changes
+1. **Cross-PR contracts in execution plans** — when PRs reference each other, include explicit interface spec (paths, CLI flags, formats) in both agent prompts
+2. **Hook audit after any hook fix** — check all hooks for the same bug pattern before closing
+3. **Repo .claude alignment as Phase 0** — before any repo gets its first wave, ensure hooks/roster/settings are in place
+4. **Branch freshness hook CWD fix** — file issue for worktree-aware git repo detection
+
+### Trust Matrix Changes
+| Member | Old | New | Reason |
+|--------|-----|-----|--------|
+| Ingrid Lindqvist | 4 | 4 | Fast delivery, 15 integration tests. Solid but no change warranted. |
+| All others | unchanged | | Zero must-fix items across the board. Already at appropriate levels. |
+
+### Fire/Hire Actions
+None. Cleanest wave to date — zero must-fix items across 8 PRs.
+
+---
+
 ## 2026-04-09 — User Service Extraction Phase 3 Wave 2 Retrospective
 
 **Scope:** 11 PRs merged across 3 repos (user-service: 4, deploy: 4, isnad-graph: 2, main: 1 issue-only). 6 issues closed (IG #756, #757, #761, #762, US #33, #34). 5 new issues filed (Main #58, #59, Deploy #49, #53, IG #769). Meta-issue: noorinalabs-main#48.
