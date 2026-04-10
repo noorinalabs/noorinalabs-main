@@ -63,11 +63,22 @@ def extract_comment_body(command: str) -> str | None:
     return None
 
 
-def get_branch_name(pr_number: str) -> str | None:
+def extract_repo_from_command(command: str) -> str | None:
+    """Extract --repo value from gh pr comment command."""
+    match = re.search(r"--repo\s+(\S+)", command)
+    if match:
+        return match.group(1)
+    return None
+
+
+def get_branch_name(pr_number: str, repo: str | None = None) -> str | None:
     """Fetch the head branch name for a PR."""
     try:
+        cmd = ["gh", "pr", "view", pr_number, "--json", "headRefName"]
+        if repo:
+            cmd.extend(["--repo", repo])
         result = subprocess.run(
-            ["gh", "pr", "view", pr_number, "--json", "headRefName"],
+            cmd,
             capture_output=True, text=True, timeout=15,
         )
         if result.returncode != 0:
@@ -114,8 +125,9 @@ def main() -> None:
         # Not a review comment — allow
         sys.exit(0)
 
-    # Extract PR number
+    # Extract PR number and repo
     pr_number = extract_pr_number(command)
+    repo = extract_repo_from_command(command)
     if not pr_number:
         # Can't determine PR — allow with warning
         result = {
@@ -129,7 +141,7 @@ def main() -> None:
         sys.exit(0)
 
     # Get branch name
-    branch_name = get_branch_name(pr_number)
+    branch_name = get_branch_name(pr_number, repo=repo)
     if not branch_name:
         result = {
             "decision": "allow",
