@@ -27,6 +27,9 @@ tmp/
 temp/
 .cache/
 
+# Claude Code local state (machine-specific)
+.claude/projects/
+
 # Editor files
 *.swp
 *.swo
