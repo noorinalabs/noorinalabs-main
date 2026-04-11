@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: Warn when agents are spawned without wave context.
+"""PreToolUse hook: Warn when agents are spawned without wave context or ontology.
 
-Checks for an active wave marker in cross-repo-status.json. If no active wave
-is found, emits a warning (does not block).
+Two checks on Agent tool calls:
+1. Active wave marker in cross-repo-status.json
+2. Ontology context in the agent's prompt (keyword search)
 
 Exit codes:
   0 — always allow (warning only)
@@ -14,12 +15,24 @@ from pathlib import Path
 
 _STATUS_PATH = Path(__file__).resolve().parent.parent.parent / "cross-repo-status.json"
 
+# Keywords that indicate ontology librarian output was included in the prompt
+_ONTOLOGY_MARKERS = [
+    "## Ontology Context",
+    "**Ontology:",
+    "ontology librarian",
+    "/ontology-librarian",
+    "**Entities:**",
+    "**Services:**",
+    "Ontology is current",
+    "Ontology has",
+    "ontology/",
+]
+
 
 def has_active_wave() -> bool:
     """Check if cross-repo-status.json indicates an active wave."""
     try:
         data = json.loads(_STATUS_PATH.read_text(encoding="utf-8"))
-        # Check for explicit wave_active marker
         if data.get("wave_active"):
             return True
         if data.get("current_wave"):
@@ -27,6 +40,12 @@ def has_active_wave() -> bool:
         return False
     except (FileNotFoundError, json.JSONDecodeError, KeyError):
         return False
+
+
+def has_ontology_context(prompt: str) -> bool:
+    """Check if the agent prompt contains ontology context."""
+    prompt_lower = prompt.lower()
+    return any(marker.lower() in prompt_lower for marker in _ONTOLOGY_MARKERS)
 
 
 def main() -> None:
@@ -39,19 +58,32 @@ def main() -> None:
     if tool_name != "Agent":
         sys.exit(0)
 
-    if has_active_wave():
-        sys.exit(0)
+    tool_input = input_data.get("tool_input", {})
+    prompt = tool_input.get("prompt", "")
 
-    result = {
-        "decision": "allow",
-        "systemMessage": (
-            "WARNING: No active wave context detected in cross-repo-status.json. "
-            "Run `/wave-kickoff` to set up wave context before spawning agents. "
-            "Proceeding without wave context means retros, trust updates, and "
-            "charter enforcement may be skipped."
-        ),
-    }
-    print(json.dumps(result))
+    warnings = []
+
+    if not has_active_wave():
+        warnings.append(
+            "No active wave context detected in cross-repo-status.json. "
+            "Run `/wave-kickoff` to set up wave context before spawning agents."
+        )
+
+    if prompt and not has_ontology_context(prompt):
+        warnings.append(
+            "Agent prompt does not contain ontology context. "
+            "Per charter, the orchestrator MUST run `/ontology-librarian {topic}` "
+            "and include the output in the agent's spawn prompt before any code changes. "
+            "This prevents assigning stale issues and ensures domain context."
+        )
+
+    if warnings:
+        result = {
+            "decision": "allow",
+            "systemMessage": "WARNING: " + " | ".join(warnings),
+        }
+        print(json.dumps(result))
+
     sys.exit(0)
 
 

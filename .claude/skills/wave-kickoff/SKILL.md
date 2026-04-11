@@ -118,7 +118,28 @@ This issue is assigned to you for p{N}-wave-{M}.
 Please begin implementation.
 ```
 
-### 8. Output execution plan
+### 8. Ontology librarian lookup per agent (MANDATORY)
+
+**Before spawning any agent**, the orchestrator MUST run `/ontology-librarian {topic}` for each agent's work area and **include the output in the agent's spawn prompt**. Do NOT tell agents to "run it themselves" — the orchestrator runs it and bakes the context in.
+
+For each agent in the wave:
+1. Identify the repos and code areas they'll modify
+2. Run the librarian with a descriptive query:
+   ```
+   /ontology-librarian {repo} {area being modified}
+   ```
+   Examples:
+   - `/ontology-librarian isnad-graph frontend auth and verification`
+   - `/ontology-librarian user-service Dockerfile and dependencies`
+   - `/ontology-librarian main hooks and CI`
+3. Include the librarian's output (entities, services, conventions, stale warnings) in the agent's spawn prompt under a `## Ontology Context` section
+4. If the librarian flags stale references, note them so the agent treats that information with caution
+
+**Why:** In P2W3, running the librarian before spawning agents identified 10 stale issues (middleware extracted to user-service) — saving significant wasted effort. In P2W2, skipping this step led to 3 already-resolved issues being assigned.
+
+**Enforcement:** The `validate_wave_context.py` PreToolUse hook fires on Agent spawns. Agents spawned without ontology context in their prompt will trigger a warning.
+
+### 9. Output execution plan
 
 Generate and display a structured execution plan with:
 - **Priority ordering:** hotfixes first, then security fixes, then bugs, then features (per charter § Wave Planning & Priority)
