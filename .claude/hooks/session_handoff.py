@@ -226,7 +226,6 @@ def main() -> None:
     display_lines.append("Handoff saved to project memory — next session will auto-load it.")
 
     result = {
-        "decision": "allow",
         "systemMessage": "\n".join(display_lines),
     }
     print(json.dumps(result))
