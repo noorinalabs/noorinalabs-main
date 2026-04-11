@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: Auto-set ENVIRONMENT=test before pytest/make test.
+"""PreToolUse hook: Auto-set ENVIRONMENT=test before test runner commands.
 
-Ensures ENVIRONMENT=test is present in the environment for any pytest or
-`make test` command. If not already set, prepends ENVIRONMENT=test to the
-command.
+Ensures ENVIRONMENT=test is present in the environment for actual test
+execution commands (pytest, vitest, npm test, make test, etc.). Only matches
+commands in executable position — not strings that happen to contain test
+runner names in arguments, commit messages, or comment bodies.
 
 Exit codes:
   0 — allow (always; modifies command if needed via JSON output)
@@ -26,8 +27,24 @@ def main() -> None:
 
     command = input_data.get("tool_input", {}).get("command", "")
 
-    # Match pytest, uv run pytest, or make test commands
-    is_test_cmd = bool(re.search(r"\bpytest\b", command) or re.search(r"\bmake\s+test\b", command))
+    # Only match actual test execution commands, not strings that happen to
+    # contain "pytest" or "test" in arguments, commit messages, or comment
+    # bodies.  We require the test runner to appear in command position: at
+    # the start of the line, or after a shell operator (&&, ||, ;, |).
+    # Optional leading env-var assignments (FOO=bar) are allowed before the
+    # command word.
+    _CMD_POS = r"(?:^|&&|\|\||[;|])\s*(?:\w+=\S*\s+)*"
+    _TEST_RUNNERS = [
+        r"pytest\b",                  # pytest / uv run pytest (handled via prefix)
+        r"python\s+-m\s+pytest\b",    # python -m pytest
+        r"uv\s+run\s+pytest\b",       # uv run pytest
+        r"make\s+test\b",             # make test
+        r"npm\s+test\b",              # npm test
+        r"npx\s+vitest\b",            # npx vitest
+        r"vitest\b",                  # vitest
+    ]
+    _PATTERN = _CMD_POS + r"(?:" + "|".join(_TEST_RUNNERS) + r")"
+    is_test_cmd = bool(re.search(_PATTERN, command))
 
     if not is_test_cmd:
         sys.exit(0)
