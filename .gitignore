@@ -7,6 +7,9 @@ noorinalabs-isnad-graph-ingestion/
 noorinalabs-isnad-ingest-platform/
 noorinalabs-user-service/
 
+# Documentation (local only)
+high-level-docs/
+
 # Python
 __pycache__/
 *.pyc
