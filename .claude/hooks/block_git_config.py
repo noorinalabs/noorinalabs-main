@@ -24,25 +24,19 @@ _READ_ONLY_PATTERNS = re.compile(
 )
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
+def check(input_data: dict) -> dict | None:
+    """Check for git config writes. Returns result dict if blocking, None if allowed."""
     tool_name = input_data.get("tool_name", "")
     if tool_name != "Bash":
-        sys.exit(0)
+        return None
 
     command = input_data.get("tool_input", {}).get("command", "")
 
-    # Match `git config` as a standalone command
     if not re.search(r"\bgit\s+config\b", command):
-        sys.exit(0)
+        return None
 
-    # Allow read-only operations
     if _READ_ONLY_PATTERNS.search(command):
-        sys.exit(0)
+        return None
 
     result = {
         "decision": "block",
@@ -56,8 +50,20 @@ def main() -> None:
         ),
     }
     log_pretooluse_block("block_git_config", command, result["reason"])
-    print(json.dumps(result))
-    sys.exit(2)
+    return result
+
+
+def main() -> None:
+    try:
+        input_data = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        sys.exit(0)
+
+    result = check(input_data)
+    if result and result.get("decision") == "block":
+        print(json.dumps(result))
+        sys.exit(2)
+    sys.exit(0)
 
 
 if __name__ == "__main__":

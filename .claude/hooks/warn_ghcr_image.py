@@ -70,30 +70,23 @@ def extract_repo_from_command(command: str) -> str | None:
     return None
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
+def check(input_data: dict) -> dict | None:
+    """Check GHCR image availability. Returns result dict if warning, None if allowed."""
     tool_name = input_data.get("tool_name", "")
     if tool_name != "Bash":
-        sys.exit(0)
+        return None
 
     command = input_data.get("tool_input", {}).get("command", "")
 
-    # Match gh workflow run
     if not re.search(r"\bgh\s+workflow\s+run\b", command):
-        sys.exit(0)
+        return None
 
-    # Check if it's a deploy-related workflow
     if not DEPLOY_PATTERNS.search(command):
-        sys.exit(0)
+        return None
 
     repo = extract_repo_from_command(command)
     if not repo:
-        # No repo context — generic warning
-        result = {
+        return {
             "decision": "allow",
             "systemMessage": (
                 "WARNING: Triggering a deploy workflow. Verify the GHCR image "
@@ -101,15 +94,13 @@ def main() -> None:
                 "if the image hasn't been published."
             ),
         }
-        print(json.dumps(result))
-        sys.exit(0)
 
     image = REPO_IMAGE_MAP.get(repo)
     if not image:
-        sys.exit(0)
+        return None
 
     if not check_ghcr_image(image):
-        result = {
+        return {
             "decision": "allow",
             "systemMessage": (
                 f"WARNING: GHCR image {image}:latest may not exist. "
@@ -117,8 +108,20 @@ def main() -> None:
                 f"Check: gh api orgs/noorinalabs/packages/container/{repo}/versions"
             ),
         }
-        print(json.dumps(result))
 
+    return None
+
+
+def main() -> None:
+    try:
+        input_data = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        sys.exit(0)
+
+    result = check(input_data)
+    if result is None:
+        sys.exit(0)
+    print(json.dumps(result))
     sys.exit(0)
 
 

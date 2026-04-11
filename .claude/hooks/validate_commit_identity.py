@@ -71,24 +71,17 @@ def _is_git_commit_command(command: str) -> bool:
     )
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
+def check(input_data: dict) -> dict | None:
+    """Check commit identity. Returns result dict if blocking, None if allowed."""
     tool_name = input_data.get("tool_name", "")
     if tool_name != "Bash":
-        sys.exit(0)
+        return None
 
     command = input_data.get("tool_input", {}).get("command", "")
 
-    # Only match actual `git commit` invocations — not mentions of "git" and
-    # "commit" inside heredocs, quoted strings, or other non-command text.
     if not _is_git_commit_command(command):
-        sys.exit(0)
+        return None
 
-    # Extract -c user.name="..." or -c user.name='...' or -c user.name=...
     name_match = re.search(r'-c\s+user\.name=["\']?([^"\']+)["\']?', command)
     email_match = re.search(r'-c\s+user\.email=["\']?([^"\']+)["\']?', command)
 
@@ -103,8 +96,7 @@ def main() -> None:
             ),
         }
         log_pretooluse_block("validate_commit_identity", command, result["reason"])
-        print(json.dumps(result))
-        sys.exit(2)
+        return result
 
     if not email_match:
         result = {
@@ -117,13 +109,11 @@ def main() -> None:
             ),
         }
         log_pretooluse_block("validate_commit_identity", command, result["reason"])
-        print(json.dumps(result))
-        sys.exit(2)
+        return result
 
     name = name_match.group(1).strip()
     email = email_match.group(1).strip()
 
-    # Validate against roster
     if name not in ROSTER:
         result = {
             "decision": "block",
@@ -133,8 +123,7 @@ def main() -> None:
             ),
         }
         log_pretooluse_block("validate_commit_identity", command, result["reason"])
-        print(json.dumps(result))
-        sys.exit(2)
+        return result
 
     expected_email = ROSTER[name]
     if email != expected_email:
@@ -146,10 +135,21 @@ def main() -> None:
             ),
         }
         log_pretooluse_block("validate_commit_identity", command, result["reason"])
+        return result
+
+    return None
+
+
+def main() -> None:
+    try:
+        input_data = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        sys.exit(0)
+
+    result = check(input_data)
+    if result and result.get("decision") == "block":
         print(json.dumps(result))
         sys.exit(2)
-
-    # Identity is valid
     sys.exit(0)
 
 

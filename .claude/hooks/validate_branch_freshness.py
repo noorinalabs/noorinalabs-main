@@ -49,25 +49,21 @@ def is_branch_fresh(base: str) -> bool:
         return True
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
+def check(input_data: dict) -> dict | None:
+    """Check branch freshness. Returns result dict if blocking, None if allowed."""
     tool_name = input_data.get("tool_name", "")
     if tool_name != "Bash":
-        sys.exit(0)
+        return None
 
     command = input_data.get("tool_input", {}).get("command", "")
 
     if not re.search(r"\bgh\s+pr\s+create\b", command):
-        sys.exit(0)
+        return None
 
     base = get_base_branch(command)
 
     if is_branch_fresh(base):
-        sys.exit(0)
+        return None
 
     result = {
         "decision": "block",
@@ -79,8 +75,20 @@ def main() -> None:
         ),
     }
     log_pretooluse_block("validate_branch_freshness", command, result["reason"])
-    print(json.dumps(result))
-    sys.exit(2)
+    return result
+
+
+def main() -> None:
+    try:
+        input_data = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        sys.exit(0)
+
+    result = check(input_data)
+    if result and result.get("decision") == "block":
+        print(json.dumps(result))
+        sys.exit(2)
+    sys.exit(0)
 
 
 if __name__ == "__main__":

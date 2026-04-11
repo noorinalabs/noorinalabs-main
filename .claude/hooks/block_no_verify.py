@@ -18,27 +18,20 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from annunaki_log import log_pretooluse_block
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
+def check(input_data: dict) -> dict | None:
+    """Check for --no-verify. Returns result dict if blocking, None if allowed."""
     tool_name = input_data.get("tool_name", "")
     if tool_name != "Bash":
-        sys.exit(0)
+        return None
 
     command = input_data.get("tool_input", {}).get("command", "")
 
-    # Only check git commit commands
     if not re.search(r"\bgit\b.*\bcommit\b", command):
-        sys.exit(0)
+        return None
 
-    # Check for --no-verify flag
     if "--no-verify" not in command:
-        sys.exit(0)
+        return None
 
-    # Block with a clear message requiring justification
     result = {
         "decision": "block",
         "reason": (
@@ -50,8 +43,20 @@ def main() -> None:
         ),
     }
     log_pretooluse_block("block_no_verify", command, result["reason"])
-    print(json.dumps(result))
-    sys.exit(2)
+    return result
+
+
+def main() -> None:
+    try:
+        input_data = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        sys.exit(0)
+
+    result = check(input_data)
+    if result and result.get("decision") == "block":
+        print(json.dumps(result))
+        sys.exit(2)
+    sys.exit(0)
 
 
 if __name__ == "__main__":

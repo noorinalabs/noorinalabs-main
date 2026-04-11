@@ -217,54 +217,44 @@ def ensure_issues_on_board(repo: str, issue_numbers: list[str]) -> None:
             pass  # Best-effort — don't block merge on board failures
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
+def check(input_data: dict) -> dict | None:
+    """Check PR review requirements. Returns result dict if blocking/warning, None if allowed."""
     tool_name = input_data.get("tool_name", "")
     if tool_name != "Bash":
-        sys.exit(0)
+        return None
 
     command = input_data.get("tool_input", {}).get("command", "")
 
     if not is_merge_command(command):
-        sys.exit(0)
+        return None
 
-    # Allow --admin override only if explicitly present
     if "--admin" in command:
-        sys.exit(0)
+        return None
 
     pr_number = extract_pr_number(command)
     repo = extract_repo_from_command(command)
     pr_data = get_pr_data(pr_number, repo=repo)
 
     if pr_data is None:
-        # Could not fetch PR info — allow with warning
-        result = {
+        return {
             "decision": "allow",
             "systemMessage": (
                 "WARNING: Could not verify PR review status. "
                 "Ensure the PR has at least one peer review before merging."
             ),
         }
-        print(json.dumps(result))
-        sys.exit(0)
 
     author = pr_data["author"]
     reviews = pr_data["reviews"]
     head_ref = pr_data["headRefName"]
     number = pr_data["number"]
 
-    # Collect distinct non-author reviewers from formal GitHub reviews
     formal_reviewers: set[str] = set()
     for review in reviews:
         login = review.get("author", {}).get("login", "")
         if login and login != author:
             formal_reviewers.add(login.lower())
 
-    # Collect distinct non-author reviewers from comment-based reviews
     comment_review_result = CommentReviewResult()
     branch_author_lastname = None
     if head_ref:
@@ -272,12 +262,10 @@ def main() -> None:
         if branch_author_lastname:
             comment_review_result = check_comment_reviews(number, branch_author_lastname, repo=repo)
 
-    # Total distinct reviewers (formal + comment-based)
     total_distinct = len(formal_reviewers) + len(comment_review_result.reviewers)
 
     pr_display = f"#{pr_number}" if pr_number else "(current branch)"
 
-    # Check reviewer count first
     if total_distinct < 2:
         found = total_distinct
         result = {
@@ -293,10 +281,8 @@ def main() -> None:
             ),
         }
         log_pretooluse_block("validate_pr_review", command, result["reason"])
-        print(json.dumps(result))
-        sys.exit(2)
+        return result
 
-    # Check TechDebt attestation on all comment-based reviews
     missing = comment_review_result.reviews_missing_tech_debt
     if missing:
         names = ", ".join(missing)
@@ -315,13 +301,11 @@ def main() -> None:
             ),
         }
         log_pretooluse_block("validate_pr_review", command, result["reason"])
-        print(json.dumps(result))
-        sys.exit(2)
+        return result
 
     # All checks passed — ensure any referenced tech-debt issues are on the board
     td_issues = comment_review_result.tech_debt_issue_numbers
     if td_issues:
-        # Determine the repo from --repo flag or current directory
         board_repo_name = ""
         if repo and "/" in repo:
             board_repo_name = repo.split("/", 1)[1]
@@ -340,6 +324,21 @@ def main() -> None:
         if board_repo_name:
             ensure_issues_on_board(board_repo_name, td_issues)
 
+    return None
+
+
+def main() -> None:
+    try:
+        input_data = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        sys.exit(0)
+
+    result = check(input_data)
+    if result is None:
+        sys.exit(0)
+    print(json.dumps(result))
+    if result.get("decision") == "block":
+        sys.exit(2)
     sys.exit(0)
 
 

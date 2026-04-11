@@ -53,47 +53,35 @@ def extract_labels(command: str) -> list[str]:
     return labels
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
+def check(input_data: dict) -> dict | None:
+    """Check labels on gh issue create. Returns result dict if blocking/warning, None if allowed."""
     tool_name = input_data.get("tool_name", "")
     if tool_name != "Bash":
-        sys.exit(0)
+        return None
 
     command = input_data.get("tool_input", {}).get("command", "")
 
-    # Only match gh issue create commands
     if not re.search(r"\bgh\s+issue\s+create\b", command):
-        sys.exit(0)
+        return None
 
-    # Extract labels from the command
     labels = extract_labels(command)
     if not labels:
-        sys.exit(0)
+        return None
 
-    # Fetch existing labels
     existing = get_existing_labels()
     if not existing:
-        # If we can't fetch labels (network issue, etc.), allow with a warning
-        result = {
+        return {
             "decision": "allow",
             "systemMessage": (
                 "WARNING: Could not fetch existing labels to validate. "
                 "Proceeding without validation. Run `gh label list` to verify."
             ),
         }
-        print(json.dumps(result))
-        sys.exit(0)
 
-    # Check for missing labels
     missing = [label for label in labels if label not in existing]
     if not missing:
-        sys.exit(0)
+        return None
 
-    # Build helpful error with gh label create suggestions
     suggestions = "\n".join(f'  gh label create "{label}"' for label in missing)
     result = {
         "decision": "block",
@@ -104,8 +92,22 @@ def main() -> None:
         ),
     }
     log_pretooluse_block("validate_labels", command, result["reason"])
+    return result
+
+
+def main() -> None:
+    try:
+        input_data = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        sys.exit(0)
+
+    result = check(input_data)
+    if result is None:
+        sys.exit(0)
     print(json.dumps(result))
-    sys.exit(2)
+    if result.get("decision") == "block":
+        sys.exit(2)
+    sys.exit(0)
 
 
 if __name__ == "__main__":

@@ -94,75 +94,57 @@ def extract_branch_author_lastname(head_ref: str) -> str | None:
     return None
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
+def check(input_data: dict) -> dict | None:
+    """Check review comment format. Returns result dict if blocking/warning, None if allowed."""
     tool_name = input_data.get("tool_name", "")
     if tool_name != "Bash":
-        sys.exit(0)
+        return None
 
     command = input_data.get("tool_input", {}).get("command", "")
 
     if not is_comment_command(command):
-        sys.exit(0)
+        return None
 
-    # Extract the comment body
     body = extract_comment_body(command)
     if not body:
-        sys.exit(0)
+        return None
 
-    # Check if this is a charter-format review comment
     has_requestee = re.search(r"\*{0,2}Requestee:\*{0,2}\s*(.+)", body)
     has_request_or_replied = re.search(r"RequestOrReplied:", body)
 
     if not (has_requestee and has_request_or_replied):
-        # Not a review comment — allow
-        sys.exit(0)
+        return None
 
-    # Extract PR number
     pr_number = extract_pr_number(command)
     if not pr_number:
-        # Can't determine PR — allow with warning
-        result = {
+        return {
             "decision": "allow",
             "systemMessage": (
                 "WARNING: Could not extract PR number from comment command. "
                 "Unable to validate Requestor/Requestee format."
             ),
         }
-        print(json.dumps(result))
-        sys.exit(0)
 
-    # Get branch name
     branch_name = get_branch_name(pr_number)
     if not branch_name:
-        result = {
+        return {
             "decision": "allow",
             "systemMessage": (
                 "WARNING: Could not fetch branch name for PR. "
                 "Unable to validate Requestor/Requestee format."
             ),
         }
-        print(json.dumps(result))
-        sys.exit(0)
 
-    # Extract branch author's last name
     branch_author = extract_branch_author_lastname(branch_name)
     if not branch_author:
-        result = {
+        return {
             "decision": "allow",
             "systemMessage": (
                 "WARNING: Could not extract author from branch name. "
                 "Unable to validate Requestor/Requestee format."
             ),
         }
-        print(json.dumps(result))
-        sys.exit(0)
 
-    # Extract Requestee's last name from the comment body
     requestee_raw = has_requestee.group(1).strip()
     requestee_raw = requestee_raw.strip("*").strip()
     requestee_name = re.sub(r"\s*\(.*?\)\s*$", "", requestee_raw).strip()
@@ -172,7 +154,6 @@ def main() -> None:
     else:
         requestee_lastname = requestee_name
 
-    # Block if Requestee matches branch author (fields are swapped)
     if requestee_lastname.lower() == branch_author.lower():
         result = {
             "decision": "block",
@@ -185,10 +166,23 @@ def main() -> None:
             ),
         }
         log_pretooluse_block("validate_review_comment_format", command, result["reason"])
-        print(json.dumps(result))
-        sys.exit(2)
+        return result
 
-    # Fields are correct
+    return None
+
+
+def main() -> None:
+    try:
+        input_data = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        sys.exit(0)
+
+    result = check(input_data)
+    if result is None:
+        sys.exit(0)
+    print(json.dumps(result))
+    if result.get("decision") == "block":
+        sys.exit(2)
     sys.exit(0)
 
 

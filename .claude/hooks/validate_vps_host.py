@@ -136,36 +136,30 @@ def is_ip_address(value: str) -> bool:
         return False
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
+def check(input_data: dict) -> dict | None:
+    """Check VPS_HOST value. Returns result dict if blocking/warning, None if allowed."""
     tool_name = input_data.get("tool_name", "")
     if tool_name != "Bash":
-        sys.exit(0)
+        return None
 
     command = input_data.get("tool_input", {}).get("command", "")
 
-    # Match gh variable set VPS_HOST <value>
     match = re.search(r"\bgh\s+variable\s+set\s+VPS_HOST\s+[\"']?(\S+)[\"']?", command)
     if not match:
-        sys.exit(0)
+        return None
 
     value = match.group(1).strip("\"'")
 
-    # Determine IP to check
     if is_ip_address(value):
         ip_to_check = value
-        is_hostname = False
+        is_hostname_val = False
     else:
-        is_hostname = True
+        is_hostname_val = True
         ip_to_check = resolve_hostname(value)
 
     warnings = []
 
-    if is_hostname:
+    if is_hostname_val:
         warnings.append(
             f"WARNING: VPS_HOST is a hostname ({value}), not a direct IP. "
             "SSH should use the direct VPS IP to avoid proxy issues."
@@ -183,16 +177,29 @@ def main() -> None:
             ),
         }
         log_pretooluse_block("validate_vps_host", command, result["reason"])
-        print(json.dumps(result))
-        sys.exit(2)
+        return result
 
     if warnings:
-        result = {
+        return {
             "decision": "allow",
             "systemMessage": "\n".join(warnings),
         }
-        print(json.dumps(result))
 
+    return None
+
+
+def main() -> None:
+    try:
+        input_data = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        sys.exit(0)
+
+    result = check(input_data)
+    if result is None:
+        sys.exit(0)
+    print(json.dumps(result))
+    if result.get("decision") == "block":
+        sys.exit(2)
     sys.exit(0)
 
 
