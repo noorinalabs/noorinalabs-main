@@ -10,8 +10,12 @@ Exit codes:
 """
 
 import json
+import os
 import re
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from annunaki_log import log_pretooluse_block
 
 
 def main() -> None:
@@ -45,6 +49,7 @@ def main() -> None:
             "fix the underlying hook failure instead."
         ),
     }
+    log_pretooluse_block("block_no_verify", command, result["reason"])
     print(json.dumps(result))
     sys.exit(2)
 

@@ -11,8 +11,12 @@ Exit codes:
 """
 
 import json
+import os
 import re
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from annunaki_log import log_pretooluse_block
 
 # Read-only git config flags/subcommands that should be allowed
 _READ_ONLY_PATTERNS = re.compile(
@@ -51,6 +55,7 @@ def main() -> None:
             "See .claude/team/charter.md § Commit Identity for the full identity table."
         ),
     }
+    log_pretooluse_block("block_git_config", command, result["reason"])
     print(json.dumps(result))
     sys.exit(2)
 

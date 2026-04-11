@@ -18,6 +18,9 @@ import sys
 import time
 import urllib.request
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from annunaki_log import log_pretooluse_block
+
 # Cloudflare publishes their IP ranges at these URLs
 _CF_IPV4_URL = "https://www.cloudflare.com/ips-v4"
 _CF_IPV6_URL = "https://www.cloudflare.com/ips-v6"
@@ -181,6 +184,7 @@ def main() -> None:
                 "Check your hosting provider's dashboard for the origin server IP."
             ),
         }
+        log_pretooluse_block("validate_vps_host", command, result["reason"])
         print(json.dumps(result))
         sys.exit(2)
 

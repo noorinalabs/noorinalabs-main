@@ -14,6 +14,9 @@ from pathlib import Path
 import re
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from annunaki_log import log_pretooluse_block
+
 # Load roster from shared JSON file — single source of truth for all hooks
 _ROSTER_PATH = Path(__file__).resolve().parent.parent / "team" / "roster.json"
 try:
@@ -98,6 +101,7 @@ def main() -> None:
                 "Example: git -c user.name=\"Kwame Asante\" -c user.email=\"parametrization+Kwame.Asante@gmail.com\" commit -m \"...\""
             ),
         }
+        log_pretooluse_block("validate_commit_identity", command, result["reason"])
         print(json.dumps(result))
         sys.exit(2)
 
@@ -110,6 +114,7 @@ def main() -> None:
                 "Example: git -c user.name=\"Kwame Asante\" -c user.email=\"parametrization+Kwame.Asante@gmail.com\" commit -m \"...\""
             ),
         }
+        log_pretooluse_block("validate_commit_identity", command, result["reason"])
         print(json.dumps(result))
         sys.exit(2)
 
@@ -125,6 +130,7 @@ def main() -> None:
                 f"Valid names: {', '.join(sorted(ROSTER.keys()))}"
             ),
         }
+        log_pretooluse_block("validate_commit_identity", command, result["reason"])
         print(json.dumps(result))
         sys.exit(2)
 
@@ -137,6 +143,7 @@ def main() -> None:
                 f"Expected: {expected_email}"
             ),
         }
+        log_pretooluse_block("validate_commit_identity", command, result["reason"])
         print(json.dumps(result))
         sys.exit(2)
 

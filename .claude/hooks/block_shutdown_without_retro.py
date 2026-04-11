@@ -18,6 +18,9 @@ import sys
 from datetime import date
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from annunaki_log import log_pretooluse_block
+
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _FEEDBACK_LOG = _REPO_ROOT / ".claude" / "team" / "feedback_log.md"
 
@@ -89,6 +92,7 @@ def main() -> None:
             "Run /wave-retro or /retro first, then retry shutdown."
         ),
     }
+    log_pretooluse_block("block_shutdown_without_retro", message, result["reason"], tool_name="SendMessage")
     print(json.dumps(result))
     sys.exit(2)
 

@@ -9,9 +9,13 @@ Exit codes:
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from annunaki_log import log_pretooluse_block
 
 
 def get_base_branch(command: str) -> str:
@@ -74,6 +78,7 @@ def main() -> None:
             "This prevents merge conflicts and ensures CI runs against current code."
         ),
     }
+    log_pretooluse_block("validate_branch_freshness", command, result["reason"])
     print(json.dumps(result))
     sys.exit(2)
 

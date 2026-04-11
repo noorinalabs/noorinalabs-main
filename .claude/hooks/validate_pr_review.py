@@ -11,9 +11,13 @@ Exit codes:
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from annunaki_log import log_pretooluse_block
 
 
 def is_merge_command(command: str) -> bool:
@@ -275,6 +279,7 @@ def main() -> None:
                 "Pass `--admin` for emergency overrides only."
             ),
         }
+        log_pretooluse_block("validate_pr_review", command, result["reason"])
         print(json.dumps(result))
         sys.exit(2)
 
@@ -296,6 +301,7 @@ def main() -> None:
                 "Pass `--admin` for emergency overrides only."
             ),
         }
+        log_pretooluse_block("validate_pr_review", command, result["reason"])
         print(json.dumps(result))
         sys.exit(2)
 

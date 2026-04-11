@@ -10,9 +10,13 @@ Exit codes:
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from annunaki_log import log_pretooluse_block
 
 
 def get_existing_labels() -> set[str]:
@@ -101,6 +105,7 @@ def main() -> None:
             "See charter § GitHub Label Hygiene: verify labels exist before creating issues."
         ),
     }
+    log_pretooluse_block("validate_labels", command, result["reason"])
     print(json.dumps(result))
     sys.exit(2)
 
