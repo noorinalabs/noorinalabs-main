@@ -563,3 +563,66 @@ None. All team members performed well. Minor feedback items only.
 
 ### Fire/Hire Actions
 None. All team members performed well. Zero must-fix items across 7 PRs.
+
+---
+
+## 2026-04-11 — Phase 2 Wave 2 Retrospective
+
+**Scope:** 8 PRs merged across 7 repos. 17 issues closed. Theme: CI Green + Live Bugs + Pre-commit Hooks.
+
+### Per-Engineer Assessments
+
+#### Wanjiku Mwangi (TPM)
+- PRs: main #89 (worktree bug fix), main #90 (pre-commit hook), user-service #48 (lint/type/pre-commit)
+- Charter compliance: 3/3 PRs fully compliant
+- Must-fix items received: 0
+- Quality: Worktree cwd fix was well-engineered. User-service PR went beyond scope — fixed 14 ruff + 2 mypy errors. Correctly identified 3 issues already resolved by prior PRs, avoiding duplicate work.
+- Process concern: Main repo CI was red after merge (pre-existing lint/mypy errors). Reported auto_set_env_test.py false positives.
+- Severity: **Minor** — CI gap, not quality gap
+
+#### Santiago Ferreira (RC)
+- PRs: isnad-graph #780, landing-page #58, deploy #62, design-system #40, ingestion #25
+- Charter compliance: 5/5 PRs fully compliant
+- CI failures introduced: 0
+- Must-fix items received: 0
+- Quality: Consistent pre-commit patterns across 5 repos, cheapest-first hook ordering. ESLint 9.x flat config well-structured. Efficient 5-repo parallel worktree execution.
+- Severity: **None** — strong delivery
+
+#### Aino Virtanen (Standards Lead)
+- Reviews: 8/8 PRs reviewed
+- Charter compliance audit: Zero violations found
+- Quality: Thorough reviews with CI status tracking per repo. Identified CI-red-on-merge concern. Retro facilitation comprehensive.
+- Severity: **None** — exemplary
+
+#### Orchestrator (self-assessment)
+- **Positive:** Full wave completed in single session (plan → implement → review → merge → wrapup). Review templates pre-filled correctly — zero format errors. Both engineers ran fully parallel with no cross-contamination.
+- **Gap:** Assigned 3 issues (#79, #80, #84) that were already resolved by prior PRs. Should have cross-referenced open issues against recent merges before assignment.
+- **Gap:** Did not verify CI status on main repo before approving merge of PRs #89/#90. Pre-existing lint/mypy failures should have been flagged.
+- Severity: **Minor**
+
+### Top 3 Going Well
+1. **Zero charter violations across 8 PRs** — review template mandate from P3W1 retro is working
+2. **Consistent pre-commit standardization** — 7 repos now have pre-commit hooks replicating CI checks locally
+3. **Single-session wave completion** — plan through wrapup with zero must-fix items and zero rework
+
+### Top 3 Pain Points
+1. **auto_set_env_test.py hook false positives** — both engineers hit independently. Hook triggers on "test" in any bash argument, not just test commands.
+2. **Pre-existing CI failures not triaged before wave** — 3 repos had red CI unrelated to wave work, creating confusion
+3. **Already-resolved issues assigned** — 3 issues were duplicates of prior merged work, wasted triage time
+
+### Proposed Process Changes
+1. **Fix auto_set_env_test.py hook** — narrow match to actual test commands only. Rationale: 100% of engineers hit this.
+2. **Pre-wave CI triage step in /wave-kickoff** — check CI status on all affected repos before assignment. Rationale: 3 repos had pre-existing failures.
+3. **Cross-reference issues against recent merges in /wave-kickoff** — flag already-resolved issues. Rationale: 3 issues were already closed by prior PRs.
+
+### Trust Updates
+
+| Rater | Rated | Old | New | Reason |
+|-------|-------|-----|-----|--------|
+| Orchestrator | Wanjiku Mwangi | 4 | 4 | Strong delivery, beyond-scope fixes. CI gap offsets. No change. |
+| Orchestrator | Santiago Ferreira | 5 | 5 | 5 repos cleanly, already at max. |
+| Orchestrator | Aino Virtanen | 5 | 5 | 8 reviews, thorough retro. Already at max. |
+| Orchestrator | Nadia Khoury | 4 | 4 | Clean coordination, spawn requests well-structured. No change. |
+
+### Fire/Hire Actions
+None. All team members performed well.
