@@ -18,6 +18,11 @@
             "type": "command",
             "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/validate_wave_context.py",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/enforce_ontology_context.py",
+            "timeout": 10
           }
         ]
       },
