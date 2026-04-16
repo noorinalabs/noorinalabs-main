@@ -15,21 +15,21 @@
       "resolved_at": "2026-04-11T16:26:02.575946+00:00"
     },
     "CLAUDE.md": {
-      "last_tracked": "b3c527318dc6314bcca22c68a4686216fdec74d60f554b86bd90fe87a3166038",
+      "last_tracked": "2ff5777e173a103c52147c197e470734dd8980796b3e12e1a10fde6c118fe05e",
       "last_resolved": "b3c527318dc6314bcca22c68a4686216fdec74d60f554b86bd90fe87a3166038",
-      "tracked_at": "2026-04-11T16:59:01.595963+00:00",
+      "tracked_at": "2026-04-14T03:28:05.987928+00:00",
       "resolved_at": "2026-04-11T18:37:30.535410+00:00"
     },
     "ontology/domain.yaml": {
-      "last_tracked": "47d3e4855f3b9f4f0ae224a26a23f3d3a9cbb9a6008e38690cd2df1be7027d75",
+      "last_tracked": "ba253f621d1718100488a3800c5b2c041f0de2772435c80cd93475a3c30bd85f",
       "last_resolved": "47d3e4855f3b9f4f0ae224a26a23f3d3a9cbb9a6008e38690cd2df1be7027d75",
-      "tracked_at": "2026-04-11T16:26:02.575946+00:00",
+      "tracked_at": "2026-04-14T03:28:21.976426+00:00",
       "resolved_at": "2026-04-11T16:26:02.575946+00:00"
     },
     "ontology/services.yaml": {
-      "last_tracked": "880568af26a3865820c81eb7ed120297292c41db6a7417ca3afdd4e054fa37a3",
+      "last_tracked": "c45544e09663815681f5bfdd5bb13a2391a47cff5c0d8158ef5587c89cd038b4",
       "last_resolved": "880568af26a3865820c81eb7ed120297292c41db6a7417ca3afdd4e054fa37a3",
-      "tracked_at": "2026-04-12T03:46:50.471864+00:00",
+      "tracked_at": "2026-04-14T03:28:23.527687+00:00",
       "resolved_at": "2026-04-12T03:46:50.471864+00:00"
     },
     "ontology/conventions.md": {
@@ -69,9 +69,9 @@
       "resolved_at": "2026-04-11T16:26:02.575946+00:00"
     },
     "ontology/repos/ingestion.yaml": {
-      "last_tracked": "417289b4f7b4d55f3c0a3f9407c3fbb3f5d6fbfd9785430cdbf9ec0806dda44b",
+      "last_tracked": "368917f91938272e9f8002534ddf7301f02679e0987ffb06fe6022429f0ca0b6",
       "last_resolved": "417289b4f7b4d55f3c0a3f9407c3fbb3f5d6fbfd9785430cdbf9ec0806dda44b",
-      "tracked_at": "2026-04-11T16:26:02.575946+00:00",
+      "tracked_at": "2026-04-14T03:28:26.085111+00:00",
       "resolved_at": "2026-04-11T16:26:02.575946+00:00"
     },
     "ontology/checksums.json": {
@@ -81,27 +81,27 @@
       "resolved_at": "2026-04-11T16:26:02.575946+00:00"
     },
     "/home/parameterization/.claude/projects/-home-parameterization-code-noorinalabs-main/memory/project_ontology_system.md": {
-      "last_tracked": "aec106ae6261921e5d305a1c58b22062fb150511e64957b47b59907173792b7c",
+      "last_tracked": "11a7966430f85d5c71271f56ebba1493b93575c2294b9c8f7c0f9ad6f30678a1",
       "last_resolved": "aec106ae6261921e5d305a1c58b22062fb150511e64957b47b59907173792b7c",
-      "tracked_at": "2026-04-11T16:27:09.722316+00:00",
+      "tracked_at": "2026-04-14T01:46:03.638600+00:00",
       "resolved_at": "2026-04-11T18:37:30.535410+00:00"
     },
     "/home/parameterization/.claude/projects/-home-parameterization-code-noorinalabs-main/memory/MEMORY.md": {
-      "last_tracked": "5c8a8490c4b71fda57d9df31e6e82c6f007221459f9458c2d09618936eb4979b",
+      "last_tracked": "3b6bca045991259e3a5804e85f6a9f104be610a1d825ca3df887a4c9b8e5e5cd",
       "last_resolved": "5c8a8490c4b71fda57d9df31e6e82c6f007221459f9458c2d09618936eb4979b",
-      "tracked_at": "2026-04-12T23:09:29.484949+00:00",
+      "tracked_at": "2026-04-14T03:23:53.690111+00:00",
       "resolved_at": "2026-04-12T23:12:56.612546+00:00"
     },
     ".claude/team/charter.md": {
-      "last_tracked": "b428ad621b0afb6671cd2a68faa4996db0dc0fabece5f23abe2a88623e13d4f3",
+      "last_tracked": "a79e60476eb72af6689a5af1c3a09e0d5878c67b26ab8f5ab3516ee26ff717d3",
       "last_resolved": "b428ad621b0afb6671cd2a68faa4996db0dc0fabece5f23abe2a88623e13d4f3",
-      "tracked_at": "2026-04-11T16:41:49.994510+00:00",
+      "tracked_at": "2026-04-14T01:45:26.901226+00:00",
       "resolved_at": "2026-04-11T18:37:30.535410+00:00"
     },
     ".claude/team/charter/agents.md": {
-      "last_tracked": "3c3185b6eb68ef1c66514c9094fa8de1d996aefd5b8205c93427b20b4a542a00",
+      "last_tracked": "dce25c289af21159f90f4c6b15bb7ef638f96a272e3e9b479442ccbfde0dc751",
       "last_resolved": "3c3185b6eb68ef1c66514c9094fa8de1d996aefd5b8205c93427b20b4a542a00",
-      "tracked_at": "2026-04-11T16:41:56.882270+00:00",
+      "tracked_at": "2026-04-14T03:28:42.811651+00:00",
       "resolved_at": "2026-04-11T18:37:30.535410+00:00"
     },
     "/home/parameterization/.claude/projects/-home-parameterization-code-noorinalabs-main/memory/project_bootstrap_repo.md": {
@@ -123,15 +123,15 @@
       "resolved_at": "2026-04-12T23:12:56.612546+00:00"
     },
     ".claude/skills/handoff/SKILL.md": {
-      "last_tracked": "9f106c7932f8ef284eadfc61fd824fee46b7514f03cf7a6f0360c6c5a83380f3",
+      "last_tracked": "d68c996a20db5fbc4c5e54f5ab1a75e8c5bad2c03faee13d264b4ffd37f03f6c",
       "last_resolved": "9f106c7932f8ef284eadfc61fd824fee46b7514f03cf7a6f0360c6c5a83380f3",
-      "tracked_at": "2026-04-11T16:55:02.464470+00:00",
+      "tracked_at": "2026-04-14T03:28:32.923544+00:00",
       "resolved_at": "2026-04-11T18:37:30.535410+00:00"
     },
     ".claude/hooks/session_handoff.py": {
-      "last_tracked": "cf3013361d37cfbdbc3dd6e861f4f95959f1523a359bdb10fa331e0b62769de5",
+      "last_tracked": "11b48a92c4502641efa79f4cf3915bdc8d097a6ed73d2351e25261d7ad6155be",
       "last_resolved": "cf3013361d37cfbdbc3dd6e861f4f95959f1523a359bdb10fa331e0b62769de5",
-      "tracked_at": "2026-04-11T18:16:33.439430+00:00",
+      "tracked_at": "2026-04-14T03:28:30.786023+00:00",
       "resolved_at": "2026-04-11T18:37:30.535410+00:00"
     },
     "/home/parameterization/code/2real-team-framework/generic_prompts/SESSION_HANDOFF_PROMPT.md": {
@@ -243,9 +243,9 @@
       "resolved_at": "2026-04-11T22:09:20.362695+00:00"
     },
     ".claude/team/feedback_log.md": {
-      "last_tracked": "f66f71bd52aea08b662009700786bb60c88cfd7da00ee3c5375beb56df12efe3",
+      "last_tracked": "f768457338aa71feadb1390db271a29428abc2d501d7ff24c02f8db3af3499c4",
       "last_resolved": "f66f71bd52aea08b662009700786bb60c88cfd7da00ee3c5375beb56df12efe3",
-      "tracked_at": "2026-04-11T22:57:19.282988+00:00",
+      "tracked_at": "2026-04-14T01:43:00.537412+00:00",
       "resolved_at": "2026-04-12T03:32:34.047264+00:00"
     },
     ".claude/skills/wave-kickoff/SKILL.md": {
@@ -279,9 +279,9 @@
       "resolved_at": "2026-04-12T23:12:56.612546+00:00"
     },
     "/home/parameterization/.claude/projects/-home-parameterization-code-noorinalabs-main/memory/project_current_state.md": {
-      "last_tracked": "0346ac81731b50ecdbbeb1ccd0d57ad68c0fed666de5a09e4039f9f03d7f0013",
+      "last_tracked": "5607ba54797c980e7e1c783e4a9c96189fd0cae8ebe177c87c503a8970d81d1b",
       "last_resolved": "0346ac81731b50ecdbbeb1ccd0d57ad68c0fed666de5a09e4039f9f03d7f0013",
-      "tracked_at": "2026-04-12T03:45:38.456055+00:00",
+      "tracked_at": "2026-04-14T01:46:01.753829+00:00",
       "resolved_at": "2026-04-12T03:46:50.471864+00:00"
     },
     ".claude/hooks/enforce_ontology_context.py": {
@@ -345,15 +345,45 @@
       "resolved_at": "2026-04-12T23:12:56.612546+00:00"
     },
     "cross-repo-status.json": {
-      "last_tracked": "fab4b07b0cd6904acdd8408deea73bdeaaa690563aeaa5e5c81fffe249cb9a7d",
+      "last_tracked": "68a6428308986e6427a6a8e708e298931864b4e3d5f1134ca05c58fe05a47a7a",
       "last_resolved": "",
-      "tracked_at": "2026-04-12T23:18:29.734503+00:00",
+      "tracked_at": "2026-04-14T03:28:27.194501+00:00",
       "resolved_at": ""
     },
     "ONBOARDING.md": {
-      "last_tracked": "115c3a0adad3f31a34eab7dfb4c9a5820174cf0a07add1e4325ab3d7cfa20bec",
+      "last_tracked": "2399db18c2b9c8cc038c3132efee7e39696fdac41c0a58c95ea3cc987f4439e0",
       "last_resolved": "",
-      "tracked_at": "2026-04-13T16:27:41.484248+00:00",
+      "tracked_at": "2026-04-14T03:28:06.542051+00:00",
+      "resolved_at": ""
+    },
+    ".claude/team/charter/pull-requests.md": {
+      "last_tracked": "0f2728222e2db74008a89fd93b061be9ed5d67f118b071cb27277a6d538f4fb9",
+      "last_resolved": "",
+      "tracked_at": "2026-04-14T01:45:27.971013+00:00",
+      "resolved_at": ""
+    },
+    "/home/parameterization/.claude/projects/-home-parameterization-code-noorinalabs-main/memory/project_data_pipeline_architecture.md": {
+      "last_tracked": "1b7e149d7ec1b371c04484175e9cb26cb1be11a45e1e03b41de0cbb92b622071",
+      "last_resolved": "",
+      "tracked_at": "2026-04-14T03:23:51.811042+00:00",
+      "resolved_at": ""
+    },
+    ".gitignore": {
+      "last_tracked": "efd1512f2b89c7e493593531008a57206b2e7315917c4e17d547088bee8660a6",
+      "last_resolved": "",
+      "tracked_at": "2026-04-14T03:28:20.380581+00:00",
+      "resolved_at": ""
+    },
+    "dependencies.yml": {
+      "last_tracked": "f4b53ffd3e1f81e055130ae2f53ff08ba9b5f651782434bbf3ac8b3eab4276e8",
+      "last_resolved": "",
+      "tracked_at": "2026-04-14T03:28:28.155815+00:00",
+      "resolved_at": ""
+    },
+    ".claude/hooks/warn_ghcr_image.py": {
+      "last_tracked": "597ff6cf41a8a7424ac2cd4253244846f9b420c17035714586b355811a56784d",
+      "last_resolved": "",
+      "tracked_at": "2026-04-14T03:28:29.749611+00:00",
       "resolved_at": ""
     }
   }

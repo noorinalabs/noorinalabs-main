@@ -1,8 +1,8 @@
-# noorinalabs-isnad-graph-ingestion — Repo Ontology
+# noorinalabs-data-acquisition — Repo Ontology
 # Updated by /ontology-rebuild.
 
-repo: noorinalabs-isnad-graph-ingestion
-description: Data ingestion pipeline — acquire, parse, resolve, load, enrich (Python + PyArrow + Neo4j)
+repo: noorinalabs-data-acquisition
+description: Data source acquisition — scrapers, API connectors, downloaders. Output goes to B2 raw/ bucket for pipeline processing.
 tech_stack:
   language: Python 3.14
   package_manager: uv

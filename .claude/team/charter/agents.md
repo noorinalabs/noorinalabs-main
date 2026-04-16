@@ -173,7 +173,7 @@ All spawned agents MUST be named `{repo-name}-{persona-firstname}` (e.g., `main-
 | `noorinalabs-isnad-graph` | `isnad-graph-` |
 | `noorinalabs-design-system` | `design-system-` |
 | `noorinalabs-deploy` | `deploy-` |
-| `noorinalabs-isnad-graph-ingestion` | `ingestion-` |
+| `noorinalabs-data-acquisition` | `acquisition-` |
 | `noorinalabs-landing-page` | `landing-page-` |
 | `noorinalabs-main` (cross-repo) | `main-` |
 
@@ -187,7 +187,7 @@ Each repo defines its own `team_name` in its repo charter. Use that name for all
 | Work in noorinalabs-landing-page | `noorinalabs-landing-page` |
 | Work in noorinalabs-deploy | `noorinalabs-deploy` |
 | Work in noorinalabs-design-system | `noorinalabs-design-system` |
-| Work in noorinalabs-isnad-graph-ingestion | `noorinalabs-isnad-graph-ingestion` |
+| Work in noorinalabs-data-acquisition | `noorinalabs-data-acquisition` |
 | Cross-repo coordination | `noorinalabs` |
 
 > **Agent tool limitation:** Spawned agents (including the Program Director and team members) do NOT have access to the Agent tool. They cannot spawn other agents. All agent spawning must be done by the orchestrating Claude instance.

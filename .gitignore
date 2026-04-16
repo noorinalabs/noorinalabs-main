@@ -3,7 +3,7 @@ noorinalabs-isnad-graph/
 noorinalabs-landing-page/
 noorinalabs-deploy/
 noorinalabs-design-system/
-noorinalabs-isnad-graph-ingestion/
+noorinalabs-data-acquisition/
 noorinalabs-isnad-ingest-platform/
 noorinalabs-user-service/
 
@@ -36,3 +36,4 @@ temp/
 *~
 .vscode/
 .idea/
+.hypothesis/

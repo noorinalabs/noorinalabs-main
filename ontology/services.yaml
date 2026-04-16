@@ -101,7 +101,7 @@ services:
       - { route: /projects/isnad-graph, source: projects/isnad-graph.astro, collection: projects }
 
   ingestion-pipeline:
-    repo: noorinalabs-isnad-graph-ingestion
+    repo: noorinalabs-data-acquisition
     type: data_pipeline
     language: Python 3.14
     cli_command: isnad-ingest

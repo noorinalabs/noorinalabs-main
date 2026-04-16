@@ -8,7 +8,7 @@ version: 1
 contexts:
   hadith_scholarship:
     description: Core domain — hadith texts, chains of transmission, narrator criticism
-    repos: [isnad-graph, isnad-graph-ingestion]
+    repos: [isnad-graph, data-acquisition, isnad-ingest-platform]
 
   user_management:
     description: Authentication, authorization, subscriptions, RBAC

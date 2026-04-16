@@ -35,7 +35,7 @@ isnad-graph:
       trigger: manifest-changed
       action: "reload graph data"
 
-isnad-graph-ingestion:
+data-acquisition:
   provides:
     - artifact: "pipeline data"
       type: b2-bucket

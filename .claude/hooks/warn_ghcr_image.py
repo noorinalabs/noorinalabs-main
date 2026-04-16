@@ -21,7 +21,7 @@ REPO_IMAGE_MAP = {
     "noorinalabs-isnad-graph": "ghcr.io/noorinalabs/noorinalabs-isnad-graph",
     "noorinalabs-landing-page": "ghcr.io/noorinalabs/noorinalabs-landing-page",
     "noorinalabs-design-system": "ghcr.io/noorinalabs/noorinalabs-design-system",
-    "noorinalabs-isnad-graph-ingestion": "ghcr.io/noorinalabs/noorinalabs-isnad-graph-ingestion",
+    "noorinalabs-data-acquisition": "ghcr.io/noorinalabs/noorinalabs-data-acquisition",
 }
 
 

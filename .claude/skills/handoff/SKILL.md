@@ -21,7 +21,7 @@ git branch --show-current
 
 **Open PRs across all repos:**
 ```bash
-for repo in noorinalabs-main noorinalabs-isnad-graph noorinalabs-user-service noorinalabs-deploy noorinalabs-design-system noorinalabs-landing-page noorinalabs-isnad-graph-ingestion; do
+for repo in noorinalabs-main noorinalabs-isnad-graph noorinalabs-user-service noorinalabs-deploy noorinalabs-design-system noorinalabs-landing-page noorinalabs-data-acquisition; do
   echo "--- $repo ---"
   gh pr list --repo "noorinalabs/$repo" --state open --json number,title,author,headRefName --limit 5 2>/dev/null
 done

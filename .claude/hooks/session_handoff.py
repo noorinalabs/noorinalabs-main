@@ -64,7 +64,7 @@ def _get_open_prs() -> list[str]:
         "noorinalabs-deploy",
         "noorinalabs-design-system",
         "noorinalabs-landing-page",
-        "noorinalabs-isnad-graph-ingestion",
+        "noorinalabs-data-acquisition",
     ]
     prs = []
     for repo in repos:
