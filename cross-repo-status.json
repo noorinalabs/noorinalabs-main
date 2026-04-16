@@ -1,10 +1,13 @@
 {
-  "wave_active": true,
-  "current_wave": "wave-7",
+  "wave_active": false,
+  "current_wave": null,
+  "next_wave": "wave-8",
   "phase": "phase-2",
-  "wave_started": "2026-04-11T00:00:00Z",
-  "deployments_branch": "deployments/phase2/wave-7",
-  "wave_branch_status": "4 commits ahead of main, not yet merged",
+  "last_completed_wave": "wave-7",
+  "last_completed_at": "2026-04-13T18:01:00Z",
+  "wave_started": null,
+  "deployments_branch": null,
+  "wave_branch_status": "wave-7 merged to main 2026-04-13. wave-8 not yet kicked off.",
   "open_prs_total": 0,
   "historical_phases": {
     "note": "wave-c phase tracking (phases 1-4) is superseded by phase-2 wave numbering",
