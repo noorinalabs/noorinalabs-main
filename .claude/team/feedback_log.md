@@ -740,3 +740,66 @@ No changes. All scores remain at current levels.
 
 ### Fire/Hire Actions
 None.
+
+---
+
+## 2026-04-17 — Phase 2 Wave 8 Retrospective
+
+**Scope:** 9 PRs merged across 5 repos. 3 issues closed (#109, #110, #111). 1 new issue filed mid-retro (#123, validate_pr_review false-positive). Theme: CI Hygiene.
+
+### Wave Highlights
+- **Wave sequencing worked as designed:** #110 (ruff format) → #111 (CI sweep) → #109 (CI gate hook). Doing #111 first shrank #109's risk of self-blocking.
+- **Enforcement-hierarchy principle validated:** #109 landed and immediately caught a real hook false-positive during its own PR's merge (`validate_pr_review` flagging the review-request comment) — filed as #123.
+- **Cross-session continuity:** wave spanned 2 sessions cleanly via session_handoff.md. All 3 team members picked back up with zero context loss.
+- **Tech-debt triage: 16 issues filed** during W8 across all repos. Pattern: 6 hook bugs (#113, #114, #118, #123 + two others), 7 infra items, 3 ops items.
+
+### Per-Engineer Assessments
+
+#### Wanjiku Mwangi (TPM) — Severity: None
+- PRs: main #115, isnad-graph #811, user-service #60, design-system #56 (#111 CI sweep across 4 repos)
+- Filed tech-debt with forensic detail: #810, #812, #54, #113, #114, #118
+- Worked around classic-Projects GraphQL deprecation via REST PATCH when `gh pr edit` failed
+- Handled retroactive breadcrumb edits cleanly when disable-with-followup rule was ratified mid-wave
+
+#### Santiago Ferreira (RC) — Severity: None
+- PRs: isnad-graph #808, user-service #58, data-acquisition #27 (#110 ruff pre-commit across 3 Python repos)
+- Hit commit-identity roster-blocker on 3 of 4 child repos — not his fault (long-term fix: #112)
+- Unblocked 4 PR merges tonight (#115, #56, #60, #811) with `--admin` per authorized exception
+
+#### Aino Virtanen (SQL) — Severity: None
+- PRs: main #122 (#109 CI gate hook implementation)
+- Proactively caught spec-discrepancy (nonexistent `gh pr checks --json bucket,name,state` flag combo), used equivalent `gh pr view --json statusCheckRollup`, documented in PR body for reviewers
+- Reviewed 7 W8 PRs as charter enforcer, all with correct TechDebt attestation format
+- Zero must-fix items received on #122
+
+#### Nadia Khoury (PD) — Severity: None
+- Reviewed PR #122 with executive-quality spec audit (dispatcher integration, Hook 7 stacking, program-level interactions)
+- Light involvement appropriate for a tightly-scoped wave
+
+#### Orchestrator — Severity: Minor
+- Spent ~30 min chasing OAuth scope migration (`read:project` → `project`) mid-retro, eating user time. Projects v2 scope enforcement should have been caught in W7.
+- Hit `validate_pr_review` false-positive on #122 merge — resolved by editing the review-request comment. Proper fix filed as #123.
+
+### Top 3 Going Well
+1. **Wave sequencing prevented self-blocking** — doing #111 (CI sweep) before #109 (CI gate hook) meant the hook didn't immediately block its own merge PR on any pre-existing red CI.
+2. **Enforcement-hierarchy validated** — the W7 principle ("charter rules without enforcement decay, promote to hooks") produced a hook that caught a real bug within minutes of landing.
+3. **Team simulation scaled cleanly** — 3 parallel implementers during #110/#111 execution, 2 parallel reviewers on #122. No collisions, no context-loss across spawn cycles.
+
+### Top 3 Pain Points
+1. **Hook substring/regex bug cluster (6 in one wave):** #113 (cwd repo), #114 (test cmd false-positives), #118 (branch freshness cwd), #110 (ontology-tracker ghost /tmp entries), #123 (validate_pr_review RequestOrReplied detection), plus pre-existing validate_labels default-limit. Systemic: hooks written without explicit input-language spec.
+2. **Disable-with-followup rule ratified mid-wave** — Wanjiku had to do retroactive breadcrumb edits across two PRs after the rule was established during #111 review. New-rule enforcement should wait for next wave boundary.
+3. **Single-reviewer exception overused** — bootstrap exception applied to all 4 #110 PRs AND all 4 #111 PRs (Aino sole reviewer). Became pattern-of-convenience rather than exception.
+4. **OAuth scope migration chased in real-time** — GitHub Projects v2 scope enforcement surfaced mid-retro, consumed ~30 min of orchestrator + user time. Should have been on W7 radar.
+
+### Proposed Process Changes
+1. **Hook authorship spec requirement** — any new hook must include explicit input-language spec (what commands/formats it matches) in docstring + charter/hooks.md entry. Rationale: fixes substring-bug cluster root cause.
+2. **W9 opens with hook-architecture mini-sprint** — bundle #113, #114, #118, #123 into a single day of hook triage before W9 main scope. Rationale: 6 hook bugs in one wave is a meta-debt signal.
+3. **Single-reviewer exception — formalize or drop** — wave-bootstrap PRs ONLY, one-time per wave, logged in retro. Otherwise require 2 reviewers per charter. Rationale: W8 used it 8 times; that's not an exception anymore.
+4. **Disable-with-followup rule → charter** — move `feedback_disable_followup_load_bearing` memory into charter § Pull Requests as ratified rule. Rationale: memory is session-scoped; charter is authoritative.
+5. **Pre-wave auth/scope audit step in /wave-kickoff** — verify gh token scopes against wave's expected operations. Rationale: Projects v2 scope gap was catchable.
+
+### Trust Updates
+No changes. All scores stable. See trust_matrix.md § Phase 2 Wave 8.
+
+### Fire/Hire Actions
+None.

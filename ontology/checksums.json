@@ -307,6 +307,24 @@
       "last_resolved": "b8ca5cc2f951054d287dd600c4eab104311e56dd4987bece91bb7e697855e27c",
       "tracked_at": "2026-04-16T21:36:05.052302+00:00",
       "resolved_at": "2026-04-16T21:36:05.052302+00:00"
+    },
+    ".claude/hooks/validate_pr_ci_status.py": {
+      "last_tracked": "ff4c0c20785a0a014013388070b9c009632a3da2c15fd4e34c0e44e5b6e62ce9",
+      "last_resolved": "ff4c0c20785a0a014013388070b9c009632a3da2c15fd4e34c0e44e5b6e62ce9",
+      "tracked_at": "2026-04-17T01:04:35.934020+00:00",
+      "resolved_at": "2026-04-17T02:37:52.367305+00:00"
+    },
+    ".claude/hooks/dispatcher.py": {
+      "last_tracked": "f550dd83a45a65b26a26193c2215b13d6196c3118ccf6437141009cc29bcca54",
+      "last_resolved": "f550dd83a45a65b26a26193c2215b13d6196c3118ccf6437141009cc29bcca54",
+      "tracked_at": "2026-04-17T01:04:35.138954+00:00",
+      "resolved_at": "2026-04-17T02:37:52.367305+00:00"
+    },
+    ".claude/team/charter/hooks.md": {
+      "last_tracked": "701d9b0500f6c4158ecd9dce79e02ca8677082c7e845d57a35ca232615799eda",
+      "last_resolved": "701d9b0500f6c4158ecd9dce79e02ca8677082c7e845d57a35ca232615799eda",
+      "tracked_at": "2026-04-17T01:05:32.878330+00:00",
+      "resolved_at": "2026-04-17T02:37:52.367305+00:00"
     }
   }
 }
