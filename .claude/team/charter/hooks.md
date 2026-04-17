@@ -133,3 +133,10 @@ When hooks sharing the same matcher type (Bash, Agent, SendMessage, etc.) accumu
 - **Augments:** Cross-Repo Wave Plan § Board Maintenance Rules — "New issues created during a wave must be added to the board immediately."
 - **Manual steps remaining:** None — fully automated.
 - **Emergency override:** Remove the hook entry from `.claude/settings.json`.
+
+## Hook 14: Validate PR CI Status (`validate_pr_ci_status.py`)
+
+- **What it automates:** Blocks `gh pr merge` when any CI check on the PR is failing, cancelled, timed out, or requires action. Pending checks also block unless the user passes `--auto` (let GitHub auto-merge on green). Queries `gh pr view --json statusCheckRollup`; supports the `--repo` flag.
+- **Augments:** [Pull Requests](pull-requests.md) "green CI before merge" requirement. Phase 2 Wave 7 merged multiple PRs with red `security-audit`, `e2e`, and `test_migrate_users.py` checks despite the charter rule. Per the enforcement-hierarchy principle (hook > skill > charter), a repeatedly violated charter rule becomes a hook.
+- **Manual steps remaining:** None — the hook queries `gh pr view` for the check rollup automatically.
+- **Emergency override:** Pass `--admin` to `gh pr merge`, or remove the `validate_pr_ci_status` entry from the dispatcher hook list.

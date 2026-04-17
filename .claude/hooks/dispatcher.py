@@ -36,6 +36,7 @@ _BASH_HOOKS = [
     "validate_labels",
     "validate_review_comment_format",
     "validate_pr_review",
+    "validate_pr_ci_status",
     "validate_branch_freshness",
     "validate_vps_host",
     "warn_ghcr_image",
