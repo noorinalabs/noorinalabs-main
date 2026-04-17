@@ -140,3 +140,48 @@ When hooks sharing the same matcher type (Bash, Agent, SendMessage, etc.) accumu
 - **Augments:** [Pull Requests](pull-requests.md) "green CI before merge" requirement. Phase 2 Wave 7 merged multiple PRs with red `security-audit`, `e2e`, and `test_migrate_users.py` checks despite the charter rule. Per the enforcement-hierarchy principle (hook > skill > charter), a repeatedly violated charter rule becomes a hook.
 - **Manual steps remaining:** None — the hook queries `gh pr view` for the check rollup automatically.
 - **Emergency override:** Pass `--admin` to `gh pr merge`, or remove the `validate_pr_ci_status` entry from the dispatcher hook list.
+
+---
+
+## Hook Authorship Requirements
+
+Every new hook in `.claude/hooks/` must meet these requirements **at the time it is merged**. Partial compliance is a moderate feedback event.
+
+### 1. Input-language specification
+
+The hook's module docstring (top of file) must include an explicit **Input Language** section defining:
+
+- **Fires on:** which PreToolUse event (Bash, Agent, Edit, Write, etc.)
+- **Matches:** the exact command / input shape the hook acts on, expressed as a regex or grammar fragment
+- **Does NOT match:** inputs that superficially look similar but are intentionally out of scope (with examples)
+- **Flag pass-through:** which CLI flags (e.g., `--repo`, `--admin`) are extracted from the matched command and how
+
+Example (from `validate_pr_ci_status.py`):
+```python
+"""
+Input Language:
+  Fires on:      PreToolUse Bash
+  Matches:       gh pr merge {N} [--repo {OWNER/REPO}] [--squash|--merge|--rebase] [--admin] [--auto]
+  Does NOT match: gh pr list, gh pr view, gh pr checks, gh pr create, git merge, git pull
+  Flag pass-through:
+    --repo   → overrides cwd-resolved repo when querying gh pr view
+    --admin  → short-circuits (emergency override, allows merge)
+    --auto   → allows pending checks (GitHub auto-merge)
+"""
+```
+
+**Why:** Phase 2 Wave 8 surfaced six hook substring/regex bugs (#113 validate_labels cwd, #114 auto_set_env_test test-string false-positives, #118 validate_branch_freshness cwd, #123 validate_pr_review RequestOrReplied-Requested false-positive, ontology-tracker /tmp ghost entries, validate_labels default-limit). Root cause was hooks written liberally without an explicit spec of what they match vs. don't. An input-language docstring forces the author to enumerate the negative space before shipping.
+
+### 2. Charter entry in `charter/hooks.md`
+
+Every new hook must have a numbered entry in this file with: What it automates, Augments (which charter section), Manual steps remaining, Emergency override. No hook ships without a charter entry.
+
+### 3. Test coverage for negative matches
+
+The hook's test suite (or docstring-embedded manual verification) must include at least one input that **looks like a match but is intentionally excluded** — to guard against the substring-bug pattern. Example: a `validate_pr_merge` hook must verify it does NOT fire on `gh pr list`.
+
+### 4. Dispatcher registration (not settings.json)
+
+New Bash hooks must register in `dispatcher.py`'s `_BASH_HOOKS` list, not as a separate `settings.json` entry. See `charter/hooks.md` § Hook Dispatcher Consolidation (Hook 7 pattern).
+
+**Enforcement:** The Standards & Quality Lead (Aino) verifies these requirements during hook PR review. A hook missing any of the four requirements must not be approved.

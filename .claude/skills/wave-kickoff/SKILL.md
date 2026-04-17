@@ -33,7 +33,30 @@ If missing, create it:
 gh label create "p{N}-wave-{M}" --description "Phase {N} Wave {M}" --color "8B5CF6"
 ```
 
-### 3. Pre-wave CI triage
+### 3. Pre-wave auth/scope audit
+
+Verify the gh token has the scopes needed for this wave's operations. GitHub periodically hardens scope enforcement (e.g., Projects v2 requires the explicit `project` write scope; classic-Projects API deprecation). A missing scope mid-wave consumes orchestrator + user time chasing OAuth flows.
+
+```bash
+gh api -i user 2>&1 | grep -i "x-oauth-scopes"
+```
+
+Required scopes (baseline for all waves):
+- `repo` — issues, PRs, comments, code
+- `read:org` — roster / label lookups
+- `project` — adding issues/PRs to the board (`gh project item-add`)
+- `workflow` — editing `.github/workflows/*` files
+- `gist`, `admin:public_key` — retained from prior grants
+
+If any required scope is missing, instruct the user:
+```
+gh auth refresh -h github.com -s {missing_scope}
+```
+Wait for confirmation that scopes are updated before proceeding. Do NOT begin wave assignment with known-missing scopes.
+
+**Why:** Phase 2 Wave 8 surfaced the Projects v2 scope gap mid-retro while trying to add PR #122 to the board. Fixing it interactively consumed ~30 minutes. Catching this at wave-kickoff prevents mid-wave interruptions.
+
+### 4. Pre-wave CI triage
 
 Before assigning issues, verify CI health across all repos in the wave scope:
 
@@ -56,7 +79,7 @@ For each repo:
 
 Flag repos with known-red CI so engineers are not confused by pre-existing failures.
 
-### 4. Cross-reference wave issues against recent merges
+### 5. Cross-reference wave issues against recent merges
 
 Before posting kickoff comments, check if any wave issues were already resolved:
 
@@ -75,7 +98,7 @@ For each merged PR:
 
 Wait for user confirmation before proceeding with assignment. Remove any confirmed-resolved issues from the wave list.
 
-### 5. Collect issue list and assignments
+### 6. Collect issue list and assignments
 
 Prompt the user for:
 - List of issue numbers for this wave
@@ -90,7 +113,7 @@ gh label list --search "FIRSTNAME"
 
 Create any missing labels before applying.
 
-### 6. Label all issues
+### 7. Label all issues
 
 For each issue, apply the wave label and assignee label:
 
@@ -98,7 +121,7 @@ For each issue, apply the wave label and assignee label:
 gh issue edit {NUMBER} --add-label "p{N}-wave-{M}" --add-label "{FIRSTNAME_LASTNAME}"
 ```
 
-### 7. Post kickoff comments
+### 8. Post kickoff comments
 
 Post a kickoff comment on each issue using charter format:
 
@@ -118,7 +141,7 @@ This issue is assigned to you for p{N}-wave-{M}.
 Please begin implementation.
 ```
 
-### 8. Ontology librarian lookup per agent (MANDATORY)
+### 9. Ontology librarian lookup per agent (MANDATORY)
 
 **Before spawning any agent**, the orchestrator MUST run `/ontology-librarian {topic}` for each agent's work area and **include the output in the agent's spawn prompt**. Do NOT tell agents to "run it themselves" — the orchestrator runs it and bakes the context in.
 
@@ -139,7 +162,7 @@ For each agent in the wave:
 
 **Enforcement:** The `validate_wave_context.py` PreToolUse hook fires on Agent spawns. Agents spawned without ontology context in their prompt will trigger a warning.
 
-### 9. Output execution plan
+### 10. Output execution plan
 
 Generate and display a structured execution plan with:
 - **Priority ordering:** hotfixes first, then security fixes, then bugs, then features (per charter § Wave Planning & Priority)
@@ -147,7 +170,7 @@ Generate and display a structured execution plan with:
 - **Dependencies:** any cross-PR dependencies identified
 - **Estimated parallelism:** which issues can run concurrently
 
-### 9. Report
+### 11. Report
 
 Present the full plan to the user. Do NOT begin implementation until the user approves.
 

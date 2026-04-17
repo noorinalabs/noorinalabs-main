@@ -49,6 +49,36 @@ Every PR must have **two reviewers** assigned at wave kickoff — a primary and 
 
 The Program Director's execution plan MUST include a review matrix with two named reviewers per expected PR. The orchestrator verifies this before spawning agents.
 
+## Single-Reviewer Exception (Wave-Bootstrap Only)
+
+The two-reviewer requirement may be waived **exclusively** for wave-bootstrap PRs — i.e., PRs that establish the tooling/CI/hooks that subsequent wave PRs will be gated by (e.g., the pre-commit hook rollout that the CI sweep depends on).
+
+Strict conditions — **all must hold**:
+- The PR is part of wave bootstrap (establishes infra that blocks other wave work)
+- No more than **one** such exception per wave
+- The single reviewer is the Standards & Quality Lead (Aino) or a comparable charter enforcer
+- The exception is logged by name in the wave retro, with explicit justification
+
+All other PRs require two comment-based reviews. `--admin` merges without two reviews are subject to the moderate-feedback-event classification in § Feedback System.
+
+**Why:** In Phase 2 Wave 8, the single-reviewer shortcut was invoked 8× — it had stopped being an exception and become a pattern of convenience. This clause formalizes the boundary.
+
+## Load-Bearing Followups for Disabled CI Jobs
+
+When a PR disables a CI job to unblock merge, the followup tracking issue must be **load-bearing** — the re-enablement of the job is a first-class acceptance criterion of the issue, not a hidden subtask of "fix the underlying bug."
+
+Concrete requirements:
+1. **Followup issue exists before the disable PR is approved.** The reviewer verifies the issue number in the PR body under a `## Disabled CI jobs (load-bearing followup)` section.
+2. **Followup issue acceptance criteria** must include:
+   - A specific fix for the underlying problem
+   - Re-enable the CI job (remove `if: false` / `--skip` / equivalent)
+   - Verify green CI after re-enablement
+   - All three bullets are required in the issue body.
+3. **Breadcrumb in PR body.** The PR that disables a job must include a top-level section `## Disabled CI jobs (load-bearing followup)` naming the job disabled, the reason, and the followup issue number.
+4. **No silent disables.** A PR that disables a CI job without both the issue and the breadcrumb is a moderate feedback event.
+
+**Why:** Phase 2 Wave 8 ratified this rule mid-wave after two PRs (isnad-graph#811, design-system#56) disabled CI jobs with tracking issues that could be "closed" by just fixing the bug without ever re-enabling the job. Promoting the rule into the charter closes that loophole. Reference: `feedback_disable_followup_load_bearing.md` (historical memory, superseded by this clause).
+
 ## PR Review Workflow for Deployments Branch PRs
 
 1. **Create the PR** targeting `deployments/phase{N}/wave-{M}`.

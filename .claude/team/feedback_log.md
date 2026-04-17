@@ -791,12 +791,15 @@ None.
 3. **Single-reviewer exception overused** — bootstrap exception applied to all 4 #110 PRs AND all 4 #111 PRs (Aino sole reviewer). Became pattern-of-convenience rather than exception.
 4. **OAuth scope migration chased in real-time** — GitHub Projects v2 scope enforcement surfaced mid-retro, consumed ~30 min of orchestrator + user time. Should have been on W7 radar.
 
-### Proposed Process Changes
-1. **Hook authorship spec requirement** — any new hook must include explicit input-language spec (what commands/formats it matches) in docstring + charter/hooks.md entry. Rationale: fixes substring-bug cluster root cause.
-2. **W9 opens with hook-architecture mini-sprint** — bundle #113, #114, #118, #123 into a single day of hook triage before W9 main scope. Rationale: 6 hook bugs in one wave is a meta-debt signal.
-3. **Single-reviewer exception — formalize or drop** — wave-bootstrap PRs ONLY, one-time per wave, logged in retro. Otherwise require 2 reviewers per charter. Rationale: W8 used it 8 times; that's not an exception anymore.
-4. **Disable-with-followup rule → charter** — move `feedback_disable_followup_load_bearing` memory into charter § Pull Requests as ratified rule. Rationale: memory is session-scoped; charter is authoritative.
-5. **Pre-wave auth/scope audit step in /wave-kickoff** — verify gh token scopes against wave's expected operations. Rationale: Projects v2 scope gap was catchable.
+### Proposed Process Changes — ALL ACCEPTED 2026-04-17
+1. **Hook authorship spec requirement** — ACCEPTED. Ratified in `charter/hooks.md` § Hook Authorship Requirements (input-language docstring, charter entry, negative-match test coverage, dispatcher registration).
+2. **W9 opens with hook-architecture mini-sprint** — ACCEPTED. Tracked as issue #125.
+3. **Single-reviewer exception — formalize or drop** — ACCEPTED (formalized). Ratified in `charter/pull-requests.md` § Single-Reviewer Exception (wave-bootstrap PRs ONLY, one-time per wave, Aino as sole reviewer, logged in retro).
+4. **Disable-with-followup rule → charter** — ACCEPTED. Ratified in `charter/pull-requests.md` § Load-Bearing Followups for Disabled CI Jobs. Memory `feedback_disable_followup_load_bearing.md` superseded by charter.
+5. **Pre-wave auth/scope audit step in /wave-kickoff** — ACCEPTED. Added as `/wave-kickoff` step 3, running before CI triage.
+
+### Skill enforcement change — ACCEPTED 2026-04-17
+**Trust matrix updates now land in the retro PR**, not on `CEO/0000-Trust_Matrix`. The `/wave-retro` skill now edits `.claude/team/trust_matrix.md` directly on the retro branch. Stale side-branch pattern retired — it had diverged by 7622 lines from main.
 
 ### Trust Updates
 No changes. All scores stable. See trust_matrix.md § Phase 2 Wave 8.

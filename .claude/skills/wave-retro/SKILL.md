@@ -56,25 +56,18 @@ Structure as:
 
 ### 5. Update trust matrix
 
-Use a temporary worktree to update the trust matrix (avoids conflicts with the current working tree). Use `mktemp -d` to generate a unique path, preventing collisions when multiple agents run trust updates concurrently:
+**Trust matrix lives on `main`**, not a side branch. Edit `.claude/team/trust_matrix.md` directly on the retro branch so the update lands in the same retro PR as the feedback log. Do NOT use a separate worktree or push to `CEO/0000-Trust_Matrix` — that pattern (retired 2026-04-17) orphaned trust updates off-main for months.
 
-```bash
-git fetch origin CEO/0000-Trust_Matrix
-TRUST_WORKTREE="$(mktemp -d /tmp/trust-matrix-update-XXXXXXXX)"
-rmdir "$TRUST_WORKTREE"  # git worktree add needs a non-existent path
-git worktree add "$TRUST_WORKTREE" CEO/0000-Trust_Matrix
-```
-
-Update `$TRUST_WORKTREE/.claude/team/trust_matrix.md` with directional trust changes based on wave performance:
+Apply directional trust changes based on wave performance:
 - Reliable delivery, clean reviews → increase trust (+1, max 5)
 - CI failures, must-fix items, broken commitments → decrease trust (-1, min 1)
 - No significant signal → no change
 
-Add change log entries with date and reason. Commit as the Manager (see `.claude/team/roster.json` for identity), push, then clean up:
+Append a new `## Phase {N} Wave {M} Trust Updates ({DATE}) — {theme}` section with:
+- A `| Rated | Old | New | Reason |` table for each relevant team grouping (e.g., `### Org-Level Team`)
+- A `### Done Well / Needs Improvement (Phase {N} Wave {M})` matrix
 
-```bash
-git worktree remove "$TRUST_WORKTREE"
-```
+The edit will be committed as part of the retro PR (see Step 6). Do NOT create a separate commit or PR for the trust matrix update.
 
 ### 6. Append to feedback log
 

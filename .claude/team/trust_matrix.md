@@ -276,3 +276,26 @@ The org was restructured in Session 3 with new repo-level teams. The matrix abov
 | **Santiago Ferreira** | CI workflow for hooks (new infrastructure), release tagging cadence (process formalization). Both well-documented. | Pre-existing lint issues not caught before merge — CI introduced by his PR fails on his own branch |
 | **Aino Virtanen** | Label naming convention hook, 7 reviews as second reviewer. Consistent quality gate. | None this wave |
 | **Nadia Khoury** | Redis health check fix (security), coordination of wave execution | None this wave |
+
+---
+
+## Phase 2 Wave 8 Trust Updates (2026-04-17) — CI Hygiene
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Wanjiku Mwangi (TPM) | 4 | 4 | 4 PRs across 4 repos for #111 (main #115, isnad-graph #811, user-service #60, design-system #56), all merged clean. Filed high-quality tech-debt issues with forensic detail (#810, #812, #54, etc.). Handled load-bearing breadcrumb retrofit cleanly across session boundary. No negatives. |
+| Santiago Ferreira (RC) | 5 | 5 | 3 PRs for #110 (ruff autoformat in pre-commit): isnad-graph #808, user-service #58, data-acquisition #27. Clean delivery after commit-identity roster-blocker unblocked by Steven. Already at max. |
+| Aino Virtanen (SQL) | 5 | 5 | Implemented #109 CI gate hook solo (PR #122), caught spec substitution proactively (`gh pr checks --json` → `statusCheckRollup`), reviewed 7 W8 PRs as charter enforcer, zero must-fix items received. Already at max. |
+| Nadia Khoury (PD) | 5 | 5 | Light involvement — reviewed PR #122 with thorough spec-fidelity audit. Already at max, no change. |
+
+### Done Well / Needs Improvement (Phase 2 Wave 8)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Wanjiku Mwangi** (TPM) | Forensic tech-debt filing during #111 sweep (caught hook bugs #113, #118, plus classic-Projects deprecation workaround via REST PATCH). Clean multi-repo delivery. | Had to rework PR bodies post-review when disable-with-followup rule was ratified mid-wave — workflow, not her fault |
+| **Santiago Ferreira** (RC) | Batched ruff-format across 3 Python repos efficiently. Review quality matched charter format on all #110 PRs. | Hit commit-identity roster-blocker on 3 of 4 child repos — unblocked by Steven authorizing cross-repo roster merge (long-term fix: #112) |
+| **Aino Virtanen** (SQL) | #109 implementation matched existing hook patterns exactly. Handled spec-discrepancy (nonexistent `gh pr checks --json bucket,name,state` flag combo) transparently in PR body. Thorough reviewer across the wave. | None this wave |
+| **Nadia Khoury** (PD) | Spec-fidelity review of #122 was executive-quality — validated substitution, checked dispatcher position, flagged program-level concerns (Hook 7 stacking) | Limited involvement — other members carried the wave; appropriate for a wave with tight scope |
+
