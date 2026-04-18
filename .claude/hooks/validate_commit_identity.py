@@ -32,7 +32,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from annunaki_log import log_pretooluse_block
+try:
+    from annunaki_log import log_pretooluse_block
+except ImportError:
+    # Child repos may not have annunaki instrumentation installed yet.
+    def log_pretooluse_block(*_args, **_kwargs) -> None:  # type: ignore[no-redef]
+        return None
+
 
 # Local roster path — this hook's repo's roster (either the parent org-level
 # repo, or a child repo). Single source of truth for identities owned by
