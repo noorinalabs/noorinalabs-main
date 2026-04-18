@@ -25,9 +25,10 @@ The following charter rules are enforced automatically via Claude Code hooks in 
 
 ## Hook 4: Auto-set `ENVIRONMENT=test` (`auto_set_env_test.py`)
 
-- **What it automates:** Ensures `ENVIRONMENT=test` is set before any `pytest`, `uv run pytest`, or `make test` command. Prevents CI breaks caused by missing environment variable.
+- **What it automates:** Ensures `ENVIRONMENT=test` is set before any `pytest`, `uv run pytest`, `python -m pytest`, or `make test` command. Prevents CI breaks caused by missing environment variable.
 - **Augments:** Testing workflow. This is an automated safeguard, not replacing a prior manual rule.
 - **Manual steps remaining:** None — the hook blocks and instructs the user to prepend `ENVIRONMENT=test`.
+- **Scoping (W9, #114):** The match is anchored to the **effective `argv[0]`** of each shell-chained segment (`&&`, `||`, `|`, `;`). Leading `VAR=value` env assignments are stripped before inspecting `argv[0]`. This means the hook fires on `pytest tests/` and `ENVIRONMENT=test pytest && pytest` (second segment missing env), but does **NOT** fire on substring mentions inside quoted flag values such as `gh pr comment --body "pytest failed"`, `gh issue create --body "... make test ..."`, `git log --grep pytest`, or `echo "run pytest"`. See the hook's `Input Language` docstring for the full spec.
 - **Emergency override:** Remove the hook entry from `.claude/settings.json`.
 
 ## Hook 5: Validate Labels Before `gh issue create` (`validate_labels.py`)
