@@ -1,5 +1,10 @@
+# Meta-repo only — not a Python package. This file exists to share ruff config
+# across org tooling (hooks, scripts). The `version` sentinel below is required
+# so `uv` does not error when walking up from child repos during workspace
+# discovery. Do not publish, install, or treat as a workspace root.
 [project]
 name = "noorinalabs-main"
+version = "0.0.0"
 requires-python = ">=3.12"
 
 [tool.ruff]
