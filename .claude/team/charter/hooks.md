@@ -46,8 +46,9 @@ The following charter rules are enforced automatically via Claude Code hooks in 
 
 ## Hook 7: Validate PR Review (`validate_pr_review.py`)
 
-- **What it automates:** Blocks `gh pr merge` unless the PR has at least one review from a non-author. Enforces the charter's peer review requirement.
+- **What it automates:** Blocks `gh pr merge` unless the PR has at least TWO reviews from distinct non-authors (formal GitHub reviews or charter-format comment reviews). Also blocks when any counted review is missing the mandatory `TechDebt:` attestation line. Enforces the charter's peer review requirement.
 - **Augments:** [Pull Requests](pull-requests.md) review requirements. Session 4 saw all PR reviews skipped across 3 waves.
+- **Comment-review detection (tightened for #123):** Counts a PR comment as a review iff it contains BOTH a `Requestee:` line AND a `RequestOrReplied:` line whose value is one of `Approved`, `Changes Requested`, or `Replied`. Comments with `RequestOrReplied: Requested` are review REQUESTS (assignment comments) — they are explicitly excluded and do NOT count as reviews.
 - **Manual steps remaining:** None — the hook queries `gh pr view` for reviews automatically. Use `--admin` flag for emergency overrides.
 - **Emergency override:** Pass `--admin` to `gh pr merge`, or remove the hook entry.
 

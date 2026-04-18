@@ -5,6 +5,36 @@ Blocks `gh pr merge` unless the PR has at least two reviews from distinct
 non-authors, using either formal GitHub reviews or charter-format
 comment-based reviews from different team members.
 
+Input Language:
+  Fires on:      PreToolUse Bash
+  Matches:       gh pr merge {N} [--repo {OWNER/REPO}] [--squash|--merge|--rebase] [--admin]
+  Does NOT match: gh pr list, gh pr view, gh pr checks, gh pr create, gh pr comment, git merge
+  Flag pass-through:
+    --repo   → overrides cwd-resolved repo when querying gh pr view / gh api comments
+    --admin  → short-circuits (emergency override, allows merge)
+
+Comment-review detection (inside gh pr merge flow):
+  Counts a PR comment as a review iff it contains BOTH:
+    - Requestee:          <name>
+    - RequestOrReplied:   {Approved | Changes Requested | Replied}
+  Does NOT count as a review:
+    - RequestOrReplied: Requested  (this is a review REQUEST, not a review)
+    - Comments with only Requestee: but no RequestOrReplied: line
+    - Comments with only RequestOrReplied: but no Requestee: line
+
+Negative-match verification (guards against the #123 false-positive):
+  Input comment body (the review-request assignment that tripped the buggy hook on PR #122):
+    Requestor: Aino.Virtanen
+    Requestee: Nadia.Khoury
+    RequestOrReplied: Requested
+  Expected: NOT counted as a review → merge proceeds with 2 actual reviews.
+
+  Input comment body (an actual review missing TechDebt:):
+    Requestor: Aino.Virtanen
+    Requestee: Nadia.Khoury
+    RequestOrReplied: Approved
+  Expected: counted as a review AND blocks merge for missing TechDebt: line.
+
 Exit codes:
   0 — allow (not a merge command, or two reviews exist)
   2 — block (fewer than two peer reviews found)
@@ -157,7 +187,13 @@ def check_comment_reviews(
             # Check for charter-format review: must contain Requestee: and RequestOrReplied:
             # Handles markdown bold (**Requestee:**) and plain text (Requestee:)
             has_requestee = re.search(r"\*{0,2}Requestee:\*{0,2}\s*(.+)", body)
-            has_request_or_replied = re.search(r"RequestOrReplied:", body)
+            # Only count comments that record a review OUTCOME, not review requests.
+            # RequestOrReplied: Requested means "review requested" — not itself a review.
+            has_request_or_replied = re.search(
+                r"\*{0,2}RequestOrReplied:\*{0,2}\s*"
+                r"\*{0,2}(?:Approved|Changes Requested|Replied)\*{0,2}",
+                body,
+            )
 
             if has_requestee and has_request_or_replied:
                 # Extract Requestee name (the reviewer)
