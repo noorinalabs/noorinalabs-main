@@ -32,7 +32,8 @@ The following charter rules are enforced automatically via Claude Code hooks in 
 
 ## Hook 5: Validate Labels Before `gh issue create` (`validate_labels.py`)
 
-- **What it automates:** GitHub Label Hygiene — validates that all `--label` values exist in the repository before `gh issue create` runs.
+- **What it automates:** GitHub Label Hygiene — validates that all `--label` values exist in the **target** repository before `gh issue create` runs. The hook parses `--repo` / `-R` from the command and forwards it to `gh label list --repo ...`, so labels are resolved against the repo the issue is being created in, not the cwd-resolved repo.
+- **Input language:** uses `shlex.split` to tokenize the command, then walks the `gh issue create` argv slice. Only `--label` / `-l` tokens that appear as flags (not inside a `--body` / `--title` / `-F` value) are treated as labels. Prevents false-positives when issue bodies document gh commands or mention label names as prose.
 - **Augments:** The label hygiene section. The manual rule to run `gh label list` first is now enforced automatically.
 - **Manual steps remaining:** None — the hook fetches labels and validates automatically.
 - **Emergency override:** Remove the hook entry from `.claude/settings.json`. If `gh label list` is unavailable (network issue), the hook allows the command with a warning.
