@@ -1,60 +1,96 @@
 {
-  "wave_active": false,
-  "current_wave": null,
-  "next_wave": "wave-8",
+  "wave_active": true,
+  "current_wave": "wave-9",
+  "next_wave": "wave-10",
   "phase": "phase-2",
-  "last_completed_wave": "wave-7",
-  "last_completed_at": "2026-04-13T18:01:00Z",
-  "wave_started": null,
-  "deployments_branch": null,
-  "wave_branch_status": "wave-7 merged to main 2026-04-13. wave-8 not yet kicked off.",
+  "last_completed_wave": "wave-8",
+  "last_completed_at": "2026-04-17T23:46:00Z",
+  "wave_started": "2026-04-17T00:00:00Z",
+  "deployments_branch": "deployments/phase-2/wave-9",
+  "wave_branch_status": "wave-8 merged to main 2026-04-17 (PRs #122, #124, #127). wave-9 kicked off 2026-04-17.",
   "open_prs_total": 0,
   "historical_phases": {
     "note": "wave-c phase tracking (phases 1-4) is superseded by phase-2 wave numbering",
     "wave_c_status": "complete — all tracked work merged or superseded"
   },
-  "wave_7_work": {
+  "wave_9_plan": {
+    "theme": "Hook architecture cleanup + data pipeline + user-service cutover",
+    "phase_a_mini_sprint": {
+      "rationale": "W8 retro proposal #2 — open W9 with hook mini-sprint before pipeline work",
+      "issues": [
+        "main #125: sprint coordinator (meta)",
+        "main #113: validate_labels.py bugs",
+        "main #114: auto_set_env_test substring false-positives",
+        "main #118: validate_branch_freshness cwd bug",
+        "main #119: pyproject.toml missing version",
+        "main #123: validate_pr_review false-positive",
+        "main #112: sync validate_commit_identity + merge rosters"
+      ]
+    },
+    "phase_b_pipeline": {
+      "issues": [
+        "main #105: Backblaze B2 bucket + stage prefixes",
+        "main #106: Kafka (KRaft) on deploy",
+        "main #107: Kafka worker containers",
+        "main #108: Pipeline reset/obliterate",
+        "main #49: Cross-repo integration test suite"
+      ]
+    },
+    "wave_close_gate": {
+      "issue": "main #62",
+      "title": "ops: Production Neo4j → Postgres user migration",
+      "owner": "Steven French (user action required)",
+      "monitor": "Nurul Hakim",
+      "blocking": false,
+      "wave_close_blocking": true,
+      "note": "Non-blocking during execution; W9 retro cannot close until migration is run"
+    }
+  },
+  "wave_8_work": {
     "merged": [
-      "DS #52: P2W7 design system — tokens, components, tests, exports",
-      "IG #801: P2W7 theme alignment with design system tokens",
-      "IG #800: Fix Neo4j label casing in admin queries",
-      "LP #65: P2W7 landing page design system alignment",
-      "deploy #75: Restrict metrics/observability service exposure",
-      "main: Session-start hook, worktree cleanup, annunaki dedup, 4-tier staleness (on wave-7 branch)"
+      "main #110 (ruff pre-commit across repos) via PRs: main #115, isnad-graph #811, user-service #60, design-system #56",
+      "main #111 (CI hygiene sweep)",
+      "main #109/#122: Block gh pr merge when CI not green (hook)",
+      "main #124/#127: W8 retro + 5 accepted proposals + trust matrix"
     ],
     "open": [],
-    "remaining": "Wave-7 branch needs merge to main after triage/retro"
+    "remaining": "W8 complete; all retro proposals ratified"
   },
   "design-system": {
     "latest_version": "0.0.1",
     "status": "published",
     "open_prs": 0,
-    "last_updated": "2026-04-12T23:20:00Z"
+    "last_updated": "2026-04-17T00:00:00Z"
   },
   "isnad-graph": {
     "status": "active",
     "open_prs": 0,
-    "last_updated": "2026-04-12T23:20:00Z"
+    "last_updated": "2026-04-17T00:00:00Z"
   },
   "landing-page": {
     "status": "active",
     "open_prs": 0,
     "deploy_status": "live",
-    "last_updated": "2026-04-12T23:20:00Z"
+    "last_updated": "2026-04-17T00:00:00Z"
   },
   "deploy": {
     "status": "active",
     "open_prs": 0,
-    "last_updated": "2026-04-12T23:20:00Z"
+    "last_updated": "2026-04-17T00:00:00Z"
   },
   "data-acquisition": {
     "status": "active",
     "open_prs": 0,
-    "last_updated": "2026-04-12T23:20:00Z"
+    "last_updated": "2026-04-17T00:00:00Z"
   },
   "isnad-ingest-platform": {
     "status": "active",
     "open_prs": 0,
-    "last_updated": "2026-04-12T23:20:00Z"
+    "last_updated": "2026-04-17T00:00:00Z"
+  },
+  "user-service": {
+    "status": "active",
+    "open_prs": 0,
+    "last_updated": "2026-04-17T00:00:00Z"
   }
 }
