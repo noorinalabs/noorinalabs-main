@@ -63,9 +63,9 @@
       "resolved_at": "2026-04-11T16:26:02.575946+00:00"
     },
     "ontology/repos/deploy.yaml": {
-      "last_tracked": "9282ce2e8926f072f41589f93e95750ca085c4aca9b0bfd105390c1da2b0a144",
+      "last_tracked": "ec02f04a45d5ae625f53a044c939568029936f2c704969f37777279cc515bdac",
       "last_resolved": "9282ce2e8926f072f41589f93e95750ca085c4aca9b0bfd105390c1da2b0a144",
-      "tracked_at": "2026-04-11T16:26:02.575946+00:00",
+      "tracked_at": "2026-04-19T14:27:14.572208+00:00",
       "resolved_at": "2026-04-11T16:26:02.575946+00:00"
     },
     "ontology/repos/ingestion.yaml": {
@@ -261,9 +261,9 @@
       "resolved_at": "2026-04-12T23:12:56.612546+00:00"
     },
     "cross-repo-status.json": {
-      "last_tracked": "68a6428308986e6427a6a8e708e298931864b4e3d5f1134ca05c58fe05a47a7a",
+      "last_tracked": "5ef6c2502f6fdb47bb190e4ce9edbacd37efdc11ced4f95d432e2eb778f5af1b",
       "last_resolved": "68a6428308986e6427a6a8e708e298931864b4e3d5f1134ca05c58fe05a47a7a",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
+      "tracked_at": "2026-04-19T14:08:43.615543+00:00",
       "resolved_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "ONBOARDING.md": {
@@ -1207,6 +1207,30 @@
       "last_resolved": "c2a8ab8adb2c5978f63f65a86c465680096a0321e724e328f2c2953f5683aaa3",
       "tracked_at": "2026-04-19T02:39:50.758257+00:00",
       "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/main-meta-ghcr-cutover.md": {
+      "last_tracked": "0daf96f43755167baf19cfb589e598863a0e2e4dd465f6fb86bf78b062c3fa14",
+      "last_resolved": "",
+      "tracked_at": "2026-04-19T14:23:57.178387+00:00",
+      "resolved_at": ""
+    },
+    "noorinalabs-deploy/.claude/worktrees/L.Ferreira-0103-drop-build-blocks/compose/docker-compose.prod.yml": {
+      "last_tracked": "872471c28086eeb9e0546c992fb9ba9f826adcfbbde7e05659c663973b9cb43c",
+      "last_resolved": "",
+      "tracked_at": "2026-04-19T14:27:09.642835+00:00",
+      "resolved_at": ""
+    },
+    "/tmp/hook-labels-heredoc-bug.md": {
+      "last_tracked": "408e6aaaa18797f47f6a9448a915fd1b1aa0898dcc61b77c3b722b168920a448",
+      "last_resolved": "",
+      "tracked_at": "2026-04-19T14:27:31.918292+00:00",
+      "resolved_at": ""
+    },
+    "noorinalabs-isnad-graph/.claude/worktrees/L.Pham-0817-ghcr-publish-frontend/.github/workflows/ghcr-publish.yml": {
+      "last_tracked": "e5c8c31260d7fd3a958cbde0f267849f192847541be375b33754e9b9cf5d4b7d",
+      "last_resolved": "",
+      "tracked_at": "2026-04-19T14:28:56.513701+00:00",
+      "resolved_at": ""
     }
   }
 }

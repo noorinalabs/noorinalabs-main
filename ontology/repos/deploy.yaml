@@ -72,7 +72,7 @@ environments:
 
 local_patterns:
   rolling_update: "docker compose up -d --force-recreate + health poll"
-  image_fallback: "GHCR pull with fallback to local build"
+  image_fallback: "GHCR-only for app services (api, frontend, landing, user-service); no local-build fallback. Infra services use upstream images directly."
   env_injection: "GitHub Actions writes .env on VPS via SSH"
   read_only_containers: "All app containers use read_only + tmpfs"
   network_isolation: "Backend networks are internal (not exposed)"
