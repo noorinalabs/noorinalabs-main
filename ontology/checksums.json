@@ -1401,16 +1401,16 @@
       "resolved_at": "2026-04-19T21:53:15Z"
     },
     "noorinalabs-user-service/.claude/worktrees/M.Salazar-0066-oauth-callback-get/src/app/config.py": {
-      "last_tracked": "ad1d596538af868e3fa7c793da7d55fd24ae734ec79c2a98a965b157c012ba7f",
-      "last_resolved": "ad1d596538af868e3fa7c793da7d55fd24ae734ec79c2a98a965b157c012ba7f",
-      "tracked_at": "2026-04-19T21:45:37.186655+00:00",
-      "resolved_at": "2026-04-19T21:53:15Z"
+      "last_tracked": "af8555480177360dc92c837777dc8f881ff789f5affcea7cde62f3507c1a1616",
+      "last_resolved": "af8555480177360dc92c837777dc8f881ff789f5affcea7cde62f3507c1a1616",
+      "tracked_at": "2026-04-19T22:10:03.529657+00:00",
+      "resolved_at": "2026-04-19T22:12:52.546666+00:00"
     },
     "noorinalabs-user-service/.claude/worktrees/M.Salazar-0066-oauth-callback-get/src/app/routers/auth.py": {
-      "last_tracked": "156973de21fccd6f13ce7b2e17e8812fb5a16dbbc6a4f8b43e888943457f9205",
-      "last_resolved": "156973de21fccd6f13ce7b2e17e8812fb5a16dbbc6a4f8b43e888943457f9205",
-      "tracked_at": "2026-04-19T21:48:20.157672+00:00",
-      "resolved_at": "2026-04-19T21:53:15Z"
+      "last_tracked": "129819260a349053cdd434f4bc9b5908cbdb0eae3d88eaccc12811d09f199e1e",
+      "last_resolved": "129819260a349053cdd434f4bc9b5908cbdb0eae3d88eaccc12811d09f199e1e",
+      "tracked_at": "2026-04-19T22:09:32.955986+00:00",
+      "resolved_at": "2026-04-19T22:12:52.546666+00:00"
     },
     "noorinalabs-user-service/.claude/worktrees/M.Salazar-0066-oauth-callback-get/src/app/schemas/auth.py": {
       "last_tracked": "d17e3fe2bca6c86733ee8df43311882005e8bc4628e917f74bfea834fc555683",
@@ -1419,16 +1419,16 @@
       "resolved_at": "2026-04-19T21:53:15Z"
     },
     "noorinalabs-user-service/.claude/worktrees/M.Salazar-0066-oauth-callback-get/.env.example": {
-      "last_tracked": "da18ff3ec95f43b72058f06c3dc90ef130f8d9a143aaa8d32945a711d62c738e",
-      "last_resolved": "da18ff3ec95f43b72058f06c3dc90ef130f8d9a143aaa8d32945a711d62c738e",
-      "tracked_at": "2026-04-19T21:47:10.992997+00:00",
-      "resolved_at": "2026-04-19T21:53:15Z"
+      "last_tracked": "46e53b7454edf55f39dc1b31b183c8a94f5b311f45ead17b6c070ff3e8e19e23",
+      "last_resolved": "46e53b7454edf55f39dc1b31b183c8a94f5b311f45ead17b6c070ff3e8e19e23",
+      "tracked_at": "2026-04-19T22:09:49.516187+00:00",
+      "resolved_at": "2026-04-19T22:12:52.546666+00:00"
     },
     "noorinalabs-user-service/.claude/worktrees/M.Salazar-0066-oauth-callback-get/tests/test_oauth_callback_get.py": {
-      "last_tracked": "48766648cd1b2098e1577186a5189f403ff2ba46587394bf0df63645d6145d85",
-      "last_resolved": "48766648cd1b2098e1577186a5189f403ff2ba46587394bf0df63645d6145d85",
-      "tracked_at": "2026-04-19T21:48:48.970393+00:00",
-      "resolved_at": "2026-04-19T21:53:15Z"
+      "last_tracked": "5f5ed7ae0684ab60165b842209a07db096977659bf052a006970642042bea2ed",
+      "last_resolved": "5f5ed7ae0684ab60165b842209a07db096977659bf052a006970642042bea2ed",
+      "tracked_at": "2026-04-19T22:10:39.235868+00:00",
+      "resolved_at": "2026-04-19T22:12:52.546666+00:00"
     },
     "/tmp/pr-066-body.md": {
       "last_tracked": "9537f3f324ba5ab5cce8963c29fd6dbbbfc33ea9bea230c44c22edefae1966eb",
@@ -1447,6 +1447,42 @@
       "last_resolved": "cfda5f151d9dee45e465da7b39e48526d0df1086f1f1b8f707619b0a7f22bce8",
       "tracked_at": "2026-04-19T21:52:12.825135+00:00",
       "resolved_at": "2026-04-19T21:53:15Z"
+    },
+    "/tmp/skill-cwd-robustness.md": {
+      "last_tracked": "298234ba85806b432ea2ccb7cc988867afd90e01592825d96c4a976b312989ad",
+      "last_resolved": "298234ba85806b432ea2ccb7cc988867afd90e01592825d96c4a976b312989ad",
+      "tracked_at": "2026-04-19T21:58:01.865687+00:00",
+      "resolved_at": "2026-04-19T22:12:52.546666+00:00"
+    },
+    "/tmp/librarian-enforcement.md": {
+      "last_tracked": "18de00906728e43a47547bfa07d1a46a42d3a2950dc7dbd1d415cc44bc3662a5",
+      "last_resolved": "18de00906728e43a47547bfa07d1a46a42d3a2950dc7dbd1d415cc44bc3662a5",
+      "tracked_at": "2026-04-19T21:58:29.487413+00:00",
+      "resolved_at": "2026-04-19T22:12:52.546666+00:00"
+    },
+    "/tmp/wave-retro-memory-audit.md": {
+      "last_tracked": "95ced2fb14243f2808798e7c4993a1cdc0cb340e61bad8e35587c674f01ad186",
+      "last_resolved": "95ced2fb14243f2808798e7c4993a1cdc0cb340e61bad8e35587c674f01ad186",
+      "tracked_at": "2026-04-19T22:03:35.465696+00:00",
+      "resolved_at": "2026-04-19T22:12:52.546666+00:00"
+    },
+    "/tmp/pr-67-reply-anya.md": {
+      "last_tracked": "f03f7328f095bb95a07a491d62a9d74ccdac9cfa5f3f1643353c855422cef274",
+      "last_resolved": "f03f7328f095bb95a07a491d62a9d74ccdac9cfa5f3f1643353c855422cef274",
+      "tracked_at": "2026-04-19T22:11:35.565748+00:00",
+      "resolved_at": "2026-04-19T22:12:52.546666+00:00"
+    },
+    "/tmp/pr-67-rerequest-anya.md": {
+      "last_tracked": "e09aa0e3720bb9c152411ff4642611873d530df67a5e93116efe0b929c84a175",
+      "last_resolved": "e09aa0e3720bb9c152411ff4642611873d530df67a5e93116efe0b929c84a175",
+      "tracked_at": "2026-04-19T22:11:36.761344+00:00",
+      "resolved_at": "2026-04-19T22:12:52.546666+00:00"
+    },
+    "/tmp/promotion-audit-spec.md": {
+      "last_tracked": "ba41982b9c4e7207f480a6ee32cdbf2a0ace0e09bfff65511fbdb455d8405a3f",
+      "last_resolved": "ba41982b9c4e7207f480a6ee32cdbf2a0ace0e09bfff65511fbdb455d8405a3f",
+      "tracked_at": "2026-04-19T22:11:39.455949+00:00",
+      "resolved_at": "2026-04-19T22:12:52.546666+00:00"
     }
   }
 }
