@@ -87,10 +87,10 @@
       "resolved_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "/home/parameterization/.claude/projects/-home-parameterization-code-noorinalabs-main/memory/MEMORY.md": {
-      "last_tracked": "2b8b00adc1b53e9fe363a41ff931659fdcdee30ec76b14d775922eb2a99dd295",
-      "last_resolved": "2b8b00adc1b53e9fe363a41ff931659fdcdee30ec76b14d775922eb2a99dd295",
-      "tracked_at": "2026-04-18T17:20:31.607962+00:00",
-      "resolved_at": "2026-04-18T17:22:28.117995Z"
+      "last_tracked": "c6f32a8a81651ba5de27666e149bfab3493c25057d591c6060a755cc2284a861",
+      "last_resolved": "c6f32a8a81651ba5de27666e149bfab3493c25057d591c6060a755cc2284a861",
+      "tracked_at": "2026-04-19T14:00:38.295905+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
     },
     ".claude/team/charter.md": {
       "last_tracked": "a79e60476eb72af6689a5af1c3a09e0d5878c67b26ab8f5ab3516ee26ff717d3",
@@ -141,10 +141,10 @@
       "resolved_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "/home/parameterization/.claude/projects/-home-parameterization-code-noorinalabs-main/memory/session_handoff.md": {
-      "last_tracked": "d1ba97068ee666a7918142b950d3cb012084276cc80f974a1827ec4b0b940aec",
-      "last_resolved": "d1ba97068ee666a7918142b950d3cb012084276cc80f974a1827ec4b0b940aec",
-      "tracked_at": "2026-04-18T17:20:26.402561+00:00",
-      "resolved_at": "2026-04-18T17:22:28.117995Z"
+      "last_tracked": "65644fbffe7ff4cca57ff25795b5726d156e832e25ac072904dbad4da140bb61",
+      "last_resolved": "65644fbffe7ff4cca57ff25795b5726d156e832e25ac072904dbad4da140bb61",
+      "tracked_at": "2026-04-19T14:00:17.513519+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
     },
     "/home/parameterization/.claude/settings.json": {
       "last_tracked": "d526f085b8e99a4e8f28511674bd42f55b9703e24d5d428d81cf41ef5239728a",
@@ -369,10 +369,10 @@
       "resolved_at": "2026-04-18T17:14:01.044194+00:00"
     },
     ".claude/worktrees/S.Ferreira-0105-b2-bucket-deploy/terraform/backblaze/main.tf": {
-      "last_tracked": "3033f306c4c33e90f4dc90d3c25791fa6e9b0147d5ec9aa6ee0068d7c8a2bbb7",
-      "last_resolved": "3033f306c4c33e90f4dc90d3c25791fa6e9b0147d5ec9aa6ee0068d7c8a2bbb7",
-      "tracked_at": "2026-04-18T03:36:47.723110+00:00",
-      "resolved_at": "2026-04-18T17:14:01.044194+00:00"
+      "last_tracked": "976d7b65c94511012dd179b13267141e95703ced469ab9cd1d447b7c9ab723cb",
+      "last_resolved": "976d7b65c94511012dd179b13267141e95703ced469ab9cd1d447b7c9ab723cb",
+      "tracked_at": "2026-04-18T17:47:59.034941+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
     },
     ".claude/worktrees/W.Mwangi-0107-kafka-workers/workers/lib/metrics.py": {
       "last_tracked": "820600aa3ea03aeee457598bc756eb77d2846bee5f7afd1d1d9e6b951e12e853",
@@ -465,10 +465,10 @@
       "resolved_at": "2026-04-18T17:14:01.044194+00:00"
     },
     "noorinalabs-deploy/.claude/worktrees/W.Zielinska-0106-kafka-kraft/compose/docker-compose.prod.yml": {
-      "last_tracked": "67f5bcbc1767efa20d2f997135e08c6ddbad3fe7df592e746f97bef426bce995",
-      "last_resolved": "67f5bcbc1767efa20d2f997135e08c6ddbad3fe7df592e746f97bef426bce995",
-      "tracked_at": "2026-04-18T03:37:43.085665+00:00",
-      "resolved_at": "2026-04-18T17:14:01.044194+00:00"
+      "last_tracked": "29e780b5eb1da3980188dd789b57810f9279ef197df51d71619d8b256dea28cd",
+      "last_resolved": "29e780b5eb1da3980188dd789b57810f9279ef197df51d71619d8b256dea28cd",
+      "tracked_at": "2026-04-18T17:46:32.201023+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
     },
     ".claude/worktrees/W.Mwangi-0107-kafka-workers/workers/enrich/processor.py": {
       "last_tracked": "9c05f93edad07443814db578cabb99d93cb901cc13e67b7bb4b00c008e174e3e",
@@ -519,10 +519,10 @@
       "resolved_at": "2026-04-18T17:14:01.044194+00:00"
     },
     ".claude/worktrees/S.Ferreira-0105-b2-bucket-deploy/docs/pipeline-storage.md": {
-      "last_tracked": "2138db611b06bcd1a5fe9a2d5fb91e4b11e3259d7db0ef87af00d41e65fd10ab",
-      "last_resolved": "2138db611b06bcd1a5fe9a2d5fb91e4b11e3259d7db0ef87af00d41e65fd10ab",
-      "tracked_at": "2026-04-18T03:37:58.179545+00:00",
-      "resolved_at": "2026-04-18T17:14:01.044194+00:00"
+      "last_tracked": "3fe43a72d10a386a4a7a788b508fd5446d62613f7def05c48b47d8022b2ba71b",
+      "last_resolved": "3fe43a72d10a386a4a7a788b508fd5446d62613f7def05c48b47d8022b2ba71b",
+      "tracked_at": "2026-04-18T17:48:41.869121+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
     },
     ".claude/worktrees/W.Mwangi-0107-kafka-workers/workers/normalize/main.py": {
       "last_tracked": "eff9d1cfb0b6dda28bb3ff99e5489ea27ae5c322893c9b384274aaf88430b466",
@@ -639,10 +639,10 @@
       "resolved_at": "2026-04-18T17:14:01.044194+00:00"
     },
     "noorinalabs-deploy/.claude/worktrees/W.Zielinska-0106-kafka-kraft/docs/pipeline-kafka.md": {
-      "last_tracked": "9f94bd20f5eac80be62e83de554e9faa7e63a77518df857f53ab5e3bbf3d6bfc",
-      "last_resolved": "9f94bd20f5eac80be62e83de554e9faa7e63a77518df857f53ab5e3bbf3d6bfc",
-      "tracked_at": "2026-04-18T03:38:49.539739+00:00",
-      "resolved_at": "2026-04-18T17:14:01.044194+00:00"
+      "last_tracked": "0906d35d5a1ab8c3220d93a3f820c8865e908a0e20baafca7d5690de28254f65",
+      "last_resolved": "0906d35d5a1ab8c3220d93a3f820c8865e908a0e20baafca7d5690de28254f65",
+      "tracked_at": "2026-04-18T17:46:40.246518+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
     },
     ".claude/worktrees/W.Mwangi-0107-kafka-workers/docker-compose.yaml": {
       "last_tracked": "7ca5b1a72b7ea5d666d380cced007edc334cd655c0fc89889256171a0e195c83",
@@ -949,6 +949,264 @@
       "last_resolved": "5f27d4d3755ec92ce6ff50cf24c2d2fd58f64f66aac15cc49103c7e10e5e9324",
       "tracked_at": "2026-04-18T17:18:18.040684+00:00",
       "resolved_at": "2026-04-18T17:22:28.117995Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/W.Zielinska-0106-kafka-kraft/.github/workflows/compose-validate.yml": {
+      "last_tracked": "c968789d4c0ce7738bab3dc4ccf87f096e3228e0bf3ebfc2eec6d66204738037",
+      "last_resolved": "c968789d4c0ce7738bab3dc4ccf87f096e3228e0bf3ebfc2eec6d66204738037",
+      "tracked_at": "2026-04-18T17:33:42.206365+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/W.Zielinska-0106-kafka-kraft/.github/workflows/deploy-isnad-graph.yml": {
+      "last_tracked": "56dbf06fddfbd1a7c0014aad37e8cf3ea7fbb8741481043f055a4d1521d32f3e",
+      "last_resolved": "56dbf06fddfbd1a7c0014aad37e8cf3ea7fbb8741481043f055a4d1521d32f3e",
+      "tracked_at": "2026-04-18T19:38:50.002686+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/W.Zielinska-0106-kafka-kraft/scripts/restore.sh": {
+      "last_tracked": "27c0025fd0c4d7cc2fa0f0c0e4540698f0b938428074e47910b7b55d17e68446",
+      "last_resolved": "27c0025fd0c4d7cc2fa0f0c0e4540698f0b938428074e47910b7b55d17e68446",
+      "tracked_at": "2026-04-18T17:46:17.309698+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/W.Zielinska-0106-kafka-kraft/scripts/verify_deployment.sh": {
+      "last_tracked": "c2cbc5d0b44a9319dc63f66a358a0fa8d54ef9a030e01ee2c29898e5a9412138",
+      "last_resolved": "c2cbc5d0b44a9319dc63f66a358a0fa8d54ef9a030e01ee2c29898e5a9412138",
+      "tracked_at": "2026-04-18T17:46:25.546653+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/kafka-exporter-issue.md": {
+      "last_tracked": "67e7df74ac79d3e0d540efc107e438c2883efebbeafb3c550f982810e0e6995e",
+      "last_resolved": "67e7df74ac79d3e0d540efc107e438c2883efebbeafb3c550f982810e0e6995e",
+      "tracked_at": "2026-04-18T17:47:12.829925+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    ".claude/worktrees/S.Ferreira-0105-b2-bucket-deploy/.github/workflows/terraform.yml": {
+      "last_tracked": "41dff183fec1fc67bb2be36f8169c08f319d675fd214e9fa6400f2cf1ac8448b",
+      "last_resolved": "41dff183fec1fc67bb2be36f8169c08f319d675fd214e9fa6400f2cf1ac8448b",
+      "tracked_at": "2026-04-18T17:48:35.606860+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    ".claude/worktrees/S.Ferreira-0105-b2-bucket-deploy/.github/workflows/deploy-isnad-graph.yml": {
+      "last_tracked": "bcc774693d932de384812d0c76a90432861e12dcbc6c040c9e3ca1805801ff6a",
+      "last_resolved": "bcc774693d932de384812d0c76a90432861e12dcbc6c040c9e3ca1805801ff6a",
+      "tracked_at": "2026-04-18T17:49:14.023448+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-deploy/terraform/backblaze/versions.tf": {
+      "last_tracked": "0d17ce7d5eabc6be771b827411335a629ad539afb2299dda27682311edef8395",
+      "last_resolved": "0d17ce7d5eabc6be771b827411335a629ad539afb2299dda27682311edef8395",
+      "tracked_at": "2026-04-18T19:00:37.374688+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/S.Ferreira-0091-tf-backend-fix/terraform/backblaze/versions.tf": {
+      "last_tracked": "792794f9e7ce58d4433f28c653c3b00e2a189f23265374755e5a06fc14bf4fee",
+      "last_resolved": "792794f9e7ce58d4433f28c653c3b00e2a189f23265374755e5a06fc14bf4fee",
+      "tracked_at": "2026-04-18T19:05:36.218141+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/S.Ferreira-0091-tf-backend-fix/terraform/hetzner/versions.tf": {
+      "last_tracked": "e3f23cb3d985c9bcad3fc4c140bfb97e381de99eb224c66a59021a9baf3eb4bc",
+      "last_resolved": "e3f23cb3d985c9bcad3fc4c140bfb97e381de99eb224c66a59021a9baf3eb4bc",
+      "tracked_at": "2026-04-18T19:05:39.212272+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/S.Ferreira-0091-tf-backend-fix/terraform/cloudflare/versions.tf": {
+      "last_tracked": "fe44472232649fec3e28dadd4d54b93bc20bd8b699ac97a3bf8db3c89adcf00b",
+      "last_resolved": "fe44472232649fec3e28dadd4d54b93bc20bd8b699ac97a3bf8db3c89adcf00b",
+      "tracked_at": "2026-04-18T19:05:42.315126+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/env-quoting-issue.md": {
+      "last_tracked": "b9e66f885ccbb07757df201d76494434fd64f90e0765050433982eb6dbd6a2fd",
+      "last_resolved": "b9e66f885ccbb07757df201d76494434fd64f90e0765050433982eb6dbd6a2fd",
+      "tracked_at": "2026-04-18T20:04:20.853552+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/W.Mwangi-0094-env-file-quoting/.github/workflows/deploy-isnad-graph.yml": {
+      "last_tracked": "d10440adcccf62e6aa79960955ad55fc009fe089aca55272bc1b3962a5bb4a8f",
+      "last_resolved": "d10440adcccf62e6aa79960955ad55fc009fe089aca55272bc1b3962a5bb4a8f",
+      "tracked_at": "2026-04-18T20:04:52.455948+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/pr-env-quoting-body.md": {
+      "last_tracked": "d96487ac80057859abaed6d44e984b1795a8d27eacfe151ebb52489c516c0d1b",
+      "last_resolved": "d96487ac80057859abaed6d44e984b1795a8d27eacfe151ebb52489c516c0d1b",
+      "tracked_at": "2026-04-18T20:05:34.986893+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/techdebt-env-derivation.md": {
+      "last_tracked": "b598967574872ce09a915a1501434a781fe3ea1bbe2ab4048e164bfd6e9d323c",
+      "last_resolved": "b598967574872ce09a915a1501434a781fe3ea1bbe2ab4048e164bfd6e9d323c",
+      "tracked_at": "2026-04-18T20:27:53.272670+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/fix-issue-env-wiring.md": {
+      "last_tracked": "ab0f033416ed49a5007fdf25051a8e0a0a8ed9eed2771b91a70f99a66e09cd11",
+      "last_resolved": "ab0f033416ed49a5007fdf25051a8e0a0a8ed9eed2771b91a70f99a66e09cd11",
+      "tracked_at": "2026-04-18T20:28:15.083310+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/W.Mwangi-0098-user-service-env-wiring/.github/workflows/deploy-isnad-graph.yml": {
+      "last_tracked": "707eb38460aa540a66d9697f8a8ed8a3aed3a8f1082c2bf88f4472568e232e13",
+      "last_resolved": "707eb38460aa540a66d9697f8a8ed8a3aed3a8f1082c2bf88f4472568e232e13",
+      "tracked_at": "2026-04-18T20:29:08.212456+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/pr-user-service-env-body.md": {
+      "last_tracked": "a328e929fc0da0031f5872d53ab5873a178da626f60c3805abe3e6ce78ee4aaf",
+      "last_resolved": "a328e929fc0da0031f5872d53ab5873a178da626f60c3805abe3e6ce78ee4aaf",
+      "tracked_at": "2026-04-18T20:30:00.530709+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/piece2-kafka-image-decision.md": {
+      "last_tracked": "ead374f166ed32d74a5040da80c1ef7bec007c4c9be3b5b04cce1d9a2f1028a0",
+      "last_resolved": "ead374f166ed32d74a5040da80c1ef7bec007c4c9be3b5b04cce1d9a2f1028a0",
+      "tracked_at": "2026-04-18T20:44:13.746874+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/piece1-fix-issue.md": {
+      "last_tracked": "5f8436d88011ce083928f1269f340a8ad8a07f664f697db29d2612745f7bbfa5",
+      "last_resolved": "5f8436d88011ce083928f1269f340a8ad8a07f664f697db29d2612745f7bbfa5",
+      "tracked_at": "2026-04-18T20:44:39.428274+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/W.Mwangi-0101-bitnami-legacy-namespace/compose/docker-compose.prod.yml": {
+      "last_tracked": "daed07beea52379fa2e17122652ae7b28f4146f4391c196c160ef170e6f6c61a",
+      "last_resolved": "daed07beea52379fa2e17122652ae7b28f4146f4391c196c160ef170e6f6c61a",
+      "tracked_at": "2026-04-18T20:45:10.969008+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/W.Mwangi-0101-bitnami-legacy-namespace/compose/.env.example": {
+      "last_tracked": "264c3577d1a673bc147651422dbd7c48c76670ff7ff70e8f2709c7d8ee77e9be",
+      "last_resolved": "264c3577d1a673bc147651422dbd7c48c76670ff7ff70e8f2709c7d8ee77e9be",
+      "tracked_at": "2026-04-18T20:45:21.540885+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/W.Mwangi-0101-bitnami-legacy-namespace/docs/pipeline-kafka.md": {
+      "last_tracked": "d19c00646f4ca5de4ec053c854a578220b98489ea35940098dbcf43c40b40ca9",
+      "last_resolved": "d19c00646f4ca5de4ec053c854a578220b98489ea35940098dbcf43c40b40ca9",
+      "tracked_at": "2026-04-18T20:45:27.868801+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/pr-bitnami-legacy-body.md": {
+      "last_tracked": "fe6ff095464b8b30f5e64ac27c930405de5f6a6cb9b753b7ec9dcc29a710c0bf",
+      "last_resolved": "fe6ff095464b8b30f5e64ac27c930405de5f6a6cb9b753b7ec9dcc29a710c0bf",
+      "tracked_at": "2026-04-18T20:46:22.451900+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/techdebt-api-frontend-build.md": {
+      "last_tracked": "97faeff04e356acd3442c2ec97d10b4323fd4045648b6f40e4e70a2aea56c554",
+      "last_resolved": "97faeff04e356acd3442c2ec97d10b4323fd4045648b6f40e4e70a2aea56c554",
+      "tracked_at": "2026-04-18T20:55:18.255695+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/fix-issue-ghcr-auth.md": {
+      "last_tracked": "92a33417db91162b339de382f679a71a07789072788372a17447e27b1d94a58e",
+      "last_resolved": "92a33417db91162b339de382f679a71a07789072788372a17447e27b1d94a58e",
+      "tracked_at": "2026-04-18T20:55:42.061058+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/W.Mwangi-0104-ghcr-auth/.github/workflows/deploy-isnad-graph.yml": {
+      "last_tracked": "59e0217c42407e19f13bf36c28cf5a0f2cc38e421910197cfc9a79cb1f977582",
+      "last_resolved": "59e0217c42407e19f13bf36c28cf5a0f2cc38e421910197cfc9a79cb1f977582",
+      "tracked_at": "2026-04-18T20:56:35.431579+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/W.Mwangi-0104-ghcr-auth/compose/docker-compose.prod.yml": {
+      "last_tracked": "6c67d8a03fb691605190946dd37baa8e7783e4d36485635d55df65bc43ba89d1",
+      "last_resolved": "6c67d8a03fb691605190946dd37baa8e7783e4d36485635d55df65bc43ba89d1",
+      "tracked_at": "2026-04-18T20:56:56.757758+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/pr-ghcr-auth-body.md": {
+      "last_tracked": "feef22f7205028f5413d34b57d6d519aaf6b08189a61cd6945575540bf65c6fa",
+      "last_resolved": "feef22f7205028f5413d34b57d6d519aaf6b08189a61cd6945575540bf65c6fa",
+      "tracked_at": "2026-04-18T20:57:59.374973+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/deploy-design-system-fix-issue.md": {
+      "last_tracked": "d52a78898ca19b5558b0c94d845a4bb2a5a84c6acc4e57b9c37dfb942fb38907",
+      "last_resolved": "d52a78898ca19b5558b0c94d845a4bb2a5a84c6acc4e57b9c37dfb942fb38907",
+      "tracked_at": "2026-04-18T22:20:33.706502+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-isnad-graph/.claude/worktrees/W.Mwangi-0818-dockerfile-design-system/frontend/Dockerfile": {
+      "last_tracked": "729d5f74700b33051eb09d44717564e70e939f917087231496c9da5dc89f16f7",
+      "last_resolved": "729d5f74700b33051eb09d44717564e70e939f917087231496c9da5dc89f16f7",
+      "tracked_at": "2026-04-18T22:21:13.597616+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/W.Mwangi-0106-design-system-clone/.github/workflows/deploy-isnad-graph.yml": {
+      "last_tracked": "21edef462d6b803041b975c0fe5596a0a31d3d17d4d6c0068ef4198b04073350",
+      "last_resolved": "21edef462d6b803041b975c0fe5596a0a31d3d17d4d6c0068ef4198b04073350",
+      "tracked_at": "2026-04-18T22:22:45.839887+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/hook-cross-repo-issue.md": {
+      "last_tracked": "899e7dda3c16bd41215224b8a250a1279f432d467d33fac58dc6baaed7668c06",
+      "last_resolved": "899e7dda3c16bd41215224b8a250a1279f432d467d33fac58dc6baaed7668c06",
+      "tracked_at": "2026-04-18T22:24:45.609371+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-isnad-graph/.claude/worktrees/L.Pham-0818-dockerfile-design-system/frontend/Dockerfile": {
+      "last_tracked": "49ce338ec579072e515a483c716db3b1a961fddcdd92ef6ac131a4e874cceffb",
+      "last_resolved": "49ce338ec579072e515a483c716db3b1a961fddcdd92ef6ac131a4e874cceffb",
+      "tracked_at": "2026-04-18T22:25:11.120692+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/pr-design-system-clone-body.md": {
+      "last_tracked": "2da5aaf915624be3da39f8e93ba5b96de81fe930f45d6ac2d49cb0f8e7988b23",
+      "last_resolved": "2da5aaf915624be3da39f8e93ba5b96de81fe930f45d6ac2d49cb0f8e7988b23",
+      "tracked_at": "2026-04-18T22:25:22.230291+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/bootstrap-opt-provisioning.md": {
+      "last_tracked": "a3152ca51ad24770209af9f45119655606f4c163ea97789ab9e9b2e90f70024a",
+      "last_resolved": "a3152ca51ad24770209af9f45119655606f4c163ea97789ab9e9b2e90f70024a",
+      "tracked_at": "2026-04-18T22:34:46.552917+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/W.Mwangi-0108-bootstrap-aux-dirs/scripts/bootstrap-vps.sh": {
+      "last_tracked": "8bc43570da65b9aaff2629fd4424e886c43c67984e76a7190c8a22ed970527bc",
+      "last_resolved": "8bc43570da65b9aaff2629fd4424e886c43c67984e76a7190c8a22ed970527bc",
+      "tracked_at": "2026-04-18T22:37:42.055519+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/pr-bootstrap-aux-dirs-body.md": {
+      "last_tracked": "68cce472b8a713d5d12bb50ddedc7e3cd72f61ce259b66f51946cd0682c588c7",
+      "last_resolved": "68cce472b8a713d5d12bb50ddedc7e3cd72f61ce259b66f51946cd0682c588c7",
+      "tracked_at": "2026-04-18T22:38:55.170803+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/bootstrap-noninteractive-issue.md": {
+      "last_tracked": "6e2177c311947163ddb3f5b2a3a7ede319f617c5f3fc1dbf8af38d7eb95bc561",
+      "last_resolved": "6e2177c311947163ddb3f5b2a3a7ede319f617c5f3fc1dbf8af38d7eb95bc561",
+      "tracked_at": "2026-04-19T02:32:19.923201+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/W.Mwangi-0110-bootstrap-noninteractive/scripts/bootstrap-vps.sh": {
+      "last_tracked": "5e3cd5d042aa0ef103e24e82eb916e0cc930e566852215e0690a5fa38fa186f3",
+      "last_resolved": "5e3cd5d042aa0ef103e24e82eb916e0cc930e566852215e0690a5fa38fa186f3",
+      "tracked_at": "2026-04-19T02:32:50.236029+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/pr-noninteractive-body.md": {
+      "last_tracked": "bc792e89f43625ea65377ee79b5a0667592206644bdaf7b58d070a626fd2edbe",
+      "last_resolved": "bc792e89f43625ea65377ee79b5a0667592206644bdaf7b58d070a626fd2edbe",
+      "tracked_at": "2026-04-19T02:33:36.934708+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/bootstrap-ssh-overwrite-issue.md": {
+      "last_tracked": "4594f6383dfb8923d2242cf7faebf9429d3cf98abbefe66d6acaf87ecba51c18",
+      "last_resolved": "4594f6383dfb8923d2242cf7faebf9429d3cf98abbefe66d6acaf87ecba51c18",
+      "tracked_at": "2026-04-19T02:38:21.124863+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
+    },
+    "/tmp/bootstrap-safe-directory-issue.md": {
+      "last_tracked": "c2a8ab8adb2c5978f63f65a86c465680096a0321e724e328f2c2953f5683aaa3",
+      "last_resolved": "c2a8ab8adb2c5978f63f65a86c465680096a0321e724e328f2c2953f5683aaa3",
+      "tracked_at": "2026-04-19T02:39:50.758257+00:00",
+      "resolved_at": "2026-04-19T14:01:37.639152Z"
     }
   }
 }
