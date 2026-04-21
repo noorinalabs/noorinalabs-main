@@ -5,9 +5,38 @@ Blocks `gh pr merge` unless the PR has at least two reviews from distinct
 non-authors, using either formal GitHub reviews or charter-format
 comment-based reviews from different team members.
 
+Input Language:
+  Fires on:      PreToolUse Bash
+  Matches:       gh pr merge [{N}] [--repo {OWNER/REPO}] [--squash|--merge|--rebase]
+                             [--admin] [--auto]   — including when chained via
+                             && / || / | / ; after env-var assignments.
+  Does NOT match: gh pr list, gh pr view, gh pr checks, gh pr create,
+                  git merge, git pull.
+  Flag pass-through:
+    --repo   → forwarded to `gh pr view` and comment fetch so the hook checks
+               the PR in the repo the user named, not the cwd-resolved repo.
+    --admin  → short-circuits (emergency override — allows merge).
+
+Charter-format review comments:
+  Each comment is expected to include:
+    Requestor: <branch author>
+    Requestee: <reviewer>
+    RequestOrReplied: <Request|Replied|Approved|Changes Requested>
+    TechDebt: none | #15, #16, ...
+
+  Canonical RequestOrReplied values (verified on PR #821 comments):
+    - Request            — requesting review (NOT a verdict)
+    - Replied            — author responding to review (NOT a verdict)
+    - Approved           — actual review verdict (TechDebt line REQUIRED)
+    - Changes Requested  — actual review verdict (TechDebt line REQUIRED)
+
+  Only Approved and Changes Requested comments are ACTUAL REVIEWS. Request /
+  Replied comments are process metadata and must NOT be required to carry the
+  TechDebt attestation line. This is the fix for issue #147.
+
 Exit codes:
   0 — allow (not a merge command, or two reviews exist)
-  2 — block (fewer than two peer reviews found)
+  2 — block (fewer than two peer reviews found, or a verdict is missing TechDebt)
 """
 
 import json
@@ -113,6 +142,28 @@ class CommentReviewResult:
         self.tech_debt_issue_numbers: list[str] = []  # issue numbers from TechDebt: lines
 
 
+# Only these RequestOrReplied values represent actual review verdicts that
+# REQUIRE the TechDebt attestation line. Request / Replied comments are
+# process metadata (review requests, author replies) and do NOT require it.
+# Issue #147: the prior implementation flagged any Requestee+RequestOrReplied
+# comment, which over-enforced TechDebt on Request/Replied traffic.
+_VERDICT_REQUIRING_TECH_DEBT = {"approved", "changes requested", "changes"}
+
+
+def _is_verdict(value: str) -> bool:
+    """Return True if a RequestOrReplied value is an actual review verdict.
+
+    Comparison is case-insensitive and whitespace-trimmed. Accepts both the
+    canonical `Changes Requested` and the shorter `Changes` variant noted in
+    charter discussion as seen in practice. Does NOT accept Request (a review
+    request) or Replied (an author's reply).
+    """
+    normalized = value.strip().lower()
+    # Strip trailing markdown markers and stray punctuation
+    normalized = normalized.rstrip("*").strip()
+    return normalized in _VERDICT_REQUIRING_TECH_DEBT
+
+
 def check_comment_reviews(
     pr_number: str | int,
     branch_author_lastname: str,
@@ -157,26 +208,40 @@ def check_comment_reviews(
             # Check for charter-format review: must contain Requestee: and RequestOrReplied:
             # Handles markdown bold (**Requestee:**) and plain text (Requestee:)
             has_requestee = re.search(r"\*{0,2}Requestee:\*{0,2}\s*(.+)", body)
-            has_request_or_replied = re.search(r"RequestOrReplied:", body)
+            ror_match = re.search(r"\*{0,2}RequestOrReplied:\*{0,2}\s*(.+)", body)
 
-            if has_requestee and has_request_or_replied:
-                # Extract Requestee name (the reviewer)
-                requestee_raw = has_requestee.group(1).strip()
-                # Strip markdown bold markers and parenthetical role descriptions
-                requestee_raw = requestee_raw.strip("*").strip()
-                requestee_name = re.sub(r"\s*\(.*?\)\s*$", "", requestee_raw).strip()
-                # Extract last name — handle "Firstname Lastname" and "Firstname.Lastname"
-                parts = re.split(r"[\s.]+", requestee_name)
-                if len(parts) >= 2:
-                    reviewer_lastname = parts[-1]
-                else:
-                    reviewer_lastname = requestee_name
+            if not (has_requestee and ror_match):
+                continue
 
-                # Reviewer must differ from branch author
-                if reviewer_lastname.lower() != branch_author_lastname.lower():
-                    result.reviewers.add(reviewer_lastname.lower())
+            # Extract Requestee name (the reviewer)
+            requestee_raw = has_requestee.group(1).strip()
+            # Strip markdown bold markers and parenthetical role descriptions
+            requestee_raw = requestee_raw.strip("*").strip()
+            requestee_name = re.sub(r"\s*\(.*?\)\s*$", "", requestee_raw).strip()
+            # Extract last name — handle "Firstname Lastname" and "Firstname.Lastname"
+            parts = re.split(r"[\s.]+", requestee_name)
+            if len(parts) >= 2:
+                reviewer_lastname = parts[-1]
+            else:
+                reviewer_lastname = requestee_name
 
-                # Check for mandatory TechDebt: attestation line
+            # Reviewer must differ from branch author.
+            # NOTE: Reviewer counting is NOT filtered by verdict type. It
+            # continues to use all Requestee+RequestOrReplied comments as in
+            # prior behavior; issue #147 addresses the TechDebt filter only,
+            # and weakening the reviewer count would break existing flows.
+            if reviewer_lastname.lower() != branch_author_lastname.lower():
+                result.reviewers.add(reviewer_lastname.lower())
+
+            ror_value = ror_match.group(1).strip()
+            # Keep only the first line of the value, in case the regex greedy-
+            # matched into following content on the same line.
+            ror_value = ror_value.split("\n", 1)[0].strip()
+
+            # TechDebt attestation is REQUIRED only on actual verdicts
+            # (Approved / Changes Requested). Request / Replied comments do
+            # NOT require it (issue #147 fix).
+            if _is_verdict(ror_value):
                 has_tech_debt = re.search(r"\*{0,2}TechDebt:\*{0,2}\s*(.+)", body)
                 if not has_tech_debt:
                     result.reviews_missing_tech_debt.append(requestee_name)
