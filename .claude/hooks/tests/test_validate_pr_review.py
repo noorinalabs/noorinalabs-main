@@ -118,8 +118,7 @@ class TechDebtFilterTests(_CheckCommentReviewsHarness):
         """NEGATIVE MATCH for #147: Request comment lacking TechDebt must NOT be flagged."""
         comments = [
             self._comment(
-                "Requestor: Linh Pham\nRequestee: Jelani Mwangi\n"
-                "RequestOrReplied: Request"
+                "Requestor: Linh Pham\nRequestee: Jelani Mwangi\nRequestOrReplied: Request"
             ),
         ]
         result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
@@ -129,8 +128,7 @@ class TechDebtFilterTests(_CheckCommentReviewsHarness):
         """NEGATIVE MATCH for #147: Replied comment lacking TechDebt must NOT be flagged."""
         comments = [
             self._comment(
-                "Requestor: Linh Pham\nRequestee: Anya Kowalczyk\n"
-                "RequestOrReplied: Replied"
+                "Requestor: Linh Pham\nRequestee: Anya Kowalczyk\nRequestOrReplied: Replied"
             ),
         ]
         result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
@@ -140,8 +138,7 @@ class TechDebtFilterTests(_CheckCommentReviewsHarness):
         """Positive: Approved lacking TechDebt MUST still be flagged — #147 does NOT weaken this."""
         comments = [
             self._comment(
-                "Requestor: Linh Pham\nRequestee: Mateo Santos\n"
-                "RequestOrReplied: Approved"
+                "Requestor: Linh Pham\nRequestee: Mateo Santos\nRequestOrReplied: Approved"
             ),
         ]
         result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
@@ -189,12 +186,10 @@ class TechDebtFilterTests(_CheckCommentReviewsHarness):
         comments = [
             # Review requests (no TechDebt line — must be accepted after fix)
             self._comment(
-                "Requestor: Linh Pham\nRequestee: Jelani Mwangi\n"
-                "RequestOrReplied: Request"
+                "Requestor: Linh Pham\nRequestee: Jelani Mwangi\nRequestOrReplied: Request"
             ),
             self._comment(
-                "Requestor: Linh Pham\nRequestee: Anya Kowalczyk\n"
-                "RequestOrReplied: Request"
+                "Requestor: Linh Pham\nRequestee: Anya Kowalczyk\nRequestOrReplied: Request"
             ),
             # Actual reviews with TechDebt
             self._comment(
@@ -207,13 +202,11 @@ class TechDebtFilterTests(_CheckCommentReviewsHarness):
             ),
             # Author reply (no TechDebt line — must be accepted after fix)
             self._comment(
-                "Requestor: Linh Pham\nRequestee: Anya Kowalczyk\n"
-                "RequestOrReplied: Replied"
+                "Requestor: Linh Pham\nRequestee: Anya Kowalczyk\nRequestOrReplied: Replied"
             ),
             # Re-request for re-review after changes
             self._comment(
-                "Requestor: Linh Pham\nRequestee: Anya Kowalczyk\n"
-                "RequestOrReplied: Request"
+                "Requestor: Linh Pham\nRequestee: Anya Kowalczyk\nRequestOrReplied: Request"
             ),
             # Re-review approval
             self._comment(
@@ -222,8 +215,9 @@ class TechDebtFilterTests(_CheckCommentReviewsHarness):
             ),
         ]
         result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
-        self.assertEqual(result.reviews_missing_tech_debt, [],
-                         "non-verdict comments must not be flagged")
+        self.assertEqual(
+            result.reviews_missing_tech_debt, [], "non-verdict comments must not be flagged"
+        )
         self.assertEqual(sorted(result.tech_debt_issue_numbers), ["200"])
 
     def test_markdown_bold_ror_value_still_filtered(self):
