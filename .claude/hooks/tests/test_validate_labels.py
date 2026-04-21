@@ -51,9 +51,7 @@ class ExtractLabelsTests(unittest.TestCase):
 
     def test_multiple_flags(self):
         self.assertEqual(
-            hook.extract_labels(
-                'gh issue create --label "bug" --label "tech-debt"'
-            ),
+            hook.extract_labels('gh issue create --label "bug" --label "tech-debt"'),
             ["bug", "tech-debt"],
         )
 
@@ -83,7 +81,7 @@ class NegativeMatchLabelsTests(unittest.TestCase):
         cmd = (
             'gh issue create --title "real title" '
             '--body "Example: gh issue create --label fake-label-xyz" '
-            '--label real-label'
+            "--label real-label"
         )
         labels = hook.extract_labels(cmd)
         self.assertIn("real-label", labels)
@@ -92,30 +90,21 @@ class NegativeMatchLabelsTests(unittest.TestCase):
     def test_body_with_code_block_label_flag_is_ignored(self):
         """Body includes a fenced code block with --label; still must not leak."""
         cmd = (
-            "gh issue create "
-            "--body '```bash\\ngh issue create --label ghost\\n```' "
-            "--label actual"
+            "gh issue create --body '```bash\\ngh issue create --label ghost\\n```' --label actual"
         )
         labels = hook.extract_labels(cmd)
         self.assertIn("actual", labels)
         self.assertNotIn("ghost", labels)
 
     def test_body_with_short_flag_variant_is_ignored(self):
-        cmd = (
-            'gh issue create --body "see: gh issue create -l phantom" '
-            '-l real'
-        )
+        cmd = 'gh issue create --body "see: gh issue create -l phantom" -l real'
         labels = hook.extract_labels(cmd)
         self.assertIn("real", labels)
         self.assertNotIn("phantom", labels)
 
     def test_title_with_label_flag_text_is_ignored(self):
         """Prose in --title that contains `--label X` must not be extracted."""
-        cmd = (
-            'gh issue create '
-            '--title "use --label flag correctly" '
-            '--label documentation'
-        )
+        cmd = 'gh issue create --title "use --label flag correctly" --label documentation'
         labels = hook.extract_labels(cmd)
         self.assertEqual(labels, ["documentation"])
 
@@ -163,9 +152,9 @@ class ExtractRepoTests(unittest.TestCase):
     def test_repo_token_in_body_is_ignored(self):
         """`--repo ghost/ghost` inside --body must not leak as the target repo."""
         cmd = (
-            'gh issue create '
+            "gh issue create "
             '--body "sample: gh issue create --repo ghost/ghost" '
-            '--repo real/real --label bug'
+            "--repo real/real --label bug"
         )
         self.assertEqual(hook.extract_repo(cmd), "real/real")
 
@@ -188,13 +177,16 @@ class GateMatchingTests(unittest.TestCase):
 
     def test_non_bash_tool_is_ignored(self):
         self.assertIsNone(
-            hook.check({"tool_name": "Edit", "tool_input": {"command": "gh issue create --label bug"}})
+            hook.check(
+                {
+                    "tool_name": "Edit",
+                    "tool_input": {"command": "gh issue create --label bug"},
+                }
+            )
         )
 
     def test_command_without_label_flag_is_allowed(self):
-        self.assertIsNone(
-            hook.check(self._input('gh issue create --title "x" --body "y"'))
-        )
+        self.assertIsNone(hook.check(self._input('gh issue create --title "x" --body "y"')))
 
 
 class CheckEndToEndTests(unittest.TestCase):
@@ -224,26 +216,18 @@ class CheckEndToEndTests(unittest.TestCase):
         mocked.assert_called_once_with(repo="noorinalabs/noorinalabs-isnad-graph")
 
     def test_missing_label_blocks(self):
-        with mock.patch.object(
-            hook, "get_existing_labels", return_value={"bug"}
-        ):
-            result = hook.check(
-                self._input('gh issue create --label does-not-exist')
-            )
+        with mock.patch.object(hook, "get_existing_labels", return_value={"bug"}):
+            result = hook.check(self._input("gh issue create --label does-not-exist"))
         self.assertIsNotNone(result)
         self.assertEqual(result["decision"], "block")
         self.assertIn("does-not-exist", result["reason"])
 
     def test_body_containing_fake_label_does_not_block(self):
         """Bug 2: a body-quoted --label must NOT cause a spurious block."""
-        with mock.patch.object(
-            hook, "get_existing_labels", return_value={"bug"}
-        ):
+        with mock.patch.object(hook, "get_existing_labels", return_value={"bug"}):
             result = hook.check(
                 self._input(
-                    'gh issue create '
-                    '--body "example: gh issue create --label fake" '
-                    '--label bug'
+                    'gh issue create --body "example: gh issue create --label fake" --label bug'
                 )
             )
         self.assertIsNone(result, f"unexpected block: {result}")
@@ -255,30 +239,25 @@ class CheckEndToEndTests(unittest.TestCase):
         repo A. Body documents an example command referencing repo B and a
         non-existent label. Neither the body's --repo nor --label may leak.
         """
+
         def fake_get_existing_labels(repo=None):
             if repo == "noorinalabs/noorinalabs-isnad-graph":
                 return {"frontend"}
             return {"other-label"}  # would be returned if cwd-resolved
 
-        with mock.patch.object(
-            hook, "get_existing_labels", side_effect=fake_get_existing_labels
-        ):
+        with mock.patch.object(hook, "get_existing_labels", side_effect=fake_get_existing_labels):
             result = hook.check(
                 self._input(
                     "gh issue create --repo noorinalabs/noorinalabs-isnad-graph "
                     '--body "example: gh issue create --repo ghost/ghost --label nope" '
-                    '--label frontend'
+                    "--label frontend"
                 )
             )
         self.assertIsNone(result, f"unexpected block: {result}")
 
     def test_no_labels_to_validate_is_allowed(self):
-        with mock.patch.object(
-            hook, "get_existing_labels", return_value={"bug"}
-        ) as mocked:
-            result = hook.check(
-                self._input('gh issue create --title "t" --body "b"')
-            )
+        with mock.patch.object(hook, "get_existing_labels", return_value={"bug"}) as mocked:
+            result = hook.check(self._input('gh issue create --title "t" --body "b"'))
         self.assertIsNone(result)
         mocked.assert_not_called()
 

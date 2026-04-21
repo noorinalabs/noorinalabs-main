@@ -43,7 +43,6 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from annunaki_log import log_pretooluse_block
 
-
 # Flags whose VALUE is a label list (comma-separated allowed by gh).
 _LABEL_FLAGS = {"--label", "-l"}
 
@@ -205,9 +204,7 @@ def check(input_data: dict) -> dict | None:
         return None
 
     create_repo_flag = f" --repo {repo}" if repo else ""
-    suggestions = "\n".join(
-        f'  gh label create "{label}"{create_repo_flag}' for label in missing
-    )
+    suggestions = "\n".join(f'  gh label create "{label}"{create_repo_flag}' for label in missing)
     repo_note = f" in {repo}" if repo else ""
     result = {
         "decision": "block",
