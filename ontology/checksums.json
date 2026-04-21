@@ -15,10 +15,10 @@
       "resolved_at": "2026-04-17T02:56:03.855330+00:00"
     },
     "CLAUDE.md": {
-      "last_tracked": "18498d583f3ab8a9ca84766f2821e091a5ecbcd9a4734c05d8a17cfcc5873dce",
-      "last_resolved": "18498d583f3ab8a9ca84766f2821e091a5ecbcd9a4734c05d8a17cfcc5873dce",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00"
+      "last_tracked": "fc33f42e4f80a14fad7ec9de07de304bff3b0cfb1e9016ea3b3b3ccbaf493dde",
+      "last_resolved": "fc33f42e4f80a14fad7ec9de07de304bff3b0cfb1e9016ea3b3b3ccbaf493dde",
+      "tracked_at": "2026-04-19T22:30:10.380074+00:00",
+      "resolved_at": "2026-04-21T01:14:29.412621+00:00"
     },
     "ontology/domain.yaml": {
       "last_tracked": "6fedad509f80b9570d0385fb5759e861d8b6f7b219ecc425b8dd472173ca536c",
@@ -1483,6 +1483,366 @@
       "last_resolved": "ba41982b9c4e7207f480a6ee32cdbf2a0ace0e09bfff65511fbdb455d8405a3f",
       "tracked_at": "2026-04-19T22:11:39.455949+00:00",
       "resolved_at": "2026-04-19T22:12:52.546666+00:00"
+    },
+    "/tmp/inspect_transcript.py": {
+      "last_tracked": "f2ceeb22f1161d078589a71219b665274c8d3ede965fb8526a2fd354e16f4a28",
+      "last_resolved": "f2ceeb22f1161d078589a71219b665274c8d3ede965fb8526a2fd354e16f4a28",
+      "tracked_at": "2026-04-19T22:14:10.397130+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/enforce_librarian_consulted.py": {
+      "last_tracked": "3b3685823ad964de4a6fde1613daf9609d7febc9ea707848223aa62fe5cc97fc",
+      "last_resolved": "3b3685823ad964de4a6fde1613daf9609d7febc9ea707848223aa62fe5cc97fc",
+      "tracked_at": "2026-04-19T22:16:31.213235+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/test_enforce_librarian_consulted.py": {
+      "last_tracked": "c15fc6de40567c04b8e93a16992e10343f71cec815afba5649d735cc967be5bf",
+      "last_resolved": "c15fc6de40567c04b8e93a16992e10343f71cec815afba5649d735cc967be5bf",
+      "tracked_at": "2026-04-19T22:17:30.439524+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/settings.json": {
+      "last_tracked": "2584850e32c6fb5206a82abcf6ee7c4b09c2351bf2c20fb8aae256533b2c49c3",
+      "last_resolved": "2584850e32c6fb5206a82abcf6ee7c4b09c2351bf2c20fb8aae256533b2c49c3",
+      "tracked_at": "2026-04-19T22:18:10.096897+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/charter_patch.py": {
+      "last_tracked": "ea59df2ce96306d24d49a10d06a43baa9190f30d95427c9fb78ec04b20a74a90",
+      "last_resolved": "ea59df2ce96306d24d49a10d06a43baa9190f30d95427c9fb78ec04b20a74a90",
+      "tracked_at": "2026-04-19T22:19:02.361134+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/feedback_append.py": {
+      "last_tracked": "5cd7fe8de16dfba448f55bb84dc1d378e4cc125ead2597c49c4b34f9bd04d7e6",
+      "last_resolved": "5cd7fe8de16dfba448f55bb84dc1d378e4cc125ead2597c49c4b34f9bd04d7e6",
+      "tracked_at": "2026-04-19T22:19:27.510152+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/hook_smoketest.py": {
+      "last_tracked": "910052b9a120c4010ae4a06de49d0fe34a0150b5c3451997dad45343481efa2d",
+      "last_resolved": "910052b9a120c4010ae4a06de49d0fe34a0150b5c3451997dad45343481efa2d",
+      "tracked_at": "2026-04-19T22:19:44.780293+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/pr150_body.md": {
+      "last_tracked": "1d302c35e2a667fd2fe76cd0981d82b5da47212c5a5740515916955cea0d7d64",
+      "last_resolved": "1d302c35e2a667fd2fe76cd0981d82b5da47212c5a5740515916955cea0d7d64",
+      "tracked_at": "2026-04-19T22:20:59.726761+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/reviewer_wanjiku.md": {
+      "last_tracked": "e54163200798260b1491931554d5a98ab411bd6f569099fab17622ce261966d2",
+      "last_resolved": "e54163200798260b1491931554d5a98ab411bd6f569099fab17622ce261966d2",
+      "tracked_at": "2026-04-19T22:21:24.844393+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/reviewer_nadia.md": {
+      "last_tracked": "13645648ece753b8914913ff75248fab63e069d0368b9575f6a09210ce2d19b1",
+      "last_resolved": "13645648ece753b8914913ff75248fab63e069d0368b9575f6a09210ce2d19b1",
+      "tracked_at": "2026-04-19T22:21:34.137300+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/fix_lint_mypy.py": {
+      "last_tracked": "25db3a17a9cd901b84233a17e3c5b1c09dcca29e43dee48391e3ff987de617dc",
+      "last_resolved": "25db3a17a9cd901b84233a17e3c5b1c09dcca29e43dee48391e3ff987de617dc",
+      "tracked_at": "2026-04-19T22:26:54.381137+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/pr_ci_reply.md": {
+      "last_tracked": "fb9b043ca425ff761a5cc38e068154f89897db118c8b41e74b8496fcda0ea38d",
+      "last_resolved": "fb9b043ca425ff761a5cc38e068154f89897db118c8b41e74b8496fcda0ea38d",
+      "tracked_at": "2026-04-19T22:27:52.406435+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/caddy-auth-callback-routing.md": {
+      "last_tracked": "ddafb935a93c05e53723b23f7a62c2aa97876cea6721111994ac3f3139d3f856",
+      "last_resolved": "ddafb935a93c05e53723b23f7a62c2aa97876cea6721111994ac3f3139d3f856",
+      "tracked_at": "2026-04-20T02:05:00.567890+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/oauth-exchange-logging.md": {
+      "last_tracked": "167216aa31343b4de5e665e82296358519d112354be8db1ffb80af647e8b7892",
+      "last_resolved": "167216aa31343b4de5e665e82296358519d112354be8db1ffb80af647e8b7892",
+      "tracked_at": "2026-04-20T02:05:20.645460+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/L.Ferreira-0133-caddy-auth-callback/caddy/Caddyfile": {
+      "last_tracked": "7983691c3a0ba14c97340d16ee00c1f39c1a410d9e74d772cd99010e318c2872",
+      "last_resolved": "7983691c3a0ba14c97340d16ee00c1f39c1a410d9e74d772cd99010e318c2872",
+      "tracked_at": "2026-04-20T02:06:47.388231+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/pr-133-body.md": {
+      "last_tracked": "fbaf6a075ed17653a5a6d9c85c509a94aebcf91efdb71f4c1125d7f011d85b8c",
+      "last_resolved": "fbaf6a075ed17653a5a6d9c85c509a94aebcf91efdb71f4c1125d7f011d85b8c",
+      "tracked_at": "2026-04-20T02:07:24.863639+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "noorinalabs-user-service/.claude/worktrees/M.Salazar-0071-exchange-logging/src/app/routers/auth.py": {
+      "last_tracked": "31fc7e4e5412a54d293b8e481534c570d63fe2d7b2daa676901166199992e6ff",
+      "last_resolved": "31fc7e4e5412a54d293b8e481534c570d63fe2d7b2daa676901166199992e6ff",
+      "tracked_at": "2026-04-20T02:08:16.725797+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "noorinalabs-user-service/.claude/worktrees/M.Salazar-0071-exchange-logging/tests/test_oauth_callback_get.py": {
+      "last_tracked": "5ef492f046c0dcc2da649fd76e82b40973a8ede85ce1436ead36a6d5dd7e26cd",
+      "last_resolved": "5ef492f046c0dcc2da649fd76e82b40973a8ede85ce1436ead36a6d5dd7e26cd",
+      "tracked_at": "2026-04-20T02:09:07.224656+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/pr71_body.md": {
+      "last_tracked": "f2e4d5e46d0edc13615f9ae0a5e12aef5641e84ab776258b759e4feb02e33949",
+      "last_resolved": "f2e4d5e46d0edc13615f9ae0a5e12aef5641e84ab776258b759e4feb02e33949",
+      "tracked_at": "2026-04-20T02:10:37.817521+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/review_pr72.md": {
+      "last_tracked": "728c7b4354a9577754dfe84941945621fe3894ad01d50b63290637a41c860d74",
+      "last_resolved": "728c7b4354a9577754dfe84941945621fe3894ad01d50b63290637a41c860d74",
+      "tracked_at": "2026-04-20T02:14:25.769161+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/home/parameterization/.claude/projects/-home-parameterization-code-noorinalabs-main/memory/feedback_enforcement_hierarchy.md": {
+      "last_tracked": "499f8549c4a5c456eb7df726dd25101e681b6c731e414589eca41e218f3beb45",
+      "last_resolved": "499f8549c4a5c456eb7df726dd25101e681b6c731e414589eca41e218f3beb45",
+      "tracked_at": "2026-04-20T02:14:41.770365+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/promotion_audit/SKILL.md": {
+      "last_tracked": "1891ec2cefdf9419b44bf5eaee9d289ce48099cc115b25cf9cc92453c9d0ef52",
+      "last_resolved": "1891ec2cefdf9419b44bf5eaee9d289ce48099cc115b25cf9cc92453c9d0ef52",
+      "tracked_at": "2026-04-20T02:17:39.604093+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/landing-page-broken-styling.md": {
+      "last_tracked": "4c2712dbfccf609430254cc6d0c7c00bc030416808a36b9824e8be12c0d65582",
+      "last_resolved": "4c2712dbfccf609430254cc6d0c7c00bc030416808a36b9824e8be12c0d65582",
+      "tracked_at": "2026-04-20T02:18:12.501617+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/promotion_audit/helpers.py": {
+      "last_tracked": "6d39a8bcc4962b820d384e8e852bc2c0b869b4f527f76c1dd188577793608ece",
+      "last_resolved": "6d39a8bcc4962b820d384e8e852bc2c0b869b4f527f76c1dd188577793608ece",
+      "tracked_at": "2026-04-20T02:19:31.519995+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/promotion_audit/templates/charter-section.md": {
+      "last_tracked": "859d7f4dd6e2a82b9f1ec666ac87c45b5ea3382ca0d37e94b40e02e2b81b56b4",
+      "last_resolved": "859d7f4dd6e2a82b9f1ec666ac87c45b5ea3382ca0d37e94b40e02e2b81b56b4",
+      "tracked_at": "2026-04-20T02:19:36.074724+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/promotion_audit/templates/skill-scaffold.md": {
+      "last_tracked": "fe723a0f0cc11feff6a86006672ad703b0a0c46f2a64e7b8eb797643c501888b",
+      "last_resolved": "fe723a0f0cc11feff6a86006672ad703b0a0c46f2a64e7b8eb797643c501888b",
+      "tracked_at": "2026-04-20T02:19:40.267878+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/landing-page-polish.md": {
+      "last_tracked": "d8e91e460224697f577079afef25a471d469334777de794eb2eaca446c5a1ac6",
+      "last_resolved": "d8e91e460224697f577079afef25a471d469334777de794eb2eaca446c5a1ac6",
+      "tracked_at": "2026-04-20T02:19:50.437603+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/promotion_audit/templates/hook-draft.md": {
+      "last_tracked": "84a8f9ac6bcaca0fccb4e8d2dfdc830b6e526c81ab824633c4459cbc9a6a1fa7",
+      "last_resolved": "84a8f9ac6bcaca0fccb4e8d2dfdc830b6e526c81ab824633c4459cbc9a6a1fa7",
+      "tracked_at": "2026-04-20T02:20:04.298712+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/caddy-healthcheck-tls.md": {
+      "last_tracked": "e2f92ebf50248ed9c9739b7ce537e92d936df554b7fbb1a9057e38609341f8d7",
+      "last_resolved": "e2f92ebf50248ed9c9739b7ce537e92d936df554b7fbb1a9057e38609341f8d7",
+      "tracked_at": "2026-04-20T02:20:05.710904+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/promotion_audit/tests/test_helpers.py": {
+      "last_tracked": "bdcf32956ef2a74f07b8fffb03f92068d1b2152a9999dab0b416c42f6a71a433",
+      "last_resolved": "bdcf32956ef2a74f07b8fffb03f92068d1b2152a9999dab0b416c42f6a71a433",
+      "tracked_at": "2026-04-20T02:21:26.637247+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/promotion_audit/tests/test_smoke.py": {
+      "last_tracked": "d16874538a5e313957db3b16d58387c8cf3e751c1fc77f133143c555bb1ec96c",
+      "last_resolved": "d16874538a5e313957db3b16d58387c8cf3e751c1fc77f133143c555bb1ec96c",
+      "tracked_at": "2026-04-20T02:21:56.895187+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/fix_smoke_test.py": {
+      "last_tracked": "f4002898d9adbff25f312f49be4f64eff6ac380538768ae6e73cb99fa512e9a3",
+      "last_resolved": "f4002898d9adbff25f312f49be4f64eff6ac380538768ae6e73cb99fa512e9a3",
+      "tracked_at": "2026-04-20T02:23:15.496050+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/backfill_markers.py": {
+      "last_tracked": "b46b2f481ccb5b2a67383317f5e7718f4d82854bf39972231b569676a75112ce",
+      "last_resolved": "b46b2f481ccb5b2a67383317f5e7718f4d82854bf39972231b569676a75112ce",
+      "tracked_at": "2026-04-20T02:24:02.339377+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/retro_insert.py": {
+      "last_tracked": "72e895cf774ee2a43b7b595f1c5b21596e002583babc6f75f00327c1c892c019",
+      "last_resolved": "72e895cf774ee2a43b7b595f1c5b21596e002583babc6f75f00327c1c892c019",
+      "tracked_at": "2026-04-20T02:24:31.288794+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/run_first_audit.py": {
+      "last_tracked": "620314a41a9fbd2f43b42a9a46ab9dc238ddb3513a6e07dfa6f963843faa2250",
+      "last_resolved": "620314a41a9fbd2f43b42a9a46ab9dc238ddb3513a6e07dfa6f963843faa2250",
+      "tracked_at": "2026-04-20T02:24:50.800728+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/fix_provenance_parser.py": {
+      "last_tracked": "1456641cbbb6034f5de5a97f485492408e9ae170720cbbd8fcf7c7d807429d89",
+      "last_resolved": "1456641cbbb6034f5de5a97f485492408e9ae170720cbbd8fcf7c7d807429d89",
+      "tracked_at": "2026-04-20T02:25:36.710046+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/add_forward_ref_test.py": {
+      "last_tracked": "dfa20c3372837aa28af22f1aed562efb406d638476b7f16461b31dd895155c7e",
+      "last_resolved": "dfa20c3372837aa28af22f1aed562efb406d638476b7f16461b31dd895155c7e",
+      "tracked_at": "2026-04-20T02:26:07.136210+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/fix_lint.py": {
+      "last_tracked": "0eb21d09364f0f40743ca9a226157a3aef36ad3c4f894fd9811357b05e33535f",
+      "last_resolved": "0eb21d09364f0f40743ca9a226157a3aef36ad3c4f894fd9811357b05e33535f",
+      "tracked_at": "2026-04-20T02:26:40.221087+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/fix_mypy.py": {
+      "last_tracked": "21cc69571d3b0240d0041483e1fee1d4aa5412eaca81771bf77dfba2b5b4ac6d",
+      "last_resolved": "21cc69571d3b0240d0041483e1fee1d4aa5412eaca81771bf77dfba2b5b4ac6d",
+      "tracked_at": "2026-04-20T02:27:25.517109+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/user-service-no-egress.md": {
+      "last_tracked": "7228af74df550e7ae40afeb9cc16036aa1bf45ea3b9f1be37b23d23f66567236",
+      "last_resolved": "7228af74df550e7ae40afeb9cc16036aa1bf45ea3b9f1be37b23d23f66567236",
+      "tracked_at": "2026-04-20T02:27:29.323447+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "noorinalabs-deploy/.claude/worktrees/L.Ferreira-egress-userservice/compose/docker-compose.prod.yml": {
+      "last_tracked": "c036da4e398b72d41488aa509668c449c57be929036bd09d2a2b4100c331de66",
+      "last_resolved": "c036da4e398b72d41488aa509668c449c57be929036bd09d2a2b4100c331de66",
+      "tracked_at": "2026-04-20T02:28:34.982524+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/pr-body-138.md": {
+      "last_tracked": "9c93c28279b666b0a2e2da665245f06c8c7078be3d4578d83fc9ac5a1a31c1c3",
+      "last_resolved": "9c93c28279b666b0a2e2da665245f06c8c7078be3d4578d83fc9ac5a1a31c1c3",
+      "tracked_at": "2026-04-20T02:29:04.520380+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/reviewer-comment-139.md": {
+      "last_tracked": "79a00a64e48789767d9668a6eac69b449dab02373b5faed6813b29f3e383b30e",
+      "last_resolved": "79a00a64e48789767d9668a6eac69b449dab02373b5faed6813b29f3e383b30e",
+      "tracked_at": "2026-04-20T02:29:17.822001+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/pr152_body.md": {
+      "last_tracked": "f317105fbc2f218bb07c40da654befe7a11905546f8a12c4d7acb2695b19a180",
+      "last_resolved": "f317105fbc2f218bb07c40da654befe7a11905546f8a12c4d7acb2695b19a180",
+      "tracked_at": "2026-04-20T02:29:36.133435+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/r152_wanjiku.md": {
+      "last_tracked": "79974ab2ed97ae5e6eaca4dd6ca194e4910d3ff8ecefe51e8f1a34714b7bd3d5",
+      "last_resolved": "79974ab2ed97ae5e6eaca4dd6ca194e4910d3ff8ecefe51e8f1a34714b7bd3d5",
+      "tracked_at": "2026-04-20T02:30:00.199066+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/r152_nadia.md": {
+      "last_tracked": "99ae38f73a7fd7eb596e4a1c2eef367fbacd2ac4612fb6791c4a1a96778bc67e",
+      "last_resolved": "99ae38f73a7fd7eb596e4a1c2eef367fbacd2ac4612fb6791c4a1a96778bc67e",
+      "tracked_at": "2026-04-20T02:30:15.000715+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/migrations-on-deploy.md": {
+      "last_tracked": "b68dd856b22dd2c8ff912e6c7e56d3a233124ba1e5fd279c32176445800465b7",
+      "last_resolved": "b68dd856b22dd2c8ff912e6c7e56d3a233124ba1e5fd279c32176445800465b7",
+      "tracked_at": "2026-04-20T03:09:03.776577+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/oauth-callback-db-error-handler.md": {
+      "last_tracked": "8d7264f4dd2cdecfcf59a101b98bc28cbc05548f2fa0f4e4a68372e224155b23",
+      "last_resolved": "8d7264f4dd2cdecfcf59a101b98bc28cbc05548f2fa0f4e4a68372e224155b23",
+      "tracked_at": "2026-04-20T03:09:23.076793+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/frontend-user-name-mismatch.md": {
+      "last_tracked": "8ad9f024ca8970291651ec7165af6b41ab569b78f7120ffd36aeaeb34e619ec2",
+      "last_resolved": "8ad9f024ca8970291651ec7165af6b41ab569b78f7120ffd36aeaeb34e619ec2",
+      "tracked_at": "2026-04-20T03:15:52.856362+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/subscription-404-vs-200.md": {
+      "last_tracked": "52a15e1db3819b3e3cd067565bdbcac0b92cc9f1901fcabc8dc7614d799f7433",
+      "last_resolved": "52a15e1db3819b3e3cd067565bdbcac0b92cc9f1901fcabc8dc7614d799f7433",
+      "tracked_at": "2026-04-20T03:16:07.757575+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/csp-violations.md": {
+      "last_tracked": "6c18c80356158b4fcbf02151f7e6eb087bb07726c393aff1f8e60cf398f65512",
+      "last_resolved": "6c18c80356158b4fcbf02151f7e6eb087bb07726c393aff1f8e60cf398f65512",
+      "tracked_at": "2026-04-20T03:16:31.549129+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "noorinalabs-isnad-graph/.claude/worktrees/L.Pham-0825-user-display-name/frontend/src/hooks/useAuth.ts": {
+      "last_tracked": "1e0df36ec1f51c96b705a22fa504d2e43579bcfbe51e9ca60a493063a128612d",
+      "last_resolved": "1e0df36ec1f51c96b705a22fa504d2e43579bcfbe51e9ca60a493063a128612d",
+      "tracked_at": "2026-04-20T03:19:13.345661+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "noorinalabs-isnad-graph/.claude/worktrees/L.Pham-0825-user-display-name/frontend/src/components/WelcomeBanner.tsx": {
+      "last_tracked": "0676acce0360afb2bcdb89ed6808eb6bf06c728ec9810139d0df7f9b1ba36da3",
+      "last_resolved": "0676acce0360afb2bcdb89ed6808eb6bf06c728ec9810139d0df7f9b1ba36da3",
+      "tracked_at": "2026-04-20T03:19:20.403004+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "noorinalabs-isnad-graph/.claude/worktrees/L.Pham-0825-user-display-name/frontend/src/components/UserMenu.tsx": {
+      "last_tracked": "b92b61ffbfd0368d8895f3b5110605764b70d037e9d4f78df117e8522aff9329",
+      "last_resolved": "b92b61ffbfd0368d8895f3b5110605764b70d037e9d4f78df117e8522aff9329",
+      "tracked_at": "2026-04-20T03:19:34.604965+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "noorinalabs-isnad-graph/.claude/worktrees/L.Pham-0825-user-display-name/frontend/src/components/Sidebar.tsx": {
+      "last_tracked": "b362f863495766fe21de0b0266df9207b0172d7d1445ceb0d33eaa14eef58cab",
+      "last_resolved": "b362f863495766fe21de0b0266df9207b0172d7d1445ceb0d33eaa14eef58cab",
+      "tracked_at": "2026-04-20T03:19:37.779455+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "noorinalabs-isnad-graph/.claude/worktrees/L.Pham-0825-user-display-name/frontend/src/pages/TrialExpiredPage.tsx": {
+      "last_tracked": "9481ec51cb9d2a38cb2d056f3ab8da6c2f08044e6184a23b13fbd2c12496b8e5",
+      "last_resolved": "9481ec51cb9d2a38cb2d056f3ab8da6c2f08044e6184a23b13fbd2c12496b8e5",
+      "tracked_at": "2026-04-20T03:19:41.936583+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "noorinalabs-isnad-graph/.claude/worktrees/L.Pham-0825-user-display-name/frontend/src/components/__tests__/WelcomeBanner.test.tsx": {
+      "last_tracked": "0262d1da7347ee3b95049971df05b36f7aced7c5d6a8ebe61eb46840633bc327",
+      "last_resolved": "0262d1da7347ee3b95049971df05b36f7aced7c5d6a8ebe61eb46840633bc327",
+      "tracked_at": "2026-04-20T03:20:01.535207+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/pr-body-825.md": {
+      "last_tracked": "0e38ed404b29fe5fdd97ca73bca5a1262ac0611cbf266f0280a9a7038bb15c2b",
+      "last_resolved": "0e38ed404b29fe5fdd97ca73bca5a1262ac0611cbf266f0280a9a7038bb15c2b",
+      "tracked_at": "2026-04-20T03:22:57.806329+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "noorinalabs-isnad-graph/.claude/worktrees/L.Pham-0828-rbac-derivation/frontend/src/hooks/useAuth.ts": {
+      "last_tracked": "5c659b4ee3701bd160401bbf126c67c1563f35c0251c967b5f937ed672a5866e",
+      "last_resolved": "5c659b4ee3701bd160401bbf126c67c1563f35c0251c967b5f937ed672a5866e",
+      "tracked_at": "2026-04-20T03:33:41.513027+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "noorinalabs-isnad-graph/.claude/worktrees/L.Pham-0828-rbac-derivation/frontend/src/hooks/__tests__/useAuth.test.ts": {
+      "last_tracked": "56194dd9658e22835ed2a9aa82a4a23327d1d2d53672976af8b0fd2c372f6f3d",
+      "last_resolved": "56194dd9658e22835ed2a9aa82a4a23327d1d2d53672976af8b0fd2c372f6f3d",
+      "tracked_at": "2026-04-20T03:34:05.238574+00:00",
+      "resolved_at": "2026-04-21T01:14:16.460629Z"
     }
   }
 }
