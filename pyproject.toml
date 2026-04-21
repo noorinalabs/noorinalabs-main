@@ -1,5 +1,7 @@
 [project]
 name = "noorinalabs-main"
+version = "0.0.0"
+description = "Org-level coordination root for noorinalabs (not a published package)"
 requires-python = ">=3.12"
 
 [tool.ruff]
