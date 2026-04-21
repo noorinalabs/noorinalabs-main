@@ -60,9 +60,9 @@ The following charter rules are enforced automatically via Claude Code hooks in 
 
 ## Hook 9: Validate Branch Freshness (`validate_branch_freshness.py`)
 
-- **What it automates:** Blocks `gh pr create` if the feature branch is behind the base branch. Prevents merge conflicts from stale branches.
+- **What it automates:** Blocks `gh pr create` if the feature branch is behind the base branch. Prevents merge conflicts from stale branches. Honors the `--repo OWNER/REPO` flag (#118 fix): when present, the freshness check uses the GitHub `compare` API against the target repo instead of the cwd-based `git fetch`/`git merge-base`. Without `--repo`, falls back to cwd behavior. Cross-repo PRs without `--head` are skipped (we cannot infer head reliably from cwd).
 - **Augments:** [Branching](branching.md) workflow. Session 4 had RBAC and session hardening PRs conflict because neither was rebased.
-- **Manual steps remaining:** None — the hook runs `git fetch` and `git merge-base --is-ancestor` automatically.
+- **Manual steps remaining:** None — the hook runs `git fetch` and `git merge-base --is-ancestor` (cwd path) or `gh api repos/.../compare/{base}...{head}` (cross-repo path) automatically.
 - **Emergency override:** Remove the hook entry from `.claude/settings.json`.
 
 ## Hook 10: Validate VPS_HOST (`validate_vps_host.py`)
