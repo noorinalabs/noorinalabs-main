@@ -1843,6 +1843,90 @@
       "last_resolved": "56194dd9658e22835ed2a9aa82a4a23327d1d2d53672976af8b0fd2c372f6f3d",
       "tracked_at": "2026-04-20T03:34:05.238574+00:00",
       "resolved_at": "2026-04-21T01:14:16.460629Z"
+    },
+    "/tmp/pr-body-subscription-loop.md": {
+      "last_tracked": "999aaf67f9ec5f4b1b0061a8658416662d4be82642417f897dfa75df01351685",
+      "last_resolved": "999aaf67f9ec5f4b1b0061a8658416662d4be82642417f897dfa75df01351685",
+      "tracked_at": "2026-04-21T01:17:19.085253+00:00",
+      "resolved_at": "2026-04-21T03:08:46.038672Z",
+      "resolution_note": "noise: tmp/worktree path, no ontology impact"
+    },
+    "/tmp/issue-protected-route-remount.md": {
+      "last_tracked": "c4a75f52b13e5766610dd04da07c42e44d2d022fc8973c476aac35fac9ca8c1b",
+      "last_resolved": "c4a75f52b13e5766610dd04da07c42e44d2d022fc8973c476aac35fac9ca8c1b",
+      "tracked_at": "2026-04-21T01:27:54.747271+00:00",
+      "resolved_at": "2026-04-21T03:08:46.038672Z",
+      "resolution_note": "noise: tmp/worktree path, no ontology impact"
+    },
+    "noorinalabs-isnad-graph/.claude/worktrees/L.Pham-0830-subscription-retry-admin-bypass/frontend/src/hooks/useSubscription.ts": {
+      "last_tracked": "6797a91d6c0501e36ae1103f6eaedacf9b06d6e91e406eac67aa84e04a1fd95e",
+      "last_resolved": "6797a91d6c0501e36ae1103f6eaedacf9b06d6e91e406eac67aa84e04a1fd95e",
+      "tracked_at": "2026-04-21T01:30:12.474847+00:00",
+      "resolved_at": "2026-04-21T03:08:46.038672Z",
+      "resolution_note": "noise: tmp/worktree path, no ontology impact"
+    },
+    "noorinalabs-isnad-graph/.claude/worktrees/L.Pham-0830-subscription-retry-admin-bypass/frontend/src/api/client.ts": {
+      "last_tracked": "254a1e34fccb8aa00379c0894fc6ec1b356bfd90a2b0ee3478152eedbf72275a",
+      "last_resolved": "254a1e34fccb8aa00379c0894fc6ec1b356bfd90a2b0ee3478152eedbf72275a",
+      "tracked_at": "2026-04-21T01:30:24.734813+00:00",
+      "resolved_at": "2026-04-21T03:08:46.038672Z",
+      "resolution_note": "noise: tmp/worktree path, no ontology impact"
+    },
+    "noorinalabs-isnad-graph/.claude/worktrees/L.Pham-0830-subscription-retry-admin-bypass/frontend/src/hooks/__tests__/useSubscription.test.tsx": {
+      "last_tracked": "a12d86afe301c39a2bdb652d1e393400e0723d71eae113b2861aa483ca175780",
+      "last_resolved": "a12d86afe301c39a2bdb652d1e393400e0723d71eae113b2861aa483ca175780",
+      "tracked_at": "2026-04-21T01:30:44.128279+00:00",
+      "resolved_at": "2026-04-21T03:08:46.038672Z",
+      "resolution_note": "noise: tmp/worktree path, no ontology impact"
+    },
+    "/tmp/pr-body-830.md": {
+      "last_tracked": "9f2de1c9a7d4f2bb2fc48d841ac5cd2c4fb36f2520fe147a59e30d62069bb287",
+      "last_resolved": "9f2de1c9a7d4f2bb2fc48d841ac5cd2c4fb36f2520fe147a59e30d62069bb287",
+      "tracked_at": "2026-04-21T01:32:16.403915+00:00",
+      "resolved_at": "2026-04-21T03:08:46.038672Z",
+      "resolution_note": "noise: tmp/worktree path, no ontology impact"
+    },
+    "/tmp/pr-830-body.md": {
+      "last_tracked": "ca4218a55d30424148a5f8668708581f242e7348c4a249abb87b77a91714cb8f",
+      "last_resolved": "ca4218a55d30424148a5f8668708581f242e7348c4a249abb87b77a91714cb8f",
+      "tracked_at": "2026-04-21T01:35:41.385407+00:00",
+      "resolved_at": "2026-04-21T03:08:46.038672Z",
+      "resolution_note": "noise: tmp/worktree path, no ontology impact"
+    },
+    "/tmp/anya-review-832.md": {
+      "last_tracked": "3df499332a89e97fac2046f8f6b4912e1fff4df3ed935b71fbe666b7cef36263",
+      "last_resolved": "3df499332a89e97fac2046f8f6b4912e1fff4df3ed935b71fbe666b7cef36263",
+      "tracked_at": "2026-04-21T01:39:52.917869+00:00",
+      "resolved_at": "2026-04-21T03:08:46.038672Z",
+      "resolution_note": "noise: tmp/worktree path, no ontology impact"
+    },
+    "/tmp/techdebt_fetchjson_404.md": {
+      "last_tracked": "ca7b55325f3129f5abe31536fbb7ba51959477e2aa74676eb7a78a299cd621c7",
+      "last_resolved": "ca7b55325f3129f5abe31536fbb7ba51959477e2aa74676eb7a78a299cd621c7",
+      "tracked_at": "2026-04-21T01:42:19.015527+00:00",
+      "resolved_at": "2026-04-21T03:08:46.038672Z",
+      "resolution_note": "noise: tmp/worktree path, no ontology impact"
+    },
+    "/tmp/r832_jelani.md": {
+      "last_tracked": "cb345349cdd1e55d6ad9a1a1064873b964d24063a32cd9ddaffb1eb7d7f405bb",
+      "last_resolved": "cb345349cdd1e55d6ad9a1a1064873b964d24063a32cd9ddaffb1eb7d7f405bb",
+      "tracked_at": "2026-04-21T01:43:13.300978+00:00",
+      "resolved_at": "2026-04-21T03:08:46.038672Z",
+      "resolution_note": "noise: tmp/worktree path, no ontology impact"
+    },
+    "/tmp/issue-notify-deploy-stopped.md": {
+      "last_tracked": "a65b1f9b0cf57354c1e24c61f0358c866b1a967aed1c62f93c6f206accdc79b6",
+      "last_resolved": "a65b1f9b0cf57354c1e24c61f0358c866b1a967aed1c62f93c6f206accdc79b6",
+      "tracked_at": "2026-04-21T02:32:23.168391+00:00",
+      "resolved_at": "2026-04-21T03:08:46.038672Z",
+      "resolution_note": "noise: tmp/worktree path, no ontology impact"
+    },
+    "/tmp/issue-auth-user-service-url.md": {
+      "last_tracked": "d48a4ba5f32661f0578585a08c8949350b515e0bd0c887de07795106509b0228",
+      "last_resolved": "d48a4ba5f32661f0578585a08c8949350b515e0bd0c887de07795106509b0228",
+      "tracked_at": "2026-04-21T02:47:56.377553+00:00",
+      "resolved_at": "2026-04-21T03:08:46.038672Z",
+      "resolution_note": "noise: tmp/worktree path, no ontology impact"
     }
   }
 }
