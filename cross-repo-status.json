@@ -24,11 +24,12 @@
       "isnad-ingest-platform #8 — Kafka worker containers for pipeline stages",
       "isnad-ingest-platform #9 — pipeline reset CLI (stage/source/full + audit log)"
     ],
-    "current_blocker": "design-system tarball generation on VPS — frontend/package-lock.json pins noorinalabs-design-system-0.0.1.tgz by name, design-system main is at v0.0.2. Diagnostic in flight.",
+    "current_blocker": "RESOLVED 2026-04-21 — VPS no longer generates the tarball; CI builds it via DESIGN_SYSTEM_REF=v0.0.1 in ghcr-publish.yml and bakes it into the GHCR image. Auto-deploy chain confirmed working end-to-end via three successful chained deploys tonight (commits 04c70328, d26092c1, 3f495d15). Remaining work is tech-debt (consumer-side bump v0.0.1→v0.0.2/v0.0.3 to consume newer design-system features incl. Inter-fallback cleanup), tracked as isnad-graph#810 (registry-migration) + isnad-graph#840 (consumer bump after design-system republish). Decision: defer the bump to owner-supervised work because design-system 0.0.2/0.0.3 includes API additions (Radix UI dropdown menu added between 0.0.1 and 0.0.2) and visual regression risk warrants human verification, not autonomous overnight execution.",
     "paths_forward": [
-      "(a) fix tarball gen on VPS — continue diagnosing (PICKED 2026-04-19)",
-      "(b) bump isnad-graph frontend to design-system 0.0.2, regenerate lockfile (tracked in isnad-graph #818)",
-      "(c) GHCR publishing for api+frontend images (tracked in isnad-graph #817)"
+      "(a) historical: fix tarball gen on VPS — superseded by GHCR-image strategy that landed via #821",
+      "(b) bump isnad-graph frontend to design-system v0.0.2 (or v0.0.3 once design-system republishes #59 Inter cleanup) — tracked in isnad-graph#840",
+      "(c) historical: GHCR publishing for api+frontend images — landed via #821 (notify-deploy folded into ghcr-publish.yml)",
+      "(d) NEW: migrate from local tarball to published @noorinalabs/design-system npm package — tracked in isnad-graph#810"
     ]
   },
   "wave_8_work": {
