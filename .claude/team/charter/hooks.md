@@ -28,6 +28,9 @@ The following charter rules are enforced automatically via Claude Code hooks in 
 - **What it automates:** Ensures `ENVIRONMENT=test` is set before any `pytest`, `uv run pytest`, or `make test` command. Prevents CI breaks caused by missing environment variable.
 - **Augments:** Testing workflow. This is an automated safeguard, not replacing a prior manual rule.
 - **Manual steps remaining:** None — the hook blocks and instructs the user to prepend `ENVIRONMENT=test`.
+- **Skip conditions (#114):** Two short-circuits run before the pytest/make-test regex to prevent substring false-positives in GitHub API calls and body content:
+  1. **`gh` subcommands** — if the effective argv[0] (after stripping leading `VAR=value` assignments) is `gh`, the hook skips. `gh` is a GitHub API client, never a test runner.
+  2. **`--body` / `--body-file` flags** — if the command contains either flag, the hook skips. Structured bodies almost always contain user-supplied text mentioning `pytest` or `make test`. This skip is intentionally broad — a rare false negative on an exotic `--body`-using tool is cheaper than blocking every review/issue/comment that references pytest.
 - **Emergency override:** Remove the hook entry from `.claude/settings.json`.
 
 ## Hook 5: Validate Labels Before `gh issue create` (`validate_labels.py`)
