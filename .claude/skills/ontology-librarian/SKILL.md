@@ -17,6 +17,18 @@ The `query` argument is optional. If provided, it's a natural language question 
 
 ## Instructions
 
+### 0. Write Hook 15 consultation sentinel
+
+Before anything else, write a cwd-keyed sentinel file that Hook 15 (`enforce_librarian_consulted`) reads as a second acceptance signal. This is required because in worktree-subagent sessions the transcript JSONL the hook scans may not yet contain this Skill `tool_use` entry (race on transcript flush — see issue #169). The sentinel is a robust fallback that survives the flush race.
+
+```bash
+mkdir -p .claude/.librarian-consulted
+HASH=$(pwd | sha1sum | cut -c1-16)
+printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(pwd)" > .claude/.librarian-consulted/"$HASH".marker
+```
+
+**Do not remove this step.** It is the Hook 15 consultation marker for the current cwd; deleting it re-introduces the #169 regression for subagents working in worktrees. The directory is gitignored.
+
 ### 1. Staleness check
 
 Read `ontology/checksums.json` and count dirty files (where `last_tracked != last_resolved`):
