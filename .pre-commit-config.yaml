@@ -1,0 +1,26 @@
+# Pre-commit hooks for noorinalabs-main
+# Install: pre-commit install
+# Docs:    https://pre-commit.com/
+#
+# This mirrors .github/workflows/ci.yml coverage so local commits fail fast
+# instead of surfacing ruff errors only after a PR is opened. Keep `rev`
+# aligned with sibling repos (isnad-graph pins ruff 0.15.11) so the same
+# ruff version runs in local pre-commit and in CI.
+#
+# Scope: `.claude/hooks/` — the Python hook files CI checks.
+# `.claude/worktrees/` is excluded because it contains scratch checkouts of
+# other branches; reformatting them would silently overwrite in-progress work.
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.11
+    hooks:
+      - id: ruff-format
+        name: ruff-format
+        files: ^\.claude/hooks/.*\.py$
+        exclude: ^\.claude/worktrees/
+      - id: ruff
+        name: ruff-lint
+        args: [--fix]
+        files: ^\.claude/hooks/.*\.py$
+        exclude: ^\.claude/worktrees/
