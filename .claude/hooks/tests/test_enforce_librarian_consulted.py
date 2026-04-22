@@ -14,6 +14,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -390,6 +391,142 @@ class SignalDetectionTests(unittest.TestCase):
                 ]
             )
         )
+
+
+class SentinelFallbackTests(unittest.TestCase):
+    """Sentinel fallback for #169 — transcript-flush race in worktree subagents.
+
+    Each test uses an isolated tmp cwd so sentinel state cannot leak across
+    tests or across the host's real .claude/.librarian-consulted/ dir.
+    Tmp roots are placed outside /tmp so the hook's /tmp allow-list does not
+    short-circuit the sentinel/transcript checks we are exercising.
+    """
+
+    def setUp(self) -> None:
+        # Tmp root outside /tmp — /tmp is on the hook's allow-list, which
+        # would short-circuit before the sentinel check we are testing.
+        self._tmp_root = tempfile.mkdtemp(prefix="librarian_sentinel_", dir=os.path.expanduser("~"))
+
+    def tearDown(self) -> None:
+        import shutil
+
+        shutil.rmtree(self._tmp_root, ignore_errors=True)
+
+    def _make_cwd(self, name: str) -> str:
+        cwd = os.path.join(self._tmp_root, name)
+        os.makedirs(cwd, exist_ok=True)
+        return cwd
+
+    def _write_sentinel(self, cwd: str, *, mtime_offset: float = 0.0) -> Path:
+        """Write a sentinel for the given cwd; optionally shift mtime backwards."""
+        sentinel_dir = Path(cwd) / hook.SENTINEL_DIR_NAME
+        sentinel_dir.mkdir(parents=True, exist_ok=True)
+        sentinel = sentinel_dir / f"{hook._cwd_sentinel_hash(cwd)}.marker"
+        sentinel.write_text(f"2026-04-21T00:00:00Z {cwd}\n", encoding="utf-8")
+        if mtime_offset:
+            new_time = time.time() + mtime_offset
+            os.utime(sentinel, (new_time, new_time))
+        return sentinel
+
+    def test_fresh_sentinel_allows_edit(self) -> None:
+        """POS: sentinel written just now -> allow even with empty transcript.
+
+        This is the #169 worktree-subagent path: transcript flush lagged, but
+        the librarian skill wrote a sentinel synchronously.
+        """
+        cwd = self._make_cwd("fresh")
+        self._write_sentinel(cwd)
+        result = hook.check(
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": os.path.join(cwd, "src/foo.py")},
+                "transcript_path": _write_transcript([]),  # no librarian in transcript
+                "cwd": cwd,
+            }
+        )
+        self.assertIsNone(result, "fresh sentinel must allow edit")
+
+    def test_stale_sentinel_blocks_edit(self) -> None:
+        """NEG: sentinel older than TTL -> must not attest, edit blocks."""
+        cwd = self._make_cwd("stale")
+        # Older than TTL.
+        self._write_sentinel(cwd, mtime_offset=-(hook.SENTINEL_TTL_SECONDS + 60))
+        result = hook.check(
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": os.path.join(cwd, "src/foo.py")},
+                "transcript_path": _write_transcript([]),
+                "cwd": cwd,
+            }
+        )
+        assert result is not None  # mypy narrowing
+        self.assertEqual(result["decision"], "block", "stale sentinel must not attest")
+
+    def test_sentinel_in_different_cwd_blocks(self) -> None:
+        """NEG: a sentinel keyed to a DIFFERENT cwd must not attest.
+
+        Guards the cwd-keyed isolation property: an orchestrator sentinel
+        in the main-repo cwd must not unlock a subagent in a worktree cwd.
+        """
+        other_cwd = self._make_cwd("other")
+        my_cwd = self._make_cwd("mine")
+        # Sentinel exists for other_cwd only.
+        self._write_sentinel(other_cwd)
+        result = hook.check(
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": os.path.join(my_cwd, "src/foo.py")},
+                "transcript_path": _write_transcript([]),
+                "cwd": my_cwd,  # different cwd — no matching sentinel here
+            }
+        )
+        assert result is not None  # mypy narrowing
+        self.assertEqual(result["decision"], "block", "cross-cwd sentinel must not attest")
+
+    def test_no_sentinel_but_librarian_in_transcript_allows(self) -> None:
+        """POS regression guard: sentinel absent, transcript has librarian -> allow.
+
+        Ensures the sentinel addition did not break the pre-existing
+        transcript-scan acceptance signal.
+        """
+        cwd = self._make_cwd("no_sentinel")
+        # No sentinel written.
+        result = hook.check(
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": os.path.join(cwd, "src/foo.py")},
+                "transcript_path": _write_transcript([_librarian_skill_call()]),
+                "cwd": cwd,
+            }
+        )
+        self.assertIsNone(result, "transcript signal must still allow when sentinel absent")
+
+    def test_no_sentinel_and_no_librarian_blocks(self) -> None:
+        """NEG: neither signal present -> block (baseline #150 enforcement holds)."""
+        cwd = self._make_cwd("neither")
+        result = hook.check(
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": os.path.join(cwd, "src/foo.py")},
+                "transcript_path": _write_transcript([]),
+                "cwd": cwd,
+            }
+        )
+        assert result is not None  # mypy narrowing
+        self.assertEqual(result["decision"], "block")
+
+    def test_cwd_hash_matches_shell_pwd_sha1sum(self) -> None:
+        """Parity guard: Python hash must match `pwd | sha1sum | cut -c1-16`.
+
+        The librarian skill writes the sentinel via shell; if the hook's
+        Python hash diverges, no sentinel would ever match.
+        """
+        import hashlib
+
+        sample = "/home/parameterization/code/noorinalabs-main"
+        # Shell `pwd` output ends with newline before `sha1sum` consumes it.
+        expected = hashlib.sha1((sample + "\n").encode("utf-8")).hexdigest()[:16]
+        self.assertEqual(hook._cwd_sentinel_hash(sample), expected)
 
 
 if __name__ == "__main__":

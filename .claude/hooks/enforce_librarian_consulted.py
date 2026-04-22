@@ -59,30 +59,66 @@ Detection signals (any ONE is sufficient):
        "/ontology-librarian" OR "<command-name>/ontology-librarian".
     2. An `assistant` `tool_use` block with name == "Skill" and
        input.skill == "ontology-librarian".
+    3. A fresh cwd-keyed sentinel file (see below) — fallback for the
+       transcript-flush race in subagent worktree sessions.
+
+Sentinel fallback (second acceptance signal, added for #169):
+    The librarian skill writes a sentinel file on invocation at:
+        <cwd>/.claude/.librarian-consulted/<hash>.marker
+    where <hash> is the first 16 hex chars of sha1(abspath(cwd)). The hook
+    accepts the marker if its mtime is within SENTINEL_TTL_SECONDS (1 hour)
+    of now AND the cwd reported in `input_data["cwd"]` matches the hashed
+    cwd. Either the transcript scan OR a fresh matching sentinel is
+    sufficient to allow the edit.
+
+    Rationale (#169): subagents in worktree sessions repeatedly had
+    /ontology-librarian Skill tool_use entries ignored by the transcript
+    scan — the transcript path the hook reads either lagged the flush or
+    pointed at the parent orchestrator's file. The sentinel is written
+    synchronously by the skill and doesn't depend on transcript plumbing.
+
+    Cwd-keyed design: each worktree has a distinct cwd, hence a distinct
+    sentinel. This preserves the charter requirement that each agent invoke
+    the librarian ITSELF — the orchestrator in the main repo cwd and a
+    subagent in a worktree cwd do not share a sentinel.
+
+    Known limitation: a subagent operating in the SAME cwd as its parent
+    (non-worktree — rare) would be covered by the parent's sentinel. This
+    is an accepted trade-off; the dominant failure mode (#169) is worktree
+    subagents, which this fix addresses.
 
 Scope of scan:
     Entire transcript file (a Claude Code session == one transcript). Each
     new session starts a fresh transcript, so a previous session's
     invocation cannot carry over. This matches the issue body's
-    "since the last /clear or session start" requirement.
+    "since the last /clear or session start" requirement. Sentinel TTL of
+    1 hour bounds cross-session carryover on the sentinel path.
 
 Exit codes (per Claude Code hook convention):
-    0 — allow (not a matched tool, allow-listed path, or librarian found)
-    2 — block (writable path AND no librarian found in transcript)
+    0 — allow (not a matched tool, allow-listed path, librarian found in
+        transcript, or fresh sentinel matches cwd)
+    2 — block (writable path AND no librarian signal from either source)
 
 Enforcement artifact for: noorinalabs/noorinalabs-main#150
+Sentinel fallback for:   noorinalabs/noorinalabs-main#169
 Promotion pattern example: memory -> charter (CLAUDE.md § Ontology) -> hook.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from annunaki_log import log_pretooluse_block  # noqa: E402
+
+# Sentinel-fallback config (see docstring § "Sentinel fallback").
+SENTINEL_DIR_NAME = ".claude/.librarian-consulted"
+SENTINEL_TTL_SECONDS = 3600  # 1 hour
 
 # Tool matchers this hook enforces on.
 _MATCHED_TOOLS = {"Edit", "Write", "NotebookEdit"}
@@ -205,6 +241,42 @@ def _transcript_has_librarian(transcript_path: str) -> bool:
     return False
 
 
+def _cwd_sentinel_hash(cwd: str) -> str:
+    """Return the first 16 hex chars of sha1(abspath(cwd)).
+
+    Matches the hash the librarian skill writes (`pwd | sha1sum | cut -c1-16`).
+    """
+    try:
+        abspath = os.path.abspath(os.path.expanduser(cwd))
+    except (OSError, ValueError):
+        abspath = cwd
+    # Shell `pwd | sha1sum` includes the trailing newline from pwd's output.
+    digest = hashlib.sha1((abspath + "\n").encode("utf-8")).hexdigest()
+    return digest[:16]
+
+
+def _sentinel_attests_librarian(cwd: str) -> bool:
+    """Return True if a fresh cwd-keyed sentinel exists for this cwd.
+
+    Fresh = mtime within SENTINEL_TTL_SECONDS of now. Absent, stale, or
+    unreadable sentinels return False (do not attest). OSError paths fail
+    open (return True) to match the transcript-scan fail-open stance.
+    """
+    if not cwd:
+        return False
+
+    try:
+        abspath = os.path.abspath(os.path.expanduser(cwd))
+        sentinel = Path(abspath) / SENTINEL_DIR_NAME / f"{_cwd_sentinel_hash(abspath)}.marker"
+        if not sentinel.exists():
+            return False
+        age = time.time() - sentinel.stat().st_mtime
+        return 0 <= age <= SENTINEL_TTL_SECONDS
+    except OSError:
+        # Fail open — do not block on our own inability to stat.
+        return True
+
+
 _BLOCK_MESSAGE = (
     "BLOCKED: /ontology-librarian must be consulted before code edits in this session.\n"
     'Per CLAUDE.md § Ontology: "Every agent — orchestrator, team member, or one-off —\n'
@@ -229,8 +301,15 @@ def check(input_data: dict) -> dict | None:
     if _is_allowlisted(file_path):
         return None
 
+    # Primary signal: transcript scan.
     transcript_path = input_data.get("transcript_path", "")
     if _transcript_has_librarian(transcript_path):
+        return None
+
+    # Fallback signal: cwd-keyed sentinel (see docstring § "Sentinel fallback").
+    # Survives the transcript-flush race that blocks subagents in worktrees (#169).
+    cwd = input_data.get("cwd", "")
+    if _sentinel_attests_librarian(cwd):
         return None
 
     return {

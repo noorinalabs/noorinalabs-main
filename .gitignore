@@ -30,6 +30,9 @@ temp/
 # Claude Code local state (machine-specific)
 .claude/projects/
 
+# Hook 15 librarian-consultation sentinel markers (#169 — local-only, cwd-keyed)
+.claude/.librarian-consulted/
+
 # Editor files
 *.swp
 *.swo
