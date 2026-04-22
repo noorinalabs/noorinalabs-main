@@ -405,9 +405,7 @@ class SentinelFallbackTests(unittest.TestCase):
     def setUp(self) -> None:
         # Tmp root outside /tmp — /tmp is on the hook's allow-list, which
         # would short-circuit before the sentinel check we are testing.
-        self._tmp_root = tempfile.mkdtemp(
-            prefix="librarian_sentinel_", dir=os.path.expanduser("~")
-        )
+        self._tmp_root = tempfile.mkdtemp(prefix="librarian_sentinel_", dir=os.path.expanduser("~"))
 
     def tearDown(self) -> None:
         import shutil
