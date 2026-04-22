@@ -31,6 +31,7 @@ _BASH_HOOKS = [
     "block_no_verify",
     "block_git_config",
     "block_gh_pr_review",
+    "no_worktree_self_delete",
     "auto_set_env_test",
     "validate_lockfile_paths",
     "validate_labels",
