@@ -816,3 +816,185 @@ None.
 **Artifact:** `.claude/hooks/enforce_librarian_consulted.py` (PreToolUse on Edit/Write/NotebookEdit). Charter entry: `charter/hooks.md` § Hook 15. Issue: [#150](https://github.com/noorinalabs/noorinalabs-main/issues/150).
 
 **Worked example:** This is the first end-to-end execution of the memory → charter → hook promotion pipeline ratified by the owner on 2026-04-19. The `/promotion-audit` skill (tracked separately) will reference this as its canonical example.
+
+## 2026-04-22 — Phase 2 Wave 9 Retrospective
+
+### Wave theme
+
+Data pipeline + user-service cutover + deploy infra + (mid-wave) hook-architecture mini-sprint. Started 2026-04-17; closed 2026-04-22 with 22 items carried forward to wave-10.
+
+### Team Performance
+
+**Org-wide output:** ~50 PRs merged across 8 repos over 5 days. ~35 issues closed. 22 tech-debt followups filed during tonight's intensive session (Apr 22). CI health: 2 red-CI merges slipped through (main#178, deploy#146) — both caught post-merge and repaired; #182 and deploy#148 filed as process gaps.
+
+**Tonight's session volume (2026-04-22):** 18 PRs merged across 4 repos. Items closed: #112 (both parts + 7 child-repo syncs), #135 (user-service#77 + deploy#146/#149 fake_oauth), #149, #169, #173, #177, #179, #184, #192, #190, #191, #10, #13. Filed: main#175, #176, #181, #182, #185, #188, #189, #192; user-service#76, #78, #79; deploy#147, #148; isnad-graph#842, #843; ip#19, #20, #23, #24.
+
+### Per-Engineer Assessments
+
+**Aino Virtanen (Standards & Quality Lead)**
+- Tonight: #174 Hook 15 sentinel, #180 branch-regex, #183 skill cwd, #112-b across 6 child repos. Plus ontology cleanup (290 noise entries).
+- CI failures caught pre-merge: 1 (ruff format on #174 — self-fixed).
+- Must-fix items received: 1 (Wanjiku's session-start path regression on #183 — fixed cleanly in re-review).
+- Tech-debt issues filed: 2 in memory (feedback_heredoc_in_git_commit, feedback_canonical_source_via_git_show).
+- Standout: divergent-hook transparency on #112-b — quoted replaced design in each child-repo PR body so local teams could flag load-bearing concerns. Also identified + raised the annunaki_log bundling question instead of silently overwriting.
+- Severity: **none** (positive)
+
+**Wanjiku Mwangi (TPM)**
+- Tonight: #21 D-ii rewire (topics.py + normalize fan-out + manifest). Reviewer on 4+ PRs (#180, #178, #183, #21-self-reviewed).
+- CI failures: 0.
+- Review depth: caught real session-start path regression on #183, filed #184; caught `kafka-python` / `.new`-vs-`.ready` mismatch during #28 review path.
+- Standout: proactive scope guidance — her #21 report flagged graph-load as out-of-scope for her and pointed at #13, preserving PR boundaries cleanly.
+- Severity: **none** (positive)
+
+**Weronika Zielinska (Platform Architect)**
+- Tonight: #18 D-ii rewire (manifest-gated MERGE, per-field coalesce SET). Reviewer on #183 (#184 co-filing), #21.
+- Phase-4 safety implementation: `coalesce(row.props.<f>, n.<f>)` per field — a **genuine improvement over the spec** (I suggested hand-authored per-row Cypher rebuild; she found the elegant alternative).
+- CI failures: 0.
+- Standout: noticed + filed GRADED_BY Pydantic gap (isnad-graph#842) and shape-mismatch with Wanjiku's normalize during her own implementation. Cross-PR scope awareness.
+- Severity: **none** (positive)
+
+**Lucas Ferreira (SRE)**
+- Tonight: deploy#146 fake_oauth container, deploy#149 fixup after CI-red merge. Earlier wave-9: deploy#120, #114 (GHCR-only cleanup).
+- CI failures (caught post-merge): 1 (deploy#146 merged with red CI — GET vs POST callback shape mismatch). Recovery via fixup #149 was clean.
+- Must-fix items: 0 from reviewers (Aisha + Nino both approved #146 on first pass), but CI caught what reviewers missed.
+- Tech-debt filed from surfacing: user-service#79 (.dockerignore), deploy#148 (CI gating parallel).
+- Severity: **minor** — merged with red CI, but recovered cleanly within 30 min and surfaced two real process gaps.
+
+**Mateo Salazar (user-service Engineer)**
+- Tonight: user-service#77 OAuth override + security fixup. Commit SHA d203687 → 1104104.
+- Changes Requested by Idris on security grounds — responded with full fixup covering all 3 blockers in one pass.
+- CI failures: 0.
+- Scope discipline: Apple `aud`/`issuer` exemption + filing user-service#76 for pre-existing mypy debt were both sharp calls.
+- Severity: **none** (positive; security-guard-inline pattern saved as feedback memory).
+
+**Idris Yusuf (user-service Security)**
+- Tonight: security review on user-service#77 — caught prod-credential-exfil vector (no env-guard on OAuth URL override). Filed user-service#78 as blocker before approving.
+- This review alone prevented a real production misconfig disaster. High-value find.
+- Severity: **none** (very positive — security signal at its best).
+
+**Aisha Idrissi (SRE)**
+- Tonight: #114 auto_set_env fix, reviewed deploy#146, reviewed deploy#149. Filed deploy#147 (image-size claim reconciliation).
+- CI failures on #114 merge: 2 (ruff format + mypy pre-existing union-attr). Neither introduced by her code — I caught mypy separately, she'd accurately reported "ruff clean".
+- Severity: **none** — pre-existing debt, not her regression.
+
+**Kwesi Boateng (data-acquisition Integration)**
+- Tonight: data-acquisition#30 Kafka emit + fixup after Changes Requested + #31 topic rename.
+- Changes Requested by Alejandra on 4 blockers (future.get batching, retry/jitter, validator, date slice). Fixup e5255df addressed all 4 cleanly in one pass.
+- Scope discipline: chose kafka-python over confluent-kafka for 3.14 wheel reasons with explicit docstring; future-compat b2_key construction; flagged topic-name mismatch in PR body (led to Dilara filing #190).
+- Severity: **none** (positive — Changes-Requested → clean-fixup cycle worked exactly as intended).
+
+**Dilara Erdogan (data-acquisition Manager)**
+- Tonight: reviewed data-acquisition#30 — filed #190 topic-reconciliation tracking. Re-approved after fixup.
+- Severity: **none** (positive; filed a cross-repo tracking issue that became central to the #192 design call).
+
+**Alejandra Reyes-Fuentes (data-acquisition Staff Data Engineer)**
+- Tonight: code-level review on data-acquisition#30 — Changes Requested with 4 substantive technical findings (future.get defeating batching, retry/jitter, validator, date-slice). Re-approved after fixup.
+- Severity: **none** (very positive; caught real performance + correctness bugs).
+
+**Farhan Malik (isnad-graph Data Engineer Lead)**
+- Tonight: reviewed ip#18 (Phase-4 safety catch on `SET n += row.props` — this blocker became central to the rewire). Re-reviewed both post-rewire. Filed isnad-graph#843 (Narrated edge model parallel to #842).
+- Severity: **none** (very positive; Phase-4 catch materially improved the final design).
+
+**Arjun Raghavan (isnad-graph System Architect)**
+- Tonight: reviewed ip#18 both pre and post-rewire. Filed ip#19, #20, #23, #24 — 4 real tech-debt followups at varying levels of severity.
+- Severity: **none** (positive; architectural signal at the right level).
+
+**Nino Kavtaradze (deploy Security)**
+- Tonight: reviewed deploy#146 — comprehensive security enumeration (production compose untouched, no id_token signing surface, no host port leakage, fake creds grep-checked, network isolation verified).
+- Severity: **none** (positive).
+
+**Santiago Ferreira (Release Coordinator)**
+- Tonight: reviewed main#180 (branch-enumeration false-positive walk-through) and main#187. Also #178 earlier in session.
+- Severity: **none** (positive; release-coordinator signal consistent with W8).
+
+**Bereket Tadesse (Engineer — spawned for #177)**
+- Tonight: executed #177 post-merge verification in fresh subagent worktree. PASS reported with honest caveat about intermittency.
+- Severity: **none** (positive — unbiased verification was the point).
+
+**Nadia Khoury (Program Director)**
+- Tonight: reviewed main#174 (Hook 15 sentinel) with strategic scope. Filed #176 (reusable sentinel helper) and #177 (verification) as followups.
+- Earlier wave: light involvement (other members carried).
+- Severity: **none**.
+
+**Orchestrator (me)**
+- Actual problem areas:
+  - Merged main#178 and deploy#146 with red CI. Process gap filed twice (#182, deploy#148) but the blunder was twofold: not checking `gh pr checks` before `gh pr merge`, then trusting implementer's "ruff clean" report without cross-check.
+  - Conflated "parent-repo tooling sweep done" with "wave-9 done" in my first handoff. User had to correct me. Filed feedback memory: "honest audit over false conclusion".
+  - Caused the #18/#21 architectural mismatch by not requiring a design sketch before spawning both implementers in parallel. Both PRs shipped on incompatible assumptions; required owner-chaired design call to reconcile.
+  - Over-permissively labeled #192 as p2-wave-10 when it was blocking wave-9 items.
+
+### Top 3 Going Well
+
+1. **Cross-repo team-simulated execution scaled cleanly to 4+ repos simultaneously.** Up to 4 subagents in flight, each with correct role identity and commit attribution. Zero identity confusions; no parent-team members authored in child repos where child teams existed.
+
+2. **Review depth > rubber-stamping.** Every PR this session got substantive review findings:
+   - Idris caught prod credential exfil on OAuth override (user-service#78 filed as hard blocker).
+   - Alejandra caught `future.get` defeating Kafka batching on data-acquisition#30.
+   - Wanjiku caught session-start path regression on main#183.
+   - Farhan caught Phase-4 safety violation on ip#18 — led directly to the `coalesce` approach.
+   - Arjun filed 4 legitimate tech-debt followups on ip#18.
+   None of these would have shipped cleanly without the review layer.
+
+3. **Changes-Requested → clean-fixup → re-approve cycle worked exactly as intended multiple times.** Mateo on user-service#77 (Idris's security blockers), Kwesi on data-acquisition#30 (Alejandra's 4 blockers), Aino on main#183 (Wanjiku's regression), Weronika + Wanjiku on the #18/#21 D-ii rewires. No "defer to followup" drift; blockers were closed inline.
+
+### Top 3 Pain Points
+
+1. **CI-red merges happened twice.** main#178 merged with ruff format + mypy failures; deploy#146 merged with end-to-end test failure (wrong HTTP method on OAuth callback). Both required post-merge fixup. Both filed as process gaps (#182, deploy#148). **Root cause:** orchestrator-side — I ran `gh pr merge` without first verifying `gh pr checks` returned clean. Charter enforcement is missing here; a PreToolUse hook that blocks `gh pr merge` when the target PR's latest check run has any FAILURE would close this class of error permanently.
+
+2. **Design call happened POST-implementation for ip#18/#21.** Two parallel implementers (Wanjiku + Weronika) built on incompatible assumptions about message shape (Parquet-batch vs per-row). Mismatch surfaced only during reviewer-cross-check, after both PRs were essentially complete. Required owner-chaired design call + substantial rewire on both PRs. **Root cause:** I spawned both implementers in parallel without requiring a shared design sketch first, assuming the task description was enough. For any cross-worker-contract work, a brief design doc (even as a comment on the parent meta-issue) before implementation begins would catch this in 5 minutes instead of after 2+ hours of parallel work.
+
+3. **Orchestrator honest-audit discipline decayed.** Claimed "wave-9 parent-repo workstream concluded" in handoff when in fact ~22 items remained open across child repos. User had to prompt "have we completed all PRs and open issues for wave 9?" to surface the truth. Need stronger built-in audit step before any "concluded" claim.
+
+### Proposed Process Changes
+
+1. **Promote `validate_ci_before_merge` hook.**
+   - Rationale: two red-CI merges in one session is not a coincidence — it's a predictable failure of relying on the merge-time operator to check CI manually.
+   - Design: PreToolUse Bash hook scanning `gh pr merge` invocations; for the target PR, run `gh pr checks --json` (or equivalent), block if any check conclusion is `FAILURE`. `--admin` flag is the documented emergency override.
+   - Scope: both noorinalabs-main and each child repo. Closes #182 + deploy#148 simultaneously.
+   - Enforcement-hierarchy alignment: hook > skill > charter. Charter alone hasn't prevented the failure.
+
+2. **Design-sketch requirement for parallel cross-contract PRs.**
+   - Rationale: ip#18/#21 mismatch cost 2+ hours to discover and rewire. Owner explicitly called a design meeting to resolve. 5 minutes of design-doc-in-a-comment would have prevented it.
+   - Proposal: when two PRs are in flight that consume/produce from each other (Kafka topics, Parquet schemas, API contracts), the FIRST PR opened must include a "Contract" section in the PR body (message shape, schema, endpoints). The second PR links to that contract and documents any divergence explicitly. Any reviewer may block on missing Contract section.
+   - Charter home: `charter/pull-requests.md` § Cross-Contract PRs.
+
+3. **Pre-handoff wave-audit checklist.**
+   - Rationale: orchestrator's "wave-9 concluded" claim was untrue; user had to catch it. Skill-level audit should prevent recurrence.
+   - Proposal: `/wave-wrapup` (before `/handoff`) must run a cross-repo count of open items labeled with the active wave label. Any "concluded" phrasing in the handoff requires that count to be 0 OR an explicit carry-forward list.
+   - Charter home: `charter/skills.md` § Wave Lifecycle.
+
+### Trust Matrix Updates
+
+(See trust_matrix.md § Phase 2 Wave 9 for the table.)
+
+- **Weronika Zielinska**: 3 → **4** ↑ — Phase-4 `coalesce` improvement over spec + cross-PR shape-mismatch catch. Architecture-level contribution material to wave outcome.
+- **Wanjiku Mwangi**: 4 → **5** ↑ — multi-role wave (implementer on ip#21 + reviewer on 4+ PRs + caught session-start regression). Sustained high output at quality bar across week.
+- **Idris Yusuf**: new entry at **4** — single-review prevention of production credential-exfil vector (user-service#78).
+- **Alejandra Reyes-Fuentes**: new entry at **4** — substantive technical review (Kafka batching + date parsing + validator correctness).
+- **Farhan Malik**: new entry at **4** — Phase-4 safety catch materially improved the ingest MERGE design.
+- **Arjun Raghavan**: new entry at **4** — four legitimate tech-debt followups at varying levels.
+- **Kwesi Boateng**: new entry at **4** — Changes-Requested → clean-fixup cycle worked exactly as intended; scope-disciplined around kafka-python / b2-path / topic reconciliation.
+- **Mateo Salazar**: new entry at **4** — security-fixup-inline over deferral; Apple JWT exemption call.
+- **Lucas Ferreira**: 3 → **3** — deploy#146 red-CI merge is a minor ding but the recovery was clean and surfaced #148. No change.
+- **Aisha, Nino, Santiago, Bereket, Nadia**: unchanged (all at current ratings, this wave's contribution aligned with existing signal).
+
+### Fire/Hire Actions
+
+None.
+
+### Proposed Charter Changes
+
+1. `charter/hooks.md`: add Hook 17 `validate_ci_before_merge` spec per process-change #1.
+2. `charter/pull-requests.md`: new § "Cross-Contract PRs" per process-change #2.
+3. `charter/skills.md` (create or extend): wave-audit checklist per process-change #3.
+
+### Orchestrator self-feedback saved to memory
+
+Already saved this session:
+- `feedback_heredoc_in_git_commit.md` — use `-F /tmp/msg.txt` for multi-line commit messages.
+- `feedback_canonical_source_via_git_show.md` — `git show <sha>:<path>` when local main lags origin.
+- `feedback_child_repo_implementer_rule.md` — child-repo PRs drawn from that repo's own team roster unless owner overrides.
+- `feedback_security_guard_inline_not_followup.md` — security blockers landed inline, not deferred.
+
+New memory candidate from this retro:
+- `feedback_honest_audit_over_conclusion_claim.md` — before claiming a wave/workstream is concluded, run cross-repo open-item count; no "done" without zero or explicit carry-forward.

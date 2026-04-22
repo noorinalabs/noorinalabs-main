@@ -114,6 +114,21 @@ This catches semantic conflicts that GitHub's textual merge cannot detect (e.g.,
 
 **CI enforcement:** All repositories must configure CI workflows to trigger on pushes to `deployments/**` branches (not just PRs). This provides automatic verification after each merge, complementing the manager's manual check.
 
+## Cross-Contract PRs <!-- promotion-target: skill -->
+When two or more PRs in flight consume/produce from each other (Kafka topics, Parquet schemas, shared API contracts, wire formats between workers or services), the **first PR opened MUST include a "Contract" section** in the PR body. Subsequent PRs that consume or produce against that contract link to it and document any divergence explicitly.
+
+The Contract section must specify:
+
+1. **Message / schema / API shape** — concrete example or reference to a shared constants module (e.g., `workers/lib/topics.py`).
+2. **Ownership** — which PR owns the contract; which owner adjudicates disputes.
+3. **Divergence** — how other PRs may legitimately deviate (optional fields, label supersets, etc.).
+
+Any reviewer may block a cross-contract PR that fails this requirement.
+
+**Rationale:** in P2W9, noorinalabs-isnad-ingest-platform#18 (Weronika) and #21 (Wanjiku) built in parallel on incompatible assumptions about message shape (per-row `{label, id, props}` vs Parquet batches with `hadiths.parquet` payload). The mismatch surfaced only during reviewer cross-check after both PRs were essentially complete, forcing an owner-chaired design call (noorinalabs-main#192) and substantive rewires on both branches. A 5-minute Contract section in whichever PR opened first would have caught this upfront.
+
+Derived from Phase 2 Wave 9 retrospective, 2026-04-22.
+
 ## Cross-PR Dependency Sequencing <!-- promotion-target: skill -->
 When multiple PRs in the same wave have dependencies (e.g., PR B depends on changes from PR A):
 

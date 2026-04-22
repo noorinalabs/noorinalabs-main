@@ -299,3 +299,73 @@ The org was restructured in Session 3 with new repo-level teams. The matrix abov
 | **Aino Virtanen** (SQL) | #109 implementation matched existing hook patterns exactly. Handled spec-discrepancy (nonexistent `gh pr checks --json bucket,name,state` flag combo) transparently in PR body. Thorough reviewer across the wave. | None this wave |
 | **Nadia Khoury** (PD) | Spec-fidelity review of #122 was executive-quality — validated substitution, checked dispatcher position, flagged program-level concerns (Hook 7 stacking) | Limited involvement — other members carried the wave; appropriate for a wave with tight scope |
 
+
+
+---
+
+## Phase 2 Wave 9 Trust Updates (2026-04-22) — Data Pipeline + Hook-Architecture Mini-Sprint
+
+### Org-Level Team (noorinalabs-main)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Wanjiku Mwangi (TPM) | 4 | **5** ↑ | Dual-role wave: implementer on ip#21 (normalize D-ii rewire + topics.py) AND reviewer on main#180, #178, #183, ip#21. Caught main#183 session-start path regression filed as #184. Sustained high output at quality bar for 5 days. Max trust. |
+| Santiago Ferreira (RC) | 5 | 5 | Consistent release-coordinator signal: reviewed #180 with branch-enumeration walk-through, approved #187 with dispatcher-position + fail-open analysis. Already at max. |
+| Aino Virtanen (SQL) | 5 | 5 | Heavyweight hook-author for the wave: main#174 sentinel, #180 regex unblocker, #183 skill cwd, 6 child-repo #112-b syncs, plus ontology cleanup. Already at max; no ceiling. |
+| Nadia Khoury (PD) | 4 | 4 | Strategic review on #174 (sentinel fallback pattern), filed #176 + #177 as followups. Appropriate coordination scope. No change. |
+| Weronika Zielinska (PA) | 3 | **4** ↑ | Material architectural contribution: `coalesce(row.props.<f>, n.<f>)` per-field Phase-4 safety is a genuine improvement over the spec I sketched. Caught cross-PR shape mismatch during her own implementation (filed isnad-graph#842 for GRADED_BY gap). #18 D-ii rewire shipped clean on first re-review. |
+
+### Child-Repo Teams — New Entries / Updates
+
+#### noorinalabs-user-service team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Mateo Salazar (Eng) | — | **4** (new) | user-service#77 OAuth override + security-fixup cycle. Apple `aud`/`issuer` exemption call + scope-disciplined #76 tech-debt filing. Changes-Requested → clean-fixup → merge in one pass. |
+| Idris Yusuf (Sec Eng) | — | **4** (new) | Single-review prevention of production credential-exfil vector (no env-guard on OAuth override). Filed user-service#78 as hard blocker before approving — exactly the right pattern. |
+| Anya Kowalczyk (TL) | — | **3** (new) | Tech-lead review of user-service#77 with architectural fit analysis (override scheme+netloc abstraction, 13-call-site coverage audit). Path-in-override nit still open as minor followup. |
+
+#### noorinalabs-data-acquisition team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Kwesi Boateng (Integration Eng) | — | **4** (new) | data-acquisition#30 Kafka emit + fixup after 4-blocker Changes-Requested. Scope discipline on kafka-python decision + future-compat b2_key construction + topic-name mismatch flagging. Also shipped #31 (.new → .landed rename) cleanly. |
+| Dilara Erdogan (Pipeline Mgr) | — | **4** (new) | Manager review on #30 — filed noorinalabs-main#190 as cross-repo tracking issue during review. That filing became central to the #192 design call. |
+| Alejandra Reyes-Fuentes (Staff Data Eng) | — | **4** (new) | Code-level review on #30 with 4 substantive technical findings (future.get defeating batching, no jitter on retry, validator gaps, ISO date slice). Every finding was a real bug. |
+
+#### noorinalabs-isnad-graph team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Farhan Malik (Data Eng Lead) | — | **4** (new) | Reviewer on ip#18 — caught Phase-4 safety violation (`SET n += row.props`) that materially reshaped the final ingest design. Re-reviewed post-rewire and filed isnad-graph#843 as parallel followup to his own earlier-filed #842. |
+| Arjun Raghavan (System Architect) | — | **4** (new) | Reviewer on ip#18 pre + post-rewire. Filed ip#19, #20, #23, #24 — four legitimate tech-debt followups at appropriate severity levels. |
+
+#### noorinalabs-deploy team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Lucas Ferreira (SRE) | 3 | 3 | deploy#146 shipped with red CI (GET vs POST callback shape mismatch) — recovery via fixup #149 was clean and surfaced user-service#79 + deploy#148 process gaps. Minor ding offset by recovery discipline. Holding at 3. |
+| Aisha Idrissi (SRE) | — | **4** (new) | Multi-role wave: implemented main#114 (auto_set_env_test fix) + reviewed deploy#146/#149 with network-topology and healthcheck analysis. Filed deploy#147 image-size reconciliation. |
+| Nino Kavtaradze (Sec Eng) | — | **4** (new) | Security review on deploy#146 with comprehensive enumeration (prod compose untouched, no id_token signing surface, no host port leakage, fake creds grep-checked). |
+| Bereket Tadesse (Infra Mgr) | — | **3** (new) | Appeared as review routing target (wasn't actually spawned this wave) + #177 post-merge verification executed cleanly by the fresh-spawn identity. |
+
+### Done Well / Needs Improvement (Phase 2 Wave 9)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Wanjiku Mwangi** (TPM) | 5-day sustained delivery: #180 branch-regex, #21 D-ii rewire + topics.py, multiple clean reviews. Caught main#183 session-start regression + filed #184. | None this wave. |
+| **Aino Virtanen** (SQL) | Heavy hook-author output: #174, #180, #183, #112-b × 6 child repos + ontology cleanup. Divergent-hook transparency pattern on #112-b was exactly right. | Initial session-start path regression on #183 (recovered in fixup same session). |
+| **Weronika Zielinska** (PA) | `coalesce` Phase-4 approach was a material improvement over spec. Cross-PR shape-mismatch detection during own implementation. | None this wave. |
+| **Mateo Salazar** (user-service Eng) | Security-fixup-inline over defer-to-followup (user-service#78 closed at merge, not left to tech-debt). | None this wave. |
+| **Idris Yusuf** (user-service Sec) | Prevention-of-production-vulnerability review. Textbook security signal. | None this wave. |
+| **Kwesi Boateng** (data-acquisition Int) | Changes-Requested → clean-fixup cycle worked exactly as designed. Topic-name reconciliation flagging in PR body led to right tracking. | None this wave. |
+| **Alejandra Reyes-Fuentes** (data-acquisition Staff DE) | Four real technical findings on #30 — no false positives, all addressed in fixup. | None this wave. |
+| **Farhan Malik** (isnad-graph DE Lead) | Phase-4 safety catch was the pivot point of the ip#18 rewire. Co-filed #842/#843 edge-model gaps. | None this wave. |
+| **Arjun Raghavan** (isnad-graph Arch) | Four legitimate tech-debt followups at appropriate severity (coalesce null-asymmetry, property-map drift, retry compounding, schema source-of-truth). | None this wave. |
+| **Lucas Ferreira** (deploy SRE) | Deploy#146 fixup recovery within 30 min; surfacing #79 + #148. | Merged deploy#146 with red CI — cross-verification against `gh pr checks` before `gh pr merge` would have prevented. |
+| **Aisha Idrissi** (deploy SRE) | Auto_set_env fix shipped clean; review on deploy#146 network-topology was right-depth. | None this wave. |
+| **Nino Kavtaradze** (deploy Sec) | Comprehensive deploy#146 security enumeration with grep-verified fake-creds non-leakage. | None this wave. |
+| **Santiago Ferreira** (RC) | Consistent release-coordinator analysis on #180 and #187. | None this wave. |
+| **Nadia Khoury** (PD) | Strategic sentinel-pattern review on #174 with followup filing discipline. | None this wave. |
+| **Bereket Tadesse** (Infra Mgr) | Clean #177 verification with honest intermittency caveat. | None this wave. |
+| **Orchestrator** | Volume execution across 4 repos; team-simulation scaled cleanly. | 2 red-CI merges (main#178, deploy#146); late design call for ip#18/#21 mismatch; premature "wave-9 concluded" handoff claim requiring user correction. |

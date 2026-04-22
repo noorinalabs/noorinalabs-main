@@ -142,6 +142,7 @@ When hooks sharing the same matcher type (Bash, Agent, SendMessage, etc.) accumu
 - **Augments:** [Pull Requests](pull-requests.md) "green CI before merge" requirement. Phase 2 Wave 7 merged multiple PRs with red `security-audit`, `e2e`, and `test_migrate_users.py` checks despite the charter rule. Per the enforcement-hierarchy principle (hook > skill > charter), a repeatedly violated charter rule becomes a hook.
 - **Manual steps remaining:** None — the hook queries `gh pr view` for the check rollup automatically.
 - **Emergency override:** Pass `--admin` to `gh pr merge`, or remove the `validate_pr_ci_status` entry from the dispatcher hook list.
+- **P2W9 retro findings (2026-04-22):** Hook 14 is registered in noorinalabs-main but is NOT synced to child repos. `gh pr merge` on child-repo PRs (deploy#146 in particular) bypassed the CI check because the dispatcher in the child repo doesn't list this hook. **Action:** sync Hook 14 to all 7 child-repo dispatchers following the same pattern as #112 part (b) for `validate_commit_identity`. Additionally, the hook's behavior on **pending** checks may have been too permissive during P2W9 — the mid-CI-run merge window allowed main#178 to merge before FAILURE conclusions materialized. Tighten the pending-check semantics to block mid-run merges unless `--auto` is passed to hand off to GitHub's auto-merge. Tracking issues: noorinalabs-main#182 (main), noorinalabs-deploy#148 (cross-repo sync).
 
 ## Hook 15: Enforce Librarian Consulted (`enforce_librarian_consulted.py`)
 
