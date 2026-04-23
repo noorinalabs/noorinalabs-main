@@ -7,22 +7,44 @@ description: Deployment orchestration — Terraform, Docker Compose, CI/CD workf
 terraform_modules:
   hetzner:
     path: terraform/hetzner/
-    provider: hetznercloud/hcloud ~> 1.49
-    resources:
-      server: { name: noorinalabs-isnad-graph-prod, type: CPX41, location: ash, image: ubuntu-24.04 }
-      ssh_key: { name: noorinalabs-isnad-graph-prod-deploy }
-      firewall: { name: noorinalabs-isnad-graph-prod-firewall, rules: [SSH/22, HTTP/80, HTTPS/443] }
-    state_backend: { type: s3, bucket: noorinalabs-terraform-state, endpoint: backblaze-b2 }
+    layout: per-env
+    # Per ADR 0001 (deploy#82, P2W10): envs/{stg,prod}/ root modules each call shared modules/hetzner-vps/.
+    # Working directory IS the env selector (no Terraform workspaces).
+    shared_module:
+      path: terraform/hetzner/modules/hetzner-vps/
+      provider: hetznercloud/hcloud ~> 1.49
+      resource_naming: "noorinalabs-${var.env}[-suffix]"  # server, firewall, ssh-key all use ${env}
+      labels: { project: noorinalabs, environment: "${var.env}" }
+    envs:
+      stg:
+        path: terraform/hetzner/envs/stg/
+        server: { name: noorinalabs-stg, type: CPX21, location: ash, image: ubuntu-24.04 }
+        state_key: hetzner/stg.tfstate
+      prod:
+        path: terraform/hetzner/envs/prod/
+        server: { name: noorinalabs-prod, type: CPX41, location: ash, image: ubuntu-24.04 }
+        state_key: hetzner/prod.tfstate
+    state_backend: { type: s3, bucket: noorinalabs-terraform-state, endpoint: backblaze-b2, region: us-east-005 }
+    firewall_rules: [SSH/22, HTTP/80, HTTPS/443]
+    outputs_per_env: [env, server_name, server_ip, server_ipv6, ssh_target, labels, server_status]
+    notes:
+      - "Pre-wave-10 root at terraform/hetzner/ used single state key hetzner/terraform.tfstate — migrated to hetzner/prod.tfstate."
+      - "Hand-made isnad-graph-prod VPS (outside Terraform) remains live until deploy#86 decommission."
+    adr: docs/adr/0001-tf-hetzner-per-env-state-strategy.md
 
   cloudflare:
     path: terraform/cloudflare/
     provider: cloudflare/cloudflare ~> 4.43
     resources:
-      zone_settings: { ssl: strict, min_tls: "1.2", always_https: true }
+      zone_settings: { ssl: strict, min_tls: "1.2", always_https: true, automatic_https_rewrites: "on" }
       dns_records:
-        - { name: "@", type: A, target: VPS IP, proxied: false }
+        - { name: "@", type: A, target: var.vps_ipv4_address, proxied: false }
         - { name: www, type: CNAME, target: noorinalabs.com, proxied: false }
-        - { name: isnad-graph, type: CNAME, target: noorinalabs.com, proxied: false }
+      subdomains:
+        variable: "var.subdomains (map of name → proxied_bool)"
+        default: { isnad-graph: false }
+        # Per-service stg subdomains (e.g., stg.isnad-graph, stg.landing) added via deploy#83 / PR #157.
+        open_pr: "deploy#157 (P2W10) — stg + per-service subdomains across both envs"
 
 docker_services:
   compose_file: compose/docker-compose.prod.yml
@@ -65,16 +87,39 @@ workflows:
   deploy_landing: { trigger: workflow_dispatch, target: [landing], health_check: 60s }
   deploy_all: { trigger: workflow_dispatch, target: all, health_check: 120s }
   verify_deploy: { trigger: workflow_run, checks: [HTTPS, health, TLS] }
-  terraform: { trigger: "push to main (terraform/**)", jobs: [validate, plan, apply] }
+  terraform:
+    trigger: "pull_request + push to main (terraform/**)"
+    jobs:
+      fmt: "terraform fmt -check -recursive"
+      validate: "matrix over [modules/hetzner-vps, envs/stg, envs/prod, cloudflare, backblaze] — -backend=false"
+      plan: "matrix over [stg, prod] — PR only — comments plan on PR"
+      apply: "matrix over [stg, prod] with max-parallel=1 — push to main only — stg before prod"
+    environments: { stg: staging, prod: production }
+  integration_tests: { trigger: "pull_request + push to main", purpose: "cross-repo integration suite" }
   rollback: { trigger: workflow_dispatch, inputs: [image_tag, service] }
+  # Promotion pathway (P2W10, section A — open PRs):
+  promote: { pr: "deploy#155 (Aisha)", issue: "#84", status: open, description: "stg auto-deploy + prod manual-approval promotion" }
+  deploy_stg: { pr: "deploy#155 (Aisha)", issue: "#84", status: open, trigger: "ghcr-publish → stg auto" }
+  deploy_prod: { pr: "deploy#155 (Aisha)", issue: "#84", status: open, trigger: "manual approval in production environment" }
+  alembic_pre_deploy_gate: { pr: "deploy#153 (Lucas)", issue: "#85", status: draft, description: "alembic upgrade head pre-deploy gate with heads-count assertion" }
+  image_tag_invariants: { pr: "deploy#157 (Weronika)", issue: "#83 (bundled)", status: open, description: "CI validation of image-tag shape per #815 Contract v6" }
 
 environments:
+  staging:
+    vps: { provider: Hetzner, spec: "CPX21 (3 vCPU, 4GB)", location: Ashburn, name: noorinalabs-stg }
+    domains_planned: "stg.isnad-graph.noorinalabs.com, stg.landing (per PR #157)"
+    tls: "Caddy auto-provisioned Let's Encrypt"
+    deploy_user: deploy
+    deploy_method: "SSH via appleboy/ssh-action"
+    state_key: hetzner/stg.tfstate
   production:
-    vps: { provider: Hetzner, spec: "CPX41 (8 vCPU, 16GB)", location: Ashburn }
+    vps: { provider: Hetzner, spec: "CPX41 (8 vCPU, 16GB)", location: Ashburn, name: noorinalabs-prod }
     domains: [noorinalabs.com, www.noorinalabs.com, isnad-graph.noorinalabs.com]
     tls: "Caddy auto-provisioned Let's Encrypt"
     deploy_user: deploy
     deploy_method: "SSH via appleboy/ssh-action"
+    state_key: hetzner/prod.tfstate
+    note: "Currently-live prod runs on hand-made isnad-graph-prod VPS outside Terraform (decommission tracked in deploy#86)."
 
 local_patterns:
   rolling_update: "docker compose up -d --force-recreate + health poll"

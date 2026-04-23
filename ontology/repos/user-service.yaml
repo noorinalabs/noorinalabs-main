@@ -75,6 +75,8 @@ data_models:
     - { id: "0010", description: "Verification tokens indexes" }
     - { id: "0020", description: "Subscription trial unique constraint" }
     - { id: "0030", description: "TOTP secrets table" }
+    - { id: "0040", description: "Merge multi-heads — collapses 0003/0020/0030 into single head (no-op merge migration, P2W10 #63)" }
+  migration_policy: "Single head after 0040 — `alembic upgrade head` (singular) works. deploy integration tests revert `heads`→`head` after US#63 merge."
 
 local_patterns:
   async_all: "Fully async — asyncpg, async Redis, aiosmtplib"

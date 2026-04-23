@@ -236,11 +236,13 @@ integrations:
 infrastructure:
   compute:
     provider: Hetzner Cloud
-    server: noorinalabs-isnad-graph-prod
-    type: CPX41
-    specs: { vcpu: 8, ram_gb: 16 }
     location: Ashburn (ash)
     os: Ubuntu 24.04
+    # P2W10: split into per-env (stg + prod). Pre-wave-10 single server was noorinalabs-isnad-graph-prod.
+    # Currently-live production is a hand-made isnad-graph-prod VPS outside Terraform (decommission in deploy#86).
+    servers:
+      stg: { name: noorinalabs-stg, type: CPX21, specs: { vcpu: 3, ram_gb: 4 }, state_key: hetzner/stg.tfstate }
+      prod: { name: noorinalabs-prod, type: CPX41, specs: { vcpu: 8, ram_gb: 16 }, state_key: hetzner/prod.tfstate }
 
   dns:
     provider: Cloudflare
@@ -248,6 +250,7 @@ infrastructure:
     ssl: strict
     min_tls: "1.2"
     proxied: false (DNS only — TLS terminated at Caddy)
+    subdomains_variable: "var.subdomains map; stg subdomains being added via deploy PR #157"
 
   state_backend:
     type: Backblaze B2 (S3-compatible)
