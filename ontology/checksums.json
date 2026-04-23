@@ -1,215 +1,257 @@
 {
-  "version": 1,
   "description": "Tracks file checksums for ontology change detection. last_tracked = current file hash (updated by tracker hook). last_resolved = hash when ontology was last rebuilt from this file (updated by resolver). When last_tracked != last_resolved, the file is dirty.",
   "files": {
-    ".claude/skills/wave-wrapup/SKILL.md": {
-      "last_tracked": "942ee78e1af0066f6aac71bdcca00793808f6c3f9a04ab729ba0f8cc6ab5e4de",
-      "last_resolved": "942ee78e1af0066f6aac71bdcca00793808f6c3f9a04ab729ba0f8cc6ab5e4de",
-      "tracked_at": "2026-04-11T16:16:53.008874+00:00",
-      "resolved_at": "2026-04-11T16:26:02.575946+00:00"
-    },
-    ".claude/skills/wave-retro/SKILL.md": {
-      "last_tracked": "4cb181da87445574175c9aeb268376114faa3b821ad833a0d80df1aab1b431bd",
-      "last_resolved": "4cb181da87445574175c9aeb268376114faa3b821ad833a0d80df1aab1b431bd",
-      "tracked_at": "2026-04-17T02:53:10.158033+00:00",
-      "resolved_at": "2026-04-17T02:56:03.855330+00:00"
-    },
-    "CLAUDE.md": {
-      "last_tracked": "fc33f42e4f80a14fad7ec9de07de304bff3b0cfb1e9016ea3b3b3ccbaf493dde",
-      "last_resolved": "fc33f42e4f80a14fad7ec9de07de304bff3b0cfb1e9016ea3b3b3ccbaf493dde",
-      "tracked_at": "2026-04-19T22:30:10.380074+00:00",
-      "resolved_at": "2026-04-21T01:14:29.412621+00:00"
-    },
-    "ontology/domain.yaml": {
-      "last_tracked": "6fedad509f80b9570d0385fb5759e861d8b6f7b219ecc425b8dd472173ca536c",
-      "last_resolved": "6fedad509f80b9570d0385fb5759e861d8b6f7b219ecc425b8dd472173ca536c",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00"
-    },
-    "ontology/services.yaml": {
-      "last_tracked": "a587c68c10694f2c642e93e3fff799bc5398a7579721dce71fcdac983de985ef",
-      "last_resolved": "a587c68c10694f2c642e93e3fff799bc5398a7579721dce71fcdac983de985ef",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00"
-    },
-    "ontology/conventions.md": {
-      "last_tracked": "b26367f6b14dab8e9d7aa030c5ea55fe080d0b3b9167089dfdf846acaf8f7b90",
-      "last_resolved": "b26367f6b14dab8e9d7aa030c5ea55fe080d0b3b9167089dfdf846acaf8f7b90",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00"
-    },
-    "ontology/repos/isnad-graph.yaml": {
-      "last_tracked": "175ebd6c739a9e336fc3d04a8b549ea0ff5cb8a5c58a1982e33ffe5e2a838c14",
-      "last_resolved": "175ebd6c739a9e336fc3d04a8b549ea0ff5cb8a5c58a1982e33ffe5e2a838c14",
-      "tracked_at": "2026-04-11T16:26:02.575946+00:00",
-      "resolved_at": "2026-04-11T16:26:02.575946+00:00"
-    },
-    "ontology/repos/user-service.yaml": {
-      "last_tracked": "1d5a8c1687a32fcf3ef028ed377db8cf436ed2fc1adaeed99d4a312af8e825f8",
-      "last_resolved": "1d5a8c1687a32fcf3ef028ed377db8cf436ed2fc1adaeed99d4a312af8e825f8",
-      "tracked_at": "2026-04-12T03:46:50.471864+00:00",
-      "resolved_at": "2026-04-12T03:46:50.471864+00:00"
-    },
-    "ontology/repos/landing-page.yaml": {
-      "last_tracked": "e16ba4b3b13528559b1e11ef8ce5d4ac3e9a0827c697bc02db921465bfbf5b7a",
-      "last_resolved": "e16ba4b3b13528559b1e11ef8ce5d4ac3e9a0827c697bc02db921465bfbf5b7a",
-      "tracked_at": "2026-04-11T16:26:02.575946+00:00",
-      "resolved_at": "2026-04-11T16:26:02.575946+00:00"
-    },
-    "ontology/repos/design-system.yaml": {
-      "last_tracked": "64f1eb7a16e3c9284f92d018eed4ce2a0da2aa761f60353c98117f3b2319a1a8",
-      "last_resolved": "64f1eb7a16e3c9284f92d018eed4ce2a0da2aa761f60353c98117f3b2319a1a8",
-      "tracked_at": "2026-04-11T16:26:02.575946+00:00",
-      "resolved_at": "2026-04-11T16:26:02.575946+00:00"
-    },
-    "ontology/repos/deploy.yaml": {
-      "last_tracked": "54e4ea679b5046cbffcbdb47f857ac4af7507af987376684c47dc12077a4ef6b",
-      "last_resolved": "54e4ea679b5046cbffcbdb47f857ac4af7507af987376684c47dc12077a4ef6b",
-      "tracked_at": "2026-04-19T21:53:09.719511+00:00",
-      "resolved_at": "2026-04-19T21:53:15Z"
-    },
-    "ontology/repos/ingestion.yaml": {
-      "last_tracked": "368917f91938272e9f8002534ddf7301f02679e0987ffb06fe6022429f0ca0b6",
-      "last_resolved": "368917f91938272e9f8002534ddf7301f02679e0987ffb06fe6022429f0ca0b6",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00"
-    },
-    "ontology/checksums.json": {
-      "last_tracked": "b53a9c08a50719237396f9c1ae29540b174a1670682080359e23dffa4b8cbd94",
-      "last_resolved": "b53a9c08a50719237396f9c1ae29540b174a1670682080359e23dffa4b8cbd94",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00"
-    },
-    ".claude/team/charter.md": {
-      "last_tracked": "a79e60476eb72af6689a5af1c3a09e0d5878c67b26ab8f5ab3516ee26ff717d3",
-      "last_resolved": "a79e60476eb72af6689a5af1c3a09e0d5878c67b26ab8f5ab3516ee26ff717d3",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00"
-    },
-    ".claude/team/charter/agents.md": {
-      "last_tracked": "dce25c289af21159f90f4c6b15bb7ef638f96a272e3e9b479442ccbfde0dc751",
-      "last_resolved": "dce25c289af21159f90f4c6b15bb7ef638f96a272e3e9b479442ccbfde0dc751",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00"
-    },
-    ".claude/hooks/suggest_generic_prompt.py": {
-      "last_tracked": "b32325333219200d17ccb647aca4ecf408c37c2e0b1fbdedf7e698337592518b",
-      "last_resolved": "b32325333219200d17ccb647aca4ecf408c37c2e0b1fbdedf7e698337592518b",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00"
-    },
-    ".claude/settings.json": {
-      "last_tracked": "d06e2af0692388e99b361c91ea76666e152d40bd6c0c90f9c9fbd4f6e1fc6824",
-      "last_resolved": "d06e2af0692388e99b361c91ea76666e152d40bd6c0c90f9c9fbd4f6e1fc6824",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00"
-    },
-    ".claude/skills/handoff/SKILL.md": {
-      "last_tracked": "d68c996a20db5fbc4c5e54f5ab1a75e8c5bad2c03faee13d264b4ffd37f03f6c",
-      "last_resolved": "d68c996a20db5fbc4c5e54f5ab1a75e8c5bad2c03faee13d264b4ffd37f03f6c",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00"
-    },
-    ".claude/hooks/session_handoff.py": {
-      "last_tracked": "11b48a92c4502641efa79f4cf3915bdc8d097a6ed73d2351e25261d7ad6155be",
-      "last_resolved": "11b48a92c4502641efa79f4cf3915bdc8d097a6ed73d2351e25261d7ad6155be",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00"
-    },
-    ".claude/team/feedback_log.md": {
-      "last_tracked": "53a38a78680373a6668c7d29e7057c9151bf1ba516d881e0447944be7cbf8cf8",
-      "last_resolved": "53a38a78680373a6668c7d29e7057c9151bf1ba516d881e0447944be7cbf8cf8",
-      "tracked_at": "2026-04-17T02:55:49.813670+00:00",
-      "resolved_at": "2026-04-17T02:56:03.855330+00:00"
-    },
-    ".claude/skills/wave-kickoff/SKILL.md": {
-      "last_tracked": "4a12511cafd3640536ce552fbc0f25b9585c98ec8c3a22411918885270472b70",
-      "last_resolved": "4a12511cafd3640536ce552fbc0f25b9585c98ec8c3a22411918885270472b70",
-      "tracked_at": "2026-04-17T02:54:35.749176+00:00",
-      "resolved_at": "2026-04-17T02:56:03.855330+00:00"
-    },
-    ".claude/hooks/validate_wave_context.py": {
-      "last_tracked": "24938c642f56e8f076f4cc0dfd137219605b83dfe814a92b713b67eece833451",
-      "last_resolved": "24938c642f56e8f076f4cc0dfd137219605b83dfe814a92b713b67eece833451",
-      "tracked_at": "2026-04-12T21:15:55.663771+00:00",
-      "resolved_at": "2026-04-12T23:12:56.612546+00:00"
-    },
-    ".claude/hooks/enforce_ontology_context.py": {
-      "last_tracked": "699674ce3bc845ed5b791655cfe0182d27137993c09564c022f84ea1effdf65d",
-      "last_resolved": "699674ce3bc845ed5b791655cfe0182d27137993c09564c022f84ea1effdf65d",
-      "tracked_at": "2026-04-12T21:15:55.414154+00:00",
-      "resolved_at": "2026-04-12T23:12:56.612546+00:00"
-    },
-    "cross-repo-status.json": {
-      "last_tracked": "5ef6c2502f6fdb47bb190e4ce9edbacd37efdc11ced4f95d432e2eb778f5af1b",
-      "last_resolved": "5ef6c2502f6fdb47bb190e4ce9edbacd37efdc11ced4f95d432e2eb778f5af1b",
-      "tracked_at": "2026-04-19T14:08:43.615543+00:00",
-      "resolved_at": "2026-04-19T21:53:15Z"
-    },
-    "ONBOARDING.md": {
-      "last_tracked": "2399db18c2b9c8cc038c3132efee7e39696fdac41c0a58c95ea3cc987f4439e0",
-      "last_resolved": "2399db18c2b9c8cc038c3132efee7e39696fdac41c0a58c95ea3cc987f4439e0",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00"
-    },
-    ".claude/team/charter/pull-requests.md": {
-      "last_tracked": "7fb84ff8c57335b6ec532761111e541fa3a90c8c1da9686d742d03c16349b97e",
-      "last_resolved": "7fb84ff8c57335b6ec532761111e541fa3a90c8c1da9686d742d03c16349b97e",
-      "tracked_at": "2026-04-17T02:53:35.642630+00:00",
-      "resolved_at": "2026-04-17T02:56:03.855330+00:00"
-    },
-    ".gitignore": {
-      "last_tracked": "485dc652a170747795b28d630c593c7c263ef6426b814a325fbb92c407ceea0f",
-      "last_resolved": "485dc652a170747795b28d630c593c7c263ef6426b814a325fbb92c407ceea0f",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00"
-    },
-    "dependencies.yml": {
-      "last_tracked": "f4b53ffd3e1f81e055130ae2f53ff08ba9b5f651782434bbf3ac8b3eab4276e8",
-      "last_resolved": "f4b53ffd3e1f81e055130ae2f53ff08ba9b5f651782434bbf3ac8b3eab4276e8",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00"
-    },
-    ".claude/hooks/warn_ghcr_image.py": {
-      "last_tracked": "597ff6cf41a8a7424ac2cd4253244846f9b420c17035714586b355811a56784d",
-      "last_resolved": "597ff6cf41a8a7424ac2cd4253244846f9b420c17035714586b355811a56784d",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00"
-    },
-    "ontology/repos/isnad-ingest-platform.yaml": {
-      "last_tracked": "b8ca5cc2f951054d287dd600c4eab104311e56dd4987bece91bb7e697855e27c",
-      "last_resolved": "b8ca5cc2f951054d287dd600c4eab104311e56dd4987bece91bb7e697855e27c",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00"
-    },
-    ".claude/hooks/validate_pr_ci_status.py": {
-      "last_tracked": "ff4c0c20785a0a014013388070b9c009632a3da2c15fd4e34c0e44e5b6e62ce9",
-      "last_resolved": "ff4c0c20785a0a014013388070b9c009632a3da2c15fd4e34c0e44e5b6e62ce9",
-      "tracked_at": "2026-04-17T01:04:35.934020+00:00",
-      "resolved_at": "2026-04-17T02:37:52.367305+00:00"
+    ".claude/hooks/annunaki_log.py": {
+      "last_resolved": "ff302070ec73dab2811a8308f6666fcbe633a5759da8cd49e941c16c24216e79",
+      "last_tracked": "ff302070ec73dab2811a8308f6666fcbe633a5759da8cd49e941c16c24216e79",
+      "resolved_at": "2026-04-23T00:07:17.600045+00:00",
+      "tracked_at": "2026-04-22T04:22:26.067556+00:00"
     },
     ".claude/hooks/dispatcher.py": {
-      "last_tracked": "f550dd83a45a65b26a26193c2215b13d6196c3118ccf6437141009cc29bcca54",
       "last_resolved": "f550dd83a45a65b26a26193c2215b13d6196c3118ccf6437141009cc29bcca54",
-      "tracked_at": "2026-04-17T01:04:35.138954+00:00",
-      "resolved_at": "2026-04-17T02:37:52.367305+00:00"
+      "last_tracked": "f550dd83a45a65b26a26193c2215b13d6196c3118ccf6437141009cc29bcca54",
+      "resolved_at": "2026-04-17T02:37:52.367305+00:00",
+      "tracked_at": "2026-04-17T01:04:35.138954+00:00"
+    },
+    ".claude/hooks/enforce_ontology_context.py": {
+      "last_resolved": "699674ce3bc845ed5b791655cfe0182d27137993c09564c022f84ea1effdf65d",
+      "last_tracked": "699674ce3bc845ed5b791655cfe0182d27137993c09564c022f84ea1effdf65d",
+      "resolved_at": "2026-04-12T23:12:56.612546+00:00",
+      "tracked_at": "2026-04-12T21:15:55.414154+00:00"
+    },
+    ".claude/hooks/session_handoff.py": {
+      "last_resolved": "11b48a92c4502641efa79f4cf3915bdc8d097a6ed73d2351e25261d7ad6155be",
+      "last_tracked": "11b48a92c4502641efa79f4cf3915bdc8d097a6ed73d2351e25261d7ad6155be",
+      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
+      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
+    },
+    ".claude/hooks/suggest_generic_prompt.py": {
+      "last_resolved": "b32325333219200d17ccb647aca4ecf408c37c2e0b1fbdedf7e698337592518b",
+      "last_tracked": "b32325333219200d17ccb647aca4ecf408c37c2e0b1fbdedf7e698337592518b",
+      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
+      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
+    },
+    ".claude/hooks/tests/test_auto_set_env_test.py": {
+      "last_resolved": "e1476cac3e5c535c17ee8b734ea4c84de388276234d3ff5e90d09a7fce9692f0",
+      "last_tracked": "e1476cac3e5c535c17ee8b734ea4c84de388276234d3ff5e90d09a7fce9692f0",
+      "resolved_at": "2026-04-23T00:07:17.600045+00:00",
+      "tracked_at": "2026-04-22T02:50:42.815513+00:00"
+    },
+    ".claude/hooks/validate_pr_ci_status.py": {
+      "last_resolved": "ff4c0c20785a0a014013388070b9c009632a3da2c15fd4e34c0e44e5b6e62ce9",
+      "last_tracked": "ff4c0c20785a0a014013388070b9c009632a3da2c15fd4e34c0e44e5b6e62ce9",
+      "resolved_at": "2026-04-17T02:37:52.367305+00:00",
+      "tracked_at": "2026-04-17T01:04:35.934020+00:00"
+    },
+    ".claude/hooks/validate_wave_context.py": {
+      "last_resolved": "24938c642f56e8f076f4cc0dfd137219605b83dfe814a92b713b67eece833451",
+      "last_tracked": "24938c642f56e8f076f4cc0dfd137219605b83dfe814a92b713b67eece833451",
+      "resolved_at": "2026-04-12T23:12:56.612546+00:00",
+      "tracked_at": "2026-04-12T21:15:55.663771+00:00"
+    },
+    ".claude/hooks/warn_ghcr_image.py": {
+      "last_resolved": "597ff6cf41a8a7424ac2cd4253244846f9b420c17035714586b355811a56784d",
+      "last_tracked": "597ff6cf41a8a7424ac2cd4253244846f9b420c17035714586b355811a56784d",
+      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
+      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
+    },
+    ".claude/settings.json": {
+      "last_resolved": "d06e2af0692388e99b361c91ea76666e152d40bd6c0c90f9c9fbd4f6e1fc6824",
+      "last_tracked": "d06e2af0692388e99b361c91ea76666e152d40bd6c0c90f9c9fbd4f6e1fc6824",
+      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
+      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
+    },
+    ".claude/skills/handoff/SKILL.md": {
+      "last_resolved": "d68c996a20db5fbc4c5e54f5ab1a75e8c5bad2c03faee13d264b4ffd37f03f6c",
+      "last_tracked": "d68c996a20db5fbc4c5e54f5ab1a75e8c5bad2c03faee13d264b4ffd37f03f6c",
+      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
+      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
+    },
+    ".claude/skills/wave-kickoff/SKILL.md": {
+      "last_resolved": "4a12511cafd3640536ce552fbc0f25b9585c98ec8c3a22411918885270472b70",
+      "last_tracked": "4a12511cafd3640536ce552fbc0f25b9585c98ec8c3a22411918885270472b70",
+      "resolved_at": "2026-04-17T02:56:03.855330+00:00",
+      "tracked_at": "2026-04-17T02:54:35.749176+00:00"
+    },
+    ".claude/skills/wave-retro/SKILL.md": {
+      "last_resolved": "4cb181da87445574175c9aeb268376114faa3b821ad833a0d80df1aab1b431bd",
+      "last_tracked": "4cb181da87445574175c9aeb268376114faa3b821ad833a0d80df1aab1b431bd",
+      "resolved_at": "2026-04-17T02:56:03.855330+00:00",
+      "tracked_at": "2026-04-17T02:53:10.158033+00:00"
+    },
+    ".claude/skills/wave-wrapup/SKILL.md": {
+      "last_resolved": "942ee78e1af0066f6aac71bdcca00793808f6c3f9a04ab729ba0f8cc6ab5e4de",
+      "last_tracked": "942ee78e1af0066f6aac71bdcca00793808f6c3f9a04ab729ba0f8cc6ab5e4de",
+      "resolved_at": "2026-04-11T16:26:02.575946+00:00",
+      "tracked_at": "2026-04-11T16:16:53.008874+00:00"
+    },
+    ".claude/team/charter.md": {
+      "last_resolved": "a79e60476eb72af6689a5af1c3a09e0d5878c67b26ab8f5ab3516ee26ff717d3",
+      "last_tracked": "a79e60476eb72af6689a5af1c3a09e0d5878c67b26ab8f5ab3516ee26ff717d3",
+      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
+      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
+    },
+    ".claude/team/charter/agents.md": {
+      "last_resolved": "dce25c289af21159f90f4c6b15bb7ef638f96a272e3e9b479442ccbfde0dc751",
+      "last_tracked": "dce25c289af21159f90f4c6b15bb7ef638f96a272e3e9b479442ccbfde0dc751",
+      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
+      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     ".claude/team/charter/hooks.md": {
-      "last_tracked": "c428fe52cd1a9b8837d8e00c4d7e5e71491a53baacf7e35ba72b83c58a9892a4",
-      "last_resolved": "c428fe52cd1a9b8837d8e00c4d7e5e71491a53baacf7e35ba72b83c58a9892a4",
-      "tracked_at": "2026-04-17T02:54:04.676509+00:00",
-      "resolved_at": "2026-04-17T02:56:03.855330+00:00"
+      "last_resolved": "518829629de66db1d14abc8d37c32703dfee4bd42ebeb3c651b7afe2946232c7",
+      "last_tracked": "518829629de66db1d14abc8d37c32703dfee4bd42ebeb3c651b7afe2946232c7",
+      "resolved_at": "2026-04-23T00:07:17.600045+00:00",
+      "tracked_at": "2026-04-22T23:03:25.764007+00:00"
+    },
+    ".claude/team/charter/pull-requests.md": {
+      "last_resolved": "f38d6f2f26158d2698aae1859d78738ce4f1ad0d015692f85ab2e1c326910d48",
+      "last_tracked": "f38d6f2f26158d2698aae1859d78738ce4f1ad0d015692f85ab2e1c326910d48",
+      "resolved_at": "2026-04-23T00:07:17.600045+00:00",
+      "tracked_at": "2026-04-22T23:02:38.307846+00:00"
+    },
+    ".claude/team/charter/skills.md": {
+      "last_resolved": "3d17f4b3d18d25767976007ec0d79884c5befa66bf9096c52a0c7b2ba9636078",
+      "last_tracked": "3d17f4b3d18d25767976007ec0d79884c5befa66bf9096c52a0c7b2ba9636078",
+      "resolved_at": "2026-04-23T00:07:17.600045+00:00",
+      "tracked_at": "2026-04-22T23:02:59.573817+00:00"
+    },
+    ".claude/team/feedback_log.md": {
+      "last_resolved": "53a38a78680373a6668c7d29e7057c9151bf1ba516d881e0447944be7cbf8cf8",
+      "last_tracked": "53a38a78680373a6668c7d29e7057c9151bf1ba516d881e0447944be7cbf8cf8",
+      "resolved_at": "2026-04-17T02:56:03.855330+00:00",
+      "tracked_at": "2026-04-17T02:55:49.813670+00:00"
+    },
+    ".gitignore": {
+      "last_resolved": "485dc652a170747795b28d630c593c7c263ef6426b814a325fbb92c407ceea0f",
+      "last_tracked": "485dc652a170747795b28d630c593c7c263ef6426b814a325fbb92c407ceea0f",
+      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
+      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
+    },
+    ".pre-commit-config.yaml": {
+      "last_resolved": "e5cb514b9a22f37b80adb4d74896cef8e9d2768f0f42ae3f3a29001efd3ae615",
+      "last_tracked": "e5cb514b9a22f37b80adb4d74896cef8e9d2768f0f42ae3f3a29001efd3ae615",
+      "resolved_at": "2026-04-23T00:07:17.600045+00:00",
+      "tracked_at": "2026-04-22T02:53:25.065010+00:00"
+    },
+    "CLAUDE.md": {
+      "last_resolved": "fc33f42e4f80a14fad7ec9de07de304bff3b0cfb1e9016ea3b3b3ccbaf493dde",
+      "last_tracked": "fc33f42e4f80a14fad7ec9de07de304bff3b0cfb1e9016ea3b3b3ccbaf493dde",
+      "resolved_at": "2026-04-21T01:14:29.412621+00:00",
+      "tracked_at": "2026-04-19T22:30:10.380074+00:00"
+    },
+    "Makefile": {
+      "last_resolved": "ab83cf7d5b737362e62fe74382f1a56fb36d7610ca6e69369f51b454b980fafe",
+      "last_tracked": "ab83cf7d5b737362e62fe74382f1a56fb36d7610ca6e69369f51b454b980fafe",
+      "resolved_at": "2026-04-23T00:07:17.600045+00:00",
+      "tracked_at": "2026-04-22T02:46:23.568956+00:00"
+    },
+    "ONBOARDING.md": {
+      "last_resolved": "2399db18c2b9c8cc038c3132efee7e39696fdac41c0a58c95ea3cc987f4439e0",
+      "last_tracked": "2399db18c2b9c8cc038c3132efee7e39696fdac41c0a58c95ea3cc987f4439e0",
+      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
+      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
+    },
+    "cross-repo-status.json": {
+      "last_resolved": "5ef6c2502f6fdb47bb190e4ce9edbacd37efdc11ced4f95d432e2eb778f5af1b",
+      "last_tracked": "5ef6c2502f6fdb47bb190e4ce9edbacd37efdc11ced4f95d432e2eb778f5af1b",
+      "resolved_at": "2026-04-19T21:53:15Z",
+      "tracked_at": "2026-04-19T14:08:43.615543+00:00"
+    },
+    "dependencies.yml": {
+      "last_resolved": "f4b53ffd3e1f81e055130ae2f53ff08ba9b5f651782434bbf3ac8b3eab4276e8",
+      "last_tracked": "f4b53ffd3e1f81e055130ae2f53ff08ba9b5f651782434bbf3ac8b3eab4276e8",
+      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
+      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
+    },
+    "noorinalabs-data-acquisition/.claude/team/roster.json": {
+      "last_resolved": "229ce754ddab342a697ba4c130904dfa7d807206af379864dc31e42c24bcf399",
+      "last_tracked": "229ce754ddab342a697ba4c130904dfa7d807206af379864dc31e42c24bcf399",
+      "resolved_at": "2026-04-23T00:07:17.600045+00:00",
+      "tracked_at": "2026-04-22T03:20:31.510218+00:00"
     },
     "noorinalabs-deploy/terraform/backblaze/versions.tf": {
-      "last_tracked": "0d17ce7d5eabc6be771b827411335a629ad539afb2299dda27682311edef8395",
       "last_resolved": "0d17ce7d5eabc6be771b827411335a629ad539afb2299dda27682311edef8395",
-      "tracked_at": "2026-04-18T19:00:37.374688+00:00",
-      "resolved_at": "2026-04-19T14:01:37.639152Z"
+      "last_tracked": "0d17ce7d5eabc6be771b827411335a629ad539afb2299dda27682311edef8395",
+      "resolved_at": "2026-04-19T14:01:37.639152Z",
+      "tracked_at": "2026-04-18T19:00:37.374688+00:00"
+    },
+    "noorinalabs-design-system/.claude/team/roster.json": {
+      "last_resolved": "d328d0cdfcad8b4d39395655b135309a267bfae375a370cbc4decabc0cffea6b",
+      "last_tracked": "d328d0cdfcad8b4d39395655b135309a267bfae375a370cbc4decabc0cffea6b",
+      "resolved_at": "2026-04-23T00:07:17.600045+00:00",
+      "tracked_at": "2026-04-22T03:19:27.169224+00:00"
+    },
+    "ontology/checksums.json": {
+      "last_resolved": "b53a9c08a50719237396f9c1ae29540b174a1670682080359e23dffa4b8cbd94",
+      "last_tracked": "b53a9c08a50719237396f9c1ae29540b174a1670682080359e23dffa4b8cbd94",
+      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
+      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
+    },
+    "ontology/conventions.md": {
+      "last_resolved": "9307179304689d3ddde7e91f76999674b3f8b6b917adffc2d4d0f4b97021a4d6",
+      "last_tracked": "9307179304689d3ddde7e91f76999674b3f8b6b917adffc2d4d0f4b97021a4d6",
+      "resolved_at": "2026-04-23T00:07:17.600045+00:00",
+      "tracked_at": "2026-04-23T00:07:17.600045+00:00"
+    },
+    "ontology/domain.yaml": {
+      "last_resolved": "6fedad509f80b9570d0385fb5759e861d8b6f7b219ecc425b8dd472173ca536c",
+      "last_tracked": "6fedad509f80b9570d0385fb5759e861d8b6f7b219ecc425b8dd472173ca536c",
+      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
+      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
+    },
+    "ontology/repos/deploy.yaml": {
+      "last_resolved": "54e4ea679b5046cbffcbdb47f857ac4af7507af987376684c47dc12077a4ef6b",
+      "last_tracked": "54e4ea679b5046cbffcbdb47f857ac4af7507af987376684c47dc12077a4ef6b",
+      "resolved_at": "2026-04-19T21:53:15Z",
+      "tracked_at": "2026-04-19T21:53:09.719511+00:00"
+    },
+    "ontology/repos/design-system.yaml": {
+      "last_resolved": "64f1eb7a16e3c9284f92d018eed4ce2a0da2aa761f60353c98117f3b2319a1a8",
+      "last_tracked": "64f1eb7a16e3c9284f92d018eed4ce2a0da2aa761f60353c98117f3b2319a1a8",
+      "resolved_at": "2026-04-11T16:26:02.575946+00:00",
+      "tracked_at": "2026-04-11T16:26:02.575946+00:00"
+    },
+    "ontology/repos/ingestion.yaml": {
+      "last_resolved": "368917f91938272e9f8002534ddf7301f02679e0987ffb06fe6022429f0ca0b6",
+      "last_tracked": "368917f91938272e9f8002534ddf7301f02679e0987ffb06fe6022429f0ca0b6",
+      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
+      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
+    },
+    "ontology/repos/isnad-graph.yaml": {
+      "last_resolved": "175ebd6c739a9e336fc3d04a8b549ea0ff5cb8a5c58a1982e33ffe5e2a838c14",
+      "last_tracked": "175ebd6c739a9e336fc3d04a8b549ea0ff5cb8a5c58a1982e33ffe5e2a838c14",
+      "resolved_at": "2026-04-11T16:26:02.575946+00:00",
+      "tracked_at": "2026-04-11T16:26:02.575946+00:00"
+    },
+    "ontology/repos/isnad-ingest-platform.yaml": {
+      "last_resolved": "b8ca5cc2f951054d287dd600c4eab104311e56dd4987bece91bb7e697855e27c",
+      "last_tracked": "b8ca5cc2f951054d287dd600c4eab104311e56dd4987bece91bb7e697855e27c",
+      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
+      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
+    },
+    "ontology/repos/landing-page.yaml": {
+      "last_resolved": "e16ba4b3b13528559b1e11ef8ce5d4ac3e9a0827c697bc02db921465bfbf5b7a",
+      "last_tracked": "e16ba4b3b13528559b1e11ef8ce5d4ac3e9a0827c697bc02db921465bfbf5b7a",
+      "resolved_at": "2026-04-11T16:26:02.575946+00:00",
+      "tracked_at": "2026-04-11T16:26:02.575946+00:00"
+    },
+    "ontology/repos/user-service.yaml": {
+      "last_resolved": "1d5a8c1687a32fcf3ef028ed377db8cf436ed2fc1adaeed99d4a312af8e825f8",
+      "last_tracked": "1d5a8c1687a32fcf3ef028ed377db8cf436ed2fc1adaeed99d4a312af8e825f8",
+      "resolved_at": "2026-04-12T03:46:50.471864+00:00",
+      "tracked_at": "2026-04-12T03:46:50.471864+00:00"
+    },
+    "ontology/services.yaml": {
+      "last_resolved": "a587c68c10694f2c642e93e3fff799bc5398a7579721dce71fcdac983de985ef",
+      "last_tracked": "a587c68c10694f2c642e93e3fff799bc5398a7579721dce71fcdac983de985ef",
+      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
+      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     }
   },
   "last_cleanup": {
     "at": "2026-04-22T01:18:31.242494+00:00",
-    "noise_removed": 290,
-    "issue": "noorinalabs-main#171"
-  }
+    "issue": "noorinalabs-main#171",
+    "noise_removed": 290
+  },
+  "version": 1
 }

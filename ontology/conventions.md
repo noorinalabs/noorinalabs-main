@@ -85,14 +85,16 @@ Updated by `/ontology-rebuild`. Manual edits require `checksums.json` update.
 
 ### PR workflow
 - Minimum 2 reviewers per PR (comment-based, not API reviews)
-- Charter-format review comments (Requestor/Requestee/RequestOrReplied)
+- Charter-format review comments (Requestor/Requestee/RequestOrReplied/TechDebt)
 - Must-fix items block merge; tech-debt items get GitHub Issues
 - CI must be green before merge (enforced by hooks)
+- Cross-contract PRs (shared Kafka topics, Parquet schemas, wire formats): first PR opened must include a `## Contract` section; subsequent PRs link to it and document divergence (P2W9 retro, 2026-04-22)
 
 ### Wave lifecycle
 - `/wave-start` → `/wave-kickoff` → work → `/wave-wrapup` → `/wave-retro`
 - Wrapup includes: PR merge sequencing, ontology rebuild, Annunaki attack, memory audit
 - Retro includes: ontology staleness check, per-engineer assessments, trust matrix updates
+- **Open-item audit before "concluded" claims** (charter `skills.md`): every wave-wrapup / handoff / retro that claims a wave or workstream is complete MUST first run the cross-repo open-item count; zero open or an explicit carry-forward list is required. Promotion-target: hook.
 
 ### Session continuity
 - **Auto-handoff** (`session_handoff.py` Stop hook): Fires on every session exit (throttled to 5 min). Captures git state, open PRs/issues, wave status, ontology staleness. Writes to project memory for next session pickup.
@@ -117,6 +119,9 @@ Updated by `/ontology-rebuild`. Manual edits require `checksums.json` update.
 | `validate_wave_context.py` | PreToolUse (Agent) | Warn if agent spawned without wave context or ontology context in prompt |
 | `block_shutdown_without_retro.py` | PreToolUse (SendMessage) | Block agent shutdown before retro |
 | `auto_add_issue_to_board.py` | PostToolUse (Bash) | Auto-add new issues to project board |
+| `validate_pr_ci_status.py` | PreToolUse (Bash) | Block `gh pr merge` when any CI check is failing/cancelled/timed-out |
+| `enforce_librarian_consulted.py` | PreToolUse (Edit/Write/NotebookEdit) | Block edits unless `/ontology-librarian` consulted earlier in session |
+| `no_worktree_self_delete.py` | PreToolUse (Bash) | Block `git worktree remove` when cwd is inside target worktree |
 | `annunaki_log.py` | Utility (imported by hooks) | Shared logging for PreToolUse block events to Annunaki error log |
 | `annunaki_monitor.py` | PostToolUse (Bash) | Capture failed commands to error log |
 | `ontology_tracker.py` | PostToolUse (Edit/Write) | Track file checksums for ontology changes |
