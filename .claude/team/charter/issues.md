@@ -24,6 +24,33 @@ Reviews may include: dependency concerns, timeline conflicts, release impact, st
 
 Only after both conditions are met does the Program Director signal that implementation may begin. This ensures the entire initiative is planned, visible, and vetted before any work starts.
 
+## Wave Planning — Project Board Is Authoritative <!-- promotion-target: skill -->
+
+Wave and phase planning MUST begin with the full project board as the candidate pool, not with the subset of issues carrying a `p{N}-wave-{M}` label or listed in a meta-issue body.
+
+1. **Source of truth:** project 2 (`gh project item-list 2 --owner noorinalabs`). Every open issue across all repos should appear there.
+2. **Labels are post-scoping tags**, not pre-scoping filters. When a wave is planned, in-scope issues get labeled; the labels document decisions but do not bound which issues could have been considered.
+3. **Meta-issue bodies document declared scope** and carry the wave narrative, but they do not replace the board audit.
+
+**Pre-wave drift audit:** before a wave-scoping pass, verify every repo's open issues are on the board. Hook 13 (`auto_add_issue_to_board.py`) auto-adds issues created via our in-session `gh issue create` calls, but externally created issues (manual UI creation, bot PRs, cross-repo-dispatch-triggered issues) slip past. Run:
+
+```bash
+for repo in noorinalabs-main noorinalabs-isnad-graph noorinalabs-user-service \
+           noorinalabs-deploy noorinalabs-design-system noorinalabs-landing-page \
+           noorinalabs-data-acquisition noorinalabs-isnad-ingest-platform; do
+  gh issue list --repo "noorinalabs/$repo" --state open --limit 500 --json url --jq '.[].url'
+done | sort -u > /tmp/all_open.txt
+
+gh project item-list 2 --owner noorinalabs --format json --limit 1000 \
+  --jq '.items[] | select(.content.url) | .content.url' | sort -u > /tmp/board_urls.txt
+
+comm -23 /tmp/all_open.txt /tmp/board_urls.txt
+```
+
+Any URL printed by the final `comm` is an open issue missing from the board — add it via `gh project item-add 2 --owner noorinalabs --url <url>` before scoping.
+
+**Why:** On 2026-04-23, running this check during P2W10 execution revealed **72 of 193 open issues (37%) were missing from the board**. Those issues were invisible to any wave-planning pass that read labels or meta-issue bodies. Planning from labels alone systematically excludes work the team forgot to triage.
+
 ## Pre-Wave Checklist <!-- promotion-target: skill -->
 Before any wave begins, the Manager must verify:
 

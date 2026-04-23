@@ -380,9 +380,9 @@
       "resolved_at": ""
     },
     ".claude/drafts/spawn_linh_0815.md": {
-      "last_tracked": "8e959a3bfac26d4e9e8912b2ba7831d4bce74ed6542996f294ab277969c855ed",
+      "last_tracked": "c26dc265b92501661cb1c53f4d4c0dbc7265c4cf935d89bc42cedcbf021f0da7",
       "last_resolved": "",
-      "tracked_at": "2026-04-23T03:05:57.188148+00:00",
+      "tracked_at": "2026-04-23T03:27:55.527694+00:00",
       "resolved_at": ""
     },
     ".claude/drafts/spawn_anya_0063.md": {
@@ -395,6 +395,60 @@
       "last_tracked": "6bbd49b06c4f959c7b8e5ed98b608347b2d7d22990e6b9bd3535946f53140eaf",
       "last_resolved": "",
       "tracked_at": "2026-04-23T03:07:58.485892+00:00",
+      "resolved_at": ""
+    },
+    "noorinalabs-deploy/.github/workflows/promote.yml": {
+      "last_tracked": "f6d208f6ee0dc662156cedf2e74bba9095b583e6f909eca1945c2c162060d88a",
+      "last_resolved": "",
+      "tracked_at": "2026-04-23T03:24:10.651190+00:00",
+      "resolved_at": ""
+    },
+    "noorinalabs-deploy/.github/workflows/deploy-stg.yml": {
+      "last_tracked": "78143ff6347a3e8363455d945b42e1f97a64d5e4a17ab2ad73ef8302b74ee09f",
+      "last_resolved": "",
+      "tracked_at": "2026-04-23T03:24:59.323368+00:00",
+      "resolved_at": ""
+    },
+    "noorinalabs-deploy/.github/workflows/deploy-prod.yml": {
+      "last_tracked": "fe6058212cc53d5e1ff35bfbe3eac938106700053c38aeedd9e845aa89776b94",
+      "last_resolved": "",
+      "tracked_at": "2026-04-23T03:25:33.029878+00:00",
+      "resolved_at": ""
+    },
+    "noorinalabs-deploy/.github/workflows/image-tag-invariants.yml": {
+      "last_tracked": "1ebb348f6b7de6964ad3767ec7efd633697c5d01a0799305cccc47357f75272c",
+      "last_resolved": "",
+      "tracked_at": "2026-04-23T03:25:56.773576+00:00",
+      "resolved_at": ""
+    },
+    "noorinalabs-deploy/integration-tests/scripts/check_tag_invariants.py": {
+      "last_tracked": "55e2b4011115a09ae437115da78fc46f2b7454277c066445eb8510867ca310dc",
+      "last_resolved": "",
+      "tracked_at": "2026-04-23T03:26:31.825121+00:00",
+      "resolved_at": ""
+    },
+    "noorinalabs-deploy/.github/workflows/deploy-isnad-graph.yml": {
+      "last_tracked": "b77ae549407f1d32156f419f97646c8944fa8341c24252bd4d98ee9de6b8cbe4",
+      "last_resolved": "",
+      "tracked_at": "2026-04-23T03:26:57.338681+00:00",
+      "resolved_at": ""
+    },
+    "noorinalabs-deploy/.github/workflows/deploy-landing-page.yml": {
+      "last_tracked": "184c3eebec003165c0ad998a69c4936e287525664604d5f2c4993289acc7d1df",
+      "last_resolved": "",
+      "tracked_at": "2026-04-23T03:27:04.436590+00:00",
+      "resolved_at": ""
+    },
+    ".claude/team/charter/issues.md": {
+      "last_tracked": "60744ea8009688aa75481b9d908968fe3fc8162c597c04889635dc603140da95",
+      "last_resolved": "",
+      "tracked_at": "2026-04-23T03:27:45.739038+00:00",
+      "resolved_at": ""
+    },
+    ".claude/skills/plan-phase/SKILL.md": {
+      "last_tracked": "ebfb84aa63b418b2026bc04428f584a002aa0b248659e8416d086d663c8e14a4",
+      "last_resolved": "",
+      "tracked_at": "2026-04-23T03:27:56.046417+00:00",
       "resolved_at": ""
     }
   },
