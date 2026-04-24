@@ -11,6 +11,7 @@
 ## 0. Constraints & methodology
 
 - **No secret values were read.** Only secret *names* are accessible via `gh api repos/<repo>/actions/secrets`. All "shared identical?" judgements below are **inferred from naming convention + workflow consumers**, never verified against ciphertext. Any cell marked `inferred-not-verified` MUST be re-confirmed by the owner before the per-repo copy is deleted.
+  - *Runbook-execution implication:* because GitHub never returns ciphertext, migrating a per-repo secret to org/env scope MUST source its value from the **canonical upstream** (Hetzner/Backblaze/OAuth consoles, VPS env files, keypair custody), NOT from a rehydration of the old per-repo ciphertext. This is codified as the mandatory § 3.0 value-preservation protocol — do not start § 3.1 without completing § 3.0.
 - **Org-level secret enumeration was unavailable** — `gh api orgs/noorinalabs/actions/secrets` returns HTTP 403 (`admin:org` scope not granted to the audit account). Owner SHOULD run that command from an org-admin shell and append the result to § 1.b before executing § 3.
 - All commands in § 3 are dry-run-safe to reason about but **mutating**. They were generated, never executed, by the audit pass.
 - Per-environment secrets (`stg`/`prod` split) refer to GH Environments already provisioned by [noorinalabs-deploy#155](https://github.com/noorinalabs/noorinalabs-deploy/pull/155) (`promote.yml` precedent).
@@ -31,7 +32,7 @@ Captured 2026-04-24 via `gh api repos/noorinalabs/<repo>/actions/secrets --pagin
 | noorinalabs-landing-page | 3 | `DEPLOY_SSH_PRIVATE_KEY`, `GH_PACKAGES_TOKEN`, `GITLEAKS_LICENSE` |
 | noorinalabs-isnad-graph | 21 | `AUTH_GITHUB_CLIENT_ID`, `AUTH_GITHUB_CLIENT_SECRET`, `AUTH_GOOGLE_CLIENT_ID`, `AUTH_GOOGLE_CLIENT_SECRET`, `B2_APP_KEY`, `B2_BUCKET`, `B2_ENDPOINT`, `B2_KEY_ID`, `DEPLOY_REPO_PAT`, `DEPLOY_SSH_PRIVATE_KEY`, `DEPLOY_VPS_IP`, `GH_PACKAGES_TOKEN`, `GITLEAKS_LICENSE`, `GRAFANA_ADMIN_PASSWORD`, `HCLOUD_TOKEN`, `NEO4J_PASSWORD`, `NEO4J_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`, `POSTGRES_USER`, `REDIS_PASSWORD` |
 | noorinalabs-data-acquisition | 0 | *(none — pre-CI)* |
-| noorinalabs-isnad-ingest-platform | 0 | *(none — planned P2W8, no CI yet)* |
+| noorinalabs-isnad-ingest-platform | 0 | *(none — no CI yet; wave unscheduled)* |
 | noorinalabs-design-system | 0 | *(none — uses `secrets.GITHUB_TOKEN` for npm publish)* |
 
 **Totals:** 8 repos, 57 secret-slots populated, 35 unique secret names.
@@ -59,7 +60,7 @@ For each unique secret name: where it currently lives, whether the value is like
 | `AUTH_GITHUB_CLIENT_SECRET` | deploy, isnad-graph (2) | **Yes** (paired with above) | rare | Same as above. |
 | `AUTH_GOOGLE_CLIENT_ID` | deploy, isnad-graph (2) | **Yes** (same OAuth Google App) | rare | Same scope as `AUTH_GITHUB_CLIENT_ID`. |
 | `AUTH_GOOGLE_CLIENT_SECRET` | deploy, isnad-graph (2) | **Yes** (paired) | rare | Same as above. |
-| `B2_APP_KEY` | deploy, isnad-graph (2) | likely (same Backblaze account) | quarterly | **Org-scope to {deploy, isnad-graph}**. May expand to {data-acquisition, ingest-platform} once those gain CI (P2W8). |
+| `B2_APP_KEY` | deploy, isnad-graph (2) | likely (same Backblaze account) | quarterly | **Org-scope to {deploy, isnad-graph}**. May expand to {data-acquisition, ingest-platform} once those gain CI (currently unscheduled). |
 | `B2_BUCKET` | deploy, isnad-graph (2) | likely | static | Same as above. |
 | `B2_ENDPOINT` | deploy, isnad-graph (2) | likely | static | Same as above. |
 | `B2_KEY_ID` | deploy, isnad-graph (2) | likely | quarterly | Same as above. |
@@ -84,7 +85,7 @@ For each unique secret name: where it currently lives, whether the value is like
 | `DEPLOY_VPS_IP` | isnad-graph (1) | n/a | per-rebuild | **Env-scope (stg/prod)** — different VPS per env per [P2W10 per-env Hetzner](https://github.com/noorinalabs/noorinalabs-main/issues/141). Move to deploy under env-scope; delete from isnad-graph. |
 | `TF_STATE_B2_APP_KEY` | deploy (1) | n/a | quarterly | Repo-scope (Terraform state credentials only consumed by deploy's `terraform.yml`). |
 | `TF_STATE_B2_KEY_ID` | deploy (1) | n/a | quarterly | Repo-scope. |
-| `PIPELINE_B2_BUCKET` | deploy (1) | n/a | static | Repo-scope today; **expand to org-scope {deploy, data-acquisition, ingest-platform}** once those repos gain CI (P2W8). |
+| `PIPELINE_B2_BUCKET` | deploy (1) | n/a | static | Repo-scope today; **expand to org-scope {deploy, data-acquisition, ingest-platform}** once those repos gain CI (currently unscheduled). |
 | `PIPELINE_B2_ENDPOINT` | deploy (1) | n/a | static | Same. |
 | `PIPELINE_B2_KEY` | deploy (1) | n/a | quarterly | Same. |
 | `PIPELINE_B2_KEY_ID` | deploy (1) | n/a | quarterly | Same. |
@@ -100,7 +101,7 @@ For each unique secret name: where it currently lives, whether the value is like
 | **B. Org-scope, selected repos** | 2+ repos clearly need same value | **13** | `DEPLOY_REPO_PAT`, `DEPLOY_SSH_PRIVATE_KEY` (transitional), `AUTH_GITHUB_CLIENT_ID`, `AUTH_GITHUB_CLIENT_SECRET`, `AUTH_GOOGLE_CLIENT_ID`, `AUTH_GOOGLE_CLIENT_SECRET`, `B2_APP_KEY`, `B2_BUCKET`, `B2_ENDPOINT`, `B2_KEY_ID`, `HCLOUD_TOKEN`, `GH_PACKAGES_TOKEN`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` (14 incl. transitional SSH key) |
 | **C. Environment-scope** | differs per env → use existing GH Environments `staging`/`production` (deploy#155) | **15** | `POSTGRES_DB`, `POSTGRES_PASSWORD`, `POSTGRES_USER`, `USER_POSTGRES_DB`, `USER_POSTGRES_PASSWORD`, `USER_POSTGRES_USER`, `REDIS_PASSWORD`, `USER_REDIS_PASSWORD`, `NEO4J_PASSWORD`, `NEO4J_USER`, `GRAFANA_ADMIN_PASSWORD`, `KAFKA_CLUSTER_ID`, `KAFKA_UI_USER`, `KAFKA_UI_PASSWORD`, `DEPLOY_VPS_IP`, `DEPLOY_SSH_PRIVATE_KEY` (post-transitional, see Tier B) |
 | **D. Repo-scope only** | single consumer, no overlap, no env-split | **2** | `TF_STATE_B2_APP_KEY`, `TF_STATE_B2_KEY_ID` (deploy-only) |
-| **E. Pending repo onboarding** | will become org/env scope when consumer repos ship CI | **5** | `PIPELINE_B2_BUCKET`, `PIPELINE_B2_ENDPOINT`, `PIPELINE_B2_KEY`, `PIPELINE_B2_KEY_ID`, `PIPELINE_B2_REGION` (revisit P2W8 when data-acquisition + ingest-platform gain CI) |
+| **E. Pending repo onboarding** | will become org/env scope when consumer repos ship CI | **5** | `PIPELINE_B2_BUCKET`, `PIPELINE_B2_ENDPOINT`, `PIPELINE_B2_KEY`, `PIPELINE_B2_KEY_ID`, `PIPELINE_B2_REGION` (revisit when `data-acquisition` + `ingest-platform` gain CI — currently unscheduled; track under main#141 successor meta) |
 
 **Total recommended migrations (Tiers A + B + C):** 29 secret slots → 14 unique org-level secrets (A+B) + 15 env-scoped relocations (C).
 
@@ -114,12 +115,87 @@ For each unique secret name: where it currently lives, whether the value is like
 >
 > **Post-flight per migration:** trigger one workflow in each affected repo (push a no-op commit or `gh workflow run`) and verify the secret resolves. Note the verification result inline in the runbook before deleting the next batch.
 
+### 3.0. Value-preservation protocol (MANDATORY — execute before any `gh secret set`)
+
+**Why this exists.** The GitHub Actions Secrets API never returns ciphertext: once a per-repo secret is deleted, its value is unrecoverable. If the org-scoped replacement drifts from the original by a single character, post-delete workflows fail at runtime with no recovery path short of regenerating upstream credentials (JWT keypair reissue, OAuth app re-consent, Hetzner token rotation, etc.). Every step in § 3 that runs `gh secret set` MUST source its value from this staging tree, NOT from "what I think was in the old repo-scope secret."
+
+#### 3.0.a. Identify canonical upstream source per secret class
+
+Each secret's authoritative source lives OUTSIDE GitHub. Before any `set-org` / `set --env` call, fetch the current value from the upstream source into the staging tree (§ 3.0.b).
+
+| Secret class | Canonical upstream source |
+|---|---|
+| `DEPLOY_REPO_PAT` | GitHub → Developer Settings → Personal access tokens (classic or fine-grained); if expired/unknown, regenerate and rotate downstream — do NOT attempt to recover. |
+| `GITLEAKS_LICENSE` | Gitleaks vendor email / license portal for `noorinalabs` org seat. |
+| `DEPLOY_SSH_PRIVATE_KEY` | VPS operator's local filesystem — `TODO(santiago):` confirm canonical path (owner's workstation at `~/.ssh/noorinalabs_deploy` vs. a keypair stored elsewhere). The public half lives on the Hetzner VPS under `~/.ssh/authorized_keys` for the `deploy` user. |
+| `AUTH_GITHUB_CLIENT_ID` / `AUTH_GITHUB_CLIENT_SECRET` | GitHub → Organization settings → Developer settings → OAuth Apps → (the noorinalabs OAuth app). Client secret can be regenerated from that console; regenerating invalidates the current secret — rotate downstream immediately. |
+| `AUTH_GOOGLE_CLIENT_ID` / `AUTH_GOOGLE_CLIENT_SECRET` | Google Cloud Console → APIs & Services → Credentials → (OAuth 2.0 Client IDs for noorinalabs). Same regenerate-and-rotate semantics as GitHub OAuth. |
+| `B2_APP_KEY` / `B2_KEY_ID` | Backblaze B2 console → App Keys. Value is shown once at creation — if lost, create a new key and retire the old one. |
+| `B2_BUCKET` / `B2_ENDPOINT` | Backblaze B2 console → Buckets (bucket name + S3-compatible endpoint URL; not secret per se, but staged alongside for runbook completeness). |
+| `HCLOUD_TOKEN` | Hetzner Cloud Console → (noorinalabs project) → Security → API tokens. Value shown once at creation — regenerate if lost. |
+| `GH_PACKAGES_TOKEN` | GitHub → Developer Settings → Personal access tokens with `read:packages` / `write:packages` for the `@noorinalabs` npm scope. Regenerate if unknown. |
+| `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` | Keypair on owner's workstation / VPS — `TODO(santiago):` confirm canonical custodial path. If not recoverable, regenerate via `openssl` and re-issue all outstanding JWTs (breaking change — plan a user session-reset window). |
+| `POSTGRES_*`, `USER_POSTGRES_*`, `REDIS_*`, `USER_REDIS_*`, `NEO4J_*` (passwords/users/dbs) | Current VPS filesystem — `TODO(santiago):` confirm canonical path for the rendered env files (e.g., `/opt/noorinalabs/stg/.env` on the staging VPS). These can be `ssh`-copied to the staging tree with a `cat` over the pipe — do NOT scp the whole env file into the staging tree. |
+| `GRAFANA_ADMIN_PASSWORD` | Same as Postgres — rendered env file on the VPS. |
+| `KAFKA_CLUSTER_ID` | Derived at cluster bootstrap — documented in `noorinalabs-deploy` Terraform state or VPS env file. `TODO(santiago):` confirm. |
+| `KAFKA_UI_USER` / `KAFKA_UI_PASSWORD` | Rendered env file on VPS (Kafka-UI container config). |
+| `DEPLOY_VPS_IP` | Hetzner Cloud Console — current VPS public IPv4. Not secret (public), but staged for consistency. |
+| `TF_STATE_B2_APP_KEY` / `TF_STATE_B2_KEY_ID` | Backblaze B2 console → App Keys (dedicated key for Terraform state bucket). |
+| `PIPELINE_B2_*` | Tier-E, deferred — see § 3.11. No staging needed this migration cycle. |
+
+If any row above resolves to "unknown / unrecoverable," the correct move is **regenerate upstream first, complete the § 3 migration with the new value, and rotate downstream consumers in the same window** — never guess-and-paste into `gh secret set --org`.
+
+#### 3.0.b. Stage values into a local-only tree
+
+```bash
+# One-time setup. All paths are on the owner's workstation, NOT committed anywhere.
+STAGING="$HOME/.noorinalabs-secrets-migration-2026-04-24"
+mkdir -p -m 700 "$STAGING"/{org,env/staging,env/production}
+
+# Confirm the parent dir is gitignored (should resolve to a path OUTSIDE any repo).
+case "$STAGING" in
+  "$HOME/.noorinalabs-secrets-migration-"*) : ok ;;
+  *) echo "ABORT: staging tree must live outside any repo worktree"; exit 1 ;;
+esac
+
+# File-per-secret layout:
+#   $STAGING/org/DEPLOY_REPO_PAT          — org-scoped value (Tier A/B)
+#   $STAGING/env/staging/POSTGRES_PASSWORD — env-scoped value (Tier C, staging)
+#   $STAGING/env/production/POSTGRES_PASSWORD — env-scoped value (Tier C, production)
+#
+# For each secret named in § 3.0.a:
+#   1. Fetch the value from its canonical upstream source (console, keypair file, VPS env file).
+#   2. Write it to the appropriate $STAGING/... path with `chmod 600`.
+#   3. Do NOT print the value to terminal history — use `pbpaste > file` (macOS) or
+#      `wl-paste > file` (Linux/Wayland), or a console "copy to clipboard" → paste-into-editor flow.
+
+# Example for one secret:
+#   cat > "$STAGING/org/DEPLOY_REPO_PAT" <<'EOF'
+#   <paste-pat-value-here>
+#   EOF
+#   chmod 600 "$STAGING/org/DEPLOY_REPO_PAT"
+```
+
+#### 3.0.c. Cleanup (MANDATORY — after § 3 runbook completes)
+
+```bash
+# Secure delete all staged secret files. Run ONLY after all § 3.x verifications pass.
+find "$STAGING" -type f -exec shred -u -n 3 {} \;   # Linux
+# find "$STAGING" -type f -exec rm -P {} \;        # macOS equivalent
+rmdir "$STAGING"/org "$STAGING"/env/staging "$STAGING"/env/production "$STAGING"/env "$STAGING"
+```
+
+**Every `gh secret set` call in § 3.1–§ 3.9 below MUST source its value from this staging tree via `--body "$(cat ...)"` or stdin-pipe (`cat ... | gh secret set ... -`).** The literal `<value>` placeholders below are NOT to be typed into an interactive prompt.
+
 ### 3.1. `DEPLOY_REPO_PAT` — closes US#84 (HIGHEST priority)
+
+> Value source: `$STAGING/org/DEPLOY_REPO_PAT` (staged per § 3.0.b from GitHub → Developer Settings → PATs).
 
 ```bash
 # 1. Set at org-level, scoped to the 3 repos that need cross-repo dispatch
 gh secret set DEPLOY_REPO_PAT --org noorinalabs --visibility selected \
-  --repos noorinalabs-isnad-graph,noorinalabs-user-service,noorinalabs-landing-page
+  --repos noorinalabs-isnad-graph,noorinalabs-user-service,noorinalabs-landing-page \
+  --body "$(cat "$STAGING/org/DEPLOY_REPO_PAT")"
 
 # 2. Verify org-level placement
 gh api orgs/noorinalabs/actions/secrets/DEPLOY_REPO_PAT \
@@ -145,9 +221,12 @@ gh issue close 84 --repo noorinalabs/noorinalabs-user-service \
 
 ### 3.2. `GITLEAKS_LICENSE` — vendor license, all-org
 
+> Value source: `$STAGING/org/GITLEAKS_LICENSE` (staged per § 3.0.b from the Gitleaks vendor license portal).
+
 ```bash
 # Org-scope to ALL repos (visibility=all is correct here — license is org-wide)
-gh secret set GITLEAKS_LICENSE --org noorinalabs --visibility all
+gh secret set GITLEAKS_LICENSE --org noorinalabs --visibility all \
+  --body "$(cat "$STAGING/org/GITLEAKS_LICENSE")"
 
 # Delete per-repo copies
 for repo in noorinalabs-main noorinalabs-deploy noorinalabs-landing-page noorinalabs-isnad-graph; do
@@ -160,14 +239,18 @@ gh api orgs/noorinalabs/actions/secrets/GITLEAKS_LICENSE --jq '{name, visibility
 
 ### 3.3. OAuth credentials — `AUTH_{GITHUB,GOOGLE}_CLIENT_{ID,SECRET}` (4 secrets)
 
+> Value sources: `$STAGING/org/AUTH_*` (staged per § 3.0.b from GitHub OAuth App console + Google Cloud Console → Credentials).
+
 ```bash
 for SECRET in AUTH_GITHUB_CLIENT_ID AUTH_GITHUB_CLIENT_SECRET \
               AUTH_GOOGLE_CLIENT_ID AUTH_GOOGLE_CLIENT_SECRET; do
   gh secret set "$SECRET" --org noorinalabs --visibility selected \
-    --repos noorinalabs-deploy,noorinalabs-isnad-graph,noorinalabs-user-service
+    --repos noorinalabs-deploy,noorinalabs-isnad-graph,noorinalabs-user-service \
+    --body "$(cat "$STAGING/org/$SECRET")"
 done
 
-# Trigger one workflow per consumer repo, verify resolution, then:
+# Trigger one workflow per consumer repo (`gh workflow run` + `gh run watch`),
+# verify resolution, then:
 for SECRET in AUTH_GITHUB_CLIENT_ID AUTH_GITHUB_CLIENT_SECRET \
               AUTH_GOOGLE_CLIENT_ID AUTH_GOOGLE_CLIENT_SECRET; do
   gh secret delete "$SECRET" --repo noorinalabs/noorinalabs-deploy
@@ -177,10 +260,13 @@ done
 
 ### 3.4. JWT keypair — `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`
 
+> Value sources: `$STAGING/org/JWT_PRIVATE_KEY` and `$STAGING/org/JWT_PUBLIC_KEY` (staged per § 3.0.b from canonical keypair custody — see § 3.0.a `TODO(santiago):`). If either value is unrecoverable, regenerate the keypair upstream and plan the JWT re-issue window BEFORE running this section.
+
 ```bash
 for SECRET in JWT_PRIVATE_KEY JWT_PUBLIC_KEY; do
   gh secret set "$SECRET" --org noorinalabs --visibility selected \
-    --repos noorinalabs-deploy,noorinalabs-user-service,noorinalabs-isnad-graph
+    --repos noorinalabs-deploy,noorinalabs-user-service,noorinalabs-isnad-graph \
+    --body "$(cat "$STAGING/org/$SECRET")"
 done
 
 # Verify before deleting deploy's copy — deploy injects this into env files
@@ -193,10 +279,13 @@ done
 
 ### 3.5. Backblaze cluster creds — `B2_*` (4 secrets)
 
+> Value sources: `$STAGING/org/B2_*` (staged per § 3.0.b from Backblaze B2 console → App Keys + Buckets). If `B2_APP_KEY` is unrecoverable, create a new app key and retire the old one.
+
 ```bash
 for SECRET in B2_APP_KEY B2_BUCKET B2_ENDPOINT B2_KEY_ID; do
   gh secret set "$SECRET" --org noorinalabs --visibility selected \
-    --repos noorinalabs-deploy,noorinalabs-isnad-graph
+    --repos noorinalabs-deploy,noorinalabs-isnad-graph \
+    --body "$(cat "$STAGING/org/$SECRET")"
 done
 
 for SECRET in B2_APP_KEY B2_BUCKET B2_ENDPOINT B2_KEY_ID; do
@@ -207,9 +296,12 @@ done
 
 ### 3.6. `HCLOUD_TOKEN` — Hetzner Cloud API token
 
+> Value source: `$STAGING/org/HCLOUD_TOKEN` (staged per § 3.0.b from Hetzner Cloud Console → Security → API tokens). If unrecoverable, regenerate in-console and expect existing tokens to be revoked.
+
 ```bash
 gh secret set HCLOUD_TOKEN --org noorinalabs --visibility selected \
-  --repos noorinalabs-deploy,noorinalabs-isnad-graph
+  --repos noorinalabs-deploy,noorinalabs-isnad-graph \
+  --body "$(cat "$STAGING/org/HCLOUD_TOKEN")"
 
 gh secret delete HCLOUD_TOKEN --repo noorinalabs/noorinalabs-deploy
 gh secret delete HCLOUD_TOKEN --repo noorinalabs/noorinalabs-isnad-graph
@@ -217,9 +309,12 @@ gh secret delete HCLOUD_TOKEN --repo noorinalabs/noorinalabs-isnad-graph
 
 ### 3.7. `GH_PACKAGES_TOKEN` — `@noorinalabs` npm registry
 
+> Value source: `$STAGING/org/GH_PACKAGES_TOKEN` (staged per § 3.0.b from GitHub → Developer Settings → PATs with `read:packages` / `write:packages` scope).
+
 ```bash
 gh secret set GH_PACKAGES_TOKEN --org noorinalabs --visibility selected \
-  --repos noorinalabs-landing-page,noorinalabs-isnad-graph,noorinalabs-design-system,noorinalabs-user-service
+  --repos noorinalabs-landing-page,noorinalabs-isnad-graph,noorinalabs-design-system,noorinalabs-user-service \
+  --body "$(cat "$STAGING/org/GH_PACKAGES_TOKEN")"
 
 gh secret delete GH_PACKAGES_TOKEN --repo noorinalabs/noorinalabs-landing-page
 gh secret delete GH_PACKAGES_TOKEN --repo noorinalabs/noorinalabs-isnad-graph
@@ -227,11 +322,16 @@ gh secret delete GH_PACKAGES_TOKEN --repo noorinalabs/noorinalabs-isnad-graph
 
 ### 3.8. `DEPLOY_SSH_PRIVATE_KEY` — TWO-STAGE migration
 
+> Value sources:
+> - Stage 1 (org-scope transitional): `$STAGING/org/DEPLOY_SSH_PRIVATE_KEY` — current shared keypair per § 3.0.a `TODO(santiago):`.
+> - Stage 2 (env-scope): `$STAGING/env/staging/DEPLOY_SSH_PRIVATE_KEY` and `$STAGING/env/production/DEPLOY_SSH_PRIVATE_KEY` — generated at per-env Hetzner VPS cutover (main#141); new keypairs, each with its public half added to its env's VPS `authorized_keys`.
+
 **Stage 1 — org-scope (transitional, restores parity with stg/prod split):**
 
 ```bash
 gh secret set DEPLOY_SSH_PRIVATE_KEY --org noorinalabs --visibility selected \
-  --repos noorinalabs-deploy,noorinalabs-landing-page,noorinalabs-isnad-graph
+  --repos noorinalabs-deploy,noorinalabs-landing-page,noorinalabs-isnad-graph \
+  --body "$(cat "$STAGING/org/DEPLOY_SSH_PRIVATE_KEY")"
 
 gh secret delete DEPLOY_SSH_PRIVATE_KEY --repo noorinalabs/noorinalabs-deploy
 gh secret delete DEPLOY_SSH_PRIVATE_KEY --repo noorinalabs/noorinalabs-landing-page
@@ -243,30 +343,80 @@ gh secret delete DEPLOY_SSH_PRIVATE_KEY --repo noorinalabs/noorinalabs-isnad-gra
 ```bash
 # Stage as separate keys per env, replace org-scoped above
 gh secret set DEPLOY_SSH_PRIVATE_KEY \
-  --repo noorinalabs/noorinalabs-deploy --env staging
+  --repo noorinalabs/noorinalabs-deploy --env staging \
+  --body "$(cat "$STAGING/env/staging/DEPLOY_SSH_PRIVATE_KEY")"
 gh secret set DEPLOY_SSH_PRIVATE_KEY \
-  --repo noorinalabs/noorinalabs-deploy --env production
+  --repo noorinalabs/noorinalabs-deploy --env production \
+  --body "$(cat "$STAGING/env/production/DEPLOY_SSH_PRIVATE_KEY")"
 # Then delete the org-scoped transitional secret
 gh secret delete DEPLOY_SSH_PRIVATE_KEY --org noorinalabs
 ```
 
 ### 3.9. Env-scope migrations (Tier C, executed via deploy#155 envs)
 
-For each Tier-C secret, set in **both** `staging` and `production` GH Environments on `noorinalabs-deploy`:
+For each Tier-C secret, set in **both** `staging` and `production` GH Environments on `noorinalabs-deploy`. Values are sourced from the staging tree per § 3.0.b — **no interactive prompts** (the bare `gh secret set … --env …` form prompts stdin, which loops non-deterministically and fails outright in non-TTY shells).
+
+> Value sources: `$STAGING/env/staging/<SECRET>` and `$STAGING/env/production/<SECRET>` (staged per § 3.0.b from the canonical VPS env files — see § 3.0.a).
+
+**Pre-flight — verify every required staging file exists before running the loop:**
 
 ```bash
-# Pattern (repeat per secret with appropriate value):
-gh secret set <SECRET_NAME> --repo noorinalabs/noorinalabs-deploy --env staging
-gh secret set <SECRET_NAME> --repo noorinalabs/noorinalabs-deploy --env production
+TIER_C=(
+  POSTGRES_DB POSTGRES_PASSWORD POSTGRES_USER
+  USER_POSTGRES_DB USER_POSTGRES_PASSWORD USER_POSTGRES_USER
+  REDIS_PASSWORD USER_REDIS_PASSWORD
+  NEO4J_PASSWORD NEO4J_USER
+  GRAFANA_ADMIN_PASSWORD
+  KAFKA_CLUSTER_ID KAFKA_UI_USER KAFKA_UI_PASSWORD
+  DEPLOY_VPS_IP
+)
 
-# Then delete the repo-level copy (and the isnad-graph copy if it exists):
-gh secret delete <SECRET_NAME> --repo noorinalabs/noorinalabs-deploy
-gh secret delete <SECRET_NAME> --repo noorinalabs/noorinalabs-isnad-graph 2>/dev/null || true
+missing=0
+for SECRET in "${TIER_C[@]}"; do
+  for ENV in staging production; do
+    if [ ! -s "$STAGING/env/$ENV/$SECRET" ]; then
+      echo "MISSING: $STAGING/env/$ENV/$SECRET"
+      missing=1
+    fi
+  done
+done
+[ "$missing" -eq 0 ] || { echo "ABORT: stage all Tier-C values per § 3.0 before running § 3.9"; exit 1; }
 ```
 
-Apply to: `POSTGRES_DB`, `POSTGRES_PASSWORD`, `POSTGRES_USER`, `USER_POSTGRES_DB`, `USER_POSTGRES_PASSWORD`, `USER_POSTGRES_USER`, `REDIS_PASSWORD`, `USER_REDIS_PASSWORD`, `NEO4J_PASSWORD`, `NEO4J_USER`, `GRAFANA_ADMIN_PASSWORD`, `KAFKA_CLUSTER_ID`, `KAFKA_UI_USER`, `KAFKA_UI_PASSWORD`, `DEPLOY_VPS_IP`.
+**Set — two-env write per secret, values from staging tree:**
 
-> **Note:** Tier C steps require the env values to actually differ between `staging` and `production`. If they don't yet (single shared VPS), seed both envs with the current value and rotate `production` separately during the per-env Hetzner cutover (main#141).
+```bash
+for SECRET in "${TIER_C[@]}"; do
+  gh secret set "$SECRET" --repo noorinalabs/noorinalabs-deploy --env staging \
+    --body "$(cat "$STAGING/env/staging/$SECRET")"
+  gh secret set "$SECRET" --repo noorinalabs/noorinalabs-deploy --env production \
+    --body "$(cat "$STAGING/env/production/$SECRET")"
+done
+```
+
+**Verify — each secret is readable at env scope:**
+
+```bash
+for SECRET in "${TIER_C[@]}"; do
+  for ENV in staging production; do
+    gh api "repos/noorinalabs/noorinalabs-deploy/environments/$ENV/secrets/$SECRET" \
+      --jq '.name' || echo "MISSING at $ENV: $SECRET"
+  done
+done
+
+# Then trigger one deploy-{stg,prod}.yml run and confirm env resolution before proceeding.
+```
+
+**Delete — repo-level copies (and isnad-graph copy if present):**
+
+```bash
+for SECRET in "${TIER_C[@]}"; do
+  gh secret delete "$SECRET" --repo noorinalabs/noorinalabs-deploy 2>/dev/null || true
+  gh secret delete "$SECRET" --repo noorinalabs/noorinalabs-isnad-graph 2>/dev/null || true
+done
+```
+
+> **Note on seed-then-rotate:** Tier C assumes env values actually differ between `staging` and `production`. If they don't yet (single shared VPS pre-cutover), stage both `$STAGING/env/staging/<SECRET>` and `$STAGING/env/production/<SECRET>` with the SAME current value, complete this section, then rotate `production`-side values separately during the per-env Hetzner cutover (main#141). The staging tree gives you a single place to rewrite values between rotations — never re-type from memory.
 
 ### 3.10. Tier-D leave-as-is
 
@@ -274,7 +424,7 @@ Apply to: `POSTGRES_DB`, `POSTGRES_PASSWORD`, `POSTGRES_USER`, `USER_POSTGRES_DB
 
 ### 3.11. Tier-E deferral
 
-`PIPELINE_B2_*` (5 secrets) stay repo-scoped on `noorinalabs-deploy` until P2W8 brings `noorinalabs-data-acquisition` and `noorinalabs-isnad-ingest-platform` onto CI. Re-audit at that wave.
+`PIPELINE_B2_*` (5 secrets) stay repo-scoped on `noorinalabs-deploy` until `noorinalabs-data-acquisition` and `noorinalabs-isnad-ingest-platform` gain CI (currently unscheduled; track under main#141 successor meta). Re-audit when either repo adds a `.github/workflows/*.yml` file.
 
 ---
 
