@@ -37,6 +37,16 @@
         ]
       },
       {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/validate_wave_audit.py",
+            "timeout": 30
+          }
+        ]
+      },
+      {
         "matcher": "Edit",
         "hooks": [
           {
