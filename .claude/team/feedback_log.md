@@ -1799,3 +1799,127 @@ These do NOT auto-apply within this retro PR (per skill: "Do NOT apply any chart
 | E — process collapse under fire | Orchestrator-class | 0 (no emergency) | 1 historical |
 | F — orchestrator-class pre-flight gap | Orchestrator-class | 0 | 6 historical, **closed by #245 + #249** |
 | **G — in-wave skill self-improvement** (NEW) | Skill/Hook author | 1 (Aino #276 `/wave-scope` self-threading shipped in wave that proposed it) | **2** (W4 #250 validate_pr_review canonicalization + W5 #276 `/wave-scope` threading) |
+
+## Retrospective: Phase 3 Wave 6 — Backlog Triage + Runbook Fan-Out + Hot-Fix (2026-05-06 → 2026-05-07)
+
+### Wave shape
+
+| Metric | Value |
+|---|---|
+| Duration | ~25h (kickoff 2026-05-06T22:41:08Z → final wave-merge 2026-05-07T23:38:44Z) |
+| Repos in scope | 8 declared; **7 produced PRs** (user-service Tier-1-only by design, 0 PRs — `wave_6_decisions.scope_drops` records by-design) |
+| PRs merged into wave branches | **11** (main: 2; isnad-graph: 1; deploy: 1; design-system: 2; data-acquisition: 2; ingest-platform: 1; landing-page: 2) |
+| Wave-merge → main PRs | **7** (one per non-identical repo; user-service skipped as identical sha) |
+| CI failures | 0 |
+| Admin overrides at wave-merge | **0 (TRUTHFUL FIRST)** — hook gap #294 enabled actual 2-reviewer enforcement on wave-merge PRs for the first time. W3-W5 claimed 0 but silently bypassed via `--admin`. |
+| Implementer substitutions | **0** (every PR's actual committer matched kickoff-declared implementer) |
+| ChangesRequested cycles | **0** (verified at retro Step 2.5) |
+| Top-implementer concentration | **2 / 11 = 18%** (Kofi Mensah-Williams, Tier-2 #49 + Tier-3 #77) — well below 40% kickoff cap and 60% retro-flag threshold |
+| Counter-verification drift (Step 2.5) | **0** — first wave with all `wave_6_*` numeric counters matching PR-level recomputation (W4 had 22→80 concentration drift, W5 had 6→4 CR-cycles drift) |
+| Tier-1 backlog triage delivery | **8/8 repos** submitted disposition tables on #284 (151 issues audited total) |
+| Tier-1 dispositions applied at wrapup | 13 close-stale + 2 close-dup + 28 phase-15 relabel + 9 isnad-graph pre-applied + 3 carry-forward strip = **55 issue mutations** |
+| Issues closed in wave (excluding triage) | 9 wave-resolved (main#278; deploy#24; design-system#67, #32; data-acquisition#38, #22; ingest-platform#7; landing-page#77, #49) |
+| W5 retro action items shipped IN-wave | 5 AUTO promotion-audit candidates → main#282 promotion PR (codified W5 retro promise); implementer-substitution check satisfied (0 swaps); status-counter verification satisfied (0 drift); both retro-proposed Pattern G instances continue (Aino #294 in-flight) |
+| Carry-forward to W7 | 4 (main#287, main#285, main#294, deploy#274) |
+
+### Per-engineer assessments
+
+#### Org-level team
+
+**Aino Virtanen** (SQL) — 1 wave-internal PR + extensive wrapup work + in-flight follow-on. main#288 (`fix(/wave-scope #278)`: idempotent JSON-write helper, Tier-4 W5 carry-forward) — clean execution, 0 CR. R1 reviews on all 7 wave-merge PRs (charter format with refresh-discipline + diff-vs-body verification + scope_drops verification). In-flight #294 hook fix surfaced from her own R1 review of #293 (Pattern G in-wave self-improvement repeat). Severity: **none**. Trust 5→5 (already max).
+
+**Wanjiku Mwangi** (TPM) — 1 wave-internal PR + Tier-1 + 2 status commits. main#291 (`fix(hook #289)`: validate_workflow_paths_coverage parser fix, post-scope hot-fix). Tier-1 noorinalabs-main backlog triage (16 issues audited, 18.75% close-rate, 31% defer-phase-15, 50% confirm-actionable). 2 wrapup status commits via gh api PUT contents (67cce96 wave_6_decisions, a3419a4 P3W6 CLOSED). Severity: **none**. Trust 5→5.
+
+**Nadia Khoury** (PD) — R2 reviews on all 7 wave-merge PRs (cross-repo coordination focus, scope-drop verification, carry-forward label-stripping verified at PR-review time). Co-author on design-system Tier-1 backlog triage with Kofi Mensah. Surfaced 3 retro candidates (e235b0b orphan, label-drift prevention, repo-split coordination) deferred-to-retro per discipline. Reviewer-only profile across 4 consecutive waves. Severity: **none**. Trust 4→4 (level pinned by reviewer-only profile).
+
+**Santiago Ferreira** (RC) — Theme-routed wave (no deploy-cycle work). Severity: **none**. Trust 5→5.
+
+#### Child-repo teams (PR authors only)
+
+**Jun-Seo Park** (isnad-graph Eng, NEW) — isnad-graph#864 (settings parity Tier-4 W5 carry-forward, closes #862). 0 CR. New entry at trust 3.
+
+**Lucas Ferreira** (deploy SRE) — deploy#273 (operational runbook Tier-2, with R1+R2 accuracy revisions absorbed cleanly). 0 CR. Trust 5→5.
+
+**Keanu Tama** (design-system Eng, NEW) — design-system#69 (operational runbook Tier-2). 0 CR. New entry at trust 3.
+
+**Maricel Reyes** (design-system Eng, NEW) — design-system#70 (settings parity Tier-4 W5 carry-forward). 0 CR. New entry at trust 3.
+
+**Tarek Mansour** (data-acquisition Eng) — data-acquisition#40 (operational runbook Tier-2, with R1+R2 review fixups for local-vs-B2 path shape, Kafka envs, CLI flag). 0 CR. Trust 3→**4** ↑ (second consecutive substantive wave; W5 substitution rationale resolved).
+
+**Alejandra Reyes-Fuentes** (data-acquisition Eng, NEW) — data-acquisition#41 (settings parity Tier-4 W5 carry-forward). 0 CR. New entry at trust 3.
+
+**Bjørn Henriksen** (ingest-platform Eng, NEW) — ingest-platform#28 (operational runbook Tier-2, with review fixups for offset-commit + ingest-row + 3 obs). 0 CR. New entry at trust 3.
+
+**Kofi Mensah-Williams** (landing-page Eng) — TWO PRs: landing-page#82 (Tier-3 hotfix for #77 deploy-VPS regression) + landing-page#81 (Tier-2 runbook for #49, with post-#82 publish-only workflow refresh). 4 approveds on #81 (revisions + re-approvals — clean iteration). Top concentration at 18% — theme-fit, not fragility. Severity: **none**. Trust 4→4.
+
+#### Tier-1 triagers (no PR — comment-only delivery)
+
+**Anya Kowalczyk** (isnad-graph Eng) — Largest backlog (36 issues), 100% verification rate against HEAD; 9 inline `phase-3`→`phase-15` relabels with explicit rationale; surfaced production OAuth break (#824) and worktree-tracking bug (#807) as elevated-priority candidates. Trust 3→3.
+
+**Mateo Salazar** (user-service Eng) — 15 issues audited; disciplined origin-over-local verification per memory. No PR by W6 design (Tier-1-only). Trust 4→4.
+
+**Kofi Mensah** (design-system Docs Eng) — Co-authored 7-issue disposition with Nadia; identified Chromatic-CI surface area on #53/#54 as forward-coupler gap. Trust 4→4.
+
+**Sofia Cardoso** (data-acquisition Tech Writer) — 4-issue audit; surfaced #21 enrichment-pipeline as cross-repo relocation candidate to ingest-platform per ontology repo-split. Confirmed W6 Tier-1 slot post-W5 substitution. Trust 3→3.
+
+**Adaeze Okonkwo** (ingest-platform Eng) — 14-issue audit; pipeline-durability cluster correctly preserved as own future wave per meta-issue boundary. Trust 3→3.
+
+**Bereket Tadesse** (deploy Manager) — Largest backlog (40 issues), 22.5% close-rate via 7 stale + 2 dup; 23 relabel-later-wave preserving phase-3. Trust 4→4.
+
+**Marcia Vasquez-Paredes** (landing-page Project Lead) — 19-issue audit; 8 defer-future-phase relabels recommended; surfaced #67/#69 as keep-in-P3-strategic with owner-ruling rationale. Trust 4→4.
+
+**Nurul Hakim** (deploy R1, NEW) — Caught load-bearing followup gap during PR #273 review (alertmanager `${VAR}` placeholder URL); filed deploy#274. Reviewer-class first entry at trust 3.
+
+### Top 3 going well
+
+1. **Truthful 0-admin-override accounting for wave-merge PRs (FIRST).** Hook gap #294 surfaced AT wrapup when the validate_pr_review parser silently early-returned for `deployments/*/wave-*` head refs. In-band 5-line patch + canonical Aino-authored fix in flight enabled actual 2-reviewer enforcement (Aino R1 + Nadia R2) on all 7 wave-merge PRs. Per W3/W4/W5 inspection: those waves' wave_N_admin_overrides=0 claims were inaccurate (0 reviewer comments on each wave-merge PR + merged via `--admin`). W6 is the first wave with the claim grounded in actual hook validation. Pattern: hook-gap surfaced AT wrapup → in-band fix + same-wave canonical PR (Pattern G repeat).
+
+2. **Counter-verification step 2.5 had 0 drift.** First wave since the discipline was added (W5 retro) where every wave_6_* numeric counter matched PR-level recomputation (PR count: 11=11; CR cycles: 0=0; concentration: 18%=18%). W4 had 22→80 concentration drift; W5 had 6→4 CR-cycles drift. The discipline took at the third invocation. Operationally: wrapup-time arithmetic is now reliable enough that retro can use it directly without a defensive recomputation pass surfacing surprises.
+
+3. **8/8 Tier-1 backlog triage delivery + 55 wrapup mutations applied cleanly.** Every repo submitted a substantive disposition table on #284 (151 issues audited total, all evidence-cited against HEAD via origin-over-local memory discipline). Bulk dispositions executed at wrapup batch in ~3 min (13 close-stale + 2 close-dup + 28 phase-15 relabel + 9 isnad-graph pre-applied + 3 carry-forward strip). Backlog-hygiene wave shape demonstrably works: the team can audit + reach disposition + execute mutations within a single wave cycle.
+
+### Top 3 pain points
+
+1. **Pattern G persists at 4 instances in W6 alone — largest single-wave parser-bug cluster.** Hook parser bugs: #285 (/wave-kickoff Step 1 EXISTING_SHA captures 404 body), #287 (validate_commit_identity false-blocks backslash-line-continuation), #289 (validate_workflow_paths_coverage misparses bare on.pull_request:), #294 (validate_pr_review skips reviewer counting on deployments/*/wave-* heads). All four are PARSER bugs in production hooks discovered AT runtime when an unanticipated input shape arrives. Suggests a class-level discipline gap: hook authors don't reflexively enumerate input-shape fixtures before declaring a parser \"done.\" Proposing parser-fixture coverage as a charter principle.
+
+2. **Local-vs-origin main divergence (e235b0b orphaned local commit) — kickoff status push discipline gap.** The P3W6 kickoff committed wave_6_active state to LOCAL main as commit e235b0b but never pushed to origin. Local main was 1 ahead of origin/main throughout the wave; only the consolidated wrapup commit (67cce96 via gh api PUT contents) captured the kickoff state on origin. Operationally: this is a F-pattern (orchestrator-class pre-flight gap) — closed by #245+#249 historically per W5 retro, but reopens at the kickoff-push verification surface. The right enforcement is to make kickoff status commits via gh api PUT contents (atomic, no local-orphan-possible) instead of local-then-push. Same enforcement shape used by the wrapup status commits this wave (a3419a4) — the pattern is proven and should be retro-fitted to kickoff.
+
+3. **/tmp file-race recurring for spawned-agent gh-comment workflows (3 hook blocks this session).** \`block_stale_tmp_message_file\` blocked 3 spawned-agent \`gh pr comment --body-file\` calls where the body file aged > 30s during a Bash call delay. Existing memory \`feedback_tmp_msg_file_stale.md\` covers the pattern (issue#-keyed paths + sequential ordering + read-back verify), but spawned agents continue to hit it because the spawn-prompt template doesn't surface the discipline. Proposing a spawn-prompt template addition: \"When using --body-file with gh, write the file to issue#-keyed path immediately before the gh call (no other tool between).\"
+
+### Proposed process changes
+
+1. **Parser-fixture coverage discipline (charter principle).** Rationale: 4 hook parser bugs discovered in W6 alone (#285, #287, #289, #294). Add a charter rule under \`charter/hooks.md § Hook Authorship Requirements\`: every hook with input parsing MUST have test fixtures for all known input shapes. New shapes discovered in production require fixture-add backport BEFORE the bug-fix PR can merge. Codification mirrors the W5 status-counter-verification step 2.5 (added discipline that took on third invocation).
+
+2. **Kickoff status via gh api PUT contents (deprecate local-then-push).** Rationale: e235b0b orphan was a kickoff status commit made locally that never pushed. The wrapup status commits this wave (67cce96, a3419a4) used gh api PUT contents successfully — atomic, no local-orphan possible, attribution captured cleanly. Retrofit \`/wave-kickoff\` Step 7+8 (per #286 hook proposal) to use the same gh api PUT contents pattern instead of local-checkout + local-commit + push.
+
+3. **Spawn-prompt /tmp file-race reminder.** Rationale: 3 \`block_stale_tmp_message_file\` hook blocks for spawned-agent gh-comment workflows in this session. Memory \`feedback_tmp_msg_file_stale.md\` covers the discipline but spawned agents don't see it during their working context. Add to \`charter/agents.md § Implementer Spawn Template\` a one-line reminder: \"When using --body-file with gh, write the file to issue#-keyed path immediately before the gh call (no other tool between, < 30s mtime gap).\"
+
+### Charter changes proposed (NOT auto-applied — require user approval)
+
+1. **\`charter/hooks.md\` — § Parser-Fixture Coverage Requirements** — every hook with input parsing MUST have fixtures covering all known input shapes; production-discovered shapes require fixture-add backport before bug-fix merge.
+2. **\`.claude/skills/wave-kickoff/SKILL.md\` — § Step 7+8 status commits via gh api PUT contents** — deprecate local-checkout + local-commit + push pattern; use atomic gh api PUT contents instead.
+3. **\`charter/agents.md\` — § Implementer Spawn Template addition** — one-line /tmp file-race reminder for body-file workflows.
+
+### Promotion audit
+
+Will be appended by \`/promotion-audit\` at retro step 7.5.
+
+### Action items
+
+1. Apply approved charter changes (this PR if user approves).
+2. W7 planning MUST include the 4 carry-forwards (main#287, main#285, main#294, deploy#274) — three are existing parser-bug class items + one is the hook-gap canonical fix.
+3. W7 planning MUST address Nadia's reviewer-only profile (4 consecutive waves at 4) — either a charter-update PR or a Tier-2 implementation PR routed to her would establish implement-class delivery.
+4. Aino's #294 PR is in flight; if it merges before W7 kickoff, the canonical hook fix is in place; if not, the local in-band patch carries forward and #294 stays in carry-forward.
+5. /wave-scope for W7 BLOCKED — W7 meta-issue does not yet exist. Per \`/wave-retro\` Step 9 acceptance: surface as kickoff blocker. Owner needs to draft \"Phase 3 Wave 7 — <theme>\" before /wave-kickoff can run.
+
+### Pattern tally (running)
+
+| Pattern | Class | This wave | Cumulative |
+|---|---|---|---|
+| A — design-rationale block | Implementer | 1 (Aino #288 design rationale for upsert helper in PR body) | 11 |
+| B unified — verify-vs-artifact | Implementer + reviewer | 14 (Aino R1 + Nadia R2 across all 7 wave-merge PRs with diff-vs-body verification) | promotion-threshold met by tally repeatedly; awaiting next /promotion-audit pass |
+| C — claim-state-staleness | Manager-class amplifier | 0 | reverted, held |
+| D — message-ordering-race | Architecture | n/a | tracked main#241 |
+| E — process collapse under fire | Orchestrator-class | 0 (no emergency) | 1 historical |
+| F — orchestrator-class pre-flight gap | Orchestrator-class | **1 NEW** (e235b0b kickoff status push gap) | 7 historical, **previously closed by #245+#249** but **REOPENED** by kickoff-push surface |
+| **G — in-wave skill self-improvement** | Skill/Hook author | 1 (Aino #294 hook fix in-flight, surfaced by her own R1 review of #293) | **3** (W4 #250 + W5 #276 + W6 #294) |
