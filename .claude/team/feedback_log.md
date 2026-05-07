@@ -1900,9 +1900,17 @@ These do NOT auto-apply within this retro PR (per skill: "Do NOT apply any chart
 2. **\`.claude/skills/wave-kickoff/SKILL.md\` — § Step 7+8 status commits via gh api PUT contents** — deprecate local-checkout + local-commit + push pattern; use atomic gh api PUT contents instead.
 3. **\`charter/agents.md\` — § Implementer Spawn Template addition** — one-line /tmp file-race reminder for body-file workflows.
 
-### Promotion audit
+### Promotion audit (deterministic — see `.claude/team/promotion_audit_log/wave-6.md`)
 
-Will be appended by \`/promotion-audit\` at retro step 7.5.
+```
+Promotion audit wave-6: 0 AUTO · 0 DECIDE · 52 KEPT · 16 SUPERSEDED · 1 ALREADY-PROMOTED
+```
+
+**Delta vs W5 (`5 / 0 / 52 / 11 / 1`):** AUTO went 5 → **0** because the W5 5 AUTO candidates landed via main#282 promotion PR (codified W5 retro promise) — they now show as SUPERSEDED (enforced via charter sections). SUPERSEDED count went 11 → 16 (+5 = the 5 newly enforced-elsewhere markers from #282). KEPT and ALREADY-PROMOTED unchanged.
+
+**0 AUTO this wave** is the expected steady-state for a hygiene-themed wave that didn't introduce new memory-class patterns crossing the citation threshold. The 36 frontmatter-classified memories from W5 #277 continue to be processed by the deterministic audit; any new candidates would require either (a) new memory citations in this retro entry crossing the 3× threshold, or (b) new feedback memories with `promotion_target: charter` filed during W6.
+
+The pipeline is converging — W5 promoted 5, W6 has no new candidates. Pattern: promotion-audit lifecycle works.
 
 ### Action items
 
