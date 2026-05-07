@@ -678,6 +678,66 @@ class CheckEndToEndTests(unittest.TestCase):
         self.assertIsNone(result)
         get_mock.assert_not_called()
 
+    def test_wave_merge_head_ref_runs_comment_review(self):
+        """Issue #294: wave-merge PRs (head = deployments/phase-{N}/wave-{M}) must
+        invoke check_comment_reviews with an empty-string author-lastname sentinel
+        rather than silently skipping it.
+
+        Before the fix, extract_branch_author_lastname() returned None for the
+        wave-branch shape and the inner `if branch_author_lastname:` short-circuited,
+        leaving comment_review_result empty — the 2-reviewer gate blocked legitimate
+        wave-merge PRs even when 2 charter-format Approved comments were present.
+
+        With the fix, the new `elif` clause detects deployments/.../wave-... heads
+        and calls check_comment_reviews(number, "", repo=repo) so existing
+        reviewer-vs-author lastname comparison admits any non-empty reviewer name.
+        """
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen", "nadia khoury"}
+        with (
+            mock.patch.object(
+                hook,
+                "get_pr_data",
+                return_value=self._patch_pr_data(headRefName="deployments/phase-3/wave-6"),
+            ),
+            mock.patch.object(
+                hook, "check_comment_reviews", return_value=review_result
+            ) as ccr_mock,
+        ):
+            result = hook.check(self._input("gh pr merge 100 --squash"))
+        self.assertIsNone(
+            result,
+            "wave-merge PR with 2 charter-format Approveds should allow merge",
+        )
+        ccr_mock.assert_called_once()
+        # Empty-string sentinel is what permits any non-empty reviewer name.
+        call_args = ccr_mock.call_args
+        self.assertEqual(call_args.args[0], 100)
+        self.assertEqual(call_args.args[1], "")
+
+    def test_wave_merge_head_ref_blocks_with_one_reviewer(self):
+        """Issue #294: wave-merge PRs still subject to the 2-reviewer threshold.
+
+        The fix only routes the comment-review check; it does NOT relax the
+        reviewer count requirement. A wave-merge PR with a single Approved
+        comment must still block (no wave-bootstrap exception applies here).
+        """
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen"}
+        with (
+            mock.patch.object(
+                hook,
+                "get_pr_data",
+                return_value=self._patch_pr_data(headRefName="deployments/phase-3/wave-6"),
+            ),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input("gh pr merge 100 --squash"))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("1/2", result["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()
