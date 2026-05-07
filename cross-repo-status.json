@@ -200,11 +200,11 @@
     }
   },
   "wave_6_kicked_off_at": "2026-05-06T22:41:08Z",
-  "wave_active": true,
-  "current_wave": "wave-6",
-  "next_wave": "wave-6",
-  "last_completed_wave": "wave-5",
-  "last_completed_at": "2026-05-06T00:41:23Z",
+  "wave_active": false,
+  "current_wave": null,
+  "next_wave": "wave-7",
+  "last_completed_wave": "wave-6",
+  "last_completed_at": "2026-05-07T23:40:46Z",
   "wave_5_completed_at": "2026-05-06T00:41:23Z",
   "wave_5_main_merge_sha": "121132e",
   "wave_5_final_pr_count": 11,
@@ -878,7 +878,7 @@
   "wave_started": "2026-04-30T21:00:00Z",
   "wave_1_wrap_started": "2026-04-30T23:18:00Z",
   "wave_1_wrap_status": "CLOSED 2026-05-01T01:49:41Z. Both wave-merge PRs landed (deploy#213 merge-commit b6f2cd1; main#235 merge-commit 9a1ef3e). 5/5 Tier-1 + 2/2 Tier-2 + #205 followup-of-spec + #214 wave-tail flake fix (#215 retry-with-backoff JSON-parse classifier) all on main. 8 deploy worktrees pruned. 2 ontology files resolved. 4 charter deltas landed (Patterns A + B unified + C + D). Trust matrix updated (Lucas 4→5; others hold). Promotion audit 0/0/55/4. Wave-tail produced 5 additional retro-pattern data points stress-testing the just-landed charter; all four patterns held. 9 follow-ups filed for next-wave planning (#199 #200 #203 #204 #209 #211 #212 + main#232 + main#233 + main#234). 3 Tier-3 carry-forwards remain operationally gated (deploy#86 async-routine fires post-this-merge; deploy#151 manual SRE B2 tfstate-key migration; user-service#84 manual SRE DEPLOY_REPO_PAT secret).",
-  "last_updated": "2026-05-04T03:15:00Z",
+  "last_updated": "2026-05-07T23:40:46Z",
   "deployments_branch": "deployments/phase-3/wave-3",
   "wave_1_theme": "Promotion pipeline goes prod — owner directive: pipeline running seamlessly so team can refocus on product + process",
   "wave_1_scope": {
@@ -1312,6 +1312,39 @@
         "rationale": "orphan filed during W6 (PR #273 review by Nurul Hakim); load-bearing followup to deploy#273 runbook claim"
       }
     ],
-    "wave_6_wrapup_started_at": "2026-05-07T03:00:00Z"
+    "wave_6_wrapup_started_at": "2026-05-07T03:00:00Z",
+    "wave_6_main_merge_completed_at": "2026-05-07T23:40:46Z",
+    "hook_gap_surfaced": "main#294 (validate_pr_review parser gap on deployments/*/wave-* head refs); local in-band patch applied to land 7 wave-merge PRs cleanly with full 2-reviewer enforcement; canonical fix in flight as Aino-authored PR. This is the FIRST wave with a truthful 0-admin-override count for wave-merge PRs (W3-W5 silently bypassed via --admin)."
+  },
+  "wave_6_completed_at": "2026-05-07T23:40:46Z",
+  "wave_6_admin_overrides": 0,
+  "wave_6_changes_requested_cycles": 0,
+  "wave_6_final_pr_count": 11,
+  "wave_6_top_concentration_pct": 18,
+  "wave_6_top_concentration_implementer": "Kofi Mensah-Williams (Tier-2 #49 + Tier-3 #77, 2/11 PR slots)",
+  "wave_6_concentration_cap_pct": 40,
+  "wave_6_carry_forward_to_w7": [
+    "noorinalabs-main#287",
+    "noorinalabs-main#285",
+    "noorinalabs-deploy#274",
+    "noorinalabs-main#294"
+  ],
+  "wave_6_main_merge_shas": {
+    "noorinalabs-main": "fd45b2a817ba5fb31db422611399e7b0733c43b4",
+    "noorinalabs-isnad-graph": "d4eb65a6375971e9abd58c71b55ab4d58fd95cfd",
+    "noorinalabs-deploy": "d42f08d5a789355eb4638b47e77b4d9a78367455",
+    "noorinalabs-design-system": "b71776c9a7250b731ab09fb5ed8fbe1ecb0871a7",
+    "noorinalabs-data-acquisition": "f43b84d19d1e38f4b964c6ed313ce5cc58584914",
+    "noorinalabs-isnad-ingest-platform": "68408c4e8aef75c2f4321a9ca36bae732f6d7dcd",
+    "noorinalabs-landing-page": "e8855aded8135fc5549cbaf97d9eb6101f1531c4"
+  },
+  "wave_6_main_merge_pr_per_repo": {
+    "noorinalabs-main": "main#293",
+    "noorinalabs-isnad-graph": "isnad-graph#865",
+    "noorinalabs-deploy": "deploy#275",
+    "noorinalabs-design-system": "design-system#71",
+    "noorinalabs-data-acquisition": "data-acquisition#42",
+    "noorinalabs-isnad-ingest-platform": "ingest-platform#29",
+    "noorinalabs-landing-page": "landing-page#83"
   }
 }
