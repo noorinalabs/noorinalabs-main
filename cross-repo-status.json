@@ -1,8 +1,207 @@
 {
   "wave_6_scope_reconciled_at": "2026-05-06T02:36:55Z",
   "wave_6_scope_reconciliation_note": "Manual /wave-scope run post-#274 close. Declared 11 unique refs across 4 tiers + 1 tracking-only mention; labeled 0 (p3-wave-6 label not yet created — kickoff Step 7 owns label creation/application per W5 precedent). All 5 W5→W6 carry-forwards folded into meta-body; no W6 memory must-includes filed; zero drift between declared and labeled state.",
-  "wave_active": false,
-  "current_wave": null,
+  "wave_6_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-isnad-graph",
+    "noorinalabs-user-service",
+    "noorinalabs-deploy",
+    "noorinalabs-design-system",
+    "noorinalabs-data-acquisition",
+    "noorinalabs-isnad-ingest-platform",
+    "noorinalabs-landing-page"
+  ],
+  "wave_6_meta_issue": 284,
+  "wave_6_scope": {
+    "tier_1_backlog_triage": [
+      {
+        "repo": "noorinalabs-main",
+        "approx_open": 21,
+        "implementer": "Wanjiku Mwangi",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Nadia Khoury"
+      },
+      {
+        "repo": "noorinalabs-isnad-graph",
+        "approx_open": 40,
+        "implementer": "Anya Volkov",
+        "reviewer": "Idris",
+        "reviewer_2": "Arjun Raghavan"
+      },
+      {
+        "repo": "noorinalabs-deploy",
+        "approx_open": 86,
+        "implementer": "Bereket Tadesse",
+        "reviewer": "Aisha",
+        "reviewer_2": "Weronika"
+      },
+      {
+        "repo": "noorinalabs-user-service",
+        "approx_open": 15,
+        "implementer": "Mateo Salazar",
+        "reviewer": "Anya Volkov",
+        "reviewer_2": "Idris"
+      },
+      {
+        "repo": "noorinalabs-design-system",
+        "approx_open": 8,
+        "implementer": "Kofi Mensah",
+        "reviewer": "Maeve",
+        "reviewer_2": "Beren"
+      },
+      {
+        "repo": "noorinalabs-data-acquisition",
+        "approx_open": 4,
+        "implementer": "Sofia Cardoso",
+        "reviewer": "Dilara",
+        "reviewer_2": "Jeanclaude"
+      },
+      {
+        "repo": "noorinalabs-landing-page",
+        "approx_open": 17,
+        "implementer": "Marcia",
+        "reviewer": "Nazia",
+        "reviewer_2": "Cedric"
+      },
+      {
+        "repo": "noorinalabs-isnad-ingest-platform",
+        "approx_open": 14,
+        "implementer": "Adaeze",
+        "reviewer": "Tomas",
+        "reviewer_2": "Petra"
+      }
+    ],
+    "tier_2_runbook_fanout": [
+      {
+        "id": "noorinalabs-deploy#24",
+        "implementer": "Lucas Ferreira",
+        "reviewer": "Nurul",
+        "reviewer_2": "Nino"
+      },
+      {
+        "id": "noorinalabs-design-system#32",
+        "implementer": "Keanu",
+        "reviewer": "Luciana",
+        "reviewer_2": "Astrid"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#22",
+        "implementer": "Tarek Mansour",
+        "reviewer": "Nikolaos",
+        "reviewer_2": "Kavitha"
+      },
+      {
+        "id": "noorinalabs-landing-page#49",
+        "implementer": "Kofi Mensah-Williams",
+        "reviewer": "Anika",
+        "reviewer_2": "Nazia"
+      },
+      {
+        "id": "noorinalabs-isnad-ingest-platform#7",
+        "implementer": "Bjorn",
+        "reviewer": "Fatima",
+        "reviewer_2": "Sayed"
+      }
+    ],
+    "tier_3_hotfix": [
+      {
+        "id": "noorinalabs-landing-page#77",
+        "title": "Deploy to VPS workflow red on main since 2026-05-04",
+        "implementer": "Kofi Mensah-Williams",
+        "reviewer": "Lucas Ferreira",
+        "reviewer_2": "Marcia",
+        "cross_roster_reviewer_rationale": "deploy-roster R1 (Lucas) for workflow expertise per meta-issue #284; landing-page-roster R2 (Marcia) for repo familiarity"
+      }
+    ],
+    "tier_4_w5_carry_forward_stretch": [
+      {
+        "id": "noorinalabs-isnad-graph#862",
+        "shape": "settings.json parity",
+        "implementer": "Junseo Park",
+        "reviewer": "Linh",
+        "reviewer_2": "Mateo Salazar"
+      },
+      {
+        "id": "noorinalabs-design-system#67",
+        "shape": "settings.json parity",
+        "implementer": "Maricel",
+        "reviewer": "Astrid",
+        "reviewer_2": "Keanu"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#38",
+        "shape": "settings.json parity",
+        "implementer": "Alejandra",
+        "reviewer": "Kavitha",
+        "reviewer_2": "Nikolaos"
+      },
+      {
+        "id": "noorinalabs-main#278",
+        "shape": "/wave-scope idempotency",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Nadia Khoury"
+      }
+    ],
+    "tracking_only_not_in_scope": [
+      {
+        "id": "noorinalabs-main#283",
+        "rationale": "/promotion-audit find_already_promoted parser gap — surfaced at W5 retro, tracking only"
+      }
+    ],
+    "deliberately_not_in_w6": [
+      "Phase-15 features (i18n, in-app notifications, billing, web vitals, CDN, minification)",
+      "secrets-audit cluster (#205-#210) — own wave",
+      "branch-protection audit (#221, #222) — own wave",
+      "hook DRY refactors (#170, #176, #259, #260) — own 'hook consolidation' themed wave",
+      "ingest-platform deeper backlog (#11, #12, #19, #20, #23, #24) — own pipeline-durability wave",
+      "isnad-graph frontend test-debt cluster (#790-#799) — own 'test infrastructure' wave"
+    ],
+    "concentration_top_implementer_pct": 11,
+    "concentration_top_implementer": "Kofi Mensah-Williams (Tier-2 #49 + Tier-3 #77, 2/18 impl slots)",
+    "two_reviewer_compliance": "all 18 PRs assigned 2 reviewers per charter pull-requests.md § Two-Reviewer Assignment"
+  },
+  "wave_6_branches": {
+    "branch": "deployments/phase-3/wave-6",
+    "created_at": "2026-05-06T22:24:42Z",
+    "repos": {
+      "noorinalabs-main": {
+        "sha": "c800b666c9b7eaac0215a9abd5a0cb23a9f2717f",
+        "status": "created"
+      },
+      "noorinalabs-isnad-graph": {
+        "sha": "dc2935a957727790e6f06a889405880facdc65ad",
+        "status": "created"
+      },
+      "noorinalabs-user-service": {
+        "sha": "76ff877c7379d6e33dbf5d0afffd521b230b1a53",
+        "status": "created"
+      },
+      "noorinalabs-deploy": {
+        "sha": "fd865413a9762112f35813bd778e8463461d6388",
+        "status": "created"
+      },
+      "noorinalabs-design-system": {
+        "sha": "f2ac4dd526c0277f5d5b26aecaaf08cc0328c5ea",
+        "status": "created"
+      },
+      "noorinalabs-data-acquisition": {
+        "sha": "c35a0bb7e0b7a576ed3629981c7f0795c75a5667",
+        "status": "created"
+      },
+      "noorinalabs-isnad-ingest-platform": {
+        "sha": "42f4d6421b814034515668d217d5977266b25f59",
+        "status": "created"
+      },
+      "noorinalabs-landing-page": {
+        "sha": "b8eae315b8d09f4a9262be68afa627e15b21d0aa",
+        "status": "created"
+      }
+    }
+  },
+  "wave_6_kicked_off_at": "2026-05-06T22:41:08Z",
+  "wave_active": true,
+  "current_wave": "wave-6",
   "next_wave": "wave-6",
   "last_completed_wave": "wave-5",
   "last_completed_at": "2026-05-06T00:41:23Z",
@@ -12,7 +211,13 @@
   "wave_5_admin_overrides": 0,
   "wave_5_top_concentration_pct": 22,
   "wave_5_changes_requested_cycles": 6,
-  "wave_5_carry_forward_to_wave_6": ["main#278", "isnad-graph#862", "design-system#67", "data-acquisition#38", "landing-page#77"],
+  "wave_5_carry_forward_to_wave_6": [
+    "main#278",
+    "isnad-graph#862",
+    "design-system#67",
+    "data-acquisition#38",
+    "landing-page#77"
+  ],
   "wave_5_meta_issue": "noorinalabs-main#274",
   "wave_5_kicked_off_at": "2026-05-05T22:30:00Z",
   "wave_5_scope_reconciled_at": "2026-05-05T22:31:00Z",
@@ -21,34 +226,164 @@
   "wave_5_theme": "Multi-repo fan-out + memory classification + skill self-improvement",
   "wave_5_length_estimate_days": "5-7",
   "wave_5_concentration_cap_pct": 40,
-  "wave_5_repos_in_scope": ["noorinalabs-main", "noorinalabs-isnad-graph", "noorinalabs-user-service", "noorinalabs-design-system", "noorinalabs-data-acquisition", "noorinalabs-isnad-ingest-platform", "noorinalabs-deploy", "noorinalabs-landing-page"],
-  "wave_5_carry_forwards_from_w4": ["main#263", "main#264", "main#267"],
+  "wave_5_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-isnad-graph",
+    "noorinalabs-user-service",
+    "noorinalabs-design-system",
+    "noorinalabs-data-acquisition",
+    "noorinalabs-isnad-ingest-platform",
+    "noorinalabs-deploy",
+    "noorinalabs-landing-page"
+  ],
+  "wave_5_carry_forwards_from_w4": [
+    "main#263",
+    "main#264",
+    "main#267"
+  ],
   "wave_5_scope_total_issues": 11,
-  "wave_5_branches": {"branch": "deployments/phase-3/wave-5", "created_at": "2026-05-05T22:32:00Z", "repos": {"noorinalabs-main": {"sha": "c8504560", "status": "created"}, "noorinalabs-isnad-graph": {"sha": "908a19e0", "status": "created"}, "noorinalabs-user-service": {"sha": "b1108b0c", "status": "created"}, "noorinalabs-design-system": {"sha": "f9e7a847", "status": "created"}, "noorinalabs-data-acquisition": {"sha": "388e728d", "status": "created"}, "noorinalabs-isnad-ingest-platform": {"sha": "e10bc2e3", "status": "created"}, "noorinalabs-deploy": {"sha": "c7cfabf0", "status": "created"}, "noorinalabs-landing-page": {"sha": "41316302", "status": "created"}}},
+  "wave_5_branches": {
+    "branch": "deployments/phase-3/wave-5",
+    "created_at": "2026-05-05T22:32:00Z",
+    "repos": {
+      "noorinalabs-main": {
+        "sha": "c8504560",
+        "status": "created"
+      },
+      "noorinalabs-isnad-graph": {
+        "sha": "908a19e0",
+        "status": "created"
+      },
+      "noorinalabs-user-service": {
+        "sha": "b1108b0c",
+        "status": "created"
+      },
+      "noorinalabs-design-system": {
+        "sha": "f9e7a847",
+        "status": "created"
+      },
+      "noorinalabs-data-acquisition": {
+        "sha": "388e728d",
+        "status": "created"
+      },
+      "noorinalabs-isnad-ingest-platform": {
+        "sha": "e10bc2e3",
+        "status": "created"
+      },
+      "noorinalabs-deploy": {
+        "sha": "c7cfabf0",
+        "status": "created"
+      },
+      "noorinalabs-landing-page": {
+        "sha": "41316302",
+        "status": "created"
+      }
+    }
+  },
   "wave_5_scope": {
     "tier_1_w4_carry_forwards": [
-      {"id": "noorinalabs-main#263", "title": "Phase 2 #214 child fan-out — sweep all 7 child repos to parent-canonical hook paths", "shape": "fan-out", "implementers": "distributed (1 per child repo, see tier_1A)"},
-      {"id": "noorinalabs-main#264", "title": "Phase 2 #215 settings.json fan-out (US + ingest-platform)", "implementers": ["Anya Kowalczyk (US)", "Yusuke (ingest-platform)"]},
-      {"id": "noorinalabs-main#267", "title": "ci.yml paths filter excludes .claude/skills/**", "implementer": "Aino Virtanen", "reviewers": ["Wanjiku Mwangi", "Nadia Khoury"]}
+      {
+        "id": "noorinalabs-main#263",
+        "title": "Phase 2 #214 child fan-out — sweep all 7 child repos to parent-canonical hook paths",
+        "shape": "fan-out",
+        "implementers": "distributed (1 per child repo, see tier_1A)"
+      },
+      {
+        "id": "noorinalabs-main#264",
+        "title": "Phase 2 #215 settings.json fan-out (US + ingest-platform)",
+        "implementers": [
+          "Anya Kowalczyk (US)",
+          "Yusuke (ingest-platform)"
+        ]
+      },
+      {
+        "id": "noorinalabs-main#267",
+        "title": "ci.yml paths filter excludes .claude/skills/**",
+        "implementer": "Aino Virtanen",
+        "reviewers": [
+          "Wanjiku Mwangi",
+          "Nadia Khoury"
+        ]
+      }
     ],
     "tier_1A_263_distribution": [
-      {"repo": "noorinalabs-isnad-graph", "implementer": "Linh Pham", "second_reviewer": "Arjun Raghavan"},
-      {"repo": "noorinalabs-user-service", "implementer": "Mateo Salazar", "second_reviewer": "Anya Kowalczyk"},
-      {"repo": "noorinalabs-design-system", "implementer": "Kofi Mensah", "second_reviewer": "Maeve"},
-      {"repo": "noorinalabs-data-acquisition", "implementer": "Sofia Cardoso", "second_reviewer": "Kwesi Boateng"},
-      {"repo": "noorinalabs-isnad-ingest-platform", "implementer": "Yusuke", "second_reviewer": "Adaeze"},
-      {"repo": "noorinalabs-deploy", "implementer": "Lucas Ferreira", "second_reviewer": "Bereket Tadesse"},
-      {"repo": "noorinalabs-landing-page", "implementer": "K. Mensah-Williams", "second_reviewer": "Maeve"}
+      {
+        "repo": "noorinalabs-isnad-graph",
+        "implementer": "Linh Pham",
+        "second_reviewer": "Arjun Raghavan"
+      },
+      {
+        "repo": "noorinalabs-user-service",
+        "implementer": "Mateo Salazar",
+        "second_reviewer": "Anya Kowalczyk"
+      },
+      {
+        "repo": "noorinalabs-design-system",
+        "implementer": "Kofi Mensah",
+        "second_reviewer": "Maeve"
+      },
+      {
+        "repo": "noorinalabs-data-acquisition",
+        "implementer": "Sofia Cardoso",
+        "second_reviewer": "Kwesi Boateng"
+      },
+      {
+        "repo": "noorinalabs-isnad-ingest-platform",
+        "implementer": "Yusuke",
+        "second_reviewer": "Adaeze"
+      },
+      {
+        "repo": "noorinalabs-deploy",
+        "implementer": "Lucas Ferreira",
+        "second_reviewer": "Bereket Tadesse"
+      },
+      {
+        "repo": "noorinalabs-landing-page",
+        "implementer": "K. Mensah-Williams",
+        "second_reviewer": "Maeve"
+      }
     ],
     "tier_2_day0_deliverables": [
-      {"id": "noorinalabs-main#273", "title": "Thread /wave-scope into /wave-retro Step 9 + /wave-kickoff Step 0", "implementer": "Aino Virtanen", "reviewers": ["Wanjiku Mwangi", "Nadia Khoury"]},
-      {"id": "noorinalabs-main#269", "title": "Memory-audit: classify 36 feedback memories", "implementer": "Aino Virtanen", "reviewers": ["Wanjiku Mwangi", "Nadia Khoury"]}
+      {
+        "id": "noorinalabs-main#273",
+        "title": "Thread /wave-scope into /wave-retro Step 9 + /wave-kickoff Step 0",
+        "implementer": "Aino Virtanen",
+        "reviewers": [
+          "Wanjiku Mwangi",
+          "Nadia Khoury"
+        ]
+      },
+      {
+        "id": "noorinalabs-main#269",
+        "title": "Memory-audit: classify 36 feedback memories",
+        "implementer": "Aino Virtanen",
+        "reviewers": [
+          "Wanjiku Mwangi",
+          "Nadia Khoury"
+        ]
+      }
     ],
     "tier_3_ingest_platform_direct": [
-      {"id": "noorinalabs-isnad-ingest-platform#14", "title": "Regenerate uv.lock to include kafka-python and boto3, remove Dockerfile workaround", "implementer": "Yusuke", "reviewers": ["Adaeze", "Bjorn"]}
+      {
+        "id": "noorinalabs-isnad-ingest-platform#14",
+        "title": "Regenerate uv.lock to include kafka-python and boto3, remove Dockerfile workaround",
+        "implementer": "Yusuke",
+        "reviewers": [
+          "Adaeze",
+          "Bjorn"
+        ]
+      }
     ],
     "tier_4_small_followups": [
-      {"id": "noorinalabs-main#271", "title": "charter cross-reference between adjacent Single-Reviewer Exception sections", "implementer": "Wanjiku Mwangi", "reviewers": ["Aino Virtanen", "Nadia Khoury"]}
+      {
+        "id": "noorinalabs-main#271",
+        "title": "charter cross-reference between adjacent Single-Reviewer Exception sections",
+        "implementer": "Wanjiku Mwangi",
+        "reviewers": [
+          "Aino Virtanen",
+          "Nadia Khoury"
+        ]
+      }
     ],
     "deliberately_not_in_w5": [
       "noorinalabs-deploy backlog (~30 issues) — only #263 sliver in scope, broader deploy work continues prior W4 deferral",
@@ -62,8 +397,17 @@
   "wave_4_main_merge_sha": "af51f94",
   "wave_4_final_pr_count": 14,
   "wave_4_admin_overrides": 0,
-  "wave_4_carry_forward_to_wave_5": ["main#263", "main#264", "main#267"],
-  "wave_4_repos_descoped_during_wave": [{"repo": "noorinalabs-isnad-ingest-platform", "reason": "Kickoff-side scoping error (corrected per main#272) — listed in wave_4_repos_in_scope at kickoff but no tier item assigned ingest-platform a deliverable; the only touch-points (#214, #215) were structured as Phase-1-main-only with Phase-2 child fan-out always intended as W5 work (#263, #264). Not a wave-execution failure; not a theme-misalignment drop."}],
+  "wave_4_carry_forward_to_wave_5": [
+    "main#263",
+    "main#264",
+    "main#267"
+  ],
+  "wave_4_repos_descoped_during_wave": [
+    {
+      "repo": "noorinalabs-isnad-ingest-platform",
+      "reason": "Kickoff-side scoping error (corrected per main#272) — listed in wave_4_repos_in_scope at kickoff but no tier item assigned ingest-platform a deliverable; the only touch-points (#214, #215) were structured as Phase-1-main-only with Phase-2 child fan-out always intended as W5 work (#263, #264). Not a wave-execution failure; not a theme-misalignment drop."
+    }
+  ],
   "wave_4_retro_completed_at": "2026-05-05T22:00:00Z",
   "wave_3_completed_at": "2026-05-04T02:35:00Z",
   "wave_4_kicked_off_at": "2026-05-04T03:15:00Z",
@@ -81,45 +425,272 @@
   "wave_4_scope_total_issues": 31,
   "wave_4_scope": {
     "tier_1_validate_pr_review_family": [
-      {"id": "noorinalabs-main#244", "title": "validate_pr_review.py Requestee-as-reviewer mismatch", "assignee": "Aino Virtanen", "reviewers": ["Wanjiku Mwangi", "Nadia Khoury"], "branch": "A.Virtanen/0244-pr-review-canonicalization", "bundle": "PR closes #244 + #233 + #228"},
-      {"id": "noorinalabs-main#233", "title": "charter Requestor/Requestee directionality ambiguity", "assignee": "Aino Virtanen", "reviewers": ["Wanjiku Mwangi", "Nadia Khoury"], "bundle": "with #244"},
-      {"id": "noorinalabs-main#228", "title": "validate_pr_review hook doesn't honor Single-Reviewer Exception", "assignee": "Aino Virtanen", "reviewers": ["Wanjiku Mwangi", "Nadia Khoury"], "bundle": "with #244"}
+      {
+        "id": "noorinalabs-main#244",
+        "title": "validate_pr_review.py Requestee-as-reviewer mismatch",
+        "assignee": "Aino Virtanen",
+        "reviewers": [
+          "Wanjiku Mwangi",
+          "Nadia Khoury"
+        ],
+        "branch": "A.Virtanen/0244-pr-review-canonicalization",
+        "bundle": "PR closes #244 + #233 + #228"
+      },
+      {
+        "id": "noorinalabs-main#233",
+        "title": "charter Requestor/Requestee directionality ambiguity",
+        "assignee": "Aino Virtanen",
+        "reviewers": [
+          "Wanjiku Mwangi",
+          "Nadia Khoury"
+        ],
+        "bundle": "with #244"
+      },
+      {
+        "id": "noorinalabs-main#228",
+        "title": "validate_pr_review hook doesn't honor Single-Reviewer Exception",
+        "assignee": "Aino Virtanen",
+        "reviewers": [
+          "Wanjiku Mwangi",
+          "Nadia Khoury"
+        ],
+        "bundle": "with #244"
+      }
     ],
     "tier_2_hook_matcher_family": [
-      {"id": "noorinalabs-main#226", "title": "validate_commit_identity slurps -c user.email", "assignee": "Aino Virtanen", "reviewers": ["Nadia Khoury", "Wanjiku Mwangi"], "branch": "A.Virtanen/0226-hook-matcher-sanitization", "bundle": "PR closes #226 + #227 + #223 + #216 + #188 + #144 + #189"},
-      {"id": "noorinalabs-main#227", "title": "validate_branch_freshness uses dispatcher cwd", "bundle": "with #226"},
-      {"id": "noorinalabs-main#223", "title": "block_no_verify trips on heredoc body", "bundle": "with #226"},
-      {"id": "noorinalabs-main#216", "title": "block_git_config trips on heredoc body", "bundle": "with #226"},
-      {"id": "noorinalabs-main#188", "title": "validate_commit_identity heredoc stripping breaks on nested heredoc", "bundle": "with #226"},
-      {"id": "noorinalabs-main#144", "title": "validate_branch_freshness uses parent cwd, not worktree", "bundle": "with #226"},
-      {"id": "noorinalabs-main#189", "title": "block_shutdown_without_retro false-positive on subagent task-complete", "bundle": "with #226"},
-      {"id": "noorinalabs-isnad-graph#819", "title": "validate_commit_identity ignores cross-repo roster lookup", "assignee": "Linh Pham", "reviewers": ["Jelani Mwangi", "Arjun Raghavan"], "branch": "L.Pham/0819-hook-cross-repo-roster", "bundle": "PR closes isnad-graph#819 + #814"},
-      {"id": "noorinalabs-isnad-graph#814", "title": "validate_commit_identity heredoc/quote-strip ordering fragile", "bundle": "with isnad-graph#819"}
+      {
+        "id": "noorinalabs-main#226",
+        "title": "validate_commit_identity slurps -c user.email",
+        "assignee": "Aino Virtanen",
+        "reviewers": [
+          "Nadia Khoury",
+          "Wanjiku Mwangi"
+        ],
+        "branch": "A.Virtanen/0226-hook-matcher-sanitization",
+        "bundle": "PR closes #226 + #227 + #223 + #216 + #188 + #144 + #189"
+      },
+      {
+        "id": "noorinalabs-main#227",
+        "title": "validate_branch_freshness uses dispatcher cwd",
+        "bundle": "with #226"
+      },
+      {
+        "id": "noorinalabs-main#223",
+        "title": "block_no_verify trips on heredoc body",
+        "bundle": "with #226"
+      },
+      {
+        "id": "noorinalabs-main#216",
+        "title": "block_git_config trips on heredoc body",
+        "bundle": "with #226"
+      },
+      {
+        "id": "noorinalabs-main#188",
+        "title": "validate_commit_identity heredoc stripping breaks on nested heredoc",
+        "bundle": "with #226"
+      },
+      {
+        "id": "noorinalabs-main#144",
+        "title": "validate_branch_freshness uses parent cwd, not worktree",
+        "bundle": "with #226"
+      },
+      {
+        "id": "noorinalabs-main#189",
+        "title": "block_shutdown_without_retro false-positive on subagent task-complete",
+        "bundle": "with #226"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#819",
+        "title": "validate_commit_identity ignores cross-repo roster lookup",
+        "assignee": "Linh Pham",
+        "reviewers": [
+          "Jelani Mwangi",
+          "Arjun Raghavan"
+        ],
+        "branch": "L.Pham/0819-hook-cross-repo-roster",
+        "bundle": "PR closes isnad-graph#819 + #814"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#814",
+        "title": "validate_commit_identity heredoc/quote-strip ordering fragile",
+        "bundle": "with isnad-graph#819"
+      }
     ],
     "tier_3_skill_and_retro_action_items": [
-      {"id": "noorinalabs-main#238", "title": "/wave-kickoff multi-repo wave-branch creation", "assignee": "Wanjiku Mwangi", "reviewers": ["Aino Virtanen", "Nadia Khoury"], "branch": "W.Mwangi/0238-wave-kickoff-multi-repo"},
-      {"id": "noorinalabs-main#158", "title": "promotion-audit fall-back signal — stale-memory warning class", "assignee": "Aino Virtanen", "reviewers": ["Wanjiku Mwangi", "Santiago Ferreira"], "branch": "A.Virtanen/0158-promotion-audit-fallback"},
-      {"id": "noorinalabs-main#196", "title": "/wave-scope skill — reconcile meta-issue vs labels", "assignee": "Wanjiku Mwangi", "reviewers": ["Nadia Khoury", "Aino Virtanen"], "branch": "W.Mwangi/0196-wave-scope-skill"}
+      {
+        "id": "noorinalabs-main#238",
+        "title": "/wave-kickoff multi-repo wave-branch creation",
+        "assignee": "Wanjiku Mwangi",
+        "reviewers": [
+          "Aino Virtanen",
+          "Nadia Khoury"
+        ],
+        "branch": "W.Mwangi/0238-wave-kickoff-multi-repo"
+      },
+      {
+        "id": "noorinalabs-main#158",
+        "title": "promotion-audit fall-back signal — stale-memory warning class",
+        "assignee": "Aino Virtanen",
+        "reviewers": [
+          "Wanjiku Mwangi",
+          "Santiago Ferreira"
+        ],
+        "branch": "A.Virtanen/0158-promotion-audit-fallback"
+      },
+      {
+        "id": "noorinalabs-main#196",
+        "title": "/wave-scope skill — reconcile meta-issue vs labels",
+        "assignee": "Wanjiku Mwangi",
+        "reviewers": [
+          "Nadia Khoury",
+          "Aino Virtanen"
+        ],
+        "branch": "W.Mwangi/0196-wave-scope-skill"
+      }
     ],
     "tier_4_charter_docs_sweep": [
-      {"id": "noorinalabs-main#225", "title": "secrets-audit doc sweep §3.0.a TODO + §3.4/§3.8 back-refs", "assignee": "Aino Virtanen", "reviewers": ["Wanjiku Mwangi", "Nadia Khoury"], "branch": "A.Virtanen/0225-charter-docs-sweep", "bundle": "PR closes #225 + #239 + #240 + #200 + #201 + #197"},
-      {"id": "noorinalabs-main#239", "title": "charter base-image-pinning convention", "bundle": "with #225"},
-      {"id": "noorinalabs-main#240", "title": "charter per-env OAuth provisioning convention", "bundle": "with #225"},
-      {"id": "noorinalabs-main#200", "title": "charter wave-branch CI triggers (W10 carry-forward)", "bundle": "with #225"},
-      {"id": "noorinalabs-main#201", "title": "charter spawn-prompt template — reviewer-slate first-line (W10 carry-forward)", "bundle": "with #225"},
-      {"id": "noorinalabs-main#197", "title": "docs: clarify single-leader session-team architecture", "bundle": "with #225"},
-      {"id": "noorinalabs-isnad-graph#852", "title": "CLAUDE.md branching backslash → slash sync", "assignee": "Ingrid Lindqvist", "reviewers": ["Anya Kowalczyk"], "branch": "I.Lindqvist/0852-claude-md-branching-sync", "wave_bootstrap": true},
-      {"id": "noorinalabs-user-service#90", "title": "CLAUDE.md branching backslash → slash sync", "assignee": "Mateo Salazar", "reviewers": ["Anya Kowalczyk"], "branch": "M.Salazar/0090-claude-md-branching-sync", "wave_bootstrap": true},
-      {"id": "noorinalabs-design-system#62", "title": "CLAUDE.md branching backslash → slash sync", "assignee": "Kofi Mensah", "reviewers": ["Maeve Callahan"], "branch": "K.Mensah/0062-claude-md-branching-sync", "wave_bootstrap": true},
-      {"id": "noorinalabs-data-acquisition#33", "title": "CLAUDE.md branching backslash → slash sync", "assignee": "Sofia Cardoso", "reviewers": ["Dilara Erdogan"], "branch": "S.Cardoso/0033-claude-md-branching-sync", "wave_bootstrap": true}
+      {
+        "id": "noorinalabs-main#225",
+        "title": "secrets-audit doc sweep §3.0.a TODO + §3.4/§3.8 back-refs",
+        "assignee": "Aino Virtanen",
+        "reviewers": [
+          "Wanjiku Mwangi",
+          "Nadia Khoury"
+        ],
+        "branch": "A.Virtanen/0225-charter-docs-sweep",
+        "bundle": "PR closes #225 + #239 + #240 + #200 + #201 + #197"
+      },
+      {
+        "id": "noorinalabs-main#239",
+        "title": "charter base-image-pinning convention",
+        "bundle": "with #225"
+      },
+      {
+        "id": "noorinalabs-main#240",
+        "title": "charter per-env OAuth provisioning convention",
+        "bundle": "with #225"
+      },
+      {
+        "id": "noorinalabs-main#200",
+        "title": "charter wave-branch CI triggers (W10 carry-forward)",
+        "bundle": "with #225"
+      },
+      {
+        "id": "noorinalabs-main#201",
+        "title": "charter spawn-prompt template — reviewer-slate first-line (W10 carry-forward)",
+        "bundle": "with #225"
+      },
+      {
+        "id": "noorinalabs-main#197",
+        "title": "docs: clarify single-leader session-team architecture",
+        "bundle": "with #225"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#852",
+        "title": "CLAUDE.md branching backslash → slash sync",
+        "assignee": "Ingrid Lindqvist",
+        "reviewers": [
+          "Anya Kowalczyk"
+        ],
+        "branch": "I.Lindqvist/0852-claude-md-branching-sync",
+        "wave_bootstrap": true
+      },
+      {
+        "id": "noorinalabs-user-service#90",
+        "title": "CLAUDE.md branching backslash → slash sync",
+        "assignee": "Mateo Salazar",
+        "reviewers": [
+          "Anya Kowalczyk"
+        ],
+        "branch": "M.Salazar/0090-claude-md-branching-sync",
+        "wave_bootstrap": true
+      },
+      {
+        "id": "noorinalabs-design-system#62",
+        "title": "CLAUDE.md branching backslash → slash sync",
+        "assignee": "Kofi Mensah",
+        "reviewers": [
+          "Maeve Callahan"
+        ],
+        "branch": "K.Mensah/0062-claude-md-branching-sync",
+        "wave_bootstrap": true
+      },
+      {
+        "id": "noorinalabs-data-acquisition#33",
+        "title": "CLAUDE.md branching backslash → slash sync",
+        "assignee": "Sofia Cardoso",
+        "reviewers": [
+          "Dilara Erdogan"
+        ],
+        "branch": "S.Cardoso/0033-claude-md-branching-sync",
+        "wave_bootstrap": true
+      }
     ],
     "tier_5_firm_per_owner_directive_2026_05_04": [
-      {"id": "noorinalabs-main#214", "title": "rationalize parent-canonical hook paths org-wide", "assignee": "Aino Virtanen", "reviewers": ["Wanjiku Mwangi", "Nadia Khoury"], "branch": "A.Virtanen/0214-parent-canonical-hook-paths"},
-      {"id": "noorinalabs-main#215", "title": "settings.json fan-out (US + ingest-platform)", "assignee": "Aino Virtanen", "reviewers": ["Wanjiku Mwangi", "Santiago Ferreira"], "branch": "A.Virtanen/0215-settings-json-fanout", "touches_repos": ["noorinalabs-user-service", "noorinalabs-isnad-ingest-platform"]},
-      {"id": "noorinalabs-main#236", "title": "feedback-promotion: Reviewer Pattern C (TF state-drift)", "assignee": "Nadia Khoury", "reviewers": ["Aino Virtanen", "Santiago Ferreira"], "branch": "N.Khoury/0236-pattern-c-promotion"},
-      {"id": "noorinalabs-main#198", "title": "validate_edit_completion (new hook)", "assignee": "Aino Virtanen", "reviewers": ["Wanjiku Mwangi", "Nadia Khoury"], "branch": "A.Virtanen/0198-validate-edit-completion"},
-      {"id": "noorinalabs-main#203", "title": "validate_workflow_paths_coverage (new hook)", "assignee": "Aino Virtanen", "reviewers": ["Wanjiku Mwangi", "Nadia Khoury"], "branch": "A.Virtanen/0203-validate-workflow-paths-coverage"},
-      {"id": "noorinalabs-main#219", "title": "Hook 14 NEUTRAL conclusion bypass (Chromatic gate gap)", "assignee": "Aino Virtanen", "reviewers": ["Wanjiku Mwangi", "Santiago Ferreira"], "branch": "A.Virtanen/0219-hook14-neutral-bypass"}
+      {
+        "id": "noorinalabs-main#214",
+        "title": "rationalize parent-canonical hook paths org-wide",
+        "assignee": "Aino Virtanen",
+        "reviewers": [
+          "Wanjiku Mwangi",
+          "Nadia Khoury"
+        ],
+        "branch": "A.Virtanen/0214-parent-canonical-hook-paths"
+      },
+      {
+        "id": "noorinalabs-main#215",
+        "title": "settings.json fan-out (US + ingest-platform)",
+        "assignee": "Aino Virtanen",
+        "reviewers": [
+          "Wanjiku Mwangi",
+          "Santiago Ferreira"
+        ],
+        "branch": "A.Virtanen/0215-settings-json-fanout",
+        "touches_repos": [
+          "noorinalabs-user-service",
+          "noorinalabs-isnad-ingest-platform"
+        ]
+      },
+      {
+        "id": "noorinalabs-main#236",
+        "title": "feedback-promotion: Reviewer Pattern C (TF state-drift)",
+        "assignee": "Nadia Khoury",
+        "reviewers": [
+          "Aino Virtanen",
+          "Santiago Ferreira"
+        ],
+        "branch": "N.Khoury/0236-pattern-c-promotion"
+      },
+      {
+        "id": "noorinalabs-main#198",
+        "title": "validate_edit_completion (new hook)",
+        "assignee": "Aino Virtanen",
+        "reviewers": [
+          "Wanjiku Mwangi",
+          "Nadia Khoury"
+        ],
+        "branch": "A.Virtanen/0198-validate-edit-completion"
+      },
+      {
+        "id": "noorinalabs-main#203",
+        "title": "validate_workflow_paths_coverage (new hook)",
+        "assignee": "Aino Virtanen",
+        "reviewers": [
+          "Wanjiku Mwangi",
+          "Nadia Khoury"
+        ],
+        "branch": "A.Virtanen/0203-validate-workflow-paths-coverage"
+      },
+      {
+        "id": "noorinalabs-main#219",
+        "title": "Hook 14 NEUTRAL conclusion bypass (Chromatic gate gap)",
+        "assignee": "Aino Virtanen",
+        "reviewers": [
+          "Wanjiku Mwangi",
+          "Santiago Ferreira"
+        ],
+        "branch": "A.Virtanen/0219-hook14-neutral-bypass"
+      }
     ],
     "deliberately_not_in_w4": [
       "noorinalabs-deploy backlog (~50 issues) — wave is hooks/charter/skill scope; deploy work resumes W5+",
@@ -150,7 +721,12 @@
   "wave_3_theme": "Post-emergency stabilization + frontend-API absolute-URLs phase 2",
   "wave_3_branch": "deployments/phase-3/wave-3",
   "wave_3_length_estimate_days": "7-9",
-  "wave_3_repos_in_scope": ["noorinalabs-deploy", "noorinalabs-main", "noorinalabs-isnad-graph", "noorinalabs-landing-page"],
+  "wave_3_repos_in_scope": [
+    "noorinalabs-deploy",
+    "noorinalabs-main",
+    "noorinalabs-isnad-graph",
+    "noorinalabs-landing-page"
+  ],
   "wave_3_branches_per_repo": {
     "noorinalabs-main": "f962b0f→27ba9e6 (planning + kickoff)",
     "noorinalabs-deploy": "0b3b214 (created at first-implementer-spawn 2026-05-03; Aisha-252 caught the orchestrator gap)",
@@ -164,28 +740,120 @@
   ],
   "wave_3_scope": {
     "tier_1_emergency_exposed_gaps": [
-      {"id": "noorinalabs-deploy#252", "title": "smoke tests pointing at destroyed isnad-graph.noorinalabs.com hostname", "priority": "bug,priority-high", "assignee": "Aisha Idrissi", "reviewer": "Bereket Tadesse"},
-      {"id": "noorinalabs-isnad-graph#853", "title": "Publish to GHCR red — Trivy HIGH on nghttp2-libs CVE-2026-27135 (frontend image)", "priority": "bug,priority-high", "assignee": "Idris Yusuf", "reviewer": "Linh Pham", "added_at_kickoff": "2026-05-03 — surfaced by pre-wave CI triage; blocker for #245 frontend artifact promotion", "pr": "noorinalabs-isnad-graph#854 OPEN, MERGEABLE/CLEAN, base=deployments/phase-3/wave-3, head=f091e11. Combined nginx digest-pin (sha256:0272e460) + RUN apk upgrade --no-cache. nghttp2-libs 1.68.0-r0→1.69.0-r0 verified locally. Image size 93.5→95.2MB (+1.8%). Awaiting Linh Pham review."},
-      {"id": "noorinalabs-deploy#249", "title": "cold-rebuild dry-run as acceptance gate for promotion-pathway / migration / TF-apply workflows", "assignee": "Aisha Idrissi", "reviewer": "Lucas Ferreira"},
-      {"id": "noorinalabs-deploy#250", "title": "wire terraform/cloudflare into CI apply matrix (#226 ran locally only)", "assignee": "Lucas Ferreira", "reviewer": "Aisha Idrissi"},
-      {"id": "noorinalabs-deploy#251", "title": "alert/audit on break-glass workflow input usage (skip_alembic_gate / allow_stg_tags)", "assignee": "Weronika Zielinska", "reviewer": "Bereket Tadesse"},
-      {"id": "noorinalabs-deploy#242", "title": "standardize all 4 services on multi-arch images (root-fix promote.yml multi-arch assumption)", "assignee": "Lucas Ferreira", "reviewer": "Aisha Idrissi", "actual_repo_for_changes": "noorinalabs-landing-page (the only single-arch outlier per #242 issue body table; remaining work is its ghcr-publish.yml + a follow-up promote.yml branch deletion in noorinalabs-deploy). Sibling-of isnad-graph#853 corrected at kickoff 2026-05-03 (Idris-853 catch via issue-body re-read; see issuecomment-4366836610)."},
-      {"id": "noorinalabs-deploy#255", "title": "prometheus blackbox-exporter still probing destroyed isnad-graph.noorinalabs.com (steady-state monitor counterpart to #252)", "priority": "bug,priority-high,ci-cd", "assignee": "Weronika Zielinska", "reviewer": "Bereket Tadesse", "added_at_owner_decision_2026_05_03": "Aisha-252 surfaced during PR#254 work; multi-layer-gap discipline (separate lifecycle from #252 hostname-rot in scripts/workflows). Weronika owns the blackbox-exporter (#183 lineage); Bereket continuing as obs reviewer."},
-      {"id": "noorinalabs-deploy#256", "title": "smoke check 6 phantom /auth/login route (closes remaining 1/6 of #252 acceptance)", "priority": "bug,ci-cd", "assignee": "Aisha Idrissi", "reviewer": "Bereket Tadesse", "added_at_owner_decision_2026_05_03": "Aisha-252 surfaced during live-trace verification of PR#254. Script-correctness, not hostname-rot. user-service exposes /auth/oauth/{provider}/login not /auth/login. 1-line fix; sequential to PR#254 merge for clean rebase."}
+      {
+        "id": "noorinalabs-deploy#252",
+        "title": "smoke tests pointing at destroyed isnad-graph.noorinalabs.com hostname",
+        "priority": "bug,priority-high",
+        "assignee": "Aisha Idrissi",
+        "reviewer": "Bereket Tadesse"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#853",
+        "title": "Publish to GHCR red — Trivy HIGH on nghttp2-libs CVE-2026-27135 (frontend image)",
+        "priority": "bug,priority-high",
+        "assignee": "Idris Yusuf",
+        "reviewer": "Linh Pham",
+        "added_at_kickoff": "2026-05-03 — surfaced by pre-wave CI triage; blocker for #245 frontend artifact promotion",
+        "pr": "noorinalabs-isnad-graph#854 OPEN, MERGEABLE/CLEAN, base=deployments/phase-3/wave-3, head=f091e11. Combined nginx digest-pin (sha256:0272e460) + RUN apk upgrade --no-cache. nghttp2-libs 1.68.0-r0→1.69.0-r0 verified locally. Image size 93.5→95.2MB (+1.8%). Awaiting Linh Pham review."
+      },
+      {
+        "id": "noorinalabs-deploy#249",
+        "title": "cold-rebuild dry-run as acceptance gate for promotion-pathway / migration / TF-apply workflows",
+        "assignee": "Aisha Idrissi",
+        "reviewer": "Lucas Ferreira"
+      },
+      {
+        "id": "noorinalabs-deploy#250",
+        "title": "wire terraform/cloudflare into CI apply matrix (#226 ran locally only)",
+        "assignee": "Lucas Ferreira",
+        "reviewer": "Aisha Idrissi"
+      },
+      {
+        "id": "noorinalabs-deploy#251",
+        "title": "alert/audit on break-glass workflow input usage (skip_alembic_gate / allow_stg_tags)",
+        "assignee": "Weronika Zielinska",
+        "reviewer": "Bereket Tadesse"
+      },
+      {
+        "id": "noorinalabs-deploy#242",
+        "title": "standardize all 4 services on multi-arch images (root-fix promote.yml multi-arch assumption)",
+        "assignee": "Lucas Ferreira",
+        "reviewer": "Aisha Idrissi",
+        "actual_repo_for_changes": "noorinalabs-landing-page (the only single-arch outlier per #242 issue body table; remaining work is its ghcr-publish.yml + a follow-up promote.yml branch deletion in noorinalabs-deploy). Sibling-of isnad-graph#853 corrected at kickoff 2026-05-03 (Idris-853 catch via issue-body re-read; see issuecomment-4366836610)."
+      },
+      {
+        "id": "noorinalabs-deploy#255",
+        "title": "prometheus blackbox-exporter still probing destroyed isnad-graph.noorinalabs.com (steady-state monitor counterpart to #252)",
+        "priority": "bug,priority-high,ci-cd",
+        "assignee": "Weronika Zielinska",
+        "reviewer": "Bereket Tadesse",
+        "added_at_owner_decision_2026_05_03": "Aisha-252 surfaced during PR#254 work; multi-layer-gap discipline (separate lifecycle from #252 hostname-rot in scripts/workflows). Weronika owns the blackbox-exporter (#183 lineage); Bereket continuing as obs reviewer."
+      },
+      {
+        "id": "noorinalabs-deploy#256",
+        "title": "smoke check 6 phantom /auth/login route (closes remaining 1/6 of #252 acceptance)",
+        "priority": "bug,ci-cd",
+        "assignee": "Aisha Idrissi",
+        "reviewer": "Bereket Tadesse",
+        "added_at_owner_decision_2026_05_03": "Aisha-252 surfaced during live-trace verification of PR#254. Script-correctness, not hostname-rot. user-service exposes /auth/oauth/{provider}/login not /auth/login. 1-line fix; sequential to PR#254 merge for clean rebase."
+      }
     ],
     "tier_2_frontend_absolute_urls_phase_2": [
-      {"id": "noorinalabs-deploy#243", "title": "Caddy CSP / COOP / CORP for users.${BASE_DOMAIN} API surface", "assignee": "Lucas Ferreira", "reviewer": "Bereket Tadesse", "ships_before": "noorinalabs-deploy#245 (CORS gate)"},
-      {"id": "noorinalabs-deploy#245", "title": "frontend uses absolute URLs targeting users.{base}; isnad.{base} can drop /auth proxy", "assignee": "Aisha Idrissi", "reviewer": "Lucas Ferreira", "depends_on": ["noorinalabs-deploy#243 (CSP)", "noorinalabs-isnad-graph#853 (frontend image publishing)"]},
-      {"id": "noorinalabs-deploy#244", "title": "per-env OAuth (REDUCED to docs+cleanup — provisioning verified DONE 2026-05-02 per kickoff audit)", "assignee": "Aisha Idrissi", "reviewer": "Lucas Ferreira", "scope_reduction_at_kickoff": "Provisioning + stg env-scope confirmed via gh secret list. Remaining: prod-org→env-scope cleanup, runbook, charter promotion. Parallel-able. See issue comment 4366806318."}
+      {
+        "id": "noorinalabs-deploy#243",
+        "title": "Caddy CSP / COOP / CORP for users.${BASE_DOMAIN} API surface",
+        "assignee": "Lucas Ferreira",
+        "reviewer": "Bereket Tadesse",
+        "ships_before": "noorinalabs-deploy#245 (CORS gate)"
+      },
+      {
+        "id": "noorinalabs-deploy#245",
+        "title": "frontend uses absolute URLs targeting users.{base}; isnad.{base} can drop /auth proxy",
+        "assignee": "Aisha Idrissi",
+        "reviewer": "Lucas Ferreira",
+        "depends_on": [
+          "noorinalabs-deploy#243 (CSP)",
+          "noorinalabs-isnad-graph#853 (frontend image publishing)"
+        ]
+      },
+      {
+        "id": "noorinalabs-deploy#244",
+        "title": "per-env OAuth (REDUCED to docs+cleanup — provisioning verified DONE 2026-05-02 per kickoff audit)",
+        "assignee": "Aisha Idrissi",
+        "reviewer": "Lucas Ferreira",
+        "scope_reduction_at_kickoff": "Provisioning + stg env-scope confirmed via gh secret list. Remaining: prod-org→env-scope cleanup, runbook, charter promotion. Parallel-able. See issue comment 4366806318."
+      }
     ],
     "tier_3_process_cleanup_p3w2_retro_outcomes": [
-      {"id": "noorinalabs-main#234", "title": "Pattern D adoption signal-check (tracking audit)", "assignee": "Nadia Khoury", "reviewer": "Aino Virtanen"},
-      {"id": "noorinalabs-main#237", "title": "/tmp/* file race hardening — PreToolUse hook on git commit -F / gh --body-file with stale mtime", "assignee": "Aino Virtanen", "reviewer": "Nadia Khoury"}
+      {
+        "id": "noorinalabs-main#234",
+        "title": "Pattern D adoption signal-check (tracking audit)",
+        "assignee": "Nadia Khoury",
+        "reviewer": "Aino Virtanen"
+      },
+      {
+        "id": "noorinalabs-main#237",
+        "title": "/tmp/* file race hardening — PreToolUse hook on git commit -F / gh --body-file with stale mtime",
+        "assignee": "Aino Virtanen",
+        "reviewer": "Nadia Khoury"
+      }
     ],
     "owner_action_track": [
-      {"id": "A", "task": "Rotate CLOUDFLARE_API_TOKEN", "status": "DONE 2026-05-03 (owner-confirmed)"},
-      {"id": "B", "task": "Rotate TF_STATE_B2_KEY_ID + TF_STATE_B2_APP_KEY", "status": "DONE 2026-05-03 (owner-confirmed)"},
-      {"id": "C", "task": "Disable Cloudflare Web Analytics on noorinalabs.com zone", "status": "DROPPED 2026-05-03 — owner countered with utilize-not-disable. CWA stays enabled. Free-tier utilization tracked as deploy#253 (phase-3 backlog, not W3)."}
+      {
+        "id": "A",
+        "task": "Rotate CLOUDFLARE_API_TOKEN",
+        "status": "DONE 2026-05-03 (owner-confirmed)"
+      },
+      {
+        "id": "B",
+        "task": "Rotate TF_STATE_B2_KEY_ID + TF_STATE_B2_APP_KEY",
+        "status": "DONE 2026-05-03 (owner-confirmed)"
+      },
+      {
+        "id": "C",
+        "task": "Disable Cloudflare Web Analytics on noorinalabs.com zone",
+        "status": "DROPPED 2026-05-03 — owner countered with utilize-not-disable. CWA stays enabled. Free-tier utilization tracked as deploy#253 (phase-3 backlog, not W3)."
+      }
     ],
     "stretch_if_tier_1_2_finishes_early": [
       "noorinalabs-deploy#231 (Phase C runbook reframe — owner-driven supersedes routine; direct emergency-thread lesson)",
@@ -215,20 +883,71 @@
   "wave_1_theme": "Promotion pipeline goes prod — owner directive: pipeline running seamlessly so team can refocus on product + process",
   "wave_1_scope": {
     "tier_1_core_promotion_pipeline": [
-      {"id": "noorinalabs-deploy#178", "title": "integration-tests remote-mode for post-deploy validation", "assignee": "Aisha Idrissi", "reviewer": "Lucas Ferreira"},
-      {"id": "noorinalabs-deploy#179", "title": "promote.yml gates prod-promote on latest stg verify-deploy", "assignee": "Aisha Idrissi", "reviewer": "Lucas Ferreira"},
-      {"id": "noorinalabs-deploy#160", "title": "wire db-migrate.yml into promote/deploy-stg/deploy-prod", "assignee": "Lucas Ferreira", "reviewer": "Aisha Idrissi"},
-      {"id": "noorinalabs-deploy#67", "title": "Rollback workflow missing user-service and landing targets", "assignee": "Lucas Ferreira", "reviewer": "Aisha Idrissi"},
-      {"id": "noorinalabs-deploy#73", "title": "Verify-deploy workflow only triggers after isnad-graph", "assignee": "Lucas Ferreira", "reviewer": "Aisha Idrissi"}
+      {
+        "id": "noorinalabs-deploy#178",
+        "title": "integration-tests remote-mode for post-deploy validation",
+        "assignee": "Aisha Idrissi",
+        "reviewer": "Lucas Ferreira"
+      },
+      {
+        "id": "noorinalabs-deploy#179",
+        "title": "promote.yml gates prod-promote on latest stg verify-deploy",
+        "assignee": "Aisha Idrissi",
+        "reviewer": "Lucas Ferreira"
+      },
+      {
+        "id": "noorinalabs-deploy#160",
+        "title": "wire db-migrate.yml into promote/deploy-stg/deploy-prod",
+        "assignee": "Lucas Ferreira",
+        "reviewer": "Aisha Idrissi"
+      },
+      {
+        "id": "noorinalabs-deploy#67",
+        "title": "Rollback workflow missing user-service and landing targets",
+        "assignee": "Lucas Ferreira",
+        "reviewer": "Aisha Idrissi"
+      },
+      {
+        "id": "noorinalabs-deploy#73",
+        "title": "Verify-deploy workflow only triggers after isnad-graph",
+        "assignee": "Lucas Ferreira",
+        "reviewer": "Aisha Idrissi"
+      }
     ],
     "tier_2_visibility": [
-      {"id": "noorinalabs-deploy#161", "title": "alembic pre-deploy gate textfile metrics", "assignee": "Aisha Idrissi", "reviewer": "Bereket Tadesse"},
-      {"id": "noorinalabs-deploy#183", "title": "blackbox-exporter for continuous prod-route probing", "assignee": "Weronika Zielinska", "reviewer": "Bereket Tadesse"}
+      {
+        "id": "noorinalabs-deploy#161",
+        "title": "alembic pre-deploy gate textfile metrics",
+        "assignee": "Aisha Idrissi",
+        "reviewer": "Bereket Tadesse"
+      },
+      {
+        "id": "noorinalabs-deploy#183",
+        "title": "blackbox-exporter for continuous prod-route probing",
+        "assignee": "Weronika Zielinska",
+        "reviewer": "Bereket Tadesse"
+      }
     ],
     "tier_3_carry_forwards": [
-      {"id": "noorinalabs-deploy#86", "type": "async-routine", "routine_id": "trig_01Bif8T51pdaYFjkbM5bERyL", "assignee": "Nadia Khoury (tracker)", "reviewer": "Bereket Tadesse"},
-      {"id": "noorinalabs-deploy#151", "type": "manual-sre", "assignee": "Aisha Idrissi", "reviewer": "Bereket Tadesse"},
-      {"id": "noorinalabs-user-service#84", "type": "manual-sre", "assignee": "Mateo Salazar", "reviewer": "Anya Kowalczyk"}
+      {
+        "id": "noorinalabs-deploy#86",
+        "type": "async-routine",
+        "routine_id": "trig_01Bif8T51pdaYFjkbM5bERyL",
+        "assignee": "Nadia Khoury (tracker)",
+        "reviewer": "Bereket Tadesse"
+      },
+      {
+        "id": "noorinalabs-deploy#151",
+        "type": "manual-sre",
+        "assignee": "Aisha Idrissi",
+        "reviewer": "Bereket Tadesse"
+      },
+      {
+        "id": "noorinalabs-user-service#84",
+        "type": "manual-sre",
+        "assignee": "Mateo Salazar",
+        "reviewer": "Anya Kowalczyk"
+      }
     ],
     "stretch_if_tier_1_2_finishes_early": [
       "noorinalabs-deploy#192 (apply CF stg subdomain TF)",
@@ -251,9 +970,22 @@
     "noorinalabs-data-acquisition": 3
   },
   "phase_3_carry_forwards": [
-    {"id": "noorinalabs-deploy#86", "type": "async-routine", "routine_id": "trig_01Bif8T51pdaYFjkbM5bERyL", "note": "VPS decom; fires after wave-10 → main merge (now satisfied)"},
-    {"id": "noorinalabs-deploy#151", "type": "manual-sre", "note": "B2 tfstate-key migration hetzner/terraform.tfstate → hetzner/prod.tfstate"},
-    {"id": "noorinalabs-user-service#84", "type": "manual-sre", "note": "Provision DEPLOY_REPO_PAT secret for notify-deploy job"}
+    {
+      "id": "noorinalabs-deploy#86",
+      "type": "async-routine",
+      "routine_id": "trig_01Bif8T51pdaYFjkbM5bERyL",
+      "note": "VPS decom; fires after wave-10 → main merge (now satisfied)"
+    },
+    {
+      "id": "noorinalabs-deploy#151",
+      "type": "manual-sre",
+      "note": "B2 tfstate-key migration hetzner/terraform.tfstate → hetzner/prod.tfstate"
+    },
+    {
+      "id": "noorinalabs-user-service#84",
+      "type": "manual-sre",
+      "note": "Provision DEPLOY_REPO_PAT secret for notify-deploy job"
+    }
   ],
   "wave_branch_status": "phase-2 closed 2026-04-30. wave-10 retro PR #230 merged 20:47:41Z. Phase 3 deployments branch will be opened when wave-1 is planned. Wave-10 work fully on main: deploy promotion-pathway end-to-end, image-tag Contract v6 across 4 repos, alembic merge migration, CF + Hetzner per-env, SSE-B2 + URL-safe secrets, 4 hook updates (14, 15, 16, 17).",
   "open_prs_total": 0,
@@ -493,5 +1225,93 @@
         "Multi-instance dispatcher matcher-substring family: 5 known instances now (#118 #134 #216 #223 #226), plus 3 different-shape siblings (#227 cross-repo scope, #228 stricter-than-charter, label-validator meta-instance)"
       ]
     }
+  },
+  "wave_6_decisions": {
+    "implementer_substitutions": [],
+    "implementer_substitutions_check_note": "All 11 merged W6 PRs verified — actual committer matches kickoff-declared implementer for every PR (main#288 Aino, main#291 Wanjiku, isnad-graph#864 Jun-Seo Park, deploy#273 Lucas, design-system#69 Keanu, design-system#70 Maricel, data-acquisition#40 Tarek, data-acquisition#41 Alejandra, ingest-platform#28 Bjørn, landing-page#81+#82 Kofi Mensah-Williams). Zero swaps.",
+    "scope_drops": [
+      {
+        "repo": "noorinalabs-user-service",
+        "rationale": "Tier-1 backlog-triage only by W6 design (no Tier-2/3/4 PR work declared for this repo). Triage delivered as per-issue disposition table comment by Mateo Salazar on noorinalabs-main#284 (15 issues audited: 0 close, 2 relabel-phase-15, 13 confirm-actionable). PR optional per kickoff comment 'only required if a label-edit batch is large enough' — Mateo opted for comment-only. Wave-6 branch sha == main sha (identical, 0 PRs).",
+        "disposition": "by-design / not a real drop"
+      }
+    ],
+    "tier_1_triage_outcomes": {
+      "audited_total": 151,
+      "by_repo": {
+        "data-acquisition": 4,
+        "user-service": 15,
+        "design-system": 7,
+        "landing-page": 19,
+        "ingest-platform": 14,
+        "noorinalabs-main": 16,
+        "isnad-graph": 36,
+        "deploy": 40
+      },
+      "applied_during_wrapup": {
+        "close_as_stale": 13,
+        "close_as_duplicate": 2,
+        "relabel_phase_15": 28,
+        "carry_forward_strip_p3w6": 3,
+        "isnad_graph_pre_applied_by_implementer": 9
+      },
+      "applied_during_wrapup_note": "Bulk dispositions executed during P3W6 wrapup batch per owner directive. Issue audit trail in noorinalabs-main#284 comments 1-8 (one per repo)."
+    },
+    "wave_6_resolved_issues_closed_at_wrapup": [
+      {
+        "id": "noorinalabs-main#278",
+        "merged_via": "main#288"
+      },
+      {
+        "id": "noorinalabs-deploy#24",
+        "merged_via": "deploy#273"
+      },
+      {
+        "id": "noorinalabs-design-system#67",
+        "merged_via": "design-system#70"
+      },
+      {
+        "id": "noorinalabs-design-system#32",
+        "merged_via": "design-system#69"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#38",
+        "merged_via": "data-acquisition#41"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#22",
+        "merged_via": "data-acquisition#40"
+      },
+      {
+        "id": "noorinalabs-isnad-ingest-platform#7",
+        "merged_via": "ingest-platform#28"
+      },
+      {
+        "id": "noorinalabs-landing-page#77",
+        "merged_via": "landing-page#82"
+      },
+      {
+        "id": "noorinalabs-landing-page#49",
+        "merged_via": "landing-page#81"
+      }
+    ],
+    "wave_6_carry_forwards_to_w7": [
+      {
+        "id": "noorinalabs-main#287",
+        "shape": "validate_commit_identity false-block parser bug",
+        "rationale": "not addressed in W6"
+      },
+      {
+        "id": "noorinalabs-main#285",
+        "shape": "/wave-kickoff Step 1 EXISTING_SHA 404 capture",
+        "rationale": "explicitly deferred at kickoff per #284"
+      },
+      {
+        "id": "noorinalabs-deploy#274",
+        "shape": "Wire Alertmanager receivers to real notifier",
+        "rationale": "orphan filed during W6 (PR #273 review by Nurul Hakim); load-bearing followup to deploy#273 runbook claim"
+      }
+    ],
+    "wave_6_wrapup_started_at": "2026-05-07T03:00:00Z"
   }
 }
