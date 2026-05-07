@@ -298,15 +298,56 @@ Do NOT delete the original body — copy it (or post the pre-update version as a
 
 If any step surfaced a process gap (stale memory, missing meta-issue, vague reference), include a `**Process gaps surfaced**` section so the next retro can address them.
 
-### 13. Write reconciliation timestamp to `cross-repo-status.json` (added P3W5 #273)
+### 13. Write reconciliation timestamp + structured bookkeeping keys to `cross-repo-status.json`
 
-This is what `/wave-kickoff` Step 0a reads to confirm the wave's scope was reconciled before kickoff. Write only on full success — if the run aborted at step 7 (no dispositions) or step 10 (label-churn confirmation declined), do NOT write.
+This is what `/wave-kickoff` Steps 0a and 0 read to confirm the wave's scope was reconciled before kickoff AND to derive the per-repo iteration list. Write only on full success — if the run aborted at step 7 (no dispositions) or step 10 (label-churn confirmation declined), do NOT write.
+
+The helper writes **four** keys (added P3W5 #273; structured-keys triplet added P3W6 #278 after `/wave-kickoff 3 6` STOPped on the missing keys):
+
+| Key | Source | Type |
+|---|---|---|
+| `wave_{M}_scope_reconciled_at` | `$TS` — UTC ISO timestamp captured at write time | string |
+| `wave_{M}_repos_in_scope` | the canonical 8-repo `REPOS` array from Step 4, optionally overridden by `WAVE_SCOPE_REPOS` (space-separated repo names) when a wave deliberately excludes a repo | array of strings |
+| `wave_{M}_meta_issue` | `$META_ISSUE` from Step 3 | integer |
+| `wave_{M}_scope` | from `WAVE_SCOPE_STRUCTURED` env var (a JSON object the orchestrator built from the meta-issue body — tier_*_*, deliberately_not_in_w*, concentration metrics, etc.) — falls back to a minimal `{"declared_refs": [...], "carry_forwards": [...], "must_includes": [...]}` shape derived from steps 1-3 if the env var is unset | object |
 
 **Why not raw jq:** `jq ... > tmp && mv` round-trips reformat the entire file from compact-inline (the deliberate shape used by `/wave-kickoff` and `/wave-start` for `wave_{N}_*` keys) to jq's default pretty form, doubling line count and producing a 500+ line cosmetic diff per run. P3W5 PR #276 review flagged this as load-bearing. The targeted upsert helper below preserves the existing shape — replace-in-place when the key exists (zero churn), insert-near-sibling when it doesn't (delta = 1 line per new key).
 
 ```bash
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-UPSERT_ARGS=("wave_{M}_scope_reconciled_at=$(jq -nc --arg t "$TS" '$t')")
+
+# repos_in_scope: env-var override else canonical REPOS array from Step 4
+if [ -n "${WAVE_SCOPE_REPOS:-}" ]; then
+  REPOS_IN_SCOPE_JSON=$(printf '%s\n' $WAVE_SCOPE_REPOS | jq -Rnc '[inputs]')
+else
+  REPOS_IN_SCOPE_JSON=$(printf '%s\n' "${REPOS[@]}" | jq -Rnc '[inputs]')
+fi
+
+# wave_{M}_scope: WAVE_SCOPE_STRUCTURED if owner pre-built it, else minimal derived shape
+if [ -n "${WAVE_SCOPE_STRUCTURED:-}" ]; then
+  # Validate it is a JSON object before passing through
+  echo "$WAVE_SCOPE_STRUCTURED" | jq -e 'type == "object"' > /dev/null || {
+    echo "ERROR: WAVE_SCOPE_STRUCTURED is not a JSON object"; exit 1;
+  }
+  SCOPE_JSON="$WAVE_SCOPE_STRUCTURED"
+else
+  # Minimal deterministic shape from earlier steps
+  DECLARED_JSON=$(jq -Rnc '[inputs]' < /tmp/wavescope-{M}-declared-issues.txt)
+  CF_JSON=$(printf '%s\n' "${CARRY_FORWARDS[@]:-}" | jq -Rnc '[inputs | select(. != "")]')
+  MI_JSON=$(printf '%s\n' "${MUST_INCLUDES[@]:-}" | jq -Rnc '[inputs | select(. != "")]')
+  SCOPE_JSON=$(jq -nc \
+    --argjson d "$DECLARED_JSON" \
+    --argjson c "$CF_JSON" \
+    --argjson m "$MI_JSON" \
+    '{declared_refs: $d, carry_forwards: $c, must_includes: $m}')
+fi
+
+UPSERT_ARGS=(
+  "wave_{M}_scope_reconciled_at=$(jq -nc --arg t "$TS" '$t')"
+  "wave_{M}_repos_in_scope=$REPOS_IN_SCOPE_JSON"
+  "wave_{M}_meta_issue=$META_ISSUE"
+  "wave_{M}_scope=$SCOPE_JSON"
+)
 
 if [ -n "${SCOPE_RECONCILIATION_NOTE:-}" ]; then
   UPSERT_ARGS+=("wave_{M}_scope_reconciliation_note=$(jq -nc --arg n "$SCOPE_RECONCILIATION_NOTE" '$n')")
@@ -316,10 +357,15 @@ python3 "$REPO_ROOT/.claude/skills/wave-scope/upsert_status_keys.py" \
   "$REPO_ROOT/cross-repo-status.json" \
   "${UPSERT_ARGS[@]}"
 
-echo "  wave_{M}_scope_reconciled_at = $TS written to cross-repo-status.json"
+echo "  wave_{M}_scope_reconciled_at = $TS"
+echo "  wave_{M}_repos_in_scope      = $REPOS_IN_SCOPE_JSON"
+echo "  wave_{M}_meta_issue          = $META_ISSUE"
+echo "  wave_{M}_scope               = $(echo "$SCOPE_JSON" | jq -c 'keys')"
 ```
 
-The helper validates JSON pre- and post-write, replaces top-level keys in place when they already exist, and inserts new keys after the most-recent `wave_{N}_*` sibling line. Idempotent — re-running with identical values produces zero diff.
+The helper validates JSON pre- and post-write, replaces top-level keys in place when they already exist, and inserts new keys after the most-recent `wave_{N}_*` sibling line. Idempotent — re-running with identical values produces zero diff (re-confirmed via P3W6 #278 dry-run on a fictional `wave_99_*` shape).
+
+**Why these four are the canonical bookkeeping shape.** `/wave-kickoff` Step 0 STOPs unconditionally without `wave_{M}_repos_in_scope` (it iterates the array for branch creation, label application, and kickoff comments). `wave_{M}_meta_issue` lets retro/wrapup skills find the meta-issue without re-querying GitHub. `wave_{M}_scope` is the structured payload retros and audits read for tier-by-tier breakdown. Writing all three at scope-reconciliation time eliminates the W5 silent-zero-write and W6 in-band-repair patterns observed before #278.
 
 The optional `wave_{M}_scope_reconciliation_note` is for capturing edge cases (e.g., "no drift; no memory must-includes; manual run because skill not yet built"). Set `SCOPE_RECONCILIATION_NOTE` in the environment before invoking the helper if there is a non-trivial summary worth preserving for the next retro.
 
@@ -350,6 +396,7 @@ Re-running `/wave-scope` after an initial pass should:
 - Find drift = 0 if labels match the refreshed meta-issue.
 - Re-fold any new must-includes added to memory since the prior pass (cheap re-check).
 - Be safe to abort at any step before step 10 — only step 10 (label churn) and step 11 (meta-issue PATCH) mutate state.
+- Step 13's four `wave_{M}_*` JSON-write keys are upserted via `upsert_status_keys.py`: identical values produce zero diff, novel values produce 1 line per new key (plus replace-in-place when already present). This is the load-bearing shape #278 closed — no full-file reformat, no churn.
 
 ## Promotion provenance
 

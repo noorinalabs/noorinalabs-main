@@ -196,6 +196,13 @@ def _parse_workflow_paths(yml_text: str) -> tuple[set[str], bool]:
 
         # Inside `on:` block.
         if indent <= on_indent:
+            # Symmetric with the sibling-boundary case (line 220-227) and the
+            # EOF case (line 256-258): if we exit `on:` while still inside
+            # `pull_request:` with no `paths:` key seen, that's covers-all.
+            # Without this guard, workflows where `pull_request:` is the LAST
+            # child of `on:` are misparsed as covering-nothing (#289).
+            if in_pr and not pr_has_paths_key:
+                return set(), True
             in_on = False
             in_pr = False
             in_pr_paths = False

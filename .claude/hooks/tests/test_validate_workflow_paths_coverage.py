@@ -120,6 +120,26 @@ class ParseWorkflowPathsTests(unittest.TestCase):
         self.assertEqual(paths, set())
         self.assertTrue(no_paths)
 
+    def test_pr_last_child_of_on_without_paths_filter(self):
+        """Regression for #289: `pull_request:` as LAST child of `on:` with no
+        `paths:` key was misparsed as covering-nothing because the on:-block
+        boundary cleared `in_pr` without consulting `pr_has_paths_key`.
+        """
+        yml = (
+            "name: CI\n"
+            "on:\n"
+            "  push:\n"
+            "    branches: [main]\n"
+            "  pull_request:\n"
+            '    branches: [main, "deployments/**"]\n'
+            "jobs:\n"
+            "  build:\n"
+            "    runs-on: ubuntu-latest\n"
+        )
+        paths, no_paths = hook._parse_workflow_paths(yml)
+        self.assertEqual(paths, set())
+        self.assertTrue(no_paths)
+
     def test_pr_with_inline_paths_list(self):
         yml = 'name: CI\non:\n  pull_request:\n    paths: ["src/**", "tests/**"]\n'
         paths, no_paths = hook._parse_workflow_paths(yml)
