@@ -1625,5 +1625,16 @@
   ],
   "wave_7_final_pr_count": 12,
   "wave_7_changes_requested_cycles": 6,
-  "wave_7_top_concentration_pct": 17
+  "wave_7_top_concentration_pct": 17,
+  "wave_8_scope": {
+    "theme": "Foundation reset — hook/skill/charter ownership disambiguation + artifact-CI scope definition",
+    "meta_issue": 331,
+    "phase_3_end_state_targets": [
+      328,
+      326
+    ],
+    "set_at": "2026-05-08T21:42:38.454544Z",
+    "set_by": "owner directive 2026-05-08",
+    "tentative_w9": "Deploy spike + smoke scaffold (#323 stg + #329 smoke + #325 wrapup gate prep)"
+  }
 }
