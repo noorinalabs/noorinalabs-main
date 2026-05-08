@@ -1,4 +1,9 @@
 {
+  "wave_8_scope_reconciled_at": "2026-05-08T22:10:19Z",
+  "wave_8_repos_in_scope": ["noorinalabs-main","noorinalabs-isnad-graph","noorinalabs-user-service","noorinalabs-deploy","noorinalabs-design-system","noorinalabs-landing-page","noorinalabs-data-acquisition","noorinalabs-isnad-ingest-platform"],
+  "wave_8_meta_issue": 331,
+  "wave_8_scope": {"theme":"Foundation reset — hook/skill/charter ownership disambiguation + artifact-CI scope definition","phase_3_end_state_targets":[328,326],"tier_1_main_foundation":[{"id":"noorinalabs-main#328","role":"end-state-target","note":"Disambiguate hook/skill/charter ownership"},{"id":"noorinalabs-main#326","role":"end-state-target","note":"All committed artifacts pass all CI checks"},{"id":"noorinalabs-main#311","role":"work-item","note":"charter hooks.md dispatcher-children sub-clause"},{"id":"noorinalabs-main#313","role":"work-item","note":"charter hooks.md § Hook Audit Protocol"},{"id":"noorinalabs-main#283","role":"work-item","note":"/promotion-audit charter-tier scan"},{"id":"noorinalabs-main#290","role":"work-item","note":"agents.md isolation: worktree default"},{"id":"noorinalabs-main#317","role":"work-item","note":"W7 retro lint scan — cross-repo cleanup"},{"id":"noorinalabs-main#318","role":"work-item","note":"/wave-wrapup top-level counter keys"},{"id":"noorinalabs-main#319","role":"work-item","note":"/wave-scope roster validation"},{"id":"noorinalabs-main#320","role":"work-item","note":"reviewer throughline-watch default"}],"tier_2_main_parser_fixtures":[{"id":"noorinalabs-main#302","note":"parser fixtures for validate_review_comment_format"},{"id":"noorinalabs-main#303","note":"parser fixtures for validate_pr_review (>100 comment pagination)"},{"id":"noorinalabs-main#304","note":"parser fixtures for validate_labels (--label= equals form)"},{"id":"noorinalabs-main#306","note":"parser fixtures for validate_workflow_paths_coverage (YAML anchor)"},{"id":"noorinalabs-main#307","note":"parser fixtures for validate_pr_ci_status (empty rollup)"},{"id":"noorinalabs-main#309","note":"Org-wide GitHub Actions Node 20 deprecation — upgrade audit (5 repos)"}],"tier_3_child_repo_backports":[{"id":"noorinalabs-isnad-graph#866"},{"id":"noorinalabs-isnad-graph#867"},{"id":"noorinalabs-isnad-graph#868"},{"id":"noorinalabs-isnad-graph#869"},{"id":"noorinalabs-isnad-graph#870"},{"id":"noorinalabs-user-service#98"},{"id":"noorinalabs-user-service#99"},{"id":"noorinalabs-user-service#101"},{"id":"noorinalabs-deploy#276"},{"id":"noorinalabs-deploy#277"},{"id":"noorinalabs-deploy#280"},{"id":"noorinalabs-design-system#74"},{"id":"noorinalabs-data-acquisition#43"},{"id":"noorinalabs-data-acquisition#44"},{"id":"noorinalabs-data-acquisition#46"},{"id":"noorinalabs-landing-page#84"},{"id":"noorinalabs-landing-page#85"},{"id":"noorinalabs-landing-page#86"},{"id":"noorinalabs-landing-page#88"}],"deliberately_not_in_w8":["All deploy-track work (#323 stg, #324 prod, #325 wrapup gate, #329 smoke tests) — tentative W9","#322 CI block all merges — blocked on W8 ownership clarity","#327 hook parity rollout — uses W8 outputs (#326 + #328) as input"],"must_includes":[],"actual_labeled_at_scope_time":0,"drift":0,"declared_total":35,"repo_distribution":{"noorinalabs-main":16,"noorinalabs-isnad-graph":5,"noorinalabs-user-service":3,"noorinalabs-deploy":3,"noorinalabs-design-system":1,"noorinalabs-data-acquisition":3,"noorinalabs-landing-page":4}},
+  "wave_8_scope_reconciliation_note": "Manual /wave-scope run for fresh wave (label not yet created — kickoff Step 7 owns label creation/application). 35 declared items folded across 3 tiers: Tier 1 main foundation (10 items: #328+#326 trackers + 8 work items), Tier 2 main parser fixtures (6 items #302-#309), Tier 3 child-repo backports (19 items across 6 child repos — fold-in disposition per owner directive 2026-05-08). Replaced stale wave_8_work (P2W8 historical) + wave_8_carry_forward (W7-era pre-phase-reset intent) with canonical wave_8_scope structure. 0 drift; 0 memory must-includes. First wave under /phase-review + theme-required gates introduced in P3 phase reset commit e19dc27.",
   "wave_7_scope_reconciled_at": "2026-05-08T00:56:56Z",
   "wave_7_repos_in_scope": [
     "noorinalabs-main",
@@ -1211,16 +1216,6 @@
       "isnad-graph#810 — migrate to published @noorinalabs/design-system npm package"
     ]
   },
-  "wave_8_work": {
-    "status": "complete — merged 2026-04-17 (#127 retro)",
-    "process_changes_ratified_2026-04-17": [
-      "Hook authorship spec requirement — charter/hooks.md § Hook Authorship Requirements",
-      "Single-reviewer exception formalized — charter/pull-requests.md § Single-Reviewer Exception",
-      "Disable-with-followup → charter — charter/pull-requests.md § Load-Bearing Followups for Disabled CI Jobs",
-      "Pre-wave auth/scope audit — /wave-kickoff step 3",
-      "Trust matrix updates now land in retro PR"
-    ]
-  },
   "phase_2_wave_7_work": {
     "status": "complete — merged 2026-04-13",
     "renamed_at": "2026-05-08T00:55:00Z",
@@ -1594,47 +1589,7 @@
       "downstream_beneficiary_closure": "noorinalabs-main#312"
     }
   },
-  "wave_8_carry_forward": [
-    "noorinalabs-main#302",
-    "noorinalabs-main#303",
-    "noorinalabs-main#304",
-    "noorinalabs-main#306",
-    "noorinalabs-main#307",
-    "noorinalabs-main#309",
-    "noorinalabs-main#311",
-    "noorinalabs-main#313",
-    "noorinalabs-isnad-graph#866",
-    "noorinalabs-isnad-graph#867",
-    "noorinalabs-isnad-graph#868",
-    "noorinalabs-isnad-graph#869",
-    "noorinalabs-isnad-graph#870",
-    "noorinalabs-user-service#98",
-    "noorinalabs-user-service#99",
-    "noorinalabs-user-service#101",
-    "noorinalabs-deploy#276",
-    "noorinalabs-deploy#277",
-    "noorinalabs-deploy#280",
-    "noorinalabs-design-system#74",
-    "noorinalabs-data-acquisition#43",
-    "noorinalabs-data-acquisition#44",
-    "noorinalabs-data-acquisition#46",
-    "noorinalabs-landing-page#84",
-    "noorinalabs-landing-page#85",
-    "noorinalabs-landing-page#86",
-    "noorinalabs-landing-page#88"
-  ],
   "wave_7_final_pr_count": 12,
   "wave_7_changes_requested_cycles": 6,
-  "wave_7_top_concentration_pct": 17,
-  "wave_8_scope": {
-    "theme": "Foundation reset — hook/skill/charter ownership disambiguation + artifact-CI scope definition",
-    "meta_issue": 331,
-    "phase_3_end_state_targets": [
-      328,
-      326
-    ],
-    "set_at": "2026-05-08T21:42:38.454544Z",
-    "set_by": "owner directive 2026-05-08",
-    "tentative_w9": "Deploy spike + smoke scaffold (#323 stg + #329 smoke + #325 wrapup gate prep)"
-  }
+  "wave_7_top_concentration_pct": 17
 }
