@@ -36,6 +36,12 @@ temp/
 # Hook 18 validate_edit_completion sentinel state (#198 — session-scoped, local-only)
 .claude/.edit-error-sentinel/
 
+# Scratch — ephemeral working drafts (issue bodies, audit scripts, etc.)
+.claude/scratch/
+
+# Python lockfile for the virtual parent project (no real deps; auto-regen)
+/uv.lock
+
 # Editor files
 *.swp
 *.swo

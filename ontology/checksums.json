@@ -170,10 +170,10 @@
       "resolved_at": "2026-05-06T00:59:20.040752+00:00"
     },
     ".gitignore": {
-      "last_resolved": "485dc652a170747795b28d630c593c7c263ef6426b814a325fbb92c407ceea0f",
-      "last_tracked": "485dc652a170747795b28d630c593c7c263ef6426b814a325fbb92c407ceea0f",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
+      "last_tracked": "190721c8bc9b74b883f33f6daba0ad4432bed3ede48a119788884b0b188ee9ee",
+      "last_resolved": "190721c8bc9b74b883f33f6daba0ad4432bed3ede48a119788884b0b188ee9ee",
+      "tracked_at": "2026-05-08T20:53:45.852247+00:00",
+      "resolved_at": "2026-05-08T20:54:11.368739Z"
     },
     ".pre-commit-config.yaml": {
       "last_resolved": "e5cb514b9a22f37b80adb4d74896cef8e9d2768f0f42ae3f3a29001efd3ae615",
