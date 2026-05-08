@@ -1,8 +1,182 @@
 {
   "wave_8_scope_reconciled_at": "2026-05-08T22:10:19Z",
-  "wave_8_repos_in_scope": ["noorinalabs-main","noorinalabs-isnad-graph","noorinalabs-user-service","noorinalabs-deploy","noorinalabs-design-system","noorinalabs-landing-page","noorinalabs-data-acquisition","noorinalabs-isnad-ingest-platform"],
+  "wave_8_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-isnad-graph",
+    "noorinalabs-user-service",
+    "noorinalabs-deploy",
+    "noorinalabs-design-system",
+    "noorinalabs-landing-page",
+    "noorinalabs-data-acquisition"
+  ],
   "wave_8_meta_issue": 331,
-  "wave_8_scope": {"theme": "Foundation reset — hook/skill/charter ownership disambiguation + artifact-CI scope definition", "phase_3_end_state_targets": [328, 326], "tier_1_main_foundation": [{"id": "noorinalabs-main#328", "role": "end-state-target", "note": "Disambiguate hook/skill/charter ownership"}, {"id": "noorinalabs-main#326", "role": "end-state-target", "note": "All committed artifacts pass all CI checks"}, {"id": "noorinalabs-main#311", "role": "work-item", "note": "charter hooks.md dispatcher-children sub-clause"}, {"id": "noorinalabs-main#313", "role": "work-item", "note": "charter hooks.md § Hook Audit Protocol"}, {"id": "noorinalabs-main#283", "role": "work-item", "note": "/promotion-audit charter-tier scan"}, {"id": "noorinalabs-main#290", "role": "work-item", "note": "agents.md isolation: worktree default"}, {"id": "noorinalabs-main#317", "role": "work-item", "note": "W7 retro lint scan — cross-repo cleanup"}, {"id": "noorinalabs-main#318", "role": "work-item", "note": "/wave-wrapup top-level counter keys"}, {"id": "noorinalabs-main#319", "role": "work-item", "note": "/wave-scope roster validation"}, {"id": "noorinalabs-main#320", "role": "work-item", "note": "reviewer throughline-watch default"}, {"id": "noorinalabs-main#332", "role": "work-item", "note": "/wave-scope upsert_status_keys.py bug — multi-line sibling block break (surfaced during W8 scope reconcile)"}], "tier_2_main_parser_fixtures": [{"id": "noorinalabs-main#302", "note": "parser fixtures for validate_review_comment_format"}, {"id": "noorinalabs-main#303", "note": "parser fixtures for validate_pr_review (>100 comment pagination)"}, {"id": "noorinalabs-main#304", "note": "parser fixtures for validate_labels (--label= equals form)"}, {"id": "noorinalabs-main#306", "note": "parser fixtures for validate_workflow_paths_coverage (YAML anchor)"}, {"id": "noorinalabs-main#307", "note": "parser fixtures for validate_pr_ci_status (empty rollup)"}, {"id": "noorinalabs-main#309", "note": "Org-wide GitHub Actions Node 20 deprecation — upgrade audit (5 repos)"}], "tier_3_child_repo_backports": [{"id": "noorinalabs-isnad-graph#866"}, {"id": "noorinalabs-isnad-graph#867"}, {"id": "noorinalabs-isnad-graph#868"}, {"id": "noorinalabs-isnad-graph#869"}, {"id": "noorinalabs-isnad-graph#870"}, {"id": "noorinalabs-user-service#98"}, {"id": "noorinalabs-user-service#99"}, {"id": "noorinalabs-user-service#101"}, {"id": "noorinalabs-deploy#276"}, {"id": "noorinalabs-deploy#277"}, {"id": "noorinalabs-deploy#280"}, {"id": "noorinalabs-design-system#74"}, {"id": "noorinalabs-data-acquisition#43"}, {"id": "noorinalabs-data-acquisition#44"}, {"id": "noorinalabs-data-acquisition#46"}, {"id": "noorinalabs-landing-page#84"}, {"id": "noorinalabs-landing-page#85"}, {"id": "noorinalabs-landing-page#86"}, {"id": "noorinalabs-landing-page#88"}], "deliberately_not_in_w8": ["All deploy-track work (#323 stg, #324 prod, #325 wrapup gate, #329 smoke tests) — tentative W9", "#322 CI block all merges — blocked on W8 ownership clarity", "#327 hook parity rollout — uses W8 outputs (#326 + #328) as input"], "must_includes": [], "actual_labeled_at_scope_time": 0, "drift": 0, "declared_total": 36, "repo_distribution": {"noorinalabs-main": 17, "noorinalabs-isnad-graph": 5, "noorinalabs-user-service": 3, "noorinalabs-deploy": 3, "noorinalabs-design-system": 1, "noorinalabs-data-acquisition": 3, "noorinalabs-landing-page": 4}},
+  "wave_8_scope": {
+    "theme": "Foundation reset — hook/skill/charter ownership disambiguation + artifact-CI scope definition",
+    "phase_3_end_state_targets": [
+      328,
+      326
+    ],
+    "tier_1_main_foundation": [
+      {
+        "id": "noorinalabs-main#328",
+        "role": "end-state-target",
+        "note": "Disambiguate hook/skill/charter ownership"
+      },
+      {
+        "id": "noorinalabs-main#326",
+        "role": "end-state-target",
+        "note": "All committed artifacts pass all CI checks"
+      },
+      {
+        "id": "noorinalabs-main#311",
+        "role": "work-item",
+        "note": "charter hooks.md dispatcher-children sub-clause"
+      },
+      {
+        "id": "noorinalabs-main#313",
+        "role": "work-item",
+        "note": "charter hooks.md § Hook Audit Protocol"
+      },
+      {
+        "id": "noorinalabs-main#283",
+        "role": "work-item",
+        "note": "/promotion-audit charter-tier scan"
+      },
+      {
+        "id": "noorinalabs-main#290",
+        "role": "work-item",
+        "note": "agents.md isolation: worktree default"
+      },
+      {
+        "id": "noorinalabs-main#317",
+        "role": "work-item",
+        "note": "W7 retro lint scan — cross-repo cleanup"
+      },
+      {
+        "id": "noorinalabs-main#318",
+        "role": "work-item",
+        "note": "/wave-wrapup top-level counter keys"
+      },
+      {
+        "id": "noorinalabs-main#319",
+        "role": "work-item",
+        "note": "/wave-scope roster validation"
+      },
+      {
+        "id": "noorinalabs-main#320",
+        "role": "work-item",
+        "note": "reviewer throughline-watch default"
+      },
+      {
+        "id": "noorinalabs-main#332",
+        "role": "work-item",
+        "note": "/wave-scope upsert_status_keys.py bug — multi-line sibling block break (surfaced during W8 scope reconcile)"
+      }
+    ],
+    "tier_2_main_parser_fixtures": [
+      {
+        "id": "noorinalabs-main#302",
+        "note": "parser fixtures for validate_review_comment_format"
+      },
+      {
+        "id": "noorinalabs-main#303",
+        "note": "parser fixtures for validate_pr_review (>100 comment pagination)"
+      },
+      {
+        "id": "noorinalabs-main#304",
+        "note": "parser fixtures for validate_labels (--label= equals form)"
+      },
+      {
+        "id": "noorinalabs-main#306",
+        "note": "parser fixtures for validate_workflow_paths_coverage (YAML anchor)"
+      },
+      {
+        "id": "noorinalabs-main#307",
+        "note": "parser fixtures for validate_pr_ci_status (empty rollup)"
+      },
+      {
+        "id": "noorinalabs-main#309",
+        "note": "Org-wide GitHub Actions Node 20 deprecation — upgrade audit (5 repos)"
+      }
+    ],
+    "tier_3_child_repo_backports": [
+      {
+        "id": "noorinalabs-isnad-graph#866"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#867"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#868"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#869"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#870"
+      },
+      {
+        "id": "noorinalabs-user-service#98"
+      },
+      {
+        "id": "noorinalabs-user-service#99"
+      },
+      {
+        "id": "noorinalabs-user-service#101"
+      },
+      {
+        "id": "noorinalabs-deploy#276"
+      },
+      {
+        "id": "noorinalabs-deploy#277"
+      },
+      {
+        "id": "noorinalabs-deploy#280"
+      },
+      {
+        "id": "noorinalabs-design-system#74"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#43"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#44"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#46"
+      },
+      {
+        "id": "noorinalabs-landing-page#84"
+      },
+      {
+        "id": "noorinalabs-landing-page#85"
+      },
+      {
+        "id": "noorinalabs-landing-page#86"
+      },
+      {
+        "id": "noorinalabs-landing-page#88"
+      }
+    ],
+    "deliberately_not_in_w8": [
+      "All deploy-track work (#323 stg, #324 prod, #325 wrapup gate, #329 smoke tests) — tentative W9",
+      "#322 CI block all merges — blocked on W8 ownership clarity",
+      "#327 hook parity rollout — uses W8 outputs (#326 + #328) as input"
+    ],
+    "must_includes": [],
+    "actual_labeled_at_scope_time": 0,
+    "drift": 0,
+    "declared_total": 36,
+    "repo_distribution": {
+      "noorinalabs-main": 17,
+      "noorinalabs-isnad-graph": 5,
+      "noorinalabs-user-service": 3,
+      "noorinalabs-deploy": 3,
+      "noorinalabs-design-system": 1,
+      "noorinalabs-data-acquisition": 3,
+      "noorinalabs-landing-page": 4
+    }
+  },
   "wave_8_scope_reconciliation_note": "Manual /wave-scope run for fresh wave (label not yet created — kickoff Step 7 owns label creation/application). 35 declared items folded across 3 tiers: Tier 1 main foundation (10 items: #328+#326 trackers + 8 work items), Tier 2 main parser fixtures (6 items #302-#309), Tier 3 child-repo backports (19 items across 6 child repos — fold-in disposition per owner directive 2026-05-08). Replaced stale wave_8_work (P2W8 historical) + wave_8_carry_forward (W7-era pre-phase-reset intent) with canonical wave_8_scope structure. 0 drift; 0 memory must-includes. First wave under /phase-review + theme-required gates introduced in P3 phase reset commit e19dc27.",
   "wave_7_scope_reconciled_at": "2026-05-08T00:56:56Z",
   "wave_7_repos_in_scope": [
@@ -1591,5 +1765,41 @@
   },
   "wave_7_final_pr_count": 12,
   "wave_7_changes_requested_cycles": 6,
-  "wave_7_top_concentration_pct": 17
+  "wave_7_top_concentration_pct": 17,
+  "wave_8_active": true,
+  "wave_8_kicked_off_at": "2026-05-08T23:49:19Z",
+  "wave_8_branches": {
+    "branch": "deployments/phase-3/wave-8",
+    "created_at": "2026-05-08T23:49:19Z",
+    "repos": {
+      "noorinalabs-main": {
+        "sha": "dd65ecf5492d204abc50995ebc2230c716ee627d",
+        "status": "exists-ancestor"
+      },
+      "noorinalabs-isnad-graph": {
+        "sha": "d4eb65a6375971e9abd58c71b55ab4d58fd95cfd",
+        "status": "exists-clean"
+      },
+      "noorinalabs-user-service": {
+        "sha": "76ff877c7379d6e33dbf5d0afffd521b230b1a53",
+        "status": "exists-clean"
+      },
+      "noorinalabs-deploy": {
+        "sha": "d42f08d5a789355eb4638b47e77b4d9a78367455",
+        "status": "exists-clean"
+      },
+      "noorinalabs-design-system": {
+        "sha": "b71776c9a7250b731ab09fb5ed8fbe1ecb0871a7",
+        "status": "exists-clean"
+      },
+      "noorinalabs-landing-page": {
+        "sha": "e8855aded8135fc5549cbaf97d9eb6101f1531c4",
+        "status": "exists-clean"
+      },
+      "noorinalabs-data-acquisition": {
+        "sha": "f43b84d19d1e38f4b964c6ed313ce5cc58584914",
+        "status": "exists-clean"
+      }
+    }
+  }
 }
