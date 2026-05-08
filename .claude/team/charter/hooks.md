@@ -289,4 +289,12 @@ The hook's test suite (or docstring-embedded manual verification) must include a
 
 New Bash hooks must register in `dispatcher.py`'s `_BASH_HOOKS` list, not as a separate `settings.json` entry. See `charter/hooks.md` § Hook Dispatcher Consolidation (Hook 7 pattern).
 
-**Enforcement:** The Standards & Quality Lead (Aino) verifies these requirements during hook PR review. A hook missing any of the four requirements must not be approved.
+### 5. Parser-Fixture Coverage Requirements
+
+Every hook with input parsing MUST have test fixtures covering all known input shapes. New input shapes discovered in production (e.g., a `head_ref` shape the parser doesn't recognize, a quoting style that trips shlex, a YAML edge case) require fixture-add backport BEFORE the bug-fix PR can merge — the fixture pinning the new shape lands together with the parser fix in the same commit.
+
+**Rationale:** P3W6 surfaced 4 hook parser bugs in a single wave (#285 /wave-kickoff Step 1 EXISTING_SHA captures 404 body; #287 validate_commit_identity false-blocks backslash-line-continuation; #289 validate_workflow_paths_coverage misparses bare `on.pull_request:`; #294 validate_pr_review skips reviewer counting on `deployments/*/wave-*` heads). All four are parser bugs in production hooks discovered AT runtime when an unanticipated input shape arrives. Fixture-with-fix discipline pins the new shape so future regressions surface in CI.
+
+**Acceptance:** PR introducing a parser-bug fix MUST include the new fixture in the same commit. CI (or hook authors during review) flags PRs that change parser logic without an accompanying fixture addition.
+
+**Enforcement:** The Standards & Quality Lead (Aino) verifies these requirements during hook PR review. A hook missing any of the five requirements must not be approved.

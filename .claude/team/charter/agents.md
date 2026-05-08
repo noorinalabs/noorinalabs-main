@@ -238,6 +238,7 @@ Every implementer spawn prompt MUST include, **in order**:
 6. **Cross-Contract rule** reference if the PR is part of a cross-contract cluster (charter `pull-requests.md`).
 7. **Charter enforcement reminders** (2 reviewers, CI green before merge, no `--no-verify`, no global/repo git config, `/ontology-librarian` per agent).
 8. **Reporting pattern** — who they report to (usually their manager) and when (draft open, CI green, blocker, merge).
+9. **/tmp file-race discipline:** When using `--body-file` with `gh issue/pr comment` or `git commit -F`, write the file to an issue#-keyed path (e.g., `/tmp/{issue#}-{purpose}.md`) IMMEDIATELY before the gh/git call — no other tool calls between the Write and the consuming Bash. Hook `block_stale_tmp_message_file` blocks files older than 30s. P3W6 surfaced 3 such blocks in spawned-agent gh-comment flows; this discipline prevents them.
 
 ### Origin
 
