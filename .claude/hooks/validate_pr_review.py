@@ -492,6 +492,11 @@ def check(input_data: dict) -> dict | None:
         branch_author_lastname = extract_branch_author_lastname(head_ref)
         if branch_author_lastname:
             comment_review_result = check_comment_reviews(number, branch_author_lastname, repo=repo)
+        elif head_ref.startswith("deployments/") and "/wave-" in head_ref:
+            # Wave-merge PR (head = deployments/phase-{N}/wave-{M}); no implementer-branch
+            # author. Pass empty sentinel so the reviewer-vs-author lastname comparison
+            # admits any non-empty reviewer name. See main#294.
+            comment_review_result = check_comment_reviews(number, "", repo=repo)
 
     distinct_reviewers = formal_reviewers | comment_review_result.reviewers
     total_distinct = len(distinct_reviewers)
