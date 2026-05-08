@@ -1539,7 +1539,7 @@
     }
   },
   "wave_7_kicked_off_at": "2026-05-08T01:02:21Z",
-  "wave_7_active": true,
+  "wave_7_active": false,
   "wave_7_decisions": {
     "implementer_substitutions": [
       {
@@ -1569,5 +1569,58 @@
         }
       ]
     }
-  }
+  },
+  "wave_7_completed_at": "2026-05-08T03:03:00Z",
+  "wave_7_summary": {
+    "total_prs_merged": 12,
+    "admin_overrides": 0,
+    "pr_breakdown": {
+      "tier_1_audits": 7,
+      "tier_2_fix_plus_fixtures": 2,
+      "tier_3_carry_forward": 1,
+      "tier_4_opportunistic": 1,
+      "nadia_star_summary": 1
+    },
+    "backport_issues_filed": 25,
+    "issues_closed_this_wrapup": 5,
+    "charter_change_proposals_for_w8": [
+      "noorinalabs-main#311 dispatcher-children sub-clause",
+      "noorinalabs-main#313 Hook Audit Protocol"
+    ],
+    "thesis": "All 7 child repos confirmed dispatcher-style via committed-tree inspection — wave audit work primarily verified migration was already complete; PRs #301, #305, #312 established as the first three charter § Parser-Fixture Coverage Requirements reference implementations; committed-tree audit methodology codified to prevent the 3-misclassification pattern from recurring.",
+    "reference_implementation_set": {
+      "pattern_g_template": "noorinalabs-main#301",
+      "shared_utility_hardening": "noorinalabs-main#305",
+      "downstream_beneficiary_closure": "noorinalabs-main#312"
+    }
+  },
+  "wave_8_carry_forward": [
+    "noorinalabs-main#302",
+    "noorinalabs-main#303",
+    "noorinalabs-main#304",
+    "noorinalabs-main#306",
+    "noorinalabs-main#307",
+    "noorinalabs-main#309",
+    "noorinalabs-main#311",
+    "noorinalabs-main#313",
+    "noorinalabs-isnad-graph#866",
+    "noorinalabs-isnad-graph#867",
+    "noorinalabs-isnad-graph#868",
+    "noorinalabs-isnad-graph#869",
+    "noorinalabs-isnad-graph#870",
+    "noorinalabs-user-service#98",
+    "noorinalabs-user-service#99",
+    "noorinalabs-user-service#101",
+    "noorinalabs-deploy#276",
+    "noorinalabs-deploy#277",
+    "noorinalabs-deploy#280",
+    "noorinalabs-design-system#74",
+    "noorinalabs-data-acquisition#43",
+    "noorinalabs-data-acquisition#44",
+    "noorinalabs-data-acquisition#46",
+    "noorinalabs-landing-page#84",
+    "noorinalabs-landing-page#85",
+    "noorinalabs-landing-page#86",
+    "noorinalabs-landing-page#88"
+  ]
 }
