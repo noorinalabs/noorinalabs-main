@@ -70,6 +70,64 @@ class IsGhPrGateCommandTests(unittest.TestCase):
         """grep with the phrase in pattern position — should NOT match."""
         self.assertFalse(hook._is_gh_pr_gate_command("grep 'gh pr create' /tmp/file"))
 
+    def test_line_continuation_pr_create_matches(self):
+        """Backslash-newline line continuation in gh pr create — transitive #305 fix.
+
+        _shell_parse.tokenize() normalizes '\\\\\\n' to ' ' before shlex.split,
+        so a multi-line gh pr create still lands at command position and matches.
+        """
+        cmd = "gh pr create \\\n  --title 'fix: thing' \\\n  --base main"
+        self.assertTrue(hook._is_gh_pr_gate_command(cmd))
+
+    def test_line_continuation_pr_ready_matches(self):
+        """gh pr ready with line continuation — transitive #305 fix."""
+        cmd = "gh pr ready \\\n  123"
+        self.assertTrue(hook._is_gh_pr_gate_command(cmd))
+
+    def test_heredoc_containing_gh_pr_create_does_not_match(self):
+        """gh pr create text INSIDE a heredoc body must NOT trigger the gate.
+
+        strip_heredocs() removes the body before tokenization, so `gh pr create`
+        appearing as document content is never seen as a command token.
+        """
+        cmd = "cat <<EOF\ngh pr create --base main\nEOF\necho done"
+        self.assertFalse(hook._is_gh_pr_gate_command(cmd))
+
+    def test_chained_with_line_continuation_matches(self):
+        """git push && gh pr create across a line continuation — #305 transitive."""
+        cmd = "git push origin feature \\\n  && gh pr create --base main"
+        self.assertTrue(hook._is_gh_pr_gate_command(cmd))
+
+
+class WalkFlagValueTests(unittest.TestCase):
+    """_walk_flag_value: token-based flag extraction."""
+
+    def test_space_separated_form(self):
+        tokens = ["gh", "pr", "create", "--base", "main"]
+        self.assertEqual(hook._walk_flag_value(tokens, "base"), "main")
+
+    def test_equals_form(self):
+        tokens = ["gh", "pr", "create", "--base=develop"]
+        self.assertEqual(hook._walk_flag_value(tokens, "base"), "develop")
+
+    def test_absent_returns_none(self):
+        tokens = ["gh", "pr", "create"]
+        self.assertIsNone(hook._walk_flag_value(tokens, "base"))
+
+    def test_flag_value_inside_body_not_extracted(self):
+        """Flag value inside --body is a single token; won't match as --repo value.
+
+        shlex collapses quoted body to one token, so '--repo' inside the body
+        string is never a separate token in flag position.
+        """
+        tokens = ["gh", "pr", "create", "--body", "use --repo x/y here"]
+        self.assertIsNone(hook._walk_flag_value(tokens, "repo"))
+
+    def test_flag_at_end_with_no_value_returns_none(self):
+        """Flag token at end of list with no following value."""
+        tokens = ["gh", "pr", "create", "--base"]
+        self.assertIsNone(hook._walk_flag_value(tokens, "base"))
+
 
 class ExtractFlagTests(unittest.TestCase):
     """_extract_flag covers --flag value, --flag=value, --flag "quoted"."""
@@ -94,6 +152,25 @@ class ExtractFlagTests(unittest.TestCase):
 
     def test_absent_flag_returns_none(self):
         self.assertIsNone(hook._extract_flag("gh pr create", "base"))
+
+    def test_repo_value_in_quoted_body_not_extracted(self):
+        """--repo value inside --body quoted string must NOT be extracted as --repo.
+
+        shlex collapses the quoted body to one token, so the --repo substring
+        inside it is never seen as a flag token by _walk_flag_value.
+        """
+        cmd = 'gh pr create --body "link: --repo x/y here" --repo noorinalabs/test'
+        self.assertEqual(hook._extract_flag(cmd, "repo"), "noorinalabs/test")
+
+    def test_flag_extracted_after_line_continuation(self):
+        """--repo flag value after a backslash-newline continuation — #305 transitive."""
+        cmd = "gh pr create \\\n  --repo noorinalabs/test \\\n  --base main"
+        self.assertEqual(hook._extract_flag(cmd, "repo"), "noorinalabs/test")
+
+    def test_base_extracted_after_line_continuation(self):
+        """--base after line continuation tokenizes correctly."""
+        cmd = "gh pr create \\\n  --base deployments/phase-3/wave-7"
+        self.assertEqual(hook._extract_flag(cmd, "base"), "deployments/phase-3/wave-7")
 
 
 class ParseWorkflowPathsTests(unittest.TestCase):
