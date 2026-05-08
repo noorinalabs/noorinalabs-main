@@ -35,6 +35,30 @@ WAVE_LABEL="p{P}-wave-{M}"
 PRIOR_WAVE_LABEL="p{P}-wave-$(({M} - 1))"  # for retro carry-forward cross-ref
 ```
 
+### 0.5. Phase-review prerequisite + owner-set theme (MANDATORY)
+
+**Two non-negotiable gates before proceeding past Step 0.5.**
+
+**Gate A — `/phase-review` must have run in this session.** Without phase context, theme picking is reactive. Check the conversation transcript for a `/phase-review` invocation against phase `{P}`. If absent:
+
+```
+STOP. /phase-review must run before /wave-scope. Run:
+   /phase-review {P}
+Then re-run /wave-scope.
+```
+
+**Gate B — wave theme set by owner via dialogue.** The theme is NEVER inferred from carry-forwards, backlog tier ordering, or retro proposals alone. The orchestrator MUST:
+
+1. Surface 2-3 candidate themes to the owner (informed by `/phase-review` output and the phase plan's remaining end-state criteria).
+2. Wait for the owner to pick or hybridize.
+3. Record the chosen theme in BOTH:
+   - `cross-repo-status.json` → `wave_{M}_scope.theme = "<theme string>"`
+   - The next-wave meta-issue body, top section, as a `## Theme` heading.
+
+If the meta-issue body has no `## Theme` heading after this step, `/wave-scope` STOPS and refuses to proceed. The hook layer (or a future hook addition) should enforce this at meta-issue update time.
+
+**Why this gate exists:** Phase 3 reset 2026-05-08 — 5 of 7 prior P3 waves had no recorded theme, and theme-picking had drifted to "whatever's most painful in retro carry-forwards." Owner directive: theme is a deliberate choice, not an emergent property.
+
 ### 1. Read previous-wave retro carry-forward
 
 `/wave-retro` writes carry-forward items to two places:
