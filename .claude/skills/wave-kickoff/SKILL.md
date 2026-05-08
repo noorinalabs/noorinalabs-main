@@ -183,6 +183,23 @@ fi
 
 **Verify step 0.1 holds for every repo before moving on** — every entry in the status table must be `created`, `exists-clean`, `exists-ancestor`, or (with explicit user sign-off) `exists-drift`. A missing or errored wave branch in any child repo is a stop-the-line condition.
 
+### 1a. Status commits — use `gh api` PUT contents (atomic, no local orphan)
+
+**Status commit pattern (added P3W6 retro 2026-05-08, supersedes local-then-push):**
+
+Wave-status commits (kickoff active state, reconciliation timestamps, completion state) MUST use `gh api -X PUT repos/.../contents/cross-repo-status.json` instead of local checkout + local commit + push. The PUT-contents flow is atomic — no local-orphan-possible (the P3W6 e235b0b orphan was a local kickoff status commit that never reached origin and only surfaced at wrapup).
+
+Recipe:
+1. Fetch current sha + content via `gh api .../contents/cross-repo-status.json?ref=main --jq .sha` and `--jq .content | base64 -d`
+2. Build new content via `jq` (e.g., `jq '. + {wave_N_kicked_off_at: $now, wave_N_active: true, ...}'`)
+3. base64-encode the new content
+4. Build PUT payload JSON with `message`, `content` (base64), `sha` (current), `branch: "main"`, `author: {name, email}`, `committer: {name, email}`
+5. `gh api -X PUT repos/.../contents/cross-repo-status.json --input <payload>.json`
+
+Attribution: kickoff status commits use Wanjiku Mwangi (TPM); reconciliation/wrapup commits use the role-running implementer.
+
+The local-then-push `jq | mv | git commit | git push` pattern at the end of Step 1 above pre-dates this guidance — it remains acceptable for the `wave_{M}_branches` write (which is wave-branch-scoped, not main) but MUST NOT be used for any commit landing on `main`. Status writes that target `main` (kickoff active, reconciliation, wrapup completion) use the PUT-contents recipe.
+
 ### 2. Create wave label
 
 Check if label `p{N}-wave-{M}` exists:
