@@ -1,0 +1,5 @@
+{
+  "description": "Happy path: git commit -F /tmp/msg.txt (file-based message per feedback_heredoc_in_git_commit)",
+  "command": "git -c user.name=\"Aino Virtanen\" -c user.email=\"parametrization+Aino.Virtanen@gmail.com\" commit -F /tmp/287-commit-msg.txt",
+  "expect": "allow"
+}

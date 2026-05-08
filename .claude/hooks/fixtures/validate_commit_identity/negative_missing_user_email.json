@@ -1,0 +1,5 @@
+{
+  "description": "Negative: missing -c user.email= flag — must be blocked",
+  "command": "git -c user.name=\"Aino Virtanen\" commit -m \"missing email flag\"",
+  "expect": "block:missing user.email"
+}

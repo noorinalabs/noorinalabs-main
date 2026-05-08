@@ -1,0 +1,5 @@
+{
+  "description": "Negative: user.email does not match roster entry for user.name — must be blocked",
+  "command": "git -c user.name=\"Aino Virtanen\" -c user.email=\"wrong.email@example.com\" commit -m \"wrong email\"",
+  "expect": "block:email mismatch"
+}

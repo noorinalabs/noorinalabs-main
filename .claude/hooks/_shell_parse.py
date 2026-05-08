@@ -138,11 +138,23 @@ _GIT_BOOL_GLOBALS = {
     "--no-optional-locks",
 }
 
+# Backslash + newline = POSIX line continuation. The Claude Code harness passes
+# the raw bash command string including these sequences. shlex.split(posix=True)
+# does NOT consume them as line continuations — instead it emits the trailing
+# newline as a standalone token (issue #287), breaking command-position detection.
+_LINE_CONTINUATION_RE = re.compile(r"\\\n[ \t]*")
+
 
 def tokenize(cmd: str) -> list[str] | None:
-    """shlex.split the command. Return None on parse error (unbalanced quote)."""
+    """shlex.split the command. Return None on parse error (unbalanced quote).
+
+    Normalizes POSIX line-continuation sequences (backslash + newline) to a
+    single space before tokenizing. Without this, shlex.split(posix=True)
+    emits the trailing newline as a stray token that breaks command-position
+    detection (issue #287).
+    """
     try:
-        return shlex.split(cmd, posix=True)
+        return shlex.split(_LINE_CONTINUATION_RE.sub(" ", cmd), posix=True)
     except ValueError:
         return None
 
