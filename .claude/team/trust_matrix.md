@@ -748,3 +748,86 @@ The org was restructured in Session 3 with new repo-level teams. The matrix abov
 | **Kofi Mensah-Williams** (landing-page Eng) | Multi-tier delivery (Tier-2 + Tier-3 hotfix); post-#82 runbook refresh discipline | None this wave. |
 | **Marcia Vasquez-Paredes** (landing-page Project Lead) | Surfaced #67/#69 as keep-in-P3-strategic with owner-ruling rationale | None this wave. |
 | **Orchestrator** | 11/11 wave-internal PRs landed; 7/7 wave-merge PRs landed with truthful 0-admin-override (FIRST wave with truthful 0 — W3-W5 silently bypassed via --admin); 0 implementer substitutions; 0 ChangesRequested cycles; counter-verification step 2.5 had 0 drift (FIRST wave with this property since W5 added the discipline); 8/8 Tier-1 backlog triage delivery; in-band hook patch + canonical fix flow for #294 — 5-line patch, search-before-filing satisfied | (a) Local-vs-origin main divergence (e235b0b orphaned local commit) — kickoff status was committed locally but never pushed. Process discipline gap, orchestrator-class. (b) /tmp file-race recurring (3 hook blocks for spawned-agent gh-comment workflows this session). Existing memory `feedback_tmp_msg_file_stale.md` exists but spawned agents still hit it; agent-spawn discipline gap. (c) Pattern G persists at 4 instances in W6 alone (#285, #287, #289, #294 all hook parser bugs) — largest single-wave parser-bug cluster, suggests parser-fixture coverage discipline as charter principle. |
+
+## Phase 3 Wave 7 Trust Updates (2026-05-08) — Hook Parser-Fixture Coverage Backport Audit
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Aino Virtanen (SQL) | 5 | 5 | TWO PRs: #305 (#287 fix — `_shell_parse.tokenize()` line-continuation normalization + 3 scope-disciplined adjacent improvements + 11 fixtures + 12 fixture tests + 3 unit tests, 75/75 green) + #312 (T4 #260 _shell_parse refactor — 2 regex matchers migrated to tokenize/walker + 12 fixture tests pinning transitive #305 fix). 3 R1 reviews (#301, #308, #310 ★). Already at max. |
+| Wanjiku Mwangi (TPM) | 5 | 5 | TWO PRs: #301 (#285 fix — SHA-shape regex validator + 4 fixtures incl. live-trigger 404 body + 8 cases) + #308 (T1 main parser audit — 31 hooks, 14 parser-class, 5 prioritized gaps filed as #302-#307). 3 reviews (R1 #305, R2 #310, R1 #312). Identified `gh project item-add` silent no-op + GraphQL `addProjectV2ItemById` workaround. Already at max. |
+| **Nadia Khoury (PD)** | **4** | **5** ↑ | **★ Implement-class delivery** — PR #310 cross-repo audit summary with two-tier thesis, 3 charter proposals (2 filed as W8 issues #311 #313 + 1 inline silent-no-op family memory extension). PLUS 4 R2 reviews across #301, #305, #308, #312 with executive-lens framing on charter compliance and cross-PR coherence. Pre-loaded the ★ thesis content during R2 reviews (3 candidate observations baked before spawn). **W6 retro flag on 4-consecutive-reviewer-only-waves NOW resolved by ★ delivery.** Promote to 5 — full PD execution profile complete. |
+| Santiago Ferreira (RC) | 5 | 5 | No deploy-cycle wave routing (theme: hook parser-fixture audit). Already at max. |
+
+### noorinalabs-isnad-graph team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Anya Kowalczyk (Tech Lead)** | **3** | **4** ↑ | First implement-class PR: isnad-graph#871 (T1 audit + **Pattern G in-band fix** syncing `auto_set_env_test.py` from parent — `gh`/`--body` short-circuit backported from parent main#114 that was missing in child). Identity reconciled at first commit (matrix called her "Anya Volkov"; canonical roster identity is Kowalczyk; documented in PR body). Idris R1 + Arjun R2 Approved with framing notes (#868 + #870 are stale-worktree-only, not live regressions); she addressed issue-body cleanups async post-merge approval. Promote to 4 — clean cross-repo work + Pattern G in-band + post-review cleanup discipline. |
+| Idris Yusuf (Engineer) | — | **3** (new) | First reviewer entry: R1 of isnad-graph#871 + user-service#100 (cross-repo R1). **Coined the wave-level thesis sentence**: "fixture-first discipline broke at the parent→child update boundary" — became Nadia's ★ thesis. Surfaced stale-worktree-vs-live distinction for #868/#870 framing cleanup. New entry at 3. |
+| Arjun Raghavan (Engineer) | — | **3** (new) | First reviewer entry: R2 of isnad-graph#871. Independently confirmed stale-worktree-vs-live distinction; spot-checked Pattern G fix byte-equivalence to parent at parent's main HEAD. Minor note: #866-#870 missing `p3-wave-7` label (only `tech-debt+phase-3`) — non-blocking, flagged for /wave-scope p3 w8 cleanup. New entry at 3. |
+
+### noorinalabs-user-service team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Mateo Salazar (Engineer) | 4 | 4 | Tier-1 audit PR user-service#100. Initial framing was pre-P3W5-stale (caught at R2 by Anya-K via committed-tree verification — **3rd-of-3 misclassifications** this wave). Addressed all 3 follow-throughs cleanly post-R2: project 2 GraphQL adds + #98/#99 re-scoped to PARENT test augmentation (parent genuinely missing `test_block_gh_pr_review.py`; alembic-shape coverage redirected to parent's existing tests). Hold at 4 — substantive correction caught at R2, addressed cleanly. |
+
+### noorinalabs-deploy team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Bereket Tadesse (Manager)** | **4** | **5** ↑ | TWO PRs: deploy#278 (T3 #274 Alertmanager wiring with PR-vs-runtime acceptance discipline + post-review CI fix on shellcheck SC2016 false-positive — clean one-line `# shellcheck disable` resolution) + deploy#279 (T1 deploy audit — 6 parser-class hooks all stale-orphan + dead-code + non-registered, two backport issues #276 #277 filed). Stale-orphan finding contributed to wave-level structural framing (one of 4 reviewers/implementers triangulating). Promote to 5 — multi-tier disciplined delivery + clean post-review CI cycle + load-bearing structural-finding contribution. |
+| Aisha Idrissi (R1 reviewer) | — | **3** (new) | First reviewer entry: R1 of deploy#278 + #279. Strong PR-vs-runtime split per `feedback_runtime_gate_scoping.md`. Caught minor RUNBOOK §Tier 0 cross-link one-hop note (judgment-call kept non-blocking). New entry at 3. |
+| Weronika Zielinska (R2 reviewer) | — | **3** (new) | First reviewer entry: R2 of deploy#278 + #279. Independently verified secrets hygiene + amtool gate completeness. **Caught untracked-vs-committed nuance** for stale-orphan finding (load-bearing for ★ summary). Minor non-blocking note: amtool tarball verified via SHA256 but not GPG-verified for SHA256SUMS — acceptable for current threat model. New entry at 3. |
+
+### noorinalabs-design-system team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Kofi Mensah (Docs / Storybook Eng) | 4 | 4 | Tier-1 audit PR design-system#73. Initial framing pre-PR#66-stale (caught at R1 by Maeve — **1st-of-3 misclassifications**). Addressed framing revision + re-scoped #72 (closed invalid) + later R2 PR-body-stale catch handled via `gh api -X PATCH --field` workaround when `--field "body=@file"` silently literal-pasted (**NEW silent-no-op family signal** — load-bearing for memory extension). Hold at 4 — substantive cycles but addressed cleanly. |
+| Maeve Callahan (R1 reviewer) | — | **3** (new) | First reviewer entry: R1 of design-system#73 with substantive Changes-Requested. **Two-tier framing originator** (hook-owning vs dispatcher-style children) — became load-bearing for Nadia's ★ thesis. Strong charter-lens R1. New entry at 3. |
+| Beren Yildiz (R2 reviewer) | — | **3** (new) | First reviewer entry: R2 of design-system#73 with PR-body-stale catch. Independent settings.json completeness verification established design-system as exemplary endpoint of dispatcher pattern (no #85-equivalent matcher gap; more complete than landing-page). New entry at 3. |
+
+### noorinalabs-data-acquisition team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Sofia Cardoso (Tech Writer) | 3 | 3 | Tier-1 audit PR data-acq#45 — first implement-class delivery (Tier-1-only in W6). Initial G2 framing was wrong (caught at R2 by Jeanclaude via tree verification — **2nd-of-3 misclassifications**). Addressed cleanly with **methodological retro point** (filesystem ≠ committed tree → mandatory `gh api .../git/trees/<sha>?recursive=1` first step → now charter proposal #313). Hold at 3 — promote-watch for W8 if methodological-finding pattern continues. |
+| Dilara Erdogan (R1 reviewer) | — | **3** (new) | First reviewer entry: R1 of data-acq#45. **Surfaced cross-repo PVTI-vs-issue-number false-match finding** (`gh project item-list --limit N` returns false matches because issue numbers collide across repos) — load-bearing for memory extension Proposal 3. New entry at 3. |
+| Jean-Claude Habimana (R2 reviewer) | — | **3** (new) | First reviewer entry: R2 of data-acq#45 with substantive Changes-Requested. **Used `gh api git/trees recursive` to verify** — the methodology that becomes charter proposal #313. New entry at 3. |
+
+### noorinalabs-landing-page team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Nazia Rahman (Senior QA / Performance Engineer)** | — | **4** (new) | First wave PR — substituted from "per-repo-roster-tbd" placeholder at fan-out (orchestrator pick based on parser-fixture-audit fit). Tier-1 audit PR landing-page#87. **Only audit that got it RIGHT first try** — origin-clean verified at head_sha, W5 PR #79 history correctly cited, 14 frontmatter + 8 MDX shape matrix per QA discipline (incl. BOM, multi-doc YAML, CRLF, Arabic Unicode, YAML anchors). 0 CR. Marcia R1 + Kofi-FE R2 both Approved cleanly. **NEW entry at 4** — clean first-wave delivery + strong domain discipline + only audit that exercised committed-tree-vs-filesystem correctly without R1/R2 catch. Merits start above default. |
+| Marcia Vasquez-Paredes (Project Lead) | 4 | 4 | R1 of landing-page#87. All 6 checks passed including origin-clean verification + #85 carry-forward verified against PR #79 history. Strong project-lead lens. Hold at 4. |
+| Kofi Mensah-Williams (Frontend Engineer) | 4 | 4 | R2 of landing-page#87. Astro-domain depth — verified Zod schema mapping for 14 frontmatter shapes + identified `cta.href` URL-form fixture-coverage gap as informational addendum. Hold at 4. |
+
+### Done Well / Needs Improvement (Phase 3 Wave 7)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Aino Virtanen** (SQL) | #305 root-cause patch at `_shell_parse.tokenize()` module level (all consumers benefit transitively) + #312 first downstream beneficiary refactor with explicit transitive-fix pinning. 3 disciplined R1 reviews. | None this wave. |
+| **Wanjiku Mwangi** (TPM) | #301 fix-with-fixtures cites e906e135 live trace (strongest acceptance available). #308 main parser audit thorough. Surfaced + worked around `gh project item-add` silent no-op via GraphQL. | None this wave. |
+| **Nadia Khoury** (PD) | ★ implement-class delivery with full two-tier thesis, 3 charter proposals filed for W8, pre-loaded thesis material during R2 reviews. **W6 reviewer-only-profile flag resolved.** | None this wave. |
+| **Santiago Ferreira** (RC) | Theme-routed wave (no deploy-cycle work). | No actionable improvement; theme-routed shape. |
+| **Anya Kowalczyk** (isnad-graph TL) | First implement-class PR clean + Pattern G in-band parent-sync fix. | None this wave. |
+| **Idris Yusuf** (isnad-graph Eng, NEW) | **Coined wave-level thesis sentence**; cross-repo R1 strength (own repo + user-service). | None this wave. |
+| **Arjun Raghavan** (isnad-graph Eng, NEW) | Independent stale-worktree-vs-live confirmation; byte-equivalence verification of Pattern G fix. | None this wave. |
+| **Mateo Salazar** (user-service Eng) | Clean post-R2 follow-through (project 2 GraphQL + #98/#99 parent-redirect). | Initial audit framing pre-P3W5-stale; should have run committed-tree check first (now codified as #313). |
+| **Bereket Tadesse** (deploy Manager) | Multi-tier delivery + post-review CI fix discipline + stale-orphan finding contribution. | None this wave. |
+| **Aisha Idrissi** (deploy R1, NEW) | Strong PR-vs-runtime split adherence per memory. | None this wave. |
+| **Weronika Zielinska** (deploy R2, NEW) | Untracked-vs-committed nuance catch (load-bearing for ★). | None this wave. |
+| **Kofi Mensah** (design-system Docs Eng) | Clean revision after R1; surfaced new `gh api -X PATCH -f body=@file` literal-paste gotcha. | Initial audit framing pre-PR#66-stale; PR body update missed at first revision (caught by R2). |
+| **Maeve Callahan** (design-system R1, NEW) | **Two-tier framing originator** + dispatcher-style charter-clarification framing. | None this wave. |
+| **Beren Yildiz** (design-system R2, NEW) | PR-body-stale catch + dispatcher-completeness verification. | None this wave. |
+| **Sofia Cardoso** (data-acquisition Tech Writer) | First implement-class delivery; clean post-R2 revision with **methodological retro point** (committed-tree-first verification). | Initial G2 framing wrong (filesystem-vs-tree); now codified as #313. |
+| **Dilara Erdogan** (data-acquisition R1, NEW) | PVTI-vs-issue-number false-match finding (load-bearing for memory extension). | None this wave. |
+| **Jean-Claude Habimana** (data-acquisition R2, NEW) | `gh api git/trees recursive` methodology — becomes #313. | None this wave. |
+| **Nazia Rahman** (landing-page QA, NEW @4) | **Only audit that got it RIGHT first try** — committed-tree-vs-filesystem distinction exercised correctly without R1/R2 catch; QA-discipline shape-matrix enumeration. | None this wave. |
+| **Marcia Vasquez-Paredes** (landing-page Project Lead) | Origin-clean independent verification + #85 carry-forward traced to PR #79. | None this wave. |
+| **Kofi Mensah-Williams** (landing-page Frontend Eng) | Astro Zod-schema verification + `cta.href` URL-form gap addendum. | None this wave. |
+| **Orchestrator** | 12/12 PRs merged, 0 admin overrides; cross-repo two-tier thesis emerged organically via 5-reviewer + 4-implementer triangulation; ★ Nadia summary brief baked all retro-material in advance (full thesis + 3-act reference-impl set); phased Phase A/B/C wrapup executed cleanly; gh api PUT contents pattern used 3× for atomic status updates (no orphans); routed CR cycles to existing idle agents (no over-spawning); spotted CI shellcheck failure on deploy#278 post-review and routed to Bereket. | (a) Filed Node 20 deprecation issues during wrapup (mid-flow scope expansion); could have deferred. (b) Wrote wave_7 counters as nested `wave_7_summary.*` instead of TOP-LEVEL canonical keys — required atomic PUT during retro; /wave-wrapup skill update needed. (c) 3-of-3 audit framing misclassifications surfaced — Tier-1 audit spawn briefs did NOT enforce committed-tree-first verification methodology; should have baked Sofia/Jeanclaude's discovery into brief template prospectively. (d) `auto_set_env_test` hook false-positive on heredoc body containing pytest-substring caught at retro file-edit time — file via Write tool worked; suggests #114 short-circuit conditions need a heredoc-content extension. |

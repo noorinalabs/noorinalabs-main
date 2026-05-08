@@ -1931,3 +1931,92 @@ The pipeline is converging — W5 promoted 5, W6 has no new candidates. Pattern:
 | E — process collapse under fire | Orchestrator-class | 0 (no emergency) | 1 historical |
 | F — orchestrator-class pre-flight gap | Orchestrator-class | **1 NEW** (e235b0b kickoff status push gap) | 7 historical, **previously closed by #245+#249** but **REOPENED** by kickoff-push surface |
 | **G — in-wave skill self-improvement** | Skill/Hook author | 1 (Aino #294 hook fix in-flight, surfaced by her own R1 review of #293) | **3** (W4 #250 + W5 #276 + W6 #294) |
+
+---
+
+## Retrospective: Phase 3 Wave 7 — Hook Parser-Fixture Coverage Backport Audit (2026-05-07 → 2026-05-08)
+
+### Wave shape
+
+| Metric | Value |
+|--------|-------|
+| Total PRs merged | 12 (10 wave PRs + ★ summary #310 + Tier-4 refactor #312) |
+| Repos in scope | 8 (7 with delivery; ingest-platform = no-op stub per declared scope) |
+| Top-implementer concentration | 2/12 = 17% — 3-way tie (Aino × 2 #305 #312, Wanjiku × 2 #301 #308, Bereket × 2 #278 #279) |
+| Admin overrides | 0 (Hook 17 enforced cleanly across all merges) |
+| Changes-Requested cycles | 6 |
+| Implementer substitutions | 2 (Anya Volkov→Kowalczyk, per-repo-roster-tbd→Nazia; recorded in cross-repo-status.json wave_7_decisions) |
+| Silent scope drops | 0 |
+| Pattern G in-band fixes | 1 (Anya synced auto_set_env_test.py from parent → isnad-graph) |
+| Backport issues filed | ~25 (queued for W8 carry-forward) |
+| Charter change proposals | 3 (#311 dispatcher-children sub-clause, #313 Hook Audit Protocol, Proposal-3 inline silent-no-op family memory extension) |
+| Counter drift | 0 (canonical top-level keys absent at wrapup; added at retro fb459b23 — flagged for /wave-wrapup skill update) |
+
+### Per-engineer assessment
+
+See `.claude/team/trust_matrix.md` § Phase 3 Wave 7 Trust Updates for full per-engineer table. Summary:
+
+- **Promotions (3):** Nadia Khoury (4→5, ★ delivery resolves W6 reviewer-only flag), Anya Kowalczyk (3→4, first implement-class + Pattern G in-band), Bereket Tadesse (4→5, multi-tier + post-review CI cycle).
+- **New entries (10):** Idris Yusuf, Arjun Raghavan, Aisha Idrissi, Weronika Zielinska, Maeve Callahan, Beren Yildiz, Dilara Erdogan, Jean-Claude Habimana — all reviewer-class first entries at 3. Nazia Rahman new at 4 (only audit right first try + QA-discipline shape matrix).
+- **Holds (10):** Aino, Wanjiku, Santiago, Mateo, Kofi (design-system), Sofia, Marcia, Kofi-FE, all at prior level.
+
+### Top 3 going well
+
+1. **Cross-cutting framing emerged organically via reviewer triangulation.** 5 reviewers (Aisha, Dilara, Idris, Marcia, Maeve) + 4 implementers (Bereket, Sofia, Mateo, Anya) independently arrived at the two-tier thesis. The wave-level sentence ("fixture-first discipline broke at the parent→child update boundary") was coined by Idris in his R1 message and confirmed by 5 subsequent reviewers. By the time Nadia's ★ spawn fired, the thesis was COMPLETE. Pattern: rich reviewer-class context-loading-in-advance accelerates structural-finding consolidation. Recommend baking explicit "throughline-watch" instructions into reviewer spawn briefs as a default.
+
+2. **Three-act reference-implementation set complete in one wave.** PR #301 = Pattern G template (live-trigger → in-band → backport with fixture). PR #305 = shared-utility hardening (fix at module level, all consumers benefit). PR #312 = downstream beneficiary closure (consumer hook migrates + pins transitive fix with dedicated tests). Each PR self-cited its position in the arc. Charter rule § Parser-Fixture Coverage Requirements (introduced #299 in W6) now has 3 worked examples future PRs can cite.
+
+3. **0 admin overrides on 12 PRs across 7 repos.** Hook 17 (validate_pr_review) enforced cleanly across the entire merge ceremony — no charter bypass needed. W6 set the 0-admin precedent (first wave with truthful 0); W7 sustained it with 50% more PRs. Operationally: the team's reviewer-comment + TechDebt-line discipline is now reliably hook-validated.
+
+### Top 3 pain points
+
+1. **3-of-3 stale-mirror misclassifications at Tier-1 audits** (Kofi/design-system caught at R1 by Maeve, Mateo/user-service caught at R2 by Anya-K, Sofia/data-acq caught at R2 by Jeanclaude). Root cause: filesystem enumeration ≠ committed tree. All three audits framed against working-directory state instead of `gh api .../git/trees/<sha>?recursive=1`. Caught + corrected at R1/R2 but caused 5 of 6 Changes-Requested cycles. Already proposed as charter #313 (§ Hook Audit Protocol).
+
+2. **`gh project item-add` silent-no-op family** hit 3+ PRs with cumulative ~9 issue-add silent failures (Wanjiku #308 × 5, Sofia #45 × 2, Mateo #100 × 2). Plus `gh project item-list --limit N` returns false matches on multi-repo boards (Dilara found this re-reviewing #45). Plus `gh api -X PATCH -f body=@file` silently literal-pastes the @file string (Kofi caught it on #73). Memory `feedback_gh_pr_edit_silent_noop.md` covers only `gh pr edit --body-file`. Memory extension overdue.
+
+3. **Roster gap surfaced at spawn fan-out**: matrix called "Anya Volkov" but canonical isnad-graph Tech Lead is Anya Kowalczyk. Same alias also appeared as R1 for user-service#100. Substitution worked smoothly but wasn't caught at /wave-scope time. Documented in `wave_7_decisions.implementer_substitutions` for cleanup pre-/wave-scope-W8.
+
+### Proposed process changes (NOT auto-applied — require user approval)
+
+1. **Charter `hooks.md` § Audit Protocol (NEW SECTION)** — codify `gh api repos/<repo>/git/trees/<sha>?recursive=1` as mandatory first verification step in hook audits. Filed as #313. Should land early in W8 to prevent 3-misclassification recurrence.
+2. **Charter `hooks.md` § Parser-Fixture Coverage Requirements** — dispatcher-children sub-clause exempting children with no committed `.claude/hooks/`. Filed as #311. Closes Maeve's charter-clarification question.
+3. **Memory `feedback_gh_pr_edit_silent_noop.md` extension** — cover `gh project item-add`, `gh project item-list --limit N` (multi-repo false-matches), `gh api -X PATCH -f body=@file` (literal @file paste). Documented inline in ★ #310 § 4e + § 5; W8 session-start should write the extended memory file.
+4. **(Orchestrator-class) /wave-wrapup wave-counter format** — write `wave_${M}_final_pr_count`, `wave_${M}_changes_requested_cycles`, `wave_${M}_top_concentration_pct` as TOP-LEVEL keys (matching what /wave-retro Step 2.5 expects), not nested under `wave_${M}_summary.*`. File issue against /wave-wrapup skill.
+5. **(Orchestrator-class) Reviewer-spawn brief template** — bake "throughline-watch" instructions into reviewer briefs by default. The W7 reviewer briefs explicitly asked R1+R2 to surface cross-repo throughline observations for Nadia's ★ summary; this produced the rich pre-loaded thesis structure. Make this default, not per-wave addition.
+6. **(Orchestrator-class) /wave-scope roster validation** — before /wave-kickoff fan-out, /wave-scope should validate every implementer/reviewer name in the matrix against per-repo `team/roster/`. The W7 "Anya Volkov" placeholder was a stale matrix alias not caught at scope time.
+7. **(NEW Hook 4 surface) auto_set_env_test heredoc-body skip condition** — false-positive matches "pytest" substring inside heredoc bodies (caught at retro file-edit time when heredoc content referenced fixture tests). Add a third short-circuit condition to Hook 4 alongside #114's gh-and---body skips: skip when the command is heredoc-redirecting to a non-test path (e.g., regex `<<-?\s*'?\w+'?` followed by content not containing standalone pytest invocation lines).
+
+### Charter changes proposed (filed as separate W8 issues — not applied this PR)
+
+| Proposal | Section | Issue | Status |
+|----------|---------|-------|--------|
+| Dispatcher-children sub-clause | charter/hooks.md § Parser-Fixture Coverage Requirements | noorinalabs-main#311 | Filed for W8 |
+| § Hook Audit Protocol (new section) | charter/hooks.md | noorinalabs-main#313 | Filed for W8 |
+| Silent-no-op family memory extension | memory/feedback_gh_pr_edit_silent_noop.md | (no issue — inline in ★ #310 § 4e + § 5) | W8 session-start action |
+
+### Action items
+
+1. Apply approved charter changes (W8 PRs against #311, #313).
+2. Extend memory `feedback_gh_pr_edit_silent_noop.md` at W8 session-start.
+3. File issue against /wave-wrapup skill for canonical counter-key format.
+4. File issue against /wave-scope skill for roster-validation step.
+5. File issue against Hook 4 (auto_set_env_test) for heredoc-body false-positive (surfaced at retro).
+6. Bake throughline-watch into default reviewer-spawn brief template.
+7. Roster cleanup at /wave-scope p3 w8: replace "Anya Volkov" alias with "Anya Kowalczyk" in matrix.
+
+### Pattern tally (running)
+
+| Pattern | Class | This wave | Cumulative |
+|---|---|---|---|
+| A — design-rationale block | Implementer | 0 | 11 |
+| B unified — verify-vs-artifact | Implementer + reviewer | many — reviewers consistently used `gh api contents@head_sha`; Jeanclaude's `gh api git/trees recursive` extension is new sub-pattern | promotion-threshold met repeatedly |
+| C — claim-state-staleness | Manager-class | 0 | reverted, held |
+| D — message-ordering-race | Architecture | n/a | tracked main#241 |
+| E — process collapse under fire | Orchestrator-class | 0 (no emergency) | 1 historical |
+| F — orchestrator-class pre-flight gap | Orchestrator-class | 0 | 7 historical, closed via W6 #299 |
+| **G — in-wave skill self-improvement** | Skill/Hook author | 1 (Anya synced auto_set_env_test from parent → isnad-graph in-band) | **4** (W4 #250 + W5 #276 + W6 #294 + W7 isnad-graph) |
+| **NEW: Misclassification-via-filesystem-not-tree** | Implementer | 3 (Kofi/Mateo/Sofia audits) | **3** — first formal recognition; codified as charter #313 |
+
+### Promotion audit
+
+(deterministic — see `.claude/team/promotion_audit_log/wave-7.md` after /promotion-audit runs)
