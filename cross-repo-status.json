@@ -1,8 +1,149 @@
 {
   "wave_7_scope_reconciled_at": "2026-05-08T00:56:56Z",
-  "wave_7_repos_in_scope": ["noorinalabs-main","noorinalabs-isnad-graph","noorinalabs-user-service","noorinalabs-deploy","noorinalabs-design-system","noorinalabs-data-acquisition","noorinalabs-isnad-ingest-platform","noorinalabs-landing-page"],
+  "wave_7_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-isnad-graph",
+    "noorinalabs-user-service",
+    "noorinalabs-deploy",
+    "noorinalabs-design-system",
+    "noorinalabs-data-acquisition",
+    "noorinalabs-isnad-ingest-platform",
+    "noorinalabs-landing-page"
+  ],
   "wave_7_meta_issue": 300,
-  "wave_7_scope": {"theme":"Hook parser-fixture coverage backport audit","tier_1_per_repo_audits":[{"repo":"noorinalabs-main","hook_count":48,"implementer":"Wanjiku Mwangi","reviewer":"Aino Virtanen","reviewer_2":"Nadia Khoury"},{"repo":"noorinalabs-isnad-graph","hook_count":9,"implementer":"Anya Volkov","reviewer":"Idris","reviewer_2":"Arjun Raghavan"},{"repo":"noorinalabs-deploy","hook_count":7,"implementer":"Bereket Tadesse","reviewer":"Aisha","reviewer_2":"Weronika"},{"repo":"noorinalabs-user-service","hook_count":5,"implementer":"Mateo Salazar","reviewer":"Anya Volkov","reviewer_2":"Idris"},{"repo":"noorinalabs-design-system","hook_count":2,"implementer":"Kofi Mensah","reviewer":"Maeve","reviewer_2":"Beren"},{"repo":"noorinalabs-data-acquisition","hook_count":2,"implementer":"Sofia Cardoso","reviewer":"Dilara","reviewer_2":"Jeanclaude"},{"repo":"noorinalabs-landing-page","hook_count":2,"implementer":"per-repo-roster-tbd","reviewer":"per-repo-roster-tbd","reviewer_2":"per-repo-roster-tbd"},{"repo":"noorinalabs-isnad-ingest-platform","hook_count":0,"implementer":"no-op-stub","reviewer":"none","reviewer_2":"none"}],"tier_2_known_buggy_parsers":[{"id":"noorinalabs-main#287","title":"validate_commit_identity backslash-line-continuation","implementer":"Aino Virtanen","reviewer":"Wanjiku Mwangi","reviewer_2":"Nadia Khoury"},{"id":"noorinalabs-main#285","title":"/wave-kickoff Step 1 EXISTING_SHA captures 404 body","implementer":"Wanjiku Mwangi","reviewer":"Aino Virtanen","reviewer_2":"Nadia Khoury"}],"tier_3_cross_repo_carry_forward":[{"id":"noorinalabs-deploy#274","title":"Wire Alertmanager receivers to real notifier","implementer":"Bereket Tadesse","reviewer":"Aisha","reviewer_2":"Weronika"}],"tier_4_opportunistic_techdebt":[{"id":"noorinalabs-main#260","title":"refactor validate_workflow_paths_coverage Bash matchers to use _shell_parse","implementer":"Aino Virtanen","reviewer":"Wanjiku Mwangi","reviewer_2":"Nadia Khoury"}],"nadia_authored_pr":{"description":"Cross-repo audit summary PR — charter/hooks.md § Parser Class Definition + summary table","implementer":"Nadia Khoury","reviewer":"Aino Virtanen","reviewer_2":"Wanjiku Mwangi","rationale":"W6 retro flag — 4-consecutive-wave reviewer-only profile; gives PD an implement-class delivery"},"carry_forwards_from_w6":["noorinalabs-main#287","noorinalabs-main#285","noorinalabs-deploy#274"],"carry_forwards_dropped_from_w6":[{"id":"noorinalabs-main#294","reason":"closed 2026-05-08T00:03Z by canonical fix #295 (merged)"}],"memory_must_includes":[],"tracking_only_mentions":["noorinalabs-deploy#273"],"declared_refs":["noorinalabs-main#287","noorinalabs-main#285","noorinalabs-deploy#274","noorinalabs-main#260"],"length_estimate_days":"5-7","pr_count_target":"11-13","acceptance":["All 8 Tier-1 audit PRs merged","Both Tier-2 fix+fixture PRs merged","deploy#274 merged","Cross-repo audit summary PR (Nadia) merged","Audit-discovered parser bugs filed in-wave; Pattern G fixes landed in-band","0 admin overrides"]},
+  "wave_7_scope": {
+    "theme": "Hook parser-fixture coverage backport audit",
+    "tier_1_per_repo_audits": [
+      {
+        "repo": "noorinalabs-main",
+        "hook_count": 48,
+        "implementer": "Wanjiku Mwangi",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Nadia Khoury"
+      },
+      {
+        "repo": "noorinalabs-isnad-graph",
+        "hook_count": 9,
+        "implementer": "Anya Volkov",
+        "reviewer": "Idris",
+        "reviewer_2": "Arjun Raghavan"
+      },
+      {
+        "repo": "noorinalabs-deploy",
+        "hook_count": 7,
+        "implementer": "Bereket Tadesse",
+        "reviewer": "Aisha",
+        "reviewer_2": "Weronika"
+      },
+      {
+        "repo": "noorinalabs-user-service",
+        "hook_count": 5,
+        "implementer": "Mateo Salazar",
+        "reviewer": "Anya Volkov",
+        "reviewer_2": "Idris"
+      },
+      {
+        "repo": "noorinalabs-design-system",
+        "hook_count": 2,
+        "implementer": "Kofi Mensah",
+        "reviewer": "Maeve",
+        "reviewer_2": "Beren"
+      },
+      {
+        "repo": "noorinalabs-data-acquisition",
+        "hook_count": 2,
+        "implementer": "Sofia Cardoso",
+        "reviewer": "Dilara",
+        "reviewer_2": "Jeanclaude"
+      },
+      {
+        "repo": "noorinalabs-landing-page",
+        "hook_count": 2,
+        "implementer": "per-repo-roster-tbd",
+        "reviewer": "per-repo-roster-tbd",
+        "reviewer_2": "per-repo-roster-tbd"
+      },
+      {
+        "repo": "noorinalabs-isnad-ingest-platform",
+        "hook_count": 0,
+        "implementer": "no-op-stub",
+        "reviewer": "none",
+        "reviewer_2": "none"
+      }
+    ],
+    "tier_2_known_buggy_parsers": [
+      {
+        "id": "noorinalabs-main#287",
+        "title": "validate_commit_identity backslash-line-continuation",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Nadia Khoury"
+      },
+      {
+        "id": "noorinalabs-main#285",
+        "title": "/wave-kickoff Step 1 EXISTING_SHA captures 404 body",
+        "implementer": "Wanjiku Mwangi",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Nadia Khoury"
+      }
+    ],
+    "tier_3_cross_repo_carry_forward": [
+      {
+        "id": "noorinalabs-deploy#274",
+        "title": "Wire Alertmanager receivers to real notifier",
+        "implementer": "Bereket Tadesse",
+        "reviewer": "Aisha",
+        "reviewer_2": "Weronika"
+      }
+    ],
+    "tier_4_opportunistic_techdebt": [
+      {
+        "id": "noorinalabs-main#260",
+        "title": "refactor validate_workflow_paths_coverage Bash matchers to use _shell_parse",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Nadia Khoury"
+      }
+    ],
+    "nadia_authored_pr": {
+      "description": "Cross-repo audit summary PR — charter/hooks.md § Parser Class Definition + summary table",
+      "implementer": "Nadia Khoury",
+      "reviewer": "Aino Virtanen",
+      "reviewer_2": "Wanjiku Mwangi",
+      "rationale": "W6 retro flag — 4-consecutive-wave reviewer-only profile; gives PD an implement-class delivery"
+    },
+    "carry_forwards_from_w6": [
+      "noorinalabs-main#287",
+      "noorinalabs-main#285",
+      "noorinalabs-deploy#274"
+    ],
+    "carry_forwards_dropped_from_w6": [
+      {
+        "id": "noorinalabs-main#294",
+        "reason": "closed 2026-05-08T00:03Z by canonical fix #295 (merged)"
+      }
+    ],
+    "memory_must_includes": [],
+    "tracking_only_mentions": [
+      "noorinalabs-deploy#273"
+    ],
+    "declared_refs": [
+      "noorinalabs-main#287",
+      "noorinalabs-main#285",
+      "noorinalabs-deploy#274",
+      "noorinalabs-main#260"
+    ],
+    "length_estimate_days": "5-7",
+    "pr_count_target": "11-13",
+    "acceptance": [
+      "All 8 Tier-1 audit PRs merged",
+      "Both Tier-2 fix+fixture PRs merged",
+      "deploy#274 merged",
+      "Cross-repo audit summary PR (Nadia) merged",
+      "Audit-discovered parser bugs filed in-wave; Pattern G fixes landed in-band",
+      "0 admin overrides"
+    ]
+  },
   "wave_7_scope_reconciliation_note": "Manual /wave-scope run for fresh wave (label not yet created). Declared 4 unique meaningful refs (main#287, main#285, deploy#274, main#260) + 1 closed carry-forward (main#294, DROPPED — canonical fix #295 merged 2026-05-08T00:03Z) + 1 tracking-only mention (deploy#273). Labeled 0 (p3-wave-7 label not yet created — kickoff Step 7 owns label creation/application per W5/W6 precedent). 0 drift; 0 memory must-includes; 0 dispositions required. Stale phase_2_wave_7_work renamed inline to free wave_7_* keyspace. wave_6_carry_forward_to_w7 array still contains stale main#294 — left as-is for retro audit trail; wave_7_scope.carry_forwards_dropped_from_w6 documents the strip.",
   "wave_6_scope_reconciled_at": "2026-05-06T02:36:55Z",
   "wave_6_scope_reconciliation_note": "Manual /wave-scope run post-#274 close. Declared 11 unique refs across 4 tiers + 1 tracking-only mention; labeled 0 (p3-wave-6 label not yet created — kickoff Step 7 owns label creation/application per W5 precedent). All 5 W5→W6 carry-forwards folded into meta-body; no W6 memory must-includes filed; zero drift between declared and labeled state.",
@@ -207,7 +348,7 @@
   "wave_6_kicked_off_at": "2026-05-06T22:41:08Z",
   "wave_active": false,
   "current_wave": null,
-  "next_wave": "wave-7",
+  "next_wave": "wave-8",
   "last_completed_wave": "wave-6",
   "last_completed_at": "2026-05-07T23:40:46Z",
   "wave_5_completed_at": "2026-05-06T00:41:23Z",
@@ -883,7 +1024,7 @@
   "wave_started": "2026-04-30T21:00:00Z",
   "wave_1_wrap_started": "2026-04-30T23:18:00Z",
   "wave_1_wrap_status": "CLOSED 2026-05-01T01:49:41Z. Both wave-merge PRs landed (deploy#213 merge-commit b6f2cd1; main#235 merge-commit 9a1ef3e). 5/5 Tier-1 + 2/2 Tier-2 + #205 followup-of-spec + #214 wave-tail flake fix (#215 retry-with-backoff JSON-parse classifier) all on main. 8 deploy worktrees pruned. 2 ontology files resolved. 4 charter deltas landed (Patterns A + B unified + C + D). Trust matrix updated (Lucas 4→5; others hold). Promotion audit 0/0/55/4. Wave-tail produced 5 additional retro-pattern data points stress-testing the just-landed charter; all four patterns held. 9 follow-ups filed for next-wave planning (#199 #200 #203 #204 #209 #211 #212 + main#232 + main#233 + main#234). 3 Tier-3 carry-forwards remain operationally gated (deploy#86 async-routine fires post-this-merge; deploy#151 manual SRE B2 tfstate-key migration; user-service#84 manual SRE DEPLOY_REPO_PAT secret).",
-  "last_updated": "2026-05-07T23:40:46Z",
+  "last_updated": "2026-05-08T01:02:21Z",
   "deployments_branch": "deployments/phase-3/wave-3",
   "wave_1_theme": "Promotion pipeline goes prod — owner directive: pipeline running seamlessly so team can refocus on product + process",
   "wave_1_scope": {
@@ -1358,5 +1499,45 @@
     "noorinalabs-data-acquisition": "data-acquisition#42",
     "noorinalabs-isnad-ingest-platform": "ingest-platform#29",
     "noorinalabs-landing-page": "landing-page#83"
-  }
+  },
+  "wave_7_branches": {
+    "branch": "deployments/phase-3/wave-7",
+    "created_at": "2026-05-08T01:01:31Z",
+    "repos": {
+      "noorinalabs-main": {
+        "sha": "05f18753441147bb92d4b502738ae8235475b3f0",
+        "status": "created"
+      },
+      "noorinalabs-isnad-graph": {
+        "sha": "d4eb65a6375971e9abd58c71b55ab4d58fd95cfd",
+        "status": "created"
+      },
+      "noorinalabs-user-service": {
+        "sha": "76ff877c7379d6e33dbf5d0afffd521b230b1a53",
+        "status": "created"
+      },
+      "noorinalabs-deploy": {
+        "sha": "d42f08d5a789355eb4638b47e77b4d9a78367455",
+        "status": "created"
+      },
+      "noorinalabs-design-system": {
+        "sha": "b71776c9a7250b731ab09fb5ed8fbe1ecb0871a7",
+        "status": "created"
+      },
+      "noorinalabs-data-acquisition": {
+        "sha": "f43b84d19d1e38f4b964c6ed313ce5cc58584914",
+        "status": "created"
+      },
+      "noorinalabs-isnad-ingest-platform": {
+        "sha": "68408c4e8aef75c2f4321a9ca36bae732f6d7dcd",
+        "status": "created"
+      },
+      "noorinalabs-landing-page": {
+        "sha": "e8855aded8135fc5549cbaf97d9eb6101f1531c4",
+        "status": "created"
+      }
+    }
+  },
+  "wave_7_kicked_off_at": "2026-05-08T01:02:21Z",
+  "wave_7_active": true
 }
