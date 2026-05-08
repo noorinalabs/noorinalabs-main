@@ -1310,6 +1310,11 @@
         "id": "noorinalabs-deploy#274",
         "shape": "Wire Alertmanager receivers to real notifier",
         "rationale": "orphan filed during W6 (PR #273 review by Nurul Hakim); load-bearing followup to deploy#273 runbook claim"
+      },
+      {
+        "id": "noorinalabs-main#294",
+        "shape": "validate_pr_review wave-merge head-ref parser gap",
+        "rationale": "filed mid-wave after wrapup status committed (67cce96); surfaced by Wanjiku R1 review of P3W6 retro PR #297"
       }
     ],
     "wave_6_wrapup_started_at": "2026-05-07T03:00:00Z",
