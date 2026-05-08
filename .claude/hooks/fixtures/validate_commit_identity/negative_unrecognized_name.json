@@ -1,0 +1,5 @@
+{
+  "description": "Negative: user.name not in roster — must be blocked",
+  "command": "git -c user.name=\"Totally Fake Person\" -c user.email=\"fake@example.com\" commit -m \"not in roster\"",
+  "expect": "block:unrecognized name"
+}

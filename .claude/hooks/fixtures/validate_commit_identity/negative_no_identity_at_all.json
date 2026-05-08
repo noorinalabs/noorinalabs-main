@@ -1,0 +1,5 @@
+{
+  "description": "Negative: bare git commit with no -c flags — must be blocked",
+  "command": "git commit -m \"no identity flags at all\"",
+  "expect": "block:missing user.name"
+}
