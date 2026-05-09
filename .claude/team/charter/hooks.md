@@ -297,4 +297,22 @@ Every hook with input parsing MUST have test fixtures covering all known input s
 
 **Acceptance:** PR introducing a parser-bug fix MUST include the new fixture in the same commit. CI (or hook authors during review) flags PRs that change parser logic without an accompanying fixture addition.
 
+**Dispatcher-style children (no committed `.claude/hooks/`):** Children that delegate all hook execution to the parent canonical via `settings.json` are exempt from per-child fixture requirements. Coverage obligations are fulfilled by the parent's test suite. A child is classified as dispatcher-style when `gh api repos/<owner>/<repo>/git/trees/<head_sha>?recursive=1` returns 0 entries under `.claude/hooks/`. Design-system and landing-page (post-W5) are the canonical exemplars.
+
 **Enforcement:** The Standards & Quality Lead (Aino) verifies these requirements during hook PR review. A hook missing any of the five requirements must not be approved.
+
+## Hook Audit Protocol
+
+When auditing a repo's hook ownership status (hook-owning vs. dispatcher-style):
+
+1. Fetch the committed tree:
+   ```
+   gh api repos/<owner>/<repo>/git/trees/<head_sha>?recursive=1 \
+     --jq '[.tree[].path | select(startswith(".claude/hooks/"))]'
+   ```
+2. Classification: if the result is empty (`[]`), the repo is dispatcher-style. If non-empty, it is hook-owning.
+3. Filesystem enumeration (SSH, `ls`, `find`) is NOT a valid substitute — it includes untracked files, worktree artifacts, and gitignored content that are invisible to git.
+
+**Rationale:** P3W7 produced 3 repo misclassifications from a single root cause: auditors enumerated working-directory files instead of querying the committed git tree. Misclassified repos: design-system, user-service, data-acquisition — all initially called "stale-mirror hook-owning" but confirmed dispatcher-style via committed-tree inspection. The correct method is one API call away.
+
+**Enforcement:** Any audit-finding comment that asserts a repo's classification must cite the `gh api .../git/trees` invocation it ran (or the equivalent `gh api .../contents/.claude/hooks?ref=<sha>` form). Reviewers reject classification claims sourced from `ls`, `find`, SSH, or local checkout.
