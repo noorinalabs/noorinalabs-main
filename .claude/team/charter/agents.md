@@ -147,6 +147,22 @@ The orchestrator is the **single point that can create agents**. The Program Dir
 
 Failing to honor a spawn request within the same response is a **minor feedback event** for the orchestrator.
 
+### Spawn Isolation Default
+
+**All implementer-class spawns from the orchestrator MUST be invoked with `isolation: "worktree"`,** even when the parent-side worktree is cosmetic (e.g., the agent's actual code work lives in a child-repo clone).
+
+**Rationale:** the harness uses worktree-isolation as the signal for workspace-presented team-member surfaces. Non-isolated subagents render as generic "background tasks" — incorrect for implementer-class agents that the operator needs to monitor as team members.
+
+**Cost:** a temporary parent-repo worktree per agent (auto-cleaned if no changes — see Agent tool docs).
+
+**Benefit:** correct workspace presentation; Hook 14 (`enforce_ontology_context`) fires consistently across all implementer spawns; manager-class agents (per-repo PD/manager) and implementer-class agents (per-repo engineers) both render under their team membership rather than as anonymous background tasks.
+
+**Exception:** research-only forks (e.g., `Agent` calls that omit `subagent_type` to inherit context) need NOT use isolation, since they're explicitly context-inheriting forks rather than fresh implementer workspaces.
+
+**Origin:** owner-named at P3W6 wave-kickoff (2026-05-06) after observing 18 implementer spawns rendered as "background tasks" in the harness UI rather than as workspace-presented team members. The orchestrator weighed the trade-off explicitly during spawn ("17 of 18 implementers do code work in child repos which are `.gitignore`d from the parent — orchestrator-side worktree is cosmetic") and picked "no parent worktree" — that turned out to be the wrong call because the UI presentation cost wasn't surfaced in the trade-off analysis. Codified by noorinalabs-main#290.
+
+Failing to set `isolation: "worktree"` on an implementer spawn is a **minor feedback event** for the orchestrator.
+
 ### No Direct-to-Engineer Spawns
 
 **The orchestrator MUST NOT spawn engineers directly without first spawning the Program Director.** Even for "simple" or "mechanical" fixes, the team hierarchy must be followed:
