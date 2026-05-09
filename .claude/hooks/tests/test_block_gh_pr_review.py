@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Tests for block_gh_pr_review — basic behavioral fixtures.
+"""Behavioral test fixtures for block_gh_pr_review hook.
 
-This is NOT parser-fixture coverage per the W7 audit
-(`.claude/hooks/audit/parser_fixture_coverage.md` line 61), which classifies
-`block_gh_pr_review` as non-parser-class (simple regex match + shell-separator
-split, no structured parsing). This file closes a smaller gap: the hook had
-zero test coverage at all. These fixtures pin the hook's documented behavior
-and the regex's interaction with the `&&`, `||`, `|`, `;` segment-splitter.
+The hook is parser-class — it parses `tool_input.command` via `re.split` on
+shell separators (`&&`, `||`, `|`, `;`) and `re.match` for `gh pr review`
+detection on each segment. This file closes the empirical fixture gap
+surfaced by user-service#98: the hook had zero test coverage at all
+(verified at origin: `.claude/hooks/tests/test_block_gh_pr_review.py`
+returned HTTP 404 against `noorinalabs-main` `main` pre-PR).
+
+Fixtures pin documented behavior — `gh pr review` blocked, `gh pr comment`
+passes, `gh pr edit` passes — and the segment-splitter's interaction with
+each shell separator class.
 
 Run: ENVIRONMENT=test python3 -m pytest .claude/hooks/tests/test_block_gh_pr_review.py -v
 """
