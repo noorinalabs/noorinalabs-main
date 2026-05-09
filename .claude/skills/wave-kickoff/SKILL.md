@@ -357,6 +357,7 @@ Per charter `agents.md` § Hub-and-Spoke Orchestration Model + § Single-Leader 
 - **Single team per session** — one `TeamCreate` per orchestrator session; additional TeamCreates fail with "Already leading team." Use `team_name: "noorinalabs"` for cross-repo waves.
 - **Managers request implementer spawns** via `SendMessage` to the team lead with full context (name, roster file, issue, branch, reviewers, Contract ownership if applicable).
 - **Team lead spawns each implementer** following step 9 above (both bakes).
+- **Isolation: every implementer spawn MUST set `isolation: "worktree"`,** even when the parent-side worktree is cosmetic (child-repo work). Per charter `agents.md` § Spawn Isolation Default. The cost is a temporary parent-repo worktree per agent (auto-cleaned if no changes); the benefit is correct workspace-presentation in the harness UI (the operator sees agents under team membership rather than as anonymous background tasks) and consistent Hook 14 (`enforce_ontology_context`) enforcement.
 
 When composing spawn prompts for implementers, pull the manager's specified reviewer pairings, branch names, and Contract expectations into the prompt so the implementer starts with full context.
 
