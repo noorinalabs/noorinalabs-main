@@ -305,6 +305,41 @@ class MatcherRobustnessTests(unittest.TestCase):
         # Not a real commit invocation — should not require identity.
         self.assertIsNone(hook.check(self._input(cmd)))
 
+    def test_alembic_heredoc_body_via_command_substitution(self):
+        """user-service#99 claim 1: alembic-shape heredoc body via `-m "$(cat <<EOF...)"`.
+
+        Defensive coverage on top of `test_nested_heredoc_in_command_substitution`
+        (#188): the existing test pins the SHAPE; this test pins an alembic-
+        specific BODY containing the literal strings the user-service `make
+        migrate-new` workflow emits — `heads`, `head`, `revision = '<sha>'`,
+        `down_revision`. None of those substrings are hook tokens, but the
+        fixture exists so any future tightening of the parser cannot
+        accidentally treat alembic-emitted strings as identity-flag keywords.
+
+        Memory ref: `project_w10_user_service_alembic.md` (P2W10 #63 alembic
+        heads→head discipline).
+        """
+        valid_name = next(iter(hook.ROSTER), None)
+        if not valid_name:
+            self.skipTest("local roster is empty")
+        valid_email = hook.ROSTER[valid_name]
+        # Alembic-emitted strings inside a heredoc body inside command-sub.
+        cmd = (
+            f'git -c user.name="{valid_name}" -c user.email="{valid_email}" '
+            "commit -m \"$(cat <<'EOF'\n"
+            "migrate(P3W8 user-service#63): merge alembic heads -> head\n"
+            "\n"
+            "revision = 'a1b2c3d4e5f6'\n"
+            "down_revision = ('aaaa1111', 'bbbb2222')\n"
+            "branch_labels = None\n"
+            "depends_on = None\n"
+            'EOF\n)"'
+        )
+        self.assertIsNone(
+            hook.check(self._input(cmd)),
+            "us#99 claim 1: alembic-shape heredoc body should not false-block",
+        )
+
     def test_label_validator_filename_no_longer_blocks(self):
         """#226 meta-instance: --body-file path inside --label list.
 
