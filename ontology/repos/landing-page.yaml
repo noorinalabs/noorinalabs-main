@@ -79,3 +79,20 @@ ci:
     issue: "#68"
     status: merged
     description: "Image-tag Contract v6 replica. Emits 4 tags on push to main: sha-<short>, latest, stg-<short>, stg-latest. No notify-deploy step — landing-page deploy flows through deploy/promote.yml registry retag, not push-time dispatch (intentional architectural divergence from isnad-graph/user-service per Cédric's review note)."
+  node_20_upgrade:
+    pr: "landing-page#91 (P3W8)"
+    workflows_touched: [.github/workflows/deploy.yml, .github/workflows/ci.yml]
+    description: "Bump GitHub Actions to Node 20-compatible majors per parent#309 audit (actions/checkout@v6, etc)."
+
+local_hooks:
+  pattern: "dispatcher-style — local settings.json delegates to parent canonical hooks"
+  settings_align_pr: "landing-page#90 (P3W8)"
+  description: "settings.json matchers aligned with parent canonical (PostToolUse/Edit/Write/Stop coverage). Per feedback_dispatcher_child_no_local_fixtures.md memory: local repo hosts dispatcher entries only; canonical hook implementations live in noorinalabs-main/.claude/hooks/."
+
+decisions:
+  adr_001_astro_build_output_hook_coverage:
+    file: docs/adr/0001-astro-build-output-hook-coverage.md
+    pr: "landing-page#89 (P3W8)"
+    decision: "DEFER — do not author Astro-build-output hook coverage at this time"
+    rationale: "P3W7 audit gap closed via deliberate defer. Astro build outputs are static artifacts; existing parent hooks cover the editing surfaces. No active runtime gate needed."
+    revisit_trigger: "Reconsider if Astro pipeline starts emitting non-static artifacts (SSR, ISR, etc.) or if a hook gap surfaces in production."
