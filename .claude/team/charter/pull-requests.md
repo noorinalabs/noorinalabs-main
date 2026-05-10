@@ -421,3 +421,110 @@ These are legitimate followups when the inline change is already safe.
 ### Worked example
 
 `noorinalabs-user-service#77` (`OAUTH_PROVIDER_BASE_URL_OVERRIDE`, 2026-04-21). Reviewer filed followup #78 proposing a prod-environment guard + HTTPS-outside-test requirement, and posted `Changes Requested`. Mateo landed both inline in fixup `1104104`; #78 closed same day. Team-lead's verdict: "shipping the env-gate + HTTPS requirement inline rather than deferring to #78 was the right call." Deferring would have left a window where a prod misconfig could exfil `client_secret` via `/token` POSTs with no backstop.
+
+<!-- Promoted from memory: feedback_live_trace_over_synthetic_acceptance.md (P3W9 #346 memory audit, 2026-05-10) -->
+
+## Live-Trace Evidence > Synthetic-Test Acceptance (Mandatory) <!-- promotion-target: skill -->
+
+When validating a new gate (CI hook, security check, alert rule, validation logic), prefer **live-trace evidence** — the gate firing on a real, in-the-wild triggering artifact — over **synthetic-test acceptance** — the gate passing on test cases authored alongside the gate.
+
+### Why
+
+Synthetic tests prove the gate handles the cases the author *imagined*. Live-trace proves the gate handles the cases the *world produces* — which routinely diverge from the author's mental model. Synthetic tests can be written to pass; live-trace evidence can't be retroactively shaped to fit. The gate either fires correctly on the wild artifact or it doesn't.
+
+### How to apply
+
+- **For PR-time gates (CI hooks, validators, lint rules):** identify the most-recent failed real PR (not a synthetic one) and demonstrate the gate's verdict on that PR. Reference the failed run by URL or sha in the PR body. If you cannot find a recent in-the-wild failure, that is itself a signal — the gate may need a longer observation window before high-confidence acceptance, or its scope may be too narrow to be worth shipping.
+- **For runtime gates (alerts, monitors, startup assertions):** capture the gate firing on a real production event (alert firing, monitor crossing threshold, boot-time assertion tripping). Reference the firing artifact (alert ID, run ID, log entry, sha range) in the PR body or evidence package.
+- **Document the live-trace explicitly** in PR review evidence — reviewers can verify the artifact independently. Synthetic tests remain valuable as a regression floor; they just don't substitute for live-trace.
+
+### Reviewer enforcement
+
+When reviewing a new gate, ask "what wild artifact did this fire on?" If the only acceptance evidence is the gate's own test fixtures, request a live-trace before approving (Changes Requested if no live-trace exists; tech-debt followup if a live-trace is achievable but deferred to next wave).
+
+### Severity if violated
+
+- Implementer ships a gate with synthetic-only acceptance: **minor** (the gate may still be correct; the discipline gap is in evidence quality).
+- Reviewer rubber-stamps a gate without asking for live-trace: **minor**, **moderate** if recurring across a wave.
+- Gate ships with synthetic-only acceptance and silently misclassifies a wild artifact post-merge: **moderate** (the missed live-trace would have caught the misclassification before merge).
+
+### Worked example
+
+`noorinalabs-main#194` Hook 14 (`validate_pr_ci_status.py`) fan-out, 2026-04-28. Marisol's PR landed the strongest acceptance signal across the entire fan-out series by **live-tracing `classify_check` against an actual in-flight failed security-audit CI run** at the time — not against a fabricated failure. The live-trace caught a behavior pattern that synthetic tests would have missed because the author didn't think to test for it. Aino flagged this as the strongest acceptance proof in the entire fan-out — distinct enough that it materially changed Hook 14's confidence floor.
+
+<!-- Promoted from memory: feedback_pr_vs_runtime_acceptance_criteria.md (P3W9 #346 memory audit, 2026-05-10) -->
+
+## PR-Time Acceptance vs Runtime Acceptance (Mandatory) <!-- promotion-target: none -->
+
+When a fix lands a PR for an issue that ALSO has a runtime gate (e.g., "one successful end-to-end backup before DNS-flip", "first deploy succeeds without manual intervention", "CI green on first run after credential rotation"), distinguish the two lifecycle positions:
+
+- **PR-acceptance criteria** — code-correctness, unit-mechanic correctness, hardening, scoped local validation. Reviewable in PR comments. Lives in PR review scope.
+- **Runtime-acceptance criteria** — operational events firing on real infrastructure that may not exist yet. Lives in cutover / runbook / operational scope. Verified post-merge in production-event flow.
+
+### Failure modes if conflated
+
+1. **Blocks PR on infrastructure that doesn't exist yet** — e.g., demanding "B2 object key proof of successful upload" from a PR fixing the backup unit, when the new prod box hasn't been provisioned and there's no compose stack to back up. The PR then either waits indefinitely OR is blocked by an irrelevant external dependency.
+2. **Forces synthetic-evidence fakery** — implementer fabricates fake "proof" (stub creds, mock invocations) to satisfy reviewer demand for evidence that can't legitimately exist yet. Worse than no proof: it masks the real runtime gate when it fires.
+
+### How to apply
+
+- When scoping a PR for an issue that has a runtime gate, write the PR's Test Plan as **two sections**:
+  1. **Pre-merge validation** (PR-acceptance) — what the reviewer can verify from the diff + CI + author's local validation.
+  2. **Post-merge validation** (runtime-acceptance) — what fires after merge in production flow, NOT required for merge.
+- If a reviewer asks for runtime evidence in PR review, push back: "that gate fires at lifecycle position X (e.g., post-compose-up on new TF-prod box); cannot legitimately exist at PR-review time. Documented in post-merge Test Plan section."
+- If a runtime gate is a genuine wave-acceptance criterion, file a SEPARATE issue tracking the runtime gate (not the code fix). The code fix's PR closes its own issue; the runtime gate's issue closes on its own runtime-event trigger.
+
+### Adjacent to layer-separation
+
+This is the **lifecycle-separation** companion to the **layer-separation** discipline encoded by the multi-layer-gap-filing memory: both are about respecting boundaries when scoping work. Multi-layer says "different layers of one root cause = separate issues." This says "different lifecycle positions of one acceptance criterion = separate scope (PR vs runtime), not bundled."
+
+### Severity if violated
+
+- Reviewer demands runtime evidence in PR scope and implementer concedes by fabricating synthetic proof: **moderate** (synthetic substitute masks the real gate when it fires).
+- Implementer bundles runtime-acceptance criteria into PR-acceptance Test Plan, blocking merge on infrastructure that doesn't exist: **minor**, **moderate** if it blocks a wave.
+- Reviewer correctly distinguishes and pushes back on conflation: positive feedback event.
+
+### Worked example
+
+`noorinalabs-deploy#121` / PR #187, 2026-04-28. The PR fixed `isnad-backup.{service,timer}` (3 + 2 stacked bugs). `noorinalabs-main#212` cutover-gate required "one successful end-to-end backup within 24h of first compose-up before DNS-flip." Aisha's spawn brief asked for "B2 object key proving end-to-end success" as PR evidence. Aisha correctly DEFERRED that evidence to post-compose-up runtime, documented what she CANNOT validate (no docker-compose stack on stg = `docker compose ps` preflight refuses to proceed = no B2 path reached), shipped unit-mechanic correctness, and added an explicit post-merge Test Plan step for the runtime gate. Bereket endorsed the deferral as canonical: "fix landing now, gate firing later" is the right shape.
+
+<!-- Promoted from memory: feedback_origin_over_local_for_still_has_claims.md (P3W9 #346 memory audit, 2026-05-10) -->
+
+## Origin > Local Clone for "Still-Has-X" File-Content Claims (Mandatory) <!-- promotion-target: none -->
+
+When asserting a "still has X" / "still at Y" / "still missing Z" property about a PR's file content, query origin directly via `gh api repos/<owner>/<repo>/contents/<path>?ref=<head_sha>` (or `gh api .../pulls/<N>/files`). Do NOT grep a local checkout, worktree, or `/tmp/` clone of the PR branch.
+
+### Why
+
+Local clones are point-in-time snapshots — frozen the moment they're created and stale the next push that lands. In high-churn cycles (active multi-implementer wave work), a clone made N minutes ago can be N commits behind origin. Asserting "still has X" against the local snapshot generates a false-positive Changes-Requested that confuses the implementer and forces a counter-correction.
+
+This is the file-content-assertion specialization of the umbrella state-verification discipline encoded in `state-claims.md § Refresh State Before Claim`. That section governs top-line PR/issue state via `gh pr view --json state,...`. This rule extends the same discipline to per-path file content via `gh api .../contents`.
+
+### How to apply
+
+- For any "PR still has bug Y" / "file <path> still does Z" / "removal didn't land" assertion, fetch the file at the PR head:
+  ```bash
+  HEAD_SHA=$(gh pr view <N> --repo <owner>/<repo> --json headRefOid --jq .headRefOid)
+  gh api "repos/<owner>/<repo>/contents/<path>?ref=$HEAD_SHA" --jq '.content' | base64 -d
+  ```
+- Refreshing a local checkout via `git fetch && git checkout <head_sha>` before grep is acceptable but takes more steps; direct `gh api repos/.../contents/<path>?ref=<head_sha>` is one call.
+- Most acute in **high-churn cycles** where commits land in the few-minute window between cloning and asserting.
+
+### Reviewer enforcement
+
+When a reviewer's review-comment cites "still has X" / "still missing Y", the comment must either include the `?ref=<head_sha>` query or be re-verifiable by another reviewer via that query. Local-checkout-grep claims that produce a false-positive Changes-Requested are correctable on the next refresh; if the implementer counter-verifies via `gh api ... contents` and demonstrates the change has landed, the original review-comment must be revised (not silently abandoned) — paper trail matters.
+
+### Severity if violated
+
+- Single false-positive Changes-Requested from local-checkout staleness: **minor**, paper-trail correction required.
+- Recurring across a wave: **moderate** (signals the discipline isn't being applied; consumes implementer cycles on counter-corrections).
+- Local-checkout-grep used to assert a security-relevant claim ("PR still missing the auth guard") that turns out to be wrong: **moderate-to-severe** depending on whether the false-positive blocks a real fix from landing.
+
+### Worked example
+
+`noorinalabs-deploy#181` / Bereket → Lucas-87, 2026-04-28. Lucas pushed `c0b65e2` addressing Weronika's 3 blockers. Bereket cloned PR #181 branch to `/tmp/pr181-v2/` at HEAD `c0b65e2`. Lucas then pushed `3c7ee55` adding Nurul's 2 nits (junit-dup + schema_version). Bereket's "ready for re-review" message arrived AFTER `c0b65e2`, BEFORE `3c7ee55`. Bereket grep'd `/tmp/pr181-v2/` (still at `c0b65e2`) and reported "still has the duplicate junit-xml" — false positive. Lucas had to counter-verify via `gh api ... contents/...?ref=3c7ee55` and demonstrate the fixes were already there. Local clone was correct *at the time it was cloned*, but stale by the time the assertion was made.
+
+### Cross-references
+
+- `state-claims.md § Refresh State Before Claim` — top-line state-verification umbrella; this rule is the file-content specialization.
+- `pull-requests.md § Trust the Artifact, Not the Framing` — companion: read the artifact at HEAD, not the PR-body framing. Both rules converge on the same access primitive (`gh api ... contents/?ref=<head_sha>`).
