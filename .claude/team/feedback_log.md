@@ -2020,3 +2020,100 @@ See `.claude/team/trust_matrix.md` § Phase 3 Wave 7 Trust Updates for full per-
 ### Promotion audit
 
 (deterministic — see `.claude/team/promotion_audit_log/wave-7.md` after /promotion-audit runs)
+
+## Retrospective: Phase 3 Wave 8 — 2026-05-10
+
+**Theme:** Foundation reset — hook/skill/charter ownership disambiguation + artifact-CI scope definition.
+
+### Team Performance
+
+- 11 PRs merged to wave-branches across 5 of 7 in-scope repos
+- 5 wave-branch → main merges landed cleanly (main, deploy, design-system, landing-page, data-acq)
+- 2 repos identical to main at close (isnad-graph close-as-resolved bundle; user-service work shipped via parent #340)
+- 1 repo descoped during wave (ingest-platform — recorded in `wave_8_repos_descoped_during_wave`)
+- 25 Approved charter-format review comments (≈2.3/PR — at 2-reviewer minimum, several PRs at 3)
+- 0 ChangesRequested cycles
+- 0 admin-overrides
+- Top-implementer concentration: Kofi Mensah-Williams 3/11 = 27% (theme-fit, no fragility flag)
+- 20 issues carry-forward to `p3-wave-9`
+
+### Per-Engineer Assessments
+
+(See `trust_matrix.md` § Phase 3 Wave 8 for full table — summary here)
+
+**▲ Promoted (4):**
+- Mateo Salazar 3→4 (scope-pivot resilience + wave-7 propagation catch + #340 citation pre-fix)
+- Anya Kowalczyk 4→5 (W5-deletion invalidation catch on 4 of 5 fixture issues + #340 citation depth)
+- Aisha Idrissi 4→5 (Bereket under-count external catch + #341 authorship)
+- Maeve Callahan 4→5 (Approved-vs-Reply hook-semantic catch with manager-layer cascade prevention)
+
+**▼ Demoted (2):**
+- Bereket Tadesse 5→4 (`head`-truncation in pre-spawn enumeration sum; #341 codifies the rule)
+- Orchestrator 4→3 (spawn-brief Reply-vs-Approved instruction error → ~17 addenda cascade)
+
+**Held at max (4 — all Org-Level):** Nadia, Wanjiku, Aino, (Santiago held at 4 — theme-routed)
+
+**Held at default (10):** Implementer-class clean deliveries
+
+**New (2):** Lucas Ferreira (deploy Eng, default 3); Nadia Boukhari (user-service Manager, default-above 4)
+
+### Top 3 Going Well
+
+1. **Manager-layer relay propagated Approved-vs-Reply discipline preempting ~17 addenda** (Maeve catch → 5 manager SendMessages → Wanjiku wave-wide guidance + Step 4 manager pre-merge check). Single reviewer-class catch with multi-PR blast-radius prevention is the strongest pattern this wave.
+
+2. **Pre-spawn verify-at-origin discipline produced 3 distinct catches** (Marcia at landing-page coordination, Bereket on deploy#280 (caught externally — see Pain Points), Aisha on Bereket via independent scan). Pattern is mature enough that catches are now coming from multiple roles, not just one. #341 promotes the rule to charter.
+
+3. **Wave-7 propagation gap surfaced live during W8** (Mateo's citation catch on #340 → main#339 with Wanjiku TPM-class audit). The catch happened pre-merge, not at retro — exactly the verify-at-source-not-from-memory umbrella applied.
+
+### Top 3 Pain Points
+
+1. **My (orchestrator) spawn-brief template said `RequestOrReplied: Reply` for approval comments** — wrong; hook counts only `Approved`. Cascade required ~17 addenda across 11 PRs. Manager-layer relay contained the blast radius, but the first-call instruction error was load-bearing. Codified as `feedback_validate_pr_review_approved_not_reply.md` memory; W9 should bake corrected template into default reviewer-spawn brief.
+
+2. **Bereket pre-spawn 14-vs-37 under-count** caught externally by Aisha (`head`-truncation in `grep` output sum, not `grep -c` per file then sum). Single-instance manager-class regression; `feedback_no_head_in_surface_enumeration.md` memory + main#341 charter promotion both filed. Trust demote 5→4 pending live trace next wave.
+
+3. **Wave-wrapup skill doesn't fit a single session under load** — Steps 13 (Annunaki-attack) + 14 (Memory-to-automation audit) were filed as #344 (proposal) + #345 (annunaki output) + #346 (memory audit deferred to W9 with full classification). Both should move to `/wave-retro` per #344. Implementer-substitution reconciliation also deferred to per-engineer assessment above (skill § P3W5 retro requires it at wrapup).
+
+### Proposed Process Changes
+
+1. **Add Annunaki-attack + memory-to-automation audit to `/wave-retro` SKILL.md** — Rationale: filed as #344. Both steps were carved out of `/wave-wrapup` because they exceed a single session's natural boundary. They belong with retro because retro is where memories are produced AND where charter changes are proposed.
+
+2. **Bake corrected `RequestOrReplied: Approved` into default reviewer-spawn brief template** — Rationale: current default template was wrong (said `Reply`), causing the W8 cascade. Memory `feedback_validate_pr_review_approved_not_reply.md` documents the rule but agent templates need the fix at source. Proposed location: `.claude/team/charter/agents.md` § Reviewer Spawn Brief Template.
+
+3. **Promote `feedback_origin_over_local_for_still_has_claims.md` + `feedback_review_against_artifact_not_framing.md` to charter `pull-requests.md` § Reviewer Discipline** — Rationale: both Bereket-named with multiple instances; reviewers keep checking local clones / reading PR-body framing instead of artifact at head_sha. Filed as part of #346 memory-audit plan; W9 owner is Aino.
+
+4. **Codify `feedback_no_head_in_surface_enumeration.md` to charter `agents.md` § Pre-Spawn State Check** — Rationale: #341 already filed during W8. Bereket's 14-vs-37 under-count is the W8 instance; rule applies to all manager-class enumerations.
+
+5. **Update `/wave-wrapup` Step 11 to auto-emit implementer-substitution reconciliation table** — Rationale: skill § P3W5 retro requires it at wrapup; in W8 it was deferred to retro per-engineer assessment. Auto-emit closes the audit-trail gap.
+
+### Fire/Hire Actions
+
+None this wave. Bereket demote 5→4 is corrective, not exit-track. Orchestrator demote 4→3 is on Steven (the user) to recalibrate spawn-brief defaults — not an agent-class action.
+
+### Action Items for Aino (S&Q owner of memory audit + most charter promotions)
+
+Per #346 memory audit plan + #344 retro-extension proposal:
+1. Charter promotions (5 sections, batched per file)
+2. Hook-message improvements (#345 validate_commit_identity + #2 from audit on validate_pr_review)
+3. /file-bug skill creation (consolidating 3 search/drift/multi-layer memories)
+4. 14 memory retirements (10 already-covered + 4 stale project_*)
+5. 2 memory refreshes (project_current_state + project_ontology_system)
+6. /wave-retro extension (#344) — Steps 7.6 + 7.7
+
+### Pattern tally (running)
+
+| Pattern | Class | This wave | Cumulative |
+|---|---|---|---|
+| A — design-rationale block | Implementer | 0 | 11 |
+| B unified — verify-vs-artifact | Implementer + reviewer | many — Mateo's #340 citation catch is canonical example; Anya's W5-deletion invalidation also fits | promotion-threshold met repeatedly; #346 promotes to charter |
+| C — claim-state-staleness | Manager-class | 0 | reverted, held |
+| D — message-ordering-race | Architecture | n/a | tracked main#241 |
+| E — process collapse under fire | Orchestrator-class | 0 (no emergency) | 1 historical |
+| F — orchestrator-class pre-flight gap | Orchestrator-class | 0 | 7 historical, closed via W6 #299 |
+| G — in-wave skill self-improvement | Skill/Hook author | 0 | 4 historical (W4-W7) |
+| **NEW: Approved-vs-Reply hook-semantic-collision** | Spawn-brief author / orchestrator | 1 (orchestrator W8) | **1** — first formal recognition; codified as `feedback_validate_pr_review_approved_not_reply.md`; #344 + spawn-brief template fix proposed |
+| **NEW: Pre-spawn enumeration head-truncation** | Manager-class | 1 (Bereket W8) | **1** — first formal recognition; codified as `feedback_no_head_in_surface_enumeration.md`; main#341 charter promotion |
+| **NEW: Wave-7-propagation-gap-surfaced-live** | Implementer / reviewer | 1 (Mateo W8) | **1** — first formal recognition of an implementer surfacing a wave-N-1 propagation defect during wave-N work; main#339 audit owner Wanjiku |
+
+### Promotion audit
+
+(deterministic — see `.claude/team/promotion_audit_log/wave-8.md` after /promotion-audit runs)

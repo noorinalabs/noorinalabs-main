@@ -831,3 +831,81 @@ The org was restructured in Session 3 with new repo-level teams. The matrix abov
 | **Marcia Vasquez-Paredes** (landing-page Project Lead) | Origin-clean independent verification + #85 carry-forward traced to PR #79. | None this wave. |
 | **Kofi Mensah-Williams** (landing-page Frontend Eng) | Astro Zod-schema verification + `cta.href` URL-form gap addendum. | None this wave. |
 | **Orchestrator** | 12/12 PRs merged, 0 admin overrides; cross-repo two-tier thesis emerged organically via 5-reviewer + 4-implementer triangulation; ★ Nadia summary brief baked all retro-material in advance (full thesis + 3-act reference-impl set); phased Phase A/B/C wrapup executed cleanly; gh api PUT contents pattern used 3× for atomic status updates (no orphans); routed CR cycles to existing idle agents (no over-spawning); spotted CI shellcheck failure on deploy#278 post-review and routed to Bereket. | (a) Filed Node 20 deprecation issues during wrapup (mid-flow scope expansion); could have deferred. (b) Wrote wave_7 counters as nested `wave_7_summary.*` instead of TOP-LEVEL canonical keys — required atomic PUT during retro; /wave-wrapup skill update needed. (c) 3-of-3 audit framing misclassifications surfaced — Tier-1 audit spawn briefs did NOT enforce committed-tree-first verification methodology; should have baked Sofia/Jeanclaude's discovery into brief template prospectively. (d) `auto_set_env_test` hook false-positive on heredoc body containing pytest-substring caught at retro file-edit time — file via Write tool worked; suggests #114 short-circuit conditions need a heredoc-content extension. |
+
+## Phase 3 Wave 8 Trust Updates (2026-05-10) — Foundation Reset (Hook/Skill/Charter Ownership Disambiguation + Artifact-CI Scope Definition)
+
+### Wave Shape
+
+| Metric | Value |
+|---|---|
+| PRs merged to wave-branches | 11 (across 5 of 7 in-scope repos) |
+| Wave-branch → main merges | 5 (main, deploy, design-system, landing-page, data-acq) |
+| Repos identical to main (no merge needed) | 2 (isnad-graph close-as-resolved bundle, user-service work shipped via parent #340) |
+| Repos descoped during wave | 1 (ingest-platform — recorded in `wave_8_repos_descoped_during_wave`) |
+| Approved review comments (charter-format) | 25 across 11 PRs (≈2.3/PR — at 2-reviewer minimum, several PRs at 3) |
+| ChangesRequested cycles | 0 |
+| Misformatted `Replied`/`Reply` corrected via addenda | 10+ (Approved-vs-Reply discipline cascade — Maeve catch) |
+| Admin-overrides | 0 |
+| Top-implementer concentration | Kofi Mensah-Williams 3/11 = **27%** (well below 60% fragility line; theme-fit since landing-page was fully W8-scoped) |
+| Carry-forward to W9 | 20 issues (17 main + 1 user-service + 2 data-acq) |
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Nadia Khoury (Program Director) | 5 | 5 | ★ Filed 3 charter proposals during wave (#337 validate_wave_label_evidence hook, #341 Pre-Spawn State Check § extension, plus W9 lifecycle ownership). Multiple R1/R2 reviews with `state,mergedAt` discriminator discipline (her own templating spawn prelude). Hold at max. |
+| Wanjiku Mwangi (TPM) | 5 | 5 | ★ Owned #309 Node 20 audit (4 of 5 child upgrades shipped). Anchored Approved-vs-Reply discipline propagation via wave-wide guidance comment (Step 4 manager pre-merge check). PUT-contents pattern for kickoff + wrapup status commits — zero local-orphans. Hold at max. |
+| Santiago Ferreira (Release Coordinator) | 4 | 4 | Theme-routed wave (no deploy-cycle work — W8 was process-discipline focused). Hold. |
+| Aino Virtanen (Standards & Quality Lead) | 5 | 5 | ★ Authored #311 + #313 hooks.md charter bundle (PR #334), responded to all R2 cycles cleanly. Stream D #43 in-progress at wave close (carry-forward, Aino-tractable). Ontology rebuild commit attribution. Hold at max. |
+
+### Implementers (W8 PR authors)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Mateo Salazar** (user-service Eng) | 3 | **4** (▲) | ★ Scope-pivot resilience: pushed back on initial #287 framing as wave-7 propagation gap (not implementer-class violation), pivoted bundle to alembic-only scope; surfaced wave-7 stranded #305 issue → became main#339 with Wanjiku TPM-class audit owner. Citation-catch on #340 caught Anya's deeper validation gap (parser_fixture_coverage.md self-contradiction) — pre-fixed before merge. Promote 3→4 for first-look-correct discipline + load-bearing wave-process catches. |
+| Aino Virtanen (also implementer this wave for #334) | (held above) | (held above) | Counted in Org-Level row. |
+| Wanjiku Mwangi (also implementer for #338) | (held above) | (held above) | Counted in Org-Level row. |
+| **Lucas Ferreira** (deploy Eng, NEW) | — | **3** (new) | First wave PR — deploy #281 hooks-lint CI workflow. Clean implementation, addressed both R1/R2 cycles cleanly. Default trust 3. |
+| **Abdelaziz Idrissi** (deploy Eng) | 3 | 3 | deploy #282 Node 20 actions upgrade. Clean implementation; all reviewer cycles addressed. Hold at 3. |
+| **Astrid Lindqvist** (design-system Eng) | 3 | 3 | design-system #75 Node 20 upgrade. Clean delivery. Hold at 3. |
+| **Kofi Mensah-Williams** (landing-page Frontend Eng) | 4 | 4 | 3 PRs landed (#89 Astro ADR defer, #90 settings.json align, #91 Node 20). Top-implementer concentration is theme-fit (landing-page wholly in W8 scope per #84-#88 cluster). Hold at 4 — clean delivery, no concentration penalty applied. |
+| **Tarek Mansour** (data-acquisition Eng) | 3 | 3 | data-acq #49 Node 20 upgrade. Clean delivery. Hold at 3. |
+| **Jean-Claude Habimana** (data-acquisition R2 promoted to implementer) | 4 | 4 | data-acq #44 ADR — 3 in-PR commits responding to citation/anchor corrections from Aino R2; merge-commit pattern (not squash) preserved per ADR convention. Hold at 4. |
+
+### Reviewers / Managers (W8)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Anya Kowalczyk** (isnad-graph TL) | 4 | **5** (▲) | ★ Caught W5 #861 dispatcher-paths deletion that invalidated 4 of 5 in-scope isnad-graph fixture issues (#866-#870) — led close-as-resolved bundle which became `feedback_dispatcher_child_no_local_fixtures.md` memory. Citation catch on #340 (parser_fixture_coverage.md is wave-7 stranded AND doesn't cover block_gh_pr_review AND self-contradicts) — load-bearing for Mateo's pre-fix. Promote 4→5 for two distinct catches that prevented wave drift. |
+| **Aisha Idrissi** (deploy R1) | 4 | **5** (▲) | ★ Independently scanned deploy#280 surface and got 37 sites where Bereket's `head`-truncated grep gave 14 — Bereket's pre-spawn brief under-count externally caught. Authored main#341 (Pre-Spawn State Check § extension) charter promotion proposal. Promote 4→5 for catch-and-promote on a manager-class discipline gap. |
+| **Maeve Callahan** (design-system R1) | 4 | **5** (▲) | ★ First reviewer to surface that `validate_pr_review` hook counts ONLY `RequestOrReplied: Approved` (not `Reply` even when body says "Approved"). Catch propagated via manager-layer relay (1 catch → 5 manager SendMessages → preempted ~17 addenda across 11 PRs). Codified as `feedback_validate_pr_review_approved_not_reply.md`. Promote 4→5 for hook-semantic catch with multi-PR blast-radius prevention. |
+| **Bereket Tadesse** (deploy Manager) | 5 | **4** (▼) | Pre-spawn brief for deploy#280 cited 14 occurrences of an actions/checkout pattern when actual was 37 — `head`-truncated `grep` output sum, not `grep -c` per file. Caught externally by Aisha's independent scan. Single-instance regression in pre-spawn discipline; charter promotion via #341 codifies the rule. Demote 5→4 — held above default until #341 lands and live trace shows the discipline restored. |
+| **Marcia Vasquez-Paredes** (landing-page Project Lead) | 4 | 4 | Coordinated Aino on #84 (resolved as wontfix-close after #311+#313 landed); 3 R1/R2 cycles on Kofi's PRs. Hold at 4. |
+| **Idris Yusuf** (isnad-graph Eng) | 4 | 4 | PR #872 was anti-pattern (path-walk to parent canonical, contradicts dispatcher-no-local-fixtures memory). Closed gracefully with charter-format comment + memory cite. Hold at 4 — corrective behavior intact even when initial framing was wrong. |
+| **Dilara Erdogan** (data-acquisition R1) | 4 | 4 | R2 of data-acq #44 ADR + R2 of #49 + manager-merge of #49 (gh pr merge --squash --delete-branch + #46 close at 02:01:09Z). Clean follow-through. Hold at 4. |
+| **Nadia Boukhari** (user-service Manager, NEW) | — | **4** (new) | First wave appearance — manager-merge of main#340 (us#98+#99 bundle) + cross-repo close-out (us#98 + us#99 closed at 02:01:48-50Z). Followed full sequence per child-repo-implementer rule extension. Default-above-3 (4) for clean first-wave manager-class delivery without R1/R2 catch. |
+
+### Orchestrator (Self-Assessment)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Orchestrator (Steven via Claude)** | 4 | **3** (▼) | Spawn-brief instruction template said "RequestOrReplied: Reply" for approval comments — wrong; hook counts only `Approved`. Cascade required ~17 addenda across 11 PRs (Maeve catch → manager-layer relay → wave-wide guidance comment + Step 4 manager pre-merge check). Demote 4→3 — first-call instruction error that scaled to wave-wide cleanup cost. Positive offsets: (a) scope-drop reconciliation handled cleanly (ingest-platform descope, isnad-graph + user-service no-merge-needed both recorded with rationale), (b) 5 wave-merge PRs landed cleanly with full charter-discipline (2-reviewer Approved + non-fast-forward merge for diverged main case + status commits via PUT-contents), (c) divergent main case (3 PRs ahead + 3 status commits behind) handled with merge-into-wave first then PR — no rebase, no force-push, no orphans. Hold at 3 until next wave shows the spawn-brief template fix is internalized. |
+
+### Done Well / Needs Improvement (Phase 3 Wave 8)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Mateo Salazar** | Scope-pivot resilience (#287→#98 only); load-bearing wave-7 propagation catch (#339); citation-pre-fix on #340 | None this wave |
+| **Anya Kowalczyk** | W5-deletion invalidation catch (4 of 5 fixture issues); citation-catch on #340; close-as-resolved bundle execution | None this wave |
+| **Aisha Idrissi** | Bereket pre-spawn under-count catch via independent scan; #341 authorship | None this wave |
+| **Maeve Callahan** | Approved-vs-Reply hook-semantic catch with manager-layer cascade prevention | None this wave |
+| **Bereket Tadesse** | None notable this wave (single-instance regression in spotlight) | `head`-truncation in pre-spawn enumeration sum (#341 codification) |
+| **Wanjiku Mwangi** | #309 audit owner; Approved-vs-Reply wave-wide guidance + Step 4 manager pre-merge check | None this wave |
+| **Aino Virtanen** | #311+#313 charter bundle authoring; Stream D in-progress at close | None this wave |
+| **Nadia Khoury** | 3 charter proposals filed (#337/#341/W9); state,mergedAt R-discriminator templating | None this wave |
+| **Lucas / Abdelaziz / Astrid / Tarek** | Routine clean implementer deliveries | None this wave |
+| **Kofi Mensah-Williams** | 3 PRs in same wave with theme-fit concentration; clean R1/R2 cycles | None this wave |
+| **Jean-Claude Habimana** | ADR with iterative anchor correction; merge-commit pattern preserved | None this wave |
+| **Idris Yusuf** | Graceful close of anti-pattern PR #872 with memory-cite | None this wave (anti-pattern itself was caught early) |
+| **Dilara / Marcia / Nadia Boukhari** | Clean manager-merge follow-throughs (squash-to-wave + cross-repo close-out) | None this wave |
+| **Orchestrator** | Scope-drop reconciliation, 5 wave-merge PRs landed cleanly, divergent-main handled with merge-not-rebase, /promotion-audit + /wave-scope auto-invoke handoffs honored | (a) Spawn-brief Reply-vs-Approved instruction error → ~17 addenda cascade. (b) Step 14 memory audit had to be filed as #346 deferred-to-W9 instead of executed in-band — annunaki + memory audit don't fit a single wave-wrapup session (proposed #344 to add to /wave-retro). (c) Implementer-substitution reconciliation skipped (skill § P3W5 retro requirement) — deferred to per-engineer assessment above; wave-wrapup skill should auto-emit substitution table. |
