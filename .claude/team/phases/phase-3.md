@@ -4,7 +4,7 @@ description: Phase definition, end-state criteria, exit gate, wave history
 phase: 3
 status: active
 created: 2026-04-30
-last_updated: 2026-05-08
+last_updated: 2026-05-10
 ---
 
 # Phase 3 — fix our tools, fix our deployment
@@ -49,23 +49,23 @@ Both tracks must move together. Finishing only one is not phase exit.
 
 Owner runs `/phase-review` and verifies all 9 end-state rows are `Done`, plus the tech-debt ratio test (criterion 9) holds. On confirmation, owner runs `/roadmap` to define Phase 4 before any P4 wave can kick off.
 
-## Phase history — P3W1 to P3W7 (retroactively themed)
+## Phase history — P3W1 to P3W8
 
-| Wave | Theme (best guess from artifacts) | Outcome |
-|------|-----------------------------------|---------|
+| Wave | Theme | Outcome |
+|------|-------|---------|
 | W1 | Foundation — phase init, label scaffolding | Closed; few artifacts |
 | W2 | Emergency-mode incident → charter sub-doc | Reactive; emergency-mode codified |
 | W3 | Post-emergency stabilization + frontend-API absolute-URLs phase 2 | 14 PRs + 5 wave-merges |
 | W4 | Tooling+process cleanup (31 issues, 6 repos) | 14 PRs, 0 admin overrides |
-| W5 | Tooling cleanup (theme not stored — backfill TBD) | 11 PRs, 0 admin overrides |
-| W6 | Tooling cleanup (theme not stored — backfill TBD) | 11 PRs, 0 admin overrides |
+| W5 | Multi-repo fan-out + memory classification + skill self-improvement | 11 PRs, 0 admin overrides |
+| W6 | Cross-repo backlog triage (Tier-1 across 8 repos + runbook fan-out) | 11 PRs, 0 admin overrides, top-concentration 18% |
 | W7 | Hook parser-fixture coverage backport audit | 12 PRs, 0 admin overrides |
+| W8 | Foundation reset — hook/skill/charter ownership disambiguation + artifact-CI scope definition | 11 PRs, 0 admin overrides, 0 ChangesRequested cycles |
 
-5 of 7 waves were tooling/meta. W3 had a small frontend feature. **No deploy work yet.** This is the gap that drove the 2026-05-08 phase reset.
+8 of 8 waves were tooling/meta (W3 had a small frontend feature; no deploy work shipped yet). This is the gap that drove the 2026-05-08 phase reset and shapes W9 scoping.
 
 ## Open questions
 
-- Backfill themes for W5 + W6? ~30 minutes of git-archaeology, optional.
 - `/roadmap` skill build — scope for which wave?
 
 ## References
