@@ -11,7 +11,7 @@
   ],
   "wave_8_meta_issue": 331,
   "wave_8_scope": {
-    "theme": "Foundation reset — hook/skill/charter ownership disambiguation + artifact-CI scope definition",
+    "theme": "Foundation reset \u2014 hook/skill/charter ownership disambiguation + artifact-CI scope definition",
     "phase_3_end_state_targets": [
       328,
       326
@@ -35,7 +35,7 @@
       {
         "id": "noorinalabs-main#313",
         "role": "work-item",
-        "note": "charter hooks.md § Hook Audit Protocol"
+        "note": "charter hooks.md \u00a7 Hook Audit Protocol"
       },
       {
         "id": "noorinalabs-main#283",
@@ -50,7 +50,7 @@
       {
         "id": "noorinalabs-main#317",
         "role": "work-item",
-        "note": "W7 retro lint scan — cross-repo cleanup"
+        "note": "W7 retro lint scan \u2014 cross-repo cleanup"
       },
       {
         "id": "noorinalabs-main#318",
@@ -70,7 +70,7 @@
       {
         "id": "noorinalabs-main#332",
         "role": "work-item",
-        "note": "/wave-scope upsert_status_keys.py bug — multi-line sibling block break (surfaced during W8 scope reconcile)"
+        "note": "/wave-scope upsert_status_keys.py bug \u2014 multi-line sibling block break (surfaced during W8 scope reconcile)"
       }
     ],
     "tier_2_main_parser_fixtures": [
@@ -96,7 +96,7 @@
       },
       {
         "id": "noorinalabs-main#309",
-        "note": "Org-wide GitHub Actions Node 20 deprecation — upgrade audit (5 repos)"
+        "note": "Org-wide GitHub Actions Node 20 deprecation \u2014 upgrade audit (5 repos)"
       }
     ],
     "tier_3_child_repo_backports": [
@@ -159,9 +159,9 @@
       }
     ],
     "deliberately_not_in_w8": [
-      "All deploy-track work (#323 stg, #324 prod, #325 wrapup gate, #329 smoke tests) — tentative W9",
-      "#322 CI block all merges — blocked on W8 ownership clarity",
-      "#327 hook parity rollout — uses W8 outputs (#326 + #328) as input"
+      "All deploy-track work (#323 stg, #324 prod, #325 wrapup gate, #329 smoke tests) \u2014 tentative W9",
+      "#322 CI block all merges \u2014 blocked on W8 ownership clarity",
+      "#327 hook parity rollout \u2014 uses W8 outputs (#326 + #328) as input"
     ],
     "must_includes": [],
     "actual_labeled_at_scope_time": 0,
@@ -177,7 +177,7 @@
       "noorinalabs-landing-page": 4
     }
   },
-  "wave_8_scope_reconciliation_note": "Manual /wave-scope run for fresh wave (label not yet created — kickoff Step 7 owns label creation/application). 35 declared items folded across 3 tiers: Tier 1 main foundation (10 items: #328+#326 trackers + 8 work items), Tier 2 main parser fixtures (6 items #302-#309), Tier 3 child-repo backports (19 items across 6 child repos — fold-in disposition per owner directive 2026-05-08). Replaced stale wave_8_work (P2W8 historical) + wave_8_carry_forward (W7-era pre-phase-reset intent) with canonical wave_8_scope structure. 0 drift; 0 memory must-includes. First wave under /phase-review + theme-required gates introduced in P3 phase reset commit e19dc27.",
+  "wave_8_scope_reconciliation_note": "Manual /wave-scope run for fresh wave (label not yet created \u2014 kickoff Step 7 owns label creation/application). 35 declared items folded across 3 tiers: Tier 1 main foundation (10 items: #328+#326 trackers + 8 work items), Tier 2 main parser fixtures (6 items #302-#309), Tier 3 child-repo backports (19 items across 6 child repos \u2014 fold-in disposition per owner directive 2026-05-08). Replaced stale wave_8_work (P2W8 historical) + wave_8_carry_forward (W7-era pre-phase-reset intent) with canonical wave_8_scope structure. 0 drift; 0 memory must-includes. First wave under /phase-review + theme-required gates introduced in P3 phase reset commit e19dc27.",
   "wave_7_scope_reconciled_at": "2026-05-08T00:56:56Z",
   "wave_7_repos_in_scope": [
     "noorinalabs-main",
@@ -285,11 +285,11 @@
       }
     ],
     "nadia_authored_pr": {
-      "description": "Cross-repo audit summary PR — charter/hooks.md § Parser Class Definition + summary table",
+      "description": "Cross-repo audit summary PR \u2014 charter/hooks.md \u00a7 Parser Class Definition + summary table",
       "implementer": "Nadia Khoury",
       "reviewer": "Aino Virtanen",
       "reviewer_2": "Wanjiku Mwangi",
-      "rationale": "W6 retro flag — 4-consecutive-wave reviewer-only profile; gives PD an implement-class delivery"
+      "rationale": "W6 retro flag \u2014 4-consecutive-wave reviewer-only profile; gives PD an implement-class delivery"
     },
     "carry_forwards_from_w6": [
       "noorinalabs-main#287",
@@ -323,9 +323,9 @@
       "0 admin overrides"
     ]
   },
-  "wave_7_scope_reconciliation_note": "Manual /wave-scope run for fresh wave (label not yet created). Declared 4 unique meaningful refs (main#287, main#285, deploy#274, main#260) + 1 closed carry-forward (main#294, DROPPED — canonical fix #295 merged 2026-05-08T00:03Z) + 1 tracking-only mention (deploy#273). Labeled 0 (p3-wave-7 label not yet created — kickoff Step 7 owns label creation/application per W5/W6 precedent). 0 drift; 0 memory must-includes; 0 dispositions required. Stale phase_2_wave_7_work renamed inline to free wave_7_* keyspace. wave_6_carry_forward_to_w7 array still contains stale main#294 — left as-is for retro audit trail; wave_7_scope.carry_forwards_dropped_from_w6 documents the strip.",
+  "wave_7_scope_reconciliation_note": "Manual /wave-scope run for fresh wave (label not yet created). Declared 4 unique meaningful refs (main#287, main#285, deploy#274, main#260) + 1 closed carry-forward (main#294, DROPPED \u2014 canonical fix #295 merged 2026-05-08T00:03Z) + 1 tracking-only mention (deploy#273). Labeled 0 (p3-wave-7 label not yet created \u2014 kickoff Step 7 owns label creation/application per W5/W6 precedent). 0 drift; 0 memory must-includes; 0 dispositions required. Stale phase_2_wave_7_work renamed inline to free wave_7_* keyspace. wave_6_carry_forward_to_w7 array still contains stale main#294 \u2014 left as-is for retro audit trail; wave_7_scope.carry_forwards_dropped_from_w6 documents the strip.",
   "wave_6_scope_reconciled_at": "2026-05-06T02:36:55Z",
-  "wave_6_scope_reconciliation_note": "Manual /wave-scope run post-#274 close. Declared 11 unique refs across 4 tiers + 1 tracking-only mention; labeled 0 (p3-wave-6 label not yet created — kickoff Step 7 owns label creation/application per W5 precedent). All 5 W5→W6 carry-forwards folded into meta-body; no W6 memory must-includes filed; zero drift between declared and labeled state.",
+  "wave_6_scope_reconciliation_note": "Manual /wave-scope run post-#274 close. Declared 11 unique refs across 4 tiers + 1 tracking-only mention; labeled 0 (p3-wave-6 label not yet created \u2014 kickoff Step 7 owns label creation/application per W5 precedent). All 5 W5\u2192W6 carry-forwards folded into meta-body; no W6 memory must-includes filed; zero drift between declared and labeled state.",
   "wave_6_repos_in_scope": [
     "noorinalabs-main",
     "noorinalabs-isnad-graph",
@@ -471,20 +471,20 @@
     "tracking_only_not_in_scope": [
       {
         "id": "noorinalabs-main#283",
-        "rationale": "/promotion-audit find_already_promoted parser gap — surfaced at W5 retro, tracking only"
+        "rationale": "/promotion-audit find_already_promoted parser gap \u2014 surfaced at W5 retro, tracking only"
       }
     ],
     "deliberately_not_in_w6": [
       "Phase-15 features (i18n, in-app notifications, billing, web vitals, CDN, minification)",
-      "secrets-audit cluster (#205-#210) — own wave",
-      "branch-protection audit (#221, #222) — own wave",
-      "hook DRY refactors (#170, #176, #259, #260) — own 'hook consolidation' themed wave",
-      "ingest-platform deeper backlog (#11, #12, #19, #20, #23, #24) — own pipeline-durability wave",
-      "isnad-graph frontend test-debt cluster (#790-#799) — own 'test infrastructure' wave"
+      "secrets-audit cluster (#205-#210) \u2014 own wave",
+      "branch-protection audit (#221, #222) \u2014 own wave",
+      "hook DRY refactors (#170, #176, #259, #260) \u2014 own 'hook consolidation' themed wave",
+      "ingest-platform deeper backlog (#11, #12, #19, #20, #23, #24) \u2014 own pipeline-durability wave",
+      "isnad-graph frontend test-debt cluster (#790-#799) \u2014 own 'test infrastructure' wave"
     ],
     "concentration_top_implementer_pct": 11,
     "concentration_top_implementer": "Kofi Mensah-Williams (Tier-2 #49 + Tier-3 #77, 2/18 impl slots)",
-    "two_reviewer_compliance": "all 18 PRs assigned 2 reviewers per charter pull-requests.md § Two-Reviewer Assignment"
+    "two_reviewer_compliance": "all 18 PRs assigned 2 reviewers per charter pull-requests.md \u00a7 Two-Reviewer Assignment"
   },
   "wave_6_branches": {
     "branch": "deployments/phase-3/wave-6",
@@ -609,7 +609,7 @@
     "tier_1_w4_carry_forwards": [
       {
         "id": "noorinalabs-main#263",
-        "title": "Phase 2 #214 child fan-out — sweep all 7 child repos to parent-canonical hook paths",
+        "title": "Phase 2 #214 child fan-out \u2014 sweep all 7 child repos to parent-canonical hook paths",
         "shape": "fan-out",
         "implementers": "distributed (1 per child repo, see tier_1A)"
       },
@@ -711,11 +711,11 @@
       }
     ],
     "deliberately_not_in_w5": [
-      "noorinalabs-deploy backlog (~30 issues) — only #263 sliver in scope, broader deploy work continues prior W4 deferral",
-      "secrets-audit cluster (#205-#210) — own wave (large surface)",
-      "8-repo audits #221, #222 — own wave (large surface)",
-      "main hook refactors (#170, #176) — better suited to a 'hook DRY' themed wave",
-      "ingest-platform deeper backlog (#19, #20, #22, #23, #24) — out of W5 scope"
+      "noorinalabs-deploy backlog (~30 issues) \u2014 only #263 sliver in scope, broader deploy work continues prior W4 deferral",
+      "secrets-audit cluster (#205-#210) \u2014 own wave (large surface)",
+      "8-repo audits #221, #222 \u2014 own wave (large surface)",
+      "main hook refactors (#170, #176) \u2014 better suited to a 'hook DRY' themed wave",
+      "ingest-platform deeper backlog (#19, #20, #22, #23, #24) \u2014 out of W5 scope"
     ]
   },
   "wave_4_completed_at": "2026-05-05T15:51:29Z",
@@ -730,14 +730,14 @@
   "wave_4_repos_descoped_during_wave": [
     {
       "repo": "noorinalabs-isnad-ingest-platform",
-      "reason": "Kickoff-side scoping error (corrected per main#272) — listed in wave_4_repos_in_scope at kickoff but no tier item assigned ingest-platform a deliverable; the only touch-points (#214, #215) were structured as Phase-1-main-only with Phase-2 child fan-out always intended as W5 work (#263, #264). Not a wave-execution failure; not a theme-misalignment drop."
+      "reason": "Kickoff-side scoping error (corrected per main#272) \u2014 listed in wave_4_repos_in_scope at kickoff but no tier item assigned ingest-platform a deliverable; the only touch-points (#214, #215) were structured as Phase-1-main-only with Phase-2 child fan-out always intended as W5 work (#263, #264). Not a wave-execution failure; not a theme-misalignment drop."
     }
   ],
   "wave_4_retro_completed_at": "2026-05-05T22:00:00Z",
   "wave_3_completed_at": "2026-05-04T02:35:00Z",
   "wave_4_kicked_off_at": "2026-05-04T03:15:00Z",
   "wave_4_branch": "deployments/phase-3/wave-4",
-  "wave_4_theme": "Tooling and process-discipline cleanup — hook bug-class consolidation + charter docs sweep",
+  "wave_4_theme": "Tooling and process-discipline cleanup \u2014 hook bug-class consolidation + charter docs sweep",
   "wave_4_length_estimate_days": "5-7",
   "wave_4_repos_in_scope": [
     "noorinalabs-main",
@@ -854,7 +854,7 @@
       },
       {
         "id": "noorinalabs-main#158",
-        "title": "promotion-audit fall-back signal — stale-memory warning class",
+        "title": "promotion-audit fall-back signal \u2014 stale-memory warning class",
         "assignee": "Aino Virtanen",
         "reviewers": [
           "Wanjiku Mwangi",
@@ -864,7 +864,7 @@
       },
       {
         "id": "noorinalabs-main#196",
-        "title": "/wave-scope skill — reconcile meta-issue vs labels",
+        "title": "/wave-scope skill \u2014 reconcile meta-issue vs labels",
         "assignee": "Wanjiku Mwangi",
         "reviewers": [
           "Nadia Khoury",
@@ -876,7 +876,7 @@
     "tier_4_charter_docs_sweep": [
       {
         "id": "noorinalabs-main#225",
-        "title": "secrets-audit doc sweep §3.0.a TODO + §3.4/§3.8 back-refs",
+        "title": "secrets-audit doc sweep \u00a73.0.a TODO + \u00a73.4/\u00a73.8 back-refs",
         "assignee": "Aino Virtanen",
         "reviewers": [
           "Wanjiku Mwangi",
@@ -902,7 +902,7 @@
       },
       {
         "id": "noorinalabs-main#201",
-        "title": "charter spawn-prompt template — reviewer-slate first-line (W10 carry-forward)",
+        "title": "charter spawn-prompt template \u2014 reviewer-slate first-line (W10 carry-forward)",
         "bundle": "with #225"
       },
       {
@@ -912,7 +912,7 @@
       },
       {
         "id": "noorinalabs-isnad-graph#852",
-        "title": "CLAUDE.md branching backslash → slash sync",
+        "title": "CLAUDE.md branching backslash \u2192 slash sync",
         "assignee": "Ingrid Lindqvist",
         "reviewers": [
           "Anya Kowalczyk"
@@ -922,7 +922,7 @@
       },
       {
         "id": "noorinalabs-user-service#90",
-        "title": "CLAUDE.md branching backslash → slash sync",
+        "title": "CLAUDE.md branching backslash \u2192 slash sync",
         "assignee": "Mateo Salazar",
         "reviewers": [
           "Anya Kowalczyk"
@@ -932,7 +932,7 @@
       },
       {
         "id": "noorinalabs-design-system#62",
-        "title": "CLAUDE.md branching backslash → slash sync",
+        "title": "CLAUDE.md branching backslash \u2192 slash sync",
         "assignee": "Kofi Mensah",
         "reviewers": [
           "Maeve Callahan"
@@ -942,7 +942,7 @@
       },
       {
         "id": "noorinalabs-data-acquisition#33",
-        "title": "CLAUDE.md branching backslash → slash sync",
+        "title": "CLAUDE.md branching backslash \u2192 slash sync",
         "assignee": "Sofia Cardoso",
         "reviewers": [
           "Dilara Erdogan"
@@ -1018,27 +1018,27 @@
       }
     ],
     "deliberately_not_in_w4": [
-      "noorinalabs-deploy backlog (~50 issues) — wave is hooks/charter/skill scope; deploy work resumes W5+",
-      "noorinalabs-landing-page #73 (design-system bump) — gated on ds#57 publish (separate workstream)",
-      "noorinalabs-isnad-graph product-feature backlog (#840 design-system bump, #717 billing) — out of W4 theme",
-      "8-repo audits noorinalabs-main#221 #222 — own wave (large surface)",
-      "Pattern E charter promotion (emergency-mode catchup) — no current emergency"
+      "noorinalabs-deploy backlog (~50 issues) \u2014 wave is hooks/charter/skill scope; deploy work resumes W5+",
+      "noorinalabs-landing-page #73 (design-system bump) \u2014 gated on ds#57 publish (separate workstream)",
+      "noorinalabs-isnad-graph product-feature backlog (#840 design-system bump, #717 billing) \u2014 out of W4 theme",
+      "8-repo audits noorinalabs-main#221 #222 \u2014 own wave (large surface)",
+      "Pattern E charter promotion (emergency-mode catchup) \u2014 no current emergency"
     ]
   },
   "wave_4_decisions": {
     "scope_signed_off_at": "2026-05-04T03:15:00Z",
     "scope_signed_off_by": "owner",
     "stretch_promoted_to_firm": "Owner directive 2026-05-04: T5 6 issues moved into firm scope, not stretch",
-    "single_reviewer_exception": "4 child-repo CLAUDE.md branching syncs use single-reviewer per § Single-Reviewer Exception (Wave-Bootstrap Only); labeled wave-bootstrap; logged here per charter requirement",
+    "single_reviewer_exception": "4 child-repo CLAUDE.md branching syncs use single-reviewer per \u00a7 Single-Reviewer Exception (Wave-Bootstrap Only); labeled wave-bootstrap; logged here per charter requirement",
     "charter_changes_applied_pre_kickoff": [
-      "pull-requests.md § Additive Commits on ChangesRequested (NEW) — codifies P3W3 positive (4/4 CR cycles additive, no force-push)",
-      "pull-requests.md § Comment-Based Reviews — disambiguate Requestor/Requestee; canonical Requestor=comment-author. Resolves #233 charter-side; hook-side fix tracked in #244+#228",
-      "/wave-kickoff § 0 Pre-Flight Checklist (NEW) — Pattern F mitigation; 6 per-repo checks; applied at this kickoff"
+      "pull-requests.md \u00a7 Additive Commits on ChangesRequested (NEW) \u2014 codifies P3W3 positive (4/4 CR cycles additive, no force-push)",
+      "pull-requests.md \u00a7 Comment-Based Reviews \u2014 disambiguate Requestor/Requestee; canonical Requestor=comment-author. Resolves #233 charter-side; hook-side fix tracked in #244+#228",
+      "/wave-kickoff \u00a7 0 Pre-Flight Checklist (NEW) \u2014 Pattern F mitigation; 6 per-repo checks; applied at this kickoff"
     ],
-    "pre_flight_checklist_pass": "All 6 checks passed for 6 in-scope repos (main, isnad-graph, user-service, design-system, data-acquisition, ingest-platform). main#232 (canonical CLAUDE.md fix) detected closed during 0.3 attribution check — dropped from scope; 4 child-sync issues retained as W4 work."
+    "pre_flight_checklist_pass": "All 6 checks passed for 6 in-scope repos (main, isnad-graph, user-service, design-system, data-acquisition, ingest-platform). main#232 (canonical CLAUDE.md fix) detected closed during 0.3 attribution check \u2014 dropped from scope; 4 child-sync issues retained as W4 work."
   },
   "wave_3_kicked_off_at": "2026-05-03T17:55:00Z",
-  "wave_3_wrap_status": "CLOSED 2026-05-04T02:35Z. All 14 wave-3 PRs dual-Approved + merged into wave-3 branches across 5 repos (user-service, deploy, isnad-graph, landing-page, main). 5 wave-merge PRs (deployments/phase-3/wave-3 → main) merged in deploy-order: user-service#93 (05d644e) → deploy#270 (c7cfabf) → isnad-graph#856 (bbf7073) → landing-page#76 (4131630) → main#243 (cc6e589). Merges used --admin override for the 2-reviewer hook (validate_pr_review.py treats Requestee as reviewer, mismatched with the wave's Requestee=author format; orchestrator follow-up filed). Pattern B (verify-vs-artifact) crossed 5+ wave-instances across 3 role classes — charter promotion threshold met. 6 orchestrator-class gaps caught by hooks/implementers/reviewers (wave-branch creation, deploy#242 attribution, child-repo-implementer rule for landing-page + user-service, 2-reviewer planning, agent-naming pattern, spawn-brief-reviewer-order-inversion). Wave-completion batch (T2/T3): #266 ChangesRequested → user-service#92 cross-repo Option A → re-Approved; #259 ChangesRequested → 2-line path-A → Approved; #261 ChangesRequested → 14-line perms+runbook → Approved; #267 ChangesRequested → 49-line workflow-input + failure-modes → Approved.",
+  "wave_3_wrap_status": "CLOSED 2026-05-04T02:35Z. All 14 wave-3 PRs dual-Approved + merged into wave-3 branches across 5 repos (user-service, deploy, isnad-graph, landing-page, main). 5 wave-merge PRs (deployments/phase-3/wave-3 \u2192 main) merged in deploy-order: user-service#93 (05d644e) \u2192 deploy#270 (c7cfabf) \u2192 isnad-graph#856 (bbf7073) \u2192 landing-page#76 (4131630) \u2192 main#243 (cc6e589). Merges used --admin override for the 2-reviewer hook (validate_pr_review.py treats Requestee as reviewer, mismatched with the wave's Requestee=author format; orchestrator follow-up filed). Pattern B (verify-vs-artifact) crossed 5+ wave-instances across 3 role classes \u2014 charter promotion threshold met. 6 orchestrator-class gaps caught by hooks/implementers/reviewers (wave-branch creation, deploy#242 attribution, child-repo-implementer rule for landing-page + user-service, 2-reviewer planning, agent-naming pattern, spawn-brief-reviewer-order-inversion). Wave-completion batch (T2/T3): #266 ChangesRequested \u2192 user-service#92 cross-repo Option A \u2192 re-Approved; #259 ChangesRequested \u2192 2-line path-A \u2192 Approved; #261 ChangesRequested \u2192 14-line perms+runbook \u2192 Approved; #267 ChangesRequested \u2192 49-line workflow-input + failure-modes \u2192 Approved.",
   "phase": "phase-3",
   "wave_1_completed_at": "2026-05-01T01:49:41Z",
   "wave_3_planned": true,
@@ -1053,7 +1053,7 @@
     "noorinalabs-landing-page"
   ],
   "wave_3_branches_per_repo": {
-    "noorinalabs-main": "f962b0f→27ba9e6 (planning + kickoff)",
+    "noorinalabs-main": "f962b0f\u219227ba9e6 (planning + kickoff)",
     "noorinalabs-deploy": "0b3b214 (created at first-implementer-spawn 2026-05-03; Aisha-252 caught the orchestrator gap)",
     "noorinalabs-isnad-graph": "fae69d4 (created at first-implementer-spawn 2026-05-03; orchestrator-correction post-Aisha-catch)",
     "noorinalabs-landing-page": "2ebf1d3 (created post-Idris-242-scope-correction 2026-05-03; 4th repo added to scope)"
@@ -1061,7 +1061,7 @@
   "wave_3_kickoff_corrections": [
     "Aisha-252 caught missing wave-3 branch in noorinalabs-deploy 2026-05-03; option A (push branch + ship time-critical fix) accepted. Tracked main#238 (skill gap).",
     "Idris-853 caught deploy#242 sibling-of-isnad-graph mis-attribution 2026-05-03; #242 actual scope is noorinalabs-landing-page (per issue body's table); landing-page added as 4th wave-scope repo; correction Reply posted on deploy#242 (issuecomment-4366836610).",
-    "Idris-853 flagged misrouted task-system assignments (tasks #2,#3,#9,#10,#11 — deploy#252 work routed to isnad-graph implementer); confirmed task system stale-routing; ignore."
+    "Idris-853 flagged misrouted task-system assignments (tasks #2,#3,#9,#10,#11 \u2014 deploy#252 work routed to isnad-graph implementer); confirmed task system stale-routing; ignore."
   ],
   "wave_3_scope": {
     "tier_1_emergency_exposed_gaps": [
@@ -1074,12 +1074,12 @@
       },
       {
         "id": "noorinalabs-isnad-graph#853",
-        "title": "Publish to GHCR red — Trivy HIGH on nghttp2-libs CVE-2026-27135 (frontend image)",
+        "title": "Publish to GHCR red \u2014 Trivy HIGH on nghttp2-libs CVE-2026-27135 (frontend image)",
         "priority": "bug,priority-high",
         "assignee": "Idris Yusuf",
         "reviewer": "Linh Pham",
-        "added_at_kickoff": "2026-05-03 — surfaced by pre-wave CI triage; blocker for #245 frontend artifact promotion",
-        "pr": "noorinalabs-isnad-graph#854 OPEN, MERGEABLE/CLEAN, base=deployments/phase-3/wave-3, head=f091e11. Combined nginx digest-pin (sha256:0272e460) + RUN apk upgrade --no-cache. nghttp2-libs 1.68.0-r0→1.69.0-r0 verified locally. Image size 93.5→95.2MB (+1.8%). Awaiting Linh Pham review."
+        "added_at_kickoff": "2026-05-03 \u2014 surfaced by pre-wave CI triage; blocker for #245 frontend artifact promotion",
+        "pr": "noorinalabs-isnad-graph#854 OPEN, MERGEABLE/CLEAN, base=deployments/phase-3/wave-3, head=f091e11. Combined nginx digest-pin (sha256:0272e460) + RUN apk upgrade --no-cache. nghttp2-libs 1.68.0-r0\u21921.69.0-r0 verified locally. Image size 93.5\u219295.2MB (+1.8%). Awaiting Linh Pham review."
       },
       {
         "id": "noorinalabs-deploy#249",
@@ -1143,10 +1143,10 @@
       },
       {
         "id": "noorinalabs-deploy#244",
-        "title": "per-env OAuth (REDUCED to docs+cleanup — provisioning verified DONE 2026-05-02 per kickoff audit)",
+        "title": "per-env OAuth (REDUCED to docs+cleanup \u2014 provisioning verified DONE 2026-05-02 per kickoff audit)",
         "assignee": "Aisha Idrissi",
         "reviewer": "Lucas Ferreira",
-        "scope_reduction_at_kickoff": "Provisioning + stg env-scope confirmed via gh secret list. Remaining: prod-org→env-scope cleanup, runbook, charter promotion. Parallel-able. See issue comment 4366806318."
+        "scope_reduction_at_kickoff": "Provisioning + stg env-scope confirmed via gh secret list. Remaining: prod-org\u2192env-scope cleanup, runbook, charter promotion. Parallel-able. See issue comment 4366806318."
       }
     ],
     "tier_3_process_cleanup_p3w2_retro_outcomes": [
@@ -1158,7 +1158,7 @@
       },
       {
         "id": "noorinalabs-main#237",
-        "title": "/tmp/* file race hardening — PreToolUse hook on git commit -F / gh --body-file with stale mtime",
+        "title": "/tmp/* file race hardening \u2014 PreToolUse hook on git commit -F / gh --body-file with stale mtime",
         "assignee": "Aino Virtanen",
         "reviewer": "Nadia Khoury"
       }
@@ -1177,20 +1177,20 @@
       {
         "id": "C",
         "task": "Disable Cloudflare Web Analytics on noorinalabs.com zone",
-        "status": "DROPPED 2026-05-03 — owner countered with utilize-not-disable. CWA stays enabled. Free-tier utilization tracked as deploy#253 (phase-3 backlog, not W3)."
+        "status": "DROPPED 2026-05-03 \u2014 owner countered with utilize-not-disable. CWA stays enabled. Free-tier utilization tracked as deploy#253 (phase-3 backlog, not W3)."
       }
     ],
     "stretch_if_tier_1_2_finishes_early": [
-      "noorinalabs-deploy#231 (Phase C runbook reframe — owner-driven supersedes routine; direct emergency-thread lesson)",
-      "noorinalabs-deploy#193 (rotate state-resident secrets — Phase 3 of #172)",
+      "noorinalabs-deploy#231 (Phase C runbook reframe \u2014 owner-driven supersedes routine; direct emergency-thread lesson)",
+      "noorinalabs-deploy#193 (rotate state-resident secrets \u2014 Phase 3 of #172)",
       "noorinalabs-deploy#180 (ADR for B2 state-bucket IaC + key rotation strategy)",
       "noorinalabs-main#226 noorinalabs-main#227 noorinalabs-main#223 noorinalabs-main#216 (4-PR substring-matcher hook root-fix bundle)",
       "noorinalabs-deploy#263 (split prometheus.yml per-env so stg blackbox stops probing prod hostnames; surfaced by Weronika-255 during PR#259 work; owner-decision 2026-05-03)"
     ],
     "deliberately_not_in_w3": [
-      "Per-repo backlogs in isnad-graph (~30), user-service (~16), landing-page (~20), design-system (~8), data-acquisition (~4), ingest-platform (~14) — fold-in deferred to post-W3 cross-repo phase-3 re-plan per owner addendum 2026-05-03",
-      "8-repo audits noorinalabs-main#221 (auto-close workflows) noorinalabs-main#222 (branch protection) — own wave (large surface)",
-      "~50 deploy issues outside emergency bucket (observability hardening #131 #132, kafka migration #100, backup posture #74) — not gating"
+      "Per-repo backlogs in isnad-graph (~30), user-service (~16), landing-page (~20), design-system (~8), data-acquisition (~4), ingest-platform (~14) \u2014 fold-in deferred to post-W3 cross-repo phase-3 re-plan per owner addendum 2026-05-03",
+      "8-repo audits noorinalabs-main#221 (auto-close workflows) noorinalabs-main#222 (branch protection) \u2014 own wave (large surface)",
+      "~50 deploy issues outside emergency bucket (observability hardening #131 #132, kafka migration #100, backup posture #74) \u2014 not gating"
     ]
   },
   "wave_3_decisions": {
@@ -1198,14 +1198,14 @@
     "reviewer_slate_default": "Lucas 5; Aisha 4; others 3-4 (P3W1 trust matrix held; reshuffle deferred unless wave surfaces new data)",
     "owner_action_a_b_completed_before_kickoff": true,
     "owner_action_c_dropped": "CWA stays enabled per owner pushback; utilize-not-disable",
-    "post_w3_addendum": "After W3 close, do cross-repo phase-3 re-plan that brings child-repo backlogs into multi-repo coordinated waves (parent meta-issue + per-repo issue clusters per CLAUDE.md § Cross-Repo Coordination). Pattern documented; not yet exercised in P3."
+    "post_w3_addendum": "After W3 close, do cross-repo phase-3 re-plan that brings child-repo backlogs into multi-repo coordinated waves (parent meta-issue + per-repo issue clusters per CLAUDE.md \u00a7 Cross-Repo Coordination). Pattern documented; not yet exercised in P3."
   },
   "wave_started": "2026-04-30T21:00:00Z",
   "wave_1_wrap_started": "2026-04-30T23:18:00Z",
-  "wave_1_wrap_status": "CLOSED 2026-05-01T01:49:41Z. Both wave-merge PRs landed (deploy#213 merge-commit b6f2cd1; main#235 merge-commit 9a1ef3e). 5/5 Tier-1 + 2/2 Tier-2 + #205 followup-of-spec + #214 wave-tail flake fix (#215 retry-with-backoff JSON-parse classifier) all on main. 8 deploy worktrees pruned. 2 ontology files resolved. 4 charter deltas landed (Patterns A + B unified + C + D). Trust matrix updated (Lucas 4→5; others hold). Promotion audit 0/0/55/4. Wave-tail produced 5 additional retro-pattern data points stress-testing the just-landed charter; all four patterns held. 9 follow-ups filed for next-wave planning (#199 #200 #203 #204 #209 #211 #212 + main#232 + main#233 + main#234). 3 Tier-3 carry-forwards remain operationally gated (deploy#86 async-routine fires post-this-merge; deploy#151 manual SRE B2 tfstate-key migration; user-service#84 manual SRE DEPLOY_REPO_PAT secret).",
+  "wave_1_wrap_status": "CLOSED 2026-05-01T01:49:41Z. Both wave-merge PRs landed (deploy#213 merge-commit b6f2cd1; main#235 merge-commit 9a1ef3e). 5/5 Tier-1 + 2/2 Tier-2 + #205 followup-of-spec + #214 wave-tail flake fix (#215 retry-with-backoff JSON-parse classifier) all on main. 8 deploy worktrees pruned. 2 ontology files resolved. 4 charter deltas landed (Patterns A + B unified + C + D). Trust matrix updated (Lucas 4\u21925; others hold). Promotion audit 0/0/55/4. Wave-tail produced 5 additional retro-pattern data points stress-testing the just-landed charter; all four patterns held. 9 follow-ups filed for next-wave planning (#199 #200 #203 #204 #209 #211 #212 + main#232 + main#233 + main#234). 3 Tier-3 carry-forwards remain operationally gated (deploy#86 async-routine fires post-this-merge; deploy#151 manual SRE B2 tfstate-key migration; user-service#84 manual SRE DEPLOY_REPO_PAT secret).",
   "last_updated": "2026-05-08T22:41:25Z",
   "deployments_branch": "deployments/phase-3/wave-3",
-  "wave_1_theme": "Promotion pipeline goes prod — owner directive: pipeline running seamlessly so team can refocus on product + process",
+  "wave_1_theme": "Promotion pipeline goes prod \u2014 owner directive: pipeline running seamlessly so team can refocus on product + process",
   "wave_1_scope": {
     "tier_1_core_promotion_pipeline": [
       {
@@ -1282,7 +1282,7 @@
   },
   "wave_1_length_estimate_days": "7-9",
   "wave_1_started_at": "2026-04-30T21:00:00Z",
-  "phase_2_status": "CLOSED 2026-04-30. wave-10 final retro PR #230 merged 20:47:41Z. 5-repo wave-merge ceremony completed (#229 main, #74 landing, #851 isnad, #196 deploy, #89 user-service). 3 carry-forwards into phase-3: deploy#86 (async routine trig_01Bif8T51pdaYFjkbM5bERyL — fires post-merge), deploy#151 (manual SRE B2 tfstate-key migration), user-service#84 (manual DEPLOY_REPO_PAT secret). All p2-wave-* labels cleared from open issues; 218 open issues re-labeled `phase-3` across 8 repos.",
+  "phase_2_status": "CLOSED 2026-04-30. wave-10 final retro PR #230 merged 20:47:41Z. 5-repo wave-merge ceremony completed (#229 main, #74 landing, #851 isnad, #196 deploy, #89 user-service). 3 carry-forwards into phase-3: deploy#86 (async routine trig_01Bif8T51pdaYFjkbM5bERyL \u2014 fires post-merge), deploy#151 (manual SRE B2 tfstate-key migration), user-service#84 (manual DEPLOY_REPO_PAT secret). All p2-wave-* labels cleared from open issues; 218 open issues re-labeled `phase-3` across 8 repos.",
   "phase_3_status": "Phase 3 INITIATED 2026-04-30. No wave assigned yet (wave-1 to be planned). Backlog is the full set of 218 open issues across 8 repos labeled `phase-3`. User wants per-phase wave breakdown discussion before kicking off P3W1.",
   "phase_3_backlog_by_repo": {
     "noorinalabs-deploy": 67,
@@ -1299,12 +1299,12 @@
       "id": "noorinalabs-deploy#86",
       "type": "async-routine",
       "routine_id": "trig_01Bif8T51pdaYFjkbM5bERyL",
-      "note": "VPS decom; fires after wave-10 → main merge (now satisfied)"
+      "note": "VPS decom; fires after wave-10 \u2192 main merge (now satisfied)"
     },
     {
       "id": "noorinalabs-deploy#151",
       "type": "manual-sre",
-      "note": "B2 tfstate-key migration hetzner/terraform.tfstate → hetzner/prod.tfstate"
+      "note": "B2 tfstate-key migration hetzner/terraform.tfstate \u2192 hetzner/prod.tfstate"
     },
     {
       "id": "noorinalabs-user-service#84",
@@ -1316,45 +1316,45 @@
   "open_prs_total": 0,
   "historical_phases": {
     "note": "wave-c phase tracking (phases 1-4) is superseded by phase-2 wave numbering",
-    "wave_c_status": "complete — all tracked work merged or superseded"
+    "wave_c_status": "complete \u2014 all tracked work merged or superseded"
   },
   "wave_10_work": {
     "theme": "Stg/prod environment split + promotion pathway",
     "meta_issue": "main #141",
-    "section_a_scope": "11 items — promotion-pathway core (incl. user-service#63 folded in 2026-04-23)",
+    "section_a_scope": "11 items \u2014 promotion-pathway core (incl. user-service#63 folded in 2026-04-23)",
     "section_a_closed": [
-      "deploy#82 — Hetzner module parameterize + provision stg/prod",
-      "deploy#117 — terraform/cloudflare module (section B precursor)",
-      "deploy#118 — cloud-init VPS baseline (section B precursor)",
-      "isnad-graph#815 — image tagging for stg/prod promotion",
-      "user-service#63 — alembic merge migration (unblocks deploy#85 live gate)",
-      "user-service#61 — GHCR Publish on PR trigger (closed 2026-04-30 via PR #87)"
+      "deploy#82 \u2014 Hetzner module parameterize + provision stg/prod",
+      "deploy#117 \u2014 terraform/cloudflare module (section B precursor)",
+      "deploy#118 \u2014 cloud-init VPS baseline (section B precursor)",
+      "isnad-graph#815 \u2014 image tagging for stg/prod promotion",
+      "user-service#63 \u2014 alembic merge migration (unblocks deploy#85 live gate)",
+      "user-service#61 \u2014 GHCR Publish on PR trigger (closed 2026-04-30 via PR #87)"
     ],
     "section_a_open": [
-      "deploy#86 — decommission hand-made noorinalabs-1box-prod VPS (Phase C cutover; DISPATCHED to routine trig_01Bif8T51pdaYFjkbM5bERyL — kicks off after wave-10 → main wrap when 5 prereqs verify)"
+      "deploy#86 \u2014 decommission hand-made noorinalabs-1box-prod VPS (Phase C cutover; DISPATCHED to routine trig_01Bif8T51pdaYFjkbM5bERyL \u2014 kicks off after wave-10 \u2192 main wrap when 5 prereqs verify)"
     ],
-    "section_a_apply_followup_filed_2026_04_29": "deploy#192 — apply Cloudflare stg subdomain tree (with prod-posture-preserving TF amendment). Not part of original section A; filed as the apply-lifecycle counterpart to closed deploy#83 (which covered the code-write only). Currently UNLABELED p2-wave-10 — verify intended wave.",
+    "section_a_apply_followup_filed_2026_04_29": "deploy#192 \u2014 apply Cloudflare stg subdomain tree (with prod-posture-preserving TF amendment). Not part of original section A; filed as the apply-lifecycle counterpart to closed deploy#83 (which covered the code-write only). Currently UNLABELED p2-wave-10 \u2014 verify intended wave.",
     "section_b_precursors_open": [
-      "deploy#116 — inventory all env vars across repos/envs (currently UNLABELED p2-wave-10 — verify)",
-      "main#148 — RESOLVED 2026-04-26 for Tier A-D; Tier E PIPELINE_B2_* deferred to W11"
+      "deploy#116 \u2014 inventory all env vars across repos/envs (currently UNLABELED p2-wave-10 \u2014 verify)",
+      "main#148 \u2014 RESOLVED 2026-04-26 for Tier A-D; Tier E PIPELINE_B2_* deferred to W11"
     ],
     "section_d_retro_mandated_open": [],
     "section_d_retro_mandated_closed": [
-      "main#182 CLOSED 2026-04-30 — investigation: 1/8 repos protected (only isnad-graph/main); remediation tracked at #222",
-      "main#194 CLOSED 2026-04-30 — Hook 14 fan-out (7/7 child repos)",
-      "main#195 CLOSED 2026-04-28 via #218 — validate_wave_audit hook (Hook 17)"
+      "main#182 CLOSED 2026-04-30 \u2014 investigation: 1/8 repos protected (only isnad-graph/main); remediation tracked at #222",
+      "main#194 CLOSED 2026-04-30 \u2014 Hook 14 fan-out (7/7 child repos)",
+      "main#195 CLOSED 2026-04-28 via #218 \u2014 validate_wave_audit hook (Hook 17)"
     ],
     "section_e_direct_blockers_open": [],
     "section_e_direct_blockers_closed_or_relabeled": [
-      "deploy#126 CLOSED 2026-04-30 — passwords rotated to URL-safe (4 secrets across stg+prod)",
-      "deploy#141, #96, #93, #121, #122 — closed or retagged out of p2-wave-10 in earlier sessions"
+      "deploy#126 CLOSED 2026-04-30 \u2014 passwords rotated to URL-safe (4 secrets across stg+prod)",
+      "deploy#141, #96, #93, #121, #122 \u2014 closed or retagged out of p2-wave-10 in earlier sessions"
     ],
     "security_techdebt_resolved_2026_04_30": [
-      "deploy#170 CLOSED — CLOUDFLARE_API_TOKEN narrowed from 3 zones (.com/.net/.org) to .com only; old token revoked; GH secret rotated 04:51:47Z",
-      "deploy#172 CLOSED — Phase 1 (SSE-B2 enabled on noorinalabs-terraform-state) + Phase 2 (13 plaintext versions deleted, only 2 SSE-B2 versions remain). Phase 3 (state-resident secret rotation) deferred to W11 as deploy#193."
+      "deploy#170 CLOSED \u2014 CLOUDFLARE_API_TOKEN narrowed from 3 zones (.com/.net/.org) to .com only; old token revoked; GH secret rotated 04:51:47Z",
+      "deploy#172 CLOSED \u2014 Phase 1 (SSE-B2 enabled on noorinalabs-terraform-state) + Phase 2 (13 plaintext versions deleted, only 2 SSE-B2 versions remain). Phase 3 (state-resident secret rotation) deferred to W11 as deploy#193."
     ],
     "open_prs": [],
-    "secrets_migration_tonight": "2026-04-23 scope: 6 of 8 Tier-B sections (§3.1, 3.2, 3.3, 3.5, 3.6, 3.7). §3.4 JWT + §3.8 SSH + §3.9 Tier C deferred to weekend pending main#211 TODO(santiago) resolution. Runbook: docs/secrets-audit-2026-04-24.md. Draft runbook: .claude/drafts/secrets-migration-tonight-2026-04-23.md.",
+    "secrets_migration_tonight": "2026-04-23 scope: 6 of 8 Tier-B sections (\u00a73.1, 3.2, 3.3, 3.5, 3.6, 3.7). \u00a73.4 JWT + \u00a73.8 SSH + \u00a73.9 Tier C deferred to weekend pending main#211 TODO(santiago) resolution. Runbook: docs/secrets-audit-2026-04-24.md. Draft runbook: .claude/drafts/secrets-migration-tonight-2026-04-23.md.",
     "phase_b_outcome": {
       "completed": "2026-04-27T03:55:00Z",
       "scope": "Stg fresh-start rebuild as Phase C dry-run (out-of-band Hetzner delete + fresh TF apply, no IP preservation)",
@@ -1367,8 +1367,8 @@
       ],
       "phase_c_plan_correction": "ORIGINAL plan said 'terraform destroy prod'. CORRECTED: prod is hand-made (noorinalabs-1box-prod, id 124917846, 87.99.134.161), NOT in any TF state. Phase C must use Hetzner-API delete (same technique as Phase B) + apply via envs/prod/. Phase C also depends on wave-10 merging to main first (deploy-prod.yml + cloudflare prod TF live on wave-10 only). DISPATCHED to routine trig_01Bif8T51pdaYFjkbM5bERyL on 2026-04-30.",
       "follow_up_artifacts": [
-        "deploy#173 — 6 cloud-init/module hardening gaps documented",
-        "deploy#174 — chomp() PR (gap A from #173, validated against stg) — CLOSED unmerged (superseded)",
+        "deploy#173 \u2014 6 cloud-init/module hardening gaps documented",
+        "deploy#174 \u2014 chomp() PR (gap A from #173, validated against stg) \u2014 CLOSED unmerged (superseded)",
         "Comment added to deploy#165 with empirical evidence on cloud-init multi-key gap"
       ],
       "cpx21_capacity_signal": "Bare-system baseline captured: 3.7 GiB total, 3.2 GiB available, no swap, 225 MiB system overhead. Full-stack signal deferred to organic auto-deploy that fires when wave-10 merges to main. Aisha estimate: full deploy stack likely needs 3.5-4.5 GiB; cpx21 may not fit.",
@@ -1382,49 +1382,49 @@
   },
   "wave_9_work": {
     "theme": "Data pipeline + user-service cutover + deploy infra",
-    "status": "complete — retro merged 2026-04-23 (#193)",
+    "status": "complete \u2014 retro merged 2026-04-23 (#193)",
     "retro_summary": "P2W9 retro: 0 AUTO / 0 DECIDE promotions, charter amendments on Cross-Contract PRs + validate_pr_ci_status + Load-Bearing Followups, trust matrix updated.",
-    "ghcr_auto_deploy_status": "End-to-end auto-deploy chain working — CI builds design-system tarball via DESIGN_SYSTEM_REF=v0.0.1 in ghcr-publish.yml and bakes into GHCR image (three successful chained deploys 2026-04-21).",
+    "ghcr_auto_deploy_status": "End-to-end auto-deploy chain working \u2014 CI builds design-system tarball via DESIGN_SYSTEM_REF=v0.0.1 in ghcr-publish.yml and bakes into GHCR image (three successful chained deploys 2026-04-21).",
     "deferred_to_owner_supervision": [
-      "isnad-graph#840 — design-system consumer bump (v0.0.1→v0.0.2/v0.0.3, Radix UI API additions + visual regression risk)",
-      "isnad-graph#810 — migrate to published @noorinalabs/design-system npm package"
+      "isnad-graph#840 \u2014 design-system consumer bump (v0.0.1\u2192v0.0.2/v0.0.3, Radix UI API additions + visual regression risk)",
+      "isnad-graph#810 \u2014 migrate to published @noorinalabs/design-system npm package"
     ]
   },
   "phase_2_wave_7_work": {
-    "status": "complete — merged 2026-04-13",
+    "status": "complete \u2014 merged 2026-04-13",
     "renamed_at": "2026-05-08T00:55:00Z",
     "renamed_reason": "p3-wave-7 kickoff repurposes wave_7_* keyspace; preserved here for audit trail per historical_phases.wave_c_status note"
   },
   "owner_decision_gated": [],
   "owner_decision_gated_resolved_2026_04_29": [
-    "deploy#100 — RESOLVED: apache/kafka selected. W11 analysis pass next (8 side-effects items), then implementation issue + PR.",
-    "isnad-graph#840 — RESOLVED: Strategy (a) selected — push design-system#57 to publish to GH Packages npm registry, then bump consumers (isnad-graph#840 + new landing-page#73). All three tagged p2-wave-11.",
-    "main#211 — RESOLVED 2026-04-24: closed via PR #213 (commit a9f4133) for 3 of 4 TODO(santiago) markers; row 3 carried forward to main#212 and resolved 2026-04-29.",
-    "main#148 — RESOLVED 2026-04-26 for Tier A/B/C/D (15 org-scoped + 30 env-scoped on deploy stg/prod + 3 deploy-only); 0 per-repo duplicates remain. Tier E (5 PIPELINE_B2_*) deferred to W11.",
-    "main#212 — RESOLVED 2026-04-29: two-VPS topology fully captured (1box-stg=staging, 1box-prod=production-rebuild, env-file=/opt/noorinalabs-deploy/.env, DNS=stg-only-add-with-prod-posture-preserved)."
+    "deploy#100 \u2014 RESOLVED: apache/kafka selected. W11 analysis pass next (8 side-effects items), then implementation issue + PR.",
+    "isnad-graph#840 \u2014 RESOLVED: Strategy (a) selected \u2014 push design-system#57 to publish to GH Packages npm registry, then bump consumers (isnad-graph#840 + new landing-page#73). All three tagged p2-wave-11.",
+    "main#211 \u2014 RESOLVED 2026-04-24: closed via PR #213 (commit a9f4133) for 3 of 4 TODO(santiago) markers; row 3 carried forward to main#212 and resolved 2026-04-29.",
+    "main#148 \u2014 RESOLVED 2026-04-26 for Tier A/B/C/D (15 org-scoped + 30 env-scoped on deploy stg/prod + 3 deploy-only); 0 per-repo duplicates remain. Tier E (5 PIPELINE_B2_*) deferred to W11.",
+    "main#212 \u2014 RESOLVED 2026-04-29: two-VPS topology fully captured (1box-stg=staging, 1box-prod=production-rebuild, env-file=/opt/noorinalabs-deploy/.env, DNS=stg-only-add-with-prod-posture-preserved)."
   ],
   "design-system": {
     "latest_version": "0.0.1",
     "status": "published-but-source-ahead",
-    "notes": "v0.0.1 only release per `gh release list` 2026-04-29. Strategy (a) approved 2026-04-29: build #57 publish workflow → bump source to v0.0.3 → tag/publish → consumer bumps in isnad-graph#840 + landing-page#73.",
+    "notes": "v0.0.1 only release per `gh release list` 2026-04-29. Strategy (a) approved 2026-04-29: build #57 publish workflow \u2192 bump source to v0.0.3 \u2192 tag/publish \u2192 consumer bumps in isnad-graph#840 + landing-page#73.",
     "open_prs": 0,
     "open_issues_notable": [
-      "#57 — publish to GH Packages npm registry (owner-approved 2026-04-29 for W11)"
+      "#57 \u2014 publish to GH Packages npm registry (owner-approved 2026-04-29 for W11)"
     ],
     "last_updated": "2026-04-30T03:25:00Z"
   },
   "isnad-graph": {
-    "status": "active — Hook 14 sync MERGED 2026-04-30",
+    "status": "active \u2014 Hook 14 sync MERGED 2026-04-30",
     "open_prs": 0,
     "open_issues_notable": [
-      "#840 — design-system consumer bump (W11, blocked on ds#57 publish; owner-decided Strategy a 2026-04-29)"
+      "#840 \u2014 design-system consumer bump (W11, blocked on ds#57 publish; owner-decided Strategy a 2026-04-29)"
     ],
     "open_prs_list": [],
     "recent_closures_2026_04_30": [
-      "#845 MERGED 02:56Z — chore(hooks): sync validate_pr_ci_status (Hook 14) from parent (#194)",
-      "#850 MERGED 02:54Z — security(deps): cherry-pick pip 26.0.1→26.1 to clear CVE-2026-3219 on main (closes #849)",
+      "#845 MERGED 02:56Z \u2014 chore(hooks): sync validate_pr_ci_status (Hook 14) from parent (#194)",
+      "#850 MERGED 02:54Z \u2014 security(deps): cherry-pick pip 26.0.1\u219226.1 to clear CVE-2026-3219 on main (closes #849)",
       "#849 auto-CLOSED 02:54Z (closed by #850)",
-      "#848 CLOSED 02:50Z — superseded by #850 (no `--ignore-vuln` will be added)"
+      "#848 CLOSED 02:50Z \u2014 superseded by #850 (no `--ignore-vuln` will be added)"
     ],
     "last_updated": "2026-04-30T03:25:00Z"
   },
@@ -1433,30 +1433,30 @@
     "open_prs": 0,
     "deploy_status": "live (running on 1box-prod per main#212 verification 2026-04-29)",
     "open_issues_notable": [
-      "#73 OPEN — design-system consumer bump to ^0.0.3 (W11; sibling of isnad-graph#840; blocked on ds#57)"
+      "#73 OPEN \u2014 design-system consumer bump to ^0.0.3 (W11; sibling of isnad-graph#840; blocked on ds#57)"
     ],
     "last_updated": "2026-04-30T03:25:00Z"
   },
   "deploy": {
-    "status": "active — W10 section A in-flight; #126/#170/#172 all closed 2026-04-30",
+    "status": "active \u2014 W10 section A in-flight; #126/#170/#172 all closed 2026-04-30",
     "open_prs": 0,
     "open_issues_notable": [
-      "#86 — Phase C VPS decom (DISPATCHED to routine trig_01Bif8T51pdaYFjkbM5bERyL)",
-      "#151 — [MANUAL] TF state migration hetzner/terraform.tfstate → hetzner/prod.tfstate (post-#150 merge)",
-      "#100 — RESOLVED: apache/kafka selected 2026-04-29 (W11 analysis pass next)",
-      "#173 — Phase B follow-up (6 cloud-init/module hardening gaps)",
-      "#137 — caddy healthcheck unhealthy on prod (existing tracker)",
-      "#190 — env-write block dedup (Aisha during deploy#189 review 2026-04-30)",
-      "#191 — bootstrap-vps CHANGE-ME placeholder UX (Nino during deploy#189 review 2026-04-30)",
-      "#193 — W11: Phase 3 state-resident secret rotation (filed 2026-04-30 from #172 close)",
-      "#194 — W11: lifecycle rule on noorinalabs-terraform-state (filed 2026-04-30 from #172)",
-      "#195 — W11: services.yaml bucket-name normalization (filed 2026-04-30 from #172, Nino-offered)"
+      "#86 \u2014 Phase C VPS decom (DISPATCHED to routine trig_01Bif8T51pdaYFjkbM5bERyL)",
+      "#151 \u2014 [MANUAL] TF state migration hetzner/terraform.tfstate \u2192 hetzner/prod.tfstate (post-#150 merge)",
+      "#100 \u2014 RESOLVED: apache/kafka selected 2026-04-29 (W11 analysis pass next)",
+      "#173 \u2014 Phase B follow-up (6 cloud-init/module hardening gaps)",
+      "#137 \u2014 caddy healthcheck unhealthy on prod (existing tracker)",
+      "#190 \u2014 env-write block dedup (Aisha during deploy#189 review 2026-04-30)",
+      "#191 \u2014 bootstrap-vps CHANGE-ME placeholder UX (Nino during deploy#189 review 2026-04-30)",
+      "#193 \u2014 W11: Phase 3 state-resident secret rotation (filed 2026-04-30 from #172 close)",
+      "#194 \u2014 W11: lifecycle rule on noorinalabs-terraform-state (filed 2026-04-30 from #172)",
+      "#195 \u2014 W11: services.yaml bucket-name normalization (filed 2026-04-30 from #172, Nino-offered)"
     ],
     "open_prs_list": [],
     "recent_closures_2026_04_30": [
-      "#126 CLOSED 03:54Z — USER_REDIS/POSTGRES passwords rotated to URL-safe (4 secrets)",
-      "#170 CLOSED 04:53Z — CLOUDFLARE_API_TOKEN narrowed to noorinalabs.com only",
-      "#172 CLOSED 04:33Z — SSE-B2 enabled + 13 plaintext state versions scrubbed"
+      "#126 CLOSED 03:54Z \u2014 USER_REDIS/POSTGRES passwords rotated to URL-safe (4 secrets)",
+      "#170 CLOSED 04:53Z \u2014 CLOUDFLARE_API_TOKEN narrowed to noorinalabs.com only",
+      "#172 CLOSED 04:33Z \u2014 SSE-B2 enabled + 13 plaintext state versions scrubbed"
     ],
     "last_updated": "2026-04-30T05:00:00Z"
   },
@@ -1471,85 +1471,85 @@
     "last_updated": "2026-04-24T21:30:00Z"
   },
   "user-service": {
-    "status": "active — W10 #61 + #81 both closed 2026-04-30",
+    "status": "active \u2014 W10 #61 + #81 both closed 2026-04-30",
     "open_prs": 0,
     "open_issues_notable": [
-      "#84 — provision DEPLOY_REPO_PAT secret for notify-deploy job (US#83 follow-up; W10)"
+      "#84 \u2014 provision DEPLOY_REPO_PAT secret for notify-deploy job (US#83 follow-up; W10)"
     ],
     "recent_closures_2026_04_30": [
-      "#87 MERGED 03:04Z — GHCR Publish PR-trigger fix (closes #61)",
+      "#87 MERGED 03:04Z \u2014 GHCR Publish PR-trigger fix (closes #61)",
       "#61 auto-CLOSED 03:04Z",
-      "#88 MERGED 04:00Z — ci.yml trigger on deployments/** (closes #81); Anya + Idris Approved",
+      "#88 MERGED 04:00Z \u2014 ci.yml trigger on deployments/** (closes #81); Anya + Idris Approved",
       "#81 auto-CLOSED 04:00Z"
     ],
     "last_updated": "2026-04-30T05:00:00Z"
   },
   "noorinalabs-main": {
-    "status": "active — W10 Section D fully closed (3/3); W11 backlog accumulating",
+    "status": "active \u2014 W10 Section D fully closed (3/3); W11 backlog accumulating",
     "open_prs": 0,
     "open_issues_notable": [
-      "#141 — W10 meta (OPEN; auto-resolves on wave wrap)",
-      "#212 — RESOLVED 2026-04-29: full topology captured; remaining work tracked at #225",
-      "#214–#228 — p2-wave-11 tech-debt/audit candidates (3 new sibling-family items filed 2026-04-30: #226 #227 #228)"
+      "#141 \u2014 W10 meta (OPEN; auto-resolves on wave wrap)",
+      "#212 \u2014 RESOLVED 2026-04-29: full topology captured; remaining work tracked at #225",
+      "#214\u2013#228 \u2014 p2-wave-11 tech-debt/audit candidates (3 new sibling-family items filed 2026-04-30: #226 #227 #228)"
     ],
     "p2_wave_11_candidates_filed_recent": [
-      "#223 — block_no_verify substring false-positive (annunaki-attack, sibling of #216)",
-      "#224 — Steven French roster email typo (annunaki-attack; CLOSED — applied as fix)",
-      "#225 — secrets-audit doc sweep (§3.0.a row 3 TODO marker + §3.4/§3.8 back-references)",
-      "#226 — validate_commit_identity matcher slurps unquoted -c user.email value (sibling of #216 #223 #134 #118; Idris repro 2026-04-30; meta-instance: label-validator slurped body-file path while filing #226 itself)",
-      "#227 — validate_branch_freshness uses dispatcher cwd for `gh pr create --repo X` (cross-repo misattribution; Mateo repro from PR #88; sibling of #226)",
-      "#228 — validate_pr_review hook doesn't honor charter's Single-Reviewer Exception (hook stricter than charter; surfaced trying to merge PR #88 with 1 reviewer)"
+      "#223 \u2014 block_no_verify substring false-positive (annunaki-attack, sibling of #216)",
+      "#224 \u2014 Steven French roster email typo (annunaki-attack; CLOSED \u2014 applied as fix)",
+      "#225 \u2014 secrets-audit doc sweep (\u00a73.0.a row 3 TODO marker + \u00a73.4/\u00a73.8 back-references)",
+      "#226 \u2014 validate_commit_identity matcher slurps unquoted -c user.email value (sibling of #216 #223 #134 #118; Idris repro 2026-04-30; meta-instance: label-validator slurped body-file path while filing #226 itself)",
+      "#227 \u2014 validate_branch_freshness uses dispatcher cwd for `gh pr create --repo X` (cross-repo misattribution; Mateo repro from PR #88; sibling of #226)",
+      "#228 \u2014 validate_pr_review hook doesn't honor charter's Single-Reviewer Exception (hook stricter than charter; surfaced trying to merge PR #88 with 1 reviewer)"
     ],
     "recent_closures_2026_04_30": [
-      "#194 CLOSED 02:57Z — Hook 14 fan-out fully complete (7/7 child repos)",
-      "#182 CLOSED 03:54Z — branch-protection investigation: 1/8 protected (only isnad-graph/main); remediation continues at #222"
+      "#194 CLOSED 02:57Z \u2014 Hook 14 fan-out fully complete (7/7 child repos)",
+      "#182 CLOSED 03:54Z \u2014 branch-protection investigation: 1/8 protected (only isnad-graph/main); remediation continues at #222"
     ],
     "last_updated": "2026-04-30T05:00:00Z"
   },
   "session_2026_04_30_summary": {
     "hook_14_fan_out_completed": "main#194 closed; isnad-graph#845 merged after #850 (cherry-pick pip 26.1 from wave-10 #847 to main) cleared CVE-2026-3219 security-audit blocker; #848 superseded; 7/7 child repos covered (deploy + isnad-graph copy-resident; design-system + data-acquisition + landing-page + user-service + ingest-platform parent-canonical). Pattern split rationalized by W11 #214.",
     "user_service_61_closed": "PR #87 merged 03:04Z. Anya Approved (architecture). Idris Changes-Requested on Q2 (script-injection sink in Resolve-Trivy-image-reference step text-substituting `${{ steps.meta.outputs.tags }}` into shell), Mateo applied env-var fix verbatim, Idris re-Approved. Self-validating: build-and-push workflow ran on the PR itself, GREEN.",
-    "phase_c_dispatched": "deploy#86 routine trig_01Bif8T51pdaYFjkbM5bERyL created. Cron 0 13 */2 * * (every 2 days at 9am ET DST). First run 2026-05-01T13:04Z. Branches: A (#86 closed→dormant), B (wave-10 still active→retry), C (wave-10 wrapped+#86 open→verify 5 prereqs→spawn deploy implementer for cutover). Hetzner-API delete + envs/prod TF apply (NOT terraform destroy — corrected plan).",
-    "matcher_substring_family_extended": "Idris's hook-trip during isnad-graph#850 commit attempt (greedy regex on -c user.email=value with no closing-quote fallback) filed as main#226 — sibling of #216 (block_git_config / heredoc) #223 (block_no_verify / heredoc) #134 #118. Body includes meta-instance: filing #226 itself tripped the dispatcher's label-validator (parsed body-file path as label). All same root anti-pattern; suggested fix shape: shared sanitization helper.",
-    "agents_spawned_this_session": "8 total — Idris Yusuf (isnad-graph + user-service security; 4 passes including hook-trip repro), Mateo Salazar (user-service eng; 3 passes for #87 + #88 + Q2 fix), Anya Kowalczyk (isnad-graph TL), Anya Kowalczyk - user-service (TL), Jelani Mwangi (isnad-graph DevOps Architect), Aisha Idrissi (deploy SRE for #170 audit), Nino Kavtaradze (deploy Security for #172 audit). All wound down clean.",
+    "phase_c_dispatched": "deploy#86 routine trig_01Bif8T51pdaYFjkbM5bERyL created. Cron 0 13 */2 * * (every 2 days at 9am ET DST). First run 2026-05-01T13:04Z. Branches: A (#86 closed\u2192dormant), B (wave-10 still active\u2192retry), C (wave-10 wrapped+#86 open\u2192verify 5 prereqs\u2192spawn deploy implementer for cutover). Hetzner-API delete + envs/prod TF apply (NOT terraform destroy \u2014 corrected plan).",
+    "matcher_substring_family_extended": "Idris's hook-trip during isnad-graph#850 commit attempt (greedy regex on -c user.email=value with no closing-quote fallback) filed as main#226 \u2014 sibling of #216 (block_git_config / heredoc) #223 (block_no_verify / heredoc) #134 #118. Body includes meta-instance: filing #226 itself tripped the dispatcher's label-validator (parsed body-file path as label). All same root anti-pattern; suggested fix shape: shared sanitization helper.",
+    "agents_spawned_this_session": "8 total \u2014 Idris Yusuf (isnad-graph + user-service security; 4 passes including hook-trip repro), Mateo Salazar (user-service eng; 3 passes for #87 + #88 + Q2 fix), Anya Kowalczyk (isnad-graph TL), Anya Kowalczyk - user-service (TL), Jelani Mwangi (isnad-graph DevOps Architect), Aisha Idrissi (deploy SRE for #170 audit), Nino Kavtaradze (deploy Security for #172 audit). All wound down clean.",
     "items_remaining_in_w10": [
-      "user-service#84 — DEPLOY_REPO_PAT secret (gated on US#83)",
-      "deploy#86 — Phase C VPS decom (DISPATCHED to routine)",
-      "deploy#151 — [MANUAL] TF state migration (owner-driven)"
+      "user-service#84 \u2014 DEPLOY_REPO_PAT secret (gated on US#83)",
+      "deploy#86 \u2014 Phase C VPS decom (DISPATCHED to routine)",
+      "deploy#151 \u2014 [MANUAL] TF state migration (owner-driven)"
     ],
     "second_batch_2026_04_30T03_30Z_to_05_00Z": {
       "items_addressed": "5 active operational + 2 owner inline + 3 W11 followups filed",
       "closures": [
-        "user-service#81 + PR#88 — ci.yml deployments/** trigger; 4-min spawn-to-merge with one CR cycle (Idris Q2 sink) caught; hook bumped exception filing (#228)",
-        "deploy#126 — 4 secrets rotated 03:53Z (43-char URL-safe, no /+= chars); structural fix in user-service deferred to W11",
-        "main#182 — investigation: 1/8 repos protected; 7 unprotected including main; sibling-family with #222 remediation track",
-        "deploy#170 — CF token narrowed to .com only; verified via tokens/verify + zones API; old 3-zone token revoked",
-        "deploy#172 — Phase 1 (SSE-B2 enable, owner) + Phase 2 (13 plaintext versions deleted via b2 rm by-fileId, 11 more than initial estimate; legacy hetzner/terraform.tfstate fully expunged)"
+        "user-service#81 + PR#88 \u2014 ci.yml deployments/** trigger; 4-min spawn-to-merge with one CR cycle (Idris Q2 sink) caught; hook bumped exception filing (#228)",
+        "deploy#126 \u2014 4 secrets rotated 03:53Z (43-char URL-safe, no /+= chars); structural fix in user-service deferred to W11",
+        "main#182 \u2014 investigation: 1/8 repos protected; 7 unprotected including main; sibling-family with #222 remediation track",
+        "deploy#170 \u2014 CF token narrowed to .com only; verified via tokens/verify + zones API; old 3-zone token revoked",
+        "deploy#172 \u2014 Phase 1 (SSE-B2 enable, owner) + Phase 2 (13 plaintext versions deleted via b2 rm by-fileId, 11 more than initial estimate; legacy hetzner/terraform.tfstate fully expunged)"
       ],
       "w11_followups_filed": [
-        "main#226 — validate_commit_identity matcher slurps -c user.email (Idris repro)",
-        "main#227 — validate_branch_freshness cross-repo misattribution (Mateo repro from PR#88)",
-        "main#228 — validate_pr_review hook doesn't honor charter Single-Reviewer Exception",
-        "deploy#193 — Phase 3 state-resident secret rotation (JWT, GHCR PAT, pipeline B2 keys)",
-        "deploy#194 — lifecycle rule on noorinalabs-terraform-state",
-        "deploy#195 — services.yaml bucket-name normalization (Nino-offered)"
+        "main#226 \u2014 validate_commit_identity matcher slurps -c user.email (Idris repro)",
+        "main#227 \u2014 validate_branch_freshness cross-repo misattribution (Mateo repro from PR#88)",
+        "main#228 \u2014 validate_pr_review hook doesn't honor charter Single-Reviewer Exception",
+        "deploy#193 \u2014 Phase 3 state-resident secret rotation (JWT, GHCR PAT, pipeline B2 keys)",
+        "deploy#194 \u2014 lifecycle rule on noorinalabs-terraform-state",
+        "deploy#195 \u2014 services.yaml bucket-name normalization (Nino-offered)"
       ],
       "tooling_added": "b2 CLI v4.6.0 installed via `uv tool install b2`; cli-readonly-tf-state + write-scoped key configured",
       "key_findings": [
         "noorinalabs-terraform-state had 13 plaintext state versions (vs Nino's pre-audit estimate); lifecycle rules empty",
-        "main is the unprotected branch — and 7 of 8 repos org-wide are unprotected; only isnad-graph/main has any protection",
-        "Charter Single-Reviewer Exception is W8-ratified but the validate_pr_review hook doesn't honor it — strict 2-reviewer block on mechanical PRs (hook stricter than charter)",
+        "main is the unprotected branch \u2014 and 7 of 8 repos org-wide are unprotected; only isnad-graph/main has any protection",
+        "Charter Single-Reviewer Exception is W8-ratified but the validate_pr_review hook doesn't honor it \u2014 strict 2-reviewer block on mechanical PRs (hook stricter than charter)",
         "Multi-instance dispatcher matcher-substring family: 5 known instances now (#118 #134 #216 #223 #226), plus 3 different-shape siblings (#227 cross-repo scope, #228 stricter-than-charter, label-validator meta-instance)"
       ]
     }
   },
   "wave_6_decisions": {
     "implementer_substitutions": [],
-    "implementer_substitutions_check_note": "All 11 merged W6 PRs verified — actual committer matches kickoff-declared implementer for every PR (main#288 Aino, main#291 Wanjiku, isnad-graph#864 Jun-Seo Park, deploy#273 Lucas, design-system#69 Keanu, design-system#70 Maricel, data-acquisition#40 Tarek, data-acquisition#41 Alejandra, ingest-platform#28 Bjørn, landing-page#81+#82 Kofi Mensah-Williams). Zero swaps.",
+    "implementer_substitutions_check_note": "All 11 merged W6 PRs verified \u2014 actual committer matches kickoff-declared implementer for every PR (main#288 Aino, main#291 Wanjiku, isnad-graph#864 Jun-Seo Park, deploy#273 Lucas, design-system#69 Keanu, design-system#70 Maricel, data-acquisition#40 Tarek, data-acquisition#41 Alejandra, ingest-platform#28 Bj\u00f8rn, landing-page#81+#82 Kofi Mensah-Williams). Zero swaps.",
     "scope_drops": [
       {
         "repo": "noorinalabs-user-service",
-        "rationale": "Tier-1 backlog-triage only by W6 design (no Tier-2/3/4 PR work declared for this repo). Triage delivered as per-issue disposition table comment by Mateo Salazar on noorinalabs-main#284 (15 issues audited: 0 close, 2 relabel-phase-15, 13 confirm-actionable). PR optional per kickoff comment 'only required if a label-edit batch is large enough' — Mateo opted for comment-only. Wave-6 branch sha == main sha (identical, 0 PRs).",
+        "rationale": "Tier-1 backlog-triage only by W6 design (no Tier-2/3/4 PR work declared for this repo). Triage delivered as per-issue disposition table comment by Mateo Salazar on noorinalabs-main#284 (15 issues audited: 0 close, 2 relabel-phase-15, 13 confirm-actionable). PR optional per kickoff comment 'only required if a label-edit batch is large enough' \u2014 Mateo opted for comment-only. Wave-6 branch sha == main sha (identical, 0 PRs).",
         "disposition": "by-design / not a real drop"
       }
     ],
@@ -1717,7 +1717,7 @@
         "declared": "Anya Volkov",
         "actual": "Anya Kowalczyk",
         "swapped_at": "2026-05-08T01:33:00Z",
-        "rationale": "Roster gap — Anya Volkov was a stale matrix alias; canonical isnad-graph Tech Lead is Anya Kowalczyk. Identity reconciled at first-spawn, documented in PR body. Same persona class (Tech Lead), benign substitution. Recommend cleaning the stale alias from cross-repo-status.json wave_*_scope tier_1.implementer keys at next wave plan."
+        "rationale": "Roster gap \u2014 Anya Volkov was a stale matrix alias; canonical isnad-graph Tech Lead is Anya Kowalczyk. Identity reconciled at first-spawn, documented in PR body. Same persona class (Tech Lead), benign substitution. Recommend cleaning the stale alias from cross-repo-status.json wave_*_scope tier_1.implementer keys at next wave plan."
       },
       {
         "repo": "noorinalabs-landing-page",
@@ -1725,7 +1725,7 @@
         "declared": "per-repo-roster-tbd",
         "actual": "Nazia Rahman",
         "swapped_at": "2026-05-08T01:38:00Z",
-        "rationale": "TBD-resolved-pre-spawn. Matrix declared placeholder per landing-page TBD-pending-finalization workflow; orchestrator selected Nazia Rahman (Senior QA / Performance Engineer) at fan-out time based on parser-fixture-audit fit (QA discipline). R1+R2 (Marcia + Kofi-frontend) both Approved with strong domain confirmation. Benign — TBD slots are explicit substitution-allowance design."
+        "rationale": "TBD-resolved-pre-spawn. Matrix declared placeholder per landing-page TBD-pending-finalization workflow; orchestrator selected Nazia Rahman (Senior QA / Performance Engineer) at fan-out time based on parser-fixture-audit fit (QA discipline). R1+R2 (Marcia + Kofi-frontend) both Approved with strong domain confirmation. Benign \u2014 TBD slots are explicit substitution-allowance design."
       }
     ],
     "scope_drop_reconciliation": {
@@ -1734,7 +1734,7 @@
       "intentional_no_ops": [
         {
           "repo": "noorinalabs-isnad-ingest-platform",
-          "reason": "hook_count=0 per meta-issue #300 tier_1 row — declared no-op stub or skip. No PRs expected from this repo this wave."
+          "reason": "hook_count=0 per meta-issue #300 tier_1 row \u2014 declared no-op stub or skip. No PRs expected from this repo this wave."
         }
       ]
     }
@@ -1756,7 +1756,7 @@
       "noorinalabs-main#311 dispatcher-children sub-clause",
       "noorinalabs-main#313 Hook Audit Protocol"
     ],
-    "thesis": "All 7 child repos confirmed dispatcher-style via committed-tree inspection — wave audit work primarily verified migration was already complete; PRs #301, #305, #312 established as the first three charter § Parser-Fixture Coverage Requirements reference implementations; committed-tree audit methodology codified to prevent the 3-misclassification pattern from recurring.",
+    "thesis": "All 7 child repos confirmed dispatcher-style via committed-tree inspection \u2014 wave audit work primarily verified migration was already complete; PRs #301, #305, #312 established as the first three charter \u00a7 Parser-Fixture Coverage Requirements reference implementations; committed-tree audit methodology codified to prevent the 3-misclassification pattern from recurring.",
     "reference_implementation_set": {
       "pattern_g_template": "noorinalabs-main#301",
       "shared_utility_hardening": "noorinalabs-main#305",
@@ -1766,7 +1766,7 @@
   "wave_7_final_pr_count": 12,
   "wave_7_changes_requested_cycles": 6,
   "wave_7_top_concentration_pct": 17,
-  "wave_8_active": true,
+  "wave_8_active": false,
   "wave_8_kicked_off_at": "2026-05-08T23:49:19Z",
   "wave_8_branches": {
     "branch": "deployments/phase-3/wave-8",
@@ -1801,5 +1801,55 @@
         "status": "exists-clean"
       }
     }
-  }
+  },
+  "wave_8_completed_at": "2026-05-10T14:31:46Z",
+  "wave_8_merged_to_main": {
+    "merged_at": "2026-05-10T14:31:46Z",
+    "ceremony": "/wave-wrapup Step 11 \u2014 per-repo deployments/phase-3/wave-8 \u2192 main PRs",
+    "merges": [
+      {
+        "repo": "noorinalabs-main",
+        "wave_merge_pr": 343,
+        "merge_sha": "4a63020d"
+      },
+      {
+        "repo": "noorinalabs-deploy",
+        "wave_merge_pr": 283,
+        "merge_sha": "1697f5e7"
+      },
+      {
+        "repo": "noorinalabs-design-system",
+        "wave_merge_pr": 76,
+        "merge_sha": "73f82367"
+      },
+      {
+        "repo": "noorinalabs-landing-page",
+        "wave_merge_pr": 92,
+        "merge_sha": "4232f3f5"
+      },
+      {
+        "repo": "noorinalabs-data-acquisition",
+        "wave_merge_pr": 51,
+        "merge_sha": "5ee1c1c8"
+      }
+    ],
+    "no_merge_needed": [
+      {
+        "repo": "noorinalabs-isnad-graph",
+        "reason": "wave-branch identical to main; W5-cleanup close-as-resolved bundle (#866-#870), no PRs in W8"
+      },
+      {
+        "repo": "noorinalabs-user-service",
+        "reason": "wave-branch identical to main; W8 work shipped via parent noorinalabs-main#340 (block_gh_pr_review fixtures + alembic-heredoc us#98+#99 bundle)"
+      }
+    ]
+  },
+  "wave_8_repos_descoped_during_wave": [
+    {
+      "repo": "noorinalabs-isnad-ingest-platform",
+      "reason": "Phase-3 reset placed ingest-platform out of P3W8 scope (no end-state target dependency); meta-issue #331 lists 7 repos; JSON drift was caught at /wave-kickoff Step 0 and reconciled (#333 tech-debt opened to harden /wave-scope upsert against multi-line sibling-block bug).",
+      "tracked_by": "noorinalabs-main#333",
+      "descoped_at": "2026-05-08T23:49:19Z"
+    }
+  ]
 }
