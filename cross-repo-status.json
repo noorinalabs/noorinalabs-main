@@ -1,4 +1,12 @@
 {
+  "wave_9_scope_reconciled_at": "2026-05-10T17:45:25Z",
+  "wave_9_repos_in_scope": ["noorinalabs-main","noorinalabs-isnad-graph","noorinalabs-user-service","noorinalabs-deploy","noorinalabs-design-system","noorinalabs-landing-page","noorinalabs-data-acquisition"],
+  "wave_9_meta_issue": 347,
+  "wave_9_scope": {"theme":"Tech-debt reduction — phase-within-phase, all-debt-labeled, fix-what-fits, deploy gated on ratio (criterion #9)","scope_size_at_reconcile":166,"per_repo_open_tech_debt":{"noorinalabs-deploy":60,"noorinalabs-main":51,"noorinalabs-isnad-graph":28,"noorinalabs-user-service":12,"noorinalabs-landing-page":9,"noorinalabs-design-system":3,"noorinalabs-data-acquisition":3},"carry_forwards":["noorinalabs-deploy#151","noorinalabs-user-service#84"],"must_includes":[],"deploy_track_paused":true,"directional_kpi":"phase-3 exit-criterion #9 (<10% cumulative-open tech-debt)"},
+  "wave_9_scope_reconciliation_note": "W9 = pure tech-debt reduction across 7 repos. 166 open tech-debt at scope time, all labeled p3-wave-9 (143 newly applied + 23 pre-existing). May span W9+W10+W11. Owner directive 2026-05-10. Phase exit gate currently 72% cumulative open vs 10% target.",
+  "wave_9_kicked_off_at": "2026-05-10T17:55:00Z",
+  "wave_9_active": true,
+  "wave_9_branches": {"branch":"deployments/phase-3/wave-9","created_at":"2026-05-10T17:55:00Z","repos":{"noorinalabs-main":{"sha":"4465ac29","status":"created"},"noorinalabs-isnad-graph":{"sha":"d4eb65a6","status":"created"},"noorinalabs-user-service":{"sha":"76ff877c","status":"created"},"noorinalabs-deploy":{"sha":"1697f5e7","status":"created"},"noorinalabs-design-system":{"sha":"73f82367","status":"created"},"noorinalabs-landing-page":{"sha":"4232f3f5","status":"created"},"noorinalabs-data-acquisition":{"sha":"5ee1c1c8","status":"created"}}},
   "wave_8_scope_reconciled_at": "2026-05-08T22:10:19Z",
   "wave_8_repos_in_scope": [
     "noorinalabs-main",
@@ -1380,7 +1388,7 @@
       ]
     }
   },
-  "wave_9_work": {
+  "phase_2_wave_9_work": {
     "theme": "Data pipeline + user-service cutover + deploy infra",
     "status": "complete \u2014 retro merged 2026-04-23 (#193)",
     "retro_summary": "P2W9 retro: 0 AUTO / 0 DECIDE promotions, charter amendments on Cross-Contract PRs + validate_pr_ci_status + Load-Bearing Followups, trust matrix updated.",
