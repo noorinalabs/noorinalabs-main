@@ -87,7 +87,7 @@ gh api 'repos/<owner>/<repo>/issues/<N>' \
 - `state=closed, state_reason=null` (or `duplicate`) — typically a duplicate; check for `Duplicate of #M` in body or comments and follow to canonical issue.
 - `state=open` — claim of "tracked as #N" is valid; check if implementer is assigned.
 
-A closed issue with `state_reason=completed` is **not proof a regression test was added**. Verify the linked PR's diff for test additions OR grep the parent test file for the bug's input shape — the fixture-with-fix discipline (`hooks.md § 5`) requires both the fix AND the regression test, but the closure-as-completed marker captures only the former.
+A closed issue with `state_reason=completed` is **not proof a regression test was added**. Verify the linked PR's diff for test additions OR grep the parent test file for the bug's input shape — the fixture-with-fix discipline (`hooks.md § Hook Authorship Requirements § 5. Parser-Fixture Coverage Requirements`) requires both the fix AND the regression test, but the closure-as-completed marker captures only the former.
 
 ### Sub-rule: merge_commit_sha reachability for "fix landed" claims
 
