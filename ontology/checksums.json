@@ -669,21 +669,21 @@
     },
     ".claude/team/phases/phase-3.md": {
       "last_tracked": "8521775b8ab8386c981d3181ef66e6b40a6aa8c7a0d17e9d06681df6289f7011",
-      "last_resolved": "",
+      "last_resolved": "8521775b8ab8386c981d3181ef66e6b40a6aa8c7a0d17e9d06681df6289f7011",
       "tracked_at": "2026-05-08T21:37:48.412517+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-05-08T23:19:16.069020+00:00"
     },
     ".claude/skills/phase-review/SKILL.md": {
       "last_tracked": "861091d903f2ece1c784c53846881bc9ea802542b39acbb8033c1f670aa1f6a1",
-      "last_resolved": "",
+      "last_resolved": "861091d903f2ece1c784c53846881bc9ea802542b39acbb8033c1f670aa1f6a1",
       "tracked_at": "2026-05-08T21:34:04.322302+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-05-08T23:19:16.069020+00:00"
     },
     ".claude/skills/wave-scope/SKILL.md": {
       "last_tracked": "b48e229d3c756a9cf829ce9e8cf1c663c3e2c59c31aa7f596345b2f2d1b1f90d",
-      "last_resolved": "",
+      "last_resolved": "b48e229d3c756a9cf829ce9e8cf1c663c3e2c59c31aa7f596345b2f2d1b1f90d",
       "tracked_at": "2026-05-08T21:34:20.919250+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-05-08T23:19:16.069020+00:00"
     }
   },
   "last_cleanup": {
