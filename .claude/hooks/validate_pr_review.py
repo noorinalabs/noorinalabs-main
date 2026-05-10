@@ -520,11 +520,24 @@ def check(input_data: dict) -> dict | None:
                 "Approved comments (resolves main#244).\n"
                 "Use `gh pr comment <PR#> --body '...'` with charter format:\n"
                 "  Requestor: <reviewer>  Requestee: <PR author>  "
-                "RequestOrReplied: Approved  TechDebt: none | #issue, ...\n"
+                "RequestOrReplied: Approved  TechDebt: none | #issue, ...\n\n"
+                "Common failure mode — Reply vs Approved:\n"
+                "  RequestOrReplied: Reply / Replied / Request / ChangesRequested do NOT\n"
+                "  count toward the 2-reviewer threshold, EVEN IF the body prose says\n"
+                '  "Approved" or "looks good." The hook parses the RequestOrReplied:\n'
+                "  field directly — body prose is not inspected for verdict signals.\n"
+                "  If a reviewer's intent was to approve, they must post a NEW comment\n"
+                "  with `RequestOrReplied: Approved` (Reply comments cannot be edited\n"
+                "  in-place to change the field).\n\n"
+                "Diagnose the count yourself before retrying merge:\n"
+                "  gh api repos/<owner>/<repo>/issues/<PR>/comments \\\n"
+                "    --jq '[.[] | select(.body | "
+                'contains("RequestOrReplied: Approved"))] | length\'\n\n'
                 "Single-Reviewer Exception (charter § Single-Reviewer Exception (Wave-Bootstrap "
                 "Only)): label PR `wave-bootstrap` AND have a charter-enforcer review (Standards "
                 "Lead, Manager, Tech Lead, Project Lead, or Program Director).\n"
-                "Pass `--admin` for emergency overrides only."
+                "Pass `--admin` for emergency overrides only.\n"
+                "See memory feedback_validate_pr_review_approved_not_reply.md for full context."
             ),
         }
         log_pretooluse_block("validate_pr_review", command, result["reason"])

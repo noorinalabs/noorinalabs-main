@@ -629,6 +629,37 @@ class CheckEndToEndTests(unittest.TestCase):
         self.assertEqual(result["decision"], "block")
         self.assertIn("1/2", result["reason"])
 
+    def test_block_message_explains_reply_vs_approved(self):
+        """BLOCKED message MUST surface the Reply-vs-Approved distinction and
+        the diagnostic recipe. Codified by #352 after a P3W8 17-addendum
+        cascade across 11 PRs where spawn briefs initially specified
+        `RequestOrReplied: Reply` and the prior message didn't explain why
+        Reply doesn't count.
+        """
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"anya kowalczyk"}  # 1/2
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._patch_pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input("gh pr merge 100 --squash"))
+        assert result is not None
+        reason = result["reason"]
+        # Failure-mode framing: Reply-vs-Approved distinction is named.
+        self.assertIn("Reply vs Approved", reason)
+        self.assertIn(
+            "Reply / Replied / Request / ChangesRequested do NOT",
+            reason,
+        )
+        # Body-prose-not-inspected framing (so operator doesn't think
+        # "looks good" or "Approved." in the body fixes it).
+        self.assertIn("body prose is not inspected", reason)
+        # Diagnostic recipe: gh api jq one-liner is shown.
+        self.assertIn("gh api repos/<owner>/<repo>/issues/<PR>/comments", reason)
+        self.assertIn('contains("RequestOrReplied: Approved")', reason)
+        # Memory pointer: canonical reference for full context.
+        self.assertIn("feedback_validate_pr_review_approved_not_reply.md", reason)
+
     def test_one_reviewer_with_wave_bootstrap_and_enforcer_allows(self):
         """Single-Reviewer Exception (#228): wave-bootstrap + charter enforcer → allow.
 
