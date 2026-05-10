@@ -1053,9 +1053,9 @@
     },
     ".claude/scratch/wave-merge-bodies/ontology-commit.py": {
       "last_tracked": "54fccbaa40c96a7d38e4aef311866228cc0829130c077fe9cf9bcb1eb5e73740",
-      "last_resolved": "",
+      "last_resolved": "54fccbaa40c96a7d38e4aef311866228cc0829130c077fe9cf9bcb1eb5e73740",
       "tracked_at": "2026-05-10T14:40:22.639809+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-05-10T16:15:15.921230+00:00"
     }
   },
   "last_cleanup": {
