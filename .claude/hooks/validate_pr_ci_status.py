@@ -220,8 +220,21 @@ def check(input_data: dict) -> dict | None:
         }
 
     if not rollup:
-        # No checks at all — allow (nothing to gate on).
-        return None
+        # Empty statusCheckRollup — no CI checks have run. Root cause of
+        # deploy#153 (workflow orphan): no on.pull_request trigger covers
+        # this branch/paths, so the merge gate has nothing to evaluate.
+        # Allow (preserves prior behavior; behavior change requires charter
+        # decision per #307), but warn so the operator can investigate.
+        return {
+            "decision": "allow",
+            "systemMessage": (
+                f"WARNING: PR {pr_display} has no CI checks (empty statusCheckRollup). "
+                "This usually means no workflow's on.pull_request trigger covers this PR. "
+                "Verify the workflow coverage via `validate_workflow_paths_coverage` or "
+                "`gh pr checks` before merging — silent absence of CI ≠ green CI.\n"
+                "See deploy#153 for the root-cause incident pattern."
+            ),
+        }
 
     failing: list[dict] = []
     pending: list[dict] = []

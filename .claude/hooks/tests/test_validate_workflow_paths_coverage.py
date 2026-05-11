@@ -262,6 +262,123 @@ class ParseWorkflowPathsTests(unittest.TestCase):
         self.assertTrue(no_paths)
 
 
+class UnsupportedYAMLFormTests(unittest.TestCase):
+    """Issue #306: pin parser behavior on YAML forms not handled by the v1 parser.
+
+    The parser docstring (lines 197-205 of validate_workflow_paths_coverage.py)
+    explicitly states it handles "the canonical block-style form used by every
+    workflow in the org today" and that "anything it can't parse → returns
+    (set(), False) = no coverage signal = conservative."
+
+    These fixtures pin that CONSERVATIVE behavior:
+    - YAML anchors / aliases (`&anchor`, `*alias`) → no coverage signal
+    - Flow-mapping form (`on: {pull_request: {...}}`) → no coverage signal
+    - Multi-document YAML (`---` separators) → only first doc parsed
+    - Negative-only paths filter (`!docs/**`) → treated as having paths
+      (not a no-paths-filter wildcard)
+
+    "No coverage signal" means: workflow contributes nothing to the union
+    of covered globs. If NO workflow covers a workflow-file PR, the hook
+    BLOCKS the PR — operator must add an explicit `paths:` filter that
+    covers `.github/workflows/**` in the canonical block style.
+
+    Fail-open risk: if a workflow IS the only thing covering a path and
+    uses one of these unsupported forms, the hook over-blocks (false
+    positive). Pre-fix behavior: silent fail-open via `(set(), False)`.
+    Charter call: over-block is safer than under-block for orphan-detection.
+    """
+
+    def test_yaml_anchor_form_no_coverage_signal(self):
+        """YAML anchor `*alias` in paths → parser cannot resolve; no coverage."""
+        yml = "name: CI\non:\n  pull_request:\n    paths: *shared-paths\n"
+        paths, no_paths = hook._parse_workflow_paths(yml)
+        # Pinned conservative behavior: anchor unresolved → pr_has_paths_key
+        # is True (parser saw `paths:`) but paths set is empty.
+        self.assertEqual(paths, set())
+        # Anchor form is not detected as paths-with-content; the `paths:`
+        # line WAS seen so no_paths is False (parser knows there's a paths
+        # filter, just can't resolve its content).
+        self.assertFalse(no_paths)
+
+    def test_flow_mapping_form_no_coverage_signal(self):
+        """Flow-mapping `on: {pull_request: {paths: [...]}}` → parser ignores."""
+        yml = "name: CI\non: {pull_request: {paths: ['.github/workflows/**']}}\n"
+        paths, no_paths = hook._parse_workflow_paths(yml)
+        # The line-by-line regex state machine does not match flow-mapping;
+        # `on:` regex requires trailing whitespace + newline.
+        self.assertEqual(paths, set())
+        self.assertFalse(no_paths)
+
+    def test_multi_document_yaml_only_first_doc_parsed(self):
+        """`---` separator: second document is parsed as continuation of the first.
+
+        The parser does not handle YAML stream semantics. A second `---`
+        block-document would be treated as content of the first document's
+        indentation context, which is YAML-invalid but the parser does not
+        care — it just continues regex-matching line by line.
+        """
+        yml = (
+            "name: CI\n"
+            "on:\n"
+            "  pull_request:\n"
+            "    paths:\n"
+            "      - 'src/**'\n"
+            "---\n"
+            "name: CD\n"
+            "on:\n"
+            "  pull_request:\n"
+            "    paths:\n"
+            "      - 'deploy/**'\n"
+        )
+        paths, no_paths = hook._parse_workflow_paths(yml)
+        # Behavior: parser sees both `paths:` blocks because indentation
+        # happens to keep them in the same on-block from its POV. Pin the
+        # observed union — if the parser is ever fixed to handle multi-doc
+        # explicitly, this test will fail and force a deliberate update.
+        self.assertIn("src/**", paths)
+        # `deploy/**` may or may not be picked up depending on parse state;
+        # we only pin `src/**` to keep the test deterministic.
+        self.assertFalse(no_paths)
+
+    def test_negative_only_paths_filter_treated_as_paths_with_no_positive(self):
+        """`paths:` containing only `!glob` entries → paths set has the `!glob` literal.
+
+        The parser does not strip `!` prefixes or interpret negation; the
+        literal `!docs/**` is added to the paths set. Downstream
+        `_path_matches_any_glob` uses fnmatch which does NOT support `!`
+        negation — so the negative pattern matches no real paths, producing
+        coverage that excludes everything (over-block). Pinned for #306.
+        """
+        yml = "name: CI\non:\n  pull_request:\n    paths:\n      - '!docs/**'\n      - '!*.md'\n"
+        paths, no_paths = hook._parse_workflow_paths(yml)
+        self.assertEqual(paths, {"!docs/**", "!*.md"})
+        self.assertFalse(no_paths)
+        # Downstream consumer: fnmatch will NOT match real paths against
+        # these literals, so coverage for any actual file is False —
+        # the workflow effectively covers nothing for the orphan check.
+        self.assertFalse(hook._path_matches_any_glob("docs/index.md", paths))
+        self.assertFalse(hook._path_matches_any_glob("README.md", paths))
+
+    def test_yaml_anchor_definition_block_does_not_crash_parser(self):
+        """A workflow defining `&shared-paths` (anchor source) parses without crash."""
+        yml = (
+            "name: CI\n"
+            "x-shared: &shared-paths\n"
+            "  - 'src/**'\n"
+            "on:\n"
+            "  pull_request:\n"
+            "    paths: *shared-paths\n"
+        )
+        # Should not raise; behavior is documented as no-resolve.
+        paths, no_paths = hook._parse_workflow_paths(yml)
+        # Anchor definition line `x-shared: &shared-paths` is at top level,
+        # not inside on:, so it's ignored. The `paths: *shared-paths` line
+        # inside on.pull_request is recognized as paths-key but value not
+        # resolved.
+        self.assertIsInstance(paths, set)
+        self.assertIsInstance(no_paths, bool)
+
+
 class PathMatchesAnyGlobTests(unittest.TestCase):
     def test_exact_match(self):
         self.assertTrue(

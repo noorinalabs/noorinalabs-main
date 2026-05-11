@@ -806,5 +806,107 @@ class CheckEndToEndTests(unittest.TestCase):
         self.assertIn("1/2", result["reason"])
 
 
+class CommentPaginationTests(_CheckCommentReviewsHarness):
+    """Issue #303: PR comments fetched with `gh api --paginate`.
+
+    Pre-fix the hook fetched `?per_page=100` without `--paginate`, silently
+    missing reviews on PRs with >100 comments. Post-fix the subprocess
+    invocation includes `--paginate`, and gh concatenates each page's JSON
+    array into a single merged array for top-level array responses.
+
+    The fixtures here assert (1) the subprocess `args` contain `--paginate`
+    and (2) reviewer counting still works correctly when the comments list
+    grows past 100 — the scenario that pre-fix would have silently allowed
+    merge.
+    """
+
+    @staticmethod
+    def _comment(body: str) -> dict:
+        return {"body": body, "user": {"login": "anyone"}}
+
+    def test_subprocess_invocation_includes_paginate_flag(self):
+        """gh api ... must be called with --paginate (#303 fix verification)."""
+        captured_args: list[list[str]] = []
+
+        def fake_run(args, capture_output, text, timeout):  # noqa: ARG001
+            captured_args.append(list(args))
+            result = mock.MagicMock()
+            result.returncode = 0
+            if args[0] == "gh" and args[1:3] == ["repo", "view"]:
+                result.stdout = json.dumps({"owner": {"login": "noorinalabs"}, "name": "r"})
+            else:
+                result.stdout = json.dumps([])
+            return result
+
+        with mock.patch.object(hook.subprocess, "run", side_effect=fake_run):
+            hook.check_comment_reviews(self.PR_NUMBER, self.BRANCH_AUTHOR, repo=self.REPO)
+
+        gh_api_calls = [a for a in captured_args if a[0] == "gh" and a[1] == "api"]
+        self.assertEqual(len(gh_api_calls), 1, "exactly one gh api call expected")
+        self.assertIn(
+            "--paginate",
+            gh_api_calls[0],
+            "gh api invocation must include --paginate (#303)",
+        )
+
+    def test_paginated_response_with_101_comments_finds_review_at_position_101(self):
+        """Review at comment index 100 (the 101st) MUST still register post-fix.
+
+        Pre-fix: per_page=100 with no pagination → comment 101 invisible →
+        validate_pr_review counts 1/2 distinct Approved reviewers and
+        SILENTLY allows merge if only one Approved was in the first 100.
+        Post-fix: --paginate fetches all pages; reviewer at position 101 is
+        included; reviewer count is 2/2 and merge proceeds correctly.
+        """
+        # Build 100 non-review comments (Request/Reply) + 1 Approved at position 101.
+        chatter = [
+            self._comment(
+                f"Requestor: Linh Pham\nRequestee: Reviewer{i}\nRequestOrReplied: Request"
+            )
+            for i in range(100)
+        ]
+        review_at_101 = [
+            self._comment(
+                "Requestor: Anya Kowalczyk\nRequestee: Linh Pham\n"
+                "RequestOrReplied: Approved\nTechDebt: none"
+            ),
+            self._comment(
+                "Requestor: Jelani Mwangi\nRequestee: Linh Pham\n"
+                "RequestOrReplied: Approved\nTechDebt: none"
+            ),
+        ]
+        comments = chatter + review_at_101
+        self.assertEqual(len(comments), 102, "sanity: harness builds the right shape")
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(
+            len(result.reviewers),
+            2,
+            "post-#303: reviewers past position 100 must be counted",
+        )
+        self.assertIn("anya kowalczyk", result.reviewers)
+        self.assertIn("jelani mwangi", result.reviewers)
+
+    def test_paginated_response_with_250_comments_traverses_full_list(self):
+        """3-page-equivalent traversal — the loop iterates the entire merged array."""
+        chatter = [
+            self._comment(f"Requestor: Author{i}\nRequestee: Linh Pham\nRequestOrReplied: Request")
+            for i in range(248)
+        ]
+        reviews = [
+            self._comment(
+                "Requestor: Anya Kowalczyk\nRequestee: Linh Pham\n"
+                "RequestOrReplied: Approved\nTechDebt: none"
+            ),
+            self._comment(
+                "Requestor: Jelani Mwangi\nRequestee: Linh Pham\n"
+                "RequestOrReplied: Approved\nTechDebt: none"
+            ),
+        ]
+        comments = chatter + reviews
+        self.assertEqual(len(comments), 250)
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(len(result.reviewers), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
