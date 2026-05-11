@@ -304,6 +304,64 @@ Track instance count at each retro. If the count grows materially (e.g., crossed
 
 P3W1 saw ~4 Lucas-side message-ordering races plus ≥1 analogous Aisha-side instance, all professionally handled but each costing ~30s of attention overhead. None caused duplicate work or wrong-direction shipping. The narrow trigger captures the high-consequence variant (spawn duplication) without sacrificing the wave-throughput-positive implementer-anticipates-context discipline.
 
+<!-- Promoted from memories: feedback_no_head_in_surface_enumeration.md + feedback_pre_spawn_verify_at_origin.md + feedback_pre_spawn_brief_verified_at_head.md (P3W8 retro-pickup #341, 2026-05-10) -->
+
+### Surface enumeration
+
+Pre-spawn briefs that enumerate a multi-file code surface (e.g., "all `actions/checkout@v` sites in this repo", "every place we read `B2_APPLICATION_KEY_ID`", "all workflows that reference `secrets.TARGET_HOST`") MUST count **occurrences, not files**. Three companion disciplines apply.
+
+#### Where to verify — origin head_sha, not local checkout
+
+Run `gh api repos/<owner>/<repo>/git/trees/<head_sha>?recursive=1` (or `gh api .../contents/<path>?ref=<head_sha>`) against the **wave-branch HEAD** before scoping the brief. Local main, local feature branches, and stale clones can all diverge from origin during a multi-implementer wave. Audit-deliverable issue bodies framed as "remove X / sync Y / augment Z / clean up dead-code N" routinely reference paths that don't survive the most recent migration; verifying premises at origin head_sha BEFORE spawning lets the manager scope-block + bounce to TPM rather than spend an implementer cycle discovering the gap.
+
+If premises hold at head_sha: proceed with spawn. If premises fail (target file/path/state doesn't exist as the issue body assumes): scope-block with a comment on the issue (sha + verification command + observed result), tag TPM/scope owner, escalate via `SendMessage`. If premises *over-deliver* (issue body assumes a block that's already cleared, e.g., parent audit table already populated): proceed AND note the unblock in the spawn-request message body so the implementer doesn't redo the look-up.
+
+#### How to count — `grep -c` per file + sum; never `| head -N` the per-file output
+
+```bash
+total=0
+for f in <file-set>; do
+  count=$(grep -cE "<pattern>" "$f")
+  [ "$count" -gt 0 ] && echo "  $f: $count" && total=$((total + count))
+done
+echo "TOTAL: $total"
+```
+
+Then a sanity-check pass that reads the un-truncated grep:
+
+```bash
+grep -nE "<pattern>" <files>  # full output, scan for missed sites
+```
+
+**Do NOT pipe per-file grep output through `head -N` before tallying.** Truncation silently drops sites and produces an under-counted brief that looks complete because the visible output is plausible. The under-count would ship as a scope leak into a follow-up PR if the implementer used the brief as a checklist.
+
+When a consolidated cross-repo audit deliverable exists (TPM-style per-repo target-version table at a parent meta-issue), **cite the audit URL in the spawn brief and treat the audit as authoritative; the manager brief is advisory**. Implementers consult the audit + run their own worktree-side scan via the Hook 15 librarian invocation. The manager-brief enumeration figure is explicitly NOT a checklist cap; if both manager-brief and audit surface counts disagree, the implementer's own worktree scan resolves the conflict and the manager re-runs the enumeration before the next spawn.
+
+#### What caveats apply — per-named-caveat applicability sweep
+
+For every named caveat in the parent audit / charter / kickoff (e.g., `upload-artifact@v4` same-name failure, `actions/github-script@v7` breaking-change, deprecated-flag warnings, version-pin requirements), the manager explicitly rules **applicable vs. non-applicable for THIS repo's surface** before sending the brief. Do not pass caveats through as "be careful" — verify them against the enumerated surface and resolve the ruling in the brief body. Implementer's PR body should mirror the manager's verification table + caveat ruling so reviewers can audit the chain.
+
+#### Severity if violated
+
+- Pre-spawn brief enumerates by file count instead of occurrence count, or pipes per-file grep through `head` before tallying: **moderate** (the under-count ships as scope leak if implementer treats the brief as a checklist; saved only by implementer-side discipline overriding flawed manager input).
+- Manager spawns an implementer to "discover the gap" on an audit-deliverable issue whose premises don't hold at head_sha: **moderate** (wastes implementer context; correct response was scope-block + TPM bounce).
+- Caveat passed through as "be careful" without applicability ruling: **minor**, **moderate** if the unapplied caveat masks a real breaking-change site.
+- Implementer-side override catches a flawed manager brief (positive event): logged in retro as discipline working as designed, no penalty.
+
+#### Worked examples (P3W8)
+
+- **deploy#280 spawn-brief** — Bereket's initial enumeration counted files (14 of 15 workflow files contain `actions/checkout@v4`) instead of occurrences (30 actual sites — `terraform.yml` has 8 alone). `actions/github-script@v7` sample also miscounted (saw lines 82, 130; missed line 174 because `head -10` truncated the per-file output). Aisha's independent worktree-side scan via Hook 15 librarian + `grep -nE` hit all 37 sites and surfaced the gap; Wanjiku's #309 freshness-pass audit independently confirmed `30 + 3 + 4 = 37` across 15 files 2-3 hours earlier and was the canonical cross-reference.
+- **Marcia / landing-page#88** — verified 6 call sites at wave-branch HEAD, ruled `upload-artifact` same-name caveat non-applicable (single call site `playwright-report` in single job). Per-named-caveat applicability sweep delivered as designed.
+- **data-acquisition#43 + #44 (Dilara)** — issue body said "remove dead-code child hook copies" / "augment stale child copy"; origin verification at head_sha returned 0 entries under `.claude/hooks/`. Pre-spawn head_sha check let the manager re-scope to ADR + parent-side fixture instead of spawning an implementer to discover the gap.
+- **isnad-graph hook surface (Anya, W8)** — 4 of 5 hook files 404 at origin; 4 W8 issues scope-blocked pre-spawn instead of consuming implementer time.
+- **Maeve / parent#309 unblock** — pre-spawn read of parent#309's existing audit table revealed the block had already cleared; spawned with the unblock noted in the brief body. Positive expression of the same head_sha discipline (catch the *unblock* signal too, not just the *block*).
+
+#### Cross-references
+
+- Companion to `pull-requests.md § Origin > Local Clone for "Still-Has-X" File-Content Claims` — reviewer-class artifact-truth principle; this section is the manager-class pre-spawn analogue.
+- Companion to `pull-requests.md § Trust the Artifact, Not the Framing` — same primitive at the PR review layer ("read the diff at HEAD, not the PR-body framing"); this section is the spawn-brief layer ("enumerate the surface at HEAD, not the issue-body framing").
+- Source memories: `feedback_no_head_in_surface_enumeration.md` (how to count), `feedback_pre_spawn_verify_at_origin.md` (where to verify), `feedback_pre_spawn_brief_verified_at_head.md` (per-caveat applicability).
+
 <!-- Promoted from memory: feedback_child_repo_implementer_rule.md (P3W5 retro 2026-05-06) -->
 
 ## Child-Repo Implementer Rule + Spawn-Brief Verification (Mandatory) <!-- promotion-target: hook -->
