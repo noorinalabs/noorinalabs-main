@@ -314,12 +314,22 @@ def check_comment_reviews(
             owner = repo_data.get("owner", {}).get("login", "")
             repo_name = repo_data.get("name", "")
 
-        # Fetch PR comments via the issues API with pagination
+        # Fetch ALL PR comments via the issues API. `--paginate` concatenates
+        # each page's JSON array into one combined response; without it, the
+        # hook silently misses reviews appearing after comment #100 (#303).
+        # Bumped the subprocess timeout to 30s to give pagination room — most
+        # PRs have <100 comments and complete in <5s; the few high-traffic
+        # PRs that need multiple pages take longer.
         comments_result = subprocess.run(
-            ["gh", "api", f"repos/{owner}/{repo_name}/issues/{pr_number}/comments?per_page=100"],
+            [
+                "gh",
+                "api",
+                "--paginate",
+                f"repos/{owner}/{repo_name}/issues/{pr_number}/comments?per_page=100",
+            ],
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=30,
         )
         if comments_result.returncode != 0:
             return result
