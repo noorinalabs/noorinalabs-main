@@ -380,6 +380,26 @@ class ParseFailureFailClosedTests(unittest.TestCase):
         # (message updated in #287 to be more precise than "shlex parsing").
         self.assertIn("unbalanced quotes", result["reason"])
 
+    def test_block_message_points_at_F_file_fix(self):
+        """Parse-failure block message MUST cite the -F file fix and the
+        heredoc-as-cause framing. Codified by #345 after 8 occurrences in
+        P3W7-W8 of agents repeating the heredoc pattern despite the memory
+        pointer existing — the message itself must surface the fix.
+        """
+        cmd = 'git -c user.name="Aino Virtanen -c user.email="a@b.c" commit -m "x"'
+        result = hook.check(self._input(cmd))
+        assert result is not None
+        reason = result["reason"]
+        # Cause framing: the heredoc-inside--m pattern is named.
+        self.assertIn("heredoc", reason.lower())
+        self.assertIn('-m "$(cat <<EOF', reason)
+        # Fix: -F file pattern is shown.
+        self.assertIn("-F /path/to/msg.txt", reason)
+        self.assertIn("/tmp/msg-issue-N.txt", reason)
+        # Memory pointer: the canonical reference is named so the operator
+        # can read full context after applying the fix.
+        self.assertIn("feedback_heredoc_in_git_commit.md", reason)
+
     def test_unbalanced_quote_without_commit_allows(self):
         """Parse failure on a non-commit command → allow (no commit to validate)."""
         cmd = 'echo "unterminated'

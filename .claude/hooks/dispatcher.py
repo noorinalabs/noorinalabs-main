@@ -37,6 +37,7 @@ _BASH_HOOKS = [
     "auto_set_env_test",
     "validate_lockfile_paths",
     "validate_labels",
+    "validate_wave_label_evidence",
     "validate_review_comment_format",
     "validate_pr_review",
     "validate_pr_ci_status",

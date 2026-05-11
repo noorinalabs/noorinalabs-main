@@ -51,6 +51,100 @@ Phase 3 Wave 1 produced 11 distinct instances across 3 people in one wave, despi
 
 The proactive variant — self-audit of own previously-published claims absent any external prompt — was demonstrated by no team member in Phase 3 Wave 1. Charter aspires to this discipline but does not mandate it. Easily becomes box-checking; the team's discipline portfolio is honestly named to include this gap.
 
+<!-- Promoted from memory: feedback_pr_state_in_refresh.md (P3W9 #346 memory audit, 2026-05-10) -->
+
+### Sub-rule: PR-state field set
+
+The canonical pre-claim refresh field set for PR state is:
+
+```bash
+gh pr view <N> --repo <owner>/<repo> --json state,mergedAt,headRefOid,statusCheckRollup,reviews,comments,mergeable
+```
+
+`state` and `mergedAt` together distinguish three PR statuses that single-field queries collapse:
+
+- `state=OPEN, mergedAt=null` — actively under review or blocked.
+- `state=OPEN, mergeable=false` — open but blocked (red CI, conflicts, missing approvals); a "still at 1/2" claim is correct here, but a "ready to merge" claim is wrong.
+- `state=MERGED, mergedAt=<timestamp>` — already merged; any "still OPEN / awaiting reviewer" claim is posthumous and must be retracted, not patched with caveats.
+
+Posthumous review noise — posting a fresh review comment on a PR that merged before SendMessage delivery — is the recurring failure mode this field set guards against. **Six occurrences in 36 hours** across the noorinalabs-main#194 fan-out (Nazia/Tarek/Oyun/Keanu/Luciana posthumous on data-acquisition + design-system PRs, plus Linh OPEN-blocked-vs-mergeable on isnad-graph#845) made this the load-bearing pre-comment refresh discipline. Reviewers must include `state,mergedAt` in EVERY pre-post `gh pr view --json` call; if `state != OPEN`, escalate to the spawning agent with the resolved state instead of posting.
+
+### Sub-rule: Issue-state field set
+
+The canonical pre-claim refresh field set for issue state is:
+
+```bash
+gh api 'repos/<owner>/<repo>/issues/<N>' \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print(f\"state={d['state']} state_reason={d.get('state_reason')} closed_at={d.get('closed_at')}\")"
+```
+
+`gh issue view --json` does NOT expose `state_reason` directly as a top-level JSON field; the REST API path is the load-bearing primitive.
+
+`state_reason` discriminates closure semantics:
+
+- `state=closed, state_reason=completed` — fix-PR was merged (somewhere). Necessary but **not sufficient** to claim "fix is on main"; verify `merge_commit_sha` reachability (next sub-rule).
+- `state=closed, state_reason=not_planned` — issue was recognized as resolved by other work or won't-fix. The closing comment is the audit trail; cited PRs/issues are the load-bearing precedents.
+- `state=closed, state_reason=null` (or `duplicate`) — typically a duplicate; check for `Duplicate of #M` in body or comments and follow to canonical issue.
+- `state=open` — claim of "tracked as #N" is valid; check if implementer is assigned.
+
+A closed issue with `state_reason=completed` is **not proof a regression test was added**. Verify the linked PR's diff for test additions OR grep the parent test file for the bug's input shape — the fixture-with-fix discipline (`hooks.md § Hook Authorship Requirements § 5. Parser-Fixture Coverage Requirements`) requires both the fix AND the regression test, but the closure-as-completed marker captures only the former.
+
+### Sub-rule: merge_commit_sha reachability for "fix landed" claims
+
+When a memory or audit cites issue#N as resolved AND you intend to act on the resolution claim (e.g., not bundle a regression test, treat the bug as fixed, close a duplicate-of), `state_reason=completed` is necessary but not sufficient. Verify the merge_commit_sha is reachable from the destination ref:
+
+```bash
+gh api 'repos/<owner>/<repo>/pulls/<N>' \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print(f\"base={d['base']['ref']} merge_commit_sha={d.get('merge_commit_sha')}\")"
+
+# If base != main, verify the wave-branch propagation status:
+gh api 'repos/<owner>/<repo>/compare/main...deployments/phase-3/wave-N' \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print(f\"ahead_by={d['ahead_by']} behind_by={d['behind_by']} status={d['status']}\")"
+```
+
+If `base != main` AND no wave-N → main merge PR exists (`gh pr list --base main --head deployments/phase-3/wave-N --state all` returns 0), the fix is **stranded** on the wave branch. Do not act on the "resolved" claim without verifying via a NEW search for any cherry-pick onto main.
+
+This catches the **stranded-on-wave-branch** trap: a PR honors fixture-with-fix discipline but its `base.ref` is a wave branch that never merged forward. Steps `state_reason=completed` and "linked-PR diff has regression test" without sha-reachable-from-main is the trap surfaced by main#339: PR#305 honored fixture-with-fix discipline, but base=`deployments/phase-3/wave-7` and the wave-7→main merge never happened, so the fix is stranded. wave-7 vs main = ahead_by=10, behind_by=15, diverged. Bug is still LIVE on main and wave-8.
+
+The reachability discipline distinguishes "discipline violation" from "wave-orchestration propagation gap" — different issue class, different owner. Wave-branch-merge-propagation is governed separately by `feedback_wave_branch_issue_close.md` (open-state-after-wave-merge); this rule is about the inverse: closed-state that doesn't reflect main reachability.
+
+<!-- Promoted from memory: feedback_refresh_before_acting.md (P3W9 #346 memory audit, 2026-05-10) -->
+
+## Refresh State Before Acting (Mandatory) <!-- promotion-target: skill -->
+
+The § Refresh State Before Claim discipline above governs **assertions** about artifact state. This section extends the same primitive to **actions**: re-check artifact state immediately before taking parallel or competing action, not based on N-minute-old snapshots.
+
+### Why
+
+Stale snapshots cause duplicate work. The completion-SendMessage delivery path lags actual artifact mutation by several seconds; assuming "no completion message in my inbox = task not done" is a false inference when the inbox lags reality. Inbox state is a **secondary** signal; the artifact itself is **primary**.
+
+### How to apply
+
+1. **Before acting in parallel with a spawned agent**, re-check the artifact directly via `gh api` / file read / `git ls-remote` — not based on any snapshot older than ~30 seconds.
+2. **For batch-reviewer scenarios** (orchestrator considering posting Approved comments on PRs that a spawned reviewer was assigned), the canonical recipe is:
+   ```bash
+   gh api repos/<owner>/<repo>/issues/<N>/comments --jq 'length'
+   ```
+   immediately before posting, not at task-assignment time.
+3. **Manager-class state assertions** (sibling to § Refresh State Before Claim § Manager Class is NOT Exempt) get the same discipline — but the new direction is **action-class**: the manager was about to *do* something, not just *claim* something.
+4. **idle_notification ≠ task-not-completed.** The agent's completion SendMessage may be in flight to your inbox for several seconds after they actually finished. When in doubt, refresh the artifact, not the inbox.
+
+### Severity if violated
+
+- One-off duplicate action with benign outcome (both writers said the same thing): **minor**, paper-trail noise but no behavior consequence.
+- Duplicate action with conflicting outcomes (orchestrator's parallel post diverges from spawned-agent's intent): **moderate**, signal-collapse failure.
+- Recurring across a wave: **moderate-to-severe** — the discipline is cheap to apply (one API call); recurrence signals a habit gap, not a one-off.
+
+### Worked example
+
+P3W4 wave-bootstrap merge ceremony, 2026-05-05. Orchestrator checked wave-bootstrap PR comment counts at 15:46 ("0 comments"), waited for spawned reviewer Nadia, observed Nadia idle-notify without a visible completion SendMessage, assumed throttle, posted own duplicate Approved comments at 15:51:15. But Nadia had actually posted her 5 Approved comments at 15:50:46-59 in the 5-minute gap. Result: 5 duplicate audit-trail entries (functionally harmless because both said "Approved" and reinforced each other, but noisy). The completion-SendMessage delivery lagged Nadia's actual posts by ~30 seconds; assuming "no completion message in my inbox = task not done" was the false inference. A `gh api .../comments --jq 'length'` call <30s before the parallel post would have shown count=5 and prevented the duplication.
+
+### Cross-references
+
+- § Refresh State Before Claim — claim-class umbrella; this rule is the action-class extension.
+- `feedback_refresh_before_status_claim.md` — implementer/reviewer-side foundational primitive that the § Refresh State Before Claim section above already encodes for the claim direction. This rule is the action-direction analogue.
+- `feedback_stale_inbox_manager.md` (memory) — manager-class inbox-staleness failure mode, distinct from artifact-staleness; the inbox lags reality, the artifact IS reality.
+
 <!-- Promoted from memory: feedback_canonical_source_via_git_show.md (P3W5 retro 2026-05-06) -->
 
 ## Canonical Source via `git show <sha>:<path>` (Mandatory) <!-- promotion-target: skill -->

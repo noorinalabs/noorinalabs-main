@@ -88,6 +88,13 @@ class NegativeMatchTests(unittest.TestCase):
     def test_no_git_at_all(self):
         self.assertIsNone(hook.check(_input("ls --no-verify-flag")))
 
+    def test_git_stash_no_commit_not_blocked(self):
+        # isnad-graph#868: regex-based child copy false-positive on `\bcommit\b`
+        # matching "commit" inside "--no-commit". Parent's shlex tokenization
+        # via _shell_parse rejects this shape (subcommand is `stash`, not
+        # `commit`). Fixture pin so a future non-shlex refactor regresses here.
+        self.assertIsNone(hook.check(_input("git stash --no-commit")))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -151,6 +151,61 @@ Invoke `/promotion-audit` to deterministically check whether any memories, chart
 
 The audit appends its table to this retro's feedback_log entry **and** writes a standalone log at `.claude/team/promotion_audit_log/{wave-name}.md`. On unchanged repo state, the audit is byte-deterministic — re-running produces identical output. See issue #152 for the full pipeline spec and PR #153 / Hook 15 for the worked example.
 
+### 7.6. Annunaki-attack (added P3W9 #344 — 2026-05-11)
+
+Invoke `/annunaki-attack` to process errors captured by the Annunaki monitor during this wave. Any hooks/skills/charter changes that emerge feed back into Step 7 (charter changes) retroactively — review the new artifacts in this retro's charter-changes proposal block.
+
+This step is **co-located** with `/wave-wrapup` Step 13. The run-marker check below prevents double-execution; whichever surface runs first wins, and the other surface skips.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ALREADY_RAN=$(jq -r ".wave_${M}_annunaki_attack_ran_at // empty" "$REPO_ROOT/cross-repo-status.json")
+
+if [ -n "$ALREADY_RAN" ]; then
+  echo "Annunaki-attack: already ran at $ALREADY_RAN (likely via /wave-wrapup Step 13). Skipping."
+else
+  # Invoke /annunaki-attack with the current wave context.
+  # On successful completion, the skill (or this step's post-invoke wrapper) writes:
+  #   wave_${M}_annunaki_attack_ran_at = <ISO-8601 UTC timestamp>
+  # to cross-repo-status.json — the marker /wave-wrapup Step 13 reads.
+fi
+```
+
+If `.claude/annunaki/errors.jsonl` is empty or missing, report "Annunaki: No errors captured this wave" and still write the marker (so wrapup's Step 13 doesn't re-check). Include any Annunaki-created issues + PRs in the wave-shape table and per-engineer assessments (Step 4) before presenting the retro at Step 8.
+
+This step runs **before** Step 7.7 (memory-to-automation audit) so that new hooks/skills/charter from error analysis are visible to the memory audit — a memory file matching a just-created hook can be retired in the same retro instead of re-surfacing as a separate audit candidate.
+
+### 7.7. Memory-to-automation audit (added P3W9 #344 — 2026-05-11)
+
+Examine all memory files in the project memory directory for entries that describe behaviors, rules, or patterns that could be codified as a **hook**, **skill**, or **charter update** instead of remaining as soft memory. Findings feed Step 7 (charter changes) retroactively.
+
+This step is **co-located** with `/wave-wrapup` Step 14. Run-marker check is the same pattern as 7.6:
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ALREADY_RAN=$(jq -r ".wave_${M}_memory_audit_ran_at // empty" "$REPO_ROOT/cross-repo-status.json")
+
+if [ -n "$ALREADY_RAN" ]; then
+  echo "Memory-to-automation audit: already ran at $ALREADY_RAN (likely via /wave-wrapup Step 14). Skipping."
+else
+  # Run the audit per the recipe in /wave-wrapup Step 14 (kept canonical there to avoid duplication):
+  #   1. Read all memory files: ls ~/.claude/projects/*/memory/*.md
+  #   2. Classify each: Hook candidate | Skill candidate | Charter update | Keep as memory
+  #   3. For each non-keep classification: file an issue, spawn/message best-fit owner, verify, delete/update memory
+  #   4. Report the conversion table
+  # On completion, write wave_${M}_memory_audit_ran_at = <ISO-8601 UTC timestamp> to cross-repo-status.json.
+fi
+```
+
+**Designated owner:** Aino Virtanen handles most conversions (hooks, charter, standards). The orchestrator spawns her with the audit list and she reports back when done — same convention as `/wave-wrapup` Step 14.
+
+**Why retro is the preferred surface (P3W9 #344 rationale):** wave-wrapup is already long, and the audits routinely get deferred at wrapup time, pushing them days or weeks into the next wave-wrapup cycle. Retro is the natural moment because:
+- The retro narrative already discusses charter-change proposals (Step 7); promotion candidates discovered in Step 7.7 land in the same proposal block.
+- Trust matrix updates (Step 5) and feedback_log entries (Step 6) are already in flight; new Aino-assigned audit-conversion issues count toward her wave engagement in the same retro pass.
+- Carry-forward to next wave (Step 9 `/wave-scope`) immediately follows; any audit-conversion issues filed here are visible to scope reconciliation.
+
+P3W8 surfaced the gap (2026-05-10): user explicitly noted "these should be a part of the wave-retro for next time." This step is that next time.
+
 ### 8. Present full retro summary to the user
 
 **Output the complete retro summary directly in the conversation.** Do not just write to files — the user must see the retro without having to open `feedback_log.md`. Include:

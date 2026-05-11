@@ -198,11 +198,16 @@ def check(input_data: dict) -> dict | None:
         result = {
             "decision": "block",
             "reason": (
-                "BLOCKED: git commit detected but the command contains unbalanced "
-                "quotes or other syntax shlex cannot parse. Cannot safely validate "
-                "`-c user.name=` / `-c user.email=` identity flags. Fix the quoting "
-                "(e.g. use -F /tmp/msg.txt instead of inline -m with unbalanced "
-                "quotes) and retry."
+                "BLOCKED: git commit detected but command failed shlex parsing "
+                "(likely unbalanced quotes — common when embedding heredocs "
+                'inside `-m "$(cat <<EOF...EOF)"` next to `-c user.name=` flags). '
+                "Cannot validate identity flags from a malformed command.\n\n"
+                "Fix: write the message to a file and use `-F /path/to/msg.txt`:\n"
+                "  printf '%s\\n' \"your commit message\" > /tmp/msg-issue-N.txt\n"
+                '  git -c user.name="Foo Bar" -c user.email="..." \\\n'
+                "      commit -F /tmp/msg-issue-N.txt\n"
+                "(Or for multi-line: heredoc into the file FIRST, then -F.)\n\n"
+                "See memory feedback_heredoc_in_git_commit.md for full context."
             ),
         }
         log_pretooluse_block("validate_commit_identity", command, result["reason"])

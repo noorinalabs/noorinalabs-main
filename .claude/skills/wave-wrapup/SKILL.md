@@ -228,6 +228,73 @@ Print a per-repo PR summary table (PR# or "no merge needed") and **wait for user
 
 **Do NOT merge to main without user approval.** This is a significant action that affects all downstream repos.
 
+### 11.5. Reachability gate — wave-branch propagation to main (final wave only)
+
+After the per-repo wave→main PRs in Step 11 are merged (or declared not-needed), verify each wave-branch is actually reachable from `origin/main`. This is the load-bearing enforcement counterpart to charter `state-claims.md § Sub-rule: merge_commit_sha reachability` — the rule's claim-time discipline becomes a wrapup-time gate.
+
+Origin story: `main#339` — `deployments/phase-3/wave-7` ended up 10 ahead / 15+ behind / diverged from main with no wave→main PR ever opened. The wave was treated as "closed" because individual PRs into the wave-branch were merged, but the wave-branch itself never reached main. PR #305 (the `validate_commit_identity` backslash fix) and 11 hook fixtures sat stranded on a branch no operator was tracking.
+
+This step catches that pattern at wrapup time, before the wave is declared closed.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+WAVE_REPOS_IN_SCOPE=$(jq -r ".wave_{M}_repos_in_scope[]" "$REPO_ROOT/cross-repo-status.json")
+BRANCH="deployments/phase-{P}/wave-{M}"
+
+STRANDED=()
+for R in $WAVE_REPOS_IN_SCOPE; do
+  # Skip repos where the wave branch doesn't exist (scope-drop case)
+  WAVE_SHA=$(gh api "repos/noorinalabs/$R/git/refs/heads/$BRANCH" --jq '.object.sha' 2>/dev/null || true)
+  [ -z "$WAVE_SHA" ] && { echo "$R: no wave branch — skip (scope-drop)"; continue; }
+
+  # Compare wave-branch against main at origin (NOT local clone — per charter
+  # pull-requests.md § Origin > Local Clone)
+  COMPARE=$(gh api "repos/noorinalabs/$R/compare/main...$BRANCH" \
+    --jq '{ahead_by, behind_by, status}')
+  AHEAD=$(echo "$COMPARE" | jq -r .ahead_by)
+  STATUS=$(echo "$COMPARE" | jq -r .status)
+
+  if [ "$AHEAD" -gt 0 ] || [ "$STATUS" = "diverged" ]; then
+    # Check if a wave→main PR exists in any state — explains the gap if so
+    PR_EXISTS=$(gh pr list --repo "noorinalabs/$R" --base main --head "$BRANCH" \
+      --state all --limit 5 --json number,state,mergedAt \
+      --jq '[.[] | select(.state == "MERGED" or .state == "OPEN")] | length')
+    STRANDED+=("$R: ahead_by=$AHEAD status=$STATUS wave→main PRs found=$PR_EXISTS")
+  else
+    echo "$R: wave-branch reachable from main (ahead_by=$AHEAD, status=$STATUS) — OK"
+  fi
+done
+
+if [ ${#STRANDED[@]} -gt 0 ]; then
+  echo "════════════════════════════════════════════════════════════"
+  echo "BLOCKED: /wave-wrapup cannot close wave {M} — STRANDED repos:"
+  for s in "${STRANDED[@]}"; do echo "  $s"; done
+  echo ""
+  echo "Each STRANDED repo has wave-branch commits NOT reachable from origin/main."
+  echo "Fix-forward options:"
+  echo "  (a) Open the wave→main PR (re-run Step 11 if no PR exists)"
+  echo "  (b) Merge an already-OPEN wave→main PR"
+  echo "  (c) If stranding is INTENTIONAL (descoped wave, rolled-back work), set"
+  echo "      STRANDING_OVERRIDE_RATIONALE=\"<explicit reason>\" before re-invoking"
+  echo "      /wave-wrapup. The override is logged to the wrapup report and to"
+  echo "      cross-repo-status.json under wave_{M}_stranding_override."
+  echo "════════════════════════════════════════════════════════════"
+  exit 1
+fi
+```
+
+**Override mechanism** (when stranding is intentional):
+
+```bash
+# Only use when the wave is deliberately not merged to main
+# (descoped, rolled back, or held for sequencing reasons)
+export STRANDING_OVERRIDE_RATIONALE="P3W7 work descoped post-#339 audit; \
+  wave-7 branch retained for historical reference, no propagation intended"
+# Re-invoke /wave-wrapup — the gate sees the rationale, logs it, and proceeds
+```
+
+The override is intentionally noisy: rationale is required (no empty string), logged to the wrapup report, and persisted to `cross-repo-status.json` under `wave_{M}_stranding_override` so subsequent /wave-retro and audit passes can surface it.
+
 ### 12. Ontology rebuild
 
 Run `/ontology-rebuild` to process any files that changed during this wave. This ensures the ontology reflects the current state of all repos before the wave closes.
@@ -238,16 +305,45 @@ Run `/ontology-rebuild` to process any files that changed during this wave. This
 
 ### 13. Annunaki error attack
 
+> **Preferred surface is `/wave-retro` Step 7.6 (P3W9 #344).** Retro is the natural moment for this audit — findings feed the retro's charter-change proposals. Wrapup retains this step as a fallback for cases where retro is delayed or skipped. The run-marker below prevents double-execution.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ALREADY_RAN=$(jq -r ".wave_${M}_annunaki_attack_ran_at // empty" "$REPO_ROOT/cross-repo-status.json")
+
+if [ -n "$ALREADY_RAN" ]; then
+  echo "Annunaki-attack: already ran at $ALREADY_RAN (via /wave-retro Step 7.6). Skipping."
+  # Continue to Step 14.
+else
+  # Proceed with the attack below; on completion write the marker.
+fi
+```
+
 Run `/annunaki-attack` to process any errors captured by the Annunaki monitor during this wave. This converts observed errors into preventative automation (hooks, skills, charter updates) before the wave closes.
 
-- If `.claude/annunaki/errors.jsonl` is empty or missing, report "Annunaki: No errors captured this wave" and skip
+- If `.claude/annunaki/errors.jsonl` is empty or missing, report "Annunaki: No errors captured this wave" and skip the attack — but still write the run-marker so retro's 7.6 doesn't re-check
 - Use the current wave label for any issues created
 - Include Annunaki-created issues and PRs in the final wave report totals
 - This step runs **before** the memory-to-automation audit so that new hooks/skills from error analysis are visible to the memory audit
+- On completion, write `wave_${M}_annunaki_attack_ran_at = <ISO-8601 UTC timestamp>` to `cross-repo-status.json`
 
 ### 14. Memory-to-automation audit
 
-Examine all memory files in the project memory directory for entries that describe behaviors, rules, or patterns that could be codified as a **hook**, **skill**, or **charter update** instead of remaining as soft memory.
+> **Preferred surface is `/wave-retro` Step 7.7 (P3W9 #344).** Retro is the natural moment for this audit — findings feed the retro's charter-change proposals and the Aino-spawned conversion issues count toward the same retro's per-engineer assessment + trust update pass. Wrapup retains this step as the canonical procedure body (referenced by retro's 7.7) and as a fallback for retro-delayed cases. The run-marker below prevents double-execution.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ALREADY_RAN=$(jq -r ".wave_${M}_memory_audit_ran_at // empty" "$REPO_ROOT/cross-repo-status.json")
+
+if [ -n "$ALREADY_RAN" ]; then
+  echo "Memory-to-automation audit: already ran at $ALREADY_RAN (via /wave-retro Step 7.7). Skipping."
+  # Continue to the rest of the wrapup.
+else
+  # Proceed with the audit below; on completion write the marker.
+fi
+```
+
+Examine all memory files in the project memory directory for entries that describe behaviors, rules, or patterns that could be codified as a **hook**, **skill**, or **charter update** instead of remaining as soft memory. On completion, write `wave_${M}_memory_audit_ran_at = <ISO-8601 UTC timestamp>` to `cross-repo-status.json`.
 
 **Process:**
 
