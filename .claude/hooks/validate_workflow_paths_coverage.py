@@ -97,13 +97,21 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _shell_parse import (  # noqa: E402
+    find_gh_subcommand,
+    iter_command_segments,
+    strip_heredocs,
+    tokenize,
+)
 from annunaki_log import log_pretooluse_block  # noqa: E402
 
 # --- Command-shape matchers -------------------------------------------------
 
-# Match `gh pr create` / `gh pr ready` at command position. Liberal pattern
-# (chained command via &&/||/|/; is fine; leading env-var assignments are
-# handled by stripping them before matching).
+_GH_PR_GATE_ACTIONS = {"create", "ready"}
+
+# Regex fallback used only when shlex tokenization fails (unbalanced quotes,
+# malformed input). Intentionally kept so the hook degrades to the old
+# substring-match path rather than silently allowing on parse failure.
 _GH_PR_GATE_RE = re.compile(
     r"(?:^|[;&|]\s*|&&\s*|\|\|\s*)\s*"
     r"(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*"
@@ -111,29 +119,69 @@ _GH_PR_GATE_RE = re.compile(
     re.MULTILINE,
 )
 
-# Flag extraction (single shlex-aware pass via simple regex; matches
-# `--flag value` and `--flag=value`). Conservative — false negatives just
-# mean we fall back to defaults (cwd repo / main / current branch).
-_FLAG_VALUE_RE = re.compile(
-    r"--{flag}(?:=|\s+)([^\s'\"]+)|--{flag}\s+\"([^\"]+)\"|--{flag}\s+'([^']+)'"
-)
+
+def _is_gh_pr_gate_command(command: str) -> bool:
+    """True if any segment of `command` is a `gh pr create` or `gh pr ready` call.
+
+    Uses _shell_parse.tokenize + find_gh_subcommand for command-position detection.
+    Falls back to regex on shlex parse failure (fail-open for the gate check:
+    a false negative just means we proceed to the coverage check).
+    Inherits _shell_parse.tokenize() line-continuation normalization from #305.
+    """
+    cleaned = strip_heredocs(command)
+    tokens = tokenize(cleaned)
+    if tokens is None:
+        return bool(_GH_PR_GATE_RE.search(command))
+    for segment in iter_command_segments(tokens):
+        result = find_gh_subcommand(segment)
+        if result is None:
+            continue
+        _globals, rest = result
+        if len(rest) >= 2 and rest[0] == "pr" and rest[1] in _GH_PR_GATE_ACTIONS:
+            return True
+    return False
 
 
-def _extract_flag(command: str, flag: str) -> str | None:
-    """Return the value of --flag from `command`, or None if absent."""
-    pat = _FLAG_VALUE_RE.pattern.replace("{flag}", re.escape(flag))
-    m = re.search(pat, command)
-    if not m:
-        return None
-    for grp in m.groups():
-        if grp:
-            return grp
+def _walk_flag_value(tokens: list[str], flag: str) -> str | None:
+    """Return the first value of `--flag` found in `tokens`, or None.
+
+    Handles `--flag value` (two tokens) and `--flag=value` (one token).
+    Only matches tokens in flag position — never inside quoted values of
+    other flags (shlex has already collapsed those to single tokens).
+    """
+    for i, tok in enumerate(tokens):
+        if tok == f"--{flag}" and i + 1 < len(tokens):
+            return tokens[i + 1]
+        if tok.startswith(f"--{flag}="):
+            return tok[len(flag) + 3 :]
     return None
 
 
-def _is_gh_pr_gate_command(command: str) -> bool:
-    """True if the command contains a `gh pr create` or `gh pr ready` at command position."""
-    return bool(_GH_PR_GATE_RE.search(command))
+def _extract_flag(command: str, flag: str) -> str | None:
+    """Return the value of --flag from `command`, or None if absent.
+
+    Tokenizes with _shell_parse.tokenize() so flag values inside quoted
+    --body strings or heredocs cannot masquerade as --repo/--base/--head.
+    Falls back to a regex scan on shlex parse failure (fail-open: a false
+    negative means we fall back to the default value in callers).
+    """
+    cleaned = strip_heredocs(command)
+    tokens = tokenize(cleaned)
+    if tokens is None:
+        f = re.escape(flag)
+        pat = (
+            rf"--{f}(?:=|\s+)([^\s'\"]+)"
+            rf"|--{f}\s+\"([^\"]+)\""
+            rf"|--{f}\s+'([^']+)'"
+        )
+        m = re.search(pat, command)
+        if not m:
+            return None
+        for grp in m.groups():
+            if grp:
+                return grp
+        return None
+    return _walk_flag_value(tokens, flag)
 
 
 # --- Workflow paths filter parsing ------------------------------------------

@@ -1,0 +1,5 @@
+{
+  "description": "Adjacent shape: git commit --amend (amending last commit)",
+  "command": "git -c user.name=\"Aino Virtanen\" -c user.email=\"parametrization+Aino.Virtanen@gmail.com\" commit --amend --no-edit",
+  "expect": "allow"
+}

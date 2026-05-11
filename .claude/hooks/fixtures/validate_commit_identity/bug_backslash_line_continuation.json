@@ -1,0 +1,5 @@
+{
+  "description": "Bug #287: backslash-line-continuation in git commit command — must be allowed, not false-blocked",
+  "command": "git -c user.name=\"Aino Virtanen\" \\\n    -c user.email=\"parametrization+Aino.Virtanen@gmail.com\" \\\n    commit -m \"fix: apply parser fix (#287)\"",
+  "expect": "allow"
+}

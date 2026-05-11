@@ -1,0 +1,5 @@
+{
+  "description": "Adjacent shape: git -c gpg.format=ssh plus identity flags (multi -c flags beyond identity)",
+  "command": "git -c gpg.format=ssh -c user.name=\"Aino Virtanen\" -c user.email=\"parametrization+Aino.Virtanen@gmail.com\" commit -m \"chore: signed commit with extra -c flags\"",
+  "expect": "allow"
+}
