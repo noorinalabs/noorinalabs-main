@@ -88,7 +88,7 @@ def _walk_flags(tokens: list[str], wanted: set[str]) -> list[str]:
             continue
         matched = False
         for flag in wanted:
-            if flag.startswith("--") and tok.startswith(flag + "="):
+            if tok.startswith(flag + "="):
                 values.append(tok[len(flag) + 1 :])
                 matched = True
                 break

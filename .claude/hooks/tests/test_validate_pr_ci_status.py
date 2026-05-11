@@ -18,6 +18,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 _HERE = Path(__file__).resolve().parent
 _HOOKS_DIR = _HERE.parent
@@ -201,6 +202,69 @@ class IsMergeCommandTests(unittest.TestCase):
 
     def test_git_merge_does_not_match(self):
         self.assertFalse(hook.is_merge_command("git merge main"))
+
+
+class EmptyRollupTests(unittest.TestCase):
+    """Issue #307: statusCheckRollup = [] — pin warn-allow behavior.
+
+    Empty rollup means no CI checks have run. Root-cause incident:
+    deploy#153 (workflow orphan — no on.pull_request trigger covered the PR).
+    Pre-fix behavior: silent allow (return None). Post-fix: allow + warn
+    systemMessage so the operator sees the signal.
+
+    Charter decision: preserve allow-merge behavior (changing it requires
+    operational change per #307 acceptance); add operator-facing warning.
+    """
+
+    @staticmethod
+    def _bash_input(command: str) -> dict:
+        return {"tool_name": "Bash", "tool_input": {"command": command}}
+
+    def test_empty_rollup_returns_warn_systemMessage(self):
+        """`gh pr merge N` with [] rollup → allow + WARNING systemMessage."""
+        with mock.patch.object(hook, "fetch_checks", return_value=[]):
+            result = hook.check(self._bash_input("gh pr merge 42"))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.get("decision"), "allow")
+        self.assertIn("systemMessage", result)
+        self.assertIn("empty statusCheckRollup", result["systemMessage"])
+
+    def test_empty_rollup_message_references_workflow_paths_coverage(self):
+        """Warning message must point operator at the sibling hook for diagnosis."""
+        with mock.patch.object(hook, "fetch_checks", return_value=[]):
+            result = hook.check(self._bash_input("gh pr merge 42"))
+        assert result is not None
+        self.assertIn("validate_workflow_paths_coverage", result["systemMessage"])
+
+    def test_empty_rollup_message_references_deploy_153_incident(self):
+        """Warning cites the canonical root-cause incident for operator context."""
+        with mock.patch.object(hook, "fetch_checks", return_value=[]):
+            result = hook.check(self._bash_input("gh pr merge 42"))
+        assert result is not None
+        self.assertIn("deploy#153", result["systemMessage"])
+
+    def test_empty_rollup_does_not_block(self):
+        """Empty rollup must NOT block — only warn. Preserves prior allow behavior."""
+        with mock.patch.object(hook, "fetch_checks", return_value=[]):
+            result = hook.check(self._bash_input("gh pr merge 42"))
+        # `allow` decision is fine; what matters is decision != "block".
+        if result is not None:
+            self.assertNotEqual(result.get("decision"), "block")
+
+    def test_admin_override_skips_empty_rollup_check(self):
+        """`--admin` short-circuits before fetch_checks — empty rollup never inspected."""
+        with mock.patch.object(hook, "fetch_checks", return_value=[]) as mock_fetch:
+            result = hook.check(self._bash_input("gh pr merge 42 --admin"))
+        self.assertIsNone(result)
+        mock_fetch.assert_not_called()
+
+    def test_non_merge_command_not_checked(self):
+        """`gh pr view` should not trigger empty-rollup logic at all."""
+        with mock.patch.object(hook, "fetch_checks", return_value=[]) as mock_fetch:
+            result = hook.check(self._bash_input("gh pr view 42"))
+        self.assertIsNone(result)
+        mock_fetch.assert_not_called()
 
 
 if __name__ == "__main__":

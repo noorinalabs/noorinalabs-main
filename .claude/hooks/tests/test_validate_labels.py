@@ -49,6 +49,34 @@ class ExtractLabelsTests(unittest.TestCase):
             ["bug"],
         )
 
+    def test_short_equals_form(self):
+        """Short-flag equals form `-l=value` — #304 fix (silent-skip pre-fix)."""
+        self.assertEqual(
+            hook.extract_labels("gh issue create -l=tech-debt"),
+            ["tech-debt"],
+        )
+
+    def test_long_equals_comma_form(self):
+        """`--label=a,b,c` — equals + comma-split combined (#304 coverage)."""
+        self.assertEqual(
+            hook.extract_labels("gh issue create --label=bug,tech-debt,p3-wave-9"),
+            ["bug", "tech-debt", "p3-wave-9"],
+        )
+
+    def test_short_equals_comma_form(self):
+        """`-l=a,b,c` — short equals + comma-split combined (#304 coverage)."""
+        self.assertEqual(
+            hook.extract_labels("gh issue create -l=bug,tech-debt"),
+            ["bug", "tech-debt"],
+        )
+
+    def test_mixed_long_equals_and_short_equals(self):
+        """`--label=a -l=b` — both equals-forms in one command (#304 coverage)."""
+        self.assertEqual(
+            hook.extract_labels("gh issue create --label=bug -l=tech-debt"),
+            ["bug", "tech-debt"],
+        )
+
     def test_multiple_flags(self):
         self.assertEqual(
             hook.extract_labels('gh issue create --label "bug" --label "tech-debt"'),
