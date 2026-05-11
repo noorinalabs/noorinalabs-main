@@ -35,11 +35,20 @@ def check(input_data: dict) -> dict | None:
                 "reason": (
                     "BLOCKED: `gh pr review` is not supported — all agents share one "
                     "GitHub user, so API-based approvals always fail.\n"
-                    "Charter § Pull Requests requires comment-based reviews instead.\n\n"
+                    "Charter § Pull Requests / § Comment-Based Reviews requires "
+                    "comment-based reviews instead.\n\n"
                     "Use `gh pr comment <PR#> --body '...'` with this format:\n"
-                    "  Requestor: <branch author name>\n"
-                    "  Requestee: <reviewer name>\n"
-                    "  RequestOrReplied: Approved | Changes Requested\n"
+                    "  Requestor: <reviewer name>      # team member POSTING the comment\n"
+                    "  Requestee: <PR author name>     # team member ADDRESSED by it\n"
+                    "  RequestOrReplied: Approved | ChangesRequested\n"
+                    "  TechDebt: none | #issue, ...\n\n"
+                    "Direction reminder (charter § Comment-Based Reviews Direction table):\n"
+                    "  Approved / ChangesRequested verdicts → Requestor=reviewer, "
+                    "Requestee=PR author.\n"
+                    "  Swapping these reproduces the W9 PR#349 cascade — "
+                    "`validate_pr_review` counts distinct Requestor values across "
+                    "Approved comments, so two reviewers both writing the PR author's "
+                    "name as Requestor collapse to 1/2.\n"
                 ),
             }
             log_pretooluse_block("block_gh_pr_review", command, result["reason"])
