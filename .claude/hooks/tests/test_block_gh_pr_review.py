@@ -74,6 +74,68 @@ class PositiveMatchTests(unittest.TestCase):
         self.assertIn("gh pr comment", result["reason"])
 
 
+class BlockedMessageDirectionTests(unittest.TestCase):
+    """Regression for #372: BLOCKED message example must NOT invert Requestor/Requestee.
+
+    Pre-fix the example said `Requestor: <branch author name>` and
+    `Requestee: <reviewer name>` — the opposite of the charter § Comment-Based
+    Reviews Direction table for Approved/ChangesRequested verdicts. An operator
+    copying the example literally reproduced the W9 PR#349 cascade
+    (validate_pr_review counts distinct Requestor values; two reviewers both
+    posting the PR author's name as Requestor → 1/2 distinct).
+    """
+
+    def _reason(self) -> str:
+        result = hook.check(_input("gh pr review 42 --approve"))
+        self.assertIsNotNone(result)
+        assert result is not None
+        return result["reason"]
+
+    def test_requestor_example_is_reviewer_not_branch_author(self):
+        reason = self._reason()
+        self.assertIn("Requestor: <reviewer name>", reason)
+        self.assertNotIn("Requestor: <branch author name>", reason)
+        self.assertNotIn("Requestor: <branch author>", reason)
+        self.assertNotIn("Requestor: <PR author", reason)
+
+    def test_requestee_example_is_pr_author_not_reviewer(self):
+        reason = self._reason()
+        self.assertIn("Requestee: <PR author name>", reason)
+        self.assertNotIn("Requestee: <reviewer name>", reason)
+        self.assertNotIn("Requestee: <reviewer>", reason)
+
+    def test_requestor_precedes_requestee_in_example(self):
+        reason = self._reason()
+        idx_r1 = reason.find("Requestor: <reviewer name>")
+        idx_r2 = reason.find("Requestee: <PR author name>")
+        self.assertGreaterEqual(idx_r1, 0)
+        self.assertGreaterEqual(idx_r2, 0)
+        self.assertLess(idx_r1, idx_r2)
+
+    def test_block_message_cites_direction_table(self):
+        """Message must reference the charter Direction table (per #372 acceptance #4)."""
+        reason = self._reason()
+        self.assertIn("Comment-Based Reviews", reason)
+        self.assertIn("Direction", reason)
+
+    def test_block_message_explains_swap_failure_mode(self):
+        """Message must include a callout naming the W9 PR#349 cascade failure mode."""
+        reason = self._reason()
+        self.assertIn("W9 PR#349", reason)
+        self.assertIn("distinct Requestor", reason)
+
+    def test_block_message_uses_canonical_verdict_strings(self):
+        """Verdict tokens prefer the canonical `ChangesRequested` (no space).
+
+        validate_pr_review.py accepts both forms (`ChangesRequested` per
+        charter line 14 and the spaced `Changes Requested` per the parser's
+        tolerance shim), but the operator-facing example should use the
+        canonical form to avoid teaching the spaced variant.
+        """
+        reason = self._reason()
+        self.assertIn("Approved | ChangesRequested", reason)
+
+
 class NegativeMatchTests(unittest.TestCase):
     """Other `gh pr <subcommand>` shapes MUST NOT be blocked."""
 
