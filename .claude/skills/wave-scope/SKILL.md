@@ -360,6 +360,69 @@ Do NOT delete the original body — copy it (or post the pre-update version as a
 
 If any step surfaced a process gap (stale memory, missing meta-issue, vague reference), include a `**Process gaps surfaced**` section so the next retro can address them.
 
+### 12.5. Validate implementer/reviewer names against per-repo rosters (#319)
+
+If the wave-scope output includes an implementer/reviewer matrix (a per-repo mapping of `implementer` / `reviewer` / `reviewer_2` to team-member names), validate every declared name against the relevant roster BEFORE `/wave-kickoff` fan-out. Pre-#319 a stale alias like "Anya Volkov" (canonical: "Anya Kowalczyk") would propagate through scope and only surface at first-spawn time — P3W7 retro recorded TWO such substitutions in `wave_7_decisions.implementer_substitutions`.
+
+**Resolution rules:**
+- Per-repo entries (`noorinalabs-deploy`, `noorinalabs-isnad-graph`, …) → child-repo roster (`<repo>/.claude/team/roster/*.md`) UNION parent roster. This lets org-level coordinators (Aino, Nadia, Wanjiku, Santiago) fill child-repo slots without duplicating roster entries.
+- Parent entries (`noorinalabs-main` or empty repo key) → parent-only roster (`.claude/team/roster/*.md`).
+- Match is case-insensitive; trailing parenthetical role suffix (`Aino Virtanen (Standards & Quality Lead)`) is stripped before comparison.
+- On miss: fuzzy-match via difflib SequenceMatcher; surface the top-3 closest matches to the operator.
+
+**Invocation:**
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+VALIDATOR="$REPO_ROOT/.claude/skills/wave-scope/validate_matrix_names.py"
+
+# The matrix JSON shape is {repo: {role: name, ...}, ...}. Build it from
+# the scope file you composed (or extract from cross-repo-status.json's
+# wave_{M}_scope tier_* entries if those have been written).
+cat > /tmp/wave-{M}-matrix.json <<'EOF'
+{
+    "noorinalabs-isnad-graph": {
+        "implementer": "Anya Kowalczyk",
+        "reviewer": "Idris Yusuf",
+        "reviewer_2": "Marisol Vega-Cruz"
+    },
+    "noorinalabs-deploy": {
+        "implementer": "Bereket Tadesse",
+        "reviewer": "Lucas Ferreira",
+        "reviewer_2": "Aino Virtanen"
+    }
+}
+EOF
+
+python3 "$VALIDATOR" /tmp/wave-{M}-matrix.json
+RC=$?
+if [ $RC -ne 0 ]; then
+    echo "STOP: resolve unresolved names before /wave-kickoff fan-out."
+    echo "  If a substitution is intentional, document it in"
+    echo "  cross-repo-status.json wave_{M}_decisions.implementer_substitutions"
+    echo "  with rationale; then update the matrix and re-run /wave-scope."
+    exit 1
+fi
+```
+
+**Acceptance:**
+- Every implementer / reviewer / reviewer_2 name in the scope matrix resolves to a canonical roster entry.
+- Unresolved names are surfaced with suggested matches.
+- Approved overrides are recorded under `wave_{M}_decisions.implementer_substitutions` in `cross-repo-status.json` with this shape:
+
+```json
+{
+    "repo": "<repo-name>",
+    "pr": "<repo>#<N>",
+    "declared": "<matrix name>",
+    "actual": "<canonical roster name>",
+    "swapped_at": "<ISO-8601 UTC>",
+    "rationale": "<why the substitution is correct>"
+}
+```
+
+**Why this lives in `/wave-scope` not `/wave-kickoff`:** Step 0 of kickoff is a pre-flight CHECKLIST that the orchestrator confirms manually. By the time kickoff runs, scope is supposed to be settled. Validating names at scope-time means the matrix shape is already correct when kickoff reads it — the orchestrator never sees a "name not in roster" surface at fan-out time, only at scope-time review.
+
 ### 13. Write reconciliation timestamp + structured bookkeeping keys to `cross-repo-status.json`
 
 This is what `/wave-kickoff` Steps 0a and 0 read to confirm the wave's scope was reconciled before kickoff AND to derive the per-repo iteration list. Write only on full success — if the run aborted at step 7 (no dispositions) or step 10 (label-churn confirmation declined), do NOT write.
