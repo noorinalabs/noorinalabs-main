@@ -238,16 +238,45 @@ Run `/ontology-rebuild` to process any files that changed during this wave. This
 
 ### 13. Annunaki error attack
 
+> **Preferred surface is `/wave-retro` Step 7.6 (P3W9 #344).** Retro is the natural moment for this audit — findings feed the retro's charter-change proposals. Wrapup retains this step as a fallback for cases where retro is delayed or skipped. The run-marker below prevents double-execution.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ALREADY_RAN=$(jq -r ".wave_${M}_annunaki_attack_ran_at // empty" "$REPO_ROOT/cross-repo-status.json")
+
+if [ -n "$ALREADY_RAN" ]; then
+  echo "Annunaki-attack: already ran at $ALREADY_RAN (via /wave-retro Step 7.6). Skipping."
+  # Continue to Step 14.
+else
+  # Proceed with the attack below; on completion write the marker.
+fi
+```
+
 Run `/annunaki-attack` to process any errors captured by the Annunaki monitor during this wave. This converts observed errors into preventative automation (hooks, skills, charter updates) before the wave closes.
 
-- If `.claude/annunaki/errors.jsonl` is empty or missing, report "Annunaki: No errors captured this wave" and skip
+- If `.claude/annunaki/errors.jsonl` is empty or missing, report "Annunaki: No errors captured this wave" and skip the attack — but still write the run-marker so retro's 7.6 doesn't re-check
 - Use the current wave label for any issues created
 - Include Annunaki-created issues and PRs in the final wave report totals
 - This step runs **before** the memory-to-automation audit so that new hooks/skills from error analysis are visible to the memory audit
+- On completion, write `wave_${M}_annunaki_attack_ran_at = <ISO-8601 UTC timestamp>` to `cross-repo-status.json`
 
 ### 14. Memory-to-automation audit
 
-Examine all memory files in the project memory directory for entries that describe behaviors, rules, or patterns that could be codified as a **hook**, **skill**, or **charter update** instead of remaining as soft memory.
+> **Preferred surface is `/wave-retro` Step 7.7 (P3W9 #344).** Retro is the natural moment for this audit — findings feed the retro's charter-change proposals and the Aino-spawned conversion issues count toward the same retro's per-engineer assessment + trust update pass. Wrapup retains this step as the canonical procedure body (referenced by retro's 7.7) and as a fallback for retro-delayed cases. The run-marker below prevents double-execution.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ALREADY_RAN=$(jq -r ".wave_${M}_memory_audit_ran_at // empty" "$REPO_ROOT/cross-repo-status.json")
+
+if [ -n "$ALREADY_RAN" ]; then
+  echo "Memory-to-automation audit: already ran at $ALREADY_RAN (via /wave-retro Step 7.7). Skipping."
+  # Continue to the rest of the wrapup.
+else
+  # Proceed with the audit below; on completion write the marker.
+fi
+```
+
+Examine all memory files in the project memory directory for entries that describe behaviors, rules, or patterns that could be codified as a **hook**, **skill**, or **charter update** instead of remaining as soft memory. On completion, write `wave_${M}_memory_audit_ran_at = <ISO-8601 UTC timestamp>` to `cross-repo-status.json`.
 
 **Process:**
 
