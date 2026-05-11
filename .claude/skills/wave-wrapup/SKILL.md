@@ -197,6 +197,48 @@ Flag any changes to:
 **Next step:** Run `/wave-retro` for full retrospective with assessments and trust updates.
 ```
 
+### 10.5. Write canonical counter keys to `cross-repo-status.json`
+
+Write the **top-level** canonical counter keys that `/wave-retro` Step 2.5 verifies. Pre-#318 these were either missing or buried under `wave_{M}_summary.*`, which forced a manual followup commit at retro (P3W7 `fb459b2`). Post-#318 the skill writes them at wrapup time so retro reads cleanly.
+
+Use the shared `upsert_status_keys.py` helper from `/wave-scope` — it does targeted text-level upsert that preserves the compact-inline shape of `cross-repo-status.json` (a naive `jq … > tmp && mv` reformats every compact line to pretty form, producing a 500-line cosmetic diff per wave — see `main#332`). The helper also validates JSON before AND after the rewrite.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+STATUS="$REPO_ROOT/cross-repo-status.json"
+UPSERT="$REPO_ROOT/.claude/skills/wave-scope/upsert_status_keys.py"
+
+# Compute the three canonical counters from the wave-wrapup report numbers.
+FINAL_PR_COUNT={count_of_merged_PRs}            # same as Step 10 "PRs: Merged"
+CHANGES_REQUESTED_CYCLES={cr_cycle_count}       # count of `ChangesRequested` verdict comments across the wave's PRs
+TOP_CONCENTRATION_PCT={highest_repo_pct}        # PRs-in-top-repo / PRs-total * 100, rounded int
+
+# Each value MUST be a self-contained JSON literal (integer here — no quotes).
+python3 "$UPSERT" "$STATUS" \
+    "wave_{M}_final_pr_count=${FINAL_PR_COUNT}" \
+    "wave_{M}_changes_requested_cycles=${CHANGES_REQUESTED_CYCLES}" \
+    "wave_{M}_top_concentration_pct=${TOP_CONCENTRATION_PCT}"
+
+# Read-back verify (memory `feedback_gh_pr_edit_silent_noop` family — any
+# jq/upsert pipeline that silently fails produces zero diff but exit 0).
+jq -r --arg m "{M}" '
+  "wave_" + $m + "_final_pr_count = " + (.["wave_" + $m + "_final_pr_count"] | tostring),
+  "wave_" + $m + "_changes_requested_cycles = " + (.["wave_" + $m + "_changes_requested_cycles"] | tostring),
+  "wave_" + $m + "_top_concentration_pct = " + (.["wave_" + $m + "_top_concentration_pct"] | tostring)
+' "$STATUS"
+```
+
+Optionally also write a richer `wave_{M}_summary` block with wave-shape detail (per-tier PR breakdown, charter-change proposals, thesis text — see P3W7 `cross-repo-status.json` for the canonical shape). Top-level keys above remain **authoritative** for `/wave-retro` Step 2.5; the summary block is a supplementary surface for retro-prose composition.
+
+**Why top-level not nested:** `/wave-retro` Step 2.5 reads via `jq -r ".wave_${M}_final_pr_count"` — a direct top-level lookup. Nesting under `wave_{M}_summary.final_pr_count` would require Step 2.5 changes per wave-counter-key, breaking the canonical-key contract. Top-level keeps the read-side simple.
+
+**Acceptance for /wave-retro Step 2.5:**
+- All three keys exist at top-level after `/wave-wrapup` completes.
+- Values match the rendered Step 10 wave report.
+- A `wave_{M}_summary` block, if also present, must not contradict the top-level values (top-level is authoritative).
+
+If a key cannot be computed (e.g., no PRs merged this wave), write the literal `0` — `/wave-retro` Step 2.5 distinguishes "0 cycles" from "key missing" and only the latter is treated as drift.
+
 ### 11. Merge to main per repo (final wave only)
 
 If this is the final wave of the phase, every repo in `wave_{M}_repos_in_scope` has its OWN `deployments/phase-{P}/wave-{M}` branch (created by `/wave-kickoff` step 1) that needs its own PR to main. This is the symmetric counterpart of the multi-repo branch creation gap (main#238).
