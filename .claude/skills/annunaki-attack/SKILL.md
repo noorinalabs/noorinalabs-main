@@ -9,7 +9,8 @@ Process the Annunaki error log, deduplicate errors, propose preventative automat
 
 ## When to run
 
-- Before `/wave-wrapup` hands off to retro (integrated into wave-wrapup step 11.5)
+- **Preferred:** during `/wave-retro` Step 7.6 — findings feed the retro's charter-change proposals (added P3W9 #344, 2026-05-11)
+- Fallback: during `/wave-wrapup` Step 13 — same run-marker (`wave_${M}_annunaki_attack_ran_at`) prevents double-execution; whichever surface runs first wins
 - Manually when the error log has accumulated enough entries to be worth processing
 - Before planning the next wave — ensures error-driven improvements are captured as issues
 
@@ -158,12 +159,15 @@ After all issues are created and fixes implemented, clear the processed errors:
 **Next step:** Issues are labeled for {wave_label} and added to the project board.
 ```
 
-## Integration with wave-wrapup
+## Integration with wave-retro / wave-wrapup
 
-This skill is called automatically as step 11.5 in `/wave-wrapup`, after the memory-to-automation audit and before the final wave report. When called from wave-wrapup:
-- Use the current wave label (already known from wrapup context)
-- If no errors to process, report "Annunaki: No errors captured this wave" and continue
-- Fixes created here are included in the wave report totals
+This skill is called from **`/wave-retro` Step 7.6** (preferred surface, added P3W9 #344) or **`/wave-wrapup` Step 13** (fallback for retro-delayed cases). Both surfaces guard the call with a `wave_${M}_annunaki_attack_ran_at` run-marker in `cross-repo-status.json` so the attack runs at most once per wave.
+
+When called from either surface:
+- Use the current wave label (already known from context)
+- If no errors to process, report "Annunaki: No errors captured this wave", **still write the run-marker**, and continue
+- Fixes created here are included in the wave report totals (wrapup) and feed Step 7 charter-change proposals (retro)
+- On completion, write `wave_${M}_annunaki_attack_ran_at = <ISO-8601 UTC timestamp>` to `cross-repo-status.json`
 
 ## What remains manual
 
