@@ -242,6 +242,47 @@ The harness enforces **one team per orchestrator session** — `TeamCreate` fail
 >
 > **Why position-first:** P2W10 surfaced four+ instances across three managers' spawn prompts where the manager-as-reviewer anti-pattern slipped through despite charter rule existing. Pattern: reviewer-naming had already happened mentally during the early-drafting pass (scope/branch/sequencing first, reviewers as a back-fill). The charter rule was correctly applied in isolated contexts but missed when embedded in a multi-section spawn prompt. Moving the rule to first-line position makes "who reviews this" a first-order architectural decision the template forces the agent to make before advancing. Discipline becomes architectural, not memorial. Co-signed by Bereket (deploy manager), Nadia Boukhari (isnad-graph + user-service manager), Marcia (landing-page manager) — each had a concrete instance during W10.
 
+### Reviewer spawn brief — throughline-watch (default, #320) <!-- promotion-target: none -->
+
+> **Every reviewer-class spawn brief MUST include a "Throughline-watch" instruction.** Reviewers are PR-scoped by primary task, but they often see cross-PR patterns that only become visible when looking at the wave from a reviewer position. Asking explicitly for throughline observations turns this latent signal into a structured surface for the wave retro's ★ summary.
+>
+> **The section MUST appear in every reviewer-class spawn brief**, regardless of whether the wave is expected to have a wave-level thesis. Single-PR waves can produce "no throughline observed, this is a standalone fix" and that is itself a useful retro signal.
+>
+> **Required template block (copy-paste verbatim into reviewer-class spawn briefs):**
+>
+> ```
+> ## Throughline-watch (in addition to PR-level review)
+>
+> As you review this PR, note any pattern that recurs across multiple PRs in
+> the wave or any wave-level structural finding that emerges from your
+> PR-level review. Surface findings explicitly at the end of your review
+> comment under a `## Throughline observations` section — do NOT bury them
+> inside TechDebt or per-line inline review.
+>
+> Typical throughline shapes (illustrative, not exhaustive):
+> - "Same root cause appears in {N} PRs across {M} repos" — convergent class
+> - "Boundary X (parent→child / hook→skill / detection→strategy) breaks
+>   repeatedly" — boundary-class
+> - "Charter rule Y is technically followed but operationally undermined
+>   by Z" — rule-vs-practice gap
+> - "Memory M would prevent class C but isn't promoted to charter/hook
+>   yet" — promotion candidate
+>
+> If you observe no throughline (single-PR wave, or finding is fully
+> PR-scoped), write: `## Throughline observations\n\nNo wave-level pattern
+> observed — this PR is a standalone fix.` The explicit no-pattern record
+> is useful retro-signal too.
+>
+> The next wave-retro `*` summary pass synthesizes throughline observations
+> across all reviewers into the wave thesis (per P3W7 demonstration:
+> 5 reviewers + 4 implementers independently arrived at the two-tier wave
+> thesis BEFORE the * spawn fired).
+> ```
+>
+> **Why default, not per-wave addition:** P3W7 added the throughline-watch instruction ad-hoc to that wave's reviewer briefs and produced a complete pre-loaded retro thesis (Idris-coined "fixture-first discipline broke at the parent→child update boundary" confirmed by 5 subsequent reviewers; Nadia's ★ spawn synthesized rather than discovered). Making this default — not memorial discipline that the orchestrator must remember to add — propagates the P3W7 win to every wave.
+>
+> **Origin:** P3W7 retro feedback log § Proposed process changes #5 (orchestrator-class). Promoted via #320.
+
 ### Orchestrator checklist when spawning an implementer
 
 Every implementer spawn prompt MUST include, **in order**:
@@ -255,6 +296,20 @@ Every implementer spawn prompt MUST include, **in order**:
 7. **Charter enforcement reminders** (2 reviewers, CI green before merge, no `--no-verify`, no global/repo git config, `/ontology-librarian` per agent).
 8. **Reporting pattern** — who they report to (usually their manager) and when (draft open, CI green, blocker, merge).
 9. **/tmp file-race discipline:** When using `--body-file` with `gh issue/pr comment` or `git commit -F`, write the file to an issue#-keyed path (e.g., `/tmp/{issue#}-{purpose}.md`) IMMEDIATELY before the gh/git call — no other tool calls between the Write and the consuming Bash. Hook `block_stale_tmp_message_file` blocks files older than 30s. P3W6 surfaced 3 such blocks in spawned-agent gh-comment flows; this discipline prevents them.
+
+### Orchestrator checklist when spawning a reviewer
+
+Every reviewer-class spawn prompt MUST include, **in order**:
+
+1. **PR + author identity** — the specific PR# and head-SHA being reviewed, the author's name (NOT the reviewer's), and the angle the reviewer is being asked to take (TPM angle, charter/QA angle, domain angle, release coordinator angle, etc.).
+2. **MANDATORY first-action** instruction to run `/ontology-librarian {topic}` — Hook 15 scans the reviewer's own transcript and blocks Edit/Write otherwise. Reviewer-class spawns don't typically Edit/Write (they post comments), but the librarian is also load-bearing for understanding what the PR touches.
+3. **Throughline-watch block** (per § Reviewer spawn brief — throughline-watch above) — copy-paste the verbatim template block. Default, not per-wave addition (#320).
+4. **`Requestor: <reviewer name>` / `Requestee: <PR author name>` / `RequestOrReplied: Approved | ChangesRequested` / `TechDebt:` format** — explicit reminder using the canonical Direction-table form (per `pull-requests.md` § Comment-Based Reviews, post-#372 / PR #375 fix). The brief should embed the verbatim "Use `gh pr comment <PR#> --body '...'` with this format:" template block to prevent W9 PR#349-style cascades from re-emerging.
+5. **`gh pr review` vs `gh pr comment` discipline** — explicit reminder NOT to use `gh pr review` (`block_gh_pr_review` enforces; spawn-brief mention prevents the trip).
+6. **Read-the-diff-at-HEAD discipline** — `gh api repos/.../contents/<path>?ref=<head_sha>` not local clone (per `pull-requests.md` § Origin > Local Clone for "Still-Has-X" File-Content Claims).
+7. **Pre-enumeration discipline** — `grep -c` per file then sum, never `| head -N` (per memory `feedback_no_head_in_surface_enumeration`).
+8. **Verdict literal-string requirements** — `RequestOrReplied: Approved` (or `ChangesRequested`), NOT `Reply`. `validate_pr_review` counts Approved-verdict comments only; Reply doesn't gate-count (per memory `feedback_validate_pr_review_approved_not_reply`).
+9. **Reporting pattern** — who to report verdict + literal-strings-confirmation to (typically team-lead or the manager who requested the review).
 
 ### Origin
 
