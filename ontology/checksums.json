@@ -170,10 +170,10 @@
       "resolved_at": "2026-05-06T00:59:20.040752+00:00"
     },
     ".gitignore": {
-      "last_tracked": "190721c8bc9b74b883f33f6daba0ad4432bed3ede48a119788884b0b188ee9ee",
-      "last_resolved": "190721c8bc9b74b883f33f6daba0ad4432bed3ede48a119788884b0b188ee9ee",
-      "tracked_at": "2026-05-08T20:53:45.852247+00:00",
-      "resolved_at": "2026-05-08T20:54:11.368739Z"
+      "last_resolved": "99a48dfddef755ee0af95d7c44b8cc62d5b74a8cda39be8977e236538a4f1b35",
+      "last_tracked": "99a48dfddef755ee0af95d7c44b8cc62d5b74a8cda39be8977e236538a4f1b35",
+      "resolved_at": "2026-05-11T01:24:19.842478+00:00",
+      "tracked_at": "2026-05-11T01:24:19.842478+00:00"
     },
     ".pre-commit-config.yaml": {
       "last_resolved": "e5cb514b9a22f37b80adb4d74896cef8e9d2768f0f42ae3f3a29001efd3ae615",
@@ -1056,6 +1056,12 @@
       "last_resolved": "",
       "tracked_at": "2026-05-10T14:40:22.639809+00:00",
       "resolved_at": ""
+    },
+    ".claude/skills/file-bug/SKILL.md": {
+      "last_resolved": "0e8e6660e3a6691aa4835428e39d39f00432effdfd6e39fb5f11205ffbbe391f",
+      "last_tracked": "0e8e6660e3a6691aa4835428e39d39f00432effdfd6e39fb5f11205ffbbe391f",
+      "resolved_at": "2026-05-11T01:24:19.842478+00:00",
+      "tracked_at": "2026-05-11T01:24:19.842478+00:00"
     }
   },
   "last_cleanup": {

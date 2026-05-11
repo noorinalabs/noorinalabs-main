@@ -39,6 +39,9 @@ temp/
 # Scratch — ephemeral working drafts (issue bodies, audit scripts, etc.)
 .claude/scratch/
 
+# /file-bug skill telemetry log (#357 — append-only, local-only, queried by /wave-retro)
+.claude/.file-bug-log.jsonl
+
 # Python lockfile for the virtual parent project (no real deps; auto-regen)
 /uv.lock
 

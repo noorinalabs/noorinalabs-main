@@ -197,6 +197,55 @@ Per `CLAUDE.md § Bug Report Workflow`:
 2. **Add to project board** — `gh project item-add 2 --owner noorinalabs --url <issue-url>`.
 3. **If multi-layer:** repeat steps 5-6 for each sibling issue, then update each issue's `## Layer siblings` section with the actual issue numbers (since they only become known after creation).
 
+### 7. Telemetry append (every invocation)
+
+Append a single JSONL line per `/file-bug` invocation to `.claude/.file-bug-log.jsonl` (gitignored). Captures the Pass A/B/C outcome and the disposition (filed-new, commented-existing, etc.) so aggregate signal is queryable without re-deriving from issue-body prose.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+LOG="$REPO_ROOT/.claude/.file-bug-log.jsonl"
+
+# Build the record from your in-skill state. Pass values come from each Pass's
+# outcome (the prose summary in Step 8 already encodes them).
+TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+REPO_FULL="noorinalabs/<repo>"
+PASS_A="<STRONG_DUP|WEAK_DUP|NO_MATCH>"       # Step 2 outcome
+PASS_B="<COMMENTED_ON|NO_MATCH|SKIPPED>"      # Step 3 outcome (SKIPPED if A intercepted)
+PASS_C="<SINGLE_LAYER|MULTI_LAYER_N|SKIPPED>" # Step 4 outcome (SKIPPED if A/B intercepted)
+DISPOSITION="<FILED_NEW|FILED_MULTIPLE|COMMENTED_EXISTING|NOT_FILED>"
+# Issue numbers as a JSON array: the new issue(s) filed, OR the existing issue
+# you commented on, OR empty array if nothing was created/touched.
+ISSUE_NUMBERS_JSON='[362]'   # or '[]' or '[362,363,364]' for multi-layer
+
+jq -c -n \
+  --arg ts "$TS" \
+  --arg repo "$REPO_FULL" \
+  --arg a "$PASS_A" \
+  --arg b "$PASS_B" \
+  --arg c "$PASS_C" \
+  --arg d "$DISPOSITION" \
+  --argjson nums "$ISSUE_NUMBERS_JSON" \
+  '{ts:$ts, repo:$repo, pass_a:$a, pass_b:$b, pass_c:$c, disposition:$d, issue_numbers:$nums}' \
+  >> "$LOG"
+```
+
+The record is append-only — no rewrites, no per-issue back-references. Each invocation produces exactly one line, regardless of whether 0 / 1 / N issues were created.
+
+Required state values (closed enums — keep stable so retro queries don't drift):
+
+| Field | Values |
+|---|---|
+| `pass_a` | `STRONG_DUP`, `WEAK_DUP`, `NO_MATCH` |
+| `pass_b` | `COMMENTED_ON`, `NO_MATCH`, `SKIPPED` |
+| `pass_c` | `SINGLE_LAYER`, `MULTI_LAYER_2`, `MULTI_LAYER_3`, …, `SKIPPED` |
+| `disposition` | `FILED_NEW`, `FILED_MULTIPLE`, `COMMENTED_EXISTING`, `NOT_FILED` |
+
+If you EXIT at Pass A on STRONG dup: `pass_a=STRONG_DUP`, `pass_b=SKIPPED`, `pass_c=SKIPPED`, `disposition=COMMENTED_EXISTING`, `issue_numbers=[<the existing one>]`.
+
+If you comment evidence on a rationalization issue at Pass B: `pass_a=NO_MATCH`, `pass_b=COMMENTED_ON`, `pass_c=SKIPPED`, `disposition=COMMENTED_EXISTING`.
+
+If you file N siblings at Pass C: `disposition=FILED_MULTIPLE`, `pass_c=MULTI_LAYER_N`, `issue_numbers=[<all N>]`.
+
 ## Output to user
 
 Present a structured summary:
@@ -223,3 +272,45 @@ If Pass A or B intercepted the file (no new issue created), state that clearly s
 - **Acceptance criteria authorship** — domain-specific, operator-authored.
 
 The skill encodes the discipline; it does not replace the judgment.
+
+## Reporting
+
+Aggregate signal lives in `.claude/.file-bug-log.jsonl` (gitignored, append-only). Query directly with `jq -s` — no separate reporting skill is required.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+LOG="$REPO_ROOT/.claude/.file-bug-log.jsonl"
+
+# Total invocations this wave (or all-time if no time filter)
+jq -s 'length' "$LOG"
+
+# Pass A intercept rate — would-have-duped saves
+jq -s '[.[] | select(.pass_a == "STRONG_DUP")] | length' "$LOG"
+
+# Pass B intercept rate — drift-evidence-on-existing
+jq -s '[.[] | select(.pass_b == "COMMENTED_ON")] | length' "$LOG"
+
+# Pass C multi-layer preservation — issues that would have been collapsed
+# by Pass-A-alone but were correctly split by Pass C
+jq -s '[.[] | select(.pass_c | startswith("MULTI_LAYER_"))] | length' "$LOG"
+
+# Per-repo dup-attempt rate
+jq -s 'group_by(.repo) | map({
+  repo: .[0].repo,
+  total: length,
+  strong_dup: ([.[] | select(.pass_a == "STRONG_DUP")] | length),
+  multi_layer: ([.[] | select(.pass_c | startswith("MULTI_LAYER_"))] | length)
+})' "$LOG"
+
+# This-wave only (filter by ISO date range)
+WAVE_START="2026-05-10T17:55:00Z"
+jq -s --arg s "$WAVE_START" '[.[] | select(.ts >= $s)] | {total: length,
+  strong_dup: ([.[] | select(.pass_a == "STRONG_DUP")] | length),
+  pass_b_commented: ([.[] | select(.pass_b == "COMMENTED_ON")] | length),
+  multi_layer: ([.[] | select(.pass_c | startswith("MULTI_LAYER_"))] | length),
+  filed_new: ([.[] | select(.disposition == "FILED_NEW")] | length),
+  filed_multiple: ([.[] | select(.disposition == "FILED_MULTIPLE")] | length)
+}' "$LOG"
+```
+
+`/wave-retro` Step 7.7 (memory-to-automation audit) should cite the wave-scoped totals from the last recipe in its skill-effectiveness summary, starting with the first retro after this PR lands.
