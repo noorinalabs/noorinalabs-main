@@ -32,12 +32,65 @@ import sys
 from pathlib import Path
 
 
+def _find_value_end(text: str, opener_match_end: int) -> int:
+    """Given the regex-match end of a top-level key:value opener line,
+    return the position immediately AFTER that key's value terminates
+    (including trailing `,` if present).
+
+    For a single-line value (line ends with `,` or `]` or `}` inline),
+    `opener_match_end` is already past the value — returned as-is.
+
+    For a multi-line value (line ends with `{` or `[`), scans forward
+    tracking bracket depth and JSON string-escape state until depth
+    returns to 0, then optionally consumes a trailing `,`.
+
+    This is the fix for main#332: the prior implementation treated
+    every wave_N_* sibling-finder match as the value's end position,
+    which inserted INSIDE multi-line arrays/objects (e.g., wave_8_work
+    or wave_8_carry_forward in the P3W8 reproducer).
+    """
+    line_start = text.rfind("\n", 0, opener_match_end) + 1
+    line_text = text[line_start:opener_match_end].rstrip()
+    if not line_text.endswith(("[", "{")):
+        return opener_match_end
+
+    depth = 1
+    in_string = False
+    escape = False
+    pos = opener_match_end
+    while pos < len(text):
+        c = text[pos]
+        if escape:
+            escape = False
+        elif c == "\\" and in_string:
+            escape = True
+        elif c == '"':
+            in_string = not in_string
+        elif not in_string:
+            if c in "{[":
+                depth += 1
+            elif c in "}]":
+                depth -= 1
+                if depth == 0:
+                    end = pos + 1
+                    if end < len(text) and text[end] == ",":
+                        end += 1
+                    return end
+        pos += 1
+    raise ValueError(f"unterminated multi-line value starting at position {opener_match_end}")
+
+
 def upsert_top_level_key(text: str, key: str, json_value: str) -> str:
     """Replace `"<key>": ...,` line in place, or insert a new line if absent.
 
-    Insertion point: after the last existing line whose top-level key matches
+    Insertion point: after the last existing key whose top-level name matches
     `wave_<N>_*` for the same wave number embedded in `key` (best-effort sibling
-    grouping). Falls back to inserting right after the opening `{` line.
+    grouping). Handles multi-line array/object siblings correctly — insertion
+    is placed AFTER the sibling's structural close, not after the opening
+    line (main#332 fix).
+
+    Falls back to inserting right after the opening `{` line if no sibling
+    exists.
     """
     line_re = re.compile(r'^(  )"' + re.escape(key) + r'":\s.*?,?\s*$', re.MULTILINE)
     new_line = f'  "{key}": {json_value},'
@@ -60,7 +113,17 @@ def upsert_top_level_key(text: str, key: str, json_value: str) -> str:
         siblings = list(sibling_re.finditer(text))
         if siblings:
             last = siblings[-1]
-            return text[: last.end()] + "\n" + new_line + text[last.end() :]
+            value_end = _find_value_end(text, last.end())
+            # If the previous sibling was the JSON-final key (no trailing
+            # comma after its value), we must add a comma to it AND drop
+            # the trailing comma from our new line so the new key becomes
+            # the new last. Otherwise we'd emit `prev_key: prev_value\n
+            # new_key: new_value,\n}` which is missing the comma between
+            # the two existing pairs.
+            prev_has_trailing_comma = value_end > 0 and text[value_end - 1] == ","
+            if prev_has_trailing_comma:
+                return text[:value_end] + "\n" + new_line + text[value_end:]
+            return text[:value_end] + "," + "\n" + new_line.rstrip(",") + text[value_end:]
 
     open_brace = text.find("{\n")
     if open_brace < 0:
@@ -95,7 +158,19 @@ def main(argv: list[str]) -> int:
         text = upsert_top_level_key(text, key, json_value)
         parsed[key] = decoded
 
-    reparsed = json.loads(text)
+    try:
+        reparsed = json.loads(text)
+    except json.JSONDecodeError as exc:
+        print(
+            f"ERROR: text-level upsert produced invalid JSON: {exc}\n"
+            "  This usually means the helper's sibling-finder mis-located\n"
+            "  the insertion point inside a multi-line array/object value\n"
+            "  (main#332 reproducer). File the failing input as an issue\n"
+            "  with the offending key=value upsert command.",
+            file=sys.stderr,
+        )
+        return 1
+
     if reparsed != parsed:
         print(
             "ERROR: text-level upsert diverged from logical upsert; aborting write",
