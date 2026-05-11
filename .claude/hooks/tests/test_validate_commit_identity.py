@@ -376,7 +376,9 @@ class ParseFailureFailClosedTests(unittest.TestCase):
         )
         assert result is not None
         self.assertEqual(result["decision"], "block")
-        self.assertIn("shlex parsing", result["reason"])
+        # Reason must indicate parse failure and actionable guidance
+        # (message updated in #287 to be more precise than "shlex parsing").
+        self.assertIn("unbalanced quotes", result["reason"])
 
     def test_unbalanced_quote_without_commit_allows(self):
         """Parse failure on a non-commit command → allow (no commit to validate)."""

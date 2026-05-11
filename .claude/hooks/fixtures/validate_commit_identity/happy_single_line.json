@@ -1,0 +1,5 @@
+{
+  "description": "Happy path: single-line git commit with quoted -c flags",
+  "command": "git -c user.name=\"Aino Virtanen\" -c user.email=\"parametrization+Aino.Virtanen@gmail.com\" commit -m \"fix: straightforward single-line commit\"",
+  "expect": "allow"
+}

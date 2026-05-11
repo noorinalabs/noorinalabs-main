@@ -1,0 +1,5 @@
+{
+  "description": "Adjacent shape: -m with $(cat <<'EOF' ... EOF) command substitution (feedback_heredoc_in_git_commit)",
+  "command": "git -c user.name=\"Aino Virtanen\" -c user.email=\"parametrization+Aino.Virtanen@gmail.com\" commit -m \"$(cat <<'EOF'\nmulti\nline\nmessage\nEOF\n)\"",
+  "expect": "allow"
+}

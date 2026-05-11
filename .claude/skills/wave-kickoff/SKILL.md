@@ -107,8 +107,11 @@ for R in $WAVE_REPOS_IN_SCOPE; do
     BRANCH_STATUS[$R]="error:cannot-read-main"; continue;
   }
 
-  # Probe existing branch
+  # Probe existing branch. gh api returns the raw 404 JSON body when the ref is absent,
+  # which --jq passes through unchanged (non-40-hex). Guard with shape validator so a
+  # missing branch yields EXISTING_SHA="" rather than the error body. (live-trigger: e906e135)
   EXISTING_SHA=$(gh api "repos/noorinalabs/$R/git/refs/heads/$BRANCH" --jq '.object.sha' 2>/dev/null || true)
+  [[ "$EXISTING_SHA" =~ ^[0-9a-f]{40}$ ]] || EXISTING_SHA=""
 
   if [ -n "$EXISTING_SHA" ]; then
     BRANCH_SHA[$R]="$EXISTING_SHA"
