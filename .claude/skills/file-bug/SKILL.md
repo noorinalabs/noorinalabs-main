@@ -57,7 +57,11 @@ For cross-repo bugs (deploy chain, CSP, auth, ontology), search BOTH the symptom
 - CSP issues may be filed in `noorinalabs-isnad-graph` OR `noorinalabs-design-system`.
 - Hook drift may be filed in `noorinalabs-main` OR the affected child repo.
 
-Read the matches. Score each as:
+Read the matches.
+
+> **Origin > local clone**: when evaluating file-content claims in a matched issue (e.g., "file X still exists at path Y", "config Z has value W"), fetch via `gh api repos/<owner>/<repo>/contents/<path>?ref=<head_sha>` — NOT the local clone. Local main may lag origin, especially during waves where work lands on a wave branch first. Charter `pull-requests.md § Origin > Local Clone for "Still-Has-X" File-Content Claims` (promoted from `feedback_origin_over_local_for_still_has_claims.md`, Bereket→Lucas-87/PR #181 2026-04-28).
+
+Score each as:
 
 | Score | Meaning | Action |
 |---|---|---|
