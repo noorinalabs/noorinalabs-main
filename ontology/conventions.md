@@ -159,6 +159,7 @@ Existing 3-digit ADRs are not merge-blockers; renames are mechanical and reversi
 | `validate_labels.py` | PreToolUse (Bash) | Verify labels exist before applying to issues |
 | `validate_lockfile_paths.py` | PreToolUse (Bash) | Block commits with absolute lockfile paths |
 | `validate_pr_review.py` | PreToolUse (Bash) | Enforce charter review comment format |
+| `validate_wave_label_evidence.py` | PreToolUse (Bash) | Verify cited paths at origin before applying p{N}-wave-{M} labels |
 | `validate_branch_freshness.py` | PreToolUse (Bash) | Warn if branch is behind origin |
 | `validate_vps_host.py` | PreToolUse (Bash) | Block SSH to non-approved VPS hosts |
 | `warn_ghcr_image.py` | PreToolUse (Bash) | Warn before pushing GHCR images |

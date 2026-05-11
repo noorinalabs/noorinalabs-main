@@ -32,10 +32,10 @@
       "tracked_at": "2026-04-24T21:39:57.857444+00:00"
     },
     ".claude/hooks/dispatcher.py": {
-      "last_resolved": "f550dd83a45a65b26a26193c2215b13d6196c3118ccf6437141009cc29bcca54",
-      "last_tracked": "f550dd83a45a65b26a26193c2215b13d6196c3118ccf6437141009cc29bcca54",
-      "resolved_at": "2026-04-17T02:37:52.367305+00:00",
-      "tracked_at": "2026-04-17T01:04:35.138954+00:00"
+      "last_resolved": "6b77b8cac02b462859bc71618e0d7263b7643d54ff5c1f0ca078f366e9df75aa",
+      "last_tracked": "6b77b8cac02b462859bc71618e0d7263b7643d54ff5c1f0ca078f366e9df75aa",
+      "resolved_at": "2026-05-11T01:41:41.840576+00:00",
+      "tracked_at": "2026-05-11T01:41:41.840576+00:00"
     },
     ".claude/hooks/enforce_ontology_context.py": {
       "last_resolved": "699674ce3bc845ed5b791655cfe0182d27137993c09564c022f84ea1effdf65d",
@@ -140,10 +140,10 @@
       "resolved_at": "2026-05-06T01:11:01.420649+00:00"
     },
     ".claude/team/charter/hooks.md": {
-      "last_resolved": "518829629de66db1d14abc8d37c32703dfee4bd42ebeb3c651b7afe2946232c7",
-      "last_tracked": "518829629de66db1d14abc8d37c32703dfee4bd42ebeb3c651b7afe2946232c7",
-      "resolved_at": "2026-04-23T00:07:17.600045+00:00",
-      "tracked_at": "2026-04-22T23:03:25.764007+00:00"
+      "last_resolved": "6186be618f7580ee5cdc2af2682d1bef385ca54645025ce82f9ebdf38c127a01",
+      "last_tracked": "6186be618f7580ee5cdc2af2682d1bef385ca54645025ce82f9ebdf38c127a01",
+      "resolved_at": "2026-05-11T01:41:41.840576+00:00",
+      "tracked_at": "2026-05-11T01:41:41.840576+00:00"
     },
     ".claude/team/charter/issues.md": {
       "last_resolved": "60744ea8009688aa75481b9d908968fe3fc8162c597c04889635dc603140da95",
@@ -464,10 +464,10 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "ontology/conventions.md": {
-      "last_resolved": "1aa2056252eca54b37e5186cf688f616800e933336a12c1f7349e59bda0371a5",
-      "last_tracked": "1aa2056252eca54b37e5186cf688f616800e933336a12c1f7349e59bda0371a5",
-      "resolved_at": "2026-05-11T01:13:02.983312+00:00",
-      "tracked_at": "2026-05-11T01:13:02.983312+00:00"
+      "last_resolved": "42e555996873dd1db40c6ffb1413ef249308ca270c85a1168753dc6088d39064",
+      "last_tracked": "42e555996873dd1db40c6ffb1413ef249308ca270c85a1168753dc6088d39064",
+      "resolved_at": "2026-05-11T01:41:41.840576+00:00",
+      "tracked_at": "2026-05-11T01:41:41.840576+00:00"
     },
     "ontology/domain.yaml": {
       "last_resolved": "6fedad509f80b9570d0385fb5759e861d8b6f7b219ecc425b8dd472173ca536c",
@@ -1068,6 +1068,12 @@
       "last_tracked": "5c72e04f279df916c5257fb5c884ad50127b908cebbb8b280b0d0f990da3c7dd",
       "resolved_at": "2026-05-11T01:29:58.147825+00:00",
       "tracked_at": "2026-05-11T01:29:58.147825+00:00"
+    },
+    ".claude/hooks/validate_wave_label_evidence.py": {
+      "last_resolved": "4ffe18574d54b6ae624373d2203aa699a1a7a841a5abbfeae1d44605bb669a0d",
+      "last_tracked": "4ffe18574d54b6ae624373d2203aa699a1a7a841a5abbfeae1d44605bb669a0d",
+      "resolved_at": "2026-05-11T01:41:41.840576+00:00",
+      "tracked_at": "2026-05-11T01:41:41.840576+00:00"
     }
   },
   "last_cleanup": {
