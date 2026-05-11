@@ -27,7 +27,11 @@ Before invoking, the user provides:
 - `{P}` — phase number for the next wave (e.g. `3`)
 - `{M}` — wave number for the next wave (e.g. `5`)
 
-The skill expects the next-wave **meta-issue** to already exist (drafted at the prior retro or before). If it does not, STOP and ask the user to create it first — `/wave-scope` reconciles a meta-issue, it does not author one.
+The skill **either reconciles or authors** the next-wave meta-issue:
+- If it already exists (drafted at the prior retro or before), Step 3 reads it and Step 11 refreshes the body.
+- If it does not exist, Step 3 drafts a stub body containing the owner-set theme + carry-forwards + must-includes, files it, and proceeds. Step 11 then refreshes the body with the post-disposition structured scope, identical to the existing-meta path.
+
+This was changed 2026-05-10 (P3W9 owner directive): `/wave-retro` does not currently author the next-wave meta as a guaranteed deliverable, so making `/wave-scope` STOP on missing-meta produced a chicken-and-egg gap. Authoring a stub here is cheap and the body is fully refreshed in Step 11 anyway.
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -92,9 +96,9 @@ For each match, read the file and extract the issue references. Memory naming co
 
 If a referenced issue ID does not parse to a `repo#N` shape, surface to the user before proceeding — memories with vague references are a process gap that should be fixed at the source.
 
-### 3. Read next-wave meta-issue → declared scope
+### 3. Locate-or-author next-wave meta-issue → declared scope
 
-The meta-issue body + comments are the canonical declared scope.
+The meta-issue body + comments are the canonical declared scope. If no meta-issue exists yet, draft a stub body and file it — see § 0 for rationale.
 
 ```bash
 # Find the meta-issue. Canonical pattern: title contains "Phase {P} Wave {M}" and is in noorinalabs-main.
@@ -103,14 +107,48 @@ META_ISSUE=$(gh issue list --repo noorinalabs/noorinalabs-main \
     --json number,title --jq '.[0].number')
 
 if [ -z "$META_ISSUE" ] || [ "$META_ISSUE" = "null" ]; then
-    echo "ERROR: no meta-issue found for Phase {P} Wave {M}. Create one before running /wave-scope."
-    exit 1
+    # No meta-issue — author a stub. Body is full-refreshed in Step 11 after dispositions.
+    # Include the owner-set theme (§ 0.5 Gate B) so the file passes the ## Theme heading check.
+    cat > /tmp/wavescope-{M}-meta-stub.md <<EOF
+## Theme
+
+${WAVE_THEME}
+
+## Scope
+
+Reconciled by /wave-scope on $(date -u +%Y-%m-%d). Initial declared scope, carry-forwards, and must-includes folded in below; full structured scope written by Step 11.
+
+## Carry-forwards from prior phase work
+
+(populated by /wave-scope from \`phase_{P}_carry_forwards\` + retro free-text — Step 1 output)
+
+## Memory must-includes
+
+(populated by /wave-scope from project memory — Step 2 output; "(none filed)" when absent)
+
+## References
+
+- Phase plan: \`.claude/team/phases/phase-{P}.md\`
+- Owner directive: this session's \`/phase-review\` and \`/wave-scope\`
+EOF
+    META_URL=$(gh issue create \
+        --repo noorinalabs/noorinalabs-main \
+        --title "Phase {P} Wave {M} — ${WAVE_THEME_SHORT}" \
+        --body-file /tmp/wavescope-{M}-meta-stub.md \
+        --label "meta-issue" --label "process" --label "phase-{P}" \
+        --assignee "@me")
+    META_ISSUE=$(echo "$META_URL" | grep -oE '[0-9]+$')
+    echo "  authored W{M} meta-issue: noorinalabs-main#${META_ISSUE}"
 fi
 
 # Pull body + every comment (declared scope can land in either)
 gh issue view "$META_ISSUE" --repo noorinalabs/noorinalabs-main --json body,comments \
     --jq '.body, (.comments[] | .body)' > /tmp/wavescope-{M}-declared.txt
 ```
+
+**Meta-issue label set:** `meta-issue, process, phase-{P}` only. Do NOT add `p{P}-wave-{M}` to the meta-issue itself — `phase-{P}` is the canonical bucket label for meta-issues per the W8 precedent (#331). The wave label `p{P}-wave-{M}` is reserved for in-scope work items, not the meta.
+
+**WAVE_THEME and WAVE_THEME_SHORT** are environment variables the orchestrator sets after Gate B's theme dialogue. `WAVE_THEME` is the full theme string written to `cross-repo-status.json`. `WAVE_THEME_SHORT` is a ~50-char title-friendly version for the issue title.
 
 Extract every `repo#N` reference from the body and comments. Use a permissive regex to catch the common shapes:
 

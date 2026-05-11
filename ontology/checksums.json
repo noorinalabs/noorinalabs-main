@@ -668,10 +668,10 @@
       "resolved_at": "2026-05-06T01:11:01.420649+00:00"
     },
     ".claude/team/phases/phase-3.md": {
-      "last_tracked": "8521775b8ab8386c981d3181ef66e6b40a6aa8c7a0d17e9d06681df6289f7011",
-      "last_resolved": "8521775b8ab8386c981d3181ef66e6b40a6aa8c7a0d17e9d06681df6289f7011",
-      "tracked_at": "2026-05-08T21:37:48.412517+00:00",
-      "resolved_at": "2026-05-08T23:19:16.069020+00:00"
+      "last_tracked": "e85f396dfb7f7c418fad4d5f6a53b03ed0fdc9aa5ebe1b6e46c196ad7009b46f",
+      "last_resolved": "e85f396dfb7f7c418fad4d5f6a53b03ed0fdc9aa5ebe1b6e46c196ad7009b46f",
+      "tracked_at": "2026-05-10T17:18:38.398792+00:00",
+      "resolved_at": "2026-05-10T18:36:01.378480+00:00"
     },
     ".claude/skills/phase-review/SKILL.md": {
       "last_tracked": "861091d903f2ece1c784c53846881bc9ea802542b39acbb8033c1f670aa1f6a1",
@@ -1053,9 +1053,9 @@
     },
     ".claude/scratch/wave-merge-bodies/ontology-commit.py": {
       "last_tracked": "54fccbaa40c96a7d38e4aef311866228cc0829130c077fe9cf9bcb1eb5e73740",
-      "last_resolved": "",
+      "last_resolved": "54fccbaa40c96a7d38e4aef311866228cc0829130c077fe9cf9bcb1eb5e73740",
       "tracked_at": "2026-05-10T14:40:22.639809+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-05-10T16:15:15.921230+00:00"
     },
     ".claude/skills/file-bug/SKILL.md": {
       "last_resolved": "0e8e6660e3a6691aa4835428e39d39f00432effdfd6e39fb5f11205ffbbe391f",

@@ -127,24 +127,25 @@ def _detect_target_roster(command: str) -> dict[str, str] | None:
     return merged or None
 
 
-def _find_commit_segment(command: str) -> list[str] | None:
-    """Find the `git ... commit ...` segment in `command`. None if absent.
+_PARSE_FAILURE = object()  # sentinel: tokenize returned None
+
+
+def _find_commit_segment(command: str) -> list[str] | None | object:
+    """Find the `git ... commit ...` segment in `command`.
+
+    Returns:
+      - list[str]      — the commit segment tokens (allow identity validation)
+      - None           — tokenize succeeded but no commit subcommand found
+      - _PARSE_FAILURE — tokenize failed (unbalanced quotes); caller must use
+                         regex fallback
 
     Strips heredocs first so a heredoc body containing the literal phrase
-    "git commit" cannot be confused with a real invocation. Tokenizes the
-    cleaned command with shlex, walks each pipeline segment, and returns
-    the first segment whose `find_git_subcommand` resolves to subcommand
-    `commit`.
-
-    Returns None on parse failure OR when there is no commit. The caller
-    distinguishes the two via `_looks_like_git_commit` so a malformed-but-
-    suspicious command falls through to a fail-closed regex path instead
-    of being silently allowed (per `_shell_parse.tokenize` contract).
+    "git commit" cannot be confused with a real invocation.
     """
     cleaned = strip_heredocs(command)
     tokens = tokenize(cleaned)
     if tokens is None:
-        return None
+        return _PARSE_FAILURE
     for segment in iter_command_segments(tokens):
         decoded = find_git_subcommand(segment)
         if decoded is None:
@@ -156,11 +157,12 @@ def _find_commit_segment(command: str) -> list[str] | None:
 
 
 # Regex-only heuristic for the parse-failure fallback: did the command,
-# after stripping heredocs, contain `git ... commit` at command position?
-# Anchored at start-of-line or after a shell operator. Liberal on purpose
-# — when shlex fails we want to err on the side of validating identity.
+# after stripping heredocs, contain `git commit` as a standalone subcommand
+# (not embedded in a path/branch-name)?  Anchored at start-of-line or after a
+# shell operator. Requires `commit` to appear as a word-boundary token
+# separated from options by whitespace (not inside a slash-separated path).
 _COMMIT_FALLBACK_RE = re.compile(
-    r"(?:^|[;&|]\s*|&&\s*|\|\|\s*)\s*git\b[^;&|]*?\bcommit\b",
+    r"(?:^|[;&|]\s*|&&\s*|\|\|\s*)\s*git\b[^;&|]*?(?<!\S)\bcommit\b(?!\S*/)",
     re.MULTILINE,
 )
 
@@ -187,12 +189,10 @@ def check(input_data: dict) -> dict | None:
     command = input_data.get("tool_input", {}).get("command", "")
 
     commit_segment = _find_commit_segment(command)
-    if commit_segment is None:
-        # Parse-failure fail-closed path: shlex couldn't tokenize, but the
-        # command LOOKS like it contains a `git commit`. Block with a
-        # parse-failure-specific message so the operator can fix the quoting
-        # and retry. Allowing here would create a hole — paste a malformed
-        # `git commit` and bypass identity validation.
+    if commit_segment is _PARSE_FAILURE:
+        # tokenize() returned None — shlex could not parse the command. Use
+        # the regex fallback: if it looks like a git commit, block (fail-closed);
+        # otherwise allow (fail-open for non-commit commands).
         if not _looks_like_git_commit(command):
             return None
         result = {
@@ -212,6 +212,11 @@ def check(input_data: dict) -> dict | None:
         }
         log_pretooluse_block("validate_commit_identity", command, result["reason"])
         return result
+    if commit_segment is None:
+        # Tokenize succeeded but no git commit subcommand was found.
+        return None
+
+    assert isinstance(commit_segment, list)  # _PARSE_FAILURE and None already handled above
 
     # Cross-repo support: if the command `cd`s into another repo, load that
     # repo's roster instead of the local one.

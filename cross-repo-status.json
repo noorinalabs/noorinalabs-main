@@ -1,4 +1,72 @@
 {
+  "wave_9_scope_reconciled_at": "2026-05-10T17:45:25Z",
+  "wave_9_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-isnad-graph",
+    "noorinalabs-user-service",
+    "noorinalabs-deploy",
+    "noorinalabs-design-system",
+    "noorinalabs-landing-page",
+    "noorinalabs-data-acquisition"
+  ],
+  "wave_9_meta_issue": 347,
+  "wave_9_scope": {
+    "theme": "Tech-debt reduction \u2014 phase-within-phase, all-debt-labeled, fix-what-fits, deploy gated on ratio (criterion #9)",
+    "scope_size_at_reconcile": 166,
+    "per_repo_open_tech_debt": {
+      "noorinalabs-deploy": 60,
+      "noorinalabs-main": 51,
+      "noorinalabs-isnad-graph": 28,
+      "noorinalabs-user-service": 12,
+      "noorinalabs-landing-page": 9,
+      "noorinalabs-design-system": 3,
+      "noorinalabs-data-acquisition": 3
+    },
+    "carry_forwards": [
+      "noorinalabs-deploy#151",
+      "noorinalabs-user-service#84"
+    ],
+    "must_includes": [],
+    "deploy_track_paused": true,
+    "directional_kpi": "phase-3 exit-criterion #9 (<10% cumulative-open tech-debt)"
+  },
+  "wave_9_scope_reconciliation_note": "W9 = pure tech-debt reduction across 7 repos. 166 open tech-debt at scope time, all labeled p3-wave-9 (143 newly applied + 23 pre-existing). May span W9+W10+W11. Owner directive 2026-05-10. Phase exit gate currently 72% cumulative open vs 10% target.",
+  "wave_9_kicked_off_at": "2026-05-10T17:55:00Z",
+  "wave_9_active": true,
+  "wave_9_branches": {
+    "branch": "deployments/phase-3/wave-9",
+    "created_at": "2026-05-10T17:55:00Z",
+    "repos": {
+      "noorinalabs-main": {
+        "sha": "4465ac29",
+        "status": "created"
+      },
+      "noorinalabs-isnad-graph": {
+        "sha": "d4eb65a6",
+        "status": "created"
+      },
+      "noorinalabs-user-service": {
+        "sha": "76ff877c",
+        "status": "created"
+      },
+      "noorinalabs-deploy": {
+        "sha": "1697f5e7",
+        "status": "created"
+      },
+      "noorinalabs-design-system": {
+        "sha": "73f82367",
+        "status": "created"
+      },
+      "noorinalabs-landing-page": {
+        "sha": "4232f3f5",
+        "status": "created"
+      },
+      "noorinalabs-data-acquisition": {
+        "sha": "5ee1c1c8",
+        "status": "created"
+      }
+    }
+  },
   "wave_8_scope_reconciled_at": "2026-05-08T22:10:19Z",
   "wave_8_repos_in_scope": [
     "noorinalabs-main",
@@ -1380,7 +1448,7 @@
       ]
     }
   },
-  "wave_9_work": {
+  "phase_2_wave_9_work": {
     "theme": "Data pipeline + user-service cutover + deploy infra",
     "status": "complete \u2014 retro merged 2026-04-23 (#193)",
     "retro_summary": "P2W9 retro: 0 AUTO / 0 DECIDE promotions, charter amendments on Cross-Contract PRs + validate_pr_ci_status + Load-Bearing Followups, trust matrix updated.",
@@ -1851,5 +1919,76 @@
       "tracked_by": "noorinalabs-main#333",
       "descoped_at": "2026-05-08T23:49:19Z"
     }
-  ]
+  ],
+  "wave_9_progress": {
+    "updated_at": "2026-05-11T00:33:14.619737+00:00",
+    "meta_issues_landed": [
+      {
+        "issue": "noorinalabs-main#346",
+        "theme": "memory-audit \u2014 14 retire + 5 charter promote + 2 hook-msg + 1 skill",
+        "owner": "Aino Virtanen",
+        "closed_at": "2026-05-10T19:13:08Z",
+        "prs": {
+          "349": {
+            "sha": "cb4149c1",
+            "scope": "charter/pull-requests.md \u2014 3 reviewer/acceptance-discipline promotions"
+          },
+          "350": {
+            "sha": "313109d7",
+            "scope": "charter/state-claims.md \u2014 PR/issue field sets + Refresh State Before Acting"
+          },
+          "351": {
+            "sha": "46b926cc",
+            "scope": "hook validate_commit_identity msg fix (closes #345)"
+          },
+          "353": {
+            "sha": "f98c0e00",
+            "scope": "hook validate_pr_review msg fix (closes #352)"
+          },
+          "355": {
+            "sha": "51d92659",
+            "scope": "/file-bug skill (consolidates 3 discipline memories)"
+          }
+        },
+        "reviewer_cycle": "11 participants, 0 admin overrides, 0 force-pushes, 2 ChangesRequested cycles, 1 orchestrator-class merge-blocked cycle (Requestor field)",
+        "phase_re_scope": "Phase B re-scoped from 5 PRs to 2 after audit revealed 4 charter candidates already promoted in P3W4-W5"
+      }
+    ],
+    "carry_forwards_filed_during_cycle": [
+      {
+        "id": "noorinalabs-main#354",
+        "title": "/wave-wrapup Step 12 merge_commit_sha gate",
+        "owner": "Wanjiku Mwangi",
+        "route": "W10 (paired with #318, live-trace via #339)"
+      },
+      {
+        "id": "noorinalabs-main#356",
+        "title": "validate_pr_review BLOCKED msg expansion for Requestor/Requestee swap",
+        "route": "pending W9 capacity"
+      },
+      {
+        "id": "noorinalabs-main#357",
+        "title": "/file-bug skill aggregate telemetry",
+        "route": "pending W9 capacity"
+      },
+      {
+        "id": "noorinalabs-main#358",
+        "title": "/file-bug skill direct citation of feedback_origin_over_local",
+        "route": "pending W9 capacity"
+      }
+    ],
+    "memory_writes_during_cycle": [
+      {
+        "file": "feedback_spawn_brief_requestor_field_semantics.md",
+        "class": "orchestrator-class",
+        "sibling_of": "feedback_validate_pr_review_approved_not_reply.md (W8)"
+      }
+    ],
+    "memory_audit_outcome": {
+      "retired": 14,
+      "refreshed": 2,
+      "memory_md_before_after": "57 \u2192 43 entries",
+      "newly_superseded_into_charter": 5
+    }
+  }
 }

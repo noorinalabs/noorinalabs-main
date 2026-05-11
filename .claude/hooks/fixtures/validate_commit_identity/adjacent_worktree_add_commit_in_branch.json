@@ -1,0 +1,5 @@
+{
+  "description": "Adjacent shape: git worktree add with 'commit' appearing in branch name — must NOT be blocked",
+  "command": "git worktree add /tmp/wt-a-virtanen-287 -b A.Virtanen/0287-fix-validate-commit-identity-backslash origin/deployments/phase-3/wave-7",
+  "expect": "allow"
+}

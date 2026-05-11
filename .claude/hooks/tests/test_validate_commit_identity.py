@@ -376,7 +376,9 @@ class ParseFailureFailClosedTests(unittest.TestCase):
         )
         assert result is not None
         self.assertEqual(result["decision"], "block")
-        self.assertIn("shlex parsing", result["reason"])
+        # Reason must indicate parse failure and actionable guidance
+        # (message updated in #287 to be more precise than "shlex parsing").
+        self.assertIn("unbalanced quotes", result["reason"])
 
     def test_block_message_points_at_F_file_fix(self):
         """Parse-failure block message MUST cite the -F file fix and the
