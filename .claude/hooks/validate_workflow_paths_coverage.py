@@ -169,11 +169,7 @@ def _extract_flag(command: str, flag: str) -> str | None:
     tokens = tokenize(cleaned)
     if tokens is None:
         f = re.escape(flag)
-        pat = (
-            rf"--{f}(?:=|\s+)([^\s'\"]+)"
-            rf"|--{f}\s+\"([^\"]+)\""
-            rf"|--{f}\s+'([^']+)'"
-        )
+        pat = rf"--{f}(?:=|\s+)([^\s'\"]+)" rf"|--{f}\s+\"([^\"]+)\"" rf"|--{f}\s+'([^']+)'"
         m = re.search(pat, command)
         if not m:
             return None
