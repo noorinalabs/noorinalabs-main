@@ -660,6 +660,42 @@ class CheckEndToEndTests(unittest.TestCase):
         # Memory pointer: canonical reference for full context.
         self.assertIn("feedback_validate_pr_review_approved_not_reply.md", reason)
 
+    def test_block_message_explains_requestor_requestee_swap(self):
+        """BLOCKED message MUST surface the Requestor/Requestee swap failure
+        mode (W9 PR#349 cascade), in addition to the Reply-vs-Approved one
+        (#352). The two failure modes are field-distinct: Reply-vs-Approved
+        is wrong RoR value; swap is wrong Requestor/Requestee assignment.
+        Codified by #356 after orchestrator spawn-brief template had the
+        Requestor/Requestee fields swapped for 7 reviewer posts on PR#349
+        before the hook caught the 1-distinct count.
+        """
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"anya kowalczyk"}  # 1/2
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._patch_pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input("gh pr merge 100 --squash"))
+        assert result is not None
+        reason = result["reason"]
+        # Failure-mode framing: swap is named as a distinct mode parallel to
+        # Reply-vs-Approved (not merged into it).
+        self.assertIn("Requestor / Requestee swap", reason)
+        # Field-direction clarification.
+        self.assertIn("Requestor is the REVIEWER", reason)
+        self.assertIn("Requestee is the PR AUTHOR", reason)
+        # Origin-story pointer: name the W9 PR#349 cascade so an operator
+        # hitting the same shape can cross-reference.
+        self.assertIn("W9 PR#349 cascade", reason)
+        # Diagnostic recipe: distinct-Requestor jq one-liner is shown.
+        self.assertIn("Requestor:", reason)
+        self.assertIn("unique", reason)
+        # Charter pointer: § Comment-Based Reviews Direction table.
+        self.assertIn(
+            "pull-requests.md § Comment-Based Reviews",
+            reason,
+        )
+
     def test_one_reviewer_with_wave_bootstrap_and_enforcer_allows(self):
         """Single-Reviewer Exception (#228): wave-bootstrap + charter enforcer → allow.
 
