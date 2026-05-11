@@ -464,10 +464,10 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "ontology/conventions.md": {
-      "last_tracked": "b204a757947bbd62430a599908ad342294625438d23b5bcc1ea4fcc9bd48c291",
-      "last_resolved": "b204a757947bbd62430a599908ad342294625438d23b5bcc1ea4fcc9bd48c291",
-      "tracked_at": "2026-05-03T16:59:38.573672+00:00",
-      "resolved_at": "2026-05-03T16:59:38.573672+00:00"
+      "last_resolved": "1aa2056252eca54b37e5186cf688f616800e933336a12c1f7349e59bda0371a5",
+      "last_tracked": "1aa2056252eca54b37e5186cf688f616800e933336a12c1f7349e59bda0371a5",
+      "resolved_at": "2026-05-11T01:13:02.983312+00:00",
+      "tracked_at": "2026-05-11T01:13:02.983312+00:00"
     },
     "ontology/domain.yaml": {
       "last_resolved": "6fedad509f80b9570d0385fb5759e861d8b6f7b219ecc425b8dd472173ca536c",

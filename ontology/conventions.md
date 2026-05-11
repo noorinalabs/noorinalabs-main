@@ -70,6 +70,35 @@ Updated by `/ontology-rebuild`. Manual edits require `checksums.json` update.
 - Internal Docker networks for backend services (not exposed)
 - Resource limits on all containers (memory + CPU)
 
+## Architecture Decision Records (ADRs)
+
+Cross-repo convention for filename, location, and format. Per-repo content remains repo-scoped; this section governs only the shape so an ADR is identifiable and sortable the same way across the org.
+
+- **Location:** `docs/adr/` at each repo root. Index file: `docs/adr/README.md` (chronological list with title + link + date + status).
+- **Filename pattern:** `<NNNN>-<kebab-title>.md` — **4-digit zero-padded** sequential number, hyphen-kebab title. Example: `0001-tf-hetzner-per-env-state-strategy.md`.
+- **Format:** Michael Nygard's ADR template (Title / Status / Context / Decision / Consequences). The dominant `adr-tools` ecosystem and most external reference material assume this shape; newcomers reading an ADR will already know it.
+- **Numbering:** strictly monotonic within a repo. Numbers are not reused on supersede — a superseded ADR keeps its number and the superseding ADR gets the next free number; both reference each other.
+- **Status values:** `Proposed`, `Accepted`, `Deprecated`, `Superseded by NNNN`. No `Rejected` (closed PRs serve that role).
+
+### Why 4-digit zero-padded
+
+Three considerations:
+
+1. **Headroom.** `0001-` supports >999 ADRs without renumbering. `001-` does not. Cheap insurance for a long-lived org.
+2. **Alphasort.** Directory listings sort numerically when zero-padded; otherwise `10-...` sorts before `2-...`. 4 digits matches the headroom decision.
+3. **External convention alignment.** Nygard's own examples and `adr-tools` zero-pad to 4 digits (`docs/adr/0001-record-architecture-decisions.md`).
+
+### Cross-repo state (2026-05-11)
+
+| Repo | Current ADRs | Convention | Action |
+|---|---|---|---|
+| `noorinalabs-deploy` | `0001-tf-hetzner-per-env-state-strategy.md` | 4-digit ✓ | None — already canonical |
+| `noorinalabs-landing-page` | `0001-astro-build-output-hook-coverage.md` (PR #89) | 4-digit ✓ | None — already canonical |
+| `noorinalabs-data-acquisition` | `001-local-hook-policy-dispatcher-style.md` (PR #48) | 3-digit | Follow-up rename PR to `0001-` |
+| `noorinalabs-isnad-graph` | `001-` … `004-` (4 ADRs merged) | 3-digit | Out of scope here — track as separate bulk-rename cleanup if pursued |
+
+Existing 3-digit ADRs are not merge-blockers; renames are mechanical and reversible.
+
 ## Team & process conventions
 
 ### Commit identity
