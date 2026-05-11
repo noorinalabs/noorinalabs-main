@@ -1062,6 +1062,12 @@
       "last_tracked": "0e8e6660e3a6691aa4835428e39d39f00432effdfd6e39fb5f11205ffbbe391f",
       "resolved_at": "2026-05-11T01:24:19.842478+00:00",
       "tracked_at": "2026-05-11T01:24:19.842478+00:00"
+    },
+    ".claude/skills/wave-scope/upsert_status_keys.py": {
+      "last_resolved": "5c72e04f279df916c5257fb5c884ad50127b908cebbb8b280b0d0f990da3c7dd",
+      "last_tracked": "5c72e04f279df916c5257fb5c884ad50127b908cebbb8b280b0d0f990da3c7dd",
+      "resolved_at": "2026-05-11T01:29:58.147825+00:00",
+      "tracked_at": "2026-05-11T01:29:58.147825+00:00"
     }
   },
   "last_cleanup": {
