@@ -347,6 +347,59 @@ else
   REPOS_IN_SCOPE_JSON=$(printf '%s\n' "${REPOS[@]}" | jq -Rnc '[inputs]')
 fi
 
+# Cross-check against meta-issue body (main#333 fix). The meta-issue's body
+# is the canonical declared scope (see Step 11 framing). Without this check
+# the JSON could ship with a different set than the meta-issue declares, and
+# /wave-kickoff Step 0.5 pre-flight would fail on the divergence — exactly
+# the P3W8 kickoff failure (canonical 8 repos, meta-issue body 7 repos,
+# ingest-platform pre-flight failed missing branch + missing label).
+META_BODY=$(gh issue view "$META_ISSUE" --repo noorinalabs/noorinalabs-main --json body --jq '.body')
+# Two reference shapes observed in real meta-issue bodies:
+#   1. Explicit cross-repo issue refs: `noorinalabs-isnad-graph#866`
+#   2. Section-header bullets: `- noorinalabs-isnad-graph: #866, #867, ...`
+# Both indicate the repo is in scope. The regex matches either suffix
+# (`#N` for the explicit form OR `:` for the section-header form) and
+# strips the suffix. Leading `(^|[^a-z])` prevents partial-word matches
+# (e.g., `non-noorinalabs-X` won't match). main#333 fix.
+ACTUAL_CHILDREN=$(echo "$META_BODY" \
+  | grep -oE '(^|[^a-z])noorinalabs-[a-z][a-z0-9-]*(#[0-9]+|:)' \
+  | sed -E 's/^[^a-z]*//; s/(#[0-9]+|:)$//' \
+  | sort -u \
+  | grep -v '^noorinalabs-main$' || true)
+# Canonical = repos_in_scope minus main (the meta-issue lives in main and
+# self-refs use `main#N` or bare `#N`; main is always implicitly in scope)
+CANONICAL_CHILDREN=$(echo "$REPOS_IN_SCOPE_JSON" \
+  | jq -r '.[] | select(. != "noorinalabs-main")' | sort)
+
+EXTRA_IN_BODY=$(comm -23 \
+  <(printf '%s\n' "$ACTUAL_CHILDREN") \
+  <(printf '%s\n' "$CANONICAL_CHILDREN") | grep -v '^$' || true)
+MISSING_FROM_BODY=$(comm -13 \
+  <(printf '%s\n' "$ACTUAL_CHILDREN") \
+  <(printf '%s\n' "$CANONICAL_CHILDREN") | grep -v '^$' || true)
+
+if [ -n "$EXTRA_IN_BODY" ]; then
+  echo "ERROR: meta-issue $META_ISSUE body references repo(s) NOT in canonical/override:"
+  echo "$EXTRA_IN_BODY" | sed 's/^/  /'
+  echo ""
+  echo "Either (a) add the repo to WAVE_SCOPE_REPOS env var and re-run, or"
+  echo "(b) remove the repo's references from the meta-issue body."
+  echo "/wave-scope aborts so cross-repo-status.json does not ship with an"
+  echo "inconsistent canonical truth — /wave-kickoff Step 0.5 would fail on it."
+  exit 1
+fi
+
+if [ -n "$MISSING_FROM_BODY" ]; then
+  # Body declares FEWER repos than canonical/override — deliberate scope reduction
+  echo "INFO: meta-issue $META_ISSUE deliberately excludes child repo(s):"
+  echo "$MISSING_FROM_BODY" | sed 's/^/  /'
+  echo "Using meta-issue-derived scope (noorinalabs-main + body-referenced children)"
+  echo "instead of the canonical/override array. This is the descope-from-meta path."
+  # Rebuild REPOS_IN_SCOPE_JSON: main + body-derived children
+  REPOS_IN_SCOPE_JSON=$(printf '%s\n' "noorinalabs-main" $ACTUAL_CHILDREN \
+    | jq -Rnc '[inputs | select(. != "")]')
+fi
+
 # wave_{M}_scope: WAVE_SCOPE_STRUCTURED if owner pre-built it, else minimal derived shape
 if [ -n "${WAVE_SCOPE_STRUCTURED:-}" ]; then
   # Validate it is a JSON object before passing through
