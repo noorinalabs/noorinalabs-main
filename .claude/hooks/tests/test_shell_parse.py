@@ -154,6 +154,133 @@ class FindGhSubcommandTests(unittest.TestCase):
         self.assertIsNone(sp.find_gh_subcommand(["git", "commit"]))
 
 
+class IsGhSubcommandTests(unittest.TestCase):
+    """Yes/no convenience wrapper introduced for the #170 helper extraction.
+
+    Replaces local `_is_gh_issue_create` / `_is_gh_pr_create` duplicates
+    that previously lived in validate_labels and validate_branch_freshness.
+    """
+
+    def test_positive_gh_issue_create(self):
+        tokens = ["gh", "issue", "create", "--title", "x"]
+        self.assertTrue(sp.is_gh_subcommand(tokens, "issue", "create"))
+
+    def test_positive_gh_pr_create(self):
+        tokens = ["gh", "pr", "create", "--base", "main"]
+        self.assertTrue(sp.is_gh_subcommand(tokens, "pr", "create"))
+
+    def test_positive_at_non_start_position(self):
+        """`cd x && gh issue create ...` — gh appears after segment tokens."""
+        tokens = ["cd", "x", "&&", "gh", "issue", "create"]
+        self.assertTrue(sp.is_gh_subcommand(tokens, "issue", "create"))
+
+    def test_negative_wrong_verb(self):
+        tokens = ["gh", "issue", "view", "42"]
+        self.assertFalse(sp.is_gh_subcommand(tokens, "issue", "create"))
+
+    def test_negative_not_gh(self):
+        tokens = ["git", "commit"]
+        self.assertFalse(sp.is_gh_subcommand(tokens, "issue", "create"))
+
+    def test_negative_no_verbs_supplied(self):
+        """Defensive: zero-verb call returns False (no match shape)."""
+        tokens = ["gh", "issue", "create"]
+        self.assertFalse(sp.is_gh_subcommand(tokens))
+
+    def test_negative_empty_tokens(self):
+        self.assertFalse(sp.is_gh_subcommand([], "issue", "create"))
+
+
+class WalkFlagValuesTests(unittest.TestCase):
+    """Generalized flag-walker that replaces local `_walk_flags` duplicates."""
+
+    def test_two_token_form(self):
+        tokens = ["gh", "issue", "create", "--label", "bug"]
+        self.assertEqual(sp.walk_flag_values(tokens, {"--label"}), ["bug"])
+
+    def test_equals_form(self):
+        tokens = ["gh", "issue", "create", "--label=bug"]
+        self.assertEqual(sp.walk_flag_values(tokens, {"--label"}), ["bug"])
+
+    def test_short_flag_two_token(self):
+        tokens = ["gh", "issue", "create", "-l", "bug"]
+        self.assertEqual(sp.walk_flag_values(tokens, {"-l"}), ["bug"])
+
+    def test_multiple_values_preserve_order(self):
+        tokens = ["gh", "issue", "create", "--label", "a", "--label", "b"]
+        self.assertEqual(sp.walk_flag_values(tokens, {"--label"}), ["a", "b"])
+
+    def test_mixed_equals_and_two_token(self):
+        tokens = ["gh", "issue", "create", "--label=a", "--label", "b"]
+        self.assertEqual(sp.walk_flag_values(tokens, {"--label"}), ["a", "b"])
+
+    def test_value_inside_other_flag_ignored(self):
+        """A `--label` substring INSIDE the value of `--body` must NOT match.
+
+        Critical correctness property: shlex.split has already collapsed
+        `--body "...contains --label X..."` into a SINGLE token whose
+        content includes `--label`, but that token is never PRECEDED by
+        `--label` itself, so the walker correctly ignores it.
+        """
+        tokens = ["gh", "issue", "create", "--body", "see --label X for context", "--label", "real"]
+        self.assertEqual(sp.walk_flag_values(tokens, {"--label"}), ["real"])
+
+    def test_no_match_returns_empty(self):
+        tokens = ["gh", "issue", "create", "--title", "no labels here"]
+        self.assertEqual(sp.walk_flag_values(tokens, {"--label"}), [])
+
+    def test_empty_tokens(self):
+        self.assertEqual(sp.walk_flag_values([], {"--label"}), [])
+
+    def test_trailing_flag_without_value(self):
+        """`--label` at end of token list with no following value is ignored."""
+        tokens = ["gh", "issue", "create", "--label"]
+        self.assertEqual(sp.walk_flag_values(tokens, {"--label"}), [])
+
+
+class FirstFlagValueTests(unittest.TestCase):
+    """Convenience wrapper combining tokenize + walk_flag_values + regex fallback."""
+
+    def test_returns_first_value(self):
+        cmd = "gh pr create --base main --base develop"
+        self.assertEqual(sp.first_flag_value(cmd, {"--base"}), "main")
+
+    def test_returns_none_when_absent(self):
+        cmd = "gh pr create --title foo"
+        self.assertIsNone(sp.first_flag_value(cmd, {"--base"}))
+
+    def test_equals_form(self):
+        cmd = "gh pr create --base=main"
+        self.assertEqual(sp.first_flag_value(cmd, {"--base"}), "main")
+
+    def test_either_alias_matched(self):
+        """`{--repo, -R}` — both aliases recognized at the first occurrence."""
+        cmd = "gh pr create -R noorinalabs/main --base main"
+        self.assertEqual(sp.first_flag_value(cmd, {"--repo", "-R"}), "noorinalabs/main")
+
+    def test_regex_fallback_on_tokenize_failure(self):
+        """Unbalanced quote breaks shlex; the regex fallback still picks up the flag."""
+        # The trailing `"` is unbalanced — shlex.split raises ValueError, tokenize -> None.
+        cmd = 'gh pr create --base main --title "broken'
+        self.assertEqual(sp.first_flag_value(cmd, {"--base"}), "main")
+
+    def test_regex_fallback_disabled_returns_none_on_failure(self):
+        """Security-critical callers pass regex_fallback=False to fail closed."""
+        cmd = 'gh pr create --base main --title "broken'
+        self.assertIsNone(sp.first_flag_value(cmd, {"--base"}, regex_fallback=False))
+
+    def test_longer_flag_preferred_in_regex_fallback(self):
+        """Regex fallback sorts wanted by length DESC so `--repo` beats `-R` prefix collision."""
+        # Construct an unbalanced-quote command (forces regex path) where
+        # both --repo and -R appear; --repo wins because it's tried first.
+        cmd = 'gh pr create -R short/x --repo long/y --title "unclosed'
+        # Both flags are in the wanted set; the regex tries longer first.
+        # The result is whichever flag's regex matches first in the string,
+        # so we assert the longer-flag preference shape via direct check.
+        out = sp.first_flag_value(cmd, {"--repo", "-R"})
+        self.assertEqual(out, "long/y")
+
+
 class ExtractDashCPairsTests(unittest.TestCase):
     def test_simple(self):
         pairs = sp.extract_dash_c_pairs(
