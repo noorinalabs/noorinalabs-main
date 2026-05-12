@@ -4,7 +4,9 @@
 The validator guards against gh api returning the raw 404 JSON error body when
 a branch doesn't exist, which was captured live during P3W7 kickoff (e906e135).
 
-Run: ENVIRONMENT=test python3 -m pytest .claude/skills/wave-kickoff/tests/test_existing_sha_validator.py -v
+Run:
+    ENVIRONMENT=test python3 -m pytest \
+        .claude/skills/wave-kickoff/tests/test_existing_sha_validator.py -v
 """
 
 from __future__ import annotations
@@ -39,7 +41,6 @@ def _jq_object_sha(fixture_path: Path) -> str:
 
 
 class TestExistingShaValidator(unittest.TestCase):
-
     def test_404_body_yields_empty(self):
         """Live-trigger fixture: 404 JSON error body must produce EXISTING_SHA=""."""
         fixture = _FIXTURES / "existing_sha_404.json"
