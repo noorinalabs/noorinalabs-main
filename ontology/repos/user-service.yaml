@@ -104,3 +104,17 @@ ci:
     pr_trigger: "On PR (paths: workflow / Dockerfile / src/**), build single-arch amd64 + load locally + Trivy scan by sha-<short> tag. No registry login on PR. Push events build multi-arch + push."
     trivy_security: "Idris CR Q2 — Resolve-Trivy-image-reference and Summary steps bind GHA expressions (github.event_name, steps.meta.outputs.tags, etc.) to env vars to close shell script-injection sink. Both PR and push paths block on CRITICAL/HIGH (exit-code: 1, ignore-unfixed: true)."
     notify_deploy: "Fires repository_dispatch event-type=deploy-noorinalabs-user-service to noorinalabs-deploy with payload {repo,sha,ref,actor}. Requires DEPLOY_REPO_PAT secret (NOT yet provisioned — tracked in user-service#84, P3 carry-forward)."
+
+dispatch_contracts_sent:
+  # Cross-link: services.yaml § cross_repo_dispatch_contracts[name=deploy-user-service]
+  - name: deploy-user-service
+    event_type: deploy-noorinalabs-user-service
+    sender_workflow: .github/workflows/ghcr-publish.yml
+    sender_job: notify-deploy
+    sender_action: peter-evans/repository-dispatch@v3
+    target: noorinalabs/noorinalabs-deploy → .github/workflows/deploy-stg.yml
+    payload_keys: [repo, sha, ref, actor]
+    gates: ["github.event_name == 'push'", "github.ref == 'refs/heads/main'", "needs: build-and-push success"]
+    notes:
+      - "DEPLOY_REPO_PAT secret pending (user-service#84). Until provisioned, this dispatch fails at runtime and deploy-stg.yml workflow_dispatch is the operator fallback."
+      - "Listener (deploy-stg.yml) uses `github.event.action == 'deploy-noorinalabs-user-service'` to gate the user-service-only alembic pre-deploy step. Renaming this event_type without updating that conditional would silently skip the alembic gate."

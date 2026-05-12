@@ -88,3 +88,23 @@ build_commands:
     test: "npm run test"
     lint: "npm run lint"
     e2e: "npm run test:e2e"
+
+ci:
+  ghcr_publish:
+    workflow: .github/workflows/ghcr-publish.yml
+    notify_deploy:
+      job: notify-deploy
+      action: peter-evans/repository-dispatch@v3
+      gates: ["github.event_name == 'push'", "github.ref == 'refs/heads/main'", "needs: build-and-push success"]
+      description: "Fires repository_dispatch to noorinalabs-deploy after both api+frontend images are published. Replaces the legacy standalone notify-deploy.yml which fired before publish (race condition)."
+
+dispatch_contracts_sent:
+  # Cross-link: services.yaml § cross_repo_dispatch_contracts[name=deploy-isnad-graph]
+  - name: deploy-isnad-graph
+    event_type: deploy-noorinalabs-isnad-graph
+    sender_workflow: .github/workflows/ghcr-publish.yml
+    sender_job: notify-deploy
+    target: noorinalabs/noorinalabs-deploy → .github/workflows/deploy-stg.yml
+    payload_keys: [repo, sha, ref, actor]
+    notes:
+      - "#162: literal event-type drifted (deploy-isnad-graph → deploy-noorinalabs-isnad-graph) at repo rename 548ba9f; sender wasn't updated until #162. This contract is now recorded in services.yaml as the source-of-truth pairing."
