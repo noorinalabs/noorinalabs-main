@@ -884,6 +884,19 @@ class GenerateArtifactsTests(unittest.TestCase):
         self.assertIn("promotion-target: skill", out)
         self.assertIn("feedback_x.md", out)
 
+    def test_charter_section_emits_canonical_html_comment_marker(self) -> None:
+        """The template MUST emit the canonical HTML-comment marker per
+        charter/skills.md § Promotion Pipeline Marker Convention (#393).
+
+        Italic-prose `_Promoted from memory_` and blockquote forms are
+        banned because the parser does not recognize them; regressing to
+        either form re-introduces the AUTO false-positive class #283 closed.
+        """
+        m = _make_memory(name="Test rule", description="A test", body="Rule body.")
+        out = h.generate_charter_section(m, self.template_dir)
+        self.assertIn("<!-- Promoted from memory: feedback_x.md", out)
+        self.assertNotIn("_Promoted from memory", out)
+
     def test_skill_scaffold_slugifies_heading(self) -> None:
         s = _make_section(heading="Load-Bearing Followups for Disabled CI Jobs")
         out = h.generate_skill_scaffold(s, self.template_dir)

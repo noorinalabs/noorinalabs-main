@@ -83,3 +83,73 @@ Memory `feedback_enforcement_hierarchy.md` (hook > skill > charter). Acute fix l
 ### Hook-class enforcement decision
 
 Per #292 item 4 — should a `validate_cross_repo_status_format` PostToolUse hook fire on Edit/Write of `cross-repo-status.json` and block writes that expand line count >N% relative to additions OR reformat compact-inline to pretty? **Decision: DEFER.** Rationale: zero charter-rule violations observed across W6–W9 since the helper landed. The two current consumers (`/wave-scope`, `/wave-wrapup`) both invoke the helper correctly. Per `feedback_enforcement_hierarchy.md`, charter-only-without-violations does NOT require hook promotion; promote-on-first-violation is the established trigger. Re-evaluate if any future skill OR manual edit produces a non-helper-mediated write that expands the file >2x its prior line count.
+
+## Promotion Pipeline Marker Convention <!-- promotion-target: none -->
+
+The charter records its own evolution via TWO markers, each with a distinct authoring role. New charter content MUST pick one of these two shapes — inventing a third (italic prose, blockquote, plain "from memory X") defeats the `/promotion-audit` pipeline because the parser only recognizes the two below.
+
+### Shape 1 — HTML-comment marker (charter-tier provenance)
+
+```markdown
+<!-- Promoted from memory: <memory_filename> (<context>) -->
+
+## <Section Heading> <!-- promotion-target: ... -->
+```
+
+**Use for:** A charter section that codifies a single memory's rule with no hook-tier promotion or multi-source narrative. The marker lives immediately adjacent to the section header. The `(<context>)` parenthetical typically cites the retro date or PR that ratified the promotion — e.g. `(P3W5 retro 2026-05-06)` or `(PR #392)`.
+
+**Parser-recognized via:** `_HTML_COMMENT_PROMOTED_RE` in `.claude/skills/promotion-audit/helpers.py` (DOTALL match; captures the body up to `-->`, so trailing context is part of the regex sweep).
+
+**Where used at HEAD:** 10 actual usage sites across 5 charter sub-docs — `pull-requests.md` (5), `state-claims.md` (3), `agents.md` (1), `skills.md` (1, the line-5 marker for this file). `hooks.md` mentions the shape once in § Hook Provenance Block Format as a cataloging reference, not as a usage.
+
+### Shape 2 — Bold-block narrative (hook-tier and multi-source provenance)
+
+```markdown
+**Promotion provenance:** <narrative citing memory filenames, PR numbers, dates, prior charter sections, augments/supersedes relationships>
+```
+
+The block lives at the END of the section it describes (or as a bullet under a hook entry in `hooks.md`).
+
+**Use for:**
+- A hook charter entry — cite hook number + PR + worked-example pointer.
+- Any charter section whose provenance crosses multiple waves, memories, or prior charter sections.
+- A section that declares an `Augments:` relationship with an existing rule.
+- Multi-step memory → charter → hook narratives.
+
+**Parser-recognized via:** `_PROVENANCE_RE` in `.claude/skills/promotion-audit/helpers.py` (matches `**Promotion provenance:**` literally; body extracted greedily until next blank line or document end).
+
+**Where used at HEAD:** 6 actual usage sites across 2 charter sub-docs — `hooks.md` (5, on Hooks 14/15/17/etc.), `tech-decisions.md` (1, § Per-Env OAuth Provisioning). `hooks.md` § 6. Promotion Provenance Phrasing also mentions the shape literal once as a cataloguing reference, not a usage. Counts treat catalogue mentions consistently — see Shape 1 above, same exclusion rule.
+
+### Choice rule
+
+1. **Default to Shape 1** for memory → charter promotions ratified at a single retro with no hook follow-up planned.
+2. **Use Shape 2** when one or more of:
+   - The promotion lands a HOOK (cite hook number + PR).
+   - The provenance crosses multiple waves, memories, or prior charter sections.
+   - The section declares an `Augments:` relationship with an existing rule.
+   - Multiple worked examples need to be cited in-line.
+
+### Forbidden shapes
+
+Reviewers reject charter PRs that introduce any of the following — correct to one of the two canonical shapes during review:
+
+- `_Promoted from memory X_` (italic prose) — NOT parser-recognized.
+- `> Promoted from memory X` (blockquote) — NOT parser-recognized.
+- Plain "Promotion provenance:" (un-bolded) — NOT parser-recognized; the regex requires `**` markdown bold delimiters.
+- Plain-text "from memory X" prose without either marker — NOT parser-recognized.
+- `### Promotion provenance` heading-form WITHOUT a `**Promotion provenance:**` line in its body — NOT parser-recognized. Two pre-existing heading-form instances (`hooks.md` § Hook-Tree Layout, `skills.md` § Cross-repo-status upsert pattern just above this section) predate this convention; they remain valid because the source artifacts have `superseded_by` set in memory. New authoring should use Shape 2's bold-prose form, OR include a bold-prose line inside the heading-form body.
+
+### Auto-template alignment
+
+The `/promotion-audit` skill's `templates/charter-section.md` emits Shape 1 (HTML-comment marker). It MUST NOT emit italic-prose or blockquote forms — those are not recognized by either parser regex AND must not be hand-authored either. If the AUTO-template ever needs richer provenance than a single line, escalate to Shape 2 manually rather than inventing a third form.
+
+### Cross-references
+
+- `/promotion-audit` SKILL.md § Context cites this convention as the authoritative source for marker shape selection.
+- `charter/hooks.md` § 6. Promotion Provenance Phrasing catalogues the parse keys and the per-hook forward-reference-filter discipline. That section documents the parser KEYS; this section codifies the authoring CHOICE between them.
+
+### Provenance
+
+<!-- Promoted from memory: (none — this section codifies the marker convention itself, not a memory-to-charter promotion) -->
+
+Filed as [#393](https://github.com/noorinalabs/noorinalabs-main/issues/393) (P3W9) — sibling of [#283](https://github.com/noorinalabs/noorinalabs-main/issues/283) (PR #392) which extended `find_already_promoted()` to recognize the HTML-comment shape via `_HTML_COMMENT_PROMOTED_RE`. PR #392 enabled the parser; this section codifies the authoring discipline that the parser support requires. Replaces the pre-#393 implicit convention (manual authors had already converged on the two shapes documented here across ~17 charter promotions) with an authoritative source.
