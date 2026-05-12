@@ -20,8 +20,13 @@ so tests do not hit the network. The `expect` field:
 Fixtures cover the four `RequestOrReplied` Direction-table values
 (charter pull-requests.md § Comment-Based Reviews):
   - Approved / ChangesRequested — verdict directions, swap heuristic in
-    scope (block on Requestee.lastname == branch-author).
-  - Request / Reply — role bindings inverted, hook narrows OOS (allow).
+    scope. Post-#386 the heuristic compares
+    `Requestor.lastname == branch-author.lastname` (block when the PR
+    author is being named as the reviewer — the post-#244 swap shape).
+  - Request / Reply — role bindings inverted in the charter Direction
+    table; hook narrows OOS (allow). Coverage shows that the canonical
+    Request/Reply shape (which has Requestor=PR-author=branch-author)
+    would block under verdict scope, but path-2 narrowing protects them.
   - Unrecognized value — fail-open (allow); the hook does not validate
     the verdict word itself, that is `validate_pr_review`'s scope.
 
@@ -99,6 +104,77 @@ def _add_fixture_test(name: str, fixture: dict) -> None:
 
 for _fixture_name, _fixture_data in _load_fixtures():
     _add_fixture_test(_fixture_name, _fixture_data)
+
+
+class Post244InversionRegressionTests(unittest.TestCase):
+    """Explicit regression: the post-#386 heuristic compares Requestor, not Requestee.
+
+    Pre-#386 the heuristic checked `Requestee.lastname == branch-author`, which
+    encoded the pre-#244 reading where Requestee was expected to be the
+    reviewer. Post-#244 the charter inverts the bindings for verdict comments
+    (Requestor=reviewer, Requestee=PR-author=branch-author). The heuristic was
+    realigned in #386.
+
+    These tests pin the direction of the inversion. If they break, someone is
+    re-introducing the pre-#244 semantics — STOP and read charter
+    pull-requests.md § Comment-Based Reviews Direction table before "fixing"
+    them.
+    """
+
+    BRANCH = "A.Virtanen/0386-direction-table-realign"
+    REVIEWER = "Nadia Khoury"
+    PR_AUTHOR = "Aino Virtanen"  # matches BRANCH author lastname
+
+    def _cmd(self, requestor: str, requestee: str, direction: str = "Approved") -> str:
+        return (
+            "gh pr comment 42 --body \"$(cat <<'EOF'\n"
+            f"Requestor: {requestor}\n"
+            f"Requestee: {requestee}\n"
+            f"RequestOrReplied: {direction}\n"
+            "TechDebt: none\n"
+            'EOF\n)"'
+        )
+
+    def test_canonical_post244_verdict_shape_allows(self):
+        """Requestor=reviewer (Khoury), Requestee=PR-author=branch-author (Virtanen) → allow.
+
+        Under PRE-#386 semantics this same body would have BLOCKED (Requestee
+        matched branch). Under POST-#386 inverted semantics it must ALLOW.
+        """
+        with mock.patch.object(hook, "get_branch_name", return_value=self.BRANCH):
+            result = hook.check(_make_input(self._cmd(self.REVIEWER, self.PR_AUTHOR)))
+        self.assertIsNone(
+            result,
+            "Post-#244 canonical verdict shape (Requestor=reviewer, Requestee=PR-author) "
+            "must be ALLOWED by the inverted heuristic. If this fails, the heuristic "
+            "may have been reverted to the pre-#244 reading.",
+        )
+
+    def test_post244_swap_shape_blocks(self):
+        """Requestor=PR-author=branch-author (Virtanen) → BLOCK with post-#386 reason.
+
+        Pre-#386 the same body would have ALLOWED (Requestee was Khoury, not
+        the branch author). Post-#386 the inverted heuristic catches it.
+        """
+        with mock.patch.object(hook, "get_branch_name", return_value=self.BRANCH):
+            result = hook.check(_make_input(self._cmd(self.PR_AUTHOR, self.REVIEWER)))
+        self.assertIsNotNone(result, "Post-#244 swap shape must BLOCK")
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        # The post-#386 BLOCKED-message describes the inverted semantics —
+        # the branch author should be the Requestee, not the Requestor.
+        self.assertIn("Requestee, not the Requestor", result["reason"])
+
+    def test_blocked_message_uses_post244_language(self):
+        """The BLOCKED message must reference 'reviewer' for Requestor and
+        'PR author' for Requestee.
+        """
+        with mock.patch.object(hook, "get_branch_name", return_value=self.BRANCH):
+            result = hook.check(_make_input(self._cmd(self.PR_AUTHOR, self.REVIEWER)))
+        assert result is not None
+        reason = result["reason"]
+        self.assertIn("Requestor should be the reviewer", reason)
+        self.assertIn("Requestee should be the PR author", reason)
 
 
 class DirectionVerdictHelperTests(unittest.TestCase):

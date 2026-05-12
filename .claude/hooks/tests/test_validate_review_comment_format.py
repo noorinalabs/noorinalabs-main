@@ -213,21 +213,18 @@ class ExtractBranchAuthorLastnameTests(unittest.TestCase):
 class CheckIntegrationTests(unittest.TestCase):
     """End-to-end fixtures driving check() with mocked branch fetch.
 
-    The hook blocks when Requestee lastname matches branch author lastname
-    (= "fields are swapped"). All scenarios mock get_branch_name so the
-    test does not hit the network.
+    Post-#386 charter binding: on `Approved` / `Changes Requested` verdicts,
+    `Requestor` is the reviewer and `Requestee` is the PR author. The hook
+    blocks when `Requestor.lastname == branch-author.lastname` — i.e., the
+    PR author is being named as the reviewer (the actual swap). All scenarios
+    mock `get_branch_name` so the test does not hit the network.
+
+    HEREDOC_CANONICAL: post-#244 canonical verdict shape (Requestor=reviewer,
+    Requestee=PR-author). HEREDOC_POST244_SWAP: post-#244 swap shape
+    (Requestor=PR-author, matching the branch author lastname — wrong).
     """
 
-    HEREDOC_OK = (
-        "gh pr comment 42 --body \"$(cat <<'EOF'\n"
-        "Requestor: Aino Virtanen\n"
-        "Requestee: Nadia Khoury\n"
-        "RequestOrReplied: Approved\n"
-        "TechDebt: none\n"
-        'EOF\n)"'
-    )
-
-    HEREDOC_SWAPPED = (
+    HEREDOC_CANONICAL = (
         "gh pr comment 42 --body \"$(cat <<'EOF'\n"
         "Requestor: Nadia Khoury\n"
         "Requestee: Aino Virtanen\n"
@@ -236,29 +233,46 @@ class CheckIntegrationTests(unittest.TestCase):
         'EOF\n)"'
     )
 
-    def test_happy_path_no_block(self):
-        """Branch is N.Khoury/...; Requestee is Nadia Khoury → swap; BLOCK.
+    HEREDOC_POST244_SWAP = (
+        "gh pr comment 42 --body \"$(cat <<'EOF'\n"
+        "Requestor: Aino Virtanen\n"
+        "Requestee: Nadia Khoury\n"
+        "RequestOrReplied: Approved\n"
+        "TechDebt: none\n"
+        'EOF\n)"'
+    )
 
-        Wait — this IS the swapped form because Requestee == branch author
-        lastname (Khoury). The "happy path" is when Requestee != branch
-        author — see `test_correct_form_allows_through`.
+    def test_canonical_form_on_pr_author_branch_allows(self):
+        """Branch A.Virtanen/...; Requestor=Nadia Khoury (reviewer),
+        Requestee=Aino Virtanen (PR-author=branch-author).
+        Khoury != Virtanen → no swap; allow.
+        """
+        with mock.patch.object(hook, "get_branch_name", return_value="A.Virtanen/0373-ruff-format"):
+            result = hook.check(_bash_input(self.HEREDOC_CANONICAL))
+        self.assertIsNone(result)
+
+    def test_canonical_form_on_unrelated_branch_allows(self):
+        """Branch N.Khoury/...; Requestor=Nadia Khoury (Requestor matches branch).
+        Inverted heuristic: Khoury == Khoury → BLOCK.
+
+        This is the post-#386 inversion of the prior `test_happy_path_no_block`.
+        The same body shape that pre-#386 produced a block from the (wrong)
+        Requestee-side heuristic now produces a block from the (correct)
+        Requestor-side heuristic — by coincidence of names. Retained as
+        regression coverage for the post-#244 charter shape.
         """
         with mock.patch.object(hook, "get_branch_name", return_value="N.Khoury/0346-w8-retro"):
-            result = hook.check(_bash_input(self.HEREDOC_OK))
+            result = hook.check(_bash_input(self.HEREDOC_CANONICAL))
         self.assertIsNotNone(result)
         assert result is not None
         self.assertEqual(result.get("decision"), "block")
 
-    def test_correct_form_allows_through(self):
-        """Branch is A.Virtanen/...; Requestee is Nadia Khoury → no swap; allow."""
+    def test_post244_swap_form_blocks(self):
+        """Branch A.Virtanen/...; Requestor=Aino Virtanen (PR-author named as
+        reviewer — swap). Inverted heuristic: Virtanen == Virtanen → BLOCK.
+        """
         with mock.patch.object(hook, "get_branch_name", return_value="A.Virtanen/0373-ruff-format"):
-            result = hook.check(_bash_input(self.HEREDOC_OK))
-        self.assertIsNone(result)
-
-    def test_swapped_form_blocks(self):
-        """Branch is A.Virtanen/...; Requestee is Aino Virtanen → swap; BLOCK."""
-        with mock.patch.object(hook, "get_branch_name", return_value="A.Virtanen/0373-ruff-format"):
-            result = hook.check(_bash_input(self.HEREDOC_SWAPPED))
+            result = hook.check(_bash_input(self.HEREDOC_POST244_SWAP))
         self.assertIsNotNone(result)
         assert result is not None
         self.assertEqual(result.get("decision"), "block")
@@ -287,12 +301,17 @@ class CheckIntegrationTests(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_no_pr_number_returns_warning(self):
-        """No bare number AND no /pull/N URL → allow with warning systemMessage."""
-        # Hook only fires if body has Requestee+RequestOrReplied;
-        # craft a body that triggers parsing but elide the PR number.
-        # The current regex `gh pr comment (\d+)` allows commands like
-        # `gh pr comment --body "..."` to slip through to the warning path.
-        cmd = 'gh pr comment --body "Requestee: Khoury\nRequestOrReplied: Approved"'
+        """No bare number AND no /pull/N URL → allow with warning systemMessage.
+
+        Post-#386 the body gate requires all three of Requestor/Requestee/
+        RequestOrReplied. Body crafted with all three to trigger parsing
+        beyond the gate, no PR number in the `gh pr comment` invocation.
+        """
+        cmd = (
+            'gh pr comment --body "Requestor: Khoury\n'
+            "Requestee: Virtanen\n"
+            'RequestOrReplied: Approved"'
+        )
         with mock.patch.object(hook, "get_branch_name", return_value=""):
             result = hook.check(_bash_input(cmd))
         # Either allow+warn or allow-None; the implementation returns a
@@ -305,7 +324,7 @@ class CheckIntegrationTests(unittest.TestCase):
     def test_unfetchable_branch_returns_warning(self):
         """get_branch_name returns None → allow with warning, no block."""
         with mock.patch.object(hook, "get_branch_name", return_value=None):
-            result = hook.check(_bash_input(self.HEREDOC_OK))
+            result = hook.check(_bash_input(self.HEREDOC_CANONICAL))
         self.assertIsNotNone(result)
         assert result is not None
         self.assertEqual(result.get("decision"), "allow")
@@ -314,7 +333,7 @@ class CheckIntegrationTests(unittest.TestCase):
     def test_hotfix_branch_unfetched_lastname_returns_warning(self):
         """Branch without `{Initial}.{Lastname}/` shape → no lastname → warn."""
         with mock.patch.object(hook, "get_branch_name", return_value="hotfix/x"):
-            result = hook.check(_bash_input(self.HEREDOC_OK))
+            result = hook.check(_bash_input(self.HEREDOC_CANONICAL))
         self.assertIsNotNone(result)
         assert result is not None
         self.assertEqual(result.get("decision"), "allow")
@@ -349,30 +368,42 @@ class CheckIntegrationTests(unittest.TestCase):
         if result is not None:
             self.assertEqual(result.get("decision"), "allow")
 
-    def test_markdown_bold_requestee_form(self):
-        """Hook regex tolerates `**Requestee:**` markdown-bold prefix."""
+    def test_markdown_bold_requestor_form(self):
+        """Hook regex tolerates `**Requestor:**` markdown-bold prefix on the swap field.
+
+        Post-#386: the heuristic compares Requestor.lastname to branch-author.
+        This test pins markdown-bold tolerance on BOTH fields — the body has
+        `**Requestor:** Aino Virtanen` (matching branch A.Virtanen) which the
+        inverted heuristic detects as a swap and blocks.
+        """
         cmd = (
             'gh pr comment 42 --body "**Requestor:** Aino Virtanen\n'
             "**Requestee:** Nadia Khoury\n"
             'RequestOrReplied: Approved"'
         )
-        with mock.patch.object(hook, "get_branch_name", return_value="N.Khoury/0346-w8"):
+        with mock.patch.object(hook, "get_branch_name", return_value="A.Virtanen/0386-x"):
             result = hook.check(_bash_input(cmd))
-        # Branch is N.Khoury, Requestee strips to Khoury → match → block.
+        # Branch is A.Virtanen, **Requestor:** strips to Virtanen → match → block.
         self.assertIsNotNone(result)
         assert result is not None
         self.assertEqual(result.get("decision"), "block")
 
-    def test_requestee_with_parenthetical_role_stripped(self):
-        """Parenthetical `Requestee: Nadia Khoury (Program Director)` strips role."""
+    def test_requestor_with_parenthetical_role_stripped(self):
+        """Parenthetical `Requestor: Aino Virtanen (Standards Lead)` strips role.
+
+        Post-#386: the parenthetical-stripping regex now applies to the
+        Requestor field (the one the heuristic checks). Body has the
+        post-#244 swap shape with a trailing parenthetical role annotation;
+        stripper must leave just `Aino Virtanen` so the lastname match fires.
+        """
         cmd = (
-            'gh pr comment 42 --body "Requestor: Aino Virtanen\n'
-            "Requestee: Nadia Khoury (Program Director)\n"
+            'gh pr comment 42 --body "Requestor: Aino Virtanen (Standards Lead)\n'
+            "Requestee: Nadia Khoury\n"
             'RequestOrReplied: Approved"'
         )
-        with mock.patch.object(hook, "get_branch_name", return_value="N.Khoury/0346-w8"):
+        with mock.patch.object(hook, "get_branch_name", return_value="A.Virtanen/0386-x"):
             result = hook.check(_bash_input(cmd))
-        # Parenthetical stripped → Khoury == Khoury → block.
+        # Parenthetical stripped → Virtanen == Virtanen → block.
         self.assertIsNotNone(result)
         assert result is not None
         self.assertEqual(result.get("decision"), "block")

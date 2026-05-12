@@ -1,6 +1,6 @@
 {
-  "description": "Approved verdict with swapped Requestor/Requestee (Requestee.lastname matches branch-author). Pre-path-2 blocked behavior preserved — verdict scope is exactly where the swap heuristic remains sound.",
-  "command": "gh pr comment 42 --body \"$(cat <<'EOF'\nRequestor: Nadia Khoury\nRequestee: Aino Virtanen\nRequestOrReplied: Approved\nTechDebt: none\nEOF\n)\"",
-  "branch_ref": "A.Virtanen/0378-direction-table-oos",
+  "description": "Approved verdict with swapped Requestor/Requestee (post-#244 swap shape: Requestor.lastname matches branch-author.lastname — the PR author is being named as the reviewer). Branch A.Virtanen/...; Requestor=Aino Virtanen (== branch author, wrong), Requestee=Nadia Khoury. Inverted heuristic compares Requestor.lastname to branch-author.lastname; Virtanen == Virtanen → block.",
+  "command": "gh pr comment 42 --body \"$(cat <<'EOF'\nRequestor: Aino Virtanen\nRequestee: Nadia Khoury\nRequestOrReplied: Approved\nTechDebt: none\nEOF\n)\"",
+  "branch_ref": "A.Virtanen/0386-direction-table-realign",
   "expect": "block:swapped"
 }
