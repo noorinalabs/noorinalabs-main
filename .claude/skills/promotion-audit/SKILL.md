@@ -59,16 +59,106 @@ For each memory, charter section, and skill, compute a `Decision` via `classify(
 
 ### 4. Produce artifacts
 
+Resolve the **current wave label** once at the top of this step from `cross-repo-status.json` `current_wave` (e.g. `wave-9` → label `p3-wave-9`). Every artifact created below — AUTO PRs AND DECIDE issues — MUST carry this label so the GitHub Project board's Wave-field sync (see `/board-audit`) routes the artifact to the current wave column. Missing this label is the failure mode #401 was filed against — PRs/issues land off-board and off-wave.
+
+#### AUTO artifacts
+
 For each AUTO decision:
-- **memory → charter:** apply `templates/charter-section.md` to the memory, append to the appropriate charter file, mark memory `superseded_by: charter:{file} § {section}`. Stage the diff, commit on a new branch as Aino.
-- **charter → skill:** apply `templates/skill-scaffold.md` to the section, write `.claude/skills/{slug}/SKILL.md`, add a back-reference comment `<!-- promoted-to: skills/{slug} -->` after the section's `promotion-target` marker. Stage, commit.
+- **memory → charter:** apply `templates/charter-section.md` to the memory, append to the appropriate charter file, mark memory `superseded_by: charter:{file} § {section}`. Stage the diff.
+- **charter → skill:** apply `templates/skill-scaffold.md` to the section, write `.claude/skills/{slug}/SKILL.md`, add a back-reference comment `<!-- promoted-to: skills/{slug} -->` after the section's `promotion-target` marker. Stage.
+
+**Commit (Aino identity per `charter/commits.md` § Identity Table):**
+
+```bash
+git -c user.name="Aino Virtanen" \
+    -c user.email="parametrization+Aino.Virtanen@gmail.com" \
+    commit -F .claude/scratch/promotion-audit-{wave}-commit.txt
+```
+
+The commit-identity flags are **mandatory** (no shortcut to `git commit -m`) — they're the only way `validate_commit_identity` recognizes Aino as the author. Write the commit message to `.claude/scratch/promotion-audit-{wave}-commit.txt` and pass via `-F`, not heredoc — heredoc inside the parent `-c` line trips the identity-hook parser (memory `feedback_heredoc_in_git_commit.md`). Include two `Co-Authored-By` trailers (Aino + Claude).
+
+**Branch + push:**
+
+```bash
+git checkout -b A.Virtanen/promotion-audit-{wave}-{timestamp}
+git push -u origin A.Virtanen/promotion-audit-{wave}-{timestamp}
+```
+
+**Open the PR** following `charter/pull-requests.md § PR Template` body shape (Summary / Related Issues / Review Checklist + two `Co-Authored-By` trailers). Always include the literal three labels:
+
+```bash
+gh pr create \
+  --base deployments/phase-{N}/wave-{M} \
+  --title "promotion-audit: AUTO promotions for {wave} (closes #N)" \
+  --body-file .claude/scratch/promotion-audit-{wave}-pr-body.md \
+  --label tech-debt \
+  --label enhancement \
+  --label p3-{wave}
+```
+
+The label set is **non-negotiable**: `tech-debt` (this is process/quality work), `enhancement` (functional addition to charter/skills), AND the current wave label (`p3-{wave}`). Validate the labels actually stuck — `gh pr edit` silently no-ops on bad label names (memory `feedback_gh_pr_edit_silent_noop.md`):
+
+```bash
+gh pr view <PR#> --json labels --jq '.labels[].name'
+# Expect: enhancement, p3-{wave}, tech-debt (any order)
+```
+
+If any label is missing, retry with `gh pr edit <PR#> --add-label <name>` and re-verify.
+
+**Add to project board (Project 2):**
+
+```bash
+PR_URL=$(gh pr view <PR#> --json url --jq .url)
+gh project item-add 2 --owner noorinalabs --url "$PR_URL"
+```
+
+`gh project item-add` is in the silent-no-op family (memory `feedback_gh_pr_edit_silent_noop.md`) — its "no output = success" output is misleading when the item-add fails. **Read-back-verify** the add stuck:
+
+```bash
+gh project item-list 2 --owner noorinalabs --format json --limit 200 \
+  | jq -r '.items[] | select(.content.url == "'"$PR_URL"'") | .id'
+```
+
+A non-empty ID confirms the add succeeded. Empty output = the add silently no-op'd — retry once, then escalate to team-lead if still empty.
+
+**Assign two reviewers** per `charter/agents.md` § Orchestrator checklist when spawning a reviewer. Use SendMessage to spawn each reviewer (do NOT use `gh pr review` — `block_gh_pr_review` enforces; memory `feedback_validate_pr_review_approved_not_reply.md`). The reviewer spawn brief MUST embed the verbatim verdict template with the literal `TechDebt: ` line shape (memory `feedback_techdebt_attestation_literal_line.md`) — `## TechDebt` headers are NOT recognized by `validate_pr_review.py`. Reviewer slate per scope:
+- memory → charter promotions: Wanjiku (TPM) + Nadia (PD)
+- charter → skill promotions: Wanjiku (TPM) + Aino (yourself ineligible — pick Santiago or Nadia)
+
+Q3 decision: auto-promote artifacts land via PR (2-reviewer gate), not direct commit.
+
+#### DECIDE artifacts
 
 For each DECIDE decision:
-- Apply `templates/hook-draft.md` to generate an issue title + body. Use `gh issue create --label "enhancement" --body-file` (NOT `--body` — avoids the `|` hook bug #146).
+- Apply `templates/hook-draft.md` to generate an issue title + body. Write the body to `.claude/scratch/promotion-audit-{wave}-decide-{slug}.md`.
+- Create the issue with the **same three-label set** as AUTO PRs (`tech-debt` + `enhancement` + current-wave label) and the same project-board treatment:
 
-For AUTO artifacts, open a PR following the same 2-reviewer pattern as any charter-touching PR:
-- Branch: `A.Virtanen/promotion-audit-{wave}-{timestamp}` (Aino as author)
-- Reviewers: Wanjiku (TPM) for coordination; Nadia (PD) for charter additions, Aino for skill scaffolds. Q3 decision: auto-promote artifacts land via PR, not direct commit.
+```bash
+gh issue create \
+  --repo noorinalabs/noorinalabs-main \
+  --title "<title from template>" \
+  --body-file .claude/scratch/promotion-audit-{wave}-decide-{slug}.md \
+  --label tech-debt \
+  --label enhancement \
+  --label p3-{wave}
+```
+
+Use `--body-file`, NOT `--body` — the `|` hook bug #146 surfaces on long-prose `--body` arguments.
+
+**Add the issue to Project 2** with the same read-back-verify protocol as AUTO PRs:
+
+```bash
+ISSUE_URL=$(gh issue view <N> --json url --jq .url)
+gh project item-add 2 --owner noorinalabs --url "$ISSUE_URL"
+gh project item-list 2 --owner noorinalabs --format json --limit 200 \
+  | jq -r '.items[] | select(.content.url == "'"$ISSUE_URL"'") | .id'
+```
+
+Empty output = retry; persistent empty after retry = escalate.
+
+#### Determinism note
+
+The `gh` calls in this step (PR/issue creation, project-board adds, label/board verification) are **the only nondeterministic external calls the skill makes** — they're isolated to artifact-emission, not to the classification logic (helpers.py). Re-running the audit on unchanged repo state still produces byte-identical classification output; the artifacts themselves carry timestamps in their branch names and bodies and are not expected to be byte-identical across runs.
 
 ### 5. Render the audit table
 
