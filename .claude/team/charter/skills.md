@@ -118,7 +118,7 @@ The block lives at the END of the section it describes (or as a bullet under a h
 
 **Parser-recognized via:** `_PROVENANCE_RE` in `.claude/skills/promotion-audit/helpers.py` (matches `**Promotion provenance:**` literally; body extracted greedily until next blank line or document end).
 
-**Where used at HEAD:** 7 sites across 2 charter sub-docs — `hooks.md` (6, on Hooks 14/15/17/etc.), `tech-decisions.md` (1, § Per-Env OAuth Provisioning).
+**Where used at HEAD:** 6 actual usage sites across 2 charter sub-docs — `hooks.md` (5, on Hooks 14/15/17/etc.), `tech-decisions.md` (1, § Per-Env OAuth Provisioning). `hooks.md` § 6. Promotion Provenance Phrasing also mentions the shape literal once as a cataloguing reference, not a usage. Counts treat catalogue mentions consistently — see Shape 1 above, same exclusion rule.
 
 ### Choice rule
 
@@ -146,7 +146,7 @@ The `/promotion-audit` skill's `templates/charter-section.md` emits Shape 1 (HTM
 ### Cross-references
 
 - `/promotion-audit` SKILL.md § Context cites this convention as the authoritative source for marker shape selection.
-- `charter/hooks.md` § Hook Provenance Block Format catalogues the parse keys and the per-hook forward-reference-filter discipline. That section documents the parser KEYS; this section codifies the authoring CHOICE between them.
+- `charter/hooks.md` § 6. Promotion Provenance Phrasing catalogues the parse keys and the per-hook forward-reference-filter discipline. That section documents the parser KEYS; this section codifies the authoring CHOICE between them.
 
 ### Provenance
 
