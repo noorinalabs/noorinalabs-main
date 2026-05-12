@@ -35,6 +35,16 @@ Path filtering (issue #143):
       the SKIP_PREFIXES check uses the resolved path so the filter still
       catches it.)
 
+Input Language:
+  Fires on:      PostToolUse Edit, Write
+  Matches:       Edit/Write whose `file_path` is non-empty AND resides inside
+                 REPO_ROOT AND does NOT trip _should_skip (worktree-copy,
+                 __pycache__, node_modules, /tmp/, etc.)
+  Does NOT match: any other tool, missing file_path, paths under skip-
+                  patterns, out-of-repo paths
+  Flag pass-through: stdin JSON is forwarded verbatim to `check()` by the
+                     PostToolUse dispatcher (`post_dispatcher.py`)
+
 Exit codes:
   0 — always (advisory hook, never blocks)
 """
@@ -114,34 +124,32 @@ def _relative_path(file_path: str) -> str:
         return file_path
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
+def check(input_data: dict) -> dict | None:
+    """Dispatcher-compatible entry point for PostToolUse Edit/Write.
 
+    Returns None when the hook is not applicable (wrong tool, skip-path,
+    unreadable file); returns an advisory dict describing the checksum
+    update when an entry is written. The dispatcher treats non-None as
+    advisory only.
+    """
     tool_name = input_data.get("tool_name", "")
     if tool_name not in ("Edit", "Write"):
-        sys.exit(0)
+        return None
 
-    # Extract file path from tool input
     file_path = input_data.get("tool_input", {}).get("file_path", "")
     if not file_path:
-        sys.exit(0)
+        return None
 
-    # Skip files that aren't relevant to ontology
     if _should_skip(file_path):
-        sys.exit(0)
+        return None
 
-    # Compute hash
     sha = _compute_sha256(Path(file_path))
     if sha is None:
-        sys.exit(0)
+        return None
 
     rel_path = _relative_path(file_path)
     now = datetime.now(timezone.utc).isoformat()
 
-    # Load existing checksums
     try:
         with open(CHECKSUMS_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -150,7 +158,6 @@ def main() -> None:
 
     files = data.setdefault("files", {})
 
-    # Update or create entry — preserve last_resolved from previous state
     existing = files.get(rel_path, {})
     files[rel_path] = {
         "last_tracked": sha,
@@ -159,7 +166,6 @@ def main() -> None:
         "resolved_at": existing.get("resolved_at", ""),
     }
 
-    # Write back atomically-ish
     try:
         CHECKSUMS_FILE.parent.mkdir(parents=True, exist_ok=True)
         tmp = CHECKSUMS_FILE.with_suffix(".tmp")
@@ -170,6 +176,15 @@ def main() -> None:
     except OSError:
         pass  # Never fail the hook
 
+    return {"action": "tracked", "path": rel_path}
+
+
+def main() -> None:
+    try:
+        input_data = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        sys.exit(0)
+    check(input_data)
     sys.exit(0)
 
 
