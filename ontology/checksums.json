@@ -200,9 +200,9 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "cross-repo-status.json": {
-      "last_tracked": "7b955ebee85480b62c226122521f664af7cfdf053fd9eb35d62b8e4ea989d772",
+      "last_tracked": "8c73a1c24a34d92608c19fe7faa9fb2048fc6bd4d9f8325d36ae7d6e8dac2663",
       "last_resolved": "7b955ebee85480b62c226122521f664af7cfdf053fd9eb35d62b8e4ea989d772",
-      "tracked_at": "2026-05-06T00:42:53.818666+00:00",
+      "tracked_at": "2026-05-12T22:57:20.346557+00:00",
       "resolved_at": "2026-05-06T00:49:39.816328+00:00"
     },
     "dependencies.yml": {
@@ -1074,6 +1074,12 @@
       "last_tracked": "4ffe18574d54b6ae624373d2203aa699a1a7a841a5abbfeae1d44605bb669a0d",
       "resolved_at": "2026-05-11T01:41:41.840576+00:00",
       "tracked_at": "2026-05-11T01:41:41.840576+00:00"
+    },
+    ".claude/scratch/aino-w9-wrapup-commit.txt": {
+      "last_tracked": "ac4830389bcadfbb2236ba1d3ac5cd5c7671e25beae3755c1dd9bfbeadf818b0",
+      "last_resolved": "",
+      "tracked_at": "2026-05-12T23:00:11.656672+00:00",
+      "resolved_at": ""
     }
   },
   "last_cleanup": {
