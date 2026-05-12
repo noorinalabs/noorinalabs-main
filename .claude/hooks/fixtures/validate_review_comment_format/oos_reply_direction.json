@@ -1,0 +1,6 @@
+{
+  "description": "Out-of-scope: `Reply` direction. Requestee.lastname (Virtanen) matches branch-author.lastname (Virtanen). Pre-path-2 hook would have BLOCKED as a swap; path-2 narrowing returns None for non-verdict directions and lets the Reply through. Coverage for the second non-verdict row of the Direction table.",
+  "command": "gh pr comment 42 --body \"$(cat <<'EOF'\nRequestor: Nadia Khoury\nRequestee: Aino Virtanen\nRequestOrReplied: Reply\n\nThanks for the review; rolled out the change.\nEOF\n)\"",
+  "branch_ref": "A.Virtanen/0378-direction-table-oos",
+  "expect": "allow"
+}

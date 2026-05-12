@@ -4,9 +4,37 @@
 Blocks `gh pr comment` if the Requestee matches the branch author, which
 indicates the Requestor and Requestee fields are swapped.
 
+Scope (closes #378)
+===================
+
+This hook enforces Requestor/Requestee non-swap detection ONLY for
+`Approved` and `ChangesRequested` verdict comments — i.e., the rows of
+the charter `pull-requests.md` § Comment-Based Reviews Direction table
+where `Requestee = PR-author`. For these verdicts, "Requestee.lastname
+== branch-author.lastname" is a reliable swap signal because the
+reviewer (Requestor) should never share the lastname of the PR author
+on whose branch they are commenting (modulo same-lastname collisions,
+which are out of scope).
+
+For `Request` and `Reply` comments — where the Direction-table role
+bindings invert (Requestee = reviewer, Requestor = PR-author) — the
+"Requestee.lastname == branch-author.lastname" heuristic misfires: a
+legitimate Request to a reviewer from the PR author would have
+Requestee = reviewer, which has no relation to the branch author's
+lastname. Author/reviewer discipline for Request/Reply traffic is
+operator-trusted and not hook-gated.
+
+Unrecognized `RequestOrReplied` values (typos, future verdict types
+the hook doesn't know about) fail OPEN — the hook returns None and
+lets the comment through. Validating the verdict word itself is
+covered by a sibling hook (`validate_pr_review`); duplicating that
+logic here would couple two hooks that should remain independent.
+
 Exit codes:
-  0 — allow (not a comment command, not a review comment, or fields correct)
-  2 — block (Requestee matches branch author — fields are swapped)
+  0 — allow (not a comment command, not a review comment, fields correct,
+       or RequestOrReplied is not Approved/ChangesRequested)
+  2 — block (Requestee matches branch author on an Approved /
+       ChangesRequested verdict — fields are swapped)
 """
 
 import json
@@ -94,6 +122,64 @@ def extract_branch_author_lastname(head_ref: str) -> str | None:
     return None
 
 
+# Verdict direction values from charter `pull-requests.md` § Comment-Based
+# Reviews Direction table. These are the rows where the swap heuristic is
+# sound (Requestee = PR-author).
+#
+# Tolerated form variants: validate_pr_review counts the literal
+# "Changes Requested" (with space) per `feedback_validate_pr_review_approved_not_reply`,
+# while some templates and older fixtures use the camelCase "ChangesRequested".
+# Both are accepted here. Comparison is case-insensitive on the canonical token
+# match. The bare "Changes" prefix is NOT a verdict on its own — we require
+# the full token (with or without internal space) to avoid false-narrowing.
+_VERDICT_DIRECTIONS = frozenset(
+    {
+        "approved",
+        "changesrequested",
+        "changes requested",
+    }
+)
+
+
+def _direction_is_verdict(body: str) -> bool:
+    """True if the comment body's `RequestOrReplied:` value is a verdict direction.
+
+    Matches the value on the same line as the `RequestOrReplied:` label. The
+    value is stripped of trailing markdown bolding / whitespace and lowercased
+    before comparison against `_VERDICT_DIRECTIONS`. If no value is captured
+    (label present but value empty), returns False (fail-out-of-scope —
+    consistent with the path-2 stance of narrowing rather than blocking on
+    ambiguous shapes).
+    """
+    match = re.search(r"RequestOrReplied:\s*(.+)", body)
+    if not match:
+        return False
+    raw = match.group(1).strip()
+    raw = raw.strip("*").strip()
+    if not raw:
+        return False
+    # Take the leading verdict word(s). The value may be followed by additional
+    # text on the same line in some custom shapes; we only look at what comes
+    # before a newline (already handled by `.+` group consuming up to EOL).
+    # Lowercase for case-insensitive match against the canonical set.
+    canonical = raw.lower()
+    # Direct match against the canonical set covers both "approved",
+    # "changesrequested", and "changes requested" forms.
+    if canonical in _VERDICT_DIRECTIONS:
+        return True
+    # Tolerate trailing-token noise: e.g. "Approved (post-merge)" should still
+    # be treated as Approved. Split on whitespace and join the first 1-2 tokens
+    # to attempt the camelCase / two-word verdict match.
+    parts = canonical.split()
+    if not parts:
+        return False
+    if parts[0] in _VERDICT_DIRECTIONS:
+        return True
+    if len(parts) >= 2 and " ".join(parts[:2]) in _VERDICT_DIRECTIONS:
+        return True
+    return False
+
+
 def check(input_data: dict) -> dict | None:
     """Check review comment format. Returns result dict if blocking/warning, None if allowed."""
     tool_name = input_data.get("tool_name", "")
@@ -113,6 +199,16 @@ def check(input_data: dict) -> dict | None:
     has_request_or_replied = re.search(r"RequestOrReplied:", body)
 
     if not (has_requestee and has_request_or_replied):
+        return None
+
+    if not _direction_is_verdict(body):
+        # Scope-narrowing per #378 / path 2: the Requestee == branch-author
+        # swap heuristic is only sound for verdict directions (Approved /
+        # ChangesRequested), where the charter Direction table binds
+        # Requestee = PR-author. For Request / Reply (or unrecognized
+        # directions) the role bindings invert or are unknown — we cannot
+        # safely block on the swap signal. Allow through and let
+        # operator/orchestrator discipline cover those surfaces.
         return None
 
     pr_number = extract_pr_number(command)

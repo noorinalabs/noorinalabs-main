@@ -1,0 +1,6 @@
+{
+  "description": "ChangesRequested verdict (camelCase form) with swapped Requestor/Requestee. Verdict scope, swap heuristic sound — block.",
+  "command": "gh pr comment 42 --body \"$(cat <<'EOF'\nRequestor: Nadia Khoury\nRequestee: Aino Virtanen\nRequestOrReplied: ChangesRequested\nTechDebt: none\nEOF\n)\"",
+  "branch_ref": "A.Virtanen/0378-direction-table-oos",
+  "expect": "block:swapped"
+}
