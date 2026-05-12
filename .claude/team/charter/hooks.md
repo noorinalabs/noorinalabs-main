@@ -335,7 +335,31 @@ Every hook with input parsing MUST have test fixtures covering all known input s
 
 **Dispatcher-style children (no committed `.claude/hooks/`):** Children that delegate all hook execution to the parent canonical via `settings.json` are exempt from per-child fixture requirements. Coverage obligations are fulfilled by the parent's test suite. A child is classified as dispatcher-style when `gh api repos/<owner>/<repo>/git/trees/<head_sha>?recursive=1` returns 0 entries under `.claude/hooks/`. Design-system and landing-page (post-W5) are the canonical exemplars.
 
-**Enforcement:** The Standards & Quality Lead (Aino) verifies these requirements during hook PR review. A hook missing any of the five requirements must not be approved.
+### 6. Promotion Provenance Phrasing
+
+Every hook's charter entry includes a provenance block describing where the hook came from. The `/promotion-audit` skill's `find_already_promoted` parser scans these blocks to decide which memories / charter rules / skill patterns have already landed as hooks. Ambiguous phrasing defeats the parser (false-negatives produce noisy AUTO classifications; false-positives produce noisy ALREADY-PROMOTED classifications). Three required parts:
+
+**Backward claim (required):** a single sentence declaring backward provenance — what prior tier (memory / charter / skill / pattern) this hook was promoted from. Example:
+
+> Promoted from memory `feedback_enforcement_hierarchy.md` via charter § Ontology Librarian Rule (PR #153).
+
+Every hook MUST have exactly one backward-claim sentence. The parser's `_PROVENANCE_RE` and `_HTML_COMMENT_PROMOTED_RE` recognizers extract memory / charter / skill references from this sentence, so it MUST cite the source artifact by filename (memories: `feedback_X.md` or unsuffixed `feedback_X`; skills: `/skill-name`; charter rules: `CLAUDE.md § X` or `charter/X.md § Y`).
+
+**Forward references (optional, must be in a separate paragraph):** if the hook's charter entry mentions sibling hooks, future artifacts, or design narrative, that narrative MUST live in its OWN paragraph — never co-located with the backward-claim sentence. Example forward reference:
+
+> Worked example referenced by the future `/promotion-audit` skill design.
+
+**Why separate paragraphs:** `find_already_promoted`'s `_FORWARD_REFERENCE_MARKERS` filter (`future`, `planned`, `design`, `upcoming`, `referenced by`, `will reference`, `proposed`, `TBD`) excludes slash-command hits that sit within ~60 chars of these markers. Forward-reference narrative mixed into the backward-claim sentence makes that filter trip on the backward citation too — turning a real promotion record invisible. Keeping the two concerns in separate paragraphs is the simplest discipline that preserves both meanings.
+
+**Recognized parse keys:** the literal tokens `/promotion-audit` scans for. Author your provenance block with one of these as the opener so the parser finds it:
+
+- `**Promotion provenance:**` — block-style header; the parser's `_PROVENANCE_RE` greedy-matches until the next blank line / heading. Used by hooks.md per-hook entries (e.g. Hook 15).
+- `Promoted from` — opening token recognized inline; works inside either the block-style entry or a standalone sentence.
+- `<!-- Promoted from memory: X -->` — HTML-comment marker form codified in #283 / #393. Used for charter-tier-only promotions (no corresponding hook). The parser's `_HTML_COMMENT_PROMOTED_RE` (DOTALL) captures the body up to `-->`, so trailing context (date, retro citation, rationale) is included in the regex sweep.
+
+**Rationale:** PR #155 added the reactive `_FORWARD_REFERENCE_MARKERS` filter to handle Hook 15's own provenance block — which had narrative referencing a future skill mixed in with the backward citation. The filter is the runtime safety net; this guidance is the preempt-at-author-time fix that reduces future filter-edits. Sibling-of-#393 (HTML-marker convention) — this section references that form but does NOT codify it (#393 is its own follow-up).
+
+**Enforcement:** The Standards & Quality Lead (Aino) verifies these requirements during hook PR review. A hook missing any of the six requirements must not be approved.
 
 ## Hook Audit Protocol
 
