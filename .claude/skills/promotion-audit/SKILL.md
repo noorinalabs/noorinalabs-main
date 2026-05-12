@@ -31,17 +31,17 @@ from helpers import (
     read_all_memories,
     read_all_charter_sections,
     read_all_skills,
-    find_already_promoted,
+    find_already_promoted_in_charter,
     count_retro_citations,
     count_skill_invocations,
     classify,
     render_audit_table,
 )
 
-memories  = read_all_memories(memory_dir)           # list[Memory]
-sections  = read_all_charter_sections(charter_dir)  # list[Section] — only sections with a promotion-target marker
-skills    = read_all_skills(skills_dir)              # list[Skill]
-already   = find_already_promoted(charter_hooks_md) # set[str] — from "Promotion provenance:" blocks
+memories  = read_all_memories(memory_dir)              # list[Memory]
+sections  = read_all_charter_sections(charter_dir)     # list[Section] — only sections with a promotion-target marker
+skills    = read_all_skills(skills_dir)                # list[Skill]
+already   = find_already_promoted_in_charter(charter_dir)  # set[str] — aggregates Promotion provenance: blocks AND <!-- Promoted from memory: X --> markers across all charter sub-docs (#283)
 ```
 
 ### 3. Classify each candidate (pure function)
@@ -53,7 +53,7 @@ For each memory, charter section, and skill, compute a `Decision` via `classify(
 - **KEPT** — promotion-target is `none`, thresholds not yet met, or status is `active` with no promotion intent
   - **STALE-OPT-OUT (informational sub-class)** — when a memory has `promotion_target: none` AND `retro_citations >= 2 * threshold`, the entry stays KEPT (the opt-out is authoritative) but is rendered in a separate sub-list so operators can spot drift during wave-retro. No auto-action, no issue filed, no override of the opt-out. (#158)
 - **SUPERSEDED** — status is `superseded` or `enforced-elsewhere` with an explicit `superseded_by` reference
-- **ALREADY-PROMOTED** — name appears in `find_already_promoted()` set (recognized via `Promotion provenance:` blocks in charter/hooks.md)
+- **ALREADY-PROMOTED** — name appears in `find_already_promoted_in_charter()` set (recognized via `Promotion provenance:` blocks AND `<!-- Promoted from memory: X -->` HTML-comment markers across all charter sub-docs; #283)
 
 ### 4. Produce artifacts
 
