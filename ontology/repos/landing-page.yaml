@@ -84,6 +84,15 @@ ci:
     workflows_touched: [.github/workflows/deploy.yml, .github/workflows/ci.yml]
     description: "Bump GitHub Actions to Node 20-compatible majors per parent#309 audit (actions/checkout@v6, etc)."
 
+dispatch_contracts_sent:
+  # Cross-link: services.yaml § cross_repo_dispatch_contracts[name=deploy-landing-page]
+  # ASYMMETRIC — listener accepts the event-type but no sender wires it.
+  - name: deploy-landing-page
+    event_type: deploy-noorinalabs-landing-page
+    status: NO_SENDER
+    listener: "noorinalabs-deploy/.github/workflows/deploy-stg.yml (types: [..., deploy-noorinalabs-landing-page])"
+    rationale: "Landing-page intentionally omits a notify-deploy job per Contract v6 (#71, Kofi). Production rollout flows through deploy/promote.yml registry retag, not push-time dispatch. The deploy-stg.yml listener still declares the event-type — either landing-page grows a sender, or the listener drops the type. Tracked in deploy#285."
+
 local_hooks:
   pattern: "dispatcher-style — local settings.json delegates to parent canonical hooks"
   settings_align_pr: "landing-page#90 (P3W8)"

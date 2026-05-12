@@ -203,6 +203,65 @@ data_stores:
     consumers: [user-service]
     purpose: [session_state, rate_limiting, verification_tracking]
 
+# --- Cross-repo repository_dispatch contracts ---
+# Each entry pairs a sender workflow (`peter-evans/repository-dispatch` step) with the
+# listener workflow whose `on.repository_dispatch.types` accepts the literal `event_type`
+# string. The literal string is the contract — GitHub returns 204 to unmatched dispatches,
+# so a sender/listener mismatch fails silently until a deploy is missed (#162 lesson).
+# Resolution: every contract here MUST be validated against both workflow files at HEAD —
+# any mismatch is a bug surface, file separately (this section documents, doesn't fix).
+cross_repo_dispatch_contracts:
+  - name: deploy-isnad-graph
+    event_type: deploy-noorinalabs-isnad-graph
+    sender:
+      repo: noorinalabs-isnad-graph
+      workflow: .github/workflows/ghcr-publish.yml
+      job: notify-deploy
+      action: peter-evans/repository-dispatch@v3
+      target_repo: noorinalabs/noorinalabs-deploy
+      auth: DEPLOY_REPO_PAT secret
+      client_payload: { repo: noorinalabs-isnad-graph, sha: github.sha, ref: github.ref_name, actor: github.actor }
+    listener:
+      repo: noorinalabs-deploy
+      workflow: .github/workflows/deploy-stg.yml
+      types: [deploy-noorinalabs-isnad-graph, deploy-noorinalabs-user-service, deploy-noorinalabs-landing-page]
+    gates: ["github.event_name == 'push'", "github.ref == 'refs/heads/main'", "needs: build-and-push success"]
+    notes:
+      - "Originally listened on deploy/.github/workflows/deploy-isnad-graph.yml (legacy single-VPS) — that workflow is now workflow_dispatch-only (manual rollback path, decom tracked in deploy#86). Active stg fan-in is deploy-stg.yml."
+      - "Rename from deploy-isnad-graph → deploy-noorinalabs-isnad-graph happened in isnad-graph#548ba9f; #162 fixed the sender mismatch and authored this ontology record."
+
+  - name: deploy-user-service
+    event_type: deploy-noorinalabs-user-service
+    sender:
+      repo: noorinalabs-user-service
+      workflow: .github/workflows/ghcr-publish.yml
+      job: notify-deploy
+      action: peter-evans/repository-dispatch@v3
+      target_repo: noorinalabs/noorinalabs-deploy
+      auth: DEPLOY_REPO_PAT secret
+      client_payload: { repo: noorinalabs-user-service, sha: github.sha, ref: github.ref_name, actor: github.actor }
+    listener:
+      repo: noorinalabs-deploy
+      workflow: .github/workflows/deploy-stg.yml
+      types: [deploy-noorinalabs-isnad-graph, deploy-noorinalabs-user-service, deploy-noorinalabs-landing-page]
+    gates: ["github.event_name == 'push'", "github.ref == 'refs/heads/main'", "needs: build-and-push success"]
+    notes:
+      - "DEPLOY_REPO_PAT secret not yet provisioned in user-service — tracked in user-service#84 (P3 carry-forward). Until provisioned, the dispatch step fails at runtime; deploy-stg.yml workflow_dispatch is the operator fallback."
+      - "Listener path discriminates `github.event.action == 'deploy-noorinalabs-user-service'` to run the user-service-only alembic pre-deploy gate (deploy-stg.yml § alembic-stg)."
+
+  - name: deploy-landing-page
+    event_type: deploy-noorinalabs-landing-page
+    sender:
+      status: NO_SENDER
+      note: "No workflow in noorinalabs-landing-page dispatches this event-type. Landing-page#71 (Contract v6) intentionally omits a notify-deploy job — landing-page deploy flows through deploy/promote.yml registry retag, not push-time dispatch (per landing-page RUNBOOK.md § 4 and ontology/repos/landing-page.yaml § ci.deploy_workflow). Listener accepts the event-type but no sender wires it."
+    listener:
+      repo: noorinalabs-deploy
+      workflow: .github/workflows/deploy-stg.yml
+      types: [deploy-noorinalabs-isnad-graph, deploy-noorinalabs-user-service, deploy-noorinalabs-landing-page]
+    gates: ["n/a — no active sender"]
+    notes:
+      - "Asymmetric contract: listener-only. Either landing-page should grow a notify-deploy job mirroring isnad-graph/user-service, OR the deploy-stg.yml listener should drop the deploy-noorinalabs-landing-page type. Tracked in deploy#285."
+
 # --- Integration points ---
 integrations:
   - name: jwt_validation
