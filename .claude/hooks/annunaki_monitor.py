@@ -6,6 +6,17 @@ Fires after every Bash tool call. Inspects the output for error signals
 each error to .claude/annunaki/errors.jsonl for later analysis by
 /annunaki-attack.
 
+Input Language:
+  Fires on:      PostToolUse Bash
+  Matches:       Bash with non-zero exit_code OR stdout/stderr matching any
+                 ERROR_PATTERNS regex (Traceback, fatal:, ModuleNotFoundError,
+                 etc.) and NOT matching IGNORE_PATTERNS
+  Does NOT match: any non-Bash tool, empty stdout+stderr, command-text
+                  containing grep-for-error / --error flags / error-named
+                  paths (false-positive guards), session-dedup hits
+  Flag pass-through: stdin JSON is forwarded verbatim to `check()` by the
+                     PostToolUse dispatcher (`post_dispatcher.py`)
+
 Exit codes:
   0 — always (advisory hook, never blocks)
 """
@@ -79,15 +90,15 @@ def _should_ignore(command: str, output: str) -> bool:
     return False
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
+def check(input_data: dict) -> dict | None:
+    """Dispatcher-compatible entry point for PostToolUse Bash.
 
-    tool_name = input_data.get("tool_name", "")
-    if tool_name != "Bash":
-        sys.exit(0)
+    Returns None when no error is detected (or input doesn't apply); returns
+    an advisory dict describing the logged record when an error is appended
+    to the JSONL log. The dispatcher treats non-None as advisory only.
+    """
+    if input_data.get("tool_name", "") != "Bash":
+        return None
 
     command = input_data.get("tool_input", {}).get("command", "")
     tool_output = input_data.get("tool_output", {})
@@ -95,36 +106,27 @@ def main() -> None:
     stderr = tool_output.get("stderr", "")
     exit_code = tool_output.get("exit_code", 0)
 
-    # Combine output for pattern matching
     combined_output = f"{stdout}\n{stderr}".strip()
-
     if not combined_output:
-        sys.exit(0)
+        return None
 
-    # Check for false positives
     if _should_ignore(command, combined_output):
-        sys.exit(0)
+        return None
 
-    # Determine if this is an error
     is_error = False
-    matched_patterns = []
+    matched_patterns: list[str] = []
 
-    # Non-zero exit code is always an error
     if exit_code and exit_code != 0:
         is_error = True
         matched_patterns.append(f"exit_code={exit_code}")
 
-    # Check stderr
     if stderr and stderr.strip():
-        # Some tools write to stderr normally (git, curl) — only flag if
-        # there's also a pattern match or non-zero exit
         for pattern in ERROR_PATTERNS:
             if pattern.search(stderr):
                 is_error = True
                 matched_patterns.append(f"stderr:{pattern.pattern}")
                 break
 
-    # Check stdout for error patterns
     for pattern in ERROR_PATTERNS:
         if pattern.search(stdout):
             is_error = True
@@ -132,21 +134,19 @@ def main() -> None:
             break
 
     if not is_error:
-        sys.exit(0)
+        return None
 
-    # Build error record
     error_lines = _extract_error_lines(combined_output)
 
-    # Session-level dedup
     dedup_input = command[:200] + "|||" + "\n".join(error_lines)[:500]
     dedup_hash = hashlib.md5(dedup_input.encode("utf-8")).hexdigest()
     if dedup_hash in _seen_hashes:
-        sys.exit(0)
+        return None
     _seen_hashes.add(dedup_hash)
 
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "command": command[:500],  # Truncate very long commands
+        "command": command[:500],
         "exit_code": exit_code,
         "matched_patterns": matched_patterns[:5],
         "error_lines": error_lines,
@@ -156,6 +156,15 @@ def main() -> None:
 
     append_jsonl_record(ERRORS_FILE, record)
 
+    return {"action": "logged", "dedup_hash": dedup_hash}
+
+
+def main() -> None:
+    try:
+        input_data = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        sys.exit(0)
+    check(input_data)
     sys.exit(0)
 
 

@@ -474,20 +474,35 @@ def _pre_tool_use_blocks(input_data: dict) -> dict | None:
 
 
 def check(input_data: dict) -> dict | None:
-    """Dispatcher-compatible entry point for Bash PreToolUse.
+    """Dispatcher-compatible entry point for Bash and Edit/Write/NotebookEdit.
 
-    The Bash dispatcher (`dispatcher.py`) routes Bash tool calls through each
-    hook's `check(input_data) -> dict | None`. This hook's Bash-side risk
-    surface is `git commit` / `gh pr comment` / `gh issue comment` while the
-    sentinel has unhandled errors — exactly what `_pre_tool_use_blocks`
-    evaluates. Other matchers (Edit / Write / NotebookEdit / SendMessage) are
-    registered DIRECTLY in `settings.json` and bypass this function via
-    `main()` going through the `_pre_tool_use_blocks` / `_post_tool_use`
-    paths based on `hook_event_name`.
+    Both the PreToolUse Bash dispatcher (`dispatcher.py`) and the PostToolUse
+    dispatcher (`post_dispatcher.py`) route tool calls through this function.
 
-    Returns None to allow, or a block dict.
+    Dispatch is `hook_event_name`-aware (with a tool_response-presence
+    fallback for inputs that omit the field):
+
+      - PreToolUse Bash             → `_pre_tool_use_blocks` (may return a block)
+      - PostToolUse Edit/Write/
+        NotebookEdit                → `_post_tool_use` (records sentinel)
+
+    Other matcher/event pairs return None.
+
+    Returns None to allow, or a block dict for PreToolUse Bash. For
+    PostToolUse the return is always None (side-effect only: sentinel append).
     """
-    if input_data.get("tool_name", "") != "Bash":
+    tool_name = input_data.get("tool_name", "")
+    event = input_data.get("hook_event_name", "")
+    if not event:
+        event = "PostToolUse" if "tool_response" in input_data else "PreToolUse"
+
+    if event == "PostToolUse":
+        if tool_name in _EDIT_TOOLS:
+            _post_tool_use(input_data)
+        return None
+
+    # PreToolUse path — only Bash goes through the dispatcher for this hook
+    if tool_name != "Bash":
         return None
     return _pre_tool_use_blocks(input_data)
 
