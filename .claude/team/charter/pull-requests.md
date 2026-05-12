@@ -29,6 +29,8 @@ The role names always describe the **comment** (not the PR):
 
 **Key consequence for verdict comments**: on `Approved` and `ChangesRequested` comments, `Requestor` is the reviewer (because the reviewer is the comment author). The hook counts distinct `Requestor` values across `Approved`/`ChangesRequested` comments to verify the 2-reviewer rule (resolves main#244 — the prior hook counted distinct `Requestee` values, which on verdict comments is the PR author, not the reviewer).
 
+**Scope of the `validate_review_comment_format` hook** (resolves main#378): This hook enforces Requestor/Requestee non-swap detection ONLY for `Approved` and `Changes Requested` verdict comments, where the Direction table above binds `Requestee = PR author`. For `Request` and `Reply` comments — where the role bindings invert (`Requestee = reviewer`, `Requestor = PR author`) — the swap heuristic does not apply and the hook returns `None`. Author/reviewer discipline for `Request`/`Reply` traffic is operator-trusted; the hook does not gate it. Unrecognized `RequestOrReplied` values also pass through (the verdict-word vocabulary is `validate_pr_review`'s scope, not this hook's).
+
 ### Validation
 
 - The `Requestor` of a `Request`-kind comment must differ from the comment author of the `Approved`/`ChangesRequested` comments (a PR author cannot self-approve their own PR via comment-based review). Enforced by `block_gh_pr_review.py` PreToolUse hook + `validate_pr_review.py` at merge time.
