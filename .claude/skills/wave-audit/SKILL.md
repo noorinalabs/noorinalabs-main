@@ -11,7 +11,7 @@ Audit open issues for a wave and close any that were resolved but not auto-close
 ### 1. List merged PRs for the wave
 
 ```bash
-gh pr list --state merged --base "deployments/phase{N}/wave-{M}" --json number,title,body,headRefName
+gh pr list --state merged --base "deployments/phase-{N}/wave-{M}" --json number,title,body,headRefName
 ```
 
 ### 2. Extract issue references from PRs
@@ -65,7 +65,7 @@ For each confirmed orphan, close with a comment:
 
 ```bash
 gh issue close {NUMBER} --comment "$(cat <<'EOF'
-Closed by wave audit. This issue was resolved by PR #{PR_NUMBER} ({PR_TITLE}) which merged to `deployments/phase{N}/wave-{M}`.
+Closed by wave audit. This issue was resolved by PR #{PR_NUMBER} ({PR_TITLE}) which merged to `deployments/phase-{N}/wave-{M}`.
 
 Added label: `fixed-in-phase{N}-wave-{M}`
 EOF

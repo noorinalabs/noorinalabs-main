@@ -25,17 +25,17 @@ Report any worktrees that were pruned. If active worktrees remain, list them and
 ### 2. Determine base branch
 
 - **Wave 1 of a phase:** Base is `main`
-- **Wave N (N > 1):** Base is the previous wave's deployment branch (`deployments/phase{P}/wave-{M-1}`), or `main` if the previous wave was already merged
+- **Wave N (N > 1):** Base is the previous wave's deployment branch (`deployments/phase-{P}/wave-{M-1}`), or `main` if the previous wave was already merged
 
 ```bash
 # Check if previous wave branch exists
-git -C "$REPO_ROOT" ls-remote --heads origin "deployments/phase{P}/wave-{M-1}"
+git -C "$REPO_ROOT" ls-remote --heads origin "deployments/phase-{P}/wave-{M-1}"
 ```
 
 If the previous wave branch exists but has not been merged to main, warn the user:
 
 ```
-WARNING: Previous wave branch deployments/phase{P}/wave-{M-1} has not been
+WARNING: Previous wave branch deployments/phase-{P}/wave-{M-1} has not been
 merged to main. Starting from main instead. Ensure previous wave changes
 are integrated before merging this wave.
 ```
@@ -46,17 +46,17 @@ are integrated before merging this wave.
 cd "$REPO_ROOT"
 git fetch origin
 git checkout main && git pull origin main
-git checkout -b "deployments/phase{P}/wave-{M}"
-git push -u origin "deployments/phase{P}/wave-{M}"
+git checkout -b "deployments/phase-{P}/wave-{M}"
+git push -u origin "deployments/phase-{P}/wave-{M}"
 ```
 
 If the branch already exists on the remote:
 
 ```bash
 cd "$REPO_ROOT"
-git fetch origin "deployments/phase{P}/wave-{M}"
-git checkout "deployments/phase{P}/wave-{M}"
-git pull origin "deployments/phase{P}/wave-{M}"
+git fetch origin "deployments/phase-{P}/wave-{M}"
+git checkout "deployments/phase-{P}/wave-{M}"
+git pull origin "deployments/phase-{P}/wave-{M}"
 ```
 
 Report which case was followed.
@@ -97,7 +97,7 @@ git -c user.name="{Manager Name}" -c user.email="{manager email}" \
     add cross-repo-status.json && \
 git -c user.name="{Manager Name}" -c user.email="{manager email}" \
     commit -m "ops: Set Wave {M} active in cross-repo-status.json"
-git push origin "deployments/phase{P}/wave-{M}"
+git push origin "deployments/phase-{P}/wave-{M}"
 ```
 
 ### 6. Run mid-wave retro (if not Wave 1)
@@ -109,7 +109,7 @@ If this is not the first wave, run `/retro` to capture a health check from the p
 ```
 **Wave Initialized: Phase {P} Wave {M}**
 
-- Branch: `deployments/phase{P}/wave-{M}` ({created|already existed})
+- Branch: `deployments/phase-{P}/wave-{M}` ({created|already existed})
 - Base: `{base_branch}`
 - Label: `p{P}-wave-{M}` ({created|already existed})
 - Stale worktrees pruned: {count}

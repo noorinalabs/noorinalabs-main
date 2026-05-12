@@ -1,0 +1,6 @@
+{
+  "description": "Out-of-scope: `Request` direction. The comment body has Requestee.lastname (Virtanen) matching the branch author lastname (Virtanen) — under the pre-path-2 hook this would have BLOCKED as a 'swap'. Path-2 narrows the hook to verdict directions only, so the Request comment passes through. This is the false-positive surface the narrowing eliminates.",
+  "command": "gh pr comment 42 --body \"$(cat <<'EOF'\nRequestor: Nadia Khoury\nRequestee: Aino Virtanen\nRequestOrReplied: Request\nEOF\n)\"",
+  "branch_ref": "A.Virtanen/0378-direction-table-oos",
+  "expect": "allow"
+}

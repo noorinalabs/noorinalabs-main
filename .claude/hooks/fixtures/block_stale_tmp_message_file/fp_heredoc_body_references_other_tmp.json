@@ -1,0 +1,5 @@
+{
+  "description": "False-positive regression (W7 retro 2026-05-08): the --body-file points to a fresh /tmp file, but the heredoc body contains another /tmp/* path as documentation reference. Heredoc-stripping must drop the inner reference so the parser sees ONLY the body-file value.",
+  "command": "gh issue create --title bug --body-file /tmp/fixture-fp-heredoc-bodyfile.md <<EOF\n## Reproducer\n\nA prior /tmp/fixture-fp-heredoc-old-reference.md was written and is documented here\nas part of the bug report body. It must NOT be treated as a body-file argument.\nEOF",
+  "expect": "allow"
+}

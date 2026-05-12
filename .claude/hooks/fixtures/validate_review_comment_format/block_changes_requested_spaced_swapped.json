@@ -1,0 +1,6 @@
+{
+  "description": "`Changes Requested` (two-word, space-separated) verdict form — the literal value `validate_pr_review` counts per feedback_validate_pr_review_approved_not_reply. Swapped fields must still block on the spaced form.",
+  "command": "gh pr comment 42 --body \"$(cat <<'EOF'\nRequestor: Nadia Khoury\nRequestee: Aino Virtanen\nRequestOrReplied: Changes Requested\nTechDebt: none\nEOF\n)\"",
+  "branch_ref": "A.Virtanen/0378-direction-table-oos",
+  "expect": "block:swapped"
+}

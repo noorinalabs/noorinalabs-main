@@ -1,0 +1,5 @@
+{
+  "description": "False-positive regression: the heredoc body has a markdown code-fence block referencing /tmp/x — since heredoc-strip runs first, the fenced content drops out before tokenization. Parser must see only the body-file value.",
+  "command": "gh issue create --title doc --body-file /tmp/fixture-fp-codefence-bodyfile.md <<EOF\n## Code\n\n\\`\\`\\`\necho hi > /tmp/fixture-fp-codefence-inside.txt\n\\`\\`\\`\nEOF",
+  "expect": "allow"
+}

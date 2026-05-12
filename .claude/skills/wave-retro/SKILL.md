@@ -17,7 +17,7 @@ Run `/ontology-librarian` to check ontology staleness before the retro. If the o
 List all PRs merged to the wave's deployments branch:
 
 ```bash
-gh pr list --state merged --base "deployments/phase{N}/wave-{M}" --json number,title,author,body,mergedAt,reviews
+gh pr list --state merged --base "deployments/phase-{N}/wave-{M}" --json number,title,author,body,mergedAt,reviews
 ```
 
 ### 2.5. Status-counter verification (added P3W5 retro 2026-05-06)
