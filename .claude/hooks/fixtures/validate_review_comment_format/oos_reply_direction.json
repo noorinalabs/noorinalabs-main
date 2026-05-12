@@ -1,6 +1,6 @@
 {
-  "description": "Out-of-scope: `Reply` direction. Requestee.lastname (Virtanen) matches branch-author.lastname (Virtanen). Pre-path-2 hook would have BLOCKED as a swap; path-2 narrowing returns None for non-verdict directions and lets the Reply through. Coverage for the second non-verdict row of the Direction table.",
-  "command": "gh pr comment 42 --body \"$(cat <<'EOF'\nRequestor: Nadia Khoury\nRequestee: Aino Virtanen\nRequestOrReplied: Reply\n\nThanks for the review; rolled out the change.\nEOF\n)\"",
-  "branch_ref": "A.Virtanen/0378-direction-table-oos",
+  "description": "Out-of-scope: `Reply` direction. Charter post-#244 Direction table binds Requestor=replier on Reply comments — for a Reply from the PR author, Requestor=PR-author=branch-author. Under the verdict-only inverted heuristic this would BLOCK (Virtanen == Virtanen), but path-2 narrowing returns None for non-verdict directions and lets the Reply through. Coverage for the second non-verdict Direction row.",
+  "command": "gh pr comment 42 --body \"$(cat <<'EOF'\nRequestor: Aino Virtanen\nRequestee: Nadia Khoury\nRequestOrReplied: Reply\n\nThanks for the review; rolled out the change.\nEOF\n)\"",
+  "branch_ref": "A.Virtanen/0386-direction-table-realign",
   "expect": "allow"
 }

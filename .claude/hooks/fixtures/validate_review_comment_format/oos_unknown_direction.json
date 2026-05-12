@@ -1,6 +1,6 @@
 {
-  "description": "Out-of-scope fail-open: unrecognized `RequestOrReplied` value (typo / future verdict not in the canonical set). The hook does NOT validate the verdict word itself — that is `validate_pr_review`'s responsibility. Returns None and lets the comment through.",
+  "description": "Out-of-scope fail-open: unrecognized `RequestOrReplied` value (typo / future verdict not in the canonical set). The hook does NOT validate the verdict word itself — that is `validate_pr_review`'s responsibility. Returns None and lets the comment through. (Body shape would post-#244-block under verdict scope: Requestor.lastname=Virtanen matches branch-author.lastname=Virtanen — but the unknown direction triggers early-return-None before the heuristic runs.)",
   "command": "gh pr comment 42 --body \"$(cat <<'EOF'\nRequestor: Aino Virtanen\nRequestee: Aino Virtanen\nRequestOrReplied: Asdf\nTechDebt: none\nEOF\n)\"",
-  "branch_ref": "A.Virtanen/0378-direction-table-oos",
+  "branch_ref": "A.Virtanen/0386-direction-table-realign",
   "expect": "allow"
 }

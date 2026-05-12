@@ -1,6 +1,6 @@
 {
-  "description": "Happy path (current hook behavior preserved): Approved verdict where Requestee.lastname != branch-author.lastname. Branch is A.Virtanen/...; Requestee is Nadia Khoury — no swap signal, allow. Note: the existing hook's swap heuristic is independent of the charter Direction-table semantics — path-2 narrows the scope where the heuristic fires but does NOT alter the heuristic's check itself. Full Direction-table semantic realignment is out of scope per #378 path-2.",
-  "command": "gh pr comment 42 --body \"$(cat <<'EOF'\nRequestor: Aino Virtanen\nRequestee: Nadia Khoury\nRequestOrReplied: Approved\nTechDebt: none\nEOF\n)\"",
-  "branch_ref": "A.Virtanen/0378-direction-table-oos",
+  "description": "Happy path (post-#244 canonical): Approved verdict where Requestor is the reviewer and Requestee is the PR author (= branch author per charter Direction table). Branch is A.Virtanen/...; Requestor is Nadia Khoury (reviewer), Requestee is Aino Virtanen (PR author = branch author). Inverted heuristic compares Requestor.lastname to branch-author.lastname; Khoury != Virtanen → no swap, allow.",
+  "command": "gh pr comment 42 --body \"$(cat <<'EOF'\nRequestor: Nadia Khoury\nRequestee: Aino Virtanen\nRequestOrReplied: Approved\nTechDebt: none\nEOF\n)\"",
+  "branch_ref": "A.Virtanen/0386-direction-table-realign",
   "expect": "allow"
 }
