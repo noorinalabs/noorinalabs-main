@@ -18,6 +18,8 @@ The project's enforcement hierarchy is **hook > skill > charter > memory** (see 
 
 Skill-to-hook **ALWAYS** produces a DECIDE-tier draft issue — never auto-applies (D6, hooks are security-sensitive).
 
+**Marker convention:** The audit pipeline recognizes exactly two provenance marker shapes — `<!-- Promoted from memory: <filename> (<context>) -->` (Shape 1, charter-tier; parser regex `_HTML_COMMENT_PROMOTED_RE`) and `**Promotion provenance:** <body>` (Shape 2, hook-tier and multi-source; parser regex `_PROVENANCE_RE`). The authoritative source for the SHAPE selection rule is [`charter/skills.md` § Promotion Pipeline Marker Convention](../../team/charter/skills.md#promotion-pipeline-marker-convention). For per-hook authoring discipline (forward-reference filter, paragraph separation), see [`charter/hooks.md` § Hook Provenance Block Format](../../team/charter/hooks.md#hook-provenance-block-format). Any future change to the recognized shapes MUST update the charter section first, then the parser, then this skill — in that order, in a single PR.
+
 ## Instructions
 
 ### 1. Resolve wave name
