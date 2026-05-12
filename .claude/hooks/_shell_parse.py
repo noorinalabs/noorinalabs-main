@@ -50,6 +50,29 @@ Public API
         Same shape for `gh ...`. Returns (gh_global_opts, [topic, action,
         ...rest]) — e.g. ([], ["pr", "create", "--repo", ...]).
 
+    is_gh_subcommand(tokens, *verbs) -> bool
+        Yes/no convenience for "does this token list contain a `gh <verb1>
+        <verb2> ...` invocation?". Walks the token stream allowing the
+        match at any position. Use this when you only need the boolean,
+        not the post-verb tail; use `find_gh_subcommand` when you need
+        to inspect the tail.
+
+    walk_flag_values(tokens, wanted) -> list[str]
+        Walks `tokens` and returns the value of every flag in `wanted`,
+        in source order. Handles both the two-token form (`--flag value`)
+        and the equals form (`--flag=value`). Values inside another flag's
+        value (e.g. inside `--body "...--flag X..."`) are correctly
+        ignored because they arrive as a SINGLE shlex token, never
+        preceded by a flag from `wanted`.
+
+    first_flag_value(command, wanted, *, regex_fallback=True) -> str | None
+        Convenience wrapper: tokenizes `command` via `tokenize()` and
+        returns the first value from `walk_flag_values()`. If tokenize
+        fails AND `regex_fallback=True` (the default), falls back to a
+        boundary-anchored regex per the public tokenize contract.
+        Security-critical matchers should pass `regex_fallback=False`
+        to fail closed on parse failure.
+
     extract_dash_c_pairs(segment) -> list[tuple[str, str]]
         Walks a tokenized git segment and returns (key, value) pairs for
         every `-c key=value` global option, in source order. shlex has
@@ -272,6 +295,92 @@ def find_gh_subcommand(segment: list[str]) -> tuple[list[str], list[str]] | None
     if len(segment) < 2:
         return None
     return [], segment[1:]
+
+
+def is_gh_subcommand(tokens: list[str], *verbs: str) -> bool:
+    """Return True if `tokens` begins a `gh <verbs[0]> <verbs[1]> ...` invocation.
+
+    Walks `tokens` looking for `gh` followed by the supplied verb sequence in
+    order, allowing them to appear at any position (not just the start of the
+    list). Used by hooks that want a yes/no "does this command invoke
+    `gh issue create`?" check without needing the post-verb token tail.
+
+    Example:
+        is_gh_subcommand(tokens, "issue", "create")  # True for `gh issue create ...`
+        is_gh_subcommand(tokens, "pr", "create")     # True for `gh pr create ...`
+    """
+    if not verbs:
+        return False
+    target = ("gh",) + verbs
+    n = len(tokens)
+    span = len(target)
+    if n < span:
+        return False
+    for i in range(n - span + 1):
+        if tuple(tokens[i : i + span]) == target:
+            return True
+    return False
+
+
+def walk_flag_values(tokens: list[str], wanted: set[str]) -> list[str]:
+    """Return values for `wanted` flag names, only when they appear as flags.
+
+    A token is treated as a wanted-flag value only if the immediately
+    preceding token is exactly one of `wanted` (e.g. `--label`). The
+    `--flag=value` equals form is also handled. Values inside other flags
+    (e.g. inside the value of `--body`) are ignored because they are a
+    SINGLE shlex token, never preceded by a flag from `wanted`.
+
+    Order is preserved: values appear in the order they were encountered
+    in the token stream.
+    """
+    values: list[str] = []
+    i = 0
+    n = len(tokens)
+    while i < n:
+        tok = tokens[i]
+        if tok in wanted:
+            if i + 1 < n:
+                values.append(tokens[i + 1])
+                i += 2
+                continue
+            i += 1
+            continue
+        matched = False
+        for flag in wanted:
+            if tok.startswith(flag + "="):
+                values.append(tok[len(flag) + 1 :])
+                matched = True
+                break
+        if matched:
+            i += 1
+            continue
+        i += 1
+    return values
+
+
+def first_flag_value(command: str, wanted: set[str], *, regex_fallback: bool = True) -> str | None:
+    """Tokenize `command` and return the first value for any flag in `wanted`.
+
+    Returns None if no wanted flag is present. If shlex tokenization fails
+    (malformed quotes) and `regex_fallback=True` (default), falls back to a
+    boundary-anchored regex search that tries longer flag names first so
+    `--repo` is preferred over a hypothetical shorter prefix collision.
+    With `regex_fallback=False`, returns None on tokenize failure (the
+    fail-closed shape used by security-critical matchers).
+    """
+    tokens = tokenize(command)
+    if tokens is None:
+        if not regex_fallback:
+            return None
+        for flag in sorted(wanted, key=len, reverse=True):
+            pattern = rf"(?:^|\s){re.escape(flag)}(?:=|\s+)(\S+)"
+            match = re.search(pattern, command)
+            if match:
+                return match.group(1)
+        return None
+    values = walk_flag_values(tokens, wanted)
+    return values[0] if values else None
 
 
 def extract_dash_c_pairs(segment: list[str]) -> list[tuple[str, str]]:
