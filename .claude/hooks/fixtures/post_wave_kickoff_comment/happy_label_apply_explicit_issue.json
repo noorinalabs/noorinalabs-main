@@ -1,0 +1,25 @@
+{
+  "description": "Happy path: gh issue edit on an explicit-issue scope row (W7+W8 shape with `id: repo#NNN`). Hook should resolve the assignment row, render the charter-format kickoff comment, and 'post' it via the injected poster mock.",
+  "command": "gh issue edit 123 --repo noorinalabs/noorinalabs-main --add-label \"p3-wave-9\"",
+  "status": {
+    "wave_9_meta_issue": 347,
+    "wave_9_scope": {
+      "tier_1_test": [
+        {"id": "noorinalabs-main#123", "implementer": "Aino Virtanen", "reviewer": "Nadia Khoury", "reviewer_2": "Santiago Ferreira", "priority": "tech-debt"}
+      ]
+    }
+  },
+  "existing_comments": [],
+  "post_succeeds": true,
+  "expect_action": "post",
+  "expect_body_contains": [
+    "Requestor: Fatima Okonkwo",
+    "Requestee: Aino Virtanen",
+    "RequestOrReplied: Request",
+    "**Wave 9 Kickoff — Phase 3**",
+    "- Peer reviewer: Nadia Khoury",
+    "- Secondary reviewer: Santiago Ferreira",
+    "- Branch from: `deployments/phase-3/wave-9`",
+    "- Priority: tech-debt"
+  ]
+}

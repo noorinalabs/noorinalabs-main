@@ -1,0 +1,15 @@
+{
+  "description": "Passthrough: gh issue edit applying a NON-wave label (e.g., tech-debt). The matcher should not fire — check() returns None (hook does not apply) and the label-apply succeeds without any side effects.",
+  "command": "gh issue edit 126 --repo noorinalabs/noorinalabs-main --add-label \"tech-debt\"",
+  "status": {
+    "wave_9_meta_issue": 347,
+    "wave_9_scope": {
+      "tier_1_test": [
+        {"id": "noorinalabs-main#126", "implementer": "Aino Virtanen", "reviewer": "Nadia Khoury", "reviewer_2": "Santiago Ferreira"}
+      ]
+    }
+  },
+  "existing_comments": [],
+  "post_succeeds": true,
+  "expect_action": null
+}
