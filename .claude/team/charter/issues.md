@@ -51,6 +51,8 @@ Any URL printed by the final `comm` is an open issue missing from the board — 
 
 **Why:** On 2026-04-23, running this check during P2W10 execution revealed **72 of 193 open issues (37%) were missing from the board**. Those issues were invisible to any wave-planning pass that read labels or meta-issue bodies. Planning from labels alone systematically excludes work the team forgot to triage.
 
+**Skill:** `/board-audit` (main#199) automates both the orphan-detection check above AND the `p{N}-wave-{M}` label → project Wave-field sync. Labels are canonical for phase/wave assignment; the project's `Wave` single-select field is a **derived projection** of labels, maintained by `/board-audit`. The skill is wired into `/wave-kickoff`, `/wave-retro`, and `/session-start` step 5 so the board stays current at every wave boundary. Manual invocation is also valid whenever drift is suspected.
+
 ## Pre-Wave Checklist <!-- promotion-target: skill -->
 Before any wave begins, the Manager must verify:
 

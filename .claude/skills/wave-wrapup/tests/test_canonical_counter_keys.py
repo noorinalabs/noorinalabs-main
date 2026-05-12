@@ -25,10 +25,13 @@ import sys
 import unittest
 from pathlib import Path
 
-# Reuse the helper from wave-scope/ — Step 10.5 of /wave-wrapup invokes it.
+# Reuse the helper from .claude/lib/ — Step 10.5 of /wave-wrapup invokes it.
+# Helper promoted from wave-scope/ to lib/ per main#292 (multi-consumer →
+# shared lib). From .claude/skills/wave-wrapup/tests/, lib is 3 levels up
+# then ../lib (tests → wave-wrapup → skills → .claude → lib).
 _HERE = Path(__file__).resolve().parent
-_WAVE_SCOPE_DIR = _HERE.parent.parent / "wave-scope"
-sys.path.insert(0, str(_WAVE_SCOPE_DIR))
+_LIB_DIR = _HERE.parent.parent.parent / "lib"
+sys.path.insert(0, str(_LIB_DIR))
 
 from upsert_status_keys import upsert_top_level_key  # noqa: E402
 

@@ -81,6 +81,8 @@ Report:
 - Open issue count and any blockers
 - Open PRs across repos
 
+If the report surfaces unexpected gaps between board view and open-issue counts (e.g., wave-labeled issues missing from project 2, or Wave-field values out of sync with `p{N}-wave-{M}` labels), invoke `/board-audit` to detect and (with confirmation) repair the drift. Per main#199, labels are canonical and the project's Wave field is a derived projection synced by `/board-audit`.
+
 ### Step 6 — Charter freshness check
 
 Read the tail of the feedback log:
