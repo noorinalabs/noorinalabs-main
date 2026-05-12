@@ -102,6 +102,135 @@ class FreshnessGateTests(unittest.TestCase):
             self.assertEqual(result["decision"], "block")
 
 
+class FreshnessGateHeredocRegressionTests(unittest.TestCase):
+    """W7-retro 2026-05-08 false-positive regression (#316).
+
+    Reproduces the actual bug shape that motivated this fix:
+      - Fresh /tmp/body.md (mtime < threshold) — the genuine --body-file arg
+      - Stale /tmp/old.md (mtime > threshold) — mentioned only inside the
+        heredoc body as documentation
+      - Command: `gh issue create --body-file /tmp/body.md <<EOF ... EOF`
+      - Expected: allow (the stale path is NOT a body-file value)
+
+    The pre-fix regex-against-raw-command-string parser found `/tmp/old.md`
+    inside the heredoc body and blocked. The post-fix parser strips heredocs
+    BEFORE tokenization, so the stale path never reaches the matcher.
+    """
+
+    def test_fresh_bodyfile_with_stale_path_in_heredoc_body_allowed(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as td:
+            fresh = f"{td}/body.md"
+            stale = f"{td}/old-stale.md"
+            _touch(fresh, age_seconds=1)
+            _touch(stale, age_seconds=120)
+            cmd = (
+                f"gh issue create --title bug --body-file {fresh} <<EOF\n"
+                "## Reproducer\n"
+                "\n"
+                f"A prior {stale} was written and is referenced here as documentation\n"
+                "of the bug shape. The hook MUST NOT treat it as a body-file value.\n"
+                "EOF"
+            )
+            result = hook.check(_bash(cmd))
+            self.assertIsNone(
+                result,
+                f"W7-retro regression: stale path inside heredoc body was treated "
+                f"as body-file argument and blocked. Reason: {result}",
+            )
+
+    def test_fresh_bodyfile_with_code_fence_tmp_in_heredoc_body_allowed(self):
+        """Code-fence inside heredoc body referencing /tmp must not trip the matcher.
+
+        Heredoc-strip drops the entire body, so the fenced /tmp/* reference
+        falls out before the path-extractor runs.
+        """
+        with tempfile.TemporaryDirectory(dir="/tmp") as td:
+            fresh = f"{td}/body.md"
+            _touch(fresh, age_seconds=1)
+            cmd = (
+                f"gh issue create --title doc --body-file {fresh} <<EOF\n"
+                "Example:\n"
+                "```\n"
+                f"cat > /tmp/some-old-example.txt <<INNER\n"
+                "content\n"
+                "INNER\n"
+                "```\n"
+                "EOF"
+            )
+            result = hook.check(_bash(cmd))
+            self.assertIsNone(result)
+
+
+class EqualsFormTests(unittest.TestCase):
+    """Coverage for --body-file=<path> / --file=<path> / --input=<path> equals form.
+
+    Pre-fix regex required a SPACE between flag and value, silently missing the
+    equals form. Post-fix tokenizer handles both shapes.
+    """
+
+    def test_stale_body_file_equals_form_blocked(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as td:
+            body = f"{td}/body.md"
+            _touch(body, age_seconds=120)
+            cmd = f"gh issue create --title x --body-file={body}"
+            result = hook.check(_bash(cmd))
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertEqual(result["decision"], "block")
+            self.assertIn(body, result["reason"])
+
+    def test_fresh_body_file_equals_form_allowed(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as td:
+            body = f"{td}/body.md"
+            _touch(body, age_seconds=1)
+            cmd = f"gh issue create --title x --body-file={body}"
+            result = hook.check(_bash(cmd))
+            self.assertIsNone(result)
+
+    def test_stale_git_commit_file_equals_form_blocked(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as td:
+            msg = f"{td}/msg.txt"
+            _touch(msg, age_seconds=120)
+            cmd = f"git commit --file={msg}"
+            result = hook.check(_bash(cmd))
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertEqual(result["decision"], "block")
+
+
+class GhApiInputTests(unittest.TestCase):
+    """Coverage for `gh api ... --input <path>` (issue #316 acceptance flag list)."""
+
+    def test_stale_gh_api_input_blocked(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as td:
+            payload = f"{td}/payload.json"
+            _touch(payload, age_seconds=120)
+            cmd = f"gh api repos/foo/bar/issues -X POST --input {payload}"
+            result = hook.check(_bash(cmd))
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertEqual(result["decision"], "block")
+            self.assertIn(payload, result["reason"])
+
+    def test_fresh_gh_api_input_allowed(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as td:
+            payload = f"{td}/payload.json"
+            _touch(payload, age_seconds=1)
+            cmd = f"gh api repos/foo/bar/issues -X POST --input {payload}"
+            result = hook.check(_bash(cmd))
+            self.assertIsNone(result)
+
+    def test_stale_gh_api_input_equals_form_blocked(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as td:
+            payload = f"{td}/payload.json"
+            _touch(payload, age_seconds=120)
+            cmd = f"gh api repos/foo/bar/issues -X POST --input={payload}"
+            result = hook.check(_bash(cmd))
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertEqual(result["decision"], "block")
+
+
 class NonMatchingTests(unittest.TestCase):
     """Cases where the hook must stay out of the way."""
 
@@ -188,7 +317,7 @@ class NonMatchingTests(unittest.TestCase):
 
 
 class ExtractionTests(unittest.TestCase):
-    """Direct coverage of _extract_tmp_paths regex behavior."""
+    """Direct coverage of _extract_tmp_paths tokenizer behavior."""
 
     def test_extracts_git_F_path(self):
         self.assertEqual(
@@ -213,6 +342,53 @@ class ExtractionTests(unittest.TestCase):
         self.assertEqual(
             sorted(hook._extract_tmp_paths(cmd)),
             ["/tmp/a.txt", "/tmp/b.md"],
+        )
+
+    def test_extracts_equals_form_body_file(self):
+        """--body-file=<path> equals form must yield the path."""
+        self.assertEqual(
+            hook._extract_tmp_paths("gh issue create --body-file=/tmp/eq.md"),
+            ["/tmp/eq.md"],
+        )
+
+    def test_extracts_gh_api_input_path(self):
+        """`gh api ... --input <path>` yields the path."""
+        self.assertEqual(
+            hook._extract_tmp_paths("gh api repos/x/y/issues -X POST --input /tmp/payload.json"),
+            ["/tmp/payload.json"],
+        )
+
+    def test_extracts_gh_api_input_equals_form(self):
+        """`gh api ... --input=<path>` equals form yields the path."""
+        self.assertEqual(
+            hook._extract_tmp_paths("gh api repos/x/y/issues -X POST --input=/tmp/payload.json"),
+            ["/tmp/payload.json"],
+        )
+
+    def test_heredoc_body_paths_ignored(self):
+        """Paths mentioned inside heredoc bodies are stripped before tokenization."""
+        cmd = (
+            "gh issue create --body-file /tmp/fresh.md <<EOF\n"
+            "see /tmp/old-doc-reference.md for prior context\n"
+            "EOF"
+        )
+        self.assertEqual(
+            hook._extract_tmp_paths(cmd),
+            ["/tmp/fresh.md"],
+        )
+
+    def test_positional_tmp_in_redirect_ignored(self):
+        """`gh pr view 42 > /tmp/out.txt` must yield NO paths (no body-file flag)."""
+        self.assertEqual(
+            hook._extract_tmp_paths("gh pr view 42 > /tmp/out.txt"),
+            [],
+        )
+
+    def test_git_log_tmp_in_grep_arg_ignored(self):
+        """`git log --grep /tmp/foo` must yield NO paths (git log is not covered)."""
+        self.assertEqual(
+            hook._extract_tmp_paths("git log --grep /tmp/foo"),
+            [],
         )
 
 

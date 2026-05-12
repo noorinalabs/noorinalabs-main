@@ -1,0 +1,5 @@
+{
+  "description": "False-positive regression: /tmp/* appears as a positional/redirect argument unrelated to a body-file flag (`gh pr view 42 > /tmp/out.txt`). Must be ignored — only body-file flag VALUES are checked.",
+  "command": "gh pr view 42 > /tmp/fixture-fp-positional-out.txt",
+  "expect": "allow"
+}

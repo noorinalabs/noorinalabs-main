@@ -1,0 +1,5 @@
+{
+  "description": "Happy path: gh issue create --body-file /tmp/<unique> when the file doesn't exist (parser extracts the path correctly; allow because mtime check on missing file is no-op)",
+  "command": "gh issue create --title fix --body-file /tmp/fixture-happy-fresh-nonexistent.md",
+  "expect": "allow"
+}
