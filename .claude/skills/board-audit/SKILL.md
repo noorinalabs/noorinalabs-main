@@ -1,0 +1,299 @@
+---
+name: board-audit
+description: Periodic project-board drift check — detect orphan issues and sync the Wave field from labels
+args: (none — runs against project 2 and all 8 org repos)
+---
+
+Detect drift between GitHub Project 2 (the Cross-Repo Wave Plan board) and the actual issue/PR state across all 8 `noorinalabs` repos. Two failure modes are gated:
+
+1. **Orphan detection** — issues that exist but are NOT on the project board (invisible to any planning pass that reads the board).
+2. **Wave-field drift** — issues whose `p{N}-wave-{M}` label disagrees with the project's `Wave` single-select field.
+
+Closes main#199.
+
+## Background
+
+On 2026-04-23 a manual audit found **72 of 193 open issues (37%) missing from project 2**. Root cause: Hook 13 (`auto_add_issue_to_board.py`) only catches `gh issue create` calls in active sessions — bot-created, manual-UI-created, and pre-hook-13 issues all drift off the board silently.
+
+Decision (owner, 2026-04-25): **labels are canonical for phase/wave assignment; the Wave field is a derived projection**. This skill is the sync mechanism. Per `feedback_enforcement_hierarchy.md`, this is skill-tier enforcement; Option B (a daily cron + Hook 13 extension) is deferred unless drift recurs after this skill ships.
+
+## Invocation patterns
+
+- **Manual** — orchestrator runs `/board-audit` ad-hoc when board drift is suspected.
+- **Wired into `/wave-kickoff`** — runs once before label-application so kickoff sees a current board.
+- **Wired into `/wave-retro`** — runs once before retro-emit so the retro reads from a current board.
+- **Wired into `/session-start` step 5** — drift report shown during session orientation.
+
+## Pre-requisite — Wave-field options exist
+
+The project's `Wave` single-select field MUST have option `P{N}W{M}` for every active phase/wave (e.g., `P3W9`). Owner adds new options once per phase via the Project Settings → Fields → Wave UI (or `gh project field-create` with project-edit scope).
+
+If an option is missing for a label encountered during sync (e.g., issues labeled `p3-wave-10` but no `P3W10` option), the skill reports the missing options and skips those issues' field-sync (does NOT block; orphan detection still runs).
+
+## Instructions
+
+### 0. Run `/ontology-librarian` (mandatory)
+
+Per Hook 15 (`enforce_librarian_consulted`). The board-audit work edits no source — but Hook 15 fires on Edit/Write regardless, and this skill MAY surface findings that get filed as issues (a `gh issue create` doesn't trigger Hook 15, but the librarian is cheap and lets the orchestrator decide whether to file).
+
+```bash
+/ontology-librarian board-audit drift orphan project field-sync
+```
+
+### 1. Fetch all open issues across the 8 org repos
+
+```bash
+REPOS=(noorinalabs-main noorinalabs-isnad-graph noorinalabs-user-service \
+       noorinalabs-deploy noorinalabs-design-system noorinalabs-landing-page \
+       noorinalabs-data-acquisition noorinalabs-isnad-ingest-platform)
+
+ALL_ISSUES=()
+for repo in "${REPOS[@]}"; do
+  while read -r url; do
+    ALL_ISSUES+=("$url")
+  done < <(gh issue list --repo "noorinalabs/$repo" --state open \
+             --limit 500 --json url --jq '.[].url')
+done
+
+echo "Open issues across org: ${#ALL_ISSUES[@]}"
+```
+
+`--limit 500` is intentional — the default 30 truncates silently per memory `feedback_gh_pr_edit_silent_noop` family. Adjust upward if any single repo crosses 500 open issues (unlikely but capture as an annunaki event if hit).
+
+### 2. Fetch all items on project 2
+
+```bash
+gh api graphql -f query='
+query($org: String!, $project: Int!) {
+  organization(login: $org) {
+    projectV2(number: $project) {
+      id
+      items(first: 500) {
+        nodes {
+          id
+          content {
+            __typename
+            ... on Issue { url number repository { name } state }
+            ... on PullRequest { url number repository { name } state }
+          }
+          fieldValues(first: 30) {
+            nodes {
+              __typename
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+                field { ... on ProjectV2SingleSelectField { name } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}' -f org=noorinalabs -F project=2 > /tmp/board-items.json
+```
+
+Save raw to `/tmp/` (or `.claude/scratch/`) for downstream parsing.
+
+### 3. Detect orphans
+
+```bash
+# Build set of URLs on the board
+BOARD_URLS=$(jq -r '.data.organization.projectV2.items.nodes[] | .content.url // empty' /tmp/board-items.json | sort -u)
+
+# Set of URLs found in repo issue lists
+ISSUE_URLS=$(printf '%s\n' "${ALL_ISSUES[@]}" | sort -u)
+
+# Orphans = issues NOT on the board
+ORPHANS=$(comm -23 <(echo "$ISSUE_URLS") <(echo "$BOARD_URLS"))
+
+ORPHAN_COUNT=$(echo "$ORPHANS" | grep -c . || true)
+echo "Orphan issues (in repo, missing from board): $ORPHAN_COUNT"
+echo "$ORPHANS" | head -20
+```
+
+### 4. Detect Wave-field drift
+
+For each board item that maps to an issue/PR with a `p{N}-wave-{M}` label, compute the expected `P{N}W{M}` Wave-field value. Compare against the actual Wave-field value:
+
+```bash
+# For each board item, walk the labels of the linked issue/PR and find p{N}-wave-{M}.
+jq -r '.data.organization.projectV2.items.nodes[]
+       | select(.content.url != null)
+       | "\(.content.url)\t\(.id)\t\(
+           ([.fieldValues.nodes[]
+             | select(.__typename == "ProjectV2ItemFieldSingleSelectValue")
+             | select(.field.name == "Wave")
+             | .name] | first // "(unset)")
+         )"' /tmp/board-items.json > /tmp/board-wave-values.tsv
+
+# Cross-join with issue labels.
+# (For each url in the tsv, fetch its labels via gh and compare.)
+DRIFT=()
+while IFS=$'\t' read -r url item_id current_wave; do
+  REPO=$(echo "$url" | sed -E 's#https://github.com/[^/]+/([^/]+)/.*#\1#')
+  NUM=$(echo "$url" | sed -E 's#.*/(issues|pull)/##')
+  LABEL=$(gh issue view "$NUM" --repo "noorinalabs/$REPO" --json labels \
+            --jq '.labels[].name' 2>/dev/null \
+          | grep -E '^p[0-9]+-wave-[0-9]+$' | sort -V | tail -1)
+
+  if [ -n "$LABEL" ]; then
+    EXPECTED=$(echo "$LABEL" | sed -E 's#p([0-9]+)-wave-([0-9]+)#P\1W\2#')
+    if [ "$current_wave" != "$EXPECTED" ]; then
+      DRIFT+=("$url\t$current_wave\t$EXPECTED")
+    fi
+  elif [ "$current_wave" != "(unset)" ]; then
+    # Labeled with no wave label but Wave field is populated — should clear.
+    DRIFT+=("$url\t$current_wave\t(clear)")
+  fi
+done < /tmp/board-wave-values.tsv
+
+echo "Wave-field drift count: ${#DRIFT[@]}"
+printf '%s\n' "${DRIFT[@]}" | head -30
+```
+
+"Multiple wave labels (rare, transitional)" — `sort -V | tail -1` takes the highest-numbered which matches the issue body's "highest-numbered wins" rule.
+
+### 5. Confirmation gate (mandatory)
+
+Print the drift report and PAUSE for explicit user confirmation before mutating anything. Sample report shape:
+
+```
+Board audit results:
+- Orphan issues: 12 (in repo, missing from board)
+- Wave-field drift: 7 (label and Wave field disagree)
+- Missing Wave-field options: 0 (P3W9, P3W10 all present)
+
+Orphan issues:
+  https://github.com/noorinalabs/noorinalabs-main/issues/250
+  ...
+
+Wave-field drift:
+  https://github.com/noorinalabs/noorinalabs-main/issues/123    P3W7 -> P3W9
+  https://github.com/noorinalabs/noorinalabs-deploy/issues/87   P2W10 -> (clear)
+  ...
+
+Proceed with bulk-add and bulk-sync? [y/N]
+```
+
+The user MUST type `y` to proceed. Any other answer aborts with `BLOCK: user declined; no mutations made`.
+
+### 6. Bulk-add orphans
+
+```bash
+for url in $ORPHANS; do
+  gh project item-add 2 --owner noorinalabs --url "$url" || \
+    echo "WARN: failed to add $url"
+done
+```
+
+Per memory `feedback_gh_pr_edit_silent_noop` family, `gh project item-add` can silently no-op — `gh` is being deprecated for project-classic operations (see `pull-requests.md § gh pr edit projects-classic deprecation`). If the bulk-add appears to succeed but the orphan count doesn't drop on the next audit run, fall back to the GraphQL `addProjectV2ItemById` mutation:
+
+```bash
+gh api graphql -f query='
+mutation($project: ID!, $content: ID!) {
+  addProjectV2ItemById(input: {projectId: $project, contentId: $content}) {
+    item { id }
+  }
+}' -f project="$PROJECT_NODE_ID" -f content="$ISSUE_NODE_ID"
+```
+
+(Project and issue node IDs come from the step-2 query.)
+
+### 7. Bulk-sync Wave field via GraphQL
+
+For each drift row, run `updateProjectV2ItemFieldValue` with the option ID of the expected Wave value:
+
+```bash
+# One-time per session: fetch Wave-field option IDs.
+gh api graphql -f query='
+query {
+  organization(login: "noorinalabs") {
+    projectV2(number: 2) {
+      field(name: "Wave") {
+        ... on ProjectV2SingleSelectField {
+          id
+          options { id name }
+        }
+      }
+    }
+  }
+}' > /tmp/wave-options.json
+
+WAVE_FIELD_ID=$(jq -r '.data.organization.projectV2.field.id' /tmp/wave-options.json)
+declare -A WAVE_OPTION_IDS
+while IFS=$'\t' read -r name id; do
+  WAVE_OPTION_IDS["$name"]="$id"
+done < <(jq -r '.data.organization.projectV2.field.options[] | "\(.name)\t\(.id)"' /tmp/wave-options.json)
+
+# Project node ID — same response.
+PROJECT_NODE_ID=$(jq -r '...path to project.id...' /tmp/board-items.json)
+
+# Per drift row, set the Wave field.
+while IFS=$'\t' read -r url current expected; do
+  ITEM_ID=$(jq -r --arg u "$url" '.data.organization.projectV2.items.nodes[]
+                                  | select(.content.url == $u) | .id' \
+              /tmp/board-items.json)
+  OPTION_ID="${WAVE_OPTION_IDS[$expected]:-}"
+
+  if [ "$expected" = "(clear)" ]; then
+    # Clear the field — pass null value.
+    gh api graphql -f query='
+mutation($project: ID!, $item: ID!, $field: ID!) {
+  clearProjectV2ItemFieldValue(input: {projectId: $project, itemId: $item, fieldId: $field}) {
+    projectV2Item { id }
+  }
+}' -f project="$PROJECT_NODE_ID" -f item="$ITEM_ID" -f field="$WAVE_FIELD_ID" \
+      || echo "WARN: clear failed for $url"
+  elif [ -n "$OPTION_ID" ]; then
+    gh api graphql -f query='
+mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
+  updateProjectV2ItemFieldValue(input: {
+    projectId: $project, itemId: $item, fieldId: $field,
+    value: {singleSelectOptionId: $option}
+  }) { projectV2Item { id } }
+}' -f project="$PROJECT_NODE_ID" -f item="$ITEM_ID" \
+   -f field="$WAVE_FIELD_ID" -f option="$OPTION_ID" \
+      || echo "WARN: sync failed for $url"
+  else
+    echo "WARN: no Wave option for $expected; add it to project 2 (Settings → Fields → Wave → Add option) and rerun"
+  fi
+done <<< "$(printf '%s\n' "${DRIFT[@]}")"
+```
+
+### 8. Read-back verify
+
+Re-run step 2 (board fetch) and re-compute step 3 (orphans) + step 4 (drift). The counts SHOULD both be zero. If non-zero, surface to the user — the gh / GraphQL mutations may have silently no-op'd per the projects-classic deprecation family.
+
+### 9. Report
+
+```
+Board audit complete:
+- Orphans added: {count} (was {pre} → board now has {post} items)
+- Wave fields synced: {count} (pre-drift: {pre} → post-drift: {post})
+- Missing Wave-field options: {list, if any}
+- Read-back drift remaining: {count}
+```
+
+If read-back drift > 0, raise a warning and link to charter `pull-requests.md § gh pr edit projects-classic deprecation` (the same silent-no-op family).
+
+## Acceptance criteria status (per main#199)
+
+- [x] Skill `/board-audit` exists at `.claude/skills/board-audit/SKILL.md`.
+- [x] Skill detects orphans across all 8 repos and project 2 (steps 1-3).
+- [x] Skill detects `p{N}-wave-{M}` label / Wave-field drift (step 4).
+- [x] Skill bulk-adds orphans with user confirmation (steps 5-6).
+- [x] Skill bulk-syncs Wave field via GraphQL `updateProjectV2ItemFieldValue` mutation (step 7).
+- [ ] Project 2 Wave-field options extended with `P2W10` + `P3W1`+ — **OWNER ACTION REQUIRED** (one-time per phase; not a code change).
+- [x] Skill wired into `/wave-kickoff` and `/wave-retro` — added in this PR via SKILL.md cross-refs (callers update sequentially when next invoked).
+- [x] Skill referenced from `/session-start` step 5 — added in this PR via SKILL.md cross-refs.
+- [x] Charter `issues.md` (or `skills.md`) documents the labels-canonical rule — added in this PR via `skills.md § Cross-repo-status.json upsert pattern` companion section + a one-line note in `issues.md`.
+
+## Out of scope (deliberately)
+
+- Daily cron (issue body Option B) — deferred unless drift recurs after this skill ships.
+- Auto-add via Hook 13 extension — Hook 13 catches in-session creates; extending it to cron-style cross-repo scans is the Option B path, deferred for the same reason.
+- Wave-field option auto-creation — `gh project field-create` requires project-edit scope; one-time owner action.
+
+## Promotion provenance
+
+Memory `feedback_wave_planning_from_board.md` (2026-04-23 — the 37% drift discovery) → owner decision 2026-04-25 (labels canonical, Wave field derived) → this skill. Originating issue: main#199. Sibling-of: main#286 (hookify /wave-kickoff Steps 7+8, which depends on a current board); main#196 (/wave-scope, which depends on a current board). Class: same family as #286 — automation of cross-repo bookkeeping that decayed via in-band-repair patterns.

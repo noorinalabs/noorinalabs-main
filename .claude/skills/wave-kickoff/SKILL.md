@@ -10,6 +10,12 @@ Automate the wave kickoff process for the `{team_name}` team.
 
 ## Instructions
 
+### 0. Run `/board-audit` (Mandatory precondition — added per main#199)
+
+Run `/board-audit` once to ensure project 2 reflects current open-issue state and the `Wave` field is in sync with `p{N}-wave-{M}` labels. Without a current board, downstream steps (scope reconciliation, label application, kickoff comments) can silently miss orphan issues per memory `feedback_wave_planning_from_board.md` (the 37% drift discovery on 2026-04-23).
+
+If `/board-audit` reports drift, address it before proceeding. Labels are canonical; the Wave field is a derived projection synced by the skill (charter `issues.md § Wave Planning — Project Board Is Authoritative`).
+
 ### 0a. Verify next-wave scope is reconciled (Mandatory precondition — added P3W5 #273)
 
 `cross-repo-status.json` MUST carry a `wave_{M}_scope_reconciled_at` ISO timestamp written by `/wave-scope {P} {M}`. If a prior-wave retro/completion timestamp is also present, the scope timestamp MUST post-date it. If `wave_{M}_scope_reconciled_at` is absent the kickoff STOPs unconditionally; the staleness check is permissive (no-op) when the prior-wave timestamp is also absent — see "Permissive fallback" below.
