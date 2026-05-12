@@ -119,6 +119,16 @@
         ]
       },
       {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/post_wave_kickoff_comment.py",
+            "timeout": 60
+          }
+        ]
+      },
+      {
         "matcher": "Edit",
         "hooks": [
           {

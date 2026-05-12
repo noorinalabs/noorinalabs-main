@@ -305,29 +305,22 @@ For each issue, apply the wave label and assignee label:
 gh issue edit {NUMBER} --add-label "p{N}-wave-{M}" --add-label "{FIRSTNAME_LASTNAME}"
 ```
 
+**The kickoff comment is posted automatically.** A `PostToolUse` hook (`.claude/hooks/post_wave_kickoff_comment.py`, closes #286) fires on the `--add-label "p{N}-wave-{M}"` pattern, reads the matching assignment row from `cross-repo-status.json` `wave_{M}_scope.tier_*` arrays, and posts the charter-format kickoff comment to the issue. Per `feedback_enforcement_hierarchy`: hook > skill > charter — the prior manual loop (old Step 8) could be skipped or partial-fail, the hook fires deterministically.
+
+Hook behavior:
+- Idempotent: re-applying the wave label after disposition correction does NOT double-post (the hook detects the charter heading `**Wave {M} Kickoff — Phase {N}**` in existing comments and skips).
+- Meta-issue skip: when the labeled issue is `wave_{M}_meta_issue`, the per-issue kickoff is skipped (the meta-issue gets its own all-hands kickoff comment — see § 8 below).
+- Failure-tolerant: if `wave_{M}_scope` is missing or the issue isn't in any tier, the hook logs to `.claude/annunaki/errors.jsonl` and lets the label-apply succeed. A missing scope row is a `/wave-scope` bug, not a label-apply bug.
+
 ### 7a. Per-wave orchestration scripts (optional automation)
 
-For waves with many issues across many repos, the labeling + project-board adds in steps 7 and 8 may be automated by a per-wave orchestration script. Write these scripts to `.claude/skills/wave-kickoff/_orchestration/` using the naming convention `w{N}-{purpose}.py` (e.g., `w5-kickoff.py`, `w5-project-add.py`). The directory is tracked for audit-trail visibility (see #247). Do NOT use `.claude/scratch/` — that location is gitignored and reserved for true ephemeral artifacts (commit messages, mid-task notes).
+For waves with many issues across many repos, the labeling + project-board adds in step 7 may be automated by a per-wave orchestration script. Write these scripts to `.claude/skills/wave-kickoff/_orchestration/` using the naming convention `w{N}-{purpose}.py` (e.g., `w5-kickoff.py`, `w5-project-add.py`). The directory is tracked for audit-trail visibility (see #247). Do NOT use `.claude/scratch/` — that location is gitignored and reserved for true ephemeral artifacts (commit messages, mid-task notes).
 
-### 8. Post kickoff comments
+### 8. Post the meta-issue all-hands kickoff comment
 
-Post a kickoff comment on each issue using charter format:
+The per-issue kickoff comments (charter format with `Requestor: Fatima Okonkwo`, `Requestee: {Implementer}`) are posted automatically by the hook described in § 7. **This step covers only the meta-issue kickoff** — a single all-hands comment on the wave meta-issue (`wave_{M}_meta_issue`) summarizing the wave theme, all participating implementers, and tier breakdown. Format and exact text vary by wave; recent precedent is #284 (W6) — read it before authoring.
 
-```
-Requestor: Fatima.Okonkwo
-Requestee: {Assignee.Name}
-RequestOrReplied: Request
-
-**Wave {M} Kickoff — Phase {N}**
-
-This issue is assigned to you for p{N}-wave-{M}.
-- Peer reviewer: {reviewer name}
-- Branch from: `deployments/phase-{N}/wave-{M}`
-- Branch naming: `{FirstInitial}.{LastName}/{IIII}-{issue-slug}`
-- Priority: {hotfix|security|bug|feature} (per charter § Wave Planning & Priority)
-
-Please begin implementation.
-```
+If the wave has no meta-issue (rare; pre-#284 waves), skip this step.
 
 ### 9. Ontology librarian — both bakes required (MANDATORY)
 
