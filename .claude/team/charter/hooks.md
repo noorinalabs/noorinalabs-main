@@ -170,6 +170,7 @@ When hooks sharing the same matcher type (Bash, Agent, SendMessage, etc.) accumu
 - **Matcher:** `Skill` (new matcher type — first hook of this kind in the codebase). Direct registration in `settings.json` per dispatcher consolidation policy (§ Dispatcher Consolidation Policy: consolidate at 4+ hooks of the same matcher; this is the only Skill-matcher hook).
 - **Manual steps remaining:** None when the gate fires — the operator must either close the open items, OR add a carry-forward block to the skill `args`. The charter rule still mandates the same discipline for manually-authored handoffs and retros that don't go through skills (those are out of scope for the hook; a separate Stop-hook scan was considered and deferred per the design comment on #195).
 - **Emergency override:** Remove the `Skill` matcher entry from `.claude/settings.json`. There is no in-band override flag — the purpose of the hook is to break the "this one's fine, just say concluded" rationalization that put the P2W9 incident on owner's desk. Matches Hook 15's stance.
+- **Deliberate-non-implementation of `--ack-incomplete`:** A `--ack-incomplete '<reason>'` in-band override flag was proposed during design ratification on #195 alongside the `--carry-forward` marker path. Only `--carry-forward` was implemented in PR #218; `--ack-incomplete` was deliberately omitted. Rationale: any per-session bypass — even one that demands a logged reason — invites the same rationalization fail-mode the hook exists to prevent. Hook 15 precedent (no in-band override). Settings.json-removal is the right granularity for "I genuinely need to bypass" — annoying enough to be deliberate, visible in commit history. Adding a flag for a hypothetical need violates the pre-emptive-surface-area rule. Re-open conditions (file a comment on [#220](https://github.com/noorinalabs/noorinalabs-main/issues/220) with evidence if any surface): (1) real escape-hatch need during a security incident — capture the timeline; (2) repeat operator action of "edit settings.json to bypass + put back" within a 30-day window — vote-with-feet signal; (3) pattern of carry-forward markers added purely to silence the gate without genuine carry-forward intent — theater-marker rationalization. Issue [#220](https://github.com/noorinalabs/noorinalabs-main/issues/220) stays OPEN as the canonical watch-list anchor for these conditions (mirrors how phase-end-state meta-issues stay open while their dependencies close). PD ratification: 2026-04-28.
 
 ## Hook 18: Validate Edit Completion (`validate_edit_completion.py`)
 
@@ -202,6 +203,30 @@ When hooks sharing the same matcher type (Bash, Agent, SendMessage, etc.) accumu
 - **Emergency override:** Remove the `validate_wave_label_evidence` entry from `dispatcher.py`'s `_BASH_HOOKS` list. There is no in-band override flag beyond the `Origin-Verification:` body line, which is the discipline-preserving path.
 - **Out of scope for v1:** `gh project item-add` matcher (W8 instances of stale-path issues hit the labeling surface before the project-add surface; covering label-time is the higher-leverage gate). Cited-issue freshness ("any cited issue # must be OPEN or noted as `closed-resolved-by-X`") — heavier hook surface; deferred to retro for now. Both filed as follow-ups against this hook.
 - **Promotion provenance:** Three-occurrence W8 pattern (2026-05-09 audit, see [#337](https://github.com/noorinalabs/noorinalabs-main/issues/337) for full provenance chain). Source memory family: `feedback_origin_over_local_for_still_has_claims.md` (SUPERSEDED 2026-05-10 by charter `pull-requests.md`), `feedback_pre_spawn_brief_verified_at_head.md`, `feedback_verify_diagnosis_before_delegating.md`. Promoted to hook in P3W9.
+
+## Shared Helpers <!-- promotion-target: none -->
+
+Reusable primitives that multiple hooks (or hooks + skills) consume. Each helper has a single-source-of-truth implementation under `.claude/hooks/` with an underscore-prefix filename (`_<helper>.py`) marking it as internal, not a hook itself.
+
+### `_shell_parse.py` — Tokenize Bash commands safely
+
+Multiple PreToolUse hooks need to detect command shapes (`git commit`, `gh pr create`, etc.) without regex'ing the raw command string — a pattern that has repeatedly mis-fired on heredoc bodies, code-fence blocks, and `--body-file` argument values (issues #118, #134, #144, #188, #189, #216, #223, #226, #227). The helper exposes `tokenize`, `strip_heredocs`, `iter_command_segments`, `find_git_subcommand`, `find_gh_subcommand`, and `extract_dash_c_pairs`. Consumed by `validate_commit_identity`, `validate_branch_freshness`, `block_git_config`, `block_no_verify`, `block_shutdown_without_retro`, `block_stale_tmp_message_file`, `validate_review_comment_format`, `post_wave_kickoff_comment`. When a new transcript-or-command-reading hook needs to discriminate command shape, consume this helper rather than regex.
+
+### `_consultation_sentinel.py` — Cwd-keyed consultation sentinel
+
+Generalizes the Hook 15 sentinel pattern (introduction: [#169](https://github.com/noorinalabs/noorinalabs-main/issues/169); generalization: [#176](https://github.com/noorinalabs/noorinalabs-main/issues/176)) for any future transcript-reading enforcement hook. The pattern: a skill writes a marker file in the agent's cwd recording that it was invoked; the hook reads the marker as a second acceptance signal beside the transcript scan. Subagent worktree sessions repeatedly hit a transcript-flush race that left the marker absent from the file the hook reads — the sentinel survives that race because the skill writes it synchronously.
+
+**Path scheme:** `<cwd>/.claude/.consulted/<skill_name>/<sha1(abspath(cwd)+"\n")[:16]>.marker`. Namespaced by skill name so multiple transcript-reading hooks don't collide. The trailing-newline hash matches the shell idiom `pwd | sha1sum | cut -c1-16` so skills can write the sentinel from shell and the Python helper computes the same path (parity gated by `test_consultation_sentinel.ShellPythonParityTests`).
+
+**API:**
+- `write_consultation_sentinel(skill_name, cwd=None) -> Path | None` — skill-side write. Returns None on OSError (fail-open).
+- `consultation_sentinel_is_fresh(cwd, skill_name, ttl_seconds=3600) -> bool` — hook-side read. False on missing / stale / unreadable / future-dated marker.
+- `consultation_sentinel_path(cwd, skill_name) -> Path` — pure path composition (tests use this to write sentinels manually).
+- `cwd_sentinel_hash(cwd) -> str` — 16-char sha1 prefix, exported because Hook 15 tests pin the shell/Python parity property.
+
+**Use this helper** when authoring a new transcript-reading enforcement hook. Do NOT reinvent path-keying, hashing, or TTL logic — every divergence becomes a sentinel-doesn't-match bug in worktree subagents.
+
+**Promotion provenance:** Hook 15 (#150 + #169) original sentinel introduction. PR #174 added synchronous skill-side write. Issue #176 extracted the helper. Filed by Nadia Khoury during PR #174 review.
 
 ## Hook Sync Across Child Repos <!-- promotion-target: none -->
 
@@ -311,7 +336,31 @@ Every hook with input parsing MUST have test fixtures covering all known input s
 
 **Dispatcher-style children (no committed `.claude/hooks/`):** Children that delegate all hook execution to the parent canonical via `settings.json` are exempt from per-child fixture requirements. Coverage obligations are fulfilled by the parent's test suite. A child is classified as dispatcher-style when `gh api repos/<owner>/<repo>/git/trees/<head_sha>?recursive=1` returns 0 entries under `.claude/hooks/`. Design-system and landing-page (post-W5) are the canonical exemplars.
 
-**Enforcement:** The Standards & Quality Lead (Aino) verifies these requirements during hook PR review. A hook missing any of the five requirements must not be approved.
+### 6. Promotion Provenance Phrasing
+
+Every hook's charter entry includes a provenance block describing where the hook came from. The `/promotion-audit` skill's `find_already_promoted` parser scans these blocks to decide which memories / charter rules / skill patterns have already landed as hooks. Ambiguous phrasing defeats the parser (false-negatives produce noisy AUTO classifications; false-positives produce noisy ALREADY-PROMOTED classifications). Three required parts:
+
+**Backward claim (required):** a single sentence declaring backward provenance — what prior tier (memory / charter / skill / pattern) this hook was promoted from. Example:
+
+> Promoted from memory `feedback_enforcement_hierarchy.md` via charter § Ontology Librarian Rule (PR #153).
+
+Every hook MUST have exactly one backward-claim sentence. The parser's `_PROVENANCE_RE` and `_HTML_COMMENT_PROMOTED_RE` recognizers extract memory / charter / skill references from this sentence, so it MUST cite the source artifact by filename (memories: `feedback_X.md` or unsuffixed `feedback_X`; skills: `/skill-name`; charter rules: `CLAUDE.md § X` or `charter/X.md § Y`).
+
+**Forward references (optional, must be in a separate paragraph):** if the hook's charter entry mentions sibling hooks, future artifacts, or design narrative, that narrative MUST live in its OWN paragraph — never co-located with the backward-claim sentence. Example forward reference:
+
+> Worked example referenced by the future `/promotion-audit` skill design.
+
+**Why separate paragraphs:** `find_already_promoted`'s `_FORWARD_REFERENCE_MARKERS` filter (`future`, `planned`, `design`, `upcoming`, `referenced by`, `will reference`, `proposed`, `TBD`) excludes slash-command hits that sit within ~60 chars of these markers. Forward-reference narrative mixed into the backward-claim sentence makes that filter trip on the backward citation too — turning a real promotion record invisible. Keeping the two concerns in separate paragraphs is the simplest discipline that preserves both meanings.
+
+**Recognized parse keys:** the literal tokens `/promotion-audit` scans for. Author your provenance block with one of these as the opener so the parser finds it:
+
+- `**Promotion provenance:**` — block-style header; the parser's `_PROVENANCE_RE` greedy-matches until the next blank line / heading. Used by hooks.md per-hook entries (e.g. Hook 15).
+- `Promoted from` — opening token recognized inline; works inside either the block-style entry or a standalone sentence.
+- `<!-- Promoted from memory: X -->` — HTML-comment marker form codified in #283 / #393. Used for charter-tier-only promotions (no corresponding hook). The parser's `_HTML_COMMENT_PROMOTED_RE` (DOTALL) captures the body up to `-->`, so trailing context (date, retro citation, rationale) is included in the regex sweep.
+
+**Rationale:** PR #155 added the reactive `_FORWARD_REFERENCE_MARKERS` filter to handle Hook 15's own provenance block — which had narrative referencing a future skill mixed in with the backward citation. The filter is the runtime safety net; this guidance is the preempt-at-author-time fix that reduces future filter-edits. Sibling-of-#393 (HTML-marker convention) — this section references that form but does NOT codify it (#393 is its own follow-up).
+
+**Enforcement:** The Standards & Quality Lead (Aino) verifies these requirements during hook PR review. A hook missing any of the six requirements must not be approved.
 
 ## Hook Audit Protocol
 

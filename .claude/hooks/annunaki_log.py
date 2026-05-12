@@ -54,3 +54,29 @@ def log_pretooluse_block(
         "stderr_excerpt": "",
     }
     append_jsonl_record(ERRORS_FILE, record)
+
+
+def log_posttooluse_event(
+    hook_name: str, command: str, reason: str, tool_name: str = "Bash"
+) -> None:
+    """Append a PostToolUse non-blocking event to the Annunaki error log.
+
+    PostToolUse hooks cannot block the tool call (it has already run), so
+    they don't "block" — they record events that need follow-up. Used by
+    hooks like `post_wave_kickoff_comment` when they cannot complete their
+    post-action work (e.g., scope row missing, gh CLI failure) and want a
+    visible signal in the Annunaki sweep without raising a failure on the
+    underlying tool call.
+    """
+    record = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "type": "posttooluse_event",
+        "hook": hook_name,
+        "tool_name": tool_name,
+        "command": command[:500],
+        "exit_code": None,
+        "matched_patterns": [f"hook_event:{hook_name}"],
+        "error_lines": [reason[:500]],
+        "stderr_excerpt": "",
+    }
+    append_jsonl_record(ERRORS_FILE, record)

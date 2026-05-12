@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """PreToolUse hook: Validate Requestor/Requestee format in PR review comments.
 
-Blocks `gh pr comment` if the Requestee matches the branch author, which
-indicates the Requestor and Requestee fields are swapped.
+Blocks `gh pr comment` if the Requestor matches the branch author, which
+indicates the Requestor and Requestee fields are swapped on a verdict
+comment (charter post-#244: on `Approved` / `Changes Requested`,
+Requestor must be the reviewer, Requestee the PR author).
 
 Scope (closes #378)
 ===================
@@ -10,19 +12,12 @@ Scope (closes #378)
 This hook enforces Requestor/Requestee non-swap detection ONLY for
 `Approved` and `ChangesRequested` verdict comments — i.e., the rows of
 the charter `pull-requests.md` § Comment-Based Reviews Direction table
-where `Requestee = PR-author`. For these verdicts, "Requestee.lastname
-== branch-author.lastname" is a reliable swap signal because the
-reviewer (Requestor) should never share the lastname of the PR author
-on whose branch they are commenting (modulo same-lastname collisions,
-which are out of scope).
-
+where the canonical binding is `Requestor = reviewer, Requestee = PR-author`.
 For `Request` and `Reply` comments — where the Direction-table role
-bindings invert (Requestee = reviewer, Requestor = PR-author) — the
-"Requestee.lastname == branch-author.lastname" heuristic misfires: a
-legitimate Request to a reviewer from the PR author would have
-Requestee = reviewer, which has no relation to the branch author's
-lastname. Author/reviewer discipline for Request/Reply traffic is
-operator-trusted and not hook-gated.
+bindings invert (`Requestor = PR-author, Requestee = reviewer`) — the
+swap heuristic does not apply and the hook returns None. Author/reviewer
+discipline for Request/Reply traffic is operator-trusted and not
+hook-gated.
 
 Unrecognized `RequestOrReplied` values (typos, future verdict types
 the hook doesn't know about) fail OPEN — the hook returns None and
@@ -30,10 +25,25 @@ lets the comment through. Validating the verdict word itself is
 covered by a sibling hook (`validate_pr_review`); duplicating that
 logic here would couple two hooks that should remain independent.
 
+Semantic realignment (closes #386)
+==================================
+
+Pre-#386 the swap heuristic checked `Requestee.lastname == branch-author.lastname`,
+which encoded the pre-#244 reading of the Direction table (Requestor=PR-author,
+Requestee=reviewer). Post-#244, the charter inverts the role bindings on
+verdict comments: Requestor IS the reviewer (because the reviewer is the
+comment author) and Requestee IS the PR author. The post-#244 swap-detection
+condition is therefore `Requestor.lastname == branch-author.lastname` — a
+verdict whose Requestor matches the branch author indicates the PR author
+is being named as the reviewer (the actual swap).
+
+The path-2 narrowing from #378 (verdict-only scope) is preserved unchanged;
+this hook only swaps which field is compared inside that scope.
+
 Exit codes:
   0 — allow (not a comment command, not a review comment, fields correct,
        or RequestOrReplied is not Approved/ChangesRequested)
-  2 — block (Requestee matches branch author on an Approved /
+  2 — block (Requestor matches branch author on an Approved /
        ChangesRequested verdict — fields are swapped)
 """
 
@@ -195,10 +205,15 @@ def check(input_data: dict) -> dict | None:
     if not body:
         return None
 
+    has_requestor = re.search(r"\*{0,2}Requestor:\*{0,2}\s*(.+)", body)
     has_requestee = re.search(r"\*{0,2}Requestee:\*{0,2}\s*(.+)", body)
     has_request_or_replied = re.search(r"RequestOrReplied:", body)
 
-    if not (has_requestee and has_request_or_replied):
+    if not (has_requestor and has_requestee and has_request_or_replied):
+        # A charter-format review comment carries all three headers. Missing
+        # any one of them means this is not the comment shape the hook
+        # validates — return None (allow) and let downstream/operator
+        # discipline cover non-conforming bodies.
         return None
 
     if not _direction_is_verdict(body):
@@ -241,30 +256,39 @@ def check(input_data: dict) -> dict | None:
             ),
         }
 
-    requestee_raw = has_requestee.group(1).strip()
-    requestee_raw = requestee_raw.strip("*").strip()
-    requestee_name = re.sub(r"\s*\(.*?\)\s*$", "", requestee_raw).strip()
-    parts = re.split(r"[\s.]+", requestee_name)
-    if len(parts) >= 2:
-        requestee_lastname = parts[-1]
-    else:
-        requestee_lastname = requestee_name
+    requestor_lastname = _extract_lastname(has_requestor.group(1))
 
-    if requestee_lastname.lower() == branch_author.lower():
+    if requestor_lastname.lower() == branch_author.lower():
         result = {
             "decision": "block",
             "reason": (
                 f"BLOCKED: Requestor/Requestee appears swapped. "
-                f"Requestor should be the PR author (who requested the review), "
-                f"Requestee should be the reviewer (who is doing the review). "
+                f"Requestor should be the reviewer (who is doing the review). "
+                f"Requestee should be the PR author (who is receiving the review). "
                 f"The branch author is {branch_author} — they should be the "
-                f"Requestor, not the Requestee."
+                f"Requestee, not the Requestor."
             ),
         }
         log_pretooluse_block("validate_review_comment_format", command, result["reason"])
         return result
 
     return None
+
+
+def _extract_lastname(field_value: str) -> str:
+    """Extract a lastname from a Requestor/Requestee field value.
+
+    Strips trailing markdown bolding, surrounding whitespace, and a trailing
+    parenthetical role annotation (e.g. `Nadia Khoury (Program Director)`).
+    Splits on whitespace or dot and returns the final token. Falls back to
+    the cleaned full name if there is no separator.
+    """
+    raw = field_value.strip().strip("*").strip()
+    cleaned = re.sub(r"\s*\(.*?\)\s*$", "", raw).strip()
+    parts = re.split(r"[\s.]+", cleaned)
+    if len(parts) >= 2:
+        return parts[-1]
+    return cleaned
 
 
 def main() -> None:

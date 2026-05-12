@@ -67,12 +67,16 @@ from __future__ import annotations
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _shell_parse import resolve_tool_cwd  # noqa: E402
+from _shell_parse import (  # noqa: E402
+    first_flag_value,
+    is_gh_subcommand,
+    resolve_tool_cwd,
+    tokenize,
+)
 from annunaki_log import log_pretooluse_block  # noqa: E402
 
 _BASE_FLAGS = {"--base", "-B"}
@@ -87,82 +91,14 @@ _REPO_FLAGS = {"--repo", "-R"}
 _REPO_SLUG_RE = re.compile(r"github\.com[/:]([^/]+/[^/.\s]+?)(?:\.git)?/?$")
 
 
-def _tokenize(command: str) -> list[str] | None:
-    """Tokenize a shell command via shlex. Return None on parse failure."""
-    try:
-        return shlex.split(command, posix=True)
-    except ValueError:
-        return None
-
-
-def _is_gh_pr_create(tokens: list[str]) -> bool:
-    """Return True if tokens contain a gh pr create invocation."""
-    for i in range(len(tokens) - 2):
-        if tokens[i] == "gh" and tokens[i + 1] == "pr" and tokens[i + 2] == "create":
-            return True
-    return False
-
-
-def _walk_flags(tokens: list[str], wanted: set[str]) -> list[str]:
-    """Return values for wanted flag names, only when they appear as flags.
-
-    A token is treated as a wanted-flag value only if the immediately
-    preceding token is exactly one of wanted. The --flag=value form is
-    also handled. Values inside other flags (e.g. inside the value of
-    --body) are ignored because they are a SINGLE shlex token, never
-    preceded by a flag from wanted.
-    """
-    values: list[str] = []
-    i = 0
-    while i < len(tokens):
-        tok = tokens[i]
-        if tok in wanted:
-            if i + 1 < len(tokens):
-                values.append(tokens[i + 1])
-                i += 2
-                continue
-            i += 1
-            continue
-        matched = False
-        for flag in wanted:
-            if flag.startswith("--") and tok.startswith(flag + "="):
-                values.append(tok[len(flag) + 1 :])
-                matched = True
-                break
-        if matched:
-            i += 1
-            continue
-        i += 1
-    return values
-
-
-def _first_flag_value(command: str, wanted: set[str]) -> str | None:
-    """Tokenize and return the first value for any of wanted, or None.
-
-    Falls back to a regex anchored at a shell-token boundary if shlex fails
-    (e.g. malformed quote). The regex tries longer flag names first so that
-    --repo is preferred over a hypothetical shorter prefix collision.
-    """
-    tokens = _tokenize(command)
-    if tokens is None:
-        for flag in sorted(wanted, key=len, reverse=True):
-            pattern = rf"(?:^|\s){re.escape(flag)}(?:=|\s+)(\S+)"
-            match = re.search(pattern, command)
-            if match:
-                return match.group(1)
-        return None
-    values = _walk_flags(tokens, wanted)
-    return values[0] if values else None
-
-
 def extract_base(command: str) -> str:
     """Extract --base / -B value, default to 'main'."""
-    return _first_flag_value(command, _BASE_FLAGS) or "main"
+    return first_flag_value(command, _BASE_FLAGS) or "main"
 
 
 def extract_head(command: str) -> str | None:
     """Extract --head / -H value. Strips OWNER: prefix if present."""
-    raw = _first_flag_value(command, _HEAD_FLAGS)
+    raw = first_flag_value(command, _HEAD_FLAGS)
     if raw and ":" in raw:
         return raw.split(":", 1)[1]
     return raw
@@ -170,7 +106,7 @@ def extract_head(command: str) -> str | None:
 
 def extract_repo(command: str) -> str | None:
     """Extract --repo / -R OWNER/REPO value, if any."""
-    return _first_flag_value(command, _REPO_FLAGS)
+    return first_flag_value(command, _REPO_FLAGS)
 
 
 def is_branch_fresh_local(base: str, cwd: str | None = None) -> bool:
@@ -281,9 +217,9 @@ def check(input_data: dict) -> dict | None:
 
     command = input_data.get("tool_input", {}).get("command", "")
 
-    tokens = _tokenize(command)
+    tokens = tokenize(command)
     if tokens is not None:
-        if not _is_gh_pr_create(tokens):
+        if not is_gh_subcommand(tokens, "pr", "create"):
             return None
     else:
         if not re.search(r"\bgh\s+pr\s+create\b", command):

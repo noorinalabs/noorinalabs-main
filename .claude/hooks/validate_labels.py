@@ -36,67 +36,22 @@ Exit codes:
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from annunaki_log import log_pretooluse_block
+from _shell_parse import (  # noqa: E402
+    is_gh_subcommand,
+    tokenize,
+    walk_flag_values,
+)
+from annunaki_log import log_pretooluse_block  # noqa: E402
 
 # Flags whose VALUE is a label list (comma-separated allowed by gh).
 _LABEL_FLAGS = {"--label", "-l"}
 
 # Flags whose VALUE is a repo specifier (OWNER/REPO).
 _REPO_FLAGS = {"--repo", "-R"}
-
-
-def _tokenize(command: str) -> list[str] | None:
-    """Tokenize a shell command via shlex. Return None if it cannot be parsed."""
-    try:
-        return shlex.split(command, posix=True)
-    except ValueError:
-        return None
-
-
-def _is_gh_issue_create(tokens: list[str]) -> bool:
-    """Return True if tokens contain a `gh issue create` invocation."""
-    for i in range(len(tokens) - 2):
-        if tokens[i] == "gh" and tokens[i + 1] == "issue" and tokens[i + 2] == "create":
-            return True
-    return False
-
-
-def _walk_flags(tokens: list[str], wanted: set[str]) -> list[str]:
-    """Return values for wanted flag names, only when they appear as flags.
-
-    A token is treated as a wanted-flag value only if the immediately
-    preceding token is exactly one of `wanted` (e.g. `--label`). The
-    `--flag=value` form is also handled. Values inside other flags
-    (e.g. inside the value of `--body`) are ignored because they are a
-    SINGLE shlex token, never preceded by a flag from `wanted`.
-    """
-    values: list[str] = []
-    i = 0
-    while i < len(tokens):
-        tok = tokens[i]
-        if tok in wanted:
-            if i + 1 < len(tokens):
-                values.append(tokens[i + 1])
-                i += 2
-                continue
-            i += 1
-            continue
-        matched = False
-        for flag in wanted:
-            if tok.startswith(flag + "="):
-                values.append(tok[len(flag) + 1 :])
-                matched = True
-                break
-        if matched:
-            i += 1
-            continue
-        i += 1
-    return values
 
 
 def get_existing_labels(repo: str | None = None) -> set[str]:
@@ -135,7 +90,7 @@ def extract_labels(command: str) -> list[str]:
     contains a malformed quote). The fallback still anchors on `--label`
     appearing at a shell-token boundary.
     """
-    tokens = _tokenize(command)
+    tokens = tokenize(command)
     if tokens is None:
         labels: list[str] = []
         for match in re.finditer(
@@ -150,7 +105,7 @@ def extract_labels(command: str) -> list[str]:
         return labels
 
     labels = []
-    for raw in _walk_flags(tokens, _LABEL_FLAGS):
+    for raw in walk_flag_values(tokens, _LABEL_FLAGS):
         for label in raw.split(","):
             label = label.strip()
             if label:
@@ -160,11 +115,11 @@ def extract_labels(command: str) -> list[str]:
 
 def extract_repo(command: str) -> str | None:
     """Extract the --repo / -R OWNER/REPO value from the command, if any."""
-    tokens = _tokenize(command)
+    tokens = tokenize(command)
     if tokens is None:
         match = re.search(r"(?:^|\s)(?:--repo|-R)(?:=|\s+)(\S+)", command)
         return match.group(1) if match else None
-    values = _walk_flags(tokens, _REPO_FLAGS)
+    values = walk_flag_values(tokens, _REPO_FLAGS)
     return values[0] if values else None
 
 
@@ -176,9 +131,9 @@ def check(input_data: dict) -> dict | None:
 
     command = input_data.get("tool_input", {}).get("command", "")
 
-    tokens = _tokenize(command)
+    tokens = tokenize(command)
     if tokens is not None:
-        if not _is_gh_issue_create(tokens):
+        if not is_gh_subcommand(tokens, "issue", "create"):
             return None
     else:
         if not re.search(r"\bgh\s+issue\s+create\b", command):

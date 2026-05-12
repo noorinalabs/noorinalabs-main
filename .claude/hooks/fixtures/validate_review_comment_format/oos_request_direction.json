@@ -1,6 +1,6 @@
 {
-  "description": "Out-of-scope: `Request` direction. The comment body has Requestee.lastname (Virtanen) matching the branch author lastname (Virtanen) — under the pre-path-2 hook this would have BLOCKED as a 'swap'. Path-2 narrows the hook to verdict directions only, so the Request comment passes through. This is the false-positive surface the narrowing eliminates.",
-  "command": "gh pr comment 42 --body \"$(cat <<'EOF'\nRequestor: Nadia Khoury\nRequestee: Aino Virtanen\nRequestOrReplied: Request\nEOF\n)\"",
-  "branch_ref": "A.Virtanen/0378-direction-table-oos",
+  "description": "Out-of-scope: `Request` direction. Charter post-#244 Direction table binds Requestor=PR-author on Request comments — so the canonical Request shape has Requestor.lastname matching the branch-author.lastname. Under the verdict-only inverted heuristic this would BLOCK (Virtanen == Virtanen), but path-2 narrowing returns None for non-verdict directions and lets the Request through. This is the false-positive surface the narrowing eliminates — and it's now also the charter-canonical Request shape, not a contrived swap.",
+  "command": "gh pr comment 42 --body \"$(cat <<'EOF'\nRequestor: Aino Virtanen\nRequestee: Nadia Khoury\nRequestOrReplied: Request\nEOF\n)\"",
+  "branch_ref": "A.Virtanen/0386-direction-table-realign",
   "expect": "allow"
 }

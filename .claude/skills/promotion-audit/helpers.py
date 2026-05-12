@@ -426,20 +426,38 @@ _PROVENANCE_RE = re.compile(
     r"\*\*Promotion provenance:\*\*\s*(?P<body>.+?)(?:\n\n|\Z)",
     re.DOTALL,
 )
+
+# `<!-- Promoted from memory: <name>[.md] (optional trailing context) -->`
+# The new charter-tier promotion marker (issue #283), used inline after a
+# charter section heading instead of a `Promotion provenance:` block. The
+# captured body runs until the closing `-->` so trailing context (date,
+# rationale, retro reference) is included in the regex sweep that
+# follows.
+_HTML_COMMENT_PROMOTED_RE = re.compile(
+    r"<!--\s*Promoted from memory:\s*(?P<body>.+?)\s*-->",
+    re.DOTALL,
+)
+
+# Memory filenames can be cited with or without the `.md` suffix in
+# charter prose (e.g. hooks.md L169 cites `feedback_honest_audit_over_conclusion_claim`
+# unsuffixed inside a backticked span). The regex now makes the `.md`
+# optional and the caller backfills the suffix into the returned set so
+# both forms are recognized membership-checks.
 _SOURCE_HINT_RE = re.compile(
     r"""
     (?:
-        feedback_[a-z0-9_]+\.md       # feedback memory filenames
+        (?:feedback|project|reference)_[a-z0-9_]+(?:\.md)?  # memory filenames (with or without .md)
         |
-        project_[a-z0-9_]+\.md        # project memory filenames
-        |
-        reference_[a-z0-9_]+\.md      # reference memory filenames
-        |
-        /[\w-]+                       # slash-commands / skill names
+        /[\w-]+                                              # slash-commands / skill names
     )
     """,
     re.VERBOSE,
 )
+
+# Memory-filename prefixes the parser recognizes. Used by
+# `_normalize_memory_hit` to decide whether a no-suffix hit should be
+# backfilled with `.md`.
+_MEMORY_PREFIXES = ("feedback_", "project_", "reference_")
 
 
 # Narrative words that indicate a forward-reference rather than a
@@ -470,50 +488,125 @@ def _is_forward_reference(body: str, match_start: int) -> bool:
     return any(marker in window for marker in _FORWARD_REFERENCE_MARKERS)
 
 
-def find_already_promoted(charter_hooks_path: str) -> set[str]:
-    """Return the set of source identifiers already promoted via Hook entries.
+def _normalize_memory_hit(hit: str) -> tuple[str, ...]:
+    """Return both forms (with and without `.md`) of a memory filename hit.
 
-    The parser recognizes `**Promotion provenance:**` blocks in
-    charter/hooks.md and extracts memory filenames or skill slash-command
-    references from their body. This is the format established by Hook 15
-    in PR #153 (the worked example).
+    The caller adds all returned strings to the already-promoted set so
+    membership checks via `memory.filename` (always `.md`-suffixed) and
+    via raw-name citation work transparently.
 
-    Expected block format (compatible with Hook 15):
+    For non-memory hits (slash-commands, anything else), returns a single-
+    element tuple containing the hit unchanged.
+    """
+    if hit.startswith(_MEMORY_PREFIXES):
+        if hit.endswith(".md"):
+            return (hit, hit[:-3])
+        return (hit, hit + ".md")
+    return (hit,)
 
-        **Promotion provenance:** First end-to-end execution of the
-        memory -> charter -> hook promotion pattern ratified by the
-        owner on 2026-04-19. Rule lived in CLAUDE.md § Ontology ...
+
+def find_already_promoted(charter_path: str) -> set[str]:
+    """Return the set of source identifiers already promoted in `charter_path`.
+
+    Recognizes BOTH provenance formats used across the charter:
+
+    1. **Block style** (charter/hooks.md, the format Hook 15 established
+       in PR #153):
+
+           **Promotion provenance:** First end-to-end execution of the
+           memory -> charter -> hook promotion pattern ratified by the
+           owner on 2026-04-19. Rule lived in CLAUDE.md § Ontology ...
+
+    2. **HTML-comment marker** (newer charter-tier-only promotions, per
+       issue #283):
+
+           <!-- Promoted from memory: feedback_X.md (P3W5 retro 2026-05-06) -->
+
+       Used inline after a charter section heading when a memory is
+       promoted into the charter without a corresponding hook.
 
     Slash-commands that appear inside forward-reference phrases (e.g.
     "referenced by the future `/promotion-audit` skill design") are
     EXCLUDED — those are narrative cross-references, not promotion claims.
     See `_FORWARD_REFERENCE_MARKERS`.
 
+    Memory-filename citations are recognized in BOTH `.md`-suffixed and
+    suffix-less forms (the latter appears in hooks.md L169's backticked
+    cite of `feedback_honest_audit_over_conclusion_claim`). Both forms
+    land in the returned set so callers using `memory.filename in
+    already_promoted` continue to match transparently.
+
+    For the aggregating scan across the full charter directory, use
+    `find_already_promoted_in_charter()` — this single-path entry point
+    is retained for the smoke test and for callers that want to scope
+    the scan to a specific file.
+
     The returned set contains strings like:
-        - "feedback_enforcement_hierarchy.md" (memory filenames)
+        - "feedback_enforcement_hierarchy.md" / "feedback_enforcement_hierarchy"
         - "/ontology-librarian" (skill slash-commands with backward semantics)
         - "CLAUDE.md § Ontology" (rule references, when the Ontology
           section is cited in any provenance block)
-
-    Callers should check membership using the candidate's `filename`
-    attribute (Memory) or `/{name}` (Skill).
     """
     refs: set[str] = set()
-    if not os.path.isfile(charter_hooks_path):
+    if not os.path.isfile(charter_path):
         return refs
-    with open(charter_hooks_path, encoding="utf-8") as f:
+    with open(charter_path, encoding="utf-8") as f:
         text = f.read()
+
+    # Block-style `**Promotion provenance:**` entries (hooks.md format).
     for block in _PROVENANCE_RE.finditer(text):
         body = block.group("body")
         for hit in _SOURCE_HINT_RE.finditer(body):
             if _is_forward_reference(body, hit.start()):
                 continue
-            refs.add(hit.group(0))
+            refs.update(_normalize_memory_hit(hit.group(0)))
+
+    # HTML-comment style `<!-- Promoted from memory: X -->` (charter-tier
+    # promotion marker, issue #283). Forward-reference filtering is
+    # unnecessary for this format — the marker is by definition a
+    # backward-looking promotion claim.
+    for block in _HTML_COMMENT_PROMOTED_RE.finditer(text):
+        body = block.group("body")
+        for hit in _SOURCE_HINT_RE.finditer(body):
+            refs.update(_normalize_memory_hit(hit.group(0)))
+
     # The librarian rule's provenance cites CLAUDE.md § Ontology; capture
     # it as a synonym for the enforcement-hierarchy memory.
     if "CLAUDE.md § Ontology" in text:
         refs.add("CLAUDE.md § Ontology")
         refs.add("feedback_enforcement_hierarchy.md")
+    return refs
+
+
+def find_already_promoted_in_charter(charter_root: str) -> set[str]:
+    """Aggregate already-promoted refs across the full charter directory.
+
+    Scans `charter_root/charter/*.md` (and the optional `charter_root/charter.md`
+    top-level file, if present) using the same recognition rules as
+    `find_already_promoted()`. Returns the union of all per-file results.
+
+    This is the entry point the /promotion-audit skill should use — single-
+    file scope (charter/hooks.md only) misses charter-tier-only promotions
+    that land via the HTML-comment marker in other sub-docs (issue #283).
+    """
+    refs: set[str] = set()
+    if not os.path.isdir(charter_root):
+        return refs
+
+    candidates: list[str] = []
+    root_file = os.path.join(charter_root, "charter.md")
+    if os.path.isfile(root_file):
+        candidates.append(root_file)
+
+    subdir = os.path.join(charter_root, "charter")
+    if os.path.isdir(subdir):
+        for name in sorted(os.listdir(subdir)):
+            if name.endswith(".md"):
+                candidates.append(os.path.join(subdir, name))
+
+    for path in candidates:
+        refs.update(find_already_promoted(path))
+
     return refs
 
 

@@ -1,0 +1,18 @@
+{
+  "description": "Idempotency: issue already has a kickoff comment with the charter heading. Hook returns skip_idempotent — re-applying the wave label (e.g., after a disposition correction) does NOT double-post.",
+  "command": "gh issue edit 124 --repo noorinalabs/noorinalabs-main --add-label \"p3-wave-9\"",
+  "status": {
+    "wave_9_meta_issue": 347,
+    "wave_9_scope": {
+      "tier_1_test": [
+        {"id": "noorinalabs-main#124", "implementer": "Wanjiku Mwangi", "reviewer": "Aino Virtanen", "reviewer_2": "Santiago Ferreira"}
+      ]
+    }
+  },
+  "existing_comments": [
+    {"body": "Some prior unrelated comment."},
+    {"body": "Requestor: Fatima Okonkwo\nRequestee: Wanjiku Mwangi\nRequestOrReplied: Request\n\n**Wave 9 Kickoff — Phase 3**\n\nThis issue is assigned to you for p3-wave-9."}
+  ],
+  "post_succeeds": true,
+  "expect_action": "skip_idempotent"
+}

@@ -402,6 +402,121 @@ class FindAlreadyPromotedTests(unittest.TestCase):
         finally:
             os.unlink(path)
 
+    def test_html_comment_charter_tier_marker_detected(self) -> None:
+        """POS (#283 gap 1): the new `<!-- Promoted from memory: X -->` HTML-
+        comment marker, used for charter-tier-only promotions (no
+        corresponding hook), must be recognized. Pre-#283 only the
+        `**Promotion provenance:**` block style was scanned, so charter-
+        tier promotions in non-hooks.md sub-docs were invisible to the
+        parser and produced false-positive AUTO classifications.
+        """
+        charter = (
+            "## Some charter section\n\n"
+            "<!-- Promoted from memory: feedback_review_against_artifact_not_framing.md "
+            "(P3W5 retro 2026-05-06; reviewer-side). -->\n\n"
+            "Body of the section.\n"
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(charter)
+            path = f.name
+        try:
+            refs = h.find_already_promoted(path)
+            self.assertIn("feedback_review_against_artifact_not_framing.md", refs)
+        finally:
+            os.unlink(path)
+
+    def test_md_less_memory_name_matched_same_as_suffixed(self) -> None:
+        """POS (#283 gap 2): a memory cited without the `.md` suffix (as in
+        hooks.md L169's backticked cite of
+        `feedback_honest_audit_over_conclusion_claim`) must be matched
+        same as a `.md`-suffixed citation. Both forms land in the
+        returned set so callers using `memory.filename in
+        already_promoted` continue to match transparently.
+        """
+        charter = (
+            "## Hook 17: Foo\n\n"
+            "- **Promotion provenance:** memory "
+            "`feedback_honest_audit_over_conclusion_claim` (2026-04-22) -> "
+            "charter rule (PR #193) -> this hook (#195).\n"
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(charter)
+            path = f.name
+        try:
+            refs = h.find_already_promoted(path)
+            # Caller checks via `memory.filename`, which is always .md-suffixed.
+            self.assertIn("feedback_honest_audit_over_conclusion_claim.md", refs)
+            # The unsuffixed form is also in the set (for completeness /
+            # callers that cite by raw name).
+            self.assertIn("feedback_honest_audit_over_conclusion_claim", refs)
+        finally:
+            os.unlink(path)
+
+    def test_hooks_md_provenance_no_regression(self) -> None:
+        """REGRESSION: extending the parser must not break recognition of
+        existing hooks.md `**Promotion provenance:**` blocks. This pins
+        the Hook 15 worked example end-to-end after the #283 changes.
+        """
+        charter = (
+            "## Hook 15: Foo\n\n"
+            "- **Promotion provenance:** First end-to-end execution of "
+            "the memory -> charter -> hook promotion pattern. Rule lived "
+            "in CLAUDE.md § Ontology; first instance cites "
+            "feedback_enforcement_hierarchy.md.\n"
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(charter)
+            path = f.name
+        try:
+            refs = h.find_already_promoted(path)
+            self.assertIn("feedback_enforcement_hierarchy.md", refs)
+            self.assertIn("CLAUDE.md § Ontology", refs)
+        finally:
+            os.unlink(path)
+
+    def test_aggregator_scans_all_charter_subdocs(self) -> None:
+        """POS (#283): `find_already_promoted_in_charter()` must aggregate
+        results across the full `<root>/charter/*.md` directory, picking
+        up charter-tier HTML-comment markers in non-hooks.md sub-docs.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            charter_subdir = os.path.join(tmpdir, "charter")
+            os.makedirs(charter_subdir)
+
+            # File 1: hooks.md with a block-style provenance entry.
+            with open(os.path.join(charter_subdir, "hooks.md"), "w") as f:
+                f.write(
+                    "## Hook 15: Foo\n\n"
+                    "- **Promotion provenance:** Worked example cites "
+                    "feedback_block_style.md.\n"
+                )
+            # File 2: pull-requests.md with an HTML-comment marker.
+            with open(os.path.join(charter_subdir, "pull-requests.md"), "w") as f:
+                f.write(
+                    "## A promoted section\n\n"
+                    "<!-- Promoted from memory: feedback_html_style.md (P3W5 retro) -->\n\n"
+                    "Body.\n"
+                )
+            # File 3: skills.md with a `.md`-less citation inside a marker.
+            with open(os.path.join(charter_subdir, "skills.md"), "w") as f:
+                f.write(
+                    "## Another promoted section\n\n"
+                    "<!-- Promoted from memory: feedback_no_suffix -->\n"
+                )
+
+            refs = h.find_already_promoted_in_charter(tmpdir)
+            self.assertIn("feedback_block_style.md", refs)
+            self.assertIn("feedback_html_style.md", refs)
+            self.assertIn("feedback_no_suffix.md", refs)
+            self.assertIn("feedback_no_suffix", refs)
+
+    def test_aggregator_handles_missing_charter_dir(self) -> None:
+        """NEG: a non-existent charter root must return an empty set
+        (not raise) — the smoke test runs against the live repo state
+        where this should never trigger, but the contract is defensive."""
+        refs = h.find_already_promoted_in_charter("/nonexistent/path/to/charter")
+        self.assertEqual(refs, set())
+
 
 # ---------------------------------------------------------------------------
 # Classification — memory

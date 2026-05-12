@@ -1,0 +1,11 @@
+{
+  "description": "Failure mode: wave_{M}_scope is null/missing. Hook annunaki-logs and returns skip_no_scope without posting (the label-apply has already succeeded; the underlying gap is a /wave-scope bug not a label-apply bug).",
+  "command": "gh issue edit 125 --repo noorinalabs/noorinalabs-main --add-label \"p3-wave-9\"",
+  "status": {
+    "wave_9_meta_issue": 347,
+    "wave_9_scope": null
+  },
+  "existing_comments": [],
+  "post_succeeds": true,
+  "expect_action": "skip_no_scope"
+}

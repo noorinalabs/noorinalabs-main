@@ -1,0 +1,15 @@
+{
+  "description": "Meta-issue skip: issue number == wave_{M}_meta_issue. Hook returns skip_meta_issue without posting (the all-hands meta-issue kickoff comment is owned by /wave-kickoff Step 8b, not this hook).",
+  "command": "gh issue edit 347 --repo noorinalabs/noorinalabs-main --add-label \"p3-wave-9\"",
+  "status": {
+    "wave_9_meta_issue": 347,
+    "wave_9_scope": {
+      "tier_1_test": [
+        {"id": "noorinalabs-main#347", "implementer": "Nadia Khoury", "reviewer": "Aino Virtanen", "reviewer_2": "Santiago Ferreira"}
+      ]
+    }
+  },
+  "existing_comments": [],
+  "post_succeeds": true,
+  "expect_action": "skip_meta_issue"
+}
