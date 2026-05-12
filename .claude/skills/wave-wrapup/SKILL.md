@@ -15,7 +15,7 @@ Finalize a wave by reviewing all open PRs, merging in dependency order, closing 
 List all PRs targeting the wave's deployment branch:
 
 ```bash
-gh pr list --state open --base "deployments/phase{P}/wave-{M}" --json number,title,author,headRefName,reviews,isDraft,createdAt
+gh pr list --state open --base "deployments/phase-{P}/wave-{M}" --json number,title,author,headRefName,reviews,isDraft,createdAt
 ```
 
 Also check for PRs targeting `main` that belong to this wave (by label or branch pattern):

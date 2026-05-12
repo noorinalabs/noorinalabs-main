@@ -305,6 +305,10 @@ For each issue, apply the wave label and assignee label:
 gh issue edit {NUMBER} --add-label "p{N}-wave-{M}" --add-label "{FIRSTNAME_LASTNAME}"
 ```
 
+### 7a. Per-wave orchestration scripts (optional automation)
+
+For waves with many issues across many repos, the labeling + project-board adds in steps 7 and 8 may be automated by a per-wave orchestration script. Write these scripts to `.claude/skills/wave-kickoff/_orchestration/` using the naming convention `w{N}-{purpose}.py` (e.g., `w5-kickoff.py`, `w5-project-add.py`). The directory is tracked for audit-trail visibility (see #247). Do NOT use `.claude/scratch/` — that location is gitignored and reserved for true ephemeral artifacts (commit messages, mid-task notes).
+
 ### 8. Post kickoff comments
 
 Post a kickoff comment on each issue using charter format:
@@ -318,7 +322,7 @@ RequestOrReplied: Request
 
 This issue is assigned to you for p{N}-wave-{M}.
 - Peer reviewer: {reviewer name}
-- Branch from: `deployments/phase{N}/wave-{M}`
+- Branch from: `deployments/phase-{N}/wave-{M}`
 - Branch naming: `{FirstInitial}.{LastName}/{IIII}-{issue-slug}`
 - Priority: {hotfix|security|bug|feature} (per charter § Wave Planning & Priority)
 

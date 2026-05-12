@@ -98,7 +98,7 @@ Concrete requirements:
 **Why:** Phase 2 Wave 8 ratified this rule mid-wave after two PRs (isnad-graph#811, design-system#56) disabled CI jobs with tracking issues that could be "closed" by just fixing the bug without ever re-enabling the job. Promoting the rule into the charter closes that loophole. Reference: `feedback_disable_followup_load_bearing.md` (historical memory, superseded by this clause).
 
 ## PR Review Workflow for Deployments Branch PRs <!-- promotion-target: skill -->
-1. **Create the PR** targeting `deployments/phase{N}/wave-{M}`.
+1. **Create the PR** targeting `deployments/phase-{N}/wave-{M}`.
 2. **Notify reviewers** — the PR creator must notify at least **two** other team members to review the PR. Use SendMessage or a GitHub comment to notify. **A PR MUST NOT be merged without at least two peer reviews from distinct non-authors.** For waves with fewer than 4 engineers, the manager's review counts but must include a substantive review comment (not just "LGTM"). This is enforced by the `validate_pr_review.py` PreToolUse hook. **This rule applies even on fast/compact waves** — speed does not exempt PRs from the review gate. Wave 7 merged 5 PRs with zero reviews; this must not recur.
 3. **Reviewer performs the review** and posts a comment-based review on the PR with:
    - **Must-fix items** — blocks merge; the submitter must resolve before proceeding.
@@ -230,7 +230,7 @@ The **user reviews and merges** this PR. Do not proceed to the next phase until 
 ## PR Template <!-- promotion-target: none -->
 ```bash
 git push -u origin <branch-name>
-gh pr create --base deployments/phase{N}/wave-{M} --title "<short title>" --body "$(cat <<'EOF'
+gh pr create --base deployments/phase-{N}/wave-{M} --title "<short title>" --body "$(cat <<'EOF'
 ## Summary <!-- promotion-target: none -->
 <1-3 bullet points describing the change>
 
