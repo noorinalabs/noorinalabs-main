@@ -72,7 +72,7 @@ EOF
 )"
 ```
 
-Add the `fixed-in-phase{N}-wave{M}` label:
+Add the `fixed-in-phase{N}-wave-{M}` label:
 
 ```bash
 gh issue edit {NUMBER} --add-label "fixed-in-phase{N}-wave-{M}"
