@@ -134,6 +134,23 @@ Append a retro entry to `.claude/team/feedback_log.md`:
 2. {change} — Rationale: {why}
 ```
 
+### 6.5. Retro PR body-vs-diff sanity check (added P3W9 #126 — 2026-05-12)
+
+Per `charter/pull-requests.md § Retro PR Body-vs-Diff Discipline`: any charter/skill/trust-matrix file claimed in the retro PR body MUST be in the retro PR diff. Direct-to-main commits for ratified retro outputs are forbidden.
+
+Once the retro PR is open, before requesting reviewers:
+
+```bash
+RETRO_PR=<N>
+gh pr view "$RETRO_PR" --repo noorinalabs/noorinalabs-main --json files --jq '[.files[].path] | sort'
+# Compare against the "Files changed" section of the PR body. Every charter/skill/trust file
+# claimed in the body MUST appear in the listing. If a claimed file is missing, commit it
+# to the retro branch and push — do NOT amend the body to remove the claim, and do NOT
+# commit the substantive change direct-to-main.
+```
+
+Worked example of the failure mode: PR #124 (W8 retro) body claimed 7 files, diff contained 2; the other 5 were committed direct-to-main (`2b92605`, `ecd1c76`). Filed as #126; this step prevents repeats.
+
 ### 7. Propose charter changes
 
 Based on pain points and findings, propose specific charter amendments. Present each as:
