@@ -31,7 +31,6 @@ _MEMORY_DIR = os.path.expanduser(
 )
 _CHARTER_ROOT = _REPO_ROOT / ".claude" / "team"
 _SKILLS_DIR = _REPO_ROOT / ".claude" / "skills"
-_HOOKS_MD = _CHARTER_ROOT / "charter" / "hooks.md"
 _FEEDBACK_LOG = _CHARTER_ROOT / "feedback_log.md"
 
 
@@ -52,7 +51,7 @@ class SmokeTests(unittest.TestCase):
         cls.memories = h.read_all_memories(_MEMORY_DIR)
         cls.sections = h.read_all_charter_sections(str(_CHARTER_ROOT))
         cls.skills = h.read_all_skills(str(_SKILLS_DIR))
-        cls.already = h.find_already_promoted(str(_HOOKS_MD))
+        cls.already = h.find_already_promoted_in_charter(str(_CHARTER_ROOT))
 
     def test_at_least_one_memory_found(self) -> None:
         self.assertGreater(len(self.memories), 0)
