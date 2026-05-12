@@ -530,3 +530,63 @@ When a reviewer's review-comment cites "still has X" / "still missing Y", the co
 
 - `state-claims.md § Refresh State Before Claim` — top-line state-verification umbrella; this rule is the file-content specialization.
 - `pull-requests.md § Trust the Artifact, Not the Framing` — companion: read the artifact at HEAD, not the PR-body framing. Both rules converge on the same access primitive (`gh api ... contents/?ref=<head_sha>`).
+
+## `gh pr edit` projects-classic deprecation — use REST API for body/title updates (Mandatory) <!-- promotion-target: none -->
+
+`gh pr edit <num> --body <text>` (and `--body-file <path>`, and `--title`) on gh-cli versions older than the one that migrated off the deprecated projects-classic GraphQL scope **silently fails** the body/title mutation. The command exits non-zero with a `GraphQL: Projects (classic) is being deprecated` error, but the error reads like a benign warning and the PR body appears unchanged on subsequent inspection — exactly the "silent-no-op" shape captured in memory `feedback_gh_pr_edit_silent_noop`.
+
+Root cause: `gh pr edit` fetches `repository.pullRequest.projectCards` as a side-effect of the mutation; the classic-projects deprecation fails that sub-query, poisoning the whole call. Resolves main#185 (Linh.Pham hit 2026-04-22 — PR#844 body silently retained option-A through the entire v5 phase; reviewers never saw v5 content for ~30 minutes).
+
+### Required workaround — use REST API directly
+
+For any PR body or title update, prefer the REST API:
+
+```bash
+# Body update (single line)
+gh api "repos/<owner>/<repo>/pulls/<num>" -X PATCH \
+  -f body="$(cat /path/to/body.md)"
+
+# Body update (multi-line, recommended — avoids quote-escape bugs)
+gh api "repos/<owner>/<repo>/pulls/<num>" \
+  --method PATCH \
+  --input <(jq -nc --rawfile b /path/to/body.md '{body:$b}')
+
+# Title update
+gh api "repos/<owner>/<repo>/pulls/<num>" -X PATCH \
+  -f title="new title"
+```
+
+`-f` is `--field` and treats the value as a string. For multi-line bodies, prefer `--input` with a `jq`-built JSON body to avoid `-f`'s newline-stripping behavior (see memory `feedback_gh_pr_edit_silent_noop` for the related `gh api -f body=@file` no-op trap — use `--input` or pipe through `jq --rawfile`).
+
+### Eligibility
+
+The REST path applies whenever the gh-cli version is older than the upstream fix release. As of this writing (May 2026) the locally-installed gh is `v2.45.0` (July 2025 build). The upstream fix landed in a later release (`cli/cli` migrated the projects-classic scope post-2025). To check locally:
+
+```bash
+gh --version
+```
+
+If `gh --version` reports `v2.45.0` or older, USE the REST path. If newer, the native `gh pr edit` may be safe — but the REST path always works regardless of version, so skill authors who want maximum portability should default to REST.
+
+### Read-back verify
+
+Per the silent-no-op shape: ALWAYS verify the body/title landed after an update, regardless of which path you used:
+
+```bash
+gh pr view <num> --repo <owner>/<repo> --json body --jq '.body | length'
+# OR (head of body):
+gh api "repos/<owner>/<repo>/pulls/<num>" --jq '.body[0:80]'
+```
+
+A 0-length body or a stale prefix is the signal the mutation didn't land.
+
+### Severity if violated
+
+- Skill or script uses `gh pr edit --body` and never reads back: **moderate** — silently produces wrong state visible to reviewers as "the body says X" when X is the prior version. Worked example: isnad-graph#844's 30-minute reviewer confusion window (Linh.Pham, P2W10).
+- Skill author uses `gh pr edit` AND read-back-verifies: **minor**. The read-back catches the no-op even if the mutation surface stays risky.
+- Manual one-off `gh pr edit` invocation by a human operator: **out of scope** for charter enforcement (humans can interactively re-run); the charter rule applies to skill/script paths where the no-op compounds across batched calls.
+
+### Cross-references
+
+- Memory `feedback_gh_pr_edit_silent_noop` — the broader silent-no-op family (`gh project item-add`, `gh project item-list --limit`, `gh api -X PATCH -f body=@file`) sharing this shape.
+- Resolves main#185.

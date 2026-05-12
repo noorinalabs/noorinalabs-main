@@ -8,6 +8,9 @@ upsert_top_level_key, validates that the result:
   1. Parses as JSON.
   2. Contains the new key with the expected value.
   3. Preserves the sibling values unchanged (no truncation, no reorder).
+
+Helper promoted to `.claude/lib/` per main#292 — the test moved with it
+(same `parent.parent` import shape as the prior wave-scope/tests/ home).
 """
 
 from __future__ import annotations
@@ -17,6 +20,8 @@ import sys
 import unittest
 from pathlib import Path
 
+# Helper lives at .claude/lib/upsert_status_keys.py; test is at
+# .claude/lib/tests/test_*.py. parent.parent reaches the lib root.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from upsert_status_keys import upsert_top_level_key  # noqa: E402

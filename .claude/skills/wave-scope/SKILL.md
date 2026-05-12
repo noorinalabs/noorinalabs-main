@@ -531,7 +531,7 @@ if [ -n "${SCOPE_RECONCILIATION_NOTE:-}" ]; then
   UPSERT_ARGS+=("wave_{M}_scope_reconciliation_note=$(jq -nc --arg n "$SCOPE_RECONCILIATION_NOTE" '$n')")
 fi
 
-python3 "$REPO_ROOT/.claude/skills/wave-scope/upsert_status_keys.py" \
+python3 "$REPO_ROOT/.claude/lib/upsert_status_keys.py" \
   "$REPO_ROOT/cross-repo-status.json" \
   "${UPSERT_ARGS[@]}"
 

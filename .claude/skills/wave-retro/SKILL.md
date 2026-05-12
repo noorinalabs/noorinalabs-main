@@ -12,6 +12,10 @@ Run a retrospective for a completed wave of the `{team_name}` team.
 
 Run `/ontology-librarian` to check ontology staleness before the retro. If the ontology is significantly behind, note it in the retro findings — the wrapup should have run `/ontology-rebuild`, so staleness here indicates a process gap.
 
+### 1.5. Board freshness check (added per main#199)
+
+Run `/board-audit` to ensure project 2's view of the wave matches actual issue state. Stale board state can mis-frame retro findings (e.g., issues that closed during the wave but never came off the active column would appear unresolved). The skill detects orphans + Wave-field drift and reports both before any retro analysis runs. Labels are canonical (charter `issues.md § Wave Planning — Project Board Is Authoritative`); the Wave field is the derived projection. If drift is found, repair it before continuing.
+
 ### 2. Gather merged PRs
 
 List all PRs merged to the wave's deployments branch:

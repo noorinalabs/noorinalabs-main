@@ -201,12 +201,12 @@ Flag any changes to:
 
 Write the **top-level** canonical counter keys that `/wave-retro` Step 2.5 verifies. Pre-#318 these were either missing or buried under `wave_{M}_summary.*`, which forced a manual followup commit at retro (P3W7 `fb459b2`). Post-#318 the skill writes them at wrapup time so retro reads cleanly.
 
-Use the shared `upsert_status_keys.py` helper from `/wave-scope` — it does targeted text-level upsert that preserves the compact-inline shape of `cross-repo-status.json` (a naive `jq … > tmp && mv` reformats every compact line to pretty form, producing a 500-line cosmetic diff per wave — see `main#332`). The helper also validates JSON before AND after the rewrite.
+Use the shared `upsert_status_keys.py` helper at `.claude/lib/` — it does targeted text-level upsert that preserves the compact-inline shape of `cross-repo-status.json` (a naive `jq … > tmp && mv` reformats every compact line to pretty form, producing a 500-line cosmetic diff per wave — see `main#332`). The helper also validates JSON before AND after the rewrite. Promoted from `/wave-scope` to `.claude/lib/` per `main#292` (multi-consumer → shared lib).
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 STATUS="$REPO_ROOT/cross-repo-status.json"
-UPSERT="$REPO_ROOT/.claude/skills/wave-scope/upsert_status_keys.py"
+UPSERT="$REPO_ROOT/.claude/lib/upsert_status_keys.py"
 
 # Compute the three canonical counters from the wave-wrapup report numbers.
 FINAL_PR_COUNT={count_of_merged_PRs}            # same as Step 10 "PRs: Merged"
