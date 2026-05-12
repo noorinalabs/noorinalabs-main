@@ -187,6 +187,30 @@ rmdir "$STAGING"/org "$STAGING"/env/staging "$STAGING"/env/production "$STAGING"
 
 **Every `gh secret set` call in § 3.1–§ 3.9 below MUST source its value from this staging tree via `--body "$(cat ...)"` or stdin-pipe (`cat ... | gh secret set ... -`).** The literal `<value>` placeholders below are NOT to be typed into an interactive prompt.
 
+#### 3.0.d. Per-stage rollback template (closes [main#208](https://github.com/noorinalabs/noorinalabs-main/issues/208))
+
+If a § 3.x verify-workflow step fails AFTER the per-repo delete has executed, the per-repo ciphertext is unrecoverable from GitHub. Recovery requires re-setting the per-repo copy from the staged value AND deleting the broken org-scope secret so consumers fall back to the per-repo copy. The cross-repo orchestration of partial-failure recovery lives in § 7 (Rollback playbook). The per-stage template below is the inner loop each § 7 scenario invokes:
+
+```bash
+# Pattern: rollback a single (secret, repo) pair to per-repo scope after a broken org-scope migration.
+# Pre-condition: $STAGING tree from § 3.0.b is still intact (do NOT run § 3.0.c cleanup until § 7 sign-off).
+
+# 1. Re-instate the per-repo copy from the staged value.
+gh secret set <NAME> --repo noorinalabs/<repo> \
+  --body "$(cat "$STAGING/org/<NAME>")"
+
+# 2. Remove the broken org-scope secret so consumers fall back to per-repo resolution.
+gh secret delete <NAME> --org noorinalabs
+
+# 3. Re-trigger the consumer workflow that detected the break and confirm it passes.
+gh workflow run <consumer-workflow> --repo noorinalabs/<repo> --ref deployments/phase-3/wave-9
+gh run watch --repo noorinalabs/<repo>
+```
+
+The org-delete in step 2 is the critical recovery action: if both per-repo AND org-scope exist for the same secret name, the GH Actions resolver prefers per-repo, so re-setting per-repo without deleting org-scope would leave the broken org-scope in place to surface in any other repo that resolves it. The order (set per-repo first, then delete org) ensures consumers always have a working value during the recovery.
+
+For per-keypair secrets (`JWT_*`, `DEPLOY_SSH_PRIVATE_KEY`) where regeneration upstream is the only recovery path, the staged value at `$STAGING/org/<NAME>` is the snapshot of the keypair as it existed at staging time per § 3.0.b. The rollback template assumes that snapshot still represents the canonical upstream value; if upstream has been rotated since staging, regenerate-and-rotate-downstream is the only correct recovery (the staged value is no longer authoritative).
+
 ### 3.1. `DEPLOY_REPO_PAT` — closes US#84 (HIGHEST priority)
 
 > Value source: `$STAGING/org/DEPLOY_REPO_PAT` (staged per § 3.0.b from GitHub → Developer Settings → PATs).
@@ -249,8 +273,17 @@ for SECRET in AUTH_GITHUB_CLIENT_ID AUTH_GITHUB_CLIENT_SECRET \
     --body "$(cat "$STAGING/org/$SECRET")"
 done
 
-# Trigger one workflow per consumer repo (`gh workflow run` + `gh run watch`),
-# verify resolution, then:
+# Verification: trigger one consumer workflow per repo, confirm green, BEFORE deleting (closes main#205).
+# OAuth-touching workflows on each consumer:
+gh workflow run ci.yml --repo noorinalabs/noorinalabs-user-service --ref deployments/phase-3/wave-9
+gh run watch --repo noorinalabs/noorinalabs-user-service
+gh workflow run ci.yml --repo noorinalabs/noorinalabs-isnad-graph --ref deployments/phase-3/wave-9
+gh run watch --repo noorinalabs/noorinalabs-isnad-graph
+# Confirm org-scope resolves at each repo before proceeding:
+gh api orgs/noorinalabs/actions/secrets/AUTH_GITHUB_CLIENT_SECRET/repositories \
+  --jq '.repositories[].name'
+# Expected: noorinalabs-deploy, noorinalabs-isnad-graph, noorinalabs-user-service
+
 for SECRET in AUTH_GITHUB_CLIENT_ID AUTH_GITHUB_CLIENT_SECRET \
               AUTH_GOOGLE_CLIENT_ID AUTH_GOOGLE_CLIENT_SECRET; do
   gh secret delete "$SECRET" --repo noorinalabs/noorinalabs-deploy
@@ -262,6 +295,8 @@ done
 
 > Value sources: `$STAGING/org/JWT_PRIVATE_KEY` and `$STAGING/org/JWT_PUBLIC_KEY` (staged per § 3.0.b from canonical keypair custody — see § 3.0.a row for `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY`). If either value is unrecoverable, regenerate the keypair upstream and plan the JWT re-issue window BEFORE running this section.
 
+**Drift-risk reorder consideration (tracking [main#210](https://github.com/noorinalabs/noorinalabs-main/issues/210)):** The JWT keypair is the highest-coupling Tier-B migration in § 3 — it is the only one where the scope change materially alters the runtime consumer set. `JWT_*` is currently set only on `deploy` (§ 1.c rows 14-15) and routed to `user-service` and `isnad-graph` via env-file injection at VPS provisioning time. Once org-scoped, both consumers can read it directly from GH, and the env-file injection path becomes decoupling work (per Open Question #2). An alternative migration order would place § 3.4 BEFORE § 3.3 (OAuth creds are already redundantly set on `deploy` AND `isnad-graph`, so the OAuth migration is purely a deduplication — a lower-coupling candidate to defer until § 3.4 has validated the runbook). The current order (§ 3.3 → § 3.4) is the safer "build confidence with lower-coupling migrations first" framing; both orderings are defensible. **Decision:** keep current order for this execution; revisit reorder framing at next-wave re-audit if the env-file injection path has not yet been decoupled.
+
 ```bash
 for SECRET in JWT_PRIVATE_KEY JWT_PUBLIC_KEY; do
   gh secret set "$SECRET" --org noorinalabs --visibility selected \
@@ -271,6 +306,24 @@ done
 
 # Verify before deleting deploy's copy — deploy injects this into env files
 gh api orgs/noorinalabs/actions/secrets/JWT_PRIVATE_KEY/repositories --jq '.repositories[].name'
+
+# Env-file injection gate (closes main#206): deploy currently routes JWT_* to user-service +
+# isnad-graph via env-file injection at VPS provisioning (Open Question #2). Deleting deploy's
+# per-repo copy below assumes deploy's provisioning workflows resolve JWT_* from org-scope.
+# Confirm this gate BEFORE proceeding to the delete loop.
+#
+# 1. Trigger a deploy provision dry-run that exercises the env-file injection path:
+gh workflow run terraform.yml --repo noorinalabs/noorinalabs-deploy \
+  --ref deployments/phase-3/wave-9 -f mode=plan
+gh run watch --repo noorinalabs/noorinalabs-deploy
+# 2. Confirm the rendered plan resolves JWT_PRIVATE_KEY from org-scope (NOT failing with
+#    "secret not found"). The plan output should show env-file lines for both staging and
+#    production VPSes containing populated JWT_PRIVATE_KEY values.
+# 3. If the plan fails because the env-file injection path requires repo-scope resolution,
+#    STOP and resolve via either (a) refactor injection to read from org-scope, OR
+#    (b) re-evaluate whether JWT_* needs env-scope rather than org-scope (pairs with
+#    main#141 per-env Hetzner work — see deploy#83/#84). Do NOT proceed to the delete
+#    loop until the gate passes.
 
 for SECRET in JWT_PRIVATE_KEY JWT_PUBLIC_KEY; do
   gh secret delete "$SECRET" --repo noorinalabs/noorinalabs-deploy
@@ -288,6 +341,14 @@ for SECRET in B2_APP_KEY B2_BUCKET B2_ENDPOINT B2_KEY_ID; do
     --body "$(cat "$STAGING/org/$SECRET")"
 done
 
+# Verification: trigger one consumer workflow per repo, confirm green, BEFORE deleting (closes main#205).
+gh workflow run backup.yml --repo noorinalabs/noorinalabs-deploy --ref deployments/phase-3/wave-9
+gh run watch --repo noorinalabs/noorinalabs-deploy
+gh workflow run ci.yml --repo noorinalabs/noorinalabs-isnad-graph --ref deployments/phase-3/wave-9
+gh run watch --repo noorinalabs/noorinalabs-isnad-graph
+gh api orgs/noorinalabs/actions/secrets/B2_APP_KEY/repositories --jq '.repositories[].name'
+# Expected: noorinalabs-deploy, noorinalabs-isnad-graph
+
 for SECRET in B2_APP_KEY B2_BUCKET B2_ENDPOINT B2_KEY_ID; do
   gh secret delete "$SECRET" --repo noorinalabs/noorinalabs-deploy
   gh secret delete "$SECRET" --repo noorinalabs/noorinalabs-isnad-graph
@@ -303,6 +364,13 @@ gh secret set HCLOUD_TOKEN --org noorinalabs --visibility selected \
   --repos noorinalabs-deploy,noorinalabs-isnad-graph \
   --body "$(cat "$STAGING/org/HCLOUD_TOKEN")"
 
+# Verification: trigger one consumer workflow per repo, confirm green, BEFORE deleting (closes main#205).
+gh workflow run terraform.yml --repo noorinalabs/noorinalabs-deploy \
+  --ref deployments/phase-3/wave-9 -f mode=plan
+gh run watch --repo noorinalabs/noorinalabs-deploy
+gh api orgs/noorinalabs/actions/secrets/HCLOUD_TOKEN/repositories --jq '.repositories[].name'
+# Expected: noorinalabs-deploy, noorinalabs-isnad-graph
+
 gh secret delete HCLOUD_TOKEN --repo noorinalabs/noorinalabs-deploy
 gh secret delete HCLOUD_TOKEN --repo noorinalabs/noorinalabs-isnad-graph
 ```
@@ -315,6 +383,14 @@ gh secret delete HCLOUD_TOKEN --repo noorinalabs/noorinalabs-isnad-graph
 gh secret set GH_PACKAGES_TOKEN --org noorinalabs --visibility selected \
   --repos noorinalabs-landing-page,noorinalabs-isnad-graph,noorinalabs-design-system,noorinalabs-user-service \
   --body "$(cat "$STAGING/org/GH_PACKAGES_TOKEN")"
+
+# Verification: trigger one publisher workflow per consumer repo, confirm green, BEFORE deleting (closes main#205).
+gh workflow run ci.yml --repo noorinalabs/noorinalabs-landing-page --ref deployments/phase-3/wave-9
+gh run watch --repo noorinalabs/noorinalabs-landing-page
+gh workflow run ci.yml --repo noorinalabs/noorinalabs-isnad-graph --ref deployments/phase-3/wave-9
+gh run watch --repo noorinalabs/noorinalabs-isnad-graph
+gh api orgs/noorinalabs/actions/secrets/GH_PACKAGES_TOKEN/repositories --jq '.repositories[].name'
+# Expected: noorinalabs-landing-page, noorinalabs-isnad-graph, noorinalabs-design-system, noorinalabs-user-service
 
 gh secret delete GH_PACKAGES_TOKEN --repo noorinalabs/noorinalabs-landing-page
 gh secret delete GH_PACKAGES_TOKEN --repo noorinalabs/noorinalabs-isnad-graph
@@ -332,6 +408,16 @@ gh secret delete GH_PACKAGES_TOKEN --repo noorinalabs/noorinalabs-isnad-graph
 gh secret set DEPLOY_SSH_PRIVATE_KEY --org noorinalabs --visibility selected \
   --repos noorinalabs-deploy,noorinalabs-landing-page,noorinalabs-isnad-graph \
   --body "$(cat "$STAGING/org/DEPLOY_SSH_PRIVATE_KEY")"
+
+# Verification: trigger one ssh-consuming workflow per repo, confirm green, BEFORE deleting (closes main#205).
+gh workflow run deploy-stg.yml --repo noorinalabs/noorinalabs-deploy --ref deployments/phase-3/wave-9
+gh run watch --repo noorinalabs/noorinalabs-deploy
+gh workflow run deploy.yml --repo noorinalabs/noorinalabs-landing-page --ref deployments/phase-3/wave-9
+gh run watch --repo noorinalabs/noorinalabs-landing-page
+gh workflow run deploy.yml --repo noorinalabs/noorinalabs-isnad-graph --ref deployments/phase-3/wave-9
+gh run watch --repo noorinalabs/noorinalabs-isnad-graph
+gh api orgs/noorinalabs/actions/secrets/DEPLOY_SSH_PRIVATE_KEY/repositories --jq '.repositories[].name'
+# Expected: noorinalabs-deploy, noorinalabs-landing-page, noorinalabs-isnad-graph
 
 gh secret delete DEPLOY_SSH_PRIVATE_KEY --repo noorinalabs/noorinalabs-deploy
 gh secret delete DEPLOY_SSH_PRIVATE_KEY --repo noorinalabs/noorinalabs-landing-page
@@ -503,3 +589,87 @@ it (rare — `GITLEAKS_LICENSE` is the only current example warranting
 2. **JWT key custody** — currently `deploy` injects JWT keys into env files at provision time. Migrating to org-scope means user-service and isnad-graph can read them directly. Confirm the env-file injection path can be removed (or whether deploy still needs the secret for legacy provisioning).
 3. **`DEPLOY_SSH_PRIVATE_KEY` two-stage** — § 3.8 assumes the per-env Hetzner cutover (main#141) lands within the same wave. If it slips to W11+, leave the org-scoped transitional in place and revisit.
 4. **Inferred-not-verified cells** — § 1.c "Likely shared identical?" column. Owner should sample-verify (e.g., via the values UI in the GH Settings page) before deleting any per-repo copy. Recommend verifying at least `JWT_PRIVATE_KEY`, `AUTH_*_CLIENT_SECRET`, and `B2_APP_KEY` since those are the highest-risk if they actually differ.
+
+---
+
+## 7. Rollback playbook (closes [main#209](https://github.com/noorinalabs/noorinalabs-main/issues/209))
+
+The § 3 runbook is a 9-stage migration across 8 repos. Each stage can partially fail — succeed for some repos and break a workflow on others. The per-stage rollback template lives in § 3.0.d; this section covers the cross-repo orchestration of partial-failure recovery.
+
+### 7.1. Known-safe pause states
+
+A migration stage can be left half-done overnight ONLY in one of these states. Any other intermediate state is a "complete the stage or roll back" decision-point.
+
+| Pause state | Description | Resolution required by |
+|---|---|---|
+| **Pre-set** | `$STAGING` populated per § 3.0.b but no `gh secret set --org` yet executed | Next session — re-stage if cleanup window has elapsed |
+| **Set-only, no-deletes** | Org-scope secret set, per-repo copies still in place | 7 days — GH Actions resolver prefers per-repo, so consumers continue to work via the older copy. Verification can be deferred but org-scope drift becomes possible |
+| **Verify-passed, no-deletes** | Org-scope set, verify-workflow trigger succeeded per § 3.x, per-repo copies still in place | 7 days — same as above but the verification anchor exists |
+
+**Never-pause states:** mid-delete loop (some per-repo copies deleted, some not). If interrupted here, finish the deletes immediately OR roll back via § 7.2.
+
+### 7.2. Partial-failure recovery — per-stage matrix
+
+For each § 3.x stage, the recovery sequence depends on WHICH repo's workflow broke. The pattern is **rollback the broken repo first**, then decide whether to continue, abort the stage, or full-rollback. The per-stage template in § 3.0.d is the inner loop; this matrix is the outer loop.
+
+#### 7.2.1. § 3.1 `DEPLOY_REPO_PAT` partial failure
+
+If `isnad-graph` or `landing-page` workflow 401s after the org-scope set:
+1. Skip the § 3.1 step 5 delete (the per-repo copy in isnad-graph stays as fallback).
+2. Inspect the failing workflow's `actions/secret` resolution log — confirm whether it's reading from per-repo or org-scope.
+3. If org-scope: investigate the PAT itself (likely a scope or expiration issue — re-issue from GitHub Developer Settings per § 3.0.a, re-stage, re-set org-scope).
+4. If per-repo and per-repo is missing: roll back via § 3.0.d template with `<NAME>=DEPLOY_REPO_PAT`, `<repo>=noorinalabs-isnad-graph`.
+
+#### 7.2.2. § 3.3 OAuth-creds partial failure
+
+If `user-service` works but `isnad-graph` fails (or vice versa):
+1. STOP the delete loop immediately (do NOT iterate to the second `gh secret delete` call).
+2. Re-instate the per-repo copy on the failing repo via § 3.0.d template per-secret (4 secrets: `AUTH_GITHUB_CLIENT_ID`, `AUTH_GITHUB_CLIENT_SECRET`, `AUTH_GOOGLE_CLIENT_ID`, `AUTH_GOOGLE_CLIENT_SECRET`).
+3. Delete the broken org-scope only if step 2's reinstated per-repo workflow passes — otherwise leave both in place (per-repo wins via resolver precedence) and investigate upstream OAuth app state.
+
+#### 7.2.3. § 3.4 JWT keypair partial failure
+
+The highest-coupling stage. Failure modes:
+- **`user-service` JWT verification fails:** the org-scope key value differs from the staged value (rare — verify via the staging tree). Re-stage, re-set, re-trigger.
+- **`isnad-graph` JWT verification fails BUT `user-service` passes:** the keys are identical (both consumers read the same org-scope secret), so the failure is consumer-side (likely a stale cached public key). Restart `isnad-graph` workflow.
+- **`deploy` env-file injection breaks AFTER step 3 (delete of deploy per-repo copy):** restore via § 3.0.d template with `<NAME>=JWT_PRIVATE_KEY` AND `<NAME>=JWT_PUBLIC_KEY`, `<repo>=noorinalabs-deploy`. This is the most common § 3.4 failure mode and the Open Question #2 path the env-file injection gate in § 3.4 is designed to catch.
+
+#### 7.2.4. § 3.5 / 3.6 / 3.7 partial failure
+
+These follow the same pattern as § 3.3:
+1. STOP the delete loop on first failure.
+2. Re-instate per-repo via § 3.0.d.
+3. Continue iteration to remaining unaffected secrets if-and-only-if their verify-workflow has independently passed.
+
+#### 7.2.5. § 3.8 two-stage SSH partial failure
+
+Stage 1 mid-flight failure: treat per § 7.2.4. Stage 2 mid-flight failure (between staging-env env-scope set and production-env env-scope set):
+- Stage 2 is per-env not per-repo, so the failure granularity is `{staging, production}`. If staging verifies but production fails, the org-scope transitional from stage 1 still resolves for both envs (env-scope shadows org-scope only when env-scope value exists). Leave the org-scope transitional in place; defer the stage-1-to-stage-2 cutover for production until the failure root cause is resolved.
+
+#### 7.2.6. § 3.9 Tier-C env-scope partial failure
+
+Tier-C secrets are per-env, so partial failure is `(secret, env)` pairs. Recovery:
+1. Re-set the failing `(secret, env)` pair from `$STAGING/env/<env>/<SECRET>`.
+2. Trigger a deploy-`<env>`.yml workflow run; confirm env resolution.
+3. Tier-C has NO org-scope fallback layer, so the per-env value must be present for the env-scoped workflow to resolve it. There is no "leave org-scope in place" pause state for Tier-C.
+
+### 7.3. Cross-repo coordination — shared migration log
+
+For a multi-hour multi-repo migration, maintain a single shared log so the owner can resume mid-session and so cross-repo dependencies are visible:
+
+- **Location:** comment thread on [main#148](https://github.com/noorinalabs/noorinalabs-main/issues/148) (the parent issue for this audit).
+- **Format:** one comment per § 3.x stage transition (`set` start → verify pass → `delete` complete). Include `gh workflow run` URLs as evidence.
+- **Status states per (secret, repo) tuple:** `staged` / `org-set` / `verified` / `per-repo-deleted` / `rolled-back`. The combinations valid per § 7.1 pause states are the lifecycle waypoints; any other combination is mid-flight.
+
+### 7.4. Full-stage rollback
+
+If a § 3.x stage cannot be salvaged via § 7.2 recovery, full-rollback to pre-stage state:
+
+1. For every repo in the stage's `--repos` list: run § 3.0.d template with the appropriate `<NAME>`/`<repo>` pair.
+2. Verify each rolled-back repo's workflow resolves to per-repo as expected.
+3. Annotate the migration log per § 7.3 with the rollback completion timestamp + root-cause notes.
+4. The rollback leaves the stage in a worse-than-pre-stage state (per-repo copies present + staged values in `$STAGING`). Decide whether to retry the stage in-session or defer to next-wave re-audit. Do NOT run § 3.0.c cleanup (`shred -u`) until the deferred stage either retries successfully OR is explicitly abandoned for the wave.
+
+### 7.5. Authoritative source of truth during partial state
+
+If the cross-repo migration log (§ 7.3) and the actual GH state (`gh secret list --org` + per-repo) disagree, the GH state wins. The log is a convenience for resumability, not the source of truth. Reconcile by re-running per-repo `gh secret list` and comparing against the log; the log entries that disagree with GH state are the rollback waypoints to repair.
