@@ -1,0 +1,5 @@
+{
+  "description": "Happy path: --body-file=<path> equals form. The previous regex parser did not handle the equals form at all — this fixture asserts the new tokenizer extracts /tmp/x.md from the equals-attached token.",
+  "command": "gh issue create --title fix --body-file=/tmp/fixture-happy-equals-bodyfile.md",
+  "expect": "allow"
+}

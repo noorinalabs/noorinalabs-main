@@ -1,0 +1,5 @@
+{
+  "description": "Adjacent shape: full charter-format git commit with quoted -c identity flags + -F /tmp/<path>. Regression coverage for tokenizer correctness around quoted -c values (which broke the previous regex parser).",
+  "command": "git -c user.name=\"Aino Virtanen\" -c user.email=\"parametrization+Aino.Virtanen@gmail.com\" commit -F /tmp/fixture-adjacent-quoted-identity.txt",
+  "expect": "allow"
+}

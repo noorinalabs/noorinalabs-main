@@ -1,0 +1,5 @@
+{
+  "description": "Happy path: gh api ... --input /tmp/<path>. Issue #316 lists --input as an additional flag to cover. Parser must recognize gh api as a covered topic and extract the path after --input.",
+  "command": "gh api repos/foo/bar/issues -X POST --input /tmp/fixture-happy-gh-api-input.json",
+  "expect": "allow"
+}
