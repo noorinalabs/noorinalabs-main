@@ -64,7 +64,7 @@ Detection signals (any ONE is sufficient):
 
 Sentinel fallback (second acceptance signal, added for #169):
     The librarian skill writes a sentinel file on invocation at:
-        <cwd>/.claude/.librarian-consulted/<hash>.marker
+        <cwd>/.claude/.consulted/ontology-librarian/<hash>.marker
     where <hash> is the first 16 hex chars of sha1(abspath(cwd)). The hook
     accepts the marker if its mtime is within SENTINEL_TTL_SECONDS (1 hour)
     of now AND the cwd reported in `input_data["cwd"]` matches the hashed
@@ -106,19 +106,28 @@ Promotion pattern example: memory -> charter (CLAUDE.md § Ontology) -> hook.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import sys
-import time
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _consultation_sentinel import (  # noqa: E402
+    DEFAULT_TTL_SECONDS,
+    SENTINEL_PARENT_DIR,
+    consultation_sentinel_path,
+    cwd_sentinel_hash,
+)
 from annunaki_log import log_pretooluse_block  # noqa: E402
 
-# Sentinel-fallback config (see docstring § "Sentinel fallback").
-SENTINEL_DIR_NAME = ".claude/.librarian-consulted"
-SENTINEL_TTL_SECONDS = 3600  # 1 hour
+# Sentinel-fallback config — delegated to `_consultation_sentinel` per #176.
+# These module-level names are preserved as back-compat shims for tests that
+# pre-#176 referenced `hook.SENTINEL_DIR_NAME` / `hook._cwd_sentinel_hash` /
+# `hook.SENTINEL_TTL_SECONDS` directly. The values are now derived from the
+# shared helper so behavior cannot drift between the two.
+_SKILL_KEY = "ontology-librarian"
+SENTINEL_DIR_NAME = f"{SENTINEL_PARENT_DIR}/{_SKILL_KEY}"
+SENTINEL_TTL_SECONDS = DEFAULT_TTL_SECONDS  # 1 hour, inherits from helper
 
 # Tool matchers this hook enforces on.
 _MATCHED_TOOLS = {"Edit", "Write", "NotebookEdit"}
@@ -242,17 +251,15 @@ def _transcript_has_librarian(transcript_path: str) -> bool:
 
 
 def _cwd_sentinel_hash(cwd: str) -> str:
-    """Return the first 16 hex chars of sha1(abspath(cwd)).
+    """Return the first 16 hex chars of sha1(abspath(cwd) + "\\n").
 
-    Matches the hash the librarian skill writes (`pwd | sha1sum | cut -c1-16`).
+    Back-compat shim: delegates to `_consultation_sentinel.cwd_sentinel_hash`.
+    The trailing-newline hash matches the shell idiom
+    `pwd | sha1sum | cut -c1-16` so the librarian skill (which writes the
+    sentinel from shell) and the hook (which reads it from Python) compute
+    the same path.
     """
-    try:
-        abspath = os.path.abspath(os.path.expanduser(cwd))
-    except (OSError, ValueError):
-        abspath = cwd
-    # Shell `pwd | sha1sum` includes the trailing newline from pwd's output.
-    digest = hashlib.sha1((abspath + "\n").encode("utf-8")).hexdigest()
-    return digest[:16]
+    return cwd_sentinel_hash(cwd)
 
 
 def _sentinel_attests_librarian(cwd: str) -> bool:
@@ -261,19 +268,30 @@ def _sentinel_attests_librarian(cwd: str) -> bool:
     Fresh = mtime within SENTINEL_TTL_SECONDS of now. Absent, stale, or
     unreadable sentinels return False (do not attest). OSError paths fail
     open (return True) to match the transcript-scan fail-open stance.
+
+    Per #176: the path is `.claude/.consulted/ontology-librarian/<hash>.marker`
+    (was `.claude/.librarian-consulted/<hash>.marker`); the path move
+    namespaces by skill so future transcript-reading hooks can reuse the
+    same sentinel directory without colliding. The helper computes the
+    canonical path; this function wraps it with Hook 15's specific
+    fail-OPEN-on-OSError semantics.
     """
     if not cwd:
         return False
 
+    import time
+
     try:
-        abspath = os.path.abspath(os.path.expanduser(cwd))
-        sentinel = Path(abspath) / SENTINEL_DIR_NAME / f"{_cwd_sentinel_hash(abspath)}.marker"
+        sentinel = consultation_sentinel_path(cwd, _SKILL_KEY)
         if not sentinel.exists():
             return False
         age = time.time() - sentinel.stat().st_mtime
         return 0 <= age <= SENTINEL_TTL_SECONDS
     except OSError:
-        # Fail open — do not block on our own inability to stat.
+        # Fail open — do not block on our own inability to stat. (Preserved
+        # from pre-#176 behavior; the shared helper fails CLOSED on OSError
+        # for cleaner generic semantics — Hook 15 wraps it here to keep the
+        # legacy fail-open stance that its tests pin.)
         return True
 
 

@@ -23,10 +23,12 @@ The `query` argument is optional. If provided, it's a natural language question 
 
 Before anything else, write a cwd-keyed sentinel file that Hook 15 (`enforce_librarian_consulted`) reads as a second acceptance signal. This is required because in worktree-subagent sessions the transcript JSONL the hook scans may not yet contain this Skill `tool_use` entry (race on transcript flush — see issue #169). The sentinel is a robust fallback that survives the flush race.
 
+Per #176 the sentinel directory is namespaced by skill name under `.claude/.consulted/<skill>/` so future transcript-reading hooks can reuse the same scheme without colliding. The shared helper lives at `.claude/hooks/_consultation_sentinel.py` and exposes `write_consultation_sentinel(skill_name)` for any future skill-side caller.
+
 ```bash
-mkdir -p .claude/.librarian-consulted
+mkdir -p .claude/.consulted/ontology-librarian
 HASH=$(pwd | sha1sum | cut -c1-16)
-printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(pwd)" > .claude/.librarian-consulted/"$HASH".marker
+printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(pwd)" > .claude/.consulted/ontology-librarian/"$HASH".marker
 ```
 
 **Do not remove this step.** It is the Hook 15 consultation marker for the current cwd; deleting it re-introduces the #169 regression for subagents working in worktrees. The directory is gitignored.

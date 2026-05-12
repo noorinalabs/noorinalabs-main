@@ -203,6 +203,30 @@ When hooks sharing the same matcher type (Bash, Agent, SendMessage, etc.) accumu
 - **Out of scope for v1:** `gh project item-add` matcher (W8 instances of stale-path issues hit the labeling surface before the project-add surface; covering label-time is the higher-leverage gate). Cited-issue freshness ("any cited issue # must be OPEN or noted as `closed-resolved-by-X`") — heavier hook surface; deferred to retro for now. Both filed as follow-ups against this hook.
 - **Promotion provenance:** Three-occurrence W8 pattern (2026-05-09 audit, see [#337](https://github.com/noorinalabs/noorinalabs-main/issues/337) for full provenance chain). Source memory family: `feedback_origin_over_local_for_still_has_claims.md` (SUPERSEDED 2026-05-10 by charter `pull-requests.md`), `feedback_pre_spawn_brief_verified_at_head.md`, `feedback_verify_diagnosis_before_delegating.md`. Promoted to hook in P3W9.
 
+## Shared Helpers <!-- promotion-target: none -->
+
+Reusable primitives that multiple hooks (or hooks + skills) consume. Each helper has a single-source-of-truth implementation under `.claude/hooks/` with an underscore-prefix filename (`_<helper>.py`) marking it as internal, not a hook itself.
+
+### `_shell_parse.py` — Tokenize Bash commands safely
+
+Multiple PreToolUse hooks need to detect command shapes (`git commit`, `gh pr create`, etc.) without regex'ing the raw command string — a pattern that has repeatedly mis-fired on heredoc bodies, code-fence blocks, and `--body-file` argument values (issues #118, #134, #144, #188, #189, #216, #223, #226, #227). The helper exposes `tokenize`, `strip_heredocs`, `iter_command_segments`, `find_git_subcommand`, `find_gh_subcommand`, and `extract_dash_c_pairs`. Consumed by `validate_commit_identity`, `validate_branch_freshness`, `block_git_config`, `block_no_verify`, `block_shutdown_without_retro`, `block_stale_tmp_message_file`, `validate_review_comment_format`, `post_wave_kickoff_comment`. When a new transcript-or-command-reading hook needs to discriminate command shape, consume this helper rather than regex.
+
+### `_consultation_sentinel.py` — Cwd-keyed consultation sentinel
+
+Generalizes the Hook 15 sentinel pattern (introduction: [#169](https://github.com/noorinalabs/noorinalabs-main/issues/169); generalization: [#176](https://github.com/noorinalabs/noorinalabs-main/issues/176)) for any future transcript-reading enforcement hook. The pattern: a skill writes a marker file in the agent's cwd recording that it was invoked; the hook reads the marker as a second acceptance signal beside the transcript scan. Subagent worktree sessions repeatedly hit a transcript-flush race that left the marker absent from the file the hook reads — the sentinel survives that race because the skill writes it synchronously.
+
+**Path scheme:** `<cwd>/.claude/.consulted/<skill_name>/<sha1(abspath(cwd)+"\n")[:16]>.marker`. Namespaced by skill name so multiple transcript-reading hooks don't collide. The trailing-newline hash matches the shell idiom `pwd | sha1sum | cut -c1-16` so skills can write the sentinel from shell and the Python helper computes the same path (parity gated by `test_consultation_sentinel.ShellPythonParityTests`).
+
+**API:**
+- `write_consultation_sentinel(skill_name, cwd=None) -> Path | None` — skill-side write. Returns None on OSError (fail-open).
+- `consultation_sentinel_is_fresh(cwd, skill_name, ttl_seconds=3600) -> bool` — hook-side read. False on missing / stale / unreadable / future-dated marker.
+- `consultation_sentinel_path(cwd, skill_name) -> Path` — pure path composition (tests use this to write sentinels manually).
+- `cwd_sentinel_hash(cwd) -> str` — 16-char sha1 prefix, exported because Hook 15 tests pin the shell/Python parity property.
+
+**Use this helper** when authoring a new transcript-reading enforcement hook. Do NOT reinvent path-keying, hashing, or TTL logic — every divergence becomes a sentinel-doesn't-match bug in worktree subagents.
+
+**Promotion provenance:** Hook 15 (#150 + #169) original sentinel introduction. PR #174 added synchronous skill-side write. Issue #176 extracted the helper. Filed by Nadia Khoury during PR #174 review.
+
 ## Hook Sync Across Child Repos <!-- promotion-target: none -->
 
 Shared hooks live in `noorinalabs-main/.claude/hooks/` (the parent repo's hooks tree). Child repos consume them via **parent-canonical paths** — their own `.claude/settings.json` registers each hook by absolute path into the parent's hooks tree, e.g.:
