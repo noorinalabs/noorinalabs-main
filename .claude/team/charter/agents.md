@@ -306,6 +306,49 @@ Every reviewer-class spawn prompt MUST include, **in order**:
 3. **Throughline-watch block** (per § Reviewer spawn brief — throughline-watch above) — copy-paste the verbatim template block. Default, not per-wave addition (#320).
 4. **`Requestor: <reviewer name>` / `Requestee: <PR author name>` / `RequestOrReplied: Approved | ChangesRequested` / `TechDebt:` format** — explicit reminder using the canonical Direction-table form (per `pull-requests.md` § Comment-Based Reviews, post-#372 / PR #375 fix). The brief should embed the verbatim "Use `gh pr comment <PR#> --body '...'` with this format:" template block to prevent W9 PR#349-style cascades from re-emerging (per memory `feedback_spawn_brief_requestor_field_semantics`).
    - TechDebt MUST be in the SAME comment as the verdict — edit-appending after the fact gets the verdict-comment dropped from hook counting (per memory `feedback_verdict_amendment_edit_not_append`).
+
+<!-- Promoted from memory: feedback_techdebt_attestation_literal_line.md (P3W9 retro 2026-05-12, owner-approved 2026-05-13) -->
+
+   **Verbatim verdict-comment template (copy-paste into reviewer spawn briefs):**
+
+   ```bash
+   # Use `gh pr comment <PR#> --body "..."` — NOT `gh pr review` (block_gh_pr_review enforces).
+   # Write the body to a /tmp file FIRST, then comment in the very next tool call
+   # (block_stale_tmp_message_file enforces 30s freshness):
+
+   cat > /tmp/<PR#>-review-<reviewer-firstname>.md <<'BODYEOF'
+   **Requestor:** <reviewer-firstname> <reviewer-lastname>
+   **Requestee:** <PR-author-firstname> <PR-author-lastname>
+   **RequestOrReplied:** Approved
+   **TechDebt:** none
+
+   <verdict body — prose, line comments, throughline observations…>
+
+   ## Throughline observations
+
+   <per § Reviewer spawn brief — throughline-watch>
+   BODYEOF
+
+   gh pr comment <PR#> --body-file /tmp/<PR#>-review-<reviewer-firstname>.md
+   ```
+
+   **Required literal forms (hook-enforced):**
+   - The line MUST literally start with `TechDebt:` (optional `**` bold wrapping OK). `## TechDebt` section headers + prose do NOT satisfy the regex.
+   - Valid values:
+     - `TechDebt: none`
+     - `TechDebt: none — addressed inline by fixup commit <sha>`
+     - `TechDebt: #15, #16` (when issues were filed pre-verdict)
+   - `RequestOrReplied: Approved` (NOT `Reply` — `validate_pr_review` counts Approved-only).
+
+   For a ChangesRequested verdict, swap to:
+   ```
+   **RequestOrReplied:** ChangesRequested
+   **TechDebt:** none
+   ```
+   (TechDebt still required even on ChangesRequested — the regex is unconditional.)
+
+   **Why literal:** P3W9 PR #409 cascade — both reviewers followed the prior prose template that prescribed `## TechDebt\n\n…` section header; `gh pr merge` blocked with `BLOCKED: PR #409 has review(s) missing the mandatory TechDebt: attestation line` at merge time, requiring per-comment PATCH amendments. Sibling pattern to P3W8 Approved-vs-Reply cascade — both fixable by spawning-brief template fixed-literal rewrite.
+
 5. **`gh pr review` vs `gh pr comment` discipline** — explicit reminder NOT to use `gh pr review` (`block_gh_pr_review` enforces; spawn-brief mention prevents the trip).
 6. **Read-the-diff-at-HEAD discipline** — `gh api repos/.../contents/<path>?ref=<head_sha>` not local clone (per `pull-requests.md` § Origin > Local Clone for "Still-Has-X" File-Content Claims).
 7. **Pre-enumeration discipline** — `grep -c` per file then sum, never `| head -N` (per memory `feedback_no_head_in_surface_enumeration`).
