@@ -49,7 +49,7 @@ Both tracks must move together. Finishing only one is not phase exit.
 
 Owner runs `/phase-review` and verifies all 9 end-state rows are `Done`, plus the tech-debt ratio test (criterion 9) holds. On confirmation, owner runs `/roadmap` to define Phase 4 before any P4 wave can kick off.
 
-## Phase history — P3W1 to P3W8
+## Phase history — P3W1 to P3W9
 
 | Wave | Theme | Outcome |
 |------|-------|---------|
@@ -61,8 +61,28 @@ Owner runs `/phase-review` and verifies all 9 end-state rows are `Done`, plus th
 | W6 | Cross-repo backlog triage (Tier-1 across 8 repos + runbook fan-out) | 11 PRs, 0 admin overrides, top-concentration 18% |
 | W7 | Hook parser-fixture coverage backport audit | 12 PRs, 0 admin overrides |
 | W8 | Foundation reset — hook/skill/charter ownership disambiguation + artifact-CI scope definition | 11 PRs, 0 admin overrides, 0 ChangesRequested cycles |
+| W9 | Tech-debt reduction (main-only) | 6 PRs, 0 admin overrides, 0 CR cycles, 67% concentration (Aino 4/6 by commit identity) |
 
-8 of 8 waves were tooling/meta (W3 had a small frontend feature; no deploy work shipped yet). This is the gap that drove the 2026-05-08 phase reset and shapes W9 scoping.
+9 of 9 waves were tooling/meta (W3 had a small frontend feature; no deploy work shipped yet). This is the gap that drove the 2026-05-08 phase reset and shapes W9 scoping.
+
+## Wave plan addendum — 2026-05-12 owner partition directive
+
+After W9 wrapped main-only (6 PRs Aino-concentrated by theme-fit), the
+remaining 115 W9-labeled issues were partitioned by owner directive
+2026-05-12T22:30Z:
+
+- **W10 = non-deploy remainder** — 54 issues across 5 child repos (isnad-graph 27,
+  user-service 12, landing-page 9, design-system 3, data-acquisition 3) + 8 main
+  issues (#402/#403/#255 carry-forwards + #262 promoted from W9 + #417/#418/#419
+  audit follow-ups + #421 this issue).
+- **W11 = deploy entirety** — 60 deploy issues + deploy#285 (sender-side
+  asymmetric dispatch contract from #413 review). Single-repo wave.
+
+Theme directive for W10: tech-debt reduction continues. Phase-3 exit
+criterion #9 (`<10% tech-debt ratio`) is NOT softened — additional sweep
+wave(s) may be added after W11 if math still doesn't close.
+
+Stored mirror: `cross-repo-status.json` § `wave_9_decisions.partition_directive_2026_05_12`.
 
 ## Open questions
 
