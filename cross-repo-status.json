@@ -1,5 +1,33 @@
 {
-  "phase_3_sweep_wave_reservation_2026_05_13": {"directive_date":"2026-05-13","reserved_waves":["wave-12","wave-13"],"reason":"post-W11 projected TD ratio ~30% — far from <10% gate. Criterion #9 NOT softened per owner directive. Sweep wave(s) close residual TD until both gates pass.","projection":{"now":{"open":198,"open_td":133,"pct":67},"post_w10":{"open":137,"open_td":83,"pct":61},"post_w11":{"open":76,"open_td":23,"pct":30},"target":{"pct":10}},"mirror_of":".claude/team/phases/phase-3.md § Sweep-wave reservation (W12, possibly W13)"},
+  "phase_3_sweep_wave_reservation_2026_05_13": {
+    "directive_date": "2026-05-13",
+    "reserved_waves": [
+      "wave-12",
+      "wave-13"
+    ],
+    "reason": "post-W11 projected TD ratio ~30% \u2014 far from <10% gate. Criterion #9 NOT softened per owner directive. Sweep wave(s) close residual TD until both gates pass.",
+    "projection": {
+      "now": {
+        "open": 198,
+        "open_td": 133,
+        "pct": 67
+      },
+      "post_w10": {
+        "open": 137,
+        "open_td": 83,
+        "pct": 61
+      },
+      "post_w11": {
+        "open": 76,
+        "open_td": 23,
+        "pct": 30
+      },
+      "target": {
+        "pct": 10
+      }
+    },
+    "mirror_of": ".claude/team/phases/phase-3.md \u00a7 Sweep-wave reservation (W12, possibly W13)"
+  },
   "wave_9_scope_reconciled_at": "2026-05-10T17:45:25Z",
   "wave_9_repos_in_scope": [
     "noorinalabs-main",
@@ -36,18 +64,61 @@
   "wave_9_active": false,
   "wave_9_wrapped_up_at": "2026-05-12T22:55:00Z",
   "wave_9_final_pr_count": 6,
-  "wave_9_shipped_pr_count_by_repo": {"noorinalabs-main": 6, "noorinalabs-isnad-graph": 0, "noorinalabs-user-service": 0, "noorinalabs-deploy": 0, "noorinalabs-design-system": 0, "noorinalabs-landing-page": 0, "noorinalabs-data-acquisition": 0},
-  "wave_9_repos_descoped_during_wave": {"reason": "Owner directive 2026-05-12 partitioned non-main work to W10 and deploy entirety to W11. Only noorinalabs-main shipped PRs in W9; the 6 other repos kept their W9-labeled issues until bulk relabel (54 to W10, 60 to W11) 2026-05-12T22:30Z.", "repos": ["noorinalabs-isnad-graph", "noorinalabs-user-service", "noorinalabs-deploy", "noorinalabs-design-system", "noorinalabs-landing-page", "noorinalabs-data-acquisition"]},
+  "wave_9_shipped_pr_count_by_repo": {
+    "noorinalabs-main": 6,
+    "noorinalabs-isnad-graph": 0,
+    "noorinalabs-user-service": 0,
+    "noorinalabs-deploy": 0,
+    "noorinalabs-design-system": 0,
+    "noorinalabs-landing-page": 0,
+    "noorinalabs-data-acquisition": 0
+  },
+  "wave_9_repos_descoped_during_wave": {
+    "reason": "Owner directive 2026-05-12 partitioned non-main work to W10 and deploy entirety to W11. Only noorinalabs-main shipped PRs in W9; the 6 other repos kept their W9-labeled issues until bulk relabel (54 to W10, 60 to W11) 2026-05-12T22:30Z.",
+    "repos": [
+      "noorinalabs-isnad-graph",
+      "noorinalabs-user-service",
+      "noorinalabs-deploy",
+      "noorinalabs-design-system",
+      "noorinalabs-landing-page",
+      "noorinalabs-data-acquisition"
+    ]
+  },
   "wave_9_implementer_substitutions": [],
-  "wave_9_decisions": {"deploy_paused_through_wave": true, "all_work_on_main_repo": true, "partition_directive_2026_05_12": "W10 = non-deploy remainder; W11 = deploy entirety", "relabel_executed_at": "2026-05-12T22:30Z"},
+  "wave_9_decisions": {
+    "deploy_paused_through_wave": true,
+    "all_work_on_main_repo": true,
+    "partition_directive_2026_05_12": "W10 = non-deploy remainder; W11 = deploy entirety",
+    "relabel_executed_at": "2026-05-12T22:30Z"
+  },
   "wave_9_changes_requested_cycles": 0,
   "wave_9_top_concentration_pct": 67,
   "wave_9_top_concentration_implementer": "Aino Virtanen (4 of 6 PRs by commit identity; theme-fit charter+skills+post_dispatcher+ontology surfaces)",
   "wave_9_annunaki_attack_ran_at": "2026-05-13T02:55:00Z",
   "wave_9_memory_audit_ran_at": "2026-05-13T02:55:00Z",
   "wave_9_promotion_audit_ran_at": "2026-05-13T02:50:00Z",
-  "wave_9_promotion_audit_counts": {"AUTO": 0, "DECIDE": 0, "KEPT": 53, "SUPERSEDED": 16},
-  "wave_9_counter_corrections": [{"key": "wave_9_changes_requested_cycles", "claimed": null, "actual": 0, "corrected_at": "2026-05-13T02:50:00Z", "note": "wrapup-time counter-write gap; recomputed at retro from gh api comments across 6 W9 PRs"}, {"key": "wave_9_top_concentration_pct", "claimed": null, "actual": 67, "corrected_at": "2026-05-13T02:50:00Z", "note": "wrapup-time counter-write gap; recomputed at retro from per-PR commit identity (Aino=4/6); follow-up issue to be filed against /wave-wrapup Step 7/10"}],
+  "wave_9_promotion_audit_counts": {
+    "AUTO": 0,
+    "DECIDE": 0,
+    "KEPT": 53,
+    "SUPERSEDED": 16
+  },
+  "wave_9_counter_corrections": [
+    {
+      "key": "wave_9_changes_requested_cycles",
+      "claimed": null,
+      "actual": 0,
+      "corrected_at": "2026-05-13T02:50:00Z",
+      "note": "wrapup-time counter-write gap; recomputed at retro from gh api comments across 6 W9 PRs"
+    },
+    {
+      "key": "wave_9_top_concentration_pct",
+      "claimed": null,
+      "actual": 67,
+      "corrected_at": "2026-05-13T02:50:00Z",
+      "note": "wrapup-time counter-write gap; recomputed at retro from per-PR commit identity (Aino=4/6); follow-up issue to be filed against /wave-wrapup Step 7/10"
+    }
+  ],
   "wave_9_retro_completed_at": "2026-05-13T02:55:00Z",
   "wave_9_branches": {
     "branch": "deployments/phase-3/wave-9",
@@ -1465,9 +1536,459 @@
     }
   },
   "wave_10_scope_reconciled_at": "2026-05-13T16:00:32Z",
-  "wave_10_repos_in_scope": ["noorinalabs-main","noorinalabs-isnad-graph","noorinalabs-user-service","noorinalabs-design-system","noorinalabs-landing-page","noorinalabs-data-acquisition"],
+  "wave_10_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-isnad-graph",
+    "noorinalabs-user-service",
+    "noorinalabs-design-system",
+    "noorinalabs-landing-page",
+    "noorinalabs-data-acquisition"
+  ],
   "wave_10_meta_issue": 424,
-  "wave_10_scope": {"theme":"Tech-debt reduction — non-deploy remainder. 62 tech-debt issues across 6 repos; criterion #9 reduction trajectory (W10 → W11 → W12 sweep). Phase-3 exit gate stays at <10%, not softened.","scope_size_at_reconcile":62,"per_repo_open":{"noorinalabs-main":8,"noorinalabs-isnad-graph":27,"noorinalabs-user-service":12,"noorinalabs-design-system":3,"noorinalabs-landing-page":9,"noorinalabs-data-acquisition":3},"cross_repo_precursor":{"design_system_57":"publish @noorinalabs/design-system to GH Packages — unblocks isnad-graph#840 + landing-page#73","sequence":"design-system#57 → consumers"},"carry_forwards_from_w9_retro":["noorinalabs-main#417","noorinalabs-main#418","noorinalabs-main#419","noorinalabs-main#423"],"must_includes":[],"deliberately_not_in_w10":{"noorinalabs-deploy":"60 issues partitioned to W11 per 2026-05-12 directive","noorinalabs-isnad-ingest-platform":"not yet active in Phase 3","deferred_to_w12_sweep":"TD items not absorbed by W10 fix-what-fits land in W12 reservation"},"process_gaps_surfaced":{"stale_carry_forwards":["noorinalabs-user-service#84 closed but listed","noorinalabs-deploy#151 closed but listed","noorinalabs-deploy#86 mislabeled p3-wave-1 (belongs W11)"],"cleanup_path":"drop 2 closed from phase_3_carry_forwards; relabel deploy#86 to p3-wave-11"},"criterion_9_trajectory":{"now_pct":67,"post_w10_projected_pct":61,"post_w11_projected_pct":30,"target_pct":10,"additional_sweep_waves_reserved":["wave-12","wave-13"]}},
+  "wave_10_scope": {
+    "theme": "Tech-debt reduction \u2014 non-deploy remainder. 62 tech-debt issues across 6 repos; criterion #9 reduction trajectory (W10 \u2192 W11 \u2192 W12 sweep). Phase-3 exit gate stays at <10%, not softened.",
+    "scope_size_at_reconcile": 62,
+    "per_repo_open": {
+      "noorinalabs-main": 8,
+      "noorinalabs-isnad-graph": 27,
+      "noorinalabs-user-service": 12,
+      "noorinalabs-design-system": 3,
+      "noorinalabs-landing-page": 9,
+      "noorinalabs-data-acquisition": 3
+    },
+    "cross_repo_precursor": {
+      "design_system_57": "publish @noorinalabs/design-system to GH Packages \u2014 unblocks isnad-graph#840 + landing-page#73",
+      "sequence": "design-system#57 \u2192 consumers"
+    },
+    "carry_forwards_from_w9_retro": [
+      "noorinalabs-main#417",
+      "noorinalabs-main#418",
+      "noorinalabs-main#419",
+      "noorinalabs-main#423"
+    ],
+    "must_includes": [],
+    "deliberately_not_in_w10": {
+      "noorinalabs-deploy": "60 issues partitioned to W11 per 2026-05-12 directive",
+      "noorinalabs-isnad-ingest-platform": "not yet active in Phase 3",
+      "deferred_to_w12_sweep": "TD items not absorbed by W10 fix-what-fits land in W12 reservation"
+    },
+    "process_gaps_surfaced": {
+      "stale_carry_forwards": [
+        "noorinalabs-user-service#84 closed but listed",
+        "noorinalabs-deploy#151 closed but listed",
+        "noorinalabs-deploy#86 mislabeled p3-wave-1 (belongs W11)"
+      ],
+      "cleanup_path": "drop 2 closed from phase_3_carry_forwards; relabel deploy#86 to p3-wave-11"
+    },
+    "criterion_9_trajectory": {
+      "now_pct": 67,
+      "post_w10_projected_pct": 61,
+      "post_w11_projected_pct": 30,
+      "target_pct": 10,
+      "additional_sweep_waves_reserved": [
+        "wave-12",
+        "wave-13"
+      ]
+    },
+    "tier_1_precursor": [
+      {
+        "id": "noorinalabs-design-system#57",
+        "implementer": "Maeve Callahan",
+        "reviewer": "Astrid Lindqvist",
+        "reviewer_2": "Beren Yildiz",
+        "note": "PRECURSOR \u2014 must merge before isnad-graph#840 + #810 and landing-page#73"
+      }
+    ],
+    "tier_2_main_process": [
+      {
+        "id": "noorinalabs-main#423",
+        "implementer": "Wanjiku Mwangi",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Bereket Tadesse"
+      },
+      {
+        "id": "noorinalabs-main#419",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Nadia Khoury"
+      },
+      {
+        "id": "noorinalabs-main#418",
+        "implementer": "Nadia Khoury",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Bereket Tadesse"
+      },
+      {
+        "id": "noorinalabs-main#417",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Nadia Khoury",
+        "reviewer_2": "Wanjiku Mwangi"
+      },
+      {
+        "id": "noorinalabs-main#403",
+        "implementer": "Aisha Idrissi",
+        "reviewer": "Nino Kavtaradze",
+        "reviewer_2": "Bereket Tadesse"
+      },
+      {
+        "id": "noorinalabs-main#402",
+        "implementer": "Lucas Ferreira",
+        "reviewer": "Aisha Idrissi",
+        "reviewer_2": "Bereket Tadesse"
+      },
+      {
+        "id": "noorinalabs-main#262",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Nadia Khoury",
+        "reviewer_2": "Wanjiku Mwangi"
+      },
+      {
+        "id": "noorinalabs-main#255",
+        "implementer": "Nadia Khoury",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Wanjiku Mwangi"
+      },
+      {
+        "id": "noorinalabs-main#425",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Nadia Khoury",
+        "note": "Filed mid-wave 2026-05-13 by owner \u2014 see issue body"
+      },
+      {
+        "id": "noorinalabs-main#426",
+        "implementer": "Nadia Khoury",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Wanjiku Mwangi",
+        "note": "Filed mid-wave 2026-05-13 by owner \u2014 see issue body"
+      }
+    ],
+    "tier_3_child_repos": [
+      {
+        "id": "noorinalabs-isnad-graph#874",
+        "implementer": "Ingrid Lindqvist",
+        "reviewer": "Jelani Mwangi",
+        "reviewer_2": "Linh Pham"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#843",
+        "implementer": "Arjun Raghavan",
+        "reviewer": "Linh Pham",
+        "reviewer_2": "Farhan Malik"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#842",
+        "implementer": "Linh Pham",
+        "reviewer": "Arjun Raghavan",
+        "reviewer_2": "Farhan Malik"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#840",
+        "implementer": "Jelani Mwangi",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Marisol Vega-Cruz",
+        "blocked_on": "noorinalabs-design-system#57"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#835",
+        "implementer": "Marisol Vega-Cruz",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Idris Yusuf"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#833",
+        "implementer": "Anya Kowalczyk",
+        "reviewer": "Marisol Vega-Cruz",
+        "reviewer_2": "Nneka Obi"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#831",
+        "implementer": "Marisol Vega-Cruz",
+        "reviewer": "Idris Yusuf",
+        "reviewer_2": "Anya Kowalczyk"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#824",
+        "implementer": "Idris Yusuf",
+        "reviewer": "Marisol Vega-Cruz",
+        "reviewer_2": "Nadia Boukhari"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#823",
+        "implementer": "Jelani Mwangi",
+        "reviewer": "Ingrid Lindqvist",
+        "reviewer_2": "Anya Kowalczyk"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#822",
+        "implementer": "Jelani Mwangi",
+        "reviewer": "Ingrid Lindqvist",
+        "reviewer_2": "Anya Kowalczyk"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#812",
+        "implementer": "Aisling Brennan",
+        "reviewer": "Thandiwe Moyo",
+        "reviewer_2": "Idris Yusuf"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#810",
+        "implementer": "Anya Kowalczyk",
+        "reviewer": "Jelani Mwangi",
+        "reviewer_2": "Marisol Vega-Cruz",
+        "blocked_on": "noorinalabs-design-system#57"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#807",
+        "implementer": "Nneka Obi",
+        "reviewer": "Jelani Mwangi",
+        "reviewer_2": "Thandiwe Moyo"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#803",
+        "implementer": "Mei Chen",
+        "reviewer": "Marisol Vega-Cruz",
+        "reviewer_2": "Anya Kowalczyk"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#802",
+        "implementer": "Marisol Vega-Cruz",
+        "reviewer": "Mei Chen",
+        "reviewer_2": "Anya Kowalczyk"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#799",
+        "implementer": "Thandiwe Moyo",
+        "reviewer": "Aisling Brennan",
+        "reviewer_2": "Marisol Vega-Cruz"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#798",
+        "implementer": "Aisling Brennan",
+        "reviewer": "Thandiwe Moyo",
+        "reviewer_2": "Marisol Vega-Cruz"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#797",
+        "implementer": "Thandiwe Moyo",
+        "reviewer": "Aisling Brennan",
+        "reviewer_2": "Idris Yusuf"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#796",
+        "implementer": "Aisling Brennan",
+        "reviewer": "Thandiwe Moyo",
+        "reviewer_2": "Arjun Raghavan"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#795",
+        "implementer": "Thandiwe Moyo",
+        "reviewer": "Aisling Brennan",
+        "reviewer_2": "Anya Kowalczyk"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#794",
+        "implementer": "Marisol Vega-Cruz",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Mei Chen"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#793",
+        "implementer": "Arjun Raghavan",
+        "reviewer": "Linh Pham",
+        "reviewer_2": "Farhan Malik"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#792",
+        "implementer": "Linh Pham",
+        "reviewer": "Arjun Raghavan",
+        "reviewer_2": "Aisling Brennan"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#791",
+        "implementer": "Nneka Obi",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Marisol Vega-Cruz"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#790",
+        "implementer": "Mei Chen",
+        "reviewer": "Marisol Vega-Cruz",
+        "reviewer_2": "Idris Yusuf"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#789",
+        "implementer": "Anya Kowalczyk",
+        "reviewer": "Marisol Vega-Cruz",
+        "reviewer_2": "Nneka Obi"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#788",
+        "implementer": "Arjun Raghavan",
+        "reviewer": "Linh Pham",
+        "reviewer_2": "Farhan Malik"
+      },
+      {
+        "id": "noorinalabs-user-service#101",
+        "implementer": "Mateo Salazar",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Idris Yusuf"
+      },
+      {
+        "id": "noorinalabs-user-service#79",
+        "implementer": "Anya Kowalczyk",
+        "reviewer": "Mateo Salazar",
+        "reviewer_2": "Nadia Boukhari"
+      },
+      {
+        "id": "noorinalabs-user-service#76",
+        "implementer": "Mateo Salazar",
+        "reviewer": "Idris Yusuf",
+        "reviewer_2": "Anya Kowalczyk"
+      },
+      {
+        "id": "noorinalabs-user-service#70",
+        "implementer": "Idris Yusuf",
+        "reviewer": "Nadia Boukhari",
+        "reviewer_2": "Mateo Salazar"
+      },
+      {
+        "id": "noorinalabs-user-service#69",
+        "implementer": "Idris Yusuf",
+        "reviewer": "Nadia Boukhari",
+        "reviewer_2": "Nino Kavtaradze"
+      },
+      {
+        "id": "noorinalabs-user-service#68",
+        "implementer": "Idris Yusuf",
+        "reviewer": "Nadia Boukhari",
+        "reviewer_2": "Anya Kowalczyk"
+      },
+      {
+        "id": "noorinalabs-user-service#56",
+        "implementer": "Anya Kowalczyk",
+        "reviewer": "Idris Yusuf",
+        "reviewer_2": "Mateo Salazar"
+      },
+      {
+        "id": "noorinalabs-user-service#55",
+        "implementer": "Nadia Boukhari",
+        "reviewer": "Idris Yusuf",
+        "reviewer_2": "Nino Kavtaradze"
+      },
+      {
+        "id": "noorinalabs-user-service#54",
+        "implementer": "Mateo Salazar",
+        "reviewer": "Nadia Boukhari",
+        "reviewer_2": "Anya Kowalczyk"
+      },
+      {
+        "id": "noorinalabs-user-service#51",
+        "implementer": "Nadia Boukhari",
+        "reviewer": "Mateo Salazar",
+        "reviewer_2": "Idris Yusuf"
+      },
+      {
+        "id": "noorinalabs-user-service#21",
+        "implementer": "Nadia Boukhari",
+        "reviewer": "Mateo Salazar",
+        "reviewer_2": "Anya Kowalczyk"
+      },
+      {
+        "id": "noorinalabs-user-service#15",
+        "implementer": "Nadia Boukhari",
+        "reviewer": "Mateo Salazar",
+        "reviewer_2": "Idris Yusuf"
+      },
+      {
+        "id": "noorinalabs-landing-page#73",
+        "implementer": "Marcia Vasquez-Paredes",
+        "reviewer": "Kofi Mensah-Williams",
+        "reviewer_2": "C\u00e9dric Nov\u00e1k",
+        "blocked_on": "noorinalabs-design-system#57"
+      },
+      {
+        "id": "noorinalabs-landing-page#67",
+        "implementer": "Marcia Vasquez-Paredes",
+        "reviewer": "C\u00e9dric Nov\u00e1k",
+        "reviewer_2": "Anika Diop-Sarr"
+      },
+      {
+        "id": "noorinalabs-landing-page#66",
+        "implementer": "C\u00e9dric Nov\u00e1k",
+        "reviewer": "Marcia Vasquez-Paredes",
+        "reviewer_2": "Anika Diop-Sarr"
+      },
+      {
+        "id": "noorinalabs-landing-page#64",
+        "implementer": "C\u00e9dric Nov\u00e1k",
+        "reviewer": "Anika Diop-Sarr",
+        "reviewer_2": "Marcia Vasquez-Paredes"
+      },
+      {
+        "id": "noorinalabs-landing-page#63",
+        "implementer": "Anika Diop-Sarr",
+        "reviewer": "Nazia Rahman",
+        "reviewer_2": "C\u00e9dric Nov\u00e1k"
+      },
+      {
+        "id": "noorinalabs-landing-page#62",
+        "implementer": "Anika Diop-Sarr",
+        "reviewer": "Nazia Rahman",
+        "reviewer_2": "Marcia Vasquez-Paredes"
+      },
+      {
+        "id": "noorinalabs-landing-page#61",
+        "implementer": "Nazia Rahman",
+        "reviewer": "Anika Diop-Sarr",
+        "reviewer_2": "Kofi Mensah-Williams"
+      },
+      {
+        "id": "noorinalabs-landing-page#60",
+        "implementer": "Nazia Rahman",
+        "reviewer": "Marcia Vasquez-Paredes",
+        "reviewer_2": "C\u00e9dric Nov\u00e1k"
+      },
+      {
+        "id": "noorinalabs-landing-page#59",
+        "implementer": "Kofi Mensah-Williams",
+        "reviewer": "C\u00e9dric Nov\u00e1k",
+        "reviewer_2": "Marcia Vasquez-Paredes"
+      }
+    ],
+    "tier_4_misc": [
+      {
+        "id": "noorinalabs-design-system#53",
+        "implementer": "Astrid Lindqvist",
+        "reviewer": "Maeve Callahan",
+        "reviewer_2": "Maricel Reyes"
+      },
+      {
+        "id": "noorinalabs-design-system#31",
+        "implementer": "Maricel Reyes",
+        "reviewer": "Keanu Tama",
+        "reviewer_2": "Maeve Callahan"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#50",
+        "implementer": "Sofia Cardoso",
+        "reviewer": "Tarek Mansour",
+        "reviewer_2": "Ivana Horvat"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#47",
+        "implementer": "Ivana Horvat",
+        "reviewer": "Sofia Cardoso",
+        "reviewer_2": "Dilara Erdogan"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#43",
+        "implementer": "Tarek Mansour",
+        "reviewer": "Sofia Cardoso",
+        "reviewer_2": "Kavitha Sundaramurthy"
+      }
+    ]
+  },
   "wave_10_scope_reconciliation_note": "W10 = 62 issues across 6 repos (excludes deploy + ingest-platform). Theme: tech-debt continuation per owner directive 2026-05-13. Pre-curated via 2026-05-12 bulk relabel + W9 retro audit follow-ups (#417/#418/#419) + #423 (PR #422 review). 3 stale phase_3_carry_forwards entries surfaced for cleanup. Cross-repo precursor: design-system#57 unblocks isnad-graph#840 + landing-page#73.",
   "wave_10_branches": {"branch":"deployments/phase-3/wave-10","created_at":"2026-05-13T16:03:11Z","repos":{"noorinalabs-main":{"sha":"52ae4780","status":"created"},"noorinalabs-isnad-graph":{"sha":"3534444e","status":"created"},"noorinalabs-user-service":{"sha":"76ff877c","status":"created"},"noorinalabs-design-system":{"sha":"73f82367","status":"created"},"noorinalabs-landing-page":{"sha":"4232f3f5","status":"created"},"noorinalabs-data-acquisition":{"sha":"5ee1c1c8","status":"created"}}},
   "wave_10_active": true,
@@ -2013,5 +2534,19 @@
       "memory_md_before_after": "57 \u2192 43 entries",
       "newly_superseded_into_charter": 5
     }
-  }
+  },
+  "wave_10_active": true,
+  "wave_10_kicked_off_at": "2026-05-13T16:35:49Z",
+  "wave_10_scope_post_kickoff_additions": [
+    {
+      "id": "noorinalabs-main#425",
+      "added_at": "2026-05-13T16:44:47Z",
+      "implementer": "Aino Virtanen"
+    },
+    {
+      "id": "noorinalabs-main#426",
+      "added_at": "2026-05-13T16:44:47Z",
+      "implementer": "Nadia Khoury"
+    }
+  ]
 }
