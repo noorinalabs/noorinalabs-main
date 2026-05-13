@@ -342,16 +342,18 @@ Every reviewer-class spawn prompt MUST include, **in order**:
 
    **Verbatim verdict-comment template (copy-paste into reviewer spawn briefs):**
 
+   > **Canonical source:** see `pull-requests.md § Review Prompt Template (Mandatory)` for the underlying spec. This block is the spawn-brief view; the `pull-requests.md` template is the verbatim source-of-truth reviewers must follow — plain form, no bold markers, no parenthetical descriptions, no extra fields.
+
    ```bash
-   # Use `gh pr comment <PR#> --body "..."` — NOT `gh pr review` (block_gh_pr_review enforces).
+   # Use `gh pr comment <PR#> --body-file <path>` — NOT `gh pr review` (block_gh_pr_review enforces).
    # Write the body to a /tmp file FIRST, then comment in the very next tool call
    # (block_stale_tmp_message_file enforces 30s freshness):
 
    cat > /tmp/<PR#>-review-<reviewer-firstname>.md <<'BODYEOF'
-   **Requestor:** <reviewer-firstname> <reviewer-lastname>
-   **Requestee:** <PR-author-firstname> <PR-author-lastname>
-   **RequestOrReplied:** Approved
-   **TechDebt:** none
+   Requestor: <reviewer-firstname> <reviewer-lastname>
+   Requestee: <PR-author-firstname> <PR-author-lastname>
+   RequestOrReplied: Approved
+   TechDebt: none
 
    <verdict body — prose, line comments, throughline observations…>
 
@@ -364,7 +366,7 @@ Every reviewer-class spawn prompt MUST include, **in order**:
    ```
 
    **Required literal forms (hook-enforced):**
-   - The line MUST literally start with `TechDebt:` (optional `**` bold wrapping OK). `## TechDebt` section headers + prose do NOT satisfy the regex.
+   - The line MUST literally start with `TechDebt:` (plain form; `pull-requests.md § Review Prompt Template` forbids bold markers — `validate_pr_review.py` regex tolerates optional `**` for backward-compat with pre-#420 verdicts, but new briefs MUST use plain form). `## TechDebt` section headers + prose do NOT satisfy the regex.
    - Valid values:
      - `TechDebt: none`
      - `TechDebt: none — addressed inline by fixup commit <sha>`
@@ -373,8 +375,8 @@ Every reviewer-class spawn prompt MUST include, **in order**:
 
    For a ChangesRequested verdict, swap to:
    ```
-   **RequestOrReplied:** ChangesRequested
-   **TechDebt:** none
+   RequestOrReplied: ChangesRequested
+   TechDebt: none
    ```
    (TechDebt still required even on ChangesRequested — the regex is unconditional.)
 

@@ -72,7 +72,7 @@ remaining 115 W9-labeled issues were partitioned by owner directive
 2026-05-12T22:30Z:
 
 - **W10 = non-deploy remainder** — 54 issues across 5 child repos (isnad-graph 27,
-  user-service 12, landing-page 9, design-system 3, data-acquisition 3) + 7 main
+  user-service 12, landing-page 9, design-system 3, data-acquisition 3) + 8 main
   issues (#402/#403/#255 carry-forwards + #262 promoted from W9 + #417/#418/#419
   audit follow-ups + #421 this issue).
 - **W11 = deploy entirety** — 60 deploy issues + deploy#285 (sender-side

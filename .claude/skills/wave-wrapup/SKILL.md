@@ -270,11 +270,13 @@ done | awk '{s+=$1} END {print s+0}')
 
 # TOP_CONCENTRATION_PCT — derived from commit-identity concentration on each
 # PR's head: count PRs per commit-author name, take the top author's PR count
-# as a percentage of total. awk `%d` truncates toward zero (4/6 = 66.67 → 66).
+# as a percentage of total. Half-up rounding via awk `printf "%d\n", x + 0.5`
+# (4/6 = 66.67 → 67) so the counter matches the human-recorded W9 history row
+# (Wanjiku TPM-vote 2026-05-13).
 TOP_CONCENTRATION_PCT=$(echo "$PRS_JSON" | jq -r '.[] | "\(.repo) \(.headRefOid)"' | while read -r R SHA; do
   gh api "repos/noorinalabs/$R/commits/$SHA" --jq '.commit.author.name'
 done | sort | uniq -c | sort -rn | awk -v total="$(echo "$PRS_JSON" | jq 'length')" \
-  'NR==1 {printf "%d\n", $1 * 100 / total}')
+  'NR==1 {printf "%d\n", $1 * 100 / total + 0.5}')
 
 # Each value MUST be a self-contained JSON literal (integer here — no quotes).
 python3 "$UPSERT" "$STATUS" \
