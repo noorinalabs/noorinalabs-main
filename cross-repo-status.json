@@ -1718,7 +1718,7 @@
         "id": "noorinalabs-isnad-graph#824",
         "implementer": "Idris Yusuf",
         "reviewer": "Marisol Vega-Cruz",
-        "reviewer_2": "Nadia Boukhari"
+        "reviewer_2": "Farhan Malik"
       },
       {
         "id": "noorinalabs-isnad-graph#823",
@@ -1845,7 +1845,7 @@
         "id": "noorinalabs-user-service#79",
         "implementer": "Anya Kowalczyk",
         "reviewer": "Mateo Salazar",
-        "reviewer_2": "Nadia Boukhari"
+        "reviewer_2": "Idris Yusuf"
       },
       {
         "id": "noorinalabs-user-service#76",
@@ -1856,19 +1856,19 @@
       {
         "id": "noorinalabs-user-service#70",
         "implementer": "Idris Yusuf",
-        "reviewer": "Nadia Boukhari",
+        "reviewer": "Anya Kowalczyk",
         "reviewer_2": "Mateo Salazar"
       },
       {
         "id": "noorinalabs-user-service#69",
         "implementer": "Idris Yusuf",
-        "reviewer": "Nadia Boukhari",
-        "reviewer_2": "Nino Kavtaradze"
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Mateo Salazar"
       },
       {
         "id": "noorinalabs-user-service#68",
         "implementer": "Idris Yusuf",
-        "reviewer": "Nadia Boukhari",
+        "reviewer": "Mateo Salazar",
         "reviewer_2": "Anya Kowalczyk"
       },
       {
@@ -1881,12 +1881,12 @@
         "id": "noorinalabs-user-service#55",
         "implementer": "Nadia Boukhari",
         "reviewer": "Idris Yusuf",
-        "reviewer_2": "Nino Kavtaradze"
+        "reviewer_2": "Mateo Salazar"
       },
       {
         "id": "noorinalabs-user-service#54",
         "implementer": "Mateo Salazar",
-        "reviewer": "Nadia Boukhari",
+        "reviewer": "Idris Yusuf",
         "reviewer_2": "Anya Kowalczyk"
       },
       {
@@ -1923,14 +1923,14 @@
       {
         "id": "noorinalabs-landing-page#66",
         "implementer": "C\u00e9dric Nov\u00e1k",
-        "reviewer": "Marcia Vasquez-Paredes",
+        "reviewer": "Nazia Rahman",
         "reviewer_2": "Anika Diop-Sarr"
       },
       {
         "id": "noorinalabs-landing-page#64",
         "implementer": "C\u00e9dric Nov\u00e1k",
         "reviewer": "Anika Diop-Sarr",
-        "reviewer_2": "Marcia Vasquez-Paredes"
+        "reviewer_2": "Kofi Mensah-Williams"
       },
       {
         "id": "noorinalabs-landing-page#63",
@@ -1942,7 +1942,7 @@
         "id": "noorinalabs-landing-page#62",
         "implementer": "Anika Diop-Sarr",
         "reviewer": "Nazia Rahman",
-        "reviewer_2": "Marcia Vasquez-Paredes"
+        "reviewer_2": "Kofi Mensah-Williams"
       },
       {
         "id": "noorinalabs-landing-page#61",
@@ -1953,28 +1953,28 @@
       {
         "id": "noorinalabs-landing-page#60",
         "implementer": "Nazia Rahman",
-        "reviewer": "Marcia Vasquez-Paredes",
+        "reviewer": "Anika Diop-Sarr",
         "reviewer_2": "C\u00e9dric Nov\u00e1k"
       },
       {
         "id": "noorinalabs-landing-page#59",
         "implementer": "Kofi Mensah-Williams",
         "reviewer": "C\u00e9dric Nov\u00e1k",
-        "reviewer_2": "Marcia Vasquez-Paredes"
+        "reviewer_2": "Anika Diop-Sarr"
       }
     ],
     "tier_4_misc": [
       {
         "id": "noorinalabs-design-system#53",
         "implementer": "Astrid Lindqvist",
-        "reviewer": "Maeve Callahan",
+        "reviewer": "Keanu Tama",
         "reviewer_2": "Maricel Reyes"
       },
       {
         "id": "noorinalabs-design-system#31",
         "implementer": "Maricel Reyes",
         "reviewer": "Keanu Tama",
-        "reviewer_2": "Maeve Callahan"
+        "reviewer_2": "Beren Yildiz"
       },
       {
         "id": "noorinalabs-data-acquisition#50",
@@ -1986,7 +1986,7 @@
         "id": "noorinalabs-data-acquisition#47",
         "implementer": "Ivana Horvat",
         "reviewer": "Sofia Cardoso",
-        "reviewer_2": "Dilara Erdogan"
+        "reviewer_2": "Tarek Mansour"
       },
       {
         "id": "noorinalabs-data-acquisition#43",
