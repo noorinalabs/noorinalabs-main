@@ -123,6 +123,37 @@ When all PRs for a wave are merged into the deployments branch, the orchestrator
 
 Failure to manage agent lifecycle leads to resource exhaustion and duplicate agent confusion. This is a **moderate feedback event** for the orchestrator.
 
+<!-- Promoted from memory: feedback_reuse_idle_teammates_not_clones.md (P3W9 retro 2026-05-12, owner-approved 2026-05-13; pre-promote-on-first-occurrence variant of the enforcement-hierarchy rule) -->
+
+## Orchestrator Spawn Discipline — Reuse Idle Teammates, Don't Clone <!-- promotion-target: none -->
+
+When the orchestrator needs to assign new work to a teammate whose persona already exists in the session team, `SendMessage` the idle existing instance — do NOT spawn a fresh `Agent` with a numeric-suffix name (`aino2`, `nadia2`, `wanjiku3`).
+
+### Why
+
+Idle teammates can receive messages — `SendMessage` wakes them up. Spawning a clone creates:
+
+- **Roster clutter.** `aino` and `aino2` side-by-side for the same persona confuses both the operator (which one has the PR context?) and `SendMessage` routing.
+- **No shared session memory.** Each fresh `Agent` is a blank slate; the original's accumulated context (PR #409 review history, scratch-file paths, mid-task partial work) is lost.
+- **Duplicated Hook 15 librarian overhead.** Every clone must re-invoke `/ontology-librarian` from scratch.
+- **Identity-hygiene drift.** Over a multi-PR session the roster grows linearly with PR count instead of staying at the canonical N team members.
+
+### How to apply
+
+- After a teammate sends a "PR ready" or "review complete" idle notification, they are AVAILABLE for the next task. `SendMessage` them with the new spawn-brief content; idle teammates wake on message receipt.
+- Only spawn a fresh `Agent` when (a) the persona doesn't yet exist in the session team, OR (b) the existing instance is mid-task and the new work must run truly concurrently with theirs.
+- `wanjiku2` (P3W9) is a legitimate parallel-collision precedent: Wanjiku reviewed PR #409 AND PR #410 in the same window; #410 was assigned to `wanjiku2` to keep `/tmp/<reviewer>_review_<PR#>.md` namespaces separate per the [[parallel-reviewer-tmp-filename-collision]] discipline. That precedent does NOT generalize to "always clone for the next task."
+- If unsure whether to reuse or clone, default to reuse — clones are recoverable (`SendMessage` shutdown_request, respawn fresh), but the wasted spawn cost is not.
+
+### Severity if violated
+
+- One unnecessary clone in a session: **minor** (roster clutter; ~5min context loss when the clone has to rebuild what the original already knew).
+- Pattern across a session (3+ clones in a single wave, as observed in P3W9 with `aino2`/`nadia2`/`wanjiku3`): **moderate** — pre-emptive promotion to charter on first-occurrence rather than waiting for second instance, since the cost (~15min per clone) and the recovery friction justify codifying immediately.
+
+### Origin
+
+P3W9 instances 2026-05-12: orchestrator spawned `aino2` for issue #401 work, `wanjiku3` for issue #163 work, `nadia2` for issue #126 work despite `aino`, `wanjiku2`, `nadia` being idle from prior W9 tasks. Owner flagged the pattern mid-session; this section codifies the correction. Companion to `feedback_throttle_takeover` (orchestrator-class spawn-discipline family — both are "use the agent you have, not a fresh one").
+
 ## Hub-and-Spoke Orchestration Model <!-- promotion-target: none -->
 The orchestrator is the **single point that can create agents**. The Program Director coordinates and plans; the orchestrator executes the spawning. This is a hub-and-spoke model, not recursive delegation.
 
