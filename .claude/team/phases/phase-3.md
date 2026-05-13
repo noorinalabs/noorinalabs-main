@@ -84,6 +84,37 @@ wave(s) may be added after W11 if math still doesn't close.
 
 Stored mirror: `cross-repo-status.json` § `wave_9_decisions.partition_directive_2026_05_12`.
 
+## Sweep-wave reservation (W12, possibly W13) — 2026-05-13 owner directive
+
+Pre-W10 `/phase-review` math, computed against the live issue tracker at
+phase-review time (2026-05-13):
+
+| State | Open total (7 repos) | Open TD | TD ratio | vs <10% gate |
+|-------|---------------------|---------|----------|-------------|
+| Now (pre-W10) | 198 | 133 | 67% | far over |
+| After W10 (~61 closed, mostly TD) | ~137 | ~83 | ~61% | far over |
+| After W11 (~61 closed, mostly TD) | ~76 | ~23 | ~30% | still over |
+| Target | — | — | <10% | — |
+
+Even with W10+W11 perfectly themed at tech-debt reduction, post-W11
+projected ratio is ~30% — still 3× the criterion #9 gate. Owner directive
+2026-05-13: **W12 (and W13 if needed) is reserved as a tech-debt sweep
+wave** to bring the cumulative-open ratio under 10%.
+
+Sweep-wave themes are intentionally NOT pre-committed — the exact scope
+depends on the residual surface at /phase-review pre-W12. Likely contents:
+
+- Remaining tech-debt items not absorbed by the W10/W11 fix-what-fits passes
+- Tooling/process-cleanup tickets that block the deploy track
+- Cross-repo audit follow-ups surfaced during W10/W11 retros
+
+Phase exit gate (all 9 criteria done AND TD ratio <10% on both counters)
+will be re-evaluated at /phase-review pre-W12 and again pre-W13. Phase 3
+exits when both gates close, not before — owner directive: no softening.
+
+Stored mirror: `cross-repo-status.json` § `phase_3_sweep_wave_reservation_2026_05_13`
+(to be written by next `/wave-wrapup` or set explicitly via upsert helper).
+
 ## Open questions
 
 - `/roadmap` skill build — scope for which wave?

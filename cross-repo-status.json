@@ -1,4 +1,5 @@
 {
+  "phase_3_sweep_wave_reservation_2026_05_13": {"directive_date":"2026-05-13","reserved_waves":["wave-12","wave-13"],"reason":"post-W11 projected TD ratio ~30% — far from <10% gate. Criterion #9 NOT softened per owner directive. Sweep wave(s) close residual TD until both gates pass.","projection":{"now":{"open":198,"open_td":133,"pct":67},"post_w10":{"open":137,"open_td":83,"pct":61},"post_w11":{"open":76,"open_td":23,"pct":30},"target":{"pct":10}},"mirror_of":".claude/team/phases/phase-3.md § Sweep-wave reservation (W12, possibly W13)"},
   "wave_9_scope_reconciled_at": "2026-05-10T17:45:25Z",
   "wave_9_repos_in_scope": [
     "noorinalabs-main",
