@@ -1,0 +1,70 @@
+name: Branch protection audit
+
+on:
+  schedule:
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check (read-only) | apply (PUT manifest)"
+        type: choice
+        options: [check, apply]
+        default: check
+      repo:
+        description: "Optional manifest repo key to limit scope"
+        type: string
+        default: ""
+  pull_request:
+    paths:
+      - ".claude/scripts/apply_branch_protection.py"
+      - ".claude/scripts/branch_protection_config.json"
+      - ".claude/scripts/test_apply_branch_protection.py"
+      - ".github/workflows/branch-protection-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Unit tests — apply_branch_protection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run unit tests
+        working-directory: .claude/scripts
+        run: python -m unittest test_apply_branch_protection -v
+
+  audit:
+    name: Branch-protection drift check
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    env:
+      # Cross-repo branch-protection PUT requires a PAT with `administration:write`
+      # on every targeted repo. `github.token` is repo-scoped and cannot read
+      # the other 7 repos' protection state. Set BRANCH_PROTECTION_PAT in repo
+      # secrets before the first scheduled run; missing secret leaves the audit
+      # unrun (the read-back loop will 404 on every repo).
+      GH_TOKEN: ${{ secrets.BRANCH_PROTECTION_PAT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify gh CLI available
+        run: gh --version
+      - name: Audit
+        id: audit
+        env:
+          INPUT_MODE: ${{ github.event.inputs.mode }}
+          INPUT_REPO: ${{ github.event.inputs.repo }}
+        run: |
+          mode="${INPUT_MODE:-check}"
+          if [ -n "$INPUT_REPO" ]; then
+            python .claude/scripts/apply_branch_protection.py "--$mode" --repo "$INPUT_REPO"
+          else
+            python .claude/scripts/apply_branch_protection.py "--$mode"
+          fi
