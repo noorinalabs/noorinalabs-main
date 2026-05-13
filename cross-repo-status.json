@@ -1647,6 +1647,20 @@
         "implementer": "Nadia Khoury",
         "reviewer": "Aino Virtanen",
         "reviewer_2": "Wanjiku Mwangi"
+      },
+      {
+        "id": "noorinalabs-main#425",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Nadia Khoury",
+        "note": "Filed mid-wave 2026-05-13 by owner \u2014 see issue body"
+      },
+      {
+        "id": "noorinalabs-main#426",
+        "implementer": "Nadia Khoury",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Wanjiku Mwangi",
+        "note": "Filed mid-wave 2026-05-13 by owner \u2014 see issue body"
       }
     ],
     "tier_3_child_repos": [
@@ -2520,5 +2534,17 @@
     }
   },
   "wave_10_active": true,
-  "wave_10_kicked_off_at": "2026-05-13T16:35:49Z"
+  "wave_10_kicked_off_at": "2026-05-13T16:35:49Z",
+  "wave_10_scope_post_kickoff_additions": [
+    {
+      "id": "noorinalabs-main#425",
+      "added_at": "2026-05-13T16:44:47Z",
+      "implementer": "Aino Virtanen"
+    },
+    {
+      "id": "noorinalabs-main#426",
+      "added_at": "2026-05-13T16:44:47Z",
+      "implementer": "Nadia Khoury"
+    }
+  ]
 }
