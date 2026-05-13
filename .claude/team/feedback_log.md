@@ -2117,3 +2117,127 @@ Per #346 memory audit plan + #344 retro-extension proposal:
 ### Promotion audit
 
 (deterministic — see `.claude/team/promotion_audit_log/wave-8.md` after /promotion-audit runs)
+
+## Retrospective: Phase 3 Wave 9 — Tech-Debt Reduction (Main-Only) — 2026-05-12
+
+### Team Performance
+
+**Wave-shape table:**
+
+| Metric | Value |
+|---|---|
+| PRs merged to wave-9 | 6 (+1 wave→main propagation = #416) |
+| Issues closed | 7 (#393, #259, #395, #401, #126, #163, #414) |
+| ChangesRequested cycles | **0** (recomputed at retro; cross-repo-status had `null` — counter-write gap in /wave-wrapup) |
+| CI health | 100% green across all merged PRs |
+| Tech-debt filed this wave | 2 (#414 closed in-wave; deploy#285 → W11) + 3 filed at retro (#417/#418/#419 → W10) |
+| Top implementer concentration | **67%** (Aino 4/6, by commit identity; Nadia 1/6 #412; Wanjiku 1/6 #413) |
+| Wave duration | ~6 hours (single working session) |
+| Worktrees stale at end | 0 |
+| Repos in scope vs shipped | 7 declared / **1 shipped** — 6 explicitly de-scoped mid-wave per owner partition directive 2026-05-12 |
+| Bulk relabel executed | 115 issues (54 → p3-wave-10 across 5 child repos; 60 → p3-wave-11 deploy; 1 → p3-wave-11 deploy#285 separately) + 11 new wave labels created on child repos |
+
+### Per-Engineer Assessments
+
+#### Aino Virtanen — 4 PRs (#409, #410, #411, #415)
+- CI failures: 0
+- ChangesRequested received: 0
+- TechDebt items raised against her PRs: 2 (#409 — asymmetric catalogue-count + broken anchor; both addressed inline via fixup commit 0373925 before merge)
+- Severity: none (positive)
+
+#### Nadia Khoury — 1 PR (#412) + 4 reviews
+- CI failures: 0
+- ChangesRequested received: 0
+- TechDebt items raised against her PR: 1 (#414 — Wanjiku flagged /wave-wrapup mirror gap; filed pre-verdict per charter rule; closed in-wave via PR #415)
+- Reviewer-class: caught the count-asymmetry on #409, the wrapup-counter-completeness on #416
+- Severity: none (positive)
+
+#### Wanjiku Mwangi — 1 PR (#413) + 2 reviews
+- CI failures: 0 (CI path-filter excluded; Santiago verified legitimate)
+- ChangesRequested received: 0
+- TechDebt items raised against her PR: 0 (filed sibling deploy#285 as audit by-product, not against the PR)
+- Severity: none (positive)
+
+#### Santiago Ferreira — 0 PRs, 4 reviews
+- Posted Approveds on #410, #411, #413, #415, #416 all with TechDebt: none
+- Caught the path-filter CI-not-reported nuance on #413 (verified vs. just rejecting); flagged `current_wave` not advancing during /wave-wrapup on #416
+- Severity: none (positive)
+
+#### Orchestrator (me) — author of #409 + spawn-brief authoring
+
+**Two process defects this wave:**
+
+1. **Spawn-brief template defect cascade (TechDebt-line shape)** — reviewer-spawn briefs prescribed `## TechDebt` section header + prose instead of literal `TechDebt: ` line; both #409 reviewers (Nadia, Wanjiku) followed the template faithfully and both verdicts were rejected at merge time by `validate_pr_review.py`. Required 2 PATCH amendments to unblock. Filed as `feedback_techdebt_attestation_literal_line.md`. Sibling of W8's Approved-vs-Reply defect — same class.
+
+2. **Roster clutter via clone spawning** — spawned `aino2`, `wanjiku3`, `nadia2` as fresh `Agent` calls instead of `SendMessage`-ing the idle existing personas (`aino`, `wanjiku2`, `nadia`). Wasted ~5 min of librarian/worktree re-setup × 3. User explicitly corrected the pattern. Filed as `feedback_reuse_idle_teammates_not_clones.md`.
+
+**Severity:** moderate (both defects shipped and were corrected via memory; W10 spawn-brief template + orchestrator discipline now reflect both lessons)
+
+### Top 3 Going Well
+
+1. **Charter codification velocity** — 6 charter/skill/hook artifacts shipped in one session with parser-side test coverage + cross-reference network closure. PR #409 (marker convention) was sibling-of-#283 (PR #392 parser extension) — the authoring-discipline + parser support pair landed across 2 PRs in 2 waves with tight cohesion.
+
+2. **Bulk relabel discipline** — 115 issues across 7 repos partitioned in ~1 min programmatic loop with read-back verification. 11 new wave labels auto-created on child repos. The partition directive (W10=non-deploy, W11=deploy) is now mechanically reflected in the board.
+
+3. **W8 cascade lesson absorbed pre-#410** — The W8 retro's Approved-vs-Reply finding (`feedback_validate_pr_review_approved_not_reply.md`) was correctly embedded in every W9 reviewer-spawn brief. Zero ChangesRequested-cycles across the wave is evidence of propagation.
+
+### Top 3 Pain Points
+
+1. **Orchestrator spawn-brief template defects** — 2 distinct defects in one wave. Sibling-pattern to W8's Approved-vs-Reply. Charter promotion candidate: `agents.md § Reviewer Spawn Brief Template` should embed the literal verdict-comment shape as a FIXED TEMPLATE STRING, not as prose.
+
+2. **Counter-recording gap at wrapup** — `wave_9_changes_requested_cycles` and `wave_9_top_concentration_pct` were `null` after wrapup; actuals (0 + 67%) had to be recomputed at retro. Same class as W4 (80% recomputed) and W5 (6→4 CR recomputed). 3rd consecutive wave with this gap. **Filed as separate follow-up against `/wave-wrapup` Step 7/10 — to compute and write these mechanically at wrapup time.**
+
+3. **upsert_status_keys helper path drift + text-vs-logical bug on main** — `.claude/lib/upsert_status_keys.py` (referenced by `/wave-wrapup` prose) only existed on wave-9 (per PR #407) until #416 merged. Plus the version on main had a divergence bug. Fixed forward by the wave-9 → main merge itself; non-recurring.
+
+### Proposed Process Changes
+
+1. **`agents.md` § Reviewer Spawn Brief Template — embed verbatim verdict-comment shape** — Rationale: 2 wave-cascading defects this wave + W8's Approved-vs-Reply trace to the same root: spawn briefs prescribe verdict shape via prose. Make the template a frozen literal block.
+
+2. **`/wave-wrapup` Step 7/10 — compute + write `wave_{M}_changes_requested_cycles` and `wave_{M}_top_concentration_pct`** — Rationale: 3rd consecutive wave with this gap (W4 80% / W5 6→4 / W9 null+null). Mechanical computation; data exists in `gh pr list` + `gh api comments`. **Followup tracked as part of W10 backlog.**
+
+3. **`feedback_reuse_idle_teammates_not_clones.md` → charter `agents.md` § Orchestrator Spawn Discipline** — Rationale: 1 instance this wave, but the cost (~15 min wasted) and visibility (roster clutter) are high enough to codify pre-emptively. Pre-promote-on-first-occurrence variant of the enforcement-hierarchy rule.
+
+### Fire/Hire Actions
+
+None. Orchestrator demotion (4→3 → hold at 3) is corrective, not exit-track. Wanjiku promotion 4→5 recovers from a W8 demotion that was already corrected via charter (#341).
+
+### Promotion Audit
+
+Deterministic run completed:
+
+```
+Promotion audit wave-9 complete: 0 AUTO · 0 DECIDE · 53 KEPT · 16 SUPERSEDED
+Log: .claude/team/promotion_audit_log/wave-9.md
+```
+
+Three real defects in the audit itself were surfaced via caller-side error and filed for W10: **#417** (SKILL.md prose drift — `classify()` vs actual `classify_memory/_section/_skill`), **#418** (`find_already_promoted_in_charter(charter_root)` confusingly takes parent-of-charter), **#419** (`_SOURCE_HINT_RE` matches 11 URL-fragment false positives at HEAD).
+
+### Annunaki
+
+2 SAFE PreToolUse blocks captured this wave — both hooks correctly catching things that were then fixed (validate_pr_review caught #409 TechDebt-line gap; validate_branch_freshness caught a stale rebase on #410). No new automation needed; existing hooks doing their job.
+
+### Memory-to-Automation Audit
+
+2 new W9 memories:
+- `feedback_techdebt_attestation_literal_line.md` — proposed for charter promotion per process change #1 above
+- `feedback_reuse_idle_teammates_not_clones.md` — proposed for charter promotion per process change #3 above
+
+Neither is hook-tier urgent (the underlying validate_pr_review enforcement is already hook). Both stay as memory until next wave's /promotion-audit picks them up under the new charter sections.
+
+### Pattern Tally (running)
+
+| Pattern | Class | This wave | Cumulative |
+|---|---|---|---|
+| A — design-rationale block | Implementer | 0 | 11 |
+| B unified — verify-vs-artifact | Implementer + reviewer | 0 | promoted to charter |
+| C — claim-state-staleness | Manager-class | 0 | held |
+| D — message-ordering-race | Architecture | n/a | tracked main#241 |
+| E — process collapse under fire | Orchestrator-class | 0 (no emergency) | 1 historical |
+| F — orchestrator-class pre-flight gap | Orchestrator-class | 0 | 7 historical, closed via W6 #299 |
+| G — in-wave skill self-improvement | Skill/Hook author | 1 (Aino #410 dispatcher + Aino #415 mirror) | 5 historical (W4-W8) |
+| Approved-vs-Reply hook-semantic | Spawn-brief author / orchestrator | 0 | 1 (W8) |
+| Pre-spawn enumeration head-truncation | Manager-class | 0 | 1 (W8) |
+| Wave-7-propagation-gap-surfaced-live | Implementer / reviewer | 0 | 1 (W8) |
+| **NEW: Spawn-brief literal-line drift (TechDebt-line)** | Orchestrator/template-author | 1 (orchestrator W9) | **1** — sibling of Approved-vs-Reply; both fixable by spawning-brief template fixed-literal rewrite |
+| **NEW: Roster clutter via clone spawning** | Orchestrator | 1 (orchestrator W9) | **1** — `SendMessage` idle existing > `Agent` fresh clone; codified as `feedback_reuse_idle_teammates_not_clones.md` |
+| **NEW: Wave-wrapup counter-write gap** | Skill (/wave-wrapup) | 1 (wave-9) | **3** — W4 80% recomputed; W5 6→4 recomputed; W9 null+null. Same skill defect across 3 waves; follow-up issue against /wave-wrapup Step 7/10 |

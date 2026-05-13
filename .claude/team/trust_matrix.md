@@ -909,3 +909,30 @@ The org was restructured in Session 3 with new repo-level teams. The matrix abov
 | **Idris Yusuf** | Graceful close of anti-pattern PR #872 with memory-cite | None this wave (anti-pattern itself was caught early) |
 | **Dilara / Marcia / Nadia Boukhari** | Clean manager-merge follow-throughs (squash-to-wave + cross-repo close-out) | None this wave |
 | **Orchestrator** | Scope-drop reconciliation, 5 wave-merge PRs landed cleanly, divergent-main handled with merge-not-rebase, /promotion-audit + /wave-scope auto-invoke handoffs honored | (a) Spawn-brief Reply-vs-Approved instruction error → ~17 addenda cascade. (b) Step 14 memory audit had to be filed as #346 deferred-to-W9 instead of executed in-band — annunaki + memory audit don't fit a single wave-wrapup session (proposed #344 to add to /wave-retro). (c) Implementer-substitution reconciliation skipped (skill § P3W5 retro requirement) — deferred to per-engineer assessment above; wave-wrapup skill should auto-emit substitution table. |
+
+## Phase 3 Wave 9 Trust Updates (2026-05-12) — Tech-Debt Reduction (Main-Only)
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Aino Virtanen** (SQL) | 5 | 5 | (hold at max) 4 PRs (#409, #410, #411, #415) covering charter + skills + post_dispatcher + ontology surfaces, 0 ChangesRequested cycles, parser-side test coverage on every artifact. PR #410 was a substantial 5-hook migration with 20 new tests across 5 test classes. Theme-fit concentration (67% of wave PRs by commit identity) — defensible: charter codification + skill cleanup are her territory. Continued max trust. |
+| **Nadia Khoury** (PD) | 5 | 5 | (hold at max) Authored PR #412 (retro PR body-vs-diff discipline rule, closing #126) cleanly; served as primary reviewer on 4 of the 6 W9 PRs (#411, #412, #415, #416) with consistent verdict-shape. Marker convention compliance (used Shape 1 HTML-comment per PR #409's just-landed convention). Caught the wrapup-counter-completeness gap on #416. |
+| **Wanjiku Mwangi** (TPM) | 4 | **5** (▲) | promotion — clean PR #413 (cross-repo dispatch contracts ontology) + sibling-issue filing discipline (filed #414 pre-verdict per charter rule when finding /wave-wrapup mirror gap; filed deploy#285 as audit by-product with proper A-vs-B framing). 2 thorough reviews (#410, #412). Recovers from W8 5→4 demotion (head-truncation in pre-spawn enumeration) — that lesson is now codified in charter (#341) and the discipline restored in W9 with the parser-side literal-string verification she ran on her own work. |
+| **Santiago Ferreira** (RC) | 5 | 5 | (hold at max) 4 Approveds posted across #410, #411, #413, #415, #416 with consistent procedural verdict-shape (runtime/procedural angle). Caught the CI path-filter "no checks reported" nuance on #413 (verified the filter is legitimate vs. just rejecting). Flagged `current_wave` not advancing during /wave-wrapup on #416 — useful retro-input. |
+
+### Orchestrator (Self-Assessment)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Orchestrator (Steven via Claude)** | 3 | **3** (hold) | Two new spawn-brief template defects this wave: (a) prescribed `## TechDebt` section header + prose instead of literal `TechDebt: ` line — both #409 reviewers (Nadia, Wanjiku) followed the template faithfully and both verdicts were rejected at merge time, required 2 PATCH amendments to unblock; codified as `feedback_techdebt_attestation_literal_line.md`. (b) Spawned `aino2`, `wanjiku3`, `nadia2` clone agents instead of `SendMessage`-ing the idle existing personas — user-flagged; codified as `feedback_reuse_idle_teammates_not_clones.md`. Sibling-of-W8's Approved-vs-Reply template defect — same class: spawn-brief template prescribes verdict shape via prose, hook expects literal token. Positive offsets: (c) bulk relabel of 115 issues across 7 repos with read-back verification + 11 new wave labels created mechanically; (d) wave-9 → main merge handled with merge-not-rebase + 2-reviewer gate + literal TechDebt: line discipline (no addenda cascade); (e) /promotion-audit retro-side run surfaced 3 real defects in the audit itself (#417/#418/#419 filed for W10) — caller-side error became evidence-gathering for skill cleanup. **Hold at 3** until W10 shows the spawn-brief template (literal verdict-comment shape) + reuse-idle-teammates discipline are internalized. Demote to 2 only if the same template-shape class recurs in W10. |
+
+### Done Well / Needs Improvement (Phase 3 Wave 9)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Aino Virtanen** | 4 clean PRs covering charter/skills/post_dispatcher/ontology; 20 new tests in #410 dispatcher work; PR #411 prose-vs-helper decision correctly cited § Determinism contract; PR #415 mirror with appropriate severity bump for wrapup context | None this wave (theme-fit 67% concentration noted for forward-planning, not penalized) |
+| **Nadia Khoury** | PR #412 (retro PR body-vs-diff rule) ratified discipline that immediately self-applied to this very retro PR; 4 reviewer verdicts with consistent altitude; flagged wrapup-counter-completeness on #416 | None this wave |
+| **Wanjiku Mwangi** | PR #413 cross-repo dispatch contracts with parser-side literal-string verification; #414 sibling-filing discipline; deploy#285 A-vs-B framing for owner decision; 2 thorough reviews | None this wave (W8 head-truncation lesson now codified + restored) |
+| **Santiago Ferreira** | 4 procedurally consistent Approveds; CI path-filter nuance catch on #413; current_wave-not-advancing observation on #416 | None this wave |
+| **Orchestrator** | Bulk relabel mechanical execution (115 issues + 11 new labels); wave-9 → main merge with no addenda cascade; /promotion-audit retro-side run surfaced 3 real skill defects → #417/#418/#419 (caller-side error became evidence) | (a) Spawn-brief TechDebt-line shape defect → 2 PATCH amendments. (b) Clone-spawning vs. SendMessage idle existing — user-flagged. Both codified as memories; charter promotion proposed for next wave. |
