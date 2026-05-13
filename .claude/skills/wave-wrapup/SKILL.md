@@ -237,15 +237,44 @@ Write the **top-level** canonical counter keys that `/wave-retro` Step 2.5 verif
 
 Use the shared `upsert_status_keys.py` helper at `.claude/lib/` — it does targeted text-level upsert that preserves the compact-inline shape of `cross-repo-status.json` (a naive `jq … > tmp && mv` reformats every compact line to pretty form, producing a 500-line cosmetic diff per wave — see `main#332`). The helper also validates JSON before AND after the rewrite. Promoted from `/wave-scope` to `.claude/lib/` per `main#292` (multi-consumer → shared lib).
 
+> **Mechanical computation (added P3W10 #421 — 2026-05-13).** Pre-#421 the
+> `CHANGES_REQUESTED_CYCLES` and `TOP_CONCENTRATION_PCT` placeholders here
+> were filled in by hand by the orchestrator; the resulting null/wrong
+> values had to be recomputed at retro for 3 consecutive waves (W4 80%,
+> W5 6→4, W9 null+null). The mechanical computation below eliminates the
+> recompute pattern by deriving both counters directly from the merged-PR
+> set across `wave_{M}_repos_in_scope`. `FINAL_PR_COUNT` remains the
+> already-computed Step 10 "PRs: Merged" number.
+
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 STATUS="$REPO_ROOT/cross-repo-status.json"
 UPSERT="$REPO_ROOT/.claude/lib/upsert_status_keys.py"
 
-# Compute the three canonical counters from the wave-wrapup report numbers.
-FINAL_PR_COUNT={count_of_merged_PRs}            # same as Step 10 "PRs: Merged"
-CHANGES_REQUESTED_CYCLES={cr_cycle_count}       # count of `ChangesRequested` verdict comments across the wave's PRs
-TOP_CONCENTRATION_PCT={highest_repo_pct}        # PRs-in-top-repo / PRs-total * 100, rounded int
+# FINAL_PR_COUNT is the Step 10 "PRs: Merged" number — already in hand.
+FINAL_PR_COUNT={count_of_merged_PRs}
+
+# Build the wave's merged-PR set across all repos in scope.
+PRS_JSON=$(jq -r '.["wave_{M}_repos_in_scope"][]' "$STATUS" | while read -r REPO; do
+  gh pr list --repo "noorinalabs/$REPO" --state merged \
+    --base "deployments/phase-{P}/wave-{M}" \
+    --json number,headRefOid --jq ".[] | . + {repo: \"$REPO\"}"
+done | jq -s .)
+
+# CHANGES_REQUESTED_CYCLES — count `RequestOrReplied: ChangesRequested` verdict
+# comments across every wave PR's issue-comments timeline.
+CHANGES_REQUESTED_CYCLES=$(echo "$PRS_JSON" | jq -r '.[] | "\(.repo) \(.number)"' | while read -r R N; do
+  gh api "repos/noorinalabs/$R/issues/$N/comments" \
+    --jq '[.[] | select(.body | test("RequestOrReplied:\\s*ChangesRequested"))] | length'
+done | awk '{s+=$1} END {print s+0}')
+
+# TOP_CONCENTRATION_PCT — derived from commit-identity concentration on each
+# PR's head: count PRs per commit-author name, take the top author's PR count
+# as a percentage of total. awk `%d` truncates toward zero (4/6 = 66.67 → 66).
+TOP_CONCENTRATION_PCT=$(echo "$PRS_JSON" | jq -r '.[] | "\(.repo) \(.headRefOid)"' | while read -r R SHA; do
+  gh api "repos/noorinalabs/$R/commits/$SHA" --jq '.commit.author.name'
+done | sort | uniq -c | sort -rn | awk -v total="$(echo "$PRS_JSON" | jq 'length')" \
+  'NR==1 {printf "%d\n", $1 * 100 / total}')
 
 # Each value MUST be a self-contained JSON literal (integer here — no quotes).
 python3 "$UPSERT" "$STATUS" \
