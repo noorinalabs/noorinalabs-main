@@ -5,6 +5,16 @@ Fires after Edit or Write on files under .claude/. Emits a systemMessage
 reminding the agent to consider whether the change could be genericized
 into a product-neutral prompt for the 2real-team-framework repo.
 
+Input Language:
+  Fires on:      PostToolUse Edit, Write
+  Matches:       Edit/Write whose `file_path` contains `/.claude/` AND is
+                 NOT a tracker-managed artifact (checksums.json /
+                 annunaki/errors.jsonl)
+  Does NOT match: any other tool, missing file_path, paths outside
+                  `.claude/`, skip-listed tracker artifacts
+  Flag pass-through: stdin JSON is forwarded verbatim to `check()` by the
+                     PostToolUse dispatcher (`post_dispatcher.py`)
+
 Exit codes:
   0 — always (advisory hook, never blocks)
 """
@@ -53,31 +63,31 @@ def _classify(file_path: str) -> dict | None:
     }
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
+def check(input_data: dict) -> dict | None:
+    """Dispatcher-compatible entry point for PostToolUse Edit/Write.
 
+    Returns None when the hook is not applicable; returns a
+    `{"systemMessage": ...}` advisory dict when a generic-prompt suggestion
+    should surface. The dispatcher aggregates systemMessage values across
+    all hooks for the matcher.
+    """
     tool_name = input_data.get("tool_name", "")
     if tool_name not in ("Edit", "Write"):
-        sys.exit(0)
+        return None
 
     file_path = input_data.get("tool_input", {}).get("file_path", "")
     if not file_path:
-        sys.exit(0)
+        return None
 
-    # Only trigger for files under .claude/
     if "/.claude/" not in file_path:
-        sys.exit(0)
+        return None
 
-    # Skip the ontology tracker checksum updates and annunaki logs
     skip_patterns = [
         "ontology/checksums.json",
         "annunaki/errors.jsonl",
     ]
     if any(p in file_path for p in skip_patterns):
-        sys.exit(0)
+        return None
 
     category = _classify(file_path)
     rel_path = file_path.split("/.claude/")[-1] if "/.claude/" in file_path else file_path
@@ -100,8 +110,17 @@ def main() -> None:
         f"{framework_note}"
     )
 
-    result = {"systemMessage": message}
-    print(json.dumps(result))
+    return {"systemMessage": message}
+
+
+def main() -> None:
+    try:
+        input_data = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        sys.exit(0)
+    result = check(input_data)
+    if result is not None:
+        print(json.dumps(result))
     sys.exit(0)
 
 

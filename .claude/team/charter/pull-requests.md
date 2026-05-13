@@ -531,6 +531,70 @@ When a reviewer's review-comment cites "still has X" / "still missing Y", the co
 - `state-claims.md § Refresh State Before Claim` — top-line state-verification umbrella; this rule is the file-content specialization.
 - `pull-requests.md § Trust the Artifact, Not the Framing` — companion: read the artifact at HEAD, not the PR-body framing. Both rules converge on the same access primitive (`gh api ... contents/?ref=<head_sha>`).
 
+<!-- Promoted from memory: (none — this section codifies retro-PR-diff discipline; sourced from #126 + W8 PR #124 incident) -->
+
+## Retro PR Body-vs-Diff Discipline (Mandatory) <!-- promotion-target: skill -->
+
+The retro PR is the **authoritative artifact** for a wave's ratified changes. If the retro accepts charter, skill, or trust-matrix updates, those file edits MUST land **in the retro PR's diff** — not via direct-to-main commits committed alongside.
+
+### Why
+
+The retro PR is where future reviewers, audits, and `git log --first-parent main -- .claude/team/charter/` trace **wave theme → ratified charter changes → trust updates**. Direct-to-main commits for substantive retro outputs break that trace and bypass two gates the charter relies on:
+
+1. **The two-reviewer rule** (`pull-requests.md § Comment-Based Reviews`) — direct-to-main commits skip review entirely. No `RequestOrReplied: Approved` comments, no `validate_pr_review` hook gate, no peer scrutiny of the charter/skill text that future agents are bound by.
+2. **`validate_pr_ci_status`** (`hooks.md § Hook validate_pr_ci_status`) — no PR means no CI gate, so charter/skill edits land without `hooks-lint`, schema validation, or any other automated check that the PR path would have run.
+
+The audit-trail break is the more durable harm: a ratified charter section with no PR linkage looks identical, six months later, to a charter section someone slipped in unreviewed. The retro PR body claiming files that aren't in the diff makes the mismatch worse — it manufactures the appearance of review for changes that received none.
+
+### How to apply
+
+**For retro-PR authors:**
+
+- **In-scope for the retro PR diff:** every charter, skill, trust-matrix, or memory file the retro ratified, plus the `feedback_log.md` narrative and `ontology/checksums.json` resolution. Edit on the retro branch; commit; push; let the diff land via the PR.
+- **Out-of-scope for direct-to-main:** ratified charter/skill/trust-matrix changes. There is no "small enough to land direct" carve-out — if it was a retro proposal accepted by the user, it goes through the retro PR.
+- **PR body discipline:** the "Files changed" section of the retro PR body MUST match `gh pr view <N> --json files --jq '.files[].path'`. If the body lists a file the diff doesn't contain, fix the diff (push the commit) — do NOT amend the body to remove the claim.
+
+**For retro-PR reviewers (Mandatory enforcement clause):**
+
+Before approving a retro PR, run:
+
+```bash
+gh pr view <N> --repo <owner>/<repo> --json files --jq '.files[].path' | sort > /tmp/retro_<N>_diff_files.txt
+# Then read the PR body's "Files changed" section and compare.
+```
+
+If the body claims any file (charter/skill/trust-matrix, in particular) that is not in `/tmp/retro_<N>_diff_files.txt`, post **ChangesRequested** with the specific missing path(s). Approving a retro PR whose body claims files absent from the diff is a charter violation in the reviewer-class.
+
+### Skill enforcement
+
+`/wave-retro` (Step 6 / Step 8) and `/wave-wrapup` SHOULD run a body-vs-diff sanity check before emitting the retro summary or wrapup table:
+
+```bash
+RETRO_PR=<N>
+gh pr view "$RETRO_PR" --repo <owner>/<repo> --json files --jq '[.files[].path] | sort' > /tmp/retro_diff.json
+# Parse the PR body's "Files changed" section.
+# For each path claimed in body but missing from /tmp/retro_diff.json, ABORT with a clear "body claims X not in diff" error.
+```
+
+Promotion target on this section is `skill` — the retro skill is the natural home for the check, and the `/promotion-audit` pipeline can pick it up on a future pass.
+
+### Severity if violated
+
+- Retro PR body lists a charter/skill file that is not in the diff, and the actual edit is committed direct-to-main: **severe**. Bypasses two-reviewer gate and CI; breaks the audit trail. Reviewer who approved it shares the severity.
+- Retro PR body lists files that aren't in the diff, but the edits never actually landed (typo in body, no direct-to-main commit either): **moderate**. The audit trail is salvageable by editing the body, but the misleading framing already shipped to anyone who read the merged PR.
+- Retro author commits substantive charter/skill changes direct-to-main alongside the retro PR but does NOT claim those files in the body: **moderate-to-severe** depending on whether the change was substantive. The two-reviewer gate is still bypassed even without the body mismatch.
+
+### Worked example
+
+`noorinalabs/noorinalabs-main` PR [#124](https://github.com/noorinalabs/noorinalabs-main/pull/124) (W8 retro, merged 2026-04-17). The PR body listed seven files: `feedback_log.md`, `trust_matrix.md`, `charter/pull-requests.md` (2 new sections), `charter/hooks.md`, `skills/wave-retro/SKILL.md`, `skills/wave-kickoff/SKILL.md`, `ontology/checksums.json`. The actual PR diff contained two: `feedback_log.md` + `ontology/checksums.json`. The five substantive charter/skill/trust-matrix changes landed via two direct-to-main commits (`2b92605`, `ecd1c76`) with no PR — bypassing two-reviewer review and `validate_pr_ci_status`. Found by Santiago's post-merge review of #124; filed as [#126](https://github.com/noorinalabs/noorinalabs-main/issues/126).
+
+### Cross-references
+
+- `pull-requests.md § Comment-Based Reviews` — the two-reviewer gate this rule protects.
+- `hooks.md § Hook validate_pr_ci_status` — the CI gate this rule protects.
+- `pull-requests.md § Trust the Artifact, Not the Framing` — sibling rule on the reviewer side: read the artifact, not the body framing. This rule extends the discipline to the **author** side of the retro PR.
+- `skills/wave-retro/SKILL.md` — the skill that should adopt the body-vs-diff sanity check per the Skill enforcement clause above.
+
 ## `gh pr edit` projects-classic deprecation — use REST API for body/title updates (Mandatory) <!-- promotion-target: none -->
 
 `gh pr edit <num> --body <text>` (and `--body-file <path>`, and `--title`) on gh-cli versions older than the one that migrated off the deprecated projects-classic GraphQL scope **silently fails** the body/title mutation. The command exits non-zero with a `GraphQL: Projects (classic) is being deprecated` error, but the error reads like a benign warning and the PR body appears unchanged on subsequent inspection — exactly the "silent-no-op" shape captured in memory `feedback_gh_pr_edit_silent_noop`.

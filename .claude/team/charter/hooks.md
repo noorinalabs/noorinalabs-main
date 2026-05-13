@@ -358,7 +358,7 @@ Every hook MUST have exactly one backward-claim sentence. The parser's `_PROVENA
 - `Promoted from` — opening token recognized inline; works inside either the block-style entry or a standalone sentence.
 - `<!-- Promoted from memory: X -->` — HTML-comment marker form codified in #283 / #393. Used for charter-tier-only promotions (no corresponding hook). The parser's `_HTML_COMMENT_PROMOTED_RE` (DOTALL) captures the body up to `-->`, so trailing context (date, retro citation, rationale) is included in the regex sweep.
 
-**Rationale:** PR #155 added the reactive `_FORWARD_REFERENCE_MARKERS` filter to handle Hook 15's own provenance block — which had narrative referencing a future skill mixed in with the backward citation. The filter is the runtime safety net; this guidance is the preempt-at-author-time fix that reduces future filter-edits. Sibling-of-#393 (HTML-marker convention) — this section references that form but does NOT codify it (#393 is its own follow-up).
+**Rationale:** PR #155 added the reactive `_FORWARD_REFERENCE_MARKERS` filter to handle Hook 15's own provenance block — which had narrative referencing a future skill mixed in with the backward citation. The filter is the runtime safety net; this guidance is the preempt-at-author-time fix that reduces future filter-edits. Sibling of #393 (HTML-marker convention) — this section catalogues the parse keys; the authoritative shape-selection rule (when to use HTML-comment vs. bold-prose) lives at [`charter/skills.md` § Promotion Pipeline Marker Convention](skills.md#promotion-pipeline-marker-convention).
 
 **Enforcement:** The Standards & Quality Lead (Aino) verifies these requirements during hook PR review. A hook missing any of the six requirements must not be approved.
 

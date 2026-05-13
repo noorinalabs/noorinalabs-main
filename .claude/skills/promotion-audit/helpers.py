@@ -961,12 +961,17 @@ def _read_template(template_dir: str, name: str) -> str:
 
 
 def generate_charter_section(memory: Memory, template_dir: str) -> str:
-    """Render a charter-section artifact from a memory using the template."""
+    """Render a charter-section artifact from a memory using the template.
+
+    The template emits the canonical HTML-comment provenance marker per
+    charter/skills.md § Promotion Pipeline Marker Convention (#393); the
+    italic-prose `_Promoted from memory ..._` line that this template used
+    pre-#393 was not parser-recognized and is now banned.
+    """
     tpl = _read_template(template_dir, "charter-section.md")
     return (
         tpl.replace("{{MEMORY_NAME}}", memory.name)
         .replace("{{MEMORY_FILENAME}}", memory.filename)
-        .replace("{{DESCRIPTION}}", memory.description)
         .replace("{{BODY}}", memory.body.strip())
     )
 

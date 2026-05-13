@@ -83,8 +83,9 @@ docker_services:
     kafka-ui: { image: "provectuslabs/kafka-ui:v0.7.2", port: "127.0.0.1:8085", auth: basic, readonly: true }
 
 workflows:
-  deploy_isnad_graph: { trigger: repository_dispatch, target: [api, frontend], health_check: 120s }
-  deploy_landing: { trigger: workflow_dispatch, target: [landing], health_check: 60s }
+  deploy_isnad_graph: { trigger: workflow_dispatch, target: [api, frontend], health_check: 120s, note: "Legacy single-VPS path. Was repository_dispatch listener pre-W10; now workflow_dispatch-only (manual rollback). Decom tracked in deploy#86." }
+  deploy_landing: { trigger: workflow_dispatch, target: [landing], health_check: 60s, note: "Legacy single-VPS path. Manual-only rollback to legacy VPS; decom tracked in deploy#86." }
+  deploy_stg: { trigger: "repository_dispatch + workflow_dispatch", target: "stg fan-in for isnad-graph + user-service + landing-page", note: "Active listener — see dispatch_contracts_received below." }
   deploy_all: { trigger: workflow_dispatch, target: all, health_check: 120s }
   verify_deploy: { trigger: workflow_run, checks: [HTTPS, health, TLS] }
   terraform:
@@ -120,6 +121,21 @@ workflows:
     status: merged
     description: "Smoke test asserting Contract v6 invariants — exactly 4 publish-side tags (sha-<short>, latest, stg-<short>, stg-latest) + exactly 2 promote-side tags (prod-<short>, prod-latest) per image."
     invariant_script: integration-tests/scripts/check_tag_invariants.py
+
+dispatch_contracts_received:
+  # Cross-link: services.yaml § cross_repo_dispatch_contracts. The literal event_type
+  # strings ARE the contract — sender/listener mismatch returns 204 silently (#162).
+  # Active listener is deploy-stg.yml; deploy-isnad-graph.yml + deploy-landing-page.yml
+  # are workflow_dispatch-only (legacy single-VPS rollback path).
+  - listener_workflow: .github/workflows/deploy-stg.yml
+    types: [deploy-noorinalabs-isnad-graph, deploy-noorinalabs-user-service, deploy-noorinalabs-landing-page]
+    senders:
+      - { name: deploy-isnad-graph, event_type: deploy-noorinalabs-isnad-graph, sender_repo: noorinalabs-isnad-graph, sender_workflow: .github/workflows/ghcr-publish.yml, sender_job: notify-deploy }
+      - { name: deploy-user-service, event_type: deploy-noorinalabs-user-service, sender_repo: noorinalabs-user-service, sender_workflow: .github/workflows/ghcr-publish.yml, sender_job: notify-deploy }
+      - { name: deploy-landing-page, event_type: deploy-noorinalabs-landing-page, sender_repo: NO_SENDER, note: "Asymmetric — listener accepts but no sender wires. Tracked in deploy#285. See services.yaml § cross_repo_dispatch_contracts[name=deploy-landing-page]." }
+    discrimination: "Listener jobs gate on `github.event.action` to identify the source service (e.g., the alembic-stg job runs only when action == 'deploy-noorinalabs-user-service')."
+    notes:
+      - "#162 origin: literal event-type drifted across the repo rename in isnad-graph#548ba9f; the contract is now recorded in services.yaml so a future rename has a single source-of-truth to grep for."
 
 environments:
   staging:
