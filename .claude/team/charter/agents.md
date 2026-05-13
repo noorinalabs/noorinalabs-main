@@ -365,6 +365,8 @@ Every reviewer-class spawn prompt MUST include, **in order**:
    gh pr comment <PR#> --body-file /tmp/<PR#>-review-<reviewer-firstname>.md
    ```
 
+   > Inline `gh pr comment <PR#> --body "..."` is also valid when no /tmp file is involved; `--body-file <path>` is the required form when the body is written to /tmp first (`block_stale_tmp_message_file` 30s freshness rule applies only when a /tmp file is the source). This reconciles the new block above with `pull-requests.md § Review Prompt Template (Mandatory)` lines 47–53 which use inline `--body "..."` — both are legitimate; flag form follows write-path.
+
    **Required literal forms (hook-enforced):**
    - The line MUST literally start with `TechDebt:` (plain form; `pull-requests.md § Review Prompt Template` forbids bold markers — `validate_pr_review.py` regex tolerates optional `**` for backward-compat with pre-#420 verdicts, but new briefs MUST use plain form). `## TechDebt` section headers + prose do NOT satisfy the regex.
    - Valid values:
