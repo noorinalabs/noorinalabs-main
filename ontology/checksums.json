@@ -632,10 +632,10 @@
       "resolved_at": "2026-04-29T23:59:35.101790Z"
     },
     "noorinalabs-user-service/.github/workflows/ghcr-publish.yml": {
-      "last_tracked": "464d61b5a75e2149f209f605d6642489df77a7e855c452565324bf881b1cffc7",
-      "last_resolved": "464d61b5a75e2149f209f605d6642489df77a7e855c452565324bf881b1cffc7",
-      "tracked_at": "2026-04-30T20:39:01.509671+00:00",
-      "resolved_at": "2026-04-30T21:45:22.232993+00:00"
+      "last_tracked": "a5b065969e9baceaf3628167df610541d9005d160c093f6f17dc13496271c6b2",
+      "last_resolved": "a5b065969e9baceaf3628167df610541d9005d160c093f6f17dc13496271c6b2",
+      "tracked_at": "2026-05-13T18:31:24.198384+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
     },
     ".claude/team/charter/emergency-mode.md": {
       "last_tracked": "0c38ede7c43879c5033128dfaacd970f46b4ea4de44895fa3c0ab853ee940b6d",
@@ -1080,6 +1080,198 @@
       "last_resolved": "ac4830389bcadfbb2236ba1d3ac5cd5c7671e25beae3755c1dd9bfbeadf818b0",
       "tracked_at": "2026-05-12T23:00:11.656672+00:00",
       "resolved_at": "2026-05-13T03:21:08.894134+00:00"
+    },
+    "noorinalabs-landing-page/src/pages/index.astro": {
+      "last_tracked": "5c5169ba4d34277e6b6bfa31f593192ab48f5d8836357e43bbd9ae5d9b5c5e23",
+      "last_resolved": "5c5169ba4d34277e6b6bfa31f593192ab48f5d8836357e43bbd9ae5d9b5c5e23",
+      "tracked_at": "2026-05-13T18:22:18.809691+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    "noorinalabs-landing-page/src/layouts/ProjectLayout.astro": {
+      "last_tracked": "a29ed534a5f13520a78b500affbc306e95bbda743b7e6b6cc6fe411ec4e7fe77",
+      "last_resolved": "a29ed534a5f13520a78b500affbc306e95bbda743b7e6b6cc6fe411ec4e7fe77",
+      "tracked_at": "2026-05-13T18:22:20.301406+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    "noorinalabs-landing-page/public/robots.txt": {
+      "last_tracked": "0871e59c31c3fc4f3d7532077864dc4289454a0a065753b8052adf78fbaabb65",
+      "last_resolved": "0871e59c31c3fc4f3d7532077864dc4289454a0a065753b8052adf78fbaabb65",
+      "tracked_at": "2026-05-13T18:23:14.371487+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    "noorinalabs-landing-page/src/pages/404.astro": {
+      "last_tracked": "3d4a6e3d7eb095f12cef0e383cc1b8c719045f06503ce9e76e2b5af80f8da2fc",
+      "last_resolved": "3d4a6e3d7eb095f12cef0e383cc1b8c719045f06503ce9e76e2b5af80f8da2fc",
+      "tracked_at": "2026-05-13T18:23:26.087249+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/anya-0833/frontend/src/api/client.ts": {
+      "last_tracked": "baeca912d253a8284ec108592fad12943a7793671f922719d041c07e8b9c0691",
+      "last_resolved": "baeca912d253a8284ec108592fad12943a7793671f922719d041c07e8b9c0691",
+      "tracked_at": "2026-05-13T18:29:47.856368+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/jelani-0823-npm-ci-design-system/.github/workflows/ghcr-publish.yml": {
+      "last_tracked": "fad732b00529761e2a1de5479d887a82369577bfa51a7dacc2c268efc999b57d",
+      "last_resolved": "fad732b00529761e2a1de5479d887a82369577bfa51a7dacc2c268efc999b57d",
+      "tracked_at": "2026-05-13T18:29:52.462163+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/arjun-0843-narrated-edge/src/models/edges.py": {
+      "last_tracked": "c585c28b49be38d32baf14b4a25b506747fe97b184b5b640fb1343400932565a",
+      "last_resolved": "c585c28b49be38d32baf14b4a25b506747fe97b184b5b640fb1343400932565a",
+      "tracked_at": "2026-05-13T18:29:51.619922+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/arjun-0843-narrated-edge/tests/test_models/test_all_models.py": {
+      "last_tracked": "e577a762fd04af0370d8976ac21315564fb479a8b9a08931dd6a67eb8c8beaa2",
+      "last_resolved": "e577a762fd04af0370d8976ac21315564fb479a8b9a08931dd6a67eb8c8beaa2",
+      "tracked_at": "2026-05-13T18:30:13.564786+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/anya-0833/frontend/src/api/__tests__/client.test.ts": {
+      "last_tracked": "864d3bf79e5f59a681bac22bac18fa1f51714cc84f2898db567f211a1d8c4455",
+      "last_resolved": "864d3bf79e5f59a681bac22bac18fa1f51714cc84f2898db567f211a1d8c4455",
+      "tracked_at": "2026-05-13T18:30:15.756259+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/marisol-0835-hide-user-management-nav/frontend/src/components/AdminLayout.tsx": {
+      "last_tracked": "cbae3427e6fe348b211ee60d50350d7a3078c0626443b64eb4ab1fc8312b5aa6",
+      "last_resolved": "cbae3427e6fe348b211ee60d50350d7a3078c0626443b64eb4ab1fc8312b5aa6",
+      "tracked_at": "2026-05-13T18:30:31.483559+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/thandiwe-0799-test-factories/tests/factories.py": {
+      "last_tracked": "c4c4a882019b9ef619512b7533491378c970264b1270f7bf484f61dff0e9aad8",
+      "last_resolved": "c4c4a882019b9ef619512b7533491378c970264b1270f7bf484f61dff0e9aad8",
+      "tracked_at": "2026-05-13T18:30:33.245207+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/marisol-0835-hide-user-management-nav/frontend/src/App.tsx": {
+      "last_tracked": "72086e0ecb1d20f9eda38cddea6fb84c354e508d4db027ffec2377d0d25d15c4",
+      "last_resolved": "72086e0ecb1d20f9eda38cddea6fb84c354e508d4db027ffec2377d0d25d15c4",
+      "tracked_at": "2026-05-13T18:30:39.560316+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/ingrid-0874-node20-cleanup/.github/workflows/ci.yml": {
+      "last_tracked": "e64fdba874db9d3f51d3ae99441eb263c7c75f8236aedd630dbddc22965d5ee9",
+      "last_resolved": "e64fdba874db9d3f51d3ae99441eb263c7c75f8236aedd630dbddc22965d5ee9",
+      "tracked_at": "2026-05-13T18:30:37.706559+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/thandiwe-0799-test-factories/tests/test_api/test_narrators.py": {
+      "last_tracked": "05623bc03c03b8dce7168ddb5ae90c7f2d4a73be06f372a67f3e8aedabeb27cc",
+      "last_resolved": "05623bc03c03b8dce7168ddb5ae90c7f2d4a73be06f372a67f3e8aedabeb27cc",
+      "tracked_at": "2026-05-13T18:30:38.688254+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/ingrid-0874-node20-cleanup/.github/workflows/ghcr-publish.yml": {
+      "last_tracked": "1f39710373f2e03ccc304bd0c472d2b4704d92274fb5ec2cb6f4631928f1657e",
+      "last_resolved": "1f39710373f2e03ccc304bd0c472d2b4704d92274fb5ec2cb6f4631928f1657e",
+      "tracked_at": "2026-05-13T18:30:41.710124+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/aisling-0812-e2e-auth-mocks/frontend/tests/e2e/fixtures/auth-user.json": {
+      "last_tracked": "95800c2730a1f518305b5c10c401e82de24fffa475c527cde1f34180ffe1cc11",
+      "last_resolved": "95800c2730a1f518305b5c10c401e82de24fffa475c527cde1f34180ffe1cc11",
+      "tracked_at": "2026-05-13T18:30:41.651267+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/nneka-0807-gitignore-worktrees/.gitignore": {
+      "last_tracked": "a3d0b61fd506f7665f935dc4dd8527dcd8e3f2f754fcb363fc251da8c2947d9b",
+      "last_resolved": "a3d0b61fd506f7665f935dc4dd8527dcd8e3f2f754fcb363fc251da8c2947d9b",
+      "tracked_at": "2026-05-13T18:30:45.548374+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/thandiwe-0799-test-factories/tests/test_api/test_hadiths.py": {
+      "last_tracked": "eb3b91b08a7e09877eae18ed57f13aaf061add4e1fcea8f6ee4723106dcb81e2",
+      "last_resolved": "eb3b91b08a7e09877eae18ed57f13aaf061add4e1fcea8f6ee4723106dcb81e2",
+      "tracked_at": "2026-05-13T18:30:50.822839+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/marisol-0835-hide-user-management-nav/frontend/src/components/__tests__/AdminLayout.test.tsx": {
+      "last_tracked": "3342bb6908747d76706f45146729c2fd6c4681af681ee9c70b19481e6e9f8e36",
+      "last_resolved": "3342bb6908747d76706f45146729c2fd6c4681af681ee9c70b19481e6e9f8e36",
+      "tracked_at": "2026-05-13T18:30:55.702955+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/thandiwe-0799-test-factories/tests/test_api/test_collections.py": {
+      "last_tracked": "4aaf265c6b5c09ff0f22c688ce8640a82172bb57bb494bd28b768fb0e9b9eb49",
+      "last_resolved": "4aaf265c6b5c09ff0f22c688ce8640a82172bb57bb494bd28b768fb0e9b9eb49",
+      "tracked_at": "2026-05-13T18:31:05.662427+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/aisling-0812-e2e-auth-mocks/frontend/tests/e2e/navigation.spec.ts": {
+      "last_tracked": "29ce3e84cd96d4480a0037e946b023c7bcfd81e5e111b45e140e0186407a23e6",
+      "last_resolved": "29ce3e84cd96d4480a0037e946b023c7bcfd81e5e111b45e140e0186407a23e6",
+      "tracked_at": "2026-05-13T18:31:06.099220+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/aisling-0812-e2e-auth-mocks/frontend/tests/e2e/search.spec.ts": {
+      "last_tracked": "b185ce14ce847cd6cadec32476b5c6dd3974a6304c31b59963fb9678c68cf06f",
+      "last_resolved": "b185ce14ce847cd6cadec32476b5c6dd3974a6304c31b59963fb9678c68cf06f",
+      "tracked_at": "2026-05-13T18:31:13.314898+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/thandiwe-0799-test-factories/tests/test_api/test_graph.py": {
+      "last_tracked": "64c4a7c89cfc1bebecd509bf5b844b939aeb2e46a8d6eea19699718e32f9e226",
+      "last_resolved": "64c4a7c89cfc1bebecd509bf5b844b939aeb2e46a8d6eea19699718e32f9e226",
+      "tracked_at": "2026-05-13T18:31:26.157236+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    "noorinalabs-user-service/.github/workflows/ci.yml": {
+      "last_tracked": "6db9577092f42d5aa3fc2252d186bc4c16d80bc6a35eeede42fc6d8b4155f508",
+      "last_resolved": "6db9577092f42d5aa3fc2252d186bc4c16d80bc6a35eeede42fc6d8b4155f508",
+      "tracked_at": "2026-05-13T18:31:16.856179+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/aisling-0812-e2e-auth-mocks/frontend/tests/e2e/accessibility.spec.ts": {
+      "last_tracked": "2df04dd660c5799aff1e47bb0795898e256aa299230b17f7db1843de477bb9a2",
+      "last_resolved": "2df04dd660c5799aff1e47bb0795898e256aa299230b17f7db1843de477bb9a2",
+      "tracked_at": "2026-05-13T18:31:22.656920+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/aisling-0812-e2e-auth-mocks/.github/workflows/ci.yml": {
+      "last_tracked": "b6378b9eae96b2b28ab784c347d4f89af85699e9aeadabebd742e734b6ccb50b",
+      "last_resolved": "b6378b9eae96b2b28ab784c347d4f89af85699e9aeadabebd742e734b6ccb50b",
+      "tracked_at": "2026-05-13T18:31:30.314967+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/thandiwe-0799-test-factories/tests/test_api/test_search.py": {
+      "last_tracked": "1146fb6232b85b54418e837114f85b93b243a7d81bbd2b66e0ce863d4345af6b",
+      "last_resolved": "1146fb6232b85b54418e837114f85b93b243a7d81bbd2b66e0ce863d4345af6b",
+      "tracked_at": "2026-05-13T18:31:38.034965+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/jelani-0822-design-system-version-pin/.github/workflows/ghcr-publish.yml": {
+      "last_tracked": "d4185ec7e02ab5ac24526710bc4115ccc06b6bfcd61c1cb3b79a4dd06d0a10e8",
+      "last_resolved": "d4185ec7e02ab5ac24526710bc4115ccc06b6bfcd61c1cb3b79a4dd06d0a10e8",
+      "tracked_at": "2026-05-13T18:32:36.983528+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/jelani-0822-design-system-version-pin/frontend/Dockerfile": {
+      "last_tracked": "40075d4532d66d1892a27dfeb7a1b9ab3dead946cf675fab9dfa76e3be8b4bcd",
+      "last_resolved": "40075d4532d66d1892a27dfeb7a1b9ab3dead946cf675fab9dfa76e3be8b4bcd",
+      "tracked_at": "2026-05-13T18:32:51.518086+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    ".claude/worktrees-isnad-graph/jelani-0822-design-system-version-pin/frontend/package-lock.json": {
+      "last_tracked": "4ece95023b4fb75aebae75c69e97dbf93e759891d2c6379611e4efd80ff11c58",
+      "last_resolved": "4ece95023b4fb75aebae75c69e97dbf93e759891d2c6379611e4efd80ff11c58",
+      "tracked_at": "2026-05-13T18:32:59.360979+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    "noorinalabs-user-service/src/app/services/token.py": {
+      "last_tracked": "1b31f6e195488d20756e8ddcf629d258bf7f31d5966a201fa8b5f4e6f500c6b0",
+      "last_resolved": "1b31f6e195488d20756e8ddcf629d258bf7f31d5966a201fa8b5f4e6f500c6b0",
+      "tracked_at": "2026-05-13T18:41:45.874873+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
+    },
+    "noorinalabs-landing-page/.claude/team/roster/ux_designer_cedric.md": {
+      "last_tracked": "b766832df713845764a8bc5d3e07e29fb04c6f0189d699b7149a7b3b93be18e9",
+      "last_resolved": "b766832df713845764a8bc5d3e07e29fb04c6f0189d699b7149a7b3b93be18e9",
+      "tracked_at": "2026-05-13T18:57:16.438139+00:00",
+      "resolved_at": "2026-05-14T02:26:48Z"
     }
   },
   "last_cleanup": {
