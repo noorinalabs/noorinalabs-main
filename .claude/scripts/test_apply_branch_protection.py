@@ -154,6 +154,37 @@ class TestNormalizeActual(unittest.TestCase):
         self.assertTrue(norm["enforce_admins"])
         self.assertFalse(norm["allow_force_pushes"])
 
+    def test_required_pull_request_reviews_strips_get_only_fields(self) -> None:
+        # GET wraps RPR with `url` and may carry extra keys; normalize must
+        # strip them so the diff matches a PUT-shape desired body.
+        actual = {
+            "required_status_checks": None,
+            "enforce_admins": True,
+            "allow_force_pushes": False,
+            "allow_deletions": False,
+            "required_linear_history": False,
+            "required_conversation_resolution": False,
+            "required_pull_request_reviews": {
+                "url": "https://api.github.com/repos/x/y/branches/main/protection/required_pull_request_reviews",
+                "dismiss_stale_reviews": True,
+                "require_code_owner_reviews": False,
+                "required_approving_review_count": 2,
+                "require_last_push_approval": False,
+                "dismissal_restrictions": {},
+            },
+            "restrictions": None,
+        }
+        norm = abp.normalize_actual(actual)
+        self.assertEqual(
+            norm["required_pull_request_reviews"],
+            {
+                "required_approving_review_count": 2,
+                "dismiss_stale_reviews": True,
+                "require_code_owner_reviews": False,
+                "require_last_push_approval": False,
+            },
+        )
+
 
 class TestDiffState(unittest.TestCase):
     def test_in_sync(self) -> None:
@@ -360,9 +391,23 @@ class TestRealManifestSchema(unittest.TestCase):
     def test_negative_protections_uniform(self) -> None:
         for repo_name in self.manifest["repos"]:
             desired = abp.build_desired_for_repo(self.manifest, repo_name)
-            self.assertFalse(desired["enforce_admins"], repo_name)
             self.assertFalse(desired["allow_force_pushes"], repo_name)
             self.assertFalse(desired["allow_deletions"], repo_name)
+
+    def test_enforce_admins_uniform_true(self) -> None:
+        for repo_name in self.manifest["repos"]:
+            desired = abp.build_desired_for_repo(self.manifest, repo_name)
+            self.assertTrue(desired["enforce_admins"], repo_name)
+
+    def test_required_pull_request_reviews_uniform(self) -> None:
+        for repo_name in self.manifest["repos"]:
+            desired = abp.build_desired_for_repo(self.manifest, repo_name)
+            rpr = desired["required_pull_request_reviews"]
+            self.assertIsNotNone(rpr, repo_name)
+            self.assertEqual(rpr["required_approving_review_count"], 2, repo_name)
+            self.assertTrue(rpr["dismiss_stale_reviews"], repo_name)
+            self.assertFalse(rpr["require_code_owner_reviews"], repo_name)
+            self.assertFalse(rpr["require_last_push_approval"], repo_name)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,13 @@
 {
   "_doc": "Per-repo branch-protection config for `main`. Run via .claude/scripts/apply_branch_protection.py. Contexts MUST match the exact check-run NAME emitted on the most recent PR head SHA (verify with `gh api repos/{owner}/{repo}/commits/{sha}/check-runs`). Mismatch causes the protection to silently never satisfy.",
   "_common": {
-    "enforce_admins": false,
-    "required_pull_request_reviews": null,
+    "enforce_admins": true,
+    "required_pull_request_reviews": {
+      "required_approving_review_count": 2,
+      "dismiss_stale_reviews": true,
+      "require_code_owner_reviews": false,
+      "require_last_push_approval": false
+    },
     "restrictions": null,
     "allow_force_pushes": false,
     "allow_deletions": false,

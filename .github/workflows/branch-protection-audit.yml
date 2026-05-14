@@ -42,6 +42,11 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     needs: unit-tests
+    # Manual-approval gate: `apply` mode pins the `branch-protection-apply`
+    # Environment (which has required-reviewers configured), forcing a human
+    # ack before any PUT runs. Scheduled `check` runs and manual `check`
+    # dispatches resolve the env name to empty string -> no gate.
+    environment: ${{ github.event.inputs.mode == 'apply' && 'branch-protection-apply' || '' }}
     env:
       # Cross-repo branch-protection PUT requires a PAT with `administration:write`
       # on every targeted repo. `github.token` is repo-scoped and cannot read

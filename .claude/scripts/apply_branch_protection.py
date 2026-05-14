@@ -168,7 +168,15 @@ def normalize_actual(actual: dict | None) -> dict:
     norm["required_conversation_resolution"] = _enabled("required_conversation_resolution")
 
     rpr = actual.get("required_pull_request_reviews")
-    norm["required_pull_request_reviews"] = rpr if rpr else None
+    if rpr:
+        norm["required_pull_request_reviews"] = {
+            "required_approving_review_count": int(rpr.get("required_approving_review_count", 0)),
+            "dismiss_stale_reviews": bool(rpr.get("dismiss_stale_reviews", False)),
+            "require_code_owner_reviews": bool(rpr.get("require_code_owner_reviews", False)),
+            "require_last_push_approval": bool(rpr.get("require_last_push_approval", False)),
+        }
+    else:
+        norm["required_pull_request_reviews"] = None
 
     restrictions = actual.get("restrictions")
     norm["restrictions"] = restrictions if restrictions else None
