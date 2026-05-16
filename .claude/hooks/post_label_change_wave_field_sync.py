@@ -346,15 +346,13 @@ def _get_project_ids(graphql_runner=None) -> dict | None:
 
 
 _ITEM_LOOKUP_QUERY = """
-query($org: String!, $project: Int!, $repo: String!, $num: Int!) {
-  organization(login: $org) {
-    projectV2(number: $project) {
-      items(first: 100) {
+query($org: String!, $repo: String!, $num: Int!) {
+  repository(owner: $org, name: $repo) {
+    issue(number: $num) {
+      projectItems(first: 10) {
         nodes {
           id
-          content {
-            ... on Issue { number repository { name } }
-          }
+          project { number }
         }
       }
     }
@@ -366,19 +364,19 @@ query($org: String!, $project: Int!, $repo: String!, $num: Int!) {
 def _lookup_item_id(repo: str, issue_number: str, graphql_runner=None) -> str | None:
     """Find the project 2 item ID for `noorinalabs/<repo>` issue `<issue_number>`.
 
-    `items(first: 100)` is the first page; in practice we'd need
-    pagination to be 100% correct, but a 100-item first page covers
-    every wave's working set we've seen. If the issue isn't found on
-    page 1, returns None (graceful skip — board-audit will sweep later).
-    Pagination is intentionally deferred to keep the hook cheap; if
-    we observe miss-after-first-page false-skips in production, file a
-    follow-up to extend.
+    Uses a direct repository→issue→projectItems traversal, which avoids the
+    100-item pagination limitation of the old org→projectV2→items scan and
+    eliminates the variableNotUsed GraphQL error ($repo/$num were declared
+    but never referenced in the old query body).
+
+    PROJECT_NUMBER filtering is done Python-side since the projectItems field
+    has no server-side project-number filter argument; the `first: 10` ceiling
+    is safe because issues are rarely on more than a handful of projects.
     """
     data = _gh_graphql(
         _ITEM_LOOKUP_QUERY,
         {
             "org": ORG,
-            "project": PROJECT_NUMBER,
             "repo": repo,
             "num": int(issue_number),
         },
@@ -386,14 +384,12 @@ def _lookup_item_id(repo: str, issue_number: str, graphql_runner=None) -> str | 
     )
     if not data:
         return None
-    proj = (data.get("data") or {}).get("organization", {}).get("projectV2")
-    if not proj:
+    issue = (data.get("data") or {}).get("repository", {}).get("issue")
+    if not issue:
         return None
-    nodes = (proj.get("items") or {}).get("nodes") or []
+    nodes = (issue.get("projectItems") or {}).get("nodes") or []
     for node in nodes:
-        content = node.get("content") or {}
-        repo_obj = content.get("repository") or {}
-        if content.get("number") == int(issue_number) and repo_obj.get("name") == repo:
+        if (node.get("project") or {}).get("number") == PROJECT_NUMBER:
             return node.get("id")
     return None
 
