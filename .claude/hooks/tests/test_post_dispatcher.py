@@ -358,5 +358,189 @@ class BackwardCompatTests(unittest.TestCase):
         self.assertIsNone(result)
 
 
+class DispatchTraceTests(unittest.TestCase):
+    """#425: every interesting dispatched check() emits an annunaki
+    `posttooluse_dispatch` record so /annunaki can show what each hook
+    did per Bash call. "Interesting" = raised OR returned a non-None
+    dict; None returns stay silent to avoid log spam.
+    """
+
+    def setUp(self) -> None:
+        import tempfile
+
+        import annunaki_log
+
+        self._tmp_dir = tempfile.mkdtemp(prefix="post_dispatch_trace_")
+        self._orig_errors_file = annunaki_log.ERRORS_FILE
+        self._errors_file = Path(self._tmp_dir) / "errors.jsonl"
+        annunaki_log.ERRORS_FILE = self._errors_file
+
+    def tearDown(self) -> None:
+        import shutil
+
+        import annunaki_log
+
+        annunaki_log.ERRORS_FILE = self._orig_errors_file
+        shutil.rmtree(self._tmp_dir, ignore_errors=True)
+
+    def _read_records(self) -> list[dict]:
+        if not self._errors_file.exists():
+            return []
+        with self._errors_file.open("r", encoding="utf-8") as f:
+            return [json.loads(line) for line in f if line.strip()]
+
+    def test_action_dict_return_records_dispatch_trace(self) -> None:
+        """POS (#425 core case): when post_wave_kickoff_comment returns
+        `{'action': 'post', ...}` the dispatcher records a trace so the
+        action is visible in /annunaki — was previously invisible because
+        the dispatcher only surfaces `systemMessage` returns."""
+        input_data = {
+            "tool_name": "Bash",
+            "hook_event_name": "PostToolUse",
+            "tool_input": {"command": "gh issue edit 423 --add-label p3-wave-10"},
+            "tool_response": {"stdout": "", "stderr": "", "exitCode": 0},
+        }
+        action_return = {"action": "post", "repo": "noorinalabs-main", "issue": "423"}
+        with (
+            mock.patch("annunaki_monitor.check", return_value=None),
+            mock.patch("auto_add_issue_to_board.check", return_value=None),
+            mock.patch("post_wave_kickoff_comment.check", return_value=action_return),
+        ):
+            code, _ = _run_dispatcher(input_data)
+        self.assertEqual(code, 0)
+
+        traces = [r for r in self._read_records() if r["type"] == "posttooluse_dispatch"]
+        # Only the post_wave_kickoff_comment record fires (the other two
+        # returned None — those are silent per design).
+        self.assertEqual(len(traces), 1, "exactly one trace for the non-None return")
+        rec = traces[0]
+        self.assertEqual(rec["module"], "post_wave_kickoff_comment")
+        self.assertEqual(rec["tool_name"], "Bash")
+        self.assertIn("'action': 'post'", rec["outcome"]["returned"])
+        self.assertIsNone(rec["outcome"]["raised"])
+        self.assertIsNone(rec["outcome"]["traceback_excerpt"])
+        self.assertIn("gh issue edit", rec["command"])
+
+    def test_none_returns_silent_by_default(self) -> None:
+        """NEG: when every hook returns None (overwhelming common case),
+        the dispatcher writes ZERO trace records — keeps the log low-noise.
+        """
+        input_data = {
+            "tool_name": "Bash",
+            "hook_event_name": "PostToolUse",
+            "tool_input": {"command": "echo hi"},
+            "tool_response": {"stdout": "hi\n", "stderr": "", "exitCode": 0},
+        }
+        with (
+            mock.patch("annunaki_monitor.check", return_value=None),
+            mock.patch("auto_add_issue_to_board.check", return_value=None),
+            mock.patch("post_wave_kickoff_comment.check", return_value=None),
+        ):
+            code, _ = _run_dispatcher(input_data)
+        self.assertEqual(code, 0)
+        self.assertEqual(self._read_records(), [])
+
+    def test_raised_exception_records_trace_with_traceback(self) -> None:
+        """POS: a raising hook surfaces type + traceback in the trace
+        record — was previously a bare `except: continue` with zero
+        forensic visibility. Sibling hooks must still run."""
+        input_data = {
+            "tool_name": "Bash",
+            "hook_event_name": "PostToolUse",
+            "tool_input": {"command": "echo trace-test"},
+            "tool_response": {"stdout": "", "stderr": "", "exitCode": 0},
+        }
+        sibling = mock.MagicMock(return_value=None)
+        with (
+            mock.patch("annunaki_monitor.check", side_effect=RuntimeError("simulated crash")),
+            mock.patch("auto_add_issue_to_board.check", sibling),
+            mock.patch("post_wave_kickoff_comment.check", return_value=None),
+        ):
+            code, _ = _run_dispatcher(input_data)
+        self.assertEqual(code, 0, "exception still swallowed for advisory contract")
+        self.assertEqual(sibling.call_count, 1, "sibling still runs after sibling-raise")
+
+        traces = [r for r in self._read_records() if r["type"] == "posttooluse_dispatch"]
+        self.assertEqual(len(traces), 1)
+        rec = traces[0]
+        self.assertEqual(rec["module"], "annunaki_monitor")
+        self.assertIn("RuntimeError", rec["outcome"]["raised"])
+        self.assertIn("simulated crash", rec["outcome"]["raised"])
+        self.assertIsNotNone(rec["outcome"]["traceback_excerpt"])
+        # Traceback excerpt is bounded at 500 chars and the unittest.mock
+        # frames often consume that budget before the actual exception
+        # text appears. The starting "Traceback" sentinel is enough to
+        # confirm we captured one; the exception type + message are
+        # already asserted via `outcome.raised`.
+        self.assertTrue(rec["outcome"]["traceback_excerpt"].startswith("Traceback"))
+
+    def test_trace_all_env_var_forces_none_returns_logged(self) -> None:
+        """POS: when POST_DISPATCHER_TRACE_ALL=1, even None returns
+        produce a trace record — useful when debugging "did the hook
+        even run?" questions (the #425 original symptom)."""
+        import importlib
+
+        import post_dispatcher
+
+        input_data = {
+            "tool_name": "Bash",
+            "hook_event_name": "PostToolUse",
+            "tool_input": {"command": "echo trace-all"},
+            "tool_response": {"stdout": "", "stderr": "", "exitCode": 0},
+        }
+        with mock.patch.dict("os.environ", {"POST_DISPATCHER_TRACE_ALL": "1"}):
+            importlib.reload(post_dispatcher)
+            try:
+                with (
+                    mock.patch("annunaki_monitor.check", return_value=None),
+                    mock.patch("auto_add_issue_to_board.check", return_value=None),
+                    mock.patch("post_wave_kickoff_comment.check", return_value=None),
+                ):
+                    stdin = io.StringIO(json.dumps(input_data))
+                    stdout = io.StringIO()
+                    with (
+                        mock.patch.object(sys, "stdin", stdin),
+                        mock.patch.object(sys, "stdout", stdout),
+                    ):
+                        try:
+                            post_dispatcher.main()
+                        except SystemExit:
+                            pass
+            finally:
+                importlib.reload(post_dispatcher)
+
+        traces = [r for r in self._read_records() if r["type"] == "posttooluse_dispatch"]
+        self.assertEqual(
+            len(traces), 3, "TRACE_ALL must emit one record per registered Bash module"
+        )
+        modules = {t["module"] for t in traces}
+        self.assertEqual(
+            modules, {"annunaki_monitor", "auto_add_issue_to_board", "post_wave_kickoff_comment"}
+        )
+
+    def test_elapsed_ms_recorded(self) -> None:
+        """POS: every trace record carries an `elapsed_ms` field for
+        spotting slow check()s. Doesn't pin a value, just presence + type."""
+        input_data = {
+            "tool_name": "Bash",
+            "hook_event_name": "PostToolUse",
+            "tool_input": {"command": "echo timing"},
+            "tool_response": {"stdout": "", "stderr": "", "exitCode": 0},
+        }
+        with (
+            mock.patch("annunaki_monitor.check", return_value=None),
+            mock.patch("auto_add_issue_to_board.check", return_value=None),
+            mock.patch(
+                "post_wave_kickoff_comment.check",
+                return_value={"action": "skip_no_row", "repo": "x", "issue": "0"},
+            ),
+        ):
+            _run_dispatcher(input_data)
+        traces = [r for r in self._read_records() if r["type"] == "posttooluse_dispatch"]
+        self.assertEqual(len(traces), 1)
+        self.assertIsInstance(traces[0]["outcome"]["elapsed_ms"], (int, float))
+        self.assertGreaterEqual(traces[0]["outcome"]["elapsed_ms"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
