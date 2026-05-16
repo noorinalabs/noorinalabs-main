@@ -112,7 +112,7 @@ Promotion provenance
 
 P3W10 retro PR #441 § Proposed Process Changes #3. Owner-decided
 2026-05-16; charter adoption via PR #444 (ccc7edf); this hook
-implementation via PR #__PR_NUMBER__ (issue #445). 5-drift evidence base
+implementation via PR #446 (issue #445). 5-drift evidence base
 from W10 /board-audit run (all label-edit-class drifts that Hook 13
 didn't catch). Companion to Hook 13 (`auto_add_issue_to_board.py`)
 which catches CREATE-time only; this hook closes the label-EDIT gap.
