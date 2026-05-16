@@ -542,3 +542,39 @@ Wrong-roster spawn (hook-blocked at first commit, respawn required): minor — a
 |---|---|---|---|
 | 2026-04-22 | child-repo#139 prereqs | Deferred-under-misread of user intent | Owner correction next turn |
 | 2026-05-03 | P3W3 deploy#242 spawn brief | Spawned Lucas Ferreira (deploy roster) for landing-page work; conflated reviewer-class permission with implementer-class | Hook 5 blocked Lucas-242's first commit; Lucas-242 surfaced charter Pattern B catch (verify-vs-artifact: roster.json) and recommended Kofi from landing-page roster |
+
+<!-- Promoted from memory: (none — this section codifies retro proposal #4 sub-section under existing parent rule, ratified at P3W10 retro via PR #441 owner-decided 2026-05-16) -->
+
+### Parent-Orchestrator Implementer Declarations Are Advisory
+
+When a cross-repo meta-issue authored by the parent orchestrator declares **per-child-issue implementers** (e.g., "Linh implements isnad-graph#812, Lucas implements deploy#159"), those declarations are **ADVISORY**. The child-repo manager is the canonical authority for who actually implements a child-repo PR.
+
+#### Why
+
+22 substitutions across 65 W10 PRs (**34%**) showed that parent-declared implementers were systematically overridden downstream. The substitution wasn't an error — child managers correctly applied local roster knowledge (current workload, recent role fit, in-flight cluster cohesion) that the parent orchestrator does not have at meta-issue authoring time. The cost of declaring anyway was twofold:
+
+1. **Retro-time trust-matrix-misattribution risk** — a retro that reads declared-vs-actual without the bulk-acknowledgment context would credit the wrong agent.
+2. **Wasted orchestrator effort** — composing per-issue declarations that get swapped out 34% of the time is signal-to-noise loss.
+
+#### How to apply
+
+- At **meta-issue authoring time**, parent orchestrators MAY state SUGGESTED implementers as advisory hints OR omit per-issue implementer names entirely. Both are acceptable.
+- **Child managers** assign canonical implementers via spawn briefs in their own child-repo session, applying local roster + workload + role-fit knowledge.
+- **Trust-matrix attribution at retro time** follows the **commit identity** (who actually authored the merged commits per `git log --format='%an' <merge-base>..<wave-tip>`), NOT the meta-issue declaration. Retros that compare declared-vs-actual without the bulk-acknowledgment of this rule will misattribute.
+
+#### Relationship to the parent § Child-Repo Implementer Rule
+
+The parent section above governs **WHICH ROSTER** an implementer must come from: the working-repo's roster, Hook 5 enforced. This sub-section governs **WHO HAS AUTHORITY** to make the per-issue assignment within that roster: the child manager, not the parent orchestrator.
+
+The two rules are complementary:
+- Parent rule (hook-enforced): implementer's `user.name` must be in working-repo `roster.json`.
+- This sub-section (advisory): WHICH specific roster member the child manager picks is the child manager's call, not the parent orchestrator's.
+
+#### Severity if violated
+
+- **Parent orchestrator over-specifying** (declaring per-issue implementers in a meta-issue): **minor** — wasted effort, no hook block, no downstream coupling.
+- **Parent orchestrator demanding child manager honor advisory declarations** (e.g., re-spawning the child agent to "use the declared implementer instead"): **moderate** — couples teams across the parent/child boundary, defeats the local-knowledge advantage that produced the 34% substitution rate, and corrupts the working-repo's role-fit signal.
+
+#### Provenance
+
+P3W10 retro PR #441 § Proposed Process Changes #4. 22-substitution evidence (34% of 65 W10 PRs). Owner-adopted 2026-05-16. Sibling memory: `feedback_child_repo_implementer_rule.md` (which the parent § Child-Repo Implementer Rule + Spawn-Brief Verification already supersedes for roster-source rules; this sub-section adds the authority-source clarification).

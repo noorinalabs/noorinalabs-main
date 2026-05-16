@@ -153,3 +153,69 @@ The `/promotion-audit` skill's `templates/charter-section.md` emits Shape 1 (HTM
 <!-- Promoted from memory: (none — this section codifies the marker convention itself, not a memory-to-charter promotion) -->
 
 Filed as [#393](https://github.com/noorinalabs/noorinalabs-main/issues/393) (P3W9) — sibling of [#283](https://github.com/noorinalabs/noorinalabs-main/issues/283) (PR #392) which extended `find_already_promoted()` to recognize the HTML-comment shape via `_HTML_COMMENT_PROMOTED_RE`. PR #392 enabled the parser; this section codifies the authoring discipline that the parser support requires. Replaces the pre-#393 implicit convention (manual authors had already converged on the two shapes documented here across ~17 charter promotions) with an authoritative source.
+
+<!-- Promoted from memory: (none — this section codifies retro proposal #1, ratified at P3W10 retro via PR #441 owner-decided 2026-05-16) -->
+
+## Process-Doc Authorship: Derived-From-SKILL.md-At-HEAD <!-- promotion-target: none -->
+
+When AUTHORING a process doc — a skill's `SKILL.md`, a charter section, a `lifecycle.md`, any reference doc that other agents will rely on — the source of truth is the **artifact at HEAD**: the actual SKILL.md content, the actual charter section content, the actual lifecycle steps as they exist on disk. NOT the framing in the spawn brief, NOT the commit-message rationale, NOT the surrounding PR body, NOT the issue body that asked for the change.
+
+### Why
+
+A 3-catch convergent class across PRs #438, #439, #440 in P3W10 traced back to authors writing FROM framing instead of FROM grep-able artifact state. The framing was directionally correct but lost fidelity at the detail level — counts, exact section names, behavior under edge cases — and the resulting process doc cited behavior that didn't match what the skill/charter actually did at HEAD.
+
+This Augments the existing reviewer-class discipline `feedback_review_against_artifact_not_framing.md` (and its charter form `pull-requests.md § Trust the Artifact, Not the Framing`) by lifting the same primitive to the AUTHOR layer: authors of process docs must derive content from the artifact, not from the framing handed to them.
+
+### How to apply
+
+1. **Before writing**: open the SKILL.md / charter section / lifecycle.md being documented and read it at the working commit (`git show HEAD:<path>` if uncertain about working-tree drift).
+2. **While writing**: every cited behavior — every "the skill does X", every "the hook fires on Y", every counter / threshold / step number — must be grep-able at HEAD.
+3. **PR review**: every process-doc PR review verifies cited skill/charter/lifecycle behavior is grep-able at HEAD of the PR. Reviewers MUST read the source artifact at HEAD, not trust the PR body's framing.
+
+### Severity if violated
+
+- **Minor** first occurrence — Changes-Requested with a `gh api repos/.../contents/<path>?ref=<head_sha>` link to the source artifact and the divergent line.
+- **Moderate** for a pattern (same author or same skill, 2+ occurrences within a wave).
+
+### Provenance
+
+P3W10 retro PR #441 § Proposed Process Changes #1. Wanjiku-framed at PR #440 review. 3-catch convergent class across #438/#439/#440. Owner-adopted 2026-05-16. Augments `pull-requests.md § Trust the Artifact, Not the Framing` (reviewer layer) and `feedback_review_against_artifact_not_framing.md` (reviewer-class memory).
+
+<!-- Promoted from memory: (none — this section codifies retro proposal #2, ratified at P3W10 retro via PR #441 owner-decided 2026-05-16) -->
+
+## Acceptance-Criteria-Bucketing-In-Reports <!-- promotion-target: none -->
+
+Any skill or hook that emits a count-based summary block MUST distinguish at least two semantic buckets — typically **actionable vs informational** — so readers can tell whether the count indicates a problem requiring action or ambient state to acknowledge and move on.
+
+### Why
+
+A single "N items" number is ambiguous: the reader cannot tell whether N=166 is a backlog crisis or a healthy steady-state. The W10 `/board-audit` DRIFT-vs-NOOP split (landed in #439) demonstrated that adding bucketing made the same underlying data immediately actionable — the same audit run that previously read as "166 items processed" became "0 DRIFT / 166 NOOP," which the reader can act on (or not) in one glance.
+
+### How to apply
+
+Every count-emitting summary block has **at least 2 buckets with semantic labels**. Examples of well-bucketed outputs:
+
+- `/promotion-audit`: `0 AUTO · 0 DECIDE · 146 KEPT · 5 SUPERSEDED · 15 ALREADY-PROMOTED` (actionable buckets first: AUTO/DECIDE; informational buckets last: KEPT/SUPERSEDED/ALREADY-PROMOTED).
+- `/board-audit`: `0 DRIFT · 166 NOOP` (DRIFT requires action; NOOP is ambient).
+- `/wave-retro`: Top 3 Going Well vs Top 3 Pain Points (positive vs negative semantic split).
+
+A **single undifferentiated number** ("166 items processed", "N events captured", "M files scanned") is **forbidden** in summary blocks emitted by skills or hooks.
+
+### Sibling / retrofit list (skills/hooks that should adopt this convention as they next change)
+
+- `/promotion-audit` — already bucketed (AUTO/DECIDE/KEPT/SUPERSEDED/ALREADY-PROMOTED); cited as a positive example here. The combined SUPERSEDED + ALREADY-PROMOTED 20-line summary is the natural application of this rule.
+- `/wave-retro` — Top 3 Going Well vs Top 3 Pain Points; further bucketing of the Memory-to-Automation Audit (Keep vs Charter-candidate vs Hook-candidate) recommended.
+- `/board-audit` — DRIFT vs NOOP already landed in #439.
+- `/session-start` — errors-needing-action vs ambient-state buckets in the startup status table.
+- `/wave-wrapup` — open-items-this-wave vs carry-forward vs merged-this-wave buckets.
+- `/wave-scope` — declared-in-retro vs labeled-only vs both vs explicit-out-of-scope buckets.
+
+The retrofit list is non-binding: existing skills retrofit at their next material change, not in a mass sweep.
+
+### Severity if violated
+
+**Minor** — reviewers should ask for bucketing in PR review of any new or materially-changed skill/hook that emits a summary block. Existing un-bucketed summaries are not retroactively in violation; they retrofit at next change.
+
+### Provenance
+
+P3W10 retro PR #441 § Proposed Process Changes #2. Wanjiku + Santiago independently named the pattern on PR #439 review. Sibling generalization of the `/board-audit` DRIFT-vs-NOOP split that landed in #439. Owner-adopted 2026-05-16.
