@@ -32,13 +32,11 @@ flowchart LR
 | Step | Skill | Precondition | Side effects + state written | Next skill |
 |------|-------|--------------|------------------------------|------------|
 | P0 | `/plan-phase {team} {P}` | Project board (project 2) reflects current open-issue state across all 8 repos. Pre-phase drift audit (Step 1) STOPs if any open issue across the org is missing from project 2. | Reads project 2 as authoritative backlog. Creates per-issue GitHub Issues with phase / assignee / category labels (Step 2-3). Posts 6-perspective review comments per issue (Step 4). Presents a proposed wave structure for owner approval (Steps 5-7). The `phase-{P}.md` plan doc that `/phase-review` reads from is hand-authored — `/plan-phase` proposes the wave structure but does not directly write the plan doc. | `/phase-review {P}` |
-| P1 | `/phase-review {P}` | `.claude/team/phases/phase-{P}.md` exists. STOPs and directs to a phase-creation step (the `phase-{P}.md` plan doc is the only required input — author it hand-in-hand with `/plan-phase` Step 7's owner-approved wave structure). | (none) — read-only diagnostic. Surfaces tech-debt ratio against the 10% exit gate. May edit `phase-{P}.md` with owner confirmation. | `/wave-scope {P} {M}` (mandatory next; gates Wave Lifecycle Gate A) |
+| P1 | `/phase-review {P}` | `.claude/team/phases/phase-{P}.md` exists. STOPs and directs to `/plan-phase` if missing (the `phase-{P}.md` plan doc is the only required input — hand-author it from `/plan-phase` Step 7's owner-approved wave structure). | (none) — read-only diagnostic. Surfaces tech-debt ratio against the 10% exit gate. May edit `phase-{P}.md` with owner confirmation. | `/wave-scope {P} {M}` (mandatory next; gates Wave Lifecycle Gate A) |
 
 **Phase close-out:** there is no explicit close-out skill. A phase ends when every tracking issue in `phase-{P}.md` is closed and the tech-debt ratio is under the 10% exit gate. A subsequent `/plan-phase` invocation marks the next phase's planning pass.
 
 **`/phase-review` cadence:** mandatory before every `/wave-scope` (gated by `/wave-scope` Step 0.5 Gate A — a transcript check for a same-session invocation against phase `{P}`). May also be run on demand.
-
-**Note on the `/roadmap` reference in `phase-review/SKILL.md`:** `/phase-review` Step 1 mentions `/roadmap` as the source of `phase-{P}.md`, but no `/roadmap` skill exists in `.claude/skills/` as of this PR. `/plan-phase` is the closest existing skill; the `phase-{P}.md` plan doc is currently hand-authored. Follow-up issue should be filed if a dedicated `/roadmap` skill is wanted; otherwise update `phase-review/SKILL.md` to drop the `/roadmap` reference.
 
 ---
 

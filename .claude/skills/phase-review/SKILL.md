@@ -14,13 +14,13 @@ Phase-level track check. **Mandatory before every `/wave-scope`.** Surfaces acco
 
 - **Before every `/wave-scope`.** Mandatory pre-step. `/wave-scope` Step 0.5 will block until `/phase-review` has been invoked in the same session.
 - **On demand** — owner can run anytime to check phase health.
-- Not a replacement for `/retro` (per-wave) or `/roadmap` (cross-phase).
+- Not a replacement for `/retro` (per-wave) or `/plan-phase` (phase-creation).
 
 ## What this skill is NOT
 
 - Not a wave reconciliation step — that's `/wave-scope`.
 - Not a retrospective — that's `/wave-retro`.
-- Not a phase-creation step — `/roadmap` is the phase-transition skill.
+- Not a phase-creation step — `/plan-phase` is the phase-creation skill.
 - Does NOT pick the next wave's theme — that's the owner's call after seeing the picture.
 - Does NOT modify the phase plan doc without owner confirmation.
 
@@ -37,13 +37,13 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 PHASE_DOC="$REPO_ROOT/.claude/team/phases/phase-{P}.md"
 if [ ! -f "$PHASE_DOC" ]; then
   echo "ERROR: phase plan doc missing at $PHASE_DOC"
-  echo "Run /roadmap first to create one — without a phase plan, /phase-review has nothing to check against."
+  echo "Run /plan-phase first to draft the phase scope, then hand-author the phase plan doc — without it, /phase-review has nothing to check against."
   exit 1
 fi
 cat "$PHASE_DOC"
 ```
 
-If the phase plan doc is missing, STOP and direct the owner to `/roadmap`.
+If the phase plan doc is missing, STOP and direct the owner to `/plan-phase` (which proposes the wave structure that the phase plan doc captures). The phase plan doc itself is hand-authored.
 
 ### 2. Pull current state of each tracking issue
 
