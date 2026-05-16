@@ -134,6 +134,16 @@ def fetch_actual(owner: str, repo: str, branch: str = DEFAULT_BRANCH) -> dict | 
     )
 
 
+def _actor_logins(actors: list) -> list[str]:
+    # GET returns list of {login, id, type, ...}; PUT accepts list of login strings.
+    return [a["login"] if isinstance(a, dict) else str(a) for a in actors]
+
+
+def _actor_slugs(actors: list) -> list[str]:
+    # Teams/apps GET returns list of {slug, id, name, ...}; PUT accepts slug strings.
+    return [a["slug"] if isinstance(a, dict) else str(a) for a in actors]
+
+
 def normalize_actual(actual: dict | None) -> dict:
     """Reduce the GET response to the same shape as the PUT body.
 
@@ -169,11 +179,41 @@ def normalize_actual(actual: dict | None) -> dict:
 
     rpr = actual.get("required_pull_request_reviews")
     if rpr:
+        # bypass_pull_request_allowances is a UI-configurable allow-list of
+        # actors that can merge without satisfying review requirements. It
+        # MUST be preserved so drift detection catches UI-side additions —
+        # otherwise the 2-reviewer gate is silently bypassable. Default to
+        # the empty PUT-shape (all three sub-lists empty) when the GET
+        # omits it. See noorinalabs/noorinalabs-main#433.
+        bypass = rpr.get(
+            "bypass_pull_request_allowances",
+            {"users": [], "teams": [], "apps": []},
+        )
+        # GET returns full actor objects (with id, login, type, etc.); the
+        # PUT body accepts a list of logins/slugs. Collapse to the PUT
+        # shape so the structural diff against the manifest is meaningful.
+        bypass_norm = {
+            "users": sorted(_actor_logins(bypass.get("users", []))),
+            "teams": sorted(_actor_slugs(bypass.get("teams", []))),
+            "apps": sorted(_actor_slugs(bypass.get("apps", []))),
+        }
+        # dismissal_restrictions has the same actor-list shape and is the
+        # adjacent allow-list controlling who can dismiss reviews. Same
+        # blind-spot class as bypass_pull_request_allowances; preserved
+        # together per #433 Out-of-Scope follow-up.
+        dr = rpr.get("dismissal_restrictions") or {}
+        dr_norm = {
+            "users": sorted(_actor_logins(dr.get("users", []))),
+            "teams": sorted(_actor_slugs(dr.get("teams", []))),
+            "apps": sorted(_actor_slugs(dr.get("apps", []))),
+        }
         norm["required_pull_request_reviews"] = {
             "required_approving_review_count": int(rpr.get("required_approving_review_count", 0)),
             "dismiss_stale_reviews": bool(rpr.get("dismiss_stale_reviews", False)),
             "require_code_owner_reviews": bool(rpr.get("require_code_owner_reviews", False)),
             "require_last_push_approval": bool(rpr.get("require_last_push_approval", False)),
+            "bypass_pull_request_allowances": bypass_norm,
+            "dismissal_restrictions": dr_norm,
         }
     else:
         norm["required_pull_request_reviews"] = None

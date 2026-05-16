@@ -156,7 +156,9 @@ class TestNormalizeActual(unittest.TestCase):
 
     def test_required_pull_request_reviews_strips_get_only_fields(self) -> None:
         # GET wraps RPR with `url` and may carry extra keys; normalize must
-        # strip them so the diff matches a PUT-shape desired body.
+        # strip `url` so the diff matches a PUT-shape desired body, while
+        # preserving bypass_pull_request_allowances and dismissal_restrictions
+        # which are security-relevant actor allow-lists (#433).
         actual = {
             "required_status_checks": None,
             "enforce_admins": True,
@@ -170,7 +172,8 @@ class TestNormalizeActual(unittest.TestCase):
                 "require_code_owner_reviews": False,
                 "required_approving_review_count": 2,
                 "require_last_push_approval": False,
-                "dismissal_restrictions": {},
+                "dismissal_restrictions": {"users": [], "teams": [], "apps": []},
+                "bypass_pull_request_allowances": {"users": [], "teams": [], "apps": []},
             },
             "restrictions": None,
         }
@@ -182,7 +185,126 @@ class TestNormalizeActual(unittest.TestCase):
                 "dismiss_stale_reviews": True,
                 "require_code_owner_reviews": False,
                 "require_last_push_approval": False,
+                "bypass_pull_request_allowances": {"users": [], "teams": [], "apps": []},
+                "dismissal_restrictions": {"users": [], "teams": [], "apps": []},
             },
+        )
+        # `url` was stripped, the two allow-list fields were NOT.
+        self.assertNotIn("url", norm["required_pull_request_reviews"])
+
+    def test_required_pull_request_reviews_preserves_bypass_allowances(self) -> None:
+        # When GET omits bypass_pull_request_allowances (older shape or no
+        # bypass ever configured), normalize must still produce the empty
+        # PUT-shape so the diff against desired-empty is in-sync.
+        actual = {
+            "required_status_checks": None,
+            "enforce_admins": True,
+            "allow_force_pushes": False,
+            "allow_deletions": False,
+            "required_linear_history": False,
+            "required_conversation_resolution": False,
+            "required_pull_request_reviews": {
+                "required_approving_review_count": 2,
+                "dismiss_stale_reviews": True,
+                "require_code_owner_reviews": False,
+                "require_last_push_approval": False,
+            },
+            "restrictions": None,
+        }
+        norm = abp.normalize_actual(actual)
+        self.assertEqual(
+            norm["required_pull_request_reviews"]["bypass_pull_request_allowances"],
+            {"users": [], "teams": [], "apps": []},
+        )
+        self.assertEqual(
+            norm["required_pull_request_reviews"]["dismissal_restrictions"],
+            {"users": [], "teams": [], "apps": []},
+        )
+
+    def test_bypass_allowances_drift_flagged_when_ui_adds_user(self) -> None:
+        # The regression scenario from #433: a repo admin adds a bypass
+        # actor via the UI. GET returns the actor object; desired manifest
+        # has an empty bypass list. diff_state MUST flag drift on
+        # required_pull_request_reviews so --check exits non-zero.
+        actual = {
+            "required_status_checks": None,
+            "enforce_admins": True,
+            "allow_force_pushes": False,
+            "allow_deletions": False,
+            "required_linear_history": False,
+            "required_conversation_resolution": False,
+            "required_pull_request_reviews": {
+                "required_approving_review_count": 2,
+                "dismiss_stale_reviews": True,
+                "require_code_owner_reviews": False,
+                "require_last_push_approval": False,
+                "bypass_pull_request_allowances": {
+                    "users": [
+                        {"login": "rogue-admin", "id": 999, "type": "User"},
+                    ],
+                    "teams": [],
+                    "apps": [],
+                },
+                "dismissal_restrictions": {"users": [], "teams": [], "apps": []},
+            },
+            "restrictions": None,
+        }
+        actual_norm = abp.normalize_actual(actual)
+        # bypass-user collapsed to login string.
+        self.assertEqual(
+            actual_norm["required_pull_request_reviews"]["bypass_pull_request_allowances"]["users"],
+            ["rogue-admin"],
+        )
+        desired = {
+            "required_status_checks": None,
+            "enforce_admins": True,
+            "allow_force_pushes": False,
+            "allow_deletions": False,
+            "required_linear_history": False,
+            "required_conversation_resolution": False,
+            "required_pull_request_reviews": {
+                "required_approving_review_count": 2,
+                "dismiss_stale_reviews": True,
+                "require_code_owner_reviews": False,
+                "require_last_push_approval": False,
+                "bypass_pull_request_allowances": {"users": [], "teams": [], "apps": []},
+                "dismissal_restrictions": {"users": [], "teams": [], "apps": []},
+            },
+            "restrictions": None,
+        }
+        drift = abp.diff_state(desired, actual_norm)
+        self.assertEqual(len(drift), 1)
+        self.assertIn("required_pull_request_reviews", drift[0])
+        self.assertIn("rogue-admin", drift[0])
+
+    def test_bypass_allowances_team_drift_flagged(self) -> None:
+        # Same drift class but via a team allow-list addition (slug shape).
+        actual_rpr = {
+            "required_approving_review_count": 2,
+            "dismiss_stale_reviews": True,
+            "require_code_owner_reviews": False,
+            "require_last_push_approval": False,
+            "bypass_pull_request_allowances": {
+                "users": [],
+                "teams": [{"slug": "release-bots", "id": 7, "name": "Release Bots"}],
+                "apps": [],
+            },
+            "dismissal_restrictions": {"users": [], "teams": [], "apps": []},
+        }
+        actual = {
+            "required_status_checks": None,
+            "enforce_admins": True,
+            "allow_force_pushes": False,
+            "allow_deletions": False,
+            "required_linear_history": False,
+            "required_conversation_resolution": False,
+            "required_pull_request_reviews": actual_rpr,
+            "restrictions": None,
+        }
+        actual_norm = abp.normalize_actual(actual)
+        self.assertEqual(
+            actual_norm["required_pull_request_reviews"]["bypass_pull_request_allowances"]["teams"],
+            ["release-bots"],
         )
 
 
@@ -408,6 +530,24 @@ class TestRealManifestSchema(unittest.TestCase):
             self.assertTrue(rpr["dismiss_stale_reviews"], repo_name)
             self.assertFalse(rpr["require_code_owner_reviews"], repo_name)
             self.assertFalse(rpr["require_last_push_approval"], repo_name)
+
+    def test_bypass_pull_request_allowances_empty_in_manifest(self) -> None:
+        # #433: manifest MUST explicitly declare empty bypass + dismissal
+        # allow-lists so PUT clears any UI-added entries on every --apply,
+        # and --check flags drift between runs.
+        for repo_name in self.manifest["repos"]:
+            desired = abp.build_desired_for_repo(self.manifest, repo_name)
+            rpr = desired["required_pull_request_reviews"]
+            self.assertEqual(
+                rpr["bypass_pull_request_allowances"],
+                {"users": [], "teams": [], "apps": []},
+                repo_name,
+            )
+            self.assertEqual(
+                rpr["dismissal_restrictions"],
+                {"users": [], "teams": [], "apps": []},
+                repo_name,
+            )
 
 
 if __name__ == "__main__":
