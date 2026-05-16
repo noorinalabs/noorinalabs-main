@@ -529,5 +529,215 @@ class SentinelFallbackTests(unittest.TestCase):
         self.assertEqual(hook._cwd_sentinel_hash(sample), expected)
 
 
+class TolerantSentinelReadTests(unittest.TestCase):
+    """#429 regression — Hook 15 accepts non-canonical-hash markers whose
+    body cwd matches. Mirrors `FindAttestingSentinelTests` at the hook
+    integration layer to lock in the end-to-end allow path."""
+
+    def setUp(self) -> None:
+        self._tmp_root = tempfile.mkdtemp(prefix="librarian_tolerant_", dir=os.path.expanduser("~"))
+
+    def tearDown(self) -> None:
+        import shutil
+
+        shutil.rmtree(self._tmp_root, ignore_errors=True)
+
+    def _make_cwd(self, name: str) -> str:
+        cwd = os.path.join(self._tmp_root, name)
+        os.makedirs(cwd, exist_ok=True)
+        return cwd
+
+    def test_noncanonical_hash_marker_with_matching_body_allows_edit(self) -> None:
+        """POS: marker filename uses sha1(cwd) without trailing \\n; body
+        records the correct cwd. Hook must accept it — this is the
+        live-evidence case from #429 (cedric-0066-dark-mode-tokens)."""
+        import hashlib
+
+        cwd = self._make_cwd("noncanonical")
+        wrong_hash = hashlib.sha1(cwd.encode()).hexdigest()[:16]
+        # Sanity: must differ from canonical to actually exercise the
+        # tolerant-read path rather than the canonical-path success path.
+        canonical_hash = hook._cwd_sentinel_hash(cwd)
+        self.assertNotEqual(wrong_hash, canonical_hash)
+
+        skill_dir = Path(cwd) / hook.SENTINEL_DIR_NAME
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        marker = skill_dir / f"{wrong_hash}.marker"
+        marker.write_text(f"2026-05-14T00:00:00Z {cwd}\n", encoding="utf-8")
+
+        result = hook.check(
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": os.path.join(cwd, "src/foo.py")},
+                "transcript_path": _write_transcript([]),
+                "cwd": cwd,
+            }
+        )
+        self.assertIsNone(result, "non-canonical-hash marker with matching body must allow edit")
+
+    def test_noncanonical_hash_marker_with_wrong_body_still_blocks(self) -> None:
+        """NEG: a marker with non-canonical hash AND a body pointing at a
+        different cwd must still block — preserves isolation."""
+        cwd = self._make_cwd("strict")
+        other_cwd = self._make_cwd("elsewhere")
+        skill_dir = Path(cwd) / hook.SENTINEL_DIR_NAME
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        marker = skill_dir / "deadbeefcafe1234.marker"
+        marker.write_text(f"2026-05-14T00:00:00Z {other_cwd}\n", encoding="utf-8")
+
+        result = hook.check(
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": os.path.join(cwd, "src/foo.py")},
+                "transcript_path": _write_transcript([]),
+                "cwd": cwd,
+            }
+        )
+        assert result is not None  # mypy narrowing
+        self.assertEqual(
+            result["decision"],
+            "block",
+            "body cwd pointing elsewhere must not attest",
+        )
+
+
+class DiagnosticEmissionTests(unittest.TestCase):
+    """#429: every block emits a `pretooluse_diagnostic` annunaki record
+    with enough forensic context to debug WHY the hook returned block."""
+
+    def setUp(self) -> None:
+        import annunaki_log
+
+        self._tmp_dir = tempfile.mkdtemp(prefix="librarian_diag_")
+        self._orig_errors_file = annunaki_log.ERRORS_FILE
+        self._errors_file = Path(self._tmp_dir) / "errors.jsonl"
+        annunaki_log.ERRORS_FILE = self._errors_file
+
+    def tearDown(self) -> None:
+        import shutil
+
+        import annunaki_log
+
+        annunaki_log.ERRORS_FILE = self._orig_errors_file
+        shutil.rmtree(self._tmp_dir, ignore_errors=True)
+
+    def _read_records(self) -> list[dict]:
+        if not self._errors_file.exists():
+            return []
+        with self._errors_file.open("r", encoding="utf-8") as f:
+            return [json.loads(line) for line in f if line.strip()]
+
+    def _run_hook_main_with(self, input_data: dict) -> int:
+        """Invoke `hook.main()` with `input_data` on stdin, return exit code."""
+        import io
+
+        original_stdin = sys.stdin
+        original_stdout = sys.stdout
+        sys.stdin = io.StringIO(json.dumps(input_data))
+        sys.stdout = io.StringIO()
+        try:
+            try:
+                hook.main()
+            except SystemExit as e:
+                return int(e.code) if e.code is not None else 0
+            return 0
+        finally:
+            sys.stdin = original_stdin
+            sys.stdout = original_stdout
+
+    def test_block_emits_diagnostic_record(self) -> None:
+        """POS: a real block writes BOTH a pretooluse_block record and a
+        pretooluse_diagnostic record with structured fields."""
+        cwd = tempfile.mkdtemp(prefix="diag_cwd_", dir=os.path.expanduser("~"))
+        try:
+            transcript = _write_transcript([])
+            exit_code = self._run_hook_main_with(
+                {
+                    "tool_name": "Edit",
+                    "tool_input": {"file_path": os.path.join(cwd, "src/foo.py")},
+                    "transcript_path": transcript,
+                    "cwd": cwd,
+                }
+            )
+            self.assertEqual(exit_code, 2, "block path must exit 2")
+            records = self._read_records()
+            block_records = [r for r in records if r["type"] == "pretooluse_block"]
+            diag_records = [r for r in records if r["type"] == "pretooluse_diagnostic"]
+            self.assertEqual(len(block_records), 1, "exactly one block record per block")
+            self.assertEqual(len(diag_records), 1, "exactly one diagnostic record per block")
+
+            diag = diag_records[0]["diagnostic"]
+            self.assertEqual(diag["cwd"], cwd)
+            self.assertEqual(diag["cwd_realpath"], os.path.realpath(cwd))
+            self.assertIn(".consulted/ontology-librarian/", diag["expected_sentinel_path"])
+            self.assertFalse(diag["sentinel_exists"])
+            self.assertIsNone(diag["sentinel_age_s"])
+            self.assertEqual(diag["transcript_path"], transcript)
+            self.assertTrue(diag["transcript_exists"])
+            self.assertEqual(diag["transcript_line_count"], 0)
+        finally:
+            import shutil
+
+            shutil.rmtree(cwd, ignore_errors=True)
+
+    def test_allow_path_emits_no_diagnostic(self) -> None:
+        """NEG: when the hook ALLOWS the edit, no diagnostic record is
+        written. Diagnostics are a block-path-only side channel."""
+        cwd = tempfile.mkdtemp(prefix="diag_allow_", dir=os.path.expanduser("~"))
+        try:
+            exit_code = self._run_hook_main_with(
+                {
+                    "tool_name": "Edit",
+                    "tool_input": {"file_path": os.path.join(cwd, "src/foo.py")},
+                    "transcript_path": _write_transcript([_librarian_skill_call()]),
+                    "cwd": cwd,
+                }
+            )
+            self.assertEqual(exit_code, 0, "allow path exits 0")
+            records = self._read_records()
+            self.assertEqual(records, [], "allow path must not write any annunaki records")
+        finally:
+            import shutil
+
+            shutil.rmtree(cwd, ignore_errors=True)
+
+    def test_diagnostic_captures_existing_sentinel_age(self) -> None:
+        """POS: when a STALE canonical marker is present, diagnostic
+        reports its age and dir-count so the operator sees that a marker
+        existed and was rejected for staleness (not absence)."""
+        cwd = tempfile.mkdtemp(prefix="diag_stale_", dir=os.path.expanduser("~"))
+        try:
+            canonical_hash = hook._cwd_sentinel_hash(cwd)
+            skill_dir = Path(cwd) / hook.SENTINEL_DIR_NAME
+            skill_dir.mkdir(parents=True, exist_ok=True)
+            marker = skill_dir / f"{canonical_hash}.marker"
+            marker.write_text("2026-05-01T00:00:00Z cwd\n", encoding="utf-8")
+            stale_time = time.time() - (hook.SENTINEL_TTL_SECONDS + 600)
+            os.utime(marker, (stale_time, stale_time))
+
+            exit_code = self._run_hook_main_with(
+                {
+                    "tool_name": "Edit",
+                    "tool_input": {"file_path": os.path.join(cwd, "src/foo.py")},
+                    "transcript_path": _write_transcript([]),
+                    "cwd": cwd,
+                }
+            )
+            self.assertEqual(exit_code, 2)
+            diag = next(
+                r["diagnostic"]
+                for r in self._read_records()
+                if r["type"] == "pretooluse_diagnostic"
+            )
+            self.assertTrue(diag["sentinel_exists"])
+            self.assertGreater(diag["sentinel_age_s"], hook.SENTINEL_TTL_SECONDS)
+            self.assertFalse(diag["sentinel_within_ttl"])
+            self.assertGreaterEqual(diag["sentinel_dir_marker_count"], 1)
+        finally:
+            import shutil
+
+            shutil.rmtree(cwd, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

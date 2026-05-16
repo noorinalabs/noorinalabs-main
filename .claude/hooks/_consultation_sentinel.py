@@ -190,6 +190,72 @@ def consultation_sentinel_is_fresh(
         return False
 
 
+def find_attesting_sentinel(
+    cwd: str, skill_name: str, ttl_seconds: int = DEFAULT_TTL_SECONDS
+) -> Path | None:
+    """Tolerant-read scan: return ANY fresh sentinel whose body cwd matches.
+
+    Distinct from `consultation_sentinel_is_fresh` (which only checks the
+    canonical hash-filename path). This function scans every `*.marker`
+    file under `<cwd>/.claude/.consulted/<skill_name>/` and accepts any
+    fresh marker whose second whitespace-delimited body token resolves
+    (via realpath) to the same path as `cwd`.
+
+    Rationale (#429): two real markers found in cedric-0066-dark-mode-tokens
+    used inconsistent hash formulas — one with the canonical
+    sha1(cwd + "\\n") and one with sha1(cwd) (no newline). The latter is
+    a documented-formula deviation by an ad-hoc writer (likely an LLM
+    one-liner that forgot the trailing `\\n`). The canonical-hash read
+    path ignored it. This function rescues such markers as long as their
+    BODY records the correct cwd — defense in depth, not a path-scheme
+    fork. The canonical write path stays single-source via
+    `consultation_sentinel_path`.
+
+    Returns the Path of the matching marker, or None if no fresh
+    body-cwd-matching marker is found. Body-cwd match is exact-realpath:
+    we resolve both `cwd` and the body's cwd token through
+    `os.path.realpath(os.path.expanduser(...))` so symlink hops and
+    `~/` expansions don't mask matches.
+
+    Fail-closed on OSError — returns None rather than raising. Callers
+    that want fail-open semantics wrap accordingly (Hook 15 does so).
+    """
+    if not cwd or not skill_name:
+        return None
+    try:
+        target_real = os.path.realpath(os.path.expanduser(cwd))
+    except (OSError, ValueError):
+        return None
+    try:
+        skill_dir = Path(target_real) / SENTINEL_PARENT_DIR / skill_name
+        if not skill_dir.is_dir():
+            return None
+        now = _now_seconds()
+        for marker in skill_dir.glob("*.marker"):
+            try:
+                age = now - marker.stat().st_mtime
+                if not (0 <= age <= ttl_seconds):
+                    continue
+                body = marker.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            # Body format: "<iso8601> <cwd>\n". Split into at most 2
+            # tokens so a cwd containing spaces still resolves cleanly.
+            parts = body.strip().split(None, 1)
+            if len(parts) < 2:
+                continue
+            body_cwd = parts[1].strip()
+            try:
+                body_real = os.path.realpath(os.path.expanduser(body_cwd))
+            except (OSError, ValueError):
+                continue
+            if body_real == target_real:
+                return marker
+    except OSError:
+        return None
+    return None
+
+
 def _now_seconds() -> float:
     """Indirection for test injection. Real time defaults; tests can
     monkeypatch this to control freshness comparisons without touching
