@@ -87,6 +87,40 @@ def log_pretooluse_diagnostic(
     append_jsonl_record(ERRORS_FILE, record)
 
 
+def log_posttooluse_dispatch(
+    module_name: str,
+    command: str,
+    outcome: dict,
+    tool_name: str = "Bash",
+) -> None:
+    """Append a per-hook dispatch trace from `post_dispatcher`.
+
+    Distinct from `log_posttooluse_event` (which is hooks self-reporting
+    their own non-actionable conditions) because this records the
+    DISPATCHER's view of every check() call: did it return None / a
+    structured action dict / raise. Critical for #425-class debugging
+    where the harness sees only `stdout=""` and the operator concludes
+    "dispatcher dead" even when the chain is firing perfectly. Type is
+    `posttooluse_dispatch` so /annunaki can filter these out of error
+    counts — they're informational unless `outcome.raised` is set.
+
+    `outcome` shape (all JSON-safe primitives):
+      - returned: stringified repr of what check() returned (or "None")
+      - raised: exception type name, or null
+      - traceback_excerpt: first 500 chars of traceback if raised, else null
+      - elapsed_ms: optional, round-trip duration of the check() call
+    """
+    record = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "type": "posttooluse_dispatch",
+        "module": module_name,
+        "tool_name": tool_name,
+        "command": command[:500],
+        "outcome": outcome,
+    }
+    append_jsonl_record(ERRORS_FILE, record)
+
+
 def log_posttooluse_event(
     hook_name: str, command: str, reason: str, tool_name: str = "Bash"
 ) -> None:
