@@ -134,9 +134,9 @@
       "resolved_at": "2026-05-03T16:59:38.573672+00:00"
     },
     ".claude/team/charter/agents.md": {
-      "last_tracked": "e01a0d773db423445cd7eb1a974c00663a325e14d285618beb85f0425e6a6059",
+      "last_tracked": "2d88f9d901b855232666cca126b00558963480c3a8720edbdf3143b6550054ed",
       "last_resolved": "e01a0d773db423445cd7eb1a974c00663a325e14d285618beb85f0425e6a6059",
-      "tracked_at": "2026-05-06T01:09:30.045935+00:00",
+      "tracked_at": "2026-05-16T21:57:39.421700+00:00",
       "resolved_at": "2026-05-06T01:11:01.420649+00:00"
     },
     ".claude/team/charter/hooks.md": {
@@ -158,16 +158,16 @@
       "resolved_at": "2026-05-06T01:11:01.420649+00:00"
     },
     ".claude/team/charter/skills.md": {
-      "last_tracked": "ebed0f2646c067c3f5fe4c5cd3d15504d51c2bc16a2b9bd9eed550bbfae5a598",
+      "last_tracked": "bf69870cfb2d1afcc245330242ddfcf79e8445a9cd4bc11cac9b7c5caf588d24",
       "last_resolved": "ebed0f2646c067c3f5fe4c5cd3d15504d51c2bc16a2b9bd9eed550bbfae5a598",
-      "tracked_at": "2026-05-06T01:08:14.927799+00:00",
+      "tracked_at": "2026-05-16T21:57:37.674267+00:00",
       "resolved_at": "2026-05-06T01:11:01.420649+00:00"
     },
     ".claude/team/feedback_log.md": {
-      "last_tracked": "bfec458da44732e6fbcddfb0ba042b3448e68be5e9544a2fb447d1342f9af704",
-      "last_resolved": "bfec458da44732e6fbcddfb0ba042b3448e68be5e9544a2fb447d1342f9af704",
-      "tracked_at": "2026-05-06T00:58:59.181870+00:00",
-      "resolved_at": "2026-05-06T00:59:20.040752+00:00"
+      "last_tracked": "24527356214699ac5bbe511709a30c597af928e742128dff7aff801145e403e3",
+      "last_resolved": "2b1de4087bedb17a88c775d266c4929947f58e77239a73f93c4b2fb0d4c9aebd",
+      "tracked_at": "2026-05-16T21:55:57.205028+00:00",
+      "resolved_at": "2026-05-16T21:40:10.554735+00:00"
     },
     ".gitignore": {
       "last_resolved": "99a48dfddef755ee0af95d7c44b8cc62d5b74a8cda39be8977e236538a4f1b35",
@@ -650,10 +650,10 @@
       "resolved_at": "2026-05-06T00:49:39.816328+00:00"
     },
     ".claude/team/trust_matrix.md": {
-      "last_tracked": "1351fe43a7eee95c09ed866e99a4e343b9ce420edad57a20365835fb4cddf1bb",
-      "last_resolved": "1351fe43a7eee95c09ed866e99a4e343b9ce420edad57a20365835fb4cddf1bb",
-      "tracked_at": "2026-05-06T00:55:23.211891+00:00",
-      "resolved_at": "2026-05-06T00:59:20.040752+00:00"
+      "last_tracked": "202251c15f7e8f2ba4c26ff94935b01a9aced66439b32daefba9026447398bcd",
+      "last_resolved": "202251c15f7e8f2ba4c26ff94935b01a9aced66439b32daefba9026447398bcd",
+      "tracked_at": "2026-05-16T20:55:04.594635+00:00",
+      "resolved_at": "2026-05-16T21:40:10.554735+00:00"
     },
     ".claude/team/promotion_audit_log/wave-5.md": {
       "last_tracked": "85263be2a3a83a8d84e4334aac290bed766cc5a2b08e238ffbc5b26563791002",
