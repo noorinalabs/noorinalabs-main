@@ -100,16 +100,13 @@ def _item_lookup_response(repo: str, num: int) -> str:
     return json.dumps(
         {
             "data": {
-                "organization": {
-                    "projectV2": {
-                        "items": {
+                "repository": {
+                    "issue": {
+                        "projectItems": {
                             "nodes": [
                                 {
                                     "id": "ITEM_ID_123",
-                                    "content": {
-                                        "number": num,
-                                        "repository": {"name": repo},
-                                    },
+                                    "project": {"number": 2},
                                 }
                             ]
                         }
@@ -121,7 +118,7 @@ def _item_lookup_response(repo: str, num: int) -> str:
 
 
 def _item_lookup_empty_response() -> str:
-    return json.dumps({"data": {"organization": {"projectV2": {"items": {"nodes": []}}}}})
+    return json.dumps({"data": {"repository": {"issue": {"projectItems": {"nodes": []}}}}})
 
 
 def _mutation_success_response(_variables=None) -> str:
@@ -163,7 +160,7 @@ class FakeGraphQLRouter:
             self.calls["introspect"] += 1
             r = self.introspect() if callable(self.introspect) else self.introspect
             return r or ""
-        if "items(first:" in query:
+        if "repository(owner:" in query and "projectItems" in query:
             self.calls["item_lookup"] += 1
             r = (
                 self.item_lookup(variables.get("repo"), variables.get("num"))
@@ -611,6 +608,112 @@ class KillSwitchPureTests(unittest.TestCase):
     def test_value_true_string(self):
         os.environ[hook.KILL_SWITCH_ENV] = "true"
         self.assertFalse(hook._kill_switch_active())
+
+
+class GraphQLVariableUsageTests(unittest.TestCase):
+    """Static analysis: every declared GraphQL variable must be referenced in the body.
+
+    Catches the variableNotUsed class of bug that caused the first-production-fire
+    on Hook 21 (issue #448). The old _ITEM_LOOKUP_QUERY declared $repo and $num
+    but never used them — GitHub's GraphQL rejected with variableNotUsed errors,
+    gh exited non-zero, and the hook silently skipped with skip_no_item.
+
+    This test is intentionally query-string-level (no subprocess / network) so
+    it runs in the default suite and catches the bug class at authoring time.
+    Sibling pattern to issue #175 (Hook 15 sentinel-fallback shell-vs-Python
+    hash test gap) — same shape, different query.
+    """
+
+    _QUERIES_UNDER_TEST = [
+        ("_ITEM_LOOKUP_QUERY", hook._ITEM_LOOKUP_QUERY),
+        ("_INTROSPECT_QUERY", hook._INTROSPECT_QUERY),
+        ("_SET_FIELD_MUTATION", hook._SET_FIELD_MUTATION),
+        ("_CLEAR_FIELD_MUTATION", hook._CLEAR_FIELD_MUTATION),
+    ]
+
+    @staticmethod
+    def _declared_vars(query: str) -> set[str]:
+        """Return the set of variable names declared in `query(...)` / `mutation(...)`.
+
+        Matches `$varname` inside the leading `query(...)` or `mutation(...)` signature
+        (i.e. before the first `{`), which is where GraphQL variable declarations live.
+        """
+        import re
+
+        # Everything up to (and including) the opening brace of the operation body.
+        header_match = re.match(r"[^{]*\(([^)]*)\)", query, re.DOTALL)
+        if not header_match:
+            return set()
+        return set(re.findall(r"\$(\w+)", header_match.group(1)))
+
+    def _assert_all_declared_vars_used(self, name: str, query: str) -> None:
+        declared = self._declared_vars(query)
+        # Each declared var must appear in the query body (i.e., at least twice
+        # in the full string — once in the signature, once in the body).
+        import re
+
+        for var in declared:
+            count = len(re.findall(rf"\${re.escape(var)}\b", query))
+            self.assertGreaterEqual(
+                count,
+                2,
+                f"{name}: declared variable ${var} is never referenced in the query body "
+                f"(variableNotUsed — same class as issue #448). "
+                f"Either use it in the body or remove it from the signature.",
+            )
+
+    def test_item_lookup_query_all_vars_used(self):
+        self._assert_all_declared_vars_used("_ITEM_LOOKUP_QUERY", hook._ITEM_LOOKUP_QUERY)
+
+    def test_introspect_query_all_vars_used(self):
+        self._assert_all_declared_vars_used("_INTROSPECT_QUERY", hook._INTROSPECT_QUERY)
+
+    def test_set_field_mutation_all_vars_used(self):
+        self._assert_all_declared_vars_used("_SET_FIELD_MUTATION", hook._SET_FIELD_MUTATION)
+
+    def test_clear_field_mutation_all_vars_used(self):
+        self._assert_all_declared_vars_used("_CLEAR_FIELD_MUTATION", hook._CLEAR_FIELD_MUTATION)
+
+    def test_old_buggy_query_would_have_failed(self):
+        """Regression guard: the old _ITEM_LOOKUP_QUERY shape fails this check.
+
+        Ensures the test catches the exact bug class from issue #448 — if someone
+        accidentally reverts to the old query, this test turns red.
+        """
+        old_buggy_query = """
+query($org: String!, $project: Int!, $repo: String!, $num: Int!) {
+  organization(login: $org) {
+    projectV2(number: $project) {
+      items(first: 100) {
+        nodes {
+          id
+          content {
+            ... on Issue { number repository { name } }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+        import re
+
+        declared = self._declared_vars(old_buggy_query)
+        unused = []
+        for var in declared:
+            count = len(re.findall(rf"\${re.escape(var)}\b", old_buggy_query))
+            if count < 2:
+                unused.append(var)
+        self.assertIn(
+            "repo",
+            unused,
+            "Old buggy query should have $repo as unused — test regression guard failed",
+        )
+        self.assertIn(
+            "num",
+            unused,
+            "Old buggy query should have $num as unused — test regression guard failed",
+        )
 
 
 if __name__ == "__main__":
