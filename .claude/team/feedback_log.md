@@ -2241,3 +2241,183 @@ Neither is hook-tier urgent (the underlying validate_pr_review enforcement is al
 | **NEW: Spawn-brief literal-line drift (TechDebt-line)** | Orchestrator/template-author | 1 (orchestrator W9) | **1** — sibling of Approved-vs-Reply; both fixable by spawning-brief template fixed-literal rewrite |
 | **NEW: Roster clutter via clone spawning** | Orchestrator | 1 (orchestrator W9) | **1** — `SendMessage` idle existing > `Agent` fresh clone; codified as `feedback_reuse_idle_teammates_not_clones.md` |
 | **NEW: Wave-wrapup counter-write gap** | Skill (/wave-wrapup) | 1 (wave-9) | **3** — W4 80% recomputed; W5 6→4 recomputed; W9 null+null. Same skill defect across 3 waves; follow-up issue against /wave-wrapup Step 7/10 |
+
+## Retrospective: Phase 3 Wave 10 — Tech-Debt Reduction (Non-Deploy Remainder) — 2026-05-13 → 2026-05-16
+
+### Team Performance
+
+**Wave-shape table:**
+
+| Metric | Value |
+|---|---|
+| PRs merged to wave-10 | **65** across 6 child repos (vs W9's 6 main-only) |
+| Repos in scope vs shipped | **6 declared / 6 shipped** — full delivery, 0 scope drops |
+| Issues closed | All W10 issues with merged PRs closed via Lucas's auto-close-issues workflow (PR #431; 8-9s propagation per merge); 2 carry-forwarded to W11 (#262 forward-gap, #255 cross-repo systemic) |
+| ChangesRequested cycles | **7** (10.8% of PRs — recomputed at retro, matches wrapup counter exactly; recompute-vs-wrapup drift = 0 for the first time across W4/W5/W9 history) |
+| CI health | 100% green across all merged PRs |
+| Tech-debt filed this wave | 6 new W10-era memories filed; 0 new tech-debt issues from retro audit (counter triplet matched) |
+| Top implementer concentration | **12%** (Mateo Salazar 8/65, by branch-prefix author — the engineer-distribution signal) — note: wrapup counter computed by commit-identity gives 11% because 7 throttle-takeover PRs land under `parametrization`; retro narrative uses branch-prefix for engineer attribution. Both perspectives recorded; counter correction below. |
+| Wave duration | ~3 days (kickoff 2026-05-13T16:35:49Z; last merge ~2026-05-16) |
+| Worktrees stale at end | 0 (12 cleaned this session: 7 tracked main + 2 tracked isnad-graph + 3 orphan dirs) |
+| Implementer substitutions | **22** (~34% of PRs) — all classified benign per `feedback_child_repo_implementer_rule.md`; child-repo managers reassigned vs parent-orchestrator-declared names; bulk-acknowledged in `wave_10_decisions.implementer_substitutions_bulk_acknowledgment` |
+| Board drifts synced this retro | 5 (P3W10 → P3W11 label-lag from this session's carry-forwards + 3 from prior sessions) |
+| Cross-window PR filter | Used (W9 partition lesson applied via PR #428); 0 cross-window contamination caught |
+
+### Per-Engineer Assessments
+
+#### Aino Virtanen (SQL) — 4 main# PRs (#434, #437, #438, #439)
+- #438: `fix(hooks): dispatcher zero-observability` (closes #425) — added `EMIT_DISPATCH_SUMMARY` per-hook opt-in
+- #439: `tech-debt(skill): /board-audit splits actionable vs no-op drift counts` (closes #427) — sibling-discovery of the audit-counter bucket-clarity class
+- #437: `promotion-audit bundle` (closes #417 SKILL.md prose drift + #419 _SOURCE_HINT_RE false positives)
+- #434: `fix(hook15): diagnose + tolerate sentinel regression` (closes #429)
+- CI: 0 failures · ChangesRequested received: 0
+- Theme-fit again — all charter/skills/hooks/board surfaces; same defensible concentration shape as W9
+- **Severity:** none (positive)
+
+#### Nadia Khoury (PD) — 2 main# PRs (#436, #440) + 4 reviews
+- #440: `process(lifecycle): codify phase/wave/session skill order in lifecycle.md` (closes #426) — over-delivery via parenthetical clarifications on each `/plan-phase` reference (flagged by Aino for trust matrix); reviewer-class catch surfaced that `/phase-review` SKILL.md references `/roadmap` (which doesn't exist), folded inline per owner option C, drove a crossed-message-race recovery resolved per `feedback_verdict_amendment_edit_not_append`
+- #436: `tech-debt(/promotion-audit)`: charter_root → charter_parent rename (closes #418)
+- CI: 0 failures · ChangesRequested received: 0
+- **Severity:** none (positive)
+
+#### Wanjiku Mwangi (TPM) — 1 main# PR (#428) + multiple reviews
+- #428: `tech-debt(/wave-wrapup): cross-window PR over-count fix — Option A + B` (closes #423) — applied W9-retro-codified cross-window filter to `/wave-wrapup` Step 10.5; the filter passed live verification THIS retro
+- Charter-promotion catalyst: framed Nadia's lifecycle.md line 5 discipline as `skills.md § Process-Doc Authorship: Derived-From-SKILL.md-At-HEAD` — DECIDE-tier candidate (see § Proposed Process Changes #1)
+- Charter-promotion catalyst with Santiago: independently named `skills.md § Acceptance-Criteria-Bucketing-In-Reports` — DECIDE-tier (see § Proposed Process Changes #2)
+- CI: 0 failures · ChangesRequested received: 0
+- **Severity:** none (positive)
+
+#### Santiago Ferreira (RC) — 0 PRs, multiple reviews
+- Procedurally consistent Approveds across W10 reviewer slate (runtime/procedural angle)
+- Charter-promotion catalyst with Wanjiku: independently named the actionable-vs-informational bucketing pattern in `/board-audit` Step 5 (drift-vs-no-op split) → generalized to `skills.md § Acceptance-Criteria-Bucketing-In-Reports`
+- Cosmetic nit on `/board-audit` Step 5 sample-report column misalignment shipped in merged code; owner-choice on follow-up (deferred — not blocking)
+- **Severity:** none (positive)
+
+#### Aisha Idrissi (Infra implementer) — 3 main# PRs (#430, #432, #435)
+- #430: `ci(paths-coverage): widen ci.yml pull_request paths to include all workflows (precursor to #403)`
+- #432: `tech-debt(infra): branch protection manifest + audit workflow for 8 org repos` (closes #403) — 1 ChangesRequested cycle from security review (commit a9504db addressed it inline: enforce_admins=true, 2-reviewer gate, Environment apply-gating)
+- #435: `tech-debt(infra): preserve bypass_pull_request_allowances + PUT empty list` (closes #433) — security followup
+- Wide cross-repo infrastructure execution; responded cleanly to security review on #432
+- **Severity:** none (positive)
+
+#### Lucas Ferreira (SRE) — 7 cross-repo PRs (#431 + 6 propagation siblings)
+- #431: `infra(auto-close): add auto-close-issues workflow (propagation from isnad-graph per main#402)` — **unlocked reliable W10 issue auto-close across all 7 repos**; 8-9s propagation per merge, fully reliable. Operationally eliminates `feedback_wave_branch_issue_close.md` failure mode
+- 6 sibling propagation PRs across user-service#106 / design-system#78 / landing-page#95 / data-acquisition#54 / deploy#286 / ingest-platform#30 — full 7-repo coverage
+- **Severity:** none (strong positive)
+
+#### Mateo Salazar (user-service Tech Lead) — 8 PRs (top implementer by branch count)
+- 8 PRs across isnad-graph + user-service; multiple as substitute-implementer for declared assignees (Nadia Boukhari, Anya Kowalczyk, Idris Yusuf — all benign per child-repo-implementer-rule)
+- Top concentration by branch prefix (8/65 = 12%) — well within healthy distribution
+- **Severity:** none (positive — high volume + clean delivery in child repos)
+
+#### Aisling Brennan (isnad-graph) — 5 PRs
+- 5 isnad-graph PRs (#903, #902, #900, #884, +1); substitute-implementer for declared assignees on #831, #802
+- **Severity:** none (positive)
+
+#### Anya Kowalczyk (isnad-graph + user-service) — 4 PRs
+- 4 PRs spanning two child repos; substitute-implementer for declared Idris Yusuf (#69) and N.Boukhari (#21)
+- **Severity:** none (positive)
+
+#### Long-tail (Marisol Vega-Cruz, Jin Park, Linh Pham, Arjun Raghavan, Nneka Obi, Jelani Mwangi, Thandiwe Moyo, Idris Yusuf, Maeve Callahan, Nazia Rahman, Anika Diop-Sarr — 2-3 PRs each + 8 with 1 PR)
+- Wide distribution — 26 distinct branch-prefix authors across 65 PRs is the healthiest distribution since the multi-repo team was established
+- No CR-cycle blockers; the 6 CR cycles distributed across 4 child-repo PRs (user-service#117 ×1, design-system#80 ×1, design-system#79 ×1, landing-page#96 ×3) plus 1 cycle on main#432 (Aisha — security review) = 7 total cycles, all security-class or design-class catches addressed cleanly
+
+#### Orchestrator (me) — author of #438 + #437 spawn-brief authoring + 7 throttle-takeovers
+- W9 process defects **did not recur in W10**:
+  - Spawn-brief TechDebt-line shape: every W10 reviewer-spawn brief used the post-#422 charter template literal (zero defect-cycle this wave)
+  - Reuse-idle-teammates discipline: applied throughout; no clone-spawning
+- 7 throttle-takeovers under `parametrization` identity — sound partial work finished directly per `feedback_throttle_takeover.md`; recorded in `wave_10_decisions.orchestrator_takeover_acknowledgment` so trust matrix correctly attributes to the original implementer
+- Crossed-message-race on #440: Wanjiku's first verdict landed 1s after my supersede; resolved via NEW Approved comments at new HEAD per `feedback_verdict_amendment_edit_not_append` (no edit-append) — protocol held under live race
+- 22 implementer-substitutions across child repos — most are benign per child-repo-implementer-rule; the parent-orchestrator's declaration at kickoff is mostly noise for child-repo work (pain point #1 below)
+- **Severity:** minor-positive — W9's two process defects (TechDebt-line + clone-spawn) both held under W10 load. Conditional promotion 3→4 per W9 retro's stated criterion: "Demote to 2 only if same template-shape class recurs in W10" — they did not recur.
+
+### Top 3 Going Well
+
+1. **Wave-shape thesis converged across 3 independent reviewers + author** — "make process knowable from artifacts, not from source-reading" — Wanjiku-named on #440, Aino-confirmed via her own #439 board-audit work, Nadia-codified via lifecycle.md. Three convergent witnesses on one process-quality pattern in a single wave is rare; the convergence itself is evidence the pattern is real.
+
+2. **Auto-close-issues workflow (Lucas #431) — operationally retires `feedback_wave_branch_issue_close.md`** — 8-9s propagation on every W10 merge, fully reliable. The previous failure mode ("`Closes #N` only fires on default-branch merges; after every wave-branch merge, `gh issue view <N>` and explicitly close if still open") is now mechanically handled by Lucas's workflow.
+
+3. **W9 process-defect cycle held — both defects did NOT recur in W10** — TechDebt-line literal-shape + reuse-idle-teammates-not-clones. Charter promotion of `feedback_techdebt_attestation_literal_line.md` (PR #422) successfully shifted the failure mode from orchestrator-discipline to template-enforced discipline. Zero TechDebt-line addenda cascades this wave (vs W9's 17-addendum cascade across 11 PRs in W8).
+
+### Top 3 Pain Points
+
+1. **Implementer-declared-vs-actual gap (22 substitutions / 34% of W10 PRs)** — Child-repo-implementer-rule is *intended* but the parent-orchestrator's kickoff-time declaration is mostly noise for child-repo work. Trust-matrix updates that read declared-vs-actual without the bulk-acknowledgment context would misattribute credit. Charter clarification candidate: `agents.md § Child-Repo Implementer Rule` should state that parent-orchestrator declarations for child-repo issues are *advisory only* and the child-repo manager is canonical.
+
+2. **Crossed-message-race continues (8 races in P3W10 per `feedback_owner_pivot_supersedes_protocol.md`)** — Wanjiku's #440 first-verdict-landed-1s-after-supersede was the highest-visibility instance this wave. Protocol held (charter `Crossed-Message-Race-Protocol` correctly recovered), but the round-trip cost is real. Charter promotion candidate: `agents.md § Crossed-Message-Race-Protocol` already exists; needs reinforcement via supersedes-as-of headers in pivot messages.
+
+3. **Board-audit P3W10 → P3W11 label-lag (5 drifts this retro)** — All 5 drifts were issues whose `p3-wave-N` label was changed but the project's Wave field was not auto-synced. This is the same failure class /board-audit was designed to catch; the gap is the *write-side* — Hook 13 (`auto_add_issue_to_board.py`) catches `gh issue create` but no hook catches `gh issue edit --add-label`/`--remove-label` for Wave field re-sync. DECIDE-tier (hook) candidate.
+
+### Proposed Process Changes
+
+1. **(Pre-loaded DECIDE-tier) `skills.md § Process-Doc Authorship: Derived-From-SKILL.md-At-HEAD`** — Wanjiku-framed at #440 review. Lifts `feedback_review_against_artifact_not_framing` from *reviewer* discipline to *author* discipline: when authoring a process doc (lifecycle.md, charter section, skill SKILL.md), the source of truth is the artifact at HEAD (the SKILL.md file content, the charter section content), not the surrounding framing or commit-message rationale. Why: 3-catch convergent class spanning #438/#439/#440 traces to authors reading framing instead of artifact. How to apply: every process-doc PR review checks that cited skill/charter behavior is grep-able at HEAD of the PR.
+
+2. **(Pre-loaded DECIDE-tier) `skills.md § Acceptance-Criteria-Bucketing-In-Reports`** — Wanjiku + Santiago independently named on #439's board-audit drift-vs-no-op split. Generalization: count-emitting skills/hooks MUST distinguish actionable vs informational categories in summaries. Sibling/promotion target: `/promotion-audit` (AUTO vs KEPT), `/wave-retro` (Top 3 Going Well vs Pain Points), `/board-audit` (DRIFT vs NOOP — landed in #439), `/session-start` (errors needing action vs ambient state). Why: a single "N items" number is ambiguous; readers can't tell if N is a problem. How to apply: every count-emitting summary block has at least 2 buckets with semantic labels.
+
+3. **(NEW) DECIDE-tier hook `post_label_change_wave_field_sync`** — When a `p{N}-wave-{M}` label changes on an open issue, automatically PATCH the project 2 Wave field. Why: 5 drifts caught at /board-audit this retro, all from label-edit operations that hooks don't catch (vs Hook 13 which catches create-time only). How to apply: PostToolUse hook on `Bash` matching `gh issue edit .* --add-label|--remove-label "p[0-9]+-wave-[0-9]+"` → GraphQL `updateProjectV2ItemFieldValue`. Security-sensitive (hook tier) → DECIDE.
+
+4. **(NEW) Lifecycle clarification: `agents.md § Child-Repo Implementer Rule` should state parent-orchestrator declarations are advisory** — 22 substitutions / 34% of W10 PRs is too high a signal-to-noise ratio for "declared implementer." The intended semantics (child manager is canonical for child PRs) should be charter-stated to eliminate confusion at retro time. Rationale: reduce trust-matrix-misattribution risk + reduce orchestrator effort on per-issue implementer declarations that are systematically overridden downstream.
+
+### Fire/Hire Actions
+
+None.
+
+**Trust promotions earned this wave:**
+- Orchestrator 3 → **4** (W9's two process defects did not recur under W10's load — the conditional promotion criterion from W9 retro is met)
+- Lucas Ferreira 4 → **5** (auto-close-issues workflow operationally retires a long-standing failure mode; cross-repo propagation discipline)
+- Aisha Idrissi 4 → **5** (clean 3-PR infrastructure execution including security-review-driven inline fix on #432)
+
+**Holds at max:**
+- Aino Virtanen, Nadia Khoury, Wanjiku Mwangi, Santiago Ferreira — all hold at 5
+
+### Promotion Audit
+
+Deterministic run completed:
+
+```
+Promotion audit p3-wave-10 complete: 0 AUTO · 0 DECIDE · 146 KEPT · 5 SUPERSEDED · 15 ALREADY-PROMOTED
+Log: .claude/team/promotion_audit_log/p3-wave-10.md
+```
+
+No AUTO/DECIDE artifacts from /promotion-audit this run — the 2 charter-promotion candidates above (§ Proposed Process Changes #1 and #2) are *retro-narrative-DECIDE* (proposed for next-wave action via this PR), not pipeline-DECIDE (which requires retro_citations >= threshold from prior waves). Both will accumulate citations through W11 and surface as classifier-DECIDE in a future wave.
+
+### Annunaki
+
+2 SAFE PreToolUse-class events captured this session — both from `post_wave_kickoff_comment` hook correctly bailing on the W11-not-kicked-off case when the W10 carry-forwards (#262, #255) were relabeled `p3-wave-10` → `p3-wave-11`. Hook behavior is correct (it shouldn't render a kickoff comment for a wave that hasn't been kicked off); minor follow-up candidate is filtering the hook to fire only on the *initial* wave-label add, not on between-wave relabels. Not implementable until W11 kickoff exists; tracked as a soft watching-brief.
+
+`/wave-wrapup` Step 13 marker (`wave_10_annunaki_attack_ran_at`) was written at wrapup time per the co-located run-marker pattern; this retro's Step 7.6 correctly detected and skipped re-execution.
+
+### Memory-to-Automation Audit
+
+6 new W10-era memories (post W9 retro 2026-05-12):
+
+| Memory | Classification | Reasoning |
+|---|---|---|
+| `feedback_consumer_against_in_flight_upstream.md` | Keep | Single-instance pattern (P3W10 PR #96 Anika+Nazia dual-axis); needs more signal before charter promotion. Will accumulate citations. |
+| `feedback_cross_persona_task_claim_hazard.md` | Keep | Task-system hazard; not enough signal for hook/charter; visibility-only at this stage. |
+| `feedback_owner_pivot_supersedes_protocol.md` | Keep → charter candidate (NEXT WAVE) | 8 races in P3W10 is a high-signal class. Pre-charter-promote candidate; held to memory until cross-wave-recurrence confirms (sibling to charter `Crossed-Message-Race-Protocol`). |
+| `feedback_pr_number_placeholders.md` | Keep | Naming discipline; too narrow for charter; useful as memory. |
+| `feedback_cwd_collision_cross_spawn.md` | Keep | Cross-spawn cwd hazard; long-term hook candidate but insufficient signal. |
+| `feedback_bundle_fixup_instructions.md` | Keep | Orchestrator discipline; single instance; useful as memory. |
+
+All 6 stay as memories. None hook-tier urgent (no enforcement-hierarchy violations). The 2 DECIDE-tier charter candidates in § Proposed Process Changes are from *wave-shape thesis* (not memory-tier signal), so they bypass the memory→charter path and propose directly into the charter via this retro PR.
+
+### Pattern Tally (running)
+
+| Pattern | Class | This wave | Cumulative |
+|---|---|---|---|
+| A — design-rationale block | Implementer | 0 | 11 |
+| B unified — verify-vs-artifact | Implementer + reviewer | 0 | promoted to charter |
+| C — claim-state-staleness | Manager-class | 0 | held |
+| D — message-ordering-race | Architecture | n/a | tracked main#241 |
+| E — process collapse under fire | Orchestrator-class | 0 (no emergency) | 1 historical |
+| F — orchestrator-class pre-flight gap | Orchestrator-class | 0 | 7 historical, closed via W6 #299 |
+| G — in-wave skill self-improvement | Skill/Hook author | 1 (Wanjiku #428 /wave-wrapup cross-window fix landed in W10 that this very retro then verified) | 6 historical (W4-W9) + 1 W10 |
+| Approved-vs-Reply hook-semantic | Spawn-brief author / orchestrator | 0 | 1 (W8) |
+| Pre-spawn enumeration head-truncation | Manager-class | 0 | 1 (W8) |
+| Spawn-brief literal-line drift (TechDebt-line) | Orchestrator/template-author | 0 (W9-fix held) | 1 (W9) — fixed via PR #422 charter promotion |
+| Roster clutter via clone spawning | Orchestrator | 0 (W9-fix held) | 1 (W9) |
+| Wave-wrapup counter-write gap | Skill (/wave-wrapup) | 0 — recompute-vs-wrapup drift = 0 for first time | 3 historical (W4/W5/W9); fixed via PR #421 (mechanical computation) + PR #428 (cross-window filter) |
+| **NEW: Convergent-class wave thesis (process knowable from artifacts not source)** | Wave-shape | 1 (W10) | **1** — 3-witness convergence across #438/#439/#440; charter promotion candidates #1+#2 above |
+| **NEW: Implementer-declared-vs-actual gap (child repos)** | Orchestrator/charter | 1 (W10, 22 substitutions) | **1** — charter clarification candidate #4 above |
+| **NEW: Board Wave-field write-side gap (label-edit not auto-synced)** | Hook | 1 (W10, 5 drifts) | **1** — hook DECIDE candidate #3 above |
+

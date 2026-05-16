@@ -2558,5 +2558,7 @@
       "added_at": "2026-05-13T16:55:57Z",
       "implementer": "Aino Virtanen"
     }
-  ]
+  ],
+  "wave_10_top_concentration_pct": 12,
+  "wave_10_counter_corrections": [{"metric":"wave_10_top_concentration_pct","claimed":11,"actual":12,"corrected_at":"2026-05-16","methodology_note":"wrapup recipe computes by commit-identity (parametrization 7/65 = 11%); retro narrative uses branch-prefix author (M.Salazar 8/65 = 12%) for engineer-distribution signal. Branch-prefix is more representative of wave-distribution health because the 7 throttle-takeover PRs land under parametrization identity but are credited (per wave_10_decisions.orchestrator_takeover_acknowledgment) to the original branch-prefix engineer for trust/distribution attribution.","catalyst":"Wanjiku Mwangi review of PR #441 (W10 retro)"}]
 }
