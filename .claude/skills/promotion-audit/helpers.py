@@ -459,19 +459,60 @@ _HTML_COMMENT_PROMOTED_RE = re.compile(
 
 # Memory filenames can be cited with or without the `.md` suffix in
 # charter prose (e.g. hooks.md L169 cites `feedback_honest_audit_over_conclusion_claim`
-# unsuffixed inside a backticked span). The regex now makes the `.md`
-# optional and the caller backfills the suffix into the returned set so
-# both forms are recognized membership-checks.
+# unsuffixed inside a backticked span). The regex makes the `.md` optional
+# and the caller backfills the suffix into the returned set so both forms
+# are recognized in membership checks.
+#
+# Slash-command branch shape (#419): `(?<![\w/])/[a-z][a-z0-9-]{2,}` —
+# kebab-case slash-commands, alpha-leading, length >= 3, AND preceded by
+# a non-word/non-slash boundary. The alpha-leading filter rejects
+# URL-path-fragment hits like `/198` (numeric issue IDs from gh URLs);
+# the length-3 minimum rejects `/a`, `/b1`; and the lookbehind rejects
+# mid-token slashes like `/supersedes` inside the prose `augments/supersedes`
+# in charter/skills.md. Combined with `_strip_url_bodies` (applied to the
+# block body BEFORE the regex runs), this rejects the 11 URL-fragment
+# false positives documented in #419 plus the `augments/supersedes` 12th.
 _SOURCE_HINT_RE = re.compile(
     r"""
     (?:
         (?:feedback|project|reference)_[a-z0-9_]+(?:\.md)?  # memory filenames (with or without .md)
         |
-        /[\w-]+                                              # slash-commands / skill names
+        (?<![\w/])/[a-z][a-z0-9-]{2,}                       # slash-commands at word boundary
     )
     """,
     re.VERBOSE,
 )
+
+
+# URL-stripping regexes (#419). Applied to provenance-block bodies BEFORE
+# `_SOURCE_HINT_RE.finditer` so URL path fragments never reach the slash-
+# command branch. Three forms:
+#   - markdown link bodies: `[text](url)` → `[text]()` (preserves link text)
+#   - autolinks: `<url>` → ``
+#   - bare URLs: `https://...` → ``
+# The link-text preservation matters because some link labels themselves
+# contain a memory filename or slash-command reference that IS load-bearing.
+_MD_LINK_URL_RE = re.compile(r"\]\(\s*<?(?:https?|ftp)://[^\s)>]+>?\s*\)")
+_AUTOLINK_URL_RE = re.compile(r"<(?:https?|ftp)://[^>\s]+>")
+_BARE_URL_RE = re.compile(r"(?<![\[\(])(?:https?|ftp)://[^\s)>]+")
+
+
+def _strip_url_bodies(text: str) -> str:
+    """Remove URL bodies from `text` while preserving non-URL prose.
+
+    Applied to provenance-block bodies before `_SOURCE_HINT_RE.finditer`
+    so URL path fragments (`/198`, `/issues`, `/noorinalabs-main`, etc.)
+    never reach the slash-command branch as false positives (#419).
+    Markdown link text is preserved by replacing `(url)` with `()`,
+    leaving `[text]` intact — if a link label cites a real memory
+    filename or slash-command, that reference still surfaces in the
+    downstream regex sweep.
+    """
+    text = _MD_LINK_URL_RE.sub("]()", text)
+    text = _AUTOLINK_URL_RE.sub("", text)
+    text = _BARE_URL_RE.sub("", text)
+    return text
+
 
 # Memory-filename prefixes the parser recognizes. Used by
 # `_normalize_memory_hit` to decide whether a no-suffix hit should be
@@ -573,8 +614,10 @@ def find_already_promoted(charter_path: str) -> set[str]:
         text = f.read()
 
     # Block-style `**Promotion provenance:**` entries (hooks.md format).
+    # URL bodies stripped first (#419) so gh-issue-link path fragments
+    # never reach the slash-command branch.
     for block in _PROVENANCE_RE.finditer(text):
-        body = block.group("body")
+        body = _strip_url_bodies(block.group("body"))
         for hit in _SOURCE_HINT_RE.finditer(body):
             if _is_forward_reference(body, hit.start()):
                 continue
@@ -585,7 +628,7 @@ def find_already_promoted(charter_path: str) -> set[str]:
     # unnecessary for this format — the marker is by definition a
     # backward-looking promotion claim.
     for block in _HTML_COMMENT_PROMOTED_RE.finditer(text):
-        body = block.group("body")
+        body = _strip_url_bodies(block.group("body"))
         for hit in _SOURCE_HINT_RE.finditer(body):
             refs.update(_normalize_memory_hit(hit.group(0)))
 
