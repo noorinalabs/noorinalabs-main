@@ -542,5 +542,85 @@ class DispatchTraceTests(unittest.TestCase):
         self.assertGreaterEqual(traces[0]["outcome"]["elapsed_ms"], 0)
 
 
+class EmitDispatchSummaryOptInTests(unittest.TestCase):
+    """#425 followup — per-hook opt-in surfacing of action-shaped returns
+    as systemMessage. Hooks set `EMIT_DISPATCH_SUMMARY = True` at module
+    scope to opt in. Default is False; no behavior change for unmarked
+    hooks (preserves existing harness UX for annunaki_monitor, etc.)."""
+
+    def _run(self, action_return: dict, opt_in: bool) -> str:
+        """Run the dispatcher with post_wave_kickoff_comment returning the
+        given action dict and EMIT_DISPATCH_SUMMARY set per `opt_in`.
+        Returns the dispatcher's stdout."""
+        input_data = {
+            "tool_name": "Bash",
+            "hook_event_name": "PostToolUse",
+            "tool_input": {"command": "gh issue edit 423 --add-label p3-wave-10"},
+            "tool_response": {"stdout": "", "stderr": "", "exitCode": 0},
+        }
+        with (
+            mock.patch("annunaki_monitor.check", return_value=None),
+            mock.patch("auto_add_issue_to_board.check", return_value=None),
+            mock.patch("post_wave_kickoff_comment.check", return_value=action_return),
+            mock.patch("post_wave_kickoff_comment.EMIT_DISPATCH_SUMMARY", opt_in, create=True),
+        ):
+            _, out = _run_dispatcher(input_data)
+        return out
+
+    def test_opt_in_synthesizes_systemmessage_from_action(self) -> None:
+        """POS (#425 core): opt-in hook with action-return → systemMessage
+        appears in dispatcher stdout, with module name + action + extra
+        keys formatted for operator visibility."""
+        out = self._run({"action": "post", "repo": "noorinalabs-main", "issue": "423"}, opt_in=True)
+        self.assertNotEqual(out, "")
+        parsed = json.loads(out)
+        msg = parsed["systemMessage"]
+        self.assertIn("post_wave_kickoff_comment", msg)
+        self.assertIn("action=post", msg)
+        self.assertIn("issue=423", msg)
+        self.assertIn("repo=noorinalabs-main", msg)
+
+    def test_opt_out_default_stays_silent(self) -> None:
+        """NEG: default (EMIT_DISPATCH_SUMMARY absent/False) → dispatcher
+        stdout stays empty for action-shaped returns. Preserves pre-#425
+        UX for hooks that haven't opted in."""
+        out = self._run(
+            {"action": "post", "repo": "noorinalabs-main", "issue": "423"}, opt_in=False
+        )
+        self.assertEqual(out, "", "opt-out default must not surface action returns")
+
+    def test_explicit_systemmessage_always_wins_over_synthesis(self) -> None:
+        """NEG: when a hook returns BOTH `systemMessage` and `action`, the
+        explicit message is used; synthesis is skipped. (Synthesis is a
+        fallback for hooks that don't carry their own message.)"""
+        out = self._run(
+            {
+                "systemMessage": "EXPLICIT_MESSAGE",
+                "action": "post",
+                "repo": "x",
+                "issue": "1",
+            },
+            opt_in=True,
+        )
+        parsed = json.loads(out)
+        msg = parsed["systemMessage"]
+        self.assertEqual(msg.strip(), "EXPLICIT_MESSAGE")
+        self.assertNotIn("action=post", msg)
+
+    def test_opt_in_with_no_action_key_stays_silent(self) -> None:
+        """NEG: opt-in module returning a dict WITHOUT an `action` key →
+        no synthesis (synthesis requires an action-shaped dict)."""
+        out = self._run({}, opt_in=True)
+        self.assertEqual(out, "")
+
+    def test_post_wave_kickoff_comment_opts_in(self) -> None:
+        """POS contract: the real post_wave_kickoff_comment module sets
+        EMIT_DISPATCH_SUMMARY = True. Locks the opt-in attestation so a
+        future edit removing it has to update this test."""
+        import post_wave_kickoff_comment
+
+        self.assertIs(getattr(post_wave_kickoff_comment, "EMIT_DISPATCH_SUMMARY", False), True)
+
+
 if __name__ == "__main__":
     unittest.main()

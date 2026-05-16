@@ -11,7 +11,11 @@ Each PostToolUse hook module exposes:
         Returns None for no-op (hook didn't apply or had no advisory to
         emit). Returns a dict with `systemMessage` to surface an advisory
         message through the harness. Other keys (`action`, etc.) are
-        recorded for diagnostics but not surfaced.
+        recorded for diagnostics but not surfaced — UNLESS the module
+        sets `EMIT_DISPATCH_SUMMARY = True` at module scope, in which
+        case the dispatcher synthesizes a `systemMessage` summary from
+        the action-shaped return so operators see what happened in the
+        harness UI (per-hook opt-in, default False; see #425).
 
 Unlike PreToolUse, PostToolUse hooks CANNOT block the tool — it already
 ran. The dispatcher runs every registered module for the matcher and
@@ -163,6 +167,24 @@ def main() -> None:
         msg = result.get("systemMessage")
         if msg:
             messages.append(str(msg))
+            continue
+
+        # Per-hook opt-in (#425): when the module sets
+        # `EMIT_DISPATCH_SUMMARY = True` AND the result carries an `action`
+        # key, the dispatcher synthesizes a short systemMessage from the
+        # action-shaped return. Operators then see "post_wave_kickoff_comment:
+        # action=post repo=… issue=…" in the harness UI for the specific
+        # hooks where that visibility is load-bearing. Default-off keeps
+        # hooks like annunaki_monitor (action dicts on every Bash call) from
+        # spamming the UI. The annunaki dispatch-trace record fires
+        # independently of this flag for full forensic visibility.
+        if getattr(mod, "EMIT_DISPATCH_SUMMARY", False) and result.get("action"):
+            summary_parts = [f"{module_name}: action={result['action']}"]
+            for k, v in sorted(result.items()):
+                if k in ("action", "systemMessage"):
+                    continue
+                summary_parts.append(f"{k}={v}")
+            messages.append(" ".join(summary_parts))
 
     if messages:
         output = {"systemMessage": "\n\n".join(messages)}
