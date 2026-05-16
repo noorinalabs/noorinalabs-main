@@ -179,7 +179,7 @@ This Augments the existing reviewer-class discipline `feedback_review_against_ar
 
 ### Provenance
 
-P3W10 retro PR #441 § Proposed Process Changes #1. Wanjiku-framed at PR #440 review. 3-catch convergent class across #438/#439/#440. Owner-adopted 2026-05-16. Augments `pull-requests.md § Trust the Artifact, Not the Framing` (reviewer layer) and `feedback_review_against_artifact_not_framing.md` (reviewer-class memory).
+P3W10 retro PR #441 § Proposed Process Changes #1. Wanjiku-framed at PR #440 review. 3-catch convergent class across #438/#439/#440. Owner-adopted 2026-05-16 (PR #444). Augments `pull-requests.md § Trust the Artifact, Not the Framing` (reviewer layer) and `feedback_review_against_artifact_not_framing.md` (reviewer-class memory).
 
 <!-- Promoted from memory: (none — this section codifies retro proposal #2, ratified at P3W10 retro via PR #441 owner-decided 2026-05-16) -->
 
@@ -218,4 +218,4 @@ The retrofit list is non-binding: existing skills retrofit at their next materia
 
 ### Provenance
 
-P3W10 retro PR #441 § Proposed Process Changes #2. Wanjiku + Santiago independently named the pattern on PR #439 review. Sibling generalization of the `/board-audit` DRIFT-vs-NOOP split that landed in #439. Owner-adopted 2026-05-16.
+P3W10 retro PR #441 § Proposed Process Changes #2. Wanjiku + Santiago independently named the pattern on PR #439 review. Sibling generalization of the `/board-audit` DRIFT-vs-NOOP split that landed in #439. Owner-adopted 2026-05-16 (PR #444).

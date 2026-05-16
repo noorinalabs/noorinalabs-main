@@ -577,4 +577,4 @@ The two rules are complementary:
 
 #### Provenance
 
-P3W10 retro PR #441 § Proposed Process Changes #4. 22-substitution evidence (34% of 65 W10 PRs). Owner-adopted 2026-05-16. Sibling memory: `feedback_child_repo_implementer_rule.md` (which the parent § Child-Repo Implementer Rule + Spawn-Brief Verification already supersedes for roster-source rules; this sub-section adds the authority-source clarification).
+P3W10 retro PR #441 § Proposed Process Changes #4. 22-substitution evidence (34% of 65 W10 PRs). Owner-adopted 2026-05-16 (PR #444). Sibling memory: `feedback_child_repo_implementer_rule.md` (which the parent § Child-Repo Implementer Rule + Spawn-Brief Verification already supersedes for roster-source rules; this sub-section adds the authority-source clarification).
