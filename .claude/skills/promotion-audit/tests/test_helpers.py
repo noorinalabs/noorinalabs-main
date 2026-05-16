@@ -928,5 +928,137 @@ class SlugifyTests(unittest.TestCase):
         self.assertEqual(h._slugify("   "), "section")
 
 
+class SourceHintReTests(unittest.TestCase):
+    """#419 regression — `_SOURCE_HINT_RE` MUST NOT match URL path
+    fragments inside gh-issue link bodies, and MUST still match real
+    kebab-case slash-commands at word boundaries.
+
+    Exercises the regex directly (tightening) plus `_strip_url_bodies`
+    (link-context elimination). Both layers are load-bearing; tests
+    cover each independently and in combination via `find_already_promoted`.
+    """
+
+    def test_excludes_numeric_url_path_fragment(self) -> None:
+        """NEG (#419 row 1): `/198` from gh-issue URL fragments is rejected
+        purely by the regex shape — alpha-leading filter — even before
+        URL-stripping runs."""
+        matches = h._SOURCE_HINT_RE.findall("filed as /198 and /200 and /244")
+        self.assertNotIn("/198", matches)
+        self.assertNotIn("/200", matches)
+        self.assertNotIn("/244", matches)
+
+    def test_excludes_uppercase_url_path_fragment(self) -> None:
+        """NEG (#419 row 2): `/Edit` from path fragments rejected by the
+        alpha-LOWERCASE-leading filter."""
+        matches = h._SOURCE_HINT_RE.findall("see /Edit or /GitHub")
+        self.assertNotIn("/Edit", matches)
+        self.assertNotIn("/GitHub", matches)
+
+    def test_excludes_mid_token_slash(self) -> None:
+        """NEG (12th case): `/supersedes` inside `augments/supersedes`
+        prose (charter/skills.md:108) is rejected by the word-boundary
+        lookbehind."""
+        matches = h._SOURCE_HINT_RE.findall("augments/supersedes relationships")
+        self.assertNotIn("/supersedes", matches)
+
+    def test_matches_real_slash_command_at_word_boundary(self) -> None:
+        """POS (#419 acceptance): real slash-commands at word boundaries
+        (start, after whitespace, after punctuation) still match."""
+        matches = set(
+            h._SOURCE_HINT_RE.findall("see /promotion-audit and /wave-retro (/auto-promote)")
+        )
+        self.assertIn("/promotion-audit", matches)
+        self.assertIn("/wave-retro", matches)
+        self.assertIn("/auto-promote", matches)
+
+    def test_matches_memory_filename_both_forms(self) -> None:
+        """POS regression guard: memory-filename matching unaffected by
+        the slash-branch tightening."""
+        matches = set(
+            h._SOURCE_HINT_RE.findall(
+                "see feedback_foo.md and project_bar (suffixless), reference_baz.md"
+            )
+        )
+        self.assertIn("feedback_foo.md", matches)
+        self.assertIn("reference_baz.md", matches)
+        # Suffix-less form is captured separately.
+        self.assertIn("project_bar", matches)
+
+
+class StripUrlBodiesTests(unittest.TestCase):
+    """#419: `_strip_url_bodies` removes URL bodies (markdown links,
+    autolinks, bare URLs) while preserving the surrounding prose so
+    URL-path-fragment matches never reach `_SOURCE_HINT_RE`."""
+
+    def test_markdown_link_url_stripped_text_preserved(self) -> None:
+        """[text](url) → [text]() — URL gone, link text remains so any
+        memory/slash-command reference inside the text is still hit."""
+        s = h._strip_url_bodies(
+            "[#198](https://github.com/noorinalabs/noorinalabs-main/issues/198)"
+        )
+        self.assertEqual(s, "[#198]()")
+        # Downstream regex on the stripped form must NOT hit `/198`/`/issues`.
+        self.assertNotIn("/198", h._SOURCE_HINT_RE.findall(s))
+        self.assertNotIn("/issues", h._SOURCE_HINT_RE.findall(s))
+        self.assertNotIn("/noorinalabs", h._SOURCE_HINT_RE.findall(s))
+
+    def test_autolink_url_stripped(self) -> None:
+        """<https://...> → empty (no link text to preserve)."""
+        s = h._strip_url_bodies("see <https://github.com/foo/bar/issues/337>")
+        self.assertNotIn("github", s)
+        self.assertNotIn("337", s)
+
+    def test_bare_url_stripped(self) -> None:
+        """Bare `http(s)://...` in prose is stripped."""
+        s = h._strip_url_bodies("docs at https://example.com/path/to/thing")
+        self.assertNotIn("https://", s)
+        self.assertNotIn("/path", s)
+        self.assertNotIn("/thing", s)
+
+    def test_non_url_prose_unchanged(self) -> None:
+        """NEG: text without URLs is returned identically — no
+        accidental damage to charter prose."""
+        s = "see /promotion-audit and feedback_foo.md per retro"
+        self.assertEqual(h._strip_url_bodies(s), s)
+
+    def test_link_text_with_real_slash_command_preserved(self) -> None:
+        """POS: a markdown link whose LABEL cites a real slash-command
+        must still surface that slash-command after stripping."""
+        s = h._strip_url_bodies("[/promotion-audit run output](https://example.com/log)")
+        self.assertIn("/promotion-audit", h._SOURCE_HINT_RE.findall(s))
+
+    def test_find_already_promoted_rejects_url_fragments_end_to_end(self) -> None:
+        """POS end-to-end (#419 acceptance): a provenance block whose
+        body contains an issue link does NOT pollute the returned set
+        with URL-path-fragment noise.
+        """
+        charter = textwrap.dedent(
+            """\
+            ## Hook 99: Foo
+
+            - **Promotion provenance:** Rule lived in feedback_foo.md.
+              Filed as [#198](https://github.com/noorinalabs/noorinalabs-main/issues/198).
+              Worked example used /promotion-audit run output.
+            """
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(charter)
+            path = f.name
+        try:
+            refs = h.find_already_promoted(path)
+            # Real refs present.
+            self.assertIn("feedback_foo.md", refs)
+            self.assertIn("/promotion-audit", refs)
+            # URL-fragment noise absent.
+            for noise in ("/198", "/issues", "/noorinalabs", "/noorinalabs-main", "/github"):
+                self.assertNotIn(
+                    noise,
+                    refs,
+                    msg=f"URL-fragment {noise!r} leaked into already-promoted set",
+                )
+        finally:
+            os.unlink(path)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

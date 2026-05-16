@@ -36,7 +36,9 @@ from helpers import (
     find_already_promoted_in_charter,
     count_retro_citations,
     count_skill_invocations,
-    classify,
+    classify_memory,
+    classify_section,
+    classify_skill,
     render_audit_table,
 )
 
@@ -48,7 +50,44 @@ already   = find_already_promoted_in_charter(charter_dir)  # set[str] — aggreg
 
 ### 3. Classify each candidate (pure function)
 
-For each memory, charter section, and skill, compute a `Decision` via `classify()`:
+There is no single `classify()` entry point — each tier transition has its own classifier with a distinct signature, because the signal sources differ (retro citations for memory → charter; invocation counts for charter → skill and skill → hook) and `classify_section` has no `already_promoted` analogue (sections carry their own `promoted_to` back-reference instead).
+
+| Function | Signature | `signals` keys consumed |
+|---|---|---|
+| `classify_memory(memory, signals, already_promoted)` | `(Memory, dict[str,int], set[str]) -> Decision` | `retro_citations` |
+| `classify_section(section, signals)` | `(CharterSection, dict[str,int]) -> Decision` | `skill_invocations`, `threshold` |
+| `classify_skill(skill, signals, already_promoted)` | `(Skill, dict[str,int], set[str]) -> Decision` | `skill_invocations`, `threshold` |
+
+Worked example (one item per tier):
+
+```python
+mem_decision = classify_memory(
+    memories[0],
+    signals={"retro_citations": count_retro_citations(memories[0], feedback_log_path)},
+    already_promoted=already,
+)
+
+sec_decision = classify_section(
+    sections[0],
+    signals={
+        "skill_invocations": count_skill_invocations(sections[0].promoted_to_slug or "", repo_root),
+        "threshold": 5,
+    },
+)
+
+skill_decision = classify_skill(
+    skills[0],
+    signals={
+        "skill_invocations": count_skill_invocations(skills[0].name, repo_root),
+        "threshold": 5,
+    },
+    already_promoted=already,
+)
+```
+
+Common failure mode: passing the citation/invocation count as a bare int (`classify_memory(mem, cite, already)`) rather than wrapping it in the `signals` dict (`classify_memory(mem, {"retro_citations": cite}, already)`). The classifiers all do `signals.get(...)` and will raise `AttributeError: 'int' object has no attribute 'get'` on a bare int. Always pass a dict.
+
+Each call returns a `Decision` in one of these kinds:
 
 - **AUTO** — thresholds met, promotion target is charter or skill, NOT already promoted
 - **DECIDE** — thresholds met, target is hook (always DECIDE), OR `requires_decision: true` override, OR signals ambiguous
