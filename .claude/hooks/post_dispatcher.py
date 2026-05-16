@@ -60,6 +60,7 @@ _REGISTRY: dict[str, list[str]] = {
         "annunaki_monitor",  # local: regex over stdout/stderr, JSONL append
         "auto_add_issue_to_board",  # network: runs `gh project item-add`
         "post_wave_kickoff_comment",  # network: gh fetch + post comment
+        "post_label_change_wave_field_sync",  # network: GraphQL updateProjectV2ItemFieldValue
     ],
     "Edit": _EDIT_WRITE_MODULES,
     "Write": _EDIT_WRITE_MODULES,

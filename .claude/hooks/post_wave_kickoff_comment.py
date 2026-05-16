@@ -58,12 +58,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _shell_parse import (  # noqa: E402
-    find_gh_subcommand,
-    iter_command_segments,
-    strip_heredocs,
-    tokenize,
-)
+from _wave_label_parse import parse_wave_label, parse_wave_label_change  # noqa: E402
 from annunaki_log import log_posttooluse_event  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -79,10 +74,6 @@ SCRATCH_DIR = REPO_ROOT / ".claude" / "scratch"
 # future, update this constant — there is no roster lookup for "who runs
 # wave-kickoff" because that role is implicit.
 KICKOFF_REQUESTOR = "Fatima Okonkwo"
-
-# Regex matching the wave label value (e.g. "p3-wave-9"). Used both for
-# argument detection and for parsing phase/wave numerics out.
-_WAVE_LABEL_RE = re.compile(r"^p(\d+)-wave-(\d+)$")
 
 # Regex matching the kickoff comment heading the charter requires
 # (`**Wave {M} Kickoff — Phase {N}**`). Used for idempotency check. The
@@ -106,69 +97,22 @@ def _read_status() -> dict | None:
 def parse_label_apply_command(command: str) -> tuple[str, str, str] | None:
     """Parse `gh issue edit <num> --repo <repo> --add-label "p{N}-wave-{M}"`.
 
-    Returns (repo, issue_number, wave_label) if the command applies a wave
-    label, else None. Tolerates additional flags (e.g. extra --add-label
-    arguments for implementer label) and arbitrary flag ordering.
+    Returns (repo, issue_number, wave_label) if the command APPLIES a wave
+    label, else None. Tolerates additional flags and arbitrary flag
+    ordering. The kickoff hook only fires on label-APPLY, so commands
+    that only `--remove-label` a wave label return None here.
 
-    Implementation: tokenize via _shell_parse (heredoc-strip + shlex), walk
-    pipeline segments looking for a `gh issue edit` segment with an
-    `--add-label "p{N}-wave-{M}"` flag-value pair. Returns the FIRST such
-    match per command.
+    Delegates to the shared `_wave_label_parse.parse_wave_label_change`
+    helper (extracted in #445 alongside Hook 21). The shim narrows the
+    helper's WaveLabelChange shape down to the (repo, issue, label)
+    tuple this hook's downstream code already expects — preserves the
+    pre-extraction behavior exactly so existing fixtures continue to
+    pass without modification.
     """
-    cleaned = strip_heredocs(command)
-    tokens = tokenize(cleaned)
-    if tokens is None:
+    change = parse_wave_label_change(command)
+    if change is None or change.add_label is None:
         return None
-
-    for segment in iter_command_segments(tokens):
-        gh = find_gh_subcommand(segment)
-        if gh is None:
-            continue
-        _globals, rest = gh
-        if len(rest) < 3 or rest[0] != "issue" or rest[1] != "edit":
-            continue
-
-        # The issue number is the first positional arg after `edit`.
-        issue_number = None
-        repo = None
-        wave_label = None
-        i = 2
-        n = len(rest)
-        while i < n:
-            tok = rest[i]
-            if issue_number is None and re.fullmatch(r"\d+", tok):
-                issue_number = tok
-                i += 1
-                continue
-            if tok == "--repo" and i + 1 < n:
-                repo_full = rest[i + 1]
-                # Accept "owner/name" or just "name"
-                repo = repo_full.split("/")[-1]
-                i += 2
-                continue
-            if tok.startswith("--repo="):
-                repo_full = tok[len("--repo=") :]
-                repo = repo_full.split("/")[-1]
-                i += 1
-                continue
-            if tok == "--add-label" and i + 1 < n:
-                value = rest[i + 1]
-                if _WAVE_LABEL_RE.match(value):
-                    wave_label = value
-                i += 2
-                continue
-            if tok.startswith("--add-label="):
-                value = tok[len("--add-label=") :]
-                if _WAVE_LABEL_RE.match(value):
-                    wave_label = value
-                i += 1
-                continue
-            i += 1
-
-        if issue_number and repo and wave_label:
-            return repo, issue_number, wave_label
-
-    return None
+    return change.repo, change.issue_number, change.add_label
 
 
 def find_assignment_row(status: dict, repo: str, issue_number: str, wave_num: int) -> dict | None:
@@ -374,11 +318,10 @@ def check(
         return None
     repo, issue_number, wave_label = parsed
 
-    m = _WAVE_LABEL_RE.match(wave_label)
-    if m is None:
+    parsed_label = parse_wave_label(wave_label)
+    if parsed_label is None:
         return None
-    phase_num = int(m.group(1))
-    wave_num = int(m.group(2))
+    phase_num, wave_num = parsed_label
 
     status = (status_loader or _read_status)()
     if status is None:

@@ -135,9 +135,9 @@
     },
     ".claude/team/charter/agents.md": {
       "last_tracked": "2d88f9d901b855232666cca126b00558963480c3a8720edbdf3143b6550054ed",
-      "last_resolved": "e01a0d773db423445cd7eb1a974c00663a325e14d285618beb85f0425e6a6059",
+      "last_resolved": "2d88f9d901b855232666cca126b00558963480c3a8720edbdf3143b6550054ed",
       "tracked_at": "2026-05-16T21:57:39.421700+00:00",
-      "resolved_at": "2026-05-06T01:11:01.420649+00:00"
+      "resolved_at": "2026-05-16T22:20:43.893664+00:00"
     },
     ".claude/team/charter/hooks.md": {
       "last_resolved": "6186be618f7580ee5cdc2af2682d1bef385ca54645025ce82f9ebdf38c127a01",
@@ -159,15 +159,15 @@
     },
     ".claude/team/charter/skills.md": {
       "last_tracked": "bf69870cfb2d1afcc245330242ddfcf79e8445a9cd4bc11cac9b7c5caf588d24",
-      "last_resolved": "ebed0f2646c067c3f5fe4c5cd3d15504d51c2bc16a2b9bd9eed550bbfae5a598",
+      "last_resolved": "bf69870cfb2d1afcc245330242ddfcf79e8445a9cd4bc11cac9b7c5caf588d24",
       "tracked_at": "2026-05-16T21:57:37.674267+00:00",
-      "resolved_at": "2026-05-06T01:11:01.420649+00:00"
+      "resolved_at": "2026-05-16T22:20:43.893664+00:00"
     },
     ".claude/team/feedback_log.md": {
       "last_tracked": "24527356214699ac5bbe511709a30c597af928e742128dff7aff801145e403e3",
-      "last_resolved": "2b1de4087bedb17a88c775d266c4929947f58e77239a73f93c4b2fb0d4c9aebd",
+      "last_resolved": "24527356214699ac5bbe511709a30c597af928e742128dff7aff801145e403e3",
       "tracked_at": "2026-05-16T21:55:57.205028+00:00",
-      "resolved_at": "2026-05-16T21:40:10.554735+00:00"
+      "resolved_at": "2026-05-16T22:20:43.893664+00:00"
     },
     ".gitignore": {
       "last_resolved": "99a48dfddef755ee0af95d7c44b8cc62d5b74a8cda39be8977e236538a4f1b35",
