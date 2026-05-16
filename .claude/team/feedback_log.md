@@ -2256,7 +2256,7 @@ Neither is hook-tier urgent (the underlying validate_pr_review enforcement is al
 | ChangesRequested cycles | **7** (10.8% of PRs — recomputed at retro, matches wrapup counter exactly; recompute-vs-wrapup drift = 0 for the first time across W4/W5/W9 history) |
 | CI health | 100% green across all merged PRs |
 | Tech-debt filed this wave | 6 new W10-era memories filed; 0 new tech-debt issues from retro audit (counter triplet matched) |
-| Top implementer concentration | **11%** (Mateo Salazar 8/65 by branch prefix); orchestrator-takeover 7 under `parametrization` identity acknowledged separately as throttle-takeover pattern (`feedback_throttle_takeover.md`) |
+| Top implementer concentration | **12%** (Mateo Salazar 8/65, by branch-prefix author — the engineer-distribution signal) — note: wrapup counter computed by commit-identity gives 11% because 7 throttle-takeover PRs land under `parametrization`; retro narrative uses branch-prefix for engineer attribution. Both perspectives recorded; counter correction below. |
 | Wave duration | ~3 days (kickoff 2026-05-13T16:35:49Z; last merge ~2026-05-16) |
 | Worktrees stale at end | 0 (12 cleaned this session: 7 tracked main + 2 tracked isnad-graph + 3 orphan dirs) |
 | Implementer substitutions | **22** (~34% of PRs) — all classified benign per `feedback_child_repo_implementer_rule.md`; child-repo managers reassigned vs parent-orchestrator-declared names; bulk-acknowledged in `wave_10_decisions.implementer_substitutions_bulk_acknowledgment` |
@@ -2300,9 +2300,9 @@ Neither is hook-tier urgent (the underlying validate_pr_review enforcement is al
 - Wide cross-repo infrastructure execution; responded cleanly to security review on #432
 - **Severity:** none (positive)
 
-#### Lucas Ferreira (SRE) — 5 cross-repo PRs (#431 + 4 propagation siblings)
+#### Lucas Ferreira (SRE) — 7 cross-repo PRs (#431 + 6 propagation siblings)
 - #431: `infra(auto-close): add auto-close-issues workflow (propagation from isnad-graph per main#402)` — **unlocked reliable W10 issue auto-close across all 7 repos**; 8-9s propagation per merge, fully reliable. Operationally eliminates `feedback_wave_branch_issue_close.md` failure mode
-- 4 sibling propagation PRs across user-service / design-system / landing-page / data-acquisition
+- 6 sibling propagation PRs across user-service#106 / design-system#78 / landing-page#95 / data-acquisition#54 / deploy#286 / ingest-platform#30 — full 7-repo coverage
 - **Severity:** none (strong positive)
 
 #### Mateo Salazar (user-service Tech Lead) — 8 PRs (top implementer by branch count)
@@ -2320,7 +2320,7 @@ Neither is hook-tier urgent (the underlying validate_pr_review enforcement is al
 
 #### Long-tail (Marisol Vega-Cruz, Jin Park, Linh Pham, Arjun Raghavan, Nneka Obi, Jelani Mwangi, Thandiwe Moyo, Idris Yusuf, Maeve Callahan, Nazia Rahman, Anika Diop-Sarr — 2-3 PRs each + 8 with 1 PR)
 - Wide distribution — 26 distinct branch-prefix authors across 65 PRs is the healthiest distribution since the multi-repo team was established
-- No CR-cycle blockers; the 4 CR cycles on child-repo PRs (#117, #80, #79, #96) were security-class or design-class catches that were addressed cleanly
+- No CR-cycle blockers; the 6 CR cycles distributed across 4 child-repo PRs (user-service#117 ×1, design-system#80 ×1, design-system#79 ×1, landing-page#96 ×3) plus 1 cycle on main#432 (Aisha — security review) = 7 total cycles, all security-class or design-class catches addressed cleanly
 
 #### Orchestrator (me) — author of #438 + #437 spawn-brief authoring + 7 throttle-takeovers
 - W9 process defects **did not recur in W10**:
