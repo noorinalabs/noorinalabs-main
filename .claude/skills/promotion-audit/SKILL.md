@@ -40,10 +40,12 @@ from helpers import (
     render_audit_table,
 )
 
-memories  = read_all_memories(memory_dir)              # list[Memory]
-sections  = read_all_charter_sections(charter_dir)     # list[Section] — only sections with a promotion-target marker
-skills    = read_all_skills(skills_dir)                # list[Skill]
-already   = find_already_promoted_in_charter(charter_dir)  # set[str] — aggregates Promotion provenance: blocks AND <!-- Promoted from memory: X --> markers across all charter sub-docs (#283)
+memories  = read_all_memories(memory_dir)                  # list[Memory]
+sections  = read_all_charter_sections(charter_parent)      # list[Section] — only sections with a promotion-target marker
+skills    = read_all_skills(skills_dir)                    # list[Skill]
+already   = find_already_promoted_in_charter(charter_parent)  # set[str] — aggregates Promotion provenance: blocks AND <!-- Promoted from memory: X --> markers across all charter sub-docs (#283)
+# NOTE: `charter_parent` is the directory CONTAINING `charter/` (e.g. `.claude/team`),
+# NOT the `charter/` directory itself. Passing `.claude/team/charter` raises ValueError (#418).
 ```
 
 ### 3. Classify each candidate (pure function)

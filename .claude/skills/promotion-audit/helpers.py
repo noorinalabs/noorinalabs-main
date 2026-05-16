@@ -298,17 +298,36 @@ def read_charter_sections(charter_path: str) -> list[CharterSection]:
     return results
 
 
-def read_all_charter_sections(charter_root: str) -> list[CharterSection]:
+def read_all_charter_sections(charter_parent: str) -> list[CharterSection]:
     """Scan charter.md + charter/*.md for marked sections.
 
+    `charter_parent` is the directory **containing** the `charter/` subdir
+    (typically `.claude/team`), NOT the `charter/` directory itself. Sibling
+    of `find_already_promoted_in_charter` — same parameter semantics, same
+    silent-empty failure mode if the caller passes the charter dir instead
+    of its parent (issue #418).
+
     Sorted by (path, heading) for determinism.
+
+    Raises:
+        ValueError: if `charter_parent` is itself named `charter` — see #418.
     """
+    if os.path.isdir(charter_parent) and (
+        os.path.basename(os.path.normpath(charter_parent)) == "charter"
+    ):
+        raise ValueError(
+            f"read_all_charter_sections({charter_parent!r}): "
+            "argument is the charter directory itself — pass its parent "
+            "(e.g. '.claude/team', not '.claude/team/charter'). "
+            "See issue #418."
+        )
+
     candidates: list[str] = []
-    root_file = os.path.join(charter_root, "charter.md")
+    root_file = os.path.join(charter_parent, "charter.md")
     if os.path.isfile(root_file):
         candidates.append(root_file)
 
-    subdir = os.path.join(charter_root, "charter")
+    subdir = os.path.join(charter_parent, "charter")
     if os.path.isdir(subdir):
         for name in sorted(os.listdir(subdir)):
             if name.endswith(".md"):
@@ -578,27 +597,45 @@ def find_already_promoted(charter_path: str) -> set[str]:
     return refs
 
 
-def find_already_promoted_in_charter(charter_root: str) -> set[str]:
+def find_already_promoted_in_charter(charter_parent: str) -> set[str]:
     """Aggregate already-promoted refs across the full charter directory.
 
-    Scans `charter_root/charter/*.md` (and the optional `charter_root/charter.md`
-    top-level file, if present) using the same recognition rules as
-    `find_already_promoted()`. Returns the union of all per-file results.
+    `charter_parent` is the directory **containing** the `charter/` subdir
+    (typically `.claude/team`), NOT the `charter/` directory itself.
+
+    Scans `<charter_parent>/charter/*.md` (and the optional
+    `<charter_parent>/charter.md` top-level file, if present) using the same
+    recognition rules as `find_already_promoted()`. Returns the union of
+    all per-file results.
 
     This is the entry point the /promotion-audit skill should use — single-
     file scope (charter/hooks.md only) misses charter-tier-only promotions
     that land via the HTML-comment marker in other sub-docs (issue #283).
+
+    Raises:
+        ValueError: if `charter_parent` is itself a directory named `charter`
+            — a strong hint the caller passed the charter dir instead of its
+            parent (issue #418 silent-zero bug). Returns set() for any other
+            non-existent path (defensive contract preserved).
     """
     refs: set[str] = set()
-    if not os.path.isdir(charter_root):
+    if not os.path.isdir(charter_parent):
         return refs
 
+    if os.path.basename(os.path.normpath(charter_parent)) == "charter":
+        raise ValueError(
+            f"find_already_promoted_in_charter({charter_parent!r}): "
+            "argument is the charter directory itself — pass its parent "
+            "(e.g. '.claude/team', not '.claude/team/charter'). "
+            "See issue #418."
+        )
+
     candidates: list[str] = []
-    root_file = os.path.join(charter_root, "charter.md")
+    root_file = os.path.join(charter_parent, "charter.md")
     if os.path.isfile(root_file):
         candidates.append(root_file)
 
-    subdir = os.path.join(charter_root, "charter")
+    subdir = os.path.join(charter_parent, "charter")
     if os.path.isdir(subdir):
         for name in sorted(os.listdir(subdir)):
             if name.endswith(".md"):

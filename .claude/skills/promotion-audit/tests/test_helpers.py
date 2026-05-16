@@ -517,6 +517,40 @@ class FindAlreadyPromotedTests(unittest.TestCase):
         refs = h.find_already_promoted_in_charter("/nonexistent/path/to/charter")
         self.assertEqual(refs, set())
 
+    def test_aggregator_raises_on_charter_dir_itself(self) -> None:
+        """NEG (#418): passing the charter directory itself (e.g.
+        `.claude/team/charter`) instead of its parent must raise
+        ValueError. Previously this silently returned set() because no
+        `<root>/charter/charter/` subdir exists — the silent-zero failure
+        mode that #418 was filed to fix.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            charter_subdir = os.path.join(tmpdir, "charter")
+            os.makedirs(charter_subdir)
+            # Correct form: parent of charter/ — returns set() (empty corpus).
+            self.assertEqual(h.find_already_promoted_in_charter(tmpdir), set())
+            # Wrong form: the charter dir itself — must raise loudly.
+            with self.assertRaises(ValueError) as ctx:
+                h.find_already_promoted_in_charter(charter_subdir)
+            self.assertIn("#418", str(ctx.exception))
+
+            # Trailing slash form must still raise — normpath strips it.
+            with self.assertRaises(ValueError):
+                h.find_already_promoted_in_charter(charter_subdir + "/")
+
+    def test_read_all_charter_sections_raises_on_charter_dir_itself(self) -> None:
+        """NEG (#418, sibling): `read_all_charter_sections` has identical
+        parent-of-charter semantics and the same silent-empty failure mode.
+        Passing the charter dir itself must raise.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            charter_subdir = os.path.join(tmpdir, "charter")
+            os.makedirs(charter_subdir)
+            # Correct form: returns empty list (no marked sections in empty corpus).
+            self.assertEqual(h.read_all_charter_sections(tmpdir), [])
+            with self.assertRaises(ValueError):
+                h.read_all_charter_sections(charter_subdir)
+
 
 # ---------------------------------------------------------------------------
 # Classification — memory
