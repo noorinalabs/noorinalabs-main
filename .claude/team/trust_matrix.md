@@ -936,3 +936,39 @@ The org was restructured in Session 3 with new repo-level teams. The matrix abov
 | **Wanjiku Mwangi** | PR #413 cross-repo dispatch contracts with parser-side literal-string verification; #414 sibling-filing discipline; deploy#285 A-vs-B framing for owner decision; 2 thorough reviews | None this wave (W8 head-truncation lesson now codified + restored) |
 | **Santiago Ferreira** | 4 procedurally consistent Approveds; CI path-filter nuance catch on #413; current_wave-not-advancing observation on #416 | None this wave |
 | **Orchestrator** | Bulk relabel mechanical execution (115 issues + 11 new labels); wave-9 → main merge with no addenda cascade; /promotion-audit retro-side run surfaced 3 real skill defects → #417/#418/#419 (caller-side error became evidence) | (a) Spawn-brief TechDebt-line shape defect → 2 PATCH amendments. (b) Clone-spawning vs. SendMessage idle existing — user-flagged. Both codified as memories; charter promotion proposed for next wave. |
+
+## Phase 3 Wave 10 Trust Updates (2026-05-16) — Tech-Debt Reduction (Non-Deploy Remainder) + Convergent Wave-Shape Thesis
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Aino Virtanen** (SQL) | 5 | 5 | (hold at max) 4 main# PRs (#434, #437, #438, #439) all charter/skills/hooks/board surfaces — theme-fit again, sibling-discovery pattern on #439 (board-audit drift-vs-no-op split) catalysed one of two DECIDE-tier charter promotions this wave. 0 ChangesRequested cycles. Trust signal continuity: same defensible concentration shape as W9 (charter codification + skill cleanup are her territory). |
+| **Nadia Khoury** (PD) | 5 | 5 | (hold at max) Authored #440 (lifecycle.md) with over-delivery — parenthetical clarifications on every `/plan-phase` reference (flagged by Aino for trust matrix). Reviewer-class catch on `/phase-review` SKILL.md → `/roadmap` non-existent reference, folded inline per owner option C; drove crossed-message-race recovery resolved per `feedback_verdict_amendment_edit_not_append` (no edit-append). 4 reviewer verdicts. |
+| **Wanjiku Mwangi** (TPM) | 5 | 5 | (hold at max — recovers from W9 4→5 promotion) PR #428 cross-window PR over-count fix for /wave-wrapup landed in W10 and the filter was live-verified THIS retro (recompute-vs-wrapup drift = 0 for the first time across W4/W5/W9 history). **Wanjiku is the catalyst for both DECIDE-tier charter promotions this wave**: framed #1 (`Process-Doc Authorship: Derived-From-SKILL.md-At-HEAD`) from #440 review, co-named #2 (`Acceptance-Criteria-Bucketing-In-Reports`) with Santiago from #439 review. Charter-promotion catalyst behavior is a Pattern G evolution (in-wave skill self-improvement now extends to in-wave charter-class proposal). |
+| **Santiago Ferreira** (RC) | 5 | 5 | (hold at max) 4+ Approveds posted across W10 reviewer slate with consistent procedural verdict-shape (runtime/procedural angle). Co-named with Wanjiku the actionable-vs-informational bucketing pattern → DECIDE-tier #2. Filed minor cosmetic nit on /board-audit Step 5 column alignment (deferred per owner choice). |
+
+### Cross-Repo Implementer Promotions
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Lucas Ferreira** (SRE) | 4 | **5** (▲) | PR #431 (`auto-close-issues workflow`) + 4 cross-repo propagation siblings. **Operationally retires `feedback_wave_branch_issue_close.md` failure mode** — 8-9s propagation on every W10 merge, fully reliable across all 7 repos. The propagation discipline (one parent PR + 4 mechanically-derived siblings) is the cleanest cross-repo fan-out shipped this phase. |
+| **Aisha Idrissi** (Infra implementer) | 4 | **5** (▲) | 3 main# PRs (#430, #432, #435) wide cross-repo infrastructure work. #432 took 1 ChangesRequested cycle from security review and addressed it inline (commit a9504db: enforce_admins=true, 2-reviewer gate, Environment apply-gating) rather than via followup — security-guard-inline-not-followup discipline (per `feedback_security_guard_inline_not_followup.md`). Clean recovery + branch protection now active across 8 repos. |
+
+### Orchestrator (Self-Assessment)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Orchestrator (Steven via Claude)** | 3 | **4** (▲) | **Conditional promotion from W9 retro met.** W9 retro stated: "Hold at 3 until W10 shows the spawn-brief template (literal verdict-comment shape) + reuse-idle-teammates discipline are internalized. Demote to 2 only if the same template-shape class recurs in W10." Both held: (a) zero TechDebt-line addenda cascades this wave (vs W9's defect that produced 2 PATCH amendments); (b) zero clone-spawning this wave — `SendMessage` to idle existing personas throughout. Additional positives: (c) crossed-message-race on #440 resolved correctly via NEW Approved comments at new HEAD (no edit-append) per `feedback_verdict_amendment_edit_not_append`; (d) /promotion-audit live verification with byte-deterministic 0/0/146/20 (no caller-side errors this run); (e) 7 throttle-takeovers under `parametrization` identity with explicit `wave_10_decisions.orchestrator_takeover_acknowledgment` so trust-matrix attribution stays accurate. Minor pain: 22 implementer-substitutions for child-repo PRs is a noise pattern that surfaces a charter-clarification candidate (§ Proposed Process Changes #4). |
+
+### Done Well / Needs Improvement (Phase 3 Wave 10)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Aino Virtanen** | 4 main# PRs across charter/skills/hooks/board surfaces; #439 board-audit drift-vs-no-op split catalysed DECIDE-tier charter promotion #2; theme-fit concentration noted as forward-planning signal | None this wave |
+| **Nadia Khoury** | #440 lifecycle.md with over-delivery (parenthetical clarifications); reviewer-class catch on /roadmap reference; crossed-message-race recovery per protocol | None this wave |
+| **Wanjiku Mwangi** | PR #428 cross-window filter live-verified at this retro (W9-defect-fix held under W10 load); catalyst for both W10 DECIDE-tier charter promotions; sustained TPM voice across review slate | None this wave |
+| **Santiago Ferreira** | Co-named bucketing pattern with Wanjiku → DECIDE-tier #2; procedurally consistent verdict-shape; cosmetic-nit-deferral discipline | None this wave |
+| **Lucas Ferreira** | Auto-close-issues workflow operationally retires a long-standing failure mode; cross-repo propagation discipline | None this wave |
+| **Aisha Idrissi** | Security-guard-inline-not-followup on #432; clean 3-PR infrastructure execution; branch protection now active across 8 repos | None this wave |
+| **Orchestrator** | W9 process-defect fixes held under W10 load (zero recurrence); crossed-message-race recovered cleanly; /promotion-audit byte-deterministic with no caller-side errors; throttle-takeover acknowledgment in cross-repo-status | 22 implementer-substitutions for child-repo PRs surfaces a kickoff-time-declaration-vs-runtime-truth gap → charter clarification candidate #4 (advisory only, not corrective) |
