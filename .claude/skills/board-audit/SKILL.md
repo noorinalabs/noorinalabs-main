@@ -11,6 +11,8 @@ Detect drift between GitHub Project 2 (the Cross-Repo Wave Plan board) and the a
 
 Closes main#199.
 
+> See [`.claude/team/lifecycle.md`](../../team/lifecycle.md) § Wave Lifecycle for the canonical skill order and preconditions.
+
 ## Background
 
 On 2026-04-23 a manual audit found **72 of 193 open issues (37%) missing from project 2**. Root cause: Hook 13 (`auto_add_issue_to_board.py`) only catches `gh issue create` calls in active sessions — bot-created, manual-UI-created, and pre-hook-13 issues all drift off the board silently.

@@ -6,6 +6,8 @@ args: Phase number
 
 Phase-level track check. **Mandatory before every `/wave-scope`.** Surfaces accomplishments, blockers, and remaining end-state criteria so the owner can choose the next wave's theme deliberately, not reactively.
 
+> See [`.claude/team/lifecycle.md`](../../team/lifecycle.md) § Phase Lifecycle for the canonical skill order and preconditions.
+
 > Note: all repo paths in bash blocks below are rooted at `$REPO_ROOT` to avoid cwd drift when the skill is invoked from a worktree or child-repo subdirectory (#149).
 
 ## When to use

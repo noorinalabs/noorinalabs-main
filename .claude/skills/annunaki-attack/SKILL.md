@@ -5,6 +5,8 @@ description: Analyze captured errors, propose automation (hooks/skills/charter),
 
 Process the Annunaki error log, deduplicate errors, propose preventative automation, create GitHub issues, and implement fixes. This is the **action** counterpart to the `/annunaki` status viewer.
 
+> See [`.claude/team/lifecycle.md`](../../team/lifecycle.md) § Wave Lifecycle for the canonical skill order and preconditions.
+
 > Note: all repo paths in bash blocks below are rooted at `$REPO_ROOT` to avoid cwd drift when the skill is invoked from a worktree or child-repo subdirectory (#149).
 
 ## When to run

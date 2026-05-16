@@ -6,6 +6,8 @@ args: team_name, Phase number
 
 Plan a phase of work for the `{team_name}` team. Decomposes phase scope into GitHub Issues, assigns them, reviews from multiple perspectives, and proposes a wave structure.
 
+> See [`.claude/team/lifecycle.md`](../../team/lifecycle.md) § Phase Lifecycle for the canonical skill order and preconditions.
+
 > Note: all repo paths in bash blocks below are rooted at `$REPO_ROOT` to avoid cwd drift when the skill is invoked from a worktree or child-repo subdirectory (#149).
 
 ## Instructions

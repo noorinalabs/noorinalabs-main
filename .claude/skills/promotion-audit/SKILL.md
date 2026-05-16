@@ -6,6 +6,8 @@ args: wave_name (optional — defaults to the current wave from cross-repo-statu
 
 Run a deterministic audit of the promotion pipeline. Every step below is backed by a pure function in `helpers.py` so the same input produces byte-identical output.
 
+> See [`.claude/team/lifecycle.md`](../../team/lifecycle.md) § Wave Lifecycle for the canonical skill order and preconditions.
+
 ## Context
 
 The project's enforcement hierarchy is **hook > skill > charter > memory** (see `.claude/team/charter.md` § Enforcement Hierarchy and memory `feedback_enforcement_hierarchy.md`). Rules migrate upward along that path as evidence accumulates.
