@@ -427,5 +427,335 @@ class ParseFailureFailClosedTests(unittest.TestCase):
         )
 
 
+class HyphenatedNameFixtures(unittest.TestCase):
+    """data-acquisition#43: hyphenated names in roster.json must round-trip
+    cleanly through shlex tokenization and roster lookup.
+
+    Pins names with hyphens in the first-name slot, last-name slot, and the
+    Spanish/West-African/Senegalese double-barrelled-surname patterns that
+    show up in noorinalabs-data-acquisition, noorinalabs-landing-page, and
+    noorinalabs-user-service rosters. Each name uses the LOCAL parent roster
+    (which already contains the merged entries) — no synthetic child repo
+    setup needed; the parent roster is the union of all child rosters.
+    """
+
+    @staticmethod
+    def _input(command: str) -> dict:
+        return {"tool_name": "Bash", "tool_input": {"command": command}}
+
+    # (name, email) tuples that MUST be present in the local roster for the
+    # fixture to be meaningful. Skipping on missing keeps the test stable if
+    # the roster is trimmed in a future cleanup; the WHY is then surfaced as
+    # a skip reason rather than a misleading pass.
+    HYPHENATED_NAMES = [
+        ("Jean-Claude Habimana", "parametrization+Jean-Claude.Habimana@gmail.com"),
+        ("Marcia Vasquez-Paredes", "parametrization+Marcia.Vasquez-Paredes@gmail.com"),
+        ("Kofi Mensah-Williams", "parametrization+Kofi.Mensah-Williams@gmail.com"),
+        ("Anika Diop-Sarr", "parametrization+Anika.Diop-Sarr@gmail.com"),
+        ("Marisol Vega-Cruz", "parametrization+Marisol.Vega-Cruz@gmail.com"),
+        ("Jun-Seo Park", "parametrization+Jun-Seo.Park@gmail.com"),
+        ("Alejandra Reyes-Fuentes", "parametrization+Alejandra.Reyes-Fuentes@gmail.com"),
+        ("Rashid Osei-Mensah", "parametrization+Rashid.Osei-Mensah@gmail.com"),
+        ("Mei-Lin Chang", "parametrization+Mei-Lin.Chang@gmail.com"),
+        ("Sable Nakamura-Whitfield", "parametrization+Sable.Nakamura-Whitfield@gmail.com"),
+    ]
+
+    def test_hyphenated_name_local_commit_allowed(self):
+        """Each hyphenated roster name → local commit with matching email allowed."""
+        for name, email in self.HYPHENATED_NAMES:
+            with self.subTest(name=name):
+                if name not in hook.ROSTER:
+                    self.skipTest(f"{name} not in local roster — fixture stale")
+                self.assertEqual(
+                    hook.ROSTER[name],
+                    email,
+                    f"roster email for {name} drifted from fixture",
+                )
+                cmd = f'git -c user.name="{name}" -c user.email="{email}" commit -m "test"'
+                self.assertIsNone(
+                    hook.check(self._input(cmd)),
+                    f"hyphenated name {name!r} should pass identity validation",
+                )
+
+    def test_hyphenated_name_wrong_email_blocks(self):
+        """Hyphenated name with email-local-part stripped of hyphens → blocks.
+
+        Realistic operator mistake: typing `Jean-Claude.Habimana@...` but
+        backspacing the hyphen to `JeanClaude.Habimana@...`. The hook must
+        catch the email mismatch, not silently accept.
+        """
+        for name, email in self.HYPHENATED_NAMES:
+            with self.subTest(name=name):
+                if name not in hook.ROSTER:
+                    self.skipTest(f"{name} not in local roster — fixture stale")
+                wrong_email = email.replace("-", "")
+                if wrong_email == email:
+                    continue  # no hyphen in email local-part — nothing to test
+                cmd = f'git -c user.name="{name}" -c user.email="{wrong_email}" commit -m "test"'
+                result = hook.check(self._input(cmd))
+                self.assertIsNotNone(
+                    result,
+                    f"de-hyphenated email for {name} should not pass identity validation",
+                )
+                assert result is not None
+                self.assertEqual(result.get("decision"), "block")
+                self.assertIn("does not match roster", result["reason"])
+
+    def test_unicode_hyphen_carolina_mendez_rios(self):
+        """`Carolina Méndez-Ríos` — Unicode (é, í) + hyphen in name; ASCII email.
+
+        ingestion-platform roster pattern. The shlex tokenizer handles UTF-8
+        transparently because the bytes are inside quoted strings; the
+        roster lookup is a Python dict comparison which is Unicode-safe.
+        """
+        name = "Carolina Méndez-Ríos"
+        if name not in hook.ROSTER:
+            self.skipTest(f"{name} not in local roster — fixture stale")
+        email = hook.ROSTER[name]
+        cmd = f'git -c user.name="{name}" -c user.email="{email}" commit -m "test"'
+        self.assertIsNone(
+            hook.check(self._input(cmd)),
+            f"Unicode+hyphen name {name!r} should pass identity validation",
+        )
+
+    def test_tomasz_wojcik_unicode_in_name_ascii_in_email(self):
+        """`Tomasz Wójcik` — name has `ó`, email local-part is ASCII `Wojcik`.
+
+        Common Slavic-name handling pattern: display-name retains diacritic,
+        email folds to ASCII. The hook compares email STRING equality so a
+        mismatch (e.g. `Wójcik` in email) must block.
+        """
+        name = "Tomasz Wójcik"
+        if name not in hook.ROSTER:
+            self.skipTest(f"{name} not in local roster — fixture stale")
+        ascii_email = hook.ROSTER[name]
+        self.assertNotIn("ó", ascii_email, "roster email for Tomasz must be ASCII-folded")
+        # Positive: ASCII-folded email allowed.
+        cmd_ok = f'git -c user.name="{name}" -c user.email="{ascii_email}" commit -m "test"'
+        self.assertIsNone(hook.check(self._input(cmd_ok)))
+        # Negative: someone hand-types the diacritic into the email-local-part.
+        unfolded_email = ascii_email.replace("Wojcik", "Wójcik")
+        cmd_bad = f'git -c user.name="{name}" -c user.email="{unfolded_email}" commit -m "test"'
+        result = hook.check(self._input(cmd_bad))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+
+
+class CrossRepoCommitIdentityFixtures(unittest.TestCase):
+    """data-acquisition#43: `cd <child-repo> && git commit` shapes that
+    real data-acquisition agents emit. Builds a synthetic child repo per
+    test using the existing `_git_init`/`_write_roster` helpers so the
+    `_detect_target_roster` path is exercised end-to-end against names
+    that exist ONLY in the child (not the local parent roster).
+
+    Why this matters: in production the parent roster.json IS the union
+    of all child rosters (org-level merge), so a local-only commit would
+    succeed for any hyphenated name listed there. The cross-repo `cd`
+    path is the one place where the child roster is loaded fresh from
+    disk and merged with the parent — and is the codepath that would
+    silently miss a tokenization bug for hyphens in `cd <path>`.
+    """
+
+    @staticmethod
+    def _input(command: str) -> dict:
+        return {"tool_name": "Bash", "tool_input": {"command": command}}
+
+    def test_cross_repo_dilara_data_acq_commit_allowed(self):
+        """`cd <data-acq-clone> && git -c user.name="Dilara Erdogan" commit`."""
+        with tempfile.TemporaryDirectory() as td:
+            outer = Path(td)
+            _git_init(outer)
+            # Parent roster intentionally lacks Dilara to prove the child
+            # roster supplies her identity.
+            _write_roster(outer, {"Nadia Khoury": "parametrization+Nadia.Khoury@gmail.com"})
+            child = outer / "noorinalabs-data-acquisition"
+            child.mkdir()
+            _git_init(child)
+            _write_roster(
+                child,
+                {"Dilara Erdogan": "parametrization+Dilara.Erdogan@gmail.com"},
+            )
+            cmd = (
+                f'cd {child} && git -c user.name="Dilara Erdogan" '
+                f'-c user.email="parametrization+Dilara.Erdogan@gmail.com" '
+                f'commit -m "x"'
+            )
+            self.assertIsNone(
+                hook.check(self._input(cmd)),
+                "data-acq child roster member must be accepted in cross-repo commit",
+            )
+
+    def test_cross_repo_jean_claude_hyphenated_first_name_allowed(self):
+        """`cd <data-acq-clone> && git -c user.name="Jean-Claude Habimana" commit`.
+
+        Hyphenated first name through the `cd <path>` codepath. This is the
+        canonical fixture flagged in noorinalabs/noorinalabs-data-acquisition#43.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            outer = Path(td)
+            _git_init(outer)
+            _write_roster(outer, {})
+            child = outer / "noorinalabs-data-acquisition"
+            child.mkdir()
+            _git_init(child)
+            _write_roster(
+                child,
+                {
+                    "Jean-Claude Habimana": "parametrization+Jean-Claude.Habimana@gmail.com",
+                },
+            )
+            cmd = (
+                f'cd {child} && git -c user.name="Jean-Claude Habimana" '
+                f'-c user.email="parametrization+Jean-Claude.Habimana@gmail.com" '
+                f'commit -m "x"'
+            )
+            self.assertIsNone(
+                hook.check(self._input(cmd)),
+                "hyphenated first name must round-trip through cross-repo cd",
+            )
+
+    def test_cross_repo_vasquez_paredes_hyphenated_surname_allowed(self):
+        """`cd <ingest-clone> && git -c user.name="Marcia Vasquez-Paredes" commit`."""
+        with tempfile.TemporaryDirectory() as td:
+            outer = Path(td)
+            _git_init(outer)
+            _write_roster(outer, {})
+            child = outer / "noorinalabs-isnad-ingest-platform"
+            child.mkdir()
+            _git_init(child)
+            _write_roster(
+                child,
+                {
+                    "Marcia Vasquez-Paredes": "parametrization+Marcia.Vasquez-Paredes@gmail.com",
+                },
+            )
+            cmd = (
+                f'cd {child} && git -c user.name="Marcia Vasquez-Paredes" '
+                f'-c user.email="parametrization+Marcia.Vasquez-Paredes@gmail.com" '
+                f'commit -m "x"'
+            )
+            self.assertIsNone(
+                hook.check(self._input(cmd)),
+                "Spanish double-barrelled surname must round-trip through cross-repo cd",
+            )
+
+    def test_cross_repo_mensah_williams_hyphenated_surname_allowed(self):
+        """`cd <ingest-clone> && git -c user.name="Kofi Mensah-Williams" commit`."""
+        with tempfile.TemporaryDirectory() as td:
+            outer = Path(td)
+            _git_init(outer)
+            _write_roster(outer, {})
+            child = outer / "noorinalabs-isnad-ingest-platform"
+            child.mkdir()
+            _git_init(child)
+            _write_roster(
+                child,
+                {
+                    "Kofi Mensah-Williams": "parametrization+Kofi.Mensah-Williams@gmail.com",
+                },
+            )
+            cmd = (
+                f'cd {child} && git -c user.name="Kofi Mensah-Williams" '
+                f'-c user.email="parametrization+Kofi.Mensah-Williams@gmail.com" '
+                f'commit -m "x"'
+            )
+            self.assertIsNone(
+                hook.check(self._input(cmd)),
+                "West-African double-barrelled surname must round-trip through cross-repo cd",
+            )
+
+    def test_cross_repo_diop_sarr_hyphenated_surname_allowed(self):
+        """`cd <ingest-clone> && git -c user.name="Anika Diop-Sarr" commit`."""
+        with tempfile.TemporaryDirectory() as td:
+            outer = Path(td)
+            _git_init(outer)
+            _write_roster(outer, {})
+            child = outer / "noorinalabs-isnad-ingest-platform"
+            child.mkdir()
+            _git_init(child)
+            _write_roster(
+                child,
+                {
+                    "Anika Diop-Sarr": "parametrization+Anika.Diop-Sarr@gmail.com",
+                },
+            )
+            cmd = (
+                f'cd {child} && git -c user.name="Anika Diop-Sarr" '
+                f'-c user.email="parametrization+Anika.Diop-Sarr@gmail.com" '
+                f'commit -m "x"'
+            )
+            self.assertIsNone(
+                hook.check(self._input(cmd)),
+                "Senegalese double-barrelled surname must round-trip through cross-repo cd",
+            )
+
+    def test_cross_repo_design_system_maeve_callahan_allowed(self):
+        """`cd <design-system-clone> && git -c user.name="Maeve Callahan" commit`.
+
+        Pins `Maeve Callahan` (canonical design-system manager identity) as
+        the expected name — NOT `Maeve O'Sullivan`. Apostrophe-in-name was
+        considered for this fixture during issue triage but rejected: the
+        design-system roster uses Callahan; adding an apostrophe fixture for
+        a name no roster actually contains would misrepresent the spec.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            outer = Path(td)
+            _git_init(outer)
+            _write_roster(outer, {})
+            child = outer / "noorinalabs-design-system"
+            child.mkdir()
+            _git_init(child)
+            _write_roster(
+                child,
+                {"Maeve Callahan": "parametrization+Maeve.Callahan@gmail.com"},
+            )
+            cmd = (
+                f'cd {child} && git -c user.name="Maeve Callahan" '
+                f'-c user.email="parametrization+Maeve.Callahan@gmail.com" '
+                f'commit -m "x"'
+            )
+            self.assertIsNone(
+                hook.check(self._input(cmd)),
+                "design-system manager Maeve Callahan must be accepted",
+            )
+
+    def test_cross_repo_hyphenated_wrong_email_blocks(self):
+        """Cross-repo + hyphenated + email drops hyphen → block with mismatch reason.
+
+        Combines the cross-repo `cd` codepath with a realistic typo (operator
+        omits the hyphen from email local-part). Without this fixture, a
+        future regression in `_detect_target_roster` could swap to the local
+        roster (where the de-hyphenated email also doesn't match) and
+        produce a misleading error message. By pinning the child-roster
+        path explicitly, we ensure the block reason cites the CHILD roster
+        expectation, not the parent.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            outer = Path(td)
+            _git_init(outer)
+            _write_roster(outer, {})
+            child = outer / "noorinalabs-data-acquisition"
+            child.mkdir()
+            _git_init(child)
+            _write_roster(
+                child,
+                {
+                    "Jean-Claude Habimana": "parametrization+Jean-Claude.Habimana@gmail.com",
+                },
+            )
+            wrong_email = "parametrization+JeanClaude.Habimana@gmail.com"
+            cmd = (
+                f'cd {child} && git -c user.name="Jean-Claude Habimana" '
+                f'-c user.email="{wrong_email}" commit -m "x"'
+            )
+            result = hook.check(self._input(cmd))
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertEqual(result.get("decision"), "block")
+            self.assertIn("does not match roster", result["reason"])
+            self.assertIn("Jean-Claude.Habimana", result["reason"])
+
+
 if __name__ == "__main__":
     unittest.main()
