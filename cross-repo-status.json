@@ -1,4 +1,7 @@
 {
+  "wave_11_annunaki_attack_ran_at": "2026-05-17T00:09:02Z",
+  "wave_11_active": true,
+  "wave_11_meta_issue": 447,
   "phase_3_sweep_wave_reservation_2026_05_13": {
     "directive_date": "2026-05-13",
     "reserved_waves": [
@@ -680,10 +683,10 @@
     }
   },
   "wave_6_kicked_off_at": "2026-05-06T22:41:08Z",
-  "wave_active": false,
-  "current_wave": "wave-10",
-  "next_wave": "wave-11",
-  "last_completed_wave": "wave-9",
+  "wave_active": true,
+  "current_wave": "wave-11",
+  "next_wave": "wave-12",
+  "last_completed_wave": "wave-10",
   "last_completed_at": "2026-05-13T02:39:42Z",
   "wave_5_completed_at": "2026-05-06T00:41:23Z",
   "wave_5_main_merge_sha": "121132e",
@@ -1358,7 +1361,7 @@
   "wave_started": "2026-04-30T21:00:00Z",
   "wave_1_wrap_started": "2026-04-30T23:18:00Z",
   "wave_1_wrap_status": "CLOSED 2026-05-01T01:49:41Z. Both wave-merge PRs landed (deploy#213 merge-commit b6f2cd1; main#235 merge-commit 9a1ef3e). 5/5 Tier-1 + 2/2 Tier-2 + #205 followup-of-spec + #214 wave-tail flake fix (#215 retry-with-backoff JSON-parse classifier) all on main. 8 deploy worktrees pruned. 2 ontology files resolved. 4 charter deltas landed (Patterns A + B unified + C + D). Trust matrix updated (Lucas 4\u21925; others hold). Promotion audit 0/0/55/4. Wave-tail produced 5 additional retro-pattern data points stress-testing the just-landed charter; all four patterns held. 9 follow-ups filed for next-wave planning (#199 #200 #203 #204 #209 #211 #212 + main#232 + main#233 + main#234). 3 Tier-3 carry-forwards remain operationally gated (deploy#86 async-routine fires post-this-merge; deploy#151 manual SRE B2 tfstate-key migration; user-service#84 manual SRE DEPLOY_REPO_PAT secret).",
-  "last_updated": "2026-05-08T22:41:25Z",
+  "last_updated": "2026-05-17T03:35:53Z",
   "deployments_branch": "deployments/phase-3/wave-3",
   "wave_1_theme": "Promotion pipeline goes prod \u2014 owner directive: pipeline running seamlessly so team can refocus on product + process",
   "wave_1_scope": {
@@ -1449,24 +1452,7 @@
     "noorinalabs-design-system": 7,
     "noorinalabs-data-acquisition": 3
   },
-  "phase_3_carry_forwards": [
-    {
-      "id": "noorinalabs-deploy#86",
-      "type": "async-routine",
-      "routine_id": "trig_01Bif8T51pdaYFjkbM5bERyL",
-      "note": "VPS decom; fires after wave-10 \u2192 main merge (now satisfied)"
-    },
-    {
-      "id": "noorinalabs-deploy#151",
-      "type": "manual-sre",
-      "note": "B2 tfstate-key migration hetzner/terraform.tfstate \u2192 hetzner/prod.tfstate"
-    },
-    {
-      "id": "noorinalabs-user-service#84",
-      "type": "manual-sre",
-      "note": "Provision DEPLOY_REPO_PAT secret for notify-deploy job"
-    }
-  ],
+  "phase_3_carry_forwards": [],
   "wave_branch_status": "phase-2 closed 2026-04-30. wave-10 retro PR #230 merged 20:47:41Z. Phase 3 deployments branch will be opened when wave-1 is planned. Wave-10 work fully on main: deploy promotion-pathway end-to-end, image-tag Contract v6 across 4 repos, alembic merge migration, CF + Hetzner per-env, SSE-B2 + URL-safe secrets, 4 hook updates (14, 15, 16, 17).",
   "open_prs_total": 0,
   "historical_phases": {
@@ -2540,7 +2526,7 @@
       "newly_superseded_into_charter": 5
     }
   },
-  "wave_10_active": true,
+  "wave_10_active": false,
   "wave_10_kicked_off_at": "2026-05-13T16:35:49Z",
   "wave_10_scope_post_kickoff_additions": [
     {
@@ -2560,5 +2546,117 @@
     }
   ],
   "wave_10_top_concentration_pct": 12,
-  "wave_10_counter_corrections": [{"metric":"wave_10_top_concentration_pct","claimed":11,"actual":12,"corrected_at":"2026-05-16","methodology_note":"wrapup recipe computes by commit-identity (parametrization 7/65 = 11%); retro narrative uses branch-prefix author (M.Salazar 8/65 = 12%) for engineer-distribution signal. Branch-prefix is more representative of wave-distribution health because the 7 throttle-takeover PRs land under parametrization identity but are credited (per wave_10_decisions.orchestrator_takeover_acknowledgment) to the original branch-prefix engineer for trust/distribution attribution.","catalyst":"Wanjiku Mwangi review of PR #441 (W10 retro)"}]
+  "wave_10_counter_corrections": [
+    {
+      "metric": "wave_10_top_concentration_pct",
+      "claimed": 11,
+      "actual": 12,
+      "corrected_at": "2026-05-16",
+      "methodology_note": "wrapup recipe computes by commit-identity (parametrization 7/65 = 11%); retro narrative uses branch-prefix author (M.Salazar 8/65 = 12%) for engineer-distribution signal. Branch-prefix is more representative of wave-distribution health because the 7 throttle-takeover PRs land under parametrization identity but are credited (per wave_10_decisions.orchestrator_takeover_acknowledgment) to the original branch-prefix engineer for trust/distribution attribution.",
+      "catalyst": "Wanjiku Mwangi review of PR #441 (W10 retro)"
+    }
+  ],
+  "wave_11_scope_reconciled_at": "2026-05-17T03:29:57Z",
+  "wave_11_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-isnad-graph",
+    "noorinalabs-user-service",
+    "noorinalabs-deploy",
+    "noorinalabs-design-system",
+    "noorinalabs-landing-page",
+    "noorinalabs-data-acquisition",
+    "noorinalabs-isnad-ingest-platform"
+  ],
+  "wave_11_scope": {
+    "theme": "Tech-debt sweep across all 8 repos (deploy + non-deploy together). 98 of 117 issues (84%) are tech-debt; targets P3 criterion #9 (<10% TD ratio). Deploy-track ignition folded in opportunistically (78 deploy issues, 62 TD + 16 non-TD). Sweep wave reservation for W12/W13 remains warranted.",
+    "scope_size_at_reconcile": 118,
+    "td_count": 99,
+    "per_repo_open": {
+      "noorinalabs-deploy": 78,
+      "noorinalabs-main": 13,
+      "noorinalabs-isnad-ingest-platform": 11,
+      "noorinalabs-isnad-graph": 5,
+      "noorinalabs-design-system": 4,
+      "noorinalabs-user-service": 3,
+      "noorinalabs-data-acquisition": 3,
+      "noorinalabs-landing-page": 1
+    },
+    "per_repo_open_td": {
+      "noorinalabs-deploy": 62,
+      "noorinalabs-main": 11,
+      "noorinalabs-isnad-ingest-platform": 10,
+      "noorinalabs-isnad-graph": 5,
+      "noorinalabs-design-system": 4,
+      "noorinalabs-user-service": 3,
+      "noorinalabs-data-acquisition": 3,
+      "noorinalabs-landing-page": 1
+    },
+    "carry_forwards": [
+      "noorinalabs-main#262",
+      "noorinalabs-main#255",
+      "noorinalabs-main#442",
+      "noorinalabs-main#202",
+      "noorinalabs-design-system#31",
+      "noorinalabs-data-acquisition#47",
+      "noorinalabs-data-acquisition#43",
+      "noorinalabs-isnad-graph#840",
+      "noorinalabs-landing-page#73"
+    ],
+    "must_includes": [],
+    "w10_holdovers_migrated_in_w11_scope": [
+      "noorinalabs-isnad-graph#840",
+      "noorinalabs-landing-page#73"
+    ],
+    "board_field_synced_in_w11_scope": [
+      "noorinalabs-main#442",
+      "noorinalabs-main#136",
+      "noorinalabs-deploy#116"
+    ],
+    "directional_kpi": {
+      "target": "<10% cumulative-open TD ratio",
+      "pre_wave_ratio_pct": 59,
+      "projected_post_wave_ratio_pct": 20,
+      "target_gate_pct": 10
+    }
+  },
+  "wave_11_scope_reconciliation_note": "Resumed /wave-scope 2026-05-17 after partial completion last session. Theme reframed from 'Tech debt and deployment' to 'Tech-debt sweep across all 8 repos (deploy + non-deploy together)' per owner directive post-/phase-review. Pulled W10 holdovers (isnad-graph#840, landing-page#73). Synced 3 board Wave-field drifts. 117 issues across all 8 repos, 84% TD.",
+  "wave_11_kicked_off_at": "2026-05-17T03:35:53Z",
+  "wave_11_branches": {
+    "branch": "deployments/phase-3/wave-11",
+    "created_at": "2026-05-17T03:35:53Z",
+    "repos": {
+      "noorinalabs-main": {
+        "sha": "150066cc9800e04366a4b4e404fcfef7277674bf",
+        "status": "created"
+      },
+      "noorinalabs-isnad-graph": {
+        "sha": "3534444e05515a059e9692af802b3b3f9f8c8e70",
+        "status": "created"
+      },
+      "noorinalabs-user-service": {
+        "sha": "76ff877c7379d6e33dbf5d0afffd521b230b1a53",
+        "status": "created"
+      },
+      "noorinalabs-deploy": {
+        "sha": "d89f4542edbaa52648bc371fee3c1171b5639317",
+        "status": "created"
+      },
+      "noorinalabs-design-system": {
+        "sha": "73f82367ef3a988fb2e3c7e91964f95f6bf79223",
+        "status": "created"
+      },
+      "noorinalabs-landing-page": {
+        "sha": "4232f3f5de5d6ecfbe6842e1c8d9164708d4da4b",
+        "status": "created"
+      },
+      "noorinalabs-data-acquisition": {
+        "sha": "5ee1c1c8d73340b7cdee46caa27da667695e6ea4",
+        "status": "created"
+      },
+      "noorinalabs-isnad-ingest-platform": {
+        "sha": "5c3cadc78257b7b3183e45affafe29cd3b4e4655",
+        "status": "created"
+      }
+    }
+  }
 }
