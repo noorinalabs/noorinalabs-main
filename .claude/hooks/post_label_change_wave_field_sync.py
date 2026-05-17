@@ -128,8 +128,22 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _wave_label_parse import parse_wave_label, parse_wave_label_change  # noqa: E402
+import re  # noqa: E402
+
+from _wave_label_parse import (  # noqa: E402
+    WaveLabelChange,
+    parse_wave_label,
+    parse_wave_label_changes,
+)
 from annunaki_log import log_posttooluse_event  # noqa: E402
+
+# Heuristic: command "looks like" it should have parsed as a wave-label change
+# but `parse_wave_label_changes` returned empty. Used by the parser-skip logger
+# to distinguish "no gh issue edit at all" (silent OK) from "had gh issue edit
+# AND a canonical wave-label" (worth logging per #455). The regex matches the
+# canonical `p{N}-wave-{M}` shape inside a flag value (quoted or equals-form),
+# bounded so suffixed labels like `p3-wave-10-special` do NOT match.
+_CANONICAL_WAVE_LABEL_IN_CMD = re.compile(r'["= ]p\d+-wave-\d+["\s]')
 
 ORG = "noorinalabs"
 PROJECT_NUMBER = 2
@@ -450,72 +464,36 @@ def _ensure_auth_warned_once(reason: str) -> None:
     )
 
 
-def check(
-    input_data: dict,
-    auth_status_runner=None,
-    graphql_runner=None,
-) -> dict | None:
-    """Pure decision function. Returns a dict describing the action taken
-    (or skipped), or None when the hook does not apply.
+def _apply_one_change(
+    change: WaveLabelChange,
+    command: str,
+    ids: dict,
+    graphql_runner,
+) -> dict:
+    """Apply a single WaveLabelChange against project 2. Returns a result dict.
 
-    Result shape (always advisory — never blocking):
-      None                                       — hook didn't apply
-      {"action": "killed", ...}                  — kill-switch env var set
-      {"action": "skip_no_auth_scope", ...}      — gh missing project scope
-      {"action": "skip_no_project_ids", ...}     — introspection failed
-      {"action": "skip_no_option", ...}          — wave option missing
-      {"action": "skip_no_item", ...}            — issue not on project 2
-      {"action": "set", ...}                     — Wave field set
-      {"action": "cleared", ...}                 — Wave field cleared
-      {"action": "skip_mutation_failed", ...}    — GraphQL mutation error
-
-    Injection points let tests mock external state without mocking
-    subprocess: `auth_status_runner()` returns the gh-auth-status output;
-    `graphql_runner(query, variables)` returns the gh-api-graphql output.
+    Pre-condition: caller has verified auth scope + ids are present. This
+    function is invoked once per change in the multi-cmd loop in `check()`.
     """
-    if input_data.get("tool_name", "") != "Bash":
-        return None
-
-    if _kill_switch_active():
-        return {"action": "killed"}
-
-    command = input_data.get("tool_input", {}).get("command", "")
-    if not command:
-        return None
-
-    change = parse_wave_label_change(command)
-    if change is None:
-        return None
-
     # POST-edit state semantics: if BOTH add and remove fired in one
     # command, the added value is the post-edit Wave field value.
-    # If only add → set. If only remove → clear (we lost the wave
-    # label from this issue). `parse_wave_label_change` guarantees at
-    # least one of add_label / remove_label is non-None when it returns
-    # a result, so the `or` here always resolves to a real str.
     target_label: str = change.add_label or change.remove_label or ""
     action_kind = "set" if change.add_label else "clear"
 
-    if not _has_project_scope(auth_status_runner=auth_status_runner):
-        _ensure_auth_warned_once(
-            "post_label_change_wave_field_sync skipped: gh project scope required; "
-            "run 'gh auth refresh -s project' to enable Wave-field auto-sync."
-        )
-        return {"action": "skip_no_auth_scope", "repo": change.repo, "issue": change.issue_number}
-
-    ids = _get_project_ids(graphql_runner=graphql_runner)
-    if not ids:
+    option_name = _wave_label_to_option_name(target_label)
+    if option_name is None:
+        # Caller already validated the shape; defensive only.
         log_posttooluse_event(
             "post_label_change_wave_field_sync",
             command,
-            "Failed to introspect project 2 IDs; skipping Wave-field sync.",
+            f"Internal: wave label {target_label!r} failed option-name conversion "
+            f"for {change.repo}#{change.issue_number}.",
         )
-        return {"action": "skip_no_project_ids", "repo": change.repo, "issue": change.issue_number}
-
-    option_name = _wave_label_to_option_name(target_label)
-    if option_name is None:
-        # Caller already validated the shape; this is defensive only.
-        return None
+        return {
+            "action": "skip_no_option",
+            "repo": change.repo,
+            "issue": change.issue_number,
+        }
     option_id = ids.get("option_ids", {}).get(option_name)
     if action_kind == "set" and option_id is None:
         # Missing option → log + skip (board-audit pre-req: option must be
@@ -523,7 +501,8 @@ def check(
         log_posttooluse_event(
             "post_label_change_wave_field_sync",
             command,
-            f"Project 2 Wave field has no option {option_name!r}; "
+            f"Project 2 Wave field has no option {option_name!r} for "
+            f"{change.repo}#{change.issue_number}; "
             f"add via Project Settings then re-fire.",
         )
         return {
@@ -536,6 +515,14 @@ def check(
     item_id = _lookup_item_id(change.repo, change.issue_number, graphql_runner=graphql_runner)
     if item_id is None:
         # Issue not on project 2 — graceful skip; board-audit will sweep.
+        # Per #451: log this so /annunaki-attack can pattern-match the skip.
+        log_posttooluse_event(
+            "post_label_change_wave_field_sync",
+            command,
+            f"skip_no_item: {change.repo}#{change.issue_number} is not on project 2; "
+            f"board-audit will sweep. Hook 13 should have added it on create — "
+            f"investigate if recurring.",
+        )
         return {
             "action": "skip_no_item",
             "repo": change.repo,
@@ -623,6 +610,104 @@ def check(
         "repo": change.repo,
         "issue": change.issue_number,
     }
+
+
+def check(
+    input_data: dict,
+    auth_status_runner=None,
+    graphql_runner=None,
+) -> dict | None:
+    """Pure decision function. Returns a dict describing the action taken
+    (or skipped), or None when the hook does not apply.
+
+    Result shape (always advisory — never blocking). For single-cmd Bash
+    the dict is returned as-is. For multi-cmd Bash (#455) the returned
+    dict has shape `{"action": "multi", "results": [<per-change result>, ...]}`
+    so callers can introspect every dispatched mutation.
+
+    Single-cmd result variants:
+      None                                       — hook didn't apply
+      {"action": "killed", ...}                  — kill-switch env var set
+      {"action": "skip_no_auth_scope", ...}      — gh missing project scope
+      {"action": "skip_no_project_ids", ...}     — introspection failed
+      {"action": "skip_no_option", ...}          — wave option missing
+      {"action": "skip_no_item", ...}            — issue not on project 2
+      {"action": "set", ...}                     — Wave field set
+      {"action": "cleared", ...}                 — Wave field cleared
+      {"action": "skip_mutation_failed", ...}    — GraphQL mutation error
+
+    Multi-cmd Bash (issue #455):
+      {"action": "multi", "results": [...], "count": N}
+
+    Injection points let tests mock external state without mocking
+    subprocess: `auth_status_runner()` returns the gh-auth-status output;
+    `graphql_runner(query, variables)` returns the gh-api-graphql output.
+    """
+    if input_data.get("tool_name", "") != "Bash":
+        return None
+
+    if _kill_switch_active():
+        return {"action": "killed"}
+
+    command = input_data.get("tool_input", {}).get("command", "")
+    if not command:
+        return None
+
+    changes = parse_wave_label_changes(command)
+    if not changes:
+        # Per #455 acceptance: if the command "looks like" a wave-label edit
+        # (contains `gh issue edit` AND a canonical `p{N}-wave-{M}` flag value)
+        # but the parser returned empty, log it as a parser-skip event so
+        # silent multi-cmd misses are visible to /annunaki-attack. Suffixed
+        # labels (`p3-wave-10-special`) and non-edit `gh` calls are correctly
+        # excluded by the regex anchors and substring check.
+        if "gh issue edit" in command and _CANONICAL_WAVE_LABEL_IN_CMD.search(command):
+            log_posttooluse_event(
+                "post_label_change_wave_field_sync",
+                command,
+                "skip_parser_returned_empty: command contains `gh issue edit` "
+                "and a canonical wave-label flag but parser extracted no changes. "
+                "Likely an unhandled multi-cmd shape (for-loop with unexpanded "
+                "vars, etc.); investigate.",
+            )
+            return {"action": "skip_parser_returned_empty"}
+        return None
+
+    if not _has_project_scope(auth_status_runner=auth_status_runner):
+        _ensure_auth_warned_once(
+            "post_label_change_wave_field_sync skipped: gh project scope required; "
+            "run 'gh auth refresh -s project' to enable Wave-field auto-sync."
+        )
+        # Per #451: surface ALL skipped changes' identity in the result.
+        return {
+            "action": "skip_no_auth_scope",
+            "repo": changes[0].repo,
+            "issue": changes[0].issue_number,
+            "skipped_count": len(changes),
+        }
+
+    ids = _get_project_ids(graphql_runner=graphql_runner)
+    if not ids:
+        log_posttooluse_event(
+            "post_label_change_wave_field_sync",
+            command,
+            f"skip_no_project_ids: failed to introspect project 2 IDs; "
+            f"skipping Wave-field sync for {len(changes)} change(s).",
+        )
+        return {
+            "action": "skip_no_project_ids",
+            "repo": changes[0].repo,
+            "issue": changes[0].issue_number,
+            "skipped_count": len(changes),
+        }
+
+    # Single-cmd shape: preserve original single-result return for back-compat.
+    if len(changes) == 1:
+        return _apply_one_change(changes[0], command, ids, graphql_runner)
+
+    # Multi-cmd shape (#455): iterate every change and aggregate results.
+    results = [_apply_one_change(c, command, ids, graphql_runner) for c in changes]
+    return {"action": "multi", "results": results, "count": len(results)}
 
 
 def main() -> None:
