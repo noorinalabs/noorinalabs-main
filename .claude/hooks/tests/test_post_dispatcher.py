@@ -331,6 +331,53 @@ class BackwardCompatTests(unittest.TestCase):
         )
         self.assertIsNone(result)
 
+    def test_annunaki_monitor_reads_tool_response_production_shape(self):
+        # Regression for #453: production passes `tool_response`; legacy code
+        # read `tool_output` and silently bailed (`combined_output = ""`).
+        import annunaki_monitor as h
+
+        # Force a fresh module-level dedup set so prior fixtures don't suppress.
+        h._seen_hashes.clear()
+
+        result = h.check(
+            {
+                "tool_name": "Bash",
+                "tool_input": {"command": "false"},
+                "tool_response": {
+                    "stdout": "",
+                    "stderr": "fatal: simulated production failure\n",
+                    "exit_code": 1,
+                },
+            }
+        )
+        self.assertIsNotNone(result)
+        self.assertEqual(result.get("action"), "logged")
+
+    def test_auto_add_issue_to_board_reads_tool_response_production_shape(self):
+        # Regression for #453: same field-name bug class. The hook short-circuits
+        # at `stdout = tool_response.get("stdout","")` if reading the wrong key.
+        # Mock subprocess.run so we never hit the network during the test.
+        import auto_add_issue_to_board as h
+
+        with mock.patch.object(h.subprocess, "run") as mock_run:
+            mock_run.return_value.returncode = 0
+            result = h.check(
+                {
+                    "tool_name": "Bash",
+                    "tool_input": {
+                        "command": "gh issue create --repo noorinalabs/noorinalabs-main --title T",
+                    },
+                    "tool_response": {
+                        "stdout": "https://github.com/noorinalabs/noorinalabs-main/issues/999\n",
+                        "stderr": "",
+                        "exit_code": 0,
+                    },
+                }
+            )
+        self.assertIsNotNone(result)
+        # The hook attempted to add; URL was parsed from stdout.
+        mock_run.assert_called_once()
+
     def test_ontology_tracker_check_skips_non_edit_tool(self):
         import ontology_tracker as h
 

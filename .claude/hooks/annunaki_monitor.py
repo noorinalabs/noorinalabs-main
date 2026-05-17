@@ -101,7 +101,9 @@ def check(input_data: dict) -> dict | None:
         return None
 
     command = input_data.get("tool_input", {}).get("command", "")
-    tool_output = input_data.get("tool_output", {})
+    # Claude Code's PostToolUse contract passes `tool_response`. Legacy hook
+    # fixtures used `tool_output`; we accept both so old tests still pass.
+    tool_output = input_data.get("tool_response") or input_data.get("tool_output", {})
     stdout = tool_output.get("stdout", "")
     stderr = tool_output.get("stderr", "")
     exit_code = tool_output.get("exit_code", 0)

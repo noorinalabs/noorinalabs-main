@@ -46,7 +46,10 @@ def check(input_data: dict) -> dict | None:
     if "gh issue create" not in command and "gh issue create" not in command.replace("  ", " "):
         return None
 
-    stdout = input_data.get("tool_output", {}).get("stdout", "")
+    # Claude Code's PostToolUse contract passes `tool_response`. Legacy hook
+    # fixtures used `tool_output`; we accept both so old tests still pass.
+    tool_response = input_data.get("tool_response") or input_data.get("tool_output", {})
+    stdout = tool_response.get("stdout", "")
     if not stdout:
         return None
 
