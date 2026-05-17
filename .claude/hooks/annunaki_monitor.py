@@ -109,8 +109,6 @@ def check(input_data: dict) -> dict | None:
     exit_code = tool_output.get("exit_code", 0)
 
     combined_output = f"{stdout}\n{stderr}".strip()
-    if not combined_output:
-        return None
 
     if _should_ignore(command, combined_output):
         return None
@@ -118,22 +116,27 @@ def check(input_data: dict) -> dict | None:
     is_error = False
     matched_patterns: list[str] = []
 
+    # Check exit_code first so silent failures (commands that exit non-zero
+    # with no stdout/stderr — `false`, `kill -9 $$`, exit-1-no-output) are
+    # captured. Previously an empty-output early-return short-circuited this
+    # branch and dropped them on the floor (#472).
     if exit_code and exit_code != 0:
         is_error = True
         matched_patterns.append(f"exit_code={exit_code}")
 
-    if stderr and stderr.strip():
-        for pattern in ERROR_PATTERNS:
-            if pattern.search(stderr):
-                is_error = True
-                matched_patterns.append(f"stderr:{pattern.pattern}")
-                break
+    if combined_output:
+        if stderr and stderr.strip():
+            for pattern in ERROR_PATTERNS:
+                if pattern.search(stderr):
+                    is_error = True
+                    matched_patterns.append(f"stderr:{pattern.pattern}")
+                    break
 
-    for pattern in ERROR_PATTERNS:
-        if pattern.search(stdout):
-            is_error = True
-            matched_patterns.append(f"stdout:{pattern.pattern}")
-            break
+        for pattern in ERROR_PATTERNS:
+            if pattern.search(stdout):
+                is_error = True
+                matched_patterns.append(f"stdout:{pattern.pattern}")
+                break
 
     if not is_error:
         return None
