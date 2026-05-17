@@ -4,7 +4,7 @@ description: Phase definition, end-state criteria, exit gate, wave history
 phase: 3
 status: active
 created: 2026-04-30
-last_updated: 2026-05-10
+last_updated: 2026-05-17
 ---
 
 # Phase 3 — fix our tools, fix our deployment
@@ -62,8 +62,9 @@ Owner runs `/phase-review` and verifies all 9 end-state rows are `Done`, plus th
 | W7 | Hook parser-fixture coverage backport audit | 12 PRs, 0 admin overrides |
 | W8 | Foundation reset — hook/skill/charter ownership disambiguation + artifact-CI scope definition | 11 PRs, 0 admin overrides, 0 ChangesRequested cycles |
 | W9 | Tech-debt reduction (main-only) | 6 PRs, 0 admin overrides, 0 CR cycles, 67% concentration (Aino 4/6 by commit identity) |
+| W10 | Tech-debt reduction (non-deploy remainder, 6 child repos + main) | 11 PRs across 5 repos (main 4, user-service 2, design-system 2, data-acquisition 2, landing-page 1); 0 admin overrides; retro adopted 3/4 process proposals (charter PR #444, Hook 21 #446) |
 
-9 of 9 waves were tooling/meta (W3 had a small frontend feature; no deploy work shipped yet). This is the gap that drove the 2026-05-08 phase reset and shapes W9 scoping.
+10 of 10 waves were tooling/meta (W3 had a small frontend feature; no deploy work shipped yet). This is the gap that drove the 2026-05-08 phase reset and shapes W11 (deploy entirety).
 
 ## Wave plan addendum — 2026-05-12 owner partition directive
 
@@ -86,20 +87,24 @@ Stored mirror: `cross-repo-status.json` § `wave_9_decisions.partition_directive
 
 ## Sweep-wave reservation (W12, possibly W13) — 2026-05-13 owner directive
 
-Pre-W10 `/phase-review` math, computed against the live issue tracker at
-phase-review time (2026-05-13):
+Pre-W10 `/phase-review` math (2026-05-13) projected post-W11 ~30% TD
+ratio; pre-W11 actuals (2026-05-17) confirm the trajectory but TD reduction
+is happening slightly faster than projected — W10 closed 61 issues (vs the
+projection's 61) but the open-TD count dropped from 133 → 98 because retro
++ audit follow-ups also closed obsolete TD outside the scope.
 
-| State | Open total (7 repos) | Open TD | TD ratio | vs <10% gate |
+| State | Open total (8 repos) | Open TD | TD ratio | vs <10% gate |
 |-------|---------------------|---------|----------|-------------|
-| Now (pre-W10) | 198 | 133 | 67% | far over |
-| After W10 (~61 closed, mostly TD) | ~137 | ~83 | ~61% | far over |
-| After W11 (~61 closed, mostly TD) | ~76 | ~23 | ~30% | still over |
+| Pre-W10 (2026-05-13 projection) | 198 | 133 | 67% | far over |
+| Pre-W11 (2026-05-17 actual) | 166 | 98 | **59%** | far over |
+| After W11 (~117 in scope, mostly TD) | ~50 | ~10 | ~20% | still over |
 | Target | — | — | <10% | — |
 
-Even with W10+W11 perfectly themed at tech-debt reduction, post-W11
-projected ratio is ~30% — still 3× the criterion #9 gate. Owner directive
-2026-05-13: **W12 (and W13 if needed) is reserved as a tech-debt sweep
-wave** to bring the cumulative-open ratio under 10%.
+Even with W11 perfectly themed at tech-debt reduction (117 issues in scope,
+of which ~85 are TD), post-W11 projected ratio is ~20% — still 2× the
+criterion #9 gate. Owner directive 2026-05-13: **W12 (and W13 if needed)
+is reserved as a tech-debt sweep wave** to bring the cumulative-open ratio
+under 10%. The sweep reservation remains warranted at the pre-W11 actuals.
 
 Sweep-wave themes are intentionally NOT pre-committed — the exact scope
 depends on the residual surface at /phase-review pre-W12. Likely contents:
