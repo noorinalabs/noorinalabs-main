@@ -131,6 +131,95 @@ class CoordinatorClassExempt(unittest.TestCase):
         prompt = "You are Bereket Tadesse, Manager for noorinalabs-deploy. Coordinate the wave."
         self.assertIsNone(hook.check(_spawn(prompt)))
 
+    def test_project_lead_exempt_marcia(self):
+        # Marcia Vasquez-Paredes (landing-page) — composer flattens
+        # "Project Lead / Manager" roster title to ", Project Lead".
+        # Was 1 of the 8 captured blocks (#466) that the initial regex missed.
+        prompt = (
+            "You are **Marcia Vasquez-Paredes**, Project Lead for noorinalabs-landing-page. "
+            "Coordinate the wave."
+        )
+        self.assertIsNone(hook.check(_spawn(prompt)))
+
+    def test_pipeline_manager_exempt_dilara(self):
+        # Dilara (data-acquisition) — Senior VP coordinator with the
+        # "Pipeline Manager" composer-output. Surfaced by Santiago's #469
+        # roster-grep during PR #468 review.
+        prompt = (
+            "You are **Dilara Aydin**, Pipeline Manager for noorinalabs-data-acquisition. "
+            "Coordinate the wave."
+        )
+        self.assertIsNone(hook.check(_spawn(prompt)))
+
+
+class CoordinatorExemptHandlesPrependedHeader(unittest.TestCase):
+    """Coordinator-class exemption must match when the spawn brief prepends
+    content (header, task framing, role-card excerpt) before the canonical
+    "You are X, Role" opener — `re.MULTILINE` enables `^` to match at line
+    starts beyond char 0. Caught by Aino's review blocker #2 on PR #468."""
+
+    def test_coordinator_after_markdown_header_exempt(self):
+        prompt = (
+            "# Wave-tail re-spawn brief\n\n"
+            "You are **Bereket Tadesse**, Manager for noorinalabs-deploy. Coordinate the wave."
+        )
+        self.assertIsNone(hook.check(_spawn(prompt)))
+
+    def test_coordinator_after_task_context_exempt(self):
+        prompt = (
+            "Task context: P3W11 wave-tail cleanup.\n"
+            "\n"
+            "You are **Adaeze Okonkwo**, Manager for noorinalabs-isnad-ingest-platform. "
+            "Coordinate the wave."
+        )
+        self.assertIsNone(hook.check(_spawn(prompt)))
+
+    def test_coordinator_after_role_card_excerpt_exempt(self):
+        prompt = (
+            "Roster card excerpt:\n"
+            "  Role: Manager for noorinalabs-landing-page\n"
+            "  Reports to: Nadia Khoury\n"
+            "\n"
+            "You are **Marcia Vasquez-Paredes**, Project Lead for noorinalabs-landing-page. "
+            "Coordinate the wave."
+        )
+        self.assertIsNone(hook.check(_spawn(prompt)))
+
+
+class CheckIsCrashSafeOnMalformedInput(unittest.TestCase):
+    """PreToolUse hooks that raise get surfaced to the user as
+    block-with-error, which is worse than silently allowing a malformed
+    shape (the tool itself will reject it). `check()` must return None on
+    any non-conforming input. Covers Aino's non-blocking concern on #468."""
+
+    def test_none_prompt_does_not_crash(self):
+        self.assertIsNone(hook.check({"tool_name": "Agent", "tool_input": {"prompt": None}}))
+
+    def test_int_prompt_does_not_crash(self):
+        self.assertIsNone(hook.check({"tool_name": "Agent", "tool_input": {"prompt": 42}}))
+
+    def test_dict_prompt_does_not_crash(self):
+        self.assertIsNone(hook.check({"tool_name": "Agent", "tool_input": {"prompt": {"x": 1}}}))
+
+    def test_none_tool_input_does_not_crash(self):
+        self.assertIsNone(hook.check({"tool_name": "Agent", "tool_input": None}))
+
+    def test_list_tool_input_does_not_crash(self):
+        self.assertIsNone(hook.check({"tool_name": "Agent", "tool_input": []}))
+
+    def test_none_isolation_does_not_crash(self):
+        self.assertIsNone(
+            hook.check(
+                {
+                    "tool_name": "Agent",
+                    "tool_input": {"isolation": None, "prompt": "You are X, Engineer."},
+                }
+            )
+        )
+
+    def test_missing_tool_input_does_not_crash(self):
+        self.assertIsNone(hook.check({"tool_name": "Agent"}))
+
 
 class CoordinatorExemptIsBoundaryStrict(unittest.TestCase):
     """The exemption matches the canonical opener shape and NOT incidental

@@ -4,11 +4,11 @@
 Blocks worktree-isolated Agent tool calls unless the prompt either contains
 ontology context markers (indicating the orchestrator ran
 `/ontology-librarian` before spawning) OR the prompt opens with a
-coordinator-class role declaration (Manager, Program Director, TPM,
-Release Coordinator).
+coordinator-class role declaration (Manager, Pipeline Manager, Project
+Lead, Program Director, TPM, Release Coordinator).
 
-Coordinator-class exemption (#466)
-==================================
+Coordinator-class exemption (#466, expanded via Aino + Santiago review)
+======================================================================
 
 Coordinators communicate via SendMessage and rarely Edit/Write directly.
 Hook 15 (`enforce_librarian_consulted`) covers the Edit/Write surface for
@@ -21,6 +21,13 @@ catching real risk.
 Implementer-class roles (Engineer, Tech Lead, Standards & Quality Lead,
 Security Engineer, etc.) are NOT exempt — they Edit/Write code as the
 primary task.
+
+Title taxonomy is enumerative (not heuristic): each role string here
+corresponds to an actual canonical-composer output observed in spawn
+briefs across the 7 child rosters. Compound titles that the composer
+flattens to a different name (e.g., Bereket's "Infrastructure Manager"
+→ composer emits `, Manager`; Marcia's "Project Lead / Manager" →
+composer emits `, Project Lead`) match by their composer-output form.
 
 Exit codes:
   0 — allow (not an Agent call, non-worktree isolation, coordinator-class
@@ -48,24 +55,47 @@ ONTOLOGY_MARKERS = [
 
 # Canonical coordinator-class opener: `You are **{Name}**, {Role}[ for {repo}]`
 # where {Role} is one of the pure-coordination titles. Bold-markdown around
-# the name is optional (some shorter briefs drop it). Anchored to start so
-# only the opener matches — incidental mentions of "Manager" later in the
-# prompt do not exempt the spawn.
+# the name is optional. `re.MULTILINE` so the `^` anchor matches at the
+# start of any line — handles briefs that prepend a header (Ontology
+# Context block, task framing, etc.) before the "You are X, ..." opener.
+#
+# Title list is enumerative — see module docstring. Multi-word titles
+# precede single-word `Manager` alternation so the regex engine doesn't
+# half-consume "Pipeline Manager" as `Manager` (it wouldn't anyway because
+# `Manager` requires position right after `, `, but the explicit ordering
+# documents the intent for future maintainers).
 COORDINATOR_ROLE_OPENER = re.compile(
     r"^\s*You are\s+\*{0,2}[^,\n]+?\*{0,2},\s*"
-    r"(Manager|Program\s+Director|TPM|Technical\s+Program\s+Manager|Release\s+Coordinator)\b",
-    re.IGNORECASE,
+    r"(Pipeline\s+Manager"
+    r"|Project\s+Lead"
+    r"|Program\s+Director"
+    r"|Technical\s+Program\s+Manager"
+    r"|TPM"
+    r"|Release\s+Coordinator"
+    r"|Manager)\b",
+    re.IGNORECASE | re.MULTILINE,
 )
 
 
 def check(input_data: dict) -> dict | None:
-    """Pure decision function. Returns None to allow, or a block-dict."""
+    """Pure decision function. Returns None to allow, or a block-dict.
+
+    Returns None for malformed inputs (non-dict tool_input, non-str prompt,
+    etc.) rather than crashing — PreToolUse hooks that raise are surfaced
+    to the user as block-with-error, which is worse than allowing through
+    a malformed shape that the tool itself will reject.
+    """
     if input_data.get("tool_name", "") != "Agent":
         return None
 
-    tool_input = input_data.get("tool_input", {})
+    tool_input = input_data.get("tool_input")
+    if not isinstance(tool_input, dict):
+        return None
+
     isolation = tool_input.get("isolation", "")
     prompt = tool_input.get("prompt", "")
+    if not isinstance(isolation, str) or not isinstance(prompt, str):
+        return None
 
     if isolation != "worktree":
         return None
@@ -101,8 +131,13 @@ def main() -> None:
         sys.exit(0)
 
     print(json.dumps(result))
-    prompt = input_data.get("tool_input", {}).get("prompt", "")
-    log_pretooluse_block("enforce_ontology_context", prompt[:200], result["reason"])
+    prompt = ""
+    tool_input = input_data.get("tool_input")
+    if isinstance(tool_input, dict):
+        raw = tool_input.get("prompt", "")
+        if isinstance(raw, str):
+            prompt = raw[:200]
+    log_pretooluse_block("enforce_ontology_context", prompt, result["reason"])
     sys.exit(2)
 
 
