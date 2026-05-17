@@ -167,12 +167,15 @@ Existing 3-digit ADRs are not merge-blockers; renames are mechanical and reversi
 | `validate_review_comment_format.py` | PreToolUse (Bash) | Enforce review comment charter format |
 | `validate_wave_context.py` | PreToolUse (Agent) | Warn if agent spawned without wave context or ontology context in prompt |
 | `block_shutdown_without_retro.py` | PreToolUse (SendMessage) | Block agent shutdown before retro |
-| `auto_add_issue_to_board.py` | PostToolUse (Bash) | Auto-add new issues to project board |
+| `auto_add_issue_to_board.py` | PostToolUse (Bash) | Auto-add new issues to project board. Reads `tool_response.stdout` (with legacy `tool_output` fallback) per Claude Code PostToolUse contract — #453/#454 fix |
+| `post_wave_kickoff_comment.py` | PostToolUse (Bash) | Post charter-format kickoff comment when a `p{N}-wave-{M}` label is APPLIED |
+| `post_label_change_wave_field_sync.py` | PostToolUse (Bash) | Auto-sync project 2 `Wave` single-select field when a `p{N}-wave-{M}` label is added or removed via `gh issue edit`. Closes label-EDIT gap that Hook 13 (CREATE-only) doesn't cover. Kill-switch: `NOORIN_DISABLE_LABEL_SYNC_HOOK=1`. Cache: `.claude/.consulted/post_label_change_wave_field_sync/project_ids.json` (1h TTL, 0600). 5-drift evidence base from W10 `/board-audit`; PR #446, issue #445. variableNotUsed fix landed #449 (hotfix) |
 | `validate_pr_ci_status.py` | PreToolUse (Bash) | Block `gh pr merge` when any CI check is failing/cancelled/timed-out |
 | `enforce_librarian_consulted.py` | PreToolUse (Edit/Write/NotebookEdit) | Block edits unless `/ontology-librarian` consulted earlier in session |
 | `no_worktree_self_delete.py` | PreToolUse (Bash) | Block `git worktree remove` when cwd is inside target worktree |
-| `annunaki_log.py` | Utility (imported by hooks) | Shared logging for PreToolUse block events to Annunaki error log |
-| `annunaki_monitor.py` | PostToolUse (Bash) | Capture failed commands to error log |
+| `_wave_label_parse.py` | Utility (imported by hooks) | Shared parser for `gh issue edit <num> --add-label\|--remove-label "p{N}-wave-{M}"` — consolidated from `post_wave_kickoff_comment` during Hook 21 (`post_label_change_wave_field_sync`) implementation. Public API: `parse_wave_label_change(command)`, `is_wave_label(value)`, `parse_wave_label(value)`. Anchored regex `^p\d+-wave-\d+$` — suffixed labels (e.g., `p3-wave-10-special`) are out of scope. P3W10 retro proposal #3 |
+| `annunaki_log.py` | Utility (imported by hooks) | Shared logging for PreToolUse block events + PostToolUse non-blocking events (`log_pretooluse_block`, `log_posttooluse_event`) to Annunaki error log. **Test-mode write suppression (#452):** `_is_test_mode()` returns True when `ENVIRONMENT=test` or `NOORIN_HOOK_TEST_MODE=1`; `append_jsonl_record` returns without writing. Prevents the hook test suite from polluting the prod error log with ~293 fixture entries/run (76% of log content pre-#452) |
+| `annunaki_monitor.py` | PostToolUse (Bash) | Capture failed commands to error log. Reads `tool_response` (with legacy `tool_output` fallback) per #453/#454 hotfix |
 | `ontology_tracker.py` | PostToolUse (Edit/Write) | Track file checksums for ontology changes |
 | `suggest_generic_prompt.py` | PostToolUse (Edit/Write) | Suggest generic prompts for `.claude/` changes |
 | `session_handoff.py` | Stop | Auto-generate handoff on session exit |
