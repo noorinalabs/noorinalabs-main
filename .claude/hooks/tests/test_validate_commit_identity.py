@@ -427,5 +427,289 @@ class ParseFailureFailClosedTests(unittest.TestCase):
         )
 
 
+class IndirectExecBypassTests(unittest.TestCase):
+    """Issue #475 fix 2: PreToolUse hooks only see the outer Bash command,
+    so wrappers like `printf '…git commit…' | bash` and `bash <script>`
+    hide the actual git invocation. Each shape below must BLOCK with the
+    canonical-shape hint, and the matching innocent variant must ALLOW
+    (the detector requires both `git` AND `commit` in the inner payload).
+    """
+
+    @staticmethod
+    def _input(command: str, cwd: str | None = None) -> dict:
+        d: dict = {"tool_name": "Bash", "tool_input": {"command": command}}
+        if cwd is not None:
+            d["cwd"] = cwd
+        return d
+
+    def _assert_blocked_as_indirect(self, result):
+        self.assertIsNotNone(result, "indirect-exec bypass must block")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("indirect-exec", result["reason"])
+        self.assertIn("#475", result["reason"])
+
+    # --- printf | bash family ---------------------------------------------
+
+    def test_printf_pipe_bash_with_git_commit_blocks(self):
+        """POS: `printf '<git commit ...>' | bash` — the headline #475 repro."""
+        cmd = (
+            'printf \'git -c user.name="Bjørn Henriksen" '
+            '-c user.email="..." commit -F /tmp/msg.txt\\n\' | bash'
+        )
+        self._assert_blocked_as_indirect(hook.check(self._input(cmd)))
+
+    def test_printf_pipe_sh_with_git_commit_blocks(self):
+        """POS: `printf '…' | sh` — sh is also a shell interpreter."""
+        cmd = "printf 'git -c user.name=X -c user.email=Y commit -m z\\n' | sh"
+        self._assert_blocked_as_indirect(hook.check(self._input(cmd)))
+
+    def test_printf_pipe_zsh_with_git_commit_blocks(self):
+        """POS: `printf '…' | zsh` — zsh is also a shell interpreter."""
+        cmd = "printf 'git -c user.name=X -c user.email=Y commit -m z\\n' | zsh"
+        self._assert_blocked_as_indirect(hook.check(self._input(cmd)))
+
+    def test_echo_pipe_bash_with_git_commit_blocks(self):
+        """POS: `echo '…git commit…' | bash` — same shape as printf."""
+        cmd = 'echo "git -c user.name=X -c user.email=Y commit -m z" | bash'
+        self._assert_blocked_as_indirect(hook.check(self._input(cmd)))
+
+    def test_printf_pipe_bash_without_git_commit_allows(self):
+        """NEG: `printf 'echo hello' | bash` — innocent pipe-to-shell.
+
+        The detector requires `git` AND `commit` in the inner payload.
+        This is the #475 acceptance bullet "printf 'echo hello' | bash → ALLOWED".
+        """
+        self.assertIsNone(hook.check(self._input("printf 'echo hello' | bash")))
+
+    def test_echo_pipe_bash_without_git_commit_allows(self):
+        """NEG: `echo ls | bash` — innocent pipe-to-shell."""
+        self.assertIsNone(hook.check(self._input("echo ls | bash")))
+
+    # --- shell -c family --------------------------------------------------
+
+    def test_bash_dash_c_with_git_commit_blocks(self):
+        """POS: `bash -c '…git commit…'` — direct -c invocation."""
+        cmd = 'bash -c \'git -c user.name="X" -c user.email="Y" commit -m "z"\''
+        self._assert_blocked_as_indirect(hook.check(self._input(cmd)))
+
+    def test_sh_dash_c_with_git_commit_blocks(self):
+        """POS: `sh -c '…git commit…'`."""
+        cmd = "sh -c 'cd /repo && git -c user.name=X -c user.email=Y commit -m z'"
+        self._assert_blocked_as_indirect(hook.check(self._input(cmd)))
+
+    def test_bash_dash_c_double_quoted_payload_blocks(self):
+        """POS: `bash -c "…git commit…"` — double-quoted payload form."""
+        cmd = 'bash -c "git -c user.name=X -c user.email=Y commit -m z"'
+        self._assert_blocked_as_indirect(hook.check(self._input(cmd)))
+
+    def test_bash_dash_c_without_git_commit_allows(self):
+        """NEG: `bash -c 'ls -la'` — innocent -c invocation."""
+        self.assertIsNone(hook.check(self._input("bash -c 'ls -la'")))
+
+    def test_bash_dash_c_with_git_but_no_commit_allows(self):
+        """NEG: `bash -c 'git status'` — git, but not git commit."""
+        self.assertIsNone(hook.check(self._input("bash -c 'git status'")))
+
+    # --- bash <script> family ---------------------------------------------
+
+    def test_bash_script_containing_git_commit_blocks(self):
+        """POS: `bash /tmp/script.sh` where script content contains git commit.
+
+        Script content is read from disk; if it matches the git-commit shape
+        the wrapper is blocked. This closes the `bash <script-file>` bypass
+        path explicitly called out in #475.
+        """
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".sh", delete=False, encoding="utf-8"
+        ) as f:
+            f.write('git -c user.name="X" -c user.email="Y" commit -F /tmp/msg.txt\n')
+            script_path = f.name
+        try:
+            self._assert_blocked_as_indirect(hook.check(self._input(f"bash {script_path}")))
+        finally:
+            Path(script_path).unlink(missing_ok=True)
+
+    def test_bash_script_without_git_commit_allows(self):
+        """NEG: `bash some-script.sh` whose content does NOT contain git commit.
+
+        #475 acceptance bullet: "Plain bash some-script.sh where the script
+        does NOT contain git commit → ALLOWED".
+        """
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".sh", delete=False, encoding="utf-8"
+        ) as f:
+            f.write("#!/usr/bin/env bash\nls -la\necho done\n")
+            script_path = f.name
+        try:
+            self.assertIsNone(hook.check(self._input(f"bash {script_path}")))
+        finally:
+            Path(script_path).unlink(missing_ok=True)
+
+    def test_bash_script_unreadable_allows(self):
+        """NEG: `bash /nonexistent/path.sh` — unreadable script. Allow rather
+        than block on disk errors; the operator will get a real shell error
+        immediately when bash tries to execute the missing file."""
+        self.assertIsNone(hook.check(self._input("bash /nonexistent/never/exists.sh")))
+
+    # --- process substitution ---------------------------------------------
+
+    def test_bash_process_sub_with_git_commit_blocks(self):
+        """POS: `bash <(echo '…git commit…')` — process substitution bypass."""
+        cmd = 'bash <(echo "git -c user.name=X -c user.email=Y commit -m z")'
+        self._assert_blocked_as_indirect(hook.check(self._input(cmd)))
+
+    def test_bash_process_sub_without_git_commit_allows(self):
+        """NEG: `bash <(echo "ls -la")` — innocent process substitution."""
+        self.assertIsNone(hook.check(self._input('bash <(echo "ls -la")')))
+
+    # --- bare interpreter and pass-through cases --------------------------
+
+    def test_plain_bash_no_args_allows(self):
+        """NEG: bare `bash` (interactive shell) — no inline cmd to inspect.
+
+        #475 acceptance bullet: "Plain bash (interactive shell) with no
+        inline cmd → ALLOWED (no git commit detected)".
+        """
+        self.assertIsNone(hook.check(self._input("bash")))
+
+    def test_direct_git_commit_still_validates_identity(self):
+        """NEG/regression: a direct `git -c ... commit` is still validated
+        through the existing parser — must allow when identity is valid.
+
+        #475 acceptance bullet: existing behavior preserved (still allowed
+        because identity flags present + roster name valid).
+        """
+        valid_name = next(iter(hook.ROSTER), None)
+        if not valid_name:
+            self.skipTest("local roster is empty")
+        valid_email = hook.ROSTER[valid_name]
+        cmd = (
+            f'git -c user.name="{valid_name}" -c user.email="{valid_email}" commit -F /tmp/msg.txt'
+        )
+        self.assertIsNone(hook.check(self._input(cmd)))
+
+    def test_direct_git_commit_missing_identity_still_blocks(self):
+        """NEG/regression: `git commit -m msg` (no identity flags) still blocks.
+
+        #475 acceptance bullet: existing behavior preserved (BLOCKED — current
+        rule). Indirect-exec detection must not bypass the existing
+        identity-validation path for direct invocations.
+        """
+        result = hook.check(self._input('git commit -m "x"'))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        # Should be the missing-name block, not the indirect-exec block.
+        self.assertNotIn("indirect-exec", result["reason"])
+        self.assertIn("user.name", result["reason"])
+
+    # --- cross-check: indirect-exec runs BEFORE segment parser ------------
+
+    def test_indirect_wrapper_wins_over_outer_innocent_commit_pattern(self):
+        """POS: a command that BOTH has an outer non-commit shape AND an
+        inner-via-wrapper git commit blocks on the wrapper, not silently
+        allows. Otherwise the wrapper detection is structurally redundant
+        with the existing parser."""
+        # Outer command does not contain a real `git commit` at the
+        # tokenize level (just `printf` and `bash`); inner payload does.
+        cmd = "printf 'git -c user.name=X -c user.email=Y commit -m z\\n' | bash"
+        result = hook.check(self._input(cmd))
+        assert result is not None
+        self.assertIn("indirect-exec", result["reason"])
+
+
+class CwdFallbackTests(unittest.TestCase):
+    """Issue #475 fix 1: when no literal `cd <path>` prefix is present, fall
+    back to the tool-call cwd for roster resolution. Lets operators commit
+    from within a child-repo worktree without composing a `cd` prefix."""
+
+    def test_cwd_fallback_loads_child_roster(self):
+        """`git -c user.name=<child-only-name> ... commit` from inside the
+        child worktree (no `cd` prefix) validates against the child roster."""
+        with tempfile.TemporaryDirectory() as td:
+            outer = Path(td)
+            _git_init(outer)
+            _write_roster(outer, {"Nadia": "nadia@example.com"})
+            child = outer / "child"
+            child.mkdir()
+            _git_init(child)
+            _write_roster(child, {"Alice": "alice@example.com"})
+
+            detected = hook._detect_target_roster("git commit -m 'x'", cwd=str(child))
+            self.assertIsNotNone(detected)
+            assert detected is not None
+            self.assertEqual(
+                detected,
+                {
+                    "Nadia": "nadia@example.com",
+                    "Alice": "alice@example.com",
+                },
+            )
+
+    def test_cwd_fallback_when_no_roster_returns_none(self):
+        """cwd has no roster.json → return None (caller uses local ROSTER)."""
+        with tempfile.TemporaryDirectory() as td:
+            empty = Path(td) / "no_roster"
+            empty.mkdir()
+            self.assertIsNone(hook._detect_target_roster("git commit -m 'x'", cwd=str(empty)))
+
+    def test_cd_prefix_wins_over_cwd_fallback(self):
+        """Explicit `cd <path>` in the command takes priority over cwd."""
+        with tempfile.TemporaryDirectory() as td:
+            outer = Path(td)
+            _git_init(outer)
+            cd_target = outer / "explicit"
+            cd_target.mkdir()
+            _git_init(cd_target)
+            _write_roster(cd_target, {"Explicit": "explicit@example.com"})
+
+            # Different repo for the cwd-fallback; should be ignored.
+            cwd_target = outer / "cwd_only"
+            cwd_target.mkdir()
+            _git_init(cwd_target)
+            _write_roster(cwd_target, {"FromCwd": "cwd@example.com"})
+
+            detected = hook._detect_target_roster(
+                f"cd {cd_target} && git commit -m 'x'",
+                cwd=str(cwd_target),
+            )
+            assert detected is not None
+            self.assertIn("Explicit", detected)
+            self.assertNotIn("FromCwd", detected)
+
+    def test_no_cd_no_cwd_returns_none(self):
+        """Regression: omitting both still returns None (existing contract)."""
+        self.assertIsNone(hook._detect_target_roster("git commit -m 'x'"))
+
+    def test_check_uses_cwd_fallback_to_accept_child_only_name(self):
+        """Integration: `check()` with a child-only roster name + cwd
+        pointing at the child repo (no `cd` prefix) → ALLOWED.
+
+        Previously this BLOCKED because `_detect_target_roster` returned
+        None without a cd prefix, the local ROSTER was used, and the
+        child-only name failed lookup. Fix 1 makes the cwd the fallback
+        anchor, restoring symmetry with the cd-prefix path.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            outer = Path(td)
+            _git_init(outer)
+            _write_roster(outer, {"Nadia": "nadia@example.com"})
+            child = outer / "child"
+            child.mkdir()
+            _git_init(child)
+            _write_roster(child, {"Alice": "alice@example.com"})
+
+            cmd = 'git -c user.name="Alice" -c user.email="alice@example.com" commit -m "x"'
+            result = hook.check(
+                {
+                    "tool_name": "Bash",
+                    "tool_input": {"command": cmd},
+                    "cwd": str(child),
+                }
+            )
+            self.assertIsNone(result, f"expected allow, got block: {result}")
+
+
 if __name__ == "__main__":
     unittest.main()
