@@ -206,6 +206,64 @@ class ParseLabelApplyCommandTests(unittest.TestCase):
             ("noorinalabs-main", "999", "p3-wave-9"),
         )
 
+    # --- #467 between-wave relabel filter ---
+
+    def test_between_wave_relabel_returns_none(self):
+        """Issue #467: `--add-label "p3-wave-11" --remove-label "p3-wave-10"`
+        is the carry-forward (between-wave relabel) shape. The kickoff hook
+        must NOT fire on these commands — they were generating a 36-event
+        annunaki noise burst in P3W11 (all `skip_no_scope`)."""
+        self.assertIsNone(
+            hook.parse_label_apply_command(
+                "gh issue edit 262 --repo noorinalabs/noorinalabs-main "
+                '--add-label "p3-wave-11" --remove-label "p3-wave-10"'
+            )
+        )
+
+    def test_between_wave_relabel_flag_order_swapped_returns_none(self):
+        """Same as above but `--remove-label` first → still skipped."""
+        self.assertIsNone(
+            hook.parse_label_apply_command(
+                "gh issue edit 262 --repo noorinalabs/noorinalabs-main "
+                '--remove-label "p3-wave-10" --add-label "p3-wave-11"'
+            )
+        )
+
+    def test_between_wave_relabel_equals_form_returns_none(self):
+        """Equals-form flags on a relabel also skip."""
+        self.assertIsNone(
+            hook.parse_label_apply_command(
+                "gh issue edit 262 --repo=noorinalabs/noorinalabs-main "
+                "--add-label=p3-wave-11 --remove-label=p3-wave-10"
+            )
+        )
+
+    def test_add_with_non_wave_remove_still_matches(self):
+        """`--add-label "p3-wave-11" --remove-label "tech-debt"` should still
+        fire the hook — removing a non-wave label doesn't make this a
+        between-wave relabel. The `parse_wave_label_change` helper only
+        populates `remove_label` for canonical wave labels, so a non-wave
+        remove leaves `remove_label=None` and the filter doesn't trigger."""
+        self.assertEqual(
+            hook.parse_label_apply_command(
+                "gh issue edit 100 --repo noorinalabs/noorinalabs-main "
+                '--add-label "p3-wave-11" --remove-label "tech-debt"'
+            ),
+            ("noorinalabs-main", "100", "p3-wave-11"),
+        )
+
+    def test_initial_add_without_remove_still_matches(self):
+        """Regression guard: the common initial-kickoff shape — bare
+        `--add-label "p3-wave-11"` with no `--remove-label` — must still
+        return the tuple so the hook proceeds to render + post the kickoff
+        comment. This pins acceptance criterion #2 from issue #467."""
+        self.assertEqual(
+            hook.parse_label_apply_command(
+                'gh issue edit 200 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-11"'
+            ),
+            ("noorinalabs-main", "200", "p3-wave-11"),
+        )
+
 
 class FindAssignmentRowTests(unittest.TestCase):
     """Direct coverage of tier-array row lookup with both shapes."""
