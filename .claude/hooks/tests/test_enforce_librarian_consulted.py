@@ -529,5 +529,126 @@ class SentinelFallbackTests(unittest.TestCase):
         self.assertEqual(hook._cwd_sentinel_hash(sample), expected)
 
 
+class ShellPythonHashParityTests(unittest.TestCase):
+    """Issue #175 — subprocess-based shell/Python hash parity.
+
+    The existing `test_cwd_hash_matches_shell_pwd_sha1sum` spot-check above
+    re-implements the same algorithm in test code and asserts it equals the
+    hook's Python function. That's a Python-vs-Python parity check; it does
+    NOT catch divergence between the librarian skill's actual shell pipeline
+    (`pwd | sha1sum | cut -c1-16`) and the Python implementation.
+
+    These tests close that gap by:
+      1. Running the exact shell pipeline from SKILL.md in an isolated cwd
+         and asserting the resulting filename matches the Python hash.
+      2. Parsing the shell snippet directly out of SKILL.md so the test
+         fails if the skill drifts (e.g., switches to `realpath`, uses a
+         different cut width, etc.).
+    """
+
+    # Resolve SKILL.md once at class-load — fail fast at collection time if
+    # the layout has shifted, before any test runs.
+    _SKILL_MD = (
+        Path(__file__).resolve().parent.parent.parent / "skills" / "ontology-librarian" / "SKILL.md"
+    )
+
+    def _read_skill_md(self) -> str:
+        self.assertTrue(
+            self._SKILL_MD.is_file(),
+            f"Expected SKILL.md at {self._SKILL_MD} — test cannot validate parity "
+            "without the canonical shell pipeline source",
+        )
+        return self._SKILL_MD.read_text(encoding="utf-8")
+
+    def test_shell_pipeline_matches_python_hash_in_isolated_cwd(self) -> None:
+        """Run `pwd | sha1sum | cut -c1-16` in an isolated cwd. Assert the
+        resulting 16-hex prefix matches `_cwd_sentinel_hash(cwd)`.
+
+        Uses `subprocess.run(..., cwd=tmp_dir)` so the shell `pwd` resolves
+        to the test's tmp cwd, not the test runner's cwd. The pipeline is
+        passed verbatim from SKILL.md step 0 (the literal bash snippet that
+        the librarian skill writes the sentinel filename from).
+        """
+        import subprocess
+        import tempfile
+
+        with tempfile.TemporaryDirectory(prefix="hash_parity_") as tmp:
+            # Realpath to defeat any /tmp -> /private/tmp on macOS or symlink
+            # surprises; Python's `os.path.abspath` does the same resolution
+            # the hook applies before hashing.
+            tmp_abs = os.path.abspath(tmp)
+            result = subprocess.run(
+                ["bash", "-c", "pwd | sha1sum | cut -c1-16"],
+                cwd=tmp_abs,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=10,
+            )
+            shell_hash = result.stdout.strip()
+            python_hash = hook._cwd_sentinel_hash(tmp_abs)
+            self.assertEqual(
+                shell_hash,
+                python_hash,
+                f"Shell pipeline produced {shell_hash!r} but Python produced "
+                f"{python_hash!r} for cwd {tmp_abs!r}. If the skill writes a "
+                f"sentinel under {shell_hash}.marker the hook will look up "
+                f"{python_hash}.marker and never find it.",
+            )
+
+    def test_shell_pipeline_matches_python_hash_for_long_path(self) -> None:
+        """A long path with multiple segments — guard against any
+        length-dependent truncation difference between shell and Python."""
+        import subprocess
+        import tempfile
+
+        with tempfile.TemporaryDirectory(prefix="hash_parity_long_") as tmp:
+            nested = os.path.join(tmp, "deep", "nested", "worktree", "subagent", "cwd")
+            os.makedirs(nested, exist_ok=True)
+            nested_abs = os.path.abspath(nested)
+            result = subprocess.run(
+                ["bash", "-c", "pwd | sha1sum | cut -c1-16"],
+                cwd=nested_abs,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=10,
+            )
+            shell_hash = result.stdout.strip()
+            python_hash = hook._cwd_sentinel_hash(nested_abs)
+            self.assertEqual(shell_hash, python_hash)
+
+    def test_skill_md_uses_expected_shell_pipeline(self) -> None:
+        """Drift guard: the bash snippet in SKILL.md step 0 must contain
+        the exact `pwd | sha1sum | cut -c1-16` pipeline.
+
+        If a future edit to the skill changes the algorithm (e.g., switches
+        to `realpath | sha256sum | cut -c1-16`, or drops the cut width
+        to 8 chars), this test goes red so the change is noticed and the
+        Python side updated in lock-step.
+        """
+        skill_md = self._read_skill_md()
+        self.assertIn(
+            "pwd | sha1sum | cut -c1-16",
+            skill_md,
+            "SKILL.md step 0 must use the canonical `pwd | sha1sum | cut -c1-16` "
+            "pipeline. If the algorithm has changed, update _cwd_sentinel_hash "
+            "in _consultation_sentinel.py to match.",
+        )
+
+    def test_skill_md_uses_consulted_directory_structure(self) -> None:
+        """Drift guard: SKILL.md must write sentinels under the namespaced
+        `.claude/.consulted/ontology-librarian/` directory that the hook
+        reads from (per #176)."""
+        skill_md = self._read_skill_md()
+        self.assertIn(
+            ".claude/.consulted/ontology-librarian",
+            skill_md,
+            "SKILL.md must write sentinels under `.claude/.consulted/ontology-librarian/`. "
+            "If the directory has moved, update SENTINEL_PARENT_DIR + _SKILL_KEY in the "
+            "hook so the read path matches the write path.",
+        )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
