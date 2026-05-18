@@ -68,34 +68,64 @@ IGNORE_PATTERNS = [
     re.compile(r"error_log|error\.log|errorhandl", re.IGNORECASE),  # filenames
 ]
 
-# Silent-boolean-test idioms (#474): commands whose ONLY failure signal is a
-# non-zero exit code with empty stdout/stderr — by design, not an error.
-# After #473 closed the silent-failure blind spot, these idioms became noise.
-# Apply ONLY when matched_patterns is exactly ["exit_code=..."] (no stdout or
-# stderr pattern matched) — pattern matches always win, ignore-on-silent-exit
-# never suppresses a real error.
+# Silent-boolean-test idioms (#474, tightened #490): commands whose ONLY
+# failure signal is a non-zero exit code with empty stdout/stderr — by
+# design, not an error. After #473 closed the silent-failure blind spot,
+# these idioms became noise. Apply ONLY when matched_patterns is exactly
+# ["exit_code=..."] (no stdout or stderr pattern matched) — pattern
+# matches always win, ignore-on-silent-exit never suppresses a real error.
+#
+# #490 changes vs #474:
+#   - Removed `^\s*if\s+\[` and `^\s*if\s+\[\[` (gap #3): outer `if [` matched
+#     even when the body — a real deploy step — was the failing command, so
+#     silenced genuine failures. The `[ ... ]` regex still covers bare
+#     condition-only commands; if-bodies now log on their own merit.
+#   - Removed redundant `^\s*\[\[` (micro-cleanup): `^\s*\[` already matches
+#     `[[` (both start with `[`).
+#   - Extended grep regex to handle split-flag forms (`grep -E -q ...`) in
+#     addition to combined-flag forms (`grep -qE`, `grep -Eq`).
 SILENT_BOOLEAN_TEST_PATTERNS = [
-    re.compile(r"^\s*\["),  # POSIX `[ ... ]` test
-    re.compile(r"^\s*\[\["),  # Bash `[[ ... ]]` test
+    re.compile(r"^\s*\["),  # POSIX `[ ... ]` test (also matches `[[`)
     re.compile(r"^\s*test\b"),  # explicit `test` builtin
-    re.compile(r"\bgrep\s+-[a-zA-Z]*q"),  # grep -q (and -qE, -qi, etc.)
+    # grep with -q anywhere in the flag sequence: combined (-qE, -Eq, -qi)
+    # or split (-E -q, -i -q). Non-capturing repeated `-flags \s+` prefix
+    # allows any number of intermediate flag tokens before the -*q* terminal.
+    re.compile(r"\bgrep\s+(?:-[a-zA-Z]+\s+)*-[a-zA-Z]*q"),
     re.compile(r"^\s*(pgrep|pkill)\b"),  # process find/signal, exit 1 on no match
     re.compile(r"^\s*(which|command\s+-v)\b"),  # which/command -v not-found
-    re.compile(r"\bdiff\s+--quiet\b"),  # diff --quiet: exit 1 on differences
-    re.compile(r"\bgit\s+diff\s+--quiet\b"),  # git diff --quiet: same
-    re.compile(r"^\s*if\s+\["),  # `if [ ... ]; then ...; fi` whole-conditional
-    re.compile(r"^\s*if\s+\[\["),  # `if [[ ... ]]; then ...; fi`
+]
+
+# Idioms with exit-code-conditional skip (#490 gap #2): these tools use
+# exit_code as a SIGNAL channel where some codes are by-design and others
+# are real errors. Listed here as (pattern, by_design_codes) so the skip
+# only fires when the exit_code is in the by-design set. Any other exit
+# code falls through to LOG.
+#
+# `diff` and `git diff --quiet` exit-code semantics:
+#   0 — identical
+#   1 — files differ (by-design idiom; suppress)
+#   2 — trouble (couldn't open, permission denied, etc.; LOG)
+SILENT_BOOLEAN_TEST_PATTERNS_BY_EXIT_CODE = [
+    (re.compile(r"\bdiff\s+--quiet\b"), {1}),
+    (re.compile(r"\bgit\s+diff\s+--quiet\b"), {1}),
 ]
 
 
-def _is_silent_boolean_test(command: str) -> bool:
+def _is_silent_boolean_test(command: str, exit_code: int = 0) -> bool:
     """Return True if command matches a documented silent-boolean-test idiom.
 
     Caller must additionally verify that the ONLY failure signal is exit_code
     (no stdout/stderr pattern match) — pattern matches always take precedence.
+
+    For exit-code-conditional idioms (diff --quiet, git diff --quiet), the
+    skip only fires when exit_code is in the by-design set documented for
+    that tool. Any other non-zero code falls through to LOG.
     """
     for pattern in SILENT_BOOLEAN_TEST_PATTERNS:
         if pattern.search(command):
+            return True
+    for pattern, by_design_codes in SILENT_BOOLEAN_TEST_PATTERNS_BY_EXIT_CODE:
+        if pattern.search(command) and exit_code in by_design_codes:
             return True
     return False
 
@@ -180,7 +210,9 @@ def check(input_data: dict) -> dict | None:
     # boolean-test idioms whose failure branch is by-design. Stderr/stdout
     # pattern matches always win — a `[ -f x ]` that somehow emits a real
     # Traceback still logs.
-    if matched_patterns == [f"exit_code={exit_code}"] and _is_silent_boolean_test(command):
+    if matched_patterns == [f"exit_code={exit_code}"] and _is_silent_boolean_test(
+        command, exit_code
+    ):
         return None
 
     error_lines = _extract_error_lines(combined_output)
