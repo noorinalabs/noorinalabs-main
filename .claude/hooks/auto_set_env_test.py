@@ -26,6 +26,7 @@ Matches (blocks if ENVIRONMENT=test missing on the test segment):
         DEBUG=1 pytest tests/                  (env prefix preserved)
         cd /path && pytest tests/              (chain — env must be on pytest segment)
         pytest tests/ && pytest tests-other/   (chain — env required on BOTH segments)
+        (ENVIRONMENT=test pytest tests/)       (subshell — env recognised inside parens)
 
 Does NOT match (short-circuit skips — #114 fix):
     1. Command whose effective argv[0] is `gh` — `gh` is a GitHub API
@@ -48,10 +49,18 @@ Detection order:
     1. Strip leading `VAR=value` tokens from the command for argv[0] check.
     2. If the next token is `gh`, ALLOW (return None).
     3. If the command contains `--body` or `--body-file`, ALLOW.
-    4. Split on `&&`/`||`/`;`/`|` into segments.
+    4. Split on `&&`/`||`/`;`/`|` into segments using a quote-aware
+       state-machine scanner — separators inside `'...'`, `"..."`, or
+       `\\`-escaped positions are NOT recognised.
     5. For each segment containing `\\bpytest\\b` or `\\bmake\\s+test\\b`,
-       require `\\bENVIRONMENT=test\\b` in that segment's leading env-block;
-       else BLOCK with a per-segment-rewritten suggestion.
+       require `\\bENVIRONMENT=test\\b` in that segment's leading env-block
+       (subshell-aware: a segment that opens with `(` peeks inside the
+       parens for the env-block); else BLOCK with a per-segment-rewritten
+       suggestion, EXCEPT when the test segment is the body of a
+       control-flow construct (`for|while|until|if ... ; do pytest ...`)
+       where splicing env between `;` and `do` would produce invalid
+       shell — there we ALLOW with an operator-readable diagnostic
+       logged via annunaki_log rather than emit a mangled suggestion.
 
 Per-segment env-block check (the #476 silent-bypass fix):
     `ENVIRONMENT=test cd /x && pytest tests/` does NOT pass — even though
@@ -59,12 +68,33 @@ Per-segment env-block check (the #476 silent-bypass fix):
     on the pytest segment. Shell semantics apply env assignments only to
     the immediately-following program in the same segment.
 
+Shell-syntax-awareness scope (#478):
+    The state-machine split handles single quotes, double quotes, and
+    backslash-escapes at the top level. It does NOT recurse into
+    `$(...)` or backtick command substitutions — separators inside
+    `$(... && ...)` will still split, which is acceptable because the
+    inner command would only fire if the substitution were executed and
+    the segment scan would catch any pytest invocation regardless.
+    Subshell-recognition is one-deep: `(((pytest)))` is correctly
+    parsed; nested-with-other-content edge cases bail to the
+    control-flow allow-with-diagnostic path on the side of NOT mangling.
+
+Decision on subshell + control-flow coverage (#478):
+    Both are handled in this PR, NOT punted. Once the state machine is
+    in place for quote-awareness (case #1), subshell detection is a
+    leading-`(` peek and control-flow detection is a sibling-segment
+    keyword check — both cheap. Splitting into separate commits would
+    risk leaving the hook in a half-fixed state where mangled
+    suggestions still ship for cases #2 and #3.
+
 Exit codes:
     0 — allow (not a Bash tool, or skip condition met, or every test
-        segment already has ENVIRONMENT=test in its leading env-block)
-    2 — block (at least one test segment is missing ENVIRONMENT=test)
+        segment already has ENVIRONMENT=test in its leading env-block,
+        or test segment is inside a control-flow body — see #478)
+    2 — block (at least one test segment is missing ENVIRONMENT=test
+        and we can produce a syntactically-valid corrected suggestion)
 
-Enforcement artifact for: noorinalabs/noorinalabs-main#114, #476
+Enforcement artifact for: noorinalabs/noorinalabs-main#114, #476, #478
 """
 
 import json
@@ -83,17 +113,19 @@ _ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=\S*\s+")
 # `--body=x`, and `--body-file path`.
 _BODY_FLAG = re.compile(r"(?<![\w-])--body(?:-file)?(?=[\s=]|$)")
 
-# Shell separators we split on. Order matters in the alternation: longer
-# tokens first so `&&` isn't mis-split as two `|`s by the `|` alternative.
-# Captured group preserves the separator in the split output so we can
-# splice segments back together with original glue.
-_SEPARATORS = re.compile(r"(\s*(?:&&|\|\||;|\|)\s*)")
-
 # Test-runner detection: pytest OR `make test`.
 _TEST_RUNNER = re.compile(r"\bpytest\b|\bmake\s+test\b")
 
 # The literal env-var we require.
 _ENV_TOKEN = re.compile(r"\bENVIRONMENT=test\b")
+
+# Shell control-flow keywords that appear as standalone tokens between
+# segment separators. When a test-bearing segment is bracketed by these,
+# splicing `ENVIRONMENT=test` between the separator and the next program
+# produces invalid shell (e.g. `for f in a; ENVIRONMENT=test do pytest`).
+# Used by the bail-with-diagnostic path in `_rewrite_command` (#478).
+_CONTROL_FLOW_OPENERS = frozenset({"for", "while", "until", "if", "case"})
+_CONTROL_FLOW_BODY_KEYWORDS = frozenset({"do", "done", "then", "else", "elif", "fi", "esac", "in"})
 
 
 def _strip_leading_env(command: str) -> str:
@@ -151,11 +183,103 @@ def _split_segments(command: str) -> list[str]:
     """Split command on `&&`/`||`/`;`/`|`, preserving separators as
     alternating list entries: [seg0, sep0, seg1, sep1, ..., segN].
 
+    Quote-aware (#478): separators inside `'...'`, `"..."`, or
+    `\\`-escaped positions are NOT recognised. The previous regex-only
+    implementation tripped on `git log --grep='fix && pytest'` by
+    treating the `&&` inside the grep pattern as a real separator and
+    classifying the quoted `pytest` token as a test-runner invocation.
+
     The result always has odd length: segments at even indices, separators
     at odd indices. A command with no separators returns a single-element
-    list [command].
+    list [command]. Surrounding whitespace around separators is preserved
+    in the separator entry so segments + separators concat back to the
+    original command byte-for-byte.
+
+    State machine:
+        - quote_char: None | "'" | '"'  (current quoting context)
+        - in_escape:  True after a `\\` outside single quotes (POSIX rule)
+        - Separators only fire when quote_char is None.
+        - Inside `'...'` backslashes are literal (POSIX); inside `"..."`
+          they escape `$` `` ` `` `"` `\\`. We treat `\\` as a generic
+          escape outside single quotes — close enough for the hook's
+          purpose, which is to avoid mis-splitting on quoted operators.
     """
-    return _SEPARATORS.split(command)
+    parts: list[str] = []
+    buf: list[str] = []
+    quote_char: str | None = None
+    in_escape = False
+    i = 0
+    n = len(command)
+    while i < n:
+        ch = command[i]
+        if in_escape:
+            buf.append(ch)
+            in_escape = False
+            i += 1
+            continue
+        if quote_char is not None:
+            if ch == "\\" and quote_char == '"':
+                buf.append(ch)
+                in_escape = True
+                i += 1
+                continue
+            buf.append(ch)
+            if ch == quote_char:
+                quote_char = None
+            i += 1
+            continue
+        # Unquoted context.
+        if ch == "\\":
+            buf.append(ch)
+            in_escape = True
+            i += 1
+            continue
+        if ch in ("'", '"'):
+            buf.append(ch)
+            quote_char = ch
+            i += 1
+            continue
+        # Separator detection — only fires outside quotes.
+        sep = _match_separator_at(command, i)
+        if sep is not None:
+            # Look back over the buffer to find the trailing whitespace
+            # that belongs to the separator group, mirroring the old
+            # regex `\s*(...)\s*` capture.
+            seg = "".join(buf)
+            trailing_ws_len = len(seg) - len(seg.rstrip())
+            parts.append(seg[: len(seg) - trailing_ws_len])
+            ws_before = seg[len(seg) - trailing_ws_len :]
+            j = i + len(sep)
+            ws_after_len = 0
+            while j < n and command[j] in (" ", "\t"):
+                ws_after_len += 1
+                j += 1
+            parts.append(ws_before + sep + command[i + len(sep) : i + len(sep) + ws_after_len])
+            buf = []
+            i = j
+            continue
+        buf.append(ch)
+        i += 1
+    parts.append("".join(buf))
+    return parts
+
+
+def _match_separator_at(command: str, i: int) -> str | None:
+    """Return the longest separator token at position `i`, or None.
+
+    Order is significant: `&&` and `||` must be matched before single
+    `&`/`|` would (we don't recognise bare `&`, but `||` must match
+    before `|`).
+    """
+    if command.startswith("&&", i):
+        return "&&"
+    if command.startswith("||", i):
+        return "||"
+    if command[i] == ";":
+        return ";"
+    if command[i] == "|":
+        return "|"
+    return None
 
 
 def _segment_has_env_in_leading_block(segment: str) -> bool:
@@ -165,15 +289,74 @@ def _segment_has_env_in_leading_block(segment: str) -> bool:
     start of the segment (after stripping surrounding whitespace). This
     is the only position where a shell env assignment applies to the
     segment's program.
+
+    Subshell-aware (#478): if the segment opens with `(`, peek inside
+    the parens at the leading env-block of the subshell contents. This
+    handles `(ENVIRONMENT=test pytest tests/)` — the env is on the
+    correct (sub-)segment's program. We strip the leading `(` and any
+    interior whitespace before re-checking; we do NOT need to find the
+    closing `)` because the env-block check only cares about leading
+    tokens. Nested subshells (`((ENVIRONMENT=test pytest))`) are handled
+    by recursion.
     """
     stripped = segment.lstrip()
+    if stripped.startswith("("):
+        # Strip one layer of subshell parens + interior whitespace, then
+        # recurse. This lets the env-block check see through one or more
+        # nested subshells uniformly.
+        return _segment_has_env_in_leading_block(stripped[1:])
     consumed = stripped[: len(stripped) - len(_strip_leading_env(stripped))]
     return bool(_ENV_TOKEN.search(consumed))
 
 
 def _is_test_segment(segment: str) -> bool:
-    """True if segment contains pytest or `make test` as a real invocation."""
-    return bool(_TEST_RUNNER.search(segment))
+    """True if segment contains pytest or `make test` as a real invocation.
+
+    Quote-aware (#478): a `pytest` token inside `'...'` or `"..."`
+    quoting is NOT a test-runner invocation — it's argument data. The
+    `_split_segments` quote-aware tokenizer already protects against
+    quoted separators triggering bogus segment splits, but a single
+    segment can still contain a quoted `pytest` substring (e.g.
+    `git log --grep='fix pytest'` with no separators at all). This
+    function strips quoted regions before applying the test-runner
+    regex.
+    """
+    return bool(_TEST_RUNNER.search(_strip_quoted_regions(segment)))
+
+
+def _strip_quoted_regions(s: str) -> str:
+    """Return `s` with single-quoted and double-quoted regions replaced
+    by empty strings. Backslash-escapes outside single quotes consume
+    their following char.
+
+    Used by `_is_test_segment` to avoid false-positive matches on
+    `pytest` / `make test` text that appears inside argument quoting.
+    """
+    out: list[str] = []
+    quote_char: str | None = None
+    in_escape = False
+    for ch in s:
+        if in_escape:
+            in_escape = False
+            if quote_char is None:
+                out.append(ch)
+            continue
+        if quote_char is not None:
+            if ch == "\\" and quote_char == '"':
+                in_escape = True
+                continue
+            if ch == quote_char:
+                quote_char = None
+            continue
+        if ch == "\\":
+            in_escape = True
+            out.append(ch)
+            continue
+        if ch in ("'", '"'):
+            quote_char = ch
+            continue
+        out.append(ch)
+    return "".join(out)
 
 
 def _prepend_env_to_segment(segment: str) -> str:
@@ -184,23 +367,111 @@ def _prepend_env_to_segment(segment: str) -> str:
     `DEBUG=1 ENVIRONMENT=test pytest`) and preserves the segment's
     leading whitespace exactly so splicing back into the chain doesn't
     re-shape the original command's formatting.
+
+    Subshell-aware (#478): if segment opens with `(`, the env is
+    inserted INSIDE the parens (after the opening `(` and any interior
+    whitespace). This produces `(ENVIRONMENT=test pytest)` rather than
+    the syntactically-incorrect `ENVIRONMENT=test (pytest)`.
     """
     leading_ws_len = len(segment) - len(segment.lstrip())
     leading_ws = segment[:leading_ws_len]
     body = segment[leading_ws_len:]
+    if body.startswith("("):
+        # Insert inside the subshell. Find the run of whitespace after
+        # the `(` so the env sits flush against the first real token.
+        inner = body[1:]
+        inner_ws_len = len(inner) - len(inner.lstrip())
+        inner_after_ws = inner[inner_ws_len:]
+        # Recurse the env-prepend onto the inner so DEBUG=1 etc. is
+        # preserved inside the subshell.
+        inner_with_env = _prepend_env_to_segment(inner_after_ws)
+        return f"{leading_ws}({inner[:inner_ws_len]}{inner_with_env}"
     body_after_env = _strip_leading_env(body)
     env_block = body[: len(body) - len(body_after_env)]
     return f"{leading_ws}{env_block}ENVIRONMENT=test {body_after_env}"
 
 
-def _rewrite_command(command: str) -> str:
-    """Splice ENVIRONMENT=test onto each test-bearing segment that lacks it."""
+def _is_control_flow_bracketed(parts: list[str], idx: int) -> bool:
+    """True if the segment at `parts[idx]` is part of a shell control-
+    flow construct where splicing `ENVIRONMENT=test` at the segment's
+    leading position would produce invalid shell.
+
+    Three invalid shapes we're guarding against:
+
+    1. **Body-keyword leading segment** —
+       `for f in a b; do pytest $f; done`
+       Splicing onto the `do pytest $f` segment yields
+       `; ENVIRONMENT=test do pytest $f` which is invalid (the `do`
+       keyword must immediately follow the separator).
+
+    2. **Opener-keyword leading segment** (this segment) —
+       `while pytest --quick; do echo ok; done`
+       The leading token is `while` (a control-flow opener); env
+       assignments can only precede simple commands, not compound
+       commands. Splicing yields `ENVIRONMENT=test while pytest ...`
+       which is invalid.
+
+    3. **Body-segment of a prior opener** —
+       `for f in a b; do pytest $f; done`
+       The test segment (`do pytest $f`) follows an opener segment
+       (`for f in a b`). Even after stripping the `do` keyword the
+       splice can't be placed safely without re-tokenising the body.
+
+    Detection:
+       - Segment-leading token is a body keyword (`do`/`then`/...) → bail
+       - Segment-leading token is an opener keyword (`for`/`while`/...) → bail
+       - A PRIOR segment leads with an opener and no closer (`done`/`fi`/...)
+         has intervened → segment is inside a body → bail
+
+    Per the docstring decision (#478), bail means ALLOW with annunaki
+    diagnostic rather than emit a mangled suggestion. The opener-segment
+    case (#2) could in principle be handled by splicing inside the
+    compound (`while ENVIRONMENT=test pytest --quick`) but that requires
+    a token-level rewrite — out of scope for this PR per the design
+    decision recorded in the docstring.
+    """
+    seg = parts[idx].lstrip()
+    first_token = seg.split(None, 1)[0] if seg else ""
+    if first_token in _CONTROL_FLOW_BODY_KEYWORDS:
+        return True
+    if first_token in _CONTROL_FLOW_OPENERS:
+        return True
+    # Look backwards through prior segments for a control-flow opener.
+    # If we find one before another opener-or-body-closing keyword
+    # interrupts the run, treat the current segment as inside its body.
+    for j in range(idx - 2, -1, -2):
+        prior = parts[j].lstrip()
+        prior_first = prior.split(None, 1)[0] if prior else ""
+        if prior_first in _CONTROL_FLOW_OPENERS:
+            return True
+        if prior_first in ("done", "fi", "esac"):
+            # Closer of a previous construct — current segment is OUTSIDE.
+            return False
+    return False
+
+
+def _rewrite_command(command: str) -> tuple[str, list[int]]:
+    """Splice ENVIRONMENT=test onto each test-bearing segment that lacks it.
+
+    Returns (rewritten_command, control_flow_bail_indices). The bail
+    indices are segment positions where the test segment is inside a
+    control-flow body — those are NOT rewritten (the splice would
+    produce invalid shell), and the caller uses the list to emit the
+    bail-with-diagnostic ALLOW path instead of a BLOCK.
+    """
     parts = _split_segments(command)
+    bail_indices: list[int] = []
     for i in range(0, len(parts), 2):
         seg = parts[i]
-        if _is_test_segment(seg) and not _segment_has_env_in_leading_block(seg):
-            parts[i] = _prepend_env_to_segment(seg)
-    return "".join(parts)
+        if not _is_test_segment(seg):
+            continue
+        if _segment_has_env_in_leading_block(seg):
+            continue
+        if _is_control_flow_bracketed(parts, i):
+            bail_indices.append(i)
+            continue
+        parts[i] = _prepend_env_to_segment(seg)
+    return "".join(parts), bail_indices
 
 
 def check(input_data: dict) -> dict | None:
@@ -223,14 +494,57 @@ def check(input_data: dict) -> dict | None:
         return None
 
     parts = _split_segments(command)
-    test_segments = [parts[i] for i in range(0, len(parts), 2) if _is_test_segment(parts[i])]
-    if not test_segments:
+    test_segment_indices = [i for i in range(0, len(parts), 2) if _is_test_segment(parts[i])]
+    if not test_segment_indices:
         return None
 
-    if all(_segment_has_env_in_leading_block(seg) for seg in test_segments):
-        return None
+    # Per-segment env-block + control-flow + subshell evaluation.
+    # Three buckets:
+    #   - satisfied: env-prefixed, no action needed
+    #   - control-flow bail: can't splice without invalid shell → ALLOW + log
+    #   - missing-env: real block, splice produces valid suggestion
+    needs_block = False
+    saw_control_flow_bail = False
+    for i in test_segment_indices:
+        if _segment_has_env_in_leading_block(parts[i]):
+            continue
+        if _is_control_flow_bracketed(parts, i):
+            saw_control_flow_bail = True
+            continue
+        needs_block = True
+    if needs_block:
+        rewritten, _ = _rewrite_command(command)
+        return {
+            "decision": "block",
+            "reason": (
+                "ENVIRONMENT=test is required for test commands but was not found in "
+                "the leading env-block of each test-bearing segment. Shell env "
+                "assignments only apply to the immediately-following program in the "
+                "same segment, so chains like `cd /x && pytest` need the env on the "
+                "pytest segment, not at the start of the whole command. Suggested "
+                "command:\n"
+                f"  {rewritten}"
+            ),
+        }
+    if saw_control_flow_bail:
+        # Every offending test segment is inside a control-flow body.
+        # See #478: erroring on the side of NOT mangling — emit a
+        # operator-readable diagnostic via annunaki_log and ALLOW.
+        return {
+            "decision": "allow_with_log",
+            "reason": (
+                "auto_set_env_test: test-bearing segment is inside a shell "
+                "control-flow construct (for/while/until/if). Cannot safely "
+                "splice ENVIRONMENT=test between the separator and the "
+                "control-flow keyword without producing invalid shell. "
+                "Allowing the command — operator must set ENVIRONMENT=test "
+                "in the body manually if the test runner needs it. "
+                f"Command: {command}"
+            ),
+        }
+    return None
 
-    rewritten = _rewrite_command(command)
+    rewritten, _ = _rewrite_command(command)
     return {
         "decision": "block",
         "reason": (
@@ -262,6 +576,19 @@ def main() -> None:
             tool_name="Bash",
         )
         sys.exit(2)
+    if result and result.get("decision") == "allow_with_log":
+        # Control-flow body bail (#478): log the diagnostic via annunaki
+        # but exit 0 so the operator's command runs. Stderr is suppressed
+        # to keep ALLOW paths quiet at the terminal — annunaki captures
+        # the diagnostic for post-hoc review.
+        command = input_data.get("tool_input", {}).get("command", "")
+        log_pretooluse_block(
+            "auto_set_env_test",
+            command,
+            result["reason"],
+            tool_name="Bash",
+        )
+        sys.exit(0)
     sys.exit(0)
 
 
