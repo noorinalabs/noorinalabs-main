@@ -166,6 +166,7 @@ Existing 3-digit ADRs are not merge-blockers; renames are mechanical and reversi
 | `block_gh_pr_review.py` | PreToolUse (Bash) | Block `gh pr review` (use comment-based reviews) |
 | `validate_review_comment_format.py` | PreToolUse (Bash) | Enforce review comment charter format |
 | `validate_wave_context.py` | PreToolUse (Agent) | Warn if agent spawned without wave context or ontology context in prompt |
+| `enforce_ontology_context.py` | PreToolUse (Agent) | Block worktree-isolated Agent spawns without `## Ontology Context` marker (or equivalent librarian-output markers) in the prompt. Coordinator-class spawns (Manager, Pipeline Manager, Project Lead, Program Director, TPM / Technical Program Manager, Release Coordinator) are exempt — the hook matches `COORDINATOR_ROLE_OPENER` against the canonical `You are **{Name}**, {Role}[ for {repo}]` opener and skips. Hook 15 (`enforce_librarian_consulted.py`) covers the Edit/Write surface for the few coordinators that do edit. PR #468 (issue #466) |
 | `block_shutdown_without_retro.py` | PreToolUse (SendMessage) | Block agent shutdown before retro |
 | `auto_add_issue_to_board.py` | PostToolUse (Bash) | Auto-add new issues to project board. Reads `tool_response.stdout` (with legacy `tool_output` fallback) per Claude Code PostToolUse contract — #453/#454 fix |
 | `post_wave_kickoff_comment.py` | PostToolUse (Bash) | Post charter-format kickoff comment when a `p{N}-wave-{M}` label is APPLIED |
