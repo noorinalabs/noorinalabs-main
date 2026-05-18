@@ -334,7 +334,7 @@ If the wave has no meta-issue (rare; pre-#284 waves), skip this step.
 
 **(a) Orchestrator bakes librarian output into the spawn prompt** — `enforce_ontology_context.py` scans the Agent tool prompt for the literal heading `## Ontology Context` and **blocks** the spawn if absent.
 
-**Coordinator-class exemption (#468):** the `## Ontology Context` bake is REQUIRED for implementer-class spawns and OPTIONAL for coordinator-class spawns (Manager, Pipeline Manager, Project Lead, Program Director, TPM / Technical Program Manager, Release Coordinator). The hook's `COORDINATOR_ROLE_OPENER` regex matches the canonical `You are **{Name}**, {Role}[ for {repo}]` opener and exempts these spawns from step (a). Step (b) below — instructing the agent to run `/ontology-librarian` themselves — still applies to coordinators that may Edit/Write, since Hook 15 fires independently at the Edit/Write surface.
+**Coordinator-class exemption (#468):** the `## Ontology Context` bake is REQUIRED for implementer-class spawns and OPTIONAL for coordinator-class spawns (Manager, Pipeline Manager, Project Lead, Program Director, TPM / Technical Program Manager, Release Coordinator). The hook's `COORDINATOR_ROLE_OPENER` regex matches the canonical `You are **{Name}**, {Role}[ for {repo}]` opener and exempts these spawns from step (a). Step (b) below — instructing the agent to run `/ontology-librarian` themselves — still applies to coordinators that may Edit/Write, since Hook 15 fires independently at the Edit/Write surface. Note: spawn-brief composers must canonicalize role titles to the exempt enumeration — e.g., `"Infrastructure Manager"` → `, Manager` for the regex match.
 
 For each implementer in the wave:
 1. Identify the repos and code areas they'll modify
