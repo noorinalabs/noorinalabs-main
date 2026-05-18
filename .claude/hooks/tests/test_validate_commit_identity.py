@@ -757,5 +757,468 @@ class CrossRepoCommitIdentityFixtures(unittest.TestCase):
             self.assertIn("Jean-Claude.Habimana", result["reason"])
 
 
+class IndirectExecBypassTests(unittest.TestCase):
+    """Issue #475 fix 2: PreToolUse hooks only see the outer Bash command,
+    so wrappers like `printf '…git commit…' | bash` and `bash <script>`
+    hide the actual git invocation. Each shape below must BLOCK with the
+    canonical-shape hint, and the matching innocent variant must ALLOW
+    (the detector requires both `git` AND `commit` in the inner payload).
+    """
+
+    @staticmethod
+    def _input(command: str, cwd: str | None = None) -> dict:
+        d: dict = {"tool_name": "Bash", "tool_input": {"command": command}}
+        if cwd is not None:
+            d["cwd"] = cwd
+        return d
+
+    def _assert_blocked_as_indirect(self, result):
+        self.assertIsNotNone(result, "indirect-exec bypass must block")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("indirect-exec", result["reason"])
+        self.assertIn("#475", result["reason"])
+
+    # --- printf | bash family ---------------------------------------------
+
+    def test_printf_pipe_bash_with_git_commit_blocks(self):
+        """POS: `printf '<git commit ...>' | bash` — the headline #475 repro."""
+        cmd = (
+            'printf \'git -c user.name="Bjørn Henriksen" '
+            '-c user.email="..." commit -F /tmp/msg.txt\\n\' | bash'
+        )
+        self._assert_blocked_as_indirect(hook.check(self._input(cmd)))
+
+    def test_printf_pipe_sh_with_git_commit_blocks(self):
+        """POS: `printf '…' | sh` — sh is also a shell interpreter."""
+        cmd = "printf 'git -c user.name=X -c user.email=Y commit -m z\\n' | sh"
+        self._assert_blocked_as_indirect(hook.check(self._input(cmd)))
+
+    def test_printf_pipe_zsh_with_git_commit_blocks(self):
+        """POS: `printf '…' | zsh` — zsh is also a shell interpreter."""
+        cmd = "printf 'git -c user.name=X -c user.email=Y commit -m z\\n' | zsh"
+        self._assert_blocked_as_indirect(hook.check(self._input(cmd)))
+
+    def test_echo_pipe_bash_with_git_commit_blocks(self):
+        """POS: `echo '…git commit…' | bash` — same shape as printf."""
+        cmd = 'echo "git -c user.name=X -c user.email=Y commit -m z" | bash'
+        self._assert_blocked_as_indirect(hook.check(self._input(cmd)))
+
+    def test_printf_pipe_bash_without_git_commit_allows(self):
+        """NEG: `printf 'echo hello' | bash` — innocent pipe-to-shell.
+
+        The detector requires `git` AND `commit` in the inner payload.
+        This is the #475 acceptance bullet "printf 'echo hello' | bash → ALLOWED".
+        """
+        self.assertIsNone(hook.check(self._input("printf 'echo hello' | bash")))
+
+    def test_echo_pipe_bash_without_git_commit_allows(self):
+        """NEG: `echo ls | bash` — innocent pipe-to-shell."""
+        self.assertIsNone(hook.check(self._input("echo ls | bash")))
+
+    # --- shell -c family --------------------------------------------------
+
+    def test_bash_dash_c_with_git_commit_blocks(self):
+        """POS: `bash -c '…git commit…'` — direct -c invocation."""
+        cmd = 'bash -c \'git -c user.name="X" -c user.email="Y" commit -m "z"\''
+        self._assert_blocked_as_indirect(hook.check(self._input(cmd)))
+
+    def test_sh_dash_c_with_git_commit_blocks(self):
+        """POS: `sh -c '…git commit…'`."""
+        cmd = "sh -c 'cd /repo && git -c user.name=X -c user.email=Y commit -m z'"
+        self._assert_blocked_as_indirect(hook.check(self._input(cmd)))
+
+    def test_bash_dash_c_double_quoted_payload_blocks(self):
+        """POS: `bash -c "…git commit…"` — double-quoted payload form."""
+        cmd = 'bash -c "git -c user.name=X -c user.email=Y commit -m z"'
+        self._assert_blocked_as_indirect(hook.check(self._input(cmd)))
+
+    def test_bash_dash_c_without_git_commit_allows(self):
+        """NEG: `bash -c 'ls -la'` — innocent -c invocation."""
+        self.assertIsNone(hook.check(self._input("bash -c 'ls -la'")))
+
+    def test_bash_dash_c_with_git_but_no_commit_allows(self):
+        """NEG: `bash -c 'git status'` — git, but not git commit."""
+        self.assertIsNone(hook.check(self._input("bash -c 'git status'")))
+
+    # --- bash <script> family ---------------------------------------------
+
+    def test_bash_script_containing_git_commit_blocks(self):
+        """POS: `bash /tmp/script.sh` where script content contains git commit.
+
+        Script content is read from disk; if it matches the git-commit shape
+        the wrapper is blocked. This closes the `bash <script-file>` bypass
+        path explicitly called out in #475.
+        """
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".sh", delete=False, encoding="utf-8"
+        ) as f:
+            f.write('git -c user.name="X" -c user.email="Y" commit -F /tmp/msg.txt\n')
+            script_path = f.name
+        try:
+            self._assert_blocked_as_indirect(hook.check(self._input(f"bash {script_path}")))
+        finally:
+            Path(script_path).unlink(missing_ok=True)
+
+    def test_bash_script_without_git_commit_allows(self):
+        """NEG: `bash some-script.sh` whose content does NOT contain git commit.
+
+        #475 acceptance bullet: "Plain bash some-script.sh where the script
+        does NOT contain git commit → ALLOWED".
+        """
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".sh", delete=False, encoding="utf-8"
+        ) as f:
+            f.write("#!/usr/bin/env bash\nls -la\necho done\n")
+            script_path = f.name
+        try:
+            self.assertIsNone(hook.check(self._input(f"bash {script_path}")))
+        finally:
+            Path(script_path).unlink(missing_ok=True)
+
+    def test_bash_script_unreadable_allows(self):
+        """NEG: `bash /nonexistent/path.sh` — unreadable script. Allow rather
+        than block on disk errors; the operator will get a real shell error
+        immediately when bash tries to execute the missing file."""
+        self.assertIsNone(hook.check(self._input("bash /nonexistent/never/exists.sh")))
+
+    # --- process substitution ---------------------------------------------
+
+    def test_bash_process_sub_with_git_commit_blocks(self):
+        """POS: `bash <(echo '…git commit…')` — process substitution bypass."""
+        cmd = 'bash <(echo "git -c user.name=X -c user.email=Y commit -m z")'
+        self._assert_blocked_as_indirect(hook.check(self._input(cmd)))
+
+    def test_bash_process_sub_without_git_commit_allows(self):
+        """NEG: `bash <(echo "ls -la")` — innocent process substitution."""
+        self.assertIsNone(hook.check(self._input('bash <(echo "ls -la")')))
+
+    # --- bare interpreter and pass-through cases --------------------------
+
+    def test_plain_bash_no_args_allows(self):
+        """NEG: bare `bash` (interactive shell) — no inline cmd to inspect.
+
+        #475 acceptance bullet: "Plain bash (interactive shell) with no
+        inline cmd → ALLOWED (no git commit detected)".
+        """
+        self.assertIsNone(hook.check(self._input("bash")))
+
+    def test_direct_git_commit_still_validates_identity(self):
+        """NEG/regression: a direct `git -c ... commit` is still validated
+        through the existing parser — must allow when identity is valid.
+
+        #475 acceptance bullet: existing behavior preserved (still allowed
+        because identity flags present + roster name valid).
+        """
+        valid_name = next(iter(hook.ROSTER), None)
+        if not valid_name:
+            self.skipTest("local roster is empty")
+        valid_email = hook.ROSTER[valid_name]
+        cmd = (
+            f'git -c user.name="{valid_name}" -c user.email="{valid_email}" commit -F /tmp/msg.txt'
+        )
+        self.assertIsNone(hook.check(self._input(cmd)))
+
+    def test_direct_git_commit_missing_identity_still_blocks(self):
+        """NEG/regression: `git commit -m msg` (no identity flags) still blocks.
+
+        #475 acceptance bullet: existing behavior preserved (BLOCKED — current
+        rule). Indirect-exec detection must not bypass the existing
+        identity-validation path for direct invocations.
+        """
+        result = hook.check(self._input('git commit -m "x"'))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        # Should be the missing-name block, not the indirect-exec block.
+        self.assertNotIn("indirect-exec", result["reason"])
+        self.assertIn("user.name", result["reason"])
+
+    # --- cross-check: indirect-exec runs BEFORE segment parser ------------
+
+    def test_indirect_wrapper_wins_over_outer_innocent_commit_pattern(self):
+        """POS: a command that BOTH has an outer non-commit shape AND an
+        inner-via-wrapper git commit blocks on the wrapper, not silently
+        allows. Otherwise the wrapper detection is structurally redundant
+        with the existing parser."""
+        # Outer command does not contain a real `git commit` at the
+        # tokenize level (just `printf` and `bash`); inner payload does.
+        cmd = "printf 'git -c user.name=X -c user.email=Y commit -m z\\n' | bash"
+        result = hook.check(self._input(cmd))
+        assert result is not None
+        self.assertIn("indirect-exec", result["reason"])
+
+
+class IndirectExecExtensionTests(unittest.TestCase):
+    """Issue #482: extend indirect-exec detection from the original 4 shapes
+    (#475) to 5 more — heredoc, here-string, eval, dash/ksh -c (via the
+    widened `_INTERPRETERS` alternation), and extension-agnostic script
+    read (the highest-severity #482 change, since operators could trivially
+    rename a bypass script to circumvent the prior `.sh\\b` restriction).
+
+    Each new shape gets a paired BLOCK / ALLOW test to pin both halves of
+    the detection contract:
+      - BLOCK: inner payload contains git-commit-shape
+      - ALLOW: same wrapper shape but inner payload is innocent
+
+    All existing 46 tests in this file continue to pass — the extensions
+    are strictly additive to `_detect_indirect_commit`'s dispatcher.
+    """
+
+    @staticmethod
+    def _input(command: str, cwd: str | None = None) -> dict:
+        d: dict = {"tool_name": "Bash", "tool_input": {"command": command}}
+        if cwd is not None:
+            d["cwd"] = cwd
+        return d
+
+    def _assert_blocked_with_shape(self, result, shape_label: str) -> None:
+        """Assert the result is an indirect-exec block and the reason
+        contains the expected shape label (e.g. 'heredoc', 'here-string').
+        Also asserts the unified #475/#482 cite is present."""
+        self.assertIsNotNone(result, f"indirect-exec bypass must block ({shape_label})")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("indirect-exec", result["reason"])
+        self.assertIn(shape_label, result["reason"])
+        # Both citations should be present in the unified post-#482 block message.
+        self.assertIn("#475", result["reason"])
+        self.assertIn("#482", result["reason"])
+
+    # --- heredoc shape -----------------------------------------------------
+
+    def test_bash_heredoc_with_git_commit_blocks(self):
+        """POS: `bash <<EOF\\ngit commit ...\\nEOF` — heredoc body fed as
+        stdin to a shell. Without #482 detection the outer tokenizer sees
+        only `['bash', '<<EOF', '...', 'EOF']`-style decomposition and
+        `_find_commit_segment` returns None → silent allow."""
+        cmd = 'bash <<EOF\ngit -c user.name="X" -c user.email="Y" commit -F /tmp/msg.txt\nEOF'
+        self._assert_blocked_with_shape(hook.check(self._input(cmd)), "heredoc")
+
+    def test_bash_heredoc_quoted_delim_with_git_commit_blocks(self):
+        """POS: `bash <<'EOF'...` — quoted-delim heredoc (no var expansion).
+        Same exec semantics; detector must match this variant too."""
+        cmd = 'bash <<\'EOF\'\ngit -c user.name="X" -c user.email="Y" commit -m z\nEOF'
+        self._assert_blocked_with_shape(hook.check(self._input(cmd)), "heredoc")
+
+    def test_bash_heredoc_dash_form_with_git_commit_blocks(self):
+        """POS: `bash <<-EOF...` — tab-stripping heredoc form."""
+        cmd = "bash <<-EOF\n\tgit -c user.name=X -c user.email=Y commit -m z\n\tEOF"
+        self._assert_blocked_with_shape(hook.check(self._input(cmd)), "heredoc")
+
+    def test_bash_heredoc_no_git_commit_allows(self):
+        """NEG: `bash <<EOF\\necho hi\\nEOF` — innocent heredoc body."""
+        cmd = "bash <<EOF\necho hello\nls -la\nEOF"
+        self.assertIsNone(hook.check(self._input(cmd)))
+
+    def test_cat_heredoc_mentioning_git_commit_allows(self):
+        """NEG: `cat <<EOF\\ngit commit is a phrase\\nEOF` — `cat` is NOT
+        a shell interpreter so the heredoc body is data, not code. Must
+        not false-block. This is the principal false-positive guard for
+        heredoc detection — prose containing 'git commit' inside a doc
+        being piped to `cat` (or `tee`, `bat`, etc.) is everywhere."""
+        cmd = "cat <<EOF > /tmp/doc.md\nHow to git commit:\ngit commit -m foo\nEOF"
+        self.assertIsNone(hook.check(self._input(cmd)))
+
+    # --- here-string shape -------------------------------------------------
+
+    def test_bash_herestring_with_git_commit_blocks(self):
+        """POS: `bash <<<'git commit ...'` — here-string body."""
+        cmd = "bash <<<'git -c user.name=X -c user.email=Y commit -m z'"
+        self._assert_blocked_with_shape(hook.check(self._input(cmd)), "here-string")
+
+    def test_bash_herestring_double_quoted_with_git_commit_blocks(self):
+        """POS: `bash <<<"..."` — double-quoted here-string."""
+        cmd = 'bash <<<"git -c user.name=X -c user.email=Y commit -m z"'
+        self._assert_blocked_with_shape(hook.check(self._input(cmd)), "here-string")
+
+    def test_bash_herestring_no_git_commit_allows(self):
+        """NEG: `bash <<<'echo hi'` — innocent here-string."""
+        self.assertIsNone(hook.check(self._input("bash <<<'echo hello'")))
+
+    def test_cat_herestring_mentioning_git_commit_allows(self):
+        """NEG: `cat <<<'git commit is a phrase'` — `cat` is not a shell;
+        body is data not code. Must not false-block."""
+        self.assertIsNone(hook.check(self._input("cat <<<'git commit is a phrase'")))
+
+    # --- eval shape --------------------------------------------------------
+
+    def test_eval_with_git_commit_blocks(self):
+        """POS: `eval 'git commit ...'` — shell builtin re-parses and
+        executes its argument. Outer tokenizer sees `eval` as argv[0]
+        and skips identity validation."""
+        cmd = "eval 'git -c user.name=X -c user.email=Y commit -m foo'"
+        self._assert_blocked_with_shape(hook.check(self._input(cmd)), "eval")
+
+    def test_eval_double_quoted_payload_blocks(self):
+        """POS: `eval "git commit ..."` — double-quoted payload form."""
+        cmd = 'eval "git -c user.name=X -c user.email=Y commit -m foo"'
+        self._assert_blocked_with_shape(hook.check(self._input(cmd)), "eval")
+
+    def test_eval_no_git_commit_allows(self):
+        """NEG: `eval 'echo hello'` — innocent eval."""
+        self.assertIsNone(hook.check(self._input("eval 'echo hello'")))
+
+    def test_eval_variable_substitution_documented_punt(self):
+        """NEG: `eval "$CMD"` — variable-substituted eval body. Documented
+        punt per the hook docstring: substitution happens at shell-runtime,
+        after the hook fires, so we can't inspect the actual command. Must
+        ALLOW (otherwise every legitimate `eval $cmd` use would false-block)."""
+        self.assertIsNone(hook.check(self._input('eval "$CMD"')))
+        self.assertIsNone(hook.check(self._input("eval $cmd")))
+
+    def test_eval_no_quotes_no_commit_allows(self):
+        """NEG: `eval echo hello` — bareword eval, no commit shape."""
+        self.assertIsNone(hook.check(self._input("eval echo hello")))
+
+    # --- dash / ksh extended interpreter alternation -----------------------
+
+    def test_dash_dash_c_with_git_commit_blocks(self):
+        """POS: `dash -c 'git commit ...'` — `dash` is a POSIX shell.
+        Pre-#482 `_INTERPRETERS` was `(?:bash|sh|zsh)` and missed dash;
+        #482 extended to `(?:bash|sh|zsh|dash|ksh)`."""
+        cmd = "dash -c 'git -c user.name=X -c user.email=Y commit -m z'"
+        self._assert_blocked_with_shape(hook.check(self._input(cmd)), "shell -c")
+
+    def test_ksh_dash_c_with_git_commit_blocks(self):
+        """POS: `ksh -c 'git commit ...'` — Korn shell, also POSIX."""
+        cmd = "ksh -c 'git -c user.name=X -c user.email=Y commit -m z'"
+        self._assert_blocked_with_shape(hook.check(self._input(cmd)), "shell -c")
+
+    def test_dash_dash_c_no_git_commit_allows(self):
+        """NEG: `dash -c 'ls -la'` — innocent dash invocation."""
+        self.assertIsNone(hook.check(self._input("dash -c 'ls -la'")))
+
+    def test_dash_piped_with_git_commit_blocks(self):
+        """POS: `printf '...' | dash` — pipe-to-shell with dash interpreter."""
+        cmd = "printf 'git -c user.name=X -c user.email=Y commit -m z\\n' | dash"
+        self._assert_blocked_with_shape(hook.check(self._input(cmd)), "printf/echo piped to shell")
+
+    def test_ksh_piped_with_git_commit_blocks(self):
+        """POS: `echo '...' | ksh` — same with ksh."""
+        cmd = "echo 'git -c user.name=X -c user.email=Y commit -m z' | ksh"
+        self._assert_blocked_with_shape(hook.check(self._input(cmd)), "printf/echo piped to shell")
+
+    # --- extension-agnostic script read (highest-severity #482 fix) -------
+
+    def test_bash_script_dot_bash_extension_blocks(self):
+        """POS: `bash /tmp/script.bash` — .bash extension was NOT covered
+        by the pre-#482 `\\.sh\\b` restriction. Now extension-agnostic,
+        any readable file under the 256 KiB cap is inspected."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".bash", delete=False, encoding="utf-8"
+        ) as f:
+            f.write('git -c user.name="X" -c user.email="Y" commit -F /tmp/msg.txt\n')
+            script_path = f.name
+        try:
+            self._assert_blocked_with_shape(
+                hook.check(self._input(f"bash {script_path}")),
+                "shell script",
+            )
+        finally:
+            Path(script_path).unlink(missing_ok=True)
+
+    def test_bash_script_extensionless_blocks(self):
+        """POS: `bash /tmp/script-no-ext` — completely extensionless. The
+        rename-bypass that was the highest-severity #482 concern: an
+        operator who knew the hook checked `.sh` could rename their
+        bypass script to `myscript` and slip through. Now blocked."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix="", delete=False, encoding="utf-8") as f:
+            f.write('git -c user.name="X" -c user.email="Y" commit -F /tmp/msg.txt\n')
+            script_path = f.name
+        try:
+            self._assert_blocked_with_shape(
+                hook.check(self._input(f"bash {script_path}")),
+                "shell script",
+            )
+        finally:
+            Path(script_path).unlink(missing_ok=True)
+
+    def test_bash_script_unusual_extension_blocks(self):
+        """POS: `bash /tmp/script.ksh` — unusual extension. Content read
+        is unconditional on extension; the cap + fail-open OSError discipline
+        is preserved from the prior `.sh\\b`-restricted detector."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".ksh", delete=False, encoding="utf-8"
+        ) as f:
+            f.write("git -c user.name=X -c user.email=Y commit -m z\n")
+            script_path = f.name
+        try:
+            self._assert_blocked_with_shape(
+                hook.check(self._input(f"bash {script_path}")),
+                "shell script",
+            )
+        finally:
+            Path(script_path).unlink(missing_ok=True)
+
+    def test_bash_extensionless_script_no_git_commit_allows(self):
+        """NEG: `bash /tmp/script` where content has NO git commit.
+        Detection should still try to read (extension-agnostic), find
+        nothing matching, and allow."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix="", delete=False, encoding="utf-8") as f:
+            f.write("#!/usr/bin/env bash\nls -la\necho done\n")
+            script_path = f.name
+        try:
+            self.assertIsNone(hook.check(self._input(f"bash {script_path}")))
+        finally:
+            Path(script_path).unlink(missing_ok=True)
+
+    def test_bash_script_dash_c_does_not_false_match_as_script(self):
+        """NEG/regression: `bash -c '...'` must continue to match as
+        `shell -c`, NOT as a script-path read. The script regex's leading
+        char class excludes `-`, so `-c` is correctly skipped."""
+        cmd = "bash -c 'git -c user.name=X -c user.email=Y commit -m foo'"
+        result = hook.check(self._input(cmd))
+        assert result is not None
+        # Should be matched by the shell -c detector, not the script detector
+        self.assertIn("shell -c", result["reason"])
+        # Should NOT have script-shape language in the reason
+        self.assertNotIn("shell script", result["reason"])
+
+    def test_bash_script_with_size_cap_still_protected(self):
+        """NEG (defensive): a script file >256 KiB is NOT inspected
+        (preserves the original #475 fail-open-on-large-file discipline).
+        If the script content contains a git commit shape but the file
+        exceeds the cap, the detector returns None and the rest of the
+        hook handles it normally (ALLOW since outer-command tokenizer
+        sees `bash <path>`, not git)."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".bash", delete=False, encoding="utf-8"
+        ) as f:
+            # Write >256 KiB of padding followed by git commit text
+            f.write("# padding\n" * 30000)  # ~300 KiB
+            f.write('git -c user.name="X" -c user.email="Y" commit -m z\n')
+            script_path = f.name
+        try:
+            self.assertIsNone(
+                hook.check(self._input(f"bash {script_path}")),
+                "files >256 KiB must not be inspected (preserves fail-open discipline)",
+            )
+        finally:
+            Path(script_path).unlink(missing_ok=True)
+
+    # --- cross-shape coherence --------------------------------------------
+
+    def test_unified_block_message_cites_both_issues(self):
+        """POS: the post-#482 block message MUST cite both #475 (original
+        4-shape work) AND #482 (5-shape extension) so operators landing
+        on the message can trace the full bypass surface."""
+        result = hook.check(self._input("eval 'git -c user.name=X commit -m z'"))
+        assert result is not None
+        self.assertIn("#475", result["reason"])
+        self.assertIn("#482", result["reason"])
+
+    def test_block_message_lists_new_shapes(self):
+        """POS: the wrapper-list in the block message MUST include the
+        new shape examples so the operator sees them inline. Helps prevent
+        operators from re-discovering bypass patterns by trial."""
+        result = hook.check(self._input("eval 'git -c user.name=X commit -m z'"))
+        assert result is not None
+        # New #482 shapes named in the unified message
+        self.assertIn("<<EOF", result["reason"])
+        self.assertIn("<<<", result["reason"])
+        self.assertIn("eval", result["reason"])
+
+
 if __name__ == "__main__":
     unittest.main()
