@@ -11,9 +11,12 @@ Input Language:
   Matches:       Bash with non-zero exit_code OR stdout/stderr matching any
                  ERROR_PATTERNS regex (Traceback, fatal:, ModuleNotFoundError,
                  etc.) and NOT matching IGNORE_PATTERNS
-  Does NOT match: any non-Bash tool, empty stdout+stderr, command-text
-                  containing grep-for-error / --error flags / error-named
-                  paths (false-positive guards), session-dedup hits
+  Does NOT match: any non-Bash tool, command-text containing grep-for-error /
+                  --error flags / error-named paths (false-positive guards),
+                  silent-boolean-test idioms (`[`, `[[`, `test`, `grep -q`,
+                  `pgrep`, `pkill`, `which`, `command -v`, `diff --quiet`,
+                  `git diff --quiet`, `if [...]`) when their ONLY error signal
+                  is a non-zero exit code, session-dedup hits
   Flag pass-through: stdin JSON is forwarded verbatim to `check()` by the
                      PostToolUse dispatcher (`post_dispatcher.py`)
 
@@ -64,6 +67,37 @@ IGNORE_PATTERNS = [
     re.compile(r"--error", re.IGNORECASE),  # flags containing "error"
     re.compile(r"error_log|error\.log|errorhandl", re.IGNORECASE),  # filenames
 ]
+
+# Silent-boolean-test idioms (#474): commands whose ONLY failure signal is a
+# non-zero exit code with empty stdout/stderr — by design, not an error.
+# After #473 closed the silent-failure blind spot, these idioms became noise.
+# Apply ONLY when matched_patterns is exactly ["exit_code=..."] (no stdout or
+# stderr pattern matched) — pattern matches always win, ignore-on-silent-exit
+# never suppresses a real error.
+SILENT_BOOLEAN_TEST_PATTERNS = [
+    re.compile(r"^\s*\["),  # POSIX `[ ... ]` test
+    re.compile(r"^\s*\[\["),  # Bash `[[ ... ]]` test
+    re.compile(r"^\s*test\b"),  # explicit `test` builtin
+    re.compile(r"\bgrep\s+-[a-zA-Z]*q"),  # grep -q (and -qE, -qi, etc.)
+    re.compile(r"^\s*(pgrep|pkill)\b"),  # process find/signal, exit 1 on no match
+    re.compile(r"^\s*(which|command\s+-v)\b"),  # which/command -v not-found
+    re.compile(r"\bdiff\s+--quiet\b"),  # diff --quiet: exit 1 on differences
+    re.compile(r"\bgit\s+diff\s+--quiet\b"),  # git diff --quiet: same
+    re.compile(r"^\s*if\s+\["),  # `if [ ... ]; then ...; fi` whole-conditional
+    re.compile(r"^\s*if\s+\[\["),  # `if [[ ... ]]; then ...; fi`
+]
+
+
+def _is_silent_boolean_test(command: str) -> bool:
+    """Return True if command matches a documented silent-boolean-test idiom.
+
+    Caller must additionally verify that the ONLY failure signal is exit_code
+    (no stdout/stderr pattern match) — pattern matches always take precedence.
+    """
+    for pattern in SILENT_BOOLEAN_TEST_PATTERNS:
+        if pattern.search(command):
+            return True
+    return False
 
 
 def _extract_error_lines(text: str, max_lines: int = 10) -> list[str]:
@@ -139,6 +173,14 @@ def check(input_data: dict) -> dict | None:
                 break
 
     if not is_error:
+        return None
+
+    # #474 silent-boolean-test filter: when the ONLY signal is a non-zero
+    # exit code (no stderr/stdout pattern matched), suppress documented
+    # boolean-test idioms whose failure branch is by-design. Stderr/stdout
+    # pattern matches always win — a `[ -f x ]` that somehow emits a real
+    # Traceback still logs.
+    if matched_patterns == [f"exit_code={exit_code}"] and _is_silent_boolean_test(command):
         return None
 
     error_lines = _extract_error_lines(combined_output)
