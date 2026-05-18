@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for `post_label_change_wave_field_sync` PostToolUse hook.
 
-Six semantic buckets covered (per `skills.md § Acceptance-Criteria-Bucketing-In-Reports`):
+Nine semantic buckets covered (per `skills.md § Acceptance-Criteria-Bucketing-In-Reports`):
 
 ACTIONABLE buckets
 ==================
@@ -1002,6 +1002,144 @@ class SkipPathLoggingTests(unittest.TestCase):
             )
         finally:
             restore()
+
+    def test_skip_mutation_failed_logs(self):
+        """skip_mutation_failed fires when the set-field GraphQL mutation
+        returns empty (gh exit non-zero) and the field-not-found retry path
+        does not apply — covers the 5th skip path from the bucket docstring
+        (closes #462). Symmetric to the other 4 tests in this class.
+        """
+        hook._write_cache(_ids_blob())
+        captured, restore = self._make_log_capture()
+        try:
+            # Mutation responder returns empty → _gh_graphql returns None →
+            # `not result` branch in _apply_one_change → skip_mutation_failed.
+            # No "field not found" string in the (empty) errors blob, so the
+            # cache-bust retry path is not taken.
+            router = FakeGraphQLRouter(
+                item_lookup=_item_lookup_response,
+                mutation=lambda _vars: "",
+            )
+            result = hook.check(
+                _bash(
+                    'gh issue edit 123 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-11"'
+                ),
+                auth_status_runner=_scopes_with_project,
+                graphql_runner=router,
+            )
+            self.assertEqual(result["action"], "skip_mutation_failed")
+            self.assertTrue(
+                any("set-field mutation failed" in c["reason"] for c in captured),
+                f"skip_mutation_failed must log set-field-mutation-failed; captured: {captured}",
+            )
+        finally:
+            restore()
+
+
+class CanonicalWaveLabelRegexTests(unittest.TestCase):
+    """Issue #463 — `_CANONICAL_WAVE_LABEL_IN_CMD` defense-in-depth anchor
+    must match canonical wave labels in ALL plausible flag-value shapes:
+    quoted, equals-form, spaced-bare, AND spaced-bare at end-of-string
+    (the gap the original `["\\s]` right-anchor missed).
+
+    The regex powers the parser-skip log path (line 664-672 in the hook):
+    if `parse_wave_label_changes` returns empty but the command contains
+    `gh issue edit` AND this regex matches, we annunaki-log a
+    `skip_parser_returned_empty` event so silent multi-cmd misses are
+    visible to /annunaki-attack. A regex miss here turns into a silent
+    silent-bypass, so the spaced-bare-EOF gap is a defense-in-depth bug.
+
+    Acceptance criteria from #463:
+      - `--add-label p3-wave-11<EOF>` (spaced bare EOF) → match
+      - `--add-label=p3-wave-11<EOF>` (equals EOF)      → match
+      - `--add-label "p3-wave-10-special"` (suffixed)   → NOT match
+      - `--add-label p3-wave-10-special` (suffixed EOF) → NOT match
+    """
+
+    # All four #463 acceptance cases use a command that the parser
+    # actually CAN'T parse (missing --repo), so the parser-skip log
+    # path is the one exercised by check(). The first two MUST log;
+    # the last two MUST NOT log.
+
+    def setUp(self):
+        _wipe_cache()
+
+    def tearDown(self):
+        _wipe_cache()
+
+    def test_spaced_bare_eof_matches(self):
+        """The #463 headline gap: `--add-label p3-wave-11` at command end."""
+        self.assertIsNotNone(
+            hook._CANONICAL_WAVE_LABEL_IN_CMD.search("gh issue edit 1 --add-label p3-wave-11"),
+            "spaced-bare canonical wave-label at EOF must match",
+        )
+
+    def test_equals_bare_eof_matches(self):
+        """The other EOF shape: `--add-label=p3-wave-11` at command end."""
+        self.assertIsNotNone(
+            hook._CANONICAL_WAVE_LABEL_IN_CMD.search("gh issue edit 1 --add-label=p3-wave-11"),
+            "equals-form canonical wave-label at EOF must match",
+        )
+
+    def test_quoted_with_surrounding_still_matches(self):
+        """Regression: pre-existing matched form must still match."""
+        self.assertIsNotNone(
+            hook._CANONICAL_WAVE_LABEL_IN_CMD.search(
+                'gh issue edit 1 --add-label "p3-wave-11" --remove-label "p3-wave-10"'
+            )
+        )
+
+    def test_suffixed_label_quoted_does_not_match(self):
+        """Regression guard from issue #463: suffixed labels like
+        `p3-wave-10-special` must NOT match even in quoted form."""
+        self.assertIsNone(
+            hook._CANONICAL_WAVE_LABEL_IN_CMD.search(
+                'gh issue edit 1 --add-label "p3-wave-10-special"'
+            ),
+            "suffixed label must NOT match canonical regex (would log false-positive)",
+        )
+
+    def test_suffixed_label_spaced_eof_does_not_match(self):
+        """New guard from issue #463: suffixed label at spaced-bare EOF
+        must also NOT match. With the widened right-anchor it's tempting
+        for the regex to match `p3-wave-10` and leave `-special` trailing,
+        but the right-anchor requires `["\\s]` or `$` — `-` satisfies
+        neither, so the regex backtracks and ultimately fails to match.
+        """
+        self.assertIsNone(
+            hook._CANONICAL_WAVE_LABEL_IN_CMD.search(
+                "gh issue edit 1 --add-label p3-wave-10-special"
+            ),
+            "suffixed label at spaced-bare EOF must NOT match — widened right-anchor "
+            "regression guard",
+        )
+
+    def test_parser_skip_logs_for_spaced_bare_eof_cmd(self):
+        """End-to-end via check(): spaced-bare-EOF wave-label with missing
+        --repo (parser returns empty) must produce a skip_parser_returned_empty
+        event so /annunaki-attack catches the silent miss.
+        """
+        # `gh issue edit 1 --add-label p3-wave-11` — no --repo, no quotes.
+        # Pre-#463 the regex would not match this, so the hook would return
+        # None silently. Post-#463 it must return skip_parser_returned_empty.
+        result = hook.check(_bash("gh issue edit 1 --add-label p3-wave-11"))
+        self.assertEqual(
+            result.get("action") if result else None,
+            "skip_parser_returned_empty",
+            "spaced-bare-EOF wave-label must trigger parser-skip log path post-#463",
+        )
+
+    def test_parser_skip_does_not_fire_on_suffixed_label_spaced_eof(self):
+        """End-to-end regression guard: suffixed label at spaced-bare EOF
+        must NOT trigger the parser-skip log (would be noise). Companion
+        to `test_parser_skip_does_not_fire_on_suffixed_label` in the
+        MultiCmdBashTests bucket (which covers the quoted suffixed case).
+        """
+        result = hook.check(_bash("gh issue edit 1 --add-label p3-wave-10-special"))
+        self.assertIsNone(
+            result,
+            "suffixed label at spaced-bare EOF must NOT trigger parser-skip log",
+        )
 
 
 class MultiCmdNoMatchPreservedTests(unittest.TestCase):
