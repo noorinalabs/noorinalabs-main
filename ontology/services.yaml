@@ -318,6 +318,7 @@ infrastructure:
   state_backend:
     type: Backblaze B2 (S3-compatible)
     bucket: noorinalabs-terraform-state
+    encryption_at_rest: SSE-B2  # enabled 2026-04-30 per noorinalabs-deploy#172
     used_by: [terraform/hetzner, terraform/cloudflare]
 
   container_registry:
