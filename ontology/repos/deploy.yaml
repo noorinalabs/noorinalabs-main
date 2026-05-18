@@ -24,7 +24,7 @@ terraform_modules:
         path: terraform/hetzner/envs/prod/
         server: { name: noorinalabs-prod, type: CPX41, location: ash, image: ubuntu-24.04 }
         state_key: hetzner/prod.tfstate
-    state_backend: { type: s3, bucket: noorinalabs-terraform-state, endpoint: backblaze-b2, region: us-east-005 }
+    state_backend: { type: s3, bucket: noorinalabs-terraform-state, endpoint: backblaze-b2, region: us-east-005, encryption_at_rest: SSE-B2 }
     firewall_rules: [SSH/22, HTTP/80, HTTPS/443]
     outputs_per_env: [env, server_name, server_ip, server_ipv6, ssh_target, labels, server_status]
     notes:
