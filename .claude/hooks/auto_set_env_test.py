@@ -106,12 +106,40 @@ def _strip_leading_env(command: str) -> str:
 
 
 def _is_gh_invocation(command: str) -> bool:
-    """True if the effective argv[0] (after env assignments) is `gh`."""
+    """True if the effective argv[0] (after env assignments) is `gh`.
+
+    Also handles a single leading `env` wrapper (#181):
+        env FOO=bar gh pr comment ...
+        env FOO=1 BAR=2 gh pr comment ...
+        FOO=1 env BAR=2 gh pr comment ...   (env after shell VAR prefix)
+
+    Does NOT recurse into `env -i`, `env -u`, `env --` flag forms (out of
+    scope per #181 — `env -i` clears the inherited environment which is an
+    operator-explicit "I want a clean slate" signal; treating it the same
+    as the bare `env` wrapper would let an `env -i gh ...` shape mask a
+    pytest invocation hidden in its later args). The flag-form is rare in
+    operator commands and the `--body` short-circuit covers the common gh
+    case regardless.
+    """
     stripped = _strip_leading_env(command).lstrip()
     if not stripped:
         return False
     token = stripped.split(None, 1)[0]
-    return token == "gh"
+    if token == "gh":
+        return True
+    if token == "env":
+        # Peek at the next token. If it's a flag (starts with `-`), bail —
+        # we don't recurse into `env -i` / `env -u` / `env --` shapes.
+        remainder = stripped[len("env") :].lstrip()
+        next_token = remainder.split(None, 1)[0] if remainder else ""
+        if next_token.startswith("-"):
+            return False
+        # Strip env's own leading VAR=val assignments, then re-check argv[0].
+        after_env = _strip_leading_env(remainder).lstrip()
+        if not after_env:
+            return False
+        return after_env.split(None, 1)[0] == "gh"
+    return False
 
 
 def _has_body_flag(command: str) -> bool:

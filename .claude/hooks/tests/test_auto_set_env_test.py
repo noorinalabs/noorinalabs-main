@@ -74,6 +74,79 @@ class GhSubcommandSkipTests(unittest.TestCase):
         self.assertIsNone(result)
 
 
+class EnvWrapperGhSkipTests(unittest.TestCase):
+    """Issue #181: extend gh-skip to recognise the literal `env` wrapper:
+        env FOO=bar gh pr comment ...
+        env FOO=1 BAR=2 gh pr ...
+        FOO=1 env BAR=2 gh pr ...   (shell VAR prefix BEFORE env)
+    The bare `env` form (no flags) is a transparent wrapper — it sets env
+    vars then exec's gh. The hook must treat the inner gh as argv[0] for
+    short-circuit purposes."""
+
+    def test_env_wrapper_gh_invocation_skipped(self) -> None:
+        """NEG: `env FOO=bar gh pr comment ...` — env wrapper, gh skip fires."""
+        result = hook.check(_bash('env FOO=bar gh pr comment 1 --body "pytest"'))
+        self.assertIsNone(result, "env wrapper before gh must allow")
+
+    def test_env_wrapper_with_multiple_assignments_gh_skipped(self) -> None:
+        """NEG: `env FOO=1 BAR=2 gh pr ...` — multiple env's own assignments."""
+        result = hook.check(_bash('env FOO=1 BAR=2 gh pr comment 1 --body "pytest"'))
+        self.assertIsNone(result)
+
+    def test_env_wrapper_bare_gh_skipped(self) -> None:
+        """NEG: `env gh pr ...` — env with no assignments, just the gh exec."""
+        result = hook.check(_bash('env gh pr comment 1 --body "pytest"'))
+        self.assertIsNone(result)
+
+    def test_shell_prefix_then_env_wrapper_gh_skipped(self) -> None:
+        """NEG: `FOO=1 env BAR=2 gh pr ...` — shell env prefix, THEN `env`
+        wrapper, THEN gh. _strip_leading_env eats `FOO=1`, then we see
+        `env BAR=2 gh ...` and recurse one step."""
+        result = hook.check(_bash('FOO=1 env BAR=2 gh pr comment 1 --body "pytest"'))
+        self.assertIsNone(result)
+
+    def test_env_wrapper_non_gh_does_not_skip(self) -> None:
+        """POS: `env FOO=1 pytest tests/` — env wrapper around pytest is
+        STILL a test command (env doesn't change the fact that the eventual
+        argv[0] passed to exec is pytest). Must block."""
+        result = hook.check(_bash("env FOO=1 pytest tests/"))
+        assert result is not None, "env-wrapped pytest must still block"
+        self.assertEqual(result.get("decision"), "block")
+
+    def test_env_dash_i_flag_not_recursed(self) -> None:
+        """POS: `env -i gh pr ...` — the `-i` flag form is OUT OF SCOPE per
+        #181. `env -i` clears the inherited environment (operator-explicit
+        signal); we don't pretend the inner gh is argv[0]. With pytest
+        absent here this is allowed via the "not a test command" path, but
+        we assert the recursion didn't happen by checking the next case."""
+        result = hook.check(_bash("env -i gh pr comment 1"))
+        # No pytest, no make test → allowed regardless of skip path. The
+        # important assertion is the next test: env -i with pytest must still
+        # block (i.e., we did NOT silently treat it as a gh invocation).
+        self.assertIsNone(result)
+
+    def test_env_dash_i_does_not_mask_pytest(self) -> None:
+        """POS: `env -i gh pr comment --title 'pytest tests/'` is a contrived
+        case but illustrates the safety: because the `-i` flag form is not
+        recognised as a gh wrapper, the `--body`/`--body-file` skip is the
+        only thing protecting us — and there's no `--body` here. But because
+        `pytest` only appears inside `--title` (no `pytest` token outside it)
+        the test-runner regex needs that text. Use a more direct example:
+        `env -i pytest tests/` — the `-i` flag form is not a gh skip path,
+        and pytest is the effective program. Must block."""
+        result = hook.check(_bash("env -i pytest tests/"))
+        assert result is not None, "env -i around pytest must still block"
+        self.assertEqual(result.get("decision"), "block")
+
+    def test_env_wrapper_does_not_match_envar_prefix_word(self) -> None:
+        """POS: `environment_check pytest tests/` — leading token `environment_check`
+        starts with `env` but is NOT the `env` builtin. Must not be confused
+        for the wrapper; pytest is still the effective program → block."""
+        result = hook.check(_bash("environment_check pytest tests/"))
+        assert result is not None, "env-prefix lookalike token must not match `env`"
+        self.assertEqual(result.get("decision"), "block")
+
+
 class BodyFlagSkipTests(unittest.TestCase):
     """Short-circuit #2: --body / --body-file flags exempt the whole command."""
 
