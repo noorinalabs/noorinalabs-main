@@ -205,5 +205,144 @@ class UpsertMultiLineFinalKeyTests(unittest.TestCase):
         self.assertEqual(parsed["wave_8_carry_forward"], ["#341"])
 
 
+class UpsertNestedSiblingFalseMatchTests(unittest.TestCase):
+    """main#456 regression — the sibling-finder must NOT match keys whose
+    name happens to look like a wave_N_* sibling but is actually nested
+    inside a multi-line value at the same indent level.
+
+    Reproducer: pretty-printed JSON where the outer wave_N_scope dict has
+    inner keys at 2-space indent (which happens when the user wrote a
+    multi-line value with `json.dumps(value, indent=2)` or hand-formatted
+    pretty JSON without re-indenting). The pre-#456 regex would match
+    those nested keys and treat them as wave_N_* siblings, then call
+    _find_value_end on the wrong position and insert IN THE MIDDLE of the
+    wave_N_scope dict.
+
+    These tests pin the structural-top-level filter so the insertion
+    always lands at the genuine top level.
+    """
+
+    def test_nested_wave_key_at_2_space_indent_does_not_confuse_sibling_finder(self):
+        """The reproducer that motivated #456. Nested `wave_11_inner_*` keys
+        at the same 2-space indent as the outer `wave_11_scope` opener must
+        NOT count as wave_11_* siblings — they're inside wave_11_scope's
+        value, not at the top level."""
+        text = (
+            "{\n"
+            '  "phase": "phase-3",\n'
+            '  "wave_11_scope": {\n'
+            '  "wave_11_inner_a": 1,\n'
+            '  "wave_11_inner_b": 2\n'
+            "  }\n"
+            "}\n"
+        )
+        out = upsert_top_level_key(text, "wave_11_meta_issue", "447")
+        parsed = json.loads(out)
+        # The new key must land at TOP LEVEL, not inside wave_11_scope.
+        self.assertEqual(parsed.get("wave_11_meta_issue"), 447)
+        # wave_11_scope's nested keys must remain unchanged.
+        self.assertEqual(
+            parsed.get("wave_11_scope"),
+            {"wave_11_inner_a": 1, "wave_11_inner_b": 2},
+        )
+
+    def test_nested_wave_key_replace_does_not_target_nested_match(self):
+        """When upserting `wave_11_inner_a` at top level (with no top-level
+        key by that name), the regex MUST NOT match the nested `wave_11_inner_a`
+        inside `wave_11_scope`. The insertion should add a NEW top-level key."""
+        text = '{\n  "phase": "phase-3",\n  "wave_11_scope": {\n  "wave_11_inner_a": 1\n  }\n}\n'
+        out = upsert_top_level_key(text, "wave_11_inner_a", "999")
+        parsed = json.loads(out)
+        # Top-level wave_11_inner_a should be 999.
+        self.assertEqual(parsed["wave_11_inner_a"], 999)
+        # Nested wave_11_inner_a inside wave_11_scope should STILL be 1.
+        self.assertEqual(parsed["wave_11_scope"]["wave_11_inner_a"], 1)
+
+    def test_nested_wave_key_at_4_space_indent_still_ignored(self):
+        """Already worked pre-#456 (indent mismatch) but pinned as a guard."""
+        text = (
+            "{\n"
+            '  "phase": "phase-3",\n'
+            '  "wave_11_scope": {\n'
+            '    "wave_11_inner_a": 1,\n'
+            '    "wave_11_inner_b": 2\n'
+            "  }\n"
+            "}\n"
+        )
+        out = upsert_top_level_key(text, "wave_11_meta_issue", "447")
+        parsed = json.loads(out)
+        self.assertEqual(parsed["wave_11_meta_issue"], 447)
+        self.assertEqual(
+            parsed["wave_11_scope"],
+            {"wave_11_inner_a": 1, "wave_11_inner_b": 2},
+        )
+
+    def test_sequenced_upsert_after_inserting_multiline_dict(self):
+        """The 5-key call shape from the #456 issue body. Sequence:
+        1. start with compact-inline wave_11_* keys
+        2. upsert a multi-line dict for wave_11_scope
+        3. upsert another wave_11_* key
+
+        The multi-line dict insertion must not leave the text in a state
+        where the next upsert's sibling-finder mis-matches a nested key.
+        """
+        text = '{\n  "phase": "phase-3",\n  "wave_11_active": true\n}\n'
+        # Step 1: insert a multi-line dict value (as the helper produces
+        # when the json_value arg is pretty-printed).
+        ml_dict = '{\n    "wave_11_inner_a": 1,\n    "wave_11_inner_b": 2\n  }'
+        text2 = upsert_top_level_key(text, "wave_11_scope", ml_dict)
+        json.loads(text2)  # must parse
+        # Step 2: insert another wave_11_* key
+        text3 = upsert_top_level_key(text2, "wave_11_meta_issue", "447")
+        parsed = json.loads(text3)
+        self.assertEqual(parsed["wave_11_meta_issue"], 447)
+        self.assertEqual(
+            parsed["wave_11_scope"],
+            {"wave_11_inner_a": 1, "wave_11_inner_b": 2},
+        )
+
+
+class IsTopLevelPositionTests(unittest.TestCase):
+    """Pure-function coverage for `_is_top_level_position` — the depth
+    walker that powers the #456 fix."""
+
+    def test_inside_outer_object_is_top_level(self):
+        from upsert_status_keys import _is_top_level_position
+
+        text = '{\n  "a": 1\n}\n'
+        # Position of `"a"` is at depth 1 (inside the outer `{`).
+        pos = text.index('"a"')
+        self.assertTrue(_is_top_level_position(text, pos))
+
+    def test_inside_nested_object_is_not_top_level(self):
+        from upsert_status_keys import _is_top_level_position
+
+        text = '{\n  "outer": {\n    "inner": 1\n  }\n}\n'
+        pos = text.index('"inner"')
+        self.assertFalse(_is_top_level_position(text, pos))
+
+    def test_inside_nested_array_is_not_top_level(self):
+        from upsert_status_keys import _is_top_level_position
+
+        text = '{\n  "list": [\n    "item"\n  ]\n}\n'
+        pos = text.index('"item"')
+        self.assertFalse(_is_top_level_position(text, pos))
+
+    def test_inside_string_value_is_not_top_level(self):
+        from upsert_status_keys import _is_top_level_position
+
+        text = '{\n  "note": "contains { brace } chars"\n}\n'
+        # Position INSIDE the string value
+        pos = text.index("brace")
+        self.assertFalse(_is_top_level_position(text, pos))
+
+    def test_brace_chars_inside_strings_dont_change_depth(self):
+        from upsert_status_keys import _is_top_level_position
+
+        text = '{\n  "a": "before {b} brace",\n  "real_top": 1\n}\n'
+        pos = text.index('"real_top"')
+        self.assertTrue(_is_top_level_position(text, pos))
+
+
 if __name__ == "__main__":
     unittest.main()
