@@ -1151,7 +1151,7 @@ Stg/prod environment split + promotion pathway (theme), with Phase B (stg fresh-
 2. **Worktree sweep PR-state check.** Update `wave-wrapup` skill step 8 to default to `gh pr list --head <branch> --state all` instead of `git merge-base --is-ancestor` for merge-status detection. Rationale: 45-worktree pile-up shows the ancestor check is unreliable for squash-merged branches.
 3. **Adopt Bereket's 5 primitives as memories** (already done) **and consider charter promotion of "refresh-before-status-claim" as a charter-section** since it now has retro-citations across two waves (W9, W10) with four distinct application sites. Rationale: enforcement-hierarchy escalation per memory `feedback_enforcement_hierarchy.md`.
 
-### Promotion audit (deterministic — see `.claude/team/promotion_audit_log/wave-10.md`)
+### Promotion audit (deterministic — see `.claude/team/promotion_audit_log/p2-wave-10.md`)
 
 **Result: 0 AUTO · 0 DECIDE · 54 KEPT · 4 SUPERSEDED.**
 
@@ -1568,7 +1568,7 @@ Skipped — the named agents did not actually run during this thread. Holding ev
 
 3. **`charter/pr-review.md` § Comment Format — disambiguate Requestor/Requestee.** Resolve main#233 ambiguity. Two readings exist; the team consistently uses Requestor=author / Requestee=reviewer (matches main#244 hook reading). Decision needed: codify the actual-usage reading and update validate_pr_review.py to match (closes #244, #233 simultaneously). Alternative: codify charter-original reading (Requestor=reviewer) and update all existing PR comments + hook. Owner-decision required.
 
-### Promotion audit (deterministic — see `.claude/team/promotion_audit_log/wave-3.md`)
+### Promotion audit (deterministic — see `.claude/team/promotion_audit_log/p2-wave-3.md`)
 
 ```
 Promotion audit wave-3 complete: 0 AUTO · 0 DECIDE · 60 KEPT · 3 SUPERSEDED · 1 ALREADY-PROMOTED
@@ -1663,7 +1663,7 @@ Promotion audit wave-3 complete: 0 AUTO · 0 DECIDE · 60 KEPT · 3 SUPERSEDED �
 2. **`.claude/skills/wave-wrapup/SKILL.md` — § Scope-Drop Reconciliation** (in-scope-but-zero-PR check)
 3. **`.claude/skills/wave-retro/SKILL.md` — § Wave-Concentration Metric** (top-implementer concentration in retro template)
 
-### Promotion audit (deterministic — see `.claude/team/promotion_audit_log/wave-4.md`)
+### Promotion audit (deterministic — see `.claude/team/promotion_audit_log/p2-wave-4.md`)
 
 ```
 Promotion audit wave-4: 0 AUTO · 0 DECIDE · 65 KEPT · 3 SUPERSEDED · 1 ALREADY-PROMOTED
@@ -1760,7 +1760,7 @@ No memory crossed `retro_citations >= threshold` AND `promotion_target != none`.
 2. **`.claude/skills/wave-retro/SKILL.md` — § Step 2.5: Status-Counter Verification** — recompute `wave_N_*` numeric counters from PR data, surface drift before proceeding to per-engineer assessments.
 3. **`.claude/skills/wave-retro/SKILL.md` — pattern-tally template addition** — Pattern G — in-wave skill self-improvement.
 
-### Promotion audit (deterministic — see `.claude/team/promotion_audit_log/wave-5.md`)
+### Promotion audit (deterministic — see `.claude/team/promotion_audit_log/p2-wave-5.md`)
 
 ```
 Promotion audit wave-5: 5 AUTO · 0 DECIDE · 52 KEPT · 11 SUPERSEDED · 1 ALREADY-PROMOTED
@@ -1900,7 +1900,7 @@ These do NOT auto-apply within this retro PR (per skill: "Do NOT apply any chart
 2. **\`.claude/skills/wave-kickoff/SKILL.md\` — § Step 7+8 status commits via gh api PUT contents** — deprecate local-checkout + local-commit + push pattern; use atomic gh api PUT contents instead.
 3. **\`charter/agents.md\` — § Implementer Spawn Template addition** — one-line /tmp file-race reminder for body-file workflows.
 
-### Promotion audit (deterministic — see `.claude/team/promotion_audit_log/wave-6.md`)
+### Promotion audit (deterministic — see `.claude/team/promotion_audit_log/p2-wave-6.md`)
 
 ```
 Promotion audit wave-6: 0 AUTO · 0 DECIDE · 52 KEPT · 16 SUPERSEDED · 1 ALREADY-PROMOTED
@@ -2019,7 +2019,7 @@ See `.claude/team/trust_matrix.md` § Phase 3 Wave 7 Trust Updates for full per-
 
 ### Promotion audit
 
-(deterministic — see `.claude/team/promotion_audit_log/wave-7.md` after /promotion-audit runs)
+(deterministic — see `.claude/team/promotion_audit_log/p2-wave-7.md` after /promotion-audit runs)
 
 ## Retrospective: Phase 3 Wave 8 — 2026-05-10
 
@@ -2116,7 +2116,7 @@ Per #346 memory audit plan + #344 retro-extension proposal:
 
 ### Promotion audit
 
-(deterministic — see `.claude/team/promotion_audit_log/wave-8.md` after /promotion-audit runs)
+(deterministic — see `.claude/team/promotion_audit_log/p2-wave-8.md` after /promotion-audit runs)
 
 ## Retrospective: Phase 3 Wave 9 — Tech-Debt Reduction (Main-Only) — 2026-05-12
 
@@ -2207,7 +2207,7 @@ Deterministic run completed:
 
 ```
 Promotion audit wave-9 complete: 0 AUTO · 0 DECIDE · 53 KEPT · 16 SUPERSEDED
-Log: .claude/team/promotion_audit_log/wave-9.md
+Log: .claude/team/promotion_audit_log/p2-wave-9.md
 ```
 
 Three real defects in the audit itself were surfaced via caller-side error and filed for W10: **#417** (SKILL.md prose drift — `classify()` vs actual `classify_memory/_section/_skill`), **#418** (`find_already_promoted_in_charter(charter_root)` confusingly takes parent-of-charter), **#419** (`_SOURCE_HINT_RE` matches 11 URL-fragment false positives at HEAD).
