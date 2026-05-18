@@ -64,6 +64,18 @@ Updated by `/ontology-rebuild`. Manual edits require `checksums.json` update.
 - Path-based routing: `/auth/*` and user management → user-service, `/api/*` → isnad-graph, `/*` → frontend
 - Security headers: CSP, HSTS, X-Frame-Options, Referrer-Policy
 
+### Cloudflare proxy posture (prod-true / stg-false asymmetry)
+
+Production Cloudflare DNS records are orange-cloud (`proxied = true`) — traffic flows through the Cloudflare edge. Staging records for the same subdomains are gray-cloud (`proxied = false`) — DNS only, traffic resolves directly to the origin VPS. The Terraform `var.subdomains` map (`noorinalabs-deploy/terraform/cloudflare/`) carries one `proxied` boolean per name, set per-env via `terraform.tfvars`.
+
+**Root cause — TLS certificate coverage at the CF edge.** Cloudflare's free Universal SSL covers exactly two label depths: the apex (`noorinalabs.com`) and one wildcard level (`*.noorinalabs.com`). Production subdomains (`isnad.noorinalabs.com`, `users.noorinalabs.com`) sit at that one-wildcard level and are covered. Staging subdomains are third-level (`isnad.stg.noorinalabs.com`, `users.stg.noorinalabs.com`) — Universal SSL does NOT cover them, so orange-clouding them produces a TLS handshake failure at the edge before the request ever reaches the origin. Gray-cloud bypasses the edge entirely; the origin Caddy auto-provisions Let's Encrypt certificates for those names and terminates TLS itself.
+
+**Operator trade-off.** Gray-cloud staging loses every edge benefit Cloudflare provides — DDoS absorption, WAF, edge cache, IP masking. The staging origin IP is reachable directly via DNS, which is the acceptable posture for non-prod (staging is not user-facing and is firewalled separately). Anything that depends on edge behavior (e.g., a WAF rule shielding an endpoint) must be validated against prod, not stg.
+
+**Remediation path.** Cloudflare Advanced Certificate Manager (ACM, ~$10/mo) issues certificates covering arbitrary subdomain depths, including `*.stg.noorinalabs.com`. Once ACM is enabled, the `proxied` value for staging records can be flipped to `true` and the asymmetry disappears. This is an owner-budget decision tracked in deploy#229; until then, the stg-false posture is the documented baseline.
+
+**Per-repo reference.** The Terraform module README at `noorinalabs-deploy/terraform/cloudflare/README.md` (file added by deploy#298; proxy-posture section added by deploy#303) documents the same asymmetry from the implementation side and is the source of truth for `var.subdomains` shape and per-env tfvars wiring.
+
 ### Container security
 - Read-only filesystems on all application containers
 - tmpfs for writable paths (/tmp, nginx cache)
