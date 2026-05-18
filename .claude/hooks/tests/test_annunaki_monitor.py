@@ -171,5 +171,210 @@ class AnnunakiMonitorTests(unittest.TestCase):
         self.assertIsNone(result)
 
 
+class SilentBooleanTestIdiomTests(unittest.TestCase):
+    """#474 coverage: documented boolean-test idioms whose by-design failure
+    branch is non-zero exit with empty output must NOT produce log entries
+    after #473 closed the silent-failure capture path. Each idiom gets a
+    NEGATIVE-match test (no log) plus a precedence test that confirms a real
+    stderr-pattern match still wins."""
+
+    def setUp(self):
+        self._saved_env = {
+            "ENVIRONMENT": os.environ.pop("ENVIRONMENT", None),
+            "NOORIN_HOOK_TEST_MODE": os.environ.pop("NOORIN_HOOK_TEST_MODE", None),
+        }
+        am._seen_hashes.clear()
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._errors_path = Path(self._tmpdir.name) / "errors.jsonl"
+        self._orig_monitor_file = am.ERRORS_FILE
+        self._orig_log_file = alog.ERRORS_FILE
+        am.ERRORS_FILE = self._errors_path
+        alog.ERRORS_FILE = self._errors_path
+
+    def tearDown(self):
+        am.ERRORS_FILE = self._orig_monitor_file
+        alog.ERRORS_FILE = self._orig_log_file
+        self._tmpdir.cleanup()
+        for k, v in self._saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    # --- Each documented idiom: NEG match on silent exit-1 ---
+
+    def test_posix_bracket_silent_exit_not_logged(self):
+        """NEG: `[ -d /nonexistent ]` exit 1 silent → no log."""
+        result = am.check(_bash_event("[ -d /nonexistent ]", exit_code=1))
+        self.assertIsNone(result)
+        self.assertFalse(self._errors_path.exists())
+
+    def test_bash_double_bracket_silent_exit_not_logged(self):
+        """NEG: `[[ -f /nonexistent ]]` exit 1 silent → no log."""
+        result = am.check(_bash_event("[[ -f /nonexistent ]]", exit_code=1))
+        self.assertIsNone(result)
+
+    def test_test_builtin_silent_exit_not_logged(self):
+        """NEG: `test -f /nonexistent` exit 1 silent → no log."""
+        result = am.check(_bash_event("test -f /nonexistent", exit_code=1))
+        self.assertIsNone(result)
+
+    def test_grep_q_no_match_silent_exit_not_logged(self):
+        """NEG: `grep -q pattern file` non-error miss → no log."""
+        result = am.check(_bash_event("grep -q needle /tmp/haystack.txt", exit_code=1))
+        self.assertIsNone(result)
+
+    def test_grep_q_with_flags_silent_exit_not_logged(self):
+        """NEG: `grep -qE` / `grep -qi` variants → no log."""
+        for cmd in ("grep -qE '^foo' f.txt", "grep -qi BAR f.txt", "grep -Eq '^foo' f.txt"):
+            am._seen_hashes.clear()
+            result = am.check(_bash_event(cmd, exit_code=1))
+            self.assertIsNone(result, f"{cmd!r} must not log")
+
+    def test_pgrep_no_match_silent_exit_not_logged(self):
+        """NEG: `pgrep nginx` not-running → no log."""
+        result = am.check(_bash_event("pgrep nginx", exit_code=1))
+        self.assertIsNone(result)
+
+    def test_pkill_no_match_silent_exit_not_logged(self):
+        """NEG: `pkill -0 nginx` not-running → no log."""
+        result = am.check(_bash_event("pkill -0 nginx", exit_code=1))
+        self.assertIsNone(result)
+
+    def test_which_not_found_silent_exit_not_logged(self):
+        """NEG: `which foo` not-installed → no log."""
+        result = am.check(_bash_event("which nonexistent-binary", exit_code=1))
+        self.assertIsNone(result)
+
+    def test_command_v_not_found_silent_exit_not_logged(self):
+        """NEG: `command -v foo` not-installed → no log."""
+        result = am.check(_bash_event("command -v nonexistent-binary", exit_code=1))
+        self.assertIsNone(result)
+
+    def test_diff_quiet_differs_silent_exit_not_logged(self):
+        """NEG: `diff --quiet a b` files differ → no log."""
+        result = am.check(_bash_event("diff --quiet /tmp/a /tmp/b", exit_code=1))
+        self.assertIsNone(result)
+
+    def test_git_diff_quiet_dirty_silent_exit_not_logged(self):
+        """NEG: `git diff --quiet` working tree dirty → no log."""
+        result = am.check(_bash_event("git diff --quiet", exit_code=1))
+        self.assertIsNone(result)
+
+    def test_if_bracket_conditional_silent_exit_not_logged(self):
+        """NEG: `if [ -f x ]; then ...; fi` whole conditional with exit-1
+        false-branch → no log."""
+        result = am.check(_bash_event("if [ -f /nonexistent ]; then echo yes; fi", exit_code=1))
+        self.assertIsNone(result)
+
+    def test_if_double_bracket_conditional_silent_exit_not_logged(self):
+        """NEG: `if [[ ... ]]; then ...; fi` shape → no log."""
+        result = am.check(_bash_event("if [[ -f /nonexistent ]]; then echo yes; fi", exit_code=1))
+        self.assertIsNone(result)
+
+    # --- Precedence: pattern match wins over idiom-on-silent-exit ---
+
+    def test_idiom_with_stderr_pattern_still_logged(self):
+        """POS: `[ -f x ]` would normally be silent-skip, BUT if stderr has
+        a real error pattern (e.g., `fatal:`), it still logs. Pattern matches
+        take precedence — the idiom-skip only suppresses the bare exit_code
+        signal."""
+        result = am.check(
+            _bash_event(
+                "[ -f /nonexistent ]",
+                stderr="fatal: unexpected internal state\n",
+                exit_code=1,
+            )
+        )
+        self.assertIsNotNone(result, "stderr pattern match must override idiom skip")
+        rec = _read_records(self._errors_path)[0]
+        # Both signals present: exit_code AND stderr pattern
+        self.assertIn("exit_code=1", rec["matched_patterns"])
+        self.assertTrue(any("fatal" in p for p in rec["matched_patterns"]))
+
+    def test_idiom_with_stdout_pattern_still_logged(self):
+        """POS: silent-test idiom that produces a stdout Traceback (would be
+        absurd in reality, but the precedence rule must hold) → logs."""
+        result = am.check(
+            _bash_event(
+                "test -f /nonexistent",
+                stdout="Traceback (most recent call last):\nValueError: x\n",
+                exit_code=1,
+            )
+        )
+        self.assertIsNotNone(result)
+
+    def test_real_silent_failure_still_logged(self):
+        """POS regression for #472: `false` is NOT in the idiom list, so the
+        silent-failure capture path still works for non-idiom commands."""
+        result = am.check(_bash_event("false", exit_code=1))
+        self.assertIsNotNone(result, "non-idiom silent failures must still log")
+
+    def test_idiom_exit_zero_not_logged(self):
+        """NEG: idiom command exits 0 (true branch) → no log because not
+        even is_error=True. Sanity check that the idiom filter doesn't get
+        in the way of the happy path."""
+        result = am.check(_bash_event("[ -f /tmp ]", exit_code=0))
+        self.assertIsNone(result)
+
+
+class AinoFollowupTests(unittest.TestCase):
+    """Aino's two non-blocking follow-up cases from PR #473 review."""
+
+    def setUp(self):
+        self._saved_env = {
+            "ENVIRONMENT": os.environ.pop("ENVIRONMENT", None),
+            "NOORIN_HOOK_TEST_MODE": os.environ.pop("NOORIN_HOOK_TEST_MODE", None),
+        }
+        am._seen_hashes.clear()
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._errors_path = Path(self._tmpdir.name) / "errors.jsonl"
+        self._orig_monitor_file = am.ERRORS_FILE
+        self._orig_log_file = alog.ERRORS_FILE
+        am.ERRORS_FILE = self._errors_path
+        alog.ERRORS_FILE = self._errors_path
+
+    def tearDown(self):
+        am.ERRORS_FILE = self._orig_monitor_file
+        alog.ERRORS_FILE = self._orig_log_file
+        self._tmpdir.cleanup()
+        for k, v in self._saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    def test_exit_zero_with_stderr_pattern_still_captured(self):
+        """Aino #1: command succeeds (exit 0) but stderr contains a pattern
+        like `error:` → must still log via stderr pattern match. Guards
+        against a future refactor that gates pattern matching on a non-zero
+        exit code."""
+        result = am.check(
+            _bash_event(
+                "some-tool --warn",
+                stderr="error: deprecated flag --warn used, ignored\n",
+                exit_code=0,
+            )
+        )
+        self.assertIsNotNone(result, "exit-0 with stderr error pattern must capture")
+        rec = _read_records(self._errors_path)[0]
+        self.assertEqual(rec["exit_code"], 0)
+        self.assertTrue(any("error" in p for p in rec["matched_patterns"]))
+
+    def test_ignore_pattern_takes_precedence_over_nonzero_exit(self):
+        """Aino #2: command matches `_should_ignore` (e.g., `grep -i error`)
+        AND exits non-zero → ignore-pattern check fires before exit-code
+        capture, so no log. Guards against the exit-code capture path
+        bypassing the false-positive guards from `_should_ignore`."""
+        result = am.check(
+            _bash_event(
+                "grep -i error logs.txt",
+                exit_code=1,
+            )
+        )
+        self.assertIsNone(result, "_should_ignore must precede exit-code capture")
+        self.assertFalse(self._errors_path.exists())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
