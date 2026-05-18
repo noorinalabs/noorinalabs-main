@@ -172,5 +172,174 @@ class NonTestCommandTests(unittest.TestCase):
         self.assertIsNone(result)
 
 
+class ChainedCommandTests(unittest.TestCase):
+    """Issue #476: chains like `cd /path && pytest tests/` need env on the
+    pytest segment, not on the leading `cd`. Pre-fix the hook (a) suggested
+    a broken command and (b) accepted the broken command as valid (silent
+    gate bypass). These tests pin the corrected per-segment behavior."""
+
+    def test_cd_then_pytest_blocks_with_corrected_suggestion(self) -> None:
+        """POS: `cd /path && pytest tests/` — block, suggestion places env
+        on the pytest segment."""
+        result = hook.check(_bash("cd /path && pytest tests/"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("cd /path && ENVIRONMENT=test pytest tests/", result["reason"])
+
+    def test_cd_then_env_pytest_allowed(self) -> None:
+        """NEG: `cd /path && ENVIRONMENT=test pytest tests/` — allow; env
+        is on the correct (pytest) segment."""
+        result = hook.check(_bash("cd /path && ENVIRONMENT=test pytest tests/"))
+        self.assertIsNone(result)
+
+    def test_misplaced_env_before_cd_blocks(self) -> None:
+        """POS: `ENVIRONMENT=test cd /path && pytest tests/` — BLOCK.
+
+        This is the silent-bypass case from #476. The pre-fix hook
+        accepted this command because `ENVIRONMENT=test` appeared
+        anywhere in the string, even though shell semantics apply the
+        env only to `cd` (where it has no effect) and pytest runs
+        without it. The fix requires the env to be in the leading
+        env-block of the pytest-bearing segment.
+        """
+        result = hook.check(_bash("ENVIRONMENT=test cd /path && pytest tests/"))
+        assert result is not None, "misplaced env must not pass — that's the #476 bug"
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("ENVIRONMENT=test pytest tests/", result["reason"])
+
+    def test_two_pytest_segments_both_get_env(self) -> None:
+        """POS: `pytest tests/ && pytest tests-other/` — block, suggestion
+        prepends env to BOTH segments."""
+        result = hook.check(_bash("pytest tests/ && pytest tests-other/"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn(
+            "ENVIRONMENT=test pytest tests/ && ENVIRONMENT=test pytest tests-other/",
+            result["reason"],
+        )
+
+    def test_two_pytest_segments_one_correct_still_blocks(self) -> None:
+        """POS: `ENVIRONMENT=test pytest tests/ && pytest tests-other/` —
+        block; second segment is missing env. Suggestion fixes the missing
+        one and leaves the correct one alone."""
+        result = hook.check(_bash("ENVIRONMENT=test pytest tests/ && pytest tests-other/"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn(
+            "ENVIRONMENT=test pytest tests/ && ENVIRONMENT=test pytest tests-other/",
+            result["reason"],
+        )
+
+    def test_two_pytest_segments_both_correct_allowed(self) -> None:
+        """NEG: env on both pytest segments — allow."""
+        result = hook.check(
+            _bash("ENVIRONMENT=test pytest tests/ && ENVIRONMENT=test pytest tests-other/")
+        )
+        self.assertIsNone(result)
+
+    def test_cd_then_make_test_blocks(self) -> None:
+        """POS: `cd /path && make test` — chain form of make test."""
+        result = hook.check(_bash("cd /path && make test"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("cd /path && ENVIRONMENT=test make test", result["reason"])
+
+    def test_cd_then_env_make_test_allowed(self) -> None:
+        """NEG: `cd /path && ENVIRONMENT=test make test` — allow."""
+        result = hook.check(_bash("cd /path && ENVIRONMENT=test make test"))
+        self.assertIsNone(result)
+
+    def test_misplaced_env_before_cd_with_make_test_blocks(self) -> None:
+        """POS: `ENVIRONMENT=test cd /path && make test` — BLOCK, same
+        silent-bypass shape as the pytest case."""
+        result = hook.check(_bash("ENVIRONMENT=test cd /path && make test"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("ENVIRONMENT=test make test", result["reason"])
+
+    def test_cd_then_uv_run_pytest_preserves_form(self) -> None:
+        """POS: realistic repro shape from #476 — `cd /worktree && uv run pytest …`.
+        Suggestion preserves the `uv run pytest` tokens and only prepends env."""
+        result = hook.check(
+            _bash(
+                "cd /home/x/worktree && uv run pytest "
+                "tests/test_pipeline/test_reset.py --tb=line -q"
+            )
+        )
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn(
+            "cd /home/x/worktree && ENVIRONMENT=test uv run pytest "
+            "tests/test_pipeline/test_reset.py --tb=line -q",
+            result["reason"],
+        )
+
+    def test_semicolon_separator_chain(self) -> None:
+        """POS: `;` separator behaves like `&&` for segment splitting."""
+        result = hook.check(_bash("cd /path ; pytest tests/"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("ENVIRONMENT=test pytest tests/", result["reason"])
+
+    def test_or_separator_chain(self) -> None:
+        """POS: `||` separator also splits — even though running pytest
+        only-if-cd-fails is unusual, treat it identically."""
+        result = hook.check(_bash("cd /path || pytest tests/"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+
+    def test_pipe_separator_chain(self) -> None:
+        """POS: `|` (pipe) splits too. `pytest tests/ | tee out.log` —
+        pytest must get the env."""
+        result = hook.check(_bash("pytest tests/ | tee out.log"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("ENVIRONMENT=test pytest tests/", result["reason"])
+
+    def test_env_on_pipe_target_does_not_satisfy_pytest_segment(self) -> None:
+        """POS: `pytest tests/ | ENVIRONMENT=test tee out.log` — the env is
+        in the WRONG segment (on tee, not pytest). Must still block."""
+        result = hook.check(_bash("pytest tests/ | ENVIRONMENT=test tee out.log"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+
+    def test_no_chain_suggestion_format_unchanged(self) -> None:
+        """POS: bare `pytest tests/` — single-segment suggestion is just
+        `ENVIRONMENT=test pytest tests/` (no chain glue)."""
+        result = hook.check(_bash("pytest tests/"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("ENVIRONMENT=test pytest tests/", result["reason"])
+
+    def test_extra_env_prefix_preserved_in_suggestion(self) -> None:
+        """POS: `cd /path && DEBUG=1 pytest tests/` — env-block already has
+        DEBUG=1; suggestion inserts ENVIRONMENT=test alongside, not
+        replacing the existing assignment."""
+        result = hook.check(_bash("cd /path && DEBUG=1 pytest tests/"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn(
+            "cd /path && DEBUG=1 ENVIRONMENT=test pytest tests/",
+            result["reason"],
+        )
+
+
+class ShortCircuitWithChainsTests(unittest.TestCase):
+    """Verify gh/--body short-circuits remain whole-command (NOT per-segment)
+    — i.e., a `gh` command at argv[0] exempts the entire chain even if a
+    later segment mentions pytest."""
+
+    def test_gh_at_argv0_with_pytest_in_later_segment(self) -> None:
+        """NEG: `gh pr comment ... && echo "ran pytest"` — gh skip covers
+        the whole command. (Contrived; documents the boundary.)"""
+        result = hook.check(_bash('gh pr comment 1 --body "x" && echo "ran pytest"'))
+        self.assertIsNone(result)
+
+    def test_body_flag_covers_chain(self) -> None:
+        """NEG: any command with --body anywhere exempts the whole chain."""
+        result = hook.check(_bash('some-tool --body "pytest in body" && pytest tests/'))
+        self.assertIsNone(result)
+
+
 if __name__ == "__main__":
     unittest.main()
