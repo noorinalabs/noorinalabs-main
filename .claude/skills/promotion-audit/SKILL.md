@@ -189,16 +189,16 @@ Use `render_audit_table(decisions)` to produce deterministic markdown with four 
 
 ### 6. Write outputs (Q4 — BOTH)
 
-1. **Append to feedback_log.md** — if the audit runs inside a retro (detect by checking if the most recent `## Retrospective:` entry is on today's date), append under the current retro. Otherwise prepend a fresh `## Promotion Audit — {wave_name} ({DATE})` entry at the top of the log.
-2. **Standalone log** — always write to `.claude/team/promotion_audit_log/{wave_name}.md`. Create the directory if it doesn't exist. Overwrite if re-run.
+1. **Append to feedback_log.md** — if the audit runs inside a retro (detect by checking if the most recent `## Retrospective:` entry is on today's date), append under the current retro. Otherwise prepend a fresh `## Promotion Audit — {wave_name} ({DATE})` entry at the top of the log. `{wave_name}` is always the phase-prefixed form `p{N}-wave-{M}` (e.g., `p3-wave-11`); bare `wave-{M}` is forbidden per #442 to prevent cross-phase collisions like the P2W10 vs P3W10 overwrite caught 2026-05-16.
+2. **Standalone log** — always write to `.claude/team/promotion_audit_log/{wave_name}.md` where `{wave_name}` is the phase-prefixed form `p{N}-wave-{M}` (e.g., `.claude/team/promotion_audit_log/p3-wave-11.md`). Create the directory if it doesn't exist. Overwrite if re-run. Never write a bare `wave-{M}.md` — it will collide with a same-numbered file from a different phase.
 
 ### 7. Report
 
 Print a two-line summary to stdout: counts per decision category and a link to the standalone log:
 
 ```
-Promotion audit wave-N complete: 0 AUTO · 0 DECIDE · 13 KEPT · 1 SUPERSEDED
-Log: .claude/team/promotion_audit_log/wave-N.md
+Promotion audit p{N}-wave-{M} complete: 0 AUTO · 0 DECIDE · 13 KEPT · 1 SUPERSEDED
+Log: .claude/team/promotion_audit_log/p{N}-wave-{M}.md
 ```
 
 ## Determinism

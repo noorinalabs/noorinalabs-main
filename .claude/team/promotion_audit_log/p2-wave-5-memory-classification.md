@@ -203,4 +203,4 @@ SUPERSEDED: 11
 - main#266 — STALE-OPT-OUT class (P3W4)
 - charter `feedback_enforcement_hierarchy.md` — promotion-target tier rules
 - `.claude/skills/promotion-audit/SKILL.md` — audit invocation
-- `.claude/team/promotion_audit_log/wave-4.md` — prior audit (0 AUTO / 0 DECIDE baseline)
+- `.claude/team/promotion_audit_log/p2-wave-4.md` — prior audit (0 AUTO / 0 DECIDE baseline)
