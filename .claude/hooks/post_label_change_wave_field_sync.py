@@ -141,9 +141,12 @@ from annunaki_log import log_posttooluse_event  # noqa: E402
 # but `parse_wave_label_changes` returned empty. Used by the parser-skip logger
 # to distinguish "no gh issue edit at all" (silent OK) from "had gh issue edit
 # AND a canonical wave-label" (worth logging per #455). The regex matches the
-# canonical `p{N}-wave-{M}` shape inside a flag value (quoted or equals-form),
-# bounded so suffixed labels like `p3-wave-10-special` do NOT match.
-_CANONICAL_WAVE_LABEL_IN_CMD = re.compile(r'["= ]p\d+-wave-\d+["\s]')
+# canonical `p{N}-wave-{M}` shape inside a flag value (quoted, equals-form, or
+# spaced-bare), bounded so suffixed labels like `p3-wave-10-special` do NOT
+# match. Right anchor accepts a closing quote, whitespace, OR end-of-string
+# so spaced-bare values at command-EOF (e.g. `--add-label p3-wave-11<EOF>`)
+# still trigger the parser-skip detection — see #463.
+_CANONICAL_WAVE_LABEL_IN_CMD = re.compile(r'["= ]p\d+-wave-\d+(?:["\s]|$)')
 
 ORG = "noorinalabs"
 PROJECT_NUMBER = 2
