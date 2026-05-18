@@ -56,11 +56,14 @@ Detection order:
        require `\\bENVIRONMENT=test\\b` in that segment's leading env-block
        (subshell-aware: a segment that opens with `(` peeks inside the
        parens for the env-block); else BLOCK with a per-segment-rewritten
-       suggestion, EXCEPT when the test segment is the body of a
-       control-flow construct (`for|while|until|if ... ; do pytest ...`)
-       where splicing env between `;` and `do` would produce invalid
-       shell — there we ALLOW with an operator-readable diagnostic
-       logged via annunaki_log rather than emit a mangled suggestion.
+       suggestion. When the test segment is inside a shell control-flow
+       construct (`for|while|until|if ... ; do pytest ...`) where
+       splicing would produce invalid shell, HARD BLOCK with an
+       operator-readable diagnostic that names the construct and offers
+       both inline-env (`do ENVIRONMENT=test pytest`) and pull-out
+       (`ENVIRONMENT=test pytest a b`) alternatives. Allow-with-log
+       would silently bypass the protection (#420 prod-data-wipe class),
+       so we trade UX friction for safety.
 
 Per-segment env-block check (the #476 silent-bypass fix):
     `ENVIRONMENT=test cd /x && pytest tests/` does NOT pass — even though
@@ -76,8 +79,9 @@ Shell-syntax-awareness scope (#478):
     inner command would only fire if the substitution were executed and
     the segment scan would catch any pytest invocation regardless.
     Subshell-recognition is one-deep: `(((pytest)))` is correctly
-    parsed; nested-with-other-content edge cases bail to the
-    control-flow allow-with-diagnostic path on the side of NOT mangling.
+    parsed; nested-with-other-content edge cases fall through to the
+    control-flow HARD BLOCK path with manual-edit diagnostic rather
+    than emit a mangled suggestion.
 
 Decision on subshell + control-flow coverage (#478):
     Both are handled in this PR, NOT punted. Once the state machine is
@@ -89,10 +93,10 @@ Decision on subshell + control-flow coverage (#478):
 
 Exit codes:
     0 — allow (not a Bash tool, or skip condition met, or every test
-        segment already has ENVIRONMENT=test in its leading env-block,
-        or test segment is inside a control-flow body — see #478)
-    2 — block (at least one test segment is missing ENVIRONMENT=test
-        and we can produce a syntactically-valid corrected suggestion)
+        segment already has ENVIRONMENT=test in its leading env-block)
+    2 — block (at least one test segment is missing ENVIRONMENT=test,
+        whether splice-able with a corrected suggestion or inside a
+        control-flow body that requires a manual edit per the diagnostic)
 
 Enforcement artifact for: noorinalabs/noorinalabs-main#114, #476, #478
 """
@@ -423,12 +427,16 @@ def _is_control_flow_bracketed(parts: list[str], idx: int) -> bool:
        - A PRIOR segment leads with an opener and no closer (`done`/`fi`/...)
          has intervened → segment is inside a body → bail
 
-    Per the docstring decision (#478), bail means ALLOW with annunaki
-    diagnostic rather than emit a mangled suggestion. The opener-segment
-    case (#2) could in principle be handled by splicing inside the
-    compound (`while ENVIRONMENT=test pytest --quick`) but that requires
-    a token-level rewrite — out of scope for this PR per the design
-    decision recorded in the docstring.
+    Per the hook docstring decision (#478), control-flow detection
+    triggers a HARD BLOCK with operator-readable diagnostic — never an
+    allow-with-log. Allow-with-log would silently bypass the very
+    protection this hook exists for (the #420 prod-data-wipe class).
+    The diagnostic names the construct family and offers both inline-env
+    and pull-out alternatives; operator picks the right shape and
+    re-issues the command. The opener-segment case (#2) could in
+    principle be handled by splicing inside the compound (`while
+    ENVIRONMENT=test pytest --quick`) but that requires a token-level
+    rewrite — out of scope for this PR.
     """
     seg = parts[idx].lstrip()
     first_token = seg.split(None, 1)[0] if seg else ""
@@ -501,53 +509,28 @@ def check(input_data: dict) -> dict | None:
     # Per-segment env-block + control-flow + subshell evaluation.
     # Three buckets:
     #   - satisfied: env-prefixed, no action needed
-    #   - control-flow bail: can't splice without invalid shell → ALLOW + log
-    #   - missing-env: real block, splice produces valid suggestion
-    needs_block = False
-    saw_control_flow_bail = False
+    #   - control-flow: can't splice cleanly → HARD BLOCK + diagnostic
+    #     (safety direction: never silently allow a pytest run without
+    #     ENVIRONMENT=test even when our rewriter can't produce a valid
+    #     suggestion — #478 hard-block discipline. Allow-with-log would
+    #     bypass the very protection this hook exists for, exactly the
+    #     #420 prod-data-wipe class of failure.)
+    #   - missing-env splice-able: BLOCK with corrected-command suggestion
+    needs_splice_block = False
+    saw_control_flow_block = False
     for i in test_segment_indices:
         if _segment_has_env_in_leading_block(parts[i]):
             continue
         if _is_control_flow_bracketed(parts, i):
-            saw_control_flow_bail = True
+            saw_control_flow_block = True
             continue
-        needs_block = True
-    if needs_block:
+        needs_splice_block = True
+    if needs_splice_block:
         rewritten, _ = _rewrite_command(command)
-        return {
-            "decision": "block",
-            "reason": (
-                "ENVIRONMENT=test is required for test commands but was not found in "
-                "the leading env-block of each test-bearing segment. Shell env "
-                "assignments only apply to the immediately-following program in the "
-                "same segment, so chains like `cd /x && pytest` need the env on the "
-                "pytest segment, not at the start of the whole command. Suggested "
-                "command:\n"
-                f"  {rewritten}"
-            ),
-        }
-    if saw_control_flow_bail:
-        # Every offending test segment is inside a control-flow body.
-        # See #478: erroring on the side of NOT mangling — emit a
-        # operator-readable diagnostic via annunaki_log and ALLOW.
-        return {
-            "decision": "allow_with_log",
-            "reason": (
-                "auto_set_env_test: test-bearing segment is inside a shell "
-                "control-flow construct (for/while/until/if). Cannot safely "
-                "splice ENVIRONMENT=test between the separator and the "
-                "control-flow keyword without producing invalid shell. "
-                "Allowing the command — operator must set ENVIRONMENT=test "
-                "in the body manually if the test runner needs it. "
-                f"Command: {command}"
-            ),
-        }
-    return None
-
-    rewritten, _ = _rewrite_command(command)
-    return {
-        "decision": "block",
-        "reason": (
+        # If the same command also has a control-flow segment we
+        # couldn't rewrite cleanly, surface BOTH so the operator
+        # understands the suggestion may not cover every test segment.
+        reason = (
             "ENVIRONMENT=test is required for test commands but was not found in "
             "the leading env-block of each test-bearing segment. Shell env "
             "assignments only apply to the immediately-following program in the "
@@ -555,8 +538,37 @@ def check(input_data: dict) -> dict | None:
             "pytest segment, not at the start of the whole command. Suggested "
             "command:\n"
             f"  {rewritten}"
-        ),
-    }
+        )
+        if saw_control_flow_block:
+            reason += (
+                "\n\nNote: at least one pytest invocation is inside a shell "
+                "control-flow construct (for/while/until/if) that "
+                "auto_set_env_test cannot safely rewrite. Add ENVIRONMENT=test "
+                "manually inside the body for those segments."
+            )
+        return {"decision": "block", "reason": reason}
+    if saw_control_flow_block:
+        # Every offending test segment is inside a control-flow body.
+        # HARD BLOCK with operator-readable diagnostic — splicing would
+        # produce invalid shell, but allowing would silently bypass the
+        # hook's purpose (#420-class silent-prod-write). Trade UX
+        # friction for safety. Diagnostic names the construct family
+        # and offers both inline-env and pull-out alternatives.
+        return {
+            "decision": "block",
+            "reason": (
+                "pytest detected inside a shell control-flow body "
+                "(for/while/until/if) that auto_set_env_test cannot safely "
+                "rewrite — splicing ENVIRONMENT=test between the separator "
+                "and a control-flow keyword would produce invalid shell. "
+                "Add ENVIRONMENT=test manually inside the body. Example:\n"
+                "  for f in a b; do ENVIRONMENT=test pytest $f; done\n"
+                "Or pull the loop variable outside:\n"
+                "  ENVIRONMENT=test pytest a b\n"
+                f"Original command: {command}"
+            ),
+        }
+    return None
 
 
 def main() -> None:
@@ -576,19 +588,6 @@ def main() -> None:
             tool_name="Bash",
         )
         sys.exit(2)
-    if result and result.get("decision") == "allow_with_log":
-        # Control-flow body bail (#478): log the diagnostic via annunaki
-        # but exit 0 so the operator's command runs. Stderr is suppressed
-        # to keep ALLOW paths quiet at the terminal — annunaki captures
-        # the diagnostic for post-hoc review.
-        command = input_data.get("tool_input", {}).get("command", "")
-        log_pretooluse_block(
-            "auto_set_env_test",
-            command,
-            result["reason"],
-            tool_name="Bash",
-        )
-        sys.exit(0)
     sys.exit(0)
 
 

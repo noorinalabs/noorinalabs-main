@@ -540,69 +540,70 @@ class SubshellAwareTests(unittest.TestCase):
         self.assertIsNone(result)
 
 
-class ControlFlowBailTests(unittest.TestCase):
+class ControlFlowHardBlockTests(unittest.TestCase):
     """Issue #478 case 3: `for/while/until/if ... ; do pytest ; done` —
-    the test segment is the BODY of a control-flow construct. Pre-fix
-    the splice would insert env between `;` and `do` producing invalid
-    shell. Post-fix: detect the control-flow context and emit an
-    operator-readable diagnostic + ALLOW rather than mangle. Errors on
-    the side of NOT producing broken suggestions.
+    the test segment is inside a control-flow construct where splicing
+    `ENVIRONMENT=test` between the separator and the control-flow
+    keyword would produce invalid shell.
 
-    Per the design decision recorded in the hook docstring (#478):
-    `allow_with_log` is preferred over `block` when no valid splice
-    exists — operator gets a clear annunaki diagnostic instead of a
-    suggestion they can't apply."""
+    Per design decision (#478): HARD BLOCK with operator-readable
+    diagnostic — never allow-with-log. Allow-with-log would silently
+    bypass the very protection this hook exists for (the #420 prod-
+    data-wipe class of failure). The diagnostic names the construct
+    family and offers both inline-env (`do ENVIRONMENT=test pytest`)
+    and pull-out (`ENVIRONMENT=test pytest a b`) alternatives so the
+    operator picks the right shape and re-issues."""
 
-    def test_for_do_pytest_done_allows_with_log(self) -> None:
+    def test_for_do_pytest_done_hard_blocks_with_diagnostic(self) -> None:
         """POS: `for f in a b; do pytest $f; done` — splice between `;`
-        and `do` would produce invalid shell. Allow with diagnostic
-        rather than emit a mangled suggestion."""
+        and `do` would produce invalid shell. HARD BLOCK with manual-
+        edit diagnostic; operator picks inline-env or pull-out."""
         result = hook.check(_bash("for f in a b; do pytest $f; done"))
         assert result is not None
-        self.assertEqual(result.get("decision"), "allow_with_log")
+        self.assertEqual(result.get("decision"), "block")
+        # Diagnostic must name the construct family.
         self.assertIn("control-flow", result["reason"].lower())
-        # Annunaki diagnostic should include the offending command for
-        # operator review.
-        self.assertIn("for f in a b", result["reason"])
+        # Diagnostic must show both alternatives.
+        self.assertIn("for f in a b; do ENVIRONMENT=test pytest", result["reason"])
+        self.assertIn("ENVIRONMENT=test pytest a b", result["reason"])
+        # Diagnostic must include the original command for operator review.
+        self.assertIn("for f in a b; do pytest $f; done", result["reason"])
 
-    def test_while_pytest_condition_allows_with_log(self) -> None:
+    def test_while_pytest_condition_hard_blocks(self) -> None:
         """POS: `while pytest --quick; do echo ok; done` — segment-
         leading token is `while` (a control-flow opener). Env
         assignments can only precede SIMPLE commands, not compound
         commands, so splicing `ENVIRONMENT=test while pytest ...` would
-        be invalid shell. Bail with diagnostic. (A token-level rewrite
-        could splice inside the compound — `while ENVIRONMENT=test
-        pytest ...` — but that's out of scope for this PR; design
-        decision recorded in hook docstring.)"""
+        be invalid shell. HARD BLOCK with diagnostic."""
         result = hook.check(_bash("while pytest --quick; do echo ok; done"))
         assert result is not None
-        self.assertEqual(result.get("decision"), "allow_with_log")
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("control-flow", result["reason"].lower())
 
-    def test_if_pytest_condition_allows_with_log(self) -> None:
+    def test_if_pytest_condition_hard_blocks(self) -> None:
         """POS: `if pytest --smoke; then echo go; fi` — same shape as
         the while-condition: segment-leading token is `if` (opener
-        keyword). Splice would be invalid (env can't precede compound
-        commands). Bail with diagnostic."""
+        keyword). Splice would be invalid. HARD BLOCK with diagnostic."""
         result = hook.check(_bash("if pytest --smoke; then echo go; fi"))
         assert result is not None
-        self.assertEqual(result.get("decision"), "allow_with_log")
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("control-flow", result["reason"].lower())
 
-    def test_for_with_env_inside_do_body_allowed(self) -> None:
-        """NEG: `for f in a b; do ENVIRONMENT=test pytest $f; done` —
-        env IS in the leading env-block of the `do pytest` segment
-        (after stripping the `do` keyword? No — `do` is the leading
-        token, not an env assignment). The current implementation
-        treats this as bail-with-log because `do` is the first token
-        regardless of what follows. Operator can confirm env is in the
-        body by reading the annunaki diagnostic; not blocking is the
-        safe behavior."""
+    def test_for_with_env_inside_do_body_hard_blocks(self) -> None:
+        """POS-fall-through: `for f in a b; do ENVIRONMENT=test pytest $f; done`
+        — env IS correctly placed in the body, but body-segment leading
+        token is `do` (not the env assignment), so the env-block check
+        misses it and the control-flow detector fires. Treated as HARD
+        BLOCK to preserve the safety invariant: any test segment we
+        can't analyze cleanly gets blocked, not allowed.
+
+        Known false-positive — operator can work around by moving env
+        outside the loop (`ENVIRONMENT=test pytest a b`). Documented
+        in PR body caveats; future refinement could strip control-flow
+        keywords before re-checking the env-block."""
         result = hook.check(_bash("for f in a b; do ENVIRONMENT=test pytest $f; done"))
-        # Annotated POS-fall-through: current implementation surfaces
-        # this as allow_with_log because the body-segment leading token
-        # is `do`, not `ENVIRONMENT=test`. Future refinement could
-        # strip control-flow keywords before re-checking the env-block.
         assert result is not None
-        self.assertEqual(result.get("decision"), "allow_with_log")
+        self.assertEqual(result.get("decision"), "block")
 
     def test_normal_pytest_after_control_flow_close_still_blocks(self) -> None:
         """POS: `for f in a b; do echo $f; done; pytest tests/` —
@@ -614,19 +615,23 @@ class ControlFlowBailTests(unittest.TestCase):
         self.assertEqual(result.get("decision"), "block")
         self.assertIn("done; ENVIRONMENT=test pytest tests/", result["reason"])
 
-    def test_mixed_control_flow_bail_and_real_block_prefers_block(self) -> None:
+    def test_mixed_control_flow_and_real_block_combined_message(self) -> None:
         """POS: `for f in a b; do pytest $f; done && pytest other/` —
-        first pytest is inside control-flow (bail), second is a normal
-        chain segment (splice-able). Behavior: BLOCK takes precedence
-        — operator gets a suggestion for the fixable segment and the
-        broken-suggestion case is naturally avoided by the bail-aware
-        rewrite returning unchanged for the for-body segment."""
+        first pytest is inside control-flow, second is a normal chain
+        segment. Both block; the suggestion fixes the splice-able
+        segment AND appends a note that the control-flow segment
+        needs manual edit. Splice does NOT mangle the for-body
+        (no broken `; ENVIRONMENT=test do`)."""
         result = hook.check(_bash("for f in a b; do pytest $f; done && pytest other/"))
         assert result is not None
         self.assertEqual(result.get("decision"), "block")
-        # The trailing pytest gets the splice; the for-body pytest is
-        # left alone in the suggestion (no broken `; ENVIRONMENT=test do`).
+        # Splice-able segment gets the fix.
         self.assertIn("&& ENVIRONMENT=test pytest other/", result["reason"])
+        # Control-flow segment is preserved verbatim (no mangle).
+        self.assertNotIn("; ENVIRONMENT=test do", result["reason"])
+        # Combined-message note alerts the operator to the control-flow segment.
+        self.assertIn("control-flow", result["reason"].lower())
+        self.assertIn("manually", result["reason"].lower())
         self.assertNotIn("; ENVIRONMENT=test do", result["reason"])
 
 
