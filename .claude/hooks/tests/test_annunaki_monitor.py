@@ -261,15 +261,22 @@ class SilentBooleanTestIdiomTests(unittest.TestCase):
         result = am.check(_bash_event("git diff --quiet", exit_code=1))
         self.assertIsNone(result)
 
-    def test_if_bracket_conditional_silent_exit_not_logged(self):
-        """NEG: `if [ -f x ]; then ...; fi` whole conditional with exit-1
-        false-branch → no log."""
-        result = am.check(_bash_event("if [ -f /nonexistent ]; then echo yes; fi", exit_code=1))
+    def test_if_bracket_conditional_false_branch_exit_zero_not_logged(self):
+        """NEG: `if [ -f /nonexistent ]; then echo unreachable; fi` exits 0
+        (false branch, body skipped) → no log. The whole-`if` regex was
+        removed in #490 because it silenced body failures (gap #3); the
+        false-branch path is now handled by exit_code=0 not being an error,
+        not by idiom-skip."""
+        result = am.check(
+            _bash_event("if [ -f /nonexistent ]; then echo unreachable; fi", exit_code=0)
+        )
         self.assertIsNone(result)
 
-    def test_if_double_bracket_conditional_silent_exit_not_logged(self):
-        """NEG: `if [[ ... ]]; then ...; fi` shape → no log."""
-        result = am.check(_bash_event("if [[ -f /nonexistent ]]; then echo yes; fi", exit_code=1))
+    def test_if_double_bracket_conditional_false_branch_exit_zero_not_logged(self):
+        """NEG: same shape with `[[`. exit 0 → no log."""
+        result = am.check(
+            _bash_event("if [[ -f /nonexistent ]]; then echo unreachable; fi", exit_code=0)
+        )
         self.assertIsNone(result)
 
     # --- Precedence: pattern match wins over idiom-on-silent-exit ---
@@ -374,6 +381,113 @@ class AinoFollowupTests(unittest.TestCase):
         )
         self.assertIsNone(result, "_should_ignore must precede exit-code capture")
         self.assertFalse(self._errors_path.exists())
+
+
+class IdiomTighteningTests(unittest.TestCase):
+    """#490 coverage: the 3 gaps + micro-cleanup Aisha surfaced on PR #481's
+    secondary review. Headline regression case is gap #3 — `if [ ... ]; then
+    real-failure; fi` must log the body's exit-1 failure, not be silenced."""
+
+    def setUp(self):
+        self._saved_env = {
+            "ENVIRONMENT": os.environ.pop("ENVIRONMENT", None),
+            "NOORIN_HOOK_TEST_MODE": os.environ.pop("NOORIN_HOOK_TEST_MODE", None),
+        }
+        am._seen_hashes.clear()
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._errors_path = Path(self._tmpdir.name) / "errors.jsonl"
+        self._orig_monitor_file = am.ERRORS_FILE
+        self._orig_log_file = alog.ERRORS_FILE
+        am.ERRORS_FILE = self._errors_path
+        alog.ERRORS_FILE = self._errors_path
+
+    def tearDown(self):
+        am.ERRORS_FILE = self._orig_monitor_file
+        alog.ERRORS_FILE = self._orig_log_file
+        self._tmpdir.cleanup()
+        for k, v in self._saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    # --- Gap #1: split-flag grep -q forms ---
+
+    def test_grep_split_flag_dash_E_dash_q_silent_exit_not_logged(self):
+        """NEG (#490 gap #1): `grep -E -q pattern file` exit 1 silent → no
+        log. Split-flag form was missed by the combined-flag-only regex
+        before tightening."""
+        result = am.check(_bash_event("grep -E -q '^foo' /tmp/file.txt", exit_code=1))
+        self.assertIsNone(result, "split-flag `grep -E -q` must skip")
+
+    def test_grep_split_flag_dash_i_dash_q_silent_exit_not_logged(self):
+        """NEG (#490 gap #1): `grep -i -q pattern file` exit 1 silent → no
+        log. Order-independent."""
+        result = am.check(_bash_event("grep -i -q bar /tmp/file.txt", exit_code=1))
+        self.assertIsNone(result)
+
+    # --- Gap #2: diff --quiet exit_code discrimination ---
+
+    def test_diff_quiet_exit_2_trouble_logged(self):
+        """POS (#490 gap #2): `diff --quiet a b` exit 2 (couldn't open,
+        permission denied) → MUST log even with empty stderr. Exit 2 is
+        "trouble", not by-design differs-signal."""
+        result = am.check(_bash_event("diff --quiet /tmp/a /tmp/b", exit_code=2))
+        self.assertIsNotNone(result, "diff --quiet exit=2 trouble must log")
+        rec = _read_records(self._errors_path)[0]
+        self.assertEqual(rec["exit_code"], 2)
+        self.assertIn("exit_code=2", rec["matched_patterns"])
+
+    def test_git_diff_quiet_exit_2_trouble_logged(self):
+        """POS (#490 gap #2): git diff --quiet variant of the trouble exit
+        discrimination. Exit 2 → log."""
+        result = am.check(_bash_event("git diff --quiet", exit_code=2))
+        self.assertIsNotNone(result, "git diff --quiet exit=2 trouble must log")
+
+    def test_diff_quiet_exit_1_differs_still_skipped(self):
+        """NEG (#490 gap #2 regression guard): exit 1 (the by-design
+        differs-signal) → still skipped per #474. The fix narrows the skip
+        condition, doesn't broaden the log condition."""
+        result = am.check(_bash_event("diff --quiet /tmp/a /tmp/b", exit_code=1))
+        self.assertIsNone(result, "diff --quiet exit=1 differs is still by-design")
+
+    # --- Gap #3 HEADLINE: if [ ...; ]; then real-failure; fi must log ---
+
+    def test_if_bracket_with_failing_body_logged(self):
+        """POS (#490 gap #3 HEADLINE): `if [ -d /tmp ]; then false; fi`
+        exit 1 (body failed, condition was truthy) → MUST log. This was the
+        regression case — the old `^\\s*if\\s+\\[` regex matched the outer
+        `if [` and suppressed the real body failure."""
+        result = am.check(_bash_event("if [ -d /tmp ]; then false; fi", exit_code=1))
+        self.assertIsNotNone(
+            result, "if-conditional body failure must log; idiom-skip must not silence it"
+        )
+        rec = _read_records(self._errors_path)[0]
+        self.assertEqual(rec["exit_code"], 1)
+
+    def test_if_double_bracket_with_failing_body_logged(self):
+        """POS (#490 gap #3): `[[` variant of the headline case → log."""
+        result = am.check(_bash_event("if [[ -d /tmp ]]; then false; fi", exit_code=1))
+        self.assertIsNotNone(result)
+
+    def test_if_bracket_false_condition_exit_zero_skipped(self):
+        """NEG (#490 gap #3 invariant): false condition (exit 0 because
+        else-branch is empty / body not entered) → no log. Preserves the
+        existing "happy path of the false branch is silent" behavior."""
+        result = am.check(
+            _bash_event("if [ -d /nonexistent ]; then echo unreachable; fi", exit_code=0)
+        )
+        self.assertIsNone(result, "false-condition exit-0 stays silent")
+
+    # --- Micro-cleanup: redundant `^\s*\[\[` removal regression guard ---
+
+    def test_bash_double_bracket_still_skipped_after_dedup(self):
+        """NEG (#490 micro-cleanup regression guard): `[[ -f x ]]` exit 1
+        silent → no log. The line-79 `^\\s*\\[\\[` regex was removed because
+        `^\\s*\\[` already matches `[[` (both start with `[`). This test
+        confirms `[[` is still covered by the dedup'd list."""
+        result = am.check(_bash_event("[[ -f /nonexistent ]]", exit_code=1))
+        self.assertIsNone(result, "[[ idiom must still skip after dedup")
 
 
 if __name__ == "__main__":
