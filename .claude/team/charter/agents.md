@@ -256,7 +256,9 @@ The harness enforces **one team per orchestrator session** — `TeamCreate` fail
 
 ### Reviewer slate discipline (FIRST-LINE in every spawn prompt)
 
-> **Position-first rule (resolves [main#201](https://github.com/noorinalabs/noorinalabs-main/issues/201)).** The reviewer slate is the first decision the spawn prompt forces the orchestrator (or PD-via-spawn-request) to make — not buried mid-checklist where it gets back-filled after scope/branch/sequencing have already framed the assignment. Every spawn prompt template MUST place this section immediately after the identity / git-identity preamble and BEFORE the `## Ontology Context` section.
+> **Position-first rule (resolves [main#201](https://github.com/noorinalabs/noorinalabs-main/issues/201)).** The reviewer slate is the first decision the spawn prompt forces the orchestrator (or PD-via-spawn-request) to make — not buried mid-checklist where it gets back-filled after scope/branch/sequencing have already framed the assignment. Every spawn prompt template MUST place this section immediately after the identity / git-identity preamble and BEFORE the `## Ontology Context` section (when that section is present — see coordinator-class exemption note below).
+>
+> **Coordinator-class exemption (#468):** the `## Ontology Context` section is MANDATORY for implementer-class spawns and OPTIONAL for coordinator-class spawns (Manager, Pipeline Manager, Project Lead, Program Director, TPM / Technical Program Manager, Release Coordinator). Coordinators communicate primarily via SendMessage and rarely Edit/Write directly; `enforce_ontology_context.py` matches the canonical `You are **{Name}**, {Role}[ for {repo}]` opener and exempts these roles from the spawn-time Agent block. Hook 15 (`enforce_librarian_consulted.py`) still fires at the Edit/Write surface for the few coordinators that do edit. When a coordinator brief DOES include `## Ontology Context`, the position-first rule above continues to apply — the section retains its required location.
 >
 > **You MUST NOT name as reviewer:**
 > - The **manager of the implementer's repo** (manager-boundary rule — see `pull-requests.md` § Two-Reviewer Assignment, observed-and-corrected ≥4× across three managers in P2W10).
@@ -319,7 +321,7 @@ The harness enforces **one team per orchestrator session** — `TeamCreate` fail
 Every implementer spawn prompt MUST include, **in order**:
 
 1. **Reviewer slate** (first-line per § Reviewer slate discipline above) — both reviewers named, manager-boundary verified, valid-source check applied.
-2. **`## Ontology Context`** section (literal heading) with librarian output baked in — `enforce_ontology_context.py` scans for this heading and blocks the spawn if absent.
+2. **`## Ontology Context`** section (literal heading) with librarian output baked in — `enforce_ontology_context.py` scans for this heading and blocks the spawn if absent. **Coordinator-class spawns are exempt** (Manager, Pipeline Manager, Project Lead, Program Director, TPM / Technical Program Manager, Release Coordinator) per the carveout above and #468; the hook's `COORDINATOR_ROLE_OPENER` regex matches the canonical `You are **{Name}**, {Role}[ for {repo}]` opener and skips the block. This item remains MANDATORY for implementer-class spawns (Engineer, Tech Lead, Standards & Quality Lead, Security Engineer, Engineering Manager).
 3. **MANDATORY first-action** instruction to run `/ontology-librarian {topic}` in the spawned agent's own session — Hook 15 scans the agent's transcript independently and blocks Edit/Write otherwise.
 4. **Git identity** flags (`git -c user.name="..." -c user.email="parametrization+FirstName.LastName@gmail.com"`).
 5. **Branch name** matching `{FirstInitial}.{LastName}/{IIII}-{slug}` and **PR target** (typically `deployments/phase-{N}/wave-{M}`).
