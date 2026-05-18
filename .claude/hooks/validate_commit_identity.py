@@ -22,14 +22,28 @@ cwd-fallback for cross-repo detection (#475 fix 1):
   every operator to compose a `cd` prefix when their shell cwd already names
   the right repo.
 
-Indirect-exec bypass detection (#475 fix 2):
+Indirect-exec bypass detection (#475 fix 2, extended in #482):
   PreToolUse hooks only see the literal Bash `command` parameter. Wrappers
-  like `printf '<git-commit-cmd>' | bash`, `bash -c '<git-commit-cmd>'`,
-  `bash <script-with-git-commit>`, and `bash <(echo '<git-commit-cmd>')`
-  hide the actual `git commit` from the outer-command tokenizer. The hook
-  now scans for these shapes and, if the payload looks like a git commit,
-  BLOCKS with a message pointing operators to the canonical shape. This
-  closes a silent bypass discovered in P3W11 PR #41 fixup.
+  that hide the actual `git commit` from the outer-command tokenizer are
+  detected pre-tokenize and BLOCKED. Original 4 shapes from #475:
+      printf '<git-commit-cmd>' | bash
+      bash -c '<git-commit-cmd>'
+      bash <script-with-git-commit>      (extension-restricted to *.sh)
+      bash <(echo '<git-commit-cmd>')
+
+  #482 follow-up adds 5 more, surfaced by Aisha + Petra convergent review:
+      bash <<EOF...git commit...EOF      (heredoc body)
+      bash <<<'git commit ...'           (here-string)
+      eval 'git commit ...'              (shell builtin)
+      dash|ksh -c '...'                  (extended _INTERPRETERS alternation)
+      bash <script.bash>                 (extension-agnostic; *.sh restriction removed)
+
+  The extension-agnostic script read is the highest-severity #482 change:
+  the prior `.sh` restriction was trivially circumvented by renaming the
+  bypass script. Now any token after `bash|sh|zsh|dash|ksh` that points to
+  a readable regular file (under the 256 KiB cap, fail-open on OSError)
+  has its content scanned for git-commit-shape. Token must not start with
+  a flag (`-c`, `-x`, etc.) to avoid colliding with the `-c` detector.
 
 Input Language
 ==============
@@ -192,8 +206,13 @@ def _detect_target_roster(command: str, *, cwd: str | None = None) -> dict[str, 
 #   only block when the readable content matches the git-commit shape;
 #   bare `bash some-script.sh` whose content is innocent is allowed.
 
-# Wrapper interpreters we recognise.
-_INTERPRETERS = r"(?:bash|sh|zsh)"
+# Wrapper interpreters we recognise. Extended for #482 to include `dash`
+# and `ksh` — both are POSIX shells that operators may use as `dash -c …`
+# / `ksh -c …` to bypass the original (bash|sh|zsh)-only alternation.
+# `mksh` and `pdksh` are deliberately excluded as a conservative bound;
+# they're rare in modern installs and can be added later if observed in
+# any bypass surface (see #482 acceptance bullet).
+_INTERPRETERS = r"(?:bash|sh|zsh|dash|ksh)"
 
 # printf/echo … | <interpreter>. Captures the printf/echo argument body.
 # Anchor on `printf` or `echo` at word boundary, allow any chars up to the
@@ -224,12 +243,61 @@ _PROCESS_SUB_RE = re.compile(
 )
 
 # <interpreter> <scriptpath> — the script path is whatever non-flag
-# non-redirect token follows. Restricted to tokens ending in `.sh` to
-# avoid false-positives on `bash -c '...'` (handled above) and `bash`
-# bare (interactive shell, no script). The path may be absolute or
-# relative; if relative we resolve against the hook's cwd.
+# non-redirect token follows. The prior `\.sh\b` extension restriction was
+# trivially circumvented by renaming the bypass script (`bash script.bash`
+# / `bash extensionless-script`) — see #482. Now extension-agnostic: any
+# token whose first char is not a flag (`-`), a redirect (`<>|;&`), or a
+# process-substitution opener (`(`) is treated as a candidate script path
+# and read for content inspection (subject to the 256 KiB cap + fail-open
+# OSError discipline in `_read_script_if_safe`).
+#
+# Disambiguation from the `-c` case: the leading character class `[^-…]`
+# rejects `bash -c '…'` because the first token char is `-`. The `bash`
+# bare-interactive form (no following token) has no match because the
+# `\s+(?P<path>…)` requires at least one whitespace + path char.
 _SCRIPT_INVOKE_RE = re.compile(
-    r"\b" + _INTERPRETERS + r"\s+(?P<path>[^\s|;&<>]+\.sh)\b",
+    r"\b" + _INTERPRETERS + r"\s+(?P<path>[^\s\-<>|;&(][^\s|;&<>]*)",
+)
+
+# <interpreter> <<DELIM ... DELIM  (heredoc body fed as stdin to a shell).
+# The heredoc body is read as commands by the shell — if it contains a
+# git-commit shape, it slips past the outer tokenizer. We must anchor on
+# `_INTERPRETERS` here; an unrelated `cat <<EOF\ngit commit …\nEOF` is
+# data-only (cat prints the body, does not exec it) and must not
+# false-block. Matches the four shell heredoc opener variants:
+# `<<DELIM`, `<<'DELIM'`, `<<"DELIM"`, `<<-DELIM`.
+#
+# Note: this regex INTENTIONALLY does not share machinery with
+# `_shell_parse.strip_heredocs` — the latter removes heredoc bodies for
+# the standard parser path so prose containing "git commit" inside a cat
+# heredoc doesn't false-match. Here we want the OPPOSITE: extract the
+# body specifically when the heredoc target IS a shell interpreter, so
+# we can scan it for hidden git commits.
+_HEREDOC_RE = re.compile(
+    r"\b" + _INTERPRETERS + r"\b[^\n]*?<<-?\s*['\"]?(?P<delim>\w+)['\"]?[^\n]*\n"
+    r"(?P<payload>.*?)\n\t*(?P=delim)\b",
+    re.DOTALL,
+)
+
+# <interpreter> <<<'<payload>' (here-string). The body is fed as a single
+# stdin line — same exec semantics as a heredoc for our purposes. Anchor
+# on `_INTERPRETERS` for the same reason as heredoc.
+_HERESTRING_RE = re.compile(
+    r"\b" + _INTERPRETERS + r"\s+<<<\s*(?P<payload>(?P<q>['\"]).*?(?P=q)|\S+)",
+    re.DOTALL,
+)
+
+# eval '<payload>' — shell builtin that re-parses + executes its argument
+# string. Captures the argument up to the closing matching quote OR (for
+# unquoted forms) up to the next shell segment separator. Documented
+# punts: variable-substituted eval strings (`eval "$cmd"`) are NOT
+# inspected because the substitution happens at shell-runtime, after the
+# hook fires; multi-segment eval bodies (`eval 'git status; git commit'`)
+# are matched as a single payload but the inner-payload regex correctly
+# bounds the `git` … `commit` bridge to a single segment via `[^;&|]`.
+_EVAL_RE = re.compile(
+    r"\beval\s+(?P<payload>(?P<q>['\"]).*?(?P=q)|\S+)",
+    re.DOTALL,
 )
 
 # Inner-payload commit-shape: looser than the outer `_COMMIT_FALLBACK_RE`
@@ -296,10 +364,17 @@ def _detect_indirect_commit(command: str, *, cwd: str | None = None) -> str | No
     commit, or None when no wrapper-with-commit shape is matched.
 
     Shapes checked, in order:
-      1. printf/echo … | bash|sh|zsh
-      2. bash|sh|zsh -c '<payload>'
-      3. bash|sh|zsh <(…)  (process substitution)
-      4. bash|sh|zsh <script.sh>  (reads the script content)
+      1. printf/echo … | bash|sh|zsh|dash|ksh
+      2. bash|sh|zsh|dash|ksh -c '<payload>'
+      3. bash|sh|zsh|dash|ksh <(…)  (process substitution)
+      4. bash|sh|zsh|dash|ksh <<DELIM ... DELIM  (heredoc body, #482)
+      5. bash|sh|zsh|dash|ksh <<<'<payload>'  (here-string, #482)
+      6. eval '<payload>'  (shell builtin, #482)
+      7. bash|sh|zsh|dash|ksh <scriptpath>  (extension-agnostic, #482)
+
+    The script-path check is LAST because it requires disk I/O — all
+    pattern-only checks run first to short-circuit common cases without
+    hitting the filesystem.
     """
     for m in _PIPE_TO_SHELL_RE.finditer(command):
         if _payload_looks_like_commit(m.group("payload")):
@@ -313,6 +388,20 @@ def _detect_indirect_commit(command: str, *, cwd: str | None = None) -> str | No
     for m in _PROCESS_SUB_RE.finditer(command):
         if _payload_looks_like_commit(m.group("payload")):
             return "process substitution"
+
+    for m in _HEREDOC_RE.finditer(command):
+        if _payload_looks_like_commit(m.group("payload")):
+            return "heredoc"
+
+    for m in _HERESTRING_RE.finditer(command):
+        payload = _strip_outer_quotes(m.group("payload"))
+        if _payload_looks_like_commit(payload):
+            return "here-string"
+
+    for m in _EVAL_RE.finditer(command):
+        payload = _strip_outer_quotes(m.group("payload"))
+        if _payload_looks_like_commit(payload):
+            return "eval"
 
     for m in _SCRIPT_INVOKE_RE.finditer(command):
         content = _read_script_if_safe(m.group("path"), cwd)
@@ -398,7 +487,8 @@ def check(input_data: dict) -> dict | None:
                 "carrying a hidden `git commit`. Commit-identity validation "
                 "only sees the outer Bash command, so wrappers like "
                 "`printf '...' | bash`, `bash -c '...'`, `bash <script>`, "
-                "and `bash <(...)` would let an unvalidated commit through.\n\n"
+                "`bash <(...)`, `bash <<EOF...EOF`, `bash <<<'...'`, and "
+                "`eval '...'` would let an unvalidated commit through.\n\n"
                 "Run the git command directly so the hook can inspect the "
                 "identity flags:\n"
                 '  git -c user.name="Your Name" -c user.email="..." \\\n'
@@ -406,7 +496,7 @@ def check(input_data: dict) -> dict | None:
                 "If you need a different working directory, prefix with "
                 "`cd <path> && git -c ... commit ...` (canonical cross-repo "
                 "shape).\n\n"
-                "See issue #475 for the full bypass surface and rationale."
+                "See issues #475 and #482 for the full bypass surface and rationale."
             ),
         }
         log_pretooluse_block("validate_commit_identity", command, result["reason"])
