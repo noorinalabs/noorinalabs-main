@@ -414,5 +414,226 @@ class ShortCircuitWithChainsTests(unittest.TestCase):
         self.assertIsNone(result)
 
 
+class QuoteAwareSplittingTests(unittest.TestCase):
+    """Issue #478 case 1: quoted `&&`/`||`/`;`/`|` and quoted `pytest`
+    tokens must NOT trigger segment-splitting or test-runner detection.
+
+    Pre-fix: the regex split treated quoted separators as real and
+    quoted pytest substrings as real invocations, producing both
+    false-positive blocks and mangled suggestions that inserted env
+    into the middle of a quoted string."""
+
+    def test_quoted_amp_amp_inside_grep_pattern(self) -> None:
+        """NEG: `git log --grep='fix && pytest' && echo done` — the
+        inner `&&` is inside a single-quoted grep pattern; the `pytest`
+        inside it is argument data, not a runner invocation. The OUTER
+        `&& echo done` is the only real separator, and the only segment
+        is `git log --grep=...` (no real pytest) + `echo done`. Allow.
+
+        This is the case 1 repro from #478 — pre-fix the hook blocked
+        with a mangled suggestion that inserted env inside the grep
+        pattern."""
+        result = hook.check(_bash("git log --grep='fix && pytest' && echo done"))
+        self.assertIsNone(
+            result,
+            "quoted && inside grep pattern must not split, "
+            "quoted pytest must not trigger test-runner detection",
+        )
+
+    def test_quoted_double_quoted_pytest_alone(self) -> None:
+        """NEG: `echo "running pytest"` — pytest entirely inside double
+        quotes is a string literal, not a runner invocation."""
+        result = hook.check(_bash('echo "running pytest"'))
+        self.assertIsNone(result)
+
+    def test_quoted_separator_does_not_split(self) -> None:
+        """NEG: `printf '%s' 'a;b|c&&d' ; pytest tests/` — quoted
+        separators inside printf args must not split; the trailing
+        real `;` does split, and the trailing real pytest segment
+        triggers a block. Confirms the quote-state machine correctly
+        re-enters unquoted state after the closing quote."""
+        result = hook.check(_bash("printf '%s' 'a;b|c&&d' ; pytest tests/"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        # Splice should land on the trailing pytest segment, not inside
+        # the quoted printf arg.
+        self.assertIn("ENVIRONMENT=test pytest tests/", result["reason"])
+        self.assertNotIn("ENVIRONMENT=testa;b", result["reason"])
+
+    def test_backslash_escape_outside_quotes_protects_separator(self) -> None:
+        """POS: `echo a \\&\\& pytest` — the escape protects the `&`
+        from being recognised as part of `&&` (verifying the state
+        machine's `in_escape` branch). So the whole string is ONE
+        segment containing both `echo` and the literal `pytest` token.
+        Because `pytest` IS in the segment (not inside quotes), it's
+        flagged as a test invocation and blocked. This is the
+        safe-direction over-block — operator can manually quote the
+        `pytest` if it's data. Test pins the splice destination: env
+        goes at the segment start (before `echo`), not somewhere
+        absurd inside the escaped sequence."""
+        result = hook.check(_bash(r"echo a \&\& pytest"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        # Splice prepends env to the single-segment command.
+        self.assertIn(r"ENVIRONMENT=test echo a \&\& pytest", result["reason"])
+
+    def test_quoted_pytest_with_real_pytest_in_other_segment(self) -> None:
+        """POS: `echo "pytest is great" && pytest tests/` — the quoted
+        pytest is data, the unquoted one is a real invocation. Block,
+        suggestion places env on the real pytest segment ONLY."""
+        result = hook.check(_bash('echo "pytest is great" && pytest tests/'))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn(
+            'echo "pytest is great" && ENVIRONMENT=test pytest tests/',
+            result["reason"],
+        )
+
+
+class SubshellAwareTests(unittest.TestCase):
+    """Issue #478 case 2: `(ENVIRONMENT=test pytest tests/)` — the env
+    block is inside a subshell. Pre-fix the detector looked at the
+    segment's leading tokens (which started with `(`) and missed the
+    interior env-block, false-positive-blocking."""
+
+    def test_subshell_with_env_inside_allowed(self) -> None:
+        """NEG: `(ENVIRONMENT=test pytest tests/)` — env is on the
+        correct (sub-)segment's program. Allow."""
+        result = hook.check(_bash("(ENVIRONMENT=test pytest tests/)"))
+        self.assertIsNone(result, "env inside subshell must be recognised")
+
+    def test_subshell_without_env_blocks_with_inside_splice(self) -> None:
+        """POS: `(pytest tests/)` — env missing inside subshell. Block,
+        suggestion places env INSIDE the parens (not before them)."""
+        result = hook.check(_bash("(pytest tests/)"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("(ENVIRONMENT=test pytest tests/)", result["reason"])
+
+    def test_subshell_with_debug_prefix_inside_allowed(self) -> None:
+        """NEG: `(DEBUG=1 ENVIRONMENT=test pytest tests/)` — env-block
+        inside subshell still allowed when ENVIRONMENT=test is one of
+        the leading assignments."""
+        result = hook.check(_bash("(DEBUG=1 ENVIRONMENT=test pytest tests/)"))
+        self.assertIsNone(result)
+
+    def test_subshell_splice_preserves_debug_prefix(self) -> None:
+        """POS: `(DEBUG=1 pytest tests/)` — env missing, splice inside
+        subshell preserves existing DEBUG=1."""
+        result = hook.check(_bash("(DEBUG=1 pytest tests/)"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("(DEBUG=1 ENVIRONMENT=test pytest tests/)", result["reason"])
+
+    def test_chained_subshell_segment(self) -> None:
+        """POS: `cd /path && (pytest tests/)` — chain with subshell as
+        the test segment; splice into subshell, leave cd alone."""
+        result = hook.check(_bash("cd /path && (pytest tests/)"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("cd /path && (ENVIRONMENT=test pytest tests/)", result["reason"])
+
+    def test_chained_subshell_with_env_inside_allowed(self) -> None:
+        """NEG: `cd /path && (ENVIRONMENT=test pytest tests/)` — env on
+        the correct (sub-)segment's program. Allow."""
+        result = hook.check(_bash("cd /path && (ENVIRONMENT=test pytest tests/)"))
+        self.assertIsNone(result)
+
+
+class ControlFlowHardBlockTests(unittest.TestCase):
+    """Issue #478 case 3: `for/while/until/if ... ; do pytest ; done` —
+    the test segment is inside a control-flow construct where splicing
+    `ENVIRONMENT=test` between the separator and the control-flow
+    keyword would produce invalid shell.
+
+    Per design decision (#478): HARD BLOCK with operator-readable
+    diagnostic — never allow-with-log. Allow-with-log would silently
+    bypass the very protection this hook exists for (the #420 prod-
+    data-wipe class of failure). The diagnostic names the construct
+    family and offers both inline-env (`do ENVIRONMENT=test pytest`)
+    and pull-out (`ENVIRONMENT=test pytest a b`) alternatives so the
+    operator picks the right shape and re-issues."""
+
+    def test_for_do_pytest_done_hard_blocks_with_diagnostic(self) -> None:
+        """POS: `for f in a b; do pytest $f; done` — splice between `;`
+        and `do` would produce invalid shell. HARD BLOCK with manual-
+        edit diagnostic; operator picks inline-env or pull-out."""
+        result = hook.check(_bash("for f in a b; do pytest $f; done"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        # Diagnostic must name the construct family.
+        self.assertIn("control-flow", result["reason"].lower())
+        # Diagnostic must show both alternatives.
+        self.assertIn("for f in a b; do ENVIRONMENT=test pytest", result["reason"])
+        self.assertIn("ENVIRONMENT=test pytest a b", result["reason"])
+        # Diagnostic must include the original command for operator review.
+        self.assertIn("for f in a b; do pytest $f; done", result["reason"])
+
+    def test_while_pytest_condition_hard_blocks(self) -> None:
+        """POS: `while pytest --quick; do echo ok; done` — segment-
+        leading token is `while` (a control-flow opener). Env
+        assignments can only precede SIMPLE commands, not compound
+        commands, so splicing `ENVIRONMENT=test while pytest ...` would
+        be invalid shell. HARD BLOCK with diagnostic."""
+        result = hook.check(_bash("while pytest --quick; do echo ok; done"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("control-flow", result["reason"].lower())
+
+    def test_if_pytest_condition_hard_blocks(self) -> None:
+        """POS: `if pytest --smoke; then echo go; fi` — same shape as
+        the while-condition: segment-leading token is `if` (opener
+        keyword). Splice would be invalid. HARD BLOCK with diagnostic."""
+        result = hook.check(_bash("if pytest --smoke; then echo go; fi"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("control-flow", result["reason"].lower())
+
+    def test_for_with_env_inside_do_body_hard_blocks(self) -> None:
+        """POS-fall-through: `for f in a b; do ENVIRONMENT=test pytest $f; done`
+        — env IS correctly placed in the body, but body-segment leading
+        token is `do` (not the env assignment), so the env-block check
+        misses it and the control-flow detector fires. Treated as HARD
+        BLOCK to preserve the safety invariant: any test segment we
+        can't analyze cleanly gets blocked, not allowed.
+
+        Known false-positive — operator can work around by moving env
+        outside the loop (`ENVIRONMENT=test pytest a b`). Documented
+        in PR body caveats; future refinement could strip control-flow
+        keywords before re-checking the env-block."""
+        result = hook.check(_bash("for f in a b; do ENVIRONMENT=test pytest $f; done"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+
+    def test_normal_pytest_after_control_flow_close_still_blocks(self) -> None:
+        """POS: `for f in a b; do echo $f; done; pytest tests/` —
+        control-flow construct closes with `done`, then a normal
+        pytest segment follows. The trailing pytest is NOT inside the
+        control-flow body and the splice IS safe there."""
+        result = hook.check(_bash("for f in a b; do echo $f; done; pytest tests/"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("done; ENVIRONMENT=test pytest tests/", result["reason"])
+
+    def test_mixed_control_flow_and_real_block_combined_message(self) -> None:
+        """POS: `for f in a b; do pytest $f; done && pytest other/` —
+        first pytest is inside control-flow, second is a normal chain
+        segment. Both block; the suggestion fixes the splice-able
+        segment AND appends a note that the control-flow segment
+        needs manual edit. Splice does NOT mangle the for-body
+        (no broken `; ENVIRONMENT=test do`)."""
+        result = hook.check(_bash("for f in a b; do pytest $f; done && pytest other/"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        # Splice-able segment gets the fix.
+        self.assertIn("&& ENVIRONMENT=test pytest other/", result["reason"])
+        # Control-flow segment is preserved verbatim (no mangle).
+        self.assertNotIn("; ENVIRONMENT=test do", result["reason"])
+        # Combined-message note alerts the operator to the control-flow segment.
+        self.assertIn("control-flow", result["reason"].lower())
+        self.assertIn("manually", result["reason"].lower())
+        self.assertNotIn("; ENVIRONMENT=test do", result["reason"])
+
+
 if __name__ == "__main__":
     unittest.main()
