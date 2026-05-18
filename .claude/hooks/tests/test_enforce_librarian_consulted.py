@@ -528,6 +528,85 @@ class SentinelFallbackTests(unittest.TestCase):
         expected = hashlib.sha1((sample + "\n").encode("utf-8")).hexdigest()[:16]
         self.assertEqual(hook._cwd_sentinel_hash(sample), expected)
 
+    def test_cwd_hash_matches_actual_shell_subprocess(self) -> None:
+        """Parity guard #2 (#175): run the EXACT shell pipeline from the
+        ontology-librarian SKILL.md step 0 in an isolated cwd and assert
+        the resulting hash matches `_cwd_sentinel_hash`.
+
+        The pre-#175 `test_cwd_hash_matches_shell_pwd_sha1sum` re-implemented
+        the algorithm in Python (`hashlib.sha1((sample + "\\n").encode(...))`)
+        — if `sha1sum` itself were to drift, or if a shell-platform quirk
+        produced different bytes, the pure-Python test would not notice.
+        This test actually invokes `/bin/sh -c 'pwd | sha1sum | cut -c1-16'`
+        in a `tmp_path` cwd and compares the produced filename hash against
+        `_cwd_sentinel_hash(str(tmp_path))`.
+        """
+        import subprocess
+
+        with tempfile.TemporaryDirectory(
+            prefix="hook15_parity_", dir=os.path.expanduser("~")
+        ) as tmp_cwd:
+            shell_output = subprocess.run(
+                ["/bin/sh", "-c", "pwd | sha1sum | cut -c1-16"],
+                cwd=tmp_cwd,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            shell_hash = shell_output.stdout.strip()
+            python_hash = hook._cwd_sentinel_hash(tmp_cwd)
+            self.assertEqual(
+                shell_hash,
+                python_hash,
+                f"shell `pwd | sha1sum | cut -c1-16` ({shell_hash!r}) must "
+                f"match `_cwd_sentinel_hash({tmp_cwd!r})` ({python_hash!r}); "
+                "if these diverge the librarian skill's sentinel will never "
+                "be found by the hook and the #169 race re-opens silently.",
+            )
+
+    def test_skill_md_uses_expected_shell_pipeline(self) -> None:
+        """Bonus parity guard (#175): the test_cwd_hash_matches_actual_shell_subprocess
+        test above hard-codes `pwd | sha1sum | cut -c1-16` as the pipeline
+        under test. If a future edit to SKILL.md changes the pipeline (e.g.,
+        to `realpath | sha1sum | cut -c1-16`, or a different cut width, or
+        a `printf '%s' "$(pwd)"` variant that strips the trailing newline),
+        the subprocess test would still pass against the OLD pipeline while
+        the skill writes sentinels under a DIFFERENT hash — silently
+        re-opening the #169 race.
+
+        This test asserts the literal pipeline still appears in SKILL.md as
+        the sentinel-write step. Failure means EITHER:
+          1. SKILL.md was edited and the pipeline changed — update both the
+             skill AND the parity test deliberately, OR
+          2. SKILL.md was renamed/moved — update this test's path.
+        """
+        skill_md_path = (
+            Path(__file__).resolve().parent.parent.parent
+            / "skills"
+            / "ontology-librarian"
+            / "SKILL.md"
+        )
+        self.assertTrue(
+            skill_md_path.is_file(),
+            f"SKILL.md not at expected path {skill_md_path}; if moved, "
+            "update this test's path resolution.",
+        )
+        skill_md = skill_md_path.read_text(encoding="utf-8")
+        # Literal substring search — if the skill stops using this exact
+        # pipeline the test fails loudly. The trailing newline in `pwd`
+        # output (consumed by sha1sum) is the load-bearing detail that
+        # `_cwd_sentinel_hash`'s `+ "\n"` mirrors.
+        self.assertIn(
+            "pwd | sha1sum | cut -c1-16",
+            skill_md,
+            "ontology-librarian SKILL.md no longer contains the canonical "
+            "`pwd | sha1sum | cut -c1-16` sentinel-write pipeline. If this "
+            "was an intentional change, update `_cwd_sentinel_hash` in "
+            "`_consultation_sentinel.py` to match the new shell algorithm "
+            "AND update `test_cwd_hash_matches_actual_shell_subprocess` "
+            "above to invoke the new pipeline.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
