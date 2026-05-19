@@ -251,17 +251,98 @@ def _is_approved(value: str) -> bool:
     return normalized == "approved"
 
 
+def _strip_code_regions(body: str) -> str:
+    """Strip fenced code blocks (```…```) and inline code (`…`) from `body`.
+
+    Returns a body where every char inside a code region is replaced with a
+    space (preserving line indices for downstream regex). This prevents
+    reviewer prose like `` `Requestor: (TBD)` `` from being captured as the
+    actual Requestor value (#511 — Bereket-on-deploy#339 pattern).
+
+    The replacement char is space (not empty) so any `re.search` line/column
+    arithmetic remains accurate against the original `body`'s line offsets,
+    making `_trailer_block_substring`'s `---`-line detection unaffected.
+    """
+    out: list[str] = []
+    i = 0
+    n = len(body)
+    while i < n:
+        # Fenced code: ```...``` (triple-backtick on its own or with lang tag).
+        if body.startswith("```", i):
+            end = body.find("```", i + 3)
+            if end == -1:
+                # Unterminated fence — strip rest of body.
+                out.append(" " * (n - i))
+                break
+            out.append(" " * (end + 3 - i))
+            i = end + 3
+            continue
+        # Inline code: `...` on a single span (no newlines inside the run).
+        if body[i] == "`":
+            end = body.find("`", i + 1)
+            if end == -1 or "\n" in body[i + 1 : end]:
+                # Not a closed inline span — pass through as literal.
+                out.append(body[i])
+                i += 1
+                continue
+            out.append(" " * (end + 1 - i))
+            i = end + 1
+            continue
+        out.append(body[i])
+        i += 1
+    return "".join(out)
+
+
+def _trailer_block_substring(body: str) -> str:
+    """Return the trailer-block substring of `body` for field extraction.
+
+    Trailer-block definition (#511):
+      - If `body` contains one or more lines that are a sole `---` separator
+        (charter convention for delimiting the structured-fields block), the
+        trailer is everything AFTER the LAST such separator line.
+      - Otherwise (legacy comments without separator), fall back to the full
+        body — `_extract_charter_field` then uses last-match-wins to remain
+        forgiving while still avoiding most prose-above-trailer false-matches.
+
+    The `---` must be on a line by itself (with optional leading/trailing
+    whitespace) to count. Embedded `---` within a sentence does not count.
+    """
+    lines = body.splitlines(keepends=True)
+    last_sep_idx = -1
+    for idx, line in enumerate(lines):
+        if line.strip() == "---":
+            last_sep_idx = idx
+    if last_sep_idx == -1:
+        return body
+    return "".join(lines[last_sep_idx + 1 :])
+
+
 def _extract_charter_field(field_name: str, body: str) -> str | None:
     """Extract a charter-format field value from a comment body.
 
     Handles markdown bold (`**Field:**`) and plain (`Field:`) variants.
-    Returns the first-line value with markdown markers and parenthetical
-    role descriptions stripped. Returns None if the field is not present.
+    Returns the value with markdown markers and parenthetical role
+    descriptions stripped. Returns None if the field is not present.
+
+    Match-scope discipline (#511):
+      - First, strip fenced (``` ... ```) and inline (`...`) code regions to
+        prevent reviewer prose-quoting from being captured as a verdict field
+        (Bereket-on-deploy#339 pattern).
+      - Then narrow to the trailer-block substring per charter convention
+        (text after the last `---` separator line). If no separator is
+        present, fall back to the full body to remain backward-compatible
+        with legacy verdict comments.
+      - Within that scope, use LAST-MATCH-WINS so a prose mention of the
+        field above the trailer block (without a separator) does not
+        outscore the actual trailer line (Wanjiku-on-main#509 / Lucas-on-
+        deploy#337 pattern).
     """
+    scope = _trailer_block_substring(_strip_code_regions(body))
     pattern = rf"\*{{0,2}}{re.escape(field_name)}:\*{{0,2}}\s*(.+)"
-    match = re.search(pattern, body)
-    if not match:
+    matches = list(re.finditer(pattern, scope))
+    if not matches:
         return None
+    match = matches[-1]
     value = match.group(1).strip()
     # Drop trailing content after first newline (single-line field).
     value = value.split("\n", 1)[0].strip()
@@ -631,6 +712,22 @@ def check(input_data: dict) -> dict | None:
                 "  gh api repos/<owner>/<repo>/issues/<PR>/comments \\\n"
                 "    --jq '[.[] | select(.body | "
                 'contains("RequestOrReplied: Approved"))] | length\'\n\n'
+                "Common failure mode — prose-mention of fields outside the trailer block:\n"
+                "  As of #511 the hook ONLY extracts Requestor/RequestOrReplied from the\n"
+                "  trailer-block substring (after the LAST `---` separator line) and ignores\n"
+                "  matches inside backticks/code fences. If your verdict comment quotes\n"
+                "  field syntax in prose (e.g., describing the PR body's trailer), make\n"
+                "  sure the actual structured-fields block follows a `---` separator AND\n"
+                "  is the very last block. Inline-code fences (`Requestor: foo`) and fenced\n"
+                "  code (``` ... ```) are stripped before matching.\n"
+                "  Historical instances driving this enforcement (P3W11 batch 11, 2026-05-19):\n"
+                "    - main#509 — Wanjiku's prose described the bare-line block; captured\n"
+                "      Requestor as rest-of-line garbage; 1/2 false-block.\n"
+                "    - deploy#337 — Lucas noted PR body lacked the trailer; captured\n"
+                "      garbage Requestor; 1/2 false-block.\n"
+                "    - deploy#339 — Bereket quoted `Requestor: (TBD — orchestrator will\n"
+                "      assign)`; captured TBD as Requestor; 1/2 false-block.\n"
+                "  All three required orchestrator REST PATCH pre-#511 fix.\n\n"
                 "Single-Reviewer Exception (charter § Single-Reviewer Exception (Wave-Bootstrap "
                 "Only)): label PR `wave-bootstrap` AND have a charter-enforcer review (Standards "
                 "Lead, Manager, Tech Lead, Project Lead, or Program Director).\n"

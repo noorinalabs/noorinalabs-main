@@ -1046,5 +1046,212 @@ class RosterValidationGateTests(unittest.TestCase):
         self.assertIn("could not be read", reason)
 
 
+class StripCodeRegionsTests(unittest.TestCase):
+    """Issue #511: `_strip_code_regions` removes fenced and inline code so the
+    field extractor cannot capture reviewer prose-quotes of field syntax.
+
+    Replacement char is space (not empty) so line indices stay stable for
+    downstream trailer-block detection.
+    """
+
+    def test_strips_inline_backticks(self):
+        result = hook._strip_code_regions("see `Requestor: foo` for context")
+        self.assertNotIn("Requestor", result)
+        self.assertEqual(len(result), len("see `Requestor: foo` for context"))
+
+    def test_strips_fenced_triple_backtick_block(self):
+        body = "before\n```\nRequestor: foo\n```\nafter"
+        result = hook._strip_code_regions(body)
+        self.assertNotIn("Requestor", result)
+        self.assertIn("before", result)
+        self.assertIn("after", result)
+
+    def test_unterminated_inline_backtick_passes_through(self):
+        """A lone backtick without a closing pair is treated as literal."""
+        result = hook._strip_code_regions("opening ` and then Requestor: foo")
+        self.assertIn("Requestor: foo", result)
+
+    def test_unterminated_fenced_block_strips_rest(self):
+        """An open ``` without a close conservatively eats the rest. Reviewer
+        error mode (forgot close fence) → fail safe by not matching trailing
+        chars as fields.
+        """
+        body = "intro ```\nRequestor: foo"
+        result = hook._strip_code_regions(body)
+        self.assertIn("intro", result)
+        self.assertNotIn("Requestor", result)
+
+    def test_multiline_inline_span_is_not_matched(self):
+        """`...` with a newline in between is NOT an inline-code span per
+        CommonMark — opening backtick passes through, line preserved.
+        """
+        body = "opening `\nRequestor: foo\n` closing"
+        result = hook._strip_code_regions(body)
+        self.assertIn("Requestor: foo", result)
+
+
+class TrailerBlockSubstringTests(unittest.TestCase):
+    """Issue #511: `_trailer_block_substring` returns text after the LAST
+    bare-`---` separator line. No-separator → full body (back-compat).
+    """
+
+    def test_no_separator_returns_full_body(self):
+        body = "Requestor: foo\nRequestee: bar"
+        self.assertEqual(hook._trailer_block_substring(body), body)
+
+    def test_one_separator_returns_post_only(self):
+        body = "prose intro\n\n---\nRequestor: foo\nRequestee: bar"
+        result = hook._trailer_block_substring(body)
+        self.assertIn("Requestor", result)
+        self.assertNotIn("prose intro", result)
+
+    def test_multiple_separators_last_wins(self):
+        body = (
+            "intro\n\n---\nfake trailer with Requestor: WRONG\nmore prose\n"
+            "---\nRequestor: CORRECT\nRequestee: target"
+        )
+        result = hook._trailer_block_substring(body)
+        self.assertIn("CORRECT", result)
+        self.assertNotIn("WRONG", result)
+
+    def test_separator_must_be_on_own_line(self):
+        body = "intro with --- embedded\nRequestor: foo"
+        self.assertEqual(hook._trailer_block_substring(body), body)
+
+    def test_separator_with_surrounding_whitespace_is_recognized(self):
+        body = "intro\n  ---  \nRequestor: foo"
+        result = hook._trailer_block_substring(body)
+        self.assertIn("Requestor", result)
+        self.assertNotIn("intro", result)
+
+
+class ProseFalseMatchRegressionTests(_CheckCommentReviewsHarness):
+    """Issue #511: prose-mention of charter fields above the trailer block
+    MUST NOT be captured as the verdict. Three exact-shape regressions for
+    the P3W11 batch-11 instances — pre-#511 each false-blocked at 1/2.
+    """
+
+    @staticmethod
+    def _comment(body: str) -> dict:
+        return {"body": body, "user": {"login": "anyone"}}
+
+    def test_main_509_wanjiku_prose_above_trailer_ignored(self):
+        """main#509 (Wanjiku) — prose described the bare-line trailer; pre-fix
+        captured rest-of-prose-line as Requestor. Post-fix the trailer block
+        (after `---`) is the only match scope.
+        """
+        body = (
+            "PR body trailer convention is the literal bare-line block "
+            "(Requestor / Requestee / RequestOrReplied: New / TechDebt: none) "
+            "at the end of the body. Aino's #509 follows it correctly.\n"
+            "\n"
+            "---\n"
+            "Requestor: Wanjiku Mwangi\n"
+            "Requestee: Aino Virtanen\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none"
+        )
+        result = self._run_with_fake_api([self._comment(body)], self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.reviewers, {"wanjiku mwangi"})
+        self.assertEqual(result.reviews_missing_tech_debt, [])
+
+    def test_deploy_337_lucas_prose_observation_ignored(self):
+        """deploy#337 (Lucas) — soft observation about missing trailer block.
+        Pre-fix the prose mention of `Requestor: / Requestee: / ...` itself
+        captured garbage. Post-fix the actual trailer wins.
+        """
+        body = (
+            "Soft observation: Aisha's PR body does not include the trailer "
+            "structured-fields block (Requestor: / Requestee: / "
+            "RequestOrReplied: New / TechDebt: none bare-line). Non-blocking — "
+            "she can amend post-merge. LGTM on the conftest guard.\n"
+            "\n"
+            "---\n"
+            "Requestor: Lucas Ferreira\n"
+            "Requestee: Aisha Idrissi\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none"
+        )
+        result = self._run_with_fake_api([self._comment(body)], self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.reviewers, {"lucas ferreira"})
+        self.assertEqual(result.reviews_missing_tech_debt, [])
+
+    def test_deploy_339_bereket_backtick_quote_ignored(self):
+        """deploy#339 (Bereket) — verdict quoted PR body's `Requestor: (TBD…)`
+        inside backticks. Pre-fix backtick contents were extracted as
+        Requestor. Post-fix `_strip_code_regions` zeroes the backticks.
+        """
+        body = (
+            "PR body uses `Requestor: (TBD — orchestrator will assign)` "
+            "correctly — no reviewer name prediction, deferred per charter "
+            "feedback_pr_number_placeholders.\n"
+            "\n"
+            "---\n"
+            "Requestor: Bereket Tadesse\n"
+            "Requestee: Lucas Ferreira\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none"
+        )
+        result = self._run_with_fake_api([self._comment(body)], self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.reviewers, {"bereket tadesse"})
+        self.assertEqual(result.reviews_missing_tech_debt, [])
+
+    def test_legacy_no_separator_uses_last_match_fallback(self):
+        """Back-compat: pre-#511 verdict comments without a `---` separator
+        still work — the extractor falls back to the full body and uses
+        last-match-wins. Prose above an end-of-body trailer is ignored
+        because the last match is the real trailer.
+        """
+        body = (
+            "Noting the body has Requestor: oldformat-prose-mention\n"
+            "but the real trailer below uses canonical fields:\n"
+            "Requestor: Wanjiku Mwangi\n"
+            "Requestee: Aino Virtanen\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none"
+        )
+        result = self._run_with_fake_api([self._comment(body)], self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.reviewers, {"wanjiku mwangi"})
+        self.assertEqual(result.reviews_missing_tech_debt, [])
+
+    def test_multiple_separators_only_last_trailer_matches(self):
+        """If a verdict has multiple `---` (e.g., reviewer included an aside
+        block with its own separator), only the LAST trailer is the source
+        of truth — earlier blocks are ignored even if they look canonical.
+        """
+        body = (
+            "intro prose\n"
+            "\n"
+            "---\n"
+            "Requestor: WrongName Person\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none\n"
+            "\n"
+            "(this was an aside block, not the real verdict)\n"
+            "\n"
+            "---\n"
+            "Requestor: Nadia Khoury\n"
+            "Requestee: Aino Virtanen\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none"
+        )
+        result = self._run_with_fake_api([self._comment(body)], self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.reviewers, {"nadia khoury"})
+
+    def test_existing_canonical_trailer_still_works(self):
+        """Regression baseline: a plain canonical verdict (no prose preamble,
+        no separator, fields-only body) still parses correctly under the new
+        scope discipline. Guards against over-zealous narrowing.
+        """
+        body = (
+            "Requestor: Wanjiku Mwangi\n"
+            "Requestee: Aino Virtanen\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none"
+        )
+        result = self._run_with_fake_api([self._comment(body)], self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.reviewers, {"wanjiku mwangi"})
+
+
 if __name__ == "__main__":
     unittest.main()
