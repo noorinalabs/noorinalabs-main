@@ -1220,5 +1220,97 @@ class IndirectExecExtensionTests(unittest.TestCase):
         self.assertIn("eval", result["reason"])
 
 
+class CwdFallbackTests(unittest.TestCase):
+    """Issue #475 fix 1: when no literal `cd <path>` prefix is present, fall
+    back to the tool-call cwd for roster resolution. Lets operators commit
+    from within a child-repo worktree without composing a `cd` prefix."""
+
+    def test_cwd_fallback_loads_child_roster(self):
+        """`git -c user.name=<child-only-name> ... commit` from inside the
+        child worktree (no `cd` prefix) validates against the child roster."""
+        with tempfile.TemporaryDirectory() as td:
+            outer = Path(td)
+            _git_init(outer)
+            _write_roster(outer, {"Nadia": "nadia@example.com"})
+            child = outer / "child"
+            child.mkdir()
+            _git_init(child)
+            _write_roster(child, {"Alice": "alice@example.com"})
+
+            detected = hook._detect_target_roster("git commit -m 'x'", cwd=str(child))
+            self.assertIsNotNone(detected)
+            assert detected is not None
+            self.assertEqual(
+                detected,
+                {
+                    "Nadia": "nadia@example.com",
+                    "Alice": "alice@example.com",
+                },
+            )
+
+    def test_cwd_fallback_when_no_roster_returns_none(self):
+        """cwd has no roster.json → return None (caller uses local ROSTER)."""
+        with tempfile.TemporaryDirectory() as td:
+            empty = Path(td) / "no_roster"
+            empty.mkdir()
+            self.assertIsNone(hook._detect_target_roster("git commit -m 'x'", cwd=str(empty)))
+
+    def test_cd_prefix_wins_over_cwd_fallback(self):
+        """Explicit `cd <path>` in the command takes priority over cwd."""
+        with tempfile.TemporaryDirectory() as td:
+            outer = Path(td)
+            _git_init(outer)
+            cd_target = outer / "explicit"
+            cd_target.mkdir()
+            _git_init(cd_target)
+            _write_roster(cd_target, {"Explicit": "explicit@example.com"})
+
+            # Different repo for the cwd-fallback; should be ignored.
+            cwd_target = outer / "cwd_only"
+            cwd_target.mkdir()
+            _git_init(cwd_target)
+            _write_roster(cwd_target, {"FromCwd": "cwd@example.com"})
+
+            detected = hook._detect_target_roster(
+                f"cd {cd_target} && git commit -m 'x'",
+                cwd=str(cwd_target),
+            )
+            assert detected is not None
+            self.assertIn("Explicit", detected)
+            self.assertNotIn("FromCwd", detected)
+
+    def test_no_cd_no_cwd_returns_none(self):
+        """Regression: omitting both still returns None (existing contract)."""
+        self.assertIsNone(hook._detect_target_roster("git commit -m 'x'"))
+
+    def test_check_uses_cwd_fallback_to_accept_child_only_name(self):
+        """Integration: `check()` with a child-only roster name + cwd
+        pointing at the child repo (no `cd` prefix) → ALLOWED.
+
+        Previously this BLOCKED because `_detect_target_roster` returned
+        None without a cd prefix, the local ROSTER was used, and the
+        child-only name failed lookup. Fix 1 makes the cwd the fallback
+        anchor, restoring symmetry with the cd-prefix path.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            outer = Path(td)
+            _git_init(outer)
+            _write_roster(outer, {"Nadia": "nadia@example.com"})
+            child = outer / "child"
+            child.mkdir()
+            _git_init(child)
+            _write_roster(child, {"Alice": "alice@example.com"})
+
+            cmd = 'git -c user.name="Alice" -c user.email="alice@example.com" commit -m "x"'
+            result = hook.check(
+                {
+                    "tool_name": "Bash",
+                    "tool_input": {"command": cmd},
+                    "cwd": str(child),
+                }
+            )
+            self.assertIsNone(result, f"expected allow, got block: {result}")
+
+
 if __name__ == "__main__":
     unittest.main()
