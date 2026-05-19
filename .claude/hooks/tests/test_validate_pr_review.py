@@ -1253,5 +1253,42 @@ class ProseFalseMatchRegressionTests(_CheckCommentReviewsHarness):
         self.assertEqual(result.reviewers, {"wanjiku mwangi"})
 
 
+class ExtractRepoCallSiteTests(unittest.TestCase):
+    """Smoke coverage that `validate_pr_review` exposes `extract_repo`
+    (re-exported from the shared `_repo_flag_parse` helper) and that the
+    canonical `gh pr merge --repo` happy path still resolves the same
+    value.
+
+    Comprehensive parser coverage (all 4 flag forms, tokenize / regex
+    fallback, malformed cases) lives in `test_repo_flag_parse.py` alongside
+    the helper. These tests pin the hook's import wiring so a future
+    refactor that drops the re-export trips here, not at runtime. Mirrors
+    `test_validate_review_comment_format.ExtractRepoCallSiteTests` from
+    #513.
+    """
+
+    def test_present_returns_value(self):
+        cmd = "gh pr merge 487 --repo noorinalabs/noorinalabs-deploy --squash"
+        self.assertEqual(
+            hook.extract_repo(cmd),
+            "noorinalabs/noorinalabs-deploy",
+        )
+
+    def test_absent_returns_none(self):
+        cmd = "gh pr merge 487 --squash"
+        self.assertIsNone(hook.extract_repo(cmd))
+
+    def test_equals_form_now_supported(self):
+        """`--repo=value` form is supported post-#514 (was the documented
+        latent #503-class gap in the original #509 implementation — sister
+        consolidation #510 fixed it for two hooks via #513, #514 extends
+        the fix to validate_pr_review for the gh-pr-merge code path)."""
+        cmd = "gh pr merge 487 --repo=noorinalabs/noorinalabs-deploy --squash"
+        self.assertEqual(
+            hook.extract_repo(cmd),
+            "noorinalabs/noorinalabs-deploy",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

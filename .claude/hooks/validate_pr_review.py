@@ -83,6 +83,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _repo_flag_parse import extract_repo
 from annunaki_log import log_pretooluse_block
 
 # Charter-enforcer role prefixes for the Single-Reviewer Exception. Derived
@@ -127,14 +128,6 @@ def extract_pr_number(command: str) -> str | None:
     if match:
         return match.group(1)
     # gh pr merge with no number (current branch PR)
-    return None
-
-
-def extract_repo_from_command(command: str) -> str | None:
-    """Extract --repo value from gh pr merge command."""
-    match = re.search(r"--repo\s+(\S+)", command)
-    if match:
-        return match.group(1)
     return None
 
 
@@ -584,7 +577,7 @@ def check(input_data: dict) -> dict | None:
         return None
 
     pr_number = extract_pr_number(command)
-    repo = extract_repo_from_command(command)
+    repo = extract_repo(command)
     pr_data = get_pr_data(pr_number, repo=repo)
 
     if pr_data is None:
