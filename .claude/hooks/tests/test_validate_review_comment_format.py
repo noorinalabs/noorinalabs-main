@@ -422,35 +422,41 @@ class CheckIntegrationTests(unittest.TestCase):
         self.assertEqual(result.get("decision"), "block")
 
 
-class ExtractRepoFromCommandTests(unittest.TestCase):
-    """Coverage for the `--repo` flag extractor added in #503.
+class ExtractRepoCallSiteTests(unittest.TestCase):
+    """Smoke coverage that `validate_review_comment_format` exposes
+    `extract_repo` (re-exported from the shared `_repo_flag_parse` helper)
+    and that the canonical happy path still resolves the same value.
 
-    The hook now reads the user's `--repo OWNER/NAME` flag and forwards it
-    to the internal `gh pr view` so the branch fetched matches the repo the
-    user is commenting against (closes the #503 cross-repo skew).
+    Comprehensive parser coverage (all 4 flag forms, tokenize / regex
+    fallback, malformed cases) lives in `test_repo_flag_parse.py` alongside
+    the helper. These tests pin the hook's import wiring so a future
+    refactor that drops the re-export trips here, not at runtime.
     """
 
     def test_present_returns_value(self):
         cmd = "gh pr comment 99 --repo noorinalabs/noorinalabs-deploy --body x"
         self.assertEqual(
-            hook.extract_repo_from_command(cmd),
+            hook.extract_repo(cmd),
             "noorinalabs/noorinalabs-deploy",
         )
 
     def test_absent_returns_none(self):
         cmd = 'gh pr comment 99 --body "x"'
-        self.assertIsNone(hook.extract_repo_from_command(cmd))
+        self.assertIsNone(hook.extract_repo(cmd))
 
-    def test_with_equals_form_not_supported(self):
-        """`--repo=value` form is not currently parsed (charter convention is
-        `--repo value`). Pin: returns None for the equals form so callers know
-        the limit if they ever try it.
+    def test_equals_form_now_supported(self):
+        """`--repo=value` form is supported post-#510 (was a documented
+        gap in the original #509 implementation — see issue body for the
+        latent #503-class regression risk via alternate flag forms).
+        Pre-#510 this returned None (pinned by
+        `test_with_equals_form_not_supported`); post-#510 it returns the
+        value, closing the parser inconsistency with `validate_labels.py`.
         """
         cmd = "gh pr comment 99 --repo=noorinalabs/noorinalabs-deploy --body x"
-        # The `\S+` regex captures `--repo=noorinalabs/...` as the value if
-        # space-separated isn't found; with `--repo=` form it does NOT match
-        # the leading `--repo\s+` pattern. Result: None.
-        self.assertIsNone(hook.extract_repo_from_command(cmd))
+        self.assertEqual(
+            hook.extract_repo(cmd),
+            "noorinalabs/noorinalabs-deploy",
+        )
 
 
 class CrossRepoRegressionTests(unittest.TestCase):
