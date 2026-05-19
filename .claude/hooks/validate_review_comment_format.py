@@ -54,6 +54,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _repo_flag_parse import extract_repo
 from annunaki_log import log_pretooluse_block
 
 
@@ -74,28 +75,6 @@ def extract_pr_number(command: str) -> str | None:
     if match:
         return match.group(1)
     match = re.search(r"/pull/(\d+)", command)
-    if match:
-        return match.group(1)
-    return None
-
-
-def extract_repo_from_command(command: str) -> str | None:
-    """Extract --repo value from a gh command.
-
-    The hook's internal `gh pr view` (see `get_branch_name`) must target the
-    SAME repository the user is commenting against; otherwise gh's default
-    cwd-based resolution picks the wrong repo and the branch fetched is from
-    an unrelated PR with the same number. That cross-repo skew was the
-    P3W11-#503 false-positive: reviewer in `noorinalabs-main` cwd posting
-    on `noorinalabs/noorinalabs-deploy#314` with `--repo noorinalabs/noorinalabs-deploy`
-    had the hook silently fetch main's #314 (`A.Virtanen/0300-w7-retro-charter`),
-    matched the lastname, and false-blocked.
-
-    Matches the canonical `--repo <owner>/<name>` form. Returns the value
-    string unchanged for direct pass-through to gh; returns None if the flag
-    is absent.
-    """
-    match = re.search(r"--repo\s+(\S+)", command)
     if match:
         return match.group(1)
     return None
@@ -272,7 +251,7 @@ def check(input_data: dict) -> dict | None:
     # Forward the user's --repo flag to the internal gh pr view so the branch
     # we fetch is from the SAME repo the user is commenting against. Closes
     # the #503 cross-repo skew: reviewer in repo-A cwd posting on repo-B PR.
-    repo = extract_repo_from_command(command)
+    repo = extract_repo(command)
     if not repo:
         # Same-repo path — gh's cwd-based default resolution is used. Emit a
         # stderr breadcrumb so a future cross-repo invocation that omits

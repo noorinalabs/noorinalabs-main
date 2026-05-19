@@ -40,6 +40,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _repo_flag_parse import extract_repo  # noqa: E402
 from _shell_parse import (  # noqa: E402
     is_gh_subcommand,
     tokenize,
@@ -49,9 +50,6 @@ from annunaki_log import log_pretooluse_block  # noqa: E402
 
 # Flags whose VALUE is a label list (comma-separated allowed by gh).
 _LABEL_FLAGS = {"--label", "-l"}
-
-# Flags whose VALUE is a repo specifier (OWNER/REPO).
-_REPO_FLAGS = {"--repo", "-R"}
 
 
 def get_existing_labels(repo: str | None = None) -> set[str]:
@@ -111,16 +109,6 @@ def extract_labels(command: str) -> list[str]:
             if label:
                 labels.append(label)
     return labels
-
-
-def extract_repo(command: str) -> str | None:
-    """Extract the --repo / -R OWNER/REPO value from the command, if any."""
-    tokens = tokenize(command)
-    if tokens is None:
-        match = re.search(r"(?:^|\s)(?:--repo|-R)(?:=|\s+)(\S+)", command)
-        return match.group(1) if match else None
-    values = walk_flag_values(tokens, _REPO_FLAGS)
-    return values[0] if values else None
 
 
 def check(input_data: dict) -> dict | None:
