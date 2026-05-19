@@ -79,6 +79,28 @@ def extract_pr_number(command: str) -> str | None:
     return None
 
 
+def extract_repo_from_command(command: str) -> str | None:
+    """Extract --repo value from a gh command.
+
+    The hook's internal `gh pr view` (see `get_branch_name`) must target the
+    SAME repository the user is commenting against; otherwise gh's default
+    cwd-based resolution picks the wrong repo and the branch fetched is from
+    an unrelated PR with the same number. That cross-repo skew was the
+    P3W11-#503 false-positive: reviewer in `noorinalabs-main` cwd posting
+    on `noorinalabs/noorinalabs-deploy#314` with `--repo noorinalabs/noorinalabs-deploy`
+    had the hook silently fetch main's #314 (`A.Virtanen/0300-w7-retro-charter`),
+    matched the lastname, and false-blocked.
+
+    Matches the canonical `--repo <owner>/<name>` form. Returns the value
+    string unchanged for direct pass-through to gh; returns None if the flag
+    is absent.
+    """
+    match = re.search(r"--repo\s+(\S+)", command)
+    if match:
+        return match.group(1)
+    return None
+
+
 def extract_comment_body(command: str) -> str | None:
     """Extract the comment body from the gh pr comment command.
 
@@ -107,11 +129,22 @@ def extract_comment_body(command: str) -> str | None:
     return None
 
 
-def get_branch_name(pr_number: str) -> str | None:
-    """Fetch the head branch name for a PR."""
+def get_branch_name(pr_number: str, repo: str | None = None) -> str | None:
+    """Fetch the head branch name for a PR.
+
+    When `repo` (a `<owner>/<name>` string parsed from the user's `gh pr comment
+    --repo` flag) is supplied, it is forwarded as `--repo <repo>` so the gh
+    invocation targets the SAME repo the user is commenting against. Without
+    that pass-through, gh's default repo resolution is cwd-based and a
+    cross-repo invocation (reviewer in repo A's cwd posting on repo B's PR)
+    silently returns the wrong PR's branch — the #503 cross-repo false-block.
+    """
+    cmd = ["gh", "pr", "view", pr_number, "--json", "headRefName"]
+    if repo:
+        cmd.extend(["--repo", repo])
     try:
         result = subprocess.run(
-            ["gh", "pr", "view", pr_number, "--json", "headRefName"],
+            cmd,
             capture_output=True,
             text=True,
             timeout=15,
@@ -236,7 +269,22 @@ def check(input_data: dict) -> dict | None:
             ),
         }
 
-    branch_name = get_branch_name(pr_number)
+    # Forward the user's --repo flag to the internal gh pr view so the branch
+    # we fetch is from the SAME repo the user is commenting against. Closes
+    # the #503 cross-repo skew: reviewer in repo-A cwd posting on repo-B PR.
+    repo = extract_repo_from_command(command)
+    if not repo:
+        # Same-repo path — gh's cwd-based default resolution is used. Emit a
+        # stderr breadcrumb so a future cross-repo invocation that omits
+        # --repo is discoverable in transcripts, and the brittle cwd-dependence
+        # of the same-repo path is not silent.
+        print(
+            "validate_review_comment_format: --repo flag absent on gh pr comment; "
+            "falling back to cwd-default repo resolution for internal gh pr view. "
+            "Cross-repo invocations MUST pass --repo to avoid the #503 swap-block.",
+            file=sys.stderr,
+        )
+    branch_name = get_branch_name(pr_number, repo=repo)
     if not branch_name:
         return {
             "decision": "allow",
