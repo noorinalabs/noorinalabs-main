@@ -71,6 +71,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _repo_flag_parse import extract_repo  # noqa: E402
 from _shell_parse import (  # noqa: E402
     first_flag_value,
     is_gh_subcommand,
@@ -81,7 +82,6 @@ from annunaki_log import log_pretooluse_block  # noqa: E402
 
 _BASE_FLAGS = {"--base", "-B"}
 _HEAD_FLAGS = {"--head", "-H"}
-_REPO_FLAGS = {"--repo", "-R"}
 
 # Match an OWNER/REPO suffix on a git remote URL. Handles:
 #   git@github.com:owner/repo.git
@@ -102,11 +102,6 @@ def extract_head(command: str) -> str | None:
     if raw and ":" in raw:
         return raw.split(":", 1)[1]
     return raw
-
-
-def extract_repo(command: str) -> str | None:
-    """Extract --repo / -R OWNER/REPO value, if any."""
-    return first_flag_value(command, _REPO_FLAGS)
 
 
 def is_branch_fresh_local(base: str, cwd: str | None = None) -> bool:
