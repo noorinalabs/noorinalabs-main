@@ -605,9 +605,16 @@ class CheckEndToEndTests(unittest.TestCase):
         return base
 
     def test_two_distinct_approved_requestors_allows_merge(self):
-        """Canonical happy path: 2 distinct Requestors on Approved comments → allow."""
+        """Canonical happy path: 2 distinct Requestors on Approved comments → allow.
+
+        Uses real parent-roster personas (Aino + Nadia) so the #498 roster
+        gate admits both. Pre-#498 this test used fictional personas (Anya
+        Kowalczyk / Jelani Mwangi) that incidentally passed because Hook 4
+        didn't yet cross-check roster membership — exactly the asymmetry
+        #498 closes.
+        """
         review_result = hook.CommentReviewResult()
-        review_result.reviewers = {"anya kowalczyk", "jelani mwangi"}
+        review_result.reviewers = {"aino virtanen", "nadia khoury"}
         with (
             mock.patch.object(hook, "get_pr_data", return_value=self._patch_pr_data()),
             mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
@@ -616,9 +623,13 @@ class CheckEndToEndTests(unittest.TestCase):
         self.assertIsNone(result, "2 distinct Requestor Approveds should allow merge")
 
     def test_one_reviewer_without_wave_bootstrap_blocks(self):
-        """Strict rule: 1 reviewer + no wave-bootstrap label → block."""
+        """Strict rule: 1 reviewer + no wave-bootstrap label → block.
+
+        Uses a real roster persona (Aino) so the failure mode tested is
+        purely the count shortfall, not a #498 non-roster rejection.
+        """
         review_result = hook.CommentReviewResult()
-        review_result.reviewers = {"anya kowalczyk"}
+        review_result.reviewers = {"aino virtanen"}
         with (
             mock.patch.object(hook, "get_pr_data", return_value=self._patch_pr_data()),
             mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
@@ -906,6 +917,133 @@ class CommentPaginationTests(_CheckCommentReviewsHarness):
         self.assertEqual(len(comments), 250)
         result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
         self.assertEqual(len(result.reviewers), 2)
+
+
+class LoadRosterNamesTests(unittest.TestCase):
+    """Issue #498: `_load_roster_names()` returns ALL persona names from the
+    local roster (not role-filtered like `load_charter_enforcer_names`).
+
+    Tests against the parent repo's actual roster — Aino, Nadia, Wanjiku,
+    Santiago must all be present; engineer roles too (sre, security, etc.).
+    """
+
+    def test_includes_standards_lead(self):
+        names = hook._load_roster_names()
+        self.assertIn("aino virtanen", names, f"missing standards lead: {names}")
+
+    def test_includes_program_director(self):
+        self.assertIn("nadia khoury", hook._load_roster_names())
+
+    def test_includes_tpm(self):
+        self.assertIn("wanjiku mwangi", hook._load_roster_names())
+
+    def test_includes_release_coordinator(self):
+        self.assertIn("santiago ferreira", hook._load_roster_names())
+
+    def test_includes_engineer_roles(self):
+        """Unlike `load_charter_enforcer_names`, engineer roles ARE included."""
+        names = hook._load_roster_names()
+        # sre_engineer_lucas → Lucas Ferreira; sre_engineer_aisha → Aisha Idrissi.
+        self.assertIn("lucas ferreira", names)
+
+
+class RosterValidationGateTests(unittest.TestCase):
+    """Issue #498: 2-reviewer gate must reject non-roster Requestor strings.
+
+    Drives `check()` end-to-end with stubbed pr_data and a stubbed
+    `check_comment_reviews` result; the only real-roster read is the parent
+    repo's `_load_roster_names()` (via `_iter_roster_entries`).
+
+    Repro target: PR #487 verdict comments posted under "Camila Restrepo" and
+    "Imelda Santos" — neither in `.claude/team/roster/`. Pre-fix Hook 4
+    counted both and merged. Post-fix both are filtered out.
+    """
+
+    @staticmethod
+    def _input(command: str) -> dict:
+        return {"tool_name": "Bash", "tool_input": {"command": command}}
+
+    @staticmethod
+    def _pr_data(**overrides) -> dict:
+        base = {
+            "author": "parametrization",
+            "number": 487,
+            "reviews": [],
+            "headRefName": "S.Ferreira/0470-doc-sync",
+            "labels": [],
+        }
+        base.update(overrides)
+        return base
+
+    def test_two_non_roster_requestors_blocked(self):
+        """Regression: 2 non-roster Requestors must BLOCK (P3W11 #487 repro)."""
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"camila restrepo", "imelda santos"}
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input("gh pr merge 487 --squash"))
+        self.assertIsNotNone(result, "non-roster Requestors must not satisfy the 2-reviewer gate")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        reason = result["reason"]
+        self.assertIn("camila restrepo", reason.lower())
+        self.assertIn("imelda santos", reason.lower())
+        self.assertIn("Non-roster:", reason)
+        self.assertIn("roster", reason.lower())
+
+    def test_mixed_roster_and_non_roster_blocked(self):
+        """1 roster + 1 non-roster → 1/2 (only the roster member counts)."""
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen", "imelda santos"}
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input("gh pr merge 487 --squash"))
+        self.assertIsNotNone(result, "1 roster + 1 non-roster must not pass 2/2")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        reason = result["reason"]
+        self.assertIn("imelda santos", reason.lower())
+        self.assertNotIn("aino virtanen", reason.lower().split("non-roster:")[1].split("\n")[0])
+        # Final count should reflect the filtered roster-only set.
+        self.assertIn("1/2", reason)
+
+    def test_two_roster_requestors_pass(self):
+        """Regression baseline: 2 real roster members → allow (existing behavior)."""
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen", "nadia khoury"}
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input("gh pr merge 487 --squash"))
+        self.assertIsNone(result, "two distinct roster members must pass the 2-reviewer gate")
+
+    def test_empty_roster_blocks_with_diagnostic(self):
+        """Fail-closed: if the roster cannot be read, every Requestor is non-roster.
+
+        Critical safe-direction default per `safety_direction_over_ux_friction`
+        memory: an unreadable roster must NOT silently pass review gates that
+        depend on it. The BLOCK message must surface the empty-roster
+        condition diagnostically so an operator can fix the dir, not bypass.
+        """
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen", "nadia khoury"}
+        with (
+            mock.patch.object(hook, "_load_roster_names", return_value=set()),
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input("gh pr merge 487 --squash"))
+        self.assertIsNotNone(result, "empty roster must fail closed")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        reason = result["reason"]
+        self.assertIn("empty", reason.lower())
+        self.assertIn("could not be read", reason)
 
 
 if __name__ == "__main__":
