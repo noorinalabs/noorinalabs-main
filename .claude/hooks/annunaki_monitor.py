@@ -16,7 +16,10 @@ Input Language:
                   silent-boolean-test idioms (`[`, `[[`, `test`, `grep -q`,
                   `pgrep`, `pkill`, `which`, `command -v`, `diff --quiet`,
                   `git diff --quiet`, `if [...]`) when their ONLY error signal
-                  is a non-zero exit code, session-dedup hits
+                  is a non-zero exit code, probe-with-fallback idioms (#517 —
+                  exit=0 + `2>&1` + (`||` OR `| head`/`| tail`) when the ONLY
+                  matched pattern is `stdout:No such file or directory`),
+                  session-dedup hits
   Flag pass-through: stdin JSON is forwarded verbatim to `check()` by the
                      PostToolUse dispatcher (`post_dispatcher.py`)
 
@@ -109,6 +112,53 @@ SILENT_BOOLEAN_TEST_PATTERNS_BY_EXIT_CODE = [
     (re.compile(r"\bdiff\s+--quiet\b"), {1}),
     (re.compile(r"\bgit\s+diff\s+--quiet\b"), {1}),
 ]
+
+# Probe-with-fallback shell idiom (#517): commands that intentionally swallow
+# a not-found error via stdout-merge (`2>&1`) followed by either a fallback
+# (`|| echo "..."`) or output truncation (`| head` / `| tail`). The error
+# text ends up on captured stdout and trips ERROR_PATTERNS' "No such file or
+# directory" line, but the command itself exits 0 because the failure was
+# explicitly caught. After #473 closed the silent-failure blind spot these
+# probe idioms became noise (~14 events in one W11 session).
+#
+# Conservative classifier: ignore only when ALL hold:
+#   - exit_code == 0 (probe completed cleanly)
+#   - command contains `2>&1` (stdout-merge present — required marker)
+#   - command contains `||` OR a pipe to `head` / `tail` (the fallback/truncate
+#     suffix that makes this a probe rather than a real read)
+#   - the ONLY matched pattern is `stdout:No such file or directory`
+#
+# Sibling families: #474/#481 silent-boolean-tests (`grep -q`, `[ ... ]`)
+# fire on a different signal (exit-code-only, empty output), so they live in
+# their own classifier branch. #473 silent-failure capture is the path this
+# IGNORE protects from over-logging.
+PROBE_WITH_FALLBACK_STDOUT_MERGE = re.compile(r"2>&1")
+PROBE_WITH_FALLBACK_TRAILERS = re.compile(r"\|\||\|\s*head\b|\|\s*tail\b")
+PROBE_WITH_FALLBACK_ONLY_PATTERN = "stdout:No such file or directory"
+
+
+def _is_probe_with_fallback(command: str, exit_code: int, matched_patterns: list[str]) -> bool:
+    """Return True if this matches the #517 probe-with-fallback idiom.
+
+    All four conditions must hold:
+      1. exit_code == 0
+      2. command contains `2>&1` (stdout-merge present)
+      3. command contains `||` OR a pipe to `head`/`tail`
+      4. matched_patterns is exactly the No-such-file-or-directory stdout match
+
+    Condition 4 is the strict-singleton guard: if any other signal fired
+    (stderr pattern, ModuleNotFoundError, exit_code marker), this idiom skip
+    does NOT apply and the record logs on its own merits.
+    """
+    if exit_code != 0:
+        return False
+    if matched_patterns != [PROBE_WITH_FALLBACK_ONLY_PATTERN]:
+        return False
+    if not PROBE_WITH_FALLBACK_STDOUT_MERGE.search(command):
+        return False
+    if not PROBE_WITH_FALLBACK_TRAILERS.search(command):
+        return False
+    return True
 
 
 def _is_silent_boolean_test(command: str, exit_code: int = 0) -> bool:
@@ -213,6 +263,14 @@ def check(input_data: dict) -> dict | None:
     if matched_patterns == [f"exit_code={exit_code}"] and _is_silent_boolean_test(
         command, exit_code
     ):
+        return None
+
+    # #517 probe-with-fallback filter: when a command intentionally swallows
+    # a not-found error via `2>&1` + (`||` OR `| head`/`| tail`) and exits 0,
+    # the "No such file or directory" text ends up on captured stdout but is
+    # not a real failure. The helper requires the only-pattern guard, so any
+    # additional signal (stderr pattern, non-zero exit) bypasses this skip.
+    if _is_probe_with_fallback(command, exit_code, matched_patterns):
         return None
 
     error_lines = _extract_error_lines(combined_output)
