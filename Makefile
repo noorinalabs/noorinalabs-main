@@ -14,7 +14,7 @@ setup-hooks:
 	pre-commit install
 
 lint:
-	python3 -m ruff check .claude/hooks/
+	python3 -m ruff check .claude/hooks/ .claude/lib/
 
 format:
-	python3 -m ruff format .claude/hooks/
+	python3 -m ruff format .claude/hooks/ .claude/lib/

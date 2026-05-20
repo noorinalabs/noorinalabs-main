@@ -83,6 +83,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _repo_flag_parse import extract_repo
 from annunaki_log import log_pretooluse_block
 
 # Charter-enforcer role prefixes for the Single-Reviewer Exception. Derived
@@ -127,14 +128,6 @@ def extract_pr_number(command: str) -> str | None:
     if match:
         return match.group(1)
     # gh pr merge with no number (current branch PR)
-    return None
-
-
-def extract_repo_from_command(command: str) -> str | None:
-    """Extract --repo value from gh pr merge command."""
-    match = re.search(r"--repo\s+(\S+)", command)
-    if match:
-        return match.group(1)
     return None
 
 
@@ -251,17 +244,98 @@ def _is_approved(value: str) -> bool:
     return normalized == "approved"
 
 
+def _strip_code_regions(body: str) -> str:
+    """Strip fenced code blocks (```…```) and inline code (`…`) from `body`.
+
+    Returns a body where every char inside a code region is replaced with a
+    space (preserving line indices for downstream regex). This prevents
+    reviewer prose like `` `Requestor: (TBD)` `` from being captured as the
+    actual Requestor value (#511 — Bereket-on-deploy#339 pattern).
+
+    The replacement char is space (not empty) so any `re.search` line/column
+    arithmetic remains accurate against the original `body`'s line offsets,
+    making `_trailer_block_substring`'s `---`-line detection unaffected.
+    """
+    out: list[str] = []
+    i = 0
+    n = len(body)
+    while i < n:
+        # Fenced code: ```...``` (triple-backtick on its own or with lang tag).
+        if body.startswith("```", i):
+            end = body.find("```", i + 3)
+            if end == -1:
+                # Unterminated fence — strip rest of body.
+                out.append(" " * (n - i))
+                break
+            out.append(" " * (end + 3 - i))
+            i = end + 3
+            continue
+        # Inline code: `...` on a single span (no newlines inside the run).
+        if body[i] == "`":
+            end = body.find("`", i + 1)
+            if end == -1 or "\n" in body[i + 1 : end]:
+                # Not a closed inline span — pass through as literal.
+                out.append(body[i])
+                i += 1
+                continue
+            out.append(" " * (end + 1 - i))
+            i = end + 1
+            continue
+        out.append(body[i])
+        i += 1
+    return "".join(out)
+
+
+def _trailer_block_substring(body: str) -> str:
+    """Return the trailer-block substring of `body` for field extraction.
+
+    Trailer-block definition (#511):
+      - If `body` contains one or more lines that are a sole `---` separator
+        (charter convention for delimiting the structured-fields block), the
+        trailer is everything AFTER the LAST such separator line.
+      - Otherwise (legacy comments without separator), fall back to the full
+        body — `_extract_charter_field` then uses last-match-wins to remain
+        forgiving while still avoiding most prose-above-trailer false-matches.
+
+    The `---` must be on a line by itself (with optional leading/trailing
+    whitespace) to count. Embedded `---` within a sentence does not count.
+    """
+    lines = body.splitlines(keepends=True)
+    last_sep_idx = -1
+    for idx, line in enumerate(lines):
+        if line.strip() == "---":
+            last_sep_idx = idx
+    if last_sep_idx == -1:
+        return body
+    return "".join(lines[last_sep_idx + 1 :])
+
+
 def _extract_charter_field(field_name: str, body: str) -> str | None:
     """Extract a charter-format field value from a comment body.
 
     Handles markdown bold (`**Field:**`) and plain (`Field:`) variants.
-    Returns the first-line value with markdown markers and parenthetical
-    role descriptions stripped. Returns None if the field is not present.
+    Returns the value with markdown markers and parenthetical role
+    descriptions stripped. Returns None if the field is not present.
+
+    Match-scope discipline (#511):
+      - First, strip fenced (``` ... ```) and inline (`...`) code regions to
+        prevent reviewer prose-quoting from being captured as a verdict field
+        (Bereket-on-deploy#339 pattern).
+      - Then narrow to the trailer-block substring per charter convention
+        (text after the last `---` separator line). If no separator is
+        present, fall back to the full body to remain backward-compatible
+        with legacy verdict comments.
+      - Within that scope, use LAST-MATCH-WINS so a prose mention of the
+        field above the trailer block (without a separator) does not
+        outscore the actual trailer line (Wanjiku-on-main#509 / Lucas-on-
+        deploy#337 pattern).
     """
+    scope = _trailer_block_substring(_strip_code_regions(body))
     pattern = rf"\*{{0,2}}{re.escape(field_name)}:\*{{0,2}}\s*(.+)"
-    match = re.search(pattern, body)
-    if not match:
+    matches = list(re.finditer(pattern, scope))
+    if not matches:
         return None
+    match = matches[-1]
     value = match.group(1).strip()
     # Drop trailing content after first newline (single-line field).
     value = value.split("\n", 1)[0].strip()
@@ -375,6 +449,41 @@ def check_comment_reviews(
         return result
 
 
+def _iter_roster_entries(role_prefix_filter: tuple[str, ...] | None = None) -> set[str]:
+    """Walk `_ROSTER_DIR` and return canonical names from `**Name:** <Full Name>`.
+
+    Shared parser for `load_charter_enforcer_names` (role-filtered) and
+    `_load_roster_names` (all members). When `role_prefix_filter` is supplied,
+    only filenames starting with one of the listed prefixes are read; when
+    `None`, every `*.md` in the roster dir contributes.
+
+    Names are returned in lowercase to match `CommentReviewResult.reviewers`'
+    dedup key (full name, lowercased). Returns an empty set on any I/O failure
+    (fail-closed — see callers for safe-direction semantics).
+    """
+    names: set[str] = set()
+    try:
+        if not _ROSTER_DIR.is_dir():
+            return names
+        for entry in _ROSTER_DIR.iterdir():
+            if entry.suffix != ".md":
+                continue
+            if role_prefix_filter is not None and not any(
+                entry.name.startswith(p) for p in role_prefix_filter
+            ):
+                continue
+            try:
+                content = entry.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            match = re.search(r"\*\*Name:\*\*\s*([^\n]+)", content)
+            if match:
+                names.add(match.group(1).strip().lower())
+    except OSError:
+        return set()
+    return names
+
+
 def load_charter_enforcer_names() -> set[str]:
     """Read the local roster dir and return canonical names of charter enforcers.
 
@@ -387,26 +496,22 @@ def load_charter_enforcer_names() -> set[str]:
     Names are returned in lowercase to match `CommentReviewResult.reviewers`'
     dedup key (full name, lowercased).
     """
-    enforcers: set[str] = set()
-    try:
-        if not _ROSTER_DIR.is_dir():
-            return enforcers
-        for entry in _ROSTER_DIR.iterdir():
-            if entry.suffix != ".md":
-                continue
-            if not any(entry.name.startswith(p) for p in _CHARTER_ENFORCER_ROLE_PREFIXES):
-                continue
-            try:
-                content = entry.read_text(encoding="utf-8")
-            except OSError:
-                continue
-            # Look for `**Name:** <Full Name>` (charter persona convention).
-            match = re.search(r"\*\*Name:\*\*\s*([^\n]+)", content)
-            if match:
-                enforcers.add(match.group(1).strip().lower())
-    except OSError:
-        return set()
-    return enforcers
+    return _iter_roster_entries(role_prefix_filter=_CHARTER_ENFORCER_ROLE_PREFIXES)
+
+
+def _load_roster_names() -> set[str]:
+    """Read the local roster dir and return ALL canonical persona names.
+
+    Unlike `load_charter_enforcer_names`, this set is not role-filtered — it
+    is the full membership of the local repo's `.claude/team/roster/`, used by
+    the 2-reviewer gate to reject Approved verdicts whose Requestor string
+    does not name a real roster persona (#498).
+
+    Names are returned in lowercase. Empty set indicates the roster could not
+    be read (missing dir or I/O failure); the caller is responsible for
+    failing closed.
+    """
+    return _iter_roster_entries(role_prefix_filter=None)
 
 
 def is_single_reviewer_exception(
@@ -472,7 +577,7 @@ def check(input_data: dict) -> dict | None:
         return None
 
     pr_number = extract_pr_number(command)
-    repo = extract_repo_from_command(command)
+    repo = extract_repo(command)
     pr_data = get_pr_data(pr_number, repo=repo)
 
     if pr_data is None:
@@ -508,7 +613,19 @@ def check(input_data: dict) -> dict | None:
             # admits any non-empty reviewer name. See main#294.
             comment_review_result = check_comment_reviews(number, "", repo=repo)
 
-    distinct_reviewers = formal_reviewers | comment_review_result.reviewers
+    # Filter charter-format (comment-based) reviewers against the local roster
+    # before counting them toward the 2-reviewer gate (#498). The 2-reviewer
+    # rule exists to ensure two distinct ROSTER MEMBERS reviewed; without this
+    # filter, fictional / non-roster Requestor strings (e.g., the P3W11 #487
+    # "Camila Restrepo" / "Imelda Santos" incident) slip through unchallenged.
+    # Formal GitHub reviews (`formal_reviewers`) are NOT filtered — those are
+    # real GitHub identities authenticated by the platform, not persona names
+    # that need cross-checking against `.claude/team/roster/`.
+    roster_names = _load_roster_names()
+    non_roster_requestors = {r for r in comment_review_result.reviewers if r not in roster_names}
+    roster_comment_reviewers = comment_review_result.reviewers - non_roster_requestors
+
+    distinct_reviewers = formal_reviewers | roster_comment_reviewers
     total_distinct = len(distinct_reviewers)
 
     pr_display = f"#{pr_number}" if pr_number else "(current branch)"
@@ -520,10 +637,35 @@ def check(input_data: dict) -> dict | None:
         # Exception applies — fall through to TechDebt check, then allow.
         pass
     elif total_distinct < 2:
+        # If the shortfall is wholly or partly caused by non-roster Requestor
+        # strings, prepend a dedicated diagnostic that names them (#498). The
+        # general 2-reviewer guidance still follows below.
+        roster_diagnostic = ""
+        if non_roster_requestors:
+            sample_roster = sorted(roster_names)[:20]
+            sample_label = (
+                f"Valid roster ({len(roster_names)} total, first 20): {', '.join(sample_roster)}"
+                if roster_names
+                else "Valid roster: <empty — local roster dir could not be read>"
+            )
+            raw_total = len(comment_review_result.reviewers)
+            roster_count = len(roster_comment_reviewers)
+            roster_diagnostic = (
+                f"BLOCKED: PR {pr_display} has {raw_total} distinct Requestor string(s) "
+                f"on Approved verdicts but only {roster_count} are recognized roster "
+                "members.\n"
+                f"Non-roster: {', '.join(sorted(non_roster_requestors))}\n"
+                f"{sample_label}\n"
+                "Hook 4 (#498) requires every Approved verdict's Requestor to match a "
+                "persona in `.claude/team/roster/` — non-roster Requestor strings do "
+                "NOT count toward the 2-reviewer threshold. Re-post the verdict under a "
+                "roster persona, or amend the roster if this is a new member.\n\n"
+            )
         result = {
             "decision": "block",
             "reason": (
-                f"BLOCKED: PR {pr_display} has {total_distinct}/2 required peer reviews. "
+                roster_diagnostic
+                + f"BLOCKED: PR {pr_display} has {total_distinct}/2 required peer reviews. "
                 "At least TWO Approved reviews from distinct non-authors are required before "
                 "merge.\n"
                 "Charter § Comment-Based Reviews counts distinct Requestor values across "
@@ -563,6 +705,22 @@ def check(input_data: dict) -> dict | None:
                 "  gh api repos/<owner>/<repo>/issues/<PR>/comments \\\n"
                 "    --jq '[.[] | select(.body | "
                 'contains("RequestOrReplied: Approved"))] | length\'\n\n'
+                "Common failure mode — prose-mention of fields outside the trailer block:\n"
+                "  As of #511 the hook ONLY extracts Requestor/RequestOrReplied from the\n"
+                "  trailer-block substring (after the LAST `---` separator line) and ignores\n"
+                "  matches inside backticks/code fences. If your verdict comment quotes\n"
+                "  field syntax in prose (e.g., describing the PR body's trailer), make\n"
+                "  sure the actual structured-fields block follows a `---` separator AND\n"
+                "  is the very last block. Inline-code fences (`Requestor: foo`) and fenced\n"
+                "  code (``` ... ```) are stripped before matching.\n"
+                "  Historical instances driving this enforcement (P3W11 batch 11, 2026-05-19):\n"
+                "    - main#509 — Wanjiku's prose described the bare-line block; captured\n"
+                "      Requestor as rest-of-line garbage; 1/2 false-block.\n"
+                "    - deploy#337 — Lucas noted PR body lacked the trailer; captured\n"
+                "      garbage Requestor; 1/2 false-block.\n"
+                "    - deploy#339 — Bereket quoted `Requestor: (TBD — orchestrator will\n"
+                "      assign)`; captured TBD as Requestor; 1/2 false-block.\n"
+                "  All three required orchestrator REST PATCH pre-#511 fix.\n\n"
                 "Single-Reviewer Exception (charter § Single-Reviewer Exception (Wave-Bootstrap "
                 "Only)): label PR `wave-bootstrap` AND have a charter-enforcer review (Standards "
                 "Lead, Manager, Tech Lead, Project Lead, or Program Director).\n"

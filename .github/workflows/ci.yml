@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install ruff
-      - run: ruff check .claude/hooks/
+      - run: ruff check .claude/hooks/ .claude/lib/
 
   format:
     name: Ruff format check
@@ -39,7 +39,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install ruff
-      - run: ruff format --check .claude/hooks/
+      - run: ruff format --check .claude/hooks/ .claude/lib/
 
   typecheck:
     name: Mypy type check
@@ -50,7 +50,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install mypy
-      - run: mypy .claude/hooks/ --ignore-missing-imports --no-error-summary
+      - run: mypy .claude/hooks/ .claude/lib/ --ignore-missing-imports --no-error-summary
 
   smoke-test:
     name: Smoke test — hooks compile and exit cleanly
@@ -60,9 +60,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Verify all hooks compile
+      - name: Verify all hooks and lib files compile
         run: |
-          for f in .claude/hooks/*.py; do
+          for f in .claude/hooks/*.py .claude/lib/*.py; do
             python3 -c "import py_compile; py_compile.compile('$f', doraise=True)"
           done
       - name: Verify hooks exit 0 on empty stdin
@@ -70,3 +70,17 @@ jobs:
           for f in .claude/hooks/*.py; do
             echo '{}' | python3 "$f" || true
           done
+
+  pytest:
+    name: Pytest — hooks and lib test suites
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest
+      - name: Run hook and lib tests
+        run: pytest .claude/hooks/tests/ .claude/lib/tests/ -q

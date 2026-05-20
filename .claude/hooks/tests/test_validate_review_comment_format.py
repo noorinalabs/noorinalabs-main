@@ -348,25 +348,38 @@ class CheckIntegrationTests(unittest.TestCase):
         )
         self.assertIsNone(result)
 
-    def test_cross_repo_pr_comment_with_repo_flag(self):
-        """#302 input shape: `gh pr comment N --repo OWNER/REPO`.
+    def test_cross_repo_pr_comment_with_repo_flag_forwards_repo(self):
+        """Post-#503: `gh pr comment N --repo OWNER/REPO` now forwards --repo
+        to the internal `gh pr view` so the branch fetched is from the
+        commented-against repo, NOT cwd's default.
 
-        get_branch_name does NOT forward --repo (line 76 — `gh pr view N`
-        without --repo resolves from cwd). Pin current behavior: the hook
-        validates against the CURRENT repo's PR #N, not the cross-repo one.
-        If the local cwd has no matching PR, get_branch_name returns ""
-        and the hook warn-allows.
+        Pre-#503 this test pinned the BUG: the hook fetched the wrong PR's
+        branch when reviewer's cwd was a different repo, leading to the
+        Aino-rev-deploy#314 false-block. Post-#503 the hook reads `--repo`
+        from the user's command and passes it through.
         """
         cmd = (
             "gh pr comment 99 --repo noorinalabs/noorinalabs-deploy "
             '--body "Requestor: Aino Virtanen\nRequestee: Nadia Khoury\n'
             'RequestOrReplied: Approved\nTechDebt: none"'
         )
-        with mock.patch.object(hook, "get_branch_name", return_value=""):
+        captured_kwargs: dict = {}
+
+        def fake_get_branch(pr_number, repo=None):  # noqa: ARG001
+            captured_kwargs["repo"] = repo
+            # Return a deploy-side branch that does NOT match Aino's lastname
+            # so the swap heuristic does NOT fire — this is the cross-repo
+            # happy path the fix unblocks.
+            return "N.Hakim/0071-cloud-init-caddy-removal"
+
+        with mock.patch.object(hook, "get_branch_name", side_effect=fake_get_branch):
             result = hook.check(_bash_input(cmd))
-        # Empty branch name → warn-allow path
-        if result is not None:
-            self.assertEqual(result.get("decision"), "allow")
+        # The --repo value MUST be threaded into get_branch_name (the whole
+        # point of #503).
+        self.assertEqual(captured_kwargs.get("repo"), "noorinalabs/noorinalabs-deploy")
+        # And the verdict resolves as ALLOW because the fetched branch
+        # (N.Hakim/...) lastname doesn't collide with the Requestor (Virtanen).
+        self.assertIsNone(result)
 
     def test_markdown_bold_requestor_form(self):
         """Hook regex tolerates `**Requestor:**` markdown-bold prefix on the swap field.
@@ -407,6 +420,130 @@ class CheckIntegrationTests(unittest.TestCase):
         self.assertIsNotNone(result)
         assert result is not None
         self.assertEqual(result.get("decision"), "block")
+
+
+class ExtractRepoCallSiteTests(unittest.TestCase):
+    """Smoke coverage that `validate_review_comment_format` exposes
+    `extract_repo` (re-exported from the shared `_repo_flag_parse` helper)
+    and that the canonical happy path still resolves the same value.
+
+    Comprehensive parser coverage (all 4 flag forms, tokenize / regex
+    fallback, malformed cases) lives in `test_repo_flag_parse.py` alongside
+    the helper. These tests pin the hook's import wiring so a future
+    refactor that drops the re-export trips here, not at runtime.
+    """
+
+    def test_present_returns_value(self):
+        cmd = "gh pr comment 99 --repo noorinalabs/noorinalabs-deploy --body x"
+        self.assertEqual(
+            hook.extract_repo(cmd),
+            "noorinalabs/noorinalabs-deploy",
+        )
+
+    def test_absent_returns_none(self):
+        cmd = 'gh pr comment 99 --body "x"'
+        self.assertIsNone(hook.extract_repo(cmd))
+
+    def test_equals_form_now_supported(self):
+        """`--repo=value` form is supported post-#510 (was a documented
+        gap in the original #509 implementation — see issue body for the
+        latent #503-class regression risk via alternate flag forms).
+        Pre-#510 this returned None (pinned by
+        `test_with_equals_form_not_supported`); post-#510 it returns the
+        value, closing the parser inconsistency with `validate_labels.py`.
+        """
+        cmd = "gh pr comment 99 --repo=noorinalabs/noorinalabs-deploy --body x"
+        self.assertEqual(
+            hook.extract_repo(cmd),
+            "noorinalabs/noorinalabs-deploy",
+        )
+
+
+class CrossRepoRegressionTests(unittest.TestCase):
+    """Regression coverage for the P3W11 #503 cross-repo false-block.
+
+    Reproduces the exact Aino-rev-deploy#314 scenario: reviewer in
+    noorinalabs-main cwd posting a verdict on noorinalabs-deploy PR with
+    `--repo noorinalabs/noorinalabs-deploy`. Pre-fix the hook fetched main's
+    same-numbered PR (whose branch happened to also be `A.Virtanen/...`),
+    matched the lastname, and false-blocked. Post-fix the --repo flag is
+    forwarded and the correct (deploy-side) branch is fetched.
+    """
+
+    REPRO_COMMAND = (
+        "gh pr comment 314 --repo noorinalabs/noorinalabs-deploy "
+        '--body "Requestor: Aino Virtanen\nRequestee: Nurul Hakim\n'
+        'RequestOrReplied: Approved\nTechDebt: none"'
+    )
+
+    def test_503_repro_no_false_block_when_repo_forwarded(self):
+        """The exact Aino-rev-deploy#314 false-block scenario, post-fix.
+
+        Without --repo forwarding, get_branch_name would (in production) hit
+        main's PR #314 with `A.Virtanen/0300-w7-retro-charter` → match Aino's
+        lastname → false-block. With --repo forwarding it hits deploy's PR
+        #314 with `N.Hakim/0071-cloud-init-caddy-removal` → no lastname
+        collision → allow.
+
+        Verified by capturing the repo kwarg passed to get_branch_name and
+        asserting it equals what the user wrote.
+        """
+        captured_kwargs: dict = {}
+
+        def fake_get_branch(pr_number, repo=None):  # noqa: ARG001
+            captured_kwargs["repo"] = repo
+            # Simulate gh pr view returning the deploy-side branch when --repo
+            # is properly forwarded.
+            if repo == "noorinalabs/noorinalabs-deploy":
+                return "N.Hakim/0071-cloud-init-caddy-removal"
+            # The buggy path would have returned main's same-numbered PR.
+            return "A.Virtanen/0300-w7-retro-charter"
+
+        with mock.patch.object(hook, "get_branch_name", side_effect=fake_get_branch):
+            result = hook.check(_bash_input(self.REPRO_COMMAND))
+
+        # Post-fix: --repo MUST be forwarded.
+        self.assertEqual(captured_kwargs.get("repo"), "noorinalabs/noorinalabs-deploy")
+        # And the false-block MUST NOT fire (branch lastname = Hakim ≠ Virtanen).
+        self.assertIsNone(
+            result,
+            "Cross-repo verdict with --repo correctly forwarded should NOT block",
+        )
+
+    def test_same_repo_path_emits_fallback_warning_on_stderr(self):
+        """When --repo is absent, hook uses cwd-default but emits a stderr
+        breadcrumb so future cross-repo invocations missing --repo are
+        discoverable in transcripts. Pins the fallback log behavior.
+        """
+        cmd = (
+            "gh pr comment 42 "
+            '--body "Requestor: Nadia Khoury\nRequestee: Aino Virtanen\n'
+            'RequestOrReplied: Approved\nTechDebt: none"'
+        )
+        # Capture stderr around the hook call.
+        import io
+        from contextlib import redirect_stderr
+
+        captured_kwargs: dict = {}
+
+        def fake_get_branch(pr_number, repo=None):  # noqa: ARG001
+            captured_kwargs["repo"] = repo
+            return "A.Virtanen/0373-ruff-format"
+
+        stderr_buf = io.StringIO()
+        with (
+            mock.patch.object(hook, "get_branch_name", side_effect=fake_get_branch),
+            redirect_stderr(stderr_buf),
+        ):
+            hook.check(_bash_input(cmd))
+
+        # No --repo passed → fallback path; repo kwarg is None.
+        self.assertIsNone(captured_kwargs.get("repo"))
+        # Stderr breadcrumb names the hook + the #503 origin.
+        stderr_text = stderr_buf.getvalue()
+        self.assertIn("validate_review_comment_format", stderr_text)
+        self.assertIn("--repo", stderr_text)
+        self.assertIn("#503", stderr_text)
 
 
 if __name__ == "__main__":

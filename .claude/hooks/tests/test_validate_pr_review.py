@@ -605,9 +605,16 @@ class CheckEndToEndTests(unittest.TestCase):
         return base
 
     def test_two_distinct_approved_requestors_allows_merge(self):
-        """Canonical happy path: 2 distinct Requestors on Approved comments → allow."""
+        """Canonical happy path: 2 distinct Requestors on Approved comments → allow.
+
+        Uses real parent-roster personas (Aino + Nadia) so the #498 roster
+        gate admits both. Pre-#498 this test used fictional personas (Anya
+        Kowalczyk / Jelani Mwangi) that incidentally passed because Hook 4
+        didn't yet cross-check roster membership — exactly the asymmetry
+        #498 closes.
+        """
         review_result = hook.CommentReviewResult()
-        review_result.reviewers = {"anya kowalczyk", "jelani mwangi"}
+        review_result.reviewers = {"aino virtanen", "nadia khoury"}
         with (
             mock.patch.object(hook, "get_pr_data", return_value=self._patch_pr_data()),
             mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
@@ -616,9 +623,13 @@ class CheckEndToEndTests(unittest.TestCase):
         self.assertIsNone(result, "2 distinct Requestor Approveds should allow merge")
 
     def test_one_reviewer_without_wave_bootstrap_blocks(self):
-        """Strict rule: 1 reviewer + no wave-bootstrap label → block."""
+        """Strict rule: 1 reviewer + no wave-bootstrap label → block.
+
+        Uses a real roster persona (Aino) so the failure mode tested is
+        purely the count shortfall, not a #498 non-roster rejection.
+        """
         review_result = hook.CommentReviewResult()
-        review_result.reviewers = {"anya kowalczyk"}
+        review_result.reviewers = {"aino virtanen"}
         with (
             mock.patch.object(hook, "get_pr_data", return_value=self._patch_pr_data()),
             mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
@@ -906,6 +917,377 @@ class CommentPaginationTests(_CheckCommentReviewsHarness):
         self.assertEqual(len(comments), 250)
         result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
         self.assertEqual(len(result.reviewers), 2)
+
+
+class LoadRosterNamesTests(unittest.TestCase):
+    """Issue #498: `_load_roster_names()` returns ALL persona names from the
+    local roster (not role-filtered like `load_charter_enforcer_names`).
+
+    Tests against the parent repo's actual roster — Aino, Nadia, Wanjiku,
+    Santiago must all be present; engineer roles too (sre, security, etc.).
+    """
+
+    def test_includes_standards_lead(self):
+        names = hook._load_roster_names()
+        self.assertIn("aino virtanen", names, f"missing standards lead: {names}")
+
+    def test_includes_program_director(self):
+        self.assertIn("nadia khoury", hook._load_roster_names())
+
+    def test_includes_tpm(self):
+        self.assertIn("wanjiku mwangi", hook._load_roster_names())
+
+    def test_includes_release_coordinator(self):
+        self.assertIn("santiago ferreira", hook._load_roster_names())
+
+    def test_includes_engineer_roles(self):
+        """Unlike `load_charter_enforcer_names`, engineer roles ARE included."""
+        names = hook._load_roster_names()
+        # sre_engineer_lucas → Lucas Ferreira; sre_engineer_aisha → Aisha Idrissi.
+        self.assertIn("lucas ferreira", names)
+
+
+class RosterValidationGateTests(unittest.TestCase):
+    """Issue #498: 2-reviewer gate must reject non-roster Requestor strings.
+
+    Drives `check()` end-to-end with stubbed pr_data and a stubbed
+    `check_comment_reviews` result; the only real-roster read is the parent
+    repo's `_load_roster_names()` (via `_iter_roster_entries`).
+
+    Repro target: PR #487 verdict comments posted under "Camila Restrepo" and
+    "Imelda Santos" — neither in `.claude/team/roster/`. Pre-fix Hook 4
+    counted both and merged. Post-fix both are filtered out.
+    """
+
+    @staticmethod
+    def _input(command: str) -> dict:
+        return {"tool_name": "Bash", "tool_input": {"command": command}}
+
+    @staticmethod
+    def _pr_data(**overrides) -> dict:
+        base = {
+            "author": "parametrization",
+            "number": 487,
+            "reviews": [],
+            "headRefName": "S.Ferreira/0470-doc-sync",
+            "labels": [],
+        }
+        base.update(overrides)
+        return base
+
+    def test_two_non_roster_requestors_blocked(self):
+        """Regression: 2 non-roster Requestors must BLOCK (P3W11 #487 repro)."""
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"camila restrepo", "imelda santos"}
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input("gh pr merge 487 --squash"))
+        self.assertIsNotNone(result, "non-roster Requestors must not satisfy the 2-reviewer gate")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        reason = result["reason"]
+        self.assertIn("camila restrepo", reason.lower())
+        self.assertIn("imelda santos", reason.lower())
+        self.assertIn("Non-roster:", reason)
+        self.assertIn("roster", reason.lower())
+
+    def test_mixed_roster_and_non_roster_blocked(self):
+        """1 roster + 1 non-roster → 1/2 (only the roster member counts)."""
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen", "imelda santos"}
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input("gh pr merge 487 --squash"))
+        self.assertIsNotNone(result, "1 roster + 1 non-roster must not pass 2/2")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        reason = result["reason"]
+        self.assertIn("imelda santos", reason.lower())
+        self.assertNotIn("aino virtanen", reason.lower().split("non-roster:")[1].split("\n")[0])
+        # Final count should reflect the filtered roster-only set.
+        self.assertIn("1/2", reason)
+
+    def test_two_roster_requestors_pass(self):
+        """Regression baseline: 2 real roster members → allow (existing behavior)."""
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen", "nadia khoury"}
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input("gh pr merge 487 --squash"))
+        self.assertIsNone(result, "two distinct roster members must pass the 2-reviewer gate")
+
+    def test_empty_roster_blocks_with_diagnostic(self):
+        """Fail-closed: if the roster cannot be read, every Requestor is non-roster.
+
+        Critical safe-direction default per `safety_direction_over_ux_friction`
+        memory: an unreadable roster must NOT silently pass review gates that
+        depend on it. The BLOCK message must surface the empty-roster
+        condition diagnostically so an operator can fix the dir, not bypass.
+        """
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen", "nadia khoury"}
+        with (
+            mock.patch.object(hook, "_load_roster_names", return_value=set()),
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input("gh pr merge 487 --squash"))
+        self.assertIsNotNone(result, "empty roster must fail closed")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        reason = result["reason"]
+        self.assertIn("empty", reason.lower())
+        self.assertIn("could not be read", reason)
+
+
+class StripCodeRegionsTests(unittest.TestCase):
+    """Issue #511: `_strip_code_regions` removes fenced and inline code so the
+    field extractor cannot capture reviewer prose-quotes of field syntax.
+
+    Replacement char is space (not empty) so line indices stay stable for
+    downstream trailer-block detection.
+    """
+
+    def test_strips_inline_backticks(self):
+        result = hook._strip_code_regions("see `Requestor: foo` for context")
+        self.assertNotIn("Requestor", result)
+        self.assertEqual(len(result), len("see `Requestor: foo` for context"))
+
+    def test_strips_fenced_triple_backtick_block(self):
+        body = "before\n```\nRequestor: foo\n```\nafter"
+        result = hook._strip_code_regions(body)
+        self.assertNotIn("Requestor", result)
+        self.assertIn("before", result)
+        self.assertIn("after", result)
+
+    def test_unterminated_inline_backtick_passes_through(self):
+        """A lone backtick without a closing pair is treated as literal."""
+        result = hook._strip_code_regions("opening ` and then Requestor: foo")
+        self.assertIn("Requestor: foo", result)
+
+    def test_unterminated_fenced_block_strips_rest(self):
+        """An open ``` without a close conservatively eats the rest. Reviewer
+        error mode (forgot close fence) → fail safe by not matching trailing
+        chars as fields.
+        """
+        body = "intro ```\nRequestor: foo"
+        result = hook._strip_code_regions(body)
+        self.assertIn("intro", result)
+        self.assertNotIn("Requestor", result)
+
+    def test_multiline_inline_span_is_not_matched(self):
+        """`...` with a newline in between is NOT an inline-code span per
+        CommonMark — opening backtick passes through, line preserved.
+        """
+        body = "opening `\nRequestor: foo\n` closing"
+        result = hook._strip_code_regions(body)
+        self.assertIn("Requestor: foo", result)
+
+
+class TrailerBlockSubstringTests(unittest.TestCase):
+    """Issue #511: `_trailer_block_substring` returns text after the LAST
+    bare-`---` separator line. No-separator → full body (back-compat).
+    """
+
+    def test_no_separator_returns_full_body(self):
+        body = "Requestor: foo\nRequestee: bar"
+        self.assertEqual(hook._trailer_block_substring(body), body)
+
+    def test_one_separator_returns_post_only(self):
+        body = "prose intro\n\n---\nRequestor: foo\nRequestee: bar"
+        result = hook._trailer_block_substring(body)
+        self.assertIn("Requestor", result)
+        self.assertNotIn("prose intro", result)
+
+    def test_multiple_separators_last_wins(self):
+        body = (
+            "intro\n\n---\nfake trailer with Requestor: WRONG\nmore prose\n"
+            "---\nRequestor: CORRECT\nRequestee: target"
+        )
+        result = hook._trailer_block_substring(body)
+        self.assertIn("CORRECT", result)
+        self.assertNotIn("WRONG", result)
+
+    def test_separator_must_be_on_own_line(self):
+        body = "intro with --- embedded\nRequestor: foo"
+        self.assertEqual(hook._trailer_block_substring(body), body)
+
+    def test_separator_with_surrounding_whitespace_is_recognized(self):
+        body = "intro\n  ---  \nRequestor: foo"
+        result = hook._trailer_block_substring(body)
+        self.assertIn("Requestor", result)
+        self.assertNotIn("intro", result)
+
+
+class ProseFalseMatchRegressionTests(_CheckCommentReviewsHarness):
+    """Issue #511: prose-mention of charter fields above the trailer block
+    MUST NOT be captured as the verdict. Three exact-shape regressions for
+    the P3W11 batch-11 instances — pre-#511 each false-blocked at 1/2.
+    """
+
+    @staticmethod
+    def _comment(body: str) -> dict:
+        return {"body": body, "user": {"login": "anyone"}}
+
+    def test_main_509_wanjiku_prose_above_trailer_ignored(self):
+        """main#509 (Wanjiku) — prose described the bare-line trailer; pre-fix
+        captured rest-of-prose-line as Requestor. Post-fix the trailer block
+        (after `---`) is the only match scope.
+        """
+        body = (
+            "PR body trailer convention is the literal bare-line block "
+            "(Requestor / Requestee / RequestOrReplied: New / TechDebt: none) "
+            "at the end of the body. Aino's #509 follows it correctly.\n"
+            "\n"
+            "---\n"
+            "Requestor: Wanjiku Mwangi\n"
+            "Requestee: Aino Virtanen\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none"
+        )
+        result = self._run_with_fake_api([self._comment(body)], self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.reviewers, {"wanjiku mwangi"})
+        self.assertEqual(result.reviews_missing_tech_debt, [])
+
+    def test_deploy_337_lucas_prose_observation_ignored(self):
+        """deploy#337 (Lucas) — soft observation about missing trailer block.
+        Pre-fix the prose mention of `Requestor: / Requestee: / ...` itself
+        captured garbage. Post-fix the actual trailer wins.
+        """
+        body = (
+            "Soft observation: Aisha's PR body does not include the trailer "
+            "structured-fields block (Requestor: / Requestee: / "
+            "RequestOrReplied: New / TechDebt: none bare-line). Non-blocking — "
+            "she can amend post-merge. LGTM on the conftest guard.\n"
+            "\n"
+            "---\n"
+            "Requestor: Lucas Ferreira\n"
+            "Requestee: Aisha Idrissi\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none"
+        )
+        result = self._run_with_fake_api([self._comment(body)], self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.reviewers, {"lucas ferreira"})
+        self.assertEqual(result.reviews_missing_tech_debt, [])
+
+    def test_deploy_339_bereket_backtick_quote_ignored(self):
+        """deploy#339 (Bereket) — verdict quoted PR body's `Requestor: (TBD…)`
+        inside backticks. Pre-fix backtick contents were extracted as
+        Requestor. Post-fix `_strip_code_regions` zeroes the backticks.
+        """
+        body = (
+            "PR body uses `Requestor: (TBD — orchestrator will assign)` "
+            "correctly — no reviewer name prediction, deferred per charter "
+            "feedback_pr_number_placeholders.\n"
+            "\n"
+            "---\n"
+            "Requestor: Bereket Tadesse\n"
+            "Requestee: Lucas Ferreira\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none"
+        )
+        result = self._run_with_fake_api([self._comment(body)], self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.reviewers, {"bereket tadesse"})
+        self.assertEqual(result.reviews_missing_tech_debt, [])
+
+    def test_legacy_no_separator_uses_last_match_fallback(self):
+        """Back-compat: pre-#511 verdict comments without a `---` separator
+        still work — the extractor falls back to the full body and uses
+        last-match-wins. Prose above an end-of-body trailer is ignored
+        because the last match is the real trailer.
+        """
+        body = (
+            "Noting the body has Requestor: oldformat-prose-mention\n"
+            "but the real trailer below uses canonical fields:\n"
+            "Requestor: Wanjiku Mwangi\n"
+            "Requestee: Aino Virtanen\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none"
+        )
+        result = self._run_with_fake_api([self._comment(body)], self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.reviewers, {"wanjiku mwangi"})
+        self.assertEqual(result.reviews_missing_tech_debt, [])
+
+    def test_multiple_separators_only_last_trailer_matches(self):
+        """If a verdict has multiple `---` (e.g., reviewer included an aside
+        block with its own separator), only the LAST trailer is the source
+        of truth — earlier blocks are ignored even if they look canonical.
+        """
+        body = (
+            "intro prose\n"
+            "\n"
+            "---\n"
+            "Requestor: WrongName Person\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none\n"
+            "\n"
+            "(this was an aside block, not the real verdict)\n"
+            "\n"
+            "---\n"
+            "Requestor: Nadia Khoury\n"
+            "Requestee: Aino Virtanen\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none"
+        )
+        result = self._run_with_fake_api([self._comment(body)], self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.reviewers, {"nadia khoury"})
+
+    def test_existing_canonical_trailer_still_works(self):
+        """Regression baseline: a plain canonical verdict (no prose preamble,
+        no separator, fields-only body) still parses correctly under the new
+        scope discipline. Guards against over-zealous narrowing.
+        """
+        body = (
+            "Requestor: Wanjiku Mwangi\n"
+            "Requestee: Aino Virtanen\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none"
+        )
+        result = self._run_with_fake_api([self._comment(body)], self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.reviewers, {"wanjiku mwangi"})
+
+
+class ExtractRepoCallSiteTests(unittest.TestCase):
+    """Smoke coverage that `validate_pr_review` exposes `extract_repo`
+    (re-exported from the shared `_repo_flag_parse` helper) and that the
+    canonical `gh pr merge --repo` happy path still resolves the same
+    value.
+
+    Comprehensive parser coverage (all 4 flag forms, tokenize / regex
+    fallback, malformed cases) lives in `test_repo_flag_parse.py` alongside
+    the helper. These tests pin the hook's import wiring so a future
+    refactor that drops the re-export trips here, not at runtime. Mirrors
+    `test_validate_review_comment_format.ExtractRepoCallSiteTests` from
+    #513.
+    """
+
+    def test_present_returns_value(self):
+        cmd = "gh pr merge 487 --repo noorinalabs/noorinalabs-deploy --squash"
+        self.assertEqual(
+            hook.extract_repo(cmd),
+            "noorinalabs/noorinalabs-deploy",
+        )
+
+    def test_absent_returns_none(self):
+        cmd = "gh pr merge 487 --squash"
+        self.assertIsNone(hook.extract_repo(cmd))
+
+    def test_equals_form_now_supported(self):
+        """`--repo=value` form is supported post-#514 (was the documented
+        latent #503-class gap in the original #509 implementation — sister
+        consolidation #510 fixed it for two hooks via #513, #514 extends
+        the fix to validate_pr_review for the gh-pr-merge code path)."""
+        cmd = "gh pr merge 487 --repo=noorinalabs/noorinalabs-deploy --squash"
+        self.assertEqual(
+            hook.extract_repo(cmd),
+            "noorinalabs/noorinalabs-deploy",
+        )
 
 
 if __name__ == "__main__":

@@ -53,6 +53,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _repo_flag_parse import extract_repo
 from annunaki_log import log_pretooluse_block
 
 # Conclusion values that unambiguously indicate a failed check.
@@ -101,14 +102,6 @@ def extract_pr_number(command: str) -> str | None:
     if match:
         return match.group(1)
     match = re.search(r"/pull/(\d+)", command)
-    if match:
-        return match.group(1)
-    return None
-
-
-def extract_repo_from_command(command: str) -> str | None:
-    """Extract --repo value from gh pr merge command."""
-    match = re.search(r"--repo\s+(\S+)", command)
     if match:
         return match.group(1)
     return None
@@ -205,7 +198,7 @@ def check(input_data: dict) -> dict | None:
         return None
 
     pr_number = extract_pr_number(command)
-    repo = extract_repo_from_command(command)
+    repo = extract_repo(command)
     rollup = fetch_checks(pr_number, repo)
 
     pr_display = f"#{pr_number}" if pr_number else "(current branch)"
