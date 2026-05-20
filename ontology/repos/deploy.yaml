@@ -100,11 +100,39 @@ workflows:
     trigger: "pull_request + push to main + workflow_dispatch"
     purpose: "cross-repo integration suite (#49)"
     sibling_ref_resolution: "wave-aware — resolve user-service + isnad-graph refs to same wave branch when PR base = deployments/* (with main fallback). Added in #159 (Aisha, P2W10)."
+    run_modes:
+      hermetic: "Full local docker-compose stack; builds user-service and isnad-graph-api from sibling checkouts. PR-CI default."
+      remote: "Skip stack-up; point HTTP fixtures at env-supplied stg URLs (ISNAD_BASE_URL, USER_SERVICE_BASE_URL). DB/Redis-direct fixtures auto-skip. Hard refusal at startup if ENVIRONMENT=prod/production (defaults to stg). Per-test refactors for stg test-user creds tracked in #178."
+    pull_retry: "Per-image bounded retry-with-backoff (3 attempts, 1/2s) before `compose up --build` — closes #214 (single-image Docker Hub timeout hard-failed entire run pre-fix). JSON-parse-by-shape (`image` && !`build`) avoids short-form `*/*` filter misses."
+  compose_validate:
+    workflow: .github/workflows/compose-validate.yml
+    triggers: "pull_request + push to main (paths: compose/**, infra/**, scripts/**, .github/workflows/**)"
+    jobs:
+      compose_config: "Materialize .env from .env.example with CI placeholders, then `docker compose config --quiet`"
+      shellcheck: "Lint shell scripts under infra/ + scripts/"
+      passlist_drift:
+        pr: "deploy#97"
+        description: "Catch drift between compose's :?-required vars and deploy-stg/deploy-prod `env_keys` passlists at PR-review time. Pre-fix, drift was detected only at compose-up time (PR #95 surfaced 6 missing vars post-merge). Fails CI on missing; warns on extras (passlist vars compose doesn't reference)."
+        workflow_written_vars: [IMAGE_TAG, BASE_DOMAIN, USER_SERVICE_IMAGE_TAG, LANDING_IMAGE_TAG]
   rollback: { trigger: workflow_dispatch, inputs: [image_tag, service] }
   # Promotion pathway (P2W10, section A — all merged):
   promote: { pr: "deploy#155 (Aisha)", issue: "#84", status: merged, description: "stg auto-deploy + prod manual-approval promotion (Contract v6 image-tag retag)" }
   deploy_stg: { pr: "deploy#155 (Aisha)", issue: "#84", status: merged, trigger: "repository_dispatch from service repos (deploy-noorinalabs-{isnad-graph,user-service,landing-page})" }
-  deploy_prod: { pr: "deploy#155 (Aisha)", issue: "#84", status: merged, trigger: "manual approval in production GH Environment" }
+  deploy_prod:
+    pr: "deploy#155 (Aisha, base); deploy#251 (break-glass)"
+    issue: "#84 (base); #251 (break-glass)"
+    status: merged
+    trigger: "workflow_dispatch (fired by promote.yml after retag + manual approval in production GH Environment)"
+    per_service_tag_inputs: [api_frontend_tag, user_service_tag, landing_tag]
+    tag_shape_default: "prod-* (validated per-service before deploy step)"
+    break_glass:
+      input: allow_stg_tags
+      requires: break_glass_reason
+      effect: "Accept stg-* shape tags directly (skip the prod-* shape check) for DR scenarios where promote.yml retag path is blocked (e.g., GHCR cross-repo write 403). Surfaced 2026-05-02 emergency restore."
+      jobs:
+        validate_break_glass_reason: "Runs first; fails-fast when allow_stg_tags=true but break_glass_reason is empty"
+        audit_allow_stg_tags: "Runs in parallel with deploy (does NOT gate); records bypass via composite action `./.github/actions/break-glass-audit` — appends to pinned audit-log issue (label `break-glass-audit-log`), emits Prometheus textfile-collector metric, BreakGlassUsed Alertmanager rule"
+      runbook: docs/runbooks/break-glass.md
   alembic_pre_deploy_gate:
     workflow: .github/workflows/db-migrate.yml
     pr: "deploy#153 (Lucas)"

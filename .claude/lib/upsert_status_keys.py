@@ -32,6 +32,50 @@ import sys
 from pathlib import Path
 
 
+def _is_top_level_position(text: str, position: int) -> bool:
+    """Return True iff `position` in `text` is at JSON top-level depth.
+
+    Walks the text from the start tracking bracket depth and JSON string
+    state. Depth-1 (i.e., directly inside the outermost `{...}`) is what
+    "top-level sibling" means for cross-repo-status.json. Positions inside
+    nested objects/arrays or inside string values return False.
+
+    This is the structural check that catches the bug class where the
+    regex sibling-finder happens to match a key NAME that's nested inside
+    a multi-line value (e.g., `wave_11_inner_key` at 2-space indent inside
+    `wave_11_scope: {...}`). Without this check the helper would insert a
+    new top-level key in the middle of a value, producing either invalid
+    JSON or a logical/text divergence caught only by the post-write
+    validation (which then aborts the entire upsert batch).
+
+    Performance: O(position) per call — for cross-repo-status.json
+    (~2700 lines, ~108KB) a single check is ~108K char-iterations, well
+    under 10ms even on slow hardware. Called once per sibling-finder
+    candidate, so worst case is ~108K × N candidates; N is typically 1–5
+    so the total per-upsert cost remains negligible.
+    """
+    depth = 0
+    in_string = False
+    escape = False
+    i = 0
+    while i < position and i < len(text):
+        c = text[i]
+        if escape:
+            escape = False
+        elif c == "\\" and in_string:
+            escape = True
+        elif c == '"':
+            in_string = not in_string
+        elif not in_string:
+            if c in "{[":
+                depth += 1
+            elif c in "}]":
+                depth -= 1
+        i += 1
+    # Depth 1 means we're directly inside the outermost object's body.
+    return depth == 1 and not in_string
+
+
 def _find_value_end(text: str, opener_match_end: int) -> int:
     """Given the regex-match end of a top-level key:value opener line,
     return the position immediately AFTER that key's value terminates
@@ -89,13 +133,28 @@ def upsert_top_level_key(text: str, key: str, json_value: str) -> str:
     is placed AFTER the sibling's structural close, not after the opening
     line (main#332 fix).
 
+    Both the existing-key match AND the sibling-finder match are filtered
+    by `_is_top_level_position` — a regex match whose position is nested
+    inside a multi-line value (e.g., `wave_11_inner_key` at 2-space indent
+    inside `wave_11_scope: {...}`) is rejected so insertions never land
+    mid-value. This is the fix for main#456 — the regex sibling-finder
+    pre-#456 would match nested keys and insert ON TOP of them, producing
+    either invalid JSON or a logical/text divergence aborted by the
+    post-write validation.
+
     Falls back to inserting right after the opening `{` line if no sibling
     exists.
     """
     line_re = re.compile(r'^(  )"' + re.escape(key) + r'":\s.*?,?\s*$', re.MULTILINE)
     new_line = f'  "{key}": {json_value},'
-    m = line_re.search(text)
-    if m:
+    # Replace-in-place: walk every match and pick the first one that's at
+    # top-level depth. The pre-#456 code took the first regex match
+    # unconditionally; that mis-matched nested keys whose NAME happened to
+    # equal `key` (e.g., a top-level `wave_11_meta_issue` upsert mis-matching
+    # a nested `wave_11_meta_issue` inside a wave_11_scope dict).
+    for m in line_re.finditer(text):
+        if not _is_top_level_position(text, m.start()):
+            continue
         existing = m.group(0)
         last_existing = existing.rstrip()
         if last_existing.endswith(","):
@@ -110,7 +169,9 @@ def upsert_top_level_key(text: str, key: str, json_value: str) -> str:
             r'^(  )"wave_' + re.escape(wave_num_match.group(1)) + r'_[^"]+":.*$',
             re.MULTILINE,
         )
-        siblings = list(sibling_re.finditer(text))
+        # Filter to top-level matches only; the pre-#456 code took ALL
+        # matches including nested wave_N_* names inside value dicts.
+        siblings = [m for m in sibling_re.finditer(text) if _is_top_level_position(text, m.start())]
         if siblings:
             last = siblings[-1]
             value_end = _find_value_end(text, last.end())
@@ -161,19 +222,35 @@ def main(argv: list[str]) -> int:
     try:
         reparsed = json.loads(text)
     except json.JSONDecodeError as exc:
+        # Surface the offending key=value pairs so the issue filer can
+        # paste them straight into a reproducer (main#456 follow-up).
+        key_repr = ", ".join(f"{k}={raw[:80]}" for k, raw, _ in pairs)
         print(
             f"ERROR: text-level upsert produced invalid JSON: {exc}\n"
-            "  This usually means the helper's sibling-finder mis-located\n"
-            "  the insertion point inside a multi-line array/object value\n"
-            "  (main#332 reproducer). File the failing input as an issue\n"
-            "  with the offending key=value upsert command.",
+            f"  This usually means the helper's sibling-finder mis-located\n"
+            f"  the insertion point inside a multi-line array/object value\n"
+            f"  (main#332/#456 reproducer class). File the failing input as\n"
+            f"  an issue with the offending key=value upsert command.\n"
+            f"  Offending pairs: {key_repr}",
             file=sys.stderr,
         )
         return 1
 
     if reparsed != parsed:
+        # Pinpoint which key diverged so reviewers can read the bug without
+        # diffing the full file (main#456 follow-up).
+        diverged_keys = sorted(set(reparsed.keys()) ^ set(parsed.keys()))
+        # Also catch same-key different-value divergence.
+        for k in set(reparsed.keys()) & set(parsed.keys()):
+            if reparsed[k] != parsed[k]:
+                diverged_keys.append(k)
+        key_repr = ", ".join(f"{k}={raw[:80]}" for k, raw, _ in pairs)
         print(
-            "ERROR: text-level upsert diverged from logical upsert; aborting write",
+            f"ERROR: text-level upsert diverged from logical upsert; aborting write.\n"
+            f"  Diverged keys: {sorted(set(diverged_keys))}\n"
+            f"  Offending pairs (this call): {key_repr}\n"
+            f"  This usually means a previous key in the same call was\n"
+            f"  inserted at the wrong position (main#456 sibling-finder bug).",
             file=sys.stderr,
         )
         return 1

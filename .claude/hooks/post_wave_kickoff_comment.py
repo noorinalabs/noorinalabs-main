@@ -19,7 +19,10 @@ Behavior summary
 
 1. Parse repo, issue number, wave label from the bash command. Uses
    `_shell_parse.tokenize` + heredoc-stripping (the third hook this wave
-   eating its own dogfood — siblings #316, #378, #386).
+   eating its own dogfood — siblings #316, #378, #386). Silently skip
+   between-wave relabel commands (commands that both add AND remove a
+   canonical wave label in the same invocation — #467 carry-forward
+   filter) — those are not initial kickoffs.
 2. Read `ontology/cross-repo-status.json` (or fallback paths) and find
    the matching assignment row in `wave_{M}_scope.tier_{1,2,3,4}_*`
    arrays. Match by:
@@ -102,15 +105,33 @@ def parse_label_apply_command(command: str) -> tuple[str, str, str] | None:
     ordering. The kickoff hook only fires on label-APPLY, so commands
     that only `--remove-label` a wave label return None here.
 
+    Between-wave relabel filter (#467): commands that ALSO remove a
+    canonical wave label in the same invocation
+    (e.g. `--add-label "p3-wave-11" --remove-label "p3-wave-10"`) are
+    the carry-forward shape used during wave-tail relabeling. These are
+    NOT initial kickoffs — they're moving an already-assigned issue from
+    one wave to the next. Silently return None on this shape so the hook
+    doesn't fire on each relabel, which previously produced a 36-event
+    annunaki noise burst in P3W11 (all hitting the `skip_no_scope` log
+    path because the new wave wasn't kicked off yet). The post-merge
+    behavior is intentional: real initial kickoffs use bare `--add-label`
+    without `--remove-label` and still trigger the comment.
+
     Delegates to the shared `_wave_label_parse.parse_wave_label_change`
     helper (extracted in #445 alongside Hook 21). The shim narrows the
     helper's WaveLabelChange shape down to the (repo, issue, label)
-    tuple this hook's downstream code already expects — preserves the
-    pre-extraction behavior exactly so existing fixtures continue to
-    pass without modification.
+    tuple this hook's downstream code already expects.
     """
     change = parse_wave_label_change(command)
     if change is None or change.add_label is None:
+        return None
+    # #467: between-wave relabel filter. If the same command also removes
+    # a canonical wave label, treat as a relabel (carry-forward) and skip.
+    # `parse_wave_label_change` only populates `remove_label` when the
+    # removed value matches the canonical `p{N}-wave-{M}` regex, so a
+    # non-wave `--remove-label` (e.g., removing an implementer label)
+    # does NOT trigger this filter.
+    if change.remove_label is not None:
         return None
     return change.repo, change.issue_number, change.add_label
 

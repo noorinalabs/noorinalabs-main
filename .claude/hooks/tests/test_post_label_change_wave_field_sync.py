@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for `post_label_change_wave_field_sync` PostToolUse hook.
 
-Six semantic buckets covered (per `skills.md § Acceptance-Criteria-Bucketing-In-Reports`):
+Nine semantic buckets covered (per `skills.md § Acceptance-Criteria-Bucketing-In-Reports`):
 
 ACTIONABLE buckets
 ==================
@@ -714,6 +714,456 @@ query($org: String!, $project: Int!, $repo: String!, $num: Int!) {
             unused,
             "Old buggy query should have $num as unused — test regression guard failed",
         )
+
+
+class MultiCmdBashTests(unittest.TestCase):
+    """Bucket 7 (ACTIONABLE) — multi-cmd Bash dispatching, issue #455.
+
+    A single Bash tool call may contain multiple `gh issue edit` invocations
+    via `;`, `&&`, or newline separators. The hook must dispatch ONE Wave
+    field sync per change, not silent-skip the whole batch.
+
+    Tests pin both the parser (returns N WaveLabelChange objects) AND the
+    dispatch (`check()` returns `{"action": "multi", "results": [...]}` with
+    N entries).
+    """
+
+    def setUp(self):
+        _wipe_cache()
+        hook.CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        hook._write_cache(_ids_blob())
+
+    def tearDown(self):
+        _wipe_cache()
+
+    def test_semicolon_chain_dispatches_per_segment(self):
+        router = FakeGraphQLRouter(
+            item_lookup=_item_lookup_response,
+            mutation=_mutation_success_response,
+        )
+        cmd = (
+            "gh issue edit 100 --repo noorinalabs/noorinalabs-deploy "
+            '--add-label "p3-wave-11" ; '
+            "gh issue edit 101 --repo noorinalabs/noorinalabs-deploy "
+            '--add-label "p3-wave-11" ; '
+            "gh issue edit 102 --repo noorinalabs/noorinalabs-deploy "
+            '--add-label "p3-wave-11"'
+        )
+        result = hook.check(
+            _bash(cmd),
+            auth_status_runner=_scopes_with_project,
+            graphql_runner=router,
+        )
+        self.assertEqual(result["action"], "multi")
+        self.assertEqual(result["count"], 3)
+        self.assertEqual(len(result["results"]), 3)
+        for r in result["results"]:
+            self.assertEqual(r["action"], "set")
+            self.assertEqual(r["option_name"], "P3W11")
+        self.assertEqual(router.calls["mutation"], 3, "Should dispatch one mutation per change")
+
+    def test_ampersand_chain_dispatches_per_segment(self):
+        router = FakeGraphQLRouter(
+            item_lookup=_item_lookup_response,
+            mutation=_mutation_success_response,
+        )
+        cmd = (
+            "gh issue edit 200 --repo noorinalabs/noorinalabs-main "
+            '--add-label "p3-wave-11" && '
+            "gh issue edit 201 --repo noorinalabs/noorinalabs-main "
+            '--add-label "p3-wave-11"'
+        )
+        result = hook.check(
+            _bash(cmd),
+            auth_status_runner=_scopes_with_project,
+            graphql_runner=router,
+        )
+        self.assertEqual(result["action"], "multi")
+        self.assertEqual(result["count"], 2)
+        self.assertEqual(router.calls["mutation"], 2)
+
+    def test_newline_separated_commands_dispatch_per_segment(self):
+        """Newline + `\\` line-continuation is normalized by the shared
+        tokenizer (_LINE_CONTINUATION_RE); plain newline acts like `;`."""
+        router = FakeGraphQLRouter(
+            item_lookup=_item_lookup_response,
+            mutation=_mutation_success_response,
+        )
+        cmd = (
+            'gh issue edit 300 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-11"\n'
+            'gh issue edit 301 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-11"'
+        )
+        # shlex.split tokenizes newline as whitespace by default — segment
+        # operators `;`/`&&`/`||`/`|` are what split commands. Plain newlines
+        # do NOT segment, so this command tokenizes as a single segment with
+        # two `gh issue edit` invocations concatenated. The realistic shape
+        # is `;`-separated; the newline-only shape is rare in practice.
+        # Pin the realistic semicolon-newline shape:
+        cmd = (
+            'gh issue edit 300 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-11" ;\n'
+            'gh issue edit 301 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-11"'
+        )
+        result = hook.check(
+            _bash(cmd),
+            auth_status_runner=_scopes_with_project,
+            graphql_runner=router,
+        )
+        self.assertEqual(result["action"], "multi")
+        self.assertEqual(result["count"], 2)
+        self.assertEqual(router.calls["mutation"], 2)
+
+    def test_mixed_set_and_clear_in_multi_cmd(self):
+        """`gh issue edit X --add p3-wave-11; gh issue edit Y --remove p3-wave-10`
+        dispatches one set + one clear."""
+        router = FakeGraphQLRouter(
+            item_lookup=_item_lookup_response,
+            mutation=_mutation_success_response,
+        )
+        cmd = (
+            "gh issue edit 400 --repo noorinalabs/noorinalabs-main "
+            '--add-label "p3-wave-11" ; '
+            "gh issue edit 401 --repo noorinalabs/noorinalabs-main "
+            '--remove-label "p3-wave-10"'
+        )
+        result = hook.check(
+            _bash(cmd),
+            auth_status_runner=_scopes_with_project,
+            graphql_runner=router,
+        )
+        self.assertEqual(result["action"], "multi")
+        actions = [r["action"] for r in result["results"]]
+        self.assertEqual(actions, ["set", "cleared"])
+
+    def test_single_cmd_preserves_legacy_shape(self):
+        """Single-cmd return MUST still be the flat dict (not wrapped in `multi`)
+        so existing callers and tests are unaffected."""
+        router = FakeGraphQLRouter(
+            item_lookup=_item_lookup_response,
+            mutation=_mutation_success_response,
+        )
+        result = hook.check(
+            _bash('gh issue edit 500 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-11"'),
+            auth_status_runner=_scopes_with_project,
+            graphql_runner=router,
+        )
+        self.assertEqual(result["action"], "set")
+        self.assertNotIn("results", result, "Single-cmd must not return multi-shape dict")
+
+    def test_parser_skip_logs_for_unparseable_wave_label_cmd(self):
+        """When the command CONTAINS `gh issue edit` + canonical wave-label
+        but the parser extracts nothing (e.g., missing --repo), the hook
+        emits a parser-skip annunaki event per #455 acceptance criterion."""
+        cmd = (
+            # Missing --repo flag → parser returns empty, but the command
+            # clearly intended a wave-label edit
+            'gh issue edit 600 --add-label "p3-wave-11"'
+        )
+        result = hook.check(_bash(cmd))
+        self.assertEqual(result["action"], "skip_parser_returned_empty")
+
+    def test_parser_skip_does_not_fire_on_unrelated_command(self):
+        """A command with NO `gh issue edit` at all returns None, not skip."""
+        result = hook.check(_bash("echo hello world"))
+        self.assertIsNone(result)
+
+    def test_parser_skip_does_not_fire_on_suffixed_label(self):
+        """`p3-wave-10-special` is not canonical; should NOT trigger parser-skip
+        log (would be noise). This is the regression guard for the bounded
+        regex anchor in _CANONICAL_WAVE_LABEL_IN_CMD."""
+        cmd = (
+            'gh issue edit 700 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-10-special"'
+        )
+        result = hook.check(_bash(cmd))
+        self.assertIsNone(result)
+
+
+class SkipPathLoggingTests(unittest.TestCase):
+    """Bucket 8 (ACTIONABLE) — issue #451 skip-path annunaki coverage.
+
+    skip_no_item, skip_no_auth_scope, skip_no_project_ids, skip_no_option,
+    and skip_mutation_failed must all emit log_posttooluse_event so
+    /annunaki and /annunaki-attack can sweep them.
+    """
+
+    def setUp(self):
+        _wipe_cache()
+
+    def tearDown(self):
+        _wipe_cache()
+
+    def _make_log_capture(self):
+        """Patch annunaki_log.log_posttooluse_event to capture calls.
+
+        Patches BOTH the source-of-truth module attribute AND the hook
+        module's already-bound reference (Python imports the name at
+        import time; subsequent module attribute changes don't propagate).
+        """
+        captured = []
+        orig_hook_logger = hook.log_posttooluse_event
+
+        def fake_logger(hook_name, command, reason, tool_name="Bash"):
+            captured.append({"hook": hook_name, "command": command, "reason": reason})
+
+        hook.log_posttooluse_event = fake_logger
+
+        def restore():
+            hook.log_posttooluse_event = orig_hook_logger
+
+        return captured, restore
+
+    def test_skip_no_item_logs(self):
+        """skip_no_item must produce an annunaki log entry per #451."""
+        hook._write_cache(_ids_blob())
+        captured, restore = self._make_log_capture()
+        try:
+            router = FakeGraphQLRouter(
+                item_lookup=lambda repo, num: _item_lookup_empty_response(),
+                mutation=_mutation_success_response,
+            )
+            result = hook.check(
+                _bash(
+                    'gh issue edit 999 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-11"'
+                ),
+                auth_status_runner=_scopes_with_project,
+                graphql_runner=router,
+            )
+            self.assertEqual(result["action"], "skip_no_item")
+            self.assertTrue(
+                any("skip_no_item" in c["reason"] for c in captured),
+                f"skip_no_item path must log; captured: {captured}",
+            )
+        finally:
+            restore()
+
+    def test_skip_no_auth_scope_logs(self):
+        """skip_no_auth_scope is already covered by the auth-warn-debounce
+        sentinel. Pin that path still produces a log entry (via the
+        debounced sentinel-creation path, which calls log_posttooluse_event)."""
+        captured, restore = self._make_log_capture()
+        try:
+            result = hook.check(
+                _bash(
+                    'gh issue edit 123 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-11"'
+                ),
+                auth_status_runner=_scopes_without_project,
+            )
+            self.assertEqual(result["action"], "skip_no_auth_scope")
+            self.assertTrue(
+                any("project scope" in c["reason"] for c in captured),
+                f"skip_no_auth_scope path must log; captured: {captured}",
+            )
+        finally:
+            restore()
+
+    def test_skip_no_project_ids_logs(self):
+        """skip_no_project_ids fires when introspection returns no data."""
+        captured, restore = self._make_log_capture()
+        try:
+            # Empty introspect response → no ids → skip
+            router = FakeGraphQLRouter(introspect=lambda: "")
+            result = hook.check(
+                _bash(
+                    'gh issue edit 123 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-11"'
+                ),
+                auth_status_runner=_scopes_with_project,
+                graphql_runner=router,
+            )
+            self.assertEqual(result["action"], "skip_no_project_ids")
+            self.assertTrue(
+                any("skip_no_project_ids" in c["reason"] for c in captured),
+                f"skip_no_project_ids must log; captured: {captured}",
+            )
+        finally:
+            restore()
+
+    def test_skip_no_option_logs(self):
+        """skip_no_option fires when the requested wave's option is not in
+        the cached option_ids dict."""
+        hook._write_cache(_ids_blob())  # has P3W10 + P3W11 only
+        captured, restore = self._make_log_capture()
+        try:
+            router = FakeGraphQLRouter(
+                item_lookup=_item_lookup_response,
+                mutation=_mutation_success_response,
+            )
+            result = hook.check(
+                _bash(
+                    'gh issue edit 123 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-12"'
+                ),
+                auth_status_runner=_scopes_with_project,
+                graphql_runner=router,
+            )
+            self.assertEqual(result["action"], "skip_no_option")
+            self.assertTrue(
+                any(
+                    "skip_no_option" in c["reason"] or "no option" in c["reason"] for c in captured
+                ),
+                f"skip_no_option must log; captured: {captured}",
+            )
+        finally:
+            restore()
+
+    def test_skip_mutation_failed_logs(self):
+        """skip_mutation_failed fires when the set-field GraphQL mutation
+        returns empty (gh exit non-zero) and the field-not-found retry path
+        does not apply — covers the 5th skip path from the bucket docstring
+        (closes #462). Symmetric to the other 4 tests in this class.
+        """
+        hook._write_cache(_ids_blob())
+        captured, restore = self._make_log_capture()
+        try:
+            # Mutation responder returns empty → _gh_graphql returns None →
+            # `not result` branch in _apply_one_change → skip_mutation_failed.
+            # No "field not found" string in the (empty) errors blob, so the
+            # cache-bust retry path is not taken.
+            router = FakeGraphQLRouter(
+                item_lookup=_item_lookup_response,
+                mutation=lambda _vars: "",
+            )
+            result = hook.check(
+                _bash(
+                    'gh issue edit 123 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-11"'
+                ),
+                auth_status_runner=_scopes_with_project,
+                graphql_runner=router,
+            )
+            self.assertEqual(result["action"], "skip_mutation_failed")
+            self.assertTrue(
+                any("set-field mutation failed" in c["reason"] for c in captured),
+                f"skip_mutation_failed must log set-field-mutation-failed; captured: {captured}",
+            )
+        finally:
+            restore()
+
+
+class CanonicalWaveLabelRegexTests(unittest.TestCase):
+    """Issue #463 — `_CANONICAL_WAVE_LABEL_IN_CMD` defense-in-depth anchor
+    must match canonical wave labels in ALL plausible flag-value shapes:
+    quoted, equals-form, spaced-bare, AND spaced-bare at end-of-string
+    (the gap the original `["\\s]` right-anchor missed).
+
+    The regex powers the parser-skip log path (line 664-672 in the hook):
+    if `parse_wave_label_changes` returns empty but the command contains
+    `gh issue edit` AND this regex matches, we annunaki-log a
+    `skip_parser_returned_empty` event so silent multi-cmd misses are
+    visible to /annunaki-attack. A regex miss here turns into a silent
+    silent-bypass, so the spaced-bare-EOF gap is a defense-in-depth bug.
+
+    Acceptance criteria from #463:
+      - `--add-label p3-wave-11<EOF>` (spaced bare EOF) → match
+      - `--add-label=p3-wave-11<EOF>` (equals EOF)      → match
+      - `--add-label "p3-wave-10-special"` (suffixed)   → NOT match
+      - `--add-label p3-wave-10-special` (suffixed EOF) → NOT match
+    """
+
+    # All four #463 acceptance cases use a command that the parser
+    # actually CAN'T parse (missing --repo), so the parser-skip log
+    # path is the one exercised by check(). The first two MUST log;
+    # the last two MUST NOT log.
+
+    def setUp(self):
+        _wipe_cache()
+
+    def tearDown(self):
+        _wipe_cache()
+
+    def test_spaced_bare_eof_matches(self):
+        """The #463 headline gap: `--add-label p3-wave-11` at command end."""
+        self.assertIsNotNone(
+            hook._CANONICAL_WAVE_LABEL_IN_CMD.search("gh issue edit 1 --add-label p3-wave-11"),
+            "spaced-bare canonical wave-label at EOF must match",
+        )
+
+    def test_equals_bare_eof_matches(self):
+        """The other EOF shape: `--add-label=p3-wave-11` at command end."""
+        self.assertIsNotNone(
+            hook._CANONICAL_WAVE_LABEL_IN_CMD.search("gh issue edit 1 --add-label=p3-wave-11"),
+            "equals-form canonical wave-label at EOF must match",
+        )
+
+    def test_quoted_with_surrounding_still_matches(self):
+        """Regression: pre-existing matched form must still match."""
+        self.assertIsNotNone(
+            hook._CANONICAL_WAVE_LABEL_IN_CMD.search(
+                'gh issue edit 1 --add-label "p3-wave-11" --remove-label "p3-wave-10"'
+            )
+        )
+
+    def test_suffixed_label_quoted_does_not_match(self):
+        """Regression guard from issue #463: suffixed labels like
+        `p3-wave-10-special` must NOT match even in quoted form."""
+        self.assertIsNone(
+            hook._CANONICAL_WAVE_LABEL_IN_CMD.search(
+                'gh issue edit 1 --add-label "p3-wave-10-special"'
+            ),
+            "suffixed label must NOT match canonical regex (would log false-positive)",
+        )
+
+    def test_suffixed_label_spaced_eof_does_not_match(self):
+        """New guard from issue #463: suffixed label at spaced-bare EOF
+        must also NOT match. With the widened right-anchor it's tempting
+        for the regex to match `p3-wave-10` and leave `-special` trailing,
+        but the right-anchor requires `["\\s]` or `$` — `-` satisfies
+        neither, so the regex backtracks and ultimately fails to match.
+        """
+        self.assertIsNone(
+            hook._CANONICAL_WAVE_LABEL_IN_CMD.search(
+                "gh issue edit 1 --add-label p3-wave-10-special"
+            ),
+            "suffixed label at spaced-bare EOF must NOT match — widened right-anchor "
+            "regression guard",
+        )
+
+    def test_parser_skip_logs_for_spaced_bare_eof_cmd(self):
+        """End-to-end via check(): spaced-bare-EOF wave-label with missing
+        --repo (parser returns empty) must produce a skip_parser_returned_empty
+        event so /annunaki-attack catches the silent miss.
+        """
+        # `gh issue edit 1 --add-label p3-wave-11` — no --repo, no quotes.
+        # Pre-#463 the regex would not match this, so the hook would return
+        # None silently. Post-#463 it must return skip_parser_returned_empty.
+        result = hook.check(_bash("gh issue edit 1 --add-label p3-wave-11"))
+        self.assertEqual(
+            result.get("action") if result else None,
+            "skip_parser_returned_empty",
+            "spaced-bare-EOF wave-label must trigger parser-skip log path post-#463",
+        )
+
+    def test_parser_skip_does_not_fire_on_suffixed_label_spaced_eof(self):
+        """End-to-end regression guard: suffixed label at spaced-bare EOF
+        must NOT trigger the parser-skip log (would be noise). Companion
+        to `test_parser_skip_does_not_fire_on_suffixed_label` in the
+        MultiCmdBashTests bucket (which covers the quoted suffixed case).
+        """
+        result = hook.check(_bash("gh issue edit 1 --add-label p3-wave-10-special"))
+        self.assertIsNone(
+            result,
+            "suffixed label at spaced-bare EOF must NOT trigger parser-skip log",
+        )
+
+
+class MultiCmdNoMatchPreservedTests(unittest.TestCase):
+    """Regression: ensure multi-cmd refactor did NOT regress the existing
+    no-match cases (suffixed labels, wrong subcommand, etc.). Verifies the
+    parser-skip log is silent on these too."""
+
+    def test_suffixed_label_in_multi_cmd_does_not_match(self):
+        cmd = (
+            "echo hello ; "
+            "gh issue edit 1 --repo noorinalabs/noorinalabs-main "
+            '--add-label "p3-wave-10-special" ; '
+            "echo world"
+        )
+        result = hook.check(_bash(cmd))
+        self.assertIsNone(result)
+
+    def test_pr_edit_in_multi_cmd_does_not_match(self):
+        cmd = (
+            'gh pr edit 1 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-11" && '
+            'gh pr edit 2 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-11"'
+        )
+        result = hook.check(_bash(cmd))
+        self.assertIsNone(result)
 
 
 if __name__ == "__main__":
