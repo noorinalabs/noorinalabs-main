@@ -2664,5 +2664,19 @@
   "wave_11_top_concentration_pct": 15,
   "wave_11_wrapup_at": "2026-05-20T01:36:10Z",
   "wave_11_carry_forward": ["noorinalabs-deploy#269","noorinalabs-deploy#245","noorinalabs-deploy#244","noorinalabs-deploy#204","noorinalabs-deploy#193","noorinalabs-deploy#156","noorinalabs-deploy#140","noorinalabs-deploy#100","noorinalabs-deploy#86","noorinalabs-deploy#45","noorinalabs-deploy#11","noorinalabs-main#136"],
-  "wave_11_close_blocked_by": "deploy#348 — .net/.org canonical-redirect entrypoint import must apply to prod before W11 closes (owner directive 2026-05-21)"
+  "wave_11_close_blocker_resolved": {
+    "issue": "noorinalabs-deploy#348",
+    "resolved_at": "2026-05-24T16:18:00Z",
+    "via_prs": ["noorinalabs-deploy#349", "noorinalabs-deploy#350"],
+    "evidence": "terraform apply 0 added / 2 changed / 0 destroyed; live 301 verified noorinalabs.net + .org -> .com (path + query preserved)",
+    "supersedes": "wave_11_close_blocked_by (deploy#348, owner directive 2026-05-21)"
+  },
+  "wave_11_post_unblock_scrub_2026_05_24": {
+    "open_p3_wave_11_issues": 0,
+    "orphans_found": 0,
+    "carry_forward_verified": "12 issues, all labeled p3-wave-12 (stale p3-wave-3 removed from deploy#245)",
+    "phase3_labels_added": 13,
+    "td_ratio_actual": {"open": 93, "open_td": 34, "pct": 37},
+    "note": "W11 labeled scope fully closed. TD ratio 37% exceeds the post-W11 projection (30%); W12+W13 sweep confirmed needed. Formal /wave-retro + meta-issue #447 close deferred to a dedicated session (owner directive 2026-05-24)."
+  }
 }

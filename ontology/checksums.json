@@ -200,10 +200,10 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "cross-repo-status.json": {
-      "last_tracked": "b517daf1b57c5d972b4b758cc8a779627285f8f1ffeb39c7ac09d1125ca2f4ad",
-      "last_resolved": "b517daf1b57c5d972b4b758cc8a779627285f8f1ffeb39c7ac09d1125ca2f4ad",
-      "tracked_at": "2026-05-24T15:08:13.177664+00:00",
-      "resolved_at": "2026-05-24T15:08:46Z"
+      "last_tracked": "7437b04e89d209d8cf965c0ee119f1f2c013015d5ae804fbcf78350d0572397f",
+      "last_resolved": "7437b04e89d209d8cf965c0ee119f1f2c013015d5ae804fbcf78350d0572397f",
+      "tracked_at": "2026-05-24T16:45:28Z",
+      "resolved_at": "2026-05-24T16:45:28Z"
     },
     "dependencies.yml": {
       "last_resolved": "f4b53ffd3e1f81e055130ae2f53ff08ba9b5f651782434bbf3ac8b3eab4276e8",
