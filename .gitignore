@@ -58,3 +58,12 @@ temp/
 .vscode/
 .idea/
 .hypothesis/
+
+# Worktrees — local-only isolation dirs, never tracked. Top-level .worktrees/
+# plus the .claude/worktrees/ convention path used by wave/agent isolation.
+.worktrees/
+.claude/worktrees/
+
+# Annunaki rotation backups — created by /annunaki-attack Step 1 before clearing
+# errors.jsonl. Historical-only; safe to age out locally, not for tracking.
+.claude/annunaki/errors.jsonl.bak.*

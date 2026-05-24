@@ -2658,5 +2658,11 @@
         "status": "created"
       }
     }
-  }
+  },
+  "wave_11_final_pr_count": 86,
+  "wave_11_changes_requested_cycles": 16,
+  "wave_11_top_concentration_pct": 15,
+  "wave_11_wrapup_at": "2026-05-20T01:36:10Z",
+  "wave_11_carry_forward": ["noorinalabs-deploy#269","noorinalabs-deploy#245","noorinalabs-deploy#244","noorinalabs-deploy#204","noorinalabs-deploy#193","noorinalabs-deploy#156","noorinalabs-deploy#140","noorinalabs-deploy#100","noorinalabs-deploy#86","noorinalabs-deploy#45","noorinalabs-deploy#11","noorinalabs-main#136"],
+  "wave_11_close_blocked_by": "deploy#348 — .net/.org canonical-redirect entrypoint import must apply to prod before W11 closes (owner directive 2026-05-21)"
 }

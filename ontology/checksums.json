@@ -170,10 +170,10 @@
       "resolved_at": "2026-05-16T22:20:43.893664+00:00"
     },
     ".gitignore": {
-      "last_resolved": "99a48dfddef755ee0af95d7c44b8cc62d5b74a8cda39be8977e236538a4f1b35",
-      "last_tracked": "99a48dfddef755ee0af95d7c44b8cc62d5b74a8cda39be8977e236538a4f1b35",
-      "resolved_at": "2026-05-11T01:24:19.842478+00:00",
-      "tracked_at": "2026-05-11T01:24:19.842478+00:00"
+      "last_tracked": "78d915777b9d1fcb638d4f7185c73364db6cf6cd9cfe72d8030b37e617020bde",
+      "last_resolved": "78d915777b9d1fcb638d4f7185c73364db6cf6cd9cfe72d8030b37e617020bde",
+      "tracked_at": "2026-05-24T15:08:10.361465+00:00",
+      "resolved_at": "2026-05-24T15:08:46Z"
     },
     ".pre-commit-config.yaml": {
       "last_resolved": "e5cb514b9a22f37b80adb4d74896cef8e9d2768f0f42ae3f3a29001efd3ae615",
@@ -200,10 +200,10 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "cross-repo-status.json": {
-      "last_tracked": "8c73a1c24a34d92608c19fe7faa9fb2048fc6bd4d9f8325d36ae7d6e8dac2663",
-      "last_resolved": "8c73a1c24a34d92608c19fe7faa9fb2048fc6bd4d9f8325d36ae7d6e8dac2663",
-      "tracked_at": "2026-05-12T22:57:20.346557+00:00",
-      "resolved_at": "2026-05-13T03:21:08.894134+00:00"
+      "last_tracked": "b517daf1b57c5d972b4b758cc8a779627285f8f1ffeb39c7ac09d1125ca2f4ad",
+      "last_resolved": "b517daf1b57c5d972b4b758cc8a779627285f8f1ffeb39c7ac09d1125ca2f4ad",
+      "tracked_at": "2026-05-24T15:08:13.177664+00:00",
+      "resolved_at": "2026-05-24T15:08:46Z"
     },
     "dependencies.yml": {
       "last_resolved": "f4b53ffd3e1f81e055130ae2f53ff08ba9b5f651782434bbf3ac8b3eab4276e8",
