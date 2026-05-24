@@ -2421,3 +2421,36 @@ All 6 stay as memories. None hook-tier urgent (no enforcement-hierarchy violatio
 | **NEW: Implementer-declared-vs-actual gap (child repos)** | Orchestrator/charter | 1 (W10, 22 substitutions) | **1** — charter clarification candidate #4 above |
 | **NEW: Board Wave-field write-side gap (label-edit not auto-synced)** | Hook | 1 (W10, 5 drifts) | **1** — hook DECIDE candidate #3 above |
 
+## Retrospective: Phase 3 Wave 11 — Tech Debt & Deployment — 2026-05-24
+
+### Team Performance
+86 PRs merged to `deployments/phase-3/wave-11` (deploy 46, main 16, isnad-graph 10, ingest 8, user-service 3, design-system 3); 16 changes-requested cycles; top-implementer concentration 13/86 = **15%** (L.Ferreira) — well-distributed, no fragility. Counter verification at retro: PR count 86=86 ✓, concentration 15%=15% ✓ (no drift). **Wave outcome: deploy track delivered + the prod canonical-redirect (`.net`/`.org → .com`) is LIVE** — W11's last close-blocker (deploy#348) resolved this session. Post-wave tech-debt ratio **37% (34/93)** vs the 30% post-W11 projection → W12+W13 sweep confirmed; phase-3 exit gate #9 (<10%) still far.
+
+> Note: most of W11 ran in prior sessions; this retro weights the directly-observed close-out (deploy#348 saga + #523/#524 coordination PRs) and the verified aggregate counters.
+
+### Per-Engineer Assessments
+- **Aisha Idrissi** (deploy SRE, 6 PRs) — Exemplary deploy#348 close-out: HEAD investigation, surfaced+resolved the design fork (discovery-in-both-plan-and-apply-jobs), clean recovery from the apply-time expression failure (#349→#350), honest "not claimed done", REST-PATCH recovery on the `gh pr edit` no-op. **positive.**
+- **Nino Kavtaradze** (Sec Eng, 8 PRs) — Substantive security reviews (#349/#350): token-confinement + open-redirect host-pinning analysis. **positive.** Trust 4→5.
+- **Weronika Zielinska** (Platform/IaC, 8 PRs) — Self-verified plans (0-destroy, v4 import format, idempotency) on #349/#350. **positive.** Trust 3→4.
+- **Wanjiku Mwangi** (TPM, 10 PRs), **Santiago Ferreira** (RC, 3), **Aino Virtanen**, **Nadia Khoury** — sustained review/coordination rigor on the close-out PRs; counters reconciled at retro. Hold at 5.
+- **Lucas Ferreira** (SRE, 13 PRs) — wave-wide top implementer, deploy theme-fit. Hold at 5.
+
+### Top 3 Going Well
+1. Healthy load distribution — 15% top concentration across 12+ implementers on an 86-PR wave; no single-engineer fragility.
+2. Gated-prod-apply discipline worked — reading the *actual plan* (not the green check) caught a destructive `2-to-destroy` replace; the apply gate caught a latent expression bug before a silent mis-deploy.
+3. Reviewer rigor held — every close-out PR got 2 independent HEAD-verified Approved verdicts; verify-against-artifact caught real issues.
+
+### Top 3 Pain Points
+1. **TD ratio overshoot (37% vs 30%)** — W11 sweep undershot; W12+W13 both confirmed needed.
+2. **Plan-green ≠ apply-valid (CF expressions)** — #349 passed plan + 2 reviews but failed at apply on a latent `if()`/`len()` expression bug; cost an extra PR + 2 prod-gate cycles → charter change #2.
+3. **cwd-anchor tooling friction** — change-tracker pollutes parent ontology with `.worktrees/` paths (#525, hit 2×, caused an ff-abort); session-start misses child worktrees (#526, 33 accumulated). Same root as #521/#144/#227 → charter change #3 (cwd-anchor epic).
+
+### Proposed Process Changes (charter)
+1. **Close runtime-gated issues on verified-live, not on merge** (`Refs #N` not `Closes #N`) — promoted to `pull-requests.md` from memory `feedback_cf_plan_not_validate_expr_and_close_on_verified_live`. Rationale: deploy#348 auto-closed prematurely on #349 merge before the apply ran; had to reopen.
+2. **Provider-validated expressions are apply-time acceptance** — extended `pull-requests.md § PR-Time vs Runtime Acceptance`. Rationale: CF rulesets validate `target_url` only at apply; plan+review can't certify expression correctness (#349 failure).
+3. **cwd-anchor fix epic for W12** — #525/#526 + #521/#144/#227 are one root cause; tracked as a consolidated epic (filed this retro).
+
+### Counter corrections
+None — all `wave_11_*` counters matched PR-level recomputation (86=86, 15%=15%; CR-cycles 16 accepted on two-exact-match confidence).
+
+
