@@ -478,6 +478,15 @@ When a fix lands a PR for an issue that ALSO has a runtime gate (e.g., "one succ
 - If a reviewer asks for runtime evidence in PR review, push back: "that gate fires at lifecycle position X (e.g., post-compose-up on new TF-prod box); cannot legitimately exist at PR-review time. Documented in post-merge Test Plan section."
 - If a runtime gate is a genuine wave-acceptance criterion, file a SEPARATE issue tracking the runtime gate (not the code fix). The code fix's PR closes its own issue; the runtime gate's issue closes on its own runtime-event trigger.
 
+### Provider-validated expressions are apply-time acceptance (added P3W11 retro 2026-05-24)
+
+Some IaC providers validate field values only at **apply**, not at plan. Cloudflare Ruleset `target_url` / filter (wirefilter) expressions are the canonical case: `terraform plan` shows a clean diff for a syntactically-malformed expression, and the provider rejects it only when `apply` calls the API. Therefore **a green plan + a clean two-reviewer pass cannot certify expression correctness** — the apply is the validation gate.
+
+- For PRs touching provider-validated expressions, the reviewer's Approved verdict certifies code/diff/plan correctness ONLY; expression validity is an explicit **post-merge, apply-time** acceptance line in the Test Plan.
+- Where feasible, add a pre-apply check (a CI step exercising the expression against the provider's validation endpoint, or a documented `terraform apply` in a non-prod scope) so the failure surfaces before the prod apply.
+- Do not claim "verified" on a clean plan alone for these fields.
+- Worked example: `noorinalabs-deploy#349` (P3W11) passed plan + two reviews but failed at apply — `target_url` used `if()`/`len()`, unsupported in CF's redirect expression language ("unknown identifier", apply-time only). Fixed in #350.
+
 ### Adjacent to layer-separation
 
 This is the **lifecycle-separation** companion to the **layer-separation** discipline encoded by the multi-layer-gap-filing memory: both are about respecting boundaries when scoping work. Multi-layer says "different layers of one root cause = separate issues." This says "different lifecycle positions of one acceptance criterion = separate scope (PR vs runtime), not bundled."
@@ -491,6 +500,29 @@ This is the **lifecycle-separation** companion to the **layer-separation** disci
 ### Worked example
 
 `noorinalabs-deploy#121` / PR #187, 2026-04-28. The PR fixed `isnad-backup.{service,timer}` (3 + 2 stacked bugs). `noorinalabs-main#212` cutover-gate required "one successful end-to-end backup within 24h of first compose-up before DNS-flip." Aisha's spawn brief asked for "B2 object key proving end-to-end success" as PR evidence. Aisha correctly DEFERRED that evidence to post-compose-up runtime, documented what she CANNOT validate (no docker-compose stack on stg = `docker compose ps` preflight refuses to proceed = no B2 path reached), shipped unit-mechanic correctness, and added an explicit post-merge Test Plan step for the runtime gate. Bereket endorsed the deferral as canonical: "fix landing now, gate firing later" is the right shape.
+
+## Close Runtime-Gated Issues on Verified-Live, Not on Merge (Mandatory) <!-- promotion-target: none -->
+
+When an issue's real acceptance is a **gated production apply or live behavior** (the runtime-acceptance half of the section above), the PR that implements it MUST reference the issue with `Refs #N`, NOT `Closes #N`. The orchestrator closes the issue manually **after** the post-merge apply succeeds and the live behavior is verified.
+
+### Why
+
+`Closes #N` fires on default-branch merge — which is BEFORE the gated apply runs (the apply is a separate, environment-approval-gated push-to-main run). Merge ≠ live. An auto-close on merge produces a closed-but-not-done issue when the apply then fails or is still pending approval.
+
+### How to apply
+
+- PR body uses `Refs #N` for runtime-gated issues; `Closes #N` is reserved for issues whose acceptance is fully satisfied at merge (code/CI).
+- After merge → gated apply → live verification, the orchestrator closes #N with the apply result + live-verification evidence (e.g. apply summary + `curl -sI` output) in the close comment.
+
+### Severity if violated
+
+- `Closes #N` on a runtime-gated issue auto-closes it on merge before the apply runs: **minor** if caught and reopened same-session; **moderate** if it ships a closed-but-broken issue into the backlog.
+
+### Worked example
+
+`noorinalabs-deploy#348`, 2026-05-24. PR #349 merged with "Closes #348" → #348 auto-closed on merge, but the prod apply then FAILED (apply-time CF expression rejection). Had to reopen #348. The fix PR #350 used "Refs #348"; #348 was closed only after the apply succeeded (`0 added / 2 changed / 0 destroyed`) and `curl` confirmed live 301s on `.net`/`.org`.
+
+<!-- Promoted from memory: feedback_cf_plan_not_validate_expr_and_close_on_verified_live.md (P3W11 retro, 2026-05-24) -->
 
 <!-- Promoted from memory: feedback_origin_over_local_for_still_has_claims.md (P3W9 #346 memory audit, 2026-05-10) -->
 
