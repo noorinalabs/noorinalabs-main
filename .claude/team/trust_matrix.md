@@ -972,3 +972,41 @@ The org was restructured in Session 3 with new repo-level teams. The matrix abov
 | **Lucas Ferreira** | Auto-close-issues workflow operationally retires a long-standing failure mode; cross-repo propagation discipline | None this wave |
 | **Aisha Idrissi** | Security-guard-inline-not-followup on #432; clean 3-PR infrastructure execution; branch protection now active across 8 repos | None this wave |
 | **Orchestrator** | W9 process-defect fixes held under W10 load (zero recurrence); crossed-message-race recovered cleanly; /promotion-audit byte-deterministic with no caller-side errors; throttle-takeover acknowledgment in cross-repo-status | 22 implementer-substitutions for child-repo PRs surfaces a kickoff-time-declaration-vs-runtime-truth gap → charter clarification candidate #4 (advisory only, not corrective) |
+
+## Phase 3 Wave 11 Trust Updates (2026-05-24) — Tech Debt & Deployment (close-out)
+
+> Scope note: W11 ran 86 PRs across ~6 repos, mostly in prior sessions; the wrapup recorded aggregate metrics (verified at this retro: PR count 86=86 ✓, top-concentration 15%=15% ✓). The assessments below weight the **directly-observed close-out** (deploy#348 saga, the #523/#524 coordination PRs) where signal is strongest, plus wave-wide PR distribution.
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Aino Virtanen** (SQL) | 5 | 5 | (hold at max) Ontology/checksum resolutions on #523/#524; standards continuity. No negative signal. |
+| **Nadia Khoury** (PD) | 5 | 5 | (hold at max) PD ran the full close-out: main-divergence reconcile (#523), deploy#348 sequencing, post-unblock scrub (#524). Coordination clean. |
+| **Wanjiku Mwangi** (TPM) | 5 | 5 | (hold at max) 10 wave PRs; TPM reviews on #523/#524 cross-checked at origin with all counters reconciled. |
+| **Santiago Ferreira** (RC) | 5 | 5 | (hold at max) Release reviews on #523/#524; correctly affirmed gate-clearing ≠ wave-close encoding. |
+
+### Cross-Repo Implementer Updates
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Aisha Idrissi** (deploy SRE) | 5 | 5 | (hold at max — would be ▲ if not capped) **Exemplary deploy#348 close-out under a multi-cycle prod-gated failure.** Investigated at HEAD, surfaced + resolved the design fork (the *discovery-in-both-plan-and-apply-jobs* insight made the gated plan work), recovered cleanly from the apply-time expression failure (#349→#350), held honest "not claimed done" discipline, used REST-PATCH recovery on the `gh pr edit` no-op. Highest-signal implementer this session. |
+| **Lucas Ferreira** (SRE) | 5 | 5 | (hold at max) Wave-wide top implementer (13/86 PRs, deploy-themed). Theme-fit volume leadership; no negative signal. |
+| **Nino Kavtaradze** (Sec Eng) | 4 | **5** (▲) | Substantive (not rubber-stamp) security reviews on #349/#350: token-confinement analysis of the CI discovery step (token stays in `Authorization` header, only non-secret ruleset IDs reach `$GITHUB_ENV`) + open-redirect analysis (`http.request.uri` carries no host/authority → destination host pinned). 8 wave PRs. |
+| **Weronika Zielinska** (Platform/IaC) | 3 | **4** (▲) | Sharp IaC reviews on #349/#350 — verified the plan herself (`0 destroy`, v4 import-ID format, idempotency reasoning, discovery-step robustness) rather than trusting the green check. 8 wave PRs. Consistent upward trajectory from her R2 debut. |
+
+### Orchestrator (Self-Assessment)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Orchestrator (Steven via Claude)** | 4 | 4 | (hold) Strong close-out: caught a destructive `2-to-destroy` plan by reading the actual plan (not the green check); caught + recovered the apply-time expression bug; honest close-on-verified-live (reopened #348 when the premature auto-close surfaced); verify-merged-then-remove worktree cleanup (33 cleaned, 0 stranded); clean reconcile of a 2-ahead/35-behind diverged main. **Hold-not-promote** because the #349 spawn brief instructed `Closes #348` on a runtime-gated issue (the premature-close) — self-caught and corrected same-session, and codified as charter change #1, but it was an orchestrator-authored miss. |
+
+### Done Well / Needs Improvement (Phase 3 Wave 11)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Aisha Idrissi** | deploy#348 import-adopt design + the both-jobs discovery insight; clean apply-failure recovery; honest runtime-acceptance discipline | None this wave |
+| **Nino Kavtaradze** | Substantive security analyses (token confinement, open-redirect host-pinning) on the redirect PRs | None this wave |
+| **Weronika Zielinska** | Self-verified plans (0-destroy, import format, idempotency) instead of trusting green checks | None this wave |
+| **Lucas / Wanjiku / Santiago / Aino / Nadia** | Sustained delivery + review rigor; counters reconciled at retro | None this wave |
+| **Orchestrator** | Read-the-actual-plan + apply-gate discipline caught two would-be-bad deploys; verify-merged worktree cleanup; charter codification of the lessons | `Closes #N` on a runtime-gated issue (#348) — self-caught + codified, but authored the miss |
