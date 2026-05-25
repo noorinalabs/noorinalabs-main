@@ -1,6 +1,12 @@
 {
+  "wave_12_scope_reconciled_at": "2026-05-25T03:11:55Z",
+  "wave_12_repos_in_scope": ["noorinalabs-main","noorinalabs-deploy"],
+  "wave_12_meta_issue": 529,
+  "wave_12_scope": {"theme":"Tech-debt sweep — drive cumulative-open TD ratio toward <10% (criterion #9); pure-TD theme, deploy-close-out hybrid declined","reconciled_at":"2026-05-25","td_surface_pre_w12":{"open_td_total":37,"open_total":96,"ratio_pct":38},"w12_items":24,"per_repo":{"noorinalabs-main":7,"noorinalabs-deploy":17},"deferred_to_w13":{"deploy_infra_theme_mismatch":["deploy#347","deploy#244","deploy#156","deploy#86","deploy#45","deploy#11"],"other_repo_td_unlabeled":{"isnad-ingest-platform":7,"user-service":3,"isnad-graph":1,"landing-page":1}},"excluded":["main#262 (blocked+backlog)"],"projection":{"post_w12_ratio_pct_est":17,"w13_required":true}},
+  "wave_12_scope_reconciliation_note": "Pure-TD sweep, main+deploy only (repos with wave-12 branches). 13 forgot-to-tag TD pulled in; 6 deploy infra/ops deferred to W13 (p3-wave-13); 12 other-repo TD left for W13 scoping. Post-W12 est 17% => W13 firmly needed.",
+  "wave_12_active": true,
   "wave_11_annunaki_attack_ran_at": "2026-05-17T21:59:00Z",
-  "wave_11_active": true,
+  "wave_11_active": false,
   "wave_11_meta_issue": 447,
   "phase_3_sweep_wave_reservation_2026_05_13": {
     "directive_date": "2026-05-13",
@@ -1361,7 +1367,7 @@
   "wave_started": "2026-04-30T21:00:00Z",
   "wave_1_wrap_started": "2026-04-30T23:18:00Z",
   "wave_1_wrap_status": "CLOSED 2026-05-01T01:49:41Z. Both wave-merge PRs landed (deploy#213 merge-commit b6f2cd1; main#235 merge-commit 9a1ef3e). 5/5 Tier-1 + 2/2 Tier-2 + #205 followup-of-spec + #214 wave-tail flake fix (#215 retry-with-backoff JSON-parse classifier) all on main. 8 deploy worktrees pruned. 2 ontology files resolved. 4 charter deltas landed (Patterns A + B unified + C + D). Trust matrix updated (Lucas 4\u21925; others hold). Promotion audit 0/0/55/4. Wave-tail produced 5 additional retro-pattern data points stress-testing the just-landed charter; all four patterns held. 9 follow-ups filed for next-wave planning (#199 #200 #203 #204 #209 #211 #212 + main#232 + main#233 + main#234). 3 Tier-3 carry-forwards remain operationally gated (deploy#86 async-routine fires post-this-merge; deploy#151 manual SRE B2 tfstate-key migration; user-service#84 manual SRE DEPLOY_REPO_PAT secret).",
-  "last_updated": "2026-05-17T03:35:53Z",
+  "last_updated": "2026-05-25T03:12:49Z",
   "deployments_branch": "deployments/phase-3/wave-3",
   "wave_1_theme": "Promotion pipeline goes prod \u2014 owner directive: pipeline running seamlessly so team can refocus on product + process",
   "wave_1_scope": {
