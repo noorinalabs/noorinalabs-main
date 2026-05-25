@@ -55,9 +55,15 @@ ONTOLOGY_MARKERS = [
 
 # Canonical coordinator-class opener: `You are **{Name}**, {Role}[ for {repo}]`
 # where {Role} is one of the pure-coordination titles. Bold-markdown around
-# the name is optional. `re.MULTILINE` so the `^` anchor matches at the
-# start of any line — handles briefs that prepend a header (Ontology
-# Context block, task framing, etc.) before the "You are X, ..." opener.
+# the name is optional. The `(?:\A|\n)You are` anchor matches the opener only
+# when it sits at an EXACT line start (start of prompt, or immediately after a
+# newline) — no leading-whitespace tolerance. This still handles briefs that
+# prepend a header / task framing / role-card excerpt before the opener
+# (the opener line itself is at column 0; only the prepended content is above
+# it — see CoordinatorExemptHandlesPrependedHeader tests), while NOT exempting
+# a `You are X, Manager` line that appears INDENTED inside the prompt body
+# (4-space code blocks, YAML-indented examples). The old `^\s*` + re.MULTILINE
+# matched those indented lines and falsely exempted the spawn (#471).
 #
 # Title list is enumerative — see module docstring. Multi-word titles
 # precede single-word `Manager` alternation so the regex engine doesn't
@@ -65,7 +71,7 @@ ONTOLOGY_MARKERS = [
 # `Manager` requires position right after `, `, but the explicit ordering
 # documents the intent for future maintainers).
 COORDINATOR_ROLE_OPENER = re.compile(
-    r"^\s*You are\s+\*{0,2}[^,\n]+?\*{0,2},\s*"
+    r"(?:\A|\n)You are\s+\*{0,2}[^,\n]+?\*{0,2},\s*"
     r"(Pipeline\s+Manager"
     r"|Project\s+Lead"
     r"|Program\s+Director"
@@ -73,7 +79,7 @@ COORDINATOR_ROLE_OPENER = re.compile(
     r"|TPM"
     r"|Release\s+Coordinator"
     r"|Manager)\b",
-    re.IGNORECASE | re.MULTILINE,
+    re.IGNORECASE,
 )
 
 
