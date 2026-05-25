@@ -13,15 +13,82 @@ description: "MANDATORY first action in every session — runs full startup prot
 
 Execute all 7 steps below. Steps that are independent of each other SHOULD run in parallel. Present results in a single concise status table at the end.
 
-### Step 0 — Worktree cleanup
+### Step 0 — Worktree cleanup (parent + child repos)
+
+Worktrees accumulate in BOTH the parent repo and every child repo (under
+`<child>/.claude/worktrees/`, `<child>/.worktrees/`, and sometimes `/tmp/`).
+Prior to #526, Step 0 only cleaned the parent — on 2026-05-24 ~33 stale
+child-repo worktrees were found uncaught. The block below iterates the parent
+and all 7 child repos, applying a **verify-merged-then-remove guard**:
+
+- **Auto-remove** a worktree only when its HEAD is an ancestor of that repo's
+  `origin/main` (i.e. the branch is fully merged). Safe to drop.
+- **FLAG (list, do not remove)** any worktree that is NOT verified-merged
+  (work in flight, superseded, or closed-issue cases) and any **locked**
+  worktree (e.g. the `/tmp/hotfix-user-service` lock case). Surface these for
+  a manual decision — never auto-remove unmerged work.
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-git -C "$REPO_ROOT" worktree prune
-git -C "$REPO_ROOT" worktree list
+
+# Parent repo + the 7 canonical child repos (CLAUDE.md Repository Map).
+REPOS=("$REPO_ROOT")
+for child in \
+  noorinalabs-isnad-graph \
+  noorinalabs-user-service \
+  noorinalabs-deploy \
+  noorinalabs-design-system \
+  noorinalabs-data-acquisition \
+  noorinalabs-isnad-ingest-platform \
+  noorinalabs-landing-page; do
+  [ -d "$REPO_ROOT/$child/.git" ] && REPOS+=("$REPO_ROOT/$child")
+done
+
+FLAGGED=()
+for repo in "${REPOS[@]}"; do
+  git -C "$repo" worktree prune
+  # Refresh remote tip so the merged-ancestor test is accurate.
+  git -C "$repo" fetch --quiet origin main 2>/dev/null || true
+  main_repo="$(git -C "$repo" rev-parse --show-toplevel)"
+
+  # Walk worktrees in porcelain form. Records are blank-line separated;
+  # fields we care about: worktree <path>, HEAD <sha>, locked [<reason>].
+  wt="" head="" locked=0
+  while IFS= read -r line; do
+    case "$line" in
+      "worktree "*) wt="${line#worktree }"; head=""; locked=0 ;;
+      "HEAD "*)     head="${line#HEAD }" ;;
+      "locked"*)    locked=1 ;;
+      "")  # end of a record — evaluate it
+        [ -z "$wt" ] && continue
+        if [ "$wt" = "$main_repo" ]; then wt=""; continue; fi  # skip main checkout
+        if [ "$locked" -eq 1 ]; then
+          FLAGGED+=("LOCKED  $repo :: $wt")
+        elif [ -n "$head" ] && git -C "$repo" merge-base --is-ancestor "$head" origin/main 2>/dev/null; then
+          echo "removing merged worktree: $wt"
+          git -C "$repo" worktree remove "$wt" 2>/dev/null \
+            || git -C "$repo" worktree remove --force "$wt" 2>/dev/null \
+            || FLAGGED+=("REMOVE-FAILED  $repo :: $wt")
+        else
+          FLAGGED+=("UNMERGED  $repo :: $wt (HEAD ${head:-?})")
+        fi
+        wt="" ;;
+    esac
+  done < <(git -C "$repo" worktree list --porcelain; echo)
+done
+
+echo "--- remaining worktrees (parent + children) ---"
+for repo in "${REPOS[@]}"; do git -C "$repo" worktree list; done
+
+if [ "${#FLAGGED[@]}" -gt 0 ]; then
+  echo "--- FLAGGED for manual decision (NOT removed) ---"
+  printf '%s\n' "${FLAGGED[@]}"
+fi
 ```
 
-Verify only the main repo root is listed. Remove any stale worktrees.
+Report how many merged worktrees were auto-removed and surface the FLAGGED
+list (locked + unmerged) to the user for a manual call. Do not force-remove a
+FLAGGED worktree without explicit confirmation.
 
 ### Step 1 — Team cleanup
 

@@ -90,10 +90,12 @@ def main() -> None:
         "",
     ]
 
-    # Step 0: Worktree cleanup
-    lines.append("STEP 0 — WORKTREE CLEANUP:")
-    lines.append("  Run: git worktree prune && git worktree list")
-    lines.append("  Remove any stale worktrees under .claude/worktrees/")
+    # Step 0: Worktree cleanup (parent + child repos, per #526)
+    lines.append("STEP 0 — WORKTREE CLEANUP (parent + child repos):")
+    lines.append("  Run the Step 0 block in skills/session-start/SKILL.md.")
+    lines.append("  It prunes the parent AND all 7 child repos, auto-removing")
+    lines.append("  only worktrees merged into origin/main and FLAGGING locked")
+    lines.append("  or unmerged ones for a manual decision (never auto-removed).")
     lines.append("")
 
     # Step 1: Team cleanup (unique to noorinalabs-main)
