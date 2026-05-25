@@ -17,16 +17,24 @@ Path filtering (issue #143):
     * Substring SKIP_PATTERNS (e.g. ``__pycache__/``, ``.git/``).
     * Paths beginning with ``/tmp/`` — ephemeral scratch (e.g. issue-body
       staging files).
-    * Paths containing ``.claude/worktrees/`` — ephemeral worktree copies.
-      The canonical entry for the underlying file is updated whenever the
-      file is next Edit/Written directly on the main checkout (this is a
-      PostToolUse hook on tool calls, NOT a git post-merge hook, so a
-      squash-merge of a worktree-only PR does not by itself update the
-      tracker — the next direct Edit on main does). Skipping worktree
-      paths is still the right call: it prevents accumulation of stale
-      paths in ``checksums.json`` after worktrees are removed, and the
-      slight latency in the canonical entry's ``last_tracked`` is
-      acceptable noise-vs-signal trade.
+    * Paths under any ``.worktrees`` directory — ephemeral worktree copies.
+      Two conventions are both gitignored (#523) and both skipped: the
+      historical ``.claude/worktrees/`` path and the top-level
+      ``.worktrees/`` path used by current wave/agent isolation. A worktree
+      path enters this hook when an Edit/Write happens inside a worktree and
+      the hook (anchored on the orchestrator cwd) records the worktree-
+      relative path — e.g. ``.worktrees/deploy-0348-aisha/...`` or a
+      child-repo file seen through a sibling worktree. These never resolve
+      (``last_resolved: ""``) and once aborted a ``git merge --ff-only``
+      during W11 close-out (#525). The canonical entry for the underlying
+      file is updated whenever the file is next Edit/Written directly on the
+      main checkout (this is a PostToolUse hook on tool calls, NOT a git
+      post-merge hook, so a squash-merge of a worktree-only PR does not by
+      itself update the tracker — the next direct Edit on main does).
+      Skipping worktree paths is still the right call: it prevents
+      accumulation of stale paths in ``checksums.json`` after worktrees are
+      removed, and the slight latency in the canonical entry's
+      ``last_tracked`` is acceptable noise-vs-signal trade.
     * Paths outside the repo tree — anything not under ``REPO_ROOT`` after
       resolution (e.g. user auto-memory files at
       ``/home/.../.claude/projects/.../memory/*.md``). The ontology only
@@ -73,16 +81,48 @@ SKIP_PATTERNS = [
 # Path prefixes: skip if the resolved file path starts with any of these.
 SKIP_PREFIXES = ("/tmp/",)
 
+# Directory names that mark a worktree-isolation tree. Any path with one of
+# these as a path COMPONENT is an ephemeral worktree copy and must not be
+# tracked into the parent checksums (#523 gitignored both; #525). Segment
+# matching (not substring) so a legitimate file like ``notes.worktrees.md``
+# is not skipped, while ``.worktrees/deploy-0348/x`` and
+# ``.claude/worktrees/foo/x`` both are.
+WORKTREE_DIR_NAMES = frozenset({".worktrees", "worktrees"})
+
+
+def _is_worktree_path(file_path: str) -> bool:
+    """True if any path component marks a worktree-isolation tree.
+
+    Checks the raw path components (both the as-given and, when it differs,
+    the resolved form) so that a relative worktree path recorded under the
+    orchestrator cwd (``.worktrees/...``) is caught even before resolution.
+    The ``worktrees`` bare name is only treated as a marker when its parent
+    component is ``.claude`` — i.e. the historical ``.claude/worktrees/``
+    convention — to avoid skipping an unrelated dir merely named
+    ``worktrees``.
+    """
+    parts = Path(file_path).parts
+    for i, part in enumerate(parts):
+        if part == ".worktrees":
+            return True
+        if part == "worktrees" and i > 0 and parts[i - 1] == ".claude":
+            return True
+    return False
+
 
 def _should_skip(file_path: str) -> bool:
     """Return True if this file should not be tracked.
 
-    Filters in order: substring patterns, /tmp/ prefix, then out-of-repo
-    paths. See module docstring for the rationale behind each rule.
+    Filters in order: substring patterns, worktree path components, /tmp/
+    prefix, then out-of-repo paths. See module docstring for the rationale
+    behind each rule.
     """
     for pattern in SKIP_PATTERNS:
         if pattern in file_path:
             return True
+
+    if _is_worktree_path(file_path):
+        return True
 
     try:
         resolved = Path(file_path).resolve()

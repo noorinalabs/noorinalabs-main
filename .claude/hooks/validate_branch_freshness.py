@@ -57,6 +57,19 @@ Implicit-repo resolution (#227):
   get-url origin` and extracts `OWNER/REPO` from common github URL forms.
   Returns None on any parse failure → falls back to the legacy local check.
 
+Worktree-subagent cwd recovery (#521):
+  The #227 implementation anchored on `resolve_tool_cwd`, i.e. the harness
+  stdin `cwd` field. For a worktree subagent that field is captured at
+  agent-spawn time and points at the ORCHESTRATOR's directory, not the
+  subagent's worktree after it `cd`'d in — so `_resolve_implicit_repo`
+  resolved the PARENT repo (`noorinalabs/noorinalabs-main`) and false-blocked
+  child-repo `gh pr create` on the parent's stale branch. The workaround was
+  passing `--repo` explicitly. The fix here: resolve the invocation cwd via
+  `resolve_invocation_cwd`, which recovers the real cwd from a leading
+  `cd /worktree && gh pr create` in the command string, plus a `GH_REPO`
+  env-var fast-path (gh's own canonical repo override). Both are consulted
+  before the (possibly-wrong) stdin cwd. See `_shell_parse` for the chain.
+
 Exit codes:
   0 -- allow (not the matched command, branch is up to date, or check could not run)
   2 -- block (branch is behind base)
@@ -75,7 +88,7 @@ from _repo_flag_parse import extract_repo  # noqa: E402
 from _shell_parse import (  # noqa: E402
     first_flag_value,
     is_gh_subcommand,
-    resolve_tool_cwd,
+    resolve_invocation_cwd,
     tokenize,
 )
 from annunaki_log import log_pretooluse_block  # noqa: E402
@@ -128,6 +141,27 @@ def is_branch_fresh_local(base: str, cwd: str | None = None) -> bool:
         return result.returncode == 0
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return True
+
+
+def _repo_from_env() -> str | None:
+    """Return a valid OWNER/REPO from the `GH_REPO` env var, or None.
+
+    `gh` itself honors `GH_REPO` as the implicit repo when `--repo` is
+    omitted, so when the harness or a subagent has it set it is the most
+    authoritative implicit target — more reliable than cwd resolution for a
+    worktree subagent (#521). Validated against the same slug shape gh
+    accepts (OWNER/REPO, optionally HOST/OWNER/REPO).
+    """
+    raw = (os.environ.get("GH_REPO") or "").strip()
+    if not raw:
+        return None
+    parts = raw.split("/")
+    if len(parts) == 2 and all(parts):
+        return raw
+    # HOST/OWNER/REPO form — gh accepts a host-qualified slug.
+    if len(parts) == 3 and all(parts):
+        return "/".join(parts[1:])
+    return None
 
 
 def _resolve_implicit_repo(cwd: str | None) -> str | None:
@@ -220,7 +254,7 @@ def check(input_data: dict) -> dict | None:
         if not re.search(r"\bgh\s+pr\s+create\b", command):
             return None
 
-    cwd = resolve_tool_cwd(input_data)
+    cwd = resolve_invocation_cwd(input_data)
     base = extract_base(command)
     repo = extract_repo(command)
     head = extract_head(command)
@@ -237,9 +271,13 @@ def check(input_data: dict) -> dict | None:
         rebase_hint = f"Rebase the head branch onto {target} on the target repo."
     else:
         # No --repo: prefer the implicit-repo API path when we can resolve
-        # the cwd's `origin` to a github slug (#227 — cross-cwd misattribution
-        # protection). Fall back to the local-cwd path if not on github.
-        implicit_repo = _resolve_implicit_repo(cwd)
+        # the target repo. Resolution order (#227 cross-cwd misattribution
+        # protection, extended for #521 worktree-subagent cwd recovery):
+        #   1. GH_REPO env var — gh's own canonical implicit-repo override.
+        #   2. The invocation cwd's `origin` remote (cwd already recovered
+        #      from a leading `cd` by resolve_invocation_cwd above).
+        # Fall back to the local-cwd path if neither yields a github slug.
+        implicit_repo = _repo_from_env() or _resolve_implicit_repo(cwd)
         if implicit_repo:
             implicit_head = head or _current_branch(cwd)
             if not implicit_head:

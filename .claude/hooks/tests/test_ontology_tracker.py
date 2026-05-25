@@ -120,6 +120,52 @@ class ShouldSkipPositiveTests(unittest.TestCase):
         self.assertFalse(hook._should_skip(path))
 
 
+class ShouldSkipTopLevelWorktreesTests(unittest.TestCase):
+    """#525: top-level `.worktrees/` paths must be skipped.
+
+    The change-tracker anchors on the orchestrator cwd; an Edit inside a
+    worktree gets recorded as a worktree-relative path like
+    ``.worktrees/deploy-0348-aisha/...``. Pre-#525 only ``.claude/worktrees/``
+    was skipped, so the top-level convention (gitignored as of #523) polluted
+    the parent ``checksums.json`` with entries that never resolve and once
+    aborted a ``git merge --ff-only``.
+    """
+
+    def test_relative_top_level_worktrees_path_is_skipped(self):
+        """The exact #525 evidence shape — a worktree-relative path."""
+        self.assertTrue(
+            hook._should_skip(".worktrees/deploy-0348-aisha/terraform/cloudflare/variables.tf")
+        )
+
+    def test_relative_top_level_worktrees_status_file_is_skipped(self):
+        self.assertTrue(hook._should_skip(".worktrees/main-w11-unblock/cross-repo-status.json"))
+
+    def test_absolute_top_level_worktrees_path_is_skipped(self):
+        wt = str(hook.REPO_ROOT / ".worktrees" / "0528-cwd-anchor" / "ontology" / "domain.yaml")
+        self.assertTrue(hook._should_skip(wt))
+
+    def test_worktrees_segment_not_substring_false_match(self):
+        """A file merely NAMED with a worktrees substring is NOT skipped.
+
+        Segment-matching (not substring) guards against skipping a real
+        source file like ``notes.worktrees.md`` — only a path COMPONENT of
+        ``.worktrees`` triggers the skip.
+        """
+        # Place it under REPO_ROOT so the out-of-repo filter doesn't fire.
+        legit = str(hook.REPO_ROOT / "docs" / "notes.worktrees.md")
+        self.assertFalse(hook._is_worktree_path(legit))
+
+    def test_claude_worktrees_still_skipped_via_segment(self):
+        """The historical convention is also caught by the segment check."""
+        self.assertTrue(
+            hook._is_worktree_path(".claude/worktrees/A.Virtanen-0143/ontology/services.yaml")
+        )
+
+    def test_bare_worktrees_dir_without_claude_parent_not_skipped(self):
+        """A dir literally named ``worktrees`` but NOT under ``.claude`` is fine."""
+        self.assertFalse(hook._is_worktree_path("src/worktrees/helper.py"))
+
+
 class ShouldSkipExistingFiltersTests(unittest.TestCase):
     """Regression — pre-existing SKIP_PATTERNS keep working."""
 

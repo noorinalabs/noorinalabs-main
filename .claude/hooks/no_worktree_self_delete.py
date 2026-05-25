@@ -265,6 +265,16 @@ def check(input_data: dict) -> dict | None:
 
         # Caller-reported cwd wins; fall back to ours. Hook input carries the
         # shell's actual cwd at tool-call time.
+        #
+        # NOTE: this hook deliberately does NOT adopt the #521
+        # `resolve_invocation_cwd` cd-target recovery used by the gh-pr-create
+        # hooks. Here a leading `cd` changes the SAFETY semantics rather than
+        # just repo identity: `cd /safe && git worktree remove /worktree` is
+        # safe (shell moves out first) while `cd /worktree && remove /worktree`
+        # is the self-delete. Folding the cd target into cwd would change the
+        # block/allow verdict, which is a distinct behavioral decision from the
+        # cwd-anchor sweep — see the docstring "cd plans not yet executed"
+        # note. Left as-is intentionally; tracked separately if revisited.
         cwd = input_data.get("cwd") or os.getcwd()
 
         for segment in _SEGMENT_SPLIT_RE.split(command):

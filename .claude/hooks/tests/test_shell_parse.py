@@ -379,5 +379,76 @@ class IsShutdownRequestMessageTests(unittest.TestCase):
         self.assertFalse(sp.is_shutdown_request_message(None))
 
 
+class ExtractLeadingCdTargetTests(unittest.TestCase):
+    """#521: recover a worktree subagent's real cwd from a leading `cd`."""
+
+    def test_simple_cd_and_gh(self):
+        self.assertEqual(
+            sp.extract_leading_cd_target("cd /home/u/wt && gh pr create"),
+            "/home/u/wt",
+        )
+
+    def test_no_cd_returns_none(self):
+        self.assertIsNone(sp.extract_leading_cd_target("gh pr create --title t"))
+
+    def test_relative_cd_ignored(self):
+        """Relative cd targets are ambiguous (relative to the wrong stdin cwd)."""
+        self.assertIsNone(sp.extract_leading_cd_target("cd subdir && gh pr create"))
+
+    def test_last_absolute_cd_wins(self):
+        self.assertEqual(
+            sp.extract_leading_cd_target("cd /a && cd /b && gh pr create"),
+            "/b",
+        )
+
+    def test_cd_inside_quoted_body_is_not_a_segment(self):
+        """A `cd` mention inside a flag value must not be treated as a real cd."""
+        cmd = 'gh pr create --body "first cd /ghost then build"'
+        self.assertIsNone(sp.extract_leading_cd_target(cmd))
+
+    def test_multi_arg_cd_ignored(self):
+        """`cd -P /x` is a 3-token segment — skipped rather than mis-parsed."""
+        self.assertIsNone(sp.extract_leading_cd_target("cd -P /x && gh pr create"))
+
+    def test_unparseable_command_returns_none(self):
+        self.assertIsNone(sp.extract_leading_cd_target('cd /x && echo "unbalanced'))
+
+
+class ResolveInvocationCwdTests(unittest.TestCase):
+    """#521: invocation-cwd resolution prefers an existing `cd` target."""
+
+    def test_existing_cd_target_wins_over_stdin_cwd(self):
+        # The cwd field is the (wrong) orchestrator dir; the cd target is the
+        # subagent's real worktree. An existing absolute cd target wins.
+        real_dir = str(Path(__file__).resolve().parent)  # guaranteed to exist
+        input_data = {
+            "tool_input": {"command": f"cd {real_dir} && gh pr create"},
+            "cwd": "/some/orchestrator/dir",
+        }
+        self.assertEqual(sp.resolve_invocation_cwd(input_data), real_dir)
+
+    def test_nonexistent_cd_target_falls_back_to_stdin_cwd(self):
+        input_data = {
+            "tool_input": {"command": "cd /no/such/dir/here && gh pr create"},
+            "cwd": "/orchestrator",
+        }
+        self.assertEqual(sp.resolve_invocation_cwd(input_data), "/orchestrator")
+
+    def test_no_cd_falls_back_to_stdin_cwd(self):
+        input_data = {
+            "tool_input": {"command": "gh pr create"},
+            "cwd": "/orchestrator",
+        }
+        self.assertEqual(sp.resolve_invocation_cwd(input_data), "/orchestrator")
+
+    def test_no_cd_no_cwd_falls_back_to_getcwd(self):
+        input_data = {"tool_input": {"command": "gh pr create"}}
+        self.assertEqual(sp.resolve_invocation_cwd(input_data), os.getcwd())
+
+    def test_missing_command_falls_back_to_stdin_cwd(self):
+        input_data = {"tool_input": {}, "cwd": "/orchestrator"}
+        self.assertEqual(sp.resolve_invocation_cwd(input_data), "/orchestrator")
+
+
 if __name__ == "__main__":
     unittest.main()

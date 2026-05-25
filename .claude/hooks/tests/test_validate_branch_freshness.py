@@ -384,5 +384,116 @@ class CwdHandlingTests(unittest.TestCase):
         self.assertEqual(captured.get("cwd"), "/tmp/worktree-bar")
 
 
+class Issue521CwdRecoveryTests(unittest.TestCase):
+    """#521: worktree-subagent cwd recovery + GH_REPO env fast-path.
+
+    The harness `cwd` field is the orchestrator's spawn-time dir, NOT the
+    subagent's worktree. The fix recovers the real cwd from a leading `cd`
+    in the command (resolve_invocation_cwd) and consults GH_REPO first.
+    """
+
+    @staticmethod
+    def _input(command: str, cwd: str) -> dict:
+        return {
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+            "cwd": cwd,
+        }
+
+    def test_cd_target_recovers_child_repo_cwd(self):
+        """`cd /worktree && gh pr create` resolves repo from the cd target,
+        not the (wrong) orchestrator stdin cwd.
+        """
+        import tempfile
+
+        captured: dict[str, object] = {}
+
+        def fake_resolve(cwd):
+            captured["cwd"] = cwd
+            return "noorinalabs/noorinalabs-deploy"
+
+        with tempfile.TemporaryDirectory() as worktree:
+            cmd = f"cd {worktree} && gh pr create --title t"
+            with (
+                mock.patch.dict("os.environ", {}, clear=True),
+                mock.patch.object(hook, "_resolve_implicit_repo", side_effect=fake_resolve),
+                mock.patch.object(hook, "_current_branch", return_value="A.Idrissi/0242-x"),
+                mock.patch.object(hook, "is_branch_fresh_remote", return_value=True) as remote,
+                mock.patch.object(hook, "is_branch_fresh_local") as local,
+            ):
+                result = hook.check(
+                    self._input(cmd, cwd="/home/parameterization/code/noorinalabs-main")
+                )
+            # The implicit-repo resolver saw the worktree, not the parent cwd.
+            self.assertEqual(captured.get("cwd"), worktree)
+            self.assertIsNone(result)
+            remote.assert_called_once_with(
+                "noorinalabs/noorinalabs-deploy", "main", "A.Idrissi/0242-x"
+            )
+            local.assert_not_called()
+
+    def test_repro_for_issue_521(self):
+        """Exact #521 repro: orchestrator cwd in parent, worktree targets child.
+
+        Pre-fix: `_resolve_implicit_repo` ran in the parent cwd → resolved
+        `noorinalabs/noorinalabs-main` and false-blocked on the parent's
+        wave branch. Post-fix: cd-target recovery resolves the child repo.
+        """
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as worktree:
+            cmd = f"cd {worktree} && gh pr create --title t --body-file /tmp/x.txt"
+
+            def repo_by_cwd(cwd):
+                # Parent cwd → main (the bug); worktree cwd → deploy (the fix).
+                if cwd == worktree:
+                    return "noorinalabs/noorinalabs-deploy"
+                return "noorinalabs/noorinalabs-main"
+
+            with (
+                mock.patch.dict("os.environ", {}, clear=True),
+                mock.patch.object(hook, "_resolve_implicit_repo", side_effect=repo_by_cwd),
+                mock.patch.object(hook, "_current_branch", return_value="A.Idrissi/0242-x"),
+                mock.patch.object(hook, "is_branch_fresh_remote", return_value=True) as remote,
+            ):
+                result = hook.check(
+                    self._input(cmd, cwd="/home/parameterization/code/noorinalabs-main")
+                )
+            self.assertIsNone(result, "#521: child-repo PR-create must not block on parent cwd")
+            remote.assert_called_once_with(
+                "noorinalabs/noorinalabs-deploy", "main", "A.Idrissi/0242-x"
+            )
+
+    def test_gh_repo_env_takes_priority(self):
+        """GH_REPO env var resolves the implicit repo before any cwd walk."""
+        with (
+            mock.patch.dict("os.environ", {"GH_REPO": "noorinalabs/noorinalabs-deploy"}),
+            mock.patch.object(hook, "_resolve_implicit_repo") as resolve_mock,
+            mock.patch.object(hook, "_current_branch", return_value="feat-x"),
+            mock.patch.object(hook, "is_branch_fresh_remote", return_value=True) as remote,
+        ):
+            result = hook.check(self._input("gh pr create", cwd="/anywhere"))
+        self.assertIsNone(result)
+        # GH_REPO short-circuits the cwd-based resolver entirely.
+        resolve_mock.assert_not_called()
+        remote.assert_called_once_with("noorinalabs/noorinalabs-deploy", "main", "feat-x")
+
+    def test_gh_repo_host_qualified_form(self):
+        with mock.patch.dict("os.environ", {"GH_REPO": "github.com/owner/repo"}):
+            self.assertEqual(hook._repo_from_env(), "owner/repo")
+
+    def test_gh_repo_plain_owner_repo_form(self):
+        with mock.patch.dict("os.environ", {"GH_REPO": "owner/repo"}):
+            self.assertEqual(hook._repo_from_env(), "owner/repo")
+
+    def test_gh_repo_empty_returns_none(self):
+        with mock.patch.dict("os.environ", {"GH_REPO": ""}):
+            self.assertIsNone(hook._repo_from_env())
+
+    def test_gh_repo_unset_returns_none(self):
+        with mock.patch.dict("os.environ", {}, clear=True):
+            self.assertIsNone(hook._repo_from_env())
+
+
 if __name__ == "__main__":
     unittest.main()
