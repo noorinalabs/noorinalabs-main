@@ -92,6 +92,21 @@ Public API
         want to operate on the *user's* cwd (not the hook's parent process
         cwd) should use this to anchor `subprocess.run(..., cwd=...)`.
 
+    resolve_invocation_cwd(input_data) -> str
+        Like resolve_tool_cwd, but FIRST tries to recover the directory the
+        command actually runs in by extracting a leading `cd <dir>` segment
+        from the Bash command string. This closes the #521 residual: for a
+        worktree subagent the harness `cwd` field is captured at agent-spawn
+        time (the orchestrator's dir), NOT the subagent's dir after it has
+        `cd`'d into its worktree, and subsequent `cd` calls do not propagate
+        back to the hook's view of `cwd`. When the triggering command is
+        `cd /path/to/worktree && gh pr create ...`, the cd target is the
+        only in-band signal that recovers the real repo. Falls back to
+        resolve_tool_cwd (stdin cwd → os.getcwd()) when no leading `cd`
+        is present. Only absolute existing directories are honored; relative
+        cd targets are ambiguous (they'd be relative to the already-wrong
+        stdin cwd) so they are ignored.
+
     is_shutdown_request_message(message) -> bool
         True only if `message` is a structured shutdown_request JSON
         (dict-form OR str-form parseable to a dict with type==
@@ -443,6 +458,57 @@ def resolve_tool_cwd(input_data: dict) -> str:
     if cwd and isinstance(cwd, str):
         return cwd
     return os.getcwd()
+
+
+def extract_leading_cd_target(command: str) -> str | None:
+    """Return the directory of the last `cd <dir>` that precedes other work.
+
+    Walks the command's pipeline segments (see iter_command_segments) and
+    records the target of every `cd <dir>` segment, returning the last one.
+    Only honors a single-argument absolute `cd` target — relative targets
+    are ambiguous because they'd resolve against the (wrong) stdin cwd, and
+    multi-arg `cd` (e.g. `cd -P x`) is rare enough to skip rather than
+    mis-parse.
+
+    Returns None when the command does not tokenize, has no `cd`, or the
+    cd target is not an absolute path. The caller is responsible for
+    checking the path actually exists.
+
+    This is the in-band recovery signal for the worktree-subagent cwd-anchor
+    bug (#521): `cd /worktree && gh pr create` carries the real cwd in the
+    command itself even though the harness `cwd` field points at the
+    orchestrator's spawn-time directory.
+    """
+    tokens = tokenize(command)
+    if tokens is None:
+        return None
+    target: str | None = None
+    for segment in iter_command_segments(tokens):
+        if len(segment) == 2 and segment[0] == "cd" and segment[1].startswith("/"):
+            target = segment[1]
+    return target
+
+
+def resolve_invocation_cwd(input_data: dict) -> str:
+    """Resolve the directory the triggering command actually runs in.
+
+    Priority:
+      1. An absolute, existing `cd <dir>` target extracted from the command
+         string (recovers a worktree subagent's real cwd — #521).
+      2. resolve_tool_cwd(input_data) — stdin `cwd` then os.getcwd().
+
+    Use this (rather than resolve_tool_cwd) for any hook that derives repo
+    IDENTITY from cwd — i.e. anything that runs `git remote get-url origin`
+    or `git rev-parse` to decide which GitHub repo a command targets. The
+    plain resolve_tool_cwd is fine for hooks that only need *a* git context
+    and don't care about cross-repo misattribution.
+    """
+    command = input_data.get("tool_input", {}).get("command", "")
+    if isinstance(command, str) and command:
+        cd_target = extract_leading_cd_target(command)
+        if cd_target and os.path.isdir(cd_target):
+            return cd_target
+    return resolve_tool_cwd(input_data)
 
 
 def is_shutdown_request_message(message) -> bool:

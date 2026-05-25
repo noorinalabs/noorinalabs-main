@@ -100,6 +100,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _shell_parse import (  # noqa: E402
     find_gh_subcommand,
     iter_command_segments,
+    resolve_invocation_cwd,
     strip_heredocs,
     tokenize,
 )
@@ -332,17 +333,31 @@ def _path_matches_any_glob(path: str, globs: set[str]) -> bool:
 # --- Repo / branch resolution ----------------------------------------------
 
 
-def _resolve_repo(command: str) -> str | None:
-    """Return OWNER/REPO from --repo flag, or from cwd's git remote."""
+def _resolve_repo(command: str, cwd: str | None = None) -> str | None:
+    """Return OWNER/REPO from --repo flag, or from `cwd`'s git remote.
+
+    `cwd` anchors `git remote get-url origin` so a worktree subagent's
+    `gh pr create` resolves ITS repo, not the hook's parent-process repo
+    (#521). Falls back to a `GH_REPO` env-var fast-path before cwd
+    resolution — gh's own canonical implicit-repo override.
+    """
     explicit = _extract_flag(command, "repo")
     if explicit:
         return explicit
+    env_repo = (os.environ.get("GH_REPO") or "").strip()
+    if env_repo:
+        parts = env_repo.split("/")
+        if len(parts) == 2 and all(parts):
+            return env_repo
+        if len(parts) == 3 and all(parts):  # HOST/OWNER/REPO
+            return "/".join(parts[1:])
     try:
         result = subprocess.run(
             ["git", "remote", "get-url", "origin"],
             capture_output=True,
             text=True,
             timeout=10,
+            cwd=cwd,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return None
@@ -359,7 +374,12 @@ def _resolve_base(command: str) -> str:
     return _extract_flag(command, "base") or "main"
 
 
-def _resolve_head(command: str) -> str | None:
+def _resolve_head(command: str, cwd: str | None = None) -> str | None:
+    """Return --head value, or the current branch in `cwd`.
+
+    `cwd` anchors `git rev-parse --abbrev-ref HEAD` so a worktree subagent
+    reads ITS branch, not the hook's parent-process branch (#521).
+    """
     explicit = _extract_flag(command, "head")
     if explicit:
         # Strip OWNER: prefix on cross-fork PRs.
@@ -372,6 +392,7 @@ def _resolve_head(command: str) -> str | None:
             capture_output=True,
             text=True,
             timeout=10,
+            cwd=cwd,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return None
@@ -495,9 +516,10 @@ def check(input_data: dict) -> dict | None:
     if not _is_gh_pr_gate_command(command):
         return None
 
-    repo = _resolve_repo(command)
+    cwd = resolve_invocation_cwd(input_data)
+    repo = _resolve_repo(command, cwd=cwd)
     base = _resolve_base(command)
-    head = _resolve_head(command)
+    head = _resolve_head(command, cwd=cwd)
     if not repo or not head:
         # Cannot determine PR scope → fail open. We don't block on our own
         # inability to resolve the args.
