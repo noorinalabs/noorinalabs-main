@@ -476,10 +476,10 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "ontology/repos/deploy.yaml": {
-      "last_tracked": "4ef4dd758075db27935c71c4a4470982df4396a6d91dec64e0b5027ed559cc4d",
-      "last_resolved": "4ef4dd758075db27935c71c4a4470982df4396a6d91dec64e0b5027ed559cc4d",
-      "tracked_at": "2026-05-17T21:28:10.746396+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
+      "last_tracked": "02ebd7547f0d92efbcdcea581018dae3ff90cc34ddb39de0fb492d9af36def98",
+      "last_resolved": "02ebd7547f0d92efbcdcea581018dae3ff90cc34ddb39de0fb492d9af36def98",
+      "tracked_at": "2026-05-26T00:56:33.360841+00:00",
+      "resolved_at": "2026-05-28T14:14:26.645376+00:00"
     },
     "ontology/repos/design-system.yaml": {
       "last_resolved": "64f1eb7a16e3c9284f92d018eed4ce2a0da2aa761f60353c98117f3b2319a1a8",
