@@ -2453,4 +2453,70 @@ All 6 stay as memories. None hook-tier urgent (no enforcement-hierarchy violatio
 ### Counter corrections
 None — all `wave_11_*` counters matched PR-level recomputation (86=86, 15%=15%; CR-cycles 16 accepted on two-exact-match confidence).
 
+## Retrospective: Phase 3 Wave 12 — Tech-debt Sweep + Cross-cutting Security/CI — 2026-05-30
+
+### Team Performance
+15 PRs merged to `deployments/phase-3/wave-12` (deploy 11, main 4); plus 5 cross-cutting direct-to-main PRs in the W12 window (isnad-graph #933 starlette security, #930 node24 CI, deploy #369/#370 vhost carve-out, main #538 hook fix routed through wave-12); plus 2 wave-merge PRs (#539, #371) closing the wave today. **0 changes-requested cycles across all 15 wave PRs** — cleanest CR-cycle count in P3 history. Top-implementer concentration 4/15 = **27%** (Lucas Ferreira + Weronika Zielinska tied) — healthy distribution across 7 implementers. Counter verification at retro: PR count 15=15 ✓, top-concentration 27%=27% ✓, CR-cycles 0=0 ✓ (no drift; first wave where wrapup step 10.5 was deferred to retro per skill — written this retro instead). **Wave outcome: tier-1 security #164 shipped (SSH key split, supersedes ADR 0003); tier-2 cwd-anchor epic complete (5/6 — #484 was a phantom-open dup of #490 per memory); node24 cross-repo sweep complete (5/5 repos on node24-compatible action versions, June 2 deadline met).**
+
+> Wave-shape note: W12 ran across two narrow scopes (main + deploy = 24 declared items, 15 shipped + 6 carry-forward + 1 dup-closed + 2 wave-merge ceremony). Cross-cutting node24/starlette work was W12-window but routed direct-to-main (not labeled `p3-wave-12`), keeping the wave theme pure per the convergent-class-wave thesis from W10. Counter discipline now requires the orchestrator to recompute at retro every time wrapup defers — surfacing the pattern explicitly.
+
+### Per-Engineer Assessments
+
+- **Aino Virtanen** (SQL, 3 wave PRs + #538 W12-routed) — Exemplary execution on #538: 69/69 tests pass (4 new regression cases for newline-as-separator + line-continuation + quoted-newline + standard-allow), 3 docstring contract-sync touches kept policy contract in lockstep with code. Identity verified per `feedback_brief_author_verify_roster_surname`. Hold at 5.
+- **Lucas Ferreira** (deploy SRE, 4 wave PRs + #369/#370) — Outstanding HEAD-audit on deploy#245 that caught stale-meta-issue text (frontend already done via isnad-graph 1a6f2ae); cookie-domain decision well-reasoned (host-scoped, no widening); architectural-blocker escalation on PR-B1 caught the single-image-promotion vs build-time-env conflict cleanly without destructive setup; filed sibling #932 (W13 runtime-config.js) instead of bolting onto #245. Tied top-implementer (4 PRs, 27%). Hold at 5.
+- **Weronika Zielinska** (Platform/IaC, 4 wave PRs) — Tied top-implementer with Lucas (4 PRs: ADR 0005 state-locking, ADR 0004 Part-2 backblaze, env-restructure design proposal, terraform plan-time validation). Architect-class review on #369 surfaced cross-PR sequencing observation (CSP `connect-src` is browser-side; A+B2 must ship together) and verified users.* CSP/CORP symmetry from her own prior #243 work. **Trust 4→5.**
+- **Nino Kavtaradze** (Sec Eng, 1 wave PR — but it was deploy#164 SSH key split, the tier-1 security headliner) — Substantive security review on #370 with explicit threat-model summary; caught a doc-quality nit (Lucas's PR body claimed compose v2 doesn't substitute `${VAR}` in `.env` values — actually compose-go DOES interpolate; the real reason the line was dead is that `docker-compose.prod.yml:374` used a literal, not `${CORS_ORIGINS}`). Apex-domain `https://${BASE_DOMAIN}` no-consumer observation surfaced for hardening follow-up. Hold at 5.
+- **Aisha Idrissi** (deploy SRE, 1 wave PR — #355 cloud-init parity) — Cross-PR reviewer on #369+#370 (both Approved). Hold at 5.
+- **Wanjiku Mwangi** (TPM, 1 wave PR — #534) — Reviewer on #538 with W11 #478 cross-reference regression spot-check. Hold at 5.
+- **Santiago Ferreira** (RC, reviewer + wave-merge ops) — 5-case gate-continuity probe on #538 directly verified the fix doesn't re-introduce the #476 silent-bypass class. Identity used for the deploy wave-12 ← main merge-prep commit (RC's role per CLAUDE.md "manages deployment sequencing"). Hold at 5.
+- **Nurul Hakim** (deploy Observability, 1 wave PR — #358 dedicated egress network) — Clean delivery. Hold (was not in W11 trust matrix at high tier; will appear in trust matrix as appropriate).
+- **Idris Yusuf** (isnad-graph Sec Eng, #931 audit work) — Audit work was sound (starlette imports enumerated, ABI-stability assessment per file, fastapi compat verified). **9-hour throttle stall mid-task** (post-pytest-launch, pre-commit) required orchestrator throttle-takeover per `feedback_throttle_takeover`. Audit attribution preserved in PR body; commit/push performed by orchestrator with Idris's identity. Stand-down acknowledged cleanly. **No trust change** — stall is process/infra signal, not engineering signal.
+- **Anya Kowalczyk** (isnad-graph Tech Lead, reviewer on #933 + #930) — Independently verified starlette import audit via `gh search code` (extra rigor beyond brief); confirmed `BaseHTTPMiddleware.dispatch` signature unchanged across 1.0 ABI. Flagged state-mismatch on #930 update-branch async-window — became the new memory `feedback_update_branch_async_window.md`. Direction: positive.
+- **Ingrid Lindqvist** (isnad-graph Engineer, reviewer on #933 + #930) — #924-lens repeat performance: dep-resolution verified at PyPI origin (prometheus-fastapi-instrumentator 7.1.0 pins `starlette<1.0.0`; 8.0.0 loosens — uv had no choice); CI workflow read end-to-end for dead-step regressions; all 6 SHA-pins verified at canonical upstream repos; dispatch contract byte-for-byte at both ends. Direction: positive.
+- **Linh Pham** (isnad-graph DevOps, #930 author) — PR was well-prepared 2 days pre-session (SHA-pinning policy preservation correct, gitleaks carve-out aligned with #929). PR sat for 2 days awaiting #931 unblock — not Linh's fault. Direction: positive.
+
+### Wave-Concentration Metric
+| Top-implementer concentration | 4/15 = 27% (Lucas Ferreira + Weronika Zielinska tied) |
+
+27% top concentration is well below the 60% fragility threshold AND well below W11's 15%-flat. Healthy distribution across 7 distinct implementers (Lucas 4, Weronika 4, Aino 3, Wanjiku 1, Hakim 1, Aisha 1, Nino 1). No theme-fit-or-fragility flag this wave.
+
+### Top 3 Going Well
+1. **0 ChangesRequested cycles across all 15 wave PRs.** Cleanest CR count in P3 history (vs W11's 16, W10's ~25, W9's ~17). Single-Approved-pass discipline on every PR.
+2. **HEAD-audit discipline paid compound dividends twice.** Caught stale meta-issue text on #536 (4/5 node24 PRs already done) AND #245 (frontend already done). The "investigate before implement on unevidenced brief" memory pattern saved spawning 5 implementers for done work. Lucas's #245 audit alone caught a major scope reduction (5 PRs → 2 PRs in W12 scope).
+3. **Architectural escalation discipline held.** Lucas's PR-B1 escalation (single-image-promotion vs build-time-env conflict) was caught BEFORE any destructive Edit/Write — escalated cleanly to owner, sibling #932 filed for W13 scope, step-5 dual-bind drop deferred with explicit pre-conditions. Zero work wasted, zero scope-creep.
+
+### Top 3 Pain Points
+1. **9-hour throttle stall (Idris on #931)** — audit work sound, but pytest-then-commit-then-push sequence stalled at the pytest step for 9 hours. Throttle-takeover pattern recovered cleanly (~5min vs respawn's ~15min), but the bigger question is detection: should orchestrator have caught the stall sooner? Right now the only signal is "no message in N minutes" — fragile. Charter-promotion candidate: **#1 below** (orchestrator-side throttle-stall detection + auto-takeover threshold).
+2. **Hook bug user reported as recurring (#537 newline-separator).** auto_set_env_test pre-existing bug caught by user after multiple instances ("I've seen this error pop up a few times"). The hook was last touched in W11 for #478 (control-flow detection) — newline-as-separator was not in the original test suite despite multi-line bash being common. Charter-promotion candidate: **#2 below** (proactive PreToolUse-segment-parser test coverage).
+3. **Stale meta-issue text caught 2× this session (#536, #245).** Both meta-issues were drafted at an earlier HEAD audit, then parallel work landed before next-pass implementation. Took explicit HEAD-audit-at-implementation-time to detect. Memory `feedback_pre_spawn_verify_file_existence_at_head` already covers the discipline; what's missing is a time-based trigger (when does an issue body become "stale enough to require re-audit"?). Charter-promotion candidate: **#3 below** (meta-issue freshness audit trigger).
+
+### Proposed Process Changes (charter)
+
+1. **Throttle-stall detection + auto-takeover threshold (`pull-requests.md` or `agents.md`)** — Encode: orchestrator pings an implementer agent that has been idle ≥30min mid-task with uncommitted progress in their worktree. After 2 unanswered pings (separated by ≥15min), orchestrator initiates `feedback_throttle_takeover` directly. **Why:** 9hr stall on #931 was caught reactively at retrospective-by-the-clock; faster detect → faster takeover → meet deadlines (especially node24 June-2 cutover class). Memory provides the mechanic; charter encodes the timer.
+2. **Mandatory test coverage for PreToolUse segment parsers (`hooks.md`)** — Every PreToolUse Bash hook that splits commands on shell separators MUST include test cases for: (a) standard separators (`&&`, `||`, `;`, `|`); (b) **newlines** (multi-line scripts); (c) subshells `(...)`; (d) control-flow bodies (`for/while/until/if`); (e) line-continuation (`\\\n`); (f) quoted regions (quoted newlines, quoted separators). Test class name convention: `Newline...`, `Subshell...`, `ControlFlow...`, etc. (matches Aino's #538 pattern). **Why:** #537 was caught reactively after user-reported friction; the segment parser was authored without newline-as-separator coverage despite multi-line bash being common in operator workflows. References #478 (control-flow) and #537 (newline) as the precedents.
+3. **Meta-issue freshness re-audit trigger (`issues.md` or `pull-requests.md`)** — Multi-step meta-issues older than **48 hours at next-pass implementation** require the implementer brief to start with HEAD audit per repo named in the issue (not just spot-check). **Why:** caught twice this session (#536, #245) — both meta-issues drafted with then-current state, parallel work landed within the 48hr window before next-pass, scope drifted. Existing memory `feedback_pre_spawn_verify_file_existence_at_head` covers the "what" — this rule encodes the explicit "when" trigger.
+
+### Counter corrections
+None — wave_12 canonical counters written at retro (not wrapup) per skill Step 10.5 deferral; recompute matched composed values (15=15, 0=0 CR cycles, 27%=27% top concentration). **Process gap surfaced:** wave_12 was the first wave where wrapup deferred Step 10.5 explicitly. Retro caught this and wrote the counters with `wave_12_counter_corrections` array NOT needed (no drift since wrapup didn't write claimed values).
+
+### Annunaki + Memory audit (Step 7.6 / 7.7)
+
+- **Annunaki**: 36 captured errors in `.claude/annunaki/errors.jsonl`; 0 actionable nonzero-exit failures. All entries are either over-logged ec=0 commands or resolved PreToolUse blocks (`validate_commit_identity` ×4, `block_stale_tmp_message_file` ×4, `post_label_change_wave_field_sync` ×5, `validate_pr_ci_status` ×1, `validate_labels` ×1, `validate_branch_freshness` ×1). No `/annunaki-attack` needed. Marker written.
+- **Memory-to-automation audit**: 87 memory files total; 1 added this session (`feedback_update_branch_async_window.md`, Anya-flagged). Lightweight scan: no obvious new hook/skill/charter promotion candidates surfaced beyond the 3 charter changes already proposed above. Deeper scan deferred to W13 retro (87-file batch should be Aino's domain on a planned task, not orchestrator end-of-retro). Marker written with `deferred_deep_audit: true`.
+
+### Pattern Tally (running)
+
+| Pattern | Class | This wave | Cumulative |
+|---|---|---|---|
+| A — design-rationale block | Implementer | 0 | 11 |
+| B unified — verify-vs-artifact | Implementer + reviewer | 0 | promoted to charter |
+| C — claim-state-staleness | Manager-class | **2** (W12 #536 + #245 stale-meta-issue catches) | 2 W12 + held |
+| D — message-ordering-race | Architecture | n/a | tracked main#241 |
+| E — process collapse under fire | Orchestrator-class | 0 (no emergency) | 1 historical |
+| F — orchestrator-class pre-flight gap | Orchestrator-class | 0 | 7 historical, closed via W6 #299 |
+| G — in-wave skill self-improvement | Skill/Hook author | 1 (#538 hook bug user-reported + fixed in-wave) | 6 historical (W4-W9) + 1 W10 + 1 W12 |
+| **NEW: Throttle stall (implementer-class)** | Process/infra | 1 (W12 — Idris #931 9hr stall) | **1** — charter promotion candidate #1 above |
+| **NEW: Single-Approved-pass cleanest** | Wave-shape | 1 (W12 — 0 CR cycles across 15 PRs) | **1** — positive marker |
+| Wave-wrapup counter-write gap | Skill (/wave-wrapup) | 1 (W12 deferred to retro by skill design — not a defect, but a known-pattern-needing-explicit-handling) | 4 historical (W4/W5/W9/W12) |
+
 
