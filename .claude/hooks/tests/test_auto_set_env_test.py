@@ -635,5 +635,81 @@ class ControlFlowHardBlockTests(unittest.TestCase):
         self.assertNotIn("; ENVIRONMENT=test do", result["reason"])
 
 
+class NewlineSeparatorTests(unittest.TestCase):
+    """Issue #537: an unescaped `\\n` between bash statements acts as a
+    statement terminator (equivalent to `;`). Pre-fix the separator
+    scanner only recognised `&&`/`||`/`;`/`|`, so multi-line scripts
+    where pytest is on its own line had the prior line glued onto the
+    pytest segment via `|`, producing mangled suggestions that prepended
+    ENVIRONMENT=test to the wrong token (e.g. `head -3` instead of
+    `pytest`)."""
+
+    def test_newline_separator_allows_when_env_on_pytest_line(self) -> None:
+        """NEG: multi-line script; env is in the pytest line's leading
+        env-block. The prior-line pipe (`awk ... | head -3`) does NOT
+        bleed into the pytest segment because `\\n` now splits. Allow."""
+        command = (
+            "cd /tmp\n"
+            "awk '/foo/' some.txt | head -3\n"
+            'echo "marker"\n'
+            "ENVIRONMENT=test uv run pytest -q"
+        )
+        result = hook.check(_bash(command))
+        self.assertIsNone(
+            result,
+            "newline must split segments so env on pytest line is recognised",
+        )
+
+    def test_newline_separator_blocks_when_env_missing_on_pytest_line(self) -> None:
+        """POS: multi-line script with pytest on its own line and no env.
+        Block, suggestion must prepend ENVIRONMENT=test IMMEDIATELY before
+        `uv run pytest` — NOT before `echo` or `cd` or `head`."""
+        command = 'cd /tmp\necho "marker"\nuv run pytest -q'
+        result = hook.check(_bash(command))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("ENVIRONMENT=test uv run pytest -q", result["reason"])
+        # The splice must not land on the prior segments.
+        self.assertNotIn("ENVIRONMENT=test cd /tmp", result["reason"])
+        self.assertNotIn('ENVIRONMENT=test echo "marker"', result["reason"])
+
+    def test_newline_inside_single_quotes_not_a_separator(self) -> None:
+        """NEG: a literal newline character inside `'...'` must NOT be
+        recognised as a separator (quote-aware state machine stays
+        in-quote). `awk '/foo\\nbar/' file | pytest tests/` — the `\\n`
+        inside the awk pattern is data; the only real separator is the
+        `|`, splitting awk-segment | pytest-segment. Pytest segment
+        lacks env → block, splice on the pytest segment, NOT inside
+        the awk pattern.
+
+        Regression-guard so future refactors don't break the quote-
+        aware split."""
+        command = "awk '/foo\nbar/' file | pytest tests/"
+        result = hook.check(_bash(command))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        # Splice on pytest segment.
+        self.assertIn("ENVIRONMENT=test pytest tests/", result["reason"])
+        # Awk pattern must be preserved verbatim — no env inside the quoted region.
+        self.assertNotIn("ENVIRONMENT=testbar", result["reason"])
+        self.assertNotIn("'/fooENVIRONMENT=test", result["reason"])
+
+    def test_backslash_line_continuation_not_a_separator(self) -> None:
+        """POS: `ENVIRONMENT=test pytest a \\\n  b` — bash line-
+        continuation; the backslash escapes the newline so it does NOT
+        terminate the statement. The whole thing is one logical segment
+        with env+pytest+both args. Existing `in_escape` flag in
+        `_split_segments` handles this; the new newline-as-separator
+        branch must not bypass it.
+
+        Verifies: with env present on the (sole) segment, allow."""
+        command = "ENVIRONMENT=test pytest a \\\n  b"
+        result = hook.check(_bash(command))
+        self.assertIsNone(
+            result,
+            "backslash-newline line-continuation must not be treated as separator",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
