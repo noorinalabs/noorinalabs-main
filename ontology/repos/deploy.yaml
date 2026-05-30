@@ -95,7 +95,11 @@ workflows:
       validate: "matrix over [modules/hetzner-vps, envs/stg, envs/prod, cloudflare, backblaze] — -backend=false"
       plan: "matrix over [stg, prod] — PR only — comments plan on PR"
       apply: "matrix over [stg, prod] with max-parallel=1 — push to main only — stg before prod"
+      lock_guard: "scripts/check_tf_apply_locking.py — asserts every apply job carries a terraform-apply-* concurrency group (cancel-in-progress:false). Regression guard per ADR 0005 / #334."
     environments: { stg: staging, prod: production }
+    locking_mechanism: "gh-actions-concurrency-group"  # ADR 0005 (#334): per-root per-env `concurrency: {group: terraform-apply-<root>-<env>, cancel-in-progress: false}` on apply jobs serializes concurrent applies to the same B2 state file (B2 has no native lock). Workstation-apply bypasses it — see docs/runbooks/terraform-workstation-apply.md.
+    locking_adr: docs/adr/0005-terraform-state-locking-on-b2-backend.md
+    locking_smoke: ".github/workflows/terraform-lock-smoke.yml + terraform/_lock-smoke/ (null_resource serialization proof)"
   integration_tests:
     trigger: "pull_request + push to main + workflow_dispatch"
     purpose: "cross-repo integration suite (#49)"

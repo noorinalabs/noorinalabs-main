@@ -186,6 +186,49 @@ class CoordinatorExemptHandlesPrependedHeader(unittest.TestCase):
         self.assertIsNone(hook.check(_spawn(prompt)))
 
 
+class IndentedCoordinatorOpenerNotExempt(unittest.TestCase):
+    """The opener must sit at an EXACT line start to exempt. An indented
+    `You are X, Manager` line — inside a 4-space code block, a YAML-indented
+    example, or a blockquote — is NOT the coordinator's own opener; it's
+    prompt-body content. The old `^\\s*` + re.MULTILINE matched these and
+    falsely exempted implementer spawns. The `(?:\\A|\\n)You are` anchor
+    blocks them (#471). The opener tested here belongs to an Engineer spawn
+    with NO ontology context, so the correct outcome is a block."""
+
+    def test_four_space_indented_opener_not_exempt(self):
+        prompt = (
+            "You are **Mateo Salazar**, Engineer. Implement #123. Example brief shape:\n"
+            "    You are **Bereket Tadesse**, Manager for noorinalabs-deploy.\n"
+        )
+        result = hook.check(_spawn(prompt))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_yaml_indented_opener_not_exempt(self):
+        prompt = (
+            "You are **Mateo Salazar**, Engineer. Implement #123. YAML example:\n"
+            "brief:\n"
+            "  opener: You are **Bereket Tadesse**, Manager for noorinalabs-deploy\n"
+        )
+        result = hook.check(_spawn(prompt))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_blockquote_indented_opener_not_exempt(self):
+        # Defensive: a blockquote-prefixed opener (`> You are ...`) already
+        # wouldn't match a column-0 anchor; this pins that it stays blocked.
+        prompt = (
+            "You are **Mateo Salazar**, Engineer. Implement #123. Quoted brief:\n"
+            "> You are **Bereket Tadesse**, Manager for noorinalabs-deploy\n"
+        )
+        result = hook.check(_spawn(prompt))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+
 class CheckIsCrashSafeOnMalformedInput(unittest.TestCase):
     """PreToolUse hooks that raise get surfaced to the user as
     block-with-error, which is worse than silently allowing a malformed

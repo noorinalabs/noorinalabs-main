@@ -545,5 +545,89 @@ class CheckEndToEndTests(unittest.TestCase):
         self.assertIn("db-migrate.yml", result["reason"])
 
 
+class CwdAnchorResolutionTests(unittest.TestCase):
+    """#521 cwd-anchor sweep: repo/head resolution must use the invocation cwd.
+
+    Pre-fix `_resolve_repo` / `_resolve_head` ran `git` with NO `cwd=`, so a
+    worktree subagent's `gh pr create` resolved the hook's parent-process
+    repo/branch. The fix threads `resolve_invocation_cwd` through both.
+    """
+
+    @staticmethod
+    def _input(command: str, cwd: str) -> dict:
+        return {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": cwd}
+
+    def test_resolve_repo_anchors_git_on_cwd(self):
+        captured: dict[str, object] = {}
+
+        class _R:
+            returncode = 0
+            stdout = "git@github.com:noorinalabs/noorinalabs-deploy.git\n"
+
+        def fake_run(args, **kwargs):
+            captured["cwd"] = kwargs.get("cwd")
+            return _R()
+
+        with (
+            mock.patch.dict("os.environ", {}, clear=True),
+            mock.patch.object(hook.subprocess, "run", side_effect=fake_run),
+        ):
+            repo = hook._resolve_repo("gh pr create", cwd="/worktree/x")
+        self.assertEqual(repo, "noorinalabs/noorinalabs-deploy")
+        self.assertEqual(captured.get("cwd"), "/worktree/x")
+
+    def test_resolve_repo_gh_repo_env_priority(self):
+        with mock.patch.dict("os.environ", {"GH_REPO": "noorinalabs/noorinalabs-deploy"}):
+            with mock.patch.object(hook.subprocess, "run") as run_mock:
+                repo = hook._resolve_repo("gh pr create", cwd="/worktree/x")
+        self.assertEqual(repo, "noorinalabs/noorinalabs-deploy")
+        run_mock.assert_not_called()
+
+    def test_resolve_head_anchors_git_on_cwd(self):
+        captured: dict[str, object] = {}
+
+        class _R:
+            returncode = 0
+            stdout = "A.Idrissi/0242-promote\n"
+
+        def fake_run(args, **kwargs):
+            captured["cwd"] = kwargs.get("cwd")
+            return _R()
+
+        with mock.patch.object(hook.subprocess, "run", side_effect=fake_run):
+            head = hook._resolve_head("gh pr create", cwd="/worktree/x")
+        self.assertEqual(head, "A.Idrissi/0242-promote")
+        self.assertEqual(captured.get("cwd"), "/worktree/x")
+
+    def test_check_threads_recovered_cwd_into_resolvers(self):
+        """End-to-end: `cd /worktree && gh pr create` → resolvers see worktree."""
+        import tempfile
+
+        captured: dict[str, object] = {}
+
+        def fake_repo(command, cwd=None):
+            captured["repo_cwd"] = cwd
+            return "noorinalabs/noorinalabs-deploy"
+
+        def fake_head(command, cwd=None):
+            captured["head_cwd"] = cwd
+            return "feat-x"
+
+        with tempfile.TemporaryDirectory() as worktree:
+            cmd = f"cd {worktree} && gh pr create --base main"
+            with (
+                mock.patch.object(hook, "_resolve_repo", side_effect=fake_repo),
+                mock.patch.object(hook, "_resolve_head", side_effect=fake_head),
+                # No workflow files in diff → allow (keeps the test focused on cwd).
+                mock.patch.object(hook, "_list_pr_diff_files", return_value=["src/app.py"]),
+            ):
+                result = hook.check(
+                    self._input(cmd, cwd="/home/parameterization/code/noorinalabs-main")
+                )
+            self.assertIsNone(result)
+            self.assertEqual(captured.get("repo_cwd"), worktree)
+            self.assertEqual(captured.get("head_cwd"), worktree)
+
+
 if __name__ == "__main__":
     unittest.main()

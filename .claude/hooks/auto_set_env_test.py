@@ -14,9 +14,10 @@ Fires on:
 Matches (blocks if ENVIRONMENT=test missing on the test segment):
     Any Bash command containing a real test-runner invocation detected
     by the regexes `\\bpytest\\b` or `\\bmake\\s+test\\b`. The command is
-    split on shell separators (`&&`, `||`, `;`, `|`) into segments; each
-    test-bearing segment is checked independently for a leading
-    `ENVIRONMENT=test` env-block.
+    split on shell separators (`&&`, `||`, `;`, `|`, `\\n`) into segments;
+    each test-bearing segment is checked independently for a leading
+    `ENVIRONMENT=test` env-block. An unescaped newline acts as a statement
+    terminator equivalent to `;` (#537).
 
     Typical matched forms:
         pytest tests/
@@ -49,9 +50,10 @@ Detection order:
     1. Strip leading `VAR=value` tokens from the command for argv[0] check.
     2. If the next token is `gh`, ALLOW (return None).
     3. If the command contains `--body` or `--body-file`, ALLOW.
-    4. Split on `&&`/`||`/`;`/`|` into segments using a quote-aware
+    4. Split on `&&`/`||`/`;`/`|`/`\\n` into segments using a quote-aware
        state-machine scanner — separators inside `'...'`, `"..."`, or
-       `\\`-escaped positions are NOT recognised.
+       `\\`-escaped positions are NOT recognised. (A `\\`-then-newline
+       line-continuation is consumed by `in_escape` and so does NOT split.)
     5. For each segment containing `\\bpytest\\b` or `\\bmake\\s+test\\b`,
        require `\\bENVIRONMENT=test\\b` in that segment's leading env-block
        (subshell-aware: a segment that opens with `(` peeks inside the
@@ -184,7 +186,7 @@ def _has_body_flag(command: str) -> bool:
 
 
 def _split_segments(command: str) -> list[str]:
-    """Split command on `&&`/`||`/`;`/`|`, preserving separators as
+    """Split command on `&&`/`||`/`;`/`|`/`\\n`, preserving separators as
     alternating list entries: [seg0, sep0, seg1, sep1, ..., segN].
 
     Quote-aware (#478): separators inside `'...'`, `"..."`, or
@@ -283,6 +285,8 @@ def _match_separator_at(command: str, i: int) -> str | None:
         return ";"
     if command[i] == "|":
         return "|"
+    if command[i] == "\n":
+        return "\n"
     return None
 
 
