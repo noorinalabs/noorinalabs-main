@@ -2932,5 +2932,80 @@
   "wave_12_top_concentration_pct": 27,
   "wave_12_annunaki_attack_ran_at": "2026-05-30T16:50:00Z",
   "wave_12_memory_audit_ran_at": "2026-05-30T16:50:00Z",
-  "wave_12_memory_audit_notes": "1 new memory added (feedback_update_branch_async_window.md). Lightweight scan \u2014 no obvious new hook/skill/charter promotion candidates beyond the 3 charter changes proposed in retro feedback_log entry. Deeper 87-file batch scan deferred to W13 \u2014 should be Aino-assigned planned task, not orchestrator end-of-retro."
+  "wave_12_memory_audit_notes": "1 new memory added (feedback_update_branch_async_window.md). Lightweight scan \u2014 no obvious new hook/skill/charter promotion candidates beyond the 3 charter changes proposed in retro feedback_log entry. Deeper 87-file batch scan deferred to W13 \u2014 should be Aino-assigned planned task, not orchestrator end-of-retro.",
+  "wave_13_scope_reconciled_at": "2026-05-31T03:41:08Z",
+  "wave_13_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-deploy",
+    "noorinalabs-user-service",
+    "noorinalabs-isnad-ingest-platform",
+    "noorinalabs-isnad-graph"
+  ],
+  "wave_13_meta_issue": 541,
+  "wave_13_scope": {
+    "theme": "Tech-debt reduction sweep (us+deploy+ingest-platform minimum, main+isnad-graph stretches) + charter-change implementation (#542 throttle-stall, #543 hook test coverage, #544 meta-issue freshness)",
+    "reconciled_at": "2026-05-31T03:41:08Z",
+    "tier_1_charter_changes": [
+      "noorinalabs-main#542",
+      "noorinalabs-main#543",
+      "noorinalabs-main#544"
+    ],
+    "tier_2_td_sweep": {
+      "noorinalabs-user-service": [
+        "us#129",
+        "us#126",
+        "us#124"
+      ],
+      "noorinalabs-deploy": [
+        "deploy#361",
+        "deploy#352",
+        "deploy#347",
+        "deploy#269",
+        "deploy#245",
+        "deploy#244",
+        "deploy#204",
+        "deploy#193",
+        "deploy#156",
+        "deploy#100",
+        "deploy#86",
+        "deploy#45",
+        "deploy#11"
+      ],
+      "noorinalabs-isnad-ingest-platform": [
+        "ip#43",
+        "ip#42",
+        "ip#40",
+        "ip#38",
+        "ip#35",
+        "ip#33",
+        "ip#31"
+      ]
+    },
+    "tier_3_stretch": [
+      "main#136",
+      "main#535",
+      "main#533",
+      "isnad-graph#932"
+    ],
+    "verify_and_close": [
+      "main#536",
+      "isnad-graph#929"
+    ],
+    "per_repo_counts": {
+      "main": 6,
+      "deploy": 13,
+      "user-service": 3,
+      "ingest-platform": 7,
+      "isnad-graph": 1
+    },
+    "total_work_items": 26,
+    "targets": {
+      "ingest-platform_td_pct": "<50% (from 87.5%)",
+      "deploy_td_pct": "<30% (from 50%)",
+      "user-service_td_pct": "<20% (from 42.9%)",
+      "cumulative_td_pct": "<25% (from 31.8%)"
+    },
+    "spec_revision_pending": "noorinalabs-main#545 (Proposal A/B/C \u2014 owner-pending; ratification may reshape W13 acceptance)"
+  },
+  "wave_13_scope_reconciliation_note": "W13 scope reconciled 2026-05-31T03:41:08Z. 17 issues label-edited: 6 strip-and-relabel from p3-wave-12 to p3-wave-13 (main#136 + deploy#269/245/204/193/100), 11 new p3-wave-13 adds (us#129/126/124, ip#43/42/40/38/35/33/31, isnad-graph#932). 14 already-labeled p3-wave-13 retained (meta #541, 3 charter changes #542/#543/#544, 2 cwd-anchor #535/#533, 8 deploy infra #361/#352/#347/#244/#156/#86/#45/#11). 0 carry-forward struct entries (W12 retro deferred relabel to /wave-scope). 0 memory must-includes filed for W13."
 }
