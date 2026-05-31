@@ -178,3 +178,4 @@ ontology/
 - All repos use the same team roster and commit identity system
 - Hooks in `.claude/` enforce commit identity, block `--no-verify`, and block `git config` user changes
 - Standards & Quality Lead audits repos for convention compliance
+- **Artifact ownership** (which `.claude/` + ontology artifact class is owned/executes where, meta vs child; collision + create-time-placement rules) is canonicalized in [`.claude/team/charter/artifact-ownership.md`](.claude/team/charter/artifact-ownership.md)

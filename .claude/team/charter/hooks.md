@@ -252,6 +252,8 @@ Generalizes the Hook 15 sentinel pattern (introduction: [#169](https://github.co
 
 ## Hook Sync Across Child Repos <!-- promotion-target: none -->
 
+> The org-wide artifact ownership + execution-location matrix (hooks, skills, charter, memory, ontology, settings — meta vs child) is canonicalized in [`charter/artifact-ownership.md`](artifact-ownership.md) (#328). This section remains the authoritative detail for the **hook** class specifically; the matrix points back here.
+
 Shared hooks live in `noorinalabs-main/.claude/hooks/` (the parent repo's hooks tree). Child repos consume them via **parent-canonical paths** — their own `.claude/settings.json` registers each hook by absolute path into the parent's hooks tree, e.g.:
 
 ```jsonc
