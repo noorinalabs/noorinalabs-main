@@ -1,15 +1,28 @@
 # Pre-commit hooks for noorinalabs-main
-# Install: pre-commit install
-# Docs:    https://pre-commit.com/
+# Install:  pre-commit install && pre-commit install --hook-type pre-push
+# Docs:     https://pre-commit.com/
 #
-# This mirrors .github/workflows/ci.yml coverage so local commits fail fast
-# instead of surfacing ruff errors only after a PR is opened. Keep `rev`
-# aligned with sibling repos (isnad-graph pins ruff 0.15.11) so the same
-# ruff version runs in local pre-commit and in CI.
+# This MIRRORS .github/workflows/ci.yml so local commits/pushes fail fast
+# instead of surfacing a lint/type/test error only after a PR is opened
+# (Phase-3 end-state criterion #6 / #327). Keep `rev` aligned with sibling
+# repos (isnad-graph pins ruff 0.15.11) so the same ruff version runs in
+# local pre-commit and in CI.
 #
-# Scope: `.claude/hooks/` — the Python hook files CI checks.
-# `.claude/worktrees/` is excluded because it contains scratch checkouts of
+# Stage split:
+#   pre-commit (fast, every commit) — ruff-format, ruff-lint.
+#   pre-push   (heavier, every push) — mypy typecheck, pytest suite. These run
+#     the whole hooks+lib surface, so they're push-time not commit-time to keep
+#     the commit loop snappy while still catching everything before it leaves
+#     the machine.
+#
+# Scope: `.claude/hooks/` + `.claude/lib/` — the Python that CI checks (CI runs
+# ruff/mypy on BOTH; the pre_commit_ci_sync gate enforces this mirror). The
+# `.claude/worktrees/` tree is excluded because it holds scratch checkouts of
 # other branches; reformatting them would silently overwrite in-progress work.
+#
+# The kind-level mirror (ruff-lint, ruff-format, mypy, pytest present on both
+# sides) is enforced in CI by `.claude/lib/pre_commit_ci_sync.py` — if a future
+# edit drops one side, that gate fails the build.
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -17,24 +30,32 @@ repos:
     hooks:
       - id: ruff-format
         name: ruff-format
-        files: ^\.claude/hooks/.*\.py$
+        files: ^\.claude/(hooks|lib)/.*\.py$
         exclude: ^\.claude/worktrees/
       - id: ruff
         name: ruff-lint
         args: [--fix]
-        files: ^\.claude/hooks/.*\.py$
+        files: ^\.claude/(hooks|lib)/.*\.py$
         exclude: ^\.claude/worktrees/
 
-  # Mypy mirrors CI's `mypy .claude/hooks/ --ignore-missing-imports --no-error-summary`.
-  # Running as a `local` hook so we use the system mypy; upstream mirrors-mypy installs
-  # its own env and would drift from whatever CI pins.
+  # Heavier checks run at pre-push (mirror CI's mypy + pytest jobs). Running as
+  # `local`/`system` hooks so we use the system tools and don't drift from
+  # whatever CI pins.
   - repo: local
     hooks:
       - id: mypy
-        name: mypy
+        name: mypy (pre-push)
         entry: python3 -m mypy --ignore-missing-imports --no-error-summary
         language: system
         types: [python]
-        files: ^\.claude/hooks/.*\.py$
+        files: ^\.claude/(hooks|lib)/.*\.py$
         exclude: ^\.claude/worktrees/
         pass_filenames: true
+        stages: [pre-push]
+      - id: pytest
+        name: pytest (pre-push)
+        entry: env ENVIRONMENT=test python3 -m pytest .claude/hooks/tests/ .claude/lib/tests/ -q
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
