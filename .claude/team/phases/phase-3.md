@@ -4,7 +4,7 @@ description: Phase definition, end-state criteria, exit gate, wave history
 phase: 3
 status: active
 created: 2026-04-30
-last_updated: 2026-05-17
+last_updated: 2026-05-31
 ---
 
 # Phase 3 — fix our tools, fix our deployment
@@ -17,6 +17,8 @@ Phase 3 runs two tracks simultaneously:
 2. **Fix our deployment** — get staging and production live and continuously deployed. Wave wrap-ups gate on a successful staging promotion. Smoke tests run automatically post-deploy.
 
 Both tracks must move together. Finishing only one is not phase exit.
+
+**Deploy-track-alongside rule (ratified 2026-05-31 per Proposal B):** From W13 onward, every wave MUST include at least one deploy-track operational item (criteria #1/#2/#3/#8 — substantive operational progress, not infra-only) UNLESS the wave is themed `verification-and-close-sweep` (move OPEN-but-substantively-done criteria to DONE). W13 enacts this via `tier_2_deploy_track` (main#325 wrapup-gate, main#329 smoke tests).
 
 ## End-state criteria — Phase 3 exits when ALL hold
 
@@ -63,8 +65,10 @@ Owner runs `/phase-review` and verifies all 9 end-state rows are `Done`, plus th
 | W8 | Foundation reset — hook/skill/charter ownership disambiguation + artifact-CI scope definition | 11 PRs, 0 admin overrides, 0 ChangesRequested cycles |
 | W9 | Tech-debt reduction (main-only) | 6 PRs, 0 admin overrides, 0 CR cycles, 67% concentration (Aino 4/6 by commit identity) |
 | W10 | Tech-debt reduction (non-deploy remainder, 6 child repos + main) | 11 PRs across 5 repos (main 4, user-service 2, design-system 2, data-acquisition 2, landing-page 1); 0 admin overrides; retro adopted 3/4 process proposals (charter PR #444, Hook 21 #446) |
+| W11 | Tech debt & deployment (deploy entirety + main retro/audit follow-ups) | 86 PRs to wave-11 (deploy 46, main 16, isnad-graph 10, ingest 8, user-service 3, design-system 3); 16 ChangesRequested cycles; top-concentration 15% (Lucas, 13 PRs); deploy#348 close-out + #523/#524 coordination; **prod canonical-redirect LIVE** (.net/.org → .com); 3 charter changes adopted (close-on-verified-live, provider-validated apply-time acceptance, cwd-anchor fix epic) |
+| W12 | Tech-debt sweep + cross-cutting security/CI | 15 PRs (main 4, deploy 11); **0 ChangesRequested cycles** (cleanest in P3 history); 27% top-concentration (Lucas + Weronika tied at 4 each); plus 5 cross-cutting direct-to-main PRs (isnad-graph #933 starlette security, #930 node24, deploy #369/#370 vhost carve-out, main #538 hook fix); tier-1 #164 SSH key split (supersedes ADR 0003); node24 sweep complete across 5 repos (June 2 deadline met); 3 charter changes proposed (throttle-stall detection, hook test coverage, meta-issue freshness) — issues #542/#543/#544 |
 
-10 of 10 waves were tooling/meta (W3 had a small frontend feature; no deploy work shipped yet). This is the gap that drove the 2026-05-08 phase reset and shapes W11 (deploy entirety).
+12 of 12 waves were tooling/meta-loop (W3 had a small frontend feature; W11 shipped substantive deploy infrastructure — ADRs 0003/0004/0005, env restructure, SSH key split, cloud-init parity, backblaze bootstrap — but live-staging/production operational verification still unstarted). This is the gap that drove the 2026-05-08 phase reset and shapes W11 (deploy entirety), and re-surfaces at 2026-05-30 /phase-review as a still-open trajectory question (see § Trajectory reality check).
 
 ## Wave plan addendum — 2026-05-12 owner partition directive
 
@@ -97,8 +101,10 @@ projection's 61) but the open-TD count dropped from 133 → 98 because retro
 |-------|---------------------|---------|----------|-------------|
 | Pre-W10 (2026-05-13 projection) | 198 | 133 | 67% | far over |
 | Pre-W11 (2026-05-17 actual) | 166 | 98 | **59%** | far over |
-| After W11 (~117 in scope, mostly TD) | ~50 | ~10 | ~20% | still over |
-| Target | — | — | <10% | — |
+| Post-W11 (2026-05-24 actual) | 93 | 34 | **37%** | far over |
+| Post-W12 (2026-05-30 actual) | 88 | 30 | **34.1%** | over (3.4× gate) |
+| New-filed phase-to-date (2026-05-30) | 311 | 261 | **83.9%** | catastrophically over (criterion #9 second axis) |
+| Target | — | — | <10% (both axes) | — |
 
 Even with W11 perfectly themed at tech-debt reduction (117 issues in scope,
 of which ~85 are TD), post-W11 projected ratio is ~20% — still 2× the
@@ -120,9 +126,64 @@ exits when both gates close, not before — owner directive: no softening.
 Stored mirror: `cross-repo-status.json` § `phase_3_sweep_wave_reservation_2026_05_13`
 (to be written by next `/wave-wrapup` or set explicitly via upsert helper).
 
+## Trajectory reality check — 2026-05-30 (post-W12 /phase-review)
+
+Math doesn't close on the timeline-as-implied. Post-W12 actuals + the new-filed-this-phase axis surface three gaps:
+
+- **Cumulative TD ratio after 2 explicit sweep waves (W11+W12): 34.1%.** Sweep waves closed substantial issues but the rate is ~5pp per wave (W11: 59%→37%; W12: 37%→34.1%). At ~5pp/wave, reaching <10% requires ~5 more sweep waves.
+- **New-filed phase-to-date TD ratio: 83.9% (261/311).** Criterion #9 has TWO axes, both must be <10%. The new-filed axis cannot be retroactively fixed — fixing it requires the volume of NEW issues filed during P3 to taper off, which only happens after the meta-loop work tapers. Meta-loop tapers when the deploy track ships + product surface re-opens.
+- **Deploy track operational verification unstarted.** Criteria #1 (live staging), #2 (live production), #3 (wrapup gates on stg), #8 (post-deploy smoke tests) are all OPEN. W11 shipped substantive deploy *infrastructure* (ADRs, terraform, SSH, cloud-init, env restructure, backblaze bootstrap) — but staging + production live verification on prod hostnames is operational work that hasn't started.
+- **4 criteria substantively done but untracked-as-closed:** #4 (CI failures block merges — W11 #432 landed branch protection across 8 repos); #5 (artifacts pass checks — W7/W8/W11 hooks-lint/CI); #6 (pre-commit + pre-push hooks — partial, needs cross-repo audit); #7 (hook/skill/charter ownership disambiguated — W8 foundation reset). Verification + explicit close pass would move 3-4 criteria from OPEN → DONE.
+
+### Two-track tension
+
+The phase plan says: "Both tracks must move together. Finishing only one is not phase exit." But 12 waves in:
+- **Tools track**: substantively complete (charter/hooks/skills/tooling). Residual is TD-labeled cleanups + W13's 3 charter changes (#542/#543/#544).
+- **Deploy track**: infrastructure substantively done. Live-stg + live-prod operational verification not started. Smoke tests blocked on stg/prod.
+
+The implicit "both tracks move together" rule has been violated in every wave so far (tools moved, deploy operational didn't). Either the rule isn't load-bearing in practice (and should be relaxed), or W13+ must include explicit deploy-track operational work.
+
+## Spec revisions — owner-decided 2026-05-31 (post-W12 retro)
+
+Three concrete proposals. Owner ratified Proposal B and C, held Proposal A. PR #545 enacts the ratifications; the held proposal is retained below for audit trail.
+
+### Proposal A — Criterion #9 reality-check: relax cumulative gate; reshape new-filed axis  (HELD 2026-05-31)
+
+**Current**: `<10% of new AND <10% of cumulative open`
+**Proposed**: `<20% of cumulative open` as the hard phase-exit gate, AND `new-filed ratio trending DOWN month-over-month` as the directional axis (rather than fixed <10%).
+
+**Rationale**: At ~5pp/sweep-wave reduction, hitting <10% cumulative requires ~5 more sweep waves — another 6-10 weeks of pure-TD waves while deploy track stays unstarted, deepening the two-track gap. <20% is achievable in W13+W14 with realistic effort. The new-filed axis at 83.9% reflects the phase's meta-loop nature — fixing it requires the meta-loop work to taper, which is the actual exit signal, not a fixed percentage.
+
+**Owner-explicit "no softening" stance (2026-05-13)** acknowledged. This proposal asks whether that stance is still load-bearing 2.5 weeks later given post-W12 actuals.
+
+**Owner decision (2026-05-31): HELD.** Criterion #9 cumulative gate stays at `<10% of new AND <10% of cumulative open` — both axes unchanged. Owner directive: tech-debt sweep continues at current trajectory (W13 + W14 + ... as needed) until the gate closes. The 2026-05-13 "no softening" stance remains load-bearing.
+
+### Proposal B — Two-track move-together: codify deploy-track-alongside requirement from W13+  (RATIFIED 2026-05-31)
+
+**Current**: "Both tracks must move together. Finishing only one is not phase exit."
+**Proposed addition**: "From W13 onward, every wave MUST include at least one deploy-track operational item (criteria #1/#2/#3/#8 — substantive operational progress, not infra-only) UNLESS the wave is themed `verification-and-close-sweep` (move OPEN-but-substantively-done criteria to DONE)."
+
+**Rationale**: W13 as locked-by-owner is TD reduction for us/deploy/ingest-platform. Encoding deploy-track-alongside means W13 picks up one deploy-track operational item *in addition to* the TD sweep — or is themed verification-and-close-sweep. If neither is acceptable, the "both tracks move together" line is functionally dead and should be removed.
+
+**Owner decision (2026-05-31): RATIFIED.** Enacted in `§ Theme` above (deploy-track-alongside rule). W13 picks up `main#325` (wave-wrapup stg-promotion gate, Aino-class) + `main#329` (post-deploy smoke tests stg+prod, Lucas-class) as `tier_2_deploy_track` — committed via PR #546.
+
+### Proposal C — Verification-and-close sweep (RATIFIED 2026-05-31, folded into W13 tier_5)
+
+**Action**: Spawn an audit pass (Aino-class) walking #322 / #326 / #327 / #328 declaring each:
+- **Done** — close the tracking issue with summary comment of the work that closed it
+- **Mostly done, X remaining** — keep open with explicit residual scope
+- **Open, no progress** — keep open as-is
+
+**Rationale**: 4 criteria appear substantively done but tracked-open. Closing 3 of 9 in a half-day audit pass would move the visible-criterion-count from 0/9 to 3/9 immediately — more honest representation of P3 progress than the current "all 9 open" surface.
+
+**Owner decision (2026-05-31): RATIFIED.** Folded into W13 as `tier_5_verify_and_close`: main#322 (criterion #4 — CI failures block all merges), main#326 (criterion #5 — committed artifacts pass all checks), main#327 (criterion #6 — pre-commit + pre-push hooks every repo), main#328 (criterion #7 — hook/skill/charter ownership disambiguated). Aino verifies + closes where substantively done. PR #546 commits the scope addition; W13 wave-wrapup re-counts criterion-done state.
+
+---
+
 ## Open questions
 
 - `/roadmap` skill build — scope for which wave?
+- Phase-4 spec definition — does P4 happen after P3 fully exits (slow), or after a partial-exit pivot (faster, requires Proposal A acceptance)?
 
 ## References
 
