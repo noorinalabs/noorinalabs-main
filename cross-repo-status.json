@@ -3249,8 +3249,9 @@
   },
   "wave_13_scope_reconciliation_note": "Reconciled by /wave-scope 3 13 on 2026-05-31T03:41:08Z. Amended 2026-05-31 post-#546 reviewer ChangesRequested (Wanjiku TPM lens + Santiago RC lens): tier_* converted to dict rows per post_wave_kickoff_comment.py schema, arithmetic recount (38 items, not 26; main 13 not 6; isnad-graph 2 not 1), repo-prefix shorthand standardized to canonical noorinalabs-* throughout. Owner ratified Proposal B (deploy-track-alongside W13+, adds main#325+#329) and Proposal C (verify-and-close sweep, adds main#322/#326/#327/#328). Held Proposal A — keep criterion #9 cumulative gate at <10%.",
   "wave_13_kicked_off_at": "2026-05-31T16:20:11Z",
-  "wave_13_active": true,
+  "wave_13_active": false,
   "wave_13_final_pr_count": 37,
   "wave_13_changes_requested_cycles": 1,
-  "wave_13_top_concentration_pct": 19
+  "wave_13_top_concentration_pct": 19,
+  "wave_13_wrapped_up_at": "2026-05-31T21:15:00Z"
 }
