@@ -187,9 +187,50 @@ def extract_branch_author_lastname(head_ref: str) -> str | None:
 PROJECT_NUMBER = 2
 ORG = "noorinalabs"
 
-# Path to the local repo's roster directory. Resolved relative to the hook
+# Path to the PARENT repo's roster directory. Resolved relative to the hook
 # file: /<repo_root>/.claude/hooks/validate_pr_review.py → /<repo_root>/.claude/team/roster.
 _ROSTER_DIR = Path(__file__).resolve().parent.parent / "team" / "roster"
+
+# Parent repo root — the directory that holds `.claude/` AND under which the
+# org's child repos are checked out as siblings (per CLAUDE.md § Repository
+# Map: `noorinalabs-isnad-graph/`, `noorinalabs-deploy/`, …). Used to locate a
+# child repo's own `.claude/team/roster/` when a `gh pr merge --repo
+# noorinalabs/<child>` command targets that repo (#552).
+_PARENT_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+class RosterResolutionError(Exception):
+    """Raised when a child repo is named but its roster dir cannot be read.
+
+    Signals the caller to fail in the SAFE direction (HARD BLOCK with a
+    diagnostic) rather than silently falling back to the parent-only roster,
+    which would re-introduce the #552 false-block / fail-open behavior under a
+    different guise (per `feedback_safety_direction_over_ux_friction`).
+    """
+
+
+def _child_roster_dir(repo: str | None) -> Path | None:
+    """Resolve the child repo's roster dir from a `--repo OWNER/NAME` value.
+
+    Child repos are checked out as siblings under `_PARENT_REPO_ROOT` (the
+    directory holding the parent's `.claude/`), so `noorinalabs/<child>`
+    resolves to `_PARENT_REPO_ROOT/<child>/.claude/team/roster` (#552).
+
+    Returns None when:
+      - `repo` is absent / malformed (no `OWNER/NAME` shape), or
+      - `repo` names the PARENT repo itself (`noorinalabs-main`) — the parent
+        roster is already `_ROSTER_DIR`, so there is no distinct child dir.
+
+    A non-None return is a path that the caller is expected to find on disk;
+    if it does not exist, that is a hard-block condition (RosterResolutionError),
+    NOT a silent parent-only fallback.
+    """
+    if not repo or "/" not in repo:
+        return None
+    _owner, _, name = repo.partition("/")
+    if not name or name == _PARENT_REPO_ROOT.name:
+        return None
+    return _PARENT_REPO_ROOT / name / ".claude" / "team" / "roster"
 
 
 class CommentReviewResult:
@@ -449,23 +490,30 @@ def check_comment_reviews(
         return result
 
 
-def _iter_roster_entries(role_prefix_filter: tuple[str, ...] | None = None) -> set[str]:
-    """Walk `_ROSTER_DIR` and return canonical names from `**Name:** <Full Name>`.
+def _iter_roster_entries(
+    role_prefix_filter: tuple[str, ...] | None = None,
+    roster_dir: Path | None = None,
+) -> set[str]:
+    """Walk a roster dir and return canonical names from `**Name:** <Full Name>`.
 
     Shared parser for `load_charter_enforcer_names` (role-filtered) and
     `_load_roster_names` (all members). When `role_prefix_filter` is supplied,
     only filenames starting with one of the listed prefixes are read; when
     `None`, every `*.md` in the roster dir contributes.
 
+    `roster_dir` defaults to `_ROSTER_DIR` (the parent repo's roster). Callers
+    pass a child repo's roster dir to union child reviewers into the gate (#552).
+
     Names are returned in lowercase to match `CommentReviewResult.reviewers`'
     dedup key (full name, lowercased). Returns an empty set on any I/O failure
     (fail-closed — see callers for safe-direction semantics).
     """
+    roster_dir = roster_dir if roster_dir is not None else _ROSTER_DIR
     names: set[str] = set()
     try:
-        if not _ROSTER_DIR.is_dir():
+        if not roster_dir.is_dir():
             return names
-        for entry in _ROSTER_DIR.iterdir():
+        for entry in roster_dir.iterdir():
             if entry.suffix != ".md":
                 continue
             if role_prefix_filter is not None and not any(
@@ -484,39 +532,83 @@ def _iter_roster_entries(role_prefix_filter: tuple[str, ...] | None = None) -> s
     return names
 
 
-def load_charter_enforcer_names() -> set[str]:
-    """Read the local roster dir and return canonical names of charter enforcers.
+def _resolve_roster_dirs(repo: str | None) -> list[Path]:
+    """Return the roster dirs to union for a merge targeting `repo` (#552).
+
+    Always includes the parent `_ROSTER_DIR` (org-level reviewers — Nadia,
+    Wanjiku, Santiago, Aino — may review any repo's PR). When `--repo` names a
+    distinct child repo, its `.claude/team/roster/` is appended so legitimate
+    child-repo reviewers (per CLAUDE.md: child rosters are canonical for
+    reviewer pairing) pass the gate.
+
+    Raises `RosterResolutionError` when a child repo IS named but its roster
+    dir does not exist — fail in the safe direction (HARD BLOCK) rather than
+    silently degrading to parent-only, which would re-block legitimate child
+    reviewers exactly as #552 did.
+    """
+    dirs = [_ROSTER_DIR]
+    child_dir = _child_roster_dir(repo)
+    if child_dir is not None:
+        if not child_dir.is_dir():
+            raise RosterResolutionError(
+                f"child roster dir not found for --repo '{repo}': {child_dir}"
+            )
+        dirs.append(child_dir)
+    return dirs
+
+
+def load_charter_enforcer_names(repo: str | None = None) -> set[str]:
+    """Read the relevant roster dirs and return canonical charter-enforcer names.
 
     Charter enforcers are roster files matching the
     `_CHARTER_ENFORCER_ROLE_PREFIXES` allowlist. Each file's
     `**Name:** <Full Name>` line is parsed for the canonical name.
+
+    When `repo` names a child repo, the parent roster is unioned with that
+    child's roster (#552) so a child-repo enforcer (e.g. a child Manager /
+    Tech Lead / Project Lead) is recognized for the Single-Reviewer Exception.
     Returns an empty set on any I/O failure (fail-closed for the exception
     path: if we can't read the roster, we don't grant the exception).
 
     Names are returned in lowercase to match `CommentReviewResult.reviewers`'
     dedup key (full name, lowercased).
     """
-    return _iter_roster_entries(role_prefix_filter=_CHARTER_ENFORCER_ROLE_PREFIXES)
+    names: set[str] = set()
+    for roster_dir in _resolve_roster_dirs(repo):
+        names |= _iter_roster_entries(
+            role_prefix_filter=_CHARTER_ENFORCER_ROLE_PREFIXES, roster_dir=roster_dir
+        )
+    return names
 
 
-def _load_roster_names() -> set[str]:
-    """Read the local roster dir and return ALL canonical persona names.
+def _load_roster_names(repo: str | None = None) -> set[str]:
+    """Read the relevant roster dirs and return ALL canonical persona names.
 
     Unlike `load_charter_enforcer_names`, this set is not role-filtered — it
-    is the full membership of the local repo's `.claude/team/roster/`, used by
-    the 2-reviewer gate to reject Approved verdicts whose Requestor string
-    does not name a real roster persona (#498).
+    is the full membership used by the 2-reviewer gate to reject Approved
+    verdicts whose Requestor string does not name a real roster persona (#498).
+
+    When `repo` names a child repo, the parent roster is UNIONED with that
+    child's `.claude/team/roster/` (#552), so a reviewer valid in EITHER the
+    org-level team or the target child repo passes the gate. Without this,
+    legitimate child-repo reviewers were filtered as non-roster and child PRs
+    could not reach the real 2-reviewer threshold — forcing `--admin`.
 
     Names are returned in lowercase. Empty set indicates the roster could not
     be read (missing dir or I/O failure); the caller is responsible for
-    failing closed.
+    failing closed. Propagates `RosterResolutionError` when a named child
+    roster dir is missing so the caller hard-blocks (safe direction).
     """
-    return _iter_roster_entries(role_prefix_filter=None)
+    names: set[str] = set()
+    for roster_dir in _resolve_roster_dirs(repo):
+        names |= _iter_roster_entries(role_prefix_filter=None, roster_dir=roster_dir)
+    return names
 
 
 def is_single_reviewer_exception(
     pr_labels: list[str],
     reviewers: set[str],
+    repo: str | None = None,
 ) -> bool:
     """Return True if the PR qualifies for the Single-Reviewer Exception.
 
@@ -526,6 +618,10 @@ def is_single_reviewer_exception(
       2. There is EXACTLY ONE distinct reviewer in `reviewers`
       3. That reviewer is a charter-enforcer role in the local roster
 
+    When `repo` names a child repo, the enforcer set unions the parent and
+    child rosters (#552) so a child-repo enforcer qualifies for the exception
+    on that child's PRs.
+
     Resolves #228 — hook-side enforcement of the charter exception that was
     previously not honored.
     """
@@ -534,7 +630,7 @@ def is_single_reviewer_exception(
     if len(reviewers) != 1:
         return False
     sole_reviewer = next(iter(reviewers))
-    enforcers = load_charter_enforcer_names()
+    enforcers = load_charter_enforcer_names(repo=repo)
     return sole_reviewer in enforcers
 
 
@@ -613,27 +709,57 @@ def check(input_data: dict) -> dict | None:
             # admits any non-empty reviewer name. See main#294.
             comment_review_result = check_comment_reviews(number, "", repo=repo)
 
-    # Filter charter-format (comment-based) reviewers against the local roster
-    # before counting them toward the 2-reviewer gate (#498). The 2-reviewer
-    # rule exists to ensure two distinct ROSTER MEMBERS reviewed; without this
+    pr_display = f"#{pr_number}" if pr_number else "(current branch)"
+
+    # Filter charter-format (comment-based) reviewers against the roster before
+    # counting them toward the 2-reviewer gate (#498). The 2-reviewer rule
+    # exists to ensure two distinct ROSTER MEMBERS reviewed; without this
     # filter, fictional / non-roster Requestor strings (e.g., the P3W11 #487
     # "Camila Restrepo" / "Imelda Santos" incident) slip through unchallenged.
     # Formal GitHub reviews (`formal_reviewers`) are NOT filtered — those are
     # real GitHub identities authenticated by the platform, not persona names
     # that need cross-checking against `.claude/team/roster/`.
-    roster_names = _load_roster_names()
+    #
+    # The roster is resolved relative to the PR's TARGET repo (#552): the parent
+    # roster is unioned with the named child repo's `.claude/team/roster/`, so a
+    # reviewer valid in EITHER the org-level team or the target child repo
+    # passes. If a child repo is named but its roster dir is unreadable, fail in
+    # the SAFE direction (HARD BLOCK with diagnostic — never silent parent-only
+    # fallback, which would re-block legitimate child reviewers as #552 did).
+    try:
+        roster_names = _load_roster_names(repo=repo)
+    except RosterResolutionError as exc:
+        result = {
+            "decision": "block",
+            "reason": (
+                f"BLOCKED: PR {pr_display} targets a child repo whose roster directory "
+                "could not be resolved, so the 2-reviewer gate cannot validate reviewer "
+                "names.\n"
+                f"Detail: {exc}\n"
+                "Hook 4 resolves the reviewer roster relative to the PR's target repo "
+                "(#552): the parent `.claude/team/roster/` is unioned with the named child "
+                "repo's `.claude/team/roster/`. The child roster dir was named via "
+                "`--repo` but does not exist on disk.\n"
+                "Fix one of:\n"
+                "  - Ensure the child repo is checked out as a sibling of the parent repo "
+                "with a populated `.claude/team/roster/`.\n"
+                "  - Correct the `--repo OWNER/NAME` value if the repo name is wrong.\n"
+                "Pass `--admin` for emergency overrides only."
+            ),
+        }
+        log_pretooluse_block("validate_pr_review", command, result["reason"])
+        return result
+
     non_roster_requestors = {r for r in comment_review_result.reviewers if r not in roster_names}
     roster_comment_reviewers = comment_review_result.reviewers - non_roster_requestors
 
     distinct_reviewers = formal_reviewers | roster_comment_reviewers
     total_distinct = len(distinct_reviewers)
 
-    pr_display = f"#{pr_number}" if pr_number else "(current branch)"
-
     # Single-Reviewer Exception (resolves #228) — wave-bootstrap PRs reviewed
     # by a charter enforcer may merge with one Approved comment instead of
-    # two. Charter-enforcer role check uses the local roster.
-    if total_distinct == 1 and is_single_reviewer_exception(labels, distinct_reviewers):
+    # two. Charter-enforcer role check uses the target-repo-resolved roster.
+    if total_distinct == 1 and is_single_reviewer_exception(labels, distinct_reviewers, repo=repo):
         # Exception applies — fall through to TechDebt check, then allow.
         pass
     elif total_distinct < 2:
