@@ -1,0 +1,39 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "//": "Spellcheck for noorinalabs-main authored docs (#326). Scoped to canonical authored prose (charter, skills, ontology, top-level docs) — the append-only machine-ish records (feedback_log, trust_matrix, promotion_audit_log, roster cards) are excluded because they are dense with names, SHAs, and quoted shell that would balloon the dictionary without catching real typos. Domain vocabulary and team names live in project-words.txt.",
+  "dictionaryDefinitions": [
+    {
+      "name": "project-words",
+      "path": "./.cspell/project-words.txt",
+      "addWords": true
+    }
+  ],
+  "dictionaries": ["project-words", "en_US", "softwareTerms", "bash", "python", "node", "filetypes"],
+  "ignoreRegExpList": [
+    "/[0-9a-f]{7,40}/",
+    "/https?:\\/\\/[^\\s)]+/",
+    "/`[^`]+`/",
+    "/<!--[\\s\\S]*?-->/",
+    "/\\b[A-Z_]{3,}\\b/"
+  ],
+  "files": [
+    ".claude/team/charter/**/*.md",
+    ".claude/skills/**/*.md",
+    "ontology/**/*.md",
+    "CLAUDE.md",
+    "ONBOARDING.md",
+    "docs/**/*.md"
+  ],
+  "ignorePaths": [
+    "noorinalabs-isnad-graph/**",
+    "noorinalabs-user-service/**",
+    "noorinalabs-deploy/**",
+    "noorinalabs-design-system/**",
+    "noorinalabs-data-acquisition/**",
+    "noorinalabs-isnad-ingest-platform/**",
+    "noorinalabs-landing-page/**",
+    ".claude/worktrees/**",
+    "node_modules/**"
+  ]
+}
