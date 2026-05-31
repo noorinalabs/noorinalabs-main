@@ -4,7 +4,7 @@ description: Phase definition, end-state criteria, exit gate, wave history
 phase: 3
 status: active
 created: 2026-04-30
-last_updated: 2026-05-30
+last_updated: 2026-05-31
 ---
 
 # Phase 3 — fix our tools, fix our deployment
@@ -17,6 +17,8 @@ Phase 3 runs two tracks simultaneously:
 2. **Fix our deployment** — get staging and production live and continuously deployed. Wave wrap-ups gate on a successful staging promotion. Smoke tests run automatically post-deploy.
 
 Both tracks must move together. Finishing only one is not phase exit.
+
+**Deploy-track-alongside rule (ratified 2026-05-31 per Proposal B):** From W13 onward, every wave MUST include at least one deploy-track operational item (criteria #1/#2/#3/#8 — substantive operational progress, not infra-only) UNLESS the wave is themed `verification-and-close-sweep` (move OPEN-but-substantively-done criteria to DONE). W13 enacts this via `tier_2_deploy_track` (main#325 wrapup-gate, main#329 smoke tests).
 
 ## End-state criteria — Phase 3 exits when ALL hold
 
@@ -141,11 +143,11 @@ The phase plan says: "Both tracks must move together. Finishing only one is not 
 
 The implicit "both tracks move together" rule has been violated in every wave so far (tools moved, deploy operational didn't). Either the rule isn't load-bearing in practice (and should be relaxed), or W13+ must include explicit deploy-track operational work.
 
-## Proposed spec revisions — owner-pending 2026-05-30
+## Spec revisions — owner-decided 2026-05-31 (post-W12 retro)
 
-Three concrete proposals. Owner ratifies, modifies, or rejects each; PR landing approval enacts them.
+Three concrete proposals. Owner ratified Proposal B and C, held Proposal A. PR #545 enacts the ratifications; the held proposal is retained below for audit trail.
 
-### Proposal A — Criterion #9 reality-check: relax cumulative gate; reshape new-filed axis
+### Proposal A — Criterion #9 reality-check: relax cumulative gate; reshape new-filed axis  (HELD 2026-05-31)
 
 **Current**: `<10% of new AND <10% of cumulative open`
 **Proposed**: `<20% of cumulative open` as the hard phase-exit gate, AND `new-filed ratio trending DOWN month-over-month` as the directional axis (rather than fixed <10%).
@@ -154,14 +156,18 @@ Three concrete proposals. Owner ratifies, modifies, or rejects each; PR landing 
 
 **Owner-explicit "no softening" stance (2026-05-13)** acknowledged. This proposal asks whether that stance is still load-bearing 2.5 weeks later given post-W12 actuals.
 
-### Proposal B — Two-track move-together: codify deploy-track-alongside requirement from W13+
+**Owner decision (2026-05-31): HELD.** Criterion #9 cumulative gate stays at `<10% of new AND <10% of cumulative open` — both axes unchanged. Owner directive: tech-debt sweep continues at current trajectory (W13 + W14 + ... as needed) until the gate closes. The 2026-05-13 "no softening" stance remains load-bearing.
+
+### Proposal B — Two-track move-together: codify deploy-track-alongside requirement from W13+  (RATIFIED 2026-05-31)
 
 **Current**: "Both tracks must move together. Finishing only one is not phase exit."
 **Proposed addition**: "From W13 onward, every wave MUST include at least one deploy-track operational item (criteria #1/#2/#3/#8 — substantive operational progress, not infra-only) UNLESS the wave is themed `verification-and-close-sweep` (move OPEN-but-substantively-done criteria to DONE)."
 
 **Rationale**: W13 as locked-by-owner is TD reduction for us/deploy/ingest-platform. Encoding deploy-track-alongside means W13 picks up one deploy-track operational item *in addition to* the TD sweep — or is themed verification-and-close-sweep. If neither is acceptable, the "both tracks move together" line is functionally dead and should be removed.
 
-### Proposal C — Verification-and-close sweep (possibly W13 stretch, or W14)
+**Owner decision (2026-05-31): RATIFIED.** Enacted in `§ Theme` above (deploy-track-alongside rule). W13 picks up `main#325` (wave-wrapup stg-promotion gate, Aino-class) + `main#329` (post-deploy smoke tests stg+prod, Lucas-class) as `tier_2_deploy_track` — committed via PR #546.
+
+### Proposal C — Verification-and-close sweep (RATIFIED 2026-05-31, folded into W13 tier_5)
 
 **Action**: Spawn an audit pass (Aino-class) walking #322 / #326 / #327 / #328 declaring each:
 - **Done** — close the tracking issue with summary comment of the work that closed it
@@ -170,7 +176,7 @@ Three concrete proposals. Owner ratifies, modifies, or rejects each; PR landing 
 
 **Rationale**: 4 criteria appear substantively done but tracked-open. Closing 3 of 9 in a half-day audit pass would move the visible-criterion-count from 0/9 to 3/9 immediately — more honest representation of P3 progress than the current "all 9 open" surface.
 
-Could fold into W13 as a stretch task or be a dedicated mini-wave (W13.5 or W14).
+**Owner decision (2026-05-31): RATIFIED.** Folded into W13 as `tier_5_verify_and_close`: main#322 (criterion #4 — CI failures block all merges), main#326 (criterion #5 — committed artifacts pass all checks), main#327 (criterion #6 — pre-commit + pre-push hooks every repo), main#328 (criterion #7 — hook/skill/charter ownership disambiguated). Aino verifies + closes where substantively done. PR #546 commits the scope addition; W13 wave-wrapup re-counts criterion-done state.
 
 ---
 
