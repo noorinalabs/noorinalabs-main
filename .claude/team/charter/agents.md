@@ -580,3 +580,43 @@ The two rules are complementary:
 #### Provenance
 
 P3W10 retro PR #441 § Proposed Process Changes #4. 22-substitution evidence (34% of 65 W10 PRs). Owner-adopted 2026-05-16 (PR #444). Sibling memory: `feedback_child_repo_implementer_rule.md` (which the parent § Child-Repo Implementer Rule + Spawn-Brief Verification already supersedes for roster-source rules; this sub-section adds the authority-source clarification).
+
+## Throttle-Stall Recovery — Trigger Thresholds <!-- promotion-target: hook -->
+
+`feedback_throttle_takeover` covers the takeover *mechanic* — when a spawned implementer throttle-stalls mid-task with sound partial work, the orchestrator finishes directly with the implementer's per-commit identity (~5min vs respawn's ~15min). This section encodes the **trigger**: when the orchestrator should detect the stall and invoke that mechanic, rather than discovering it reactively hours later.
+
+### The thresholds
+
+For an implementer agent that has gone idle **mid-task with pending uncommitted work**, the orchestrator runs the following cadence (elapsed time measured from the implementer's last message or last observed progress):
+
+1. **First ping at 30min idle.** Status-check message naming the observed state, e.g.: "Where are you? Worktree shows X modified files since session start, no commits yet." The ping both prompts the implementer and timestamps the orchestrator's detection.
+2. **Second ping at 45min idle** if the first ping went unanswered.
+3. **Auto-takeover at 60min idle** (or 15min after the second ping, whichever is later). The orchestrator initiates `feedback_throttle_takeover`: take over with the implementer's per-commit identity, preserve attribution in the PR body, and record the takeover in the wave decisions log so the retro trust matrix attributes the work to the original implementer.
+
+### Trigger scope — mid-task-with-pending-work only
+
+The 30/45/60min cadence applies **only** to idle that is mid-step on uncommitted work. Concrete signals:
+
+- worktree is dirty (modified files since session start), OR
+- branch pushed but no PR opened, OR
+- branch not pushed at all despite a committed-and-ready report.
+
+Normal **idle-after-turn-completion** does NOT trigger this — an implementer who has reported a clean handoff and is awaiting the next assignment is not stalled. The distinguishing signal is pending work the implementer was clearly mid-step on, not silence alone.
+
+### Out of scope
+
+- **Reviewer-agent stalls** — reviewers don't typically carry uncommitted work, so the worktree-dirty signal doesn't apply; different detection pattern, not covered here.
+- **Agent-tool spawn timeouts** — a different layer (harness-level), not orchestrator-side cadence.
+- **Hook enforcement of the timer** — the threshold is orchestrator-side discipline; whether to promote it to a hook follows the general `feedback_enforcement_hierarchy` decision pattern and is deferred (see promotion-target marker above).
+
+### Worked example (W12 origin)
+
+`isnad-graph#931` (starlette security fix): Idris Yusuf spawned 2026-05-30 04:51Z, sent a status update at 05:00Z ("pytest running... will report back as soon as it finishes"), then went idle. The orchestrator did not notice the stall until **14:37Z — 9 hours 37 minutes later** while doing other work; pytest had been stuck at 1 CPU-second the entire time. Throttle-takeover recovered cleanly in ~5min once detected, but the 9+ hour gap was pure waiting — exactly the loss this cadence exists to prevent. Under the thresholds above, the first ping would have fired at ~05:30Z and takeover by ~06:00Z.
+
+### Severity if violated
+
+Reactive-only detection (no cadence, stall discovered at the next state review): **minor-to-moderate** depending on deadline proximity — the work is recoverable via takeover, but the idle gap is dead time that compounds against wave deadlines (especially hard cutovers like the node24 June-2 class).
+
+### Provenance
+
+P3W12 retro (PR #540) § Proposed Process Changes #1, filed as `noorinalabs/noorinalabs-main#542` and prioritized for W13 per owner direction 2026-05-30. Sibling memory: `feedback_throttle_takeover` (P3W4 Aino-#158 2026-05-05) — the mechanic. This section is the trigger; the split (charter = when, memory = how) follows the `feedback_pre_spawn_verify_file_existence_at_head` (memory) → pre-spawn-discipline (charter) precedent.
