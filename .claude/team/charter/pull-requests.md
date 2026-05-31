@@ -294,6 +294,64 @@ Pushing code that fails lint, formatting, or tests is a **minor feedback event**
 
 **Why:** In Phase 2 Wave 1, PR #72 introduced a hook CI workflow that immediately failed on pre-existing ruff I001 lint in other files. CI went red on main because the violations weren't fixed before merge.
 
+## Org-Wide Branch Protection + Admin-Merge Exceptions (Mandatory) <!-- promotion-target: none -->
+
+Phase-3 end-state criterion #4 (`noorinalabs-main#322`): **CI failures block all merges** on every repo's default branch, org-wide — not just by team discipline, but enforced server-side by GitHub. As of W13, 7 of 8 repos (all child repos + `noorinalabs-main`) had NO branch protection and relied SOLELY on the Hook 4 comment-gate; that single-layer gap is what let the W11 batch-loop merge evade review (`feedback_batch_loop_merge_evades_pr_review_hook`). This section is the canonical spec that closes that gap; the live pilot proves it and the remaining repos adopt it per the application-status note (the spec, not a blanket apply, is the durable artifact).
+
+This section is the **canonical ruleset spec** — the shape every repo's protection must take. It is the high-value deliverable of #322 because it resolves a real tension: GitHub's native "require approvals" counts formal reviews our team structurally cannot produce, so a naive protection rule would deadlock our merge flow. The spec below defines a shape that enforces protection *without* that deadlock.
+
+### Application status
+
+The spec, the hook-side admin-merge gate, and a de-risked live pilot all land in **W13** (this PR, **`Refs #322`**); the org-wide application to the remaining repos is the **W14 fast-follow**, so `#322` stays **OPEN** as the rollout tracker until all 8 repos carry the protection. Mid-wave caution: applying default-branch protection to a repo with in-flight wave-branch PRs or before the wave→main wrapup merge can block our own merges, so org-wide application is staged rather than blanket-applied in one shot.
+
+**Pilot (W13, live):** the spec is proven live on **one** repo with no in-flight W13 PRs — `noorinalabs-data-acquisition` (ruleset id `17091263`): `~DEFAULT_BRANCH`, active, `pull_request` (0 reviews) + `required_status_checks` (strict; `Lint`, `Type Check`, `Test`, `Integration Tests`) + `deletion` + `non_fast_forward` + Repository-admin `always` bypass. Read-back-verified at origin. `noorinalabs-isnad-graph` already carried its own pre-existing protection and is untouched.
+
+**Remaining 6 repos:** the apply is **mechanical re-creation from this spec** — `gh api -X POST repos/<repo>/rulesets --input <json>` per repo with the required-check contexts tabulated below, read-back-verified, scheduled for whenever that repo has no in-flight default-branch merge in flight (post-wrapup is the safe window). This is execution of a fully-specified plan, not open design — but it is still execution that has not yet happened, so **criterion #4 is met only when the W14 rollout has applied the ruleset to all 8 default branches**; until then `#322` stays OPEN as the rollout tracker. This PR delivers the spec, the hook, and the pilot — not the org-wide enforcement.
+
+### The ruleset shape (and why it's shaped this way)
+
+The ruleset each repo adopts is a **repository ruleset** targeting `~DEFAULT_BRANCH`, `enforcement: active`, with (the pilot already carries it; the remaining repos adopt it per the application-status note above):
+
+- a `pull_request` rule with **`required_approving_review_count: 0`**, and
+- a `required_status_checks` rule (`strict_required_status_checks_policy: true`) listing that repo's **unconditional PR-gate check contexts**, and
+- `deletion` + `non_fast_forward` protection, and
+- a single `bypass_actors` entry: the built-in **Repository admin** role (`actor_id: 5`, `bypass_mode: always`).
+
+The load-bearing design decision is **0 required approvals, not 1.** GitHub's "require approvals" counts **formal GitHub PR reviews** — which our team cannot produce: the `gh` auth principal IS the PR author (`parametrization`), so a formal self-approval 422s (`feedback_gh_review_self_approve_422`), and our review discipline runs on **issue-comment verdicts** validated by Hook 4 (`validate_pr_review`), not formal reviews. A naive "require 1 approval" rule would therefore **deadlock every merge**. So the ruleset enforces only what it can enforce without breaking us — *a PR must exist* + *CI must be green* — and leaves reviewer-count enforcement to Hook 4, where the issue's own scope note ("Required-reviewer count beyond charter — already covered by `validate_pr_review`") puts it.
+
+The **Repository-admin `always` bypass** is what keeps the established flow working: the orchestrator's `--admin` wave→main wrapup merges, the wave-bootstrap and doc-sweep single-reviewer exceptions, and Emergency-Mode restore merges all run as admin. The bypass is the GitHub-side counterpart to the hook-side exception list below — protection for everyone, an audited escape valve for the established exceptions.
+
+### Two path-filtered repos require PR-before-merge only
+
+`noorinalabs-main` and `noorinalabs-deploy` have **fully path-filtered CI** — every PR-triggered workflow carries a `paths:` filter, so a PR that doesn't touch those paths (e.g. a charter/docs-only PR) produces **zero check-runs**. GitHub treats a hard-required-but-never-reported check as perpetually pending → it would deadlock the majority of PRs in those two repos. The spec therefore assigns these two a **PR-before-merge + deletion/non-fast-forward** ruleset that does NOT hard-require status-check contexts. For these two, CI-green enforcement falls to the **`validate_pr_ci_status` hook** (which reads the live `statusCheckRollup` at `gh pr merge` time and blocks on red/pending) plus the admin-merge exception gate below. The five remaining repos (data-acquisition, user-service, design-system, landing-page, ingest-platform) have unconditional PR CI, so the spec assigns them a ruleset that DOES hard-require their gate contexts. The per-repo required-check contexts the W14 rollout will apply:
+
+| Repo | CI posture | Required check contexts (strict) |
+|---|---|---|
+| data-acquisition | unconditional PR CI | `Lint`, `Type Check`, `Test`, `Integration Tests` |
+| user-service | unconditional PR CI | `check`, `openapi-snapshot-drift` |
+| design-system | unconditional PR CI | `ci (20.x)`, `validate-package` |
+| landing-page | unconditional PR CI | `Lint, Type Check & Build`, `E2E Tests (Playwright)` |
+| ingest-platform | unconditional PR CI | `lint-and-typecheck`, `security-audit`, `test` |
+| **noorinalabs-main** | path-filtered | (none — PR-before-merge only) |
+| **noorinalabs-deploy** | path-filtered | (none — PR-before-merge only) |
+
+(Contexts enumerated from each repo's default-branch check-runs at 2026-05-31; the rollout re-confirms them at apply time, since a repo's CI job names can change.)
+
+### Admin-merge exception list (hook-validated)
+
+`--admin` is no longer a silent bypass. `validate_pr_ci_status` blocks a `gh pr merge --admin` unless the operator declares a **charter-listed exception** via `ADMIN_MERGE_EXCEPTION="<class>:<rationale>"`. The `<rationale>` is required (non-empty) and **logged to the Annunaki audit trail** so each admin merge is reviewable at retro time (the issue's "auditable + reviewed at retro time" / "0 admin overrides per wave is a measured indicator"). The recognized classes:
+
+| Class | Charter source |
+|---|---|
+| `wave-bootstrap` | § Single-Reviewer Exception (Wave-Bootstrap Only) |
+| `doc-sweep` | § Trivial Cross-Repo Doc Sweep |
+| `wave-merge` | the wave→main wrapup merge (orchestrator-merged) |
+| `emergency` | `emergency-mode.md` § Allowed bypasses (`[EMERGENCY]`-prefixed) |
+
+An absent or unrecognized exception **blocks** (fail-safe per `feedback_safety_direction_over_ux_friction`). Adding a class here requires adding the matching entry to `_CHARTER_ADMIN_EXCEPTIONS` in the hook — the two are kept in lockstep.
+
+**Why:** criterion #4 closes the silent-bypass class directly via two complementary gates. The ruleset is the server-side gate (covers UI merges, external actors, the batch-loop-evasion class); the hook is the operator-side gate (covers `gh pr merge`, names the exceptions, writes the audit trail). Defense in depth — neither alone is sufficient, because the ruleset's admin bypass would otherwise be unaudited and the hook alone doesn't cover non-`gh`-CLI merges. The hook-side gate is **active now** (this PR); the server-side ruleset is **active on the pilot now** and rolls out org-wide in W14 per the rollout-status note above. Note the two gates are mutually reinforcing on the apply order: because the hook already requires `ADMIN_MERGE_EXCEPTION` for `--admin`, the W14 rollout can apply default-branch rulesets without the admin-bypass becoming an unaudited hole the moment it exists.
+
 ## CI Enforcement After PR Creation <!-- promotion-target: skill -->
 After creating a PR, **every team member** must follow this process:
 

@@ -16,8 +16,38 @@ Does NOT match: gh pr list, gh pr view, gh pr checks, gh pr create, gh pr edit,
                 git merge, git pull.
 Flag pass-through:
     --repo  → forwarded to `gh pr view`
-    --admin → short-circuits (emergency override — allows merge)
+    --admin → validated against the charter admin-merge exception list (see
+              "Admin-merge exception validation" below) — NO LONGER an
+              unconditional short-circuit
     --auto  → permits pending checks (GitHub auto-merge on green)
+
+Admin-merge exception validation (main#322 — P3 end-state criterion #4)
+======================================================================
+
+Org-wide branch-protection rulesets (main#322) let the **Repository admin**
+role bypass the GitHub-side required-status-checks gate. That bypass is what
+keeps our merge flow working (we use issue-comment verdicts, not GitHub
+formal reviews, and the orchestrator merges wave→main with `--admin`). But an
+unconditional, unlogged `--admin` short-circuit is exactly the silent escape
+hatch criterion #4 exists to close ("--admin merge usage is hook-blocked OR
+auditable + reviewed at retro time; charter exceptions are formally listed
+and validated at PR-merge hook time").
+
+So `--admin` no longer allows unconditionally. It requires an
+`ADMIN_MERGE_EXCEPTION` env var of the form `<class>:<rationale>`, where
+`<class>` is one of the charter-listed exception classes
+(`_CHARTER_ADMIN_EXCEPTIONS`) and `<rationale>` is a non-empty justification.
+The use is logged (via `log_pretooluse_block`, which doubles as the audit
+trail the retro reads). An absent or unrecognized exception **blocks** —
+fail-safe per `feedback_safety_direction_over_ux_friction` (a broken-but-
+blocking gate fails in the safe direction; a silent allow does not).
+
+The exception classes mirror `charter/pull-requests.md` and
+`charter/emergency-mode.md`:
+    wave-bootstrap → § Single-Reviewer Exception (Wave-Bootstrap Only)
+    doc-sweep      → § Trivial Cross-Repo Doc Sweep
+    wave-merge     → the wave→main wrapup merge (orchestrator-merged)
+    emergency      → § Emergency Mode (`[EMERGENCY]`-prefixed restore work)
 
 NEUTRAL conclusion semantics (resolves #219)
 ============================================
@@ -42,8 +72,9 @@ rather than "no opinion." Charter `pull-requests.md § CI Must Be Green`
 governs the rule; this allowlist is the operational mapping.
 
 Exit codes:
-  0 — allow (not a merge command, --admin override, or all checks green)
-  2 — block (failing or pending checks without --auto)
+  0 — allow (not a merge command, validated --admin exception, or all checks green)
+  2 — block (failing/pending checks without --auto, or --admin without a valid
+      charter exception)
 """
 
 import json
@@ -55,6 +86,16 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _repo_flag_parse import extract_repo
 from annunaki_log import log_pretooluse_block
+
+# Charter-listed admin-merge exception classes (main#322). An `--admin` merge
+# must declare one of these via `ADMIN_MERGE_EXCEPTION=<class>:<rationale>`.
+# Keep in lockstep with `charter/pull-requests.md` + `charter/emergency-mode.md`.
+_CHARTER_ADMIN_EXCEPTIONS = {
+    "wave-bootstrap": "Single-Reviewer Exception (Wave-Bootstrap Only)",
+    "doc-sweep": "Trivial Cross-Repo Doc Sweep",
+    "wave-merge": "wave→main wrapup merge (orchestrator-merged)",
+    "emergency": "Emergency Mode ([EMERGENCY]-prefixed restore work)",
+}
 
 # Conclusion values that unambiguously indicate a failed check.
 _FAILURE_CONCLUSIONS = {
@@ -94,6 +135,43 @@ def is_merge_command(command: str) -> bool:
         if re.match(r"gh\s+pr\s+merge\b", stripped):
             return True
     return False
+
+
+def validate_admin_exception(input_data: dict) -> dict | None:
+    """Validate an `--admin` merge against the charter exception list (main#322).
+
+    Returns None when the admin merge is authorized (a recognized exception
+    class with a non-empty rationale) — the caller then allows the merge.
+    Returns a block result dict when the exception is absent or unrecognized,
+    so an undeclared `--admin` fails safe instead of silently bypassing the
+    gate. The authorized case is logged too, so the retro has an audit trail
+    of every admin-merge exception used during a wave.
+    """
+    raw = (input_data.get("env", {}) or {}).get("ADMIN_MERGE_EXCEPTION")
+    if raw is None:
+        raw = os.environ.get("ADMIN_MERGE_EXCEPTION", "")
+    raw = (raw or "").strip()
+
+    cls, sep, rationale = raw.partition(":")
+    cls = cls.strip()
+    rationale = rationale.strip()
+    valid_list = ", ".join(sorted(_CHARTER_ADMIN_EXCEPTIONS))
+
+    if not sep or cls not in _CHARTER_ADMIN_EXCEPTIONS or not rationale:
+        return {
+            "decision": "block",
+            "reason": (
+                "BLOCKED: `--admin` merge requires a charter-listed exception. "
+                'Set ADMIN_MERGE_EXCEPTION="<class>:<rationale>" before merging, '
+                f"where <class> is one of: {valid_list}, and <rationale> is a "
+                "non-empty justification (logged for retro audit per main#322).\n"
+                "Charter: pull-requests.md § Single-Reviewer Exception / § Trivial "
+                "Cross-Repo Doc Sweep / § CI Must Be Green Before Merge; "
+                "emergency-mode.md § Allowed bypasses.\n"
+                f"Received ADMIN_MERGE_EXCEPTION={raw!r}."
+            ),
+        }
+    return None
 
 
 def extract_pr_number(command: str) -> str | None:
@@ -195,6 +273,21 @@ def check(input_data: dict) -> dict | None:
         return None
 
     if "--admin" in command:
+        # main#322: `--admin` no longer short-circuits unconditionally. It must
+        # name a charter-listed exception via ADMIN_MERGE_EXCEPTION, else block.
+        exception_block = validate_admin_exception(input_data)
+        if exception_block is not None:
+            log_pretooluse_block("validate_pr_ci_status", command, exception_block["reason"])
+            return exception_block
+        # Authorized exception — allow, but log the use for retro audit.
+        raw = (input_data.get("env", {}) or {}).get("ADMIN_MERGE_EXCEPTION") or os.environ.get(
+            "ADMIN_MERGE_EXCEPTION", ""
+        )
+        log_pretooluse_block(
+            "validate_pr_ci_status",
+            command,
+            f"ADMIN-MERGE EXCEPTION AUTHORIZED (audit): {raw.strip()}",
+        )
         return None
 
     pr_number = extract_pr_number(command)

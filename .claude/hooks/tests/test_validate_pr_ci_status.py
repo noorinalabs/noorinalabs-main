@@ -252,11 +252,30 @@ class EmptyRollupTests(unittest.TestCase):
         if result is not None:
             self.assertNotEqual(result.get("decision"), "block")
 
-    def test_admin_override_skips_empty_rollup_check(self):
-        """`--admin` short-circuits before fetch_checks — empty rollup never inspected."""
-        with mock.patch.object(hook, "fetch_checks", return_value=[]) as mock_fetch:
+    def test_admin_with_valid_exception_skips_empty_rollup_check(self):
+        """`--admin` + a valid ADMIN_MERGE_EXCEPTION short-circuits before
+        fetch_checks — empty rollup never inspected (main#322)."""
+        env = {"ADMIN_MERGE_EXCEPTION": "wave-merge: P3W13 wave->main wrapup"}
+        with (
+            mock.patch.object(hook, "fetch_checks", return_value=[]) as mock_fetch,
+            mock.patch.object(hook, "log_pretooluse_block"),
+            mock.patch.dict("os.environ", env, clear=False),
+        ):
             result = hook.check(self._bash_input("gh pr merge 42 --admin"))
         self.assertIsNone(result)
+        mock_fetch.assert_not_called()
+
+    def test_admin_without_exception_blocks_before_fetch(self):
+        """`--admin` with NO ADMIN_MERGE_EXCEPTION now BLOCKS (main#322) and
+        never reaches fetch_checks — the silent bypass is closed."""
+        with (
+            mock.patch.object(hook, "fetch_checks", return_value=[]) as mock_fetch,
+            mock.patch.object(hook, "log_pretooluse_block"),
+            mock.patch.dict("os.environ", {}, clear=True),
+        ):
+            result = hook.check(self._bash_input("gh pr merge 42 --admin"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
         mock_fetch.assert_not_called()
 
     def test_non_merge_command_not_checked(self):
@@ -265,6 +284,91 @@ class EmptyRollupTests(unittest.TestCase):
             result = hook.check(self._bash_input("gh pr view 42"))
         self.assertIsNone(result)
         mock_fetch.assert_not_called()
+
+
+class AdminMergeExceptionTests(unittest.TestCase):
+    """main#322: `--admin` merges must declare a charter-listed exception via
+    ADMIN_MERGE_EXCEPTION=<class>:<rationale>, else fail safe (block). This is
+    the hook-time validation of the formally-listed charter exceptions that
+    the org-wide branch-protection rulesets' admin-bypass relies on.
+
+    `validate_admin_exception` reads the env var (stdin `env` block first, then
+    os.environ). It returns None when authorized, a block dict otherwise.
+    """
+
+    @staticmethod
+    def _input(exception: str | None) -> dict:
+        env = {} if exception is None else {"ADMIN_MERGE_EXCEPTION": exception}
+        return {
+            "tool_name": "Bash",
+            "tool_input": {"command": "gh pr merge 42 --admin"},
+            "env": env,
+        }
+
+    # --- authorized: each charter class with a rationale allows ---
+
+    def test_each_charter_class_with_rationale_authorizes(self):
+        for cls in ("wave-bootstrap", "doc-sweep", "wave-merge", "emergency"):
+            with self.subTest(cls=cls):
+                with mock.patch.dict("os.environ", {}, clear=True):
+                    result = hook.validate_admin_exception(
+                        self._input(f"{cls}: legitimate reason for {cls}")
+                    )
+                self.assertIsNone(result, f"{cls} with rationale must authorize")
+
+    # --- blocked: absent / empty / unknown-class / missing-rationale ---
+
+    def test_absent_exception_blocks(self):
+        with mock.patch.dict("os.environ", {}, clear=True):
+            result = hook.validate_admin_exception(self._input(None))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+
+    def test_unknown_class_blocks(self):
+        with mock.patch.dict("os.environ", {}, clear=True):
+            result = hook.validate_admin_exception(self._input("because-i-said-so: please"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+
+    def test_known_class_without_rationale_blocks(self):
+        with mock.patch.dict("os.environ", {}, clear=True):
+            result = hook.validate_admin_exception(self._input("wave-merge:"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+
+    def test_known_class_no_colon_blocks(self):
+        with mock.patch.dict("os.environ", {}, clear=True):
+            result = hook.validate_admin_exception(self._input("wave-merge"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+
+    def test_block_message_lists_valid_classes(self):
+        with mock.patch.dict("os.environ", {}, clear=True):
+            result = hook.validate_admin_exception(self._input(None))
+        assert result is not None
+        for cls in hook._CHARTER_ADMIN_EXCEPTIONS:
+            self.assertIn(cls, result["reason"])
+
+    # --- env source precedence: os.environ fallback when no stdin env block ---
+
+    def test_os_environ_fallback_authorizes(self):
+        payload = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "gh pr merge 42 --admin"},
+        }
+        with mock.patch.dict(
+            "os.environ",
+            {"ADMIN_MERGE_EXCEPTION": "doc-sweep: byte-identical CLAUDE.md sync"},
+            clear=True,
+        ):
+            result = hook.validate_admin_exception(payload)
+        self.assertIsNone(result)
+
+    def test_constant_matches_charter_classes(self):
+        self.assertEqual(
+            set(hook._CHARTER_ADMIN_EXCEPTIONS),
+            {"wave-bootstrap", "doc-sweep", "wave-merge", "emergency"},
+        )
 
 
 class ExtractRepoCallSiteTests(unittest.TestCase):
