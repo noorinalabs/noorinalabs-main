@@ -1290,5 +1290,236 @@ class ExtractRepoCallSiteTests(unittest.TestCase):
         )
 
 
+class ChildRosterResolutionTests(unittest.TestCase):
+    """Issue #552: the roster the 2-reviewer gate validates against must be
+    resolved relative to the PR's TARGET repo, not hardcoded to the parent.
+
+    Pre-#552 `_ROSTER_DIR` was fixed to the parent repo's roster, so a child
+    repo PR reviewed by legitimate child-repo personas (e.g. Anya Kowalczyk,
+    Idris Yusuf) had those reviewers filtered out as "non-roster" — the gate
+    blocked the merge or, after the merge was forced, defeated itself via
+    `--admin`. In P3W13 this forced `--admin` on 14/37 child-repo PRs.
+
+    The fix unions the parent roster with the named child repo's
+    `.claude/team/roster/`. These tests build a hermetic on-disk parent+child
+    roster tree under a tmp dir and monkeypatch `_ROSTER_DIR` /
+    `_PARENT_REPO_ROOT` so they do not depend on the live sibling checkout.
+    """
+
+    PARENT_PERSONAS = {
+        "standards_lead_aino": "Aino Virtanen",
+        "program_director_nadia": "Nadia Khoury",
+    }
+    # Child personas — NOT present in the parent roster. `manager_*` is a
+    # charter-enforcer prefix; `engineer_*` is a plain reviewer.
+    CHILD_PERSONAS = {
+        "engineer_anya": "Anya Kowalczyk",
+        "engineer_idris": "Idris Yusuf",
+        "manager_bereket": "Bereket Tadesse",
+    }
+    CHILD_REPO_NAME = "noorinalabs-isnad-graph"
+    CHILD_REPO = f"noorinalabs/{CHILD_REPO_NAME}"
+
+    def _write_roster(self, roster_dir: Path, personas: dict[str, str]) -> None:
+        roster_dir.mkdir(parents=True, exist_ok=True)
+        for slug, name in personas.items():
+            (roster_dir / f"{slug}.md").write_text(
+                f"# Roster Card\n\n## Identity\n- **Name:** {name}\n", encoding="utf-8"
+            )
+
+    def setUp(self) -> None:
+        import tempfile
+
+        self._tmp = tempfile.TemporaryDirectory()
+        root = Path(self._tmp.name)
+        # Parent repo root holds .claude/team/roster and the child repo sibling.
+        parent_repo = root / "noorinalabs-main"
+        self._parent_roster = parent_repo / ".claude" / "team" / "roster"
+        self._write_roster(self._parent_roster, self.PARENT_PERSONAS)
+        child_roster = parent_repo / self.CHILD_REPO_NAME / ".claude" / "team" / "roster"
+        self._write_roster(child_roster, self.CHILD_PERSONAS)
+
+        self._patchers = [
+            mock.patch.object(hook, "_ROSTER_DIR", self._parent_roster),
+            mock.patch.object(hook, "_PARENT_REPO_ROOT", parent_repo),
+        ]
+        for p in self._patchers:
+            p.start()
+
+    def tearDown(self) -> None:
+        for p in self._patchers:
+            p.stop()
+        self._tmp.cleanup()
+
+    # --- _child_roster_dir resolution -------------------------------------
+
+    def test_child_roster_dir_resolves_for_child_repo(self):
+        d = hook._child_roster_dir(self.CHILD_REPO)
+        assert d is not None
+        self.assertTrue(d.is_dir())
+        self.assertEqual(d.parent.parent.parent.name, self.CHILD_REPO_NAME)
+
+    def test_child_roster_dir_none_for_parent_repo(self):
+        """`--repo noorinalabs/noorinalabs-main` → no distinct child dir."""
+        self.assertIsNone(hook._child_roster_dir("noorinalabs/noorinalabs-main"))
+
+    def test_child_roster_dir_none_for_absent_repo(self):
+        self.assertIsNone(hook._child_roster_dir(None))
+        self.assertIsNone(hook._child_roster_dir("not-a-repo-spec"))
+
+    # --- union roster -----------------------------------------------------
+
+    def test_load_roster_names_unions_parent_and_child(self):
+        names = hook._load_roster_names(repo=self.CHILD_REPO)
+        # Parent personas present.
+        self.assertIn("aino virtanen", names)
+        self.assertIn("nadia khoury", names)
+        # Child personas unioned in (#552).
+        self.assertIn("anya kowalczyk", names)
+        self.assertIn("idris yusuf", names)
+
+    def test_load_roster_names_parent_only_when_no_repo(self):
+        """No `--repo` → parent-only resolution (back-compat for parent PRs)."""
+        names = hook._load_roster_names(repo=None)
+        self.assertIn("aino virtanen", names)
+        self.assertNotIn("anya kowalczyk", names)
+
+    def test_enforcer_names_union_includes_child_manager(self):
+        """Child-repo `manager_*` is a charter enforcer for that repo's PRs."""
+        enforcers = hook.load_charter_enforcer_names(repo=self.CHILD_REPO)
+        self.assertIn("bereket tadesse", enforcers)
+        # engineer_* personas are NOT enforcers.
+        self.assertNotIn("anya kowalczyk", enforcers)
+
+    # --- end-to-end check() behavior --------------------------------------
+
+    @staticmethod
+    def _input(command: str) -> dict:
+        return {"tool_name": "Bash", "tool_input": {"command": command}}
+
+    @staticmethod
+    def _pr_data(**overrides) -> dict:
+        base = {
+            "author": "parametrization",
+            "number": 935,
+            "reviews": [],
+            "headRefName": "A.Kowalczyk/0900-fix",
+            "labels": [],
+        }
+        base.update(overrides)
+        return base
+
+    def test_child_pr_valid_child_reviewers_pass(self):
+        """Two distinct child-repo reviewers on a child PR → allow (#552 core)."""
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"anya kowalczyk", "idris yusuf"}
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input(f"gh pr merge 935 --repo {self.CHILD_REPO} --squash"))
+        self.assertIsNone(result, "valid child-repo reviewers must pass the 2-reviewer gate")
+
+    def test_child_pr_unknown_reviewer_blocks(self):
+        """A reviewer in NEITHER parent nor child roster is still non-roster."""
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"anya kowalczyk", "phantom persona"}
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input(f"gh pr merge 935 --repo {self.CHILD_REPO} --squash"))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("phantom persona", result["reason"].lower())
+        self.assertIn("1/2", result["reason"])
+
+    def test_parent_pr_still_passes_with_parent_reviewers(self):
+        """Regression: parent-repo PR (no `--repo`) with 2 parent reviewers → allow."""
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen", "nadia khoury"}
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input("gh pr merge 100 --squash"))
+        self.assertIsNone(result, "parent-repo PR with 2 parent reviewers must still pass")
+
+    def test_child_reviewer_does_not_count_on_parent_pr(self):
+        """A child-only persona must NOT satisfy the gate on a parent PR (no leak)."""
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen", "anya kowalczyk"}
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input("gh pr merge 100 --squash"))
+        self.assertIsNotNone(result, "child persona must not count on a parent-repo PR")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("1/2", result["reason"])
+
+    def test_missing_child_roster_dir_hard_blocks(self):
+        """Safe direction: `--repo` names a child whose roster dir is absent →
+        HARD BLOCK with diagnostic, never silent parent-only fallback
+        (feedback_safety_direction_over_ux_friction).
+        """
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen", "nadia khoury"}
+        missing_repo = "noorinalabs/noorinalabs-does-not-exist"
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input(f"gh pr merge 935 --repo {missing_repo} --squash"))
+        self.assertIsNotNone(result, "unresolvable child roster must fail closed")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        reason = result["reason"]
+        self.assertIn("roster", reason.lower())
+        self.assertIn("could not be resolved", reason)
+
+    def test_child_pr_single_reviewer_exception_with_child_enforcer(self):
+        """Single-Reviewer Exception honors a child-repo enforcer on a child PR.
+
+        wave-bootstrap + sole reviewer is the child repo's manager (enforcer)
+        → exception applies even though that persona is not in the parent roster.
+        """
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"bereket tadesse"}
+        with (
+            mock.patch.object(
+                hook,
+                "get_pr_data",
+                return_value=self._pr_data(labels=["wave-bootstrap", "tech-debt"]),
+            ),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input(f"gh pr merge 935 --repo {self.CHILD_REPO} --squash"))
+        self.assertIsNone(
+            result,
+            "child-repo enforcer should satisfy the single-reviewer exception on a child PR",
+        )
+
+
+class ResolveRosterDirsTests(unittest.TestCase):
+    """Issue #552: `_resolve_roster_dirs` returns parent + child dirs and raises
+    `RosterResolutionError` when a named child roster dir is missing.
+    """
+
+    def test_parent_only_when_no_repo(self):
+        dirs = hook._resolve_roster_dirs(None)
+        self.assertEqual(dirs, [hook._ROSTER_DIR])
+
+    def test_parent_only_when_repo_is_parent(self):
+        dirs = hook._resolve_roster_dirs(f"noorinalabs/{hook._PARENT_REPO_ROOT.name}")
+        self.assertEqual(dirs, [hook._ROSTER_DIR])
+
+    def test_raises_when_child_roster_missing(self):
+        with self.assertRaises(hook.RosterResolutionError):
+            hook._resolve_roster_dirs("noorinalabs/noorinalabs-nonexistent-xyz")
+
+
 if __name__ == "__main__":
     unittest.main()
