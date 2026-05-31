@@ -636,6 +636,7 @@ class ControlFlowHardBlockTests(unittest.TestCase):
 
 
 class NewlineSeparatorTests(unittest.TestCase):
+    # segment-class: Newline
     """Issue #537: an unescaped `\\n` between bash statements acts as a
     statement terminator (equivalent to `;`). Pre-fix the separator
     scanner only recognised `&&`/`||`/`;`/`|`, so multi-line scripts
@@ -708,6 +709,181 @@ class NewlineSeparatorTests(unittest.TestCase):
         self.assertIsNone(
             result,
             "backslash-newline line-continuation must not be treated as separator",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Canonical six-class segment-parser coverage matrix.
+#
+# Per `charter/hooks.md` § Hook Authorship Requirements § 5a (Mandatory Test
+# Coverage for PreToolUse Segment Parsers, issue #543), every hook that splits
+# a bash command on shell separators MUST carry allow + block coverage for ALL
+# SIX separator classes. The five classes above (ChainedCommandTests,
+# NewlineSeparatorTests, SubshellAwareTests, ControlFlowHardBlockTests,
+# QuoteAwareSplittingTests) already exercise these shapes under their original
+# feature-named classes; the classes below are the canonical-named, self-
+# contained reference implementation the charter section points to. Each
+# carries a `# segment-class: <Name>` marker so a future grep-based CI gate
+# (out of scope for #543, deferred follow-up) can assert all six are present.
+# ---------------------------------------------------------------------------
+
+
+class StandardSeparatorTests(unittest.TestCase):
+    # segment-class: Standard
+    """`&&` / `||` / `;` / `|` — the four standard statement separators.
+
+    Allow: env present on the pytest segment of an `&&` chain.
+    Block: env missing; suggestion lands on the pytest token of a `;` chain,
+    not the leading `cd`."""
+
+    def test_standard_separator_allows_when_env_on_pytest_segment(self) -> None:
+        result = hook.check(_bash("cd /path && ENVIRONMENT=test pytest tests/"))
+        self.assertIsNone(result, "env on the pytest segment of an && chain must allow")
+
+    def test_standard_separator_blocks_with_correctly_targeted_suggestion(
+        self,
+    ) -> None:
+        result = hook.check(_bash("cd /path ; pytest tests/"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        # Splice on the pytest segment, NOT the leading cd.
+        self.assertIn("ENVIRONMENT=test pytest tests/", result["reason"])
+        self.assertNotIn("ENVIRONMENT=test cd /path", result["reason"])
+
+
+class SubshellTests(unittest.TestCase):
+    # segment-class: Subshell
+    """`(cmd1; cmd2)` — a leading `(` opens a subshell; the env-block is
+    recognised inside the parens.
+
+    Allow: `(ENVIRONMENT=test pytest tests/)`.
+    Block: `(pytest tests/)`; suggestion splices the env inside the parens,
+    immediately before pytest."""
+
+    def test_subshell_allows_when_env_inside_parens(self) -> None:
+        result = hook.check(_bash("(ENVIRONMENT=test pytest tests/)"))
+        self.assertIsNone(result, "env inside the subshell parens must be recognised")
+
+    def test_subshell_blocks_with_inside_splice(self) -> None:
+        result = hook.check(_bash("(pytest tests/)"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("(ENVIRONMENT=test pytest tests/)", result["reason"])
+
+
+class ControlFlowBodyTests(unittest.TestCase):
+    # segment-class: ControlFlowBody
+    """`for x in ...; do pytest ...; done` — pytest inside a control-flow body
+    where a clean env splice is impossible. Per § Hook 4 / #478 the hook HARD
+    BLOCKS with an operator-readable diagnostic rather than allow-with-log
+    (which would silently bypass the protection). The hook does NOT peek into
+    the do-body for an existing env-block — even env-already-inside hard-blocks
+    (see `ControlFlowHardBlockTests.test_for_with_env_inside_do_body_*`), so
+    the meaningful "allow" for this class is a control-flow loop that carries
+    NO test runner at all (the hook correctly does not fire).
+
+    Allow: a control-flow loop with no pytest/make-test — hook does not fire.
+    Block: pytest in the body, env missing — HARD-BLOCK diagnostic naming the
+    construct."""
+
+    def test_control_flow_body_allows_when_no_test_runner_in_body(self) -> None:
+        result = hook.check(_bash("for d in a b; do echo $d; done"))
+        self.assertIsNone(
+            result,
+            "a control-flow loop with no test runner must not fire the hook",
+        )
+
+    def test_control_flow_body_hard_blocks_with_diagnostic(self) -> None:
+        result = hook.check(_bash("for d in a b; do pytest $d; done"))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        # The diagnostic names the control-flow construct rather than emitting
+        # an invalid keyword-spliced suggestion.
+        self.assertIn("control-flow", result["reason"].lower())
+
+
+class LineContinuationTests(unittest.TestCase):
+    # segment-class: LineContinuation
+    """`cmd \\<newline>  arg` — a backslash-escaped newline is a line
+    continuation, NOT a statement separator. The whole thing is one logical
+    segment; the `in_escape` flag in `_split_segments` must consume it.
+
+    Allow: env present on the (sole) continued pytest segment.
+    Block: env missing on the continued pytest segment; suggestion stays on
+    pytest and does not split at the continuation."""
+
+    def test_line_continuation_allows_when_env_present(self) -> None:
+        command = "ENVIRONMENT=test pytest a \\\n  b"
+        result = hook.check(_bash(command))
+        self.assertIsNone(
+            result,
+            "backslash-newline continuation must not split; env present allows",
+        )
+
+    def test_line_continuation_blocks_with_pytest_targeted_suggestion(
+        self,
+    ) -> None:
+        command = "pytest a \\\n  b"
+        result = hook.check(_bash(command))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        # Env splices onto the single continued segment, before pytest.
+        self.assertIn("ENVIRONMENT=test pytest a", result["reason"])
+
+
+class QuotedRegionTests(unittest.TestCase):
+    # segment-class: QuotedRegion
+    """Separators inside `'...'` or `"..."` are data, not splits — the quote-
+    aware state machine stays in-quote.
+
+    Allow: a quoted separator does not produce a spurious env-less pytest
+    segment when the real pytest segment already carries env.
+    Block: a real pytest segment alongside a quoted `&&` blocks, with the
+    splice landing on the real pytest token, not inside the quoted region."""
+
+    def test_quoted_separator_does_not_spuriously_block(self) -> None:
+        # The `&&` lives inside the single-quoted grep pattern; the only real
+        # command is the env-prefixed pytest.
+        command = "ENVIRONMENT=test pytest -k 'a && b'"
+        result = hook.check(_bash(command))
+        self.assertIsNone(result, "a quoted `&&` is data and must not split the segment")
+
+    def test_quoted_region_blocks_with_real_pytest_targeted(self) -> None:
+        # Quoted `&&` is data; the real separator is the `;`. The pytest
+        # segment lacks env → block, splice on the real pytest token.
+        command = "grep 'x && y' f ; pytest tests/"
+        result = hook.check(_bash(command))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("ENVIRONMENT=test pytest tests/", result["reason"])
+        # The quoted region must be preserved verbatim.
+        self.assertNotIn("ENVIRONMENT=test grep", result["reason"])
+
+
+class SegmentClassCoverageManifestTests(unittest.TestCase):
+    """Guard: this file must carry a `# segment-class: <Name>` marker for all
+    six separator classes mandated by `hooks.md § 5a`. This is the in-suite
+    stand-in for the deferred grep-based CI gate — if a future refactor drops
+    one of the canonical classes, this test fails loudly."""
+
+    REQUIRED_MARKERS = (
+        "Standard",
+        "Newline",
+        "Subshell",
+        "ControlFlowBody",
+        "LineContinuation",
+        "QuotedRegion",
+    )
+
+    def test_all_six_segment_class_markers_present(self) -> None:
+        source = Path(__file__).read_text(encoding="utf-8")
+        missing = [
+            name for name in self.REQUIRED_MARKERS if f"# segment-class: {name}" not in source
+        ]
+        self.assertEqual(
+            missing,
+            [],
+            f"missing segment-class markers (per hooks.md § 5a): {missing}",
         )
 
 
