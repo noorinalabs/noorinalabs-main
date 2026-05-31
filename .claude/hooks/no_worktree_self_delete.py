@@ -25,10 +25,15 @@ Matches (one or more segments in the command, split on &&, ||, ;, |):
     - Global git options `-C <dir>` and `-c key=value` are skipped.
     - Short-option flags on `worktree remove` (`-f`, `--force`) are skipped.
     - `<path>` is the first non-flag argument after `remove`.
-    - A `cd <somewhere>` earlier in the compound command does NOT neutralize
-      the check: cd's inside the command string are plans the shell has not
-      yet executed, so the tool-call's actual cwd (from `input_data["cwd"]`
-      or `os.getcwd()`) is what matters.
+    - A leading `cd <dir>` IS honored when it names an absolute directory
+      that exists on disk (#535): the cwd used for the ancestry check is the
+      last such `cd` target (last-cd-wins via `resolve_invocation_cwd`),
+      because that is where the shell will be when `git worktree remove`
+      actually runs. `cd /safe && git worktree remove <wt>` therefore ALLOWS
+      (shell moves out first) while `cd <wt> && git worktree remove <wt>`
+      BLOCKS (the self-delete). A `cd <nonexistent>` is ignored — recovery
+      falls back to the stdin `cwd`, so the guard never relaxes on a path
+      that isn't there.
 
 Does NOT match:
     git worktree list            (no `remove` subcommand)
@@ -77,6 +82,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _shell_parse import resolve_invocation_cwd  # noqa: E402
 from annunaki_log import log_pretooluse_block  # noqa: E402
 
 # Shell operators that separate command segments. We split on these to reach
@@ -263,19 +269,23 @@ def check(input_data: dict) -> dict | None:
             # Cheap pre-filter — most Bash calls don't touch worktree remove.
             return None
 
-        # Caller-reported cwd wins; fall back to ours. Hook input carries the
-        # shell's actual cwd at tool-call time.
+        # Recover the cwd the shell will actually be in when `git worktree
+        # remove` runs (#535). resolve_invocation_cwd applies last-cd-wins
+        # recovery: it returns the target of the last `cd <absolute-existing
+        # -dir>` in the command, else the stdin `cwd`, else os.getcwd().
         #
-        # NOTE: this hook deliberately does NOT adopt the #521
-        # `resolve_invocation_cwd` cd-target recovery used by the gh-pr-create
-        # hooks. Here a leading `cd` changes the SAFETY semantics rather than
-        # just repo identity: `cd /safe && git worktree remove /worktree` is
-        # safe (shell moves out first) while `cd /worktree && remove /worktree`
-        # is the self-delete. Folding the cd target into cwd would change the
-        # block/allow verdict, which is a distinct behavioral decision from the
-        # cwd-anchor sweep — see the docstring "cd plans not yet executed"
-        # note. Left as-is intentionally; tracked separately if revisited.
-        cwd = input_data.get("cwd") or os.getcwd()
+        # Unlike the gh-pr-create hooks — which adopt recovery to fix repo
+        # IDENTITY — here recovery fixes the block/allow SAFETY verdict, and it
+        # makes it MORE correct in BOTH directions:
+        #   cd <wt> && git worktree remove <wt>   → resolves to <wt>  → BLOCK
+        #       (this is the #173 self-delete the pre-#535 stdin-cwd read MISSED
+        #        when the harness cwd was anchored at the parent, not <wt>).
+        #   cd /safe && git worktree remove <wt>  → resolves to /safe → ALLOW
+        #       (the shell moves out of <wt> first; not a self-delete).
+        # The recovery only honors an absolute cd target that EXISTS on disk;
+        # a `cd <nonexistent>` falls back to the stdin cwd, so we never relax
+        # the guard on the strength of a directory that isn't there.
+        cwd = resolve_invocation_cwd(input_data)
 
         for segment in _SEGMENT_SPLIT_RE.split(command):
             target = _extract_worktree_remove_path(segment)
