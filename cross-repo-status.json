@@ -3,6 +3,8 @@
   "wave_14_repos_in_scope": ["noorinalabs-main","noorinalabs-isnad-graph","noorinalabs-user-service","noorinalabs-deploy","noorinalabs-design-system","noorinalabs-landing-page","noorinalabs-data-acquisition","noorinalabs-isnad-ingest-platform"],
   "wave_14_meta_issue": 569,
   "wave_14_scope": {"theme":"Phase-3 End-State Rollout + Process-Hook Hardening + Org-Wide Tech-Debt Reduction","tier_1_end_state_rollout":["main#322","main#326","main#327","main#571"],"tier_2_prod_gate_and_live_env":["main#329","main#323","main#324"],"tier_3_hook_hardening":["main#564","main#547","main#567","main#571"],"tier_4_remainder":["main#560","main#136"],"tech_debt_goal":{"tracker":"main#330","target_max_pct":20,"stretch_pct":10,"baseline_pooled_pct":21.7,"baseline_counts":"15/69","hot_repos":{"deploy":40,"data-acquisition":33,"main":29}},"resolved_decisions":{"main#323/#324":"PULLED INTO W14 (full deploy push — live stg+prod)","main#136":"KEPT as W14 remainder tracker (enrich/normalize/graph-load + admin-CLI scenarios)"},"carry_forwards":["main#322","main#323","main#324","main#326","main#327","main#329","main#330","main#547","main#560","main#564","main#567","main#571","main#136"],"must_includes":[],"done_during_retro":["main#552 via PR#570","retro adopt #2/#3 via PR#568","#4 filed #567"],"labeled_count":13},
+  "wave_14_active": true,
+  "wave_14_started_at": "2026-05-31T23:53:58Z",
   "wave_12_scope_reconciled_at": "2026-05-25T03:11:55Z",
   "wave_12_repos_in_scope": [
     "noorinalabs-main",
