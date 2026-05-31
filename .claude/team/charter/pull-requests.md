@@ -229,6 +229,26 @@ At the **end of a wave or phase**, the Manager creates a PR from the deployments
 
 The **user reviews and merges** this PR. Do not proceed to the next phase until the user has merged.
 
+## Wave-Wrapup Staging-Promotion Gate (Mandatory) <!-- promotion-target: skill -->
+
+A wave is **not closeable** until its merged code has been promoted to **staging green**. This is Phase-3 end-state criterion #3 (`noorinalabs-main#325`): "/wave-wrapup requires successful stg promotion as a wave-completion criterion." The gate is the wrapup-time enforcement counterpart of the same liveness contract the deploy track exists to satisfy — code that merged to main but never reached a green staging deploy is the deploy-track analogue of the stranded-wave-branch pattern (§ the reachability gate in `/wave-wrapup` Step 11.5).
+
+### The gate
+
+`/wave-wrapup` Step 11.6 (immediately after the Step 11.5 reachability-to-main gate) verifies that the staging deploy is green for the wave's merged code:
+
+1. **Workflow:** the canonical staging deploy is `noorinalabs-deploy/.github/workflows/deploy-stg.yml` (triggered by service-repo `repository_dispatch` fan-in on push, or `workflow_dispatch` for a manual redeploy). The gate inspects the latest `deploy-stg.yml` run reachable for the wave's merged commits.
+2. **Block on red:** if the latest staging run concluded `failure`/`cancelled`/`timed_out`, the wave is NOT closeable. The operator fixes-forward (re-trigger the deploy, fix the regression) before re-invoking `/wave-wrapup`.
+3. **Dependency-aware deferral (criterion #1):** criterion #3 is **blocked by criterion #1** (staging must exist). Until a live staging environment + `deploy-stg.yml` run history exist, the gate reports `staging-promotion gate DEFERRED — criterion #1 (live staging) not yet satisfied` and proceeds. This deferral is itself logged (so it is visible, not silent) and disappears automatically once staging is live. The gate must NOT hard-fail every wrapup before staging exists.
+4. **Override (when red is acceptable):** an explicit `STG_PROMOTION_OVERRIDE_RATIONALE="<reason>"` env var lets the operator close a wave despite a red/absent staging run (e.g. staging infra is mid-migration, the wave is meta-only with no deployable surface). Rationale is required (no empty string), logged to the wrapup report, and persisted — mirroring the Step 11.5 `STRANDING_OVERRIDE_RATIONALE` mechanism.
+5. **Persistence + retro hand-off:** the staging-promotion result (`success` / `failure` / `deferred` / `overridden`) is written to `cross-repo-status.json` as `wave_{M}_stg_promotion` via the shared `upsert_status_keys.py` helper, alongside the run URL. `/wave-retro` records the stg-promotion result in the wave history row next to PR count and admin overrides.
+
+### Why a gate, not a checklist
+
+A "remember to check staging" checklist item is opt-in and decays (`feedback_enforcement_hierarchy`: "Charter rules without enforcement decay"). Encoding the gate in the `/wave-wrapup` skill with a hard block (and a noisy, rationale-required override) makes staging-green a contractual wave-completion condition — the deploy track's whole purpose per Phase-3 end-state.
+
+<!-- Promoted from memory: feedback_enforcement_hierarchy (hook>skill>charter — gate-over-checklist) — codifies Phase-3 end-state criterion #3 (issue #325, deploy-track-alongside Proposal B ratified 2026-05-31). Skill-tier enforcement lands in /wave-wrapup Step 11.6; a hook MAY further enforce at invocation time (follow-up). -->
+
 ## PR Template <!-- promotion-target: none -->
 ```bash
 git push -u origin <branch-name>
