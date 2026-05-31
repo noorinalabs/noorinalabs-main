@@ -7,7 +7,7 @@ description: "MANDATORY first action in every session — runs full startup prot
 
 **This skill MUST be invoked as the FIRST action in every new session.** Do not respond to the user's message, do not read files, do not run any other tool — invoke `/session-start` first. The user's actual request is handled AFTER this completes.
 
-> Note: all repo paths in bash blocks below are rooted at `$REPO_ROOT` to avoid cwd drift when the skill is invoked from a worktree or child-repo subdirectory (#149).
+> Note: all repo paths in bash blocks below are rooted at `$REPO_ROOT` to avoid cwd drift when the skill is invoked from a worktree or child-repo subdirectory (#149). `$REPO_ROOT` is anchored to the **parent org repo** deterministically via the parent of `git rev-parse --git-common-dir` (not `--show-toplevel`, which resolves to a worktree if run from one) and verified against the parent marker `cross-repo-status.json` + `CLAUDE.md` (#533). Each bash block re-derives it, since Skill blocks run as independent shells.
 
 ## Instructions
 
@@ -29,7 +29,31 @@ and all 7 child repos, applying a **verify-merged-then-remove guard**:
   a manual decision — never auto-remove unmerged work.
 
 ```bash
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+# Anchor REPO_ROOT to the PARENT org repo deterministically (#533). Using a
+# bare `git rev-parse --show-toplevel` resolves to a WORKTREE if /session-start
+# is ever invoked from one, which silently breaks child-repo discovery below
+# (the `$REPO_ROOT/$child/.git` probes find nothing). --git-common-dir points
+# at the MAIN repo's `.git` even from a linked worktree, so its parent is the
+# real org root in both the parent-checkout and run-from-worktree cases. We
+# then verify the parent marker (cross-repo-status.json + CLAUDE.md) and warn
+# loudly rather than silently skip children if it isn't found.
+resolve_repo_root() {
+  local common_dir candidate
+  common_dir="$(git rev-parse --git-common-dir 2>/dev/null)" || common_dir=""
+  if [ -n "$common_dir" ]; then
+    candidate="$(cd "$common_dir/.." 2>/dev/null && pwd)"
+  fi
+  if [ -z "$candidate" ]; then
+    candidate="$(git rev-parse --show-toplevel 2>/dev/null)"
+  fi
+  if [ -n "$candidate" ] && [ -f "$candidate/cross-repo-status.json" ] && [ -f "$candidate/CLAUDE.md" ]; then
+    printf '%s\n' "$candidate"; return 0
+  fi
+  printf 'WARN: parent-repo marker not found under %s — child-repo discovery may be incomplete. ' "${candidate:-<unresolved>}" >&2
+  printf 'Run /session-start from the parent main checkout (its mandated invocation path).\n' >&2
+  printf '%s\n' "${candidate:-$(pwd)}"; return 1
+}
+REPO_ROOT="$(resolve_repo_root)"
 
 # Parent repo + the 7 canonical child repos (CLAUDE.md Repository Map).
 REPOS=("$REPO_ROOT")
@@ -138,6 +162,11 @@ Run `/annunaki` to check the error monitor.
 Read the current project state:
 
 ```bash
+# Re-anchor REPO_ROOT (each Skill bash block is an independent shell — the
+# Step 0 value does not carry over). Same parent-anchor as Step 0 (#533):
+# parent of --git-common-dir resolves the org root even from a worktree.
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
+[ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 cat "$REPO_ROOT/cross-repo-status.json"
 gh issue list --repo noorinalabs/noorinalabs-main --state open --limit 10 --json number,title,labels
 ```
@@ -155,6 +184,9 @@ If the report surfaces unexpected gaps between board view and open-issue counts 
 Read the tail of the feedback log:
 
 ```bash
+# Re-anchor REPO_ROOT to the parent (independent shell block — see Step 0 / #533).
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
+[ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 tail -40 "$REPO_ROOT/.claude/team/feedback_log.md"
 ```
 
