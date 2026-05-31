@@ -2943,69 +2943,309 @@
   ],
   "wave_13_meta_issue": 541,
   "wave_13_scope": {
-    "theme": "Tech-debt reduction sweep (us+deploy+ingest-platform minimum, main+isnad-graph stretches) + charter-change implementation (#542 throttle-stall, #543 hook test coverage, #544 meta-issue freshness)",
+    "theme": "Tech-debt reduction sweep (us+deploy+ingest-platform minimum, main+isnad-graph stretches) + charter-change implementation (#542 throttle-stall, #543 hook test coverage, #544 meta-issue freshness) + deploy-track operational items (#325 wrapup gate, #329 smoke tests) per Proposal B + verify-and-close on phase-3 criteria #4/#5/#6/#7 per Proposal C",
     "reconciled_at": "2026-05-31T03:41:08Z",
+    "amended_at": "2026-05-31T15:00:00Z",
+    "amendment_note": "Amended 2026-05-31 post-Wanjiku+Santiago ChangesRequested: tier_* converted to dict rows (Santiago — post_wave_kickoff_comment.py schema); arithmetic recount (Wanjiku — 26→38 total, main 6→13, isnad-graph 1→2); repo-prefix shorthand standardized to canonical noorinalabs-* throughout. Owner ratified Proposal B (deploy-track-alongside W13+, +#325/#329) and Proposal C (verify-and-close sweep, +#322/#326/#327/#328); held Proposal A (keep <10% gate).",
     "tier_1_charter_changes": [
-      "noorinalabs-main#542",
-      "noorinalabs-main#543",
-      "noorinalabs-main#544"
+      {
+        "id": "noorinalabs-main#542",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Santiago Ferreira",
+        "priority": "charter"
+      },
+      {
+        "id": "noorinalabs-main#543",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Santiago Ferreira",
+        "priority": "charter"
+      },
+      {
+        "id": "noorinalabs-main#544",
+        "implementer": "Wanjiku Mwangi",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Santiago Ferreira",
+        "priority": "charter"
+      }
     ],
-    "tier_2_td_sweep": {
-      "noorinalabs-user-service": [
-        "us#129",
-        "us#126",
-        "us#124"
-      ],
-      "noorinalabs-deploy": [
-        "deploy#361",
-        "deploy#352",
-        "deploy#347",
-        "deploy#269",
-        "deploy#245",
-        "deploy#244",
-        "deploy#204",
-        "deploy#193",
-        "deploy#156",
-        "deploy#100",
-        "deploy#86",
-        "deploy#45",
-        "deploy#11"
-      ],
-      "noorinalabs-isnad-ingest-platform": [
-        "ip#43",
-        "ip#42",
-        "ip#40",
-        "ip#38",
-        "ip#35",
-        "ip#33",
-        "ip#31"
-      ]
-    },
-    "tier_3_stretch": [
-      "main#136",
-      "main#535",
-      "main#533",
-      "isnad-graph#932"
+    "tier_2_deploy_track": [
+      {
+        "id": "noorinalabs-main#325",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Bereket Tadesse",
+        "reviewer_2": "Wanjiku Mwangi",
+        "priority": "deploy-track"
+      },
+      {
+        "id": "noorinalabs-main#329",
+        "implementer": "Lucas Ferreira",
+        "reviewer": "Bereket Tadesse",
+        "reviewer_2": "Weronika Zielinska",
+        "priority": "deploy-track"
+      }
     ],
-    "verify_and_close": [
-      "main#536",
-      "isnad-graph#929"
+    "tier_3_td_sweep_user_service": [
+      {
+        "id": "noorinalabs-user-service#129",
+        "implementer": "Idris Yusuf",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Mateo Salazar",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-user-service#126",
+        "implementer": "Mateo Salazar",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Idris Yusuf",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-user-service#124",
+        "implementer": "Mateo Salazar",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Idris Yusuf",
+        "priority": "feature"
+      }
+    ],
+    "tier_3_td_sweep_deploy": [
+      {
+        "id": "noorinalabs-deploy#361",
+        "implementer": "Nino Kavtaradze",
+        "reviewer": "Weronika Zielinska",
+        "reviewer_2": "Lucas Ferreira",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#352",
+        "implementer": "Nino Kavtaradze",
+        "reviewer": "Bereket Tadesse",
+        "reviewer_2": "Weronika Zielinska",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#347",
+        "implementer": "Weronika Zielinska",
+        "reviewer": "Bereket Tadesse",
+        "reviewer_2": "Lucas Ferreira",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#269",
+        "implementer": "Weronika Zielinska",
+        "reviewer": "Bereket Tadesse",
+        "reviewer_2": "Nino Kavtaradze",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#245",
+        "implementer": "Lucas Ferreira",
+        "reviewer": "Bereket Tadesse",
+        "reviewer_2": "Weronika Zielinska",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#244",
+        "implementer": "Weronika Zielinska",
+        "reviewer": "Bereket Tadesse",
+        "reviewer_2": "Nino Kavtaradze",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#204",
+        "implementer": "Aisha Idrissi",
+        "reviewer": "Lucas Ferreira",
+        "reviewer_2": "Bereket Tadesse",
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-deploy#193",
+        "implementer": "Nino Kavtaradze",
+        "reviewer": "Bereket Tadesse",
+        "reviewer_2": "Weronika Zielinska",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#156",
+        "implementer": "Weronika Zielinska",
+        "reviewer": "Bereket Tadesse",
+        "reviewer_2": "Lucas Ferreira",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#100",
+        "implementer": "Lucas Ferreira",
+        "reviewer": "Bereket Tadesse",
+        "reviewer_2": "Weronika Zielinska",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#86",
+        "implementer": "Bereket Tadesse",
+        "reviewer": "Lucas Ferreira",
+        "reviewer_2": "Weronika Zielinska",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#45",
+        "implementer": "Nurul Hakim",
+        "reviewer": "Bereket Tadesse",
+        "reviewer_2": "Aisha Idrissi",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#11",
+        "implementer": "Nino Kavtaradze",
+        "reviewer": "Bereket Tadesse",
+        "reviewer_2": "Weronika Zielinska",
+        "priority": "tech-debt"
+      }
+    ],
+    "tier_3_td_sweep_ingest_platform": [
+      {
+        "id": "noorinalabs-isnad-ingest-platform#43",
+        "implementer": "Léopold Mbongo",
+        "reviewer": "Petra Vidović",
+        "reviewer_2": "Yusuke Inoue",
+        "priority": "bug"
+      },
+      {
+        "id": "noorinalabs-isnad-ingest-platform#42",
+        "implementer": "Yusuke Inoue",
+        "reviewer": "Petra Vidović",
+        "reviewer_2": "Léopold Mbongo",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-ingest-platform#40",
+        "implementer": "Léopold Mbongo",
+        "reviewer": "Petra Vidović",
+        "reviewer_2": "Yusuke Inoue",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-ingest-platform#38",
+        "implementer": "Tomás Carvalho",
+        "reviewer": "Petra Vidović",
+        "reviewer_2": "Imelda Santos",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-ingest-platform#35",
+        "implementer": "Imelda Santos",
+        "reviewer": "Camila Restrepo",
+        "reviewer_2": "Petra Vidović",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-ingest-platform#33",
+        "implementer": "Imelda Santos",
+        "reviewer": "Camila Restrepo",
+        "reviewer_2": "Petra Vidović",
+        "priority": "bug"
+      },
+      {
+        "id": "noorinalabs-isnad-ingest-platform#31",
+        "implementer": "Yusuke Inoue",
+        "reviewer": "Petra Vidović",
+        "reviewer_2": "Léopold Mbongo",
+        "priority": "tech-debt"
+      }
+    ],
+    "tier_4_stretch": [
+      {
+        "id": "noorinalabs-main#136",
+        "implementer": "Aisha Idrissi",
+        "reviewer": "Lucas Ferreira",
+        "reviewer_2": "Aino Virtanen",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#535",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Santiago Ferreira",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#533",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Santiago Ferreira",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#932",
+        "implementer": "Ingrid Lindqvist",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Mateo Salazar",
+        "priority": "tech-debt"
+      }
+    ],
+    "tier_5_verify_and_close": [
+      {
+        "id": "noorinalabs-main#536",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Santiago Ferreira",
+        "priority": "verify-and-close"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#929",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Idris Yusuf",
+        "priority": "verify-and-close"
+      },
+      {
+        "id": "noorinalabs-main#322",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Santiago Ferreira",
+        "priority": "verify-and-close"
+      },
+      {
+        "id": "noorinalabs-main#326",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Santiago Ferreira",
+        "priority": "verify-and-close"
+      },
+      {
+        "id": "noorinalabs-main#327",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Santiago Ferreira",
+        "priority": "verify-and-close"
+      },
+      {
+        "id": "noorinalabs-main#328",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Santiago Ferreira",
+        "priority": "verify-and-close"
+      }
     ],
     "per_repo_counts": {
-      "main": 6,
-      "deploy": 13,
+      "main": 13,
       "user-service": 3,
-      "ingest-platform": 7,
-      "isnad-graph": 1
+      "deploy": 13,
+      "isnad-ingest-platform": 7,
+      "isnad-graph": 2
     },
-    "total_work_items": 26,
+    "total_work_items": 38,
     "targets": {
       "ingest-platform_td_pct": "<50% (from 87.5%)",
       "deploy_td_pct": "<30% (from 50%)",
       "user-service_td_pct": "<20% (from 42.9%)",
-      "cumulative_td_pct": "<25% (from 31.8%)"
+      "cumulative_td_pct": "<20% interim, en-route to <10% phase-exit gate (Proposal A held — gate stays <10%)"
     },
-    "spec_revision_pending": "noorinalabs-main#545 (Proposal A/B/C \u2014 owner-pending; ratification may reshape W13 acceptance)"
+    "owner_decisions_on_545": {
+      "proposal_a_relax_cumulative_gate": "HELD 2026-05-31 — keep criterion #9 cumulative gate at <10%",
+      "proposal_b_deploy_track_alongside": "RATIFIED 2026-05-31 — W13+ every wave must include deploy-track operational item; W13 picks up #325 + #329",
+      "proposal_c_verify_and_close_sweep": "RATIFIED 2026-05-31 — extends tier_5 to #322/#326/#327/#328"
+    }
   },
-  "wave_13_scope_reconciliation_note": "W13 scope reconciled 2026-05-31T03:41:08Z. 17 issues label-edited: 6 strip-and-relabel from p3-wave-12 to p3-wave-13 (main#136 + deploy#269/245/204/193/100), 11 new p3-wave-13 adds (us#129/126/124, ip#43/42/40/38/35/33/31, isnad-graph#932). 14 already-labeled p3-wave-13 retained (meta #541, 3 charter changes #542/#543/#544, 2 cwd-anchor #535/#533, 8 deploy infra #361/#352/#347/#244/#156/#86/#45/#11). 0 carry-forward struct entries (W12 retro deferred relabel to /wave-scope). 0 memory must-includes filed for W13."
+  "wave_13_scope_reconciliation_note": "Reconciled by /wave-scope 3 13 on 2026-05-31T03:41:08Z. Amended 2026-05-31 post-#546 reviewer ChangesRequested (Wanjiku TPM lens + Santiago RC lens): tier_* converted to dict rows per post_wave_kickoff_comment.py schema, arithmetic recount (38 items, not 26; main 13 not 6; isnad-graph 2 not 1), repo-prefix shorthand standardized to canonical noorinalabs-* throughout. Owner ratified Proposal B (deploy-track-alongside W13+, adds main#325+#329) and Proposal C (verify-and-close sweep, adds main#322/#326/#327/#328). Held Proposal A — keep criterion #9 cumulative gate at <10%."
 }
