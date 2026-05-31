@@ -274,6 +274,19 @@ EOF
 - The body must reference the related GitHub Issue(s) with `Closes #N`.
 - The submitting team member is responsible for creating the PR immediately upon branch completion.
 
+## Closes-vs-Refs Disposition — Decided at Brief Time, Never Flipped <!-- promotion-target: none -->
+
+<!-- Promoted from memory: feedback_owner_pivot_supersedes_protocol (P3W13 retro proposal #2 — #561 Closes/Refs flip-flop) -->
+
+The `Closes #N` vs `Refs #N` disposition for an issue is determined **once, when the implementer brief is authored**, and is **not re-litigated after the PR opens or merges**.
+
+- **`Closes #N`** — use only when the PR fully delivers the issue's entire acceptance surface. After merge to the default branch the issue auto-closes (and per `state-claims.md`, on a wave-branch merge it must be closed manually).
+- **`Refs #N`** — use when the issue's acceptance includes **work beyond this PR** — most commonly an **end-state / org-wide criterion with remaining per-repo rollout**, a prod-gated runtime step, or a multi-PR sequence. The issue **stays open as the rollout tracker**; closing it is a separate, later decision.
+
+**The rule:** if at brief-authoring time any part of the issue's acceptance will remain after this PR merges, the disposition is `Refs` from the **first** PR. Do not open with `Closes`, discover remaining rollout, and flip to `Refs` afterward — that flip is a routing change on an in-flight artifact and triggers the same supersede/re-verify churn as any other late pivot (see [`owner-pivot-supersedes`](#) and `feedback_owner_pivot_supersedes_protocol`).
+
+**Origin (P3W13 #561):** the org-wide branch-protection criterion (#322) was opened with `Closes`, then flipped to `Refs` after the per-repo-rollout-remaining nature surfaced — costing the brief author multiple round-trips. Deciding `Refs` up front (because rollout to 7 repos plainly remained) would have avoided every one of them.
+
 ## Pre-Push Checklist <!-- promotion-target: none -->
 Before pushing a branch and creating a PR, every engineer must:
 
