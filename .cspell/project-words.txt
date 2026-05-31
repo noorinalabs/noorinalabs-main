@@ -117,3 +117,32 @@ uvicorn
 keypairs
 runbook
 runbooks
+
+# --- second-pass terms surfaced once cspell was scoped to authored prose
+#     (charter + skills). Project jargon, identifiers, brand, and a few names. ---
+Noorina
+footgun
+hookify
+descoped
+disconfirms
+misclaim
+misdesigned
+walkback
+unacked
+throughline
+Throughline
+blackbox
+rawfile
+techdebt
+subshell
+Subshell
+cwds
+lockfiles
+hotfixes
+gatekeeping
+reposting
+firstname
+lastname
+Luciana
+Ferreyra
+Okonkwo
