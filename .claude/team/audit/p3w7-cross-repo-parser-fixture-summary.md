@@ -143,7 +143,7 @@ These proposals are NOT applied in this PR. They require separate review per `fe
 
 | Acceptance bullet | Status |
 |------------------|--------|
-| All 8 Tier-1 audit PRs merged | MET — #308 (main), #871 (isnad-graph), #100 (user-service), #279 (deploy), #73 (design-system), #45 (data-acquisition), #87 (landing-page); ingest-platform = 0-hooks skip per scope | 
+| All 8 Tier-1 audit PRs merged | MET — #308 (main), #871 (isnad-graph), #100 (user-service), #279 (deploy), #73 (design-system), #45 (data-acquisition), #87 (landing-page); ingest-platform = 0-hooks skip per scope |
 | Both Tier-2 fix+fixture PRs merged | MET — #301 (main#285), #305 (main#287) |
 | deploy#274 merged | MET — PR #278 |
 | Cross-repo audit summary PR (★ Nadia) merged | IN PROGRESS — this PR |

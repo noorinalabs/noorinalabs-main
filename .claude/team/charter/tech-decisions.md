@@ -63,7 +63,7 @@ RUN apk upgrade --no-cache
 
 **Reviewer enforcement:** Absence of a digest pin OR absence of the upgrade step on a `Dockerfile` PR is grounds for `ChangesRequested`. The pattern is mechanical; reviewers cite this section.
 
-**Promotion path:** This is step 1 + 2 (charter + memory) of the [enforcement hierarchy](../../../charter/hooks.md). A future `validate_dockerfile_base_pin` PreToolUse hook (step 3) is filed if the convention proves load-bearing across multiple Dockerfile PRs without manual reviewer reminders.
+**Promotion path:** This is step 1 + 2 (charter + memory) of the [enforcement hierarchy](hooks.md). A future `validate_dockerfile_base_pin` PreToolUse hook (step 3) is filed if the convention proves load-bearing across multiple Dockerfile PRs without manual reviewer reminders.
 
 **Why:** Surfaced by Linh-review during P3W3 review of `noorinalabs-isnad-graph#854` (Idris-853's Trivy CVE fix). The combined `digest-pin + apk upgrade` pattern Idris chose was the right shape but had no normative reference; without it the next Dockerfile author would default to a floating `nginx:alpine` (the failure shape that produced #853 in the first place). Codifying the pattern closes that gap.
 

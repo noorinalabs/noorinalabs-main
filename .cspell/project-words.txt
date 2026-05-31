@@ -94,3 +94,26 @@ repos
 canonicalized
 disambiguation
 disambiguate
+
+# --- domain / tech terms surfaced by the first spellcheck run over the
+#     authored-prose scope (conventions, CLAUDE, ONBOARDING, secrets-audit) ---
+downloaders
+dedup
+wrapup
+workstream
+judgements
+ciphertext
+Backblaze
+keypair
+Kaggle
+betweenness
+firewalled
+tfvars
+tmpfs
+Nygard
+Alphasort
+Requestee
+uvicorn
+keypairs
+runbook
+runbooks

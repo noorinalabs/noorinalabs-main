@@ -60,10 +60,23 @@ jobs:
       - name: cspell
         uses: streetsidesoftware/cspell-action@de2a73e963e7443969755b648a1008f77033c5b2 # v8.4.0
         with:
-          # Files + dictionary come from .cspell.json. Check the whole tree
-          # (config scopes to authored docs); fail on any unknown word so a
-          # real typo blocks — new domain terms go in .cspell/project-words.txt.
+          # Dictionary + ignore rules come from .cspell.json. The `files` glob
+          # here is authoritative for the action (it overrides config-side
+          # discovery), so it is scoped to the AUTHORED-prose set — charter,
+          # skills, ontology, root docs. The append-only records (feedback_log,
+          # trust_matrix, promotion_audit_log) and roster cards are excluded:
+          # they are dense with person/narrator names and SHAs that are not
+          # spell-defects, and gating them would mean maintaining a names
+          # dictionary in the thousands. A real typo in authored prose blocks;
+          # new domain terms go in .cspell/project-words.txt.
           config: ".cspell.json"
+          files: |
+            .claude/team/charter/**/*.md
+            .claude/skills/**/*.md
+            ontology/**/*.md
+            CLAUDE.md
+            ONBOARDING.md
+            docs/**/*.md
           incremental_files_only: false
           strict: true
 
