@@ -224,6 +224,8 @@ This step mirrors `/wave-retro` Step 6.5 by design — the same check fires from
 
 **Tech-debt created:** {count} new issues
 
+**Staging promotion:** {success | failure | deferred (criterion #1 not yet live) | overridden: <rationale>} {run URL if any}
+
 **Documentation:** {docs updated | docs need update | no doc changes}
 
 **Worktrees cleaned:** {count}
@@ -401,6 +403,89 @@ export STRANDING_OVERRIDE_RATIONALE="P3W7 work descoped post-#339 audit; \
 ```
 
 The override is intentionally noisy: rationale is required (no empty string), logged to the wrapup report, and persisted to `cross-repo-status.json` under `wave_{M}_stranding_override` so subsequent /wave-retro and audit passes can surface it.
+
+### 11.6. Staging-promotion gate (Phase-3 end-state criterion #3)
+
+A wave is **not closeable until its merged code has been promoted to staging green**. This is the wrapup-time enforcement of Phase-3 end-state criterion #3 (`main#325`) and the charter rule `pull-requests.md § Wave-Wrapup Staging-Promotion Gate`. It runs AFTER the Step 11.5 reachability-to-main gate (code must be on main before it can be promoted to staging) and BEFORE the ontology rebuild.
+
+The canonical staging deploy is `noorinalabs-deploy/.github/workflows/deploy-stg.yml`. The gate inspects the latest run; blocks on red; **defers** (does not fail) when staging does not yet exist — criterion #3 is blocked by criterion #1 (live staging). An explicit rationale env var overrides a red/absent run.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+STATUS="$REPO_ROOT/cross-repo-status.json"
+UPSERT="$REPO_ROOT/.claude/lib/upsert_status_keys.py"
+STG_WORKFLOW="deploy-stg.yml"
+DEPLOY_REPO="noorinalabs/noorinalabs-deploy"
+
+# Fetch the latest deploy-stg.yml run. Empty result = staging not live yet.
+STG_RUN=$(gh run list --repo "$DEPLOY_REPO" --workflow "$STG_WORKFLOW" \
+  --limit 1 --json databaseId,status,conclusion,url,headSha \
+  --jq '.[0] // empty' 2>/dev/null || true)
+
+if [ -z "$STG_RUN" ]; then
+  # Criterion #1 not satisfied — defer, do NOT hard-fail. Logged, not silent.
+  STG_RESULT="deferred"
+  STG_URL=""
+  echo "staging-promotion gate DEFERRED — criterion #1 (live staging) not yet satisfied"
+  echo "  (no $STG_WORKFLOW run history in $DEPLOY_REPO). Gate auto-activates once staging is live."
+else
+  STG_STATUS=$(echo "$STG_RUN" | jq -r .status)
+  STG_CONCLUSION=$(echo "$STG_RUN" | jq -r .conclusion)
+  STG_URL=$(echo "$STG_RUN" | jq -r .url)
+
+  if [ "$STG_STATUS" != "completed" ]; then
+    echo "staging deploy still in progress ($STG_STATUS) — re-run /wave-wrapup once $STG_URL completes,"
+    echo "or set STG_PROMOTION_OVERRIDE_RATIONALE to close anyway."
+    STG_CONCLUSION="in_progress"
+  fi
+
+  if [ "$STG_CONCLUSION" = "success" ]; then
+    STG_RESULT="success"
+    echo "staging promotion GREEN — $STG_URL"
+  elif [ -n "${STG_PROMOTION_OVERRIDE_RATIONALE:-}" ]; then
+    STG_RESULT="overridden"
+    echo "staging promotion NOT green ($STG_CONCLUSION) — OVERRIDDEN:"
+    echo "  $STG_PROMOTION_OVERRIDE_RATIONALE"
+  else
+    echo "════════════════════════════════════════════════════════════"
+    echo "BLOCKED: /wave-wrapup cannot close wave {M} — staging promotion is $STG_CONCLUSION."
+    echo "  Latest $STG_WORKFLOW run: $STG_URL"
+    echo "Fix-forward options:"
+    echo "  (a) Fix the regression and re-trigger the staging deploy, then re-run /wave-wrapup."
+    echo "  (b) Re-dispatch deploy-stg.yml manually:"
+    echo "      gh workflow run $STG_WORKFLOW --repo $DEPLOY_REPO"
+    echo "  (c) If a red/absent staging run is INTENTIONALLY acceptable (staging infra"
+    echo "      mid-migration, meta-only wave with no deployable surface), set"
+    echo "      STG_PROMOTION_OVERRIDE_RATIONALE=\"<explicit reason>\" before re-invoking."
+    echo "════════════════════════════════════════════════════════════"
+    exit 1
+  fi
+fi
+
+# Persist the result for /wave-retro Step 2.5 + audit passes. Compact-inline
+# preserved via upsert_status_keys.py (NOT jq>tmp>mv — see main#332).
+python3 "$UPSERT" "$STATUS" \
+    "wave_{M}_stg_promotion=\"${STG_RESULT}\"" \
+    "wave_{M}_stg_promotion_url=\"${STG_URL}\""
+[ "$STG_RESULT" = "overridden" ] && python3 "$UPSERT" "$STATUS" \
+    "wave_{M}_stg_promotion_override_rationale=\"${STG_PROMOTION_OVERRIDE_RATIONALE}\""
+
+# Read-back verify (feedback_gh_pr_edit_silent_noop family).
+jq -r --arg m "{M}" '"wave_" + $m + "_stg_promotion = " + (.["wave_" + $m + "_stg_promotion"] | tostring)' "$STATUS"
+```
+
+**Override mechanism** (when a red/absent staging run is acceptable):
+
+```bash
+# Only use when staging green is genuinely not achievable/applicable for this wave
+# (staging infra mid-migration, meta-only wave with no deployable surface).
+export STG_PROMOTION_OVERRIDE_RATIONALE="W13 is charter/skill-meta only; no service \
+  image changed, so no staging deploy is produced. Gate overridden, criterion #3 \
+  unaffected (no deployable surface to promote)."
+# Re-invoke /wave-wrapup — the gate logs the rationale, persists it, and proceeds.
+```
+
+Include the staging-promotion result (`success`/`failure`/`deferred`/`overridden`) and the run URL in the Step 10 final wave report. `/wave-retro` records it in the wave history row alongside PR count and admin overrides.
 
 ### 12. Ontology rebuild
 
