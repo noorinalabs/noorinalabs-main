@@ -1061,3 +1061,62 @@ W12 included cross-cutting isnad-graph work routed direct-to-main (#933 starlett
 | **Nino Kavtaradze** | Tier-1 #351 SSH key split (supersedes ADR 0003); doc-quality nit catch on #370 (compose v2 .env interpolation correction) | None this wave |
 | **Wanjiku / Santiago / Aino / Nadia** | Sustained review/coordination rigor; 5-case gate-continuity probe (Santiago); W11 #478 regression spot-check (Wanjiku); identity-discipline (Aino) | None this wave |
 | **Orchestrator** | HEAD-audit pattern caught 2 stale meta-issue traps (#536, #245); throttle-takeover with identity-preservation; architectural-blocker escalation accepted not papered-over; wave-merge with correct RC identity for sequencing | `gh pr edit` silent no-op on first base-retarget try (memory-hit recovery, but authored the wrong-tool choice initially) |
+
+## Phase 3 Wave 13 Trust Updates (2026-05-31) — Phase-3 End-State Close-out + Cross-Repo Schema Rationalization
+
+> Scope note: W13 was the **largest wave in P3 history** — **37 PRs across 5 declared repos** (main 10, deploy 13, user-service 3, isnad-ingest-platform 8, isnad-graph 3), **18 distinct implementers**. **One ChangesRequested cycle across all 37 PRs** (us#137, Idris→Mateo — a load-bearing security catch, not a quality miss). Top-implementer concentration **7/37 = 19%** (Aino, all governance/charter/end-state work — theme-fit, well under the 60% fragility threshold). The wave's defining arc: an honest Tier-5 audit surfaced **four unmet P3 end-state criteria** (#322/#326/#327/#328) that the owner pulled into W13 rather than false-closing; #328 delivered (Closes), the other three delivered as parent-canonical with per-repo rollout carried to W14 (`Refs`).
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Aino Virtanen** (SQL) | 5 | 5 | (hold at max) Wave headliner: 7 clean PRs, all governance/standards. Authored the canonical **`artifact-ownership.md`** (#328/#559, the one end-state criterion fully closed), three charter triggers (#548 throttle-stall thresholds, #549 meta-issue freshness re-audit, #550 6-class segment-parser test coverage), the wave-wrapup **staging-promotion gate** (#551/#325), session-start REPO_ROOT anchor + no_worktree self-delete recovery (#553/#554), the **pre-push ⇄ CI sync-drift gate** (#562/#327), and the docs-CI lint gate (#563/#326). The ethical spine of the wave — her Tier-5 audit **refused to false-close** the 4 end-state criteria, which is exactly the honest-audit discipline the charter prizes. |
+| **Nadia Khoury** (PD) | 5 | 5 | (hold at max) Wave kickoff → scope → wrapup orchestration across 5 repos; owner-decision escalation routing (deploy#329/#100, #35 per-field ruling, end-state gaps) without speculative work; meta-issue #541 lifecycle; wave-merge ceremony with reachability gate (0 stranded). |
+| **Wanjiku Mwangi** (TPM) | 5 | 5 | (hold at max) Authored **#561** — the canonical branch-protection ruleset spec + hook-validated admin-merge exception class system (the security backbone of the end-state push) — and **#549** meta-issue freshness trigger. Cross-dependency tracking across the 5-repo fan-out. |
+| **Santiago Ferreira** (RC) | 5 | 5 | (hold at max) **#563** docs/markdown + config lint gate (parent-canonical #326 pattern); RC role on the 5-repo wave→main merge sequencing. |
+
+### Cross-Repo Implementer Updates (deploy track)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Lucas Ferreira** (deploy SRE) | 5 | 5 | (hold at max — would be ▲ if not capped) Top deploy implementer with 3 clean architectural PRs: **#385** bitnami→`apache/kafka:3.9.2` KRaft broker migration (owner-decided image, full `KAFKA_CFG_*`→apache env reconciliation), **#383** the Option-B fast stg-smoke battery wired as a `verify-stg` fast-fail gate (mirrors the prod battery, <5min budget), **#389** the users.{base} Caddy carve-out completing the isnad.* dual-bind drop. HEAD-audit-before-Edit discipline sustained. |
+| **Nino Kavtaradze** (Sec Eng) | 5 | 5 | (hold at max) 4 security-heavy deploy PRs: **#381** secrets inventory + rotation policy, **#378** state-resident secret-rotation runbook (Phase 3 of #172), **#377** root-key exclusion from root→deploy merge, **#373** master-B2-key removal from CI (read-only plan key + workstation apply). Highest deploy PR count this wave. |
+| **Weronika Zielinska** (Platform/IaC) | 5 | 5 | (hold at max) 3 PRs: **#380** isnad-graph→isnad hostname cutover straggler sweep, **#376** pre-staged IAM role binding doc + OAuth-SPOF de-framing, **#374** Cloudflare token-scope preflight + .net/.org ruleset auth docs. |
+| **Aisha Idrissi** (deploy SRE) | 5 | 5 | (hold at max) **#382** RUN_MODE=remote non-health integration coverage expansion. |
+| **Bereket Tadesse** (deploy Manager) | 4 | 4 | (hold) **#372** decommission of the hand-made isnad-graph-prod VPS — clean delivery. Demotion from W11 (#280 head-truncation pre-spawn miss) stands until a fresh **brief-author** demonstration shows the enumeration discipline restored; this wave he worked implementer-class, so the restoring signal didn't arise. No negative this wave. |
+| **Nurul Hakim** (deploy Observability) | 4 | 4 | (hold) **#375** reachable + working Grafana login for metrics access — clean delivery, consistent with W12 #358 positive. |
+
+### Child-Repo Wave Engagement (informational — per `feedback_child_repo_implementer_rule`)
+
+> Trust numbers for child-repo rosters belong in those repos' own retros. Noted here for visibility; engagement was uniformly strong.
+
+| Member | Repo | Engagement | Direction |
+|---|---|---|---|
+| **Idris Yusuf** | user-service / isnad-graph (Sec) | ★ **Standout security catch** on us#137 — the single CR of the wave. Audited the Caddy `users.{base}` vhost at HEAD and proved the new `/metrics` endpoint would fall through the catch-all and be **publicly reachable**, contradicting the PR's "not public" claim. Correct security-guard-inline shape: required claim-correction + a hard deploy-side 403 dependency (#386) before prod-enable, without holding the sound user-service code hostage. Also authored us#138 (Dockerfile digest-pin + trivy allowlist). | strongly positive |
+| **Mateo Salazar** | user-service (Eng) | 2 PRs (#137 /metrics exposure, #136 mypy type-ignore cleanup). Received the wave's only CR and **responded correctly** — corrected the public-exposure claim and filed the deploy-side dependency rather than arguing. First-look-correct discipline holds. | positive |
+| **Tomás Carvalho** | isnad-ingest-platform (Eng) | 2 PRs: #56 Kafka-driven worker E2E + MinIO→dedup object-store flow (impl of main#136 pipeline scenarios), #52 testcontainers neo4j integration coverage. | positive |
+| **Imelda Santos** | isnad-ingest-platform (Eng) | 2 PRs: #54 per-appearance Hadith-field rationalization (the #35 ruling impl), #49 fail-loud on edge MERGE with missing endpoint. | positive |
+| **Yusuke Inoue** | isnad-ingest-platform (Eng) | 2 PRs: #53 narrowed `_build_reset_clients` return type, #50 worker_checkpoint TTL sweep. | positive |
+| **Léopold Mbongo** | isnad-ingest-platform (Eng) | 2 PRs: #51 phantom-#192-reference removal, #48 send-before-mark fix in WorkerRunner.handle_one. | positive |
+| **Farhan Malik** | isnad-graph (DE Lead) | Co-drafted the #35 per-field ruling (data-lead), then authored #935 promoting the 4 ratified ingest fields to Phase-4 Pydantic models. | positive |
+| **Aisling Brennan** | isnad-graph (Eng) | #936 ingest-extras schema reconcile — authored under isnad-graph roster identity (per-repo commit-identity rule; the ingest-roster author could not author isnad-graph commits). | positive |
+| **Ingrid Lindqvist** | isnad-graph (Eng) | #934 runtime-config.js for env-specific origins. Repeat dep-resolution-at-origin rigor noted in prior waves. | positive |
+
+### Orchestrator (Self-Assessment)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Orchestrator (Steven via Claude)** | 4 | 4 | (hold) Strong: drove 37 PRs through impl→2-reviewer→merge across 5 repos with 18 implementers and only 1 CR; **honest Tier-5 audit surfaced 4 unmet end-state criteria and escalated rather than false-closing** (the wave's best decision); clean owner-decision routing on every fork (deploy#329 Option-B, #100 apache/kafka, #35 per-field ruling, end-state pull-in) without speculative pre-work; correct per-repo commit-identity handling on the isnad-graph #936 cross-roster case. **Hold-not-promote** because of three self-authored process slips: (1) **Closes-vs-Refs flip-flop on #561** — gave conflicting "Closes stands" then "change to Refs" signals that cost Wanjiku multiple round-trips; (2) **stale-local-checkout during high-volume remote merges** — merged 37 PRs via gh while local parent was 22 commits behind, so the ontology counter-commit landed on a stale tree and needed a `reset --hard` recovery (which discarded session annunaki entries); (3) the **batch-loop merge** on the ingest cluster fail-opened Hook 4 (known memory, recurred). Each is a recognized-pattern slip, not a fresh-catch — exactly the self-authored-error class that blocks promotion. |
+
+### Done Well / Needs Improvement (Phase 3 Wave 13)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Aino Virtanen** | 7 clean governance PRs; authored artifact-ownership.md + pre-push sync-gate + 3 charter triggers; Tier-5 honest-audit refusal to false-close 4 end-state criteria | None this wave |
+| **Wanjiku Mwangi** | #561 branch-protection canonical spec + admin-merge exception classes (security backbone); #549 meta-issue freshness trigger | None this wave (the #561 Closes/Refs churn was orchestrator-authored, not hers) |
+| **Lucas Ferreira** | apache/kafka migration + stg-smoke battery + Caddy carve-out, all clean; sustained HEAD-audit discipline | None this wave |
+| **Nino Kavtaradze** | 4-PR security sweep (secrets inventory/rotation/key-removal) — highest deploy throughput | None this wave |
+| **Idris Yusuf** | ★ /metrics public-exposure catch (the wave's load-bearing security review); correct security-guard-inline shape | None this wave |
+| **Mateo Salazar** | Responded to the wave's only CR correctly — claim-correction + dependency-filing, no argument | None this wave |
+| **ingest-platform + isnad-graph rosters** | 13 clean child-repo PRs (E2E/testcontainers/#35-ruling/Phase-4 models), zero CRs | None this wave |
+| **Orchestrator** | Honest Tier-5 audit + escalation discipline; 37-PR/5-repo drive at 1 CR; cross-roster identity correctness on #936 | #561 Closes/Refs flip-flop (conflicting signals → round-trips); stale-local-checkout during high-volume merge; batch-loop Hook-4 fail-open recurrence |

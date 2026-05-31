@@ -2519,4 +2519,74 @@ None — wave_12 canonical counters written at retro (not wrapup) per skill Step
 | **NEW: Single-Approved-pass cleanest** | Wave-shape | 1 (W12 — 0 CR cycles across 15 PRs) | **1** — positive marker |
 | Wave-wrapup counter-write gap | Skill (/wave-wrapup) | 1 (W12 deferred to retro by skill design — not a defect, but a known-pattern-needing-explicit-handling) | 4 historical (W4/W5/W9/W12) |
 
+## Retrospective: Phase 3 Wave 13 — Phase-3 End-State Close-out + Cross-Repo Schema Rationalization — 2026-05-31
+
+### Team Performance
+
+**Largest wave in P3 history.** 37 PRs merged across 5 declared repos (main 10, deploy 13, user-service 3, isnad-ingest-platform 8, isnad-graph 3), 18 distinct implementers, ~20 distinct agents through the full impl→2-reviewer→merge lifecycle. **One ChangesRequested cycle across all 37 PRs** (us#137) — and it was a load-bearing security catch, not a quality miss. 26 impl issues closed, meta-issue #541 closed, all 5 wave→main propagation PRs merged with the reachability gate showing 0 stranded. CI green at every wave-merge; child-repo PRs required `--admin` (Hook-4 child-roster gap #552, see pain points) but each was verified genuinely 2-reviewer-approved before override.
+
+**Counter verification (Step 2.5):** all three top-level counters recomputed from PR-level evidence and matched wrapup-time values exactly — `final_pr_count` 37=37, `changes_requested_cycles` 1=1, `top_concentration_pct` 19=19. **No drift, no counter_corrections entry needed.** First wave since the #421 mechanical-computation fix where wrapup-written counters survived retro recomputation unchanged — the mechanization is holding.
+
+**Defining arc:** an honest Tier-5 audit found **4 unmet P3 end-state criteria** (#322 branch-protection org-wide, #326 artifacts-pass-all-CI, #327 pre-commit+pre-push everywhere, #328 ownership doc) that earlier framing had implicitly treated as done. The audit refused to false-close them; the owner pulled all 4 into W13. #328 fully delivered (Closes); #322/#326/#327 delivered as parent-canonical pieces with per-repo rollout carried to W14 via the `Refs` disposition.
+
+### Per-Engineer Assessments
+
+- **Aino Virtanen** (org SQL) — 7 PRs (19% concentration, theme-fit governance), all clean. artifact-ownership.md (#559), pre-push sync-gate (#562), docs-CI gate (#563), 3 charter triggers (#548/#549/#550), wave-wrapup staging gate (#551), session-start/no_worktree fixes (#553/#554). Tier-5 honest-audit refusal to false-close. CI failures: 0. Must-fix received: 0. Severity: **none (exemplary)**.
+- **Wanjiku Mwangi** (org TPM) — #561 (branch-protection canonical spec + admin-merge exception classes), #549. 0 CR. The #561 Closes/Refs churn was orchestrator-authored, not hers. Severity: **none**.
+- **Lucas Ferreira** (deploy) — 3 PRs (#385 apache/kafka migration, #383 stg-smoke battery, #389 Caddy carve-out), all clean, HEAD-audit discipline sustained. Severity: **none**.
+- **Nino Kavtaradze** (deploy Sec) — 4 PRs (#381/#378/#377/#373 secrets/rotation/key-removal), highest deploy throughput, 0 CR. Severity: **none**.
+- **Idris Yusuf** (Sec, child) — ★ the wave's load-bearing security catch (us#137 /metrics public-exposure via Caddy users.* catch-all); authored us#138. Severity: **none (standout)**.
+- **Mateo Salazar** (us, child) — 2 PRs; received the wave's 1 CR and responded correctly (claim-correction + dependency-filing #386). Must-fix received: 1 (resolved cleanly). Severity: **none**.
+- **Weronika/Aisha/Bereket/Nurul** (deploy) — 1–3 clean PRs each, 0 CR. Bereket holds at 4 (W11 demotion stands pending a brief-author restoration signal that didn't arise this wave). Severity: **none**.
+- **ingest-platform roster** (Tomás/Imelda/Yusuke/Léopold) — 8 clean PRs (E2E, testcontainers, #35-ruling impl, worker fixes), 0 CR. Severity: **none**.
+- **isnad-graph roster** (Farhan/Aisling/Ingrid) — 3 clean PRs (Phase-4 model promotion, extras reconcile, runtime-config), 0 CR; correct cross-roster commit-identity on #936. Severity: **none**.
+- **Orchestrator** — strong delivery + honest audit; 3 self-authored process slips (see pain points). Severity: **minor**.
+
+### Wave-Shape Table
+
+| Metric | Value |
+|--------|-------|
+| PRs merged | 37 (main 10, deploy 13, us 3, ingest 8, ig 3) |
+| Distinct implementers | 18 |
+| ChangesRequested cycles | 1 (us#137 — security catch) |
+| Top-implementer concentration | 7 / 37 = **19%** by Aino (theme-fit governance — below 60% fragility threshold) |
+| Issues closed | 26 + meta #541 |
+| Wave→main propagation | 5/5 merged, 0 stranded (reachability gate) |
+| Ontology | current (0 dirty) post-wrapup |
+| Annunaki | no actionable errors this wave |
+
+### Top 3 Going Well
+
+1. **Honest-audit discipline held under pressure.** The Tier-5 audit had every incentive to call P3 end-state "done" and ship the wave; instead it surfaced 4 unmet criteria and escalated. This is the single most valuable behavior the charter cultivates, and it fired correctly on the highest-stakes call of the phase.
+2. **Cleanest-ever large wave.** 1 CR across 37 PRs (2.7%) with an 18-implementer spread — and the 1 CR was a genuine security catch, not rework. The 19% theme-fit concentration (vs the W4 80% fragility case) shows load distribution is healthy at scale.
+3. **Counter mechanization proved out.** First post-#421 wave where wrapup-written counters survived retro recomputation byte-for-byte. The recompute-at-retro tax (W4/W5/W9 history) is paid off.
+
+### Top 3 Pain Points
+
+1. **Hook-4 child-roster gap forced `--admin` on every child-repo PR (#552).** `validate_pr_review.py`'s `_ROSTER_DIR` is parent-relative, so child-repo PRs (us/ingest/ig — 14 of 37) get validated against the parent roster and either block legitimate child reviewers or fail-open. This wave we worked around it with verified `--admin` merges, but that defeats the gate's purpose. **Highest-priority W14 carry-forward** — it's a security-gate correctness bug, not cosmetic.
+2. **Orchestrator Closes-vs-Refs flip-flop on #561.** Conflicting "Closes stands" → "change to Refs" signals cost Wanjiku multiple round-trips. Root cause: the disposition (Closes vs Refs) for an end-state criterion with remaining per-repo rollout should be decided **once, up front** (Refs, because rollout remains) — not re-litigated after a body edit. Sibling of the owner-pivot-supersedes lesson.
+3. **Stale-local-checkout during high-volume remote merging.** Merging 37 PRs via `gh` (remote) while the local parent sat 22 commits behind let an ontology counter-commit land on a stale tree, needing a `reset --hard` recovery that discarded session annunaki entries. High-volume remote-merge sessions need a periodic `git fetch && reset --hard origin/<branch>` checkpoint before any local bookkeeping commit.
+
+### Proposed Process Changes
+
+1. **Fix Hook-4 child-roster resolution (#552) before W14 child-repo work** — Rationale: 14/37 wave PRs bypassed the 2-reviewer gate via `--admin` because the hook can't resolve child rosters. The gate exists precisely for these PRs. Resolve `_ROSTER_DIR` relative to the PR's target repo (or union parent+child rosters). Charter+hook change.
+2. **End-state/rollout-remaining issues use `Refs` from first PR** — Rationale: codify that any issue whose acceptance includes per-repo rollout beyond the parent-canonical artifact is `Refs` (stays open as the rollout tracker), decided at brief-authoring time, never flipped post-merge. Prevents the #561 churn class. Charter `pull-requests.md` § disposition.
+3. **High-volume remote-merge checkpoint** — Rationale: before any local bookkeeping commit during a wave-wrapup that merged N≥10 PRs remotely, `git fetch && git reset --hard origin/<branch>` first. Add to `/wave-wrapup` Step 10.5 as a pre-write guard. Skill change.
+4. **Batch-loop merge recurrence (known memory `feedback_batch_loop_merge_evades_pr_review_hook`)** — Rationale: it fired again on the ingest cluster. Candidate for hook-side enforcement (reject `gh pr merge` when the PR number is a shell variable inside a loop) rather than relying on orchestrator memory. DECIDE-tier (hook).
+
+### Promotion Audit — p3-wave-13 (deterministic)
+
+`/promotion-audit` ran on unchanged repo state: **0 AUTO · 0 DECIDE · 93 KEPT · 16 SUPERSEDED · 0 STALE-OPT-OUT.** No promotion artifacts generated this wave. Notable: the `feedback_batch_loop_merge_evades_pr_review_hook` memory (proposed-change #4 above) sits at **2 retro citations (W11 + W13), below its threshold of 3** — it stays KEPT and is *not* auto-filed as a hook DECIDE this wave; a third recurrence will cross it. The honest-audit and other W13-relevant patterns are already-promoted or below threshold. Standalone log: `.claude/team/promotion_audit_log/p3-wave-13.md`.
+
+### Annunaki-attack — p3-wave-13
+
+No actionable errors captured this wave. `.claude/annunaki/errors.jsonl` holds 7 stale entries, all from the W7/W8 window (2026-05-08) and all benign `pretooluse_block` records (hooks working as intended — `validate_commit_identity` shlex + `block_stale_tmp_message_file`). No new PostToolUse-captured failures during W13. Marker written; `/wave-wrapup` Step 13 will skip.
+
+### Memory-to-automation Audit — p3-wave-13
+
+Scanned the project memory directory (93 active memories). No memory crossed into hook/skill/charter codification this wave that isn't already tracked:
+- The **batch-loop-merge** pattern is the clearest automation candidate (hook-side `gh pr merge`-in-loop rejection) but is correctly held at 2/3 citations by the promotion pipeline — tracked, not yet filed.
+- **#552** (Hook-4 child-roster) and **#564** (auto_set_env_test over-match) are already filed as bugs against existing hooks — fix work, not memory-codification.
+- The remaining W13 memories (`feedback_scope_audit_flips_implementer_via_child_repo_rule`, etc.) are appropriately memory-tier (judgment heuristics, not mechanically enforceable). Marker written; `/wave-wrapup` Step 14 will skip.
+
 
