@@ -44,7 +44,7 @@ The PD (Nadia) coordinates priorities and resolves conflicts but does not relay 
 Instead of literal pub/sub, use conventions in the shared state file:
 
 | Channel | Write event | Who reads |
-|---------|------------|-----------| 
+|---------|------------|-----------|
 | releases | Package published, version bumped | All consumers of that package |
 | blockers | CI broken, dependency missing | Owner of the blocking repo |
 | deployments | Service deployed, health verified | Deploy team, dependent services |
