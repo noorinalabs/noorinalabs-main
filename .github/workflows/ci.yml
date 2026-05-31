@@ -8,6 +8,7 @@ on:
       - ".claude/lib/**"
       - ".claude/skills/**"
       - ".github/workflows/ci.yml"
+      - ".pre-commit-config.yaml"
       - "pyproject.toml"
   pull_request:
     branches: [main, "deployments/**"]
@@ -16,6 +17,7 @@ on:
       - ".claude/lib/**"
       - ".claude/skills/**"
       - ".github/workflows/ci.yml"
+      - ".pre-commit-config.yaml"
       - "pyproject.toml"
 
 jobs:
@@ -84,3 +86,16 @@ jobs:
       - run: pip install pytest
       - name: Run hook and lib tests
         run: pytest .claude/hooks/tests/ .claude/lib/tests/ -q
+
+  precommit-ci-sync:
+    name: Pre-commit ⇄ CI sync-drift gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify pre-commit config mirrors CI-enforced checks (#327)
+        # Fails if a check CI enforces (ruff/mypy/pytest/…) is missing from
+        # .pre-commit-config.yaml, so local hooks can't silently drift behind CI.
+        run: python3 .claude/lib/pre_commit_ci_sync.py .

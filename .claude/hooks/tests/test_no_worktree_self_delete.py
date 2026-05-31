@@ -9,6 +9,7 @@ Run: python3 -m pytest .claude/hooks/tests/test_no_worktree_self_delete.py -v
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import unittest
@@ -88,14 +89,17 @@ class SelfDeleteBlocks(unittest.TestCase):
             assert result is not None
             self.assertEqual(result["decision"], "block")
 
-    def test_chained_cd_then_remove_still_blocks(self) -> None:
-        """POS: a `cd` earlier in the command is a PLAN, not yet executed.
+    def test_chained_cd_to_nonexistent_then_remove_still_blocks(self) -> None:
+        """POS: `cd /safe && remove <wt>` where `/safe` does NOT exist on disk.
 
-        The tool-call's actual cwd is what matters at PreToolUse time —
-        shell hasn't run the cd yet when the hook fires.
+        Post-#535 the hook honors a leading `cd`, but ONLY when the target is
+        an absolute directory that exists. A `cd <nonexistent>` is ignored and
+        cwd recovery falls back to the stdin cwd (the worktree) — so this is
+        still the self-delete and must block. This guards the "don't relax the
+        guard on a path that isn't there" invariant.
         """
         with _WorktreeFixture() as f:
-            cmd = f"cd /safe && git worktree remove {f.wt_a}"
+            cmd = f"cd /nonexistent-{os.getpid()} && git worktree remove {f.wt_a}"
             result = hook.check(_bash(cmd, cwd=str(f.wt_a)))
             assert result is not None
             self.assertEqual(result["decision"], "block")
@@ -167,6 +171,108 @@ class SafeInvocationsAllow(unittest.TestCase):
             sibling.mkdir()
             result = hook.check(_bash(f"git worktree remove {target}", cwd=str(sibling)))
             self.assertIsNone(result)
+
+
+class CdRecoverySafetyMatrix(unittest.TestCase):
+    """#535 safety matrix — last-cd-wins cwd recovery changes the block/allow
+    SAFETY verdict (not just repo identity), so it gets its own dedicated
+    test surface. Each case pins a (command, stdin-cwd) → (block|allow) cell.
+
+    The motivating bug: a worktree subagent runs `cd <wt> && git worktree
+    remove <wt>` but the harness stdin `cwd` is anchored at the PARENT, so the
+    pre-#535 stdin-cwd read saw the parent (safe-looking) and FAILED OPEN on a
+    real self-delete (#173 / #534 follow-up). Recovery resolves the post-cd
+    cwd and catches it.
+    """
+
+    # --- improvement cases: recovery now CATCHES self-deletes the old
+    #     stdin-cwd read missed (harness cwd anchored at parent) ---
+
+    def test_cd_into_target_then_remove_blocks_even_when_stdin_cwd_is_parent(
+        self,
+    ) -> None:
+        """POS: `cd <wt_a> && remove <wt_a>` with stdin cwd at the PARENT.
+
+        This is the exact worktree-subagent footgun: the old hook read the
+        parent cwd and allowed; recovery resolves to <wt_a> and blocks."""
+        with _WorktreeFixture() as f:
+            cmd = f"cd {f.wt_a} && git worktree remove {f.wt_a}"
+            result = hook.check(_bash(cmd, cwd=str(f.parent)))
+            assert result is not None, "cd-into-target self-delete must block"
+            self.assertEqual(result["decision"], "block")
+
+    def test_cd_into_subdir_then_remove_blocks_from_parent(self) -> None:
+        """POS: `cd <wt_a/sub> && remove <wt_a>` with stdin cwd at parent —
+        cwd recovers to a descendant of the target → block."""
+        with _WorktreeFixture() as f:
+            cmd = f"cd {f.wt_a_sub} && git worktree remove {f.wt_a}"
+            result = hook.check(_bash(cmd, cwd=str(f.parent)))
+            assert result is not None
+            self.assertEqual(result["decision"], "block")
+
+    # --- correctness cases: recovery now ALLOWS safe removes the old
+    #     stdin-cwd read false-blocked (shell cd's OUT before removing) ---
+
+    def test_cd_to_safe_then_remove_allows_even_when_stdin_cwd_is_target(
+        self,
+    ) -> None:
+        """NEG: `cd <safe-existing> && remove <wt_a>` with stdin cwd at
+        <wt_a>. The shell moves OUT of <wt_a> first, so this is NOT a
+        self-delete — recovery resolves to <safe> and allows. Pre-#535 this
+        false-blocked on the stdin cwd."""
+        with _WorktreeFixture() as f:
+            cmd = f"cd {f.parent} && git worktree remove {f.wt_a}"
+            result = hook.check(_bash(cmd, cwd=str(f.wt_a)))
+            self.assertIsNone(result, "cd-out-then-remove is safe; must allow")
+
+    def test_cd_to_sibling_worktree_then_remove_allows(self) -> None:
+        """NEG: `cd <wt_b> && remove <wt_a>` — cd to a sibling worktree, then
+        remove the other; safe, allow."""
+        with _WorktreeFixture() as f:
+            cmd = f"cd {f.wt_b} && git worktree remove {f.wt_a}"
+            result = hook.check(_bash(cmd, cwd=str(f.wt_a)))
+            self.assertIsNone(result)
+
+    # --- last-cd-wins ordering ---
+
+    def test_last_cd_wins_safe_then_unsafe_blocks(self) -> None:
+        """POS: `cd <safe> && cd <wt_a> && remove <wt_a>` — the LAST cd lands
+        inside the target, so it is a self-delete → block."""
+        with _WorktreeFixture() as f:
+            cmd = f"cd {f.parent} && cd {f.wt_a} && git worktree remove {f.wt_a}"
+            result = hook.check(_bash(cmd, cwd=str(f.parent)))
+            assert result is not None
+            self.assertEqual(result["decision"], "block")
+
+    def test_last_cd_wins_unsafe_then_safe_allows(self) -> None:
+        """NEG: `cd <wt_a> && cd <safe> && remove <wt_a>` — the LAST cd moves
+        out of the target, so the remove is safe → allow."""
+        with _WorktreeFixture() as f:
+            cmd = f"cd {f.wt_a} && cd {f.parent} && git worktree remove {f.wt_a}"
+            result = hook.check(_bash(cmd, cwd=str(f.wt_a)))
+            self.assertIsNone(result)
+
+    # --- recovery must not RELAX the guard on a path that isn't there ---
+
+    def test_cd_to_nonexistent_falls_back_to_stdin_cwd_and_blocks(self) -> None:
+        """POS: `cd <nonexistent> && remove <wt_a>` with stdin cwd at <wt_a>.
+        The nonexistent cd target is ignored; recovery falls back to the stdin
+        cwd (inside the target) → block. Recovery never relaxes on an absent
+        directory."""
+        with _WorktreeFixture() as f:
+            cmd = f"cd /nope-{os.getpid()} && git worktree remove {f.wt_a}"
+            result = hook.check(_bash(cmd, cwd=str(f.wt_a)))
+            assert result is not None
+            self.assertEqual(result["decision"], "block")
+
+    def test_no_cd_bare_remove_uses_stdin_cwd_blocks(self) -> None:
+        """POS: bare `git worktree remove <wt_a>` with no cd — stdin cwd
+        (inside target) is used directly → block. Confirms the no-cd path is
+        unchanged by recovery."""
+        with _WorktreeFixture() as f:
+            result = hook.check(_bash(f"git worktree remove {f.wt_a}", cwd=str(f.wt_a)))
+            assert result is not None
+            self.assertEqual(result["decision"], "block")
 
 
 class NonMatchingCommandsAllow(unittest.TestCase):

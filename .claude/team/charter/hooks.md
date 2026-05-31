@@ -252,6 +252,8 @@ Generalizes the Hook 15 sentinel pattern (introduction: [#169](https://github.co
 
 ## Hook Sync Across Child Repos <!-- promotion-target: none -->
 
+> The org-wide artifact ownership + execution-location matrix (hooks, skills, charter, memory, ontology, settings — meta vs child) is canonicalized in [`charter/artifact-ownership.md`](artifact-ownership.md) (#328). This section remains the authoritative detail for the **hook** class specifically; the matrix points back here.
+
 Shared hooks live in `noorinalabs-main/.claude/hooks/` (the parent repo's hooks tree). Child repos consume them via **parent-canonical paths** — their own `.claude/settings.json` registers each hook by absolute path into the parent's hooks tree, e.g.:
 
 ```jsonc
@@ -358,6 +360,34 @@ Every hook with input parsing MUST have test fixtures covering all known input s
 
 **Dispatcher-style children (no committed `.claude/hooks/`):** Children that delegate all hook execution to the parent canonical via `settings.json` are exempt from per-child fixture requirements. Coverage obligations are fulfilled by the parent's test suite. A child is classified as dispatcher-style when `gh api repos/<owner>/<repo>/git/trees/<head_sha>?recursive=1` returns 0 entries under `.claude/hooks/`. Design-system and landing-page (post-W5) are the canonical exemplars.
 
+#### 5a. Mandatory Test Coverage for PreToolUse Segment Parsers
+
+This is a **specialization of §5** for the narrow class of hooks that split a bash command on shell separators into segments (e.g. `auto_set_env_test.py` splits on `&&`/`||`/`;`/`|`/`\n` to check each test-bearing segment independently). Any such **segment-parser** hook MUST carry test coverage for ALL SIX separator classes — not just the ones the original feature happened to exercise.
+
+| Class | Example | Test-class-name convention |
+|---|---|---|
+| Standard separators | `cmd1 && cmd2`, `cmd1 \|\| cmd2`, `cmd1; cmd2`, `cmd1 \| cmd2` | `StandardSeparatorTests` |
+| Newline | `cmd1\ncmd2` (multi-line script) | `NewlineSeparatorTests` |
+| Subshell | `(cmd1; cmd2)` | `SubshellTests` |
+| Control-flow body | `for x in ...; do cmd; done` | `ControlFlowBodyTests` |
+| Line-continuation | `cmd \`<br>`  arg` (backslash-newline) | `LineContinuationTests` |
+| Quoted regions | `'sep && inside'`, `"sep \| inside"` | `QuotedRegionTests` |
+
+Each class MUST include at minimum:
+
+- One **allow** case — the segment correctly receives the env-block / hook-condition and the hook passes.
+- One **block-with-correctly-targeted-suggestion** case — the segment is missing the env / hook-condition, the hook blocks, AND the suggestion lands on the right token (not a neighbouring segment). For the control-flow class where a clean splice is impossible, the block case asserts the HARD-BLOCK diagnostic path instead (per §Hook 4 / #478). Because that hook deliberately does NOT peek into the loop body for an existing env-block (even env-already-inside hard-blocks, so the operator edits manually), the control-flow "allow" case is a control-flow construct that carries no test runner at all — the hook correctly does not fire.
+
+The canonical reference implementation is `.claude/hooks/tests/test_auto_set_env_test.py`. The convention-named classes there carry a `# segment-class: <Standard|Newline|Subshell|ControlFlowBody|LineContinuation|QuotedRegion>` marker comment so a future grep-based CI gate (out of scope here, follow-up) can assert all six are present.
+
+**Why charter, not a code-review checklist:** a checklist is opt-in and decays (`feedback_enforcement_hierarchy`: "Charter rules without enforcement decay"). The `auto_set_env_test` hook shipped quote-aware (#478) and control-flow-aware detection but had NO coverage for newline-as-separator; the gap surfaced as repeated operator friction ("I've seen this error a few times") before #537 was filed and fixed in #538. Encoding the six-class matrix as a contract makes the NEXT segment-parser hook add all six from the start, rather than discovering each gap at runtime.
+
+**Spawn-brief line for hook PRs:** reviewer-class and implementer-class spawn briefs for any segment-parser hook PR MUST include the line: *"ensure all 6 segment-class tests present (per `hooks.md § Mandatory Test Coverage for PreToolUse Segment Parsers`)."*
+
+**Out of scope (follow-ups):** a grep-based CI gate asserting the six convention class-names; backfilling the six classes for *other* existing hooks (they have at least partial coverage already; a separate sweep); coverage requirements for non-segment-parser PreToolUse hooks (different signal pattern — §3 negative-match coverage already governs those).
+
+<!-- Promoted from memory: feedback_safety_direction_over_ux_friction (control-flow safety-direction precedent #478) — codifies P3W12 retro § Proposed Process Changes #2 (issue #543), newline precedent #537/#538. Charter-tier only (no hook); CI-gate enforcement is a deferred follow-up. -->
+
 ### 6. Promotion Provenance Phrasing
 
 Every hook's charter entry includes a provenance block describing where the hook came from. The `/promotion-audit` skill's `find_already_promoted` parser scans these blocks to decide which memories / charter rules / skill patterns have already landed as hooks. Ambiguous phrasing defeats the parser (false-negatives produce noisy AUTO classifications; false-positives produce noisy ALREADY-PROMOTED classifications). Three required parts:
@@ -382,7 +412,7 @@ Every hook MUST have exactly one backward-claim sentence. The parser's `_PROVENA
 
 **Rationale:** PR #155 added the reactive `_FORWARD_REFERENCE_MARKERS` filter to handle Hook 15's own provenance block — which had narrative referencing a future skill mixed in with the backward citation. The filter is the runtime safety net; this guidance is the preempt-at-author-time fix that reduces future filter-edits. Sibling of #393 (HTML-marker convention) — this section catalogues the parse keys; the authoritative shape-selection rule (when to use HTML-comment vs. bold-prose) lives at [`charter/skills.md` § Promotion Pipeline Marker Convention](skills.md#promotion-pipeline-marker-convention).
 
-**Enforcement:** The Standards & Quality Lead (Aino) verifies these requirements during hook PR review. A hook missing any of the six requirements must not be approved.
+**Enforcement:** The Standards & Quality Lead (Aino) verifies these requirements during hook PR review. A hook missing any of the six requirements must not be approved. For segment-parser hooks specifically, §5a's six-class test matrix is part of that verification.
 
 ## Hook Audit Protocol
 

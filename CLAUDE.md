@@ -78,6 +78,22 @@ The full constraint and delegation mechanics (orchestrator checklist, spawn-requ
 - These three (Projects, Issues, Actions) are the **core orchestration layer** — do not introduce alternative tools for these concerns
 - **Branching strategy:** Feature branches named `{FirstInitial}.{LastName}/{IIII}-{issue-name}` (e.g., `N.Khoury/0042-update-charter`) merged to `main` via PR
 
+### Local Hooks (pre-commit + pre-push)
+
+This repo ships a `.pre-commit-config.yaml` that **mirrors `.github/workflows/ci.yml`** so a local commit/push fails fast instead of surfacing a lint/type/test error only after a PR is opened (Phase-3 end-state criterion #6 / #327). Install BOTH hook types once:
+
+```bash
+pre-commit install                          # commit-stage hooks
+pre-commit install --hook-type pre-push     # push-stage hooks
+```
+
+- **pre-commit stage (every commit):** `ruff-format`, `ruff-lint` over `.claude/hooks/` + `.claude/lib/` — fast, with `--fix`.
+- **pre-push stage (every push):** `mypy` typecheck + the `pytest` suite (`.claude/hooks/tests/`, `.claude/lib/tests/`) — the heavier checks, run before code leaves the machine.
+
+Keep the ruff `rev` aligned with the version CI installs and with sibling repos (isnad-graph pins ruff 0.15.11) so the same tool runs locally and in CI.
+
+**Sync-drift gate:** `.claude/lib/pre_commit_ci_sync.py` is a CI job (`Pre-commit ⇄ CI sync-drift gate`) that fails the build if a check CI enforces (ruff/mypy/pytest/…) is NOT mirrored in `.pre-commit-config.yaml`. Run it locally with `python3 .claude/lib/pre_commit_ci_sync.py .`. This is the machine-enforcement that keeps the mirror from rotting (per `feedback_actionlint_needs_shellcheck` — local "clean" must not diverge from CI). The same gate is the template each child repo wires into its own CI.
+
 ## Cross-Repo Coordination
 
 When a feature spans multiple repositories:
@@ -178,3 +194,4 @@ ontology/
 - All repos use the same team roster and commit identity system
 - Hooks in `.claude/` enforce commit identity, block `--no-verify`, and block `git config` user changes
 - Standards & Quality Lead audits repos for convention compliance
+- **Artifact ownership** (which `.claude/` + ontology artifact class is owned/executes where, meta vs child; collision + create-time-placement rules) is canonicalized in [`.claude/team/charter/artifact-ownership.md`](.claude/team/charter/artifact-ownership.md)

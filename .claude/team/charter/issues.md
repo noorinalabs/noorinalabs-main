@@ -53,6 +53,25 @@ Any URL printed by the final `comm` is an open issue missing from the board — 
 
 **Skill:** `/board-audit` (main#199) automates both the orphan-detection check above AND the `p{N}-wave-{M}` label → project Wave-field sync. Labels are canonical for phase/wave assignment; the project's `Wave` single-select field is a **derived projection** of labels, maintained by `/board-audit`. The skill is wired into `/wave-kickoff`, `/wave-retro`, and `/session-start` step 5 so the board stays current at every wave boundary. Manual invocation is also valid whenever drift is suspected.
 
+## Multi-Step Meta-Issue Freshness Re-Audit <!-- promotion-target: skill -->
+
+A meta-issue's enumerated scope is a snapshot of HEAD at filing time, not a standing claim. Parallel work lands in the same repos between filing and next-pass implementation, so the longer the gap, the more the body drifts from ground truth.
+
+**Trigger:** A **multi-step meta-issue** (one whose scope is enumerated as a list of files, repos, or per-step acceptance criteria) that is **older than 48 hours at next-pass implementation** requires the implementer brief to **begin with a HEAD audit, per repo named in the issue**. The audit MUST precede any Edit/Write. Single-step issues (one acceptance criterion referencing one file/symbol) are exempt — they are covered by the existing pre-spawn file-existence verify, not this re-audit.
+
+Why 48 hours: within the window the body tracks filing-time state closely enough for a routine brief; beyond it, parallel PR closures and `gh issue` events in the named repos have typically had a chance to land and must be cross-referenced before spawning.
+
+**Audit deliverable** (produced before the first implementer is spawned):
+
+1. **Per-repo HEAD-state summary** — `file:line` refs for each scope element, read at the wave-branch HEAD via `gh api repos/<owner>/<repo>/contents/<path>?ref=<head_sha>` (per [`pull-requests.md` § Origin > Local Clone for "Still-Has-X" File-Content Claims](pull-requests.md)), not the working tree.
+2. **Comparison against the meta-issue's enumerated scope** — element by element.
+3. **Per-element verdict** — one of `STILL TODO` / `ALREADY DONE` / `SCOPE CHANGED` / `NEW ITEM SURFACED`.
+4. **Audit finding posted as a COMMENT on the meta-issue, NOT a body edit.** Editing the body erases the record that scope shrank; the comment preserves the audit trail of the reduction (per the audit-as-comment precedent in [Comment Format](#comment-format) — same reasoning as drift-evidence on an existing issue).
+
+The orchestrator then briefs only the `STILL TODO` / `SCOPE CHANGED` / `NEW ITEM SURFACED` elements; `ALREADY DONE` elements are dropped from the spawn plan and the spawn count is recomputed against the audited scope, never the body's original enumeration.
+
+**Why:** caught twice in one P3W12 session. On `noorinalabs-main#536` (Node.js 20→24 cross-repo sweep) the body still listed all 5 repos as todo two days after filing, but 4 had already merged direct-to-main within hours — the HEAD audit cut 5 planned implementer spawns to 1. On `noorinalabs-deploy#245` (vhost carve-out) a step listed as todo a month after filing was already done in isnad-graph commit `1a6f2ae`; the audit reduced a planned 3-PR sweep to 2 in-scope PRs plus one sibling issue, filed as a comment to keep the scope-reduction trail. Memory `feedback_pre_spawn_verify_file_existence_at_head` covers the *what* (verify file existence at HEAD); this section encodes the *when* — the 48-hour threshold that tells operators a multi-step meta-issue is stale enough to re-audit.
+
 ## Pre-Wave Checklist <!-- promotion-target: skill -->
 Before any wave begins, the Manager must verify:
 
