@@ -235,6 +235,22 @@ This step mirrors `/wave-retro` Step 6.5 by design — the same check fires from
 
 ### 10.5. Write canonical counter keys to `cross-repo-status.json`
 
+> **High-volume remote-merge checkpoint (added P3W13 #566 — 2026-05-31).** Before the **first local bookkeeping commit** of the wrapup (the counter-key write below, the ontology rebuild commit, the wrap-marker commit), if this wave merged **N ≥ 10 PRs via `gh` against remote branches**, the local checkout may be many commits behind origin. Re-sync first:
+>
+> ```bash
+> REPO_ROOT="$(git rev-parse --show-toplevel)"
+> CUR_BRANCH="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)"
+> git -C "$REPO_ROOT" fetch --quiet origin "$CUR_BRANCH"
+> BEHIND=$(git -C "$REPO_ROOT" rev-list --count "HEAD..origin/$CUR_BRANCH" 2>/dev/null || echo 0)
+> if [ "${BEHIND:-0}" -gt 0 ]; then
+>   echo "Local is $BEHIND behind origin/$CUR_BRANCH — re-syncing before bookkeeping commit."
+>   # Stash/relocate any in-progress local edits FIRST (a hard reset discards them).
+>   git -C "$REPO_ROOT" reset --hard "origin/$CUR_BRANCH"
+> fi
+> ```
+>
+> **Why:** P3W13 merged 37 PRs remotely while the local parent sat 22 commits behind; the counter-key commit landed on a stale tree and needed a recovery `reset --hard` that discarded uncommitted session state (`.claude/annunaki/errors.jsonl`). Re-syncing **before** the first bookkeeping write — and relocating any local edits first, since the reset is destructive — prevents both the stale-tree commit and the lossy recovery. Origin > local clone for all wrap-time state (charter `pull-requests.md § Origin > Local Clone`).
+
 Write the **top-level** canonical counter keys that `/wave-retro` Step 2.5 verifies. Pre-#318 these were either missing or buried under `wave_{M}_summary.*`, which forced a manual followup commit at retro (P3W7 `fb459b2`). Post-#318 the skill writes them at wrapup time so retro reads cleanly.
 
 Use the shared `upsert_status_keys.py` helper at `.claude/lib/` — it does targeted text-level upsert that preserves the compact-inline shape of `cross-repo-status.json` (a naive `jq … > tmp && mv` reformats every compact line to pretty form, producing a 500-line cosmetic diff per wave — see `main#332`). The helper also validates JSON before AND after the rewrite. Promoted from `/wave-scope` to `.claude/lib/` per `main#292` (multi-consumer → shared lib).
