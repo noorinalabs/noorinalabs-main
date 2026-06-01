@@ -127,6 +127,14 @@
     "reviewer": "Weronika Zielinska",
     "reviewer_2": "Nino Kavtaradze",
     "priority": "tech-debt"
+   },
+   {
+    "id": "noorinalabs-main#586",
+    "ref": "main#586",
+    "implementer": "Aino Virtanen",
+    "reviewer": "Santiago Ferreira",
+    "reviewer_2": "Wanjiku Mwangi",
+    "priority": "tech-debt"
    }
   ],
   "tier_3_green_staging": [
