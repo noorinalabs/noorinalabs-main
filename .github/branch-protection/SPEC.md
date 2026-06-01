@@ -28,7 +28,7 @@ A **repository ruleset** targeting `~DEFAULT_BRANCH`, `enforcement: active`:
   discipline runs on **issue-comment verdicts** validated by Hook 4
   (`validate_pr_review`), not formal reviews. A naive "require 1 approval" rule
   would **deadlock every merge**. Reviewer-count enforcement stays with Hook 4.
-- **`required_status_checks` (strict) — EMPTY required set on this repo.**
+- **`required_status_checks` rule — OMITTED on this repo.**
   `noorinalabs-main`'s `ci.yml` is **path-filtered** (it triggers only on
   changes under `.claude/hooks/**`, `.claude/lib/**`, `.claude/skills/**`,
   `.github/workflows/ci.yml`, `.pre-commit-config.yaml`, `pyproject.toml`). Its
@@ -37,9 +37,13 @@ A **repository ruleset** targeting `~DEFAULT_BRANCH`, `enforcement: active`:
   PR/push that touches only other paths — e.g. the orchestrator's routine
   `cross-repo-status.json` and `ontology/` updates. Hard-requiring those job
   contexts would **deadlock** any non-matching PR forever waiting on a check
-  that never reports. So the required set is **EMPTY**, the same canonical choice
-  as `noorinalabs-deploy` (whose CI is also path-filtered). The ruleset still
-  enforces **PR-only + no force-push / branch-delete** on `main`; the per-PR
+  that never reports. So no status check is required at the ruleset layer. Note
+  the GitHub REST API **rejects** a `required_status_checks` rule carrying an
+  empty `required_status_checks` array (HTTP 422: "Expected at least 1 elements,
+  got 0"), so the rule is **omitted entirely** rather than included-with-`[]`.
+  This is the same canonical choice as `noorinalabs-deploy` (whose CI is also
+  path-filtered). The ruleset still enforces **PR-only + no force-push /
+  branch-delete** on `main`; the per-PR
   green-CI gate is carried by **Hook 14** (`validate_pr_ci_status`), which blocks
   merge-on-red for the checks that **did** run.
 

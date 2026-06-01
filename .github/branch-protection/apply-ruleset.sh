@@ -26,8 +26,11 @@
 #     so its gate jobs DO NOT run on a PR/push that touches only other paths
 #     (e.g. cross-repo-status.json, ontology/). Hard-requiring those job
 #     contexts would deadlock any non-matching PR waiting on a check that never
-#     reports. So the required set is EMPTY here (same canonical choice as
-#     noorinalabs-deploy, whose CI is also path-filtered): the ruleset enforces
+#     reports. So the required_status_checks rule is OMITTED here (the GitHub API
+#     422s on an empty required_status_checks array — "Expected at least 1
+#     elements, got 0" — so the rule is dropped, not included-with-[]); same
+#     canonical choice as noorinalabs-deploy, whose CI is also path-filtered:
+#     the ruleset enforces
 #     PR-only + no force-push / branch-delete on main, and the per-PR green-CI
 #     gate is carried by Hook 14 (validate_pr_ci_status) which blocks merge-on-red
 #     for the checks that DID run. If main's CI later becomes unconditional, add
