@@ -1,0 +1,21 @@
+{
+  "description": "Cross-wave carry-forward (#547): an issue carried from W12 to W13 already has a **Wave 12 Kickoff** comment. The bare --add-label p3-wave-13 must NOT be suppressed by the stale prior-wave heading — the hook posts a FRESH Wave 13 kickoff. Before the wave-specific regex fix this returned skip_idempotent (six such carry-forwards were silently skipped in the P3W13 kickoff).",
+  "command": "gh issue edit 136 --repo noorinalabs/noorinalabs-main --add-label \"p3-wave-13\"",
+  "status": {
+    "wave_13_meta_issue": 529,
+    "wave_13_scope": {
+      "tier_2_carry": [
+        {"id": "noorinalabs-main#136", "implementer": "Wanjiku Mwangi", "reviewer": "Aino Virtanen", "reviewer_2": "Santiago Ferreira", "priority": "carry-forward"}
+      ]
+    }
+  },
+  "existing_comments": [
+    {"body": "Requestor: Fatima Okonkwo\nRequestee: Wanjiku Mwangi\nRequestOrReplied: Request\n\n**Wave 12 Kickoff — Phase 3**\n\nThis issue is assigned to you for p3-wave-12."}
+  ],
+  "post_succeeds": true,
+  "expect_action": "post",
+  "expect_body_contains": [
+    "**Wave 13 Kickoff — Phase 3**",
+    "p3-wave-13"
+  ]
+}
