@@ -14,6 +14,9 @@
   "wave_14_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/26731963545",
   "wave_14_stg_promotion_override_rationale": "Wave deployable surface promotes green: frontend image now deploys (isnad-graph#940/#941 fix validated through staging — container recreated, app+data tier Healthy). Final deploy failure is a pre-existing out-of-wave-scope kafka healthcheck issue (wave changed no kafka config; masked until #940 unblocked the deploy), filed deploy#393. App staging+prod live-probed healthy 2026-06-01.",
   "wave_14_completed_at": "2026-06-01T02:35:00Z",
+  "wave_14_annunaki_attack_ran_at": "2026-06-01T05:15:00Z",
+  "wave_14_memory_audit_ran_at": "2026-06-01T05:15:00Z",
+  "wave_14_retro_completed_at": "2026-06-01T05:15:00Z",
   "wave_12_scope_reconciled_at": "2026-05-25T03:11:55Z",
   "wave_12_repos_in_scope": [
     "noorinalabs-main",
