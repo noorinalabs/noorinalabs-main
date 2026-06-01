@@ -1,4 +1,8 @@
 {
+  "wave_15_scope_reconciled_at": "2026-06-01T05:40:00Z",
+  "wave_15_repos_in_scope": ["noorinalabs-main","noorinalabs-isnad-graph","noorinalabs-user-service","noorinalabs-deploy","noorinalabs-design-system","noorinalabs-landing-page","noorinalabs-data-acquisition","noorinalabs-isnad-ingest-platform"],
+  "wave_15_meta_issue": 584,
+  "wave_15_scope": {"theme":"Phase-3 Exit Close-out — apply branch-protection rulesets org-wide (#322) + tech-debt burn-down ≤20%/≤10% (#330) + CI-green audit (#326)","tier_1_exit_gates":["main#322","main#330","main#326"],"tier_2_techdebt_burndown":["main#578","main#560","main#262","isnad-graph#939","isnad-graph#929","isnad-graph#925","design-system#91","data-acquisition#59","deploy#363","deploy#245"],"tier_3_green_staging":["deploy#393"],"deferred_phase4":["deploy#388","deploy#387"],"deferred_backlog":["main#136"],"techdebt_baseline":"14/65=21%","techdebt_target":"≤20% min / ≤10% stretch"},
   "wave_14_scope_reconciled_at": "2026-05-31T23:28:29Z",
   "wave_14_repos_in_scope": ["noorinalabs-main","noorinalabs-isnad-graph","noorinalabs-user-service","noorinalabs-deploy","noorinalabs-design-system","noorinalabs-landing-page","noorinalabs-data-acquisition","noorinalabs-isnad-ingest-platform"],
   "wave_14_meta_issue": 569,
