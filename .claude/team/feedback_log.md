@@ -2622,13 +2622,13 @@ Scanned the project memory directory (93 active memories). No memory crossed int
 3. **Rigorous security reviews on #941** — BuildKit-secret token handling (never baked into a layer), independent sha256 verification, and a ci.yml-already-green proof of the cross-repo package read.
 
 ### Top 3 Pain Points
-1. **GHCR frontend publish was silently RED on main for ~12 days** (since #840, 2026-05-19), undetected until this wave's deploy triage — and it was *silently breaking every staging deploy* the whole time (masked at the frontend-pull step). No alerting surfaced a red default-branch publish.
+1. **GHCR frontend publish was silently RED on main for ~12 days** (since commit 5804476, 2026-05-19), undetected until this wave's deploy triage — and it was *silently breaking every staging deploy* the whole time (masked at the frontend-pull step). No alerting surfaced a red default-branch publish.
 2. **"Rollout delivered" ≠ "criterion enforced."** #322 shipped branch-protection specs + apply-scripts to all repos, but the rulesets are NOT applied (`rulesets=0` org-wide; apply is owner/admin-gated). The criterion is not met despite the rollout being "complete" — nearly mis-framed as done.
 3. **`current_wave` pointer never advanced at W14 kickoff** (stayed `wave-13`) — the wave-conclusion audit hook blocked the retro until manually corrected. A kickoff-step gap.
 
 ### Proposed Process Changes
 1. **wave-kickoff MUST advance `current_wave`** — add an explicit kickoff step (or a PostToolUse hook on wave-branch creation) that writes `current_wave=wave-{M}`. `validate_wave_audit` depends on it. *Rationale:* W14 kickoff skipped it → retro blocked (the one W14 annunaki capture).
-2. **Red default-branch workflow detection** — extend `/session-start` (or the annunaki monitor) to surface FAILED latest runs of publish/deploy workflows on `main` across repos. *Rationale:* #840 GHCR red rotted 12 days undetected, silently breaking staging.
+2. **Red default-branch workflow detection** — extend `/session-start` (or the annunaki monitor) to surface FAILED latest runs of publish/deploy workflows on `main` across repos. *Rationale:* commit 5804476 GHCR red rotted 12 days undetected, silently breaking staging.
 3. **End-state criterion = mechanism APPLIED, verified at origin — not just delivered** — rollout/end-state issues must distinguish "shipped" from "enforced," verified via API (e.g., the rulesets endpoint returns the ruleset) before the criterion is framed/closed as met. *Rationale:* #322 specs+scripts delivered but unapplied.
 
 ### Promotion Audit — p3-wave-14
