@@ -135,6 +135,14 @@
     "reviewer": "Santiago Ferreira",
     "reviewer_2": "Wanjiku Mwangi",
     "priority": "tech-debt"
+   },
+   {
+    "id": "noorinalabs-isnad-graph#943",
+    "ref": "isnad-graph#943",
+    "implementer": "Mateo Salazar",
+    "reviewer": "Anya Kowalczyk",
+    "reviewer_2": "Idris Yusuf",
+    "priority": "tech-debt"
    }
   ],
   "tier_3_green_staging": [
