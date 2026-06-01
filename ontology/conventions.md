@@ -141,9 +141,11 @@ Existing 3-digit ADRs are not merge-blockers; renames are mechanical and reversi
 - Must-fix items block merge; tech-debt items get GitHub Issues
 - CI must be green before merge (enforced by hooks)
 - Cross-contract PRs (shared Kafka topics, Parquet schemas, wire formats): first PR opened must include a `## Contract` section; subsequent PRs link to it and document divergence (P2W9 retro, 2026-04-22)
+- **End-state/rollout criterion = mechanism APPLIED + verified at origin, not just delivered** — rollout/end-state issues distinguish "shipped" (specs/scripts merged) from "enforced" (API-verifiable at origin, e.g. rulesets endpoint returns the ruleset) before the criterion is closed as met (W14 retro proposal #3, adopted PR #583; charter `pull-requests.md`)
 
 ### Wave lifecycle
 - `/wave-start` → `/wave-kickoff` → work → `/wave-wrapup` → `/wave-retro`
+- Kickoff MUST advance the `current_wave` pointer in `cross-repo-status.json` to `wave-{M}` — `validate_wave_audit` depends on it; a stale pointer blocks the retro (W14 retro proposal #1, adopted PR #583)
 - Wrapup includes: PR merge sequencing, ontology rebuild, Annunaki attack, memory audit
 - Retro includes: ontology staleness check, per-engineer assessments, trust matrix updates
 - **Open-item audit before "concluded" claims** (charter `skills.md`): every wave-wrapup / handoff / retro that claims a wave or workstream is complete MUST first run the cross-repo open-item count; zero open or an explicit carry-forward list is required. Promotion-target: hook.
@@ -152,6 +154,7 @@ Existing 3-digit ADRs are not merge-blockers; renames are mechanical and reversi
 - **Auto-handoff** (`session_handoff.py` Stop hook): Fires on every session exit (throttled to 5 min). Captures git state, open PRs/issues, wave status, ontology staleness. Writes to project memory for next session pickup.
 - **Manual handoff** (`/handoff` skill): Richer version that includes conversational context — what was discussed, decisions made, blockers encountered.
 - **Session start protocol**: Charter-mandated automatic steps — (0) check handoff file, (1) team cleanup (TeamDelete + TeamCreate), (2) ontology rebuild, (3) Annunaki check, (4) wave/phase orientation, (5) charter freshness check.
+- **Red default-branch workflow detection**: session-start surfaces FAILED latest runs of publish/deploy workflows on `main` across repos — guards against silent default-branch rot (the GHCR publish red that went 12 days undetected, commit 5804476). W14 retro proposal #2, adopted PR #583.
 
 ### Emergency Mode (charter `charter/emergency-mode.md`)
 - **Triggers:** prod-down / active security incident / DR or first-deploy. Discomfort or urgency are NOT triggers.

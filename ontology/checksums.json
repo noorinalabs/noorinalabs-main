@@ -164,10 +164,10 @@
       "resolved_at": "2026-05-16T22:20:43.893664+00:00"
     },
     ".claude/team/feedback_log.md": {
-      "last_tracked": "dee4ad335d42c5e61f11380bf032533f1b03c620bb3d95d99b5e41d84e587d7f",
-      "last_resolved": "24527356214699ac5bbe511709a30c597af928e742128dff7aff801145e403e3",
+      "last_tracked": "8dae573ad04bfd96198e5c274c58f7142599b183d652977247db12ee4d6272ad",
+      "last_resolved": "8dae573ad04bfd96198e5c274c58f7142599b183d652977247db12ee4d6272ad",
       "tracked_at": "2026-05-31T22:06:22.582846+00:00",
-      "resolved_at": "2026-05-16T22:20:43.893664+00:00"
+      "resolved_at": "2026-06-01T21:17:00Z"
     },
     ".gitignore": {
       "last_tracked": "78d915777b9d1fcb638d4f7185c73364db6cf6cd9cfe72d8030b37e617020bde",
@@ -464,10 +464,10 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "ontology/conventions.md": {
-      "last_tracked": "8057854f5e2b79458cd7a04f0a8c3ff9a9c62d30b4fbfd0650efcbd678773213",
-      "last_resolved": "8057854f5e2b79458cd7a04f0a8c3ff9a9c62d30b4fbfd0650efcbd678773213",
-      "tracked_at": "2026-05-17T21:28:10.746396+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
+      "last_tracked": "43e11d079f2224f2d9ba73069667bb40915d7a7aa93653a8819aec3efa9b94d9",
+      "last_resolved": "43e11d079f2224f2d9ba73069667bb40915d7a7aa93653a8819aec3efa9b94d9",
+      "tracked_at": "2026-06-01T21:16:30.059117+00:00",
+      "resolved_at": "2026-06-01T21:17:00Z"
     },
     "ontology/domain.yaml": {
       "last_resolved": "6fedad509f80b9570d0385fb5759e861d8b6f7b219ecc425b8dd472173ca536c",
@@ -650,10 +650,10 @@
       "resolved_at": "2026-05-06T00:49:39.816328+00:00"
     },
     ".claude/team/trust_matrix.md": {
-      "last_tracked": "27bd0e0ca3abdc20265cb469f0de1655266dc9043d653e1f192e35d82f85d088",
-      "last_resolved": "202251c15f7e8f2ba4c26ff94935b01a9aced66439b32daefba9026447398bcd",
+      "last_tracked": "1fc3acd9659826e73b734af691f87466b14b1b302503969b60037613801ffc67",
+      "last_resolved": "1fc3acd9659826e73b734af691f87466b14b1b302503969b60037613801ffc67",
       "tracked_at": "2026-05-31T22:03:47.712634+00:00",
-      "resolved_at": "2026-05-16T21:40:10.554735+00:00"
+      "resolved_at": "2026-06-01T21:17:00Z"
     },
     ".claude/team/promotion_audit_log/wave-5.md": {
       "last_tracked": "85263be2a3a83a8d84e4334aac290bed766cc5a2b08e238ffbc5b26563791002",
