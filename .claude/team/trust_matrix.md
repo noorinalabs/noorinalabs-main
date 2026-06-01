@@ -1120,3 +1120,20 @@ W12 included cross-cutting isnad-graph work routed direct-to-main (#933 starlett
 | **Mateo Salazar** | Responded to the wave's only CR correctly — claim-correction + dependency-filing, no argument | None this wave |
 | **ingest-platform + isnad-graph rosters** | 13 clean child-repo PRs (E2E/testcontainers/#35-ruling/Phase-4 models), zero CRs | None this wave |
 | **Orchestrator** | Honest Tier-5 audit + escalation discipline; 37-PR/5-repo drive at 1 CR; cross-roster identity correctness on #936 | #561 Closes/Refs flip-flop (conflicting signals → round-trips); stale-local-checkout during high-volume merge; batch-loop Hook-4 fail-open recurrence |
+
+## Phase 3 Wave 14 Trust Updates (2026-06-01) — Phase-3 End-State Rollout + Hook Hardening + Verify-and-Close
+
+Final wave of Phase 3. 15 PRs / 8 repos / 0 changes-requested cycles. Directional summary: clean delivery across the board; the standout is Ingrid's investigate-first GHCR fix. Org-level + deploy-track hold at their established levels; no decreases warranted among implementers.
+
+### Done Well / Needs Improvement (Phase 3 Wave 14)
+
+| Engineer | Done Well | Needs Improvement |
+|---|---|---|
+| **Aino Virtanen** | 5 clean PRs — 4 Tier-3 hook fixes + the sync-gate build-kind/multi-line fix (+10 regression tests); also reviewed #579 | None this wave |
+| **Ingrid Lindqvist** | ★ #941 GHCR registry migration — model investigate-first (confirmed package published + proved cross-repo auth via already-green ci.yml before coding), BuildKit-secret token handling never in a layer | None this wave |
+| **Anya Kowalczyk** | user-service rollout #141/#142 + canonical alignment; thorough security-lens reviews on #938 + #941 (runtime-image-excludes-token verification) | None this wave |
+| **Linh Pham** | isnad-graph rollout #938 (byte-aligned the build-pattern fix); rigorous #941 workflow/security review as ghcr-publish owner | None this wave |
+| **Santiago Ferreira** | #579 actionlint pin with independent upstream sha256 verification; reviewed #580 | None this wave |
+| **Aisha Idrissi** | deploy rollout #391 + authored the canonical build-kind tightening later lifted into #576/#580 | None this wave |
+| **Astrid Lindqvist / Kwame Mensah-Williams / Tarek Mansour / Farhan Bensalah** | one clean end-state rollout PR each (design-system #90 / landing #104 / data-acq #60 / ingest #58), 0 CRs | None this wave |
+| **Orchestrator** | Verify-and-close discipline (avoided rebuilding already-live #323/#324/#329); investigate-first root-caused staging red to #940; honest staging-gate override with deploy#393 filed; surfaced the #322 delivered-vs-applied gap rather than false-closing | commit 5804476 GHCR red went 12 days undetected (no red-default-branch alerting); `current_wave` pointer left stale at kickoff (retro blocked); ADMIN_MERGE_EXCEPTION literal-format friction cost retries |

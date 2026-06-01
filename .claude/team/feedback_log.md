@@ -2590,3 +2590,52 @@ Scanned the project memory directory (93 active memories). No memory crossed int
 - The remaining W13 memories (`feedback_scope_audit_flips_implementer_via_child_repo_rule`, etc.) are appropriately memory-tier (judgment heuristics, not mechanically enforceable). Marker written; `/wave-wrapup` Step 14 will skip.
 
 
+
+## Retrospective: Phase 3 Wave 14 — 2026-06-01
+
+**Theme:** Phase-3 End-State Rollout + Process-Hook Hardening + Org-Wide Tech-Debt Reduction — the **final wave of Phase 3**.
+
+### Team Performance
+15 PRs merged across all 8 repos, **0 changes-requested cycles**, all green. Org-wide end-state rollout (#322/#326/#327 to all 7 children + parent), 4 Tier-3 process-hook fixes, 2 sync-gate follow-ups, and the isnad-graph GHCR registry-migration fix. 10 issues closed; 8 carried forward (see Step 9). All 8 wave→main merges via owner-approved `wave-merge` admin exception (already-reviewed bundles).
+
+| Metric | Value |
+|---|---|
+| PRs merged | 15 (all 8 repos) |
+| Changes-requested cycles | 0 |
+| Top-implementer concentration | 5/15 = **33%** (Aino — hooks+gate cluster, theme-fit) |
+| Issues closed | 10 |
+| Tech-debt filed | deploy#393 (kafka staging healthcheck) |
+| Staging promotion | **OVERRIDDEN** (frontend deploys green via #940 fix; residual = pre-existing out-of-scope kafka) |
+
+### Per-Engineer Assessments
+- **Aino Virtanen** — PRs #572/#573/#574/#575 (Tier-3 hooks) + #580 (sync-gate build-kind + multi-line scan). 0 CI failures, 0 must-fix, +10 regression tests; also reviewed #579. The wave's hook-hardening backbone. Severity: none.
+- **Ingrid Lindqvist** — ★ PR #941 (GHCR registry migration). Exemplary investigate-first: confirmed the package is published + proved cross-repo auth via the already-green ci.yml job BEFORE coding; BuildKit-secret token handling (never in a layer). The session's standout fix. Severity: none.
+- **Anya Kowalczyk** — PRs #141/#142 (user-service rollout + canonical alignment); thorough security-lens reviews on #938 + #941 (verified runtime image excludes token). Severity: none.
+- **Linh Pham** — PR #938 (isnad-graph rollout, byte-aligned the build-pattern fix with deploy#391); reviewed #941 (owns ghcr-publish). Severity: none.
+- **Santiago Ferreira** — PR #579 (actionlint pin); independently verified the v1.7.12 sha256 against upstream; reviewed #580. Severity: none.
+- **Aisha Idrissi** — PR #391 (deploy rollout) + authored the canonical `build`-kind tightening later lifted into #576/#580. High-value. Severity: none.
+- **Astrid Lindqvist (#90), Kwame Mensah-Williams (#104), Tarek Mansour (#60), Farhan Bensalah (#58)** — one clean end-state rollout PR each (design-system / landing-page / data-acquisition / ingest-platform), 0 CRs. Severity: none.
+
+### Top 3 Going Well
+1. **Verify-and-close + investigate-first paid off big.** #323/#324/#329 were found ALREADY live + healthy via live probes — the deploy track was a *verification*, not a build (the earlier "gap list" was wrong). The same discipline root-caused the staging red to #940 instead of chasing symptoms.
+2. **The #570 child-roster fix held org-wide** — all child-repo *feature* PRs cleared the real 2-reviewer gate with 0 `--admin`; admin was used only for the owner-approved wave→main bundle merges.
+3. **Rigorous security reviews on #941** — BuildKit-secret token handling (never baked into a layer), independent sha256 verification, and a ci.yml-already-green proof of the cross-repo package read.
+
+### Top 3 Pain Points
+1. **GHCR frontend publish was silently RED on main for ~12 days** (since commit 5804476, 2026-05-19), undetected until this wave's deploy triage — and it was *silently breaking every staging deploy* the whole time (masked at the frontend-pull step). No alerting surfaced a red default-branch publish.
+2. **"Rollout delivered" ≠ "criterion enforced."** #322 shipped branch-protection specs + apply-scripts to all repos, but the rulesets are NOT applied (`rulesets=0` org-wide; apply is owner/admin-gated). The criterion is not met despite the rollout being "complete" — nearly mis-framed as done.
+3. **`current_wave` pointer never advanced at W14 kickoff** (stayed `wave-13`) — the wave-conclusion audit hook blocked the retro until manually corrected. A kickoff-step gap.
+
+### Proposed Process Changes
+1. **wave-kickoff MUST advance `current_wave`** — add an explicit kickoff step (or a PostToolUse hook on wave-branch creation) that writes `current_wave=wave-{M}`. `validate_wave_audit` depends on it. *Rationale:* W14 kickoff skipped it → retro blocked (the one W14 annunaki capture).
+2. **Red default-branch workflow detection** — extend `/session-start` (or the annunaki monitor) to surface FAILED latest runs of publish/deploy workflows on `main` across repos. *Rationale:* commit 5804476 GHCR red rotted 12 days undetected, silently breaking staging.
+3. **End-state criterion = mechanism APPLIED, verified at origin — not just delivered** — rollout/end-state issues must distinguish "shipped" from "enforced," verified via API (e.g., the rulesets endpoint returns the ruleset) before the criterion is framed/closed as met. *Rationale:* #322 specs+scripts delivered but unapplied.
+
+### Promotion Audit — p3-wave-14
+0 AUTO · 0 DECIDE · 95 KEPT · 0 newly-SUPERSEDED. No memory/charter/skill crossed a promotion threshold this wave (95 memories scanned; 0 charter sections carry promotion-target markers; the 2 memories added this session — `project_p3w14_deploy_track_groundtruth`, `project_p3w14_plan_and_techdebt_goal` — are project-tier KEEP). Standalone log: `.claude/team/promotion_audit_log/p3-wave-14.md`.
+
+### Annunaki-Attack — p3-wave-14
+8 entries in errors.jsonl; **7 are stale carryovers from 2026-05-08** (a prior wave, never cleaned — recommend purge at next sweep). The **1 genuine W14 capture** is the `wave-retro` PreToolUse block caused by the stale `current_wave` pointer — this directly informs Proposed Process Change #1 (kickoff must advance `current_wave`). No new hooks/skills auto-created; the fix is the charter/kickoff change proposed above.
+
+### Memory-to-Automation Audit — p3-wave-14
+No new hook/skill/charter conversion candidates beyond the 3 charter proposals already surfaced (Steps 7 → #1 current_wave-bump, #2 red-default-branch detection, #3 delivered-vs-applied). The session's new memories are project-state (KEEP). Existing memory-tier feedback entries remain appropriately memory-tier (judgment heuristics). Marker written.
