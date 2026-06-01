@@ -860,6 +860,110 @@ class QuotedRegionTests(unittest.TestCase):
         self.assertNotIn("ENVIRONMENT=test grep", result["reason"])
 
 
+class HeredocBodyParserTests(unittest.TestCase):
+    """Pure-parser coverage for `_strip_heredoc_bodies` (#564).
+
+    The function blanks heredoc *body* characters to spaces while
+    preserving every newline and the total length, so a downstream
+    `_split_segments` on the blanked view yields segment boundaries
+    identical to the original command. These tests pin the blanking
+    behaviour directly, independent of the `check()` decision."""
+
+    def test_quoted_delimiter_body_blanked(self) -> None:
+        cmd = "git commit -F- <<'EOF'\nrun pytest\nEOF"
+        view = hook._strip_heredoc_bodies(cmd)
+        # Same length + newline positions (positional mirror).
+        self.assertEqual(len(view), len(cmd))
+        self.assertEqual(
+            [i for i, c in enumerate(view) if c == "\n"],
+            [i for i, c in enumerate(cmd) if c == "\n"],
+        )
+        # The body line `run pytest` is blanked; the opener + delimiter survive.
+        self.assertNotIn("pytest", view)
+        self.assertIn("<<'EOF'", view)
+        self.assertIn("EOF", view.splitlines()[-1])
+
+    def test_unquoted_delimiter_body_blanked(self) -> None:
+        cmd = "cat <<EOF\nmake test reminder\nEOF"
+        view = hook._strip_heredoc_bodies(cmd)
+        self.assertNotIn("make test", view)
+
+    def test_indent_strip_dash_delimiter_closes(self) -> None:
+        # `<<-` permits a tab-indented closing delimiter.
+        cmd = "cat <<-END\n\tpytest note\n\tEND"
+        view = hook._strip_heredoc_bodies(cmd)
+        self.assertNotIn("pytest", view)
+
+    def test_here_string_not_treated_as_heredoc(self) -> None:
+        # `<<<` is a here-string (operand on same line), NOT a body heredoc.
+        cmd = "pytest tests/ <<< 'payload pytest'"
+        view = hook._strip_heredoc_bodies(cmd)
+        # No body lines to blank → command returns unchanged.
+        self.assertEqual(view, cmd)
+
+    def test_real_command_after_heredoc_survives(self) -> None:
+        # A real pytest AFTER the closing delimiter is outside the body and
+        # must remain visible to the detector.
+        cmd = "git commit -F- <<'EOF'\nmsg pytest\nEOF\npytest tests/"
+        view = hook._strip_heredoc_bodies(cmd)
+        # The body `msg pytest` is gone but the trailing real `pytest` stays.
+        self.assertEqual(view.count("pytest"), 1)
+        self.assertTrue(view.rstrip().endswith("pytest tests/"))
+
+
+class HeredocBodyTests(unittest.TestCase):
+    """Negative-match coverage for the #564 over-match: a `pytest` /
+    `make test` token inside a heredoc *body* is command input data (a
+    commit message, an API `--input` payload), never a test invocation.
+    Heredoc-body sibling of `QuotedRegionTests` (quoted-arg data).
+
+    Allow: heredoc body mentioning a test runner must not fire.
+    Block: a real test invocation that merely co-occurs with a heredoc
+    (the runner lives OUTSIDE the body) must still block, with the splice
+    targeting the real token — never the heredoc body."""
+
+    def test_heredoc_commit_msg_with_pytest_allowed(self) -> None:
+        # #563 repro shape: `git commit` heredoc body mentioning pytest.
+        command = "git commit -F- <<'EOF'\nfix: pytest mirror over-match\nEOF"
+        result = hook.check(_bash(command))
+        self.assertIsNone(result, "pytest inside a commit-message heredoc must be allowed")
+
+    def test_heredoc_commit_msg_with_make_test_allowed(self) -> None:
+        command = "git commit -F- <<'EOF'\nremember to run make test later\nEOF"
+        result = hook.check(_bash(command))
+        self.assertIsNone(result, "make test inside a commit-message heredoc must be allowed")
+
+    def test_unquoted_heredoc_input_payload_allowed(self) -> None:
+        # #562 repro family: a heredoc-built request payload mentioning pytest.
+        command = 'some-tool --stdin <<EOF\n{"body": "runs pytest in CI"}\nEOF'
+        result = hook.check(_bash(command))
+        self.assertIsNone(result, "pytest inside a heredoc payload must be allowed")
+
+    def test_indent_strip_heredoc_body_allowed(self) -> None:
+        command = "cat <<-END\n\tpytest is mentioned here\n\tEND"
+        result = hook.check(_bash(command))
+        self.assertIsNone(result, "pytest inside a <<- indented heredoc body must be allowed")
+
+    def test_real_pytest_after_heredoc_still_blocks_targeted(self) -> None:
+        # The heredoc body mentions pytest (data) but a REAL pytest runs after
+        # the closing delimiter. Must block, splice on the real token only.
+        command = "git commit -F- <<'EOF'\nmsg pytest\nEOF\npytest tests/"
+        result = hook.check(_bash(command))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("ENVIRONMENT=test pytest tests/", result["reason"])
+        # The heredoc body must not be touched by the rewrite.
+        self.assertNotIn("ENVIRONMENT=test msg", result["reason"])
+
+    def test_real_pytest_with_heredoc_input_blocks(self) -> None:
+        # pytest is the actual program; its config is fed via a heredoc that
+        # happens to mention `make test`. The real pytest must still block.
+        command = "pytest -c - tests/ <<'EOF'\n[pytest]\n# make test compatible\nEOF"
+        result = hook.check(_bash(command))
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+
+
 class SegmentClassCoverageManifestTests(unittest.TestCase):
     """Guard: this file must carry a `# segment-class: <Name>` marker for all
     six separator classes mandated by `hooks.md § 5a`. This is the in-suite
