@@ -38,6 +38,22 @@ repos:
         files: ^\.claude/(hooks|lib)/.*\.py$
         exclude: ^\.claude/worktrees/
 
+  # actionlint mirrors the `Config — Workflow actionlint` CI job in
+  # .github/workflows/docs.yml (the sync-drift gate globs ALL workflow files,
+  # so a CI-enforced `actionlint` kind not mirrored here turns the gate red —
+  # #571). The upstream golang hook builds a pinned actionlint and already
+  # scopes to ^.github/workflows/. shellcheck MUST be on PATH so actionlint's
+  # embedded shellcheck integration runs rather than silently skipping
+  # (feedback_actionlint_needs_shellcheck) — CI gets this from ubuntu-latest's
+  # preinstalled shellcheck; locally, install shellcheck before committing.
+  # Pinned to v1.7.12 to match what CI's `download-actionlint.bash` (tracking
+  # the latest release off `main`) resolves to.
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+        name: actionlint
+
   # Heavier checks run at pre-push (mirror CI's mypy + pytest jobs). Running as
   # `local`/`system` hooks so we use the system tools and don't drift from
   # whatever CI pins.
