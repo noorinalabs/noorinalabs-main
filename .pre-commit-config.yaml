@@ -46,8 +46,9 @@ repos:
   # embedded shellcheck integration runs rather than silently skipping
   # (feedback_actionlint_needs_shellcheck) — CI gets this from ubuntu-latest's
   # preinstalled shellcheck; locally, install shellcheck before committing.
-  # Pinned to v1.7.12 to match what CI's `download-actionlint.bash` (tracking
-  # the latest release off `main`) resolves to.
+  # Pinned to v1.7.12 to match CI's docs.yml actionlint job, which downloads the
+  # v1.7.12 release tarball and verifies its SHA256 before running (#579/#578) —
+  # the same pinned version on both sides, no `main`-tracking installer.
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12
     hooks:
