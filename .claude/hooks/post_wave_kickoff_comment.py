@@ -25,9 +25,13 @@ Behavior summary
    filter) — those are not initial kickoffs.
 2. Read `ontology/cross-repo-status.json` (or fallback paths) and find
    the matching assignment row in `wave_{M}_scope.tier_{1,2,3,4}_*`
-   arrays. Match by:
-     - `id == "<repo>#<num>"` for explicit-issue rows (W7+W8 shape), OR
-     - `repo == "<repo>"` for Tier-1 backlog rows (W6+W7 Tier-1 shape).
+   arrays. Match by (in priority order):
+     - `id == "<repo>#<num>"` (full repo name) OR `ref == "<short>#<num>"`
+       for explicit-issue dict rows (W7+W8 / W15-converted shape), OR
+     - `repo == "<repo>"` for Tier-1 backlog rows (W6+W7 Tier-1 shape), OR
+     - a bare short-ref string entry `"<short>#<num>"` (#586 legacy
+       /wave-scope shape) — synthesizes a placeholder row so the kickoff
+       posts with `(unassigned)` slots instead of silently skipping.
 3. If found, render a charter-format kickoff comment using the row's
    `implementer` / `reviewer` / `reviewer_2` fields.
 4. Skip if the issue == `wave_{M}_meta_issue` (meta-issue gets its own
@@ -165,31 +169,60 @@ def parse_label_apply_command(command: str) -> tuple[str, str, str] | None:
     return change.repo, change.issue_number, change.add_label
 
 
+def _short_ref(repo: str, issue_number: str) -> str:
+    """Return the short-ref form `<short-repo>#<num>` for (repo, num).
+
+    `/wave-scope` and the meta-issue body use the `noorinalabs-`-stripped
+    short repo name (e.g. `main#322`, `deploy#363`) — the dict-row `ref`
+    field and the legacy plain-string tier entries both use this shape.
+    The full repo name (`noorinalabs-main`) only appears in the dict-row
+    `id` field. We strip a leading `noorinalabs-` if present; a repo name
+    that does not carry the org prefix is returned unchanged.
+    """
+    short = repo[len("noorinalabs-") :] if repo.startswith("noorinalabs-") else repo
+    return f"{short}#{issue_number}"
+
+
 def find_assignment_row(status: dict, repo: str, issue_number: str, wave_num: int) -> dict | None:
     """Locate the assignment row for (repo, issue_number) in wave_{M}_scope.
 
     Match priority:
-      1. Exact `id == "<repo>#<issue_number>"` in any tier_N array
-         (W7+W8 shape — explicit issue rows).
+      1. Exact `id == "<repo>#<issue_number>"` (full repo name) in any
+         tier_N array (W7+W8 / W15-hand-converted shape — explicit dict
+         rows). Also matches a dict row whose `ref` equals the short-ref
+         `<short-repo>#<num>`.
       2. Exact `repo == "<repo>"` AND row has no `id` field, in any
          tier_N array (W6+W7 Tier-1 backlog shape — applies to all
          backlog issues in that repo).
+      3. **Legacy plain-string fallback (#586):** a tier entry that is a
+         bare short-ref string (e.g. `"main#322"`) matching this issue's
+         short-ref. `/wave-scope` historically wrote these (W14 + W15
+         pre-conversion), and the hook silently skipped every per-issue
+         kickoff comment because Pass 1/2 only matched dict rows. We
+         synthesize a minimal row (`{"id": ..., "ref": ...}`) so
+         `render_kickoff_comment` falls through to its `(unassigned)`
+         placeholders instead of the hook silent-skipping — a visible
+         kickoff comment the orchestrator can backfill beats no comment.
 
     Returns the row dict (with `implementer` / `reviewer` / `reviewer_2`
-    fields) or None if no match.
+    fields, or the synthesized placeholder row for the string shape) or
+    None if no match.
     """
     scope = status.get(f"wave_{wave_num}_scope") or {}
     if not isinstance(scope, dict):
         return None
 
     expected_id = f"{repo}#{issue_number}"
+    expected_ref = _short_ref(repo, issue_number)
 
-    # Pass 1: match by explicit id.
+    # Pass 1: match by explicit id (full repo name) or short-ref on a dict row.
     for key, value in scope.items():
         if not key.startswith("tier_") or not isinstance(value, list):
             continue
         for row in value:
-            if isinstance(row, dict) and row.get("id") == expected_id:
+            if isinstance(row, dict) and (
+                row.get("id") == expected_id or row.get("ref") == expected_ref
+            ):
                 return row
 
     # Pass 2: match by repo (backlog-tier fallback).
@@ -199,6 +232,15 @@ def find_assignment_row(status: dict, repo: str, issue_number: str, wave_num: in
         for row in value:
             if isinstance(row, dict) and "id" not in row and row.get("repo") == repo:
                 return row
+
+    # Pass 3: legacy plain-string short-ref fallback (#586). Render with
+    # `(unassigned)` placeholders rather than silent-skipping.
+    for key, value in scope.items():
+        if not key.startswith("tier_") or not isinstance(value, list):
+            continue
+        for row in value:
+            if isinstance(row, str) and row == expected_ref:
+                return {"id": expected_id, "ref": expected_ref}
 
     return None
 
