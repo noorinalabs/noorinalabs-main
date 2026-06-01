@@ -122,6 +122,17 @@ _BODY_FLAG = re.compile(r"(?<![\w-])--body(?:-file)?(?=[\s=]|$)")
 # Test-runner detection: pytest OR `make test`.
 _TEST_RUNNER = re.compile(r"\bpytest\b|\bmake\s+test\b")
 
+# Heredoc operator: `<<` (optionally `<<-`) followed by an optionally
+# quoted delimiter word. The delimiter is captured so we can find its
+# terminating line. Examples matched:
+#     <<EOF        <<-EOF        << EOF
+#     <<'EOF'      <<"EOF"       <<-'EOF'
+# We do NOT match `<<<` (here-string) — that has no body lines, its
+# operand is on the same line and is handled by ordinary quote/word
+# scanning. The negative lookahead `(?!<)` after the second `<` excludes
+# the here-string form.
+_HEREDOC_OPEN = re.compile(r"<<(?!<)-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
+
 # The literal env-var we require.
 _ENV_TOKEN = re.compile(r"\bENVIRONMENT=test\b")
 
@@ -367,6 +378,74 @@ def _strip_quoted_regions(s: str) -> str:
     return "".join(out)
 
 
+def _strip_heredoc_bodies(command: str) -> str:
+    """Return `command` with heredoc *body* characters blanked to spaces,
+    preserving every newline and the total length so the result is a
+    positional mirror of the original.
+
+    Heredoc bodies are command *input data* (a commit message, an API
+    request payload), never a program invocation. The token `pytest` or
+    `make test` inside a heredoc body is therefore not a test runner —
+    blanking the body before the test-runner scan prevents the #564
+    false-positive (e.g. `git commit -F- <<'EOF'\\n...make test...\\nEOF`
+    or a `--input` payload built with a heredoc). It is the heredoc-body
+    sibling of `_strip_quoted_regions` (quoted-arg data) and the same
+    safety tradeoff: data passed to a command is not the command.
+
+    Length- and newline-preserving so callers can run the existing
+    quote-aware `_split_segments` on the blanked view and get segment
+    boundaries identical to the original command — the body lines become
+    runs of spaces between unchanged separators, so a real test
+    invocation OUTSIDE any heredoc still lands in its own segment at the
+    same index and can be rewritten against the original text.
+
+    Scope notes:
+        - The opening operator line (everything up to and including the
+          newline that ends the line bearing `<<DELIM`) is preserved, so
+          a real `pytest` on the *same line as* a heredoc redirect is not
+          masked.
+        - Quoted (`<<'EOF'`) and unquoted (`<<EOF`) delimiters are both
+          handled; the closing line must equal the delimiter exactly
+          after optional leading tabs (the `<<-` indent-strip form).
+        - A heredoc opened but never closed (no terminating delimiter
+          line) blanks to end-of-string — matching shell behaviour where
+          the rest of the input is the body.
+        - Multiple heredocs and heredocs not at end-of-command are
+          handled by resuming the scan after each closing delimiter.
+    """
+    lines = command.split("\n")
+    out_lines: list[str] = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        line = lines[i]
+        out_lines.append(line)
+        # Find the LAST heredoc operator on this line (a line may open
+        # several: `cmd <<A <<B`; bash collects bodies in order, but for
+        # detection we only need to know a body region begins — using the
+        # last delimiter keeps the close-scan simple and conservative).
+        matches = list(_HEREDOC_OPEN.finditer(line))
+        if not matches:
+            i += 1
+            continue
+        delimiter = matches[-1].group(2)
+        # Blank body lines (preserving each as an all-space line of equal
+        # length) until we hit the closing delimiter line or run out.
+        i += 1
+        while i < n:
+            body = lines[i]
+            # `<<-` strips leading TABS from the closing delimiter; accept
+            # the closer with optional leading tabs regardless, since a
+            # plain `<<` body line equal to the delimiter also closes.
+            if body.lstrip("\t") == delimiter:
+                out_lines.append(body)
+                i += 1
+                break
+            out_lines.append(" " * len(body))
+            i += 1
+    return "\n".join(out_lines)
+
+
 def _prepend_env_to_segment(segment: str) -> str:
     """Return segment with `ENVIRONMENT=test ` inserted before its first
     real (non-env-assignment, non-whitespace) token.
@@ -470,19 +549,26 @@ def _rewrite_command(command: str) -> tuple[str, list[int]]:
     control-flow body — those are NOT rewritten (the splice would
     produce invalid shell), and the caller uses the list to emit the
     bail-with-diagnostic ALLOW path instead of a BLOCK.
+
+    Heredoc-aware (#564): test-segment detection and control-flow
+    bracketing run against a heredoc-body-blanked *view* of the command
+    (same length/boundaries as the original), so a `pytest` token inside
+    a heredoc body is never treated as a runner to splice onto. The
+    splice itself rewrites the ORIGINAL segment text — the view is a
+    detection mask only.
     """
     parts = _split_segments(command)
+    parts_view = _split_segments(_strip_heredoc_bodies(command))
     bail_indices: list[int] = []
     for i in range(0, len(parts), 2):
-        seg = parts[i]
-        if not _is_test_segment(seg):
+        if not _is_test_segment(parts_view[i]):
             continue
-        if _segment_has_env_in_leading_block(seg):
+        if _segment_has_env_in_leading_block(parts[i]):
             continue
-        if _is_control_flow_bracketed(parts, i):
+        if _is_control_flow_bracketed(parts_view, i):
             bail_indices.append(i)
             continue
-        parts[i] = _prepend_env_to_segment(seg)
+        parts[i] = _prepend_env_to_segment(parts[i])
     return "".join(parts), bail_indices
 
 
@@ -505,8 +591,20 @@ def check(input_data: dict) -> dict | None:
     if _has_body_flag(command):
         return None
 
+    # Detection view: blank heredoc bodies (command *input data*, never a
+    # program invocation) before the test-runner scan so a `pytest` /
+    # `make test` token inside a commit-message or --input heredoc does
+    # not register as a test segment (#564). The view is length- and
+    # newline-preserving, so its segment boundaries are identical to the
+    # original command's — `parts_view[i]` and `parts[i]` cover the same
+    # byte range. We detect on the view but check env-blocks / rewrite on
+    # the original (where the real ENVIRONMENT=test, if any, lives).
+    detection_view = _strip_heredoc_bodies(command)
     parts = _split_segments(command)
-    test_segment_indices = [i for i in range(0, len(parts), 2) if _is_test_segment(parts[i])]
+    parts_view = _split_segments(detection_view)
+    test_segment_indices = [
+        i for i in range(0, len(parts_view), 2) if _is_test_segment(parts_view[i])
+    ]
     if not test_segment_indices:
         return None
 
@@ -523,9 +621,12 @@ def check(input_data: dict) -> dict | None:
     needs_splice_block = False
     saw_control_flow_block = False
     for i in test_segment_indices:
+        # env-block lives in the ORIGINAL segment (a real ENVIRONMENT=test
+        # prefix); control-flow bracketing is detected on the heredoc-
+        # blanked VIEW so keywords inside a heredoc body don't count.
         if _segment_has_env_in_leading_block(parts[i]):
             continue
-        if _is_control_flow_bracketed(parts, i):
+        if _is_control_flow_bracketed(parts_view, i):
             saw_control_flow_block = True
             continue
         needs_splice_block = True
