@@ -14,25 +14,130 @@
  "wave_15_scope": {
   "theme": "Phase-3 Exit Close-out — apply branch-protection rulesets org-wide (#322) + tech-debt burn-down ≤20%/≤10% (#330) + CI-green audit (#326)",
   "tier_1_exit_gates": [
-   "main#322",
-   "main#330",
-   "main#326"
+   {
+    "id": "noorinalabs-main#322",
+    "ref": "main#322",
+    "implementer": "Wanjiku Mwangi",
+    "reviewer": "Aino Virtanen",
+    "reviewer_2": "Santiago Ferreira",
+    "priority": "exit-gate"
+   },
+   {
+    "id": "noorinalabs-main#330",
+    "ref": "main#330",
+    "implementer": "Santiago Ferreira",
+    "reviewer": "Wanjiku Mwangi",
+    "reviewer_2": "Aino Virtanen",
+    "priority": "exit-gate"
+   },
+   {
+    "id": "noorinalabs-main#326",
+    "ref": "main#326",
+    "implementer": "Aino Virtanen",
+    "reviewer": "Wanjiku Mwangi",
+    "reviewer_2": "Santiago Ferreira",
+    "priority": "exit-gate"
+   }
   ],
   "tier_2_techdebt_burndown": [
-   "main#578",
-   "main#560",
-   "main#262",
-   "isnad-graph#939",
-   "isnad-graph#929",
-   "isnad-graph#925",
-   "design-system#91",
-   "data-acquisition#59",
-   "deploy#363",
-   "deploy#245",
-   "main#585"
+   {
+    "id": "noorinalabs-main#578",
+    "ref": "main#578",
+    "implementer": "Santiago Ferreira",
+    "reviewer": "Aino Virtanen",
+    "reviewer_2": "Wanjiku Mwangi",
+    "priority": "tech-debt"
+   },
+   {
+    "id": "noorinalabs-main#560",
+    "ref": "main#560",
+    "implementer": "Aino Virtanen",
+    "reviewer": "Santiago Ferreira",
+    "reviewer_2": "Wanjiku Mwangi",
+    "priority": "tech-debt"
+   },
+   {
+    "id": "noorinalabs-main#262",
+    "ref": "main#262",
+    "implementer": "Aino Virtanen",
+    "reviewer": "Wanjiku Mwangi",
+    "reviewer_2": "Santiago Ferreira",
+    "priority": "tech-debt"
+   },
+   {
+    "id": "noorinalabs-main#585",
+    "ref": "main#585",
+    "implementer": "Santiago Ferreira",
+    "reviewer": "Aino Virtanen",
+    "reviewer_2": "Wanjiku Mwangi",
+    "priority": "tech-debt"
+   },
+   {
+    "id": "noorinalabs-isnad-graph#939",
+    "ref": "isnad-graph#939",
+    "implementer": "Linh Pham",
+    "reviewer": "Anya Kowalczyk",
+    "reviewer_2": "Idris Yusuf",
+    "priority": "tech-debt"
+   },
+   {
+    "id": "noorinalabs-isnad-graph#929",
+    "ref": "isnad-graph#929",
+    "implementer": "Jelani Mwangi",
+    "reviewer": "Linh Pham",
+    "reviewer_2": "Anya Kowalczyk",
+    "priority": "tech-debt"
+   },
+   {
+    "id": "noorinalabs-isnad-graph#925",
+    "ref": "isnad-graph#925",
+    "implementer": "Ingrid Lindqvist",
+    "reviewer": "Idris Yusuf",
+    "reviewer_2": "Anya Kowalczyk",
+    "priority": "security"
+   },
+   {
+    "id": "noorinalabs-design-system#91",
+    "ref": "design-system#91",
+    "implementer": "Astrid Lindqvist",
+    "reviewer": "Maricel Reyes",
+    "reviewer_2": "Luciana Ferreyra",
+    "priority": "tech-debt"
+   },
+   {
+    "id": "noorinalabs-data-acquisition#59",
+    "ref": "data-acquisition#59",
+    "implementer": "Kavitha Sundaramurthy",
+    "reviewer": "Nikolaos Papadopoulos",
+    "reviewer_2": "Jean-Claude Habimana",
+    "priority": "tech-debt"
+   },
+   {
+    "id": "noorinalabs-deploy#363",
+    "ref": "deploy#363",
+    "implementer": "Aisha Idrissi",
+    "reviewer": "Lucas Ferreira",
+    "reviewer_2": "Nino Kavtaradze",
+    "priority": "tech-debt"
+   },
+   {
+    "id": "noorinalabs-deploy#245",
+    "ref": "deploy#245",
+    "implementer": "Lucas Ferreira",
+    "reviewer": "Weronika Zielinska",
+    "reviewer_2": "Nino Kavtaradze",
+    "priority": "tech-debt"
+   }
   ],
   "tier_3_green_staging": [
-   "deploy#393"
+   {
+    "id": "noorinalabs-deploy#393",
+    "ref": "deploy#393",
+    "implementer": "Lucas Ferreira",
+    "reviewer": "Aisha Idrissi",
+    "reviewer_2": "Nurul Hakim",
+    "priority": "bug"
+   }
   ],
   "deferred_phase4": [
    "deploy#388",
