@@ -42,6 +42,8 @@ Method: committed-tree inspection (`gh api repos/<repo>/git/trees/main?recursive
 
 **Drift filed:** the flat-`.md` org-skill duplicates across isnad-graph / deploy / landing-page / data-acquisition are a cleanup sweep — file/track as a `tech-debt` follow-up (remove the shadowing flat files; children invoke org skills from the parent-rooted session). This is intentionally NOT bundled into this doc PR (unrelated-cleanup discipline, `hooks.md § Anti-pattern: copy-resident hooks` precedent).
 
+**Tracked as:** `noorinalabs-main#560` (filed from this audit; P3W15). Each of the 4 child repos carries the SAME 10 flat-`.md` files — `close-stale-issues.md`, `plan-phase.md`, `retro.md`, `review-pr.md`, `team-reset.md`, `wave-audit.md`, `wave-end.md`, `wave-kickoff.md`, `wave-retro.md`, `wave-start.md`. Re-verified at each child's `main` HEAD via `gh api .../git/trees/main?recursive=1` (2026-06-01). Every flat file's frontmatter `name:` matches an org-canonical skill (9 map directly to a `<name>/SKILL.md`; `wave-end.md` is the deprecated-name predecessor of org `wave-wrapup`, and `retro.md` is mislabelled — its body is a wave-retrospective, i.e. a shadow of org `wave-retro`, not org `retro`). The flat bodies have drifted from the org dir-form canonical (the org versions evolved across waves; the frozen flat copies did not), which is exactly the no-sync-check drift collision rules 1 + 4 prohibit — confirming these are stale shadows, NOT repo-specific workflows. Deletions execute in the child repos under #560 (child-roster authors per the child-repo implementer rule); this audit row flips to **OK** once all 4 child PRs merge.
+
 ## Create-time ownership gate
 
 New artifacts must land in the repo this doc assigns them to. The gate is, in escalation order:
