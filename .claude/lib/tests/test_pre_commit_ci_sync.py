@@ -108,6 +108,148 @@ jobs:
         self.assertNotIn("ruff-lint", kinds)
 
 
+class BuildKindTightening(unittest.TestCase):
+    """#576: runtime `docker build` / `docker buildx` steps are image-MOVING,
+    not a build-QUALITY gate a local pre-commit hook can mirror — they must
+    NOT classify as the `build` kind, or any docker-image repo gets a
+    permanent un-mirrorable drift. Real build-quality gates still register."""
+
+    def test_docker_buildx_not_build_kind(self) -> None:
+        wf = """
+jobs:
+  publish:
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build and push
+        run: docker buildx build --push -t img:latest .
+"""
+        self.assertNotIn("build", kinds_from_ci(wf))
+
+    def test_bare_docker_build_not_build_kind(self) -> None:
+        self.assertNotIn("build", kinds_from_ci("      - run: docker build -t img .\n"))
+
+    def test_real_build_quality_gates_still_detected(self) -> None:
+        # The classifier inspects step lines (run:/uses:/`- ` list items), so
+        # the build-quality markers are exercised in those positions.
+        for line in (
+            "      - name: build-and-validate\n",
+            "      - run: ./scripts/build-and-test.sh\n",
+            "      - run: npm run build\n",
+        ):
+            with self.subTest(line=line):
+                self.assertIn("build", kinds_from_ci(line))
+
+    def test_docker_publish_workflow_has_no_build_drift(self) -> None:
+        # End-to-end: a publish-only workflow (docker buildx) against a config
+        # that does NOT mirror a build kind produces NO harmful drift.
+        wf = """
+jobs:
+  publish:
+    steps:
+      - run: docker buildx build --push -t img .
+"""
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+"""
+        harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
+        self.assertNotIn("build", harmful)
+
+
+class MultiLineRunBlockScanning(unittest.TestCase):
+    """#577: tools invoked on a CONTINUATION line of a multi-line `run: |` /
+    `run: >` block must be classified — else the gate has a silent blind spot
+    where a future `ruff`/`mypy` expressed multi-line drops out of the mirror
+    check."""
+
+    def test_pipe_block_continuation_lines_classified(self) -> None:
+        wf = """
+jobs:
+  security-audit:
+    steps:
+      - name: audit
+        run: |
+          uv sync
+          uv run pip-audit
+"""
+        self.assertIn("pip-audit", kinds_from_ci(wf))
+
+    def test_multiple_tools_in_one_block(self) -> None:
+        wf = """
+jobs:
+  checks:
+    steps:
+      - name: lint+type+test
+        run: |
+          ruff check .
+          mypy src/
+          pytest -q
+"""
+        kinds = kinds_from_ci(wf)
+        self.assertEqual(
+            kinds & {"ruff-lint", "mypy", "pytest"},
+            {"ruff-lint", "mypy", "pytest"},
+        )
+
+    def test_folded_block_scalar_also_scanned(self) -> None:
+        # `run: >` (folded) and chomping indicators (`|-`) open a block too.
+        wf = """
+jobs:
+  x:
+    steps:
+      - run: >-
+          mypy src/
+"""
+        self.assertIn("mypy", kinds_from_ci(wf))
+
+    def test_block_ends_at_dedented_sibling_key(self) -> None:
+        # A less-indented sibling key (here `uses:` + its `with:`) closes the
+        # block — its `fetch-depth` body must not leak a spurious classification
+        # and the block's own `ruff check` is still caught.
+        wf = """
+jobs:
+  x:
+    steps:
+      - name: a
+        run: |
+          ruff check .
+      - name: b
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+"""
+        kinds = kinds_from_ci(wf)
+        self.assertIn("ruff-lint", kinds)
+
+    def test_single_line_run_unaffected(self) -> None:
+        # Regression: the common single-line `run:` form still classifies.
+        wf = """
+jobs:
+  x:
+    steps:
+      - run: ruff check .
+      - run: mypy .
+"""
+        kinds = kinds_from_ci(wf)
+        self.assertEqual(kinds & {"ruff-lint", "mypy"}, {"ruff-lint", "mypy"})
+
+    def test_comment_in_block_not_classified(self) -> None:
+        # A commented continuation line inside the block is not a real
+        # invocation and must not register.
+        wf = """
+jobs:
+  x:
+    steps:
+      - run: |
+          # pytest is mentioned here but commented out
+          echo hi
+"""
+        self.assertNotIn("pytest", kinds_from_ci(wf))
+
+
 class DriftDirection(unittest.TestCase):
     def test_ci_enforced_not_local_is_harmful(self) -> None:
         harmful, stricter = compute_drift(
