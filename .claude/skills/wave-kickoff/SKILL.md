@@ -205,6 +205,20 @@ Recipe:
 4. Build PUT payload JSON with `message`, `content` (base64), `sha` (current), `branch: "main"`, `author: {name, email}`, `committer: {name, email}`
 5. `gh api -X PUT repos/.../contents/cross-repo-status.json --input <payload>.json`
 
+**MANDATORY — advance the `current_wave` pointer (P3W14 retro Proposed Change #1).** The kickoff status write MUST set `current_wave` to this wave, alongside the active-state keys:
+
+```jq
+. + {
+  "current_wave": "wave-{M}",
+  "last_completed_wave": "wave-{M-1}",
+  "next_wave": "wave-{M+1}",
+  "wave_{M}_active": true,
+  "wave_{M}_kicked_off_at": $now
+}
+```
+
+`validate_wave_audit` derives the current wave **label** (`p{N}-wave-{M}`) from `current_wave` to count open wave issues; if the pointer still names the prior wave, the wave-conclusion audit blocks the **next** wave's `/wave-retro`. This was the one W14 annunaki capture — W14 kicked off without advancing `current_wave`, leaving it at `wave-13`, and the retro was blocked until the pointer was manually corrected. Read-back-verify after the PUT: `gh api .../contents/cross-repo-status.json?ref=main --jq '.content' | base64 -d | jq -r '.current_wave'` MUST print `wave-{M}`.
+
 Attribution: kickoff status commits use Wanjiku Mwangi (TPM); reconciliation/wrapup commits use the role-running implementer.
 
 The local-then-push `jq | mv | git commit | git push` pattern at the end of Step 1 above pre-dates this guidance — it remains acceptable for the `wave_{M}_branches` write (which is wave-branch-scoped, not main) but MUST NOT be used for any commit landing on `main`. Status writes that target `main` (kickoff active, reconciliation, wrapup completion) use the PUT-contents recipe.
