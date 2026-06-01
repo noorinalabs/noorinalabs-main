@@ -393,6 +393,44 @@ class KickoffAlreadyPostedTests(unittest.TestCase):
 
         self.assertFalse(hook.kickoff_already_posted("x", "1", fetch_comments=fetch))
 
+    def test_wave_specific_same_wave_still_idempotent(self):
+        """#547: with wave_num=13, a Wave 13 comment still counts as posted."""
+
+        def fetch(r, n):
+            return [{"body": "**Wave 13 Kickoff — Phase 3**\n\nbody"}]
+
+        self.assertTrue(hook.kickoff_already_posted("x", "1", wave_num=13, fetch_comments=fetch))
+
+    def test_wave_specific_prior_wave_not_counted(self):
+        """#547 core fix: with wave_num=13, a stale Wave 12 carry-forward
+        kickoff comment does NOT count as the Wave 13 kickoff → not posted
+        yet, so the hook will post a fresh one."""
+
+        def fetch(r, n):
+            return [{"body": "**Wave 12 Kickoff — Phase 3**\n\nprior-wave body"}]
+
+        self.assertFalse(hook.kickoff_already_posted("x", "1", wave_num=13, fetch_comments=fetch))
+
+    def test_wave_specific_multi_digit_wave_not_substring_matched(self):
+        """#547 edge: wave_num=2 must not match a 'Wave 12 Kickoff' comment
+        (the literal-digit interpolation is `\\bWave 2 ` via \\s, but the
+        \\s+ boundary + the 'Kickoff' suffix prevent '12' from satisfying
+        'Wave 2 Kickoff'). Guards against a naive substring regex."""
+
+        def fetch(r, n):
+            return [{"body": "**Wave 12 Kickoff — Phase 3**"}]
+
+        self.assertFalse(hook.kickoff_already_posted("x", "1", wave_num=2, fetch_comments=fetch))
+
+    def test_wave_none_falls_back_to_wave_agnostic(self):
+        """#547: wave_num=None preserves legacy any-wave semantics — any
+        kickoff heading counts."""
+
+        def fetch(r, n):
+            return [{"body": "**Wave 7 Kickoff — Phase 2**"}]
+
+        self.assertTrue(hook.kickoff_already_posted("x", "1", wave_num=None, fetch_comments=fetch))
+
 
 class NonBashToolTests(unittest.TestCase):
     """tool_name != Bash → early return None."""

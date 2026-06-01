@@ -82,7 +82,36 @@ KICKOFF_REQUESTOR = "Fatima Okonkwo"
 # (`**Wave {M} Kickoff — Phase {N}**`). Used for idempotency check. The
 # emdash is the literal character in the template; we tolerate either
 # em-dash or regular hyphen-surrounded form in case of copy-paste drift.
+#
+# WAVE-SPECIFIC (#547): the wave number MUST be matched literally, not as
+# a bare `\d+`. A carry-forward issue (labeled `p3-wave-12`, then
+# relabeled `p3-wave-13`) carries its PRIOR wave's kickoff comment. A
+# wave-agnostic `Wave \d+ Kickoff` regex matched that stale comment and
+# made `kickoff_already_posted` return True, so the hook silently skipped
+# the NEW wave's kickoff (six W11/W12 carry-forwards skipped in the
+# P3W13 kickoff). `_kickoff_heading_re(wave_num)` builds a regex that
+# only matches the CURRENT wave's heading, so same-wave re-applies stay
+# idempotent while cross-wave carry-forwards get a fresh kickoff.
+#
+# The module-level `_KICKOFF_HEADING_RE` is retained as the wave-agnostic
+# fallback (`wave_num=None`) so a caller that genuinely wants "any
+# kickoff comment present" semantics keeps working; the hook's own
+# idempotency caller always passes the concrete current wave number.
 _KICKOFF_HEADING_RE = re.compile(r"\*\*Wave\s+\d+\s+Kickoff\s+[—-]\s+Phase\s+\d+\*\*")
+
+
+def _kickoff_heading_re(wave_num: int | None = None) -> re.Pattern[str]:
+    """Return the kickoff-heading regex for `wave_num`.
+
+    With a concrete `wave_num`, the wave digit is matched literally so a
+    prior wave's kickoff comment on a carry-forward issue does NOT count
+    as "already posted" for the new wave (#547). With `wave_num=None`,
+    returns the wave-agnostic `_KICKOFF_HEADING_RE` (matches any wave) —
+    the legacy fallback semantics.
+    """
+    if wave_num is None:
+        return _KICKOFF_HEADING_RE
+    return re.compile(rf"\*\*Wave\s+{wave_num}\s+Kickoff\s+[—-]\s+Phase\s+\d+\*\*")
 
 
 def _read_status() -> dict | None:
@@ -209,9 +238,17 @@ def render_kickoff_comment(row: dict, wave_num: int, phase_num: int, repo: str) 
     return "\n".join(lines)
 
 
-def kickoff_already_posted(repo: str, issue_number: str, fetch_comments=None) -> bool:
-    """Idempotency check: True if any existing comment body matches the
-    charter kickoff heading regex.
+def kickoff_already_posted(
+    repo: str, issue_number: str, wave_num: int | None = None, fetch_comments=None
+) -> bool:
+    """Idempotency check: True if an existing comment body matches the
+    kickoff heading regex for `wave_num`.
+
+    Wave-specific (#547): with a concrete `wave_num`, only a kickoff
+    comment for THAT wave counts — a carry-forward issue's prior-wave
+    kickoff comment no longer suppresses the new wave's kickoff. With
+    `wave_num=None` the legacy wave-agnostic match is used (any kickoff
+    heading counts).
 
     The `fetch_comments` callable defaults to a real `gh issue view` call;
     tests inject a mock. Returns False on any error fetching comments
@@ -225,9 +262,10 @@ def kickoff_already_posted(repo: str, issue_number: str, fetch_comments=None) ->
     if comments is None:
         return False
 
+    heading_re = _kickoff_heading_re(wave_num)
     for c in comments:
         body = c.get("body", "") if isinstance(c, dict) else ""
-        if _KICKOFF_HEADING_RE.search(body):
+        if heading_re.search(body):
             return True
     return False
 
@@ -383,8 +421,12 @@ def check(
         )
         return {"action": "skip_no_row", "repo": repo, "issue": issue_number}
 
-    # Idempotency: don't double-post.
-    if kickoff_already_posted(repo, issue_number, fetch_comments=comment_fetcher):
+    # Idempotency: don't double-post FOR THIS WAVE. Passing wave_num makes
+    # the heading match wave-specific so a carry-forward issue's prior-wave
+    # kickoff comment does not suppress the current wave's kickoff (#547).
+    if kickoff_already_posted(
+        repo, issue_number, wave_num=wave_num, fetch_comments=comment_fetcher
+    ):
         return {"action": "skip_idempotent", "repo": repo, "issue": issue_number}
 
     body = render_kickoff_comment(row, wave_num, phase_num, repo)
