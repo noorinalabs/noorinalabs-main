@@ -179,6 +179,43 @@ Report:
 
 If the report surfaces unexpected gaps between board view and open-issue counts (e.g., wave-labeled issues missing from project 2, or Wave-field values out of sync with `p{N}-wave-{M}` labels), invoke `/board-audit` to detect and (with confirmation) repair the drift. Per main#199, labels are canonical and the project's Wave field is a derived projection synced by `/board-audit`.
 
+### Step 5a — Red default-branch workflow detection (P3W14 retro Proposed Change #2)
+
+Surface any **publish/deploy/release workflow whose latest run on the repo's default branch FAILED**, across all org repos. *Rationale:* the GHCR frontend publish (isnad-graph commit 5804476) sat RED on `main` for ~12 days undetected — silently breaking every staging deploy at the frontend-pull step — because nothing surfaced a red default-branch publish at session start.
+
+For each org repo, list the latest default-branch run of each workflow and flag any whose conclusion is `failure`/`timed_out`/`cancelled`, filtered to publish/deploy/release-class workflows (these are the ones whose redness silently rots — a red lint run is loud at PR time; a red publish on `main` is not):
+
+```bash
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
+[ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+REPOS=$(jq -r '.repos[]? // empty' "$REPO_ROOT/cross-repo-status.json" 2>/dev/null)
+[ -n "$REPOS" ] || REPOS="noorinalabs-main noorinalabs-isnad-graph noorinalabs-user-service noorinalabs-deploy noorinalabs-design-system noorinalabs-data-acquisition noorinalabs-isnad-ingest-platform noorinalabs-landing-page"
+RED=()
+for repo in $REPOS; do
+  branch=$(gh api "repos/noorinalabs/$repo" --jq '.default_branch' 2>/dev/null || echo main)
+  # Latest run per workflow on the default branch; keep only publish/deploy/release-class names with a non-success conclusion.
+  while IFS=$'\t' read -r name conclusion url; do
+    case "$conclusion" in
+      failure|timed_out|cancelled|startup_failure)
+        RED+=("$repo :: $name :: $conclusion :: $url") ;;
+    esac
+  done < <(
+    gh api "repos/noorinalabs/$repo/actions/runs?branch=$branch&per_page=50" \
+      --jq '[.workflow_runs[] | select((.name // .display_title) | test("publish|deploy|release|promote|ghcr|image";"i"))]
+            | group_by(.workflow_id) | map(max_by(.run_started_at))
+            | .[] | [(.name // .display_title), .conclusion, .html_url] | @tsv' 2>/dev/null
+  )
+done
+if [ ${#RED[@]} -gt 0 ]; then
+  printf 'RED default-branch publish/deploy run(s) — investigate before relying on staging:\n'
+  printf '  %s\n' "${RED[@]}"
+else
+  echo "All publish/deploy/release workflows green on default branches."
+fi
+```
+
+Report any red runs prominently — a red publish/deploy on a default branch is a stop-and-investigate signal, not background noise: it usually means the artifact consumers (staging, downstream pulls) are silently running stale or broken bits. If `gh api` calls fail (auth/rate-limit), say so rather than reporting a false all-green.
+
 ### Step 6 — Charter freshness check
 
 Read the tail of the feedback log:
@@ -212,6 +249,7 @@ After all steps complete, present a single status block:
 | 3. Ontology | {N dirty resolved / current} |
 | 4. Annunaki | {N errors, action needed? / clear} |
 | 5. Wave | {active wave, stale?, issues} |
+| 5a. Red default-branch runs | {N red publish/deploy runs / all green} |
 | 6. Charter | {current / proposals pending} |
 
 {Then address the user's actual message/request}

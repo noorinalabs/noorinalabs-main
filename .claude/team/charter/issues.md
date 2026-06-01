@@ -110,6 +110,21 @@ Every issue must be kept up to date:
 - **Comments** — used for questions, clarifications, progress updates, and decisions.
 - **Close condition** — issues are closed **only** when the corresponding work is complete and verified. Do not close prematurely. For `[MANUAL]` issues, the human confirms completion via comment.
 
+## End-State Criterion: Delivered vs. Applied-and-Verified-at-Origin <!-- promotion-target: none -->
+
+An **end-state criterion** (or any rollout/enforcement issue) is **MET only when the mechanism is APPLIED and verified at origin via API — not when the spec, script, or hook that would apply it is merely *delivered***. "Delivered" (the spec/PR/script exists) and "applied" (the live system actually enforces it) are distinct states; a criterion-tracking issue MUST distinguish them and stay OPEN as the rollout tracker until *applied-and-verified* is true for every target.
+
+**Rule.** Before framing or closing a criterion as met, verify the enforcing state at origin with the authoritative API for that mechanism, and cite the verification. Examples of the right probe per mechanism:
+- **Branch-protection / rulesets** (criterion #4 / #322): `gh api repos/<owner>/<repo>/rulesets` (and `.../rulesets/<id>`) returns the ruleset with the expected required-check contexts — for **every** target default branch, not just the pilot. The spec + hook + one pilot is *delivered*; the criterion is *met* only once the ruleset is read-back-confirmed on all 8 default branches.
+- **CI gate live** (e.g. sync-drift, docs): the gate job appears and is green in the latest default-branch run (`gh api .../actions/runs?branch=main` / `statusCheckRollup`), not just present in the workflow file on a feature branch.
+- **Staging-green** (criterion #3 / #325): a successful `deploy-stg` run exists in run history, not just a `deploy-stg.yml` that *would* run.
+
+**Why:** a spec or script that is merged but never applied leaves the criterion's protection entirely absent while the issue's framing implies it is in place — the exact gap behind #322 (specs+scripts delivered, ruleset unapplied) and the 12-day-red GHCR publish (workflow present, latest default-branch run failing). Aligns with [`pull-requests.md` § Branch Protection — criterion #4](pull-requests.md) ("criterion #4 is met only when the W14 rollout has applied the ruleset to all 8 default branches") and `feedback_honest_audit_over_conclusion_claim` (an honest open-item count before any "done" claim). The discipline generalizes that per-criterion note into a standing rule: deliverable-exists ≠ criterion-met; the origin-verified applied state is the close condition.
+
+**Disposition shorthand:** while the mechanism is delivered-but-not-fully-applied, the tracking issue uses `Refs #N` on the delivering PR (NOT `Closes #N`) and stays open as the rollout tracker; it is closed only after the applied-and-verified-at-origin check passes for all targets. (`Closes` on a wave-branch PR would not fire anyway — see `feedback_wave_branch_issue_close` — but the substantive reason is the delivered-vs-applied distinction, not the merge mechanics.)
+
+<!-- Promoted from: P3W14 retro (2026-06-01) Proposed Process Change #3, owner-approved. Rationale: #322 specs+scripts delivered but unapplied; GHCR publish red on main 12 days undetected. Generalizes pull-requests.md § criterion #4's per-criterion note into a standing close-condition rule. -->
+
 ## Comment Format <!-- promotion-target: none -->
 All issue comments MUST follow this format:
 

@@ -117,6 +117,8 @@ uvicorn
 keypairs
 runbook
 runbooks
+ruleset
+rulesets
 
 # --- second-pass terms surfaced once cspell was scoped to authored prose
 #     (charter + skills). Project jargon, identifiers, brand, and a few names. ---
