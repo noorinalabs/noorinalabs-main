@@ -1521,5 +1521,166 @@ class ResolveRosterDirsTests(unittest.TestCase):
             hook._resolve_roster_dirs("noorinalabs/noorinalabs-nonexistent-xyz")
 
 
+class BatchLoopMergeDetectorTests(unittest.TestCase):
+    """#567: `is_variable_pr_merge_in_loop` detects a `gh pr merge <var>` inside
+    a for/while/until loop — the shape that fail-opens the 2-reviewer gate
+    (memory `feedback_batch_loop_merge_evades_pr_review_hook`).
+
+    Six parser classes per charter `hooks.md § 5a` segment-parser coverage:
+    newline-separated loop, quoted-var arg, `${}`-form, literal-still-passes,
+    while-loop, nested-loop. Plus the body-mention false-positive guard."""
+
+    def test_for_loop_quoted_var_blocked(self):
+        # parser-class: quoted-var
+        self.assertTrue(
+            hook.is_variable_pr_merge_in_loop(
+                'for pr in 48 49 50; do gh pr merge "$pr" --repo o/r --merge; done'
+            )
+        )
+
+    def test_for_loop_bare_var_blocked(self):
+        self.assertTrue(
+            hook.is_variable_pr_merge_in_loop("for pr in 48 49; do gh pr merge $pr --merge; done")
+        )
+
+    def test_brace_form_var_blocked(self):
+        # parser-class: ${}-form
+        self.assertTrue(
+            hook.is_variable_pr_merge_in_loop('for pr in 1 2; do gh pr merge "${pr}" --merge; done')
+        )
+
+    def test_while_loop_blocked(self):
+        # parser-class: while-loop
+        self.assertTrue(
+            hook.is_variable_pr_merge_in_loop("while read pr; do gh pr merge ${pr} --merge; done")
+        )
+
+    def test_until_loop_blocked(self):
+        self.assertTrue(
+            hook.is_variable_pr_merge_in_loop('until [ -z "$pr" ]; do gh pr merge $pr; done')
+        )
+
+    def test_newline_separated_loop_blocked(self):
+        # parser-class: newline
+        self.assertTrue(
+            hook.is_variable_pr_merge_in_loop(
+                'for pr in 48 49\ndo\n  gh pr merge "$pr" --merge\ndone'
+            )
+        )
+
+    def test_nested_loop_blocked(self):
+        # parser-class: nested-loop
+        self.assertTrue(
+            hook.is_variable_pr_merge_in_loop(
+                'for r in a b; do\n  for pr in 1 2; do gh pr merge "$pr" --merge; done\ndone'
+            )
+        )
+
+    def test_literal_merge_not_blocked(self):
+        # parser-class: literal-still-passes — a literal PR number is untouched
+        # by the guard (its number parses and the normal gate runs).
+        self.assertFalse(hook.is_variable_pr_merge_in_loop("gh pr merge 54 --repo o/r --merge"))
+
+    def test_literal_loop_not_blocked(self):
+        # A loop iterating LITERAL merges (no shell variable) is not the
+        # fail-open shape — each merge parses a literal number.
+        self.assertFalse(
+            hook.is_variable_pr_merge_in_loop("for n in 1; do gh pr merge 54 --merge; done")
+        )
+
+    def test_var_merge_outside_loop_not_blocked(self):
+        # Out of scope for #567: a one-off variable merge with no loop.
+        self.assertFalse(hook.is_variable_pr_merge_in_loop('gh pr merge "$PR" --merge'))
+
+    def test_loop_text_in_body_not_blocked(self):
+        # False-positive guard: a `--body` payload that merely MENTIONS the
+        # loop-merge shape (quoted prose) must NOT be detected. The real
+        # command is `gh pr create`, not a merge.
+        self.assertFalse(
+            hook.is_variable_pr_merge_in_loop(
+                'gh pr create --body "for pr in 1; do gh pr merge $pr; done"'
+            )
+        )
+
+    def test_non_merge_loop_not_blocked(self):
+        # A loop that runs some other gh command is irrelevant to the gate.
+        self.assertFalse(
+            hook.is_variable_pr_merge_in_loop('for pr in 1 2; do gh pr view "$pr"; done')
+        )
+
+
+class BatchLoopMergeEndToEndTests(unittest.TestCase):
+    """#567 end-to-end: check() HARD BLOCKS a batch-loop variable merge, and a
+    literal merge still flows to the normal 2-reviewer gate unchanged."""
+
+    @staticmethod
+    def _input(command: str) -> dict:
+        return {"tool_name": "Bash", "tool_input": {"command": command}}
+
+    def test_loop_var_merge_hard_blocked(self):
+        # The guard returns BEFORE get_pr_data; patch it to a sentinel that
+        # would NOT itself block, so a passing test proves the LOOP guard
+        # (not the downstream gate) produced the block.
+        with mock.patch.object(hook, "get_pr_data", return_value=None):
+            result = hook.check(
+                self._input('for pr in 48 49 50; do gh pr merge "$pr" --merge; done')
+            )
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("Batch-loop", result["reason"])
+        self.assertIn("one pr per call", result["reason"].lower())
+
+    def test_loop_var_merge_with_admin_still_overrides(self):
+        # --admin is the emergency override and bypasses the loop guard too.
+        result = hook.check(
+            self._input('for pr in 1 2; do gh pr merge "$pr" --admin --merge; done')
+        )
+        self.assertIsNone(result, "--admin must bypass the batch-loop guard")
+
+    def test_literal_merge_unaffected_by_loop_guard(self):
+        # A bare literal merge is NOT loop-shaped; it reaches the normal gate.
+        # With 2 distinct approved reviewers it allows (proves the guard did
+        # not interfere with the literal path).
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen", "nadia khoury"}
+        pr_data = {
+            "author": "parametrization",
+            "number": 100,
+            "reviews": [],
+            "headRefName": "L.Pham/0001-fix",
+            "labels": [],
+        }
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=pr_data),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input("gh pr merge 100 --merge"))
+        self.assertIsNone(result, "literal 2-approved merge must still pass the gate")
+
+
+class StripQuotedRunsKeepVarArgsTests(unittest.TestCase):
+    """#567 pure-parser: `_strip_quoted_runs_keep_var_args` drops quoted prose
+    but unwraps a lone `"$var"` arg to its bare form."""
+
+    def test_lone_double_quoted_var_unwrapped(self):
+        out = hook._strip_quoted_runs_keep_var_args('gh pr merge "$pr" --merge')
+        self.assertIn("$pr", out)
+        self.assertNotIn('"', out)
+
+    def test_brace_lone_var_unwrapped(self):
+        out = hook._strip_quoted_runs_keep_var_args('gh pr merge "${pr}" --merge')
+        self.assertIn("${pr}", out)
+
+    def test_prose_double_quoted_run_dropped(self):
+        out = hook._strip_quoted_runs_keep_var_args('gh pr create --body "do gh pr merge $pr"')
+        # The body content (including its inner merge mention) is removed.
+        self.assertNotIn("merge $pr", out)
+
+    def test_single_quoted_run_dropped(self):
+        out = hook._strip_quoted_runs_keep_var_args("echo 'for pr in 1; do gh pr merge $pr; done'")
+        self.assertNotIn("gh pr merge", out)
+
+
 if __name__ == "__main__":
     unittest.main()

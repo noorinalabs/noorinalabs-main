@@ -19,6 +19,15 @@ Input Language:
                the PR in the repo the user named, not the cwd-resolved repo.
     --admin  → short-circuits (emergency override — allows merge).
 
+  Batch-loop guard (#567): a `gh pr merge <shell-var>` inside a
+  for/while/until loop (e.g. `for pr in 48 49; do gh pr merge "$pr" …; done`)
+  is HARD BLOCKED. The literal-PR parse cannot resolve a loop variable, so the
+  gate would fail-open and merge every iteration unverified (observed P3W11 +
+  P3W13). The operator is told to run one literal merge per call so each PR is
+  gate-checked. `--admin` still overrides; a literal `gh pr merge 54` is
+  unaffected. Conservative DECIDE-tier shape (no conditional-allow) per
+  `feedback_safety_direction_over_ux_friction`.
+
 Charter-format review comments (canonical per `pull-requests.md` § Comment-Based Reviews,
 resolves #233):
 
@@ -129,6 +138,101 @@ def extract_pr_number(command: str) -> str | None:
         return match.group(1)
     # gh pr merge with no number (current branch PR)
     return None
+
+
+# A `gh pr merge` whose PR-number argument is a shell variable rather than a
+# literal: `$pr` or `${pr}` (the surrounding double-quotes of a `"$pr"` arg are
+# normalized away by `_strip_quoted_runs_keep_var_args` before this matches).
+# The lookahead lets the arg end at whitespace, a shell terminator, or EOS.
+_GH_MERGE_VAR_PR = re.compile(
+    r"\bgh\s+pr\s+merge\s+"  # the merge verb
+    r"\$\{?[A-Za-z_][A-Za-z0-9_]*\}?"  # $pr | ${pr}
+    r"(?=\s|;|&|\||$)"  # arg ends at whitespace, a shell terminator, or EOS
+)
+
+# A shell loop construct: a `for`/`while`/`until` opener token paired with a
+# `do` body keyword. Requiring BOTH (not just `for`) keeps the detector
+# conservative — a bare `for` in a flag value won't trip it on its own.
+_LOOP_OPENER = re.compile(r"\b(?:for|while|until)\b")
+_LOOP_BODY = re.compile(r"(?:^|[\s;])do(?:[\s;]|$)")
+
+
+def _strip_quoted_runs_keep_var_args(command: str) -> str:
+    """Return `command` with quoted regions removed, EXCEPT a quoted region
+    that is exactly a single variable reference (`"$pr"` / `"${pr}"`), which
+    is unwrapped to its bare `$pr` / `${pr}` form.
+
+    Why: the loop-merge detector must (a) NOT see a `gh pr merge $pr` that
+    lives inside a `--body "..."` payload (quoted argument data — strip it),
+    yet (b) STILL see the real arg in `gh pr merge "$pr"` where only the
+    variable itself is quoted (unwrap it). Shell semantics agree: double
+    quotes around a lone variable are removed and the variable remains the
+    program's argument, whereas a quoted run of prose is one opaque arg.
+
+    Single-quoted runs are always opaque data (no expansion) and are removed
+    wholesale. Double-quoted runs are unwrapped to the inner text ONLY when
+    the inner text is a lone variable reference; otherwise removed.
+    """
+    out: list[str] = []
+    i = 0
+    n = len(command)
+    while i < n:
+        ch = command[i]
+        if ch == "'":
+            # Single-quoted run: opaque, drop through the closing quote.
+            j = command.find("'", i + 1)
+            if j == -1:
+                break  # unbalanced — stop; raw-string fallback handles it
+            i = j + 1
+            continue
+        if ch == '"':
+            j = command.find('"', i + 1)
+            if j == -1:
+                break  # unbalanced
+            inner = command[i + 1 : j]
+            # Keep a lone-variable double-quoted arg as the bare variable.
+            if re.fullmatch(r"\$\{?[A-Za-z_][A-Za-z0-9_]*\}?", inner):
+                out.append(inner)
+            i = j + 1
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def is_variable_pr_merge_in_loop(command: str) -> bool:
+    """True if `command` runs `gh pr merge <shell-var>` inside a for/while/until
+    loop — the batch-loop merge shape that fail-opens the 2-reviewer gate
+    (#567, memory `feedback_batch_loop_merge_evades_pr_review_hook`).
+
+    The gate parses a LITERAL PR number from `gh pr merge <N>` to fetch that
+    PR's reviews. When the PR number is a loop variable (`$pr`), the literal
+    parse returns None, `get_pr_data(None)` resolves the cwd branch's PR (or
+    nothing), and the merge fail-opens — the gate is silently disabled for
+    every iteration. Both observed instances (P3W11 wave→main 4-merge loop,
+    P3W13 ingest 6-PR loop) merged with the gate effectively off.
+
+    Conservative DECIDE-tier design (per #567 + `feedback_safety_direction_
+    over_ux_friction`): we HARD BLOCK the variable-PR-in-loop shape outright.
+    We do NOT attempt to enumerate loop values and gate-verify each — that is
+    the explicitly-deferred conditional-allow path. A literal
+    `gh pr merge 54` is untouched (its PR number parses, the gate runs).
+
+    Detection requires BOTH, evaluated on a quote-normalized view of the
+    command (quoted prose stripped, a lone `"$pr"` arg unwrapped — see
+    `_strip_quoted_runs_keep_var_args`) so a `--body "... for … do gh pr
+    merge $pr … done"` payload that merely MENTIONS the shape is not matched:
+      1. a `gh pr merge` whose PR-number arg is a shell variable
+         (`$pr` / `${pr}` / `"$pr"` / `"${pr}"`), AND
+      2. a loop construct (`for`/`while`/`until` opener + a `do` body keyword).
+    Requiring the loop keyword pair avoids blocking a one-off
+    `gh pr merge "$PR"` typed outside any loop (out of scope for #567, and
+    rare) — only the batch-loop shape the gate actually fail-opens on.
+    """
+    view = _strip_quoted_runs_keep_var_args(command)
+    if not _GH_MERGE_VAR_PR.search(view):
+        return False
+    return bool(_LOOP_OPENER.search(view) and _LOOP_BODY.search(view))
 
 
 def get_pr_data(pr_number: str | None, repo: str | None = None) -> dict | None:
@@ -666,10 +770,50 @@ def check(input_data: dict) -> dict | None:
 
     command = input_data.get("tool_input", {}).get("command", "")
 
-    if not is_merge_command(command):
+    # `--admin` is the emergency override — it bypasses the whole gate
+    # (including the batch-loop guard below), matching the existing
+    # short-circuit semantics. Checked first so an explicit admin override
+    # is honored even for the loop shape.
+    if "--admin" in command:
         return None
 
-    if "--admin" in command:
+    # Batch-loop merge guard (#567): a `gh pr merge $pr` inside a for/while
+    # loop fail-opens the 2-reviewer gate (the literal-PR parse can't resolve
+    # the loop variable, so get_pr_data falls back to the cwd branch and the
+    # gate is silently disabled per iteration). HARD BLOCK and instruct
+    # one-literal-merge-per-call so the gate stays active — fail in the safe
+    # direction (`feedback_safety_direction_over_ux_friction`).
+    #
+    # This runs BEFORE the `is_merge_command` early-return below ON PURPOSE:
+    # `is_merge_command` splits on `&&`/`;`/`|` and checks each segment's
+    # FIRST token for `gh pr merge`. In a loop the merge segment leads with
+    # the `do` keyword (`do gh pr merge "$pr"`), so `is_merge_command`
+    # returns False and `check()` would early-exit — re-opening the exact
+    # fail-open hole this guard closes. Detecting the loop shape here is the
+    # only placement that fires on it.
+    if is_variable_pr_merge_in_loop(command):
+        result = {
+            "decision": "block",
+            "reason": (
+                "Batch-loop `gh pr merge` with a shell-variable PR number "
+                '(e.g. `for pr in 48 49 50; do gh pr merge "$pr" ...; done`) is '
+                "BLOCKED. The 2-reviewer gate parses a LITERAL PR number to fetch "
+                "that PR's reviews; a loop variable cannot be resolved at parse "
+                "time, so the gate fail-opens and the merge proceeds UNVERIFIED "
+                "(this happened twice — P3W11 and P3W13). Merge one PR per call "
+                "with a literal number so the gate verifies each PR:\n"
+                "  gh pr merge 48 --repo <owner/repo> --merge\n"
+                "  gh pr merge 49 --repo <owner/repo> --merge\n"
+                "Run them as separate commands (not a loop). Each literal merge "
+                "is checked for two distinct Approved reviewers individually."
+            ),
+        }
+        log_pretooluse_block("validate_pr_review", command, result["reason"])
+        return result
+
+    # Not the loop shape — only a plain `gh pr merge <N>` invocation is gated
+    # below. Anything else (gh pr list/view/create, git merge, …) is allowed.
+    if not is_merge_command(command):
         return None
 
     pr_number = extract_pr_number(command)
