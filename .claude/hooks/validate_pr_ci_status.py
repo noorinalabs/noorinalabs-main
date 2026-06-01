@@ -62,10 +62,13 @@ field reports COMPLETED. Treating that as pass would let `gh pr merge`
 through while visual-regression review is still pending — defeating the
 gate's purpose.
 
-The `_NEUTRAL_PENDING_CHECK_NAMES` allowlist below names CheckRuns whose
-`NEUTRAL` conclusion is treated as **pending** instead of pass. Match is
-case-insensitive on the check's display name (per `check_name`). Any check
-not in the allowlist preserves the prior `NEUTRAL → pass` behavior.
+The `_NEUTRAL_PENDING_CHECK_PREFIXES` allowlist below names CheckRun
+display-name PREFIXES whose `NEUTRAL` conclusion is treated as **pending**
+instead of pass. Match is a case-insensitive `startswith` on the check's
+display name (per `check_name`), so multi-step shapes like
+`Chromatic / Visual` match the `chromatic` prefix (#262). Any check whose
+name does not start with an allowlisted prefix preserves the prior
+`NEUTRAL → pass` behavior.
 
 Add a new entry when a service uses `NEUTRAL` to mean "review pending"
 rather than "no opinion." Charter `pull-requests.md § CI Must Be Green`
@@ -113,17 +116,29 @@ _PENDING_STATUSES = {"QUEUED", "IN_PROGRESS", "WAITING", "PENDING", "REQUESTED"}
 _FAIL_BUCKETS = {"fail"}
 _PASS_BUCKETS = {"pass", "skipping"}
 
-# CheckRun names whose `NEUTRAL` conclusion is treated as PENDING, not PASS
-# (resolves #219). Match is case-insensitive on the check's display name.
-# Add entries here when a service uses NEUTRAL to mean "review pending"
-# rather than "no opinion." Currently:
+# CheckRun name PREFIXES whose `NEUTRAL` conclusion is treated as PENDING,
+# not PASS (resolves #219; broadened from exact-match per #262). Match is
+# case-insensitive `startswith` on the check's display name. Add entries
+# here when a service uses NEUTRAL to mean "review pending" rather than "no
+# opinion." Currently:
 #
 #   chromatic — Visual-regression CI (Storybook snapshots). Returns NEUTRAL
 #               while snapshots are pending owner review; treating as pass
 #               lets visual changes merge un-reviewed.
-_NEUTRAL_PENDING_CHECK_NAMES = {
-    "chromatic",
-}
+#
+# #262 (forward gap): when design-system actually wires Chromatic into
+# `storybook.yml`, the GitHub Actions check name may surface as a
+# multi-step shape (`Chromatic / Visual`, `chromatic-visual`, …). v1 used a
+# case-insensitive EXACT-string set against `{"chromatic"}`, which those
+# shapes would NOT match — silently re-opening the #219 NEUTRAL-bypass gap.
+# Switching to a PREFIX match (issue option 2) catches the multi-step
+# shapes now, without waiting on the Chromatic wiring to land. Trade-off:
+# a non-Chromatic check whose name happens to start with one of these
+# prefixes would be pend-classified; the prefixes are kept distinctive
+# (`chromatic`) to keep that risk negligible — fails SAFE (a false pend
+# blocks a merge that an operator then inspects, vs. a false pass that
+# slips an unreviewed visual change through).
+_NEUTRAL_PENDING_CHECK_PREFIXES = ("chromatic",)
 
 
 def is_merge_command(command: str) -> bool:
@@ -214,11 +229,12 @@ def fetch_checks(pr_number: str | None, repo: str | None) -> list[dict] | None:
 def classify_check(check: dict) -> str:
     """Return 'fail', 'pending', or 'pass' for a single check entry.
 
-    NEUTRAL conclusion handling (resolves #219): CheckRuns whose display
-    name is in `_NEUTRAL_PENDING_CHECK_NAMES` (case-insensitive) treat
-    NEUTRAL as 'pending' rather than 'pass'. All other checks preserve
-    the prior NEUTRAL → pass behavior. See module docstring for the
-    allowlist's rationale.
+    NEUTRAL conclusion handling (resolves #219; prefix match per #262):
+    CheckRuns whose display name starts with an allowlisted prefix in
+    `_NEUTRAL_PENDING_CHECK_PREFIXES` (case-insensitive `startswith`) treat
+    NEUTRAL as 'pending' rather than 'pass'. All other checks preserve the
+    prior NEUTRAL → pass behavior. See module docstring for the allowlist's
+    rationale.
     """
     bucket = (check.get("bucket") or "").lower()
     conclusion = (check.get("conclusion") or "").upper()
@@ -232,9 +248,12 @@ def classify_check(check: dict) -> str:
         if status == "COMPLETED":
             return "pass"
         return "pending"
-    # NEUTRAL allowlist: named CheckRuns treat NEUTRAL as pending (#219).
-    if conclusion == "NEUTRAL" and check_name(check).lower() in _NEUTRAL_PENDING_CHECK_NAMES:
-        return "pending"
+    # NEUTRAL allowlist: CheckRuns whose name starts with an allowlisted
+    # prefix treat NEUTRAL as pending (#219; prefix match per #262).
+    if conclusion == "NEUTRAL":
+        name_lc = check_name(check).lower()
+        if any(name_lc.startswith(p) for p in _NEUTRAL_PENDING_CHECK_PREFIXES):
+            return "pending"
     if bucket in _PASS_BUCKETS or conclusion in {"SUCCESS", "NEUTRAL", "SKIPPED"}:
         return "pass"
     return "pass"
