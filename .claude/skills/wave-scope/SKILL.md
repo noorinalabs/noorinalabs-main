@@ -6,6 +6,8 @@ args: Phase number, Wave number
 
 Reconcile **declared scope** (next-wave meta-issue body) with **actual scope** (issues labeled `p{P}-wave-{M}` across all repos) before kickoff. Surfaces drift that accumulated during the prior wave, folds in retro carry-forwards and memory-tracked must-includes, and produces a clean meta-issue + label set for `/wave-kickoff` to act on.
 
+> See [`.claude/team/lifecycle.md`](../../team/lifecycle.md) § Wave Lifecycle for the canonical skill order and preconditions.
+
 > Note: all repo paths in bash blocks below are rooted at `$REPO_ROOT` to avoid cwd drift when the skill is invoked from a worktree or child-repo subdirectory (#149).
 
 ## When to use

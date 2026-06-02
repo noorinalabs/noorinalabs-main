@@ -11,6 +11,8 @@ Detect drift between GitHub Project 2 (the Cross-Repo Wave Plan board) and the a
 
 Closes main#199.
 
+> See [`.claude/team/lifecycle.md`](../../team/lifecycle.md) § Wave Lifecycle for the canonical skill order and preconditions.
+
 ## Background
 
 On 2026-04-23 a manual audit found **72 of 193 open issues (37%) missing from project 2**. Root cause: Hook 13 (`auto_add_issue_to_board.py`) only catches `gh issue create` calls in active sessions — bot-created, manual-UI-created, and pre-hook-13 issues all drift off the board silently.
@@ -128,7 +130,19 @@ jq -r '.data.organization.projectV2.items.nodes[]
 
 # Cross-join with issue labels.
 # (For each url in the tsv, fetch its labels via gh and compare.)
+#
+# Drift bucketing (see #427 for the regression that motivated the split):
+#   DRIFT      — actionable rows where a mutation will change board state.
+#   NOOP_COUNT — issues with no wave label AND Wave field already (unset).
+#                Functionally `(unset) → (clear)`; the apply step's
+#                clearProjectV2ItemFieldValue is a no-op against a field
+#                already cleared. Counted separately so the operator sees
+#                "audit is clean" even when the no-op equivalence class is
+#                non-empty; MUST stay out of DRIFT so Step 7 doesn't emit
+#                redundant clear mutations and Step 5's gate doesn't
+#                over-report.
 DRIFT=()
+NOOP_COUNT=0
 while IFS=$'\t' read -r url item_id current_wave; do
   REPO=$(echo "$url" | sed -E 's#https://github.com/[^/]+/([^/]+)/.*#\1#')
   NUM=$(echo "$url" | sed -E 's#.*/(issues|pull)/##')
@@ -144,10 +158,15 @@ while IFS=$'\t' read -r url item_id current_wave; do
   elif [ "$current_wave" != "(unset)" ]; then
     # Labeled with no wave label but Wave field is populated — should clear.
     DRIFT+=("$url\t$current_wave\t(clear)")
+  else
+    # No wave label AND Wave field already (unset) — already in desired
+    # state. Count for visibility; do NOT add to DRIFT.
+    NOOP_COUNT=$((NOOP_COUNT + 1))
   fi
 done < /tmp/board-wave-values.tsv
 
-echo "Wave-field drift count: ${#DRIFT[@]}"
+echo "Actionable Wave-field drift:        ${#DRIFT[@]}"
+echo "No-op equivalents (unset == clear): ${NOOP_COUNT}"
 printf '%s\n' "${DRIFT[@]}" | head -30
 ```
 
@@ -159,21 +178,24 @@ Print the drift report and PAUSE for explicit user confirmation before mutating 
 
 ```
 Board audit results:
-- Orphan issues: 12 (in repo, missing from board)
-- Wave-field drift: 7 (label and Wave field disagree)
-- Missing Wave-field options: 0 (P3W9, P3W10 all present)
+- Orphan issues:                       12 (in repo, missing from board)
+- Actionable Wave-field drift:          7 (label and Wave field disagree; mutation will change state)
+- No-op equivalents (unset == clear): 83 (functional duplicates; skipped by apply, shown for visibility)
+- Missing Wave-field options:           0 (P3W9, P3W10 all present)
 
 Orphan issues:
   https://github.com/noorinalabs/noorinalabs-main/issues/250
   ...
 
-Wave-field drift:
+Actionable Wave-field drift:
   https://github.com/noorinalabs/noorinalabs-main/issues/123    P3W7 -> P3W9
   https://github.com/noorinalabs/noorinalabs-deploy/issues/87   P2W10 -> (clear)
   ...
 
 Proceed with bulk-add and bulk-sync? [y/N]
 ```
+
+The confirmation gate is keyed off the **actionable** drift count (`${#DRIFT[@]}`) plus the orphan count. No-op equivalents never appear under "Actionable Wave-field drift" and never gate the prompt — the apply step would skip them anyway, per the Step 4 forensic note.
 
 The user MUST type `y` to proceed. Any other answer aborts with `BLOCK: user declined; no mutations made`.
 
@@ -262,19 +284,20 @@ done <<< "$(printf '%s\n' "${DRIFT[@]}")"
 
 ### 8. Read-back verify
 
-Re-run step 2 (board fetch) and re-compute step 3 (orphans) + step 4 (drift). The counts SHOULD both be zero. If non-zero, surface to the user — the gh / GraphQL mutations may have silently no-op'd per the projects-classic deprecation family.
+Re-run step 2 (board fetch) and re-compute step 3 (orphans) + step 4 (drift). Success criterion is **actionable drift == 0** AND **orphan count == 0** — the `NOOP_COUNT` bucket is expected to be non-zero on a healthy board (any issue intentionally left unlabeled lives here) and MUST NOT fail the read-back. If actionable drift or orphans are non-zero post-sync, surface to the user — the gh / GraphQL mutations may have silently no-op'd per the projects-classic deprecation family.
 
 ### 9. Report
 
 ```
 Board audit complete:
 - Orphans added: {count} (was {pre} → board now has {post} items)
-- Wave fields synced: {count} (pre-drift: {pre} → post-drift: {post})
+- Wave fields synced: {count} (pre-actionable-drift: {pre} → post-actionable-drift: {post})
+- No-op equivalents (unset == clear): {count} (informational; unchanged by sync)
 - Missing Wave-field options: {list, if any}
-- Read-back drift remaining: {count}
+- Read-back actionable drift remaining: {count}
 ```
 
-If read-back drift > 0, raise a warning and link to charter `pull-requests.md § gh pr edit projects-classic deprecation` (the same silent-no-op family).
+If read-back actionable drift > 0, raise a warning and link to charter `pull-requests.md § gh pr edit projects-classic deprecation` (the same silent-no-op family). A non-zero no-op count is normal and does NOT warrant escalation.
 
 ## Acceptance criteria status (per main#199)
 
