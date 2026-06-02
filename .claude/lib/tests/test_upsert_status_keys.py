@@ -24,7 +24,10 @@ from pathlib import Path
 # .claude/lib/tests/test_*.py. parent.parent reaches the lib root.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from upsert_status_keys import upsert_top_level_key  # noqa: E402
+from upsert_status_keys import (  # noqa: E402
+    remove_top_level_key,
+    upsert_top_level_key,
+)
 
 
 class UpsertSinglelineSiblingTests(unittest.TestCase):
@@ -342,6 +345,107 @@ class IsTopLevelPositionTests(unittest.TestCase):
         text = '{\n  "a": "before {b} brace",\n  "real_top": 1\n}\n'
         pos = text.index('"real_top"')
         self.assertTrue(_is_top_level_position(text, pos))
+
+
+class UpsertUpdateExistingScalarTests(unittest.TestCase):
+    """main#595 — UPDATING an existing scalar key must replace in place,
+    not produce a duplicate. The reproducer that aborted the W15 wrapup.
+    """
+
+    def test_update_existing_2_space_scalar(self):
+        text = '{\n  "wave_15_active": true,\n  "other": 1\n}\n'
+        out = upsert_top_level_key(text, "wave_15_active", "false")
+        parsed = json.loads(out)
+        self.assertIs(parsed["wave_15_active"], False)
+        self.assertEqual(parsed["other"], 1)
+        self.assertEqual(out.count('"wave_15_active"'), 1)
+
+    def test_update_existing_1_space_legacy_scalar_no_duplicate(self):
+        """The exact #595 failure: a 1-space-indent legacy key (P3W1 era).
+        Pre-fix, `^(  )` could not match it, so the update fell through to
+        the insert path and emitted a DUPLICATE `current_wave` key — text
+        last-wins kept the OLD value while main()'s parsed dict held the NEW
+        one, triggering the divergence abort."""
+        text = '{\n "current_wave": "wave-15",\n "next_wave": "wave-16"\n}\n'
+        out = upsert_top_level_key(text, "current_wave", '"wave-1"')
+        parsed = json.loads(out)
+        self.assertEqual(parsed["current_wave"], "wave-1")
+        self.assertEqual(out.count('"current_wave"'), 1)
+        # The key's original 1-space indentation is preserved.
+        self.assertIn('\n "current_wave": "wave-1",', out)
+
+    def test_update_existing_compact_object_value(self):
+        """Updating a key whose existing value is a single-line (compact)
+        object — the wave_N_branches shape."""
+        text = '{\n  "wave_1_branches": {"a": 1},\n  "other": 2\n}\n'
+        out = upsert_top_level_key(text, "wave_1_branches", '{"b": 2}')
+        parsed = json.loads(out)
+        self.assertEqual(parsed["wave_1_branches"], {"b": 2})
+        self.assertEqual(parsed["other"], 2)
+        self.assertEqual(out.count('"wave_1_branches"'), 1)
+
+
+class RemoveTopLevelKeyTests(unittest.TestCase):
+    """main#611 — `remove_top_level_key` / `--remove-key` mode for phase-
+    boundary cleanup of bare `wave_{M}_*` keys.
+    """
+
+    def test_remove_single_line_key(self):
+        text = '{\n  "wave_1_active": true,\n  "wave_1_scope": "x",\n  "keep": 1\n}\n'
+        out = remove_top_level_key(text, "wave_1_scope")
+        self.assertEqual(json.loads(out), {"wave_1_active": True, "keep": 1})
+
+    def test_remove_multiline_object_key(self):
+        text = (
+            "{\n"
+            '  "wave_1_scope": {\n'
+            '    "tier_1": [1, 2],\n'
+            '    "tier_2": {"a": 3}\n'
+            "  },\n"
+            '  "keep": 1\n'
+            "}\n"
+        )
+        out = remove_top_level_key(text, "wave_1_scope")
+        self.assertEqual(json.loads(out), {"keep": 1})
+
+    def test_remove_multiline_array_key(self):
+        text = '{\n  "wave_1_scope": [\n    "#1",\n    "#2"\n  ],\n  "keep": 1\n}\n'
+        out = remove_top_level_key(text, "wave_1_scope")
+        self.assertEqual(json.loads(out), {"keep": 1})
+
+    def test_remove_final_single_line_key_strips_preceding_comma(self):
+        """Removing the JSON-final key must strip the now-final preceding
+        entry's trailing comma so the result is valid JSON."""
+        text = '{\n  "keep": 1,\n  "wave_1_scope": "x"\n}\n'
+        out = remove_top_level_key(text, "wave_1_scope")
+        self.assertEqual(json.loads(out), {"keep": 1})
+
+    def test_remove_final_multiline_key_strips_preceding_comma(self):
+        text = '{\n  "keep": 1,\n  "wave_1_scope": {\n    "a": 1\n  }\n}\n'
+        out = remove_top_level_key(text, "wave_1_scope")
+        self.assertEqual(json.loads(out), {"keep": 1})
+
+    def test_remove_1_space_legacy_key(self):
+        """Indent-tolerance: a 1-space legacy key is removable (#595/#611)."""
+        text = '{\n "current_wave": "wave-1",\n "keep": 1\n}\n'
+        out = remove_top_level_key(text, "current_wave")
+        self.assertEqual(json.loads(out), {"keep": 1})
+
+    def test_remove_nonexistent_key_raises(self):
+        with self.assertRaises(KeyError):
+            remove_top_level_key('{\n  "a": 1\n}\n', "nope")
+
+    def test_remove_ignores_nested_key_of_same_name(self):
+        """A nested key sharing the name must NOT be the removal target —
+        the same _is_top_level_position guard as the upsert path."""
+        text = '{\n  "wave_1_scope": {\n  "wave_1_scope": 99\n  },\n  "keep": 1\n}\n'
+        out = remove_top_level_key(text, "wave_1_scope")
+        self.assertEqual(json.loads(out), {"keep": 1})
+
+    def test_remove_sole_key_yields_empty_object(self):
+        text = '{\n  "wave_1_scope": "x"\n}\n'
+        out = remove_top_level_key(text, "wave_1_scope")
+        self.assertEqual(json.loads(out), {})
 
 
 if __name__ == "__main__":
