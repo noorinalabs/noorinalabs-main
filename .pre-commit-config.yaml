@@ -15,10 +15,12 @@
 #     the commit loop snappy while still catching everything before it leaves
 #     the machine.
 #
-# Scope: `.claude/hooks/` + `.claude/lib/` — the Python that CI checks (CI runs
-# ruff/mypy on BOTH; the pre_commit_ci_sync gate enforces this mirror). The
-# `.claude/worktrees/` tree is excluded because it holds scratch checkouts of
-# other branches; reformatting them would silently overwrite in-progress work.
+# Scope: `.claude/hooks/` + `.claude/lib/` + `.claude/skills/` — the Python that
+# CI checks (CI runs ruff/mypy/pytest on all three; the pre_commit_ci_sync gate
+# enforces this mirror). `.claude/skills/` was added per #326 (criterion #5 —
+# skill helper/test .py was previously un-gated). The `.claude/worktrees/` tree
+# is excluded because it holds scratch checkouts of other branches; reformatting
+# them would silently overwrite in-progress work.
 #
 # The kind-level mirror (ruff-lint, ruff-format, mypy, pytest present on both
 # sides) is enforced in CI by `.claude/lib/pre_commit_ci_sync.py` — if a future
@@ -30,12 +32,12 @@ repos:
     hooks:
       - id: ruff-format
         name: ruff-format
-        files: ^\.claude/(hooks|lib)/.*\.py$
+        files: ^\.claude/(hooks|lib|skills)/.*\.py$
         exclude: ^\.claude/worktrees/
       - id: ruff
         name: ruff-lint
         args: [--fix]
-        files: ^\.claude/(hooks|lib)/.*\.py$
+        files: ^\.claude/(hooks|lib|skills)/.*\.py$
         exclude: ^\.claude/worktrees/
 
   # actionlint mirrors the `Config — Workflow actionlint` CI job in
@@ -46,8 +48,9 @@ repos:
   # embedded shellcheck integration runs rather than silently skipping
   # (feedback_actionlint_needs_shellcheck) — CI gets this from ubuntu-latest's
   # preinstalled shellcheck; locally, install shellcheck before committing.
-  # Pinned to v1.7.12 to match what CI's `download-actionlint.bash` (tracking
-  # the latest release off `main`) resolves to.
+  # Pinned to v1.7.12 to match CI's docs.yml actionlint job, which downloads the
+  # v1.7.12 release tarball and verifies its SHA256 before running (#579/#578) —
+  # the same pinned version on both sides, no `main`-tracking installer.
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12
     hooks:
@@ -64,13 +67,23 @@ repos:
         entry: python3 -m mypy --ignore-missing-imports --no-error-summary
         language: system
         types: [python]
-        files: ^\.claude/(hooks|lib)/.*\.py$
+        files: ^\.claude/(hooks|lib|skills)/.*\.py$
         exclude: ^\.claude/worktrees/
         pass_filenames: true
         stages: [pre-push]
       - id: pytest
         name: pytest (pre-push)
         entry: env ENVIRONMENT=test python3 -m pytest .claude/hooks/tests/ .claude/lib/tests/ -q
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+      # Skill test suites are run per-skill (each from its own dir) because
+      # several skills ship a top-level `tests` package that collides under one
+      # flat pytest invocation. Mirrors ci.yml § "Run skill test suites". #326.
+      - id: pytest-skills
+        name: pytest-skills (pre-push)
+        entry: bash -c 'status=0; for t in .claude/skills/*/tests; do [ -d "$t" ] || continue; d=$(dirname "$t"); ( cd "$d" && env ENVIRONMENT=test python3 -m pytest tests/ -q ) || status=1; done; exit $status'
         language: system
         pass_filenames: false
         always_run: true

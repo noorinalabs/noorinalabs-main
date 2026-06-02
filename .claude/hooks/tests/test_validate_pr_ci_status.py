@@ -4,8 +4,10 @@
 Covers:
 - `classify_check` core logic — pass/fail/pending across the conclusion +
   status + bucket axes.
-- #219 NEUTRAL allowlist semantics — `chromatic` CheckRun NEUTRAL is treated
-  as pending, all other CheckRuns' NEUTRAL preserved as pass.
+- #219 NEUTRAL allowlist semantics — a CheckRun whose name starts with an
+  allowlisted prefix (`chromatic`) treats NEUTRAL as pending; all other
+  CheckRuns' NEUTRAL preserved as pass. #262 broadened the exact-match set
+  to `startswith` prefix matching so multi-step Chromatic shapes match.
 - Hook-authorship § 3 negative-match coverage.
 
 Run:
@@ -150,12 +152,31 @@ class NeutralAllowlistTests(unittest.TestCase):
 
     def test_allowlist_constant_uses_lowercase(self):
         """Sanity check on the constant: entries must be pre-lowercased to match the comparison."""
-        for entry in hook._NEUTRAL_PENDING_CHECK_NAMES:
-            self.assertEqual(entry, entry.lower(), f"allowlist entry {entry!r} must be lowercase")
+        for entry in hook._NEUTRAL_PENDING_CHECK_PREFIXES:
+            self.assertEqual(entry, entry.lower(), f"prefix entry {entry!r} must be lowercase")
 
     def test_chromatic_in_allowlist(self):
-        """Sanity: the canonical W4-motivated entry is present."""
-        self.assertIn("chromatic", hook._NEUTRAL_PENDING_CHECK_NAMES)
+        """Sanity: the canonical W4-motivated prefix is present."""
+        self.assertIn("chromatic", hook._NEUTRAL_PENDING_CHECK_PREFIXES)
+
+    def test_chromatic_multistep_shapes_match_via_prefix(self):
+        """#262: multi-step Chromatic check-name shapes that the v1 exact-match
+        set would have MISSED now classify pending via prefix `startswith`."""
+        for name in ("Chromatic / Visual", "chromatic-visual", "Chromatic / Snapshots"):
+            with self.subTest(name=name):
+                self.assertEqual(
+                    hook.classify_check(_check(name=name, conclusion="NEUTRAL")),
+                    "pending",
+                    f"'{name}' NEUTRAL should be pending (prefix match, #262)",
+                )
+
+    def test_non_prefix_neutral_still_pass(self):
+        """#262 trade-off boundary: a name that merely CONTAINS but does not
+        START WITH `chromatic` is NOT pend-classified (startswith, not substring)."""
+        self.assertEqual(
+            hook.classify_check(_check(name="Visual Tests / Chromatic", conclusion="NEUTRAL")),
+            "pass",
+        )
 
 
 class CheckNameTests(unittest.TestCase):

@@ -30,7 +30,12 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install ruff
-      - run: ruff check .claude/hooks/ .claude/lib/
+      # .claude/skills/ added per #326: skill helper/test .py (validate_matrix_names.py,
+      # promotion-audit/helpers.py, the per-skill tests/, …) was previously
+      # un-linted, violating criterion #5 ("anything in the tree gets the same
+      # lint/format treatment"). ruff has no module-collision concern, so the
+      # flat tree works directly.
+      - run: ruff check .claude/hooks/ .claude/lib/ .claude/skills/
 
   format:
     name: Ruff format check
@@ -41,7 +46,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install ruff
-      - run: ruff format --check .claude/hooks/ .claude/lib/
+      - run: ruff format --check .claude/hooks/ .claude/lib/ .claude/skills/
 
   typecheck:
     name: Mypy type check
@@ -53,6 +58,23 @@ jobs:
           python-version: "3.12"
       - run: pip install mypy
       - run: mypy .claude/hooks/ .claude/lib/ --ignore-missing-imports --no-error-summary
+      # .claude/skills/ added per #326. mypy is run PER-SKILL-DIRECTORY (not as
+      # one flat tree) because two skills each ship a `tests/__init__.py`, which
+      # a flat `mypy .claude/skills/` rejects with "Duplicate module named
+      # 'tests'". A per-skill loop gives each its own package root. Only skills
+      # that contain .py are type-checked.
+      - name: Mypy — per-skill (avoids duplicate-tests-module collision)
+        run: |
+          status=0
+          for d in .claude/skills/*/; do
+            # Only type-check skills that actually contain .py files.
+            if find "$d" -name '*.py' -print -quit | grep -q .; then
+              echo "::group::mypy $d"
+              mypy "$d" --ignore-missing-imports --no-error-summary || status=1
+              echo "::endgroup::"
+            fi
+          done
+          exit $status
 
   smoke-test:
     name: Smoke test — hooks compile and exit cleanly
@@ -62,9 +84,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Verify all hooks and lib files compile
+      - name: Verify all hooks, lib, and skill files compile
+        # .claude/skills/**/*.py added per #326 (recursively — skill .py lives in
+        # nested dirs like wave-kickoff/_orchestration/ and */tests/).
         run: |
-          for f in .claude/hooks/*.py .claude/lib/*.py; do
+          for f in .claude/hooks/*.py .claude/lib/*.py $(find .claude/skills -name '*.py'); do
             python3 -c "import py_compile; py_compile.compile('$f', doraise=True)"
           done
       - name: Verify hooks exit 0 on empty stdin
@@ -86,6 +110,21 @@ jobs:
       - run: pip install pytest
       - name: Run hook and lib tests
         run: pytest .claude/hooks/tests/ .claude/lib/tests/ -q
+      # .claude/skills/*/tests/ added per #326. Run PER-SKILL (each from its own
+      # skill dir as rootdir) because multiple skills ship a top-level `tests`
+      # package, which a single flat `pytest .claude/skills/` rejects with a
+      # collection error ("import file mismatch" / duplicate `tests` basename).
+      - name: Run skill test suites (per-skill rootdir)
+        run: |
+          status=0
+          for t in .claude/skills/*/tests; do
+            [ -d "$t" ] || continue
+            skill_dir=$(dirname "$t")
+            echo "::group::pytest $skill_dir"
+            ( cd "$skill_dir" && pytest tests/ -q ) || status=1
+            echo "::endgroup::"
+          done
+          exit $status
 
   precommit-ci-sync:
     name: Pre-commit ⇄ CI sync-drift gate

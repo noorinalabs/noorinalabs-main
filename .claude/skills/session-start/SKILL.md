@@ -188,7 +188,15 @@ For each org repo, list the latest default-branch run of each workflow and flag 
 ```bash
 REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
 [ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
-REPOS=$(jq -r '.repos[]? // empty' "$REPO_ROOT/cross-repo-status.json" 2>/dev/null)
+# Primary: the most-recent `wave_<N>_repos_in_scope` array (the canonical org repo set;
+# there is no top-level `.repos` key). Falls through to the hardcoded list if the file is
+# missing/unparseable or has no such key.
+REPOS=$(jq -r '
+  [to_entries[]
+   | select(.key | test("^wave_[0-9]+_repos_in_scope$"))
+   | {n: (.key | capture("^wave_(?<n>[0-9]+)_repos_in_scope$").n | tonumber), v: .value}]
+  | max_by(.n) | .v[]? // empty
+' "$REPO_ROOT/cross-repo-status.json" 2>/dev/null)
 [ -n "$REPOS" ] || REPOS="noorinalabs-main noorinalabs-isnad-graph noorinalabs-user-service noorinalabs-deploy noorinalabs-design-system noorinalabs-data-acquisition noorinalabs-isnad-ingest-platform noorinalabs-landing-page"
 RED=()
 for repo in $REPOS; do
