@@ -1137,3 +1137,61 @@ Final wave of Phase 3. 15 PRs / 8 repos / 0 changes-requested cycles. Directiona
 | **Aisha Idrissi** | deploy rollout #391 + authored the canonical build-kind tightening later lifted into #576/#580 | None this wave |
 | **Astrid Lindqvist / Kwame Mensah-Williams / Tarek Mansour / Farhan Bensalah** | one clean end-state rollout PR each (design-system #90 / landing #104 / data-acq #60 / ingest #58), 0 CRs | None this wave |
 | **Orchestrator** | Verify-and-close discipline (avoided rebuilding already-live #323/#324/#329); investigate-first root-caused staging red to #940; honest staging-gate override with deploy#393 filed; surfaced the #322 delivered-vs-applied gap rather than false-closing | commit 5804476 GHCR red went 12 days undetected (no red-default-branch alerting); `current_wave` pointer left stale at kickoff (retro blocked); ADMIN_MERGE_EXCEPTION literal-format friction cost retries |
+
+## Phase 3 Wave 15 Trust Updates (2026-06-02) — Phase-3 Exit Close-out
+
+The closing wave of Phase 3. 26 PRs / all 8 repos / 1 changes-requested cycle / **0 failing CI checks across all PR heads** (cleanest P3 wave) + 8 wave→main bundles + the post-wrapup ig#950 hotfix. Directional summary: org-level + deploy-track hold at their established levels; **Nurul Hakim promotes 4→5** on a third consecutive clean wave; Ingrid's second consecutive standout wave is noted in the child-repo engagement table (per `feedback_child_repo_implementer_rule`, her number belongs to the isnad-graph roster).
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Aino Virtanen** (SQL) | 5 | 5 | (hold at max) 4 clean PRs (#589/#591/#592/#593) + the in-wave #586 hook fix; 15% theme-fit concentration; skills-CI gate (#593) closes a real enforcement gap. |
+| **Nadia Khoury** (PD) | 5 | 5 | (hold at max) Wave kickoff → 3-gate sequencing → wrapup → phase-exit coordination across all 8 repos; owner-decision routing on every gate (#322 authorize-now, #330 trailing-window, staging re-bootstrap). |
+| **Wanjiku Mwangi** (TPM) | 5 | 5 | (hold at max — would be ▲ if not capped) ★ The #322 exit gate end-to-end: spec correction (us#145), parent rollout (main#588), and the **8/8 org-wide ruleset application with per-repo read-back verification**. Top reviewer of the wave (6 Approved verdicts). |
+| **Santiago Ferreira** (RC) | 5 | 5 | (hold at max) #330 tech-debt measurement (15.3% ≤ 20%, trailing-window method); 2 clean PRs; 5 reviews; RC sequencing on the 8-bundle wave→main ceremony. |
+
+### Cross-Repo Implementer Updates (deploy track)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Lucas Ferreira** (deploy SRE) | 5 | 5 | (hold at max — would be ▲ if not capped) ★ deploy#394 kafka runbook + **live re-bootstrap execution on the stg VPS** (owner-authorized). Root-caused the real failure (Bitnami-era root-owned volume dirs vs apache/kafka UID-1000 appuser) — a diagnosis refinement over the runbook's own hypothesis, fed back into the runbook. |
+| **Nino Kavtaradze** (deploy Sec) | 5 | 5 | (hold at max) ★ The wave's load-bearing reviewer: the single CR (deploy#396) caught both the hard-gate-on-cross-repo-artifact design flaw and the dotted-only-regex evasion. Both became org memories. |
+| **Aisha Idrissi** (deploy SRE) | 5 | 5 | (hold at max) #396 (received the CR, resolved cleanly, then redesigned the gate to exit-0+`::warning::` when Hook 14 blocked the continue-on-error rendering) + #397. |
+| **Nurul Hakim** (deploy Obs) | 4 | **5** (▲) | Third consecutive clean wave: W12 #358 (egress network), W13 #375 (Grafana login), W15 #400 (ruff+mypy gate for deploy scripts) + 3 substantive reviews this wave. Consistent, reliable, no negative signal across three waves — promotion earned. |
+| **Bereket Tadesse** (deploy Mgr) | 4 | 4 | (hold) Not engaged this wave (no PRs, no reviews) — no signal either direction. The W11 demotion stands pending a brief-author restoration demonstration. |
+
+### Child-Repo Wave Engagement (informational — per `feedback_child_repo_implementer_rule`)
+
+> Trust numbers for child-repo rosters belong in those repos' own retros. Noted here for visibility.
+
+| Member | Repo | Engagement | Direction |
+|---|---|---|---|
+| **Ingrid Lindqvist** | isnad-graph | ★ Second consecutive standout wave: ig#946 + the **post-wrapup ig#950 hotfix** (runtime-config.js → /tmp for read-only rootfs, plus a new `frontend-readonly-container` CI job replicating deploy's exact constraints so the class can't regress). W14 #941 GHCR + W15 #950 = the engineer who keeps unbreaking staging. | strongly positive |
+| **Kavitha Sundaramurthy** | data-acquisition | 3 clean PRs (#62/#63/#64) — highest child-repo throughput this wave. | positive |
+| **Kofi Mensah-Williams** | landing-page | 3 clean PRs (#106/#107/#108). | positive |
+| **Astrid Lindqvist** | design-system | 2 clean PRs (#93 prettier corpus reformat + gate, #95). | positive |
+| **Linh Pham** | isnad-graph | ig#944 (retired the 3 pre-existing actionlint -ignores — closes the W14 accepted-debt item). | positive |
+| **Jelani Mwangi** | isnad-graph | ig#945 (gitleaks-action v3.0.0 node24). | positive |
+| **Mateo Salazar** | user-service | us#144 — re-assigned cleanly after his original scope row (ig#943) was discovered to be a phantom dup (orchestrator-authored error, not his). | positive |
+| **Fatima Bensalah** | isnad-ingest-platform | ingest#60. | positive |
+| **Anya Kowalczyk / Idris Yusuf** | isnad-graph / user-service | 5 + 4 reviews respectively — the child-repo review backbone this wave. | positive |
+
+### Orchestrator (Self-Assessment)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Orchestrator (Steven via Claude)** | 4 | 4 | (hold) Strong: drove 26 PRs + 8 bundles + 1 hotfix through the full lifecycle with 1 CR and 0 CI failures; honest staging-gate handling (override-with-rationale at wrapup, then **re-verified and re-recorded as genuinely green post-hotfix** instead of letting the override stand); all 3 phase-exit gates closed on API-verifiable state; correct hook-respect behavior (fixed Hook 14's blocking-design trigger instead of admin-overriding). **Hold-not-promote** because of one self-authored error: **ig#943 phantom dup** — filed an isnad-graph issue from deploy#245's stale body snapshot without re-verifying at origin HEAD; cost a scope row, Mateo's reassignment, and a board repair. Exactly the recognized-pattern slip class (the rule existed; the orchestrator didn't apply it to the issue-filing surface). |
+
+### Done Well / Needs Improvement (Phase 3 Wave 15)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Wanjiku Mwangi** | 8/8 ruleset application with read-back verification (the #322 exit gate); top reviewer (6 verdicts) | None this wave |
+| **Lucas Ferreira** | Live kafka re-bootstrap on stg VPS; root-cause refinement fed back into the runbook | None this wave |
+| **Nino Kavtaradze** | The load-bearing CR (two distinct design flaws caught in one review) | None this wave |
+| **Nurul Hakim** | Third consecutive clean wave → promoted to 5 | None this wave |
+| **Aisha Idrissi** | CR resolution + Hook-14-respecting gate redesign (exit-0 + `::warning::`) | None this wave |
+| **Ingrid Lindqvist** (ig roster) | ig#950 hotfix + regression-proof CI job; second consecutive standout | None this wave |
+| **Aino / Santiago / Nadia** | Sustained delivery, measurement, and coordination rigor | None this wave |
+| **Orchestrator** | Phase-exit on verifiable state; staging onion fully peeled; hook-respect under pressure | ig#943 phantom dup (stale-snapshot issue filing — proposed process change #1) |

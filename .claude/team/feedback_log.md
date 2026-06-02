@@ -2639,3 +2639,83 @@ Scanned the project memory directory (93 active memories). No memory crossed int
 
 ### Memory-to-Automation Audit — p3-wave-14
 No new hook/skill/charter conversion candidates beyond the 3 charter proposals already surfaced (Steps 7 → #1 current_wave-bump, #2 red-default-branch detection, #3 delivered-vs-applied). The session's new memories are project-state (KEEP). Existing memory-tier feedback entries remain appropriately memory-tier (judgment heuristics). Marker written.
+
+
+
+## Retrospective: Phase 3 Wave 15 — Phase-3 Exit Close-out — 2026-06-02
+
+**Theme:** Apply branch-protection rulesets org-wide (#322) + tech-debt burn-down ≤20%/≤10% (#330) + CI-green audit (#326) — **the closing wave of Phase 3.**
+
+### Team Performance
+
+**26 wave PRs merged across all 8 repos** + 8 wave→main propagation bundles + 1 post-wrapup hotfix (ig#950) = 35 merges total. **1 ChangesRequested cycle** (Nino → Aisha on deploy#396 — a load-bearing review catch: org-wide-artifact gate must be non-blocking + lint gate must cover all import forms). **0 failing CI checks across all 26 PR heads** — the cleanest CI record of any P3 wave. 15 wave issues closed + meta #584; the 3 phase-exit gate issues (#322/#326/#330) deliberately held open for `/phase-review 3` per owner decision (close-at-9/9-with-caveat). Median PR turnaround 0.3h.
+
+**The phase-exit arc:** all three exit gates were mechanically verified, not just delivered — **8/8 branch-protection rulesets applied + read-back-verified at origin** (owner-authorized live), **tech-debt ratio 15.3% ≤ 20% target**, and the CI-green audit closed its gaps org-wide. The W14 pain point "rollout delivered ≠ criterion enforced" was the design center of this wave's execution.
+
+**The staging onion fully peeled:** the 3-layer masked-failure chain — GHCR 401 (fixed W14) → kafka volume permissions (fixed via owner-authorized live re-bootstrap on the stg VPS) → frontend read-only rootfs crash (ig#949, fixed via same-session hotfix PR ig#950) — ended with staging genuinely green end-to-end (run 26792138597, external smoke 200s on all three vhosts). Each fix unmasked the next; only investigate-first discipline + willingness to do owner-authorized live ops got to the bottom.
+
+**Counter verification (Step 2.5):** `final_pr_count` 26=26 ✓, `top_concentration_pct` 15=15 ✓ (Aino 4/26). `changes_requested_cycles` claimed 1 vs recomputed 0 — **not a wrapup arithmetic error**: the single CR verdict (deploy#396) was edited-in-place to Approved per the charter verdict-amendment rule, so retro recomputation from *current* comment state cannot see it. The claimed value stands as authoritative-historic; a `wave_15_counter_corrections` entry records the gap and the measurement-semantics conflict feeds proposed process change #4.
+
+### Per-Engineer Assessments
+
+- **Aino Virtanen** (org SQL) — 4 PRs (main#589 wave-scope/hook shape fix, #591 Hook 14 NEUTRAL prefix-match, #592 charter drift-link, #593 skills-CI gate), all clean, 15% theme-fit concentration. Also #586 (the in-wave fix of the kickoff-comment hook bug). CI failures: 0. Severity: **none**.
+- **Wanjiku Mwangi** (org TPM) — ★ the #322 exit gate end-to-end: main#588 (.github/branch-protection/) + us#145 (SPEC.md omit-rule correction) + **the 8/8 org-wide ruleset application with per-repo read-back verification** (owner-authorized ops work beyond the PRs). Also the wave's top reviewer (6 Approved verdicts). Severity: **none (standout)**.
+- **Santiago Ferreira** (org RC) — 2 PRs (main#587 session-start repo-list fix, #590 stale-comment refresh) + the #330 tech-debt measurement (15.3% ≤ 20%, trailing-window method ratified by owner) + 5 reviews. Severity: **none**.
+- **Lucas Ferreira** (deploy SRE) — 2 PRs (deploy#394 kafka re-bootstrap runbook + cluster-id drift guard, #399 skill-shadow cleanup) + **executed the runbook live on the stg VPS** (owner-authorized SSH; root-caused the real failure to Bitnami-era root-owned volume dirs vs apache/kafka's UID-1000 appuser — a refinement over the runbook's cluster-id-mismatch hypothesis). Severity: **none (standout)**.
+- **Aisha Idrissi** (deploy SRE) — 2 PRs (deploy#396 per-env validation gate — received the wave's only CR and resolved it cleanly; #397 actionlint pin). Also redesigned the #396 gate to exit-0 + `::warning::` after Hook 14 correctly blocked the continue-on-error rendering. Severity: **none**.
+- **Nino Kavtaradze** (deploy Sec) — the wave's load-bearing reviewer: CR on #396 caught (a) a cross-repo-derived artifact gate wired as a hard PR gate and (b) a dotted-only regex that bare-import syntax evades. Both became org memories. Severity: **none (standout reviewer)**.
+- **Nurul Hakim** (deploy Obs) — deploy#400 (ruff + mypy gate for deploy scripts/) + 3 reviews. Third consecutive clean wave (W12 #358, W13 #375, W15 #400). Severity: **none**.
+- **Kavitha Sundaramurthy** (data-acq) — 3 clean PRs (da#62 graph-loader fix, #63 actionlint pin, #64 skill-shadow cleanup). Severity: **none**.
+- **Kofi Mensah-Williams** (landing-page) — 3 clean PRs (lp#106 ruleset spec port, #107 actionlint pin, #108 skill-shadow cleanup). Severity: **none**.
+- **Astrid Lindqvist** (design-system) — 2 clean PRs (ds#93 prettier reformat+gate, #95 actionlint pin). Severity: **none**.
+- **Ingrid Lindqvist** (isnad-graph) — ★ 2 deliverables: ig#946 (skill-shadow cleanup) + **the post-wrapup hotfix ig#950** (runtime-config.js → /tmp so it survives `read_only: true` rootfs; includes a new `frontend-readonly-container` CI job replicating deploy's exact constraints so the class can't regress). Second consecutive standout wave (W14 #941 GHCR). Severity: **none (standout)**.
+- **Linh Pham / Jelani Mwangi / Mateo Salazar / Fatima Bensalah** — one clean PR each (ig#944 actionlint-ignores retired, ig#945 gitleaks v3, us#144 actionlint pin, ingest#60 actionlint pin). Severity: **none**.
+- **Orchestrator** — drove 26 PRs + 8 bundles + 1 hotfix through the full lifecycle; honest staging-gate handling (overrode with rationale at wrapup, then *re-recorded as genuinely green* post-hotfix rather than leaving the override as the final word); owner-decision routing on all 3 gates. **One self-authored error: ig#943 phantom dup** (created from deploy#245's stale body snapshot without re-verifying at origin HEAD — caught and closed in-wave, Mateo reassigned). Severity: **minor**.
+
+### Wave-Shape Table
+
+| Metric | Value |
+|--------|-------|
+| PRs merged | 26 wave PRs (all 8 repos) + 8 wave→main bundles + 1 post-wrapup hotfix (ig#950) |
+| Distinct implementers | 14 |
+| Distinct reviewers | 18 (all 26 PRs cleared the real 2-reviewer gate — zero `--admin` on feature PRs) |
+| ChangesRequested cycles | 1 (Nino → Aisha deploy#396; resolved + verdict edited-in-place per charter) |
+| Top-implementer concentration | 4 / 26 = **15%** (Aino — healthy; well under 60% fragility threshold) |
+| CI health | **0 failing checks across all 26 PR heads** (cleanest P3 wave) |
+| Issues closed | 15 + meta #584 (3 exit gates held open for `/phase-review 3`) |
+| Tech-debt filed | 6 backlog issues (ig#947, da#65, deploy#398, deploy#402, main#595, main#596) — all correctly NOT wave-labeled |
+| Wave→main propagation | 8/8 merged, 0 stranded (reachability gate) |
+| Staging promotion | overridden at wrapup → **post-hotfix SUCCESS** (run 26792138597; external smoke 200s ×3 vhosts) |
+| Branch protection | **8/8 rulesets applied + verified at origin** (#322 exit gate met) |
+| Ontology | current (0 dirty) at retro |
+
+### Top 3 Going Well
+
+1. **Phase-3 exit achieved with every criterion mechanically verified, not narratively closed.** #322 = rulesets live at origin (read-back-verified per repo), #330 = 15.3% measured ≤ 20%, #326 = gaps closed + audited, staging = genuinely green (not "green with caveat"). The W14 lesson ("delivered ≠ enforced") was applied as the wave's design center — and the owner's close-at-9/9 decision rests on API-verifiable state.
+2. **The staging onion: a 3-layer masked-failure chain diagnosed and fixed in one session.** GHCR 401 → kafka volume permissions → frontend read-only rootfs. Each fix unmasked the next layer; the team (Lucas live-ops, Ingrid hotfix, orchestrator sequencing) kept pulling the thread instead of stopping at the first green signal. The post-hotfix re-verification (rather than letting the wrapup override stand) is the honest-audit discipline applied to operations.
+3. **Hook gates fired correctly under pressure, and the team worked *within* them.** Hook 14 blocked the #396 merge (continue-on-error renders as failing) → the team fixed the gate's *design* (exit 0 + `::warning::`) instead of admin-overriding. `validate_wave_label_evidence` caught a bad path citation → the citation was fixed. Hook 4 blocked the un-reviewed bundles → the documented `ADMIN_MERGE_EXCEPTION` class was used exactly as designed. Zero undocumented gate bypasses.
+
+### Top 3 Pain Points
+
+1. **Orchestrator-authored phantom dup (ig#943).** Filed a "new" isnad-graph issue from deploy#245's body snapshot without re-verifying the cited gap at origin HEAD — the work was already merged. Cost: a wasted scope row, Mateo's reassignment, and a board repair. The investigate-before-implement rule exists for implementers; this incident shows **issue-filing needs the same origin-HEAD verification discipline** (proposed change #1).
+2. **`upsert_status_keys.py` #456 recurrence (filed main#595).** The update-existing-scalar-key path still fails (`wave_15_active=false` diverged); insert-new-key works. Second recurrence of this class — workaround was a surgical regex. The shared lib that exists to prevent cosmetic-diff churn is itself unreliable for half its use cases.
+3. **Annunaki monitor noise: 25% false-positive rate (filed main#596).** ~10 of 40 W15 captures (plus 3 meta-captures during this retro) are `stdout:` pattern matches against *displayed file content* (cat / `gh api contents` of files containing `except ImportError:`), not actual failures. Noise at this rate dilutes the signal the monitor exists to provide.
+
+### Proposed Process Changes
+
+1. **Issue-filing premise verification at origin HEAD** — extend the investigate-before-implement discipline to the issue-filing class: any issue whose body cites a gap in another repo's code MUST be verified against that repo's origin HEAD (not a sibling issue's body snapshot) at filing time. *Rationale:* the ig#943 phantom dup. Charter `issues.md` addition (or `/file-bug` Pass D).
+2. **Fix `upsert_status_keys.py` update-existing-key path (main#595) in Phase 4's first wave** — *Rationale:* second recurrence; every wave wrapup/retro hits this lib twice. The fix has a clear repro (`wave_15_active=false` against the W15 file).
+3. **Annunaki monitor content-display suppression (main#596)** — skip `stdout:` pattern matching for pure-read commands (cat / `gh api contents` / `git show` / error-log display); keep exit-code detection. DECIDE-tier hook change (D6). *Rationale:* 25% noise rate this wave.
+4. **CR-cycle counter semantics: wrapup-time count is authoritative-historic** — document in `/wave-retro` Step 2.5 that `changes_requested_cycles` recomputation from current comment state will under-count whenever a CR verdict was edited-in-place to Approved (charter amendment rule). When recomputed < claimed AND the gap is explained by edit-in-place verdicts, the claimed value stands; record a corrections entry rather than "correcting" history away. *Rationale:* the W15 1-vs-0 conflict; the two charter rules (verdict-edit-in-place + counter-recomputation) were individually correct but collide.
+
+### Promotion Audit — p3-wave-15
+
+`/promotion-audit` ran on unchanged repo state: **0 AUTO · 0 DECIDE · 105 KEPT · 16 SUPERSEDED** (none newly superseded). 100 memories / 0 marked charter sections / 21 skills scanned. Every over-threshold charter-target memory is already `status: superseded` (codified in prior waves). Approaching threshold: `feedback_refresh_before_status_claim` (2/3 citations). Standalone log: `.claude/team/promotion_audit_log/p3-wave-15.md`.
+
+### Annunaki-Attack — p3-wave-15
+
+93 records processed (50 stale pre-W15 carryovers + 40 W15-window + 3 retro meta-captures). Classification: **15× kickoff-comment hook bug** (filed + fixed in-wave as #586/PR #589), **9× hook blocks working as designed** (branch-freshness ×4, CI-status ×1, PR-review ×1, wave-audit ×1, label-evidence ×1, commit-identity ×1 — all resolved through the documented paths), **2× upsert #456 recurrence** (filed main#595), **~13× content-display false positives** (filed **main#596**, the wave's one new annunaki issue), remainder one-off/transient noise. **Error log backed up + cleared** (first purge since the W13/W14 retros recommended it). Marker written.
+
+### Memory-to-Automation Audit — p3-wave-15
+
+No new hook/skill/charter conversion candidates beyond the 4 process changes proposed above (#596 already filed as the hook-tier item). The 6 memories added during W15 are correctly memory-tier (3 feedback heuristics, 2 project-state, 1 API-behavior reference). **Maintenance performed:** `MEMORY.md` index had exceeded its size limit (28.7KB > 24.4KB, truncating recall); 51 over-length index entries trimmed to ≤280 chars with detail preserved in topic files — now 23.4KB. Marker written.
