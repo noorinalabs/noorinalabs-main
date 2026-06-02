@@ -1326,6 +1326,12 @@
       "last_resolved": "effab88974d50a127ad8c00e15327c8ead6db6392227fd52b3167661482039c7",
       "tracked_at": "2026-05-17T20:10:21.238048+00:00",
       "resolved_at": "2026-05-17T21:28:10.746396+00:00"
+    },
+    ".claude/team/promotion_audit_log/p3-wave-15.md": {
+      "last_tracked": "15b3d7cfe3bf0ccef6f1a23f966fa881dcba05b243dd377d2761c9e96523eeda",
+      "last_resolved": "",
+      "tracked_at": "2026-06-02T01:54:08.205888+00:00",
+      "resolved_at": ""
     }
   },
   "last_cleanup": {
