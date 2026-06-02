@@ -117,8 +117,9 @@ from _consultation_sentinel import (  # noqa: E402
     SENTINEL_PARENT_DIR,
     consultation_sentinel_path,
     cwd_sentinel_hash,
+    find_attesting_sentinel,
 )
-from annunaki_log import log_pretooluse_block  # noqa: E402
+from annunaki_log import log_pretooluse_block, log_pretooluse_diagnostic  # noqa: E402
 
 # Sentinel-fallback config — delegated to `_consultation_sentinel` per #176.
 # These module-level names are preserved as back-compat shims for tests that
@@ -275,6 +276,12 @@ def _sentinel_attests_librarian(cwd: str) -> bool:
     same sentinel directory without colliding. The helper computes the
     canonical path; this function wraps it with Hook 15's specific
     fail-OPEN-on-OSError semantics.
+
+    Per #429: when the canonical-hash marker is absent, falls back to a
+    tolerant-read scan (`find_attesting_sentinel`) that accepts any fresh
+    marker whose BODY records this same realpath cwd. Rescues markers
+    written by ad-hoc one-liners that picked a non-canonical hash
+    formula (live evidence in cedric-0066-dark-mode-tokens worktree).
     """
     if not cwd:
         return False
@@ -283,16 +290,106 @@ def _sentinel_attests_librarian(cwd: str) -> bool:
 
     try:
         sentinel = consultation_sentinel_path(cwd, _SKILL_KEY)
-        if not sentinel.exists():
-            return False
-        age = time.time() - sentinel.stat().st_mtime
-        return 0 <= age <= SENTINEL_TTL_SECONDS
+        if sentinel.exists():
+            age = time.time() - sentinel.stat().st_mtime
+            if 0 <= age <= SENTINEL_TTL_SECONDS:
+                return True
+        # Canonical-path miss → tolerant body-cwd scan (#429).
+        if find_attesting_sentinel(cwd, _SKILL_KEY, SENTINEL_TTL_SECONDS) is not None:
+            return True
+        return False
     except OSError:
         # Fail open — do not block on our own inability to stat. (Preserved
         # from pre-#176 behavior; the shared helper fails CLOSED on OSError
         # for cleaner generic semantics — Hook 15 wraps it here to keep the
         # legacy fail-open stance that its tests pin.)
         return True
+
+
+def _build_block_diagnostic(input_data: dict) -> dict:
+    """Build a structured forensic record for a block decision.
+
+    Captures what the hook saw at decision time so #429-class "why did
+    it block?" questions are answerable from logs without rerunning the
+    failing session. Every field is JSON-safe and bounded in size; OSError
+    on any field-build falls back to a sentinel string rather than raising.
+
+    Recorded fields:
+      cwd, cwd_realpath, expected_sentinel_path, sentinel_exists,
+      sentinel_age_s, sentinel_skill_dir, sentinel_dir_marker_count,
+      transcript_path, transcript_exists, transcript_size_bytes,
+      transcript_line_count, errors (list of stringified OSError per field).
+    """
+    import time
+
+    diag: dict = {}
+    errors: list[str] = []
+    cwd = input_data.get("cwd", "") or ""
+    diag["cwd"] = cwd
+    try:
+        diag["cwd_realpath"] = os.path.realpath(os.path.expanduser(cwd)) if cwd else ""
+    except (OSError, ValueError) as e:
+        diag["cwd_realpath"] = ""
+        errors.append(f"realpath:{e}")
+
+    sentinel: Path | None = None
+    try:
+        sentinel = consultation_sentinel_path(cwd, _SKILL_KEY) if cwd else None
+    except (OSError, ValueError) as e:
+        errors.append(f"sentinel_path:{e}")
+
+    if sentinel is not None:
+        diag["expected_sentinel_path"] = str(sentinel)
+        diag["sentinel_skill_dir"] = str(sentinel.parent)
+        try:
+            exists = sentinel.exists()
+            diag["sentinel_exists"] = exists
+            if exists:
+                age = time.time() - sentinel.stat().st_mtime
+                diag["sentinel_age_s"] = round(age, 2)
+                diag["sentinel_within_ttl"] = bool(0 <= age <= SENTINEL_TTL_SECONDS)
+            else:
+                diag["sentinel_age_s"] = None
+                diag["sentinel_within_ttl"] = False
+        except OSError as e:
+            diag["sentinel_exists"] = None
+            errors.append(f"sentinel_stat:{e}")
+        try:
+            if sentinel.parent.is_dir():
+                diag["sentinel_dir_marker_count"] = sum(1 for _ in sentinel.parent.glob("*.marker"))
+            else:
+                diag["sentinel_dir_marker_count"] = 0
+        except OSError as e:
+            diag["sentinel_dir_marker_count"] = None
+            errors.append(f"sentinel_dir_scan:{e}")
+
+    transcript_path = input_data.get("transcript_path", "") or ""
+    diag["transcript_path"] = transcript_path
+    if transcript_path:
+        try:
+            tp = Path(transcript_path)
+            t_exists = tp.exists()
+            diag["transcript_exists"] = t_exists
+            if t_exists:
+                diag["transcript_size_bytes"] = tp.stat().st_size
+                # Bounded line-count: stop at 50k to avoid runaway scan
+                # cost on pathological transcripts.
+                line_count = 0
+                with tp.open("r", encoding="utf-8", errors="replace") as f:
+                    for line_count, _ in enumerate(f, start=1):
+                        if line_count >= 50000:
+                            break
+                diag["transcript_line_count"] = line_count
+            else:
+                diag["transcript_size_bytes"] = None
+                diag["transcript_line_count"] = 0
+        except OSError as e:
+            diag["transcript_exists"] = None
+            errors.append(f"transcript_read:{e}")
+
+    if errors:
+        diag["errors"] = errors[:10]
+    return diag
 
 
 _BLOCK_MESSAGE = (
@@ -358,6 +455,18 @@ def main() -> None:
             result["reason"],
             tool_name=tool_name,
         )
+        # Per #429: emit structured forensics on the block path so future
+        # regressions show WHY the hook returned block, not just THAT it
+        # did. Best-effort — never let logging crash the hook.
+        try:
+            log_pretooluse_diagnostic(
+                "enforce_librarian_consulted",
+                f"{tool_name} {file_path}",
+                _build_block_diagnostic(input_data),
+                tool_name=tool_name,
+            )
+        except Exception:  # noqa: BLE001
+            pass
         sys.exit(2)
     sys.exit(0)
 

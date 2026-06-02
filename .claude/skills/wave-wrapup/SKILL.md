@@ -265,6 +265,18 @@ Use the shared `upsert_status_keys.py` helper at `.claude/lib/` — it does targ
 > recompute pattern by deriving both counters directly from the merged-PR
 > set across `wave_{M}_repos_in_scope`. `FINAL_PR_COUNT` remains the
 > already-computed Step 10 "PRs: Merged" number.
+>
+> **Cross-window filter (added P3W10 #423 — 2026-05-13).** When a wave-branch
+> is reused across partition events (W9 split mid-wave into pre-partition
+> non-deploy PRs + post-partition canonical 6 PRs — owner directive
+> 2026-05-12), `gh pr list --base "deployments/phase-{P}/wave-{M}"` returns
+> the union of ALL windows, not the canonical wave's window. W9 actuals:
+> 30 PRs returned vs 6 canonical → TOP_CONCENTRATION_PCT computed as 50%
+> against the cross-window set vs 67% canonical. The fix below uses
+> `wave_{M}_kicked_off_at` as a `mergedAt >= X` filter to scope the PR set
+> to the canonical window (Option A), plus a `FINAL_PR_COUNT`-vs-tally
+> cross-check that loud-fails on residual mismatch (Option B — defense in
+> depth for re-roll-within-window edge cases A misses).
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -274,12 +286,42 @@ UPSERT="$REPO_ROOT/.claude/lib/upsert_status_keys.py"
 # FINAL_PR_COUNT is the Step 10 "PRs: Merged" number — already in hand.
 FINAL_PR_COUNT={count_of_merged_PRs}
 
-# Build the wave's merged-PR set across all repos in scope.
+# Cross-window filter (Option A — #423). The wave's canonical window starts
+# at `wave_{M}_kicked_off_at`; anything merged before is from a prior window
+# (W9 partition lesson). If the key is missing (legacy waves W1-W3 pre-/wave-start),
+# fall back to no-filter and rely solely on Option B's cross-check below.
+KICKOFF=$(jq -r '.["wave_{M}_kicked_off_at"] // empty' "$STATUS")
+
+# Build the wave's merged-PR set across all repos in scope. Includes mergedAt
+# so the kickoff filter applies; falls through unfiltered when KICKOFF is empty.
 PRS_JSON=$(jq -r '.["wave_{M}_repos_in_scope"][]' "$STATUS" | while read -r REPO; do
-  gh pr list --repo "noorinalabs/$REPO" --state merged \
-    --base "deployments/phase-{P}/wave-{M}" \
-    --json number,headRefOid --jq ".[] | . + {repo: \"$REPO\"}"
+  if [ -n "$KICKOFF" ]; then
+    gh pr list --repo "noorinalabs/$REPO" --state merged \
+      --base "deployments/phase-{P}/wave-{M}" \
+      --json number,headRefOid,mergedAt \
+      --jq ".[] | select(.mergedAt >= \"$KICKOFF\") | . + {repo: \"$REPO\"}"
+  else
+    gh pr list --repo "noorinalabs/$REPO" --state merged \
+      --base "deployments/phase-{P}/wave-{M}" \
+      --json number,headRefOid,mergedAt \
+      --jq ".[] | . + {repo: \"$REPO\"}"
+  fi
 done | jq -s .)
+
+# Cross-check (Option B — #423). After the kickoff filter, the PR set should
+# match Step 10's `FINAL_PR_COUNT`. A mismatch indicates either a re-roll
+# within the canonical window (rare but possible) or a missing `kicked_off_at`
+# key. Loud-fail rather than emit silently-wrong counters; the operator must
+# manually scope the PR set (e.g., by hand-listing the canonical PR numbers).
+GH_COUNT=$(echo "$PRS_JSON" | jq 'length')
+if [ "$GH_COUNT" != "$FINAL_PR_COUNT" ]; then
+  echo "ERROR: post-kickoff-filter PR count ($GH_COUNT) != FINAL_PR_COUNT ($FINAL_PR_COUNT)" >&2
+  echo "Possible cross-window contamination or re-roll within canonical window." >&2
+  echo "Inspect: gh pr list --base deployments/phase-{P}/wave-{M} --state merged --json number,mergedAt" >&2
+  echo "Then either: (a) verify wave_{M}_kicked_off_at in cross-repo-status.json is correct," >&2
+  echo "or (b) manually scope the PR list by editing this step's PRS_JSON construction." >&2
+  exit 1
+fi
 
 # CHANGES_REQUESTED_CYCLES — count `RequestOrReplied: ChangesRequested` verdict
 # comments across every wave PR's issue-comments timeline.

@@ -252,6 +252,125 @@ class ConsultationSentinelIsFreshTests(unittest.TestCase):
             shutil.rmtree(other, ignore_errors=True)
 
 
+class FindAttestingSentinelTests(unittest.TestCase):
+    """Tolerant-read scan (#429): accept any fresh marker whose BODY records
+    the matching cwd, even if the filename hash deviates from the canonical
+    formula. Defends against ad-hoc writers that picked a non-standard hash
+    (live evidence in cedric-0066-dark-mode-tokens worktree where two
+    markers existed under the same cwd with hashes computed differently)."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.mkdtemp(prefix="consult_sentinel_findany_")
+
+    def tearDown(self) -> None:
+        import shutil
+
+        shutil.rmtree(self._tmp, ignore_errors=True)
+
+    def _write_marker(self, filename_hash: str, body_cwd: str, mtime_offset: float = 0.0) -> Path:
+        skill_dir = Path(self._tmp) / sentinel.SENTINEL_PARENT_DIR / "ontology-librarian"
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        marker = skill_dir / f"{filename_hash}.marker"
+        marker.write_text(f"2026-05-14T00:00:00Z {body_cwd}\n", encoding="utf-8")
+        if mtime_offset:
+            new_time = time.time() + mtime_offset
+            os.utime(marker, (new_time, new_time))
+        return marker
+
+    def test_canonical_marker_found(self):
+        """Canonical hash filename + matching body cwd → accepted."""
+        canonical_hash = sentinel.cwd_sentinel_hash(self._tmp)
+        m = self._write_marker(canonical_hash, self._tmp)
+        found = sentinel.find_attesting_sentinel(self._tmp, "ontology-librarian")
+        self.assertEqual(found, m)
+
+    def test_noncanonical_hash_filename_but_matching_body_accepted(self):
+        """#429 rescue case: filename hash is wrong (writer forgot \\n in
+        the shell idiom), but body cwd matches → accept it."""
+        import hashlib
+
+        wrong_hash = hashlib.sha1(self._tmp.encode()).hexdigest()[:16]  # no \n
+        # Sanity: the wrong hash MUST differ from the canonical one, else
+        # the test isn't exercising the tolerant-read path.
+        self.assertNotEqual(wrong_hash, sentinel.cwd_sentinel_hash(self._tmp))
+        m = self._write_marker(wrong_hash, self._tmp)
+        found = sentinel.find_attesting_sentinel(self._tmp, "ontology-librarian")
+        self.assertEqual(found, m, "wrong-hash filename with right body cwd must attest")
+
+    def test_arbitrary_filename_but_matching_body_accepted(self):
+        """Even a totally garbage filename works as long as the body
+        records the correct cwd. This is intentional — the body is the
+        attestation, the filename is a lookup convenience."""
+        m = self._write_marker("not-a-hash-at-all", self._tmp)
+        found = sentinel.find_attesting_sentinel(self._tmp, "ontology-librarian")
+        self.assertEqual(found, m)
+
+    def test_wrong_body_cwd_rejected(self):
+        """Body cwd points at a DIFFERENT directory → reject. Guards the
+        isolation property — a leftover marker from another worktree
+        must not unlock this one."""
+        other_dir = tempfile.mkdtemp(prefix="consult_other_")
+        try:
+            wrong_hash = "deadbeefcafe1234"
+            self._write_marker(wrong_hash, other_dir)
+            found = sentinel.find_attesting_sentinel(self._tmp, "ontology-librarian")
+            self.assertIsNone(found, "cross-cwd body must not attest")
+        finally:
+            import shutil
+
+            shutil.rmtree(other_dir, ignore_errors=True)
+
+    def test_stale_marker_with_matching_body_rejected(self):
+        """Even with correct body cwd, an over-TTL marker must not attest."""
+        canonical_hash = sentinel.cwd_sentinel_hash(self._tmp)
+        self._write_marker(
+            canonical_hash, self._tmp, mtime_offset=-(sentinel.DEFAULT_TTL_SECONDS + 60)
+        )
+        found = sentinel.find_attesting_sentinel(self._tmp, "ontology-librarian")
+        self.assertIsNone(found)
+
+    def test_missing_skill_dir_returns_none(self):
+        """No skill subdirectory at all → None (no error)."""
+        found = sentinel.find_attesting_sentinel(self._tmp, "ontology-librarian")
+        self.assertIsNone(found)
+
+    def test_empty_cwd_or_skill_returns_none(self):
+        self.assertIsNone(sentinel.find_attesting_sentinel("", "ontology-librarian"))
+        self.assertIsNone(sentinel.find_attesting_sentinel(self._tmp, ""))
+
+    def test_body_cwd_with_spaces_resolves_correctly(self):
+        """Body cwd may contain spaces — `split(None, 1)` handles that."""
+        spaced = os.path.join(self._tmp, "dir with spaces")
+        os.makedirs(spaced)
+        # Write the marker under the spaced cwd's skill dir so the scan
+        # path lines up.
+        marker_dir = Path(spaced) / sentinel.SENTINEL_PARENT_DIR / "ontology-librarian"
+        marker_dir.mkdir(parents=True, exist_ok=True)
+        marker = marker_dir / "abc123.marker"
+        marker.write_text(f"2026-05-14T00:00:00Z {spaced}\n", encoding="utf-8")
+        found = sentinel.find_attesting_sentinel(spaced, "ontology-librarian")
+        self.assertEqual(found, marker)
+
+    def test_realpath_equivalence_via_symlink(self):
+        """Body cwd recorded via symlink path, lookup via real path → match.
+        Both sides resolve through realpath so symlink hops don't mask."""
+        real = os.path.join(self._tmp, "real")
+        os.makedirs(real)
+        link = os.path.join(self._tmp, "link")
+        os.symlink(real, link)
+        # Marker lives in the real dir, body records the symlink path.
+        marker_dir = Path(real) / sentinel.SENTINEL_PARENT_DIR / "ontology-librarian"
+        marker_dir.mkdir(parents=True, exist_ok=True)
+        marker = marker_dir / "zzz.marker"
+        marker.write_text(f"2026-05-14T00:00:00Z {link}\n", encoding="utf-8")
+        # Lookup via real — match.
+        found_via_real = sentinel.find_attesting_sentinel(real, "ontology-librarian")
+        self.assertEqual(found_via_real, marker)
+        # Lookup via link (realpath resolves to real) — also match.
+        found_via_link = sentinel.find_attesting_sentinel(link, "ontology-librarian")
+        self.assertEqual(found_via_link, marker)
+
+
 class ShellPythonParityTests(unittest.TestCase):
     """The shell idiom in SKILL.md and the Python helper must produce
     identical paths. If they diverge, no sentinel would ever match."""

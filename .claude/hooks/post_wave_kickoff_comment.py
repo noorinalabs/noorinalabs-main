@@ -68,6 +68,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _wave_label_parse import parse_wave_label, parse_wave_label_change  # noqa: E402
 from annunaki_log import log_posttooluse_event  # noqa: E402
 
+# Dispatcher opt-in (#425): when post_dispatcher sees this attribute set
+# to True AND `check()` returns an action-shaped dict, it synthesizes a
+# short `systemMessage` summary so operators see "post_wave_kickoff_comment:
+# action=post repo=… issue=…" in the harness UI. The visibility matters
+# here specifically because this hook's whole job is posting kickoff
+# comments — silent "did it post or did it skip?" was the original #425
+# symptom (operator concluded "dispatcher dead" when the hook was actually
+# returning skip_idempotent correctly).
+EMIT_DISPATCH_SUMMARY = True
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CROSS_REPO_STATUS = REPO_ROOT / "cross-repo-status.json"
 # Fallback location (subdir-rooted layouts have used this in earlier waves).

@@ -99,6 +99,71 @@ def log_pretooluse_block(
     append_jsonl_record(ERRORS_FILE, record)
 
 
+def log_pretooluse_diagnostic(
+    hook_name: str,
+    command: str,
+    diagnostic: dict,
+    tool_name: str = "Bash",
+) -> None:
+    """Append a structured diagnostic record alongside a PreToolUse block.
+
+    Distinct from `log_pretooluse_block` because the block-record schema is
+    pinned by /annunaki and downstream parsers; this side-channel carries
+    per-hook structured forensics without touching that contract. Used
+    today by `enforce_librarian_consulted` to capture cwd / sentinel path /
+    sentinel mtime / transcript path on every block so #429-style
+    "why did it block?" questions are answerable from logs alone.
+
+    Keys in `diagnostic` are hook-specific; values must be JSON-safe
+    primitives (no datetime, no Path — stringify upstream). The record's
+    top-level `type` is `pretooluse_diagnostic` so /annunaki can filter
+    these out of error counts.
+    """
+    record = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "type": "pretooluse_diagnostic",
+        "hook": hook_name,
+        "tool_name": tool_name,
+        "command": command[:500],
+        "diagnostic": diagnostic,
+    }
+    append_jsonl_record(ERRORS_FILE, record)
+
+
+def log_posttooluse_dispatch(
+    module_name: str,
+    command: str,
+    outcome: dict,
+    tool_name: str = "Bash",
+) -> None:
+    """Append a per-hook dispatch trace from `post_dispatcher`.
+
+    Distinct from `log_posttooluse_event` (which is hooks self-reporting
+    their own non-actionable conditions) because this records the
+    DISPATCHER's view of every check() call: did it return None / a
+    structured action dict / raise. Critical for #425-class debugging
+    where the harness sees only `stdout=""` and the operator concludes
+    "dispatcher dead" even when the chain is firing perfectly. Type is
+    `posttooluse_dispatch` so /annunaki can filter these out of error
+    counts — they're informational unless `outcome.raised` is set.
+
+    `outcome` shape (all JSON-safe primitives):
+      - returned: stringified repr of what check() returned (or "None")
+      - raised: exception type name, or null
+      - traceback_excerpt: first 500 chars of traceback if raised, else null
+      - elapsed_ms: optional, round-trip duration of the check() call
+    """
+    record = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "type": "posttooluse_dispatch",
+        "module": module_name,
+        "tool_name": tool_name,
+        "command": command[:500],
+        "outcome": outcome,
+    }
+    append_jsonl_record(ERRORS_FILE, record)
+
+
 def log_posttooluse_event(
     hook_name: str, command: str, reason: str, tool_name: str = "Bash"
 ) -> None:
