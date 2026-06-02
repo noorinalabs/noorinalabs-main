@@ -6,6 +6,9 @@
   "wave_15_stg_promotion": "overridden",
   "wave_15_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/26791516331",
   "wave_15_stg_promotion_override_rationale": "Kafka deploy#393 FIXED + live-verified (broker healthy / 5 topics / kafka-init green in run 26791516331 after owner-authorized volume re-bootstrap). Residual red = newly unmasked ig#949 (frontend runtime-config entrypoint vs read_only rootfs) - third staging onion layer; forward-fix only; filed with full diagnostic. All 15 other services Healthy.",
+  "wave_15_stg_promotion_post_hotfix": "success",
+  "wave_15_stg_promotion_post_hotfix_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/26792138597",
+  "wave_15_stg_promotion_post_hotfix_note": "ig#949 hotfix (PR ig#950) merged post-wrapup same session; ghcr-publish + auto-dispatched deploy-stg green end-to-end; external smoke 200s on all three vhosts; kafka + frontend + 20 of 22 containers healthy (caddy/alloy false-negative healthchecks filed as deploy tech-debt)",
  "wave_15_scope_reconciled_at": "2026-06-01T05:40:00Z",
  "wave_15_repos_in_scope": [
   "noorinalabs-main",
