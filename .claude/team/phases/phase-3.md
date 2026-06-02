@@ -213,7 +213,38 @@ Three concrete proposals. Owner ratified Proposal B and C, held Proposal A. PR #
 - **Open TD at close (12 issues):** main#595 (upsert update-key bug), main#596 (annunaki content-display noise), ig#947 (committed worktrees), da#65 (edge-key drift), deploy#398 (env-inventory refresh), deploy#402 (caddy/alloy healthchecks), + 6 pre-existing singles across deploy/ds/lp/da.
 - **Stale wave meta-issues never closed (cleanup):** main#331 (W8), #347 (W9), #424 (W10), #520 (W10 coordination).
 - **W15 retro proposed process changes (4)** awaiting owner approval — see `.claude/team/feedback_log.md` § Retrospective P3W15.
-- Phase 4's first `/phase-review` re-confirms criterion #9 (the caveat).
+- ~~Phase 4's first `/phase-review` re-confirms criterion #9 (the caveat).~~ → **Resolved 2026-06-02, see below.**
+
+### Criterion #9 caveat resolution — 2026-06-02 (Phase 4 first `/phase-review`)
+
+The caveat's "run 2" re-confirmation executed at `/phase-review 4` on 2026-06-02. Outcome:
+
+| Measure | Value | Gate | Result |
+|---|---|---|---|
+| Cumulative open TD (pooled, 8 repos, raw) | 14/63 = 22.2% | ≤20% | over |
+| Cumulative open TD (re-baselined, scaffolding excluded) | **13/55 = 23.6%** | ≤20% | over |
+| Trailing 14-day new-filed TD ratio (report-only axis) | 59/87 = 67.8% | report | reported |
+
+The movement from 19.7% (at P3 close, 4h earlier) was **denominator shrinkage** — closing P3's non-TD work
+(criteria #322/#326/#330, #520, stale metas, ig#949) mathematically raised the ratio; no new debt was created
+beyond the retro's deliberate carry-forward inventory. The trailing-window number is dominated by the W14/W15
+TD-visibility filing campaign.
+
+**Owner decisions (2026-06-02, via session AskUserQuestion):**
+
+1. **Re-baseline the methodology:** `meta-issue`-labeled scaffolding (phase criterion trackers, wave meta-issues)
+   is excluded from both numerator and denominator of all TD-ratio measurements from this point forward. Corrected
+   figure: 13/55 = 23.6%.
+2. **Waiver granted:** the corrected figure remains above ≤20%; the owner waives the kickoff block. Rationale:
+   P4W1 "Clean slate" (main#608) IS the burn-down remedy — 10 of the 13 real TD items are W1 scope. Blocking
+   the remedy on the disease's account is perverse.
+3. **Hard re-measure at W1 wrapup:** the ≤20% gate (re-baselined methodology) is re-measured at `/wave-wrapup`
+   for P4W1 as a **hard block** — no second waiver. The <10% target remains criterion #6 of Phase 4 (main#606).
+4. **deploy#387/#388 re-dispositioned:** from "owner-gated deferral" to **scheduled P4 work** (#388 ADR → W3,
+   #387 rotation automation → W4). They count toward the ratio until resolved.
+
+With this record, the Phase-3 criterion-#9 obligation is fully discharged; ongoing TD governance lives in
+Phase 4 criterion #6 (main#606).
 
 ## Open questions
 

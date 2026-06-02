@@ -668,9 +668,9 @@
       "resolved_at": "2026-05-06T01:11:01.420649+00:00"
     },
     ".claude/team/phases/phase-3.md": {
-      "last_tracked": "c075a815cb6b2ad63976ce2aaf03235700c0584a76331e5200198f342683e594",
+      "last_tracked": "6ededd8608f01314fbeb5ebaa87a316e1f126ed6696218ba3ac44a2dcf86840c",
       "last_resolved": "e85f396dfb7f7c418fad4d5f6a53b03ed0fdc9aa5ebe1b6e46c196ad7009b46f",
-      "tracked_at": "2026-06-02T02:16:08.255399+00:00",
+      "tracked_at": "2026-06-02T15:41:32.671236+00:00",
       "resolved_at": "2026-05-10T18:36:01.378480+00:00"
     },
     ".claude/skills/phase-review/SKILL.md": {
@@ -1334,9 +1334,9 @@
       "resolved_at": ""
     },
     ".claude/team/phases/phase-4.md": {
-      "last_tracked": "914ebd905e22263639ab5eb1b19b5da82d3a69f64e049a26bf4ce36632bfb692",
+      "last_tracked": "0795b5f6761cfbd52e30b8b5d5ddc7dff9fe3da97b81b4433167ce36fb4797f3",
       "last_resolved": "",
-      "tracked_at": "2026-06-02T13:31:01.556572+00:00",
+      "tracked_at": "2026-06-02T15:42:18.322489+00:00",
       "resolved_at": ""
     }
   },
