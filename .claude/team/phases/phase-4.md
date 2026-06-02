@@ -1,0 +1,74 @@
+---
+name: Phase 4 plan — light up the product
+description: Phase definition, end-state criteria, exit gate, wave plan
+phase: 4
+status: active
+created: 2026-06-02
+last_updated: 2026-06-02
+---
+
+# Phase 4 — light up the product
+
+## Theme
+
+Phase 3 left a deployed-but-empty platform: staging and production are live, CI is hardened org-wide, branch protection is enforced — but **the data pipeline has never run end-to-end and the graph holds no real corpus data**. Phase 3's own trajectory analysis named the exit condition: *"the meta-loop tapers when the deploy track ships + the product surface re-opens."*
+
+Phase 4 is that re-opening. Three tracks:
+
+1. **Data** — run the acquisition → B2 → Kafka → workers → Neo4j pipeline end-to-end with real hadith data; make it repeatable.
+2. **Product** — make the research surface (search, timeline, graph explorer) usable with real data on production; complete the admin surface.
+3. **Debt-to-zero** — resolve the Phase-3 criterion-9 caveat: re-confirm ≤20% at the first `/phase-review`, reach <10% cumulative by phase exit.
+
+## End-state criteria — Phase 4 exits when ALL hold
+
+| # | Criterion | Tracker |
+|---|-----------|---------|
+| 1 | **Data pipeline runs end-to-end** — sunnah_api → B2 → Kafka → workers → Neo4j on staging, repeatable, dedup-safe | noorinalabs-main#601 |
+| 2 | **Product usable with real data** — search/timeline/graph return real corpus results on production | noorinalabs-main#602 |
+| 3 | **Admin surface complete** — user mgmt via user-service, data management panel, pipeline controls | noorinalabs-main#603 |
+| 4 | **Zero carry-forward bugs** — us#65/#73/#74, lp#69 closed | noorinalabs-main#604 |
+| 5 | **Security follow-ups closed** — deploy#386/#384/#244, ig#955 | noorinalabs-main#605 |
+| 6 | **Tech-debt <10% cumulative** — resolves the P3 criterion-9 caveat (≤20% re-confirmed at first review; <10% by exit; holds 2 consecutive reviews) | noorinalabs-main#606 |
+| 7 | **P3 retro process changes applied + verified** — all 4 owner-approved changes dispositioned | noorinalabs-main#607 |
+
+## The Phase-3 criterion-9 caveat (inherited obligation)
+
+Phase 3 closed at 9/9 **with a caveat** (see `phase-3.md` § Phase exit record): criterion #9's "2 consecutive `/phase-review` runs" requirement is satisfied by run 1 = P3W15 wave-end + **run 2 = Phase 4's first `/phase-review`**, which MUST re-confirm cumulative ≤20% (trending toward <10%) and report the trailing-window new-filed ratio. This re-confirmation is a **blocking precondition for Phase 4 Wave 1 kickoff** — it happens at the `/phase-review 4` that precedes `/wave-scope 4 1`.
+
+## Wave plan (proposed at /plan-phase, owner-approved 2026-06-02)
+
+| Wave | Theme | Scope summary |
+|------|-------|---------------|
+| **W1** | **Clean slate** — bugs + security + TD burn-down | All 4 live bugs, 4 security follow-ups, 12 TD carry-forwards. Meta-issue: noorinalabs-main#608. Serves criteria 4/5/6. |
+| **W2** | **First light** — pipeline end-to-end | main#139 (keystone), main#136, da#21/#26/#65, ingest#2. Serves criterion 1. |
+| **W3** | **Open the doors** — product surface | Admin cluster (ig#804/#805/#806, main#138), us#43 email login, ig#703 i18n, lp#46 Team page, ig#721 geo filtering. Serves criteria 2/3. |
+| **W4** | **Phase exit** — verification + close-out | Production data verification, criterion audit, phase retro. Spillover buffer. |
+
+Wave themes are confirmed (not re-chosen) at each `/wave-scope`; scope reconciliation may move issues between waves.
+
+## Out of scope for P4 (deferred)
+
+- **Billing/payments** (ig#717/#718) — needs product traction first
+- **CDN + performance ops** (ig#706/#711/#712, lp#33/#34/#35, deploy#12) — optimize after real traffic exists
+- **Developer portal** (lp#42, deploy#19), **notifications** (ig#704), **visual-asset sourcing** (ig#719, lp#37, ds#24)
+- **Playwright live-site automation** (main#56/#57)
+- **Secrets-manager ADR + rotation automation** (deploy#387/#388) — owner-gated decisions
+- **Hetzner sizing analysis** (main#142) — revisit when pipeline load is real
+
+## Phase exit gate
+
+Owner runs `/phase-review 4` and verifies all 7 end-state rows are `Done`, including the criterion-6 tech-debt gate (<10% cumulative, held for 2 consecutive reviews). On confirmation, the next phase is defined via `/plan-phase` before any P5 wave can kick off (per `lifecycle.md` § Phase Lifecycle).
+
+## Process changes in force from P3 retro (applied at phase setup, 2026-06-02)
+
+1. **Issue-filing premise verification at origin HEAD** — charter `issues.md` § Issue-Filing Premise Verification (applied)
+2. **upsert_status_keys.py update-key fix** — main#595, W1 scope
+3. **Annunaki content-display suppression** — main#596, W1 scope
+4. **CR-cycle counter semantics** — `/wave-retro` Step 2.5 (applied)
+
+## References
+
+- `.claude/team/lifecycle.md` — canonical phase/wave/session skill order
+- `.claude/team/phases/phase-3.md` — prior phase (complete 2026-06-02, criterion-9 caveat inherited here)
+- `cross-repo-status.json` — live counters (`phase_4_*` keys)
+- noorinalabs-main#520 — the wave-10 stranding recovery executed at the P3/P4 boundary (14 PRs)

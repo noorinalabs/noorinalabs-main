@@ -24,6 +24,21 @@ Reviews may include: dependency concerns, timeline conflicts, release impact, st
 
 Only after both conditions are met does the Program Director signal that implementation may begin. This ensures the entire initiative is planned, visible, and vetted before any work starts.
 
+## Issue-Filing Premise Verification at Origin HEAD <!-- promotion-target: none -->
+
+<!-- Promoted from W15 retro proposed process change #1 (owner-approved 2026-06-02) -->
+
+**Any issue whose body cites a gap, bug, or missing feature in a repository's code MUST have that premise verified against the target repo's `origin/main` HEAD at filing time** — not against a sibling issue's body, a meta-issue snapshot, another repo's description of the gap, or memory of the codebase.
+
+Verification means at least one of:
+- `gh api "repos/noorinalabs/<repo>/contents/<path>?ref=main"` confirming the cited file/code state
+- `gh search code` / `gh api` grep confirming the claimed-missing symbol genuinely absent at HEAD
+- `git log origin/main -- <path>` confirming no later commit already addressed the gap
+
+**Why:** P3W15 incident — ig#943 was filed as a "new" isnad-graph gap from deploy#245's stale body snapshot; the work was already merged. Cost: a phantom scope row, an implementer reassignment, and a board repair. This is the issue-filing counterpart of the implementer-class `investigate-before-implement` rule and the reviewer-class `origin-over-local` rule: **every role class that asserts repository state verifies it at origin first.**
+
+This applies to ALL issue-filing surfaces: orchestrator, team members, `/file-bug`, and skills that auto-file issues.
+
 ## Wave Planning — Project Board Is Authoritative <!-- promotion-target: skill -->
 
 Wave and phase planning MUST begin with the full project board as the candidate pool, not with the subset of issues carrying a `p{N}-wave-{M}` label or listed in a meta-issue body.
