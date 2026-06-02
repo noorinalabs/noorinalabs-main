@@ -2,9 +2,10 @@
 name: Phase 3 plan — fix our tools, fix our deployment
 description: Phase definition, end-state criteria, exit gate, wave history
 phase: 3
-status: active
+status: complete
 created: 2026-04-30
-last_updated: 2026-05-31
+last_updated: 2026-06-02
+completed: 2026-06-02
 ---
 
 # Phase 3 — fix our tools, fix our deployment
@@ -67,6 +68,9 @@ Owner runs `/phase-review` and verifies all 9 end-state rows are `Done`, plus th
 | W10 | Tech-debt reduction (non-deploy remainder, 6 child repos + main) | 11 PRs across 5 repos (main 4, user-service 2, design-system 2, data-acquisition 2, landing-page 1); 0 admin overrides; retro adopted 3/4 process proposals (charter PR #444, Hook 21 #446) |
 | W11 | Tech debt & deployment (deploy entirety + main retro/audit follow-ups) | 86 PRs to wave-11 (deploy 46, main 16, isnad-graph 10, ingest 8, user-service 3, design-system 3); 16 ChangesRequested cycles; top-concentration 15% (Lucas, 13 PRs); deploy#348 close-out + #523/#524 coordination; **prod canonical-redirect LIVE** (.net/.org → .com); 3 charter changes adopted (close-on-verified-live, provider-validated apply-time acceptance, cwd-anchor fix epic) |
 | W12 | Tech-debt sweep + cross-cutting security/CI | 15 PRs (main 4, deploy 11); **0 ChangesRequested cycles** (cleanest in P3 history); 27% top-concentration (Lucas + Weronika tied at 4 each); plus 5 cross-cutting direct-to-main PRs (isnad-graph #933 starlette security, #930 node24, deploy #369/#370 vhost carve-out, main #538 hook fix); tier-1 #164 SSH key split (supersedes ADR 0003); node24 sweep complete across 5 repos (June 2 deadline met); 3 charter changes proposed (throttle-stall detection, hook test coverage, meta-issue freshness) — issues #542/#543/#544 |
+| W13 | Phase-3 end-state close-out + cross-repo schema rationalization | **Largest wave in P3 history**: 37 PRs across 5 repos, 18 implementers, 1 CR cycle (us#137 security catch); honest Tier-5 audit surfaced 4 unmet end-state criteria; #328 closed, #322/#326/#327 carried to W14 as `Refs` rollout trackers; criteria #3 (#325) + #7 (#328) closed |
+| W14 | Phase-3 end-state rollout + hook hardening + verify-and-close | 15 PRs (all 8 repos), 0 CR cycles; #570 child-roster Hook-4 fix held org-wide; #941 GHCR registry migration (Ingrid investigate-first standout); criteria #1 (#323), #2 (#324), #6 (#327), #8 (#329) closed via live-probe verification; staging promotion overridden (kafka residual → deploy#393) |
+| W15 | **Phase-3 Exit Close-out** | 26 PRs (all 8 repos) + 8 wave→main bundles + ig#950 hotfix; 1 CR cycle; **0 failing CI checks** (cleanest P3 wave); **8/8 branch-protection rulesets applied + verified at origin** (#322); CI-green audit closed (#326); TD cumulative 15.3–19.7% ≤ 20% (#330, with caveat); staging genuinely green end-to-end post-hotfix (run 26792138597); criteria #4, #5, #9 closed at `/phase-review` 2026-06-02 → **phase exit at 9/9** |
 
 12 of 12 waves were tooling/meta-loop (W3 had a small frontend feature; W11 shipped substantive deploy infrastructure — ADRs 0003/0004/0005, env restructure, SSH key split, cloud-init parity, backblaze bootstrap — but live-staging/production operational verification still unstarted). This is the gap that drove the 2026-05-08 phase reset and shapes W11 (deploy entirety), and re-surfaces at 2026-05-30 /phase-review as a still-open trajectory question (see § Trajectory reality check).
 
@@ -180,10 +184,41 @@ Three concrete proposals. Owner ratified Proposal B and C, held Proposal A. PR #
 
 ---
 
+## Phase exit record — 2026-06-02 (`/phase-review 3`)
+
+**Phase 3 is COMPLETE at 9/9 criteria, closed with one caveat (criterion #9).**
+
+| # | Criterion | Tracker | Closed | Closing evidence |
+|---|-----------|---------|--------|------------------|
+| 1 | Live staging environment | #323 | 2026-06-01 | W14 live-probe verification |
+| 2 | Live production environment | #324 | 2026-06-01 | W14 live-probe verification |
+| 3 | Wave-wrapup gates on stg promotion | #325 | 2026-05-31 | W13 #551 (staging-promotion gate in `/wave-wrapup`) |
+| 4 | CI failures block all merges | #322 | 2026-06-02 | **8/8 rulesets applied + read-back-verified at origin** (W15, owner-authorized) |
+| 5 | All committed artifacts pass all CI checks | #326 | 2026-06-02 | Org-wide CI-green audit at each repo's main HEAD (W15) |
+| 6 | Pre-commit + pre-push hooks every repo | #327 | 2026-06-01 | W14 org-wide rollout + sync-drift gate |
+| 7 | Hook/skill/charter ownership disambiguated | #328 | 2026-05-31 | W13 `artifact-ownership.md` (#559) |
+| 8 | Post-deploy smoke tests stg + prod | #329 | 2026-06-01 | W13 #383 stg-smoke battery + W14 verification |
+| 9 | Tech-debt ratio | #330 | 2026-06-02 | **Closed WITH CAVEAT** — see below |
+
+### Criterion #9 owner pivot (2026-06-02) — supersedes the 2026-05-31 "Proposal A HELD" stance
+
+> **Supersedes-as-of 2026-06-02:** the owner decisions below, made at W15 wrapup via session AskUserQuestion, supersede the 2026-05-31 "no softening" ruling recorded under § Spec revisions → Proposal A. This is an explicit, dated owner pivot — not a silent rewrite. The Proposal A text above is retained for audit trail.
+
+1. **Cumulative-open axis: ≤20% accepted for P3 exit.** Measured 15.3% at W15 wave-end (9/59 pooled) and 19.7% at `/phase-review` (12/61 — the drift is the retro itself filing 3 TD issues). The <10% figure remains the steady-state target carried into Phase 4.
+2. **New-filed axis: trailing-window interpretation.** The phase-to-date number (81.9%) is structurally fixed by history and cannot retroactively drop; the forward-looking signal is whether new filings taper as the meta-loop tapers. To be measured at Phase 4's first review.
+3. **Close-with-caveat:** criterion #9's "2 consecutive `/phase-review` runs" requirement is satisfied by run 1 = W15 wave-end + **run 2 = Phase 4's first `/phase-review`**, which must re-confirm cumulative ≤20% (trending toward <10%) and report the trailing-window new-filed ratio.
+
+### Carry-forward into Phase 4
+
+- **Open TD at close (12 issues):** main#595 (upsert update-key bug), main#596 (annunaki content-display noise), ig#947 (committed worktrees), da#65 (edge-key drift), deploy#398 (env-inventory refresh), deploy#402 (caddy/alloy healthchecks), + 6 pre-existing singles across deploy/ds/lp/da.
+- **Stale wave meta-issues never closed (cleanup):** main#331 (W8), #347 (W9), #424 (W10), #520 (W10 coordination).
+- **W15 retro proposed process changes (4)** awaiting owner approval — see `.claude/team/feedback_log.md` § Retrospective P3W15.
+- Phase 4's first `/phase-review` re-confirms criterion #9 (the caveat).
+
 ## Open questions
 
-- `/roadmap` skill build — scope for which wave?
-- Phase-4 spec definition — does P4 happen after P3 fully exits (slow), or after a partial-exit pivot (faster, requires Proposal A acceptance)?
+- ~~`/roadmap` skill build — scope for which wave?~~ → `/roadmap` runs next (Phase 4 definition).
+- ~~Phase-4 spec definition — does P4 happen after P3 fully exits (slow), or after a partial-exit pivot (faster, requires Proposal A acceptance)?~~ → Resolved: P3 fully exited 2026-06-02 (with the #9 caveat); P4 defined via `/roadmap`.
 
 ## References
 

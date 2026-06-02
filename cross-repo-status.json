@@ -1,4 +1,6 @@
 {
+  "phase_3_exit_record": {"criteria_closed":"9/9","caveat":"criterion #9 closed-with-caveat: Phase 4 first /phase-review re-confirms (cumulative <=20% trending to <10% + trailing-window new-filed)","cumulative_td_at_close":"12/61=19.7%","cumulative_td_wave_end":"9/59=15.3%","new_filed_phase_to_date":"286/349=81.9%","closed_by":"/phase-review 3 on 2026-06-02","owner_pivot":"2026-06-02 supersedes 2026-05-31 Proposal-A-HELD stance"},
+  "phase_3_completed_at": "2026-06-02T02:20:00Z",
   "wave_15_final_pr_count": 26,
   "wave_15_changes_requested_cycles": 1,
   "wave_15_top_concentration_pct": 15,
@@ -1950,7 +1952,7 @@
  "wave_1_length_estimate_days": "7-9",
  "wave_1_started_at": "2026-04-30T21:00:00Z",
  "phase_2_status": "CLOSED 2026-04-30. wave-10 final retro PR #230 merged 20:47:41Z. 5-repo wave-merge ceremony completed (#229 main, #74 landing, #851 isnad, #196 deploy, #89 user-service). 3 carry-forwards into phase-3: deploy#86 (async routine trig_01Bif8T51pdaYFjkbM5bERyL — fires post-merge), deploy#151 (manual SRE B2 tfstate-key migration), user-service#84 (manual DEPLOY_REPO_PAT secret). All p2-wave-* labels cleared from open issues; 218 open issues re-labeled `phase-3` across 8 repos.",
- "phase_3_status": "Phase 3 INITIATED 2026-04-30. No wave assigned yet (wave-1 to be planned). Backlog is the full set of 218 open issues across 8 repos labeled `phase-3`. User wants per-phase wave breakdown discussion before kicking off P3W1.",
+ "phase_3_status": "Phase 3 COMPLETE 2026-06-02 at 9/9 criteria (criterion #9 closed-with-caveat). All end-state issues #322-#330 closed. Exit record in .claude/team/phases/phase-3.md. Next: /roadmap for Phase 4.",
  "phase_3_backlog_by_repo": {
   "noorinalabs-deploy": 67,
   "noorinalabs-main": 50,
