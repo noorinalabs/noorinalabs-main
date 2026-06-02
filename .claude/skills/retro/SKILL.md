@@ -6,6 +6,8 @@ args: team_name
 
 Run a lightweight retrospective for the `{team_name}` team. This is a **mid-wave health check**, not a full end-of-wave retrospective. Use `/wave-retro` for the comprehensive end-of-wave engine with trust matrix updates and charter proposals.
 
+> See [`.claude/team/lifecycle.md`](../../team/lifecycle.md) § Wave Lifecycle for the canonical skill order and preconditions.
+
 > Note: all repo paths in bash blocks below are rooted at `$REPO_ROOT` to avoid cwd drift when the skill is invoked from a worktree or child-repo subdirectory (#149).
 
 ## When to use

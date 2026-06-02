@@ -6,6 +6,8 @@ args: team_name, Phase number, Wave number
 
 Run a retrospective for a completed wave of the `{team_name}` team.
 
+> See [`.claude/team/lifecycle.md`](../../team/lifecycle.md) § Wave Lifecycle for the canonical skill order and preconditions.
+
 ## Instructions
 
 ### 1. Ontology check

@@ -6,6 +6,8 @@ args: team_name, Phase number, Wave number
 
 Initialize infrastructure for a new wave. This is the **setup step** that creates the deployment branch and cleans up stale worktrees. For full wave planning with issue assignment and kickoff comments, use `/wave-kickoff` after this completes.
 
+> See [`.claude/team/lifecycle.md`](../../team/lifecycle.md) § Wave Lifecycle for the canonical skill order and preconditions.
+
 > Note: all repo paths in bash blocks below are rooted at `$REPO_ROOT` to avoid cwd drift when the skill is invoked from a worktree or child-repo subdirectory (#149).
 
 ## Instructions

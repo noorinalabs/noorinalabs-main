@@ -46,11 +46,11 @@ Both tracks must move together. Finishing only one is not phase exit.
 
 - Each wave's theme is **set by the owner** at `/wave-scope` time via dialogue. The skill blocks until a theme is recorded.
 - `/phase-review` runs **before** `/wave-scope` to surface what's done, what remains, and what's blocked — so theme picking is informed, not reactive.
-- Cross-phase review happens via `/roadmap` (mandatory before any phase transition).
+- Cross-phase review happens via `/plan-phase` (mandatory before any phase transition).
 
 ## Phase exit gate
 
-Owner runs `/phase-review` and verifies all 9 end-state rows are `Done`, plus the tech-debt ratio test (criterion 9) holds. On confirmation, owner runs `/roadmap` to define Phase 4 before any P4 wave can kick off.
+Owner runs `/phase-review` and verifies all 9 end-state rows are `Done`, plus the tech-debt ratio test (criterion 9) holds. On confirmation, owner runs `/plan-phase` to define Phase 4 before any P4 wave can kick off.
 
 ## Phase history — P3W1 to P3W9
 
@@ -217,8 +217,8 @@ Three concrete proposals. Owner ratified Proposal B and C, held Proposal A. PR #
 
 ## Open questions
 
-- ~~`/roadmap` skill build — scope for which wave?~~ → `/roadmap` runs next (Phase 4 definition).
-- ~~Phase-4 spec definition — does P4 happen after P3 fully exits (slow), or after a partial-exit pivot (faster, requires Proposal A acceptance)?~~ → Resolved: P3 fully exited 2026-06-02 (with the #9 caveat); P4 defined via `/roadmap`.
+- ~~`/plan-phase` skill build — scope for which wave?~~ → `/plan-phase` runs next (Phase 4 definition).
+- ~~Phase-4 spec definition — does P4 happen after P3 fully exits (slow), or after a partial-exit pivot (faster, requires Proposal A acceptance)?~~ → Resolved: P3 fully exited 2026-06-02 (with the #9 caveat); P4 defined via `/plan-phase`.
 
 ## References
 

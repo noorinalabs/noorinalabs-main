@@ -6,6 +6,8 @@ args: team_name, Phase number, Wave number
 
 Automate the wave kickoff process for the `{team_name}` team.
 
+> See [`.claude/team/lifecycle.md`](../../team/lifecycle.md) § Wave Lifecycle for the canonical skill order and preconditions.
+
 > Note: all repo paths in bash blocks below are rooted at `$REPO_ROOT` to avoid cwd drift when the skill is invoked from a worktree or child-repo subdirectory (#149).
 
 ## Instructions
