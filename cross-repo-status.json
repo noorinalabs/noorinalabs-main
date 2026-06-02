@@ -2,6 +2,10 @@
   "wave_15_final_pr_count": 26,
   "wave_15_changes_requested_cycles": 1,
   "wave_15_top_concentration_pct": 15,
+  "wave_15_completed_at": "2026-06-02T00:57:51Z",
+  "wave_15_stg_promotion": "overridden",
+  "wave_15_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/26791516331",
+  "wave_15_stg_promotion_override_rationale": "Kafka deploy#393 FIXED + live-verified (broker healthy / 5 topics / kafka-init green in run 26791516331 after owner-authorized volume re-bootstrap). Residual red = newly unmasked ig#949 (frontend runtime-config entrypoint vs read_only rootfs) - third staging onion layer; forward-fix only; filed with full diagnostic. All 15 other services Healthy.",
  "wave_15_scope_reconciled_at": "2026-06-01T05:40:00Z",
  "wave_15_repos_in_scope": [
   "noorinalabs-main",
@@ -3526,7 +3530,7 @@
  "wave_13_wrapped_up_at": "2026-05-31T21:15:00Z",
  "wave_13_annunaki_attack_ran_at": "2026-05-31T21:45:00Z",
  "wave_13_memory_audit_ran_at": "2026-05-31T21:45:00Z",
- "wave_15_active": true,
+ "wave_15_active": false,
  "wave_15_kicked_off_at": "2026-06-01T22:39:41Z",
  "wave_15_started_at": "2026-06-01T22:39:41Z",
  "wave_15_branches": {
