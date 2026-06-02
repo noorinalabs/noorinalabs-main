@@ -339,7 +339,12 @@ def run(cmd, **kw):
     return subprocess.run(cmd, capture_output=True, text=True, **kw)
 
 
-results = {"labeled": [], "label_failed": [], "commented": [], "comment_failed": []}
+results: dict[str, list] = {
+    "labeled": [],
+    "label_failed": [],
+    "commented": [],
+    "comment_failed": [],
+}
 
 for repo, num, assignee, branch, revs, tier, bundled, wave_bs in ISSUES:
     # Step 1: label
@@ -368,7 +373,7 @@ for repo, num, assignee, branch, revs, tier, bundled, wave_bs in ISSUES:
         " (single-reviewer per wave-bootstrap exception)" if wave_bs else ""
     )
     body = f"""Requestor: Nadia.Khoury
-Requestee: {assignee.replace('_', '.').title().replace('Mwangi', 'Mwangi').replace('Khoury', 'Khoury')}
+Requestee: {assignee.replace("_", ".").title().replace("Mwangi", "Mwangi").replace("Khoury", "Khoury")}
 RequestOrReplied: Request
 
 **Wave 4 Kickoff — Phase 3**

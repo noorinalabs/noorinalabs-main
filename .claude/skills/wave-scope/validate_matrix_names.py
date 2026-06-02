@@ -179,7 +179,8 @@ def _print_report_to_stderr(report: dict[str, list[dict[str, object]]]) -> int:
             continue
         print(f"\n  {repo}:", file=sys.stderr)
         for f in bad:
-            suggestions = f.get("suggestions") or []
+            raw_suggestions = f.get("suggestions")
+            suggestions = raw_suggestions if isinstance(raw_suggestions, list) else []
             sug_str = ", ".join(suggestions) if suggestions else "(no close matches)"
             print(
                 f"    - {f['role']}: {f['declared']!r}  →  suggestions: {sug_str}",
