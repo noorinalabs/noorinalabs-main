@@ -116,9 +116,9 @@
       "tracked_at": "2026-04-23T03:07:42.694189+00:00"
     },
     ".claude/skills/wave-retro/SKILL.md": {
-      "last_tracked": "7f0eb66cbefbae94a4b9276ae901dbbb217435ab9765500b5d10b79801730e4b",
+      "last_tracked": "00b40976619ae7eade8ac1ca5ef1aae992a771e6c7695ae39121c3fc2ec07e46",
       "last_resolved": "7f0eb66cbefbae94a4b9276ae901dbbb217435ab9765500b5d10b79801730e4b",
-      "tracked_at": "2026-05-06T01:04:58.032514+00:00",
+      "tracked_at": "2026-06-02T13:30:31.838248+00:00",
       "resolved_at": "2026-05-06T01:07:41.670330+00:00"
     },
     ".claude/skills/wave-wrapup/SKILL.md": {
@@ -146,10 +146,10 @@
       "tracked_at": "2026-05-11T01:41:41.840576+00:00"
     },
     ".claude/team/charter/issues.md": {
+      "last_tracked": "6b7e6f24cb140b969df2451db832dad5ac4cbaabe517672fd8590549546f6fc8",
       "last_resolved": "60744ea8009688aa75481b9d908968fe3fc8162c597c04889635dc603140da95",
-      "last_tracked": "60744ea8009688aa75481b9d908968fe3fc8162c597c04889635dc603140da95",
-      "resolved_at": "2026-04-23T23:34:47.340707+00:00",
-      "tracked_at": "2026-04-23T03:27:45.739038+00:00"
+      "tracked_at": "2026-06-02T13:30:25.811795+00:00",
+      "resolved_at": "2026-04-23T23:34:47.340707+00:00"
     },
     ".claude/team/charter/pull-requests.md": {
       "last_tracked": "df75d7e64166855e0f12591358e64d06a34c2d782db742caf15e857fff86b872",
@@ -1331,6 +1331,12 @@
       "last_tracked": "15b3d7cfe3bf0ccef6f1a23f966fa881dcba05b243dd377d2761c9e96523eeda",
       "last_resolved": "",
       "tracked_at": "2026-06-02T01:54:08.205888+00:00",
+      "resolved_at": ""
+    },
+    ".claude/team/phases/phase-4.md": {
+      "last_tracked": "914ebd905e22263639ab5eb1b19b5da82d3a69f64e049a26bf4ce36632bfb692",
+      "last_resolved": "",
+      "tracked_at": "2026-06-02T13:31:01.556572+00:00",
       "resolved_at": ""
     }
   },

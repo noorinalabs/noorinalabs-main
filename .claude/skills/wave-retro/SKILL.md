@@ -59,6 +59,8 @@ fi
 
 **Acceptance:** Step 3 (gather review comments) does not begin until every numeric counter in `wave_{M}_*` either matches the PR-level recomputation OR has a `wave_{M}_counter_corrections` entry recording the gap.
 
+**CR-cycle counter semantics — wrapup-time count is authoritative-historic (added P3W15 retro change #4, owner-approved 2026-06-02):** `changes_requested_cycles` recomputation from *current* comment state will under-count whenever a ChangesRequested verdict was later edited-in-place to Approved (which is exactly what charter `pull-requests.md` § verdict-amendment requires after fixes land). The two rules collide by design: the amendment rule rewrites history's surface; the recomputation reads only that surface. **Resolution:** when recomputed < claimed AND the gap is fully explained by edit-in-place verdicts (verify via the PR's review timeline or the wrapup-time record), the **claimed (wrapup-time) value stands as authoritative-historic**. Record a `wave_{M}_counter_corrections` entry documenting the measurement conflict — do NOT "correct" the historical count downward. Worked example: P3W15 claimed 1 CR cycle (Nino→Aisha, deploy#396); retro recomputation found 0 because the verdict was edited to Approved; the claimed 1 stood.
+
 ### 3. Gather review comments and CI data
 
 For each merged PR:

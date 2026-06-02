@@ -1,4 +1,9 @@
 {
+  "current_phase": "phase-4",
+  "phase_4_wave_1_meta_issue": 608,
+  "phase_4_criteria_issues": [601,602,603,604,605,606,607],
+  "phase_4_started_at": "2026-06-02T03:45:00Z",
+  "phase_4_status": "Phase 4 ACTIVE (started 2026-06-02). Theme: light up the product. 7 end-state criteria #601-#607. W1 meta #608 (clean slate). Plan doc: .claude/team/phases/phase-4.md",
   "phase_3_exit_record": {"criteria_closed":"9/9","caveat":"criterion #9 closed-with-caveat: Phase 4 first /phase-review re-confirms (cumulative <=20% trending to <10% + trailing-window new-filed)","cumulative_td_at_close":"12/61=19.7%","cumulative_td_wave_end":"9/59=15.3%","new_filed_phase_to_date":"286/349=81.9%","closed_by":"/phase-review 3 on 2026-06-02","owner_pivot":"2026-06-02 supersedes 2026-05-31 Proposal-A-HELD stance"},
   "phase_3_completed_at": "2026-06-02T02:20:00Z",
   "wave_15_final_pr_count": 26,
