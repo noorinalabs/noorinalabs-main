@@ -28,12 +28,31 @@ Phase 4 is that re-opening. Three tracks:
 | 3 | **Admin surface complete** — user mgmt via user-service, data management panel, pipeline controls | noorinalabs-main#603 |
 | 4 | **Zero carry-forward bugs** — us#65/#73/#74, lp#69 closed | noorinalabs-main#604 |
 | 5 | **Security follow-ups closed** — deploy#386/#384/#244, ig#955 | noorinalabs-main#605 |
-| 6 | **Tech-debt <10% cumulative** — resolves the P3 criterion-9 caveat (≤20% re-confirmed at first review; <10% by exit; holds 2 consecutive reviews) | noorinalabs-main#606 |
+| 6 | **Tech-debt <10% cumulative** — resolves the P3 criterion-9 caveat (first-review gate measured over → owner waiver + re-baseline 2026-06-02; ≤20% hard re-measure at W1 wrapup; <10% by exit, re-baselined methodology; holds 2 consecutive reviews) | noorinalabs-main#606 |
 | 7 | **P3 retro process changes applied + verified** — all 4 owner-approved changes dispositioned | noorinalabs-main#607 |
 
-## The Phase-3 criterion-9 caveat (inherited obligation)
+## The Phase-3 criterion-9 caveat (inherited obligation) — RESOLVED 2026-06-02
 
 Phase 3 closed at 9/9 **with a caveat** (see `phase-3.md` § Phase exit record): criterion #9's "2 consecutive `/phase-review` runs" requirement is satisfied by run 1 = P3W15 wave-end + **run 2 = Phase 4's first `/phase-review`**, which MUST re-confirm cumulative ≤20% (trending toward <10%) and report the trailing-window new-filed ratio. This re-confirmation is a **blocking precondition for Phase 4 Wave 1 kickoff** — it happens at the `/phase-review 4` that precedes `/wave-scope 4 1`.
+
+**Resolution (2026-06-02, `/phase-review 4`):** the re-confirmation ran; the gate measured **over** (raw 22.2%,
+re-baselined 23.6%) due to denominator shrinkage from P3 closures, not new debt. The owner re-baselined the
+methodology (`meta-issue`-labeled scaffolding excluded from all TD-ratio measurements) and **waived the kickoff
+block**, on the grounds that W1 "Clean slate" is itself the burn-down remedy. Conditions of the waiver:
+
+- The ≤20% gate (re-baselined) is **re-measured at P4W1 `/wave-wrapup` as a hard block** — no second waiver.
+- Criterion #6 (main#606) inherits the re-baselined methodology for its <10% exit gate.
+
+Full record: `phase-3.md` § Criterion #9 caveat resolution.
+
+### TD-ratio measurement methodology (re-baselined 2026-06-02)
+
+All Phase-4 TD-ratio measurements (criterion #6, wave-wrapup gates, phase reviews) use:
+
+```
+TD ratio = (open issues labeled tech-debt AND NOT meta-issue)
+         / (open issues NOT labeled meta-issue)        — pooled across all 8 repos
+```
 
 ## Wave plan (proposed at /plan-phase, owner-approved 2026-06-02)
 
@@ -41,8 +60,8 @@ Phase 3 closed at 9/9 **with a caveat** (see `phase-3.md` § Phase exit record):
 |------|-------|---------------|
 | **W1** | **Clean slate** — bugs + security + TD burn-down | All 4 live bugs, 4 security follow-ups, 12 TD carry-forwards. Meta-issue: noorinalabs-main#608. Serves criteria 4/5/6. |
 | **W2** | **First light** — pipeline end-to-end | main#139 (keystone), main#136, da#21/#26/#65, ingest#2. Serves criterion 1. |
-| **W3** | **Open the doors** — product surface | Admin cluster (ig#804/#805/#806, main#138), us#43 email login, ig#703 i18n, lp#46 Team page, ig#721 geo filtering. Serves criteria 2/3. |
-| **W4** | **Phase exit** — verification + close-out | Production data verification, criterion audit, phase retro. Spillover buffer. |
+| **W3** | **Open the doors** — product surface | Admin cluster (ig#804/#805/#806, main#138), us#43 email login, ig#703 i18n, lp#46 Team page, ig#721 geo filtering, **deploy#388 secrets-manager ADR (owner decision, scheduled 2026-06-02)**. Serves criteria 2/3. |
+| **W4** | **Phase exit** — verification + close-out | Production data verification, criterion audit, phase retro, **deploy#387 password-rotation automation (depends on #388 ADR)**. Spillover buffer. |
 
 Wave themes are confirmed (not re-chosen) at each `/wave-scope`; scope reconciliation may move issues between waves.
 
@@ -52,7 +71,7 @@ Wave themes are confirmed (not re-chosen) at each `/wave-scope`; scope reconcili
 - **CDN + performance ops** (ig#706/#711/#712, lp#33/#34/#35, deploy#12) — optimize after real traffic exists
 - **Developer portal** (lp#42, deploy#19), **notifications** (ig#704), **visual-asset sourcing** (ig#719, lp#37, ds#24)
 - **Playwright live-site automation** (main#56/#57)
-- **Secrets-manager ADR + rotation automation** (deploy#387/#388) — owner-gated decisions
+- ~~**Secrets-manager ADR + rotation automation** (deploy#387/#388)~~ → **re-dispositioned 2026-06-02: scheduled into W3 (#388) + W4 (#387)** per owner decision at first `/phase-review`
 - **Hetzner sizing analysis** (main#142) — revisit when pipeline load is real
 
 ## Phase exit gate
