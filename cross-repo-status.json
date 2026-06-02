@@ -1,4 +1,8 @@
 {
+  "wave_1_scope_reconciled_at": "2026-06-02T16:10:00Z",
+  "wave_1_repos_in_scope": ["noorinalabs-main","noorinalabs-isnad-graph","noorinalabs-user-service","noorinalabs-deploy","noorinalabs-design-system","noorinalabs-landing-page","noorinalabs-data-acquisition"],
+  "wave_1_meta_issue": 608,
+  "wave_1_scope": {"theme": "Clean slate — bugs + security + tech-debt burn-down","tier_1_bugs": [{"id": "noorinalabs-user-service#65","ref": "user-service#65","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "bug"},{"id": "noorinalabs-user-service#73","ref": "user-service#73","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "bug"},{"id": "noorinalabs-user-service#74","ref": "user-service#74","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "bug"},{"id": "noorinalabs-landing-page#69","ref": "landing-page#69","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "bug"}],"tier_2_security": [{"id": "noorinalabs-deploy#386","ref": "deploy#386","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "security"},{"id": "noorinalabs-deploy#384","ref": "deploy#384","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "security"},{"id": "noorinalabs-isnad-graph#955","ref": "isnad-graph#955","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "security"},{"id": "noorinalabs-deploy#244","ref": "deploy#244","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "security"}],"tier_3_tech_debt": [{"id": "noorinalabs-main#595","ref": "main#595","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "tech-debt"},{"id": "noorinalabs-main#596","ref": "main#596","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "tech-debt"},{"id": "noorinalabs-isnad-graph#947","ref": "isnad-graph#947","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "tech-debt"},{"id": "noorinalabs-data-acquisition#65","ref": "data-acquisition#65","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "tech-debt"},{"id": "noorinalabs-deploy#395","ref": "deploy#395","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "tech-debt"},{"id": "noorinalabs-deploy#398","ref": "deploy#398","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "tech-debt"},{"id": "noorinalabs-deploy#402","ref": "deploy#402","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "tech-debt"},{"id": "noorinalabs-design-system#94","ref": "design-system#94","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "tech-debt"},{"id": "noorinalabs-landing-page#43","ref": "landing-page#43","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "tech-debt"},{"id": "noorinalabs-landing-page#73","ref": "landing-page#73","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "tech-debt"},{"id": "noorinalabs-deploy#86","ref": "deploy#86","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "tech-debt"},{"id": "noorinalabs-design-system#54","ref": "design-system#54","implementer": null,"reviewer": null,"reviewer_2": null,"priority": "tech-debt"}],"deliberately_not_in_w1": ["noorinalabs-main#136 (W2 — pipeline integration tests)","noorinalabs-deploy#388 (W3 — secrets-manager ADR)","noorinalabs-deploy#387 (W4 — rotation automation, depends on #388)"],"hard_gate": "Cumulative TD ratio ≤20% re-measure (re-baselined methodology: meta-issue-labeled excluded, pooled 8 repos) at /wave-wrapup — no second waiver (PR #610)","sequencing_constraints": ["isnad-graph#955 gated on us#147 deploy","deploy#384+#386 land together (scrape/block pair)","deploy#244 has owner-action component (PR-time vs runtime acceptance split)"]},
   "td_ratio_methodology": "exclude meta-issue-labeled from numerator and denominator, pooled 8 repos (owner re-baseline 2026-06-02)",
   "phase_3_criterion9_caveat_outcome": "gate over (raw 22.2%, re-baselined 23.6%) — owner re-baseline (meta-issue scaffolding excluded) + waiver; hard re-measure at P4W1 wrapup",
   "phase_3_criterion9_caveat_resolved_at": "2026-06-02T15:41:06Z",
@@ -1718,7 +1722,6 @@
  "wave_3_kicked_off_at": "2026-05-03T17:55:00Z",
  "wave_3_wrap_status": "CLOSED 2026-05-04T02:35Z. All 14 wave-3 PRs dual-Approved + merged into wave-3 branches across 5 repos (user-service, deploy, isnad-graph, landing-page, main). 5 wave-merge PRs (deployments/phase-3/wave-3 → main) merged in deploy-order: user-service#93 (05d644e) → deploy#270 (c7cfabf) → isnad-graph#856 (bbf7073) → landing-page#76 (4131630) → main#243 (cc6e589). Merges used --admin override for the 2-reviewer hook (validate_pr_review.py treats Requestee as reviewer, mismatched with the wave's Requestee=author format; orchestrator follow-up filed). Pattern B (verify-vs-artifact) crossed 5+ wave-instances across 3 role classes — charter promotion threshold met. 6 orchestrator-class gaps caught by hooks/implementers/reviewers (wave-branch creation, deploy#242 attribution, child-repo-implementer rule for landing-page + user-service, 2-reviewer planning, agent-naming pattern, spawn-brief-reviewer-order-inversion). Wave-completion batch (T2/T3): #266 ChangesRequested → user-service#92 cross-repo Option A → re-Approved; #259 ChangesRequested → 2-line path-A → Approved; #261 ChangesRequested → 14-line perms+runbook → Approved; #267 ChangesRequested → 49-line workflow-input + failure-modes → Approved.",
  "phase": "phase-3",
- "wave_1_completed_at": "2026-05-01T01:49:41Z",
  "wave_3_planned": true,
  "wave_3_planned_at": "2026-05-03T00:00:00Z",
  "wave_3_theme": "Post-emergency stabilization + frontend-API absolute-URLs phase 2",
@@ -1879,87 +1882,8 @@
   "post_w3_addendum": "After W3 close, do cross-repo phase-3 re-plan that brings child-repo backlogs into multi-repo coordinated waves (parent meta-issue + per-repo issue clusters per CLAUDE.md § Cross-Repo Coordination). Pattern documented; not yet exercised in P3."
  },
  "wave_started": "2026-04-30T21:00:00Z",
- "wave_1_wrap_started": "2026-04-30T23:18:00Z",
- "wave_1_wrap_status": "CLOSED 2026-05-01T01:49:41Z. Both wave-merge PRs landed (deploy#213 merge-commit b6f2cd1; main#235 merge-commit 9a1ef3e). 5/5 Tier-1 + 2/2 Tier-2 + #205 followup-of-spec + #214 wave-tail flake fix (#215 retry-with-backoff JSON-parse classifier) all on main. 8 deploy worktrees pruned. 2 ontology files resolved. 4 charter deltas landed (Patterns A + B unified + C + D). Trust matrix updated (Lucas 4→5; others hold). Promotion audit 0/0/55/4. Wave-tail produced 5 additional retro-pattern data points stress-testing the just-landed charter; all four patterns held. 9 follow-ups filed for next-wave planning (#199 #200 #203 #204 #209 #211 #212 + main#232 + main#233 + main#234). 3 Tier-3 carry-forwards remain operationally gated (deploy#86 async-routine fires post-this-merge; deploy#151 manual SRE B2 tfstate-key migration; user-service#84 manual SRE DEPLOY_REPO_PAT secret).",
  "last_updated": "2026-05-31T16:38:11Z",
  "deployments_branch": "deployments/phase-3/wave-3",
- "wave_1_theme": "Promotion pipeline goes prod — owner directive: pipeline running seamlessly so team can refocus on product + process",
- "wave_1_scope": {
-  "tier_1_core_promotion_pipeline": [
-   {
-    "id": "noorinalabs-deploy#178",
-    "title": "integration-tests remote-mode for post-deploy validation",
-    "assignee": "Aisha Idrissi",
-    "reviewer": "Lucas Ferreira"
-   },
-   {
-    "id": "noorinalabs-deploy#179",
-    "title": "promote.yml gates prod-promote on latest stg verify-deploy",
-    "assignee": "Aisha Idrissi",
-    "reviewer": "Lucas Ferreira"
-   },
-   {
-    "id": "noorinalabs-deploy#160",
-    "title": "wire db-migrate.yml into promote/deploy-stg/deploy-prod",
-    "assignee": "Lucas Ferreira",
-    "reviewer": "Aisha Idrissi"
-   },
-   {
-    "id": "noorinalabs-deploy#67",
-    "title": "Rollback workflow missing user-service and landing targets",
-    "assignee": "Lucas Ferreira",
-    "reviewer": "Aisha Idrissi"
-   },
-   {
-    "id": "noorinalabs-deploy#73",
-    "title": "Verify-deploy workflow only triggers after isnad-graph",
-    "assignee": "Lucas Ferreira",
-    "reviewer": "Aisha Idrissi"
-   }
-  ],
-  "tier_2_visibility": [
-   {
-    "id": "noorinalabs-deploy#161",
-    "title": "alembic pre-deploy gate textfile metrics",
-    "assignee": "Aisha Idrissi",
-    "reviewer": "Bereket Tadesse"
-   },
-   {
-    "id": "noorinalabs-deploy#183",
-    "title": "blackbox-exporter for continuous prod-route probing",
-    "assignee": "Weronika Zielinska",
-    "reviewer": "Bereket Tadesse"
-   }
-  ],
-  "tier_3_carry_forwards": [
-   {
-    "id": "noorinalabs-deploy#86",
-    "type": "async-routine",
-    "routine_id": "trig_01Bif8T51pdaYFjkbM5bERyL",
-    "assignee": "Nadia Khoury (tracker)",
-    "reviewer": "Bereket Tadesse"
-   },
-   {
-    "id": "noorinalabs-deploy#151",
-    "type": "manual-sre",
-    "assignee": "Aisha Idrissi",
-    "reviewer": "Bereket Tadesse"
-   },
-   {
-    "id": "noorinalabs-user-service#84",
-    "type": "manual-sre",
-    "assignee": "Mateo Salazar",
-    "reviewer": "Anya Kowalczyk"
-   }
-  ],
-  "stretch_if_tier_1_2_finishes_early": [
-   "noorinalabs-deploy#192 (apply CF stg subdomain TF)",
-   "noorinalabs-deploy#194 (B2 lifecycle rule on noorinalabs-terraform-state)",
-   "noorinalabs-main#200 (wave-branch pull_request triggers retro)"
-  ]
- },
- "wave_1_length_estimate_days": "7-9",
- "wave_1_started_at": "2026-04-30T21:00:00Z",
  "phase_2_status": "CLOSED 2026-04-30. wave-10 final retro PR #230 merged 20:47:41Z. 5-repo wave-merge ceremony completed (#229 main, #74 landing, #851 isnad, #196 deploy, #89 user-service). 3 carry-forwards into phase-3: deploy#86 (async routine trig_01Bif8T51pdaYFjkbM5bERyL — fires post-merge), deploy#151 (manual SRE B2 tfstate-key migration), user-service#84 (manual DEPLOY_REPO_PAT secret). All p2-wave-* labels cleared from open issues; 218 open issues re-labeled `phase-3` across 8 repos.",
  "phase_3_status": "Phase 3 COMPLETE 2026-06-02 at 9/9 criteria (criterion #9 closed-with-caveat). All end-state issues #322-#330 closed. Exit record in .claude/team/phases/phase-3.md. Next: /roadmap for Phase 4.",
  "phase_3_backlog_by_repo": {
