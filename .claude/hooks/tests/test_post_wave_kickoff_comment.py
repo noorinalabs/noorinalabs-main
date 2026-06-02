@@ -321,6 +321,74 @@ class FindAssignmentRowTests(unittest.TestCase):
         row = hook.find_assignment_row(status, "noorinalabs-main", "1", 9)
         self.assertEqual(row["implementer"], "Y")
 
+    def test_dict_row_short_ref_match(self):
+        """#586: dict row keyed by `ref` (short form) matches even without `id`."""
+        status = {
+            "wave_9_scope": {
+                "tier_1_x": [
+                    {"ref": "main#322", "implementer": "Wanjiku Mwangi"},
+                ]
+            }
+        }
+        row = hook.find_assignment_row(status, "noorinalabs-main", "322", 9)
+        self.assertEqual(row["implementer"], "Wanjiku Mwangi")
+
+    def test_dict_row_full_id_preferred_when_both_present(self):
+        """A dict row with both `id` (full) and `ref` (short) is matched on either."""
+        status = {
+            "wave_9_scope": {
+                "tier_1_x": [
+                    {"id": "noorinalabs-deploy#393", "ref": "deploy#393", "implementer": "Lucas"},
+                ]
+            }
+        }
+        # Full-name caller resolves via id; the synthesized short-ref also resolves.
+        row = hook.find_assignment_row(status, "noorinalabs-deploy", "393", 9)
+        self.assertEqual(row["implementer"], "Lucas")
+
+    def test_legacy_plain_string_short_ref_fallback(self):
+        """#586: bare short-ref string entries (the pre-conversion /wave-scope
+        shape) synthesize a placeholder row instead of silently skipping."""
+        status = {
+            "wave_14_scope": {
+                "tier_1_end_state_rollout": ["main#322", "main#329"],
+                "tier_4_remainder": ["main#560"],
+            }
+        }
+        row = hook.find_assignment_row(status, "noorinalabs-main", "560", 14)
+        self.assertIsNotNone(row)
+        self.assertEqual(row["id"], "noorinalabs-main#560")
+        self.assertEqual(row["ref"], "main#560")
+        # No implementer/reviewer in the synthesized row → render shows placeholders.
+        self.assertNotIn("implementer", row)
+
+    def test_legacy_plain_string_no_match_returns_none(self):
+        """A plain-string tier with no matching short-ref still returns None."""
+        status = {"wave_14_scope": {"tier_1": ["main#322", "deploy#393"]}}
+        self.assertIsNone(hook.find_assignment_row(status, "noorinalabs-main", "999", 14))
+
+    def test_dict_row_wins_over_plain_string(self):
+        """When both a dict row and a plain string could match, the dict (with
+        real implementer data) is returned, not the placeholder synthesis."""
+        status = {
+            "wave_14_scope": {
+                "tier_1_strings": ["main#322"],
+                "tier_2_dicts": [{"id": "noorinalabs-main#322", "implementer": "REAL"}],
+            }
+        }
+        row = hook.find_assignment_row(status, "noorinalabs-main", "322", 14)
+        self.assertEqual(row["implementer"], "REAL")
+
+    def test_synthesized_row_renders_with_unassigned_placeholders(self):
+        """End-to-end #586: a plain-string match flows through render with
+        `(unassigned)` slots rather than producing a silent skip."""
+        status = {"wave_14_scope": {"tier_1": ["main#322"]}}
+        row = hook.find_assignment_row(status, "noorinalabs-main", "322", 14)
+        body = hook.render_kickoff_comment(row, wave_num=14, phase_num=3, repo="noorinalabs-main")
+        self.assertIn("Requestee: (unassigned)", body)
+        self.assertIn("- Peer reviewer: (unassigned)", body)
+        self.assertIn("- Secondary reviewer: (unassigned)", body)
+
 
 class RenderKickoffCommentTests(unittest.TestCase):
     """Direct coverage of comment body rendering."""

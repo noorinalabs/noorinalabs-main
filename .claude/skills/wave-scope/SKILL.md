@@ -434,7 +434,7 @@ The helper writes **four** keys (added P3W5 #273; structured-keys triplet added 
 | `wave_{M}_scope_reconciled_at` | `$TS` — UTC ISO timestamp captured at write time | string |
 | `wave_{M}_repos_in_scope` | the canonical 8-repo `REPOS` array from Step 4, optionally overridden by `WAVE_SCOPE_REPOS` (space-separated repo names) when a wave deliberately excludes a repo | array of strings |
 | `wave_{M}_meta_issue` | `$META_ISSUE` from Step 3 | integer |
-| `wave_{M}_scope` | from `WAVE_SCOPE_STRUCTURED` env var (a JSON object the orchestrator built from the meta-issue body — tier_*_*, deliberately_not_in_w*, concentration metrics, etc.) — falls back to a minimal `{"declared_refs": [...], "carry_forwards": [...], "must_includes": [...]}` shape derived from steps 1-3 if the env var is unset | object |
+| `wave_{M}_scope` | from `WAVE_SCOPE_STRUCTURED` env var (a JSON object the orchestrator built from the meta-issue body — tier_*_*, deliberately_not_in_w*, concentration metrics, etc.) — falls back to a minimal `{"declared_refs": [...], "carry_forwards": [...], "must_includes": [...]}` shape derived from steps 1-3 if the env var is unset. **`tier_*_*` arrays MUST hold assignment-row dicts, not bare short-ref strings — see § 13.1.** | object |
 
 **Why not raw jq:** `jq ... > tmp && mv` round-trips reformat the entire file from compact-inline (the deliberate shape used by `/wave-kickoff` and `/wave-start` for `wave_{N}_*` keys) to jq's default pretty form, doubling line count and producing a 500+ line cosmetic diff per run. P3W5 PR #276 review flagged this as load-bearing. The targeted upsert helper below preserves the existing shape — replace-in-place when the key exists (zero churn), insert-near-sibling when it doesn't (delta = 1 line per new key).
 
@@ -548,6 +548,32 @@ The helper validates JSON pre- and post-write, replaces top-level keys in place 
 The optional `wave_{M}_scope_reconciliation_note` is for capturing edge cases (e.g., "no drift; no memory must-includes; manual run because skill not yet built"). Set `SCOPE_RECONCILIATION_NOTE` in the environment before invoking the helper if there is a non-trivial summary worth preserving for the next retro.
 
 The companion read-side check is `/wave-kickoff` SKILL.md § 0a — it stops kickoff if this timestamp is missing or predates the prior wave's retro.
+
+### 13.1. Tier-row shape — assignment-row dicts, not bare strings (#586)
+
+The `tier_*_*` arrays inside `wave_{M}_scope` are consumed by the `post_wave_kickoff_comment.py` PostToolUse hook (Hook: kickoff-comment), which renders a per-issue charter-format kickoff comment when the wave label is applied. The hook's `find_assignment_row` matches an issue to its row by `id` / `ref`, then reads `implementer` / `reviewer` / `reviewer_2` / `priority` off that row to fill the comment.
+
+Each tier entry MUST therefore be an **assignment-row dict**, not a bare short-ref string:
+
+```json
+{
+  "id": "noorinalabs-main#322",
+  "ref": "main#322",
+  "implementer": "Wanjiku Mwangi",
+  "reviewer": "Santiago Ferreira",
+  "reviewer_2": "Aino Virtanen",
+  "priority": "tech-debt"
+}
+```
+
+- **`id`** — full repo name + `#<num>` (`noorinalabs-<repo>#<num>`). This is the hook's primary match key.
+- **`ref`** — short form (`<repo>#<num>`, org prefix stripped). Convenience for human-readable scope review; the hook also matches on this.
+- **`implementer` / `reviewer` / `reviewer_2`** — may be `null` at scope time if the slate is not yet decided; `/wave-kickoff` Step 0.4 fills them. The hook renders `(unassigned)` for any missing slot rather than blanking the bullet.
+- **`priority`** — optional; defaults to `feature` in the rendered comment.
+
+**Why dicts and not strings (the #586 regression).** `/wave-scope` historically wrote tier entries as plain short-ref strings (`["main#322", "deploy#363", …]`). The hook only matched dict rows, so every per-issue kickoff comment was silently skipped — this bit both W14 and W15 (zero auto-posted kickoff comments until the W15 orchestrator hand-converted the tiers, commit `3d2387c`). Emitting dict rows here is the source-of-truth fix; the hook additionally degrades gracefully on any residual plain-string entry (synthesizes a placeholder row, posts with `(unassigned)` slots) so the failure mode is a visible-and-backfillable comment, never a silent skip.
+
+When building `WAVE_SCOPE_STRUCTURED`, construct each tier as an array of these dicts. If the implementer/reviewer matrix (§ 12.5) is already validated, fold its names directly into the rows so kickoff has nothing to backfill.
 
 ## Relationship to other wave skills
 
