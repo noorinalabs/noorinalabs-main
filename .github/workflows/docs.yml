@@ -16,6 +16,13 @@ on:
       - "**/*.md"
       - "**/*.yaml"
       - "**/*.yml"
+      # `**/*.json` keeps the config-lint trigger aligned with the job's own
+      # scope (it parses every committed .json recursively). The prior list
+      # only caught .json under ontology/ + .claude/team/ + .cspell.json, so
+      # root cross-repo-status.json — the org's highest-churn JSON, edited
+      # every wave-scope/kickoff/wrapup — plus .claude/{settings,hooks
+      # fixtures,skills fixtures}/*.json merged with NO syntax gate (#613).
+      - "**/*.json"
       - "ontology/**"
       - ".claude/team/**"
       - ".markdownlint-cli2.jsonc"
@@ -29,6 +36,9 @@ on:
       - "**/*.md"
       - "**/*.yaml"
       - "**/*.yml"
+      # See push.paths note above (#613): `**/*.json` aligns the trigger with
+      # the config-lint job's recursive .json scope.
+      - "**/*.json"
       - "ontology/**"
       - ".claude/team/**"
       - ".markdownlint-cli2.jsonc"
