@@ -19,6 +19,9 @@ Input Language:
                   is a non-zero exit code, probe-with-fallback idioms (#517 —
                   exit=0 + `2>&1` + (`||` OR `| head`/`| tail`) when the ONLY
                   matched pattern is `stdout:No such file or directory`),
+                  content-display commands (#596 — exit=0 cat/head/tail/less,
+                  `gh api .../contents/...`, or a read of errors.jsonl when the
+                  ONLY signals are stdout-pattern matches in displayed content),
                   session-dedup hits
   Flag pass-through: stdin JSON is forwarded verbatim to `check()` by the
                      PostToolUse dispatcher (`post_dispatcher.py`)
@@ -135,6 +138,122 @@ SILENT_BOOLEAN_TEST_PATTERNS_BY_EXIT_CODE = [
 PROBE_WITH_FALLBACK_STDOUT_MERGE = re.compile(r"2>&1")
 PROBE_WITH_FALLBACK_TRAILERS = re.compile(r"\|\||\|\s*head\b|\|\s*tail\b")
 PROBE_WITH_FALLBACK_ONLY_PATTERN = "stdout:No such file or directory"
+
+# Content-display false positives (#596): commands that DISPLAY file/record
+# content which itself contains error-shaped strings (e.g. `cat` of a Python
+# source file with `except ImportError:`, `gh api .../contents/...` echoing
+# source that contains `except ValueError:`, displaying errors.jsonl whose
+# records contain "Traceback"). The command succeeded (exit 0) and only emits
+# the requested content — the matched pattern lives in the *displayed content*,
+# not in a real failure. ~25% of W15-window captures were this class, plus the
+# meta-capture case where the retro displayed the error log itself.
+#
+# Distinct from #517 (probe-with-fallback): that fires on an `ls`/`cat` of a
+# MISSING path whose "No such file or directory" stderr is merged onto stdout
+# via `2>&1` + a fallback trailer. This class fires on a SUCCESSFUL read whose
+# content happens to look like an error. Different signal, different marker set.
+#
+# Conservative classifier: suppress stdout-pattern matching (keep exit-code and
+# stderr detection) only when ALL hold:
+#   - exit_code == 0 (the read succeeded)
+#   - NO stderr pattern matched and NO exit_code marker present — i.e. the ONLY
+#     signals are stdout-pattern matches (the displayed content)
+#   - the command's leading verb is a pure content-display verb, OR the command
+#     reads the annunaki errors log itself (self-referential meta-capture guard)
+#
+# Leading-verb match is anchored: the display verb must be the command's first
+# token (allowing a single leading `cd ... &&`/`REPO_ROOT=... &&` setup prefix
+# is intentionally NOT supported here — a compound command that *also* runs a
+# real build/test step should still log on that step's merits, same precedence
+# rule as the silent-boolean-test family).
+CONTENT_DISPLAY_VERBS = re.compile(
+    r"""
+    ^\s*
+    (?:
+        cat | head | tail | less | more | bat        # file pagers/dumpers
+      | git\s+show | git\s+diff | git\s+log          # git content display
+      | gh\s+pr\s+diff | gh\s+pr\s+view              # gh PR content display
+    )
+    \b
+    """,
+    re.VERBOSE,
+)
+
+# `gh api .../contents/...` reads a file's content (base64 or, with a jq/-q
+# content selector, decoded source). Matched anywhere in the command because gh
+# api invocations are commonly preceded by a variable-assignment prefix and the
+# `contents/` path segment is an unambiguous content-read marker.
+CONTENT_DISPLAY_GH_API_CONTENTS = re.compile(r"\bgh\s+api\b.*\bcontents/")
+
+# Self-referential meta-capture guard (#596): a command that reads the annunaki
+# error log itself will echo historical records containing "Traceback" etc.
+# Reading errors.jsonl is never itself an error.
+CONTENT_DISPLAY_ERRORS_LOG = re.compile(r"errors\.jsonl")
+
+# A `2>&1` stdout-merge marks the #517 probe-with-fallback domain, not a content
+# display: you only redirect stderr onto stdout when you EXPECT a read might fail
+# and want to catch/inspect its error text. A genuine content display (`cat
+# docs.yml`, `gh api .../contents/x.py`) reads a file it expects to exist and has
+# no `2>&1`. Deferring `2>&1` shapes to the probe classifier (which has its own
+# conservative trailer guard) keeps the two classifiers from overlapping on the
+# failed-read case — e.g. `cat missing.py 2>&1 | head` leads with a display verb
+# but is a failed read whose merged error text (or an unrelated Traceback in the
+# merged stream) must still log on its own merits (#517 regression guard).
+CONTENT_DISPLAY_STDOUT_MERGE = re.compile(r"2>&1")
+
+# The `No such file or directory` stdout match always signals a FAILED
+# filesystem read (a missing path), never error-shaped *content* we want to
+# suppress — no source file we display legitimately emits that exact phrase as
+# its content. It is the #517 probe family's signal, so a content-display read
+# whose only match is this line defers to the probe classifier rather than being
+# silenced here. This is the marker-level guard complementing the `2>&1`
+# command-shape guard: a non-`2>&1` `gh api .../contents/... > /tmp && base64 -d`
+# that nonetheless emitted a No-such-file failure must still log (#517 outlier).
+CONTENT_DISPLAY_EXCLUDED_PATTERN = "stdout:No such file or directory"
+
+
+def _is_content_display(command: str, exit_code: int, matched_patterns: list[str]) -> bool:
+    """Return True if this matches the #596 content-display idiom.
+
+    All of the following must hold:
+      1. exit_code == 0 (the read/display succeeded)
+      2. EVERY matched pattern is a `stdout:` pattern — no `stderr:` match and
+         no `exit_code=` marker. A stderr pattern or non-zero exit means a real
+         failure occurred alongside the display, so this skip does NOT apply.
+      3. the command does NOT contain a `2>&1` stdout-merge AND no matched
+         pattern is the `No such file or directory` line. Both mark the #517
+         probe-with-fallback domain (an intentional/failed read of a missing
+         path) rather than displayed error-shaped content, so those cases are
+         left to the probe classifier. The `2>&1` guard catches the command
+         shape; the No-such-file guard catches the matched-signal even when the
+         command shape is absent (e.g. a bare `gh api .../contents/... > file`
+         that failed). Together they keep `cat missing.py 2>&1 | head` and the
+         non-trailer probe outliers from being mis-classified as displays.
+      4. the command is a recognized content-display operation: a leading
+         display verb (cat/head/tail/less/more/bat, git show|diff|log,
+         gh pr diff|view), a `gh api .../contents/...` read, OR a read of the
+         annunaki errors.jsonl log (self-referential meta-capture).
+
+    Condition 2 is the precedence guard mirroring the silent-boolean-test and
+    probe-with-fallback families: any real failure signal bypasses the skip.
+    """
+    if exit_code != 0:
+        return False
+    if not matched_patterns:
+        return False
+    if not all(p.startswith("stdout:") for p in matched_patterns):
+        return False
+    if CONTENT_DISPLAY_STDOUT_MERGE.search(command):
+        return False
+    if CONTENT_DISPLAY_EXCLUDED_PATTERN in matched_patterns:
+        return False
+    if CONTENT_DISPLAY_VERBS.search(command):
+        return True
+    if CONTENT_DISPLAY_GH_API_CONTENTS.search(command):
+        return True
+    if CONTENT_DISPLAY_ERRORS_LOG.search(command):
+        return True
+    return False
 
 
 def _is_probe_with_fallback(command: str, exit_code: int, matched_patterns: list[str]) -> bool:
@@ -271,6 +390,14 @@ def check(input_data: dict) -> dict | None:
     # not a real failure. The helper requires the only-pattern guard, so any
     # additional signal (stderr pattern, non-zero exit) bypasses this skip.
     if _is_probe_with_fallback(command, exit_code, matched_patterns):
+        return None
+
+    # #596 content-display filter: a command that DISPLAYS content (cat/head/
+    # tail/less of a file, `gh api .../contents/...`, a read of errors.jsonl)
+    # and exits 0 with only stdout-pattern matches is echoing error-shaped
+    # content, not failing. The helper requires exit==0 AND every matched
+    # pattern be a stdout one, so a real stderr/exit-code signal bypasses this.
+    if _is_content_display(command, exit_code, matched_patterns):
         return None
 
     error_lines = _extract_error_lines(combined_output)
