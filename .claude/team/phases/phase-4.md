@@ -28,7 +28,7 @@ Phase 4 is that re-opening. Three tracks:
 | 3 | **Admin surface complete** — user mgmt via user-service, data management panel, pipeline controls | noorinalabs-main#603 |
 | 4 | **Zero carry-forward bugs** — us#65/#73/#74, lp#69 closed | noorinalabs-main#604 |
 | 5 | **Security follow-ups closed** — deploy#386/#384/#244, ig#955 | noorinalabs-main#605 |
-| 6 | **Tech-debt <10% cumulative** — resolves the P3 criterion-9 caveat (first-review gate measured over → owner waiver + re-baseline 2026-06-02; ≤20% hard re-measure at W1 wrapup; <10% by exit, re-baselined methodology; holds 2 consecutive reviews) | noorinalabs-main#606 |
+| 6 | **Tech-debt intake — each wave takes its +20%** — every wave pulls in tech-debt-only issues = `ceil(20% of its feature/bug/security scope)` per `/wave-scope` Step 8.5 (all available if fewer). **Replaces** the brittle cumulative-ratio gate (superseded 2026-06-09, PR #619 / main#618); the pooled TD ratio stays **informational**, no longer a hard threshold | noorinalabs-main#606 |
 | 7 | **P3 retro process changes applied + verified** — all 4 owner-approved changes dispositioned | noorinalabs-main#607 |
 
 ## The Phase-3 criterion-9 caveat (inherited obligation) — RESOLVED 2026-06-02
@@ -40,14 +40,14 @@ re-baselined 23.6%) due to denominator shrinkage from P3 closures, not new debt.
 methodology (`meta-issue`-labeled scaffolding excluded from all TD-ratio measurements) and **waived the kickoff
 block**, on the grounds that W1 "Clean slate" is itself the burn-down remedy. Conditions of the waiver:
 
-- The ≤20% gate (re-baselined) is **re-measured at P4W1 `/wave-wrapup` as a hard block** — no second waiver.
-- Criterion #6 (main#606) inherits the re-baselined methodology for its <10% exit gate.
+- ~~The ≤20% gate (re-baselined) is **re-measured at P4W1 `/wave-wrapup` as a hard block** — no second waiver.~~ **Superseded 2026-06-09 (PR #619 / main#618):** the hard ratio re-measure is replaced by the per-wave **tech-debt intake** model (`/wave-scope` Step 8.5 — +20% of each wave's feature/bug/security scope). `/wave-wrapup` no longer enforces any ratio threshold; the pooled ratio is reported as informational only.
+- Criterion #6 (main#606) now measures **per-wave intake compliance**, not a `<10%` cumulative exit ratio. Rationale: a cumulative ratio whipsaws as the backlog shrinks (denominator collapses faster than real debt) — owner call 2026-06-09.
 
 Full record: `phase-3.md` § Criterion #9 caveat resolution.
 
-### TD-ratio measurement methodology (re-baselined 2026-06-02)
+### TD-ratio measurement methodology (re-baselined 2026-06-02; **informational only as of 2026-06-09**)
 
-All Phase-4 TD-ratio measurements (criterion #6, wave-wrapup gates, phase reviews) use:
+As of 2026-06-09 (PR #619) the pooled TD ratio is **reported, not gated** — the gate is per-wave intake (`/wave-scope` Step 8.5). When reporting it (phase reviews, wrapup summaries), use:
 
 ```
 TD ratio = (open issues labeled tech-debt AND NOT meta-issue)
@@ -76,7 +76,7 @@ Wave themes are confirmed (not re-chosen) at each `/wave-scope`; scope reconcili
 
 ## Phase exit gate
 
-Owner runs `/phase-review 4` and verifies all 7 end-state rows are `Done`, including the criterion-6 tech-debt gate (<10% cumulative, held for 2 consecutive reviews). On confirmation, the next phase is defined via `/plan-phase` before any P5 wave can kick off (per `lifecycle.md` § Phase Lifecycle).
+Owner runs `/phase-review 4` and verifies all 7 end-state rows are `Done`, including criterion-6 — **every wave took its +20% tech-debt intake** (`/wave-scope` Step 8.5); the pooled ratio is reported informationally and should be trending down, but is not a hard threshold. On confirmation, the next phase is defined via `/plan-phase` before any P5 wave can kick off (per `lifecycle.md` § Phase Lifecycle).
 
 ## Process changes in force from P3 retro (applied at phase setup, 2026-06-02)
 

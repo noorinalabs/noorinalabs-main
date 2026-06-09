@@ -264,7 +264,7 @@ If a `MUST_INCLUDES` entry is closed or non-existent, the source memory file is 
 
 After Step 7 has fixed the wave's feature + bug + security content, top it up with **tech-debt-only** issues equal to **20% of that content, rounded up**. If fewer qualifying TD issues exist than the target, add **all** of them — a shortfall here is a *good* signal (debt is genuinely low), never something to backfill with invented work. See [[feedback_td_intake_20pct_per_wave]].
 
-**1. Compute base + target.** Base = in-scope (`$WAVE_LABEL`, post-disposition) issues that are NOT `tech-debt` and NOT `meta-issue` — the feature/bug/security set the owner just decided in Step 7.
+**1. Compute base + target.** Base = the post-Step-7 **intended** in-scope set that is NOT `tech-debt` and NOT `meta-issue` — the feature/bug/security items the owner just decided to keep. The query below counts items already carrying `$WAVE_LABEL`; some Step-7 keeps / must-includes / carry-forwards are not labeled until Step 10, so **add those not-yet-labeled non-TD keeps to `BASE`** before computing the target (otherwise the intake target undercounts the real scope).
 
 ```bash
 REPOS=(
