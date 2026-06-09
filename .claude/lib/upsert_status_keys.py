@@ -8,19 +8,45 @@ reformats every compact line to jq's default pretty form, doubling the file
 length and producing a 500+ line cosmetic diff per wave.
 
 This helper does targeted text-level upsert:
-  - If the key exists at top level → replace its line in place.
+  - If the key exists at top level → replace its line in place, preserving the
+    key's existing leading indentation (1-space legacy keys and 2-space keys
+    are both handled — main#595/#611 indent-tolerance fix).
   - If the key does not exist → insert a new compact-inline line right after
     the most-recent wave_{N}_* sibling (or before the closing `}`).
 
+It also supports REMOVING a top-level key (`--remove-key` mode / the
+`remove_top_level_key` function) — needed at phase boundaries where bare
+`wave_{M}_*` keys from a prior phase must be cleared before the new phase
+writes its own (main#611).
+
 Validates JSON before AND after the rewrite so a malformed write is caught.
+
+Phase-boundary key convention (main#611)
+----------------------------------------
+Wave bookkeeping uses BARE `wave_{M}_*` top-level keys (e.g. `wave_1_scope`),
+NOT phase-prefixed ones. A bare `wave_{M}_*` key always belongs to the
+**current** phase. At the first `/wave-scope` of each new phase, the prior
+phase's `wave_{M}_*` keys are REMOVED (their record is preserved in git
+history and the relevant `.claude/team/phases/phase-{N}.md`) before the new
+phase writes its own `wave_{M}_*` keys. This is the "overwrite convention":
+phase-prefixed keys (`p4_wave_1_*`) were considered and rejected because they
+would require a coordinated read-contract change across /wave-kickoff,
+/wave-wrapup, /wave-retro, /wave-scope and the post_wave_kickoff_comment hook.
+Use `--remove-key` for the phase-boundary cleanup so it no longer needs an
+ad-hoc script.
 
 Invocation:
   upsert_status_keys.py <path> <key>=<json-encoded-value> [<key>=<json-encoded-value> ...]
+  upsert_status_keys.py <path> --remove-key <key> [<key> ...]
 
-Example:
+Example (upsert):
   upsert_status_keys.py cross-repo-status.json \
     wave_5_scope_reconciled_at='"2026-05-05T22:31:00Z"' \
     wave_5_scope_reconciliation_note='"manual run"'
+
+Example (phase-boundary cleanup):
+  upsert_status_keys.py cross-repo-status.json --remove-key \
+    wave_1_scope wave_1_wrap_status wave_1_completed_at
 
 Each VALUE must be a self-contained JSON literal (string/number/bool/array/object).
 Strings include their quotes — pass `'"foo"'` from the shell.
@@ -142,11 +168,25 @@ def upsert_top_level_key(text: str, key: str, json_value: str) -> str:
     either invalid JSON or a logical/text divergence aborted by the
     post-write validation.
 
+    Indent-tolerance (main#595/#611): the replace-in-place and sibling-finder
+    regexes accept ANY leading whitespace, not just exactly 2 spaces. The
+    file mixes 1-space legacy keys (P3W1-era, e.g. `current_wave` /
+    `last_completed_wave` near line ~1211) with 2-space newer keys. Pre-fix,
+    the `^(  )` anchor could not match a 1-space key at all, so an UPDATE of
+    an existing 1-space scalar fell through to the insert path and produced a
+    DUPLICATE top-level key — the logical/text divergence that aborted the
+    W15-wrapup write (main#595). The replacement now reuses the matched key's
+    own leading indent so the line's style is preserved.
+
     Falls back to inserting right after the opening `{` line if no sibling
     exists.
     """
-    line_re = re.compile(r'^(  )"' + re.escape(key) + r'":\s.*?,?\s*$', re.MULTILINE)
-    new_line = f'  "{key}": {json_value},'
+    # `[ \t]*` captures the key's own indentation so it is preserved on
+    # replace; the value pattern is greedy to end-of-line so a trailing
+    # comma (or its absence) is captured as part of the line rather than
+    # left dangling — the pre-fix non-greedy `.*?,?\s*$` could under-match
+    # certain value shapes (main#595).
+    line_re = re.compile(r'^([ \t]*)"' + re.escape(key) + r'":[ \t].*$', re.MULTILINE)
     # Replace-in-place: walk every match and pick the first one that's at
     # top-level depth. The pre-#456 code took the first regex match
     # unconditionally; that mis-matched nested keys whose NAME happened to
@@ -155,18 +195,18 @@ def upsert_top_level_key(text: str, key: str, json_value: str) -> str:
     for m in line_re.finditer(text):
         if not _is_top_level_position(text, m.start()):
             continue
-        existing = m.group(0)
-        last_existing = existing.rstrip()
-        if last_existing.endswith(","):
-            replacement = new_line
-        else:
-            replacement = new_line.rstrip(",")
+        indent = m.group(1)
+        existing = m.group(0).rstrip()
+        replacement = f'{indent}"{key}": {json_value}'
+        if existing.endswith(","):
+            replacement += ","
         return text[: m.start()] + replacement + text[m.end() :]
 
+    new_line = f'  "{key}": {json_value},'
     wave_num_match = re.match(r"wave_(\d+)_", key)
     if wave_num_match:
         sibling_re = re.compile(
-            r'^(  )"wave_' + re.escape(wave_num_match.group(1)) + r'_[^"]+":.*$',
+            r'^([ \t]*)"wave_' + re.escape(wave_num_match.group(1)) + r'_[^"]+":.*$',
             re.MULTILINE,
         )
         # Filter to top-level matches only; the pre-#456 code took ALL
@@ -193,12 +233,130 @@ def upsert_top_level_key(text: str, key: str, json_value: str) -> str:
     return text[:insertion_point] + new_line + "\n" + text[insertion_point:]
 
 
+def remove_top_level_key(text: str, key: str) -> str:
+    """Remove the top-level `"<key>": ...` entry from `text` entirely.
+
+    Used at phase boundaries to clear a prior phase's bare `wave_{M}_*` keys
+    before the new phase writes its own (main#611). Reuses the same structural
+    primitives as the upsert path:
+      - `_is_top_level_position` rejects a name match that is nested inside a
+        multi-line value, so removing `wave_1_scope` never deletes a nested
+        key that happens to share the name.
+      - `_find_value_end` handles both single-line and multi-line (array /
+        object) values, so a multi-line block is removed in full.
+
+    Indent-tolerant (`[ \t]*`) so 1-space legacy keys and 2-space keys are
+    both removable.
+
+    The whole physical line(s) — from the start of the key's line through its
+    value's terminator and trailing comma plus the newline — is excised, so no
+    blank line or dangling comma is left behind. If the removed entry was the
+    JSON-final key (its value had no trailing comma), the now-final preceding
+    entry's trailing comma is stripped to keep the JSON valid.
+
+    Raises KeyError if no top-level key by that name exists (the caller can
+    decide whether a missing key is fatal — `main` treats it as an error so a
+    typo'd phase-cleanup key surfaces rather than silently no-op'ing).
+    """
+    opener_re = re.compile(r'^([ \t]*)"' + re.escape(key) + r'":[ \t]', re.MULTILINE)
+    for m in opener_re.finditer(text):
+        if not _is_top_level_position(text, m.start()):
+            continue
+        line_start = text.rfind("\n", 0, m.start()) + 1
+        # `_find_value_end` expects the END of the opener LINE (it inspects
+        # the line's last char to decide single- vs multi-line); m.end() is
+        # only just past the `": "`. Advance to the line's newline first.
+        line_end = text.find("\n", m.end())
+        if line_end == -1:
+            line_end = len(text)
+        value_end = _find_value_end(text, line_end)
+        # `_find_value_end` already consumed a trailing comma if present.
+        # Consume the rest of the line (whitespace) and the newline so we
+        # excise whole physical lines, leaving no blank line behind.
+        cut_end = value_end
+        while cut_end < len(text) and text[cut_end] in " \t":
+            cut_end += 1
+        if cut_end < len(text) and text[cut_end] == "\n":
+            cut_end += 1
+        had_trailing_comma = value_end > 0 and text[value_end - 1] == ","
+        new_text = text[:line_start] + text[cut_end:]
+        if not had_trailing_comma:
+            # The removed entry was the JSON-final key; the entry now
+            # immediately before the closing brace must lose its trailing
+            # comma. Find the last `,` before the closing `}` and drop it.
+            close = new_text.rfind("}")
+            comma = new_text.rfind(",", 0, close)
+            if comma != -1 and new_text[comma + 1 : close].strip() == "":
+                new_text = new_text[:comma] + new_text[comma + 1 :]
+        return new_text
+    raise KeyError(f"top-level key {key!r} not found")
+
+
+def _run_remove(path: Path, keys: list[str]) -> int:
+    """Remove each top-level `key` from the file, validating JSON pre/post.
+
+    Mirrors the upsert path's safety contract: parse before, apply all
+    removals text-level, parse after, and confirm the text-level result
+    matches the logical result (the original parsed dict minus the removed
+    keys) before writing. A missing key is a hard error so a typo in a
+    phase-cleanup invocation surfaces instead of silently no-op'ing.
+    """
+    if not keys:
+        print("ERROR: --remove-key requires at least one key", file=sys.stderr)
+        return 2
+
+    text = path.read_text()
+    parsed = json.loads(text)
+
+    for key in keys:
+        if key not in parsed:
+            print(f"ERROR: top-level key {key!r} not found in {path}", file=sys.stderr)
+            return 1
+        try:
+            text = remove_top_level_key(text, key)
+        except (KeyError, ValueError) as exc:
+            print(f"ERROR: could not remove {key!r}: {exc}", file=sys.stderr)
+            return 1
+        del parsed[key]
+
+    try:
+        reparsed = json.loads(text)
+    except json.JSONDecodeError as exc:
+        print(
+            f"ERROR: text-level removal produced invalid JSON: {exc}\n  Offending keys: {keys}",
+            file=sys.stderr,
+        )
+        return 1
+
+    if reparsed != parsed:
+        diverged_keys = sorted(set(reparsed.keys()) ^ set(parsed.keys()))
+        for k in set(reparsed.keys()) & set(parsed.keys()):
+            if reparsed[k] != parsed[k]:
+                diverged_keys.append(k)
+        print(
+            f"ERROR: text-level removal diverged from logical removal; aborting write.\n"
+            f"  Diverged keys: {sorted(set(diverged_keys))}\n"
+            f"  Removed keys (this call): {keys}",
+            file=sys.stderr,
+        )
+        return 1
+
+    path.write_text(text)
+    for key in keys:
+        print(f"  removed: {key}")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     if len(argv) < 3:
         print(__doc__, file=sys.stderr)
         return 2
 
     path = Path(argv[1])
+
+    if argv[2] == "--remove-key":
+        return _run_remove(path, argv[3:])
+
     pairs = []
     for arg in argv[2:]:
         if "=" not in arg:

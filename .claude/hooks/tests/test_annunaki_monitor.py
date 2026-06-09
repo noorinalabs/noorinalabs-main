@@ -764,5 +764,287 @@ class ProbeWithFallbackTests(unittest.TestCase):
         )
 
 
+class ContentDisplayTests(unittest.TestCase):
+    """#596 coverage: commands that DISPLAY content whose displayed text
+    contains error-shaped strings (cat of source with `except ImportError:`,
+    `gh api .../contents/...` echoing source, a read of errors.jsonl whose
+    records contain "Traceback") must NOT log when exit=0 and the only signals
+    are stdout-pattern matches.
+
+    Representative W15-window captures (from the issue body):
+      - `cat .github/workflows/docs.yml` — file contains `except ImportError:`
+      - `gh api .../contents/docs.yml` — fetched source echoed to stdout
+      - `gh api .../contents/env_validate.py` — source contains `except ValueError:`
+      - retro analysis displaying errors.jsonl — matches `Traceback` in the log
+
+    Precedence sibling to #474 (silent-boolean-test) and #517 (probe-with-
+    fallback): any stderr pattern or non-zero exit bypasses the skip.
+    """
+
+    def setUp(self):
+        self._saved_env = {
+            "ENVIRONMENT": os.environ.pop("ENVIRONMENT", None),
+            "NOORIN_HOOK_TEST_MODE": os.environ.pop("NOORIN_HOOK_TEST_MODE", None),
+        }
+        am._seen_hashes.clear()
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._errors_path = Path(self._tmpdir.name) / "errors.jsonl"
+        self._orig_monitor_file = am.ERRORS_FILE
+        self._orig_log_file = alog.ERRORS_FILE
+        am.ERRORS_FILE = self._errors_path
+        alog.ERRORS_FILE = self._errors_path
+
+    def tearDown(self):
+        am.ERRORS_FILE = self._orig_monitor_file
+        alog.ERRORS_FILE = self._orig_log_file
+        self._tmpdir.cleanup()
+        for k, v in self._saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    # --- AC fixture: cat of a file containing an error-shaped string ---
+
+    def test_cat_file_with_import_error_string_exit_zero_not_logged(self):
+        """AC #1: `cat` of a file containing `except ImportError:` (exit 0) →
+        no capture."""
+        result = am.check(
+            _bash_event(
+                "cat .github/workflows/docs.yml",
+                stdout="    try:\n        import x\n    except ImportError:\n        pass\n",
+                exit_code=0,
+            )
+        )
+        self.assertIsNone(result, "cat of error-shaped content must not log")
+        self.assertEqual(_read_records(self._errors_path), [])
+
+    def test_head_file_with_traceback_string_exit_zero_not_logged(self):
+        """`head` of a file whose content contains a Traceback line → no log."""
+        result = am.check(
+            _bash_event(
+                "head -50 some_test_log.txt",
+                stdout="Traceback (most recent call last):\n  File ...\n",
+                exit_code=0,
+            )
+        )
+        self.assertIsNone(result)
+
+    def test_tail_file_with_value_error_exit_zero_not_logged(self):
+        """`tail` of a source file containing `ValueError:` → no log."""
+        result = am.check(
+            _bash_event(
+                "tail -20 env_validate.py",
+                stdout='        raise ValueError("bad config")\n',
+                exit_code=0,
+            )
+        )
+        self.assertIsNone(result)
+
+    # --- AC fixture: gh api contents read echoing error-shaped source ---
+
+    def test_gh_api_contents_python_source_exit_zero_not_logged(self):
+        """AC representative: `gh api .../contents/env_validate.py` displaying
+        source that contains `except ValueError:` → no capture."""
+        result = am.check(
+            _bash_event(
+                "gh api repos/noorinalabs/noorinalabs-deploy/contents/env_validate.py --jq .content",  # noqa: E501
+                stdout="def f():\n    try:\n        g()\n    except ValueError:\n        raise\n",
+                exit_code=0,
+            )
+        )
+        self.assertIsNone(result, "gh api contents read of error-shaped source must not log")
+
+    def test_gh_api_contents_with_prefix_assignment_not_logged(self):
+        """A `VAR=$(...) && gh api .../contents/...` read still classifies —
+        the contents/ marker is matched anywhere in the command."""
+        result = am.check(
+            _bash_event(
+                'SHA=abc123 && gh api "repos/o/r/contents/x.py?ref=$SHA" --jq .content -r | base64 -d',  # noqa: E501
+                stdout="import os\n# fatal: not really\n",
+                exit_code=0,
+            )
+        )
+        self.assertIsNone(result)
+
+    # --- AC fixture: reading the errors.jsonl log itself (meta-capture) ---
+
+    def test_read_errors_jsonl_with_traceback_records_not_logged(self):
+        """AC #3: a command reading `errors.jsonl` whose records contain
+        `Traceback` → no capture (self-referential meta-capture guard)."""
+        result = am.check(
+            _bash_event(
+                "cat .claude/annunaki/errors.jsonl | python3 -m json.tool",
+                stdout='{"error_lines": ["Traceback (most recent call last):"]}\n',
+                exit_code=0,
+            )
+        )
+        self.assertIsNone(result, "reading the error log itself must not re-capture")
+
+    def test_grep_errors_jsonl_meta_capture_not_logged(self):
+        """A non-display verb still hits the errors.jsonl self-referential
+        guard: `grep ... errors.jsonl` echoing a Traceback record → no log."""
+        result = am.check(
+            _bash_event(
+                "grep Traceback .claude/annunaki/errors.jsonl",
+                stdout='{"matched_patterns": ["stdout:Traceback ..."]}\n',
+                exit_code=0,
+            )
+        )
+        self.assertIsNone(result)
+
+    # --- Precedence: a real failure signal still wins ---
+
+    def test_cat_missing_file_nonzero_exit_still_logged(self):
+        """`cat /nonexistent` — exit 1 + stderr No-such-file → STILL logs.
+        The content-display skip requires exit 0; a real read failure is a real
+        error (AC #4: exit-code-based detection unchanged)."""
+        result = am.check(
+            _bash_event(
+                "cat /nonexistent",
+                stderr="cat: /nonexistent: No such file or directory\n",
+                exit_code=1,
+            )
+        )
+        self.assertIsNotNone(result, "a failed cat (exit 1) must still log")
+        rec = _read_records(self._errors_path)[0]
+        self.assertEqual(rec["exit_code"], 1)
+
+    def test_cat_with_stderr_pattern_and_exit_zero_still_logged(self):
+        """exit 0 but a real stderr pattern present (e.g. cat succeeds while a
+        piped tool warns on stderr) → STILL logs; skip only applies when EVERY
+        signal is a stdout pattern."""
+        result = am.check(
+            _bash_event(
+                "cat foo.py",
+                stdout="import os\n",
+                stderr="fatal: something genuinely broke\n",
+                exit_code=0,
+            )
+        )
+        self.assertIsNotNone(result, "stderr pattern on exit-0 display must still log")
+
+    def test_actual_raised_import_error_still_logged(self):
+        """AC #2: `python3 -c 'raise ImportError'` (non-zero exit) → still
+        captured. This is the error-shaped *outcome*, not error-shaped
+        *content*, and must never be suppressed by the content-display skip."""
+        result = am.check(
+            _bash_event(
+                "python3 -c \"raise ImportError('boom')\"",
+                stderr="Traceback (most recent call last):\nImportError: boom\n",
+                exit_code=1,
+            )
+        )
+        self.assertIsNotNone(result, "a real raised ImportError must log")
+        rec = _read_records(self._errors_path)[0]
+        self.assertEqual(rec["exit_code"], 1)
+
+    def test_non_display_command_with_stdout_pattern_still_logged(self):
+        """AC #4 negative-space: a non-display command (e.g. a build/test step)
+        that emits an error-shaped line on stdout at exit 0 is NOT a content
+        display and must STILL log — the skip is verb-scoped, not blanket."""
+        result = am.check(
+            _bash_event(
+                "make build",
+                stdout="Compiling...\nE   ValueError: bad\n",
+                exit_code=0,
+            )
+        )
+        self.assertIsNotNone(result, "a non-display command must still log on stdout pattern")
+
+    # --- Helper-direct unit tests ---
+
+    def test_helper_returns_false_on_nonzero_exit(self):
+        """Direct unit: _is_content_display returns False for exit != 0 even
+        with a display verb and stdout-only patterns."""
+        self.assertFalse(
+            am._is_content_display(
+                "cat foo.py",
+                exit_code=1,
+                matched_patterns=["stdout:ImportError:"],
+            )
+        )
+
+    def test_helper_returns_false_when_any_pattern_not_stdout(self):
+        """Direct unit: returns False if any matched pattern is a stderr or
+        exit_code marker (real-failure precedence)."""
+        self.assertFalse(
+            am._is_content_display(
+                "cat foo.py",
+                exit_code=0,
+                matched_patterns=["stdout:ImportError:", "stderr:^fatal:"],
+            )
+        )
+
+    def test_helper_returns_false_on_empty_patterns(self):
+        """Direct unit: returns False with no matched patterns (nothing to
+        suppress)."""
+        self.assertFalse(am._is_content_display("cat foo.py", exit_code=0, matched_patterns=[]))
+
+    def test_helper_returns_false_on_non_display_command(self):
+        """Direct unit: a non-display verb with stdout-only patterns → False."""
+        self.assertFalse(
+            am._is_content_display(
+                "pytest tests/",
+                exit_code=0,
+                matched_patterns=["stdout:E\\s+\\w+Error:"],
+            )
+        )
+
+    def test_helper_returns_false_on_stdout_merge_probe_shape(self):
+        """Direct unit: a `2>&1` stdout-merge defers to the #517 probe family
+        even with a leading display verb — `cat missing.py 2>&1 | head` is a
+        failed read, not a content display."""
+        self.assertFalse(
+            am._is_content_display(
+                'cat script.py 2>&1 | head -50 || echo "no script"',
+                exit_code=0,
+                matched_patterns=["stdout:Traceback \\(most recent call last\\)"],
+            )
+        )
+
+    def test_helper_returns_false_on_no_such_file_match(self):
+        """Direct unit: a No-such-file stdout match defers to the #517 probe
+        family even for a `gh api .../contents/...` read with no `2>&1` — the
+        failed-read signal must still log (non-trailer probe outlier)."""
+        self.assertFalse(
+            am._is_content_display(
+                "gh api 'repos/o/r/contents/x.yaml' --jq '.content' -r > /tmp/x && base64 -d /tmp/x",  # noqa: E501
+                exit_code=0,
+                matched_patterns=["stdout:No such file or directory"],
+            )
+        )
+
+    def test_helper_returns_true_on_display_verb(self):
+        """Direct unit: leading display verb + exit 0 + stdout-only → True."""
+        self.assertTrue(
+            am._is_content_display(
+                "cat foo.py",
+                exit_code=0,
+                matched_patterns=["stdout:ImportError:"],
+            )
+        )
+
+    def test_helper_returns_true_on_gh_api_contents(self):
+        """Direct unit: gh api contents read → True."""
+        self.assertTrue(
+            am._is_content_display(
+                "gh api repos/o/r/contents/x.py --jq .content",
+                exit_code=0,
+                matched_patterns=["stdout:ValueError:"],
+            )
+        )
+
+    def test_helper_returns_true_on_errors_jsonl_read(self):
+        """Direct unit: any command touching errors.jsonl → True."""
+        self.assertTrue(
+            am._is_content_display(
+                "grep Traceback .claude/annunaki/errors.jsonl",
+                exit_code=0,
+                matched_patterns=["stdout:Traceback \\(most recent call last\\)"],
+            )
+        )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
