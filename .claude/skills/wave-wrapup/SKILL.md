@@ -147,7 +147,7 @@ For each worktree:
 1. Check if it has uncommitted changes (`git -C <path> status --porcelain`)
 2. If clean, remove with `git worktree remove <path>`
 3. If dirty, report to the user — do NOT force-remove without approval
-4. Delete the remote tracking branch if the PR was merged: `git push origin --delete <branch>`
+4. Delete the remote tracking branch if the PR was merged: `git push origin --delete <branch>` — **feature/worktree branches only; NEVER delete a `deployments/phase-*/wave-*` branch** (wave branches are retained permanently per owner directive 2026-06-09 — see Step 11).
 
 Report what was cleaned:
 ```
@@ -366,9 +366,9 @@ Optionally also write a richer `wave_{M}_summary` block with wave-shape detail (
 
 If a key cannot be computed (e.g., no PRs merged this wave), write the literal `0` — `/wave-retro` Step 2.5 distinguishes "0 cycles" from "key missing" and only the latter is treated as drift.
 
-### 11. Merge to main per repo (final wave only)
+### 11. Merge to main per repo (every wave)
 
-If this is the final wave of the phase, every repo in `wave_{M}_repos_in_scope` has its OWN `deployments/phase-{P}/wave-{M}` branch (created by `/wave-kickoff` step 1) that needs its own PR to main. This is the symmetric counterpart of the multi-repo branch creation gap (main#238).
+**Every wave's wrapup merges its wave branch to main** (changed 2026-06-09 — owner directive; previously gated to the final wave only). Each repo in `wave_{M}_repos_in_scope` has its OWN `deployments/phase-{P}/wave-{M}` branch (created by `/wave-kickoff` step 1) that needs its own PR to main. This is the symmetric counterpart of the multi-repo branch creation gap (main#238). Merging each wave keeps `main` continuously current: the next wave bases off main (`/wave-start` Step 2/3), so an unmerged wave would strand its work the moment the following wave starts.
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -397,7 +397,9 @@ Print a per-repo PR summary table (PR# or "no merge needed") and **wait for user
 
 **Do NOT merge to main without user approval.** This is a significant action that affects all downstream repos.
 
-### 11.5. Reachability gate — wave-branch propagation to main (final wave only)
+**Retain the wave branch — do NOT delete it on merge** (owner directive 2026-06-09). Merge each wave→main PR with `gh pr merge <N> --merge` (**never** `--delete-branch`); the `deployments/phase-{P}/wave-{M}` branches are kept permanently as a historical / rollback anchor for every wave. Caveat: if a repo has "Automatically delete head branches" enabled at the repo level, a merge deletes the head branch regardless of the flag — for these repos, either disable that setting or restore the branch immediately after merge (`git push origin <wave-sha>:refs/heads/deployments/phase-{P}/wave-{M}`).
+
+### 11.5. Reachability gate — wave-branch propagation to main (every wave)
 
 After the per-repo wave→main PRs in Step 11 are merged (or declared not-needed), verify each wave-branch is actually reachable from `origin/main`. This is the load-bearing enforcement counterpart to charter `state-claims.md § Sub-rule: merge_commit_sha reachability` — the rule's claim-time discipline becomes a wrapup-time gate.
 

@@ -27,7 +27,7 @@ Report any worktrees that were pruned. If active worktrees remain, list them and
 ### 2. Determine base branch
 
 - **Wave 1 of a phase:** Base is `main`
-- **Wave N (N > 1):** Base is the previous wave's deployment branch (`deployments/phase-{P}/wave-{M-1}`), or `main` if the previous wave was already merged
+- **Wave N (N > 1):** Base is `main`. Each wave merges to main at its own `/wave-wrapup` (see `/wave-wrapup` Step 11, every-wave merge — changed 2026-06-09), so the previous wave is already integrated. The previous-wave-branch (`deployments/phase-{P}/wave-{M-1}`) is **retained, not deleted**, but it is not the base — it serves only as a safety-net reference if a prior wrapup's merge was somehow skipped (the warning below fires and Step 3 bases off main regardless).
 
 ```bash
 # Check if previous wave branch exists
