@@ -258,6 +258,64 @@ For each missing-label item, queue a label-apply for step 10.
 
 If a `MUST_INCLUDES` entry is closed or non-existent, the source memory file is stale — surface to the user with a recommendation to remove or update the memory entry. Do NOT silently drop a must-include.
 
+### 8.5. Tech-debt intake top-up (+20% of feature/bug scope) — MANDATORY every wave
+
+**Standing owner policy (2026-06-09).** A hard cumulative TD-*ratio* gate (phase criterion #6) whipsaws as the backlog shrinks: the denominator collapses faster than real debt does, so a genuinely healthy small backlog can still read "over." Replace ratio-chasing with steady **intake** — every wave deliberately pulls in tech-debt work proportional to its feature/bug load.
+
+After Step 7 has fixed the wave's feature + bug + security content, top it up with **tech-debt-only** issues equal to **20% of that content, rounded up**. If fewer qualifying TD issues exist than the target, add **all** of them — a shortfall here is a *good* signal (debt is genuinely low), never something to backfill with invented work. See [[feedback_td_intake_20pct_per_wave]].
+
+**1. Compute base + target.** Base = in-scope (`$WAVE_LABEL`, post-disposition) issues that are NOT `tech-debt` and NOT `meta-issue` — the feature/bug/security set the owner just decided in Step 7.
+
+```bash
+REPOS=(
+    noorinalabs-main noorinalabs-isnad-graph noorinalabs-user-service
+    noorinalabs-deploy noorinalabs-design-system noorinalabs-landing-page
+    noorinalabs-data-acquisition noorinalabs-isnad-ingest-platform
+)
+BASE=0
+for repo in "${REPOS[@]}"; do
+    n=$(gh issue list --repo "noorinalabs/$repo" --state open --label "$WAVE_LABEL" \
+          --json number,labels \
+          --jq '[.[] | select((.labels|map(.name)|index("tech-debt"))|not)
+                     | select((.labels|map(.name)|index("meta-issue"))|not)] | length' 2>/dev/null || echo 0)
+    BASE=$((BASE + n))
+done
+TARGET=$(( (BASE * 20 + 99) / 100 ))   # ceil(0.20 * BASE)
+echo "feature/bug/security in-scope: $BASE  →  TD intake target: $TARGET"
+```
+
+**2. Build candidate pool** — open, `tech-debt`-labeled, NOT `meta-issue`, and NOT already carrying any `p{P}-wave-*` label (un-scheduled debt), pooled across all repos. Oldest-first so long-lived debt drains first; the owner may reorder.
+
+```bash
+> /tmp/wavescope-{M}-td-pool.txt
+for repo in "${REPOS[@]}"; do
+    gh issue list --repo "noorinalabs/$repo" --state open --label tech-debt \
+        --json number,title,labels,createdAt \
+        --jq '.[] | select((.labels|map(.name)|index("meta-issue"))|not)
+                  | select((.labels|map(.name)|any(startswith("p") and contains("-wave-")))|not)
+                  | "\(.createdAt)\t'"$repo"'#\(.number)\t\(.title)"' \
+        2>/dev/null >> /tmp/wavescope-{M}-td-pool.txt || true
+done
+sort /tmp/wavescope-{M}-td-pool.txt
+POOL=$(wc -l < /tmp/wavescope-{M}-td-pool.txt)
+echo "un-scheduled TD pool: $POOL  |  target: $TARGET"
+```
+
+**3. Select + confirm (owner-judgment gate, same as Step 7).**
+- `POOL <= TARGET` → select **all** pool items. Report: `TD intake: <POOL> of <POOL> available — debt backlog below the 20% target (healthy)`.
+- `POOL > TARGET` → surface the top `TARGET` oldest candidates to the owner for confirmation; the owner may swap in higher-priority debt. Final selection = `TARGET` items.
+
+This is a blocking owner-judgment gate exactly like Step 7 — present, don't auto-apply.
+
+**4. Queue + fold in.** For each selected TD issue:
+- queue a `$WAVE_LABEL` label-apply into the **Step 10** batch (do NOT apply here);
+- add it to the `tier_3_tech_debt` array of `WAVE_SCOPE_STRUCTURED` as an assignment-row dict (§ 13.1), assigning implementer/reviewers from the **owning repo's** roster;
+- add it to project board 2 (`gh project item-add 2 --owner noorinalabs --url <url>`).
+
+Record `td_intake: <selected>/<target>` (and `td_pool: <POOL>`) for the Step 12 summary and Step 13 `wave_{M}_scope`.
+
+**Interaction with phase criterion #6.** This step is the operational mechanism behind the TD goal. The cumulative-ratio reading stays *informational*, but the gate the team actually works to is "did the wave take its 20% intake," not a brittle ratio threshold — which avoids the small-backlog whipsaw the owner flagged. Cross-ref `phase-4.md` § criterion #6.
+
 ### 9. Create next-wave label (`p{P}-wave-{M+1}`) if any defer dispositions
 
 If any disposition in step 7 was `defer-to-w{M+1}`, ensure the label exists in every relevant repo:
