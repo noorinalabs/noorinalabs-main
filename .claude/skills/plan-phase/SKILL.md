@@ -123,6 +123,8 @@ Group issues into waves based on:
 - **Parallelism:** maximize concurrent work by grouping independent issues
 - **Repo grouping:** minimize context-switching per agent
 
+**Tech-debt intake per wave (+20%).** For each wave, after the feature/bug/security content is set, allocate **tech-debt-only** issues equal to **20% of that content (rounded up)** — add all available if fewer qualify (a shortfall is healthy, never backfilled with invented work). This is the standing intake policy that `/wave-scope` Step 8.5 enforces per-wave at scope-reconciliation time; surface it here at phase-plan time so the wave tables already reflect the TD allocation. Rationale: a cumulative TD-*ratio* gate whipsaws as the backlog shrinks, so steady *intake* replaces ratio-chasing. See [[feedback_td_intake_20pct_per_wave]] and `/wave-scope` Step 8.5.
+
 Present the proposed structure:
 
 ```

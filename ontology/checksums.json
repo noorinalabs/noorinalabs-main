@@ -117,9 +117,9 @@
     },
     ".claude/skills/wave-retro/SKILL.md": {
       "last_tracked": "00b40976619ae7eade8ac1ca5ef1aae992a771e6c7695ae39121c3fc2ec07e46",
-      "last_resolved": "7f0eb66cbefbae94a4b9276ae901dbbb217435ab9765500b5d10b79801730e4b",
+      "last_resolved": "00b40976619ae7eade8ac1ca5ef1aae992a771e6c7695ae39121c3fc2ec07e46",
       "tracked_at": "2026-06-02T13:30:31.838248+00:00",
-      "resolved_at": "2026-05-06T01:07:41.670330+00:00"
+      "resolved_at": "2026-06-04T20:50:14.260341+00:00"
     },
     ".claude/skills/wave-wrapup/SKILL.md": {
       "last_resolved": "06ec27bab75ff4a97eb5fdfab7fea91db3178b42119c354de8c31aea3debbad9",
@@ -147,9 +147,9 @@
     },
     ".claude/team/charter/issues.md": {
       "last_tracked": "6b7e6f24cb140b969df2451db832dad5ac4cbaabe517672fd8590549546f6fc8",
-      "last_resolved": "60744ea8009688aa75481b9d908968fe3fc8162c597c04889635dc603140da95",
+      "last_resolved": "6b7e6f24cb140b969df2451db832dad5ac4cbaabe517672fd8590549546f6fc8",
       "tracked_at": "2026-06-02T13:30:25.811795+00:00",
-      "resolved_at": "2026-04-23T23:34:47.340707+00:00"
+      "resolved_at": "2026-06-04T20:50:14.260341+00:00"
     },
     ".claude/team/charter/pull-requests.md": {
       "last_tracked": "df75d7e64166855e0f12591358e64d06a34c2d782db742caf15e857fff86b872",
@@ -669,9 +669,9 @@
     },
     ".claude/team/phases/phase-3.md": {
       "last_tracked": "6ededd8608f01314fbeb5ebaa87a316e1f126ed6696218ba3ac44a2dcf86840c",
-      "last_resolved": "e85f396dfb7f7c418fad4d5f6a53b03ed0fdc9aa5ebe1b6e46c196ad7009b46f",
+      "last_resolved": "6ededd8608f01314fbeb5ebaa87a316e1f126ed6696218ba3ac44a2dcf86840c",
       "tracked_at": "2026-06-02T15:41:32.671236+00:00",
-      "resolved_at": "2026-05-10T18:36:01.378480+00:00"
+      "resolved_at": "2026-06-04T20:50:14.260341+00:00"
     },
     ".claude/skills/phase-review/SKILL.md": {
       "last_tracked": "861091d903f2ece1c784c53846881bc9ea802542b39acbb8033c1f670aa1f6a1",
@@ -1329,15 +1329,39 @@
     },
     ".claude/team/promotion_audit_log/p3-wave-15.md": {
       "last_tracked": "15b3d7cfe3bf0ccef6f1a23f966fa881dcba05b243dd377d2761c9e96523eeda",
-      "last_resolved": "",
+      "last_resolved": "15b3d7cfe3bf0ccef6f1a23f966fa881dcba05b243dd377d2761c9e96523eeda",
       "tracked_at": "2026-06-02T01:54:08.205888+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-06-04T20:50:14.260341+00:00"
     },
     ".claude/team/phases/phase-4.md": {
       "last_tracked": "0795b5f6761cfbd52e30b8b5d5ddc7dff9fe3da97b81b4433167ce36fb4797f3",
-      "last_resolved": "",
+      "last_resolved": "0795b5f6761cfbd52e30b8b5d5ddc7dff9fe3da97b81b4433167ce36fb4797f3",
       "tracked_at": "2026-06-02T15:42:18.322489+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-06-04T20:50:14.260341+00:00"
+    },
+    ".claude/scratch/nurul_pr_0403.txt": {
+      "last_tracked": "b65795b7e34e5e691ba73fa43024cbc29a29227acb952872f192bbeeac59594b",
+      "last_resolved": "b65795b7e34e5e691ba73fa43024cbc29a29227acb952872f192bbeeac59594b",
+      "tracked_at": "2026-06-03T00:19:37.217207+00:00",
+      "resolved_at": "2026-06-04T20:50:14.260341+00:00"
+    },
+    ".claude/scratch/nurul_review_409.md": {
+      "last_tracked": "efb3d4d05ad373554f976e96935ecb6d15c34d3bfdf1fc5ff7d98f6a0e52ab95",
+      "last_resolved": "efb3d4d05ad373554f976e96935ecb6d15c34d3bfdf1fc5ff7d98f6a0e52ab95",
+      "tracked_at": "2026-06-03T00:28:51.421832+00:00",
+      "resolved_at": "2026-06-04T20:50:14.260341+00:00"
+    },
+    ".claude/scratch/nurul_msg_0403_fixup.txt": {
+      "last_tracked": "95992e2da1cbcd110dc3361084a2c96361c1b2926cfabbbea0d12f63c785fadd",
+      "last_resolved": "95992e2da1cbcd110dc3361084a2c96361c1b2926cfabbbea0d12f63c785fadd",
+      "tracked_at": "2026-06-03T00:31:12.640468+00:00",
+      "resolved_at": "2026-06-04T20:50:14.260341+00:00"
+    },
+    ".claude/scratch/pr415_current_body.md": {
+      "last_tracked": "5b7a8c9aea09b1bf745af3cead503a89788605da4ec1351097617aab6549ba2f",
+      "last_resolved": "5b7a8c9aea09b1bf745af3cead503a89788605da4ec1351097617aab6549ba2f",
+      "tracked_at": "2026-06-03T00:31:58.859099+00:00",
+      "resolved_at": "2026-06-04T20:50:14.260341+00:00"
     }
   },
   "last_cleanup": {
