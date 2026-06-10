@@ -1195,3 +1195,43 @@ The closing wave of Phase 3. 26 PRs / all 8 repos / 1 changes-requested cycle / 
 | **Ingrid Lindqvist** (ig roster) | ig#950 hotfix + regression-proof CI job; second consecutive standout | None this wave |
 | **Aino / Santiago / Nadia** | Sustained delivery, measurement, and coordination rigor | None this wave |
 | **Orchestrator** | Phase-exit on verifiable state; staging onion fully peeled; hook-respect under pressure | ig#943 phantom dup (stale-snapshot issue filing — proposed process change #1) |
+
+## Phase 4 Wave 1 Trust Updates (2026-06-10) — Clean slate (bugs + security + tech-debt burn-down)
+
+First wave of Phase 4. 23 PRs / 7 repos / **1 changes-requested cycle** (deploy#415) / **0 failing CI checks** at any PR head / staging promotion green. Top-implementer concentration **13%** (3 PRs — Nurul Hakim and Aisha Idrissi tied), the most distributed wave on record — a *theme-fit* low (the wave was deliberately a broad burn-down across tiers, not a single-owner domain). Security tier landed in full (deploy#384/#386 scrape-block pair, isnad-graph#955, deploy#244 OAuth dual-env). Directional summary: **everyone at established levels holds** — a clean, well-distributed wave produces little numeric movement when most of the roster already sits at max. No negative signal, no demotions.
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Nadia Khoury** (PD) | 5 | 5 | (hold at max) Wave executed cleanly across 7 repos; the one latent defect (deploy#418) was a missing-gate gap, not a coordination failure. |
+| **Wanjiku Mwangi** (TPM) | 5 | 5 | (hold at max) Counter integrity held — wrapup counters (23 / 1 / 13%) reconciled at retro with zero drift. |
+| **Santiago Ferreira** (RC) | 5 | 5 | (hold at max) Staging-promotion gate green; owns the new `/watch-deploy` release-monitoring skill authored this session. |
+| **Aino Virtanen** (SQL) | 5 | 5 | (hold at max) Tech-debt tier (the bulk of the wave) landed clean; standards review backbone. |
+
+### Deploy / Service Implementers
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Nurul Hakim** (deploy Obs) | 5 | 5 | (hold at max) 3 PRs (deploy#384 security, observability scrape, main#596) — joint top-implementer, fourth consecutive clean wave. |
+| **Aisha Idrissi** (deploy SRE) | 5 | 5 | (hold at max) 3 PRs (deploy#395/#398 tech-debt) — joint top-implementer, all clean. |
+| **Lucas Ferreira** (deploy SRE) | 5 | 5 | (hold at max) deploy#402/#86/#410 + main#613; authored the deploy#418 fix this session through full lifecycle. |
+| **Nino Kavtaradze** (deploy Sec) | 5 | 5 | (hold at max) deploy#386 + #244 security tier landed. |
+| **Mateo Salazar** (user-service Eng) | 4 | 4 | (hold) 2 clean bug PRs (us#65 config-URL, us#74 OAuth SQLAlchemyError). Consistent with the W15 3→4 bump; one more clean wave keeps the trajectory toward 5. |
+| **Idris Yusuf** (isnad-graph / user-service Eng) | 4 | 4 | (hold) 2 clean security PRs (us#73, isnad-graph#955). Rebuilding cleanly after the W15 #872 anti-pattern note; positive trajectory. |
+
+### Orchestrator (Self-Assessment)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Orchestrator (Steven via Claude)** | 4 | 4 | (hold) This session: diagnosed the live "frontend image not-found" to root (per-service tag mis-routing, **not** the first-hypothesised publish race — pivoted honestly when the evidence contradicted the initial theory), fixed it (deploy#418/PR#419) and built `/watch-deploy` (main#623/PR#624), both through the full 2-reviewer + green-CI lifecycle, and **self-caught a real run-resolution bug in the skill during pre-merge review**. Added a landing-parity completeness pass unprompted. **Hold-not-promote:** the deploy#418 defect itself shipped through W1 undetected — defensible (no user-service-only stg deploy ever exercised the path, and the catching gate didn't exist), but promotion wants a wave with no latent-defect surface attributable to prior orchestrator-driven execution. |
+
+### Done Well / Needs Improvement (Phase 4 Wave 1)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Nurul Hakim / Aisha Idrissi** | Joint top-implementers (3 each), zero CI failures, zero must-fix items | None this wave |
+| **Lucas Ferreira** | Tech-debt + docs delivery; live-session deploy#418 root-cause fix | None this wave |
+| **Mateo Salazar / Idris Yusuf** | Clean bug + security delivery; the user-service/isnad bug+security backbone | None this wave |
+| **Org-level team** | 13% concentration (most distributed wave on record), 1 CR, 0 CI failures, stg green | Commit-identity hygiene: deploy#409 authored as bare `parametrization`; `Kofi Mensah` vs `Kofi Mensah-Williams` divergence (cross-repo persona reconciliation) |
+| **Orchestrator** | Honest diagnosis pivot; self-caught skill bug pre-merge; full-lifecycle discipline on both PRs | The deploy#418 class slipped through W1 undetected (now gated by `/watch-deploy` + the fix) |

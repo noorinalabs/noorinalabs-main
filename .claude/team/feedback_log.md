@@ -2719,3 +2719,50 @@ No new hook/skill/charter conversion candidates beyond the 3 charter proposals a
 ### Memory-to-Automation Audit — p3-wave-15
 
 No new hook/skill/charter conversion candidates beyond the 4 process changes proposed above (#596 already filed as the hook-tier item). The 6 memories added during W15 are correctly memory-tier (3 feedback heuristics, 2 project-state, 1 API-behavior reference). **Maintenance performed:** `MEMORY.md` index had exceeded its size limit (28.7KB > 24.4KB, truncating recall); 51 over-length index entries trimmed to ≤280 chars with detail preserved in topic files — now 23.4KB. Marker written.
+
+## Retrospective: Phase 4 Wave 1 — 2026-06-10
+
+**Theme:** Clean slate — bugs + security + tech-debt burn-down (first wave of Phase 4).
+
+### Team Performance
+23 PRs merged across 7 repos; 7/7 wave→main merges (branches retained per the 2026-06-09 every-wave-merge directive); **1 changes-requested cycle** (deploy#415); **0 failing CI checks** at any PR head; **staging promotion green**. All counters reconciled at retro with **zero drift** (PR count 23=23, concentration 13%=13%, CR cycles 1). Ontology current (0 dirty). Top-implementer concentration **13%** (Nurul Hakim & Aisha Idrissi tied at 3) — the most distributed wave on record, theme-fit (broad burn-down, not single-owner domain).
+
+### Per-Engineer Assessments
+- **Nurul Hakim** — 3 PRs (deploy#384 security, observability scrape, main#596). Joint top-implementer, fourth consecutive clean wave. Hold at 5. No improvement items.
+- **Aisha Idrissi** — 3 PRs (deploy#395/#398 tech-debt). Joint top-implementer, clean. Hold at 5. None.
+- **Lucas Ferreira** — deploy#402/#86/#410 + main#613; authored the live-session deploy#418 root-cause fix. Hold at 5. None.
+- **Nino Kavtaradze** — deploy#386 + #244 security tier. Hold at 5. None.
+- **Mateo Salazar** — us#65 (config-URL), us#74 (OAuth SQLAlchemyError). Clean. Hold at 4, positive trajectory toward 5.
+- **Idris Yusuf** — us#73 + isnad-graph#955 (both security). Clean; rebuilding after the W15 #872 anti-pattern note. Hold at 4, positive.
+- **Single-PR clean delivery:** Weronika Zielinska, Marcia Vasquez-Paredes, Kwesi Boateng, Kofi Mensah-Williams, Kofi Mensah, Keanu Tama, Ingrid Lindqvist, Cédric Novák, Aino Virtanen.
+
+### Wave-shape table
+| Metric | Value |
+|--------|-------|
+| PRs merged | 23 |
+| Repos touched | 7 |
+| Changes-requested cycles | 1 (deploy#415) |
+| Failing CI at head | 0 |
+| Staging promotion | success |
+| Top-implementer concentration | 3/23 = 13% (Nurul Hakim / Aisha Idrissi, tied — theme-fit) |
+
+### Top 3 Going Well
+1. **Most-distributed wave on record (13%)** with zero CI failures and a single CR cycle across 23 PRs — broad burn-down executed cleanly with no fragility concentration.
+2. **Security tier fully landed** — scrape-block pair (deploy#384/#386), isnad-graph#955, and the deploy#244 OAuth dual-env setup (stg + prod IDs/secrets, callback URLs fixed, staging verified live this session).
+3. **Honest gate handling end-to-end** — counters reconciled with zero drift; staging promotion genuinely green; the live deploy#418 defect was diagnosed to root (not the first-hypothesised cause) and fixed + gated rather than patched over.
+
+### Top 3 Pain Points
+1. **Latent deploy#418 defect shipped through W1 undetected** — `deploy-stg.yml` applied the dispatching service's sha to a single `IMAGE_TAG` (api+frontend), so every user-service-only merge broke the staging image pull. Never caught because no user-service-only stg deploy exercised the path and no gate existed. Fixed this session (PR#419) + monitoring added (`/watch-deploy`, main#623/PR#624).
+2. **Commit-identity hygiene** — deploy#409 was authored as bare `parametrization` (not a roster identity); `Kofi Mensah` (design-system#54) vs `Kofi Mensah-Williams` (landing-page) is an unreconciled cross-repo persona divergence. Both evade the per-commit identity convention's intent.
+3. **Annunaki error-log pollution** — `errors.jsonl` accumulated 17 benign `posttooluse_dispatch` traces (from `suggest_generic_prompt`) with no exit code or pattern, inflating `/annunaki`'s "error" count and able to misdirect `/annunaki-attack`. Filed main#625.
+
+### Proposed Process Changes
+1. **`/watch-deploy` step — DONE this session** (main#623/PR#624). Codifies active per-merge deploy monitoring (stg auto, prod post-approval) + bounded fix-forward, wired into `/wave-wrapup` Step 11.6a. Closes the detection gap that let deploy#418 self-heal-by-luck. *No approval needed — already shipped.*
+2. **Commit-identity verification at PR-merge time** — Rationale: deploy#409 (bare `parametrization`) and the Kofi divergence show the per-commit `-c` identity convention has no machine check. Propose a small hook/CI gate that asserts each wave PR's head-commit `author.name` is a known roster name (and flags bare `parametrization`). Enforcement-hierarchy: hook > charter. *Owner decision required.*
+3. **Separate annunaki dispatch-traces from errors** — Rationale: main#625. `errors.jsonl` should hold only genuine failures; `/annunaki` + `/annunaki-attack` should ignore `posttooluse_dispatch` traces. *Filed; next-wave tech-debt.*
+
+### Annunaki-Attack — p4-wave-1
+**0 genuine errors this wave.** The 17 records in `errors.jsonl` are all benign `posttooluse_dispatch` traces from `suggest_generic_prompt` (config/memory-edit suggestions), carrying no exit code or pattern — not failures. The pollution itself is the only finding → filed **main#625** (log hygiene). No fixes to attack. Marker written.
+
+### Memory-to-Automation Audit — p4-wave-1
+One memory added this wave (`feedback_stg_deploy_per_service_tag_routing`) — correctly memory-tier (single-instance deploy heuristic, too fresh to promote). The audit's standing promotion candidate is **process change #2** (commit-identity verification), surfaced here as a hook-tier proposal for owner decision rather than auto-applied (hooks are security-sensitive — D6). No other memory crossed a promotion threshold. Marker written.

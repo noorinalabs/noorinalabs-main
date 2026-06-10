@@ -12,6 +12,8 @@
   "wave_1_stg_promotion": "success",
   "wave_1_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/27237055115",
   "wave_1_completed_at": "2026-06-09T23:42:02Z",
+  "wave_1_annunaki_attack_ran_at": "2026-06-10T01:25:11Z",
+  "wave_1_memory_audit_ran_at": "2026-06-10T01:25:11Z",
   "td_ratio_methodology": "exclude meta-issue-labeled from numerator and denominator, pooled 8 repos (owner re-baseline 2026-06-02)",
   "phase_3_criterion9_caveat_outcome": "gate over (raw 22.2%, re-baselined 23.6%) — owner re-baseline (meta-issue scaffolding excluded) + waiver; hard re-measure at P4W1 wrapup",
   "phase_3_criterion9_caveat_resolved_at": "2026-06-02T15:41:06Z",
