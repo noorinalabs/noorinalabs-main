@@ -549,6 +549,22 @@ export STG_PROMOTION_OVERRIDE_RATIONALE="W13 is charter/skill-meta only; no serv
 
 Include the staging-promotion result (`success`/`failure`/`deferred`/`overridden`) and the run URL in the Step 10 final wave report. `/wave-retro` records it in the wave history row alongside PR count and admin overrides.
 
+### 11.6a. Per-merge deploy watch (active — `/watch-deploy`)
+
+The Step 11.6 gate above inspects only the **latest** `deploy-stg.yml` run. That misses the failure mode deploy#418 surfaced: a wave→main merge in one repo triggers a deploy that fails (e.g. a user-service merge that broke the image pull), which is then masked when a later merge's deploy goes green and becomes "latest". To close this, **actively follow the deploy each wave→main merge triggered**, not just the most-recent run.
+
+For each repo in `wave_{M}_repos_in_scope` that participates in the staging fan-in (`noorinalabs-isnad-graph`, `noorinalabs-user-service` — the repos whose `ghcr-publish.yml` dispatches `deploy-stg.yml`), take that repo's Step 11 wave→main merge commit and run:
+
+```
+/watch-deploy stg <merge_sha>
+```
+
+`/watch-deploy` polls that specific dispatched deploy to a terminal state, classifies any failure, attempts a single bounded fix-forward (e.g. re-dispatch `stg-latest`), and escalates with a diagnosis otherwise. A wave is not closeable while any fan-in merge's deploy is red and unremediated — fold any escalation into the Step 11.6 block/override decision above.
+
+Landing-page and meta-only repos do not participate in the stg fan-in (no dispatch), so they have no per-merge deploy to watch — skip them.
+
+**Production counterpart:** prod deploys are gated on owner approval (owner directive 2026-06-09). `/wave-wrapup` must NOT approve or trigger them. When the owner approves a queued prod deploy for this wave's promotion, run `/watch-deploy prod <sha>` to monitor it the same way; `/watch-deploy` never advances or auto-remediates prod.
+
 ### 12. Ontology rebuild
 
 Run `/ontology-rebuild` to process any files that changed during this wave. This ensures the ontology reflects the current state of all repos before the wave closes.

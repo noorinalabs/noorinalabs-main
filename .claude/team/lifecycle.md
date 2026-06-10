@@ -95,6 +95,7 @@ flowchart TD
 |-------|--------------|------------------------------|-------------|
 | `/retro` | Active wave (read from `cross-repo-status.json` `current_wave`). | (none) — inline diagnostic output only. No trust-matrix updates, no feedback_log writes. | Mid-wave checkpoint, after an incident, or when the team lead wants a quick pulse without the overhead of `/wave-retro`. |
 | `/promotion-audit [{wave_name}]` | Resolves `current_wave` from `cross-repo-status.json` if not provided. | Two writes: appends to `feedback_log.md` (under current retro if today's date matches, else new section); writes `.claude/team/promotion_audit_log/{wave_name}.md`. May open AUTO-tier PRs (memory→charter, charter→skill) and file DECIDE-tier issues (skill→hook always DECIDE). | Auto-invoked from `/wave-retro` Step 7.5. Standalone run between retros if drift is suspected. |
+| `/watch-deploy {stg\|prod} [sha]` | A merge has triggered (stg) or the owner has approved (prod) a deploy in `noorinalabs-deploy`. | (none persisted) — polls the dispatched deploy run to terminal, classifies failures, attempts one bounded fix-forward on **stg** (e.g. re-dispatch `stg-latest`), escalates otherwise. Never approves/triggers/auto-remediates **prod**. May `/file-bug` a real defect. | After any merge that triggers a staging deploy; auto-invoked from `/wave-wrapup` Step 11.6a per fan-in wave→main merge; for prod, only after owner approval. |
 
 ### End-of-wave
 
