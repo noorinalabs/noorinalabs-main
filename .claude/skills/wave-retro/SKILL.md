@@ -248,7 +248,7 @@ P3W8 surfaced the gap (2026-05-10): user explicitly noted "these should be a par
 
 ### 9. Reconcile next-wave scope (`/wave-scope`) — added P3W5 #273
 
-Carry-forward and memory-must-include state is freshest immediately after retro, so this is the highest-value moment to run `/wave-scope`. Auto-invoke if the next-wave meta-issue exists; otherwise surface as a kickoff blocker.
+Carry-forward and memory-must-include state is freshest immediately after retro, so this is the highest-value moment to run `/wave-scope`. Auto-invoke if the next-wave meta-issue exists; **otherwise auto-draft a stub meta-issue** (the scaffold is mechanical — only the theme is an owner decision) and surface "set the theme," rather than re-emitting a manual "go draft an issue" blocker every retro (owner directive, P4W1 retro 2026-06-10 — the blocker recurred every wave).
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -266,8 +266,49 @@ HIT_COUNT=$(echo "$META_HITS" | jq 'length')
 NEXT_META_ISSUE=$(echo "$META_HITS" | jq -r '.[0].number // empty')
 
 if [ "$HIT_COUNT" -eq 0 ]; then
-  echo "BLOCKER for /wave-kickoff p{N} w$NEXT_WAVE:"
-  echo "  Next-wave meta-issue not yet drafted. Create one titled 'Phase {N} Wave $NEXT_WAVE — <theme>' and run /wave-scope {N} $NEXT_WAVE before /wave-kickoff."
+  # AUTO-DRAFT the next-wave meta-issue stub (P4W1 retro 2026-06-10 — owner
+  # directive: stop re-surfacing "draft the meta-issue" as a manual blocker
+  # every retro). The stub's scaffold — title, carry-forward, candidate pointer
+  # — is mechanical; only the THEME is an owner decision. We create it with a
+  # TBD theme, board it, and record wave_${NEXT_WAVE}_meta_issue, then surface
+  # "set the theme". /wave-scope Gate B still blocks on the owner-set theme, so
+  # this removes the toil without removing the owner decision.
+  #
+  # Carry-forward scaffold: any "deliberately_not_in_w*" deferred markers from
+  # this wave's scope (machine-readable). The owner/orchestrator refines at
+  # /wave-scope; this is a starting point, not the final scope.
+  DEFERRED=$(jq -r '.["wave_{M}_scope"] // {} | to_entries[]
+      | select(.key | startswith("deliberately_not_in_w"))
+      | .value[]? | "- " + .' "$REPO_ROOT/cross-repo-status.json" 2>/dev/null)
+  [ -z "$DEFERRED" ] && DEFERRED="- (no deferred markers recorded in wave_{M}_scope — see this retro's feedback_log entry for carry-forward)"
+
+  STUB_BODY=$(cat <<MD
+## Theme
+
+**TBD — owner to set.** Replace this line with the wave theme, then \`/wave-scope {N} $NEXT_WAVE\` proceeds (Gate B reads the theme from this heading + cross-repo-status.json).
+
+## Carry-forward from Phase {N} Wave {M} (auto-scaffold)
+$DEFERRED
+
+## Candidate scope (refined at /wave-scope {N} $NEXT_WAVE)
+- Open issues labeled for the next wave, plus the **+20% tech-debt intake** applied automatically at \`/wave-scope\` Step 8.5.
+- See the Phase {N} Wave {M} retro entry in \`.claude/team/feedback_log.md\` for pain-point follow-ups to fold in.
+
+---
+*Auto-drafted stub from \`/wave-retro {N} {M}\` Step 9. Owner sets the theme; \`/wave-scope\` finalizes scope. Title + ## Theme line are the only manual edits.*
+MD
+)
+  NEW_URL=$(gh issue create --repo noorinalabs/noorinalabs-main \
+    --title "Phase {N} Wave $NEXT_WAVE — (theme TBD — owner to set)" \
+    --body "$STUB_BODY")
+  NEW_NUM=$(echo "$NEW_URL" | grep -oE '[0-9]+$')
+  gh project item-add 2 --owner noorinalabs --url "$NEW_URL" 2>/dev/null || true
+  python3 "$REPO_ROOT/.claude/lib/upsert_status_keys.py" "$REPO_ROOT/cross-repo-status.json" \
+    "wave_${NEXT_WAVE}_meta_issue=\"noorinalabs-main#$NEW_NUM\""
+  echo "AUTO-DRAFTED next-wave meta-issue stub: $NEW_URL"
+  echo "  → Set the theme (replace the TBD ## Theme line + the title), then /wave-scope {N} $NEXT_WAVE proceeds."
+  echo "    The theme is the ONLY manual step — the stub, board card, and status key are already in place."
+  NEXT_META_ISSUE="$NEW_NUM"
 elif [ "$HIT_COUNT" -gt 1 ]; then
   echo "BLOCKER for /wave-kickoff p{N} w$NEXT_WAVE:"
   echo "  Multiple open issues match 'Phase {N} Wave $NEXT_WAVE —' in title — meta-issue is ambiguous:"
@@ -279,13 +320,15 @@ else
 fi
 ```
 
-Then invoke the `/wave-scope` skill with the next phase + wave numbers. The skill is responsible for:
+**When a meta-issue with a set (non-TBD) theme exists** (the `HIT_COUNT == 1` branch), invoke the `/wave-scope` skill with the next phase + wave numbers. The skill is responsible for:
 - Reading carry-forward (just-written by step 6) and memory must-includes
 - Reconciling declared (meta-issue) vs labeled scope across all repos
 - Refreshing the next-wave meta-issue body
 - Writing `wave_$NEXT_WAVE_scope_reconciled_at` so `/wave-kickoff` Step 0a passes
 
-This step closes the retro→kickoff handoff loop: every retro produces a reconciled next-wave scope, and every kickoff verifies it. If the meta-issue doesn't exist yet (early-stage phase planning), surface explicitly so the gap is owned before the next kickoff.
+**When the stub was just auto-drafted** (the `HIT_COUNT == 0` branch above), do **NOT** invoke `/wave-scope` yet — its Gate B requires an owner-set theme, and the stub's theme is `TBD`. Surface the auto-drafted issue URL and stop; the owner sets the theme, then `/wave-scope {N} $NEXT_WAVE` runs on the next turn (or the next retro/session picks it up via the now-existing meta-issue).
+
+This step closes the retro→kickoff handoff loop: every retro produces *either* a reconciled next-wave scope *or* a ready-to-theme stub meta-issue — never a bare "go create an issue" blocker. The only manual action left to the owner is the theme decision itself.
 
 ## What remains manual
 
