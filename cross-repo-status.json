@@ -11,6 +11,9 @@
   "wave_2_stg_promotion": "success",
   "wave_2_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/27242671938",
   "wave_2_wrapup_completed_at": "2026-06-11T04:20:00Z",
+  "wave_2_annunaki_attack_ran_at": "2026-06-11T04:30:00Z",
+  "wave_2_memory_audit_ran_at": "2026-06-11T04:30:00Z",
+  "wave_2_retro_completed_at": "2026-06-11T04:30:00Z",
   "wave_1_scope_reconciled_at": "2026-06-02T16:10:00Z",
   "wave_1_repos_in_scope": ["noorinalabs-main","noorinalabs-isnad-graph","noorinalabs-user-service","noorinalabs-deploy","noorinalabs-design-system","noorinalabs-landing-page","noorinalabs-data-acquisition"],
   "wave_1_meta_issue": 608,
@@ -1904,6 +1907,7 @@
   "owner_action_c_dropped": "CWA stays enabled per owner pushback; utilize-not-disable",
   "post_w3_addendum": "After W3 close, do cross-repo phase-3 re-plan that brings child-repo backlogs into multi-repo coordinated waves (parent meta-issue + per-repo issue clusters per CLAUDE.md § Cross-Repo Coordination). Pattern documented; not yet exercised in P3."
  },
+  "wave_3_meta_issue": "noorinalabs-main#637",
  "wave_started": "2026-04-30T21:00:00Z",
  "last_updated": "2026-05-31T16:38:11Z",
  "deployments_branch": "deployments/phase-3/wave-3",
