@@ -67,3 +67,9 @@ temp/
 # Annunaki rotation backups — created by /annunaki-attack Step 1 before clearing
 # errors.jsonl. Historical-only; safe to age out locally, not for tracking.
 .claude/annunaki/errors.jsonl.bak.*
+
+# Annunaki benign-trace stream (#625) — high-churn, machine-generated forensic
+# dispatch/diagnostic traces split out of errors.jsonl so /annunaki stops
+# over-counting them as errors. Local diagnostic aid only; never committed.
+.claude/annunaki/traces.jsonl
+.claude/annunaki/traces.jsonl.bak.*
