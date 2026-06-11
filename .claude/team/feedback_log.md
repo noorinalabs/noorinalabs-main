@@ -2766,3 +2766,38 @@ No new hook/skill/charter conversion candidates beyond the 4 process changes pro
 
 ### Memory-to-Automation Audit — p4-wave-1
 One memory added this wave (`feedback_stg_deploy_per_service_tag_routing`) — correctly memory-tier (single-instance deploy heuristic, too fresh to promote). The audit's standing promotion candidate is **process change #2** (commit-identity verification), surfaced here as a hook-tier proposal for owner decision rather than auto-applied (hooks are security-sensitive — D6). No other memory crossed a promotion threshold. Marker written.
+
+## Retrospective: Phase 4 Wave 2 — 2026-06-11
+
+**Theme:** Pipeline first light + auth account-linking. **Result: the data-first thesis delivered** — real Riyad us-Salihin hadiths live in staging Neo4j + a frontend-renderable graph, and the *real* pipeline run flushed out three mock-masked production bugs (all fixed in-wave).
+
+### Team Performance
+- **11 PRs merged** (8 to wave branches + 3 direct to ingest-platform main), **12 wave issues closed**, 1 CR cycle (Santiago→#630 merge-commit false-positive; fixed + re-approved), 25% top-implementer concentration (Kwesi/Aino tied at 2 — healthy distribution). Staging promotion GREEN. Zero genuine team-code CI failures (only pre-existing advisory/CVE drift).
+- 3 production bugs surfaced by going live, each the same pattern (no-op test fake hiding a real-infra failure): da#77 (APPEARS_IN null-MERGE abort), ig#63 (Hadith id double-prefix), ig#69 (reset bulk delete_objects MissingContentMD5). First two fixed in-wave; ig#69 is a tracked fast-follow with the failing path xfail-guarded.
+
+### Per-Engineer Assessments
+- **Kwesi Boateng** (da#73 keystone, da#77 loader fix) — keystone vertical slice + live staging load + null-safe MERGE-on-pair fix + the in-book-ordinal evidence graph + flawless da-cluster rebase choreography (trial-rebased before flagging). Caught + owned an over-statement in his own rebase evidence. **Severity: none; exemplary.**
+- **Alejandra Reyes-Fuentes** (da#72) — scraper hadith_number fix; proactively converged to the *more honest* in-book-ordinal extraction (folded da#78 into a #75 amend) rather than the easier collection-ref. **none; strong.**
+- **Oyunbileg Batbayar** (da#69) — edge-key real-graph assertion; caught a masked empty-graph fixture bug AND the Neo4j SET-null-removes-key subtlety, advised Kwesi pre-PR. **none; strong.**
+- **Nikolaos Papadopoulos** (main#139/ig#62) — faithful in-process E2E harness + live-Neo4j run; found the id double-prefix via a realistic fixture; drove cross-PR contract alignment. **none; strong.**
+- **Aino Virtanen** (main#627, main#625) — identity gate + annunaki dual-stream, both clean; the **honest #136 duplication audit** (found her own PR redundant) + the #634 sibling-roster-CI catch are the integrity high-water mark of the wave. **none; exemplary.**
+- **Tomás Carvalho** (ig#63 fix, main#136) — comprehensive worker-chain E2E; xfail-with-diagnosis on the reset bug rather than hide-or-fix-mid-PR (surfaced ig#69). **none; strong.**
+- **Mateo Salazar** (us#153/154) — coherent single-guard for the coupled auth bugs + real-Postgres-container proof. **none; strong.**
+- **Ingrid Lindqvist** (ig#956) — config component-env fix mirroring us#65, percent-encoding + backward-compat + URL-hostile-password tests. **none.**
+- **Reviewers** (Idris gating-security on auth, Anya, Jean-Claude, Imelda, Sayed, Arjun, Santiago, Wanjiku) — rigorous, read-at-HEAD, several caught real issues (Santiago's merge-commit gate bug; Oyunbileg's SET-null). **none.**
+
+### Top 3 Going Well
+1. **Data-first paid for itself** — going live didn't just produce a graph, it forced the real pipeline and exposed 3 mock-masked production bugs that all green test suites had sailed past.
+2. **Integrity culture** — the test-mock-masks-production pattern was named and hunted repeatedly; Aino closed her own redundant PR; Kwesi corrected his own evidence over-statement; Tomás xfail-documented rather than buried a bug.
+3. **Self-organizing cross-PR contract alignment** — the da-cluster (da#72/#75 ↔ da#77 ↔ ig#63) was negotiated peer-to-peer to a mutually-consistent design with zero merge surprises.
+
+### Top 3 Pain Points
+1. **Verdict-attestation brief gap (orchestrator)** — reviewer briefs said "TechDebt line *if any*" instead of "always `none`/`#N`"; ~13 verdicts merge-blocked until transcribed. Brief-template fix needed.
+2. **Advisory-gating on ingest main** — a *required* security-audit check turned red by an external pip-CVE forced `--admin` on 3 merges. The org-wide-non-blocking-gate rule says advisory checks must be continue-on-error.
+3. **Crossed-message churn (#136 + dup issues)** — parallel agents + lagging inboxes caused repeated reopen/close cycles and a near-double-file of the reset bug. Mitigated only by verifying state at origin before every action.
+
+### Proposed Process Changes
+1. **Reviewer-brief template: require `TechDebt: none`/`#N` on EVERY verdict** (not "if any"). Rationale: validate_pr_review enforces it always; the conditional phrasing blocked 13 merges.
+2. **Advisory CI checks → `continue-on-error` / non-required** (esp. ingest security-audit). Rationale: external advisory publication shouldn't hard-gate unrelated PRs (org-wide-non-blocking-gate pattern). Folds into main#633.
+3. **Kickoff status pointer writes go to the wave branch, not main** — writing `current_wave`/`kicked_off_at` to main via PUT-contents while the wave branch also edits cross-repo-status.json caused the sole wave→main conflict. Rationale: keep the file's authority on one branch during a wave.
+4. **Re-affirm origin-state-verification before destructive/structural action** — caught a falsely-reported "closed #67" and a dup-of-dup issue close by checking origin first. (Already charter; reinforce.)
