@@ -1,0 +1,40 @@
+name: Commit identity gate
+
+# noorinalabs-main#627 — assert every commit author name a PR introduces is a
+# known roster member. This is the LANDED-STATE counterpart to the
+# `validate_commit_identity.py` PreToolUse hook: the hook gates commit-TIME
+# `-c user.name=` flags it can see in the Bash command, this gate inspects the
+# author metadata of the commits that actually reached the branch. It closes
+# the gap the hook structurally cannot (gh-API / merge / web-UI commits, and
+# the bare `parametrization` principal — the deploy#409 evasion).
+#
+# Deliberately NO `paths:` filter (unlike ci.yml): a PR touching only docs or
+# child-repo-pointer files can still carry a bad-author commit, so identity
+# must be verified on EVERY PR to a protected branch.
+
+on:
+  pull_request:
+    branches: [main, "deployments/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-commit-identity:
+    name: Verify commit authors are roster members
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need both base and head reachable to enumerate the PR's commit
+          # range with `git log base..head`. fetch-depth: 0 = full history.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify commit author names against the roster
+        run: |
+          python3 .claude/lib/verify_commit_identity.py \
+            --repo-root . \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head "${{ github.event.pull_request.head.sha }}"
