@@ -24,8 +24,10 @@ roster persona:
      NEITHER form fails here.
 
 This module is the *landed-state* gate that closes the gap the commit-time
-hook structurally cannot: it inspects the author name of every commit a PR
-introduces and asserts each is a recognized roster name. It runs in CI on the
+hook structurally cannot: it inspects the author name of every non-merge
+content commit a PR introduces and asserts each is a recognized roster name
+(merge commits are excluded — GitHub authors them as the bare principal by
+design; see `authors_in_range`). It runs in CI on the
 PR, where the actual committed author metadata — not the intended `-c` flag —
 is the ground truth.
 
@@ -53,8 +55,9 @@ Input Language
 CLI:  verify_commit_identity.py --base <ref> --head <ref> [--repo-root <dir>]
       verify_commit_identity.py --authors "Name A,Name B" [--repo-root <dir>]
 
-`--base`/`--head` resolve the commit range `base..head` via `git log` and
-collect the distinct author names. `--authors` accepts a pre-resolved
+`--base`/`--head` resolve the commit range `base..head` via `git log
+--no-merges` and collect the distinct non-merge author names. `--authors`
+accepts a pre-resolved
 comma-separated list (used by CI when the range is computed by the workflow,
 and by tests). Exactly one of (`--base`+`--head`) or `--authors` is required.
 
@@ -129,18 +132,33 @@ def load_known_names(repo_root: Path) -> set[str]:
 
 
 def authors_in_range(base: str, head: str, repo_root: Path) -> list[str]:
-    """Return the distinct author names of commits in `base..head`.
+    """Return the distinct author names of the NON-MERGE commits in `base..head`.
 
-    Uses `git log base..head --format=%an` so merge commits and every
-    introduced commit are covered — not just the single head commit. This is
+    Uses `git log --no-merges base..head --format=%an` so every introduced
+    content commit is covered — not just the single head commit. This is
     strictly stronger than the issue's "head-commit" framing: a non-roster
-    author ANYWHERE in the PR's introduced commits is a violation, which
-    catches a mid-stack bad author that a head-only check would miss.
+    author ANYWHERE in the PR's introduced content commits is a violation,
+    which catches a mid-stack bad author that a head-only check would miss.
+
+    Why `--no-merges` (PR #630 review, Santiago Ferreira)
+    ----------------------------------------------------
+    Under this org's merge strategy (`allow_merge_commit: true`), every
+    GitHub-side merge commit is authored by the bare gh principal
+    `parametrization` BY GITHUB'S DESIGN — the merger has no roster identity to
+    stamp. Counting merge commits would false-block every legitimate
+    wave-branch→main PR (the every-wave-merges-to-main flow), every per-issue
+    merge into a wave branch, and any feature PR brought up to date via
+    "Update with merge commit". A merge commit's tree is the only thing GitHub
+    controls; the actual INTRODUCED CONTENT always lives in the non-merge
+    commits, which is exactly where a bad author must be caught. `--no-merges`
+    therefore drops the false positives without reopening the gap — the
+    deploy#409 evasion was a CONTENT (non-merge) head commit authored as
+    `parametrization`, which `--no-merges` still catches.
 
     Order is preserved (newest first) and de-duplicated.
     """
     proc = subprocess.run(
-        ["git", "-C", str(repo_root), "log", f"{base}..{head}", "--format=%an"],
+        ["git", "-C", str(repo_root), "log", "--no-merges", f"{base}..{head}", "--format=%an"],
         capture_output=True,
         text=True,
         check=True,

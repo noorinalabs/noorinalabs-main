@@ -185,6 +185,133 @@ class AuthorsInRange(unittest.TestCase):
             # Newest first, base excluded (base..head is exclusive of base).
             self.assertEqual(authors, [GH_PRINCIPAL_LOGIN, "Santiago Ferreira"])
 
+    def _make_principal_merge(self, repo: Path) -> str:
+        """Build a repo with a principal-authored MERGE commit in `base..HEAD`.
+
+        Returns the base sha. Layout after this runs:
+          base (Aino) ← advance (Aino) ← MERGE (parametrization, 2 parents)
+                     \\── feat (Santiago) ─────────┘
+        The merge is the GitHub-merge shape: authored by the bare principal,
+        two parents, forced via --no-ff.
+        """
+        self._git(repo, "init", "-q")
+        (repo / "f").write_text("0", encoding="utf-8")
+        self._git(repo, "add", "f")
+        self._git(
+            repo,
+            "-c",
+            "user.name=Aino Virtanen",
+            "-c",
+            "user.email=a@x",
+            "commit",
+            "-q",
+            "-m",
+            "base",
+        )
+        base = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+        self._git(repo, "checkout", "-q", "-b", "feature")
+        (repo / "g").write_text("1", encoding="utf-8")
+        self._git(repo, "add", "g")
+        self._git(
+            repo,
+            "-c",
+            "user.name=Santiago Ferreira",
+            "-c",
+            "user.email=s@x",
+            "commit",
+            "-q",
+            "-m",
+            "feat content",
+        )
+
+        # Advance the base branch so the merge is a true 2-parent merge.
+        self._git(repo, "checkout", "-q", "-")
+        (repo / "f").write_text("0b", encoding="utf-8")
+        self._git(repo, "add", "f")
+        self._git(
+            repo,
+            "-c",
+            "user.name=Aino Virtanen",
+            "-c",
+            "user.email=a@x",
+            "commit",
+            "-q",
+            "-m",
+            "advance",
+        )
+        self._git(
+            repo,
+            "-c",
+            f"user.name={GH_PRINCIPAL_LOGIN}",
+            "-c",
+            "user.email=p@x",
+            "merge",
+            "--no-ff",
+            "-q",
+            "-m",
+            "Merge pull request",
+            "feature",
+        )
+        return base
+
+    def test_merge_commit_by_principal_excluded_but_nonmerge_caught(self) -> None:
+        """PR #630 regression: a `parametrization`-authored MERGE commit in the
+        range must NOT be flagged (GitHub authors merges as the bare principal
+        by design), while a `parametrization`-authored NON-merge content commit
+        in the same range IS still caught (the deploy#409 evasion)."""
+        with TemporaryDirectory() as td:
+            repo = Path(td)
+            base = self._make_principal_merge(repo)
+
+            # Add a NON-merge content commit authored as the bare principal —
+            # the evasion that MUST still be caught after --no-merges.
+            (repo / "h").write_text("2", encoding="utf-8")
+            self._git(repo, "add", "h")
+            self._git(
+                repo,
+                "-c",
+                f"user.name={GH_PRINCIPAL_LOGIN}",
+                "-c",
+                "user.email=p@x",
+                "commit",
+                "-q",
+                "-m",
+                "sneaky content",
+            )
+
+            authors = authors_in_range(base, "HEAD", repo)
+            # Santiago's content commit is present; the principal appears ONLY
+            # because of the non-merge sneaky commit (the merge is excluded).
+            self.assertIn("Santiago Ferreira", authors)
+            self.assertIn(GH_PRINCIPAL_LOGIN, authors)
+            # check_authors must flag the principal (the sneaky non-merge), proving
+            # --no-merges did not silence the real evasion.
+            unknown = check_authors(authors, {"Aino Virtanen", "Santiago Ferreira"})
+            self.assertEqual(unknown, [GH_PRINCIPAL_LOGIN])
+
+    def test_merge_only_range_by_principal_is_clean(self) -> None:
+        """A range whose ONLY principal-authored commit is a merge yields no
+        principal violation — the core #630 false-positive case in isolation
+        (the exact wave-branch→main shape Santiago reproduced against #622)."""
+        with TemporaryDirectory() as td:
+            repo = Path(td)
+            base = self._make_principal_merge(repo)
+            authors = authors_in_range(base, "HEAD", repo)
+            self.assertNotIn(
+                GH_PRINCIPAL_LOGIN,
+                authors,
+                "a principal-authored MERGE commit must not appear in the author set",
+            )
+            # Only the two real content authors remain (Santiago's feat, the
+            # Aino advance); the merge contributed nothing.
+            self.assertEqual(set(authors), {"Aino Virtanen", "Santiago Ferreira"})
+
 
 class CliExitCodes(unittest.TestCase):
     def _setup_roster(self, td: str) -> Path:
