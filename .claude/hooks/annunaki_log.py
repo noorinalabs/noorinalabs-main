@@ -4,6 +4,22 @@
 Called by PreToolUse hooks when they block a command, so that blocked
 commands appear in the Annunaki error log alongside PostToolUse errors.
 
+Two streams (#625)
+==================
+This module writes to TWO files under `.claude/annunaki/`:
+
+  - `errors.jsonl`  — genuine signals: command-failure records (from
+    `annunaki_monitor`), `pretooluse_block` (a real prevented command), and
+    `posttooluse_event` (a hook reporting a follow-up condition). This is what
+    `/annunaki` counts and `/annunaki-attack` processes.
+  - `traces.jsonl`  — benign forensic traces: `posttooluse_dispatch` (the
+    dispatcher's per-check() view) and `pretooluse_diagnostic` forensics.
+    Informational only; NEVER counted as errors.
+
+Pre-#625 both kinds shared `errors.jsonl`; dispatch traces were 76% of the
+P4W1 log and `/annunaki` over-counted them as errors. `TRACE_RECORD_TYPES` is
+the single source of truth for which record types are benign traces.
+
 Usage in any blocking hook:
     from annunaki_log import log_pretooluse_block
     log_pretooluse_block(hook_name="validate_commit_identity", command=command, reason=reason)
@@ -34,6 +50,31 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 ERRORS_FILE = REPO_ROOT / ".claude" / "annunaki" / "errors.jsonl"
+
+# Benign-trace stream separation (#625)
+# =====================================
+# Pre-#625, every annunaki record — genuine command-failure errors AND benign
+# forensic dispatch traces — was appended to the single `errors.jsonl`. The
+# PostToolUse dispatcher emits a `posttooluse_dispatch` trace for EVERY
+# interesting check() call (every genuine error logged by annunaki_monitor
+# returns an action dict, so each real error spawns a companion trace), plus
+# `pretooluse_diagnostic` forensics. In the P4W1 window these benign traces were
+# 137 of 181 records (76%) and `/annunaki` counted all of them as "errors",
+# wildly over-reporting (#625).
+#
+# Fix: route the two informational-by-design record kinds to a SEPARATE
+# `traces.jsonl`. `errors.jsonl` now holds only genuine signals — the
+# annunaki_monitor command-failure records, `pretooluse_block` (a real
+# prevented error), and `posttooluse_event` (a hook reporting a follow-up
+# condition). `/annunaki` + `/annunaki-attack` count `errors.jsonl` as before
+# and additionally defend against historical mixed logs by skipping any record
+# whose `type` is in TRACE_RECORD_TYPES.
+TRACES_FILE = REPO_ROOT / ".claude" / "annunaki" / "traces.jsonl"
+
+# Record `type` values that are benign forensic traces, NOT errors. The
+# annunaki parsers treat these as non-counting. Kept here as the single source
+# of truth so writers and readers agree.
+TRACE_RECORD_TYPES = frozenset({"posttooluse_dispatch", "pretooluse_diagnostic"})
 
 
 def _is_test_mode() -> bool:
@@ -116,8 +157,9 @@ def log_pretooluse_diagnostic(
 
     Keys in `diagnostic` are hook-specific; values must be JSON-safe
     primitives (no datetime, no Path — stringify upstream). The record's
-    top-level `type` is `pretooluse_diagnostic` so /annunaki can filter
-    these out of error counts.
+    top-level `type` is `pretooluse_diagnostic`; it is written to
+    `traces.jsonl` (NOT `errors.jsonl`) so it never inflates /annunaki error
+    counts (#625).
     """
     record = {
         "timestamp": datetime.now(UTC).isoformat(),
@@ -127,7 +169,8 @@ def log_pretooluse_diagnostic(
         "command": command[:500],
         "diagnostic": diagnostic,
     }
-    append_jsonl_record(ERRORS_FILE, record)
+    # Benign forensic trace → traces.jsonl, not errors.jsonl (#625).
+    append_jsonl_record(TRACES_FILE, record)
 
 
 def log_posttooluse_dispatch(
@@ -144,8 +187,9 @@ def log_posttooluse_dispatch(
     structured action dict / raise. Critical for #425-class debugging
     where the harness sees only `stdout=""` and the operator concludes
     "dispatcher dead" even when the chain is firing perfectly. Type is
-    `posttooluse_dispatch` so /annunaki can filter these out of error
-    counts — they're informational unless `outcome.raised` is set.
+    `posttooluse_dispatch`; the record is written to `traces.jsonl` (NOT
+    `errors.jsonl`) so it never inflates /annunaki error counts (#625) — it's
+    informational unless `outcome.raised` is set.
 
     `outcome` shape (all JSON-safe primitives):
       - returned: stringified repr of what check() returned (or "None")
@@ -161,7 +205,8 @@ def log_posttooluse_dispatch(
         "command": command[:500],
         "outcome": outcome,
     }
-    append_jsonl_record(ERRORS_FILE, record)
+    # Benign forensic trace → traces.jsonl, not errors.jsonl (#625).
+    append_jsonl_record(TRACES_FILE, record)
 
 
 def log_posttooluse_event(

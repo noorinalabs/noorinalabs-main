@@ -739,9 +739,15 @@ class DiagnosticEmissionTests(unittest.TestCase):
             "NOORIN_HOOK_TEST_MODE": os.environ.pop("NOORIN_HOOK_TEST_MODE", None),
         }
         self._tmp_dir = tempfile.mkdtemp(prefix="librarian_diag_")
+        # #625: pretooluse_diagnostic records now go to TRACES_FILE, not
+        # ERRORS_FILE. Redirect both so the diagnostic assertions read the
+        # right stream and a stray error write doesn't leak to the real log.
         self._orig_errors_file = annunaki_log.ERRORS_FILE
+        self._orig_traces_file = annunaki_log.TRACES_FILE
         self._errors_file = Path(self._tmp_dir) / "errors.jsonl"
+        self._traces_file = Path(self._tmp_dir) / "traces.jsonl"
         annunaki_log.ERRORS_FILE = self._errors_file
+        annunaki_log.TRACES_FILE = self._traces_file
 
     def tearDown(self) -> None:
         import shutil
@@ -749,6 +755,7 @@ class DiagnosticEmissionTests(unittest.TestCase):
         import annunaki_log
 
         annunaki_log.ERRORS_FILE = self._orig_errors_file
+        annunaki_log.TRACES_FILE = self._orig_traces_file
         shutil.rmtree(self._tmp_dir, ignore_errors=True)
         for k, v in self._saved_env.items():
             if v is None:
@@ -757,10 +764,16 @@ class DiagnosticEmissionTests(unittest.TestCase):
                 os.environ[k] = v
 
     def _read_records(self) -> list[dict]:
-        if not self._errors_file.exists():
-            return []
-        with self._errors_file.open("r", encoding="utf-8") as f:
-            return [json.loads(line) for line in f if line.strip()]
+        # #625: a librarian block now writes the pretooluse_block to ERRORS_FILE
+        # and the pretooluse_diagnostic to TRACES_FILE. This test asserts on
+        # BOTH, so read the union of the two streams.
+        records: list[dict] = []
+        for f_path in (self._errors_file, self._traces_file):
+            if not f_path.exists():
+                continue
+            with f_path.open("r", encoding="utf-8") as f:
+                records.extend(json.loads(line) for line in f if line.strip())
+        return records
 
     def _run_hook_main_with(self, input_data: dict) -> int:
         """Invoke `hook.main()` with `input_data` on stdin, return exit code."""

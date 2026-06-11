@@ -156,5 +156,63 @@ class SuppressionTests(unittest.TestCase):
                 alog.ERRORS_FILE = orig
 
 
+class StreamRoutingTests(unittest.TestCase):
+    """#625: benign forensic traces go to TRACES_FILE; genuine signals
+    (block, event) go to ERRORS_FILE, so /annunaki stops over-counting
+    dispatch traces as errors."""
+
+    def setUp(self):
+        # Disable test-mode suppression so writes actually land; restore after.
+        self._saved_env = {
+            "ENVIRONMENT": os.environ.pop("ENVIRONMENT", None),
+            "NOORIN_HOOK_TEST_MODE": os.environ.pop("NOORIN_HOOK_TEST_MODE", None),
+        }
+        self._tmp = tempfile.mkdtemp(prefix="annunaki_routing_")
+        self._orig_errors = alog.ERRORS_FILE
+        self._orig_traces = alog.TRACES_FILE
+        alog.ERRORS_FILE = Path(self._tmp) / "errors.jsonl"
+        alog.TRACES_FILE = Path(self._tmp) / "traces.jsonl"
+
+    def tearDown(self):
+        import shutil
+
+        alog.ERRORS_FILE = self._orig_errors
+        alog.TRACES_FILE = self._orig_traces
+        shutil.rmtree(self._tmp, ignore_errors=True)
+        for k, v in self._saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    def test_dispatch_trace_goes_to_traces_not_errors(self):
+        alog.log_posttooluse_dispatch(
+            "annunaki_monitor", "pytest -q", {"returned": "None", "raised": None}
+        )
+        self.assertTrue(alog.TRACES_FILE.exists(), "dispatch trace must write to TRACES_FILE")
+        self.assertFalse(alog.ERRORS_FILE.exists(), "dispatch trace must NOT write to ERRORS_FILE")
+
+    def test_diagnostic_goes_to_traces_not_errors(self):
+        alog.log_pretooluse_diagnostic("enforce_librarian_consulted", "vim x", {"cwd": "/x"})
+        self.assertTrue(alog.TRACES_FILE.exists())
+        self.assertFalse(alog.ERRORS_FILE.exists())
+
+    def test_block_goes_to_errors_not_traces(self):
+        alog.log_pretooluse_block("validate_commit_identity", "git commit", "no -c")
+        self.assertTrue(alog.ERRORS_FILE.exists(), "block is a genuine error → ERRORS_FILE")
+        self.assertFalse(alog.TRACES_FILE.exists())
+
+    def test_event_goes_to_errors_not_traces(self):
+        alog.log_posttooluse_event("post_wave_kickoff_comment", "gh issue", "scope row missing")
+        self.assertTrue(alog.ERRORS_FILE.exists(), "event is a genuine signal → ERRORS_FILE")
+        self.assertFalse(alog.TRACES_FILE.exists())
+
+    def test_trace_record_types_constant_shape(self):
+        self.assertEqual(
+            alog.TRACE_RECORD_TYPES,
+            frozenset({"posttooluse_dispatch", "pretooluse_diagnostic"}),
+        )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
