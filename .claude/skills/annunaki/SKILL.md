@@ -13,6 +13,15 @@ The Annunaki system has two parts:
 1. **Monitor (hook):** A `PostToolUse` hook on Bash that fires after every command, detects errors via exit codes and pattern matching, and logs them to `.claude/annunaki/errors.jsonl`
 2. **This skill:** Reads and summarizes the error log
 
+### Two streams — errors vs traces (#625)
+
+The hooks write to **two** files under `.claude/annunaki/`:
+
+- **`errors.jsonl`** — genuine signals: command-failure records, `pretooluse_block` (a real prevented command), and `posttooluse_event` (a hook reporting a follow-up condition). **This is the file this skill counts.**
+- **`traces.jsonl`** — benign forensic traces (`posttooluse_dispatch`, `pretooluse_diagnostic`). Informational only; **never counted as errors**. Gitignored. Read it only when debugging the dispatcher itself.
+
+Pre-#625 both kinds shared `errors.jsonl` and dispatch traces (76% of the P4W1 log) were mis-counted as errors. Use the shared reader `.claude/lib/annunaki_parse.py` — it skips blank/corrupt lines AND any benign-trace record (defending against historical mixed logs), so counts are correct on old and new logs alike.
+
 ## Instructions
 
 ### 1. Verify the hook is active
@@ -28,21 +37,22 @@ If 0, warn the user that monitoring is not active and offer to wire it up.
 
 ### 2. Read the error log
 
+Use the shared reader so benign traces and blank/corrupt lines are excluded automatically (#625). The genuine-error count:
+
 ```bash
-wc -l "$REPO_ROOT/.claude/annunaki/errors.jsonl" 2>/dev/null || echo "0 (no errors logged yet)"
+python3 "$REPO_ROOT/.claude/lib/annunaki_parse.py" "$REPO_ROOT/.claude/annunaki/errors.jsonl" --count
 ```
 
-**Parsing note:** the log is JSONL but may contain blank or whitespace-only lines from historical manual edits. Any parser you write MUST skip them — `json.loads("")` raises `JSONDecodeError`. The canonical pattern is:
+**Parsing note:** the log is JSONL but may contain blank or whitespace-only lines from historical manual edits, AND — in historical/not-yet-cleared logs — benign-trace records (`type` in `posttooluse_dispatch` / `pretooluse_diagnostic`) that are NOT errors. Any parser you write MUST skip both. Prefer `annunaki_parse.iter_records()`; the canonical inline pattern (if you must hand-roll) is:
 
 ```python
-for line in open(path):
-    line = line.strip()
-    if not line:
-        continue
-    try:
-        rec = json.loads(line)
-    except json.JSONDecodeError:
-        continue  # skip corrupt lines
+import sys
+sys.path.insert(0, f"{REPO_ROOT}/.claude/lib")
+from annunaki_parse import iter_records, count_errors  # skips blanks, corrupt, AND benign traces
+
+for rec in iter_records(path):   # genuine errors only
+    ...
+n = count_errors(path)           # genuine-error count
 ```
 
 ### 3. Show recent errors
@@ -71,22 +81,18 @@ Parse and present them in a readable table:
 
 ### 4. Show error frequency
 
-Use the blank-line-safe parser from § 2 when building the breakdown. A one-liner Bash recipe:
+Use the shared trace-filtering reader from § 2 when building the breakdown so benign traces never inflate the counts (#625). A one-liner Bash recipe:
 
 ```bash
-python3 - <<'PY' "$REPO_ROOT/.claude/annunaki/errors.jsonl"
-import json, sys
+python3 - <<PY "$REPO_ROOT/.claude/annunaki/errors.jsonl" "$REPO_ROOT/.claude/lib"
+import sys
 from collections import Counter
+sys.path.insert(0, sys.argv[2])
+from annunaki_parse import iter_records
+from pathlib import Path
 by_hook = Counter()
-with open(sys.argv[1]) as f:
-    for line in f:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            by_hook[json.loads(line).get("hook", "unknown")] += 1
-        except json.JSONDecodeError:
-            continue
+for rec in iter_records(Path(sys.argv[1])):   # genuine errors only
+    by_hook[rec.get("hook", "unknown")] += 1
 for h, c in by_hook.most_common():
     print(f"{c:4d}  {h}")
 PY

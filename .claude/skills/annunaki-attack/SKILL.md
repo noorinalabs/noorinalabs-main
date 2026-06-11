@@ -20,12 +20,17 @@ Process the Annunaki error log, deduplicate errors, propose preventative automat
 
 ### 1. Read and deduplicate the error log
 
+Read **only genuine errors** via the shared reader (#625): it skips blank/corrupt lines AND benign-trace records (`posttooluse_dispatch` / `pretooluse_diagnostic`), which were 76% of the pre-#625 log and must never be classified as errors.
+
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-cat "$REPO_ROOT/.claude/annunaki/errors.jsonl" 2>/dev/null
+# Genuine-error count (benign traces excluded):
+python3 "$REPO_ROOT/.claude/lib/annunaki_parse.py" "$REPO_ROOT/.claude/annunaki/errors.jsonl" --count
+# Iterate genuine errors in your analysis step:
+python3 -c "import sys; sys.path.insert(0,'$REPO_ROOT/.claude/lib'); from annunaki_parse import iter_records; from pathlib import Path; [print(r) for r in iter_records(Path('$REPO_ROOT/.claude/annunaki/errors.jsonl'))]"
 ```
 
-If the file is empty or missing, report "No errors to process" and exit.
+If the genuine-error count is 0 (file empty/missing, or it contains only benign traces), report "No errors to process" and exit. **Do NOT process `traces.jsonl`** — it is benign forensic output, gitignored, and ages out on its own.
 
 **Deduplication rules:**
 - Group errors by the **normalized command prefix** (first 2 tokens of the command, e.g., `git commit`, `npm run`, `gh pr`)
