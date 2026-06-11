@@ -1,5 +1,6 @@
 {
   "wave_2_meta_issue": "noorinalabs-main#628",
+  "wave_2_scope": {"theme":"Pipeline first light + auth account-linking"},
   "wave_1_scope_reconciled_at": "2026-06-02T16:10:00Z",
   "wave_1_repos_in_scope": ["noorinalabs-main","noorinalabs-isnad-graph","noorinalabs-user-service","noorinalabs-deploy","noorinalabs-design-system","noorinalabs-landing-page","noorinalabs-data-acquisition"],
   "wave_1_meta_issue": 608,
