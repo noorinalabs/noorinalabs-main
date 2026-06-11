@@ -1235,3 +1235,39 @@ First wave of Phase 4. 23 PRs / 7 repos / **1 changes-requested cycle** (deploy#
 | **Mateo Salazar / Idris Yusuf** | Clean bug + security delivery; the user-service/isnad bug+security backbone | None this wave |
 | **Org-level team** | 13% concentration (most distributed wave on record), 1 CR, 0 CI failures, stg green | Commit-identity hygiene: deploy#409 authored as bare `parametrization`; `Kofi Mensah` vs `Kofi Mensah-Williams` divergence (cross-repo persona reconciliation) |
 | **Orchestrator** | Honest diagnosis pivot; self-caught skill bug pre-merge; full-lifecycle discipline on both PRs | The deploy#418 class slipped through W1 undetected (now gated by `/watch-deploy` + the fix) |
+
+## Phase 4 Wave 2 Trust Updates (2026-06-11) — Pipeline first light + auth account-linking
+
+### Org-Level Team
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Nadia Khoury (PD) | 5 | 5 | Wave orchestration + clean wrapup; hold at max |
+| Wanjiku Mwangi (TPM) | 5 | 5 | Reviews + counter discipline; hold at max |
+| Santiago Ferreira (RC) | 5 | 5 | Caught the merge-commit false-positive in the identity gate — material; hold at max |
+| Aino Virtanen (Standards) | 5 | 5 | Identity gate + annunaki + the honest #136 duplication audit + #634 catch; exemplary, hold at max |
+
+### Data-Acquisition / Pipeline
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Kwesi Boateng | — | +1 (cap 5) | Keystone slice, live load, null-safe loader fix, in-book-ordinal evidence graph, flawless rebase choreography + self-correction |
+| Alejandra Reyes-Fuentes | — | +1 (cap 5) | Scraper fix + converged to the more-honest in-book-ordinal extraction |
+| Oyunbileg Batbayar | — | +1 (cap 5) | Edge-key real-graph assertion + caught masked empty-graph fixture + SET-null-removes-key subtlety |
+| Nikolaos Papadopoulos | — | +1 (cap 5) | E2E harness + live run + found id double-prefix + cross-PR contract alignment |
+| Tomás Carvalho (ingest) | — | +1 (cap 5) | Worker-chain E2E + honest xfail-with-diagnosis surfacing ig#69 |
+
+### User-Service
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Mateo Salazar | — | +1 (cap 5) | Coherent auth-linking guard + real-Postgres-container proof |
+| Idris Yusuf | — | +1 (cap 5) | Gating security review — verified guard genuine server-side, not mock-only |
+| Anya Kowalczyk | — | +1 (cap 5) | Thorough tech-lead reviews (us#156 + ig#961) |
+
+### Isnad-Graph / Ingest reviewers
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Ingrid Lindqvist | — | +1 (cap 5) | Config component-env fix with URL-hostile-password tests |
+| Imelda Santos, Sayed Reza, Jean-Claude Habimana, Arjun Raghavan | — | hold | Solid review verdicts; no negative signal |
+
+### Done Well / Needs Improvement (Phase 4 Wave 2)
+- **Done well:** data-first thesis delivered (real data on screen); integrity culture (mock-masks-production named + hunted, self-correcting); peer-to-peer cross-PR contract alignment.
+- **Needs improvement (orchestrator):** reviewer-brief TechDebt-attestation phrasing; advisory-gating handling; crossed-message churn discipline.
