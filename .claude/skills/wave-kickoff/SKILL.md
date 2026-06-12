@@ -87,12 +87,25 @@ For each repo `R` in `$WAVE_REPOS_IN_SCOPE`:
 |---|---|---|
 | 0.1 | **Wave branch exists in repo `R`** | `gh api repos/noorinalabs/$R/git/refs/heads/deployments/phase-{N}/wave-{M}` returns 200 (not 404). Step 1 is responsible for creation; this check confirms it landed before subsequent steps run. |
 | 0.2 | **Implementer roster confirmed for `R`** | Per child-repo-implementer rule (memory `feedback_child_repo_implementer_rule.md`): implementers come from `R`'s own team roster, not the orchestrator's parent team |
-| 0.3 | **Every scoped issue's `actual_repo_for_changes` is correct** | Re-read every issue body; sibling-of references can mislead. Concrete example: deploy#242 was filed as "sibling-of isnad-graph" but the actual code change was in landing-page (caught by Idris-853 in P3W3 only after kickoff) |
+| 0.3 | **Every scoped issue's `actual_repo_for_changes` is correct — RELOCATE if not** | Re-read every issue body; sibling-of references can mislead. Concrete example: deploy#242 was filed as "sibling-of isnad-graph" but the actual code change was in landing-page (caught by Idris-853 in P3W3 only after kickoff). **When an issue's code lands in a different repo than the one it's filed in, you MUST relocate it — do not just note it.** See § 0.3a. |
 | 0.4 | **2-reviewer slate drafted per PR** | `wave_3_scope.tier_*` entries each list `assignee` + `reviewer` (and a 2nd reviewer for charter compliance — see charter `pull-requests.md` § Two-Reviewer Assignment at Wave Kickoff) |
 | 0.5 | **Agent naming pattern** | `{FirstInitial}.{LastName}/{IIII}-{slug}` per CLAUDE.md § Branching Strategy. Verify in execution plan |
 | 0.6 | **Spawn-brief ordering** | Each spawn brief lists reviewer-class identity AHEAD of implementer-class identity. Reviewer-first prevents Pattern B inversion (the implementer drafts → reviewer verifies-vs-artifact chain only works if the reviewer's role is established before the implementer starts coding) |
 
 If any check fails for any repo, STOP and resolve before proceeding. The output of this step is a 6×N table (6 checks × N repos in scope) with explicit YES/NO/N-A entries — paste it into the kickoff comment on the meta-issue so the gap-resolution audit trail lives on the issue.
+
+### 0.3a. Mis-filed-issue relocation protocol (Mandatory — owner directive 2026-06-12)
+
+**Standing owner rule (P4W3): a wave issue whose code lands in a different repo than the one it is filed in MUST be relocated at kickoff — close it in its home repo and re-create it in the repo that actually changes. Noting the discrepancy is not enough; the issue itself moves. Do this every wave.**
+
+For each issue flagged by check 0.3 (`actual_repo_for_changes` ≠ filed repo):
+
+1. **Re-create in the actual repo(s).** Author a new issue in the repo where the code changes, with a faithful body (carry the original scope) plus a `## Provenance` line naming the closed source issue and this relocation rule. If the work splits across *multiple* repos (e.g. a UI in one repo + an HTTP endpoint in another, or per-repo lockfile bumps), create **one issue per repo** — this also serves the smaller-PR / parallelize preference. Apply the category label(s) but NOT the wave label yet.
+2. **Board + scope.** `gh project item-add 2 --owner noorinalabs --url <new-url>` for each new issue. Replace the source issue's entry in `cross-repo-status.json` `wave_{M}_scope.tier_*` with the new ref(s) + the drafted implementer/reviewer slate, keyed to the actual repo (`id`).
+3. **Close the source issue.** Post a relocation comment on it pointing to the new issue(s), `--remove-label "p{N}-wave-{M}"`, then `gh issue close … --reason "not planned"`.
+4. **Then** proceed to the wave-label apply (§ 7) on the NEW issues so the auto-kickoff-comment hook fires against the correct repo + slate.
+
+Relocation happens BEFORE the slate is persisted and BEFORE any wave-label apply, so the scope and kickoff comments reference the real repos from the start. Precedent: P4W3 relocated main#138 → isnad-graph#970 (UI) + ingest-platform#70 (HTTP endpoint), and main#633 → ingest-platform#71 (pip) + isnad-graph#971 (authlib+pip).
 
 ### 1. Create the deployments branch in every wave repo
 
