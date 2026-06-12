@@ -74,137 +74,137 @@
       {
         "id": "noorinalabs-data-acquisition#81",
         "ref": "da#81",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Jean-Claude Habimana",
+        "reviewer": "Dilara Erdogan",
+        "reviewer_2": "Kwesi Boateng",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-data-acquisition#90",
         "ref": "da#90",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Ivana Horvat",
+        "reviewer": "Kavitha Sundaramurthy",
+        "reviewer_2": "Jean-Claude Habimana",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-data-acquisition#91",
         "ref": "da#91",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Kwesi Boateng",
+        "reviewer": "Alejandra Reyes-Fuentes",
+        "reviewer_2": "Oyunbileg Batbayar",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-data-acquisition#93",
         "ref": "da#93",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Nikolaos Papadopoulos",
+        "reviewer_2": "Jean-Claude Habimana",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-data-acquisition#94",
         "ref": "da#94",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Ivana Horvat",
+        "reviewer": "Kavitha Sundaramurthy",
+        "reviewer_2": "Oyunbileg Batbayar",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-data-acquisition#95",
         "ref": "da#95",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Nikolaos Papadopoulos",
+        "reviewer": "Alejandra Reyes-Fuentes",
+        "reviewer_2": "Kwesi Boateng",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-data-acquisition#96",
         "ref": "da#96",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Kavitha Sundaramurthy",
+        "reviewer": "Nikolaos Papadopoulos",
+        "reviewer_2": "Jean-Claude Habimana",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-data-acquisition#97",
         "ref": "da#97",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Kwesi Boateng",
+        "reviewer_2": "Oyunbileg Batbayar",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-data-acquisition#98",
         "ref": "da#98",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Kwesi Boateng",
+        "reviewer": "Nikolaos Papadopoulos",
+        "reviewer_2": "Dilara Erdogan",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-data-acquisition#101",
         "ref": "da#101",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Ivana Horvat",
+        "reviewer": "Alejandra Reyes-Fuentes",
+        "reviewer_2": "Jean-Claude Habimana",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-data-acquisition#103",
         "ref": "da#103",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Nikolaos Papadopoulos",
+        "reviewer": "Kavitha Sundaramurthy",
+        "reviewer_2": "Oyunbileg Batbayar",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-data-acquisition#108",
         "ref": "da#108",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Oyunbileg Batbayar",
+        "reviewer": "Kwesi Boateng",
+        "reviewer_2": "Nikolaos Papadopoulos",
         "priority": "tech-debt"
       },
       {
         "id": "noorinalabs-data-acquisition#109",
         "ref": "da#109",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Kavitha Sundaramurthy",
+        "reviewer": "Ivana Horvat",
+        "reviewer_2": "Jean-Claude Habimana",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-data-acquisition#112",
         "ref": "da#112",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Nikolaos Papadopoulos",
+        "reviewer": "Alejandra Reyes-Fuentes",
+        "reviewer_2": "Oyunbileg Batbayar",
         "priority": "tech-debt"
       },
       {
         "id": "noorinalabs-data-acquisition#113",
         "ref": "da#113",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Tarek Mansour",
+        "reviewer": "Jean-Claude Habimana",
+        "reviewer_2": "Oyunbileg Batbayar",
         "priority": "tech-debt"
       },
       {
         "id": "noorinalabs-data-acquisition#117",
         "ref": "da#117",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Ivana Horvat",
+        "reviewer_2": "Jean-Claude Habimana",
         "priority": "tech-debt"
       },
       {
         "id": "noorinalabs-data-acquisition#118",
         "ref": "da#118",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Ivana Horvat",
+        "reviewer": "Kavitha Sundaramurthy",
+        "reviewer_2": "Oyunbileg Batbayar",
         "priority": "feature"
       }
     ],
@@ -212,73 +212,73 @@
       {
         "id": "noorinalabs-isnad-graph#978",
         "ref": "ig#978",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Ravi Wickramasinghe",
+        "reviewer": "Ingrid Lindqvist",
+        "reviewer_2": "Anya Kowalczyk",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-isnad-graph#979",
         "ref": "ig#979",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Nneka Obi",
+        "reviewer": "Mateo Salazar",
+        "reviewer_2": "Arjun Raghavan",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-isnad-graph#980",
         "ref": "ig#980",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Ingrid Lindqvist",
+        "reviewer": "Jun-Seo Park",
+        "reviewer_2": "Anya Kowalczyk",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-isnad-graph#981",
         "ref": "ig#981",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Jun-Seo Park",
+        "reviewer": "Ingrid Lindqvist",
+        "reviewer_2": "Arjun Raghavan",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-isnad-graph#977",
         "ref": "ig#977",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Idris Yusuf",
+        "reviewer": "Nneka Obi",
+        "reviewer_2": "Anya Kowalczyk",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-landing-page#121",
         "ref": "lp#121",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Kofi Mensah-Williams",
+        "reviewer": "Cédric Novák",
+        "reviewer_2": "Marcia Vasquez-Paredes",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-design-system#102",
         "ref": "ds#102",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Beren Yildiz",
+        "reviewer": "Astrid Lindqvist",
+        "reviewer_2": "Keanu Tama",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-design-system#103",
         "ref": "ds#103",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Astrid Lindqvist",
+        "reviewer": "Maricel Reyes",
+        "reviewer_2": "Keanu Tama",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-design-system#104",
         "ref": "ds#104",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Maricel Reyes",
+        "reviewer": "Keanu Tama",
+        "reviewer_2": "Nhan Pham",
         "priority": "feature"
       }
     ],
@@ -286,25 +286,25 @@
       {
         "id": "noorinalabs-isnad-graph#964",
         "ref": "ig#964",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Mei-Lin Chang",
+        "reviewer": "Thandiwe Moyo",
+        "reviewer_2": "Anya Kowalczyk",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-isnad-graph#703",
         "ref": "ig#703",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Ingrid Lindqvist",
+        "reviewer": "Ravi Wickramasinghe",
+        "reviewer_2": "Anya Kowalczyk",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-isnad-graph#721",
         "ref": "ig#721",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Farhan Malik",
+        "reviewer": "Aisling Brennan",
+        "reviewer_2": "Arjun Raghavan",
         "priority": "feature"
       }
     ],
@@ -312,17 +312,17 @@
       {
         "id": "noorinalabs-isnad-graph#968",
         "ref": "ig#968",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Marisol Vega-Cruz",
+        "reviewer": "Linh Pham",
+        "reviewer_2": "Anya Kowalczyk",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-isnad-graph#969",
         "ref": "ig#969",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Marisol Vega-Cruz",
+        "reviewer": "Jelani Mwangi",
+        "reviewer_2": "Arjun Raghavan",
         "priority": "feature"
       }
     ],
@@ -330,41 +330,41 @@
       {
         "id": "noorinalabs-deploy#427",
         "ref": "deploy#427",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Aisha Idrissi",
+        "reviewer": "Weronika Zielinska",
+        "reviewer_2": "Bereket Tadesse",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-deploy#428",
         "ref": "deploy#428",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Nurul Hakim",
+        "reviewer": "Aisha Idrissi",
+        "reviewer_2": "Bereket Tadesse",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-deploy#429",
         "ref": "deploy#429",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Aisha Idrissi",
+        "reviewer": "Lucas Ferreira",
+        "reviewer_2": "Weronika Zielinska",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-deploy#426",
         "ref": "deploy#426",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Lucas Ferreira",
+        "reviewer": "Aisha Idrissi",
+        "reviewer_2": "Nino Kavtaradze",
         "priority": "tech-debt"
       },
       {
         "id": "noorinalabs-deploy#387",
         "ref": "deploy#387",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Nino Kavtaradze",
+        "reviewer": "Weronika Zielinska",
+        "reviewer_2": "Lucas Ferreira",
         "priority": "tech-debt"
       }
     ],
@@ -372,17 +372,17 @@
       {
         "id": "noorinalabs-user-service#43",
         "ref": "us#43",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Mateo Salazar",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Idris Yusuf",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-user-service#157",
         "ref": "us#157",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Idris Yusuf",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Mateo Salazar",
         "priority": "feature"
       }
     ],
@@ -390,25 +390,25 @@
       {
         "id": "noorinalabs-isnad-ingest-platform#69",
         "ref": "ingest#69",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Fatima Bensalah",
+        "reviewer": "Léopold Mbongo",
+        "reviewer_2": "Petra Vidović",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-isnad-ingest-platform#72",
         "ref": "ingest#72",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Imelda Santos",
+        "reviewer": "Yusuke Inoue",
+        "reviewer_2": "Camila Restrepo",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-isnad-ingest-platform#74",
         "ref": "ingest#74",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Kalinda Ranasinghe",
+        "reviewer": "Léopold Mbongo",
+        "reviewer_2": "Petra Vidović",
         "priority": "tech-debt"
       }
     ],
@@ -416,9 +416,9 @@
       {
         "id": "noorinalabs-main#634",
         "ref": "main#634",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Aino Virtanen",
+        "reviewer": "Nino Kavtaradze",
+        "reviewer_2": "Wanjiku Mwangi",
         "priority": "tech-debt"
       }
     ]
