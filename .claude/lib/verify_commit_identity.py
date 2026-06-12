@@ -33,14 +33,31 @@ is the ground truth.
 
 What "known roster name" means
 ==============================
-The authoritative name set is the union of every `.claude/team/roster.json`
-in the org: the parent (`noorinalabs-main`) roster PLUS each child repo's
-roster, since a cross-repo wave PR may legitimately carry an author who is
-canonical in a sibling repo (charter `child_repo_implementer_rule`). The
-merge is name-keyed; we only assert membership of the *name*, not the
-name→email pairing (the commit-time hook already gates the email pairing for
-hook-path commits, and this gate must accept child-repo personas whose email
-lives only in the child roster).
+The authoritative name set is the **committed parent roster**
+`<repo_root>/.claude/team/roster.json`, maintained as the org-wide UNION
+manifest: it carries the parent (`noorinalabs-main`) team PLUS every
+child-repo persona, since a cross-repo wave PR may legitimately carry an
+author who is canonical in a sibling repo (charter
+`child_repo_implementer_rule`). We assert membership of the *name* only, not
+the name→email pairing (the commit-time hook already gates the email pairing
+for hook-path commits, and this gate must accept child-repo personas whose
+email canonically lives in the child roster).
+
+Why the committed parent roster — not a live sibling scan (#634)
+----------------------------------------------------------------
+An earlier version merged the parent roster with a filesystem scan of sibling
+child-repo `roster.json` files. That scan is **inert in CI**: the workflow does
+a single-repo checkout of `noorinalabs-main` only, so no sibling directories
+exist and the CI-effective set silently collapsed to the parent roster — while
+passing LOCALLY (where siblings are checked out), a local-vs-CI divergence that
+gave false confidence (#634). The fix makes the committed parent roster the
+single hermetic source of truth, so the gate behaves identically locally and in
+CI. A separate **continue-on-error** sync-drift gate
+(`.claude/lib/roster_union_sync.py`) fetches each child `roster.json` via the
+GitHub API and fails (advisorily) when the committed union has fallen behind a
+child roster — that is the mechanism that keeps this manifest complete over
+time, mirroring the `pre_commit_ci_sync.py` committed-mirror + sync-gate
+pattern.
 
 `parametrization` / `Steven French` handling
 =============================================
@@ -83,12 +100,12 @@ GH_PRINCIPAL_LOGIN = "parametrization"
 
 
 def _read_roster(roster_path: Path) -> dict[str, str]:
-    """Read one roster.json, returning {} on any failure (fail-open per file).
+    """Read one roster.json, returning {} on any failure (fail-open).
 
-    A single malformed or unreadable child roster must never crash the gate;
-    it just contributes no names. The parent roster being unreadable is the
-    only fatal case, handled by the caller (an empty name set is treated as a
-    load error, not a pass).
+    A malformed or unreadable roster must never crash the gate; it just
+    contributes no names. The parent roster yielding an empty set is the only
+    consequential case, handled by the caller (an empty name set is treated as
+    a load error, not a pass).
     """
     try:
         data = json.loads(roster_path.read_text(encoding="utf-8"))
@@ -98,37 +115,21 @@ def _read_roster(roster_path: Path) -> dict[str, str]:
 
 
 def load_known_names(repo_root: Path) -> set[str]:
-    """Collect the union of roster names from the parent + every child repo.
+    """Return the known author NAMES from the committed parent roster.
 
-    The parent roster is `<repo_root>/.claude/team/roster.json`. Child repos
-    are sibling directories of `repo_root` (the org layout: all repos cloned
-    side-by-side under one parent `code/` dir) that each carry their own
-    `.claude/team/roster.json`. We scan one level of siblings only — matching
-    the ONE-level walk discipline the commit-time hook uses (#112) — so a
-    nested `code/` tree can't pull in unrelated rosters.
+    The single hermetic source of truth is `<repo_root>/.claude/team/roster.json`,
+    maintained as the org-wide UNION manifest (parent team + every child-repo
+    persona — see the module docstring). We deliberately do NOT scan sibling
+    child-repo rosters from the filesystem: that scan is inert in CI's
+    single-repo checkout while passing locally, a divergence that gave false
+    confidence (#634). The committed parent roster reads identically in both
+    environments; `roster_union_sync.py` is the continue-on-error gate that
+    keeps it complete as child rosters evolve.
 
     Returns the set of all known author NAMES (roster keys).
     """
-    names: set[str] = set()
-
     parent_roster = repo_root / ".claude" / "team" / "roster.json"
-    names.update(_read_roster(parent_roster).keys())
-
-    # Sibling child repos live next to repo_root. The parent repo .gitignores
-    # the children, so they are plain directories here.
-    siblings_dir = repo_root.parent
-    try:
-        for child in siblings_dir.iterdir():
-            if child == repo_root or not child.is_dir():
-                continue
-            child_roster = child / ".claude" / "team" / "roster.json"
-            if child_roster.is_file():
-                names.update(_read_roster(child_roster).keys())
-    except OSError:
-        # Sibling scan is best-effort; the parent roster is the floor.
-        pass
-
-    return names
+    return set(_read_roster(parent_roster).keys())
 
 
 def authors_in_range(base: str, head: str, repo_root: Path) -> list[str]:

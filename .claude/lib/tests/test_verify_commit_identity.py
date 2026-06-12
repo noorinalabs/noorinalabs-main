@@ -1,8 +1,10 @@
 """Tests for verify_commit_identity — the landed-state commit-author gate (#627).
 
 Verifies:
-  1. Roster-name loading from a parent roster, with child-repo sibling rosters
-     merged in (the cross-repo persona case).
+  1. Roster-name loading from the COMMITTED parent roster only — the org union
+     manifest. Sibling child-repo rosters are NOT scanned (#634: that scan was
+     inert in CI's single-repo checkout); cross-repo personas are recognized by
+     being folded into the parent roster.
   2. The two real evasions the gate exists to catch:
        - bare gh principal `parametrization` as author (deploy#409);
        - a persona in NEITHER `Kofi Mensah` / `Kofi Mensah-Williams` form
@@ -55,9 +57,12 @@ class LoadKnownNames(unittest.TestCase):
             names = load_known_names(main_repo)
             self.assertEqual(names, {"Aino Virtanen", "Steven French"})
 
-    def test_child_sibling_rosters_merged(self) -> None:
-        # A persona canonical only in a sibling child repo must be accepted
-        # (charter child_repo_implementer_rule).
+    def test_sibling_child_rosters_NOT_scanned(self) -> None:
+        # #634: the gate reads ONLY the committed parent roster (the org union
+        # manifest). A sibling child-repo roster on disk must NOT be merged —
+        # that filesystem scan was inert in CI's single-repo checkout while
+        # passing locally, the divergence that gave false confidence. A child
+        # persona is recognized only by being folded INTO the parent roster.
         with TemporaryDirectory() as td:
             org = Path(td)
             main_repo = org / "noorinalabs-main"
@@ -68,23 +73,32 @@ class LoadKnownNames(unittest.TestCase):
             _write_roster(child, {"Aisling Brennan": "b@x"})
 
             names = load_known_names(main_repo)
-            self.assertIn("Aino Virtanen", names)
-            self.assertIn("Aisling Brennan", names)
+            self.assertEqual(names, {"Aino Virtanen"})
+            self.assertNotIn("Aisling Brennan", names)
 
-    def test_malformed_child_roster_is_skipped_not_fatal(self) -> None:
+    def test_child_persona_folded_into_parent_is_recognized(self) -> None:
+        # The supported path for cross-repo personas: present in the parent
+        # roster (kept honest by roster_union_sync.py).
         with TemporaryDirectory() as td:
             org = Path(td)
             main_repo = org / "noorinalabs-main"
-            child = org / "noorinalabs-broken"
             main_repo.mkdir()
-            child.mkdir()
-            _write_roster(main_repo, {"Aino Virtanen": "a@x"})
-            bad = child / ".claude" / "team" / "roster.json"
-            bad.parent.mkdir(parents=True)
-            bad.write_text("{not json", encoding="utf-8")
+            _write_roster(main_repo, {"Aino Virtanen": "a@x", "Imelda Santos": "i@x"})
 
             names = load_known_names(main_repo)
-            self.assertEqual(names, {"Aino Virtanen"})
+            self.assertIn("Imelda Santos", names)
+
+    def test_malformed_parent_roster_yields_empty_not_fatal(self) -> None:
+        with TemporaryDirectory() as td:
+            org = Path(td)
+            main_repo = org / "noorinalabs-main"
+            roster = main_repo / ".claude" / "team" / "roster.json"
+            roster.parent.mkdir(parents=True)
+            roster.write_text("{not json", encoding="utf-8")
+
+            # An empty set is the caller's load-error signal (CLI exit 2), not a
+            # crash.
+            self.assertEqual(load_known_names(main_repo), set())
 
 
 class CheckAuthors(unittest.TestCase):
@@ -352,6 +366,9 @@ class RealRosterSmoke(unittest.TestCase):
         names = load_known_names(_REPO_ROOT)
         self.assertIn("Aino Virtanen", names)
         self.assertIn("Steven French", names)
+        # A child-repo persona must be folded into the parent union manifest
+        # (#634: ingest-platform's Imelda Santos was previously omitted).
+        self.assertIn("Imelda Santos", names)
         # The bare gh login is NOT a roster name.
         self.assertNotIn(GH_PRINCIPAL_LOGIN, names)
 
