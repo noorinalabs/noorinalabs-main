@@ -91,6 +91,8 @@
   "wave_3_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/27396316126",
   "wave_3_completed_at": "2026-06-12T17:33:59Z",
   "wave_3_wrapped_at": "2026-06-12T17:33:59Z",
+  "wave_3_annunaki_attack_ran_at": "2026-06-12T18:03:00Z",
+  "wave_3_memory_audit_ran_at": "2026-06-12T18:03:00Z",
  "last_updated": "2026-06-12T00:12:20Z",
  "deployments_branch": "deployments/phase-4/wave-3",
  "phase_2_status": "CLOSED 2026-04-30. wave-10 final retro PR #230 merged 20:47:41Z. 5-repo wave-merge ceremony completed (#229 main, #74 landing, #851 isnad, #196 deploy, #89 user-service). 3 carry-forwards into phase-3: deploy#86 (async routine trig_01Bif8T51pdaYFjkbM5bERyL — fires post-merge), deploy#151 (manual SRE B2 tfstate-key migration), user-service#84 (manual DEPLOY_REPO_PAT secret). All p2-wave-* labels cleared from open issues; 218 open issues re-labeled `phase-3` across 8 repos.",

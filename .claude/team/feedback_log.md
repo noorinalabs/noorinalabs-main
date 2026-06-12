@@ -2801,3 +2801,53 @@ One memory added this wave (`feedback_stg_deploy_per_service_tag_routing`) — c
 2. **Advisory CI checks → `continue-on-error` / non-required** (esp. ingest security-audit). Rationale: external advisory publication shouldn't hard-gate unrelated PRs (org-wide-non-blocking-gate pattern). Folds into main#633.
 3. **Kickoff status pointer writes go to the wave branch, not main** — writing `current_wave`/`kicked_off_at` to main via PUT-contents while the wave branch also edits cross-repo-status.json caused the sole wave→main conflict. Rationale: keep the file's authority on one branch during a wave.
 4. **Re-affirm origin-state-verification before destructive/structural action** — caught a falsely-reported "closed #67" and a dup-of-dup issue close by checking origin first. (Already charter; reinforce.)
+
+## Retrospective: Phase 4 Wave 3 — Open the doors: real data in a usable product — 2026-06-12
+
+### Team Performance
+34 PRs merged across 7 repos; 1 issue closed at wrap (ig#967, audit shipped); **42 issues carried to W4** (owner directive: carry all remaining). 19 distinct implementers, top-concentration 15% (Kwesi Boateng 5/34 — theme-fit). 6 changes-requested cycles, 0 CI failures on merged PRs, staging promotion green. Wave branches retained in all 7 repos.
+
+**Counter verification (Step 2.5):** all three wrapup counters matched the retro recompute exactly — final_pr_count 34=34, changes_requested_cycles 6=6, top_concentration_pct 15=15. **Zero drift** (first wave with no counter correction needed).
+
+### Wave Shape
+| Metric | Value |
+|---|---|
+| PRs merged | 34 |
+| Repos | 7 (main, isnad-graph, user-service, deploy, landing-page, data-acquisition, ingest-platform) |
+| Distinct implementers | 19 |
+| Top-implementer concentration | 5/34 = 15% (Kwesi Boateng — theme-fit, da adapter sweep) |
+| Changes-requested cycles | 6 (#984, #982×2, #129, #123, #73) |
+| CI failures (merged) | 0 |
+| Staging promotion | success |
+| Prod incidents | 1 (deploy path, recovered) |
+
+### Per-Engineer Assessments
+- **Kwesi Boateng** (da) — 5 PRs (L1/L3/L4/L5 adapter light-ups + T0-B conformance gate), 0 CR, 0 CI fail. Top implementer, theme-fit. Severity: none.
+- **Ivana Horvat** (da) — Itqan adapter (115k narrators), 1 PR clean. Severity: none. (+1 trust)
+- **Farhan Malik** (ig) — historical-overlay enrichment, 1 PR clean. Severity: none. (+1 trust)
+- **Idris Yusuf** (ig/us) — 3 PRs (OBLITERATE reset UI, admin-404, bootstrap-admin); 1 CR on destructive reset UI (appropriate). Severity: none.
+- **Aisha Idrissi** (deploy) — 3 PRs (real v2-gate fix + runtime-config smoke). First RCA (#424, `\r` theory) wrong, superseded by real fix #425; reviewers caught it via both-invocation-form repro. Severity: minor (RCA rigor) — strong recovery.
+- **Marcia Vasquez-Paredes** (lp) — 3 clean PRs incl. the data-theme fix that makes DS tokens resolve. Severity: none. (+1 trust)
+- **Cédric Novak** (lp) — DS iconography PR + caught the byte-1300 charset regression in review. Severity: none. (+1 trust)
+- **Jun-Seo Park** (ig) — data-mgmt panel + empty-q no-op, clean. (+1 trust)
+- **Rohan Wickramasinghe** (ig) — DS audit, 2 CR cycles (format iteration), landed clean. Severity: minor.
+- Clean, no-significant-signal (hold): Reyes-Fuentes, Habimana, Papadopoulos, Brennan, Lindqvist, Mensah-Williams, Rahman, Diop-Sarr (1 CR, bios), Mbongo (1 CR, reset endpoint), Zielinska.
+
+### Top 3 Going Well
+1. **The data-first thesis delivered at scale** — multi-source Sunni+Shia ingestion lit up end-to-end (L1–L6 adapters), Itqan's 115k narrator profiles integrated, cross-sect PARALLEL_OF detection, historical overlay. Real data is in the product.
+2. **Most-distributed wave on record** — 19 implementers, 15% concentration (down from 13% floor seen W1 but across nearly 3× the PR volume). No fragility concentration.
+3. **Review rigor landed exactly where risk was** — every one of the 6 CR cycles was on a destructive/security/visual-correctness surface (OBLITERATE reset, reset endpoint, DS-audit, theme/charset, team bios). Reviewer catches were real (Cédric's charset regression; the both-form repro that caught the #424 wrong-RCA).
+
+### Top 3 Pain Points
+1. **First real v2 prod ship caused a total outage** — `docker compose up --wait` over the FULL prod stack let an unhealthy NON-app service (kafka, dirty bitnami-era volume) abort the dependency-ordered bring-up before caddy/frontend started → 521 total edge outage even though the app + its deps were healthy. Three distinct deploy-path gaps surfaced (deploy#427 transitive-skip, #428 kafka dirty-volume, #429 `up --wait` non-app abort), all filed + carried to W4. Recovery was non-destructive (targeted `up -d frontend caddy`).
+2. **A wrong RCA shipped before the real one** — deploy#424 (whitespace-strip, blamed `\r`) was approved by 2 reviewers and merged, but the v2 gate still failed post-merge; the real bug (key passed as python argv not env-prefix → KeyError → empty digest) was only caught when reviewers reproduced BOTH invocation forms for #425. A passing repro that used the accidentally-correct env-prefix form masked it. (Memory written: passing-repro-masks-bug-wrong-invocation-form.)
+3. **Orchestrator process slips (self-caught):** (a) paired `gh issue close 970` in-batch with an unverified #984 merge that then conflicted — issue closed with PR unmerged, had to reopen; (b) gave an optimistic "app probably rolled fine" prod read from the compose graph before SSH ground-truth showed caddy/frontend stuck `Created`.
+
+### Proposed Process Changes
+1. **Tier the prod rollout `up` — app+edge must come up independently of pipeline/analytics services.** Scope the prod `docker compose up --wait` to api/frontend/caddy + their real deps; bring the pipeline tier up non-gating. — Rationale: pain point #1; a broker hiccup must never down the reverse proxy. (Tracked: deploy#429.)
+2. **Charter/skill: never pair an `issue close` with a PR `merge` in the same un-guarded batch — confirm `merged:true` first.** — Rationale: pain point #3a; companion to the existing wave-branch-issue-close rule. (Memory [[feedback_parallel_panels_shared_file_serialize]] already captures this; promotion candidate.)
+3. **Reviewer briefs for "fix verified locally" PRs must require reproducing the FAILING invocation form (red) before the fix (green).** — Rationale: pain point #2; an accidentally-correct repro proves nothing. (Memory [[feedback_passing_repro_masks_bug_wrong_invocation_form]]; promotion candidate.)
+
+### Audits
+- **Annunaki-attack:** 3 errors captured, all benign — 2× `enforce_librarian_consulted` PreToolUse blocks (Hook 15 working as intended) + 1× `post_label_change_wave_field_sync` telemetry event. No actionable errors; no new automation needed.
+- **Memory-to-automation:** the wave's new memories are judgment-class feedback (RCA rigor, merge-serialization, prod-incident discipline) — kept as memory; two (#2, #3 above) are charter/skill promotion candidates surfaced to the proposal block. No clear new-hook candidate.
