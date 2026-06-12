@@ -1271,3 +1271,63 @@ First wave of Phase 4. 23 PRs / 7 repos / **1 changes-requested cycle** (deploy#
 ### Done Well / Needs Improvement (Phase 4 Wave 2)
 - **Done well:** data-first thesis delivered (real data on screen); integrity culture (mock-masks-production named + hunted, self-correcting); peer-to-peer cross-PR contract alignment.
 - **Needs improvement (orchestrator):** reviewer-brief TechDebt-attestation phrasing; advisory-gating handling; crossed-message churn discipline.
+
+## Phase 4 Wave 3 Trust Updates (2026-06-12) — Open the doors: real data in a usable product
+
+Wave shape: **34 PRs / 7 repos / 19 distinct implementers**, top-concentration **15%** (Kwesi Boateng 5/34 — theme-fit, the da adapter light-up sweep), **6 changes-requested cycles** (all on appropriately-sensitive surfaces: admin OBLITERATE reset UI, DS-audit format, theme/charset, team bios, reset endpoint), **0 CI failures**, staging green, **1 prod incident** (deploy path, recovered — see pain points).
+
+### Org-Level Team
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Nadia Khoury (PD) | 5 | 5 | Largest wave to date (34 PRs) wrapped clean; hold at max |
+| Wanjiku Mwangi (TPM) | 5 | 5 | Counter discipline held — all three wrapup counters matched retro recompute exactly (0 drift); hold at max |
+| Santiago Ferreira (RC) | 5 | 5 | Clean 7-repo wave→main merge sequencing + branch retention; hold at max |
+| Aino Virtanen (Standards) | 5 | 5 | Ontology + gate hygiene; hold at max |
+
+### Data-Acquisition / Pipeline (the data-first sweep)
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Kwesi Boateng | 5 | 5 | Top implementer (5 PRs: L1/L3/L4/L5 adapter light-ups + T0-B conformance gate), all clean, theme-fit; hold at max |
+| Ivana Horvat | — | +1 (cap 5) | NEW Itqan adapter — largest narrator source (115k profiles) integrated clean, single PR, no CR |
+| Farhan Malik | — | +1 (cap 5) | Historical-overlay enrichment (new HistoricalEvent node + ACTIVE_DURING links) delivered solo + clean |
+| Alejandra Reyes-Fuentes | 5 | 5 | X1 cross-source resolution + L6 sanadset, clean; hold |
+| Jean-Claude Habimana | — | hold | X2 cross-sect PARALLEL_OF + T0-A source_id scheme, clean |
+| Nikolaos Papadopoulos | 5 | 5 | Thaqalayn Shia E2E, clean; hold |
+
+### Isnad-Graph (admin surface + search + enrich)
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Idris Yusuf | 4 | 4 | 3 PRs (OBLITERATE reset UI, admin-404 restrict, us bootstrap-admin); 1 CR on the destructive reset UI = appropriate rigor; clean trajectory, hold |
+| Jun-Seo Park | — | +1 (cap 5) | Data-mgmt panel + empty-q search no-op, both clean, no CR |
+| Aisling Brennan | — | hold | Narrator fulltext index + lockfile bump, clean |
+| Ingrid Lindqvist | 5 | 5 | User-mgmt panel rewire to user-service admin API, clean; hold |
+| Rohan Wickramasinghe | — | hold | DS-alignment audit landed but took 2 CR cycles (scope/format iteration) — net neutral |
+
+### Deploy
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Aisha Idrissi | — | hold | Delivered the real v2 promote-gate fix (#425 env-prefix) + runtime-config smoke (#420); **but** the first RCA (#424, blamed `\r`) was wrong and shipped before reviewers reproducing BOTH invocation forms caught the real bug. Strong recovery, minor RCA-rigor note — net hold, not down |
+| Weronika Zielinska | — | hold | Secrets-manager ADR 0007 authored clean with owner A+B decision recorded |
+
+### Landing-Page (design-system alignment)
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Marcia Vasquez-Paredes | — | +1 (cap 5) | 3 clean PRs (monogram retint, data-theme resolution fix, canonical-origin fix) + rebase choreography; the theme fix is what makes DS semantic tokens resolve at all |
+| Cédric Novak | — | +1 (cap 5) | DS iconography PR clean AND caught the byte-1300 `<meta charset>` regression in review (real i18n defect, well-measured) |
+| Kwame Mensah-Williams | — | hold | Match look&feel via DS semantic tokens, clean |
+| Nadia Rahman | — | hold | Regression coverage for lp#69 symptom classes, clean |
+| Amara Diop-Sarr | — | hold | The Team page (7 bio cards); 1 CR (bio-card iteration), landed clean |
+
+### Ingest-Platform
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Léopold Mbongo | — | hold | HTTP reset endpoints (1 CR on the admin surface = appropriate) + pip PYSEC bump, both clean |
+
+### Orchestrator (Self-Assessment)
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Orchestrator (Steven via Claude)** | 4 | 4 | (hold) Drove the largest wave on record (34 PRs/7 repos) to a clean wrap with exact counter fidelity; **honestly corrected** an optimistic "app probably rolled fine" prod read after SSH ground-truth showed caddy/frontend stuck `Created` (total 521 outage), then recovered non-destructively (targeted `up -d frontend caddy`) and held the kafka volume-wipe for pipeline-owner sign-off. **Hold-not-promote:** two self-caught process slips this wave — a premature `gh issue close 970` paired in-batch with an unverified #984 merge (reopened), and the optimistic outage read before ground-truth. Both caught + corrected, but promotion wants a wave with no self-inflicted slip. |
+
+### Done Well / Needs Improvement (Phase 4 Wave 3)
+- **Done well:** the data-first thesis delivered at scale (multi-source Sunni+Shia ingestion light-up + Itqan's 115k narrators + cross-sect PARALLEL_OF); most-distributed wave on record (19 implementers, 15% concentration); review rigor landed exactly where it should (every CR cycle on a destructive/security/visual-correctness surface); reviewer catches were real (Cédric's charset regression, the both-invocation-form repro that caught the #424 wrong-RCA).
+- **Needs improvement (orchestrator):** (1) never pair `issue close` with an unverified PR `merge` in one batch — confirm `merged:true` first (memory [[feedback_parallel_panels_shared_file_serialize]]); (2) lead prod-incident reads with SSH ground-truth, not the compose dependency graph; (3) RCA discipline — reviewers must reproduce the FAILING invocation form, not an accidentally-correct one (memory [[feedback_passing_repro_masks_bug_wrong_invocation_form]]).
