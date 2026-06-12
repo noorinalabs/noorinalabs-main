@@ -111,9 +111,9 @@
     },
     ".claude/skills/wave-kickoff/SKILL.md": {
       "last_tracked": "44db2a186c822e37fdfccfae84e566be046697a854a456c856c2b383737fd247",
-      "last_resolved": "6cf6e0a8b40c4f4badb39760f680ddf28ead5464d43862e3d1e40525a6cea4be",
+      "last_resolved": "44db2a186c822e37fdfccfae84e566be046697a854a456c856c2b383737fd247",
       "tracked_at": "2026-06-12T01:12:43.149338+00:00",
-      "resolved_at": "2026-04-23T23:34:47.340707+00:00"
+      "resolved_at": "2026-06-12T17:36:37Z"
     },
     ".claude/skills/wave-retro/SKILL.md": {
       "last_tracked": "00b40976619ae7eade8ac1ca5ef1aae992a771e6c7695ae39121c3fc2ec07e46",
@@ -201,9 +201,9 @@
     },
     "cross-repo-status.json": {
       "last_tracked": "cb322a972c169e65e8e998cdcb7e8ce319683e3a96caa3be7cf1037c1ea8b71d",
-      "last_resolved": "7437b04e89d209d8cf965c0ee119f1f2c013015d5ae804fbcf78350d0572397f",
+      "last_resolved": "cb322a972c169e65e8e998cdcb7e8ce319683e3a96caa3be7cf1037c1ea8b71d",
       "tracked_at": "2026-06-12T00:13:58.128709+00:00",
-      "resolved_at": "2026-05-24T16:45:28Z"
+      "resolved_at": "2026-06-12T17:36:37Z"
     },
     "dependencies.yml": {
       "last_resolved": "f4b53ffd3e1f81e055130ae2f53ff08ba9b5f651782434bbf3ac8b3eab4276e8",
