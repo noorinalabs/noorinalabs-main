@@ -38,3 +38,30 @@ jobs:
             --repo-root . \
             --base "${{ github.event.pull_request.base.sha }}" \
             --head "${{ github.event.pull_request.head.sha }}"
+
+  # noorinalabs-main#634 — keep the committed parent roster (the union manifest
+  # the gate above reads) honest as child rosters evolve. The hard gate is
+  # hermetic (parent roster only); THIS job fetches each child repo's roster.json
+  # via the GitHub API and fails if a child persona is missing from the parent.
+  #
+  # continue-on-error: a single noorinalabs-main PR cannot deterministically
+  # reconcile a name a SIBLING repo just added, and the gh-API fetch is
+  # non-hermetic — so this is an ADVISORY drift signal (red check naming the
+  # personas to fold), never a hard PR block. Org pattern for CI checks over
+  # cross-repo-derived artifacts (charter org_wide_artifact_gate_non_blocking,
+  # deploy#363/PR396).
+  roster-union-sync:
+    name: Roster union sync-drift gate (parent ⊇ child personas)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify the parent roster covers every child-repo persona (#634)
+        env:
+          # The org's child repos are public, so the default token reads their
+          # contents. Set explicitly so the intent (cross-repo read) is visible.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .claude/lib/roster_union_sync.py --repo-root .
