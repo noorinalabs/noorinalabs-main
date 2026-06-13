@@ -1,8 +1,53 @@
 {
   "wave_7_meta_issue": 657,
   "wave_7_scope_reconciled_at": "2026-06-13T23:20:00Z",
-  "wave_7_repos_in_scope": ["noorinalabs-main","noorinalabs-deploy"],
-  "wave_7_scope": {"theme":"Phase 4 close-out & exit","tier_1_closeout":[{"id":"noorinalabs-main#650","ref":"main#650","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug"}],"tier_3_tech_debt":[{"id":"noorinalabs-deploy#413","ref":"deploy#413","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"}],"exit_verification":["verify #606 TD-intake W1-W6","confirm exit set #1/#4/#5/#7 green","close #606 at exit","/phase-review 4 then /plan-phase 5"],"td_intake":"1/1","td_pool":12,"deferred_to_p5":["da#146","da#147","da#148","da#144","ig#1021","ig#1023","ig#1024","ig#1025","ig#1026","deploy#443"]},
+  "wave_7_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-deploy"
+  ],
+  "wave_7_scope": {
+    "theme": "Phase 4 close-out & exit",
+    "tier_1_closeout": [
+      {
+        "id": "noorinalabs-main#650",
+        "ref": "main#650",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Weronika Zielinska",
+        "reviewer_2": "Nino Kavtaradze",
+        "priority": "bug"
+      }
+    ],
+    "tier_3_tech_debt": [
+      {
+        "id": "noorinalabs-deploy#413",
+        "ref": "deploy#413",
+        "implementer": "Weronika Zielinska",
+        "reviewer": "Nino Kavtaradze",
+        "reviewer_2": "Aisha Idrissi",
+        "priority": "tech-debt"
+      }
+    ],
+    "exit_verification": [
+      "verify #606 TD-intake W1-W6",
+      "confirm exit set #1/#4/#5/#7 green",
+      "close #606 at exit",
+      "/phase-review 4 then /plan-phase 5"
+    ],
+    "td_intake": "1/1",
+    "td_pool": 12,
+    "deferred_to_p5": [
+      "da#146",
+      "da#147",
+      "da#148",
+      "da#144",
+      "ig#1021",
+      "ig#1023",
+      "ig#1024",
+      "ig#1025",
+      "ig#1026",
+      "deploy#443"
+    ]
+  },
   "wave_6_meta_issue": "noorinalabs-main#651",
   "wave_6_scope": {
     "theme": "Real data on the VPS — proper pipeline processing + the rich graph experience",
@@ -1103,7 +1148,7 @@
     "mirror_of": ".claude/team/phases/phase-3.md § Sweep-wave reservation (W12, possibly W13)"
   },
   "wave_active": true,
-  "current_wave": "wave-6",
+  "current_wave": "wave-7",
   "wave_5_active": false,
   "wave_5_kicked_off_at": "2026-06-13T15:55:00Z",
   "wave_5_final_pr_count": 6,
@@ -1114,9 +1159,9 @@
   "wave_5_wrapped_up_at": "2026-06-13T18:00:45Z",
   "wave_5_annunaki_attack_ran_at": "2026-06-13T18:18:53Z",
   "wave_5_memory_audit_ran_at": "2026-06-13T18:18:53Z",
-  "next_wave": "wave-7",
+  "next_wave": "wave-8",
   "wave_started": "2026-06-12T00:12:20Z",
-  "last_completed_wave": "wave-5",
+  "last_completed_wave": "wave-6",
   "last_completed_at": "2026-06-11T04:13:13Z",
   "phase": "phase-4",
   "wave_3_meta_issue": 637,
@@ -1745,7 +1790,17 @@
   "wave_6_stg_promotion": "success",
   "wave_6_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/27480235233",
   "wave_6_wrapped_up_at": "2026-06-13T22:00:00Z",
-  "wave_6_counter_corrections": [{"counter":"changes_requested_cycles","claimed":4,"recomputed_current_state":0,"resolution":"claimed stands (authoritative-historic) — gap fully explained by edit-in-place ChangesRequested→Approved flips: Camila#85, Dilara#143, Nikolaos#143, Nadia#654","corrected_at":"2026-06-13T22:10:00Z"}],
+  "wave_6_counter_corrections": [
+    {
+      "counter": "changes_requested_cycles",
+      "claimed": 4,
+      "recomputed_current_state": 0,
+      "resolution": "claimed stands (authoritative-historic) — gap fully explained by edit-in-place ChangesRequested→Approved flips: Camila#85, Dilara#143, Nikolaos#143, Nadia#654",
+      "corrected_at": "2026-06-13T22:10:00Z"
+    }
+  ],
   "wave_6_annunaki_attack_ran_at": "2026-06-13T22:10:00Z",
-  "wave_6_memory_audit_ran_at": "2026-06-13T22:10:00Z"
+  "wave_6_memory_audit_ran_at": "2026-06-13T22:10:00Z",
+  "wave_7_active": true,
+  "wave_7_kicked_off_at": "2026-06-13T23:55:00Z"
 }
