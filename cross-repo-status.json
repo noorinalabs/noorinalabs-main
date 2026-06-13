@@ -1407,7 +1407,7 @@
       ]
     }
   },
-  "wave_4_active": true,
+  "wave_4_active": false,
   "wave_4_kicked_off_at": "2026-06-12T19:45:12Z",
   "wave_4_branches": {
     "branch": "deployments/phase-4/wave-4",
@@ -1452,5 +1452,7 @@
   "wave_4_top_concentration_pct": 13,
   "wave_4_stg_promotion": "overridden",
   "wave_4_counter_corrections": [{"counter":"changes_requested_cycles","mechanical_residual":0,"recorded":5,"note":"All W4 ChangesRequested verdicts (ig#995 Linh+Anya, da#118, ig#1002 Junseo, deploy#435 Nino) edited-in-place to Approved per charter discipline; residual recompute=0, wrapup-time authoritative-historic=5 per P3W15 semantics"}],
-  "wave_4_stg_promotion_override_rationale": "Frontend ghcr publish RED on openssl CVE-2026-45447 (HIGH, Alpine libcrypto3/libssl3 base-image drift) — NOT P4W4-introduced (FE changes were CSS/TSX/i18n). Wave code merged+correct; staging auto-deploy blocked by base-image CVE, tracked in ig follow-up. Same class as pip-audit advisory-drift."
+  "wave_4_stg_promotion_override_rationale": "Frontend ghcr publish RED on openssl CVE-2026-45447 (HIGH, Alpine libcrypto3/libssl3 base-image drift) — NOT P4W4-introduced (FE changes were CSS/TSX/i18n). Wave code merged+correct; staging auto-deploy blocked by base-image CVE, tracked in ig follow-up. Same class as pip-audit advisory-drift.",
+  "wave_4_wrapup_completed_at": "2026-06-13T02:28:49Z",
+  "wave_4_repos_descoped_during_wave": []
 }
