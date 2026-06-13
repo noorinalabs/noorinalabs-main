@@ -1331,3 +1331,24 @@ Wave shape: **34 PRs / 7 repos / 19 distinct implementers**, top-concentration *
 ### Done Well / Needs Improvement (Phase 4 Wave 3)
 - **Done well:** the data-first thesis delivered at scale (multi-source Sunni+Shia ingestion light-up + Itqan's 115k narrators + cross-sect PARALLEL_OF); most-distributed wave on record (19 implementers, 15% concentration); review rigor landed exactly where it should (every CR cycle on a destructive/security/visual-correctness surface); reviewer catches were real (Cédric's charset regression, the both-invocation-form repro that caught the #424 wrong-RCA).
 - **Needs improvement (orchestrator):** (1) never pair `issue close` with an unverified PR `merge` in one batch — confirm `merged:true` first (memory [[feedback_parallel_panels_shared_file_serialize]]); (2) lead prod-incident reads with SSH ground-truth, not the compose dependency graph; (3) RCA discipline — reviewers must reproduce the FAILING invocation form, not an accidentally-correct one (memory [[feedback_passing_repro_masks_bug_wrong_invocation_form]]).
+
+## Phase 4 Wave 4 Trust Updates (2026-06-12) — Data fan-out, FE light-up & standardization
+
+### Org-Level + Child-Repo Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Ingrid Lindqvist (ig) | 5 | 5 | Owned the full FE color chain; headless-Playwright-verified each step; surfaced+escalated the @theme-no-op constraint instead of shipping a silent break; absorbed heavy (orchestrator-caused) vehicle churn cleanly. Maintain at ceiling. |
+| Junseo Park (ig) | new | 4 | Rigorous ig#1002 review surfacing the real DS-publish-drift adjacent finding (→DS#111); re-verified against ground truth and owned the wrong primary conclusion transparently. Strong first appearance. |
+| Nino Kavtaradze (deploy) | 5 | 5 | Caught CWE-214 (DB password on argv) on #435 with a verified one-line fix. Maintain. |
+| Oyunbileg Batbayar (da) | 5 | 5 | Caught the #118 fuzzy-cluster over-merge pre-merge. Maintain. |
+| Idris Yusuf (ig) | — | 4 | Independently registry-verified the #1006 CVE base-image digest before approving. Solid security review. |
+| Mateo Rossi (ig) | new | 4 | Independent registry verification of the #1006 digest; clean infra review. |
+| Lucas Ferreira (deploy) | 5 | 5 | #426 admin-bootstrap (gate-isolated, no-op-safe) + #1006 CVE fix; verified env-path correctness, not blind. Maintain. |
+| Ravi Desai (ux/ig) | new | 4 | Mechanical token-mapping reviews (#999/#1002/#1003 — 65 @theme keys 1:1); retargeted #1001→#1003 himself on the vehicle swap. |
+
+### Done Well / Needs Improvement (Phase 4 Wave 4)
+
+**Done well:** review rigor caught every real defect pre-merge (CWE-214, over-merge, DS-publish drift, CVE digest); FE color system shipped correctly (owner's correct-over-expedient call); data-first core landed.
+
+**Needs improvement (orchestrator):** (1) state-toggle churn on #1001 (serial contradictory close/reopen instructions crossing the agent's actions); (2) merged #1002 at 2/3 reviewers before the deliberately-assigned 3rd (build/dep) lens finished. Both are charter-proposal items this retro.
