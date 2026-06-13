@@ -450,5 +450,71 @@ class ResolveInvocationCwdTests(unittest.TestCase):
         self.assertEqual(sp.resolve_invocation_cwd(input_data), "/orchestrator")
 
 
+class ResolveRepoShortNameTests(unittest.TestCase):
+    """#650: resolve the ambient repo NAME from the invocation cwd's origin."""
+
+    _INPUT = {"tool_input": {"command": "gh issue edit 1 --remove-label p4-wave-5"}, "cwd": "/x"}
+
+    def test_scp_form_url(self):
+        self.assertEqual(
+            sp.resolve_repo_short_name(
+                self._INPUT, git_runner=lambda _c: "git@github.com:noorinalabs/noorinalabs-main.git"
+            ),
+            "noorinalabs-main",
+        )
+
+    def test_https_form_url_no_dotgit(self):
+        self.assertEqual(
+            sp.resolve_repo_short_name(
+                self._INPUT,
+                git_runner=lambda _c: "https://github.com/noorinalabs/noorinalabs-deploy\n",
+            ),
+            "noorinalabs-deploy",
+        )
+
+    def test_https_form_url_with_dotgit(self):
+        self.assertEqual(
+            sp.resolve_repo_short_name(
+                self._INPUT,
+                git_runner=lambda _c: (
+                    "https://github.com/noorinalabs/noorinalabs-design-system.git"
+                ),
+            ),
+            "noorinalabs-design-system",
+        )
+
+    def test_trailing_slash_tolerated(self):
+        self.assertEqual(
+            sp.resolve_repo_short_name(
+                self._INPUT,
+                git_runner=lambda _c: "https://github.com/noorinalabs/noorinalabs-main/\n",
+            ),
+            "noorinalabs-main",
+        )
+
+    def test_runner_returns_none_yields_none(self):
+        self.assertIsNone(sp.resolve_repo_short_name(self._INPUT, git_runner=lambda _c: None))
+
+    def test_runner_returns_empty_yields_none(self):
+        self.assertIsNone(sp.resolve_repo_short_name(self._INPUT, git_runner=lambda _c: ""))
+
+    def test_runner_receives_invocation_cwd(self):
+        """The runner must be called with the resolved invocation cwd (the
+        `cd <dir>` recovery path, #521), not a hardcoded dir."""
+        real_dir = str(Path(__file__).resolve().parent)
+        seen = {}
+
+        def runner(cwd):
+            seen["cwd"] = cwd
+            return "git@github.com:noorinalabs/noorinalabs-main.git"
+
+        input_data = {
+            "tool_input": {"command": f"cd {real_dir} && gh issue edit 1 --remove-label p4-wave-5"},
+            "cwd": "/some/orchestrator/dir",
+        }
+        sp.resolve_repo_short_name(input_data, git_runner=runner)
+        self.assertEqual(seen["cwd"], real_dir)
+
+
 if __name__ == "__main__":
     unittest.main()
