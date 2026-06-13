@@ -1446,5 +1446,10 @@
         "status": "created"
       }
     }
-  }
+  },
+  "wave_4_final_pr_count": 38,
+  "wave_4_changes_requested_cycles": 5,
+  "wave_4_top_concentration_pct": 13,
+  "wave_4_stg_promotion": "in_flight",
+  "wave_4_counter_corrections": [{"counter":"changes_requested_cycles","mechanical_residual":0,"recorded":5,"note":"All W4 ChangesRequested verdicts (ig#995 Linh+Anya, da#118, ig#1002 Junseo, deploy#435 Nino) edited-in-place to Approved per charter discipline; residual recompute=0, wrapup-time authoritative-historic=5 per P3W15 semantics"}]
 }
