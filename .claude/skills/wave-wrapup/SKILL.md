@@ -561,7 +561,43 @@ For each repo in `wave_{M}_repos_in_scope` that participates in the staging fan-
 
 `/watch-deploy` polls that specific dispatched deploy to a terminal state, classifies any failure, attempts a single bounded fix-forward (e.g. re-dispatch `stg-latest`), and escalates with a diagnosis otherwise. A wave is not closeable while any fan-in merge's deploy is red and unremediated — fold any escalation into the Step 11.6 block/override decision above.
 
-Landing-page and meta-only repos do not participate in the stg fan-in (no dispatch), so they have no per-merge deploy to watch — skip them.
+**Publish-freshness check (P4W4 retro #3 / main#647).** The per-merge watch above follows `deploy-stg.yml`, but a base-image CVE reddens the **publish** (`ghcr-publish.yml`) *upstream* of the deploy: the W4 openssl CVE-2026-45447 reddened isnad-graph's frontend publish and never reached `deploy-stg.yml`, so the deploy watch missed it entirely. For each fan-in repo, also inspect the latest `ghcr-publish.yml` run on its default branch and treat a red publish as a wave-closeability signal — classifying the cause the same way Step 5a of `/session-start` does (base-image-CVE signal → `base-image-drift`, else `code/other`):
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+FANIN="noorinalabs-isnad-graph noorinalabs-user-service"
+PUB_RED=()
+for repo in $FANIN; do
+  # Only the fan-in repos actually in this wave's scope.
+  jq -e --arg r "$repo" '.["wave_{M}_repos_in_scope"] | index($r)' "$REPO_ROOT/cross-repo-status.json" >/dev/null 2>&1 || continue
+  branch=$(gh api "repos/noorinalabs/$repo" --jq '.default_branch' 2>/dev/null || echo main)
+  # Latest ghcr-publish.yml run on the default branch (empty if the workflow/run is absent).
+  IFS=$'\t' read -r run_id conclusion url < <(
+    gh api "repos/noorinalabs/$repo/actions/workflows/ghcr-publish.yml/runs?branch=$branch&per_page=1" \
+      --jq '(.workflow_runs[0] // empty) | [.id, .conclusion, .html_url] | @tsv' 2>/dev/null
+  )
+  case "$conclusion" in
+    failure|timed_out|cancelled|startup_failure)
+      # Best-effort base-image-CVE classification; degrades to code/other on any log-fetch failure.
+      cls=code/other
+      log=$(gh run view "$run_id" --repo "noorinalabs/$repo" --log-failed 2>/dev/null || true)
+      printf '%s' "$log" | grep -Eiq 'trivy|grype|\bCVE-[0-9]{4}-[0-9]+|apk[ -].*(upgrade|CVE)|openssl.*(vuln|CVE|advisor)|base[ -]image' && cls=base-image-drift
+      PUB_RED+=("$repo :: ghcr-publish.yml :: $conclusion :: $cls :: $url") ;;
+  esac
+done
+if [ ${#PUB_RED[@]} -gt 0 ]; then
+  printf 'RED fan-in publish run(s) — a wave is NOT closeable while a fan-in publish is red:\n'
+  printf '  %s\n' "${PUB_RED[@]}"
+  printf '%s\n' "${PUB_RED[@]}" | grep -q base-image-drift && \
+    printf '  NOTE: "base-image-drift" = upstream base-image CVE — fix-forward the base image (rebuild/bump), not the wave diff.\n'
+else
+  echo "Fan-in publishes (ghcr-publish.yml) green on default branches."
+fi
+```
+
+A red fan-in publish — `base-image-drift` or otherwise — blocks wave closeability the same as a red deploy: fold it into the Step 11.6 block/override decision above. Best-effort: on `gh api` failure, say so rather than reporting a false green.
+
+Landing-page and meta-only repos do not participate in the stg fan-in (no dispatch), so they have no per-merge deploy or publish to watch — skip them.
 
 **Production counterpart:** prod deploys are gated on owner approval (owner directive 2026-06-09). `/wave-wrapup` must NOT approve or trigger them. When the owner approves a queued prod deploy for this wave's promotion, run `/watch-deploy prod <sha>` to monitor it the same way; `/watch-deploy` never advances or auto-remediates prod.
 
