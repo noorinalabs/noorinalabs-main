@@ -31,6 +31,8 @@ Phase 4 is that re-opening. Three tracks:
 | 6 | **Tech-debt intake — each wave takes its +20%** — every wave pulls in tech-debt-only issues = `ceil(20% of its feature/bug/security scope)` per `/wave-scope` Step 8.5 (all available if fewer). **Replaces** the brittle cumulative-ratio gate (superseded 2026-06-09, PR #619 / main#618); the pooled TD ratio stays **informational**, no longer a hard threshold | noorinalabs-main#606 |
 | 7 | **P3 retro process changes applied + verified** — all 4 owner-approved changes dispositioned | noorinalabs-main#607 |
 
+> **P4W5 exit-drive re-disposition (2026-06-13, owner-approved at `/wave-scope 4 5`):** criteria **#2 (Product usable with real data on production — main#602)** and **#3 (Admin surface complete — main#603)** are **carried forward to Phase 5**. Staging was lit up and the pipeline runs there, but production cutover + admin completion are P5 work. The **Phase 4 exit gate for W5 therefore covers criteria #1, #4, #5, #6, #7** (#602/#603 explicitly excluded from the P4 exit set and re-scoped at `/plan-phase 5`). W5 theme: *Phase-4 exit drive — verify, audit & close-out*.
+
 ## The Phase-3 criterion-9 caveat (inherited obligation) — RESOLVED 2026-06-02
 
 Phase 3 closed at 9/9 **with a caveat** (see `phase-3.md` § Phase exit record): criterion #9's "2 consecutive `/phase-review` runs" requirement is satisfied by run 1 = P3W15 wave-end + **run 2 = Phase 4's first `/phase-review`**, which MUST re-confirm cumulative ≤20% (trending toward <10%) and report the trailing-window new-filed ratio. This re-confirmation is a **blocking precondition for Phase 4 Wave 1 kickoff** — it happens at the `/phase-review 4` that precedes `/wave-scope 4 1`.
