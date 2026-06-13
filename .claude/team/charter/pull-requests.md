@@ -69,6 +69,30 @@ Every PR must have **two reviewers** assigned at wave kickoff — a primary and 
 
 The Program Director's execution plan MUST include a review matrix with two named reviewers per expected PR. The orchestrator verifies this before spawning agents.
 
+## All Deliberately-Assigned Reviewers Must Approve Before Merge (Blast-Radius PRs) <!-- promotion-target: none -->
+
+The two-reviewer rule above is a **floor**, not a cap. When a PR has **three or more reviewers deliberately assigned** — typically because it has app-wide blast radius and each reviewer carries a distinct lens (e.g. correctness, build/dependency, security) — the orchestrator MUST NOT merge once the 2-reviewer minimum is met. It waits for **every** deliberately-assigned reviewer to approve (or to be explicitly released by the orchestrator with a recorded reason).
+
+### Why
+
+`validate_pr_review` (the 2-distinct-Approved hook) is satisfied at two approvals — but when a third reviewer was assigned *on purpose* to cover a lens the first two don't, merging at 2/3 ships the PR without the lens that reviewer was assigned to provide. The minimum-gate being green is not evidence that the deliberate review slate is complete.
+
+### How to apply
+
+1. Track the **assigned** reviewer slate per PR (from the spawn plan / execution matrix), not just the count of approvals received.
+2. For a blast-radius PR (3+ assigned), gate merge on **all** assigned reviewers Approved — even though the hook would let you merge at 2.
+3. To merge before an assigned reviewer finishes, the orchestrator must **explicitly release** that reviewer with a recorded reason (e.g. "released build/dep lens — change is docs-only after rebase"); silent merge-at-2/3 is not permitted.
+4. This is orchestrator discipline today; a future enhancement could key the merge gate on assigned-reviewer count.
+
+### Severity if violated
+
+- Merge at 2/3 where the 3rd reviewer's lens turns out non-applicable: **minor** (lucky).
+- Merge at 2/3 where the 3rd reviewer later surfaces a real finding the merged change embodies: **moderate** — the deliberate slate existed precisely to catch it.
+
+### Origin
+
+P4W4 ig#1002 (the DS `@theme` color bridge — app-wide blast radius): merged at 2/3 approvals before the deliberately-assigned 3rd (build/dependency) reviewer, Junseo, finished. His verdict (a false-alarm primary conclusion but a real adjacent DS-publish-drift finding → DS#111) landed post-merge; the outcome was non-blocking but only by luck. Owner-approved at the P4W4 retro.
+
 ## Single-Reviewer Exception (Wave-Bootstrap Only) <!-- promotion-target: none -->
 The two-reviewer requirement may be waived **exclusively** for wave-bootstrap PRs — i.e., PRs that establish the tooling/CI/hooks that subsequent wave PRs will be gated by (e.g., the pre-commit hook rollout that the CI sweep depends on).
 
