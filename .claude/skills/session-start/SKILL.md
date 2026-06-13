@@ -185,7 +185,7 @@ If the report surfaces unexpected gaps between board view and open-issue counts 
 
 Surface any **publish/deploy/release workflow whose latest run on the repo's default branch FAILED**, across all org repos. *Rationale:* the GHCR frontend publish (isnad-graph commit 5804476) sat RED on `main` for ~12 days undetected — silently breaking every staging deploy at the frontend-pull step — because nothing surfaced a red default-branch publish at session start.
 
-For each org repo, list the latest default-branch run of each workflow and flag any whose conclusion is `failure`/`timed_out`/`cancelled`, filtered to publish/deploy/release-class workflows (these are the ones whose redness silently rots — a red lint run is loud at PR time; a red publish on `main` is not):
+For each org repo, list the latest default-branch run of each workflow and flag any whose conclusion is `failure`/`timed_out`/`cancelled`, filtered to publish/deploy/release-class workflows (these are the ones whose redness silently rots — a red lint run is loud at PR time; a red publish on `main` is not). For each red run, attempt a **best-effort cause-classification** (P4W4 retro #3 / main#647): inspect the failed job log for base-image-CVE signals — `trivy`/`grype`/`apk`-CVE/`openssl`-class advisory failures — and tag those as a distinct **"base-image drift — fix-forward the base image, not a code regression"** class. This is non-fatal: a `gh api`/log-fetch failure degrades to the unclassified `code/other` tag, never to a false all-green.
 
 ```bash
 REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
@@ -200,31 +200,50 @@ REPOS=$(jq -r '
   | max_by(.n) | .v[]? // empty
 ' "$REPO_ROOT/cross-repo-status.json" 2>/dev/null)
 [ -n "$REPOS" ] || REPOS="noorinalabs-main noorinalabs-isnad-graph noorinalabs-user-service noorinalabs-deploy noorinalabs-design-system noorinalabs-data-acquisition noorinalabs-isnad-ingest-platform noorinalabs-landing-page"
+
+# Best-effort cause classification for a red run (main#647). Echoes "base-image-drift"
+# when the failed job log carries a base-image-CVE signal, else "code/other". Never fatal:
+# a missing/undownloadable log degrades to "code/other", never a false all-green.
+classify_red() {  # $1=repo  $2=run_id
+  local log
+  log=$(gh run view "$2" --repo "noorinalabs/$1" --log-failed 2>/dev/null) || { echo "code/other"; return 0; }
+  if printf '%s' "$log" | grep -Eiq 'trivy|grype|\bCVE-[0-9]{4}-[0-9]+|apk[ -].*(upgrade|CVE)|openssl.*(vuln|CVE|advisor)|base[ -]image'; then
+    echo "base-image-drift"
+  else
+    echo "code/other"
+  fi
+}
+
 RED=()
 for repo in $REPOS; do
   branch=$(gh api "repos/noorinalabs/$repo" --jq '.default_branch' 2>/dev/null || echo main)
   # Latest run per workflow on the default branch; keep only publish/deploy/release-class names with a non-success conclusion.
-  while IFS=$'\t' read -r name conclusion url; do
+  while IFS=$'\t' read -r name conclusion url run_id; do
     case "$conclusion" in
       failure|timed_out|cancelled|startup_failure)
-        RED+=("$repo :: $name :: $conclusion :: $url") ;;
+        cls=$(classify_red "$repo" "$run_id")
+        RED+=("$repo :: $name :: $conclusion :: $cls :: $url") ;;
     esac
   done < <(
     gh api "repos/noorinalabs/$repo/actions/runs?branch=$branch&per_page=50" \
       --jq '[.workflow_runs[] | select((.name // .display_title) | test("publish|deploy|release|promote|ghcr|image";"i"))]
             | group_by(.workflow_id) | map(max_by(.run_started_at))
-            | .[] | [(.name // .display_title), .conclusion, .html_url] | @tsv' 2>/dev/null
+            | .[] | [(.name // .display_title), .conclusion, .html_url, .id] | @tsv' 2>/dev/null
   )
 done
 if [ ${#RED[@]} -gt 0 ]; then
   printf 'RED default-branch publish/deploy run(s) — investigate before relying on staging:\n'
   printf '  %s\n' "${RED[@]}"
+  if printf '%s\n' "${RED[@]}" | grep -q 'base-image-drift'; then
+    printf '\n  NOTE: run(s) tagged "base-image-drift" failed on a base-image-CVE signal (trivy/grype/apk/openssl-class advisory),\n'
+    printf '  NOT a code regression — fix-forward the base image (rebuild/bump the upstream image), do not chase the wave diff.\n'
+  fi
 else
   echo "All publish/deploy/release workflows green on default branches."
 fi
 ```
 
-Report any red runs prominently — a red publish/deploy on a default branch is a stop-and-investigate signal, not background noise: it usually means the artifact consumers (staging, downstream pulls) are silently running stale or broken bits. If `gh api` calls fail (auth/rate-limit), say so rather than reporting a false all-green.
+Report any red runs prominently — a red publish/deploy on a default branch is a stop-and-investigate signal, not background noise: it usually means the artifact consumers (staging, downstream pulls) are silently running stale or broken bits. A run tagged `base-image-drift` is a different remediation path than generic redness: the wave's code did not break it — an upstream base image grew a new advisory (e.g. the W4 openssl CVE-2026-45447) — so fix it forward by rebuilding/bumping the base image, not by reverting wave work. If `gh api` calls fail (auth/rate-limit), say so rather than reporting a false all-green; the classifier itself is best-effort and degrades to the unclassified `code/other` tag on any log-fetch failure.
 
 ### Step 6 — Charter freshness check
 
@@ -259,7 +278,7 @@ After all steps complete, present a single status block:
 | 3. Ontology | {N dirty resolved / current} |
 | 4. Annunaki | {N errors, action needed? / clear} |
 | 5. Wave | {active wave, stale?, issues} |
-| 5a. Red default-branch runs | {N red publish/deploy runs / all green} |
+| 5a. Red default-branch runs | {N red publish/deploy runs (M base-image-drift) / all green} |
 | 6. Charter | {current / proposals pending} |
 
 {Then address the user's actual message/request}
