@@ -1,5 +1,8 @@
 {
-  "wave_7_meta_issue": "noorinalabs-main#657",
+  "wave_7_meta_issue": 657,
+  "wave_7_scope_reconciled_at": "2026-06-13T23:20:00Z",
+  "wave_7_repos_in_scope": ["noorinalabs-main","noorinalabs-deploy"],
+  "wave_7_scope": {"theme":"Phase 4 close-out & exit","tier_1_closeout":[{"id":"noorinalabs-main#650","ref":"main#650","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug"}],"tier_3_tech_debt":[{"id":"noorinalabs-deploy#413","ref":"deploy#413","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"}],"exit_verification":["verify #606 TD-intake W1-W6","confirm exit set #1/#4/#5/#7 green","close #606 at exit","/phase-review 4 then /plan-phase 5"],"td_intake":"1/1","td_pool":12,"deferred_to_p5":["da#146","da#147","da#148","da#144","ig#1021","ig#1023","ig#1024","ig#1025","ig#1026","deploy#443"]},
   "wave_6_meta_issue": "noorinalabs-main#651",
   "wave_6_scope": {
     "theme": "Real data on the VPS — proper pipeline processing + the rich graph experience",
