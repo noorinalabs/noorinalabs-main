@@ -1732,5 +1732,7 @@
       }
     }
   },
-  "wave_6_kicked_off_at": "2026-06-13T19:10:00Z"
+  "wave_6_kicked_off_at": "2026-06-13T19:10:00Z",
+  "wave_6_criterion1_met_at": "2026-06-13T21:40:00Z",
+  "wave_6_criterion1_evidence": "main#601 closed; real narrator graph live on staging Neo4j (batch E2E): 47199 Narrator, 153804 edges (TRANSMITTED_TO 52182, NARRATED 33977, APPEARS_IN 34028, GRADED_BY 33478, STUDIED_UNDER 186), independently Cypher-verified. Sunni scope; streaming path deferred (deploy#443)."
 }
