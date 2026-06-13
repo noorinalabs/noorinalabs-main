@@ -1737,5 +1737,7 @@
   "wave_6_criterion1_evidence": "main#601 closed; real narrator graph live on staging Neo4j (batch E2E): 47199 Narrator, 153804 edges (TRANSMITTED_TO 52182, NARRATED 33977, APPEARS_IN 34028, GRADED_BY 33478, STUDIED_UNDER 186), independently Cypher-verified. Sunni scope; streaming path deferred (deploy#443).",
   "wave_6_final_pr_count": 8,
   "wave_6_changes_requested_cycles": 4,
-  "wave_6_top_concentration_pct": 13
+  "wave_6_top_concentration_pct": 13,
+  "wave_6_stg_promotion": "success",
+  "wave_6_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/27480235233"
 }
