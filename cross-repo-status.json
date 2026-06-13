@@ -884,6 +884,8 @@
   "wave_5_stg_promotion": "success",
   "wave_5_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/27470358645",
   "wave_5_wrapped_up_at": "2026-06-13T18:00:45Z",
+  "wave_5_annunaki_attack_ran_at": "2026-06-13T18:18:53Z",
+  "wave_5_memory_audit_ran_at": "2026-06-13T18:18:53Z",
   "next_wave": "wave-6",
   "wave_started": "2026-06-12T00:12:20Z",
   "last_completed_wave": "wave-4",
