@@ -476,15 +476,30 @@ Read the diff against the actual artifact (Caddyfile, compose env-vars, terrafor
 
 **Authoritative example:** `noorinalabs-deploy#206` review caught a false-positive bug by walking `caddy/Caddyfile` lines 88-89 + 101 against the PR's section 3b dual-route logic. The PR-body framing said "user-service /health probe via Caddy rewrite + post-#156 subdomain fallback"; the artifact showed the fallback would route to isnad-graph instead of user-service, producing a silent false positive on user-service availability if user-service goes down.
 
+#### Confirm the PR head SHA before posting any verdict
+
+Reading the diff against the artifact only proves anything if you read the artifact at the SHA you are about to certify. Before posting Approved or ChangesRequested, the reviewer MUST record and confirm the PR head SHA they reviewed:
+
+```bash
+gh pr view <N> --repo <owner>/<repo> --json headRefOid --jq .headRefOid
+```
+
+State that SHA (or the short form) in the verdict so the certification is anchored to a concrete head, not to "the PR" as a moving target. Then:
+
+- **If the PR is rebased or force-pushed after your verdict**, the prior verdict is **stale** — it certified a head that no longer exists. It must be re-confirmed against the new head before it counts toward merge; a materially-changed diff requires a fresh read of the changed surface, not a carry-over of the old Approved. (This is the reviewer-facing companion to § Additive-Commits-Only on ChangesRequested Cycles, which keeps the head anchor stable so this re-confirmation is rarely needed.)
+- **Before posting ChangesRequested**, confirm the line(s) you are blocking on exist at the head SHA — not in a stale local checkout. A "still has X" block sourced from a local working tree that lags the head is a false positive (per § Origin > Local Clone for "Still-Has-X" File-Content Claims).
+
+**Authoritative examples (P4W6):** `noorinalabs-isnad-graph#1020` was rebased *after* approval — the head SHA changed and the diff changed materially; the author proactively flagged it and the approval was correctly re-verified against the new head rather than carried over. Conversely, `noorinalabs-ingest-platform#85` drew a ChangesRequested that turned out to be a stale-tree misread (the reviewer judged a phase-3/wave-11 working tree, not the PR head), costing a critical-path re-verify cycle — a head-SHA confirmation step at verdict time would have caught it before the block was posted.
+
 ### How to apply
 
 - **Implementer:** before any Edit/Write inside a worktree, run `gh issue view`, `git log -- <load-bearing-path>`, and `grep` for any spec claim about existing artifacts.
-- **Reviewer:** before posting Approved, walk at least one load-bearing claim in the PR body against the actual artifact via `gh api .../contents` or `git show <head>:<path>`.
+- **Reviewer:** confirm the PR head SHA (`gh pr view <N> --json headRefOid`) and state it in the verdict, then walk at least one load-bearing claim in the PR body against the actual artifact at that SHA via `gh api .../contents/<path>?ref=<head_sha>` or `git show <head_sha>:<path>`. If the head moves after your verdict (rebase/force-push), re-confirm before it counts toward merge.
 
 ### Severity if violated
 
 - Implementer: silent absorption of a spec-vs-reality gap that produces dead code or wrong defaults is minor; producing a security regression (route mismatch, env-var leak, etc.) is severe.
-- Reviewer: rubber-stamping based on PR-body framing alone is minor; missing a false-positive bug because reviewer read the framing but not the artifact is moderate.
+- Reviewer: rubber-stamping based on PR-body framing alone is minor; missing a false-positive bug because reviewer read the framing but not the artifact is moderate. Posting a verdict with no head-SHA anchor that then goes stale on a post-verdict rebase and is carried over to merge, or blocking on a line that does not exist at the head (stale-local-tree misread), is moderate.
 
 ### Why
 
