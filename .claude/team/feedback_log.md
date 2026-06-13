@@ -2920,3 +2920,39 @@ New memories this wave ([[feedback_no_users_prefer_correct_over_expedient]], [[p
 
 ### Memory-to-automation audit
 New/updated memories this wave ([[project_staging_pipeline_not_wired]] — staging reality + P4W6 plan) are correctly soft memories (project state). No memory crossed a hook/skill threshold; the live-env-verification and exploratory-pass lessons went to charter proposals #1 and #3 above.
+
+## Retrospective: Phase 4 Wave 6 — 2026-06-13 — "Real data on the VPS"
+
+### Team Performance
+8 feature PRs merged (8 distinct implementers — fully distributed, 13% top-concentration), all 2-reviewer gated. 5 wave→main merges. **#601 criterion #1 MET** — real 47,199-narrator isnad graph live on staging Neo4j (153,804 edges, Cypher-verified), wave-6 app deployed to staging green. 4 ChangesRequested cycles (all trivial — 1 reviewer misread, 2 markdown-lint, 1 doc-drift — all edited-in-place to Approved). CI healthy. Tech-debt/follow-ups filed: ig#1021, deploy#442, deploy#443, da#144. da#120 closed as verified dup of #117. ig#1018 carried forward → W7.
+
+### Per-Engineer Assessments
+- **Alejandra Reyes-Fuentes** (da#141/#143) — **wave MVP.** Found the #601 "NARRATED:0" root cause (loader read resolved mentions from `staging` while `run_all` writes to `curated` → 0 chain edges), fixed + regression-tested it, produced the real dataset, built a clean `--skip-resolve` load-only path + pre-staged verified loadset, and authored a precise gated-run spec. 1 trivial markdown-lint CR. Severity: none (exemplary).
+- **Bjørn Henriksen** (ip#83/#86) — excellent judgment: delivered the worker image + GHCR publish + RUNBOOK as *mechanism only*, refused to auto-fire live infra, and produced a thorough gated-run advisory (3 real gotchas verified). Clean 2/2. Severity: none.
+- **Aisha Idrissi** (deploy#440/#441) — profile-gated the workers (key safety call preventing a broken stg deploy), bundled a latent Kafka topic-name fix, defined the image contract. Clean 2/2. Severity: none.
+- **Imelda Santos** (ip#84/#85) — null-safe APPEARS_IN MERGE fix + found a key-name drift between ingest paths + real-neo4j container regression. Received a CR that was a reviewer misread (disproven). Severity: none.
+- **Kavitha Sundaramurthy** (da#133/#142) — durable edge-relation routing fix, good tests. Clean 2/2. Severity: none.
+- **Jun-Seo Park** (ig#1016/#1019) — single-flight refresh-on-401, sound security framing, proactively flagged the admin-path follow-up (ig#1021). Clean 2/2. Severity: none.
+- **Ingrid Lindqvist** (ig#1017/#1020) — friendly error messaging; **proactively flagged her own rebase as materially changing the diff** rather than riding stale approvals (excellent discipline); handled the cross-PR test reconciliation cleanly. Severity: none.
+- **Aino Virtanen** (main#653) — `/wave-start` park-on-main fix; swept extra lifecycle.md drift beyond brief; handled Nadia's legitimate CR cleanly. Severity: none.
+
+### Reviewers (notable)
+- **Nadia Khoury** (#654) — caught a real, well-scoped doc-drift miss the author hadn't swept. Strong catch.
+- **Nikolaos Papadopoulos** — caught the da#120 dup (saved redundant implementation) + thorough da#141 root-cause verification.
+- **Camila Restrepo** (#85) — posted a ChangesRequested based on a **stale-tree misread** (reviewed a phase-3/wave-11 working tree, not the PR head); cost a critical-path re-verify cycle. BUT corrected herself honestly and immediately when shown the line-level evidence. Mixed: -signal for not verifying head, +signal for honest correction.
+- Strong, genuinely-independent review culture across the board (Léopold, Jean-Claude, Dilara, Idris, Nneka, Mateo, Anya, Wanjiku, Petra, Fatima, Lucas, Weronika) — all verified at head, found real non-blocking items, no rubber-stamping.
+
+### Top 3 Going Well
+1. **#601 finally MET** — real data live on staging after months of empty graphs, via Alejandra's root-cause find.
+2. **High-quality, genuinely-independent review culture** — every PR 2-reviewer gated with real verification; two reviewer disputes resolved by *evidence*, not deference (Camila self-corrected on disproof, Nadia caught real drift).
+3. **Excellent execution judgment on the risky parts** — Bjørn/Aisha gating live infra, dependency-staged batches, the gated #601 run with on-box-only credentials and full de-risking before the one live write.
+
+### Top 3 Pain Points
+1. **Orchestrator omitted the TechDebt attestation line from reviewer spawn briefs** → the first merge was blocked, requiring 7 verdicts to be retrofitted. The charter ALREADY has a verbatim reviewer-brief template (agents.md) that includes it — it wasn't used.
+2. **main#650 (compound-command label-parser gap) recurred** — the #653 wave-label was applied via a `cd …; gh issue edit` compound, which silently skipped the kickoff-comment hook AND tripped the wave-field-sync hook. Second wave biting us; still open.
+3. **Stale-tree review (Camila, #85)** — a reviewer judged against a stale local working tree instead of the PR head, producing a disproven blocker on the critical path.
+
+### Proposed Process Changes
+1. **Reviewer spawn briefs MUST use the verbatim template** (agents.md § Orchestrator checklist when spawning a reviewer), which includes the `TechDebt:` attestation line. — Rationale: its omission blocked the first merge this wave; the template exists but wasn't followed.
+2. **Bump main#650 to W7** (compound-command label-parser gap) — recurred two waves running, silently drops kickoff comments + board sync. — Rationale: repeated recurrence with real bookkeeping impact.
+3. **Reviewers must confirm they are at the PR HEAD sha before reviewing** (extend charter review-against-artifact with an explicit "verify head, not a stale local checkout" step). — Rationale: Camila's stale-tree misread cost a critical-path re-verify cycle.
