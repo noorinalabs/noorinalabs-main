@@ -232,3 +232,8 @@ integration_tests:
 
 runbooks:
   user_service_alembic: docs/runbooks/user-service-alembic.md  # added in deploy#153 (Lucas, P2W10)
+
+# P4W4 (#426): db-migrate.yml runs user-service admin-bootstrap (scripts/bootstrap_admin.py)
+# post-`alembic upgrade head`, gate-isolated (set +e, never flips `migrated` output),
+# no-op-safe on fresh OAuth-only envs, idempotent. DB URL passed via -e (not argv, CWE-214).
+# Shared by deploy-stg.yml + promote.yml (prod gate).

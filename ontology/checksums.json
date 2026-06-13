@@ -1362,6 +1362,42 @@
       "last_resolved": "5b7a8c9aea09b1bf745af3cead503a89788605da4ec1351097617aab6549ba2f",
       "tracked_at": "2026-06-03T00:31:58.859099+00:00",
       "resolved_at": "2026-06-04T20:50:14.260341+00:00"
+    },
+    "noorinalabs-design-system/package.json": {
+      "last_tracked": "7adb4c347bfacb8996f1a52b1c5d52ffeb2ad156d550f5dd3bb41942a4107177",
+      "last_resolved": "7adb4c347bfacb8996f1a52b1c5d52ffeb2ad156d550f5dd3bb41942a4107177",
+      "tracked_at": "2026-06-12T20:22:49.843834+00:00",
+      "resolved_at": "2026-06-13T02:28:20Z"
+    },
+    "noorinalabs-design-system/package-lock.json": {
+      "last_tracked": "86adf34643bfc240b0a91ff5f9e475aa7526ab2ccd05a27fa09178a5a40a36dd",
+      "last_resolved": "86adf34643bfc240b0a91ff5f9e475aa7526ab2ccd05a27fa09178a5a40a36dd",
+      "tracked_at": "2026-06-12T20:22:56.943949+00:00",
+      "resolved_at": "2026-06-13T02:28:20Z"
+    },
+    "noorinalabs-data-acquisition/src/resolve/disambiguate.py": {
+      "last_tracked": "18ec8731fcba05857876f86c5d69ed29b09c1bd2aace2c070f1a45a3c6b5ab99",
+      "last_resolved": "18ec8731fcba05857876f86c5d69ed29b09c1bd2aace2c070f1a45a3c6b5ab99",
+      "tracked_at": "2026-06-12T21:00:55.281165+00:00",
+      "resolved_at": "2026-06-13T02:28:20Z"
+    },
+    "noorinalabs-data-acquisition/tests/test_resolve/test_canonical_backfill_integration.py": {
+      "last_tracked": "8bd5eb4fe6a627edaab396c8f8e6fefc02af071a9cff32d58be6bf97bb3c2815",
+      "last_resolved": "8bd5eb4fe6a627edaab396c8f8e6fefc02af071a9cff32d58be6bf97bb3c2815",
+      "tracked_at": "2026-06-12T21:01:48.941396+00:00",
+      "resolved_at": "2026-06-13T02:28:20Z"
+    },
+    "noorinalabs-deploy/.github/workflows/db-migrate.yml": {
+      "last_tracked": "dc8b0c3cb4a838e28f2c99ab5a987041333ce63e7c10c9a27117b92b85c8df46",
+      "last_resolved": "dc8b0c3cb4a838e28f2c99ab5a987041333ce63e7c10c9a27117b92b85c8df46",
+      "tracked_at": "2026-06-13T01:15:15.687379+00:00",
+      "resolved_at": "2026-06-13T02:28:20Z"
+    },
+    "noorinalabs-deploy/compose/.env.example": {
+      "last_tracked": "dcd46e3d78f4de5fbd5fa33adfd28b1532f3a9e69c1a8d4e18c35282622e8500",
+      "last_resolved": "dcd46e3d78f4de5fbd5fa33adfd28b1532f3a9e69c1a8d4e18c35282622e8500",
+      "tracked_at": "2026-06-13T01:15:22.325960+00:00",
+      "resolved_at": "2026-06-13T02:28:20Z"
     }
   },
   "last_cleanup": {
