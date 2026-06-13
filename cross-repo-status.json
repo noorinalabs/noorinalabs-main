@@ -1740,5 +1740,8 @@
   "wave_6_top_concentration_pct": 13,
   "wave_6_stg_promotion": "success",
   "wave_6_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/27480235233",
-  "wave_6_wrapped_up_at": "2026-06-13T22:00:00Z"
+  "wave_6_wrapped_up_at": "2026-06-13T22:00:00Z",
+  "wave_6_counter_corrections": [{"counter":"changes_requested_cycles","claimed":4,"recomputed_current_state":0,"resolution":"claimed stands (authoritative-historic) — gap fully explained by edit-in-place ChangesRequested→Approved flips: Camila#85, Dilara#143, Nikolaos#143, Nadia#654","corrected_at":"2026-06-13T22:10:00Z"}],
+  "wave_6_annunaki_attack_ran_at": "2026-06-13T22:10:00Z",
+  "wave_6_memory_audit_ran_at": "2026-06-13T22:10:00Z"
 }
