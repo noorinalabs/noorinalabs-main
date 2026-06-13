@@ -1386,22 +1386,27 @@ Wave shape: **34 PRs / 7 repos / 19 distinct implementers**, top-concentration *
 ### Org-Level + Child-Repo Implementers
 | Rated | Old | New | Reason |
 |-------|-----|-----|--------|
-| Alejandra Reyes-Fuentes | 3 | 5 | Wave MVP — found+fixed the #601 root cause, produced the real data, clean load-only path + gated-run spec (+2) |
+| Alejandra Reyes-Fuentes | 5 | 5 | Wave MVP — found+fixed the #601 root cause, produced the real data, clean load-only path + gated-run spec; already at ceiling, maintain at 5 |
 | Bjørn Henriksen | 3 | 4 | Mechanism-only delivery, refused to auto-fire live infra, thorough verified gated-run advisory |
-| Aisha Idrissi | 4 | 5 | Profile-gating safety call + latent topic fix + image contract; consistent strong infra judgment |
-| Imelda Santos | 3 | 4 | Null-safe loader fix + caught ingest-path key drift + real-neo4j regression |
-| Kavitha Sundaramurthy | 3 | 4 | Durable edge-relation routing fix, clean 2/2 |
-| Jun-Seo Park | 3 | 4 | Single-flight refresh, sound security framing, proactive follow-up flag |
-| Ingrid Lindqvist | 3 | 4 | Clean fix + exemplary self-flagged rebase re-review discipline |
-| Aino Virtanen | 4 | 4 | Clean /wave-start fix + extra drift sweep; steady (already high) |
+| Aisha Idrissi | 5 | 5 | Profile-gating safety call + latent topic fix + image contract; maintain at ceiling (at 5 since W5) |
+| Imelda Santos | — | 4 | First numeric rating (prior appearances were prose-only): null-safe loader fix + caught ingest-path key drift + real-neo4j regression |
+| Kavitha Sundaramurthy | — | 4 | First numeric rating: durable edge-relation routing fix, clean 2/2 |
+| Jun-Seo Park | 4 | 4 | Single-flight refresh, sound security framing, proactive follow-up flag; hold (at 4 since W4) |
+| Ingrid Lindqvist | 5 | 5 | Clean fix + exemplary self-flagged rebase re-review discipline; maintain at ceiling (5 since W3, three waves running) |
+| Aino Virtanen | 5 | 5 | Clean /wave-start fix + extra drift sweep; maintain at ceiling |
 
 ### Reviewers
 | Rated | Old | New | Reason |
 |-------|-----|-----|--------|
-| Nikolaos Papadopoulos | 3 | 4 | Caught the da#120 dup (saved redundant work) + thorough root-cause verification |
-| Nadia Khoury | 4 | 4 | Caught a real doc-drift miss; steady |
-| Camila Restrepo | 3 | 3 | HOLD — stale-tree misread cost a critical-path cycle (-), but honest immediate self-correction on disproof (+); net flat |
+| Nikolaos Papadopoulos | 5 | 5 | Caught the da#120 dup (saved redundant work) + thorough root-cause verification; maintain at ceiling (5 since W3) |
+| Nadia Khoury | 5 | 5 | Caught a real doc-drift miss AND the trust-matrix baseline error on this very retro; maintain at ceiling |
+| Camila Restrepo | — | 3 | First numeric rating; HOLD — stale-tree misread cost a critical-path cycle (−), honest immediate self-correction on disproof (+); net flat at 3 |
+
+### Orchestrator (Self-Assessment)
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Orchestrator (Steven via Claude) | 4 | 4 | (hold) Drove the #601 live load to a verified MET — real narrator graph on staging, on-box-only credentials, checkpointed gating, honest batch-vs-streaming framing. Hold-not-promote: two self-inflicted slips — reviewer briefs omitted the mandatory TechDebt attestation line (blocked the first merge; 7 verdicts retrofitted), and a compound-command label apply silently skipped the kickoff hook (main#650, recurred). Both owned + corrected; promotion wants a slip-free wave. |
 
 ### Done Well / Needs Improvement (Phase 4 Wave 6)
-- **Done well:** independent verification over deference (reviewers + orchestrator both verified peer claims against artifacts); risk-gating of live infra; fully-distributed load (8/8 implementers).
+- **Done well:** independent verification over deference (reviewers + orchestrator both verified peer claims against artifacts — reviewers also caught the trust-matrix baseline error on this retro); risk-gating of live infra; fully-distributed load (8/8 implementers).
 - **Needs improvement (orchestrator):** use the verbatim reviewer-brief template (TechDebt line) — its omission blocked the first merge; avoid compound-command label applies (main#650).
