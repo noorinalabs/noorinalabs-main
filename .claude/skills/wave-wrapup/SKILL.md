@@ -368,7 +368,7 @@ If a key cannot be computed (e.g., no PRs merged this wave), write the literal `
 
 ### 11. Merge to main per repo (every wave)
 
-**Every wave's wrapup merges its wave branch to main** (changed 2026-06-09 — owner directive; previously gated to the final wave only). Each repo in `wave_{M}_repos_in_scope` has its OWN `deployments/phase-{P}/wave-{M}` branch (created by `/wave-kickoff` step 1) that needs its own PR to main. This is the symmetric counterpart of the multi-repo branch creation gap (main#238). Merging each wave keeps `main` continuously current: the next wave bases off main (`/wave-start` Step 2/3), so an unmerged wave would strand its work the moment the following wave starts.
+**Every wave's wrapup merges its wave branch to main** (changed 2026-06-09 — owner directive; previously gated to the final wave only). Each repo in `wave_{M}_repos_in_scope` has its OWN `deployments/phase-{P}/wave-{M}` branch (created by `/wave-kickoff` step 1) that needs its own PR to main. This is the symmetric counterpart of the multi-repo branch creation gap (main#238). Merging each wave keeps `main` continuously current: the next wave bases off main (`/wave-start` § 3 base determination; ref cut by `/wave-kickoff` Step 1), so an unmerged wave would strand its work the moment the following wave starts.
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"

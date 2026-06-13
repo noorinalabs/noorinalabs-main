@@ -44,7 +44,7 @@ REGENERABLE='^(\.claude/annunaki/errors\.jsonl|cross-repo-status\.json|ontology/
 NON_REGEN_DIRTY=$(git status --porcelain | cut -c4- | grep -vE "$REGENERABLE" || true)
 if [ -n "$NON_REGEN_DIRTY" ]; then
   echo "STOP: working tree has non-regenerable uncommitted changes:"
-  printf '  %s\n' $NON_REGEN_DIRTY
+  echo "$NON_REGEN_DIRTY" | sed 's/^/  /'
   echo "Commit, stash, or discard them deliberately before /wave-start — this skill will not auto-discard."
   exit 1
 fi

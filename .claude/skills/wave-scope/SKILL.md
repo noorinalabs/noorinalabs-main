@@ -17,7 +17,7 @@ Reconcile **declared scope** (next-wave meta-issue body) with **actual scope** (
 
 ## What this skill is NOT
 
-- Not a branch-creation step — that's `/wave-start`.
+- Not a branch-creation step — that's `/wave-kickoff` (Step 1, `gh api` ref-create).
 - Not a kickoff-comment step — that's `/wave-kickoff`.
 - Not an end-of-wave audit — that's `/wave-audit` (close orphans against merged PRs).
 
@@ -641,8 +641,8 @@ When building `WAVE_SCOPE_STRUCTURED`, construct each tier as an array of these 
 |---|---|---|
 | `/wave-retro` | End of wave N | Carry-forward list, deferred items, trust updates |
 | **`/wave-scope`** | **Between waves** | **Declared-vs-labeled reconciled; meta-issue refreshed** |
-| `/wave-start` | Start of wave N+1 | Branch creation, label setup |
-| `/wave-kickoff` | Start of wave N+1 | Issue assignment, kickoff comments, execution plan |
+| `/wave-start` | Start of wave N+1 | Park checkout on `main`, label setup, worktree cleanup |
+| `/wave-kickoff` | Start of wave N+1 | Branch creation, issue assignment, kickoff comments, execution plan |
 | `/wave-wrapup` | Near end of wave N | PR merge sequencing |
 | `/wave-audit` | End of wave N | Close orphans against merged PRs |
 
