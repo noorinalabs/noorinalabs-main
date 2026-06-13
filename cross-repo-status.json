@@ -1,12 +1,219 @@
 {
   "wave_6_meta_issue": "noorinalabs-main#651",
-  "wave_6_scope": {"theme":"Real data on the VPS — proper pipeline processing + the rich graph experience","tier_1_core_data":[{"id":"noorinalabs-isnad-ingest-platform#83","ref":"ingest-platform#83","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"infra"},{"id":"noorinalabs-deploy#440","ref":"deploy#440","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"infra"},{"id":"noorinalabs-data-acquisition#141","ref":"data-acquisition#141","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"feature"},{"id":"noorinalabs-isnad-graph#1018","ref":"isnad-graph#1018","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"test"}],"tier_2_bugs":[{"id":"noorinalabs-isnad-ingest-platform#84","ref":"ingest-platform#84","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug"},{"id":"noorinalabs-isnad-graph#1016","ref":"isnad-graph#1016","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug"},{"id":"noorinalabs-isnad-graph#1017","ref":"isnad-graph#1017","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug"}],"tier_3_tech_debt":[{"id":"noorinalabs-data-acquisition#120","ref":"data-acquisition#120","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#133","ref":"data-acquisition#133","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"}],"tracking":[{"id":"noorinalabs-main#601","ref":"main#601","priority":"meta"}],"td_intake":"2/2 — da#120 + da#133 (data-correctness prereqs; target met by spine, no backfill)","sequencing":"ip#84 -> (da#120,da#133) -> deploy#440 -> ip#83 -> da#141 -> ig#1018 ; ig#1016/#1017 parallel"},
-  "wave_6_repos_in_scope": ["noorinalabs-isnad-ingest-platform","noorinalabs-data-acquisition","noorinalabs-deploy","noorinalabs-isnad-graph","noorinalabs-main"],
+  "wave_6_scope": {
+    "theme": "Real data on the VPS — proper pipeline processing + the rich graph experience",
+    "tier_1_core_data": [
+      {
+        "id": "noorinalabs-isnad-ingest-platform#83",
+        "ref": "ingest-platform#83",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "infra"
+      },
+      {
+        "id": "noorinalabs-deploy#440",
+        "ref": "deploy#440",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "infra"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#141",
+        "ref": "data-acquisition#141",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1018",
+        "ref": "isnad-graph#1018",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "test"
+      }
+    ],
+    "tier_2_bugs": [
+      {
+        "id": "noorinalabs-isnad-ingest-platform#84",
+        "ref": "ingest-platform#84",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "bug"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1016",
+        "ref": "isnad-graph#1016",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "bug"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1017",
+        "ref": "isnad-graph#1017",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "bug"
+      }
+    ],
+    "tier_3_tech_debt": [
+      {
+        "id": "noorinalabs-data-acquisition#120",
+        "ref": "data-acquisition#120",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#133",
+        "ref": "data-acquisition#133",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      }
+    ],
+    "tracking": [
+      {
+        "id": "noorinalabs-main#601",
+        "ref": "main#601",
+        "priority": "meta"
+      }
+    ],
+    "td_intake": "2/2 — da#120 + da#133 (data-correctness prereqs; target met by spine, no backfill)",
+    "sequencing": "ip#84 -> (da#120,da#133) -> deploy#440 -> ip#83 -> da#141 -> ig#1018 ; ig#1016/#1017 parallel"
+  },
+  "wave_6_repos_in_scope": [
+    "noorinalabs-isnad-ingest-platform",
+    "noorinalabs-data-acquisition",
+    "noorinalabs-deploy",
+    "noorinalabs-isnad-graph",
+    "noorinalabs-main"
+  ],
   "wave_6_scope_reconciled_at": "2026-06-13T18:34:25Z",
   "wave_6_scope_reconciliation_note": "Fresh wave, 0 label drift. Spine from main#651; deploy#440 + ig#1018 filed at scope. TD intake 2/2 met by da#120/da#133 prereqs. Slate null — filled at /wave-kickoff Step 0.4.",
-  "wave_5_scope": {"theme":"Phase-4 exit drive — verify, audit & close-out","tier_1_verification":[{"id":"noorinalabs-main#601","ref":"main#601","implementer":"Aisha Idrissi","reviewer":"Lucas Ferreira","reviewer_2":"Wanjiku Mwangi","priority":"verification","note":"verify pipeline e2e repeatability on staging (criterion #1)"},{"id":"noorinalabs-isnad-graph#969","ref":"isnad-graph#969","implementer":"Marisol Vega-Cruz","reviewer":"Anya Kowalczyk","reviewer_2":"Ravi Wickramasinghe","priority":"verification","note":"Playwright exploratory sweep — catalog working/missing"}],"tier_2_audit_close":[{"id":"noorinalabs-main#604","ref":"main#604","implementer":"Aino Virtanen","reviewer":"Wanjiku Mwangi","reviewer_2":"Santiago Ferreira","priority":"audit","note":"audit-and-close carry-forward bugs (criterion #4)"},{"id":"noorinalabs-main#605","ref":"main#605","implementer":"Nino Kavtaradze","reviewer":"Aino Virtanen","reviewer_2":"Aisha Idrissi","priority":"audit","note":"audit-and-close security follow-ups (criterion #5)"},{"id":"noorinalabs-main#607","ref":"main#607","implementer":"Wanjiku Mwangi","reviewer":"Aino Virtanen","reviewer_2":"Santiago Ferreira","priority":"audit","note":"verify P3 retro changes applied (criterion #7)"},{"id":"noorinalabs-deploy#387","ref":"deploy#387","implementer":"Lucas Ferreira","reviewer":"Nino Kavtaradze","reviewer_2":"Weronika Zielinska","priority":"security","note":"secrets rotation — #388 ADR closed, unblocked"},{"id":"noorinalabs-design-system#111","ref":"ds#111","implementer":"Astrid Lindqvist","reviewer":"Keanu Tama","reviewer_2":"Luciana Ferreyra","priority":"bug","note":"DS :root republish hygiene"}],"tier_3_tech_debt":[{"id":"noorinalabs-isnad-graph#1010","ref":"isnad-graph#1010","implementer":"Ingrid Lindqvist","reviewer":"Jun-Seo Park","reviewer_2":"Mateo Salazar","priority":"tech-debt","note":"add /auth/providers to OpenAPI snapshot + generated type"},{"id":"noorinalabs-deploy#412","ref":"deploy#412","implementer":"Nurul Hakim","reviewer":"Aisha Idrissi","reviewer_2":"Lucas Ferreira","priority":"tech-debt","note":"TD intake (oldest): EXPECTED_MERGE_HEAD drift"},{"id":"noorinalabs-main#647","ref":"main#647","implementer":"Santiago Ferreira","reviewer":"Aino Virtanen","reviewer_2":"Nino Kavtaradze","priority":"process","note":"P4W4-retro proposal #3 (skills): classify base-image-CVE redness in session-start 5a + add fan-in publish-freshness check to wave-wrapup 11.6a"}],"deliberately_not_in_w5":["noorinalabs-data-acquisition#139 — Phase-5 (geo filtering, needs location enrichment)","noorinalabs-data-acquisition#98 — Phase-5 (live-API cross-check adapters)","noorinalabs-main#602 — re-dispositioned to Phase 5 (prod cutover)","noorinalabs-main#603 — re-dispositioned to Phase 5 (admin surface)"],"td_intake":"2/2 (ig#1010 + deploy#412)","td_pool":18,"fast_tracked_out_of_w5":"isnad-graph#1008 (envsubst) — PR #1011 in review; isnad-graph#1007 already merged+live"},
+  "wave_5_scope": {
+    "theme": "Phase-4 exit drive — verify, audit & close-out",
+    "tier_1_verification": [
+      {
+        "id": "noorinalabs-main#601",
+        "ref": "main#601",
+        "implementer": "Aisha Idrissi",
+        "reviewer": "Lucas Ferreira",
+        "reviewer_2": "Wanjiku Mwangi",
+        "priority": "verification",
+        "note": "verify pipeline e2e repeatability on staging (criterion #1)"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#969",
+        "ref": "isnad-graph#969",
+        "implementer": "Marisol Vega-Cruz",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Ravi Wickramasinghe",
+        "priority": "verification",
+        "note": "Playwright exploratory sweep — catalog working/missing"
+      }
+    ],
+    "tier_2_audit_close": [
+      {
+        "id": "noorinalabs-main#604",
+        "ref": "main#604",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Santiago Ferreira",
+        "priority": "audit",
+        "note": "audit-and-close carry-forward bugs (criterion #4)"
+      },
+      {
+        "id": "noorinalabs-main#605",
+        "ref": "main#605",
+        "implementer": "Nino Kavtaradze",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Aisha Idrissi",
+        "priority": "audit",
+        "note": "audit-and-close security follow-ups (criterion #5)"
+      },
+      {
+        "id": "noorinalabs-main#607",
+        "ref": "main#607",
+        "implementer": "Wanjiku Mwangi",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Santiago Ferreira",
+        "priority": "audit",
+        "note": "verify P3 retro changes applied (criterion #7)"
+      },
+      {
+        "id": "noorinalabs-deploy#387",
+        "ref": "deploy#387",
+        "implementer": "Lucas Ferreira",
+        "reviewer": "Nino Kavtaradze",
+        "reviewer_2": "Weronika Zielinska",
+        "priority": "security",
+        "note": "secrets rotation — #388 ADR closed, unblocked"
+      },
+      {
+        "id": "noorinalabs-design-system#111",
+        "ref": "ds#111",
+        "implementer": "Astrid Lindqvist",
+        "reviewer": "Keanu Tama",
+        "reviewer_2": "Luciana Ferreyra",
+        "priority": "bug",
+        "note": "DS :root republish hygiene"
+      }
+    ],
+    "tier_3_tech_debt": [
+      {
+        "id": "noorinalabs-isnad-graph#1010",
+        "ref": "isnad-graph#1010",
+        "implementer": "Ingrid Lindqvist",
+        "reviewer": "Jun-Seo Park",
+        "reviewer_2": "Mateo Salazar",
+        "priority": "tech-debt",
+        "note": "add /auth/providers to OpenAPI snapshot + generated type"
+      },
+      {
+        "id": "noorinalabs-deploy#412",
+        "ref": "deploy#412",
+        "implementer": "Nurul Hakim",
+        "reviewer": "Aisha Idrissi",
+        "reviewer_2": "Lucas Ferreira",
+        "priority": "tech-debt",
+        "note": "TD intake (oldest): EXPECTED_MERGE_HEAD drift"
+      },
+      {
+        "id": "noorinalabs-main#647",
+        "ref": "main#647",
+        "implementer": "Santiago Ferreira",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Nino Kavtaradze",
+        "priority": "process",
+        "note": "P4W4-retro proposal #3 (skills): classify base-image-CVE redness in session-start 5a + add fan-in publish-freshness check to wave-wrapup 11.6a"
+      }
+    ],
+    "deliberately_not_in_w5": [
+      "noorinalabs-data-acquisition#139 — Phase-5 (geo filtering, needs location enrichment)",
+      "noorinalabs-data-acquisition#98 — Phase-5 (live-API cross-check adapters)",
+      "noorinalabs-main#602 — re-dispositioned to Phase 5 (prod cutover)",
+      "noorinalabs-main#603 — re-dispositioned to Phase 5 (admin surface)"
+    ],
+    "td_intake": "2/2 (ig#1010 + deploy#412)",
+    "td_pool": 18,
+    "fast_tracked_out_of_w5": "isnad-graph#1008 (envsubst) — PR #1011 in review; isnad-graph#1007 already merged+live"
+  },
   "wave_5_scope_reconciled_at": "2026-06-13T14:40:00Z",
-  "wave_5_repos_in_scope": ["noorinalabs-main","noorinalabs-isnad-graph","noorinalabs-deploy","noorinalabs-design-system"],
+  "wave_5_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-isnad-graph",
+    "noorinalabs-deploy",
+    "noorinalabs-design-system"
+  ],
   "wave_5_meta_issue": 645,
   "wave_4_carry_forward": [
     "main#634",
@@ -1470,12 +1677,47 @@
   "wave_4_changes_requested_cycles": 5,
   "wave_4_top_concentration_pct": 13,
   "wave_4_stg_promotion": "success",
-  "wave_4_counter_corrections": [{"counter":"changes_requested_cycles","mechanical_residual":0,"recorded":5,"note":"All W4 ChangesRequested verdicts (ig#995 Linh+Anya, da#118, ig#1002 Junseo, deploy#435 Nino) edited-in-place to Approved per charter discipline; residual recompute=0, wrapup-time authoritative-historic=5 per P3W15 semantics"}],
+  "wave_4_counter_corrections": [
+    {
+      "counter": "changes_requested_cycles",
+      "mechanical_residual": 0,
+      "recorded": 5,
+      "note": "All W4 ChangesRequested verdicts (ig#995 Linh+Anya, da#118, ig#1002 Junseo, deploy#435 Nino) edited-in-place to Approved per charter discipline; residual recompute=0, wrapup-time authoritative-historic=5 per P3W15 semantics"
+    }
+  ],
   "wave_4_stg_promotion_override_rationale": "Frontend ghcr publish RED on openssl CVE-2026-45447 (HIGH, Alpine libcrypto3/libssl3 base-image drift) — NOT P4W4-introduced (FE changes were CSS/TSX/i18n). Wave code merged+correct; staging auto-deploy blocked by base-image CVE, tracked in ig follow-up. Same class as pip-audit advisory-drift.",
   "wave_4_wrapup_completed_at": "2026-06-13T02:28:49Z",
   "wave_4_repos_descoped_during_wave": [],
   "wave_4_stg_promotion_resolution": "openssl CVE-2026-45447 fixed via ig#1006 (digest re-pin, merged e32cd2); Publish to GHCR green (openssl 3.5.7-r0, Trivy clean); deploy-stg dispatched. W4 frontend now reaching staging.",
   "wave_4_annunaki_attack_ran_at": "2026-06-13T02:41:26Z",
   "wave_4_memory_audit_ran_at": "2026-06-13T02:41:26Z",
-  "wave_4_annunaki_finding": "Project-2 Wave single-select field missing P4W3/P4W4/P4W5 options → post_label_change_wave_field_sync failed ~8x at kickoff. Remediated: added options via updateProjectV2Field (orchestrator-doable per feedback_projectv2_field_option). Labels canonical so wave work unaffected. Other 76 lines: skip_parser_returned_empty (multi-cmd shape, known) + dev-cmd noise (zsh mapfile, test-probe AttributeError) — transient, no automation."
+  "wave_4_annunaki_finding": "Project-2 Wave single-select field missing P4W3/P4W4/P4W5 options → post_label_change_wave_field_sync failed ~8x at kickoff. Remediated: added options via updateProjectV2Field (orchestrator-doable per feedback_projectv2_field_option). Labels canonical so wave work unaffected. Other 76 lines: skip_parser_returned_empty (multi-cmd shape, known) + dev-cmd noise (zsh mapfile, test-probe AttributeError) — transient, no automation.",
+  "wave_6_active": true,
+  "wave_6_started_at": "2026-06-13T19:05:00Z",
+  "wave_6_branches": {
+    "branch": "deployments/phase-4/wave-6",
+    "created_at": "2026-06-13T19:05:00Z",
+    "repos": {
+      "noorinalabs-isnad-ingest-platform": {
+        "sha": "f889d5a3cdb850c47a2aa29c2c8de253b0b3a657",
+        "status": "created"
+      },
+      "noorinalabs-data-acquisition": {
+        "sha": "9b251ddb5cccf657c8542848b2b38493aa4a4126",
+        "status": "created"
+      },
+      "noorinalabs-deploy": {
+        "sha": "b8f7f92f07ae4601e628014540c8d65c3682fc1f",
+        "status": "created"
+      },
+      "noorinalabs-isnad-graph": {
+        "sha": "1ff748985bc67b2c0aa20393db09d4682480b313",
+        "status": "created"
+      },
+      "noorinalabs-main": {
+        "sha": "3a380e9a57e825cb5662239a87b9777893dbc3f3",
+        "status": "created"
+      }
+    }
+  }
 }
