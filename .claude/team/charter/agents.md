@@ -498,6 +498,35 @@ For every named caveat in the parent audit / charter / kickoff (e.g., `upload-ar
 - Companion to `pull-requests.md § Trust the Artifact, Not the Framing` — same primitive at the PR review layer ("read the diff at HEAD, not the PR-body framing"); this section is the spawn-brief layer ("enumerate the surface at HEAD, not the issue-body framing").
 - Source memories: `feedback_no_head_in_surface_enumeration.md` (how to count), `feedback_pre_spawn_verify_at_origin.md` (where to verify), `feedback_pre_spawn_brief_verified_at_head.md` (per-caveat applicability).
 
+## Orchestrator State-Correction Discipline — One Aligned Instruction, Never a Serial Toggle <!-- promotion-target: none -->
+
+When correcting a spawned agent's course mid-task (close vs keep-open a PR, reopen, change a branch/label disposition), the orchestrator MUST first re-read the agent's **current** state at the artifact, then issue **one** instruction that is internally consistent with that state and requires no further reversal — explicitly voiding any prior contradictory instruction. NEVER issue serial, contradictory course-corrections (close → keep-open → reopen) that cross the agent's in-flight actions.
+
+### Why
+
+This is **architecturally distinct** from § Pre-Spawn State Check + Crossed-Message Race Protocol (which governs the *message-bus* delivery-order race — an implementer receives "do X" after already shipping X). Here the thrash is **orchestrator-self-generated**: the orchestrator emits a stream of contradictory instructions faster than the agent can act on any one, and each new instruction crosses the agent's in-flight response to the previous one. The remedy is not the canonical-ack shape (that resolves the bus race); it is **don't generate the contradictory stream in the first place**.
+
+### How to apply
+
+1. Before sending a course-correction, re-read the agent's current artifact state (`gh pr view`, `gh issue view`, branch state) — per `state-claims.md § Refresh State Before Acting`.
+2. Decide the **single** end-state you want, then send **one** instruction that reaches it from where the agent actually is now — not from where you last remembered it.
+3. Explicitly void priors in that one message: "Disregard my earlier close/reopen messages — current desired end state is X; do only X."
+4. If the agent has actions in flight, wait for them to land and re-read before instructing — do not pipeline corrections.
+
+### Severity if violated
+
+- One contradictory pair, quickly reconciled: **minor** — round-trip noise.
+- A serial toggle stream that crosses multiple in-flight actions (3+ round-trips of churn): **moderate** — wastes the agent's context, risks leaving the artifact in an unintended state, and is hard for the agent to disentangle.
+
+### Origin
+
+P4W4 #1001↔#1003 vehicle thrash (2026-06-12): the orchestrator issued contradictory serial close/keep-open/reopen instructions on #1001 that crossed Ingrid's in-flight actions (~6 round-trips), resolved only by reading the actual current state and issuing one aligned instruction voiding priors. Owner-approved at the P4W4 retro.
+
+### Cross-references
+
+- `state-claims.md § Refresh State Before Acting` — the read-current-state-before-acting primitive this rule builds on (action-class).
+- § Pre-Spawn State Check + Crossed-Message Race Protocol — the *bus-race* sibling (distinct cause; distinct remedy).
+
 <!-- Promoted from memory: feedback_child_repo_implementer_rule.md (P3W5 retro 2026-05-06) -->
 
 ## Child-Repo Implementer Rule + Spawn-Brief Verification (Mandatory) <!-- promotion-target: hook -->
