@@ -69,7 +69,8 @@
         "implementer": "Nikolaos Papadopoulos",
         "reviewer": "Alejandra Reyes-Fuentes",
         "reviewer_2": "Jean-Claude Habimana",
-        "priority": "tech-debt"
+        "priority": "tech-debt",
+        "status": "closed-dup-of-117 (PR#127, merged wave-4; verified ancestor of wave-6)"
       },
       {
         "id": "noorinalabs-data-acquisition#133",
@@ -95,7 +96,7 @@
         "priority": "meta"
       }
     ],
-    "td_intake": "2/2 — da#120 + da#133 (data-correctness prereqs; target met by spine, no backfill)",
+    "td_intake": "1 effective (da#133); da#120 closed as verified dup of #117 (already merged) — intake shortfall is healthy per policy",
     "sequencing": "ip#84 -> (da#120,da#133) -> deploy#440 -> ip#83 -> da#141 -> ig#1018 ; ig#1016/#1017 parallel",
     "owner_added": [
       "noorinalabs-main#653 — wave-start local-checkout hygiene; owner-requested mid-wave 2026-06-13 (not part of the ceil(0.20*7)=2 TD-intake calc)"
