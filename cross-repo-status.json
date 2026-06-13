@@ -1087,7 +1087,7 @@
     "mirror_of": ".claude/team/phases/phase-3.md § Sweep-wave reservation (W12, possibly W13)"
   },
   "wave_active": true,
-  "current_wave": "wave-5",
+  "current_wave": "wave-6",
   "wave_5_active": false,
   "wave_5_kicked_off_at": "2026-06-13T15:55:00Z",
   "wave_5_final_pr_count": 6,
@@ -1098,9 +1098,9 @@
   "wave_5_wrapped_up_at": "2026-06-13T18:00:45Z",
   "wave_5_annunaki_attack_ran_at": "2026-06-13T18:18:53Z",
   "wave_5_memory_audit_ran_at": "2026-06-13T18:18:53Z",
-  "next_wave": "wave-6",
+  "next_wave": "wave-7",
   "wave_started": "2026-06-12T00:12:20Z",
-  "last_completed_wave": "wave-4",
+  "last_completed_wave": "wave-5",
   "last_completed_at": "2026-06-11T04:13:13Z",
   "phase": "phase-4",
   "wave_3_meta_issue": 637,
@@ -1719,5 +1719,6 @@
         "status": "created"
       }
     }
-  }
+  },
+  "wave_6_kicked_off_at": "2026-06-13T19:10:00Z"
 }
