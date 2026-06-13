@@ -109,6 +109,8 @@ Relocation happens BEFORE the slate is persisted and BEFORE any wave-label apply
 
 ### 1. Create the deployments branch in every wave repo
 
+> **Invariant (#653):** the orchestrator should be on a clean, up-to-date `main` (parked by `/wave-start` § 2) or operating purely via `gh api` — a stale local checkout risks the Step 1a kickoff-comment hook reading an out-of-date local `cross-repo-status.json`.
+
 For **every** repo `R` in `$WAVE_REPOS_IN_SCOPE` (not just the orchestrator repo — main#238 closed in W4), create `deployments/phase-{N}/wave-{M}` from `origin/main`. The skill uses `gh api` directly so it does NOT require a clean local checkout — this is intentional, since the orchestrator session may be running in an unrelated worktree.
 
 **Idempotency contract:** if the branch already exists in `R`, the skill MUST NOT fail. It distinguishes three cases via GitHub's `compare` API:
