@@ -1455,5 +1455,8 @@
   "wave_4_stg_promotion_override_rationale": "Frontend ghcr publish RED on openssl CVE-2026-45447 (HIGH, Alpine libcrypto3/libssl3 base-image drift) — NOT P4W4-introduced (FE changes were CSS/TSX/i18n). Wave code merged+correct; staging auto-deploy blocked by base-image CVE, tracked in ig follow-up. Same class as pip-audit advisory-drift.",
   "wave_4_wrapup_completed_at": "2026-06-13T02:28:49Z",
   "wave_4_repos_descoped_during_wave": [],
-  "wave_4_stg_promotion_resolution": "openssl CVE-2026-45447 fixed via ig#1006 (digest re-pin, merged e32cd2); Publish to GHCR green (openssl 3.5.7-r0, Trivy clean); deploy-stg dispatched. W4 frontend now reaching staging."
+  "wave_4_stg_promotion_resolution": "openssl CVE-2026-45447 fixed via ig#1006 (digest re-pin, merged e32cd2); Publish to GHCR green (openssl 3.5.7-r0, Trivy clean); deploy-stg dispatched. W4 frontend now reaching staging.",
+  "wave_4_annunaki_attack_ran_at": "2026-06-13T02:41:26Z",
+  "wave_4_memory_audit_ran_at": "2026-06-13T02:41:26Z",
+  "wave_4_annunaki_finding": "Project-2 Wave single-select field missing P4W3/P4W4/P4W5 options → post_label_change_wave_field_sync failed ~8x at kickoff. Remediated: added options via updateProjectV2Field (orchestrator-doable per feedback_projectv2_field_option). Labels canonical so wave work unaffected. Other 76 lines: skip_parser_returned_empty (multi-cmd shape, known) + dev-cmd noise (zsh mapfile, test-probe AttributeError) — transient, no automation."
 }

@@ -2851,3 +2851,38 @@ One memory added this wave (`feedback_stg_deploy_per_service_tag_routing`) — c
 ### Audits
 - **Annunaki-attack:** 3 errors captured, all benign — 2× `enforce_librarian_consulted` PreToolUse blocks (Hook 15 working as intended) + 1× `post_label_change_wave_field_sync` telemetry event. No actionable errors; no new automation needed.
 - **Memory-to-automation:** the wave's new memories are judgment-class feedback (RCA rigor, merge-serialization, prod-incident discipline) — kept as memory; two (#2, #3 above) are charter/skill promotion candidates surfaced to the proposal block. No clear new-hook candidate.
+
+## Retrospective: Phase 4 Wave 4 — Data fan-out, FE light-up & standardization, CI/deploy/auth hardening — 2026-06-12
+
+### Team Performance
+38 PRs merged across all 8 repos (da 14, ig 10, deploy 4, ds 3, ingest 3, us 2, lp 1, main 1); all 8 wave→main PRs merged, reachability 0-stranded. Issues: all p4-wave-4 closed (0 open). Staging: green after the post-merge CVE fix-forward (ig#1006). CR-cycles: 5 (all edited-in-place to Approved — residual recompute 0). Top-implementer concentration: **13% (Ingrid 5/38)** — healthy, theme-fit (FE color chain). Tech-debt/follow-ups filed: DS#111 (DS :root republish hygiene), ig#1005 (openssl CVE, fixed via #1006), ig#969 (exploratory sweep, W5), deploy#387 (DB-rotation, ADR-blocked, W5), da#133 (edge-relation field), ig#993/#998, ds#110.
+
+### Per-Engineer Highlights
+- **Ingrid Lindqvist (5 PRs)** — owned the entire FE color chain (#979 ForceGraph, #980 cleanup, #1000/#1002 the @theme bridge, #981/#1001/#1003 full migration). Verified every step with headless-Playwright computed-style parity (light+dark); proactively surfaced the @theme-no-op constraint and escalated rather than shipping a silent break; absorbed heavy orchestrator-caused vehicle churn without losing the work. Exemplary. Severity: none (strong positive).
+- **Junseo Park (reviewer)** — deep ig#1002 review: reached the wrong conclusion (inert/transparent) but via genuinely rigorous analysis that surfaced a REAL adjacent issue (DS#107 :root fix never published → DS#111). Re-verified against ground truth when challenged and owned the error transparently. Model reviewer behavior. Positive.
+- **Nino Kavtaradze (reviewer)** — caught CWE-214 (DB password on argv → /proc/cmdline) on deploy#435 with a one-line drop-in fix; verified the env-path correctness before approving. Positive.
+- **Oyunbileg Batbayar (reviewer)** — caught the da#118 fuzzy-cluster over-merge (single-token-subset + transitive-bridge) pre-merge. Positive.
+- **Idris Yusuf + Mateo Rossi (reviewers)** — independently registry-verified the ig#1006 base-image digest (buildx imagetools / docker-content-digest) before approving the CVE fix. Positive.
+- **Lucas Ferreira** — deploy#426 admin-bootstrap wiring (gate-isolated, no-op-safe, idempotent) + the #1006 CVE fix-forward; verified env-path correctness, not blind drop-ins. Positive.
+- **Data-acquisition cohort (14 PRs)** — landed the data-first core (real NARRATED/STUDIED_UNDER edges from scraped data, Bihar adapter, both-sects parallels).
+
+### Top 3 Going Well
+1. **Data-first core shipped** — real edges firing from scraped data; both-sects Browse Parallels; Bihar adapter. The owner's data-first priority materialized.
+2. **FE color system done RIGHT, not expedient** — owner's correct-over-expedient call ([[feedback_no_users_prefer_correct_over_expedient]]) drove the @theme bridge that lit up DS color tokens as real Tailwind utilities app-wide, fixing latent no-op bugs (AuthCallback/SearchPage/ProtectedRoute). Verified against the pinned dep via [data-theme] ground truth.
+3. **Review rigor caught real issues pre-merge** — CWE-214 (Nino), over-merge (Oyunbileg), DS-publish drift (Junseo), CVE digest verification (Idris/Mateo). The 2-reviewer (+3rd for blast-radius) gate did its job; the wave shipped no silently-wrong code.
+
+### Top 3 Pain Points
+1. **Orchestrator state-toggle churn (my failure)** — I issued contradictory close/keep-open/reopen instructions on PR #1001 that crossed Ingrid's in-flight actions, causing a #1001↔#1003 thrash (~6 round-trips of pure PR-state toggling). Root cause: issuing SERIAL corrections that each cross the agent's last action. Resolution that worked: read the agent's CURRENT actual state, issue ONE instruction aligned to it that requires no toggle, and explicitly void all priors.
+2. **Merged #1002 on the 2-reviewer gate before the deliberately-assigned 3rd reviewer finished** — Junseo (the build/dependency lens) posted ChangesRequested AFTER I merged. It resolved as non-blocking, but on a blast-radius change where a 3rd reviewer was assigned precisely for that lens, merging at 2/3 was luck, not discipline.
+3. **Post-merge advisory/config drift gated staging** — openssl CVE-2026-45447 (Alpine base-image drift) reddened the frontend publish at wrapup (caught by Step 11.6a, fixed forward via #1006); and the Project-2 Wave field was missing P4W4 (annunaki: ~8 sync-hook failures). Both are recurring "drift" classes (cf. pip-audit advisory drift, ProjectV2 field-option).
+
+### Proposed Process Changes (charter)
+1. **State-correction discipline** — when correcting a spawned agent's PR/issue state, read its CURRENT state first and issue ONE instruction aligned to it; never a serial close/reopen toggle. Explicitly supersede priors in the same message. (charter agents.md / state-claims.md)
+2. **All-assigned-reviewers gate for blast-radius PRs** — when 3+ reviewers are deliberately assigned (app-wide / cross-repo blast radius), do NOT merge on the 2-reviewer minimum; wait for every assigned reviewer. (charter pull-requests.md)
+3. **Base-image CVE freshness at publish-merge** — session-start 5a / wrapup 11.6a should flag when a fan-in repo's last publish is red on a base-image CVE, so it's surfaced before wrapup rather than at it. (skills)
+
+### Annunaki-attack
+Wave field P4W3/P4W4/P4W5 options added to Project 2 (remediates the ~8 sync-hook failures); other 76 captured lines are skip_parser_returned_empty (known multi-cmd shape) + transient dev-cmd noise. No new hooks warranted.
+
+### Memory-to-automation audit
+New memories this wave ([[feedback_no_users_prefer_correct_over_expedient]], [[project_ds_theme_color_utilities_noop]]) are correctly soft memories (owner preference + project gotcha, the latter partly tracked by DS#111). No memory crossed a hook/skill threshold; the orchestrator-discipline lessons go to the charter proposals above.
