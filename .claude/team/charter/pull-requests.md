@@ -250,8 +250,9 @@ At the **end of a wave or phase**, the Manager creates a PR from the deployments
 2. **If any check fails**, fix it before notifying the user. The user should NEVER see a wave merge PR with red CI.
 3. **Report CI status** explicitly when presenting the PR: "All N checks passing."
 4. **Provide full clickable URLs** when presenting PRs to the user — use `https://github.com/{org}/{repo}/pull/{number}`, not `repo#number` format.
+5. **Merge via the `wave-merge` admin exception — this is the expected path, not a process failure.** The code on a `deployments/phase-{P}/wave-{M}` branch was already 2×-reviewed on its per-issue wave-branch PRs; the wave→main PR is an *integration* merge, not new code to re-review. After the user approves the merge sequence, the orchestrator merges each with a **literal PR number, one per call** (the `validate_pr_review` hook parses literal numbers — a loop variable fail-opens it): `ADMIN_MERGE_EXCEPTION="wave-merge:<rationale>" gh pr merge <N> --merge --admin`. Collecting *fresh* 2-reviewer approvals on the integration PR is **not** required and should not be requested. The `validate_pr_review` BLOCK (0/2 reviews) and the `--admin` exception prompt firing on these PRs is **expected and audited** (each exception is logged to the Annunaki trail per § Admin-merge exception list) — not a signal that something is wrong. Never `--delete-branch` (wave branches are retained, owner directive 2026-06-09). *Rationale: P4W5 fired this 4× — once per wave repo; the expected path was undocumented, producing per-wave "is this right?" friction.*
 
-The **user reviews and merges** this PR. Do not proceed to the next phase until the user has merged.
+The **user approves the merge sequence**; the orchestrator executes the `wave-merge` merges per point 5. Do not proceed to the next phase until every wave→main PR is merged and the Step 11.5 reachability gate is clean.
 
 ## Wave-Wrapup Staging-Promotion Gate (Mandatory) <!-- promotion-target: skill -->
 
@@ -272,6 +273,16 @@ A wave is **not closeable** until its merged code has been promoted to **staging
 A "remember to check staging" checklist item is opt-in and decays (`feedback_enforcement_hierarchy`: "Charter rules without enforcement decay"). Encoding the gate in the `/wave-wrapup` skill with a hard block (and a noisy, rationale-required override) makes staging-green a contractual wave-completion condition — the deploy track's whole purpose per Phase-3 end-state.
 
 <!-- Promoted from memory: feedback_enforcement_hierarchy (hook>skill>charter — gate-over-checklist) — codifies Phase-3 end-state criterion #3 (issue #325, deploy-track-alongside Proposal B ratified 2026-05-31). Skill-tier enforcement lands in /wave-wrapup Step 11.6; a hook MAY further enforce at invocation time (follow-up). -->
+
+## End-State Criterion Verification Requires Live-Environment Evidence (Mandatory) <!-- promotion-target: skill -->
+
+A Phase **end-state criterion** (the `noorinalabs-main#60x`-class tracking meta-issues) may be marked **MET** only when its verification cites **live-environment evidence** — an `ssh` / `cypher-shell` query against the deployed datastore, a `curl` against the live vhost, or a Chrome/Playwright trace of the deployed app. CI-green, testcontainers, and in-process-harness results are **necessary but not sufficient**: they prove the code works, not that the criterion is true on the running system.
+
+**Why:** P4W5 found Phase-4 end-state #1 ("data pipeline runs E2E on staging") had been treated as shipped on the strength of CI/harness runs (ingest-platform#55, main#139), while the live staging Neo4j held 47 out-of-band hadiths and **zero** narrator graph — the deployed pipeline had never run (main#601, verified by `ssh noorinalabs-stg` + `docker exec cypher-shell`). "Shipped in CI ≠ shipped on the VPS." An end-state claim backed only by harness evidence is a false exit waiting to surface a wave — or a phase — late.
+
+**How to apply:** the auditor of a `#60x` end-state criterion records the live-env command + its output (or run URL) in the issue's verification comment (cf. #605's `users.stg.noorinalabs.com/metrics → 403` curl-proof). A criterion whose live-env check is not yet runnable (e.g. blocked by another unmet criterion) stays **OPEN and explicitly NOT-MET** — it is never marked MET on harness evidence alone, and its remediation is dispositioned (carried or re-scheduled), not silently closed.
+
+<!-- Promoted from retro: P4W5 #601 not-met lesson (owner-approved 2026-06-13). Extends § Live-Trace Evidence > Synthetic-Test Acceptance (PR-time) to phase end-state criteria. -->
 
 ## PR Template <!-- promotion-target: none -->
 ```bash

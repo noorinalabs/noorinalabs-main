@@ -1352,3 +1352,31 @@ Wave shape: **34 PRs / 7 repos / 19 distinct implementers**, top-concentration *
 **Done well:** review rigor caught every real defect pre-merge (CWE-214, over-merge, DS-publish drift, CVE digest); FE color system shipped correctly (owner's correct-over-expedient call); data-first core landed.
 
 **Needs improvement (orchestrator):** (1) state-toggle churn on #1001 (serial contradictory close/reopen instructions crossing the agent's actions); (2) merged #1002 at 2/3 reviewers before the deliberately-assigned 3rd (build/dep) lens finished. Both are charter-proposal items this retro.
+
+## Phase 4 Wave 5 Trust Updates (2026-06-13) — Exit drive: verify → audit & close → tech-debt intake
+
+### Org-Level + Child-Repo Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Aisha Idrissi (ig) | — | +1 (cap 5) | #601 verification surfaced Phase-4 end-state #1 NOT MET on staging (zero narrator graph, pipeline never ran), evidenced via ssh + cypher-shell — prevented a false Phase-4 exit and seeded the P4W6 spine. Highest-value contribution of the wave. |
+| Nino Kavtaradze (deploy) | 5 | 5 | Caught a CWE-214 awk-argv leak on #438 (2nd consecutive wave catching an argv-on-cmdline class) + ran #605 security audit with a live curl 403-verify. Maintain at ceiling. |
+| Ingrid Lindqvist (ig) | 5 | 5 | Clean #1012 delivery, 0 CR. Maintain at ceiling. |
+| Astrid Lindqvist (ds) | — | +1 (cap 5) | Clean #113 delivery, 0 CR. |
+| Nurul Hakim (deploy) | — | +1 (cap 5) | Clean #437 delivery, 0 CR. |
+| Santiago Ferreira (main/release) | — | hold | Clean #648 (trivial cspell CR, edited-in-place) + ran the wave wrapup. |
+| Marisol Vega-Cruz (ig) | — | hold | #1014 coverage-honesty gap (omitted /billing/checkout) caught by review + addressed. Minor. |
+| Lucas Ferreira (deploy) | 5 | hold | #438 addressed both CRs cleanly, but shipped a CWE-214 argv-leak into review (caught by Nino) — same class as W4's deploy argv finding. Process clean; net-neutral. Forward ask: secure-by-construction on the argv surface. |
+| Aino Virtanen (standards) | — | hold | Clean #604 audit; authored this retro. |
+| Wanjiku Mwangi (tpm) | — | hold | #607 verification MET, clean. |
+
+### Orchestrator (Self-Assessment)
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Orchestrator (Steven via Claude)** | 4 | 4 | (hold) Clean wave wrap with exact counter fidelity (6/3/17, claimed==recomputed); ran a disciplined Option-A disposition (#601 not-met, dup-searched 3 gaps, mirrored #602/#603 precedent) and an honest live-staging exploratory pass that source-verified 2 real auth bugs before filing. **Hold-not-promote:** the #601 not-met state itself reflects a prior-wave gap (W4 "data-first shipped" lore was harness-only) that should have been caught at W4 wrapup, not W5 — the live-env-verification charter change (#1) is the fix. |
+
+### Done Well / Needs Improvement (Phase 4 Wave 5)
+
+**Done well:** honest verification cited live-env evidence (#601 ssh/cypher, #605 curl-403) not harness; best load distribution on record (17%, 6/6 distinct authors); the 2-reviewer gate caught a real CWE-214 leak + a coverage-honesty gap pre-merge; the baseline exploratory Chrome pass found a high-impact forced-logout-on-401 bug (ig#1016) in ~2 minutes.
+
+**Needs improvement (org):** (1) "shipped in CI ≠ shipped on the VPS" — end-state claims weren't validated against the deployed env until a wave late (charter change #1); (2) Lucas's recurring argv-leak class on the deploy surface (2 waves running) — a secure-by-construction lint/review-lens follow-up may be warranted if it recurs.

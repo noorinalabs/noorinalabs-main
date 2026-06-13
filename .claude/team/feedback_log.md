@@ -2886,3 +2886,37 @@ Wave field P4W3/P4W4/P4W5 options added to Project 2 (remediates the ~8 sync-hoo
 
 ### Memory-to-automation audit
 New memories this wave ([[feedback_no_users_prefer_correct_over_expedient]], [[project_ds_theme_color_utilities_noop]]) are correctly soft memories (owner preference + project gotcha, the latter partly tracked by DS#111). No memory crossed a hook/skill threshold; the orchestrator-discipline lessons go to the charter proposals above.
+
+## Retrospective: Phase 4 Wave 5 — Exit drive (verify → audit & close → tech-debt intake) — 2026-06-13
+
+### Team Performance
+6 PRs merged (main 1, ig 2, deploy 2, ds 1) across 4 repos; all 4 wave→main PRs merged via the `wave-merge` admin exception, reachability 0-stranded. Staging-promotion green (post-merge redeploy success). CR-cycles: 3 current-state (+1 on #648 edited-in-place to Approved → 4 review iterations historic). Top-implementer concentration: **17% (6 PRs / 6 distinct authors)** — best distribution on record, theme-fit (audit wave spread across owners). Issues: 10/10 slate resolved — 6 code closed; #604/#605/#607 verified MET + closed; **#601 verified NOT MET → re-pulled to P4W6**. New issues filed: ip#83/da#141/ip#84 (the #601 gaps), ig#1016/ig#1017 (baseline-exploratory auth bugs), main#650 (hook parser gap) = 6.
+
+### Per-Engineer Highlights
+- **Aisha Idrissi (#601 verification)** — Standout. Her verification surfaced Phase-4 end-state #1 NOT MET on staging (47 out-of-band sunni hadiths, zero narrator graph, pipeline never run), evidenced via `ssh noorinalabs-stg` + `docker exec cypher-shell`. Prevented a false Phase-4 exit and seeded the entire P4W6 spine. Highest-value contribution of the wave. Positive.
+- **Nino Kavtaradze (#605 + reviewer)** — caught a **CWE-214 awk-argv leak** on deploy#438 (second consecutive wave catching an argv-on-cmdline class — cf. W4 #435); ran the #605 security audit with a live `curl` 403-verify of the users-vhost `/metrics` block. Positive.
+- **Ingrid Lindqvist (#1012), Astrid Lindqvist (#113), Nurul Hakim (#437)** — clean single-PR deliveries, 0 CR cycles. Positive.
+- **Lucas Ferreira (#438)** — addressed both CRs cleanly, but shipped a **CWE-214 argv-leak** into review (caught by Nino) — same class as W4's deploy argv finding. Process clean; secure-by-construction awareness on the argv surface is the forward ask. Severity: moderate (caught + fixed pre-merge).
+- **Marisol Vega-Cruz (#1014)** — a coverage-honesty gap (omitted `/billing/checkout` from the asserted set) caught by Anya/Ravi review and addressed. Minor.
+- **Santiago Ferreira (#648 + ran wrapup)** — clean bar a trivial cspell-dictionary CR (edited-in-place to Approved). Positive.
+
+### Top 3 Going Well
+1. **Honest verification discipline** — #601 caught Phase-4 #1 unmet *before* a false exit; #605 was **runtime** curl-verified (403 on the live users vhost), not just "issue closed." Verification cited live-env evidence, not harness.
+2. **Best load distribution on record** — 17% concentration, 6/6 distinct authors; zero fragility going into the heavier P4W6.
+3. **The 2-reviewer gate earned its keep** — caught a real CWE-214 leak (#438) and a coverage-honesty gap (#1014) pre-merge; the wave shipped no silently-wrong code.
+
+### Top 3 Pain Points
+1. **"Shipped in CI ≠ shipped on the VPS"** — the W4-retro "data-first core shipped" lore was local/CI/harness only; the live staging reality (47 hadiths, no narrators, pipeline never ran) went unverified until W5's exit drive surfaced it a wave late (#601). End-state *claims* weren't validated against the deployed environment. → charter proposal #1.
+2. **Wave→main integration-merge friction** — both the `validate_pr_review` 2-reviewer gate and the `--admin` exception gate fired on all 4 already-2×-reviewed wave→main PRs, needing a per-PR `wave-merge` exception. Recurring toil every wave; the expected path wasn't documented. → charter proposal #2.
+3. **No live-UI exercise in the wave loop** — the baseline exploratory Chrome pass found a forced-logout-on-401 bug (ig#1016: the data client `fetchJson` emits session-expired on any 401 without attempting `refreshAccessToken()`, unlike the `/me` path) in ~2 minutes of driving the deployed app — a class nothing in the CI/harness loop exercises. → charter proposal #3.
+
+### Proposed Process Changes (charter) — all 3 owner-approved 2026-06-13
+1. **End-state criterion verification requires live-environment evidence** (not CI/harness alone). Rationale: #601 lesson — pain point #1. → `pull-requests.md`.
+2. **Document the `wave-merge` admin exception as the expected wave→main path** (already-reviewed code; no fresh 2-reviewer pass). Rationale: fired 4× this wave — pain point #2. → `pull-requests.md § Wave Merge PR Verification`.
+3. **Per-wave exploratory/E2E pass over the live app**, findings filed per the bug workflow. Rationale: ig#1016 — pain point #3. → `lifecycle.md` (mid-wave on-demand).
+
+### Annunaki-attack
+17 captured lines: 14 are expected PreToolUse enforcement blocks (loop-merge → literal-merge → `--admin`-exception adaptation flow) + benign cspell-not-local notes. 1 real gap → filed **main#650**: `post_label_change_wave_field_sync` parser skips `;`-chained multi-command Bash blocks, leaving #601's board Wave field unsynced when its label was removed (`/board-audit` reconciles). No new hooks warranted beyond the #650 fix.
+
+### Memory-to-automation audit
+New/updated memories this wave ([[project_staging_pipeline_not_wired]] — staging reality + P4W6 plan) are correctly soft memories (project state). No memory crossed a hook/skill threshold; the live-env-verification and exploratory-pass lessons went to charter proposals #1 and #3 above.
