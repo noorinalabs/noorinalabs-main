@@ -78,6 +78,14 @@
         "reviewer": "Jean-Claude Habimana",
         "reviewer_2": "Dilara Erdogan",
         "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#653",
+        "ref": "main#653",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Nadia Khoury",
+        "priority": "process"
       }
     ],
     "tracking": [
@@ -88,7 +96,10 @@
       }
     ],
     "td_intake": "2/2 — da#120 + da#133 (data-correctness prereqs; target met by spine, no backfill)",
-    "sequencing": "ip#84 -> (da#120,da#133) -> deploy#440 -> ip#83 -> da#141 -> ig#1018 ; ig#1016/#1017 parallel"
+    "sequencing": "ip#84 -> (da#120,da#133) -> deploy#440 -> ip#83 -> da#141 -> ig#1018 ; ig#1016/#1017 parallel",
+    "owner_added": [
+      "noorinalabs-main#653 — wave-start local-checkout hygiene; owner-requested mid-wave 2026-06-13 (not part of the ceil(0.20*7)=2 TD-intake calc)"
+    ]
   },
   "wave_6_repos_in_scope": [
     "noorinalabs-isnad-ingest-platform",
