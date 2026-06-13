@@ -280,6 +280,15 @@
         "reviewer": "Keanu Tama",
         "reviewer_2": "Nhan Pham",
         "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1000",
+        "ref": "#1000",
+        "implementer": "Ingrid Lindqvist",
+        "reviewer": "Ravi Desai",
+        "reviewer_2": "Anya Kowalczyk",
+        "priority": "tech-debt",
+        "note": "@theme bridge — enabler for #981 color migration; owner: correct-over-expedient"
       }
     ],
     "tier_3_product_features": [
