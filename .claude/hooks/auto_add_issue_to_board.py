@@ -247,19 +247,42 @@ def check(
         # parser may return multiple create-segments for compound commands;
         # pick the one whose repo matches the URL's repo to avoid mis-syncing
         # in `gh issue create --repo A ... && gh issue create --repo B ...`
-        # shapes.
+        # shapes. A create issued WITHOUT `--repo` (in-repo, ambient
+        # resolution — #659) parses with `repo=None`; it cannot match the URL
+        # repo by equality, so fall back to the first `repo is None` segment
+        # (the ambient create targets exactly the repo the URL reports) and
+        # finally `creates[0]`.
         url_repo_match = re.search(r"noorinalabs/([^/]+)/issues/", issue_url)
         url_repo = url_repo_match.group(1) if url_repo_match else None
-        chosen = next((c for c in creates if c.repo == url_repo), creates[0])
-        sync_result = _sync_wave_field_for_create(
-            repo=chosen.repo,
-            issue_number=issue_number,
-            wave_label=chosen.add_label,
-            command=command,
-            auth_status_runner=auth_status_runner,
-            graphql_runner=graphql_runner,
+        chosen = next(
+            (c for c in creates if c.repo == url_repo),
+            next((c for c in creates if c.repo is None), creates[0]),
         )
-        result["wave_field_sync"] = sync_result
+        # `chosen.repo` is None for an ambient (#659) create; the created-issue
+        # URL is the authoritative repo the issue actually landed in, so prefer
+        # it. (No cwd-based `resolve_repo_short_name` is needed on this surface
+        # — unlike the EDIT path #650 — because PostToolUse already has the URL.)
+        effective_repo = chosen.repo or url_repo
+        if not effective_repo:
+            # Defensive: PostToolUse only reaches here with a parsed issue URL,
+            # so url_repo is normally present. Log rather than silently drop.
+            log_posttooluse_event(
+                "auto_add_issue_to_board",
+                command,
+                "skip_no_repo_context: wave-labeled create has no --repo and the "
+                f"issue URL {issue_url!r} yielded no repo; cannot sync Wave field.",
+            )
+            result["wave_field_sync"] = {"action": "skip_no_repo_context"}
+        else:
+            sync_result = _sync_wave_field_for_create(
+                repo=effective_repo,
+                issue_number=issue_number,
+                wave_label=chosen.add_label,
+                command=command,
+                auth_status_runner=auth_status_runner,
+                graphql_runner=graphql_runner,
+            )
+            result["wave_field_sync"] = sync_result
 
     return result
 

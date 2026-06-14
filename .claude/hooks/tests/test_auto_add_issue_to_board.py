@@ -305,6 +305,90 @@ class CreateWithWaveLabelTests(unittest.TestCase):
         self.assertEqual(sync["option_name"], "P3W12")
 
 
+class CreateWithoutRepoFlagWaveLabelTests(unittest.TestCase):
+    """#659 — in-repo `gh issue create` WITHOUT `--repo` (ambient resolution)
+    must still sync the Wave field; the concrete repo is recovered from the
+    created-issue URL. Before the fix the parser dropped the create (gated on
+    `--repo`) and the board Wave field was left unset — the create-surface
+    sibling of the EDIT-path #650 silent-drop.
+    """
+
+    def setUp(self):
+        _wipe_field_sync_cache()
+        field_sync_hook.CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        field_sync_hook._write_cache(_ids_blob())
+
+    def tearDown(self):
+        _wipe_field_sync_cache()
+
+    def test_in_repo_create_without_repo_flag_resolves_repo_from_url(self):
+        cmd = 'gh issue create --title "bug" --body "x" --label "p3-wave-11"'
+        stdout = "https://github.com/noorinalabs/noorinalabs-main/issues/659\n"
+        router = FakeGraphQLRouter(
+            item_lookup=_item_lookup_response,
+            mutation=_mutation_success_response,
+        )
+        with patch.object(hook.subprocess, "run") as mock_run:
+            mock_run.return_value = type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+            result = hook.check(
+                _bash_create(cmd, stdout=stdout),
+                auth_status_runner=_scopes_with_project,
+                graphql_runner=router,
+            )
+        self.assertEqual(result["action"], "added")
+        sync = result["wave_field_sync"]
+        self.assertEqual(sync["action"], "set")
+        self.assertEqual(sync["repo"], "noorinalabs-main")  # recovered from the URL
+        self.assertEqual(sync["issue"], "659")
+        self.assertEqual(sync["option_name"], "P3W11")
+        self.assertEqual(router.calls["mutation"], 1)
+
+    def test_equals_form_without_repo_also_resolves(self):
+        """`--label=p3-wave-11` with no `--repo` (equals form) also syncs."""
+        cmd = "gh issue create --title bug --body x --label=p3-wave-11"
+        stdout = "https://github.com/noorinalabs/noorinalabs-isnad-graph/issues/77\n"
+        router = FakeGraphQLRouter(
+            item_lookup=_item_lookup_response,
+            mutation=_mutation_success_response,
+        )
+        with patch.object(hook.subprocess, "run") as mock_run:
+            mock_run.return_value = type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+            result = hook.check(
+                _bash_create(cmd, stdout=stdout),
+                auth_status_runner=_scopes_with_project,
+                graphql_runner=router,
+            )
+        sync = result["wave_field_sync"]
+        self.assertEqual(sync["action"], "set")
+        self.assertEqual(sync["repo"], "noorinalabs-isnad-graph")
+
+
+class ParseWaveLabelCreateTests(unittest.TestCase):
+    """#659 parser-level coverage for the `--repo`-Optional create path."""
+
+    def test_create_without_repo_returns_change_with_repo_none(self):
+        from _wave_label_parse import parse_wave_label_create
+
+        creates = parse_wave_label_create('gh issue create --title "bug" --label "p5-wave-3"')
+        self.assertEqual(len(creates), 1)
+        self.assertIsNone(creates[0].repo)
+        self.assertEqual(creates[0].add_label, "p5-wave-3")
+
+    def test_create_with_repo_still_captures_short_name(self):
+        from _wave_label_parse import parse_wave_label_create
+
+        creates = parse_wave_label_create(
+            "gh issue create --repo noorinalabs/noorinalabs-main --label p5-wave-3"
+        )
+        self.assertEqual(len(creates), 1)
+        self.assertEqual(creates[0].repo, "noorinalabs-main")
+
+    def test_create_without_wave_label_returns_empty(self):
+        from _wave_label_parse import parse_wave_label_create
+
+        self.assertEqual(parse_wave_label_create("gh issue create --label bug"), [])
+
+
 class ExtractIssueUrlTests(unittest.TestCase):
     """Pure-function coverage for the URL+number extractor."""
 

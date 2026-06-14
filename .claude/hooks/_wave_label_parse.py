@@ -137,9 +137,18 @@ class WaveLabelCreate:
 
     Issue NUMBER is not present at parse-time (the create has not yet
     landed); the caller extracts it from PostToolUse stdout.
+
+    `repo` is the short repo name from `--repo owner/name` (e.g.
+    `noorinalabs-main`), or None when the command OMITS `--repo` and relies
+    on gh's ambient-git-context resolution (#659 — the create-surface sibling
+    of the EDIT-path #650 fix). Requiring `--repo` here silently dropped every
+    in-repo `gh issue create` (the create never reached the Wave-field sync →
+    the board Wave field went unset). When `--repo` is absent the consumer
+    resolves the concrete repo from the created-issue URL in PostToolUse
+    stdout, which is the authoritative repo the issue actually landed in.
     """
 
-    repo: str
+    repo: str | None
     add_label: str
 
 
@@ -309,6 +318,14 @@ def parse_wave_label_create(command: str) -> list[WaveLabelCreate]:
     only the FIRST wave-label value is captured (Hook 13's existing
     invariant — one wave label per issue).
 
+    `--repo` is OPTIONAL (#659): an in-repo `gh issue create --label
+    "p{N}-wave-{M}"` run without `--repo` relies on gh's ambient-git-context
+    resolution and carries no `--repo` token. Such a create still yields a
+    `WaveLabelCreate` (with `repo=None`); the consumer resolves the concrete
+    repo from the created-issue URL. Before this fix the `if wave_label and
+    repo:` gate dropped every in-repo create, leaving the board Wave field
+    unset — the create-surface sibling of the EDIT-path #650 silent-drop.
+
     Issue #450 use case: Hook 13 (`auto_add_issue_to_board`) needs to
     know the wave label at create-time so it can set the project board's
     Wave single-select field after adding the issue. The issue NUMBER
@@ -360,6 +377,11 @@ def parse_wave_label_create(command: str) -> list[WaveLabelCreate]:
                 continue
             i += 1
 
-        if wave_label and repo:
+        if wave_label:
+            # `repo` may be None (in-repo `gh issue create` without `--repo`,
+            # #659). Emit the create anyway; the consumer recovers the concrete
+            # repo from the created-issue URL. Gating on `repo` here silently
+            # dropped every in-repo wave-labeled create — the create-surface
+            # twin of the EDIT-path #650 drop.
             out.append(WaveLabelCreate(repo=repo, add_label=wave_label))
     return out
