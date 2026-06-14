@@ -853,14 +853,6 @@
         "priority": "bug"
       },
       {
-        "id": "noorinalabs-data-acquisition#147",
-        "ref": "da#147",
-        "implementer": "Kavitha Sundaramurthy",
-        "reviewer": "Nikolaos Papadopoulos",
-        "reviewer_2": "Oyunbileg Batbayar",
-        "priority": "bug"
-      },
-      {
         "id": "noorinalabs-data-acquisition#148",
         "ref": "da#148",
         "implementer": "Nikolaos Papadopoulos",
@@ -888,7 +880,14 @@
       }
     ],
     "td_intake": "1/1",
-    "td_pool": 19
+    "td_pool": 19,
+    "descoped_premise_false": [
+      {
+        "ref": "da#147",
+        "reason": "premise-false: narrator sect IS sect_affiliation (4-valued, populated 47086+113); db.propertyKeys() misread. Verified at wave branch. Closed not-planned 2026-06-14.",
+        "verified_by": "Kavitha Sundaramurthy + orchestrator"
+      }
+    ]
   },
   "wave_1_kicked_off_at": "2026-06-14T01:20:00Z",
   "wave_1_active": true,
