@@ -943,7 +943,7 @@
     "mirror_of": ".claude/team/phases/phase-3.md § Sweep-wave reservation (W12, possibly W13)"
   },
   "wave_active": true,
-  "current_wave": "wave-2",
+  "current_wave": "wave-3",
   "wave_5_active": false,
   "wave_5_kicked_off_at": "2026-06-13T15:55:00Z",
   "wave_5_final_pr_count": 6,
@@ -954,9 +954,9 @@
   "wave_5_wrapped_up_at": "2026-06-13T18:00:45Z",
   "wave_5_annunaki_attack_ran_at": "2026-06-13T18:18:53Z",
   "wave_5_memory_audit_ran_at": "2026-06-13T18:18:53Z",
-  "next_wave": "wave-3",
+  "next_wave": "wave-4",
   "wave_started": "2026-06-12T00:12:20Z",
-  "last_completed_wave": "wave-1",
+  "last_completed_wave": "wave-2",
   "last_completed_at": "2026-06-11T04:13:13Z",
   "phase": "phase-4",
   "wave_3_meta_issue": 675,
@@ -966,49 +966,49 @@
       {
         "id": "noorinalabs-data-acquisition#158",
         "ref": "da#158",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Ivana Horvat",
+        "reviewer": "Jean-Claude Habimana",
+        "reviewer_2": "Oyunbileg Batbayar",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-data-acquisition#155",
         "ref": "da#155",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Ivana Horvat",
+        "reviewer": "Jean-Claude Habimana",
+        "reviewer_2": "Oyunbileg Batbayar",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-data-acquisition#154",
         "ref": "da#154",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Ivana Horvat",
+        "reviewer": "Jean-Claude Habimana",
+        "reviewer_2": "Oyunbileg Batbayar",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-data-acquisition#159",
         "ref": "da#159",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Kwesi Boateng",
+        "reviewer_2": "Oyunbileg Batbayar",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-data-acquisition#157",
         "ref": "da#157",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Kwesi Boateng",
+        "reviewer": "Jean-Claude Habimana",
+        "reviewer_2": "Oyunbileg Batbayar",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-data-acquisition#160",
         "ref": "da#160",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Kavitha Sundaramurthy",
+        "reviewer": "Alejandra Reyes-Fuentes",
+        "reviewer_2": "Oyunbileg Batbayar",
         "priority": "feature"
       }
     ],
@@ -1016,49 +1016,49 @@
       {
         "id": "noorinalabs-isnad-graph#1048",
         "ref": "ig#1048",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Jun-Seo Park",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Marisol Vega-Cruz",
         "priority": "bug"
       },
       {
         "id": "noorinalabs-isnad-graph#1049",
         "ref": "ig#1049",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Mei-Lin Chang",
+        "reviewer": "Farhan Malik",
+        "reviewer_2": "Marisol Vega-Cruz",
         "priority": "bug"
       },
       {
         "id": "noorinalabs-isnad-graph#1050",
         "ref": "ig#1050",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Farhan Malik",
+        "reviewer": "Arjun Raghavan",
+        "reviewer_2": "Marisol Vega-Cruz",
         "priority": "bug"
       },
       {
         "id": "noorinalabs-isnad-graph#1051",
         "ref": "ig#1051",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Mateo Salazar",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Marisol Vega-Cruz",
         "priority": "bug"
       },
       {
         "id": "noorinalabs-isnad-graph#1032",
         "ref": "ig#1032",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Farhan Malik",
+        "reviewer": "Arjun Raghavan",
+        "reviewer_2": "Marisol Vega-Cruz",
         "priority": "bug"
       },
       {
         "id": "noorinalabs-isnad-graph#1031",
         "ref": "ig#1031",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Ingrid Lindqvist",
+        "reviewer": "Ravi Wickramasinghe",
+        "reviewer_2": "Marisol Vega-Cruz",
         "priority": "bug"
       }
     ],
@@ -1066,65 +1066,65 @@
       {
         "id": "noorinalabs-isnad-graph#1027",
         "ref": "ig#1027",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Ingrid Lindqvist",
+        "reviewer": "Ravi Wickramasinghe",
+        "reviewer_2": "Marisol Vega-Cruz",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-isnad-graph#1038",
         "ref": "ig#1038",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Nneka Obi",
+        "reviewer": "Jelani Mwangi",
+        "reviewer_2": "Marisol Vega-Cruz",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-user-service#166",
         "ref": "us#166",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Anya Kowalczyk",
+        "reviewer": "Idris Yusuf",
+        "reviewer_2": "Mateo Salazar",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-deploy#449",
         "ref": "deploy#449",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Weronika Zielinska",
+        "reviewer": "Nino Kavtaradze",
+        "reviewer_2": "Aisha Idrissi",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-deploy#452",
         "ref": "deploy#452",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Nurul Hakim",
+        "reviewer": "Bereket Tadesse",
+        "reviewer_2": "Lucas Ferreira",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-deploy#453",
         "ref": "deploy#453",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Nurul Hakim",
+        "reviewer": "Bereket Tadesse",
+        "reviewer_2": "Lucas Ferreira",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-deploy#450",
         "ref": "deploy#450",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Lucas Ferreira",
+        "reviewer": "Aisha Idrissi",
+        "reviewer_2": "Nino Kavtaradze",
         "priority": "feature"
       },
       {
         "id": "noorinalabs-deploy#451",
         "ref": "deploy#451",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Lucas Ferreira",
+        "reviewer": "Aisha Idrissi",
+        "reviewer_2": "Nino Kavtaradze",
         "priority": "feature"
       }
     ],
@@ -1132,33 +1132,33 @@
       {
         "id": "noorinalabs-isnad-graph#1036",
         "ref": "ig#1036",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Thandiwe Moyo",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Marisol Vega-Cruz",
         "priority": "tech-debt"
       },
       {
         "id": "noorinalabs-isnad-graph#1046",
         "ref": "ig#1046",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Thandiwe Moyo",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Marisol Vega-Cruz",
         "priority": "tech-debt"
       },
       {
         "id": "noorinalabs-main#659",
         "ref": "main#659",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Nino Kavtaradze",
         "priority": "tech-debt"
       },
       {
         "id": "noorinalabs-main#661",
         "ref": "main#661",
-        "implementer": null,
-        "reviewer": null,
-        "reviewer_2": null,
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Nino Kavtaradze",
         "priority": "tech-debt"
       }
     ],
@@ -1180,41 +1180,28 @@
   ],
   "wave_3_scope_reconciled_at": "2026-06-14T18:33:00Z",
   "wave_3_branches": {
-    "branch": "deployments/phase-4/wave-3",
-    "created_at": "2026-06-12T00:12:20Z",
+    "branch": "deployments/phase-5/wave-3",
+    "created_at": "2026-06-14T18:48:00Z",
     "repos": {
       "noorinalabs-main": {
-        "sha": "7006055",
         "status": "created"
       },
       "noorinalabs-isnad-graph": {
-        "sha": "b52f46fd",
         "status": "created"
       },
       "noorinalabs-user-service": {
-        "sha": "1509d04d",
         "status": "created"
       },
       "noorinalabs-deploy": {
-        "sha": "00dbb304",
-        "status": "created"
-      },
-      "noorinalabs-landing-page": {
-        "sha": "5329e903",
         "status": "created"
       },
       "noorinalabs-data-acquisition": {
-        "sha": "e6c4090f",
-        "status": "created"
-      },
-      "noorinalabs-isnad-ingest-platform": {
-        "sha": "bd560194",
         "status": "created"
       }
     }
   },
-  "wave_3_active": false,
-  "wave_3_kicked_off_at": "2026-06-12T00:12:20Z",
+  "wave_3_active": true,
+  "wave_3_kicked_off_at": "2026-06-14T18:48:00Z",
   "wave_3_final_pr_count": 34,
   "wave_3_changes_requested_cycles": 6,
   "wave_3_top_concentration_pct": 15,
