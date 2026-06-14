@@ -642,6 +642,25 @@ This is the **lifecycle-separation** companion to the **layer-separation** disci
 
 `noorinalabs-deploy#121` / PR #187, 2026-04-28. The PR fixed `isnad-backup.{service,timer}` (3 + 2 stacked bugs). `noorinalabs-main#212` cutover-gate required "one successful end-to-end backup within 24h of first compose-up before DNS-flip." Aisha's spawn brief asked for "B2 object key proving end-to-end success" as PR evidence. Aisha correctly DEFERRED that evidence to post-compose-up runtime, documented what she CANNOT validate (no docker-compose stack on stg = `docker compose ps` preflight refuses to proceed = no B2 path reached), shipped unit-mechanic correctness, and added an explicit post-merge Test Plan step for the runtime gate. Bereket endorsed the deferral as canonical: "fix landing now, gate firing later" is the right shape.
 
+## Sandbox Test-Verification Pattern — Unit-Construct + Cite-CI When the Suite Hangs (Mandatory) <!-- promotion-target: none -->
+
+The dev sandbox has **no local backing services** (Neo4j/Postgres/Redis bolt + frontend resolve only inside the cluster — see memory `project_staging_neo4j_frontend_unreachable_from_sandbox`). A test whose fixture spins up the app (FastAPI `TestClient` lifespan, DB-connected `client` fixture) will **block on a connection attempt that never completes** — it presents as "still running," not as a failure, so it silently burns wall-clock.
+
+### How to apply
+
+- **If the full suite hangs**, do NOT keep waiting on it. Verify the changed logic via a **targeted unit check that needs no app/DB startup** — construct the model/function directly and assert behavior — then **cite the green CI job** (which runs with real services) as the suite-pass evidence in the PR / review.
+- **Reviewers:** a verdict may rest on "direct unit verification + green CI `test` job" when a local full-suite run is environmentally infeasible; say so explicitly. Do not demand a completed local suite run that the sandbox cannot produce (companion to § PR-Time Acceptance vs Runtime Acceptance — environmental infeasibility, not deferral).
+- **`uv run` gotcha:** prefer invoking the tool through the resolved venv (`.venv/bin/pytest`, `.venv/bin/ruff`, `.venv/bin/mypy`) over `uv run <tool>` — `uv run` can stall on venv lock-contention behind a hung sibling process, compounding the hang.
+
+### Severity if violated
+
+- Burning a long wait on a hung full-suite run instead of unit-constructing + citing CI: **minor** (wasted wall-clock).
+- Claiming "tests pass" from a run that actually hung (never reached a terminal state): **moderate** — that is an unverified claim; cite the CI job or the direct unit check, not a hung local run.
+
+### Worked example
+
+P5W2 (#1024 / PR #1045, #1048 diagnosis): `pytest tests/test_api/test_narrators.py` ran 14 min at 0.4% CPU / 163 MB RSS — hung on the `client` fixture's app-startup DB connect, not computing. Resolution: constructed `NarratorResponse` directly from a sparse `{id, name_ar}` dict to prove the fix (+ ran `ruff`/`mypy` via `.venv/bin`), and cited the green CI `test` job. Marisol independently hit the same ~9-min stall and correctly cited CI rather than a completed local run.
+
 ## Close Runtime-Gated Issues on Verified-Live, Not on Merge (Mandatory) <!-- promotion-target: none -->
 
 When an issue's real acceptance is a **gated production apply or live behavior** (the runtime-acceptance half of the section above), the PR that implements it MUST reference the issue with `Refs #N`, NOT `Closes #N`. The orchestrator closes the issue manually **after** the post-merge apply succeeds and the live behavior is verified.

@@ -400,6 +400,19 @@ Per charter `agents.md` § Hub-and-Spoke Orchestration Model + § Single-Leader 
 
 When composing spawn prompts for implementers, pull the manager's specified reviewer pairings, branch names, and Contract expectations into the prompt so the implementer starts with full context.
 
+### 9b. Track each spawned implementer with TaskCreate (Mandatory — added P5W2 retro 2026-06-14)
+
+**Every implementer spawn MUST have a corresponding `TaskCreate` entry** (subject = the issue ref + slug, owner = the implementer name) created at spawn time. The orchestrator owns the task list as the live ledger of in-flight wave work.
+
+**Why:** P5W2 spawned implementers for all scoped issues, but no tasks were tracked. The keystone bug (#1024 narrators-500) implementer produced **zero output** — no branch, no PR, no commit — and because `TaskList` was empty, the stall was **invisible** until the owner manually asked about it near end-of-wave. The keystone nearly didn't ship. A tracked task makes a zero-output stall surface at the next status sweep instead of at a manual nudge.
+
+**Mechanics:**
+- At spawn (step 9 / 9a), call `TaskCreate` for each implementer: subject `"{repo}#{issue} — {slug}"`, owner = implementer name, plus the reviewer pairing in the description.
+- Mid-wave, `TaskList` is the at-a-glance stall detector: any task still `pending`/`in_progress` with **no branch/PR after a reasonable interval** is a stall — re-prod the implementer (`SendMessage`) or take it over (per `feedback_throttle_takeover`), don't wait for it to surface manually.
+- `/wave-wrapup` and `/wave-retro` cross-check the task list against merged PRs; a task with no delivered PR is a scope-drop or substitution to reconcile explicitly (already required by those skills' reconciliation steps — this makes the input ledger reliable).
+
+This is the input-side counterpart to the wrapup scope-drop / implementer-substitution reconciliation: those catch silent drops/swaps at *close*; the task ledger catches a zero-output stall *during* the wave.
+
 ### 10. Output execution plan
 
 Generate and display a structured execution plan with:
