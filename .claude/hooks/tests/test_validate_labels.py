@@ -149,6 +149,47 @@ class NegativeMatchLabelsTests(unittest.TestCase):
         )
 
 
+class TokenizeFailureFallbackTests(unittest.TestCase):
+    """#661 — when shlex tokenization FAILS, label extraction must NOT scoop
+    label-shaped tokens out of `--body`/`--title` prose.
+
+    The prior fallback ran a `(?:--label|-l)`-anchored regex over the WHOLE
+    command on shlex failure, which over-matched documented label patterns in
+    the issue body and false-blocked a legitimate `gh issue create`. The fix
+    fails OPEN (returns []) instead of over-matching.
+    """
+
+    def test_exact_issue_661_reproducer_does_not_leak_body_label(self):
+        """The live P4W7 repro: body documents ``--label `p{N}-wave-{M}` `` and
+        contains an apostrophe ("gh's") that breaks shlex. The real flag is
+        `--label bug`; the documented pattern MUST NOT be extracted."""
+        body = "This hook validates --label `p{N}-wave-{M}` tokens. Note gh's resolution."
+        cmd = f"gh issue create --repo noorinalabs/noorinalabs-main --label bug --body '{body}'"
+        from _shell_parse import tokenize
+
+        self.assertIsNone(tokenize(cmd), "precondition: this command must break shlex")
+        labels = hook.extract_labels(cmd)
+        self.assertNotIn("`p{N}-wave-{M}`", labels)
+        self.assertNotIn("p{N}-wave-{M}", labels)
+
+    def test_tokenize_failure_returns_empty_not_body_tokens(self):
+        """A `-l`/`--label` substring inside a quote-broken body must not leak."""
+        body = "see -l phantom and --label ghost; can't parse this"
+        cmd = f"gh issue create --label real --body '{body}'"
+        from _shell_parse import tokenize
+
+        self.assertIsNone(tokenize(cmd))
+        self.assertEqual(hook.extract_labels(cmd), [])
+
+    def test_check_does_not_block_on_malformed_quote_body(self):
+        """End-to-end: the #661 reproducer must ALLOW (no spurious block)."""
+        body = "Documents --label `p{N}-wave-{M}`. Mentions gh's ambient repo."
+        cmd = f"gh issue create --repo noorinalabs/noorinalabs-main --label bug --body '{body}'"
+        with mock.patch.object(hook, "get_existing_labels", return_value={"bug"}):
+            result = hook.check({"tool_name": "Bash", "tool_input": {"command": cmd}})
+        self.assertIsNone(result, f"unexpected block on malformed-quote body: {result}")
+
+
 class ExtractRepoTests(unittest.TestCase):
     """Coverage for Bug 1 (#113) — --repo flag pass-through."""
 

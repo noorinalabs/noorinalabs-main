@@ -84,23 +84,23 @@ def extract_labels(command: str) -> list[str]:
     treated as opaque single tokens and cannot leak into the label set
     (Bug 2 fix). Comma-separated values within a single flag are split.
 
-    Falls back to a conservative regex on shlex parse failure (e.g. command
-    contains a malformed quote). The fallback still anchors on `--label`
-    appearing at a shell-token boundary.
+    Returns an empty list (→ the gate ALLOWS) when shlex tokenization fails
+    (e.g. a malformed/unbalanced quote — typically an apostrophe such as
+    "gh's" inside a single-quoted `--body`). This is the #661 fix: the prior
+    fallback ran a `(?:--label|-l)`-anchored regex over the WHOLE command,
+    which scooped label-shaped tokens out of `--body`/`--title` prose (e.g. a
+    documented ``--label `p{N}-wave-{M}` `` pattern) and FALSE-BLOCKED a
+    legitimate `gh issue create`. Without reliable token boundaries we cannot
+    tell a real `--label` flag from one quoted inside body text, so we
+    deliberately fail OPEN here: the label-existence check is a best-effort
+    pre-flight and `gh` itself rejects a genuinely-missing label server-side,
+    whereas a false block stops valid work. We therefore prefer skipping
+    validation over over-matching. Comma-separated values within a single
+    flag are split.
     """
     tokens = tokenize(command)
     if tokens is None:
-        labels: list[str] = []
-        for match in re.finditer(
-            r'(?:^|\s)(?:--label|-l)(?:=|\s+)["\']?([^"\'\s]+)["\']?',
-            command,
-        ):
-            raw = match.group(1).strip()
-            for label in raw.split(","):
-                label = label.strip()
-                if label:
-                    labels.append(label)
-        return labels
+        return []
 
     labels = []
     for raw in walk_flag_values(tokens, _LABEL_FLAGS):
