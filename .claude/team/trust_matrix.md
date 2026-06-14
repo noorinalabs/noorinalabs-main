@@ -1429,3 +1429,32 @@ Wave shape: **34 PRs / 7 repos / 19 distinct implementers**, top-concentration *
 ### Done Well / Needs Improvement (Phase 4 Wave 7)
 - **Done well:** root-cause discipline beat issue-framing (Aino disproved the issue's prescribed fix and root-fixed the real bug); reviewers independently verified peer claims AND converged un-prompted on the same forward-looking sibling gap (#659); thin-wave hygiene held (TechDebt + head-SHA on all 4 verdicts first-pass).
 - **Needs improvement (orchestrator):** prefer `gh api --jq` over `echo "$RESP" \| jq` for large API payloads (avoids the shell-mangle 409 class); keep Bash-tool commands zsh-safe (no `set -- $unquoted` word-split assumptions).
+
+## Phase 5 Wave 1 Trust Updates (2026-06-14) — Data spine
+
+First Phase-5 wave (data-acquisition only). 4 PRs, **0 ChangesRequested cycles**, all first-pass Approved; top-concentration 25% (4/4 distinct authors — healthy). Reviews were uniformly sharp — three sources independently surfaced forward-looking throughlines, and the keystone review caught a real precision bug the fix's own test masked.
+
+### Implementers
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Alejandra Reyes-Fuentes | 5 | 5 | **Wave MVP** — triple contribution: implemented da#138 (caught a real nasab-reversal false-merge, order-guard not threshold-bump) AND reviewed #150 AND the standout keystone review on #151 (reproduced عن mid-word over-segmentation in real narrator names + caught that the new e2e fixture masks it). Maintain at ceiling. |
+| Ivana Horvat | 4 | **5** (▲) | da#146 keystone — root-caused the bug AWAY from the issue framing (not the lk adapter; diacritic-free patterns vs voweled text, masked by un-voweled toy fixtures), shipped a tested deterministic splitter (1 blob → 6 mentions; 31,525 chains segmented), honest real-NER follow-up. + reviewed #152. Promote to ceiling. |
+| Kwesi Boateng | 5 | 5 | da#144 — diagnosed the upstream 2→3-file dataset restructure, Nodes-decoy-aware selector, live-traced 63,642 edges, kept mis OFF the STUDIED_UNDER allowlist. Maintain at ceiling. |
+| Nikolaos Papadopoulos | 5 | 5 | da#148 — honest producer-fixable (shipped) vs data-decision (→da#153) split; investigated + correctly closed the 15-lk-STUDIED_UNDER as cross-corpus identity merge (not a bug). Maintain at ceiling. |
+| Kavitha Sundaramurthy | 4 | **5** (▲) | da#147 correctly killed **premise-false** with cross-repo code evidence (verify-don't-fabricate; refused a harmful binary-collapse "fix") + sharp #152 secondary review (fixture covers precision AND recall traps). Promote to ceiling. |
+
+### Reviewers (first numeric ratings)
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Jean-Claude Habimana | — | **4** | First numeric rating: architect reviews on #149 + #151; confirmed the right-layer (shared arabic.py) fix, caught the "Tracked"-without-issue-number nit (→da#154), and co-surfaced the fixture-masks-bug throughline. |
+| Tarek Mansour | — | **4** | First numeric rating: #149 review surfaced the da#133 edge-relation **default-trap** (DEFAULT_EDGE_RELATION falls back to STUDIED_UNDER → silent mis-route for any future transmission producer) — a high-value forward-looking finding. |
+| Oyunbileg Batbayar | 5 | 5 | #150 QA review — verified test coverage in BOTH directions (self-loop drop AND distinct-adjacency keep; grade-normalize table breadth). Maintain at ceiling. |
+
+### Orchestrator (Self-Assessment)
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Orchestrator (Steven via Claude) | 4 | 4 | (hold) Clean wave: scoped → kicked off → 4 PRs → 8 reviewers → wrapped, 0 CR cycles, counters exact (4/0/25, claimed==recomputed). Independently verified da#147 premise-false before closing (good judgment, avoided a harmful fix). Navigated the `validate_labels` multi-cmd + stale-cache hook bugs with bare-command workarounds (the bugs are #661/#663, not orchestrator error). Two consecutive clean waves (P4W7, P5W1) build toward promotion; holding 4 for humility/trend, not for any specific slip. |
+
+### Done Well / Needs Improvement (Phase 5 Wave 1)
+- **Done well:** every reviewer verified rather than rubber-stamped — the keystone review even caught that the fix's own test masks a NEW precision bug (fixture-masks-bug recurring one layer down); three independent forward-looking throughlines; premise-false caught by the implementer (Kavitha) AND independently confirmed; honest scope-splitting (da#153/154/155 filed, nothing dropped).
+- **Needs improvement (process):** the `validate_labels` hook bit the orchestrator twice (multi-cmd `--repo` cross-association + stale label cache) — tracked in #661/#663, worked around; and the fixture-masks-bug class keeps recurring — proposed as a charter rule this retro.
