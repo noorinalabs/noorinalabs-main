@@ -1811,5 +1811,17 @@
   "wave_7_wrapup_completed_at": "2026-06-14T00:15:00Z",
   "wave_7_annunaki_attack_ran_at": "2026-06-14T00:20:00Z",
   "wave_7_memory_audit_ran_at": "2026-06-14T00:20:00Z",
-  "wave_7_retro_completed_at": "2026-06-14T00:20:00Z"
+  "wave_7_retro_completed_at": "2026-06-14T00:20:00Z",
+  "phase_4_exited_at": "2026-06-14T00:30:00Z",
+  "phase_4_exit_criteria_met": [
+    "#601",
+    "#604",
+    "#605",
+    "#606",
+    "#607"
+  ],
+  "phase_4_carried_to_p5": [
+    "#602",
+    "#603"
+  ]
 }
