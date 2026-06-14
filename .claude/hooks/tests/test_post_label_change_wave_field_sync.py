@@ -851,12 +851,19 @@ class MultiCmdBashTests(unittest.TestCase):
 
     def test_parser_skip_logs_for_unparseable_wave_label_cmd(self):
         """When the command CONTAINS `gh issue edit` + canonical wave-label
-        but the parser extracts nothing (e.g., missing --repo), the hook
-        emits a parser-skip annunaki event per #455 acceptance criterion."""
+        but the parser extracts nothing, the hook emits a parser-skip
+        annunaki event per #455 acceptance criterion.
+
+        #650 update: a missing `--repo` is NO LONGER the unparseable shape —
+        the parser now returns the change (repo=None) and the hook resolves
+        the ambient repo from cwd. The remaining genuinely-unparseable shape
+        is an UNEXPANDED shell variable as the issue number
+        (`gh issue edit $ISSUE ...`): `$ISSUE` is not a digit so no change is
+        extracted, yet the command clearly intended a wave-label edit."""
         cmd = (
-            # Missing --repo flag → parser returns empty, but the command
-            # clearly intended a wave-label edit
-            'gh issue edit 600 --add-label "p3-wave-11"'
+            # Unexpanded `$ISSUE` → issue_number not a digit → parser returns
+            # empty, but the command clearly intended a wave-label edit.
+            'gh issue edit $ISSUE --repo noorinalabs/noorinalabs-main --add-label "p3-wave-11"'
         )
         result = hook.check(_bash(cmd))
         self.assertEqual(result["action"], "skip_parser_returned_empty")
@@ -1115,14 +1122,19 @@ class CanonicalWaveLabelRegexTests(unittest.TestCase):
         )
 
     def test_parser_skip_logs_for_spaced_bare_eof_cmd(self):
-        """End-to-end via check(): spaced-bare-EOF wave-label with missing
-        --repo (parser returns empty) must produce a skip_parser_returned_empty
+        """End-to-end via check(): a spaced-bare-EOF wave-label on a command
+        the parser still can't resolve must produce a skip_parser_returned_empty
         event so /annunaki-attack catches the silent miss.
+
+        #650 update: missing-`--repo` is now resolved from cwd, so the
+        unparseable shape here uses an unexpanded `$N` issue number while
+        keeping the spaced-bare-EOF `--add-label p3-wave-11` form that
+        exercises the #463 right-anchor.
         """
-        # `gh issue edit 1 --add-label p3-wave-11` — no --repo, no quotes.
-        # Pre-#463 the regex would not match this, so the hook would return
-        # None silently. Post-#463 it must return skip_parser_returned_empty.
-        result = hook.check(_bash("gh issue edit 1 --add-label p3-wave-11"))
+        # `gh issue edit $N --add-label p3-wave-11` — unexpanded var, no quotes.
+        # `$N` is not a digit → parser returns empty; the spaced-bare-EOF
+        # canonical label still matches _CANONICAL_WAVE_LABEL_IN_CMD (#463).
+        result = hook.check(_bash("gh issue edit $N --add-label p3-wave-11"))
         self.assertEqual(
             result.get("action") if result else None,
             "skip_parser_returned_empty",
@@ -1164,6 +1176,174 @@ class MultiCmdNoMatchPreservedTests(unittest.TestCase):
         )
         result = hook.check(_bash(cmd))
         self.assertIsNone(result)
+
+
+class AmbientRepoResolutionTests(unittest.TestCase):
+    """Bucket 9 (ACTIONABLE) — issue #650 ambient `--repo` resolution.
+
+    A `gh issue edit <num> --remove-label "p4-wave-5"` run from INSIDE the
+    target repo carries no `--repo`; gh resolves it from the ambient git
+    context. The parser now returns the change with repo=None and the hook
+    recovers the repo from the invocation cwd via the injected git_runner.
+    Before #650 this produced a `skip_parser_returned_empty` and the board
+    Wave field silently went unsynced.
+    """
+
+    _ORIGIN = "git@github.com:noorinalabs/noorinalabs-main.git\n"
+
+    def setUp(self):
+        _wipe_cache()
+        hook.CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        hook._write_cache(_ids_blob())
+
+    def tearDown(self):
+        _wipe_cache()
+
+    def _git_runner(self, url=None):
+        """Return a (runner, calls) pair; calls[0] counts invocations."""
+        calls = [0]
+        resolved = self._ORIGIN if url is None else url
+
+        def runner(_cwd):
+            calls[0] += 1
+            return resolved
+
+        return runner, calls
+
+    def test_exact_issue_650_reproducer_clears_field(self):
+        """The exact `comment ; echo ; edit --remove-label ; echo ; view`
+        shape from issue #650 (no --repo) must resolve repo from cwd and
+        CLEAR the Wave field — not skip_parser_returned_empty."""
+        router = FakeGraphQLRouter(
+            item_lookup=_item_lookup_response,
+            mutation=_mutation_success_response,
+        )
+        runner, _ = self._git_runner()
+        cmd = (
+            'gh issue comment 601 -b "P4W5 close-out" ; '
+            "echo done ; "
+            'gh issue edit 601 --remove-label "p4-wave-5" ; '
+            "echo ok ; "
+            "gh issue view 601"
+        )
+        # P4W5 option must exist for the (cleared) lookup path; clear doesn't
+        # need the option but item-lookup runs regardless.
+        hook._write_cache(
+            {
+                "project_id": "PROJ_NODE_ID",
+                "field_id": "WAVE_FIELD_ID",
+                "option_ids": {"P4W5": "OPT_P4W5"},
+            }
+        )
+        result = hook.check(
+            _bash(cmd),
+            auth_status_runner=_scopes_with_project,
+            graphql_runner=router,
+            git_runner=runner,
+        )
+        self.assertEqual(result["action"], "cleared")
+        self.assertEqual(result["repo"], "noorinalabs-main")
+        self.assertEqual(result["issue"], "601")
+
+    def test_single_no_repo_add_label_resolves_and_sets(self):
+        router = FakeGraphQLRouter(
+            item_lookup=_item_lookup_response,
+            mutation=_mutation_success_response,
+        )
+        runner, _ = self._git_runner()
+        result = hook.check(
+            _bash('gh issue edit 123 --add-label "p3-wave-11"'),
+            auth_status_runner=_scopes_with_project,
+            graphql_runner=router,
+            git_runner=runner,
+        )
+        self.assertEqual(result["action"], "set")
+        self.assertEqual(result["repo"], "noorinalabs-main")
+        self.assertEqual(result["option_name"], "P3W11")
+
+    def test_https_origin_url_strips_dotgit(self):
+        router = FakeGraphQLRouter(
+            item_lookup=_item_lookup_response,
+            mutation=_mutation_success_response,
+        )
+        runner, _ = self._git_runner(url="https://github.com/noorinalabs/noorinalabs-deploy\n")
+        result = hook.check(
+            _bash('gh issue edit 123 --add-label "p3-wave-11"'),
+            auth_status_runner=_scopes_with_project,
+            graphql_runner=router,
+            git_runner=runner,
+        )
+        self.assertEqual(result["action"], "set")
+        self.assertEqual(result["repo"], "noorinalabs-deploy")
+
+    def test_multi_cmd_no_repo_resolves_once(self):
+        """Two `--repo`-less edits in one compound command share one cwd; the
+        git origin should be resolved at most once."""
+        router = FakeGraphQLRouter(
+            item_lookup=_item_lookup_response,
+            mutation=_mutation_success_response,
+        )
+        runner, calls = self._git_runner()
+        cmd = (
+            'gh issue edit 100 --add-label "p3-wave-11" ; '
+            'gh issue edit 101 --add-label "p3-wave-11"'
+        )
+        result = hook.check(
+            _bash(cmd),
+            auth_status_runner=_scopes_with_project,
+            graphql_runner=router,
+            git_runner=runner,
+        )
+        self.assertEqual(result["action"], "multi")
+        self.assertEqual(result["count"], 2)
+        self.assertTrue(all(r["repo"] == "noorinalabs-main" for r in result["results"]))
+        self.assertEqual(calls[0], 1, "ambient repo should be resolved once for a shared cwd")
+
+    def test_explicit_repo_does_not_invoke_git_runner(self):
+        """When `--repo` IS present, the ambient resolver must not be called."""
+        router = FakeGraphQLRouter(
+            item_lookup=_item_lookup_response,
+            mutation=_mutation_success_response,
+        )
+        runner, calls = self._git_runner()
+        result = hook.check(
+            _bash('gh issue edit 123 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-11"'),
+            auth_status_runner=_scopes_with_project,
+            graphql_runner=router,
+            git_runner=runner,
+        )
+        self.assertEqual(result["action"], "set")
+        self.assertEqual(calls[0], 0, "explicit --repo must not trigger ambient resolution")
+
+    def test_unresolvable_repo_skips_no_repo_context(self):
+        """No --repo AND no git origin → skip_no_repo_context (not a crash,
+        not a silent skip_parser_returned_empty)."""
+        result = hook.check(
+            _bash('gh issue edit 123 --remove-label "p3-wave-10"'),
+            auth_status_runner=_scopes_with_project,
+            graphql_runner=FakeGraphQLRouter(),
+            git_runner=lambda _cwd: None,
+        )
+        self.assertEqual(result["action"], "skip_no_repo_context")
+        self.assertEqual(result["issue"], "123")
+
+    def test_unresolvable_repo_logs(self):
+        """skip_no_repo_context must emit an annunaki log entry."""
+        captured = []
+        orig = hook.log_posttooluse_event
+        hook.log_posttooluse_event = lambda *a, **k: captured.append(a)
+        try:
+            hook.check(
+                _bash('gh issue edit 123 --remove-label "p3-wave-10"'),
+                auth_status_runner=_scopes_with_project,
+                git_runner=lambda _cwd: None,
+            )
+            self.assertTrue(
+                any("skip_no_repo_context" in str(a) for a in captured),
+                f"skip_no_repo_context must log; captured: {captured}",
+            )
+        finally:
+            hook.log_posttooluse_event = orig
 
 
 if __name__ == "__main__":

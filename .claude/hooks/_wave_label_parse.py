@@ -40,7 +40,10 @@ Public API
 
         Result fields (shared with the plural form):
           repo          — `noorinalabs-<name>` short form (last path segment
-                          of `--repo owner/name` or `--repo=owner/name`).
+                          of `--repo owner/name` or `--repo=owner/name`), or
+                          None when `--repo` is OMITTED (in-repo invocation,
+                          ambient gh resolution — #650). The consuming hook
+                          resolves the None case from the invocation cwd.
           issue_number  — the bare positional issue number after `edit`.
           add_label     — the FIRST `--add-label "p{N}-wave-{M}"` value, or
                           None if no add operation present.
@@ -114,9 +117,15 @@ class WaveLabelChange:
     """Result of parsing a `gh issue edit ... --add-label|--remove-label` command.
 
     At least one of `add_label` / `remove_label` is non-None.
+
+    `repo` is the short repo name from `--repo owner/name` (e.g.
+    `noorinalabs-main`), or None when the command OMITS `--repo` and relies
+    on gh's ambient-git-context resolution. Consumers that need a concrete
+    repo (for a GraphQL/REST call) resolve the None case from the invocation
+    cwd via `_shell_parse.resolve_repo_short_name` (#650).
     """
 
-    repo: str
+    repo: str | None
     issue_number: str
     add_label: str | None
     remove_label: str | None
@@ -154,9 +163,17 @@ def parse_wave_label(value: str) -> tuple[int, int] | None:
 def _parse_edit_segment(rest: list[str]) -> WaveLabelChange | None:
     """Parse the rest of a tokenized `gh issue edit <num> ...` segment.
 
-    Returns the WaveLabelChange if the segment has issue_number, repo,
-    AND at least one canonical wave-label `--add-label`/`--remove-label`.
-    Otherwise returns None.
+    Returns the WaveLabelChange if the segment has an issue_number AND at
+    least one canonical wave-label `--add-label`/`--remove-label`. Otherwise
+    returns None.
+
+    `--repo` is OPTIONAL (#650): a `gh issue edit <num> --remove-label
+    "p4-wave-5"` run from inside the target repo carries no `--repo` and
+    relies on gh's ambient-git-context resolution. Requiring `--repo` here
+    silently dropped every such in-repo label edit (the change never reached
+    the field-sync hook → board Wave field went unsynced). When `--repo` is
+    absent the returned `repo` is None; the consuming hook resolves the
+    ambient repo from the invocation cwd.
     """
     if len(rest) < 3 or rest[0] != "issue" or rest[1] != "edit":
         return None
@@ -208,7 +225,7 @@ def _parse_edit_segment(rest: list[str]) -> WaveLabelChange | None:
             continue
         i += 1
 
-    if issue_number and repo and (add_label or remove_label):
+    if issue_number and (add_label or remove_label):
         return WaveLabelChange(
             repo=repo,
             issue_number=issue_number,

@@ -65,6 +65,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _shell_parse import resolve_repo_short_name  # noqa: E402
 from _wave_label_parse import parse_wave_label, parse_wave_label_change  # noqa: E402
 from annunaki_log import log_posttooluse_event  # noqa: E402
 
@@ -140,13 +141,17 @@ def _read_status() -> dict | None:
     return None
 
 
-def parse_label_apply_command(command: str) -> tuple[str, str, str] | None:
-    """Parse `gh issue edit <num> --repo <repo> --add-label "p{N}-wave-{M}"`.
+def parse_label_apply_command(command: str) -> tuple[str | None, str, str] | None:
+    """Parse `gh issue edit <num> [--repo <repo>] --add-label "p{N}-wave-{M}"`.
 
     Returns (repo, issue_number, wave_label) if the command APPLIES a wave
     label, else None. Tolerates additional flags and arbitrary flag
     ordering. The kickoff hook only fires on label-APPLY, so commands
     that only `--remove-label` a wave label return None here.
+
+    `repo` is None when the command OMITS `--repo` (in-repo invocation,
+    #650); the caller (`check`) resolves the ambient repo from the
+    invocation cwd before using it.
 
     Between-wave relabel filter (#467): commands that ALSO remove a
     canonical wave label in the same invocation
@@ -398,6 +403,7 @@ def check(
     comment_fetcher=None,
     comment_poster=None,
     body_writer=None,
+    git_runner=None,
 ) -> dict | None:
     """Pure decision function. Returns a dict describing the action taken
     (or skipped), or None when the hook does not apply.
@@ -409,13 +415,17 @@ def check(
       {"action": "skip_idempotent", ...}       — kickoff already posted
       {"action": "skip_no_scope", ...}         — wave_{M}_scope missing
       {"action": "skip_no_row", ...}           — issue not in any tier
+      {"action": "skip_no_repo_context", ...}  — --repo omitted AND ambient
+                                                 repo unresolvable from cwd
       {"action": "skip_post_failed", ...}      — gh post call failed
 
     Injection points let tests mock external state without mocking
     subprocess: `status_loader()` returns the status dict, `comment_fetcher
     (repo, num)` returns the comment list, `comment_poster(repo, num, path)`
     returns success bool, `body_writer(body, repo, num)` returns the Path
-    of the written body file.
+    of the written body file, `git_runner(cwd)` returns the `origin` remote
+    URL used to resolve the ambient repo when a command omits `--repo`
+    (#650).
     """
     if input_data.get("tool_name", "") != "Bash":
         return None
@@ -428,6 +438,22 @@ def check(
     if parsed is None:
         return None
     repo, issue_number, wave_label = parsed
+
+    # #650: a label-apply run from inside the target repo carries no `--repo`
+    # (repo=None). Mirror gh's ambient-git-context resolution by recovering
+    # the repo from the invocation cwd; without it the downstream
+    # `--repo noorinalabs/<repo>` call would be malformed.
+    if repo is None:
+        repo = resolve_repo_short_name(input_data, git_runner=git_runner)
+        if repo is None:
+            log_posttooluse_event(
+                "post_wave_kickoff_comment",
+                command,
+                f"skip_no_repo_context: label-apply for issue {issue_number} omitted "
+                "--repo and the ambient repo could not be resolved from the invocation "
+                "cwd (no git origin); cannot render/post kickoff comment.",
+            )
+            return {"action": "skip_no_repo_context", "issue": issue_number}
 
     parsed_label = parse_wave_label(wave_label)
     if parsed_label is None:
