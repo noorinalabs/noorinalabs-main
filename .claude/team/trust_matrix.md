@@ -1488,3 +1488,43 @@ Clean wave: 5 PRs, **0 ChangesRequested cycles** (every PR approved first-pass),
 ### Done Well / Needs Improvement (Phase 5 Wave 2)
 - **Done well:** cleanest wave in recent memory (0 CR cycles, all first-pass approvals); strong independent review culture (Marisol's 4 verified reviews + the predicted merge-conflict flag; Mateo's TS-nullable follow-up); honest scope handling (#1023 relocated to deploy#449, not silently dropped); the keystone narrators-500 fix unblocks /graph + narrator search.
 - **Needs improvement (process):** (1) implementer dispatch had no task-tracking → a zero-output implementer (#1024) was invisible until manual nudge; (2) local full-suite test runs hang on absent sandbox DB services (14-min stall) — needs a documented verify-via-unit-construction-then-cite-CI pattern.
+
+## Phase 5 Wave 3 Trust Updates (2026-06-14) — Trustworthy data & search
+
+Clean-but-not-frictionless wave: **17 PRs across 5 repos**, all 2× Approved + CI green + staging green; **2 ChangesRequested cycles** (both real bugs caught by adversarial review, both fixed before merge); top-concentration **12%** (Mateo Salazar 2/17 — 16 distinct implementers, the lowest concentration of the phase). Two stall-class events recurred (ledger "implementing" cross-wire on ig#1023/#1038; Nneka silent-idle on ig#1038 → orchestrator takeover) — same agent-liveness gap class as P5W2's dispatch stall; the fix proposed last retro has not yet landed.
+
+### Implementers
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Aino Virtanen | 5 | 5 | main#678 (CREATE-path wave-label drop #659 + validate_labels body over-match #661) — clean hook fix, 2 approvals. Maintain at ceiling. |
+| Jun-Seo Park | 4 | 4 | ig#1052 (surface hadith grade via GRADED_BY) — clean, both approvals first-pass. Hold. |
+| Mei-Lin Chang | — | **4** | First numeric rating: ig#1053 (compute + load hadith embeddings — the semantic-search data spine), clean 2-approval delivery. **Roster hygiene flag:** roster.json/roster.md name drift surfaced this wave (process item, not a delivery slip — see feedback_log pain point #3). |
+| Ingrid Lindqvist | 4 | 4 | ig#1055 (default graph subgraph on landing) — clean. Hold. |
+| Farhan Malik | 5 | 5 | ig#1056 (isnad-narrator filter + reachability — a feat, not a fix). Clean, 2 approvals. Maintain at ceiling. |
+| Mateo Salazar | 5 | 5 | Dual-repo contributor + top-concentration (ig#1058 honest admin counts/corpus + us#167 admin user-stats endpoint). Clean both. Maintain at ceiling. |
+| Thandiwe Moyo | 3 | 3 | ig#1059 (apply collection/grading/century facets) — **1 CR cycle**: initial century-facet matcher leaked later centuries on any single-bucket-below-5 selection (caught *independently by both* Anya + Marisol). Fixed correctly with a fixed `OPEN_ENDED_CENTURY=5` constant + mid-bucket regression test. Real-bug-then-clean-fix = neutral; hold. |
+| Nneka Obi | 4 | 4 | ig#1063 (configurable Loki log retention) — shipped a real retention file-writer matching the deploy#455 contract (1 CR cycle, Jelani-verified path/tenant/inode/fallback). **Held, not docked:** the assigned agent went silent-idle pre-commit; orchestrator-takeover recovered *her* uncommitted worktree work (so the work is hers) — the stall is an agent-liveness/infra gap, not her slip. |
+| Anya Kowalczyk | 5 | 5 | us#168 (lengthen access-token TTL 15→60) clean impl **+** the independent century-facet catch on ig#1059. Maintain at ceiling. |
+| Weronika Zielinska | 4 | 4 | deploy#454 (repoint user-service blackbox probe — resolved the ig#1023 health-404 cross-wire on the deploy side). Clean. Hold. |
+| Lucas Ferreira | 3 | **4** (▲) | deploy#455 (compose log-rotation anchor + Loki retention contract) — material cross-repo contract that ig#1063 correctly consumed (the api-container-as-writer provision). Clean, 2 approvals. Promote off the prior single-interaction neutral. |
+| Nadia Hakim | — | **4** | First numeric rating: deploy#456 (Email backup + swappable alert channel) — clean feat extending the stg alerting surface (deploy#452/453 lineage). 2 approvals. |
+| Kwesi Boateng | 5 | 5 | da#168 (fail-fast on undeclared edge relation — the da#133/#157 edge-relation default-trap durably closed). Maintain at ceiling. |
+| Alejandra Reyes-Fuentes | 5 | 5 | da#169 (transliteration fallback for English-name coverage, da#159). Clean. Maintain at ceiling. |
+| Kavitha Sundaramurthy | 5 | 5 | da#170 (scale PARALLEL_OF detection). Clean. Maintain at ceiling. |
+| Ivana Horvat | 5 | 5 | da#171 (production-robust isnad segmentation). Clean. Maintain at ceiling. |
+
+### Reviewers
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Marisol Vega-Cruz | 4 | **5** (▲) | **Wave MVP (reviews), 2nd consecutive** — reviewed BOTH CR-cycle PRs: independently reproduced the ig#1059 century-facet leak AND verified ig#1063's Loki writer against the deploy#455 contract. Two straight waves of run-the-tests/verify-against-head reviews that each caught real defects → promote to ceiling. |
+| Anya Kowalczyk | 5 | 5 | (reviewer credit) independent ig#1059 century-facet catch — see implementer row. Maintain. |
+| Jelani Mwangi | 4 | 4 | ig#1063 review — verified the Loki retention writer against the merged deploy#455 contract (path/tenant/inode-preservation/fallback all confirmed). Hold (clean, precise). |
+
+### Orchestrator (Self-Assessment)
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Orchestrator (Steven via Claude) | 4 | 4 | (hold) Drove a clean wave→main close (17 PRs, 5-repo wave-merge ceremony, reachability + staging gates green, counters exact 17/2/12) and caught + corrected a real state cross-wire (ig#1023 already-resolved vs ig#1038 unstarted). But **two stall-class events recurred** (ledger cross-wire + Nneka silent-idle) of the **same agent-liveness class** I flagged at P5W2 — and the TaskCreate-per-implementer fix I proposed then still hasn't landed. Also hit the `wave_3_*` cross-phase key-reuse hazard (stale P4W3 values bled in; cleared manually at wrapup). Clean execution offset by a recurring unaddressed process gap → hold 4. |
+
+### Done Well / Needs Improvement (Phase 5 Wave 3)
+- **Done well:** strongest review culture of the phase — both CR cycles were *real* bugs surfaced by adversarial review (the century-facet leak caught independently by two reviewers), not nits; lowest concentration of the phase (12%, 16 implementers); honest data-spine work (semantic embeddings, isnad-narrator reachability, fail-fast edge-relation guard) with cross-repo contracts cleanly honored (deploy#455 ↔ ig#1063).
+- **Needs improvement (process):** (1) **agent-liveness** — two stall-class events (silent-idle + ledger cross-wire); the P5W2-proposed TaskCreate-per-implementer tracking is still unapplied; (2) **roster drift** — Mei-Lin Chang roster.json/roster.md mismatch needs a consistency check; (3) **cross-repo-status.json wave-key reuse** — `wave_{M}_*` keys carry stale prior-phase values across phases, a correctness hazard hit live this session.

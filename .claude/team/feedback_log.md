@@ -1,3 +1,36 @@
+## Retrospective: Phase 5 Wave 3 — 2026-06-14 — "Trustworthy data & search"
+
+### Team Performance
+17 PRs merged across 5 repos (main 1, isnad-graph 7, user-service 2, deploy 3, data-acquisition 4); 0 open `p5-wave-3` issues at wrapup. CI green on every PR, all 2× Approved. **2 ChangesRequested cycles** (ig#1059, ig#1063 — both real bugs caught by adversarial review, fixed before merge; CR count is authoritative-historic, edited-in-place to Approved per charter verdict-amendment rule). Wave→main: 5 integration PRs admin-merged (wave-merge exception), reachability + staging gates green (both fan-in `deploy-stg` runs success, Trivy-clean). Counters exact: **17 PRs / 2 CR / 12% top-concentration** (claimed == recomputed).
+
+| Wave-shape | Value |
+|-----------|-------|
+| PRs merged | 17 (5 repos) |
+| ChangesRequested cycles | 2 (ig#1059 century-facet, ig#1063 Loki writer) |
+| Top-implementer concentration | 2/17 = 12% (Mateo Salazar) — 16 distinct implementers, lowest of the phase (healthy) |
+| Issues closed | 24 (all pre-wrapup) |
+| Staging promotion | success (runs 27514746576 + 27514760338) |
+| Tech-debt filed | ig#1060/1061/1062 (facet-completeness follow-ups, P5W4-tagged) |
+
+### Per-Engineer Assessments
+See `trust_matrix.md` § Phase 5 Wave 3 for the full table. Highlights: **Marisol Vega-Cruz 4→5** (reviewer MVP 2nd consecutive wave — reviewed both CR-cycle PRs, caught real defects in each); **Lucas Ferreira 3→4** (deploy#455 Loki contract cleanly consumed by ig#1063); first numeric ratings **Mei-Lin Chang 4** + **Nadia Hakim 4**. Nneka Obi held at 4 (work hers, recovered post-stall; not docked for the agent-liveness gap). Thandiwe Moyo held at 3 (real century-facet bug, but clean correct fix). 13 implementers held at current (clean single deliveries).
+
+### Top 3 Going Well
+1. **Adversarial review caught real bugs, not nits** — the ig#1059 century-facet leak was found *independently by two reviewers* (Anya + Marisol); ig#1063's Loki writer was verified against the merged deploy#455 contract before merge.
+2. **Lowest concentration of the phase** — 12% top (16 distinct implementers across 5 repos); no single-engineer fragility.
+3. **Cross-repo contracts honored cleanly** — deploy#455 (Loki retention contract) ↔ ig#1063 (api-container writer) matched path/tenant/inode/fallback exactly; data-spine fail-fast guards (da#168 edge-relation) durably closed prior traps.
+
+### Top 3 Pain Points
+1. **Agent-liveness gap recurred (2nd wave running)** — two stall-class events: ig#1038 implementer (Nneka) went silent-idle pre-commit (2 idle pings, no artifacts) → orchestrator takeover; and a ledger "implementing" cross-wire (ig#1023 was already resolved via deploy#454; ig#1038 reported implementing was actually unstarted). The **TaskCreate-per-implementer tracking proposed at P5W2 has not landed**, so the same invisibility recurred.
+2. **Roster drift** — Mei-Lin Chang's `roster.json` / `roster.md` disagree (name/identity mismatch); surfaced manually, no automated guard.
+3. **`cross-repo-status.json` wave-key cross-phase reuse** — the `wave_{M}_*` keys carry stale prior-phase values (P4W3's `final_pr_count=34`, `completed_at`, annunaki/memory `*_ran_at` markers all bled into P5W3 under the same keys); had to be cleared by hand at wrapup, and a stale `*_ran_at` would have made retro silently skip annunaki/memory audits.
+
+### Proposed Process Changes
+1. **Agent-liveness checkpoint (re-propose + escalate)** — TaskCreate-per-implementer at kickoff (P5W2 proposal, still unapplied) PLUS a liveness rule: an implementer with no artifact (branch/commit/PR) after 2 idle notifications is auto-flagged to the orchestrator. Rationale: same stall class hit two consecutive waves. Owner: Wanjiku (TPM) / kickoff skill.
+2. **Mid-wave ledger↔artifact reconciliation** — before any "implementing/blocked/done" status claim drives a decision, reconcile the implementer ledger against artifacts (gh api branch/PR existence). Rationale: ig#1023/#1038 cross-wire. Owner: Aino (charter `state-claims.md`).
+3. **Roster-consistency guard** — a check (hook or audit) that flags `roster.json` ↔ `roster/*.md` name/identity drift. Rationale: Mei-Lin Chang mismatch. Owner: Aino.
+4. **Namespace or reset wave-status keys per phase** — either key wave-status as `p{N}_wave_{M}_*` or have `/wave-start` clear all `wave_{M}_*` values when a phase reuses a wave number. Rationale: P4W3→P5W3 stale-value bleed hit live this session. Owner: Aino / wave-start skill.
+
 ## Promotion Audit — p5-wave-3 (2026-06-14)
 
 0 AUTO · 0 DECIDE · 240 KEPT · 4 SUPERSEDED · 21 ALREADY-PROMOTED. No promotions warranted this wave.
