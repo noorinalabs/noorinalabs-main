@@ -3039,3 +3039,46 @@ Dominant signals: `validate_labels` multi-cmd + stale-cache (orchestrator, → #
 
 ### Memory-to-automation audit
 No new conversions. The wave's promotion-worthy pattern (production-realistic fixtures) is captured as Proposed Change #1 (charter/standards). The `validate_labels` gotcha memory written this session is the only new memory; it stays as memory (operational workaround) until #661/#663 land the durable fix.
+
+## Retrospective: Phase 5 Wave 2 — 2026-06-14 (API light-up)
+
+### Team Performance
+5 PRs merged to the wave branch, then wave→main (#1047); CI green throughout; staging promotion GREEN (deploy-stg run 27506467050). 6 issues closed (5 delivered + #1023 relocated→deploy#449). **0 ChangesRequested cycles** — every PR approved first-pass. Counters (5 / 0 / 20%) recomputed at retro == wrapup-claimed (no drift; the `git show origin/main` "null" read was a stale-local-ref artifact, gh api confirmed correct).
+
+### Per-Engineer Assessments
+- **Ingrid Lindqvist** — #1045 (narrators 500, keystone). Shipped under her identity but orchestrator-authored after a dispatch stall; held at 5, not credited (integrity). Severity: none (gap is process, not hers).
+- **Jun-Seo Park** — #1033 (search 422). Correct dual-cap fix + boundary tests; both first-pass approvals. Hold 4. Severity: none.
+- **Ravi Wickramasinghe** — #1030 (i18n page-body, TD). Clean; 7-locale parity verified. 3→4 (▲). Severity: none.
+- **Idris Yusuf** — #1029 (auth refresh-on-401). Clean, both approvals. Hold 4. Severity: none.
+- **Mateo Salazar** — #1028 (subscriptions/facet) + 2 reviews (#1045, #1030, latter flagged ig#1046). Hold 5. Severity: none.
+- **Marisol Vega-Cruz** — 4 verified reviews + the predicted #1033↔#1028 merge-conflict flag. Reviews-MVP. 3→4 (▲).
+
+### Wave-shape table
+| Metric | Value |
+|--------|-------|
+| PRs merged | 5 |
+| ChangesRequested cycles | 0 |
+| Top-implementer concentration | 1/5 = 20% (5 distinct implementers — healthy, no fragility) |
+| Issues closed | 6 (1 relocated) |
+| Staging promotion | success (run 27506467050) |
+| Tech-debt filed | ig#1046 + P5W3 backlog |
+
+### Top 3 Going Well
+1. **Cleanest wave in recent memory** — 0 ChangesRequested, all first-pass approvals, CI + staging green.
+2. **Strong independent review culture** — reviewers ran tests + verified against head; Marisol's 4 reviews + the load-bearing merge-sequencing prediction; Mateo's TS-nullable follow-up (ig#1046).
+3. **Honest scope discipline** — #1023 relocated to deploy#449 (explicit), not silently dropped; healthy 20% concentration across 5 implementers.
+
+### Top 3 Pain Points
+1. **Implementer dispatch had no task-tracking** — the keystone #1024 implementer produced zero output (no branch/PR/commit) and `TaskList` was empty, so the stall was invisible until a manual user nudge. The keystone bug nearly didn't ship. → Proposed Change #1.
+2. **Local full-suite test runs hang on absent sandbox DB services** — pytest blocked 14 min on a DB connection (Marisol hit the same ~9-min stall). Wasted wall-clock + masked as "still running." → Proposed Change #2.
+3. **PUT-contents commits leave the local `origin/main` ref stale** — counter re-verification read `null` via `git show origin/main` until re-fetched; state claims must use `gh api`, not the local ref (already a memory; recurred).
+
+### Proposed Process Changes
+1. **TaskCreate-per-implementer at kickoff** — every spawned implementer gets a tracked task so a zero-output stall is visible (and nudge-able) before wrapup, instead of surfacing only via manual user prompt. Rationale: P5W2's keystone stalled invisibly. Owner: Wanjiku (TPM) / kickoff skill.
+2. **Sandbox test-verification pattern (charter/standards):** when the full suite hangs on absent local services, verify logic via targeted unit construction (no app/DB startup) + cite the green CI job, rather than burning wall-clock on a hung run. Document the `uv run` lock-contention gotcha (use `.venv/bin/<tool>` directly). Owner: Aino.
+
+### Annunaki (16 captures this wave — all noise/benign)
+8× benign `post_label_change` hook events (kickoff labeling), 2× `enforce_librarian` hook correctly blocking (known #169 worktree-cwd race, already addressed), 6× orchestrator transient session-command errors (cd path fatals, python one-liner tracebacks, the hung-pytest FAILED). No NEW automation warranted. Log cleared, marker written.
+
+### Memory-to-automation audit
+No new conversions. 140 memory files; this wave's promotion-worthy patterns are captured as Proposed Changes #1/#2 (process/charter) rather than as standalone memories.
