@@ -836,218 +836,61 @@
   "wave_2_annunaki_attack_ran_at": "2026-06-11T04:30:00Z",
   "wave_2_memory_audit_ran_at": "2026-06-11T04:30:00Z",
   "wave_2_retro_completed_at": "2026-06-11T04:30:00Z",
-  "wave_1_scope_reconciled_at": "2026-06-02T16:10:00Z",
+  "wave_1_scope_reconciled_at": "2026-06-14T01:05:00Z",
   "wave_1_repos_in_scope": [
-    "noorinalabs-main",
-    "noorinalabs-isnad-graph",
-    "noorinalabs-user-service",
-    "noorinalabs-deploy",
-    "noorinalabs-design-system",
-    "noorinalabs-landing-page",
     "noorinalabs-data-acquisition"
   ],
-  "wave_1_meta_issue": 608,
+  "wave_1_meta_issue": 668,
   "wave_1_scope": {
-    "theme": "Clean slate — bugs + security + tech-debt burn-down",
-    "tier_1_bugs": [
+    "theme": "Data spine — segment isnad chains into narrator entities",
+    "tier_1_data": [
       {
-        "id": "noorinalabs-user-service#65",
-        "ref": "user-service#65",
-        "implementer": "Mateo Salazar",
-        "reviewer": "Anya Kowalczyk",
-        "reviewer_2": "Idris Yusuf",
+        "id": "noorinalabs-data-acquisition#146",
+        "ref": "da#146",
+        "implementer": "Ivana Horvat",
+        "reviewer": "Alejandra Reyes-Fuentes",
+        "reviewer_2": "Jean-Claude Habimana",
         "priority": "bug"
       },
       {
-        "id": "noorinalabs-user-service#73",
-        "ref": "user-service#73",
-        "implementer": "Idris Yusuf",
-        "reviewer": "Anya Kowalczyk",
-        "reviewer_2": "Mateo Salazar",
+        "id": "noorinalabs-data-acquisition#147",
+        "ref": "da#147",
+        "implementer": "Kavitha Sundaramurthy",
+        "reviewer": "Nikolaos Papadopoulos",
+        "reviewer_2": "Oyunbileg Batbayar",
         "priority": "bug"
       },
       {
-        "id": "noorinalabs-user-service#74",
-        "ref": "user-service#74",
-        "implementer": "Mateo Salazar",
-        "reviewer": "Anya Kowalczyk",
-        "reviewer_2": "Idris Yusuf",
+        "id": "noorinalabs-data-acquisition#148",
+        "ref": "da#148",
+        "implementer": "Nikolaos Papadopoulos",
+        "reviewer": "Alejandra Reyes-Fuentes",
+        "reviewer_2": "Oyunbileg Batbayar",
         "priority": "bug"
       },
       {
-        "id": "noorinalabs-landing-page#69",
-        "ref": "landing-page#69",
-        "implementer": "Kofi Mensah-Williams",
-        "reviewer": "Marcia Vasquez-Paredes",
-        "reviewer_2": "Nazia Rahman",
+        "id": "noorinalabs-data-acquisition#144",
+        "ref": "da#144",
+        "implementer": "Kwesi Boateng",
+        "reviewer": "Tarek Mansour",
+        "reviewer_2": "Jean-Claude Habimana",
         "priority": "bug"
-      }
-    ],
-    "tier_2_security": [
-      {
-        "id": "noorinalabs-deploy#386",
-        "ref": "deploy#386",
-        "implementer": "Nino Kavtaradze",
-        "reviewer": "Weronika Zielinska",
-        "reviewer_2": "Aisha Idrissi",
-        "priority": "security"
-      },
-      {
-        "id": "noorinalabs-deploy#384",
-        "ref": "deploy#384",
-        "implementer": "Nurul Hakim",
-        "reviewer": "Nino Kavtaradze",
-        "reviewer_2": "Lucas Ferreira",
-        "priority": "security"
-      },
-      {
-        "id": "noorinalabs-isnad-graph#955",
-        "ref": "isnad-graph#955",
-        "implementer": "Idris Yusuf",
-        "reviewer": "Anya Kowalczyk",
-        "reviewer_2": "Mateo Salazar",
-        "priority": "security"
-      },
-      {
-        "id": "noorinalabs-deploy#244",
-        "ref": "deploy#244",
-        "implementer": "Nino Kavtaradze",
-        "reviewer": "Weronika Zielinska",
-        "reviewer_2": "Bereket Tadesse",
-        "priority": "security"
       }
     ],
     "tier_3_tech_debt": [
       {
-        "id": "noorinalabs-main#595",
-        "ref": "main#595",
-        "implementer": "Aino Virtanen",
-        "reviewer": "Wanjiku Mwangi",
-        "reviewer_2": "Lucas Ferreira",
-        "priority": "tech-debt"
-      },
-      {
-        "id": "noorinalabs-main#596",
-        "ref": "main#596",
-        "implementer": "Nurul Hakim",
-        "reviewer": "Aino Virtanen",
-        "reviewer_2": "Santiago Ferreira",
-        "priority": "tech-debt"
-      },
-      {
-        "id": "noorinalabs-isnad-graph#947",
-        "ref": "isnad-graph#947",
-        "implementer": "Ingrid Lindqvist",
-        "reviewer": "Anya Kowalczyk",
-        "reviewer_2": "Marisol Vega-Cruz",
-        "priority": "tech-debt"
-      },
-      {
-        "id": "noorinalabs-data-acquisition#65",
-        "ref": "data-acquisition#65",
-        "implementer": "Kwesi Boateng",
-        "reviewer": "Jean-Claude Habimana",
-        "reviewer_2": "Oyunbileg Batbayar",
-        "priority": "tech-debt"
-      },
-      {
-        "id": "noorinalabs-deploy#395",
-        "ref": "deploy#395",
-        "implementer": "Aisha Idrissi",
-        "reviewer": "Weronika Zielinska",
-        "reviewer_2": "Nino Kavtaradze",
-        "priority": "tech-debt"
-      },
-      {
-        "id": "noorinalabs-deploy#398",
-        "ref": "deploy#398",
-        "implementer": "Aisha Idrissi",
-        "reviewer": "Lucas Ferreira",
-        "reviewer_2": "Weronika Zielinska",
-        "priority": "tech-debt"
-      },
-      {
-        "id": "noorinalabs-deploy#402",
-        "ref": "deploy#402",
-        "implementer": "Lucas Ferreira",
-        "reviewer": "Nurul Hakim",
-        "reviewer_2": "Aisha Idrissi",
-        "priority": "tech-debt"
-      },
-      {
-        "id": "noorinalabs-design-system#94",
-        "ref": "design-system#94",
-        "implementer": "Keanu Tama",
-        "reviewer": "Maeve Callahan",
-        "reviewer_2": "Luciana Ferreyra",
-        "priority": "tech-debt"
-      },
-      {
-        "id": "noorinalabs-landing-page#43",
-        "ref": "landing-page#43",
-        "implementer": "Cédric Novák",
-        "reviewer": "Kofi Mensah-Williams",
-        "reviewer_2": "Marcia Vasquez-Paredes",
-        "priority": "tech-debt"
-      },
-      {
-        "id": "noorinalabs-landing-page#73",
-        "ref": "landing-page#73",
-        "implementer": "Marcia Vasquez-Paredes",
-        "reviewer": "Kofi Mensah-Williams",
-        "reviewer_2": "Nazia Rahman",
-        "priority": "tech-debt"
-      },
-      {
-        "id": "noorinalabs-deploy#86",
-        "ref": "deploy#86",
-        "implementer": "Lucas Ferreira",
-        "reviewer": "Bereket Tadesse",
-        "reviewer_2": "Aisha Idrissi",
-        "priority": "tech-debt"
-      },
-      {
-        "id": "noorinalabs-design-system#54",
-        "ref": "design-system#54",
-        "implementer": "Kofi Mensah",
-        "reviewer": "Keanu Tama",
-        "reviewer_2": "Astrid Lindqvist",
-        "priority": "tech-debt"
-      },
-      {
-        "id": "noorinalabs-main#611",
-        "ref": "main#611",
-        "implementer": "Aino Virtanen",
-        "reviewer": "Wanjiku Mwangi",
-        "reviewer_2": "Lucas Ferreira",
-        "priority": "tech-debt"
-      },
-      {
-        "id": "noorinalabs-main#613",
-        "ref": "main#613",
-        "implementer": "Lucas Ferreira",
-        "reviewer": "Aino Virtanen",
-        "reviewer_2": "Nino Kavtaradze",
+        "id": "noorinalabs-data-acquisition#138",
+        "ref": "da#138",
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Ivana Horvat",
+        "reviewer_2": "Kavitha Sundaramurthy",
         "priority": "tech-debt"
       }
     ],
-    "deliberately_not_in_w1": [
-      "noorinalabs-main#136 (W2 — pipeline integration tests)",
-      "noorinalabs-deploy#388 (W3 — secrets-manager ADR)",
-      "noorinalabs-deploy#387 (W4 — rotation automation, depends on #388)"
-    ],
-    "hard_gate": "Cumulative TD ratio ≤20% re-measure (re-baselined methodology: meta-issue-labeled excluded, pooled 8 repos) at /wave-wrapup — no second waiver (PR #610)",
-    "sequencing_constraints": [
-      "isnad-graph#955 gated on us#147 deploy",
-      "deploy#384+#386 land together (scrape/block pair)",
-      "deploy#244 has owner-action component (PR-time vs runtime acceptance split)"
-    ],
-    "fold_ins_post_scope": [
-      "noorinalabs-main#611",
-      "noorinalabs-main#613"
-    ]
+    "td_intake": "1/1",
+    "td_pool": 19
   },
-  "wave_1_kicked_off_at": "2026-06-02T21:30:00Z",
+  "wave_1_kicked_off_at": null,
   "wave_1_active": false,
   "wave_1_branches": {
     "branch": "deployments/phase-4/wave-1",
@@ -1083,9 +926,9 @@
       }
     }
   },
-  "wave_1_final_pr_count": 23,
-  "wave_1_changes_requested_cycles": 1,
-  "wave_1_top_concentration_pct": 13,
+  "wave_1_final_pr_count": null,
+  "wave_1_changes_requested_cycles": null,
+  "wave_1_top_concentration_pct": null,
   "wave_1_stg_promotion": "success",
   "wave_1_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/27237055115",
   "wave_1_completed_at": "2026-06-09T23:42:02Z",
