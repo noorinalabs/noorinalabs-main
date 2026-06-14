@@ -959,308 +959,226 @@
   "last_completed_wave": "wave-1",
   "last_completed_at": "2026-06-11T04:13:13Z",
   "phase": "phase-4",
-  "wave_3_meta_issue": "noorinalabs-main#675",
+  "wave_3_meta_issue": 675,
   "wave_3_scope": {
-    "theme": "Open the doors — real data in a usable product",
-    "scope_decision": "Full W3 (owner 2026-06-11): live-walkthrough findings + entire phase-plan pencilled cluster (admin/i18n/team/geo/secrets). Serves criteria #2 + #3; W4 = lean exit/verification.",
-    "tier_1_data_depth": [
+    "theme": "Trustworthy data & search",
+    "tier_1_data_spine": [
       {
-        "id": "noorinalabs-data-acquisition#81",
-        "ref": "data-acquisition#81",
-        "implementer": "Kwesi Boateng",
-        "reviewer": "Alejandra Reyes-Fuentes",
-        "reviewer_2": "Jean-Claude Habimana",
+        "id": "noorinalabs-data-acquisition#158",
+        "ref": "da#158",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "feature"
       },
       {
-        "id": "noorinalabs-isnad-graph#965",
-        "ref": "isnad-graph#965",
-        "implementer": "Farhan Malik",
-        "reviewer": "Aisling Brennan",
-        "reviewer_2": "Arjun Raghavan",
+        "id": "noorinalabs-data-acquisition#155",
+        "ref": "da#155",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "feature"
       },
       {
-        "id": "noorinalabs-isnad-graph#963",
-        "ref": "isnad-graph#963",
-        "implementer": "Aisling Brennan",
-        "reviewer": "Farhan Malik",
-        "reviewer_2": "Anya Kowalczyk",
+        "id": "noorinalabs-data-acquisition#154",
+        "ref": "da#154",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "feature"
       },
       {
-        "id": "noorinalabs-main#631",
-        "ref": "main#631",
-        "implementer": "Aino Virtanen",
-        "reviewer": "Wanjiku Mwangi",
-        "reviewer_2": "Santiago Ferreira",
+        "id": "noorinalabs-data-acquisition#159",
+        "ref": "da#159",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#157",
+        "ref": "da#157",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#160",
+        "ref": "da#160",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "feature"
       }
     ],
-    "tier_2_product_correctness": [
+    "tier_2_search_display": [
       {
-        "id": "noorinalabs-deploy#420",
-        "ref": "deploy#420",
-        "implementer": "Aisha Idrissi",
-        "reviewer": "Lucas Ferreira",
-        "reviewer_2": "Weronika Zielinska",
+        "id": "noorinalabs-isnad-graph#1048",
+        "ref": "ig#1048",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "bug"
       },
       {
-        "id": "noorinalabs-isnad-graph#966",
-        "ref": "isnad-graph#966",
-        "implementer": "Jun-Seo Park",
-        "reviewer": "Anya Kowalczyk",
-        "reviewer_2": "Nneka Obi",
+        "id": "noorinalabs-isnad-graph#1049",
+        "ref": "ig#1049",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "bug"
       },
       {
-        "id": "noorinalabs-isnad-graph#964",
-        "ref": "isnad-graph#964",
-        "implementer": "Thandiwe Moyo",
-        "reviewer": "Mei-Lin Chang",
-        "reviewer_2": "Farhan Malik",
+        "id": "noorinalabs-isnad-graph#1050",
+        "ref": "ig#1050",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "bug"
       },
       {
-        "id": "noorinalabs-user-service#43",
-        "ref": "user-service#43",
-        "implementer": "Mateo Salazar",
-        "reviewer": "Idris Yusuf",
-        "reviewer_2": "Anya Kowalczyk",
+        "id": "noorinalabs-isnad-graph#1051",
+        "ref": "ig#1051",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "bug"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1032",
+        "ref": "ig#1032",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "bug"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1031",
+        "ref": "ig#1031",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "bug"
       }
     ],
-    "tier_3_landing_design_system": [
+    "tier_3_auth_alerting_ops": [
       {
-        "id": "noorinalabs-landing-page#118",
-        "ref": "landing-page#118",
-        "implementer": "Kofi Mensah-Williams",
-        "reviewer": "Cédric Novák",
-        "reviewer_2": "Marcia Vasquez-Paredes",
+        "id": "noorinalabs-isnad-graph#1027",
+        "ref": "ig#1027",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "feature"
       },
       {
-        "id": "noorinalabs-landing-page#119",
-        "ref": "landing-page#119",
-        "implementer": "Cédric Novák",
-        "reviewer": "Kofi Mensah-Williams",
-        "reviewer_2": "Marcia Vasquez-Paredes",
+        "id": "noorinalabs-isnad-graph#1038",
+        "ref": "ig#1038",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "feature"
       },
       {
-        "id": "noorinalabs-landing-page#120",
-        "ref": "landing-page#120",
-        "implementer": "Kofi Mensah-Williams",
-        "reviewer": "Nazia Rahman",
-        "reviewer_2": "Cédric Novák",
+        "id": "noorinalabs-user-service#166",
+        "ref": "us#166",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "feature"
       },
       {
-        "id": "noorinalabs-landing-page#121",
-        "ref": "landing-page#121",
-        "implementer": "Kofi Mensah-Williams",
-        "reviewer": "Cédric Novák",
-        "reviewer_2": "Marcia Vasquez-Paredes",
+        "id": "noorinalabs-deploy#449",
+        "ref": "deploy#449",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "feature"
       },
       {
-        "id": "noorinalabs-isnad-graph#967",
-        "ref": "isnad-graph#967",
-        "implementer": "Ravi Wickramasinghe",
-        "reviewer": "Anya Kowalczyk",
-        "reviewer_2": "Nneka Obi",
+        "id": "noorinalabs-deploy#452",
+        "ref": "deploy#452",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "feature"
       },
       {
-        "id": "noorinalabs-landing-page#46",
-        "ref": "landing-page#46",
-        "implementer": "Anika Diop-Sarr",
-        "reviewer": "Cédric Novák",
-        "reviewer_2": "Kofi Mensah-Williams",
+        "id": "noorinalabs-deploy#453",
+        "ref": "deploy#453",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-deploy#450",
+        "ref": "deploy#450",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-deploy#451",
+        "ref": "deploy#451",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "feature"
       }
     ],
-    "tier_4_admin_surface": [
+    "tier_4_tech_debt": [
       {
-        "id": "noorinalabs-isnad-graph#804",
-        "ref": "isnad-graph#804",
-        "implementer": "Idris Yusuf",
-        "reviewer": "Anya Kowalczyk",
-        "reviewer_2": "Mateo Salazar",
-        "priority": "feature"
-      },
-      {
-        "id": "noorinalabs-isnad-graph#805",
-        "ref": "isnad-graph#805",
-        "implementer": "Mateo Salazar",
-        "reviewer": "Idris Yusuf",
-        "reviewer_2": "Anya Kowalczyk",
-        "priority": "feature"
-      },
-      {
-        "id": "noorinalabs-isnad-graph#806",
-        "ref": "isnad-graph#806",
-        "implementer": "Linh Pham",
-        "reviewer": "Jelani Mwangi",
-        "reviewer_2": "Arjun Raghavan",
-        "priority": "feature"
-      },
-      {
-        "id": "noorinalabs-isnad-graph#970",
-        "ref": "isnad-graph#970",
-        "implementer": "Jun-Seo Park",
-        "reviewer": "Linh Pham",
-        "reviewer_2": "Idris Yusuf",
-        "priority": "feature"
-      },
-      {
-        "id": "noorinalabs-isnad-ingest-platform#70",
-        "ref": "isnad-ingest-platform#70",
-        "implementer": "Léopold Mbongo",
-        "reviewer": "Petra Vidović",
-        "reviewer_2": "Sayed Reza",
-        "priority": "feature"
-      }
-    ],
-    "tier_5_features_i18n_geo": [
-      {
-        "id": "noorinalabs-isnad-graph#703",
-        "ref": "isnad-graph#703",
-        "implementer": "Nneka Obi",
-        "reviewer": "Ravi Wickramasinghe",
-        "reviewer_2": "Anya Kowalczyk",
-        "priority": "feature"
-      },
-      {
-        "id": "noorinalabs-isnad-graph#721",
-        "ref": "isnad-graph#721",
-        "implementer": "Mei-Lin Chang",
-        "reviewer": "Thandiwe Moyo",
-        "reviewer_2": "Farhan Malik",
-        "priority": "feature"
-      }
-    ],
-    "tier_6_automated_testing": [
-      {
-        "id": "noorinalabs-isnad-graph#968",
-        "ref": "isnad-graph#968",
-        "implementer": "Marisol Vega-Cruz",
-        "reviewer": "Anya Kowalczyk",
-        "reviewer_2": "Linh Pham",
-        "priority": "feature"
-      },
-      {
-        "id": "noorinalabs-isnad-graph#969",
-        "ref": "isnad-graph#969",
-        "implementer": "Marisol Vega-Cruz",
-        "reviewer": "Jun-Seo Park",
-        "reviewer_2": "Anya Kowalczyk",
-        "priority": "feature"
-      }
-    ],
-    "tier_7_security_secrets": [
-      {
-        "id": "noorinalabs-deploy#388",
-        "ref": "deploy#388",
-        "implementer": "Weronika Zielinska",
-        "reviewer": "Nino Kavtaradze",
-        "reviewer_2": "Bereket Tadesse",
-        "priority": "security",
-        "note": "ADR draft for owner review; owner decides tool + rotation policy"
-      },
-      {
-        "id": "noorinalabs-deploy#387",
-        "ref": "deploy#387",
-        "implementer": "Nino Kavtaradze",
-        "reviewer": "Aisha Idrissi",
-        "reviewer_2": "Weronika Zielinska",
-        "priority": "security",
-        "status": "blocked_on_388",
-        "note": "rotation mechanism depends on the #388 tool decision; hold implementation"
-      }
-    ],
-    "tier_8_fast_follows_w2": [
-      {
-        "id": "noorinalabs-isnad-ingest-platform#71",
-        "ref": "isnad-ingest-platform#71",
-        "implementer": "Kalinda Ranasinghe",
-        "reviewer": "Petra Vidović",
-        "reviewer_2": "Bjørn Henriksen",
+        "id": "noorinalabs-isnad-graph#1036",
+        "ref": "ig#1036",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "tech-debt"
       },
       {
-        "id": "noorinalabs-isnad-graph#971",
-        "ref": "isnad-graph#971",
-        "implementer": "Aisling Brennan",
-        "reviewer": "Anya Kowalczyk",
-        "reviewer_2": "Idris Yusuf",
+        "id": "noorinalabs-isnad-graph#1046",
+        "ref": "ig#1046",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "tech-debt"
       },
       {
-        "id": "noorinalabs-main#634",
-        "ref": "main#634",
-        "implementer": "Aino Virtanen",
-        "reviewer": "Wanjiku Mwangi",
-        "reviewer_2": "Santiago Ferreira",
-        "priority": "tech-debt",
-        "fix_option": "option 2 — materialize sibling rosters in CI (owner 2026-06-12)"
-      },
-      {
-        "id": "noorinalabs-user-service#157",
-        "ref": "user-service#157",
-        "implementer": "Idris Yusuf",
-        "reviewer": "Anya Kowalczyk",
-        "reviewer_2": "Mateo Salazar",
+        "id": "noorinalabs-main#659",
+        "ref": "main#659",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "tech-debt"
       },
       {
-        "id": "noorinalabs-isnad-ingest-platform#69",
-        "ref": "isnad-ingest-platform#69",
-        "implementer": "Tomás Carvalho",
-        "reviewer": "Petra Vidović",
-        "reviewer_2": "Bjørn Henriksen",
+        "id": "noorinalabs-main#661",
+        "ref": "main#661",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
         "priority": "tech-debt"
       }
     ],
-    "tier_9_tech_debt_intake": [
-      {
-        "id": "noorinalabs-landing-page#113",
-        "ref": "landing-page#113",
-        "implementer": "Nazia Rahman",
-        "reviewer": "Kofi Mensah-Williams",
-        "reviewer_2": "Cédric Novák",
-        "priority": "tech-debt"
-      }
-    ],
-    "td_intake": "3/3 (oldest 3 from pool of 5: deploy#387, deploy#388 [in tier_7], lp#113 [tier_9])",
-    "td_pool": 5,
+    "td_intake": "4/4 (target ceil(0.20*20)=4; ig#1036, ig#1046, main#659, main#661)",
+    "base_feature_bug_count": 20,
     "deliberately_not_in_w3": [
-      "noorinalabs-deploy#412 (db-migrate EXPECTED_MERGE_HEAD pin drift — TD, deferred)",
-      "noorinalabs-deploy#413 (apply-ruleset.sh read-back echo — TD, deferred)"
+      "P5W4: ig#989/#988/#987 (admin #603), ig#1044/#1013 + us#165 (profile prefs), ig#1037 (compare UX), deploy#443 + ingest#76 (streaming #667)",
+      "P5W5: ig#1039-1043 + da#161-166 (historical timeline/dates, builds on main#673)",
+      "Owner-action/later: da#71 (sunnah API key), da#98, da#139, da#153"
     ],
-    "relocations_p4w3": {
-      "main#138": [
-        "ig#970",
-        "ingest#70"
-      ],
-      "main#633": [
-        "ingest#71",
-        "ig#971"
-      ]
-    },
-    "slate_filled_at": "2026-06-12T00:12:20Z"
+    "wave_label_apply_deferred_to_kickoff": "p5-wave-3 labels applied at /wave-kickoff Step 7 so kickoff comments fire with the reviewer slate (avoids premature unassigned comments locked by hook idempotency)."
   },
   "wave_3_repos_in_scope": [
     "noorinalabs-main",
     "noorinalabs-isnad-graph",
     "noorinalabs-user-service",
     "noorinalabs-deploy",
-    "noorinalabs-landing-page",
-    "noorinalabs-data-acquisition",
-    "noorinalabs-isnad-ingest-platform"
+    "noorinalabs-data-acquisition"
   ],
-  "wave_3_scope_reconciled_at": "2026-06-11T23:55:47Z",
+  "wave_3_scope_reconciled_at": "2026-06-14T18:33:00Z",
   "wave_3_branches": {
     "branch": "deployments/phase-4/wave-3",
     "created_at": "2026-06-12T00:12:20Z",
