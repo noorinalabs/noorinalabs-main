@@ -1410,3 +1410,22 @@ Wave shape: **34 PRs / 7 repos / 19 distinct implementers**, top-concentration *
 ### Done Well / Needs Improvement (Phase 4 Wave 6)
 - **Done well:** independent verification over deference (reviewers + orchestrator both verified peer claims against artifacts — reviewers also caught the trust-matrix baseline error on this retro); risk-gating of live infra; fully-distributed load (8/8 implementers).
 - **Needs improvement (orchestrator):** use the verbatim reviewer-brief template (TechDebt line) — its omission blocked the first merge; avoid compound-command label applies (main#650).
+
+## Phase 4 Wave 7 Trust Updates (2026-06-14) — Phase 4 close-out & exit
+
+### Implementers + Reviewers
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Aino Virtanen (standards) | 5 | 5 | Implemented main#650 — root-caused the issue's own "split on `;`" framing as a **misdiagnosis** and fixed the real bug (shared parser required `--repo`, silently dropping in-repo label edits); repo-Optional + ambient-repo recovery, both hook consumers benefit, DI-tested, 8/8 CI. Maintain at ceiling. |
+| Weronika Zielinska (platform/deploy) | 5 | 5 | Dual contribution: clean surgical deploy#413 (2-line read-back wording, shellcheck-clean) AND peer review on #658 that **independently verified** Aino's misdiagnosis claim (not rubber-stamped) + surfaced the CREATE-path sibling gap (#659). Maintain at ceiling. |
+| Nino Kavtaradze (deploy/security) | 5 | 5 | Reviewed **both** wave PRs (security angle): cleared the #658 injection surface (argv-form git, no shell), confirmed safe failure mode, independently named the same CREATE-path sibling + a charter-promotion candidate. Maintain at ceiling. |
+| Aisha Idrissi (deploy/SRE) | 5 | 5 | Secondary review on deploy#447 — operator-clarity verdict + a useful retro micro-watch (operator-facing string drifted out of sync with the authoritative in-code comment). Maintain at ceiling. |
+
+### Orchestrator (Self-Assessment)
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Orchestrator (Steven via Claude) | 4 | 4 | (hold) Clean close-out wave: 2 PRs, 4 first-pass Approved reviews, **0 CR cycles**, counters exact (2/0/50, claimed==recomputed), all wrapup gates passed. Directly remediated the W6 promotion-blocker — main#650 (the compound-label-apply skip) was **root-fixed** this wave, not worked around; all 4 verdicts carried the TechDebt line + PR-head-SHA confirmation first-pass (W6's blocker did not recur). Hold-not-promote: two minor self-inflicted recoverable slips — an `echo "$RESP" \| jq` round-trip mangled a large status PUT (409, recovered via `--jq` fetch) and a zsh word-split bash-ism (`set -- $ref`) in a retro query (recovered). The W6 bar was a slip-free wave. |
+
+### Done Well / Needs Improvement (Phase 4 Wave 7)
+- **Done well:** root-cause discipline beat issue-framing (Aino disproved the issue's prescribed fix and root-fixed the real bug); reviewers independently verified peer claims AND converged un-prompted on the same forward-looking sibling gap (#659); thin-wave hygiene held (TechDebt + head-SHA on all 4 verdicts first-pass).
+- **Needs improvement (orchestrator):** prefer `gh api --jq` over `echo "$RESP" \| jq` for large API payloads (avoids the shell-mangle 409 class); keep Bash-tool commands zsh-safe (no `set -- $unquoted` word-split assumptions).
