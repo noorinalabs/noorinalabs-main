@@ -125,11 +125,13 @@ import os
 import subprocess
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import re  # noqa: E402
 
+from _shell_parse import resolve_repo_short_name  # noqa: E402
 from _wave_label_parse import (  # noqa: E402
     WaveLabelChange,
     parse_wave_label,
@@ -475,9 +477,14 @@ def _apply_one_change(
 ) -> dict:
     """Apply a single WaveLabelChange against project 2. Returns a result dict.
 
-    Pre-condition: caller has verified auth scope + ids are present. This
-    function is invoked once per change in the multi-cmd loop in `check()`.
+    Pre-condition: caller has verified auth scope + ids are present AND has
+    resolved `change.repo` to a concrete repo name (the ambient-repo
+    resolution loop in `check()` replaces a None repo or drops the change).
+    This function is invoked once per change in the multi-cmd loop in
+    `check()`.
     """
+    # `check()` guarantees repo is resolved before dispatch (see pre-condition).
+    assert change.repo is not None
     # POST-edit state semantics: if BOTH add and remove fired in one
     # command, the added value is the post-edit Wave field value.
     target_label: str = change.add_label or change.remove_label or ""
@@ -619,6 +626,7 @@ def check(
     input_data: dict,
     auth_status_runner=None,
     graphql_runner=None,
+    git_runner=None,
 ) -> dict | None:
     """Pure decision function. Returns a dict describing the action taken
     (or skipped), or None when the hook does not apply.
@@ -631,6 +639,8 @@ def check(
     Single-cmd result variants:
       None                                       — hook didn't apply
       {"action": "killed", ...}                  — kill-switch env var set
+      {"action": "skip_no_repo_context", ...}    — --repo omitted AND ambient
+                                                   repo unresolvable from cwd
       {"action": "skip_no_auth_scope", ...}      — gh missing project scope
       {"action": "skip_no_project_ids", ...}     — introspection failed
       {"action": "skip_no_option", ...}          — wave option missing
@@ -644,7 +654,9 @@ def check(
 
     Injection points let tests mock external state without mocking
     subprocess: `auth_status_runner()` returns the gh-auth-status output;
-    `graphql_runner(query, variables)` returns the gh-api-graphql output.
+    `graphql_runner(query, variables)` returns the gh-api-graphql output;
+    `git_runner(cwd)` returns the `origin` remote URL used to resolve the
+    ambient repo when a command omits `--repo` (#650).
     """
     if input_data.get("tool_name", "") != "Bash":
         return None
@@ -675,6 +687,40 @@ def check(
             )
             return {"action": "skip_parser_returned_empty"}
         return None
+
+    # #650: a `gh issue edit <num> --remove-label "p4-wave-5"` run from inside
+    # the target repo carries NO `--repo`; the parser returns the change with
+    # repo=None. Mirror gh's own ambient-git-context resolution by recovering
+    # the repo from the invocation cwd, otherwise the Wave-field sync silently
+    # no-ops (the original #650 symptom). All `--repo`-less changes in one
+    # compound command share a single cwd, so resolve at most once.
+    ambient_repo: str | None = None
+    ambient_resolved = False
+    resolved_changes: list[WaveLabelChange] = []
+    for change in changes:
+        if change.repo is None:
+            if not ambient_resolved:
+                ambient_repo = resolve_repo_short_name(input_data, git_runner=git_runner)
+                ambient_resolved = True
+            if ambient_repo is None:
+                log_posttooluse_event(
+                    "post_label_change_wave_field_sync",
+                    command,
+                    f"skip_no_repo_context: `gh issue edit {change.issue_number}` omitted "
+                    "--repo and the ambient repo could not be resolved from the invocation "
+                    "cwd (no git origin); cannot sync Wave field for this change.",
+                )
+                continue
+            change = replace(change, repo=ambient_repo)
+        resolved_changes.append(change)
+
+    if not resolved_changes:
+        return {
+            "action": "skip_no_repo_context",
+            "issue": changes[0].issue_number,
+            "skipped_count": len(changes),
+        }
+    changes = resolved_changes
 
     if not _has_project_scope(auth_status_runner=auth_status_runner):
         _ensure_auth_warned_once(

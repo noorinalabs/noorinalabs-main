@@ -107,6 +107,19 @@ Public API
         cd targets are ambiguous (they'd be relative to the already-wrong
         stdin cwd) so they are ignored.
 
+    resolve_repo_short_name(input_data, *, git_runner=None) -> str | None
+        Resolve the GitHub repository NAME (e.g. `noorinalabs-main`) from the
+        invocation cwd's `origin` remote. This mirrors how `gh` itself
+        resolves a `gh issue edit/create ...` invocation that OMITS `--repo`:
+        it falls back to the ambient git context. Hooks that need the repo
+        name to drive a GraphQL/REST call (e.g. the Wave-field sync and the
+        kickoff-comment hooks) call this to recover the repo when the parsed
+        command carried no `--repo` flag. Returns the last path segment of
+        the `origin` URL with any trailing `.git` stripped, or None when the
+        cwd is not a git repo / has no origin / the runner fails. The
+        `git_runner(cwd) -> str | None` injection point lets tests avoid
+        shelling out (#650).
+
     is_shutdown_request_message(message) -> bool
         True only if `message` is a structured shutdown_request JSON
         (dict-form OR str-form parseable to a dict with type==
@@ -139,6 +152,7 @@ import json
 import os
 import re
 import shlex
+import subprocess
 from typing import Iterator
 
 # Shell control tokens that segment a compound command. Any of these,
@@ -509,6 +523,59 @@ def resolve_invocation_cwd(input_data: dict) -> str:
         if cd_target and os.path.isdir(cd_target):
             return cd_target
     return resolve_tool_cwd(input_data)
+
+
+def _default_origin_url_runner(cwd: str) -> str | None:
+    """Return the `origin` remote URL for the git repo at `cwd`, or None.
+
+    Shells out to `git -C <cwd> remote get-url origin`. Any failure (not a
+    git repo, no `origin` remote, git missing) yields None so the caller
+    treats the repo as unresolvable rather than crashing.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", cwd, "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout
+
+
+def resolve_repo_short_name(input_data: dict, *, git_runner=None) -> str | None:
+    """Resolve the GitHub repo NAME from the invocation cwd's `origin` remote.
+
+    When a `gh issue edit/create` command omits `--repo`, gh resolves the
+    target repository from the ambient git context (the cwd's `origin`
+    remote). Hooks that need the repo name to drive a GraphQL/REST call must
+    mirror that resolution. Returns the last path segment of the `origin`
+    URL with any trailing `.git` stripped — for both scp-form and https-form
+    URLs:
+
+        git@github.com:noorinalabs/noorinalabs-main.git  -> noorinalabs-main
+        https://github.com/noorinalabs/noorinalabs-main   -> noorinalabs-main
+
+    Returns None when the cwd is not a git repo, has no `origin` remote, or
+    the runner otherwise fails. The cwd is resolved via
+    `resolve_invocation_cwd` so a worktree-subagent's real dir is used (the
+    `cd <dir> && ...` recovery path, #521).
+
+    `git_runner(cwd) -> str | None` is the injection point for tests; the
+    default shells out to `git -C <cwd> remote get-url origin`.
+    """
+    cwd = resolve_invocation_cwd(input_data)
+    runner = git_runner or _default_origin_url_runner
+    url = runner(cwd)
+    if not url:
+        return None
+    name = url.strip().rstrip("/").split("/")[-1]
+    if name.endswith(".git"):
+        name = name[: -len(".git")]
+    return name or None
 
 
 def is_shutdown_request_message(message) -> bool:

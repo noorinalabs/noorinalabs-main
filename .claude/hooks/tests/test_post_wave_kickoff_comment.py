@@ -264,6 +264,14 @@ class ParseLabelApplyCommandTests(unittest.TestCase):
             ("noorinalabs-main", "200", "p3-wave-11"),
         )
 
+    def test_no_repo_returns_none_repo_field(self):
+        """#650: a label-apply run from inside the repo omits --repo; the pure
+        parser returns repo=None (the caller resolves it from cwd)."""
+        self.assertEqual(
+            hook.parse_label_apply_command('gh issue edit 601 --add-label "p4-wave-7"'),
+            (None, "601", "p4-wave-7"),
+        )
+
 
 class FindAssignmentRowTests(unittest.TestCase):
     """Direct coverage of tier-array row lookup with both shapes."""
@@ -515,6 +523,91 @@ class NonBashToolTests(unittest.TestCase):
     def test_empty_command_not_matched(self):
         result = hook.check({"tool_name": "Bash", "tool_input": {"command": ""}})
         self.assertIsNone(result)
+
+
+class AmbientRepoResolutionTests(unittest.TestCase):
+    """#650: a label-apply run from inside the repo omits --repo; the kickoff
+    hook resolves the ambient repo from the invocation cwd before rendering
+    and posting the kickoff comment."""
+
+    _ORIGIN = "git@github.com:noorinalabs/noorinalabs-main.git\n"
+
+    def _status(self):
+        return {
+            "wave_7_scope": {
+                "tier_1_close_out": [
+                    {
+                        "id": "noorinalabs-main#601",
+                        "implementer": "Aino Virtanen",
+                        "reviewer": "Weronika Zielinska",
+                        "reviewer_2": "Nino Kavtaradze",
+                    }
+                ]
+            }
+        }
+
+    def test_no_repo_resolves_and_posts(self):
+        captured = {}
+
+        def fake_post(repo, num, body_path):
+            captured["repo"] = repo
+            captured["num"] = num
+            return True
+
+        with tempfile.TemporaryDirectory() as td:
+
+            def fake_writer(body, repo, num):
+                path = Path(td) / f"body-{repo}-{num}.md"
+                path.write_text(body, encoding="utf-8")
+                return path
+
+            result = hook.check(
+                _bash('gh issue edit 601 --add-label "p4-wave-7"'),
+                status_loader=self._status,
+                comment_fetcher=lambda repo, num: [],
+                comment_poster=fake_post,
+                body_writer=fake_writer,
+                git_runner=lambda _cwd: self._ORIGIN,
+            )
+        self.assertEqual(result["action"], "post")
+        self.assertEqual(result["repo"], "noorinalabs-main")
+        self.assertEqual(captured["repo"], "noorinalabs-main")
+
+    def test_no_repo_unresolvable_skips_no_repo_context(self):
+        result = hook.check(
+            _bash('gh issue edit 601 --add-label "p4-wave-7"'),
+            status_loader=self._status,
+            git_runner=lambda _cwd: None,
+        )
+        self.assertEqual(result["action"], "skip_no_repo_context")
+        self.assertEqual(result["issue"], "601")
+
+    def test_explicit_repo_does_not_invoke_git_runner(self):
+        calls = [0]
+
+        def runner(_cwd):
+            calls[0] += 1
+            return self._ORIGIN
+
+        with tempfile.TemporaryDirectory() as td:
+
+            def fake_writer(body, repo, num):
+                path = Path(td) / f"body-{repo}-{num}.md"
+                path.write_text(body, encoding="utf-8")
+                return path
+
+            result = hook.check(
+                _bash(
+                    'gh issue edit 601 --repo noorinalabs/noorinalabs-main --add-label "p4-wave-7"'
+                ),
+                status_loader=self._status,
+                comment_fetcher=lambda repo, num: [],
+                comment_poster=lambda repo, num, path: True,
+                body_writer=fake_writer,
+                git_runner=runner,
+            )
+        self.assertEqual(result["action"], "post")
+        self.assertEqual(calls[0], 0, "explicit --repo must not trigger ambient resolution")
 
 
 if __name__ == "__main__":
