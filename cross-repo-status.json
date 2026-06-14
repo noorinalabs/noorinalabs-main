@@ -1808,5 +1808,8 @@
   "wave_7_top_concentration_pct": 50,
   "wave_7_stg_promotion": "success",
   "wave_7_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/27480235233",
-  "wave_7_wrapup_completed_at": "2026-06-14T00:15:00Z"
+  "wave_7_wrapup_completed_at": "2026-06-14T00:15:00Z",
+  "wave_7_annunaki_attack_ran_at": "2026-06-14T00:20:00Z",
+  "wave_7_memory_audit_ran_at": "2026-06-14T00:20:00Z",
+  "wave_7_retro_completed_at": "2026-06-14T00:20:00Z"
 }
