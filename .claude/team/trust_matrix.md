@@ -1458,3 +1458,33 @@ First Phase-5 wave (data-acquisition only). 4 PRs, **0 ChangesRequested cycles**
 ### Done Well / Needs Improvement (Phase 5 Wave 1)
 - **Done well:** every reviewer verified rather than rubber-stamped — the keystone review even caught that the fix's own test masks a NEW precision bug (fixture-masks-bug recurring one layer down); three independent forward-looking throughlines; premise-false caught by the implementer (Kavitha) AND independently confirmed; honest scope-splitting (da#153/154/155 filed, nothing dropped).
 - **Needs improvement (process):** the `validate_labels` hook bit the orchestrator twice (multi-cmd `--repo` cross-association + stale label cache) — tracked in #661/#663, worked around; and the fixture-masks-bug class keeps recurring — proposed as a charter rule this retro.
+
+## Phase 5 Wave 2 Trust Updates (2026-06-14) — API light-up
+
+Clean wave: 5 PRs, **0 ChangesRequested cycles** (every PR approved first-pass), CI green, staging green. Team = isnad-graph roster. One integrity note: the keystone #1024/#1045 shipped under Ingrid's identity but was an **orchestrator-takeover** (the assigned implementer produced no branch/PR/commit and no task was tracked — see feedback_log pain point #1); Ingrid is therefore **held, not credited**, for that PR.
+
+### Implementers
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Ingrid Lindqvist | 5 | 5 | Hold at ceiling on prior standing. #1045 (narrators 500 keystone) shipped under her identity but was orchestrator-authored after a dispatch stall — **not credited** to her this wave (integrity: don't credit unearned work). No negative signal either — the stall was a dispatch/tracking gap, not her slip. |
+| Jun-Seo Park | 4 | 4 | #1033 (search 422) — correct dual-cap fix (keyword 100 / semantic 50), non-vacuous boundary tests both sides, both approvals first-pass. Trivial post-#1028 merge conflict resolved by orchestrator. Hold (clean, at 4 since W4). |
+| Ravi Wickramasinghe | 3 | **4** (▲) | #1030 (i18n page-body, TD intake) — clean; reviewers verified 7-locale key parity programmatically (72-key base, 0 missing/extra) + correct grade-filter scope policy. Also reviewed #1028. Recovery from the stale W-early DS-integration neutral. |
+| Idris Yusuf | 4 | 4 | #1029 (auth refresh-on-401 across admin+profile clients) — clean, both approvals (Anya + Arjun). Hold (clean trajectory). |
+| Mateo Salazar | 5 | 5 | Dual contributor: implemented #1028 (subscriptions/me origin + derive collection facet) AND reviewed #1045 + #1030 (the #1045 review flagged the frontend-TS-nullable follow-up → ig#1046). Maintain at ceiling. |
+
+### Reviewers
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Marisol Vega-Cruz | 3 | **4** (▲) | **Wave MVP (reviews)** — 4 rigorous code-verified reviews (#1045, #1033, #1030, #1028), each run-the-tests + verify-against-head, and the load-bearing #1033↔#1028 merge-sequencing flag that predicted the exact conflict. Strong recovery from the old tarball-lockfile neutral. |
+| Farhan Malik | 5 | 5 | #1033 review — independently reproduced the dual-cap root cause + confirmed tests non-vacuous. Maintain at ceiling. |
+| Anya Kowalczyk | 5 | 5 | #1029 review. Maintain at ceiling. |
+| Arjun Raghavan | 4 | 4 | #1029 review. Hold. |
+
+### Orchestrator (Self-Assessment)
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Orchestrator (Steven via Claude) | 4 | 4 | (hold) Drove the wave to a clean close (5 PRs, wave→main, stg green, counters exact 5/0/20) AND handled a wide product/ops surface in parallel (landing-page hotfix, monitoring check-in, 3 issue-set filings for P5W3). Caught the #1024 dispatch stall and took it over correctly (sound fix + regression test), but **the stall itself is a process gap I own** — implementers were spawned without TaskCreate tracking, so a zero-output implementer was invisible until a manual nudge. Holding 4: clean execution offset by the dispatch-tracking gap (proposed fix this retro). |
+
+### Done Well / Needs Improvement (Phase 5 Wave 2)
+- **Done well:** cleanest wave in recent memory (0 CR cycles, all first-pass approvals); strong independent review culture (Marisol's 4 verified reviews + the predicted merge-conflict flag; Mateo's TS-nullable follow-up); honest scope handling (#1023 relocated to deploy#449, not silently dropped); the keystone narrators-500 fix unblocks /graph + narrator search.
+- **Needs improvement (process):** (1) implementer dispatch had no task-tracking → a zero-output implementer (#1024) was invisible until manual nudge; (2) local full-suite test runs hang on absent sandbox DB services (14-min stall) — needs a documented verify-via-unit-construction-then-cite-CI pattern.
