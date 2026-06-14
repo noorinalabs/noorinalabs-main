@@ -959,7 +959,7 @@
   "last_completed_wave": "wave-1",
   "last_completed_at": "2026-06-11T04:13:13Z",
   "phase": "phase-4",
-  "wave_3_meta_issue": 637,
+  "wave_3_meta_issue": "noorinalabs-main#675",
   "wave_3_scope": {
     "theme": "Open the doors — real data in a usable product",
     "scope_decision": "Full W3 (owner 2026-06-11): live-walkthrough findings + entire phase-plan pencilled cluster (admin/i18n/team/geo/secrets). Serves criteria #2 + #3; W4 = lean exit/verification.",
