@@ -27,18 +27,20 @@ Owner directive (carried): **data-first** — get real, queryable data visible i
 | 4 | **Production cutover** — real data + working product on production, solid auth/session UX | noorinalabs-main#666 | #602 (prod half), ig#1027 |
 | 5 | **Streaming pipeline repeatable** — Kafka E2E + one-click bring-up | noorinalabs-main#667 | deploy#443 (+ Kafka-E2E work issue) |
 
-## Wave plan (proposed at /plan-phase 5, owner-approved 2026-06-14)
+## Wave plan (proposed at /plan-phase 5, owner-approved 2026-06-14; revised 2026-06-14 after P5W2 light-up revealed criteria #1/#2 unmet)
 
 | Wave | Theme | Scope summary | Serves |
 |------|-------|---------------|--------|
-| **W1** | **Data spine** | da#146 (keystone — segment isnad chains into narrator entities), da#147 (sect), da#148 (integrity sweep), da#144 (mis adapter). + TD intake. | #1 |
-| **W2** | **API light-up** | ig#1024 (narrators 500 — fast Optional-fields unblock + real data behind it), ig#1025 (search 422), ig#1026 (subscriptions 404 + facet), ig#1023 (health 404), ig#1021 (auth refresh). TD intake folds in the parser fixes main#659/#661 (governed by the #663 invariant). | #2 |
-| **W3** | **Admin + auth UX** | #603 admin surface (user mgmt, data-management panel, pipeline controls), ig#1027 session-expiry UX. + TD intake. | #3 |
-| **W4** | **Production cutover + streaming** | #602 production cutover (real data + product live on prod), deploy#443 one-click bring-up, Kafka streaming E2E, prod data load, phase-exit verification. + TD intake. | #4, #5 |
+| **W1** ✅ | **Data spine** | da#146 (keystone — segment isnad chains into narrator entities), da#147 (sect), da#148 (integrity sweep), da#144 (mis adapter). + TD intake. | #1 |
+| **W2** ✅ | **API light-up** | ig#1024 (narrators 500 — fast Optional-fields unblock + real data behind it), ig#1025 (search 422), ig#1026 (subscriptions 404 + facet), ig#1023 (health 404), ig#1021 (auth refresh). TD intake folded in parser fixes main#659/#661 (governed by the #663 invariant). | #2 |
+| **W3** ▶ | **Trustworthy data & search** | Data spine *depth* — segmentation still ~80% raw blobs (da#158 keystone, da#155/#154 NER, da#159 English names, da#157 edge-relation, da#160 parallels) + search/display (ig#1048 grades, ig#1049 semantic, ig#1050 isnad-filter, ig#1051 counts, ig#1032 chains, ig#1031 graph) + auth/session UX (ig#1027 modal, us#166 TTL→60m, deploy#449 carve-out) + alerting/ops (deploy#452 Slack, deploy#453 dead-man's switch, ig#1038/deploy#450/#451 log rotation). + TD intake (4/4). | #1, #2 |
+| **W4** | **Admin surface + profile + streaming** | #603 admin surface (user mgmt create/deactivate-soft-delete, data-management panel, pipeline controls — ig#989/#988/#987), profile prefs (ig#1044/#1013 + us#165 JSONB), /compare UX (ig#1037), streaming repeatable (deploy#443 one-click + ingest#76 metrics, Kafka E2E). Admin-gated Grafana + Loki (forward_auth RBAC). + TD intake. | #3, #5 |
+| **W5** | **Historical timeline & events** | Narrator dates + ṭabaqa layering + chain dating/validation (ig#1039–1043, da#161–166) building on meta #673; historical-events corpus (kingdoms/dynasties/leaders/events). + TD intake. | (new scope; #673) |
+| **W6** | **Production cutover + phase exit** | #602/#666 production cutover (real data + product live on prod, solid auth/session UX), prod data load, phase-exit verification. + TD intake. | #4 |
 
-**Critical path:** da#146 (data spine) is the keystone — it turns chain strings into narrator entities, which makes the API surface and graph explorer *meaningful*. ig#1024's narrators-500 has a fast option-1 fix (Optional response-model fields) that unblocks the surface in W2 independently of da#146, while da#146 makes the data behind it real.
+**Critical path:** da#158 (data-spine *depth*) is the live keystone — W1's da#146 segmentation runs but ~80% of production narrator nodes are still raw isnad-chain strings, so the API surface and graph explorer read blobs, not entities. W3 makes the data genuinely trustworthy (real entities, English names, grades, working search) before admin (W4) and prod cutover (W6).
 
-Wave themes are confirmed (not re-chosen) at each `/wave-scope`; scope reconciliation may move issues between waves.
+Wave themes are confirmed (not re-chosen) at each `/wave-scope`; scope reconciliation may move issues between waves. **Revision note (2026-06-14):** W3 was originally "Admin + auth UX" but was re-themed to "Trustworthy data & search" after P5W2 revealed criteria #1/#2 are not actually met (data still blobs, search empty). Admin slid to W4; production cutover (criterion #4) to W6; a new W5 absorbs the owner-requested historical-events corpus.
 
 ## Tech-debt intake (standing policy)
 
