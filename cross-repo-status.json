@@ -709,7 +709,7 @@
       }
     ]
   },
-  "wave_2_meta_issue": "noorinalabs-main#628",
+  "wave_2_meta_issue": 670,
   "wave_2_scope": {
     "theme": "Pipeline first light + auth account-linking",
     "tier_1_data_first": [
