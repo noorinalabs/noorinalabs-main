@@ -2956,3 +2956,43 @@ New/updated memories this wave ([[project_staging_pipeline_not_wired]] — stagi
 1. **Reviewer spawn briefs MUST use the verbatim template** (agents.md § Orchestrator checklist when spawning a reviewer), which includes the `TechDebt:` attestation line. — Rationale: its omission blocked the first merge this wave; the template exists but wasn't followed.
 2. **Bump main#650 to W7** (compound-command label-parser gap) — recurred two waves running, silently drops kickoff comments + board sync. — Rationale: repeated recurrence with real bookkeeping impact.
 3. **Reviewers must confirm they are at the PR HEAD sha before reviewing** (extend charter review-against-artifact with an explicit "verify head, not a stale local checkout" step). — Rationale: Camila's stale-tree misread cost a critical-path re-verify cycle.
+
+## Retrospective: Phase 4 Wave 7 — Phase 4 close-out & exit — 2026-06-14
+
+### Team Performance
+Deliberately thin close-out wave. **2 PRs merged** (main#650, deploy#413) — each to its wave branch, then wave→main; **2 issues closed**; **0 ChangesRequested cycles**; all 4 reviewer verdicts Approved first-pass with the TechDebt line + PR-head-SHA confirmation present (W6's TechDebt-omission blocker did NOT recur). CI 8/8 green on #658; deploy#413 path-filtered (shellcheck-clean locally). **TD intake 1/1.** Staging promotion green. Top-implementer concentration 1/2 = 50% (Aino + Weronika) — theme-fit for a 2-item wave, no fragility flag.
+
+### Wave shape
+| Item | PR | Implementer | Reviewers | CR | Notes |
+|------|----|-----|-----|----|----|
+| main#650 (bug) | #658 | Aino Virtanen | Weronika, Nino | 0 | misdiagnosis-corrected root fix; 7 files (~350 test lines), 8/8 CI |
+| deploy#413 (tech-debt) | #447 | Weronika Zielinska | Nino, Aisha | 0 | 2-line read-back wording, shellcheck-clean |
+
+### Per-Engineer Assessments
+- **Aino Virtanen** — PR #658. 0 CR, 0 CI failures. Root-caused the issue's own "split on `;`" framing as a misdiagnosis (splitting already worked) and fixed the real bug: shared parser `_wave_label_parse._parse_edit_segment` required `--repo`, silently dropping in-repo label edits. Fix is repo-Optional + new shared `resolve_repo_short_name` ambient recovery (mirrors gh), both hook consumers benefit, DI-tested. Severity: none (positive).
+- **Weronika Zielinska** — PR #447 (impl) + #658 review. Surgical 2-line deploy fix; peer review independently verified Aino's diagnosis and surfaced the CREATE-path sibling (#659). Severity: none (positive).
+- **Nino Kavtaradze** — reviewed #447 + #658. Security-angle clearance of the #658 injection surface; independently named the CREATE-path sibling + a charter-promotion candidate. Severity: none (positive).
+- **Aisha Idrissi** — reviewed #447. Operator-clarity verdict + a retro micro-watch (operator string drifted from authoritative in-code comment). Severity: none (positive).
+
+### Top 3 Going Well
+1. **Root-cause discipline beat issue-framing** — Aino disproved the issue's prescribed fix and root-fixed the actual bug; both reviewers verified the diagnosis independently rather than rubber-stamping.
+2. **Reviewers converged un-prompted on the same forward-looking sibling gap** (CREATE-path #659) — the throughline-watch surfaced a real convergent-class finding.
+3. **W6 process-blocker did not recur** — all verdicts carried the TechDebt line + PR-head-SHA confirmation first-pass; the compound-label-apply bug (#650) was itself root-fixed in-wave.
+
+### Top 3 Pain Points
+1. **`validate_labels` over-matches** label-shaped tokens in issue BODY text → false-blocked filing #659 (filed **#661**). Same parser-scoping class as #650/#659.
+2. **Wrapup-gate chicken-and-egg:** `validate_wave_audit` counts the wave's own open work-items before /wave-wrapup merges+closes them, blocking the skill from running its own merge steps. Resolved by merge+close-first then re-run — non-obvious friction.
+3. **Wave branch born 1-behind main:** the kickoff status-PUT lands on main after the branch is cut, so the wave→main PR trips `validate_branch_freshness` and needs a main→wave merge first. Minor, recurring.
+
+### Convergent-class throughline (reviewer-surfaced)
+"Hooks deriving a repo/identity from a raw `gh` command MUST resolve the `--repo`-less (ambient-git-context) case from cwd, never silently drop, and MUST scope token extraction to the actual flag values." Lineage: #144/#521 (cwd anchor) → #455 (multi-cmd) → **#650 (EDIT path, FIXED)** → #659 (CREATE path, open) → #661 (validate_labels body over-match, open).
+
+### Proposed Process Changes
+1. **Promote the convergent-class rule** to a charter/standards note + shared-parser invariant: any hook parsing a `gh issue/pr` command MUST scope label/repo extraction to actual flag values via `_shell_parse`/`_wave_label_parse`, and MUST resolve the `--repo`-less case from cwd (or log `skip_no_repo_context`) — never silently drop, never match body text. Rationale: 4 issues in this class (#650 fixed; #659/#661 open). Owner: Aino.
+2. **(Skill) /wave-wrapup ordering:** document that the wave's work-issues must be merged+closed BEFORE the first /wave-wrapup invocation (the gate blocks otherwise), OR have the gate exempt issues whose merge-ready PR targets the wave branch. Rationale: the chicken-and-egg cost a re-run this wave.
+
+### Annunaki (19 captures this wave)
+6 `post_label_change_wave_field_sync` = the #650 pre-fix signal (now resolved) + kickoff firing; 2 `enforce_librarian_consulted` = working-as-intended agent blocks; 2 `post_wave_kickoff_comment` = normal kickoff; 2 `validate_labels` = the body over-match (→ #661); 1 `validate_wave_audit` = wrapup-gate friction (pain point #2); 1 `validate_branch_freshness` = born-behind friction (pain point #3); 5 unclassified (older/benign). No new automation spawned beyond #661 — the dominant signal (#650) was already root-fixed in-wave.
+
+### Memory-to-automation audit
+No new conversions this wave. The one promotion-worthy pattern (convergent repo-identity-from-cwd class) is captured as Proposed Change #1 above (charter/standards + shared-parser invariant), to be actioned in Phase 5 alongside #659/#661. Existing memory remains accurate; nothing retired.
