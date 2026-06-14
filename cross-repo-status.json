@@ -711,118 +711,80 @@
   },
   "wave_2_meta_issue": 670,
   "wave_2_scope": {
-    "theme": "Pipeline first light + auth account-linking",
-    "tier_1_data_first": [
+    "theme": "API light-up",
+    "serves": "phase-5 criterion #2 (noorinalabs-main#602) — Product API surface functional",
+    "tier_2_bugs": [
       {
-        "id": "noorinalabs-data-acquisition#73",
-        "ref": "data-acquisition#73",
-        "implementer": "Kwesi Boateng",
-        "reviewer": "Jean-Claude Habimana",
-        "reviewer_2": "Oyunbileg Batbayar",
-        "priority": "feature"
-      },
-      {
-        "id": "noorinalabs-main#139",
-        "ref": "main#139",
-        "implementer": "Nikolaos Papadopoulos",
-        "reviewer": "Kwesi Boateng",
-        "reviewer_2": "Jean-Claude Habimana",
-        "priority": "feature"
-      }
-    ],
-    "tier_2_pipeline_quality": [
-      {
-        "id": "noorinalabs-main#136",
-        "ref": "main#136",
-        "implementer": "Aino Virtanen",
-        "reviewer": "Wanjiku Mwangi",
-        "reviewer_2": "Santiago Ferreira",
-        "priority": "feature"
-      },
-      {
-        "id": "noorinalabs-data-acquisition#72",
-        "ref": "data-acquisition#72",
-        "implementer": "Alejandra Reyes-Fuentes",
-        "reviewer": "Nikolaos Papadopoulos",
-        "reviewer_2": "Oyunbileg Batbayar",
-        "priority": "bug"
-      }
-    ],
-    "tier_3_auth": [
-      {
-        "id": "noorinalabs-user-service#153",
-        "ref": "user-service#153",
-        "implementer": "Mateo Salazar",
-        "reviewer": "Idris Yusuf",
-        "reviewer_2": "Anya Kowalczyk",
-        "priority": "bug"
-      },
-      {
-        "id": "noorinalabs-user-service#154",
-        "ref": "user-service#154",
-        "implementer": "Mateo Salazar",
-        "reviewer": "Idris Yusuf",
-        "reviewer_2": "Anya Kowalczyk",
-        "priority": "bug"
-      }
-    ],
-    "tier_4_process": [
-      {
-        "id": "noorinalabs-main#627",
-        "ref": "main#627",
-        "implementer": "Aino Virtanen",
-        "reviewer": "Santiago Ferreira",
-        "reviewer_2": "Wanjiku Mwangi",
-        "priority": "process"
-      }
-    ],
-    "tier_5_tech_debt": [
-      {
-        "id": "noorinalabs-data-acquisition#69",
-        "ref": "data-acquisition#69",
-        "implementer": "Oyunbileg Batbayar",
-        "reviewer": "Kwesi Boateng",
-        "reviewer_2": "Alejandra Reyes-Fuentes",
-        "priority": "tech-debt"
-      },
-      {
-        "id": "noorinalabs-isnad-graph#956",
-        "ref": "isnad-graph#956",
+        "id": "noorinalabs-isnad-graph#1024",
+        "ref": "isnad-graph#1024",
         "implementer": "Ingrid Lindqvist",
         "reviewer": "Anya Kowalczyk",
         "reviewer_2": "Arjun Raghavan",
-        "priority": "tech-debt"
+        "priority": "bug",
+        "note": "keystone — narrators API 500 (NarratorResponse Optional-fields unblock; real segmented data behind it)"
       },
       {
-        "id": "noorinalabs-main#625",
-        "ref": "main#625",
-        "implementer": "Aino Virtanen",
-        "reviewer": "Wanjiku Mwangi",
-        "reviewer_2": "Santiago Ferreira",
-        "priority": "tech-debt"
+        "id": "noorinalabs-isnad-graph#1025",
+        "ref": "isnad-graph#1025",
+        "implementer": "Jun-Seo Park",
+        "reviewer": "Marisol Vega-Cruz",
+        "reviewer_2": "Farhan Malik",
+        "priority": "bug",
+        "note": "search results 422 — frontend limit exceeds endpoint cap"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1026",
+        "ref": "isnad-graph#1026",
+        "implementer": "Mateo Salazar",
+        "reviewer": "Ravi Wickramasinghe",
+        "reviewer_2": "Marisol Vega-Cruz",
+        "priority": "bug",
+        "note": "subscriptions/me 404 + hardcoded collection facet (derive from /collections)"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1023",
+        "ref": "isnad-graph#1023",
+        "implementer": "Nneka Obi",
+        "reviewer": "Jelani Mwangi",
+        "reviewer_2": "Linh Pham",
+        "priority": "bug",
+        "note": "user-service/health 404 on staging (gateway proxy)"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1021",
+        "ref": "isnad-graph#1021",
+        "implementer": "Idris Yusuf",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Arjun Raghavan",
+        "priority": "bug",
+        "note": "admin/profile-client auth refresh-on-401 (follow-up to #1016)"
       }
     ],
-    "base": 7,
-    "td_target": 2,
-    "td_intake": "3/2",
-    "td_pool": 8,
-    "deliberately_not_in_w2": [
-      "noorinalabs-deploy#388 (W3 — secrets-manager ADR)",
-      "noorinalabs-deploy#387 (W4 — rotation automation, depends on #388)"
+    "tier_3_tech_debt": [
+      {
+        "id": "noorinalabs-isnad-graph#998",
+        "ref": "isnad-graph#998",
+        "implementer": "Ravi Wickramasinghe",
+        "reviewer": "Marisol Vega-Cruz",
+        "reviewer_2": "Mateo Salazar",
+        "priority": "tech-debt",
+        "note": "i18n: extend translation to feature/admin page-BODY strings (owner-reported; +20% TD intake)"
+      }
     ],
-    "owner_gated": [
-      "noorinalabs-data-acquisition#71 (obtain sunnah API key — owner action; scraper covers first-light)"
+    "td_intake": "1/1",
+    "td_pool": 22,
+    "base_feature_bug": 5,
+    "projected_top_concentration_pct": 17,
+    "carry_forward_watch": [
+      "da#155 (عن-anchor) gates W4 real-data load, not W2",
+      "re-measure da#148 #2 (51 hadith w/o NARRATED) after da#146 lands",
+      "producer-parity reviewer-checklist item (batch vs streaming)"
     ],
-    "stale_dropped": [
-      "data-acquisition#21",
-      "data-acquisition#26"
-    ]
+    "reconciled_at": "2026-06-14T03:30:00Z"
   },
-  "wave_2_scope_reconciled_at": "2026-06-11T00:59:36Z",
+  "wave_2_scope_reconciled_at": "2026-06-14T03:30:00Z",
   "wave_2_repos_in_scope": [
     "noorinalabs-main",
-    "noorinalabs-user-service",
-    "noorinalabs-data-acquisition",
     "noorinalabs-isnad-graph"
   ],
   "wave_2_active": false,
