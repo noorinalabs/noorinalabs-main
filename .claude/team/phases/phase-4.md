@@ -2,9 +2,9 @@
 name: Phase 4 plan — light up the product
 description: Phase definition, end-state criteria, exit gate, wave plan
 phase: 4
-status: active
+status: exited
 created: 2026-06-02
-last_updated: 2026-06-02
+last_updated: 2026-06-14
 ---
 
 # Phase 4 — light up the product
@@ -93,3 +93,20 @@ Owner runs `/phase-review 4` and verifies all 7 end-state rows are `Done`, inclu
 - `.claude/team/phases/phase-3.md` — prior phase (complete 2026-06-02, criterion-9 caveat inherited here)
 - `cross-repo-status.json` — live counters (`phase_4_*` keys)
 - noorinalabs-main#520 — the wave-10 stranding recovery executed at the P3/P4 boundary (14 PRs)
+
+
+## Phase exit record (2026-06-14, `/phase-review 4`, owner-confirmed)
+
+**Phase 4 EXITED.** Exit set #1/#4/#5/#6/#7 all satisfied; #2/#3 carried to Phase 5 (W5 exit-drive re-disposition).
+
+| # | Criterion | Tracker | Resolution |
+|---|-----------|---------|------------|
+| 1 | Data pipeline E2E (staging) | main#601 | Closed P4W6 — real narrator graph live on staging |
+| 4 | Zero carry-forward bugs | main#604 | Closed |
+| 5 | Security follow-ups closed | main#605 | Closed |
+| 6 | Per-wave TD intake (+20%) | main#606 | Closed 2026-06-14 — intake taken every wave W1–W7 (W2 3/2, W3 3/3, W4 8≥7, W5 2/2, W6 1-eff, W7 1/1; W1 clean-slate burn-down) |
+| 7 | P3 retro process changes | main#607 | Closed |
+
+**Informational TD ratio at exit:** 30% (19/63 pooled) — reported only, not a gate (superseded 2026-06-09); expected denominator-shrink, most are P5-deferred bug-bash + W7 follow-ups.
+
+**Carried to Phase 5:** product-usable-on-production (#602), admin-surface-complete (#603), plus the live bug-bash spine (da#146 chain-segmentation, ig#1024 narrators-500, ig#1025/1026/1027, da#147/148/144, deploy#443) and W7 process follow-ups (main#659/#661/#663/#664). Scoped at `/plan-phase 5`.
