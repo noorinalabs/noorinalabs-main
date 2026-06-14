@@ -1,3 +1,9 @@
+## Promotion Audit — p5-wave-3 (2026-06-14)
+
+0 AUTO · 0 DECIDE · 240 KEPT · 4 SUPERSEDED · 21 ALREADY-PROMOTED. No promotions warranted this wave.
+
+**Tooling defect found + filed (main#677):** a naive run flagged 24 false charter→skill AUTO promotions, caused by `count_skill_invocations("")` returning 635 (empty-slug match-all) compounded by the `promoted_to_slug` attribute mismatch in SKILL.md Step 3 (real attr: `promoted_to`). Re-run passing `section.promoted_to` (signal 0 for unpromoted sections) yields the correct 0/0. Standalone log: `.claude/team/promotion_audit_log/p5-wave-3.md`.
+
 # Team Feedback Log
 
 Track all feedback events here. Format:
