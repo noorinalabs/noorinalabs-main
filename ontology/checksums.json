@@ -1398,6 +1398,10 @@
       "last_resolved": "dcd46e3d78f4de5fbd5fa33adfd28b1532f3a9e69c1a8d4e18c35282622e8500",
       "tracked_at": "2026-06-13T01:15:22.325960+00:00",
       "resolved_at": "2026-06-13T02:28:20Z"
+    },
+    "noorinalabs-deploy/.github/branch-protection/apply-ruleset.sh": {
+      "last_resolved": null,
+      "resolved_at": "2026-06-14T00:16:00Z"
     }
   },
   "last_cleanup": {
