@@ -2996,3 +2996,46 @@ Deliberately thin close-out wave. **2 PRs merged** (main#650, deploy#413) — ea
 
 ### Memory-to-automation audit
 No new conversions this wave. The one promotion-worthy pattern (convergent repo-identity-from-cwd class) is captured as Proposed Change #1 above (charter/standards + shared-parser invariant), to be actioned in Phase 5 alongside #659/#661. Existing memory remains accurate; nothing retired.
+
+## Retrospective: Phase 5 Wave 1 — Data spine — 2026-06-14
+
+### Team Performance
+First Phase-5 wave (data-acquisition only). **4 PRs merged** (da#146/148/144/138), **0 ChangesRequested cycles**, all first-pass Approved with TechDebt lines; CI green; wave→main merged (#156), staging green. **1 issue killed premise-false** (da#147). TD intake 1/1 (da#138). Top-implementer concentration **25%** (4/4 distinct authors — healthy distribution, no fragility flag). 8 reviewer agents, all sharp.
+
+### Wave shape
+| Item | PR | Implementer | Reviewers | CR | Notes |
+|------|----|-----|-----|----|----|
+| da#146 (keystone) | #151 | Ivana Horvat | Alejandra, Jean-Claude | 0 | diacritic root-cause; 31,525 chains → mentions; +TechDebt da#155 |
+| da#148 | #150 | Nikolaos Papadopoulos | Alejandra, Oyunbileg | 0 | self-loop + grade-normalize; remainder da#153 |
+| da#144 | #149 | Kwesi Boateng | Tarek, Jean-Claude | 0 | mis adapter 3-file restructure; 63,642 edges |
+| da#138 (TD) | #152 | Alejandra Reyes-Fuentes | Ivana, Kavitha | 0 | nasab-reversal false-merge fix + precision/recall harness |
+| da#147 | — | (Kavitha) | — | — | closed premise-false (sect IS sect_affiliation) |
+
+### Per-Engineer Assessments
+- **Ivana Horvat** (da#146, PR #151) — keystone; root-caused away from the issue framing (diacritic mismatch in shared arabic.py, not the lk adapter), tested deterministic splitter, honest follow-up. + reviewed #152. Severity: none (positive). Trust 4→5 ▲.
+- **Alejandra Reyes-Fuentes** (da#138 PR #152 + reviews #150/#151) — **wave MVP**: caught a nasab-reversal false-merge as implementer, then the standout keystone review reproducing عن mid-word over-segmentation + the masking-fixture. Severity: none (positive). Trust 5→5.
+- **Kwesi Boateng** (da#144, PR #149) — diagnosed upstream dataset restructure, Nodes-decoy selector, live-trace. Severity: none (positive). Trust 5→5.
+- **Nikolaos Papadopoulos** (da#148, PR #150) — honest producer-fix vs data-decision split (da#153); correct non-bug investigation. Severity: none (positive). Trust 5→5.
+- **Kavitha Sundaramurthy** (da#147 + review #152) — premise-false verified with code evidence, refused a harmful fix; sharp #152 review. Severity: none (positive). Trust 4→5 ▲.
+- **Jean-Claude Habimana** (reviews #149/#151), **Tarek Mansour** (review #149), **Oyunbileg Batbayar** (review #150) — all sharp, verified-not-rubber-stamped; first numeric ratings 4/4 for Jean-Claude/Tarek, Oyunbileg 5→5.
+
+### Top 3 Going Well
+1. **Verify-don't-rubber-stamp across the board** — the keystone review caught that the da#146 fix's OWN e2e test masks a new precision bug (عن over-segmentation); Kavitha killed da#147 premise-false with cross-repo code evidence; reviewers reproduced findings locally.
+2. **Root-cause discipline beat issue framing** on 3 of 4 PRs — da#146 (not the lk adapter), da#144 (upstream restructure), da#138 (order-insensitivity not threshold).
+3. **Honest scope-splitting** — da#153/154/155 filed for deferred/follow-up work; nothing silently dropped; TD intake (da#138) shipped real precision-guard value.
+
+### Top 3 Pain Points
+1. **fixture-masks-bug recurred INSIDE the fix for a fixture-masks bug** — da#146 fixed the un-voweled-toy-fixture blob bug, but its replacement Bukhari-h1 fixture contains no عن, masking the new over-segmentation (da#155). Recurring class (MockNeo4j, APPEARS_IN, toy-h1 double-prefix, local-only staging edges). → Proposed Change #1.
+2. **`validate_labels` hook bit the orchestrator twice** — multi-cmd `--repo` cross-association (label-create + issue-create in one block) + stale label cache (new `phase-5`/`p5-wave-1` labels not seen until `gh api`-verified). Tracked #661/#663; worked around with bare commands.
+3. **da#133 edge-relation default trap** — `DEFAULT_EDGE_RELATION` still falls back to STUDIED_UNDER; any future transmission producer that omits `relation` silently mis-routes onto the studentship allowlist. → Proposed Change #2.
+
+### Proposed Process Changes
+1. **Production-realistic fixture rule (charter/standards):** text-processing / Arabic-NER / graph-load fixtures MUST use production-realistic input (voweled Arabic containing high-frequency particles like عن; real-shape rows), NOT hand-built minimal/un-voweled chains. Rationale: the fixture-masks-bug class has now recurred 5+ times including inside its own fix (da#146→da#155). Owner: Aino. (Strongest signal this wave.)
+2. **da#133 edge-relation default → fail-safe + wave sweep:** make `DEFAULT_EDGE_RELATION` not silently fall back to STUDIED_UNDER (require explicit relation or raise), and sweep all edge-producers to confirm they set `relation` + the loader routes by it. Code follow-up against da#133 (file as a data-acq issue).
+3. **Producer-parity reviewer-checklist item:** "did the streaming (ingest-platform) path get the same invariant?" — every integrity/load invariant must hold on both batch + Kafka streaming paths (da#153 #4 tracks grade_normalized streaming mirror). Reviewer-brief addition.
+
+### Annunaki (34 captures this wave)
+Dominant signals: `validate_labels` multi-cmd + stale-cache (orchestrator, → #661/#663) and routine PUT/zsh navigation. No NEW automation warranted beyond #661/#663 already filed. The validate_labels gotchas are also captured in project memory (`feedback_validate_labels_hook_gotchas`).
+
+### Memory-to-automation audit
+No new conversions. The wave's promotion-worthy pattern (production-realistic fixtures) is captured as Proposed Change #1 (charter/standards). The `validate_labels` gotcha memory written this session is the only new memory; it stays as memory (operational workaround) until #661/#663 land the durable fix.
