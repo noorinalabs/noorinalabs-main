@@ -342,6 +342,27 @@ Pushing code that fails lint, formatting, or tests is a **minor feedback event**
 
 **Why:** In Phase 2 Wave 1, PR #72 introduced a hook CI workflow that immediately failed on pre-existing ruff I001 lint in other files. CI went red on main because the violations weren't fixed before merge.
 
+## Full Local⇄CI Tooling Parity + No Force-Merging Failing Checks (Mandatory) <!-- promotion-target: none -->
+
+Two owner directives (2026-06-14, `noorinalabs-main#684`) on local-hook/CI discipline, binding on **every** repo.
+
+### 1. Full local⇄CI tooling parity
+
+Every repo's `.pre-commit-config.yaml` (commit-stage AND push-stage hooks together) MUST mirror the **complete** set of checks its CI enforces — not a subset. If CI runs it, a local hook must run it too: the relevant test suite, **every** linter and formatter, the type-checker, **cspell**, `actionlint`, `gitleaks`, schema/drift gates, and any other gate in `.github/workflows/`. The point is that a clean local commit/push is a faithful predictor of green CI — a partial mirror that omits (say) cspell lets a spelling failure reach CI that the developer had no local signal for.
+
+- **Commit vs push staging is a latency choice, not a coverage choice.** Fast checks (format, lint) belong on the commit stage; heavier checks (typecheck, full test suite, cspell over the tree, actionlint) belong on the push stage. Either way, the *union* of the two stages must equal the CI check-set.
+- The `.claude/lib/pre_commit_ci_sync.py` **sync-drift gate** is the machine-enforcement of this parity, and its enforcement must be **complete** — today it silently ignores check kinds it cannot classify (e.g. cspell), which is exactly the blind spot this rule closes. Closing that gap (classifying every CI kind so an unmirrored cspell/actionlint/gitleaks job fails the gate) and rolling the full-parity hook set out to every child repo is tracked by **`noorinalabs-main#684`**. Do NOT treat the current gate's silence on an unclassified kind as evidence of parity, and do NOT claim to fix the gate code under this section — that is #684's per-repo work.
+
+### 2. No force-committing / force-pushing / force-merging failing checks
+
+Never commit, push, or merge a PR with a **known-failing check** without explicit owner permission — and this holds **even when the failing check is pre-existing and not caused by your change**. `--no-verify` is already hard-blocked (`hooks.md` Hook 2 `block_no_verify`); this rule extends the same stance to the *outcome*: a red gate is a stop, not a speed bump.
+
+- A pre-existing red check is **not** a unilateral "carve-out." Per § CI Must Be Green Before Merge, the path is *fix-forward* (a predecessor PR that greens the check, merged first) — never "merge through it because it was already broken."
+- If a check genuinely cannot be greened in-scope (infra-dependent runtime gate, advisory-DB drift, etc.), that is an **owner decision** — surfaced with the one-line diagnosis and the evidence, not a self-granted exception. The recognized admin-merge exception classes (§ Admin-merge exception list) are the *only* pre-authorized bypasses; anything else needs explicit owner sign-off.
+- **Severity:** force-merging a failing check without owner sign-off is a **moderate** feedback event (matching § CI Must Be Green Before Merge); doing so on a security-relevant gate (`gitleaks`, `security-audit`) is **severe**.
+
+**Cross-references:** § Pre-Push Checklist (run the gates before you push), § CI Must Be Green Before Merge (fix-forward, not merge-through), `hooks.md` Hook 2 (`block_no_verify`), `agents.md` § Orchestrator checklist when spawning an implementer (the green-before-push spawn-discipline item), and the `CLAUDE.md` § Local Hooks section (full-parity + no-force restated for the orchestrator repo).
+
 ## Org-Wide Branch Protection + Admin-Merge Exceptions (Mandatory) <!-- promotion-target: none -->
 
 Phase-3 end-state criterion #4 (`noorinalabs-main#322`): **CI failures block all merges** on every repo's default branch, org-wide — not just by team discipline, but enforced server-side by GitHub. As of W13, 7 of 8 repos (all child repos + `noorinalabs-main`) had NO branch protection and relied SOLELY on the Hook 4 comment-gate; that single-layer gap is what let the W11 batch-loop merge evade review (`feedback_batch_loop_merge_evades_pr_review_hook`). This section is the canonical spec that closes that gap; the live pilot proves it and the remaining repos adopt it per the application-status note (the spec, not a blanket apply, is the durable artifact).
