@@ -295,56 +295,86 @@
       {
         "id": "noorinalabs-isnad-graph#989",
         "ref": "ig#989",
-        "priority": "tech-debt"
+        "priority": "tech-debt",
+        "implementer": "Aisling Brennan",
+        "reviewer": "Farhan Malik",
+        "reviewer_2": "Idris Yusuf"
       },
       {
         "id": "noorinalabs-isnad-graph#988",
         "ref": "ig#988",
-        "priority": "tech-debt"
+        "priority": "tech-debt",
+        "implementer": "Idris Yusuf",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Nneka Obi"
       },
       {
         "id": "noorinalabs-isnad-graph#987",
         "ref": "ig#987",
-        "priority": "tech-debt"
+        "priority": "tech-debt",
+        "implementer": "Ravi Wickramasinghe",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Marisol Vega-Cruz"
       }
     ],
     "tier_2_profile_compare": [
       {
         "id": "noorinalabs-isnad-graph#1044",
         "ref": "ig#1044",
-        "priority": "enhancement"
+        "priority": "enhancement",
+        "implementer": "Ingrid Lindqvist",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Mateo Salazar"
       },
       {
         "id": "noorinalabs-isnad-graph#1013",
         "ref": "ig#1013",
-        "priority": "bug"
+        "priority": "bug",
+        "implementer": "Jun-Seo Park",
+        "reviewer": "Ravi Wickramasinghe",
+        "reviewer_2": "Anya Kowalczyk"
       },
       {
         "id": "noorinalabs-isnad-graph#1037",
         "ref": "ig#1037",
-        "priority": "bug"
+        "priority": "bug",
+        "implementer": "Nneka Obi",
+        "reviewer": "Ravi Wickramasinghe",
+        "reviewer_2": "Marisol Vega-Cruz"
       },
       {
         "id": "noorinalabs-user-service#165",
         "ref": "us#165",
-        "priority": "enhancement"
+        "priority": "enhancement",
+        "implementer": "Mateo Salazar",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Idris Yusuf"
       }
     ],
     "tier_3_streaming_infra": [
       {
         "id": "noorinalabs-deploy#443",
         "ref": "deploy#443",
-        "priority": "enhancement"
+        "priority": "enhancement",
+        "implementer": "Lucas Ferreira",
+        "reviewer": "Weronika Zielinska",
+        "reviewer_2": "Aisha Idrissi"
       },
       {
         "id": "noorinalabs-isnad-ingest-platform#76",
         "ref": "ingest#76",
-        "priority": "tech-debt"
+        "priority": "tech-debt",
+        "implementer": "Fatima Bensalah",
+        "reviewer": "Bjørn Henriksen",
+        "reviewer_2": "Petra Vidović"
       },
       {
         "id": "noorinalabs-deploy#458",
         "ref": "deploy#458",
-        "priority": "bug"
+        "priority": "bug",
+        "implementer": "Nurul Hakim",
+        "reviewer": "Nino Kavtaradze",
+        "reviewer_2": "Weronika Zielinska"
       }
     ],
     "tier_4_search_semantic_cluster": [
@@ -352,33 +382,53 @@
         "id": "noorinalabs-isnad-graph#1071",
         "ref": "ig#1071",
         "priority": "bug",
-        "note": "real-model load on cluster — owner track-only, no interim"
+        "note": "real-model load on cluster — owner track-only, no interim",
+        "implementer": "Mei-Lin Chang",
+        "reviewer": "Thandiwe Moyo",
+        "reviewer_2": "Farhan Malik",
+        "spawn": "track-only — owner-gated, cluster ops; no code PR this wave"
       },
       {
         "id": "noorinalabs-isnad-graph#1057",
         "ref": "ig#1057",
         "priority": "tech-debt",
-        "note": "ivfflat reindex after bulk embed"
+        "note": "ivfflat reindex after bulk embed",
+        "implementer": "Linh Pham",
+        "reviewer": "Jelani Mwangi",
+        "reviewer_2": "Farhan Malik",
+        "spawn": "ops-gated — runbook step, runs after prod bulk-embed load"
       },
       {
         "id": "noorinalabs-isnad-graph#1060",
         "ref": "ig#1060",
-        "priority": "tech-debt"
+        "priority": "tech-debt",
+        "implementer": "Thandiwe Moyo",
+        "reviewer": "Mei-Lin Chang",
+        "reviewer_2": "Anya Kowalczyk"
       },
       {
         "id": "noorinalabs-isnad-graph#1061",
         "ref": "ig#1061",
-        "priority": "tech-debt"
+        "priority": "tech-debt",
+        "implementer": "Farhan Malik",
+        "reviewer": "Mei-Lin Chang",
+        "reviewer_2": "Aisling Brennan"
       },
       {
         "id": "noorinalabs-isnad-graph#1062",
         "ref": "ig#1062",
-        "priority": "tech-debt"
+        "priority": "tech-debt",
+        "implementer": "Jun-Seo Park",
+        "reviewer": "Aisling Brennan",
+        "reviewer_2": "Thandiwe Moyo"
       },
       {
         "id": "noorinalabs-isnad-graph#1070",
         "ref": "ig#1070",
-        "priority": "tech-debt"
+        "priority": "tech-debt",
+        "implementer": "Mateo Salazar",
+        "reviewer": "Ingrid Lindqvist",
+        "reviewer_2": "Marisol Vega-Cruz"
       }
     ],
     "td_intake": "base=7 non-TD (ig#1071/#1044/#1037/#1013, us#165, deploy#458/#443) -> target ceil(0.20*7)=2; in-scope TD pool=9 (ig#1070/#1062/#1061/#1060/#1057/#989/#988/#987, ingest#76) >= target — satisfied",
@@ -624,7 +674,7 @@
     "mirror_of": ".claude/team/phases/phase-3.md § Sweep-wave reservation (W12, possibly W13)"
   },
   "wave_active": true,
-  "current_wave": "wave-3",
+  "current_wave": "wave-4",
   "wave_5_active": false,
   "wave_5_kicked_off_at": "2026-06-13T15:55:00Z",
   "wave_5_final_pr_count": 6,
@@ -635,7 +685,7 @@
   "wave_5_wrapped_up_at": "2026-06-13T18:00:45Z",
   "wave_5_annunaki_attack_ran_at": "2026-06-13T18:18:53Z",
   "wave_5_memory_audit_ran_at": "2026-06-13T18:18:53Z",
-  "next_wave": "wave-4",
+  "next_wave": "wave-5",
   "wave_started": "2026-06-12T00:12:20Z",
   "last_completed_wave": "wave-3",
   "last_completed_at": "2026-06-14T23:05:00Z",
@@ -892,7 +942,7 @@
   "wave_3_wrapped_at": "2026-06-12T17:33:59Z",
   "wave_3_annunaki_attack_ran_at": "2026-06-14T23:45:00Z",
   "wave_3_memory_audit_ran_at": "2026-06-14T23:45:00Z",
-  "last_updated": "2026-06-15T01:38:21Z",
+  "last_updated": "2026-06-15T01:52:55Z",
   "deployments_branch": "deployments/phase-4/wave-3",
   "phase_2_status": "CLOSED 2026-04-30. wave-10 final retro PR #230 merged 20:47:41Z. 5-repo wave-merge ceremony completed (#229 main, #74 landing, #851 isnad, #196 deploy, #89 user-service). 3 carry-forwards into phase-3: deploy#86 (async routine trig_01Bif8T51pdaYFjkbM5bERyL — fires post-merge), deploy#151 (manual SRE B2 tfstate-key migration), user-service#84 (manual DEPLOY_REPO_PAT secret). All p2-wave-* labels cleared from open issues; 218 open issues re-labeled `phase-3` across 8 repos.",
   "phase_3_status": "Phase 3 COMPLETE 2026-06-02 at 9/9 criteria (criterion #9 closed-with-caveat). All end-state issues #322-#330 closed. Exit record in .claude/team/phases/phase-3.md. Next: /roadmap for Phase 4.",
@@ -1075,9 +1125,30 @@
       ]
     }
   },
-  "wave_4_active": null,
-  "wave_4_kicked_off_at": null,
-  "wave_4_branches": null,
+  "wave_4_active": true,
+  "wave_4_kicked_off_at": "2026-06-15T01:52:55Z",
+  "wave_4_branches": {
+    "branch": "deployments/phase-5/wave-4",
+    "created_at": "2026-06-15T01:52:55Z",
+    "repos": {
+      "noorinalabs-isnad-graph": {
+        "sha": "6a92157b0fcae20c5cfb8707da8b11993b5cfb4f",
+        "status": "created"
+      },
+      "noorinalabs-user-service": {
+        "sha": "e879fed2413793a03d445a6e5b4e2c74d233ce14",
+        "status": "created"
+      },
+      "noorinalabs-deploy": {
+        "sha": "a5d6cc6a04e46b8f7bc88d893c29c555d9ba65b6",
+        "status": "created"
+      },
+      "noorinalabs-isnad-ingest-platform": {
+        "sha": "cb8f3f1e4d29f06d986e85a5ab86e12b7512d358",
+        "status": "created"
+      }
+    }
+  },
   "wave_4_final_pr_count": null,
   "wave_4_changes_requested_cycles": null,
   "wave_4_top_concentration_pct": null,
