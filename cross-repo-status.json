@@ -1149,9 +1149,9 @@
       }
     }
   },
-  "wave_4_final_pr_count": null,
-  "wave_4_changes_requested_cycles": null,
-  "wave_4_top_concentration_pct": null,
+  "wave_4_final_pr_count": 19,
+  "wave_4_changes_requested_cycles": 4,
+  "wave_4_top_concentration_pct": 16,
   "wave_4_stg_promotion": null,
   "wave_4_counter_corrections": null,
   "wave_4_stg_promotion_override_rationale": null,
