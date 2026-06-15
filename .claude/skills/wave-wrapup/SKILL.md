@@ -281,73 +281,27 @@ Use the shared `upsert_status_keys.py` helper at `.claude/lib/` — it does targ
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 STATUS="$REPO_ROOT/cross-repo-status.json"
-UPSERT="$REPO_ROOT/.claude/lib/upsert_status_keys.py"
 
-# FINAL_PR_COUNT is the Step 10 "PRs: Merged" number — already in hand.
-FINAL_PR_COUNT={count_of_merged_PRs}
-
-# Cross-window filter (Option A — #423). The wave's canonical window starts
-# at `wave_{M}_kicked_off_at`; anything merged before is from a prior window
-# (W9 partition lesson). If the key is missing (legacy waves W1-W3 pre-/wave-start),
-# fall back to no-filter and rely solely on Option B's cross-check below.
-KICKOFF=$(jq -r '.["wave_{M}_kicked_off_at"] // empty' "$STATUS")
-
-# Build the wave's merged-PR set across all repos in scope. Includes mergedAt
-# so the kickoff filter applies; falls through unfiltered when KICKOFF is empty.
-PRS_JSON=$(jq -r '.["wave_{M}_repos_in_scope"][]' "$STATUS" | while read -r REPO; do
-  if [ -n "$KICKOFF" ]; then
-    gh pr list --repo "noorinalabs/$REPO" --state merged \
-      --base "deployments/phase-{P}/wave-{M}" \
-      --json number,headRefOid,mergedAt \
-      --jq ".[] | select(.mergedAt >= \"$KICKOFF\") | . + {repo: \"$REPO\"}"
-  else
-    gh pr list --repo "noorinalabs/$REPO" --state merged \
-      --base "deployments/phase-{P}/wave-{M}" \
-      --json number,headRefOid,mergedAt \
-      --jq ".[] | . + {repo: \"$REPO\"}"
-  fi
-done | jq -s .)
-
-# Cross-check (Option B — #423). After the kickoff filter, the PR set should
-# match Step 10's `FINAL_PR_COUNT`. A mismatch indicates either a re-roll
-# within the canonical window (rare but possible) or a missing `kicked_off_at`
-# key. Loud-fail rather than emit silently-wrong counters; the operator must
-# manually scope the PR set (e.g., by hand-listing the canonical PR numbers).
-GH_COUNT=$(echo "$PRS_JSON" | jq 'length')
-if [ "$GH_COUNT" != "$FINAL_PR_COUNT" ]; then
-  echo "ERROR: post-kickoff-filter PR count ($GH_COUNT) != FINAL_PR_COUNT ($FINAL_PR_COUNT)" >&2
-  echo "Possible cross-window contamination or re-roll within canonical window." >&2
-  echo "Inspect: gh pr list --base deployments/phase-{P}/wave-{M} --state merged --json number,mergedAt" >&2
-  echo "Then either: (a) verify wave_{M}_kicked_off_at in cross-repo-status.json is correct," >&2
-  echo "or (b) manually scope the PR list by editing this step's PRS_JSON construction." >&2
-  exit 1
-fi
-
-# CHANGES_REQUESTED_CYCLES — count `RequestOrReplied: ChangesRequested` verdict
-# comments across every wave PR's issue-comments timeline.
-CHANGES_REQUESTED_CYCLES=$(echo "$PRS_JSON" | jq -r '.[] | "\(.repo) \(.number)"' | while read -r R N; do
-  gh api "repos/noorinalabs/$R/issues/$N/comments" \
-    --jq '[.[] | select(.body | test("RequestOrReplied:\\s*ChangesRequested"))] | length'
-done | awk '{s+=$1} END {print s+0}')
-
-# TOP_CONCENTRATION_PCT — derived from commit-identity concentration on each
-# PR's head: count PRs per commit-author name, take the top author's PR count
-# as a percentage of total. Half-up rounding via awk `printf "%d\n", x + 0.5`
-# (4/6 = 66.67 → 67) so the counter matches the human-recorded W9 history row
-# (Wanjiku TPM-vote 2026-05-13).
-TOP_CONCENTRATION_PCT=$(echo "$PRS_JSON" | jq -r '.[] | "\(.repo) \(.headRefOid)"' | while read -r R SHA; do
-  gh api "repos/noorinalabs/$R/commits/$SHA" --jq '.commit.author.name'
-done | sort | uniq -c | sort -rn | awk -v total="$(echo "$PRS_JSON" | jq 'length')" \
-  'NR==1 {printf "%d\n", $1 * 100 / total + 0.5}')
-
-# Each value MUST be a self-contained JSON literal (integer here — no quotes).
-python3 "$UPSERT" "$STATUS" \
-    "wave_{M}_final_pr_count=${FINAL_PR_COUNT}" \
-    "wave_{M}_changes_requested_cycles=${CHANGES_REQUESTED_CYCLES}" \
-    "wave_{M}_top_concentration_pct=${TOP_CONCENTRATION_PCT}"
+# Counters are computed by the deterministic helper (main#688). It replaces the
+# hand-rolled bash that used to live here, which collapsed under zsh: a
+# `for R in $WAVE_REPOS_IN_SCOPE` loop does NOT word-split a parameter in zsh
+# (this org's shell — `feedback_zsh_shell_environment`), so the whole repo list
+# was passed to `gh` as one bogus `--repo` value → "Could not resolve
+# repository" → merged PR count 0 → division-by-zero. The helper issues every
+# `gh` call as `subprocess.run([...])` with an explicit arg list (no shell, no
+# word-split), applies the `wave_{M}_kicked_off_at` cross-window filter
+# (Option A — #423), and computes final_pr_count / changes_requested_cycles /
+# top_concentration_pct.
+#
+#   --expect {count_of_merged_PRs}  is the Option-B cross-check: loud-fail
+#     (exit 1, NO write) if the tallied PR count != Step 10's "PRs: Merged".
+#   --write                         upserts the three canonical top-level keys
+#     via upsert_status_keys.py, preserving the compact-inline file shape.
+python3 "$REPO_ROOT/.claude/lib/wave_status.py" counters {P} {M} \
+    --expect {count_of_merged_PRs} --write
 
 # Read-back verify (memory `feedback_gh_pr_edit_silent_noop` family — any
-# jq/upsert pipeline that silently fails produces zero diff but exit 0).
+# upsert pipeline that silently fails produces zero diff but exit 0).
 jq -r --arg m "{M}" '
   "wave_" + $m + "_final_pr_count = " + (.["wave_" + $m + "_final_pr_count"] | tostring),
   "wave_" + $m + "_changes_requested_cycles = " + (.["wave_" + $m + "_changes_requested_cycles"] | tostring),
@@ -375,7 +329,12 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 WAVE_REPOS_IN_SCOPE=$(jq -r ".wave_{M}_repos_in_scope[]" "$REPO_ROOT/cross-repo-status.json")
 BRANCH="deployments/phase-{P}/wave-{M}"
 
-for R in $WAVE_REPOS_IN_SCOPE; do
+# zsh-safe iteration: a here-string into `while IFS= read -r` (NOT
+# `for R in $WAVE_REPOS_IN_SCOPE` — zsh does not word-split a parameter, so the
+# whole list would collapse into one bogus repo; main#688). The here-string
+# keeps the loop in the current shell — relevant for the array-accumulating
+# loops below.
+while IFS= read -r R; do
   # Skip repos where the wave branch is already merged or doesn't exist
   EXISTING=$(gh api "repos/noorinalabs/$R/git/refs/heads/$BRANCH" --jq '.object.sha' 2>/dev/null || true)
   [ -z "$EXISTING" ] && { echo "$R: no wave branch — skip"; continue; }
@@ -390,7 +349,7 @@ for R in $WAVE_REPOS_IN_SCOPE; do
   gh pr create --repo "noorinalabs/$R" --base main --head "$BRANCH" \
     --title "Phase {P} Wave {M} → main ($R)" \
     --body "Final wave merge for $R. All PRs reviewed and merged to wave branch."
-done
+done <<< "$WAVE_REPOS_IN_SCOPE"
 ```
 
 Print a per-repo PR summary table (PR# or "no merge needed") and **wait for user approval before merging any PR**. Each PR must be merged independently.
@@ -413,7 +372,10 @@ WAVE_REPOS_IN_SCOPE=$(jq -r ".wave_{M}_repos_in_scope[]" "$REPO_ROOT/cross-repo-
 BRANCH="deployments/phase-{P}/wave-{M}"
 
 STRANDED=()
-for R in $WAVE_REPOS_IN_SCOPE; do
+# zsh-safe iteration via here-string into `while read` (main#688). The
+# here-string (NOT a `| while` pipe) keeps the loop in the current shell so the
+# STRANDED array survives past `done`.
+while IFS= read -r R; do
   # Skip repos where the wave branch doesn't exist (scope-drop case)
   WAVE_SHA=$(gh api "repos/noorinalabs/$R/git/refs/heads/$BRANCH" --jq '.object.sha' 2>/dev/null || true)
   [ -z "$WAVE_SHA" ] && { echo "$R: no wave branch — skip (scope-drop)"; continue; }
@@ -434,7 +396,7 @@ for R in $WAVE_REPOS_IN_SCOPE; do
   else
     echo "$R: wave-branch reachable from main (ahead_by=$AHEAD, status=$STATUS) — OK"
   fi
-done
+done <<< "$WAVE_REPOS_IN_SCOPE"
 
 if [ ${#STRANDED[@]} -gt 0 ]; then
   echo "════════════════════════════════════════════════════════════"
@@ -565,9 +527,12 @@ For each repo in `wave_{M}_repos_in_scope` that participates in the staging fan-
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-FANIN="noorinalabs-isnad-graph noorinalabs-user-service"
+# Newline-joined so `while read` iterates safely; `for repo in $FANIN` would
+# collapse the whole string into one iteration under zsh (main#688). The
+# here-string below keeps the loop in the current shell so PUB_RED persists.
+FANIN=$'noorinalabs-isnad-graph\nnoorinalabs-user-service'
 PUB_RED=()
-for repo in $FANIN; do
+while IFS= read -r repo; do
   # Only the fan-in repos actually in this wave's scope.
   jq -e --arg r "$repo" '.["wave_{M}_repos_in_scope"] | index($r)' "$REPO_ROOT/cross-repo-status.json" >/dev/null 2>&1 || continue
   branch=$(gh api "repos/noorinalabs/$repo" --jq '.default_branch' 2>/dev/null || echo main)
@@ -584,7 +549,7 @@ for repo in $FANIN; do
       printf '%s' "$log" | grep -Eiq 'trivy|grype|\bCVE-[0-9]{4}-[0-9]+|apk[ -].*(upgrade|CVE)|openssl.*(vuln|CVE|advisor)|base[ -]image' && cls=base-image-drift
       PUB_RED+=("$repo :: ghcr-publish.yml :: $conclusion :: $cls :: $url") ;;
   esac
-done
+done <<< "$FANIN"
 if [ ${#PUB_RED[@]} -gt 0 ]; then
   printf 'RED fan-in publish run(s) — a wave is NOT closeable while a fan-in publish is red:\n'
   printf '  %s\n' "${PUB_RED[@]}"
@@ -727,15 +692,19 @@ If the count is **0**, the repo had declared work that did not ship. Resolve the
 Symmetric to § Scope-Drop Reconciliation, but for the inverted case: the declared implementer was replaced silently. Before closing a wave, reconcile **declared implementer vs actual PR author** for every PR merged to a wave branch.
 
 ```bash
-# For each repo in scope, for each merged PR:
-for repo in $(jq -r ".wave_{M}_repos_in_scope[]" "$REPO_ROOT/cross-repo-status.json"); do
-  for pr in $(gh pr list --repo "noorinalabs/$repo" --state merged --base "deployments/phase-{N}/wave-{M}" --json number --jq '.[].number'); do
-    actual=$(gh pr view $pr --repo "noorinalabs/$repo" --json author --jq '.author.login')
-    branch=$(gh pr view $pr --repo "noorinalabs/$repo" --json headRefName --jq '.headRefName')
+# For each repo in scope, for each merged PR (zsh-safe `while read` fed from the
+# repos helper + process substitution — main#688). Command substitution like
+# `for repo in $(jq …)` happens to split in zsh, but a parameter
+# (`for repo in $REPOS`) would not; standardize on `while read` so the safe form
+# is the one operators copy.
+while IFS= read -r repo; do
+  while IFS= read -r pr; do
+    actual=$(gh pr view "$pr" --repo "noorinalabs/$repo" --json author --jq '.author.login')
+    branch=$(gh pr view "$pr" --repo "noorinalabs/$repo" --json headRefName --jq '.headRefName')
     # Compare actual against wave_{M}_scope.tier_*[].implementer or .tier_*[].assignee for that issue.
     # Branch prefix (e.g., "T.Mansour/...") is the cheap proxy when author is the github org bot.
-  done
-done
+  done < <(gh pr list --repo "noorinalabs/$repo" --state merged --base "deployments/phase-{N}/wave-{M}" --json number --jq '.[].number')
+done < <(python3 "$REPO_ROOT/.claude/lib/wave_status.py" repos {N} {M})
 ```
 
 If the actual author (or branch-prefix initials) does not match the kickoff-declared implementer, the substitution must be recorded EXPLICITLY — silent swaps are not allowed.

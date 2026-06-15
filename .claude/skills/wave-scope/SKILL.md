@@ -325,7 +325,12 @@ NEXT_LABEL="p{P}-wave-$(({M} + 1))"
 # Match the color/description of the current wave label for consistency
 CURRENT_COLOR=$(gh label list --repo noorinalabs/noorinalabs-main --search "$WAVE_LABEL" --json color --jq '.[0].color')
 
-for repo in $REPOS_WITH_DEFER; do
+# Build REPOS_WITH_DEFER as a bash/zsh ARRAY (e.g. REPOS_WITH_DEFER=(repo-a
+# repo-b)) and iterate it quoted — `for repo in $REPOS_WITH_DEFER` would
+# collapse a multi-repo string into one iteration under zsh (main#688), the
+# same word-split trap as the other wave skills. The `"${arr[@]}"` form matches
+# the `REPOS` iteration earlier in this skill.
+for repo in "${REPOS_WITH_DEFER[@]}"; do
     gh label list --repo "noorinalabs/$repo" --search "$NEXT_LABEL" --json name --jq '.[].name' | grep -q "$NEXT_LABEL" || \
         gh label create "$NEXT_LABEL" --repo "noorinalabs/$repo" \
             --description "Phase {P} Wave $(({M} + 1))" --color "$CURRENT_COLOR"
