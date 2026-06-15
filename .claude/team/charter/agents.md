@@ -611,6 +611,40 @@ The two rules are complementary:
 
 P3W10 retro PR #441 § Proposed Process Changes #4. 22-substitution evidence (34% of 65 W10 PRs). Owner-adopted 2026-05-16 (PR #444). Sibling memory: `feedback_child_repo_implementer_rule.md` (which the parent § Child-Repo Implementer Rule + Spawn-Brief Verification already supersedes for roster-source rules; this sub-section adds the authority-source clarification).
 
+## Agent Liveness Checkpoint <!-- promotion-target: hook -->
+
+P5W2 and P5W3 each produced a zero-output stall invisible until manual intervention: the P5W2 #1024 narrators-500 dispatch produced no branch, no PR, no commit across the full wave; the P5W3 Nneka (#1038) silent-idle on ig#1038 went undetected until the orchestrator took over. Both required a manual nudge to surface. This section encodes the two-part rule that prevents both failure shapes from recurring silently.
+
+### Part (a): TaskCreate per implementer at spawn (mandatory)
+
+Every spawned implementer MUST have a corresponding `TaskCreate` entry at spawn time (subject = repo + issue ref + slug; owner = implementer name). The task list is the live ledger of in-flight wave work. See `/wave-kickoff` § 9b for the specific mechanics and the point in the kickoff flow at which the `TaskCreate` fires.
+
+**Rationale:** Without a task entry, a zero-output stall is invisible at the next `TaskList` sweep — the orchestrator only discovers it via a manual nudge. A tracked task makes the stall surface automatically at the next sweep.
+
+### Part (b): Zero-artifact after 2 idle notifications = auto-flag (mandatory)
+
+An implementer sending an **idle notification** ("working on it", "running tests", "will report back") but producing **no artifact** (no branch pushed, no PR opened, no commit landed) is not evidence of forward progress. The orchestrator MUST apply the following rule:
+
+- **Idle notification 1 (zero artifact):** Re-probe via `SendMessage`. Verify the task exists in `TaskList`; if absent, re-create it and note the gap.
+- **Idle notification 2 (still zero artifact):** Auto-flag for takeover or reassignment. A second successive zero-artifact idle notification is NOT "still working" — it is a stall. The orchestrator initiates the takeover mechanic described in § Throttle-Stall Recovery without waiting for a third notification.
+
+**Silent idle is categorically not evidence of forward progress.** The orchestrator MUST NOT infer progress from the absence of a completion message; the artifact (branch, PR, commit) is the only valid evidence of forward motion.
+
+### Relationship to § Throttle-Stall Recovery
+
+§ Throttle-Stall Recovery covers the **mid-task stall**: an implementer has committed or modified files but is stuck on a subsequent step. The trigger is `worktree dirty + no completion` after 30/45/60 min.
+
+This section covers the **zero-artifact stall**: the implementer has produced nothing at all despite sending idle notifications. The trigger is **notification count, not elapsed time**. The two rules are complementary: this section catches the stall earlier (before any artifact exists to assess worktree-dirty state against).
+
+### Severity
+
+- Orchestrator misses a zero-artifact stall because `TaskList` is empty (Part (a) violated): **moderate** — the stall the task list was designed to surface goes unreported.
+- Orchestrator infers "still working" from a second zero-artifact idle notification and takes no action (Part (b) violated): **moderate** — wave-level deadline risk; the P5W2 and P5W3 instances were both narrow misses on shipping the keystone deliverable.
+
+### Provenance
+
+P5W3 retro (2026-06-14) § Proposed Process Change #1 — recurred two consecutive waves. Part (a) (TaskCreate at spawn) was codified via P5W2 retro in `/wave-kickoff` § 9b. Part (b) (zero-artifact threshold) is the P5W3 addition. Both promoted here to charter level so the liveness rule applies across all spawn contexts, not just those initiated via `/wave-kickoff`.
+
 ## Throttle-Stall Recovery — Trigger Thresholds <!-- promotion-target: hook -->
 
 `feedback_throttle_takeover` covers the takeover *mechanic* — when a spawned implementer throttle-stalls mid-task with sound partial work, the orchestrator finishes directly with the implementer's per-commit identity (~5min vs respawn's ~15min). This section encodes the **trigger**: when the orchestrator should detect the stall and invoke that mechanic, rather than discovering it reactively hours later.
