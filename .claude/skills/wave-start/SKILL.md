@@ -116,6 +116,62 @@ for label in "tech-debt" "feature" "bug" "security" "infra" "process"; do
 done
 ```
 
+### 5a. Wave-key per-phase reset (when a phase reuses a wave number)
+
+At phase boundaries, bare `wave_{M}_*` keys from the prior phase's wave M remain in `cross-repo-status.json` under the same names (e.g. `wave_3_final_pr_count`, `wave_3_completed_at`, `wave_3_annunaki_attack_ran_at`). These stale values bleed into the new phase's wave M if not explicitly cleared.
+
+**Detection:** before writing any new active-state keys, check whether `wave_{M}_completed_at` or `wave_{M}_wrapped_up_at` exists in the current file AND `current_phase` in the file differs from the phase `{P}` you are starting:
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+STATUS_FILE="$REPO_ROOT/cross-repo-status.json"
+
+FILE_PHASE=$(python3 -c "import json; d=json.load(open('$STATUS_FILE')); print(d.get('current_phase',''))")
+HAS_PRIOR=$(python3 -c "
+import json; d=json.load(open('$STATUS_FILE'))
+print('yes' if d.get('wave_{M}_completed_at') or d.get('wave_{M}_wrapped_up_at') else 'no')
+")
+
+if [ "$HAS_PRIOR" = "yes" ] && [ "$FILE_PHASE" != "{P}" ]; then
+  echo "Phase reuse detected: wave-{M} previously used in phase $FILE_PHASE; resetting stale keys before starting phase-{P}/wave-{M}."
+fi
+```
+
+**When the condition is true, reset ALL of the following `wave_{M}_*` keys to `null` via `upsert_status_keys.py` — only for keys that exist in the file (skip non-existent keys to avoid inserting `null` noise):**
+
+```bash
+# Keys to reset (enumerate exactly — no glob, to keep the surface auditable):
+RESET_KEYS=(
+  wave_{M}_final_pr_count
+  wave_{M}_changes_requested_cycles
+  wave_{M}_top_concentration_pct
+  wave_{M}_completed_at
+  wave_{M}_wrapped_up_at
+  wave_{M}_kicked_off_at
+  wave_{M}_started_at
+  wave_{M}_scope_reconciled_at
+  wave_{M}_stg_promotion
+  wave_{M}_stg_promotion_url
+  wave_{M}_annunaki_attack_ran_at
+  wave_{M}_memory_audit_ran_at
+)
+
+for KEY in "${RESET_KEYS[@]}"; do
+  EXISTS=$(python3 -c "import json; d=json.load(open('$STATUS_FILE')); print('yes' if '$KEY' in d else 'no')")
+  if [ "$EXISTS" = "yes" ]; then
+    python3 "$REPO_ROOT/.claude/lib/upsert_status_keys.py" "$STATUS_FILE" "$KEY"=null
+    echo "  reset: $KEY"
+  fi
+done
+echo "Wave-key reset complete. Prior-phase values are cleared from the live file; git history preserves them."
+```
+
+This reset runs BEFORE the § 6 PUT-contents write so the active-state keys written in § 6 are the only non-null `wave_{M}_*` values once the step completes. Fold the null assignments into the same PUT-contents payload as § 6 to avoid a separate round-trip: `jq` can del() or set-to-null the stale keys in the same content transformation.
+
+**When the condition is false** (first wave of a phase, or `current_phase` already matches `{P}` because /wave-start is being re-run within the same phase): skip this step silently.
+
+**Why `upsert_status_keys.py` and not raw `jq`:** the file uses mixed compact-inline + pretty-indented style; a naive jq round-trip reformats every compact line, producing a 500+ line cosmetic diff per wave. `upsert_status_keys.py` performs targeted text-level upsert that preserves the existing style (see skills.md § Cross-repo-status.json upsert pattern).
+
 ### 6. Update cross-repo status — PUT-contents on `main`
 
 Set the active-wave fields for this repo in `cross-repo-status.json`. This is a **main-targeting** status write, so use the **`gh api` PUT-contents recipe** — the atomic, no-local-orphan pattern documented in `/wave-kickoff` Step 1a (added P3W6 retro, supersedes local-commit-then-push). Do **not** `git add/commit/push` the file from the local tree: a local commit here re-introduces the orphan / stale-tree hazard this issue (#653) closes, and the local `main` parked in § 2 races the remote after the PUT lands.

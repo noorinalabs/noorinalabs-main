@@ -408,7 +408,7 @@ When composing spawn prompts for implementers, pull the manager's specified revi
 
 **Mechanics:**
 - At spawn (step 9 / 9a), call `TaskCreate` for each implementer: subject `"{repo}#{issue} — {slug}"`, owner = implementer name, plus the reviewer pairing in the description.
-- Mid-wave, `TaskList` is the at-a-glance stall detector: any task still `pending`/`in_progress` with **no branch/PR after a reasonable interval** is a stall — re-prod the implementer (`SendMessage`) or take it over (per `feedback_throttle_takeover`), don't wait for it to surface manually.
+- Mid-wave, `TaskList` is the at-a-glance stall detector: any task still `pending`/`in_progress` with **no branch/PR** is a potential stall. Apply the liveness threshold from charter `agents.md § Agent Liveness Checkpoint, Part (b)`: after **two idle notifications with zero artifact** (no branch, no PR, no commit), auto-flag for takeover — do not wait for a third notification. "Reasonable interval" means two zero-artifact idle notifications, not elapsed time alone.
 - `/wave-wrapup` and `/wave-retro` cross-check the task list against merged PRs; a task with no delivered PR is a scope-drop or substitution to reconcile explicitly (already required by those skills' reconciliation steps — this makes the input ledger reliable).
 
 This is the input-side counterpart to the wrapup scope-drop / implementer-substitution reconciliation: those catch silent drops/swaps at *close*; the task ledger catches a zero-output stall *during* the wave.

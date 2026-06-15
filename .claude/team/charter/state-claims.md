@@ -110,6 +110,31 @@ The reachability discipline distinguishes "discipline violation" from "wave-orch
 
 <!-- Promoted from memory: feedback_refresh_before_acting.md (P3W9 #346 memory audit, 2026-05-10) -->
 
+### Sub-rule: Ledger-artifact reconciliation before status-driven decisions
+
+Before any implementer-status claim — "implementing", "blocked", "done" — drives an orchestrator decision (merge sequencing, issue closure, task reassignment, or takeover), the orchestrator MUST reconcile the claimed status against actual artifacts via `gh api`. The ledger (SendMessage inbox, TaskList status, team-member status reports) lags artifact reality in high-churn waves.
+
+**Required verification before acting on a status claim:**
+
+```bash
+# Branch existence: has the implementer pushed code at all?
+gh api repos/noorinalabs/{repo}/git/refs/heads/{branch} --jq '.object.sha' 2>/dev/null \
+  || echo "branch not found — zero-artifact stall"
+
+# PR existence: is there an open or merged PR for this issue?
+gh pr list --repo noorinalabs/{repo} \
+  --search "in:title #{issue}" --state all \
+  --json number,state,headRefOid,mergedAt
+```
+
+If the ledger says "implementing" but `gh api` finds no branch and no PR, the claimed status is **unverified**. Treat the task as a zero-artifact stall (charter `agents.md § Agent Liveness Checkpoint, Part (b)`) — do NOT make a merge/close/reassign decision based on the unverified ledger claim.
+
+This sub-rule is the **ledger-lag class** of the refresh-before-claim discipline: whereas the other sub-rules guard against stale API responses for artifacts that DO exist, this one guards against missing artifacts the ledger incorrectly implies exist.
+
+**Why:** P5W3 retro § Proposed Process Change #2 surfaced two consecutive waves where implementer status reports diverged from artifact reality: P5W2 ig#1023 reported "implementing" while deploy#454 had already resolved it; P5W3 ig#1038 reported "implementing" while no branch existed. Both required manual artifact checks to unblock the correct orchestrator decision.
+
+**Severity:** Acting on an unverified status claim without artifact check — merge/close/reassign based solely on an inbox report: **moderate** regardless of whether the decision is ultimately correct (the artifact check is cheap; skipping it is habitual rather than cost-justified).
+
 ## Refresh State Before Acting (Mandatory) <!-- promotion-target: skill -->
 
 The § Refresh State Before Claim discipline above governs **assertions** about artifact state. This section extends the same primitive to **actions**: re-check artifact state immediately before taking parallel or competing action, not based on N-minute-old snapshots.
