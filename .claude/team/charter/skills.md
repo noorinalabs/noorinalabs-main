@@ -73,7 +73,7 @@ Each `key=value` argument's VALUE must be a self-contained JSON literal (string 
 ### Current consumers
 
 - `/wave-scope` Step 13 — writes `wave_{M}_scope_reconciled_at`, `wave_{M}_repos_in_scope`, `wave_{M}_meta_issue`, `wave_{M}_scope`, optional `wave_{M}_scope_reconciliation_note`.
-- `/wave-wrapup` Step 10.5 — writes `wave_{M}_final_pr_count`, `wave_{M}_changes_requested_cycles`, `wave_{M}_top_concentration_pct`.
+- `/wave-wrapup` Step 10.5 — writes `wave_{M}_final_pr_count`, `wave_{M}_changes_requested_cycles`, `wave_{M}_top_concentration_pct` via `.claude/lib/wave_status.py counters … --write`, which delegates to this helper (main#688).
 - Future skills writing top-level `wave_{N}_*` keys → MUST use the helper; do NOT reinvent.
 
 ### Promotion provenance
@@ -83,6 +83,39 @@ Memory `feedback_enforcement_hierarchy.md` (hook > skill > charter). Acute fix l
 ### Hook-class enforcement decision
 
 Per #292 item 4 — should a `validate_cross_repo_status_format` PostToolUse hook fire on Edit/Write of `cross-repo-status.json` and block writes that expand line count >N% relative to additions OR reformat compact-inline to pretty? **Decision: DEFER.** Rationale: zero charter-rule violations observed across W6–W9 since the helper landed. The two current consumers (`/wave-scope`, `/wave-wrapup`) both invoke the helper correctly. Per `feedback_enforcement_hierarchy.md`, charter-only-without-violations does NOT require hook promotion; promote-on-first-violation is the established trigger. Re-evaluate if any future skill OR manual edit produces a non-helper-mediated write that expands the file >2x its prior line count.
+
+## Zsh-safe repo iteration in wave skills <!-- promotion-target: hook -->
+
+Skill bash blocks run under **zsh** (this org's shell — memory `feedback_zsh_shell_environment`). Unlike bash/sh, zsh does **NOT** word-split an unquoted **parameter** expansion: `for R in $WAVE_REPOS_IN_SCOPE` (where the variable holds a newline- or space-joined list) collapses the **entire list into ONE iteration**. The collapsed blob is then passed to `gh --repo`, which 404s ("Could not resolve repository") → merged-PR count 0 → division-by-zero in the counter math. This bit a single P5W4 `/wave-wrapup` three times (main#688).
+
+### The rule
+
+To iterate a repo list (or any multi-item parameter) in a skill bash block, use **one** of these — never `for X in $VAR`:
+
+```bash
+# (a) here-string into `while read` — keeps the loop in the CURRENT shell, so
+#     arrays/assoc-arrays mutated inside the loop survive past `done`.
+while IFS= read -r R; do …; done <<< "$WAVE_REPOS_IN_SCOPE"
+
+# (b) process substitution from the deterministic helper — same current-shell
+#     property; preferred when the source is the repos-in-scope list.
+while IFS= read -r R; do …; done < <(python3 "$REPO_ROOT/.claude/lib/wave_status.py" repos {P} {M})
+
+# (c) a quoted array expansion when the list is already a bash/zsh array.
+for repo in "${REPOS[@]}"; do …; done
+```
+
+**Do NOT use `… | while IFS= read -r R` (a pipe) when the loop body mutates a variable used after the loop** — a piped `while` runs in a subshell and the mutation is lost. Use the here-string (a) or process-substitution (b) form, both of which keep the loop in the current shell.
+
+`$(…)` command substitution (`for R in $(jq …)`) *does* split under zsh, so it is not broken — but standardize on `while read` anyway so the form operators copy is the one that is also parameter-safe.
+
+### Deterministic counter helper
+
+`/wave-wrapup` Step 10.5 counter math (final-PR-count / changes-requested-cycles / top-concentration) is computed by `.claude/lib/wave_status.py`, which issues every `gh` call as `subprocess.run([...])` with an explicit arg list (no shell → no word-split anywhere) and reproduces the canonical P5W4 actuals 19 / 4 / 16. New skills computing wave counters MUST use this helper rather than re-rolling bash.
+
+### Promotion provenance
+
+main#688; memory `feedback_zsh_shell_environment` (codified here) and `feedback_enforcement_hierarchy.md` (hook > skill > charter). **Hook-class decision: DEFER** — the three wave skills are swept clean and the counter math is now code, so there are zero current violations; promote a `validate_skill_bash_no_param_for_loop` lint-style gate (grep skill `*.md` bash fences for `for \w+ in \$[A-Z_]`) on first recurrence, per the promote-on-first-violation trigger.
 
 ## Promotion Pipeline Marker Convention <!-- promotion-target: none -->
 

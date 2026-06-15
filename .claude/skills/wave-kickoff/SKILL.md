@@ -125,7 +125,12 @@ BRANCH="deployments/phase-{N}/wave-{M}"
 declare -A BRANCH_SHA  # repo -> resulting SHA (for status-file update + table)
 declare -A BRANCH_STATUS  # repo -> "created" | "exists-clean" | "exists-ancestor" | "exists-drift" | "dry-run-create" | "error:<msg>"
 
-for R in $WAVE_REPOS_IN_SCOPE; do
+# zsh-safe iteration: here-string into `while read` (NOT `for R in
+# $WAVE_REPOS_IN_SCOPE` — zsh does not word-split a parameter, so the whole list
+# would collapse into one bogus repo; main#688). The here-string keeps the loop
+# in the current shell so the BRANCH_SHA / BRANCH_STATUS assoc arrays persist
+# past `done` (a `| while` pipe would lose them to the subshell).
+while IFS= read -r R; do
   MAIN_SHA=$(gh api "repos/noorinalabs/$R/git/refs/heads/main" --jq '.object.sha' 2>/dev/null) || {
     BRANCH_STATUS[$R]="error:cannot-read-main"; continue;
   }
@@ -170,7 +175,7 @@ for R in $WAVE_REPOS_IN_SCOPE; do
       BRANCH_STATUS[$R]="error:$(echo "$CREATE_OUT" | head -1 | tr -d '"' | cut -c1-80)"
     fi
   }
-done
+done <<< "$WAVE_REPOS_IN_SCOPE"
 ```
 
 Print a status table (always, in both dry-run and live mode):
@@ -194,9 +199,9 @@ Print a status table (always, in both dry-run and live mode):
 ```bash
 # Build a JSON object {repo: {sha, status}} and merge under wave_{M}_branches
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-JSON=$(for R in $WAVE_REPOS_IN_SCOPE; do
+JSON=$(while IFS= read -r R; do
   printf '%s\n' "$R ${BRANCH_SHA[$R]:-null} ${BRANCH_STATUS[$R]}"
-done | jq -Rn --arg ts "$TS" --arg branch "$BRANCH" '
+done <<< "$WAVE_REPOS_IN_SCOPE" | jq -Rn --arg ts "$TS" --arg branch "$BRANCH" '
   [inputs | split(" ")] |
   map({(.[0]): {sha: (.[1] | if . == "null" then null else . end), status: .[2]}}) |
   add | {branch: $branch, created_at: $ts, repos: .}')
