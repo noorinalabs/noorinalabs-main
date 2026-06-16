@@ -4,7 +4,7 @@ description: Phase definition, end-state criteria, exit gate, wave plan
 phase: 5
 status: active
 created: 2026-06-14
-last_updated: 2026-06-14
+last_updated: 2026-06-16
 ---
 
 # Phase 5 — real data, usable product
@@ -34,25 +34,26 @@ Owner directive (carried): **data-first** — get real, queryable data visible i
 | **W1** ✅ | **Data spine** | da#146 (keystone — segment isnad chains into narrator entities), da#147 (sect), da#148 (integrity sweep), da#144 (mis adapter). + TD intake. | #1 |
 | **W2** ✅ | **API light-up** | ig#1024 (narrators 500 — fast Optional-fields unblock + real data behind it), ig#1025 (search 422), ig#1026 (subscriptions 404 + facet), ig#1023 (health 404), ig#1021 (auth refresh). TD intake folded in parser fixes main#659/#661 (governed by the #663 invariant). | #2 |
 | **W3** ▶ | **Trustworthy data & search** | Data spine *depth* — segmentation still ~80% raw blobs (da#158 keystone, da#155/#154 NER, da#159 English names, da#157 edge-relation, da#160 parallels) + search/display (ig#1048 grades, ig#1049 semantic, ig#1050 isnad-filter, ig#1051 counts, ig#1032 chains, ig#1031 graph) + auth/session UX (ig#1027 modal, us#166 TTL→60m, deploy#449 carve-out) + alerting/ops (deploy#452 Slack, deploy#453 dead-man's switch, ig#1038/deploy#450/#451 log rotation). + TD intake (4/4). | #1, #2 |
-| **W4** | **Admin surface + profile + streaming** | #603 admin surface (user mgmt create/deactivate-soft-delete, data-management panel, pipeline controls — ig#989/#988/#987), profile prefs (ig#1044/#1013 + us#165 JSONB), /compare UX (ig#1037), streaming repeatable (deploy#443 one-click + ingest#76 metrics, Kafka E2E). Admin-gated Grafana + Loki (forward_auth RBAC). + TD intake. | #3, #5 |
-| **W5** | **Historical timeline & events** | Narrator dates + ṭabaqa layering + chain dating/validation (ig#1039–1043, da#161–166) building on meta #673; historical-events corpus (kingdoms/dynasties/leaders/events). + TD intake. | (new scope; #673) |
-| **W6** | **Production cutover + phase exit** | #602/#666 production cutover (real data + product live on prod, solid auth/session UX), prod data load, phase-exit verification. + TD intake. | #4 |
+| **W4** ✅ | **Admin surface + profile + streaming** | #603 admin surface (user mgmt, data-management panel, pipeline controls — ig#989/#988/#987), profile prefs (ig#1044/#1013 + us#165 JSONB), /compare UX (ig#1037), streaming repeatable (deploy#443 + ingest#76, Kafka E2E), admin-gated Grafana + Loki. Post-wrapup: the semantic re-embedding capstone (ig#1071 — real 384-dim model, verify-recall PASS **on staging**; prod deferred since prod is empty). + TD intake. | #3, #5 |
+| **W5** (FINAL) | **Production cutover + phase exit** | #666/#602 production cutover — **prod data load + `deploy-prod` roll** (prod Neo4j is empty + compose predates the embed service: deploy#470), real data + product live on prod, solid auth/session UX; **landing-page pre-launch polish** (lp#138 fake staff + placeholder sweep); **corpus completeness** — Shia corpus (da#167) + sunni multi-source gap, per owner 2026-06-16; phase-exit verification of all 5 criteria. **Heavy tech-debt — +20% relaxed to a floor** (final wave). | #4 (+ #1/#2/#3/#5 verification) |
 
-**Critical path:** da#158 (data-spine *depth*) is the live keystone — W1's da#146 segmentation runs but ~80% of production narrator nodes are still raw isnad-chain strings, so the API surface and graph explorer read blobs, not entities. W3 makes the data genuinely trustworthy (real entities, English names, grades, working search) before admin (W4) and prod cutover (W6).
+**Critical path:** da#158 (data-spine *depth*) is the live keystone — W1's da#146 segmentation runs but ~80% of production narrator nodes are still raw isnad-chain strings, so the API surface and graph explorer read blobs, not entities. W3 makes the data genuinely trustworthy (real entities, English names, grades, working search) before admin (W4) and prod cutover (W5).
 
-Wave themes are confirmed (not re-chosen) at each `/wave-scope`; scope reconciliation may move issues between waves. **Revision note (2026-06-14):** W3 was originally "Admin + auth UX" but was re-themed to "Trustworthy data & search" after P5W2 revealed criteria #1/#2 are not actually met (data still blobs, search empty). Admin slid to W4; production cutover (criterion #4) to W6; a new W5 absorbs the owner-requested historical-events corpus.
+Wave themes are confirmed (not re-chosen) at each `/wave-scope`; scope reconciliation may move issues between waves. **Revision note (2026-06-14):** W3 was originally "Admin + auth UX" but was re-themed to "Trustworthy data & search" after P5W2 revealed criteria #1/#2 are not actually met (data still blobs, search empty). Admin slid to W4; production cutover (criterion #4) to W6; a new W5 absorbed the owner-requested historical-events corpus. **Revision (2026-06-16, owner): Phase 5 WRAPS AT W5.** Admin completed in W4; **W5 becomes the FINAL wave** — production cutover (pulled forward from W6) + heavy TD cleanup (relaxed cap) + landing-page polish + phase-exit verification. The separate W6 is dropped. **Historical timeline & events** (#673, ig#1039–1043, da#161–166) and the deep data-quality epic are **deferred to Phase 6 (Data Quality / ML)**.
 
 ## Tech-debt intake (standing policy)
 
 Every wave takes its **+20%** TD intake (`/wave-scope` Step 8.5) — `ceil(20% of feature/bug/security scope)`, all available if fewer. The pooled TD ratio is **informational only** (the cumulative-ratio gate was superseded 2026-06-09). P4W7 process follow-ups feed the W2/W3 intake: main#659 (CREATE-path parser), main#661 (validate_labels over-match), main#663 (parser-invariant charter/standards — owner-adopted), main#664 (validate_wave_audit exemption — owner-adopted).
 
-On the **final wave (W6)** the +20% becomes a **floor, not a cap** (owner 2026-06-16): deliberately pull in a large chunk of debt to clean up before phase exit, sized by the owner at `/wave-scope`.
+On the **final wave (W5 — revised 2026-06-16, Phase 5 wraps at W5)** the +20% becomes a **floor, not a cap** (owner 2026-06-16): deliberately pull in a large chunk of debt to clean up before phase exit, sized by the owner at `/wave-scope`.
 
 ## Out of scope for P5 (deferred)
 
 - **Billing/payments** (ig#717/#718) — needs product traction first.
 - **CDN + performance ops**, **developer portal**, **notifications**, **visual-asset sourcing** — optimize after real traffic.
 - **Playwright live-site automation** (main#56/#57), **Hetzner sizing** (main#142) — revisit when prod load is real.
+- **Historical timeline & events** (#673, ig#1039–1043, da#161–166) — moved to **Phase 6** (was the original W5; deferred when P5 wrapped at W5/prod-cutover 2026-06-16).
+- **Deep data-quality epic** (da date-extraction #161–166, integrity da#153, disambiguation da#139, coverage da#98) — the **Phase 6 (Data Quality / ML)** nucleus: NER/entity-resolution accuracy, dedup, embedding quality at scale, a real model served **in prod**, validation/integrity gates.
 
 ## Phase exit gate
 
