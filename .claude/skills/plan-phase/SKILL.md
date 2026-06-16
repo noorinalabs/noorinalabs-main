@@ -125,6 +125,8 @@ Group issues into waves based on:
 
 **Tech-debt intake per wave (+20%).** For each wave, after the feature/bug/security content is set, allocate **tech-debt-only** issues equal to **20% of that content (rounded up)** — add all available if fewer qualify (a shortfall is healthy, never backfilled with invented work). This is the standing intake policy that `/wave-scope` Step 8.5 enforces per-wave at scope-reconciliation time; surface it here at phase-plan time so the wave tables already reflect the TD allocation. Rationale: a cumulative TD-*ratio* gate whipsaws as the backlog shrinks, so steady *intake* replaces ratio-chasing. See [[feedback_td_intake_20pct_per_wave]] and `/wave-scope` Step 8.5.
 
+**Last-wave-of-phase relaxation (owner 2026-06-16).** The +20% is a per-wave *cap* on every wave **except the last wave of the phase**, where it becomes a **floor**: deliberately pull in a large chunk of tech-debt (well beyond 20%) to clean up before phase exit. When laying out the wave table, size the final wave's TD allocation generously — clearing debt *is* the goal there — rather than holding it to the 20% line. The orchestrator/owner sizes the chunk at `/wave-scope` Step 8.5.
+
 Present the proposed structure:
 
 ```
