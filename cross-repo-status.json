@@ -880,7 +880,7 @@
   "wave_active": true,
   "current_wave": "wave-5",
   "wave_5_active": true,
-  "wave_5_kicked_off_at": null,
+  "wave_5_kicked_off_at": "2026-06-16T23:12:45Z",
   "wave_5_final_pr_count": null,
   "wave_5_changes_requested_cycles": null,
   "wave_5_top_concentration_pct": null,
@@ -889,9 +889,9 @@
   "wave_5_wrapped_up_at": null,
   "wave_5_annunaki_attack_ran_at": null,
   "wave_5_memory_audit_ran_at": null,
-  "next_wave": "wave-5",
+  "next_wave": "wave-6",
   "wave_started": "2026-06-12T00:12:20Z",
-  "last_completed_wave": "wave-3",
+  "last_completed_wave": "wave-4",
   "last_completed_at": "2026-06-14T23:05:00Z",
   "phase": "phase-4",
   "wave_3_meta_issue": 675,
@@ -1472,5 +1472,39 @@
   "wave_2_memory_audit_ran_at": "2026-06-14T17:31:47Z",
   "wave_3_started_at": "2026-06-14T18:40:00Z",
   "wave_3_wrapped_up_at": "2026-06-14T23:05:00Z",
-  "wave_5_started_at": "2026-06-16T22:51:14Z"
+  "wave_5_started_at": "2026-06-16T22:51:14Z",
+  "wave_5_branches": {
+    "branch": "deployments/phase-5/wave-5",
+    "repos": {
+      "noorinalabs-main": {
+        "sha": "eddd6f9",
+        "status": "created"
+      },
+      "noorinalabs-isnad-graph": {
+        "sha": "a367ce9",
+        "status": "created"
+      },
+      "noorinalabs-deploy": {
+        "sha": "f2bc9b2",
+        "status": "created"
+      },
+      "noorinalabs-design-system": {
+        "sha": "d4253f3",
+        "status": "created"
+      },
+      "noorinalabs-landing-page": {
+        "sha": "ba8c2e8",
+        "status": "created"
+      },
+      "noorinalabs-data-acquisition": {
+        "sha": "dd3d0cb",
+        "status": "created"
+      },
+      "noorinalabs-isnad-ingest-platform": {
+        "sha": "668123f",
+        "status": "created"
+      }
+    },
+    "created_at": "2026-06-16T23:12:45Z"
+  }
 }
