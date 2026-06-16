@@ -84,7 +84,30 @@ Memory `feedback_enforcement_hierarchy.md` (hook > skill > charter). Acute fix l
 
 Per #292 item 4 — should a `validate_cross_repo_status_format` PostToolUse hook fire on Edit/Write of `cross-repo-status.json` and block writes that expand line count >N% relative to additions OR reformat compact-inline to pretty? **Decision: DEFER.** Rationale: zero charter-rule violations observed across W6–W9 since the helper landed. The two current consumers (`/wave-scope`, `/wave-wrapup`) both invoke the helper correctly. Per `feedback_enforcement_hierarchy.md`, charter-only-without-violations does NOT require hook promotion; promote-on-first-violation is the established trigger. Re-evaluate if any future skill OR manual edit produces a non-helper-mediated write that expands the file >2x its prior line count.
 
+## Codify Determinism on Tooling Fragility <!-- promotion-target: none -->
+
+This is the **when-to-promote-to-code companion** to the enforcement hierarchy (hook > skill > charter > memory; memory `feedback_enforcement_hierarchy`). The hierarchy says a load-bearing *rule* that decays should climb toward a hook. This principle says the same about fragile *mechanics*: the first time a shell or `gh` syntax fragility bites a load-bearing path, the response is deterministic code — **not** a one-off patch and **not** a soft memory.
+
+### The rule
+
+The first time a shell or `gh` syntax fragility breaks a **load-bearing** automation path — a skill step, a counter/metric computation, or a merge/ceremony gate — do **not** just fix the one command and move on, and do **not** rely on a memory to prevent recurrence. Write a deterministic `.claude/lib/` helper (stdlib + `subprocess.run([...])` with explicit arg lists — no `shell=True`, no word-splitting, no string-interpolated command lines), give it tests under `.claude/lib/tests/`, and rewire the skill step to call it in place of the fragile bash. File a `tech-debt(process)` issue and route it through the normal pipeline. The conversion owner is the Standards & Quality Lead; this is the same memory→automation move `/wave-retro` Step 7.7 performs — done the moment the fragility bites, not deferred to the retro.
+
+### Trigger family (codify, don't work around)
+
+- **zsh no-word-split on a parameter expansion** — zsh does NOT split an unquoted `$VAR`, so `for X in $VAR` collapses an entire list into ONE iteration. Use `while IFS= read -r X` (here-string or process-substitution form) or a Python emitter. Worked instance: § Zsh-safe repo iteration in wave skills, immediately below.
+- **`gh api -f body=@file`** posts the literal `@path` string, not the file contents — use `-F`/`--field` (memory `feedback_gh_pr_edit_silent_noop`).
+- **`gh pr merge` in a loop** can fail-open the 2-reviewer gate when the loop variable word-splits or empties — drive merges from explicit, read-back-verified PR numbers, never an unquoted loop variable.
+- **`gh project item-add` / `gh pr edit` silent no-ops** — read back and verify the mutation landed, or route it through a deterministic helper.
+
+### Why a memory is not enough
+
+`feedback_zsh_shell_environment` already existed when zsh `for X in $VAR` word-splitting silently broke `/wave-wrapup` repo-iteration **three times in one wave** (merge loop + counter loop ×2) → `gh` "could not resolve repository" → zero/garbage counters and division-by-zero. The memory did not stop recurrence; the deterministic helper removes the failure mode entirely. Each concrete trigger above is itself promotable to a lint-style gate on **first recurrence** (per the promote-on-first-violation trigger) — e.g. the deferred `validate_skill_bash_no_param_for_loop`.
+
+**Promotion provenance:** Owner-approved 2026-06-16 as a general charter principle, promoting memory `feedback_codify_determinism_on_shell_fragility` (owner directive 2026-06-15) from memory to charter and generalizing the narrow worked instance § Zsh-safe repo iteration in wave skills (main#689). Companion to memory `feedback_enforcement_hierarchy` (hook > skill > charter > memory). Evidence — the pattern bit 3× in P5W4: main#688 (`.claude/lib/wave_status.py`, shipped — deterministic repo/counter helper) and main#690 (`/promotion-audit` hand-rolled CLI driver mis-fired section/skill tiers — same pattern, second instance in one wave). Related memories: `feedback_gh_pr_edit_silent_noop`, `feedback_heredoc_in_git_commit`, `feedback_zsh_shell_environment`.
+
 ## Zsh-safe repo iteration in wave skills <!-- promotion-target: hook -->
+
+This section is the specific **worked instance** of § Codify Determinism on Tooling Fragility above — the zsh-parameter-expansion trigger, codified into `.claude/lib/wave_status.py`.
 
 Skill bash blocks run under **zsh** (this org's shell — memory `feedback_zsh_shell_environment`). Unlike bash/sh, zsh does **NOT** word-split an unquoted **parameter** expansion: `for R in $WAVE_REPOS_IN_SCOPE` (where the variable holds a newline- or space-joined list) collapses the **entire list into ONE iteration**. The collapsed blob is then passed to `gh --repo`, which 404s ("Could not resolve repository") → merged-PR count 0 → division-by-zero in the counter math. This bit a single P5W4 `/wave-wrapup` three times (main#688).
 
