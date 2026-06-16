@@ -46,6 +46,8 @@ Wave themes are confirmed (not re-chosen) at each `/wave-scope`; scope reconcili
 
 Every wave takes its **+20%** TD intake (`/wave-scope` Step 8.5) — `ceil(20% of feature/bug/security scope)`, all available if fewer. The pooled TD ratio is **informational only** (the cumulative-ratio gate was superseded 2026-06-09). P4W7 process follow-ups feed the W2/W3 intake: main#659 (CREATE-path parser), main#661 (validate_labels over-match), main#663 (parser-invariant charter/standards — owner-adopted), main#664 (validate_wave_audit exemption — owner-adopted).
 
+On the **final wave (W6)** the +20% becomes a **floor, not a cap** (owner 2026-06-16): deliberately pull in a large chunk of debt to clean up before phase exit, sized by the owner at `/wave-scope`.
+
 ## Out of scope for P5 (deferred)
 
 - **Billing/payments** (ig#717/#718) — needs product traction first.

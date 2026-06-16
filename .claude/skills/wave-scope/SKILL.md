@@ -264,6 +264,8 @@ If a `MUST_INCLUDES` entry is closed or non-existent, the source memory file is 
 
 After Step 7 has fixed the wave's feature + bug + security content, top it up with **tech-debt-only** issues equal to **20% of that content, rounded up**. If fewer qualifying TD issues exist than the target, add **all** of them — a shortfall here is a *good* signal (debt is genuinely low), never something to backfill with invented work. See [[feedback_td_intake_20pct_per_wave]].
 
+**Last-wave-of-phase relaxation (owner 2026-06-16).** On the **final wave of a phase**, the +20% intake is a **floor, not a cap** — deliberately pull in a large chunk of tech-debt (well beyond 20%) to clean up before phase exit. The per-wave cap that prevents TD from crowding out feature work does **not** apply to a phase's last wave; clearing debt *is* the goal there. The `TARGET` below is the minimum; the orchestrator/owner sizes the actual chunk at scope time (`POOL > TARGET` is no longer a select-`TARGET`-only ceiling on the last wave — surface the whole pool and let the owner take as much as phase-exit warrants).
+
 **1. Compute base + target.** Base = the post-Step-7 **intended** in-scope set that is NOT `tech-debt` and NOT `meta-issue` — the feature/bug/security items the owner just decided to keep. The query below counts items already carrying `$WAVE_LABEL`; some Step-7 keeps / must-includes / carry-forwards are not labeled until Step 10, so **add those not-yet-labeled non-TD keeps to `BASE`** before computing the target (otherwise the intake target undercounts the real scope).
 
 ```bash
@@ -303,7 +305,7 @@ echo "un-scheduled TD pool: $POOL  |  target: $TARGET"
 
 **3. Select + confirm (owner-judgment gate, same as Step 7).**
 - `POOL <= TARGET` → select **all** pool items. Report: `TD intake: <POOL> of <POOL> available — debt backlog below the 20% target (healthy)`.
-- `POOL > TARGET` → surface the top `TARGET` oldest candidates to the owner for confirmation; the owner may swap in higher-priority debt. Final selection = `TARGET` items.
+- `POOL > TARGET` → surface the top `TARGET` oldest candidates to the owner for confirmation; the owner may swap in higher-priority debt. Final selection = `TARGET` items. **On the final wave of a phase, `TARGET` is a floor, not the cap** (see the relaxation note above) — surface the whole pool and let the owner pull in as much debt as phase-exit cleanup warrants.
 
 This is a blocking owner-judgment gate exactly like Step 7 — present, don't auto-apply.
 
