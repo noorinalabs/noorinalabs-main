@@ -1,10 +1,12 @@
 ---
 name: team-reset
-description: Transparent team teardown and recreation — handles unresponsive agents, reports roster changes
+description: Transparent agent reset — shut down unresponsive agents and re-orient the implicit team, reporting roster changes
 args: team_name
 ---
 
-Handle the team teardown/create lifecycle for the `{team_name}` team.
+Handle the agent reset lifecycle for the `{team_name}` team.
+
+> **Harness note (2026-06-16):** the current Claude Code harness has **no `TeamCreate`/`TeamDelete` tools**. The session runs on a **single implicit team** — there is nothing to delete or recreate. "Team reset" in this harness therefore means **shutting down running agents and re-orienting**, not tearing a team config down and rebuilding it. The steps below have been updated accordingly; the old TeamDelete/TeamCreate/config-file steps no longer apply.
 
 ## Instructions
 
@@ -24,54 +26,39 @@ List all active roster members with their roles and status.
 
 ### 2. Send shutdown requests
 
-Send a `shutdown_request` message to ALL active agents:
+Send a `shutdown_request` message via `SendMessage` to ALL agents you spawned this session:
 
 ```json
 {"type": "shutdown_request", "reason": "Team reset initiated"}
 ```
 
-Wait 5 seconds for agents to acknowledge.
+Send one message per agent (structured messages cannot be broadcast). Wait ~5–30 seconds for agents to acknowledge and terminate.
 
-### 3. Force teardown if needed
+### 3. Handle unresponsive agents
 
-If `TeamDelete` fails with "Cannot cleanup team with N active members":
+There is no `TeamDelete` to force in this harness, so a stuck agent cannot be cleared by deleting a team config. If an agent does not acknowledge its shutdown request:
 
-1. Report to user: "Force teardown required — {N} agents unresponsive"
-2. Manually edit the config file to remove stale members:
-   ```bash
-   # Read current config
-   cat ~/.claude/teams/{team_name}/config.json
-   # Keep only team-lead entry, remove all others
-   ```
-3. Retry `TeamDelete`
+1. Report to user: "{N} agent(s) unresponsive: {names}."
+2. Re-send the `shutdown_request` once more.
+3. If it still does not terminate, surface it to the user — a lingering agent is a UI/resource annoyance, not a blocker; spawning fresh agents is unaffected because the team is implicit. Do NOT attempt to edit or delete any `~/.claude/teams/...` config (that mechanism is gone).
 
-### 4. Delete the team
+### 4. Re-orient (no recreate needed)
 
-Call `TeamDelete` for team `{team_name}`. Report success or failure to user.
-
-```
-**Team deleted:** {team_name}
-- Agents terminated: {count}
-- Force removal required: {yes/no}
-```
-
-### 5. Create new team
-
-Read all roster files in `.claude/team/roster/` to build the new roster. Call `TeamCreate` for team `{team_name}`.
+The implicit `{team_name}` team persists for the session — there is nothing to recreate. Re-read the roster files in `.claude/team/roster/` so you have the current roster in context for the next round of spawns.
 
 Report to user:
 
 ```
-**Team created:** {team_name}
+**Implicit team re-oriented:** {team_name}
 | Role | Name | Status |
 |------|------|--------|
 | Manager | Fatima Okonkwo | Active |
 | ... | ... | ... |
 ```
 
-### 6. Highlight roster changes
+### 5. Highlight roster changes
 
-If there are differences between the old and new team (hires, departures, role changes), explicitly report them:
+If there are differences between the prior roster and the current roster files (hires, departures, role changes), explicitly report them:
 
 ```
 **Roster changes:**
@@ -80,29 +67,18 @@ If there are differences between the old and new team (hires, departures, role c
 - ROLE CHANGE: {name} — {old role} → {new role}
 ```
 
-If no changes: "Roster unchanged from previous team."
+If no changes: "Roster unchanged from previous round."
 
-### 7. Ready confirmation
+### 6. Ready confirmation
 
 Confirm the team is ready for work:
 
 ```
-Team `{team_name}` is ready. {N} members active.
-Proceed with agent spawning when ready.
+Team `{team_name}` is ready ({N} roster members). Spawn agents via the Agent tool
+(team_name: {team_name}) when ready — the orchestrator is the sole spawner.
 ```
 
 ## What remains manual
 
-- The orchestrating Claude instance must still spawn individual agents (agents cannot self-spawn)
+- The orchestrating Claude instance must still spawn individual agents via the `Agent` tool (agents cannot self-spawn)
 - Roster file changes (hires/fires) must be committed separately
-- The user may override the roster before TeamCreate if desired
-
-## Emergency override
-
-If the skill fails entirely, the manual fallback is:
-
-```bash
-# Remove stale config
-rm ~/.claude/teams/{team_name}/config.json
-# Recreate via TeamCreate
-```

@@ -116,16 +116,18 @@ Report how many merged worktrees were auto-removed and surface the FLAGGED
 list (locked + unmerged) to the user for a manual call. Do not force-remove a
 FLAGGED worktree without explicit confirmation.
 
-### Step 1 — Team cleanup
+### Step 1 — Team orientation
 
-Stale team state from prior sessions causes "does not exist" / "already leading" errors. Always start fresh:
+> **Harness note (2026-06-16):** the current Claude Code harness has **no `TeamCreate`/`TeamDelete` tools**. The session runs on a **single implicit team** — there is nothing to tear down or create, and nothing to go stale. (Earlier harness versions exposed explicit team tools and this step ran `TeamDelete` then `TeamCreate`; that is now a no-op and has been removed.)
 
-1. Run `TeamDelete` (will succeed even if no team exists)
-2. Run `TeamCreate` with `team_name: "noorinalabs"` and `description: "Org-level coordination team for noorinalabs-main"`
+There is no action to take here beyond confirming the model:
 
-Never try to reuse an existing team. Never skip this step.
+- Spawning is done with the **`Agent` tool**, passing `team_name: "noorinalabs"` for cross-repo wave work. The orchestrator is the sole `Agent`-tool caller.
+- Spawned agents join the single implicit `noorinalabs` team automatically; they cannot themselves spawn.
 
-> **Single-leader constraint:** This `TeamCreate` call establishes THE session team. Additional `TeamCreate` calls in this session will fail with "Already leading team." All managers and implementers spawned during the session — regardless of which repo they work on — join this single `noorinalabs` team. See charter `agents.md` § Single-Leader Constraint for the delegation pattern (team lead is sole `Agent`-tool caller; managers `SendMessage` the team lead to request implementer spawns).
+Report "Single implicit team (no create/delete tools in this harness)" and move on.
+
+> **Single-leader constraint:** All managers and implementers spawned during the session — regardless of which repo they work on — belong to the single `noorinalabs` team. See charter `agents.md` § Single-Leader Constraint for the delegation pattern (orchestrator is the sole `Agent`-tool caller; managers `SendMessage` the orchestrator to request implementer spawns).
 
 ### Step 2 — Handoff check
 
