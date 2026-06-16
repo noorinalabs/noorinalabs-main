@@ -98,10 +98,10 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     ".claude/skills/plan-phase/SKILL.md": {
-      "last_resolved": "ebfb84aa63b418b2026bc04428f584a002aa0b248659e8416d086d663c8e14a4",
-      "last_tracked": "ebfb84aa63b418b2026bc04428f584a002aa0b248659e8416d086d663c8e14a4",
-      "resolved_at": "2026-04-23T23:34:47.340707+00:00",
-      "tracked_at": "2026-04-23T03:27:56.046417+00:00"
+      "last_tracked": "7d0b064bd88b42c68cea295b6e869a917a7e4d55373c8c4de6bb9ccd352538bb",
+      "last_resolved": "7d0b064bd88b42c68cea295b6e869a917a7e4d55373c8c4de6bb9ccd352538bb",
+      "tracked_at": "2026-06-16T18:30:06.081434+00:00",
+      "resolved_at": "2026-06-16T22:10:10.346202+00:00"
     },
     ".claude/skills/session-start/SKILL.md": {
       "last_resolved": "6bbd49b06c4f959c7b8e5ed98b608347b2d7d22990e6b9bd3535946f53140eaf",
@@ -680,10 +680,10 @@
       "resolved_at": "2026-05-08T23:19:16.069020+00:00"
     },
     ".claude/skills/wave-scope/SKILL.md": {
-      "last_resolved": "e5fb212a4dbf3811c68c0796eee339066130852323a140d490af4f5c5b51c21e",
-      "last_tracked": "e5fb212a4dbf3811c68c0796eee339066130852323a140d490af4f5c5b51c21e",
-      "resolved_at": "2026-05-11T01:33:49.621938+00:00",
-      "tracked_at": "2026-05-11T01:33:49.621938+00:00"
+      "last_tracked": "dea260c5d4173d456f295157b474094814b9f1134e0f613eb92783a68c49c06b",
+      "last_resolved": "dea260c5d4173d456f295157b474094814b9f1134e0f613eb92783a68c49c06b",
+      "tracked_at": "2026-06-16T18:30:11.564057+00:00",
+      "resolved_at": "2026-06-16T22:10:10.346202+00:00"
     },
     ".claude/scratch/w8-kickoff-866.md": {
       "last_tracked": "5c407cebd5195c5423e6cbd413d09a53a6e01993d5d273acbfbced0af735d3b8",
@@ -1408,6 +1408,12 @@
       "last_resolved": "dde050ff53b5d74e8110d61750a760140f8606bb2f4d96dae812546a9e3c0fa7",
       "tracked_at": "2026-06-14T16:22:46.413717+00:00",
       "resolved_at": "2026-06-14T17:25:07.569711+00:00"
+    },
+    ".claude/team/phases/phase-5.md": {
+      "last_tracked": "48fc7cee27e051f3b2405e33ebc7ee1a8dcbbba1b8e79fc0d2feb3b421ec634e",
+      "last_resolved": "48fc7cee27e051f3b2405e33ebc7ee1a8dcbbba1b8e79fc0d2feb3b421ec634e",
+      "tracked_at": "2026-06-16T19:44:18.121269+00:00",
+      "resolved_at": "2026-06-16T22:10:10.346202+00:00"
     }
   },
   "last_cleanup": {
