@@ -1528,3 +1528,29 @@ Clean-but-not-frictionless wave: **17 PRs across 5 repos**, all 2× Approved + C
 ### Done Well / Needs Improvement (Phase 5 Wave 3)
 - **Done well:** strongest review culture of the phase — both CR cycles were *real* bugs surfaced by adversarial review (the century-facet leak caught independently by two reviewers), not nits; lowest concentration of the phase (12%, 16 implementers); honest data-spine work (semantic embeddings, isnad-narrator reachability, fail-fast edge-relation guard) with cross-repo contracts cleanly honored (deploy#455 ↔ ig#1063).
 - **Needs improvement (process):** (1) **agent-liveness** — two stall-class events (silent-idle + ledger cross-wire); the P5W2-proposed TaskCreate-per-implementer tracking is still unapplied; (2) **roster drift** — Mei-Lin Chang roster.json/roster.md mismatch needs a consistency check; (3) **cross-repo-status.json wave-key reuse** — `wave_{M}_*` keys carry stale prior-phase values across phases, a correctness hazard hit live this session.
+
+## Phase 5 Wave 4 Trust Updates (2026-06-16) — Trustworthy data & search (capstone)
+
+### Implementers
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Weronika Zielinska | 4 | **5** (▲) | Authored the re-embed mechanism (ADR 0008 / deploy#462) and delivered two clean, prompt follow-on fixes under capstone pressure (#466 timeout+4G mem, #469 90m) — each green-before-push, each unblocking the next step. End-to-end domain ownership of the wave's centerpiece → ceiling. |
+| Linh Pham | 3 | **4** (▲) | Precise root-cause + minimal fix on the embed-image `import src` bug (ig#1094): PYTHONPATH=/app incl. the latent runtime-stage twin, `buildx --check` green, no install creep. Exactly-scoped. |
+| Aino Virtanen | 5 | 5 | main#688/#689 deterministic `wave_status.py` shipped end-to-end (kills the zsh word-split class), live-verified 19/4/16, swept the skill loops + charter note. Maintain at ceiling. |
+| Mateo Salazar | 5 | 5 | 3 clean PRs incl. the embed code (ig#1089). Maintain at ceiling. |
+
+### Reviewers
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Jelani Mwangi | 4 | 4 | ig#1094 infra-lens review + filed ig#1095 (proper package-install follow-up). Clean, hold. |
+| Nurul Hakim | — | 4 | deploy#466/#469 observability-lens reviews; filed deploy#467 catching that a hard timeout-kill aborts before the `.prom` write (no metric emitted). Sharp. |
+| Aisha Idrissi | — | 4 | deploy#466/#469 SRE-lens; the 47.5m/60m margin note drove the 90m safety bump. Forward-looking. |
+
+### Orchestrator (Self-Assessment)
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Orchestrator (Steven via Claude) | 4 | 4 | (hold) Drove the capstone to a verified staging delivery — found+fixed two latent prod-blocking bugs *before* prod (embed-image packaging, ssh timeout), surfaced prod-empty honestly rather than forcing a pointless cutover, and caught the hand-rolled promotion-audit's 24-AUTO mis-fire before emitting. Offset by: the shell/gh fragility recurred 3× before the #688 fix, and the promotion-audit had to be hand-rolled (mis-fired) for lack of a driver. Clean delivery + good judgment, two known process gaps now filed (#688 done, #690 open) → hold 4. |
+
+### Done Well / Needs Improvement (Phase 5 Wave 4)
+- **Done well:** staging-first capstone caught 2 latent bugs before prod and verified real recall; determinism principle codified *and* shipped as code same-session (#688); honest prod-empty surfacing instead of a forced cutover; lowest-friction review culture (TechDebt attestation held, useful follow-ups filed #1095/#467).
+- **Needs improvement (process):** (1) shell/gh fragility cost cycles before #688 landed; (2) `/promotion-audit` lacks a canonical driver → hand-rolled mis-fire (#690); (3) MEMORY.md oversized (38KB); (4) `wave_{M}_*` theme/key cross-phase staleness recurred (main#683 still the durable fix).
