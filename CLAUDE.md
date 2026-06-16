@@ -49,7 +49,7 @@ This is the **org-level coordination team** for `noorinalabs-main`. Each child r
 
 ### Session team architecture
 
-The harness enforces **one team per orchestrator session**. `TeamCreate` fails with "Already leading team" if a team already exists in the session, and spawned agents do NOT have access to the `Agent` tool — only the orchestrating Claude instance can spawn. Together these eliminate the "each repo is its own team, managers spawn implementers per-repo" mental model and enforce a hub-and-spoke pattern: the team lead spawns everyone, and managers request implementer spawns via `SendMessage`.
+The harness provides a **single implicit team per orchestrator session** — there are no `TeamCreate`/`TeamDelete` tools (an earlier harness exposed them and failed a second `TeamCreate` with "Already leading team"; the current one simply has one implicit team). Spawned agents do NOT have access to the `Agent` tool — only the orchestrating Claude instance can spawn, passing `team_name: "noorinalabs"`. Together these eliminate the "each repo is its own team, managers spawn implementers per-repo" mental model and enforce a hub-and-spoke pattern: the team lead spawns everyone, and managers request implementer spawns via `SendMessage`.
 
 **What this means in practice:**
 
@@ -140,7 +140,7 @@ The project maintains a structured knowledge base in `ontology/` that captures d
 The `/session-start` skill executes all 6 steps automatically:
 
 0. **Handoff check** — read `session_handoff.md` from project memory
-1. **Team cleanup** — `TeamDelete` then `TeamCreate` for `noorinalabs` (prevents stale state errors)
+1. **Team orientation** — confirm the single implicit `noorinalabs` team (current harness has no `TeamCreate`/`TeamDelete` tools; spawn via the `Agent` tool)
 2. **Ontology rebuild** — `/ontology-rebuild` to resolve dirty files
 3. **Annunaki check** — `/annunaki` to check for captured errors
 4. **Wave/phase orientation** — read `cross-repo-status.json` and project board

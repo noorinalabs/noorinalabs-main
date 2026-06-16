@@ -98,11 +98,12 @@ def main() -> None:
     lines.append("  or unmerged ones for a manual decision (never auto-removed).")
     lines.append("")
 
-    # Step 1: Team cleanup (unique to noorinalabs-main)
-    lines.append("STEP 1 — TEAM CLEANUP:")
-    lines.append("  Run TeamDelete then TeamCreate for the 'noorinalabs' team.")
-    lines.append("  Stale team state from prior sessions causes errors.")
-    lines.append("  Always start fresh — never reuse an existing team.")
+    # Step 1: Team orientation (unique to noorinalabs-main)
+    lines.append("STEP 1 — TEAM ORIENTATION:")
+    lines.append("  Current harness has NO TeamCreate/TeamDelete tools — the")
+    lines.append("  session runs on a single implicit 'noorinalabs' team.")
+    lines.append("  Nothing to create or tear down. Spawn via the Agent tool")
+    lines.append("  (team_name: noorinalabs); orchestrator is sole spawner.")
     lines.append("")
 
     # Step 2: Session handoff
@@ -163,7 +164,7 @@ def main() -> None:
 
     # Summary directive
     actions = ["Run worktree cleanup (Step 0)"]
-    actions.append("Run team cleanup — TeamDelete + TeamCreate (Step 1)")
+    actions.append("Confirm single implicit team — no create/delete tools (Step 1)")
     if handoff:
         actions.append("Summarize handoff to user (Step 2)")
     if dirty and dirty > 0:

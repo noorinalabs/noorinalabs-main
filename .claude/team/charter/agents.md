@@ -108,18 +108,13 @@ When all PRs for a wave are merged into the deployments branch, the orchestrator
 
 ### Team Teardown Procedure
 
-`TeamDelete` does NOT terminate running agents — it only removes the config. Always follow this procedure:
+> **Harness note (2026-06-16):** the current harness exposes **no `TeamDelete` tool** — the session runs on a single implicit team that is never explicitly deleted. There is no config directory to remove. What remains relevant is **agent lifecycle**: spawned agents keep running until shut down, so you must still wind them down cleanly. The procedure below is the agent-shutdown procedure (the former step 4/5 config-removal steps no longer apply).
 
-1. **Read the team config** to get the full member list:
-   ```bash
-   cat ~/.claude/teams/{team-name}/config.json | python3 -c "import json,sys; [print(m['name']) for m in json.load(sys.stdin).get('members',[]) if m['name']!='team-lead']"
-   ```
+1. **Identify running agents** you spawned this session (their names/IDs from the spawn results).
 2. **Send shutdown requests to every agent** via `SendMessage` with `{"type": "shutdown_request"}`. Send all in parallel (one message per agent — structured messages cannot be broadcast).
 3. **Wait for confirmations** — agents will acknowledge and terminate. Allow ~30 seconds.
-4. **Call `TeamDelete`** — this cleans up the config and directories. If it fails due to active members, edit the config to remove stale entries, then retry.
-5. **Verify cleanup** — confirm `~/.claude/teams/{team-name}/` no longer exists.
 
-**Never skip steps 1-3.** Calling `TeamDelete` without shutting down agents leaves orphan processes that consume resources and confuse the UI.
+**Never skip the shutdown step.** Leaving agents running without shutting them down leaves orphan processes that consume resources and confuse the UI.
 
 Failure to manage agent lifecycle leads to resource exhaustion and duplicate agent confusion. This is a **moderate feedback event** for the orchestrator.
 
@@ -238,17 +233,17 @@ Each repo defines its own `team_name` in its repo charter. For dedicated per-rep
 
 ## Single-Leader Constraint: One Team Per Orchestrator Session <!-- promotion-target: none -->
 
-The harness enforces **one team per orchestrator session** — `TeamCreate` fails with "Already leading team" if a team already exists. Combined with the Agent-tool limitation above, this shapes how waves run:
+The harness provides a **single implicit team per orchestrator session** — there are no `TeamCreate`/`TeamDelete` tools (an earlier harness exposed them and enforced "one team per session" by failing a second `TeamCreate` with "Already leading team"; the current harness simply has one implicit team and nothing to create). Combined with the Agent-tool limitation above, this shapes how waves run:
 
 ### What this means in practice
 
-- **The `Team Names` table above is only operative when you open a session dedicated to one repo.** If a session is opened in `noorinalabs-main` to run a cross-repo wave, `TeamCreate("noorinalabs")` fires at session start and no other team can be created in that session. Agents for deploy, isnad-graph, user-service, landing-page, etc. are all spawned as members of the single `noorinalabs` team.
+- **The `Team Names` table above is only operative when you open a session dedicated to one repo.** When a session is opened in `noorinalabs-main` to run a cross-repo wave, all spawning uses `team_name: "noorinalabs"` and there is only the one implicit team. Agents for deploy, isnad-graph, user-service, landing-page, etc. are all spawned as members of the single `noorinalabs` team.
 - **Cross-repo waves always use `team_name: "noorinalabs"`** for every agent — managers AND implementers — because the single-team constraint makes anything else technically impossible.
 - **Per-repo team names** (`noorinalabs-isnad-graph`, `noorinalabs-deploy`, etc.) only apply when a session is run in isolation in that repo — not the common case for wave-kickoff work orchestrated from `noorinalabs-main`.
 
 ### Delegation mechanics (reinforcement of § Hub-and-Spoke)
 
-1. **Orchestrator** calls `TeamCreate("noorinalabs")` at session start. Spawns managers (Program Director + per-repo managers) as members of this single team.
+1. **Orchestrator** spawns managers (Program Director + per-repo managers) via the `Agent` tool with `team_name: "noorinalabs"` — the single implicit team (no `TeamCreate` call exists in the current harness).
 2. **Managers** do NOT have the Agent tool. When they need implementers, they `SendMessage` the orchestrator (team-lead) with a spawn request: "please spawn {Name} from {repo}/{roster-card} for {issue}, branch {X}, reviewers {Y, Z}."
 3. **Orchestrator spawns implementers** with the context the manager provided PLUS the Ontology Context bake (per `enforce_ontology_context.py` hook — see § Orchestrator checklist below) PLUS the MANDATORY `/ontology-librarian` first-action instruction (per Hook 15 in `hooks.md`).
 4. **Implementers report** back to their assigning manager via `SendMessage`. Cross-manager coordination is in-band (`SendMessage`) plus on-GitHub (meta-issue comments + Cross-Contract PRs).
