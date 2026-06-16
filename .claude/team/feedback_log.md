@@ -3121,3 +3121,38 @@ No new conversions. The wave's promotion-worthy pattern (production-realistic fi
 
 ### Memory-to-automation audit
 No new conversions. 140 memory files; this wave's promotion-worthy patterns are captured as Proposed Changes #1/#2 (process/charter) rather than as standalone memories.
+
+## Retrospective: Phase 5 Wave 4 — Trustworthy data & search (capstone) — 2026-06-16
+
+### Team Performance
+- **Merged to wave branches:** 19 PRs across 4 repos (isnad-graph 12 · deploy 3 · user-service 2 · ingest 2). Counters helper-verified `19 / 4 / 16` (`wave_status.py counters 5 4 --expect 19` exit 0 — no drift; first retro use of the main#688 deterministic helper).
+- **Wave→main:** 4/4 merged + retained (ig/us/deploy/ingest).
+- **Post-wrapup delivery (to main):** the semantic-search capstone arc + determinism work — main#688/#689 (`wave_status.py`), ig#1093/#1094 (embed-image `import src` fix), deploy#465/#466 + #468/#469 (ssh `command_timeout` 10m→90m + embed mem 4G). All 2-reviewed, green, no force.
+- **Capstone (#1071):** real 384-dim multilingual model re-embedded the **staging** corpus (33,958/34,028 hadiths) via the repeatable `reembed-corpus.yml` mechanism; **verify-recall PASS** (patience 0.50, prayer 0.77). Closed delivered-on-staging.
+- **CI health:** clean; 4 ChangesRequested cycles, all on the `TechDebt:` attestation (ig#1085, ingest#88) — process rigor, not defects.
+
+### Per-Engineer Highlights
+- **Weronika Zielinska** — authored the re-embed mechanism (ADR 0008, deploy#462) + two clean, prompt follow-on fixes under capstone pressure (#466 timeout+mem, #469 90m). Domain ownership end-to-end. **Severity: none (strong).**
+- **Linh Pham** — diagnosed + fixed the embed-image `import src` latent bug (ig#1094) precisely (PYTHONPATH=/app, incl. the runtime-stage twin), `buildx --check` green-before-push. **none (strong).**
+- **Aino Virtanen** — shipped the determinism helper main#688/#689 end-to-end (kills the zsh word-split class structurally), live-verified 19/4/16, swept the skill loops. **none (ceiling).**
+- **Mateo Salazar** — 3 clean PRs incl. the embed code (ig#1089). **none.**
+- **Reviewers** — strongest review culture again: Jelani filed ig#1095 (proper package-install follow-up), Nurul filed deploy#467 (reembed staleness alert — caught that a timeout-kill aborts before the `.prom` write), Aisha's 47.5m/60m margin note drove the 90m bump. Wanjiku/Santiago cleanly cleared main#689.
+- 14 distinct wave authors; remainder single clean PRs.
+
+### Top 3 Going Well
+1. **Capstone delivered real semantic search on staging via a repeatable mechanism — and caught 2 latent bugs before prod.** The owner-asked GH-Action/IaC design (not one-off SSH) found + fixed an embed-image packaging defect (masked on the api image by uvicorn's cwd insertion) and an SSH timeout, *then* passed recall. Exactly what staging-first is for.
+2. **Determinism principle codified AND shipped as code same-session.** The recurring zsh/gh fragility → main#688 `wave_status.py` (deterministic, `--expect` gate) + charter § zsh-safe iteration. Soft memory → enforced code, the enforcement-hierarchy move done at the moment it bit.
+3. **Low concentration + rigorous review culture.** 16% top concentration, 14 authors; the `TechDebt:` attestation gate held firm (4 CR cycles were all attestation rigor).
+
+### Top 3 Pain Points
+1. **Shell/gh fragility bit the wrapup 3× before being fixed** (zsh word-split → garbage counters/div-by-zero). Now structurally fixed (main#688), but it cost real cycles mid-wave.
+2. **`/promotion-audit` has no canonical driver** — hand-rolling the helper-call sequence at retro mis-fired **24 spurious AUTO** on the section/skill tiers (memory tier correctly 0). Caught before emitting; filed main#690. Same determinism gap as #688.
+3. **Prod is empty + MEMORY.md is oversized.** Prod Neo4j has 0 nodes — semantic search (and all data) is staging-only; prod cutover is a large untouched workstream (deploy#470). Separately, MEMORY.md is 38.0KB vs the ~24.4KB limit — index entries need trimming.
+
+### Process Changes (proposed)
+1. **Build the `/promotion-audit` canonical driver** (main#690) — `run.py {wave}` with a steady-state test; SKILL.md invokes it instead of prose. Eliminates per-retro hand-rolling.
+2. **Trim MEMORY.md index** — entries exceed ~200 chars; move detail into topic files (the file's own warning).
+3. **Theme-key staleness** — `wave_4_scope.theme` still reads the stale P4W4 value ("Admin surface + profile + streaming") via the known `wave_{M}_*` cross-phase collision (main#683). Recurs every same-numbered cross-phase wave; the deterministic-key fix remains the durable answer.
+
+### Proposed Charter Change
+- **Promote the determinism-codification reflex to a charter principle.** It currently lives as memory `feedback_codify_determinism_on_shell_fragility` + the narrow `charter/skills.md § zsh-safe iteration`. Broaden to a general rule under the enforcement hierarchy: *the first time a shell/gh syntax fragility bites a load-bearing path, write a deterministic `.claude/lib` helper, not a workaround.* (Rationale: bit 3× this wave; the targeted fix (#688) and the audit-driver gap (#690) are the same pattern.)
