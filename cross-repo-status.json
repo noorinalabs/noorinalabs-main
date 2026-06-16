@@ -161,22 +161,323 @@
   "wave_6_scope_reconciled_at": "2026-06-13T18:34:25Z",
   "wave_6_scope_reconciliation_note": "Fresh wave, 0 label drift. Spine from main#651; deploy#440 + ig#1018 filed at scope. TD intake 2/2 met by da#120/da#133 prereqs. Slate null — filled at /wave-kickoff Step 0.4.",
   "wave_5_scope": {
-    "theme": "Production cutover — real data live on prod (+ landing-page polish + heavy tech-debt, last-wave relaxed ratio)",
-    "reset_at": "2026-06-16",
-    "note": "Reset from stale P4W5 value (cross-phase wave_5_* collision, main#683). P5W5 owner-themed prod-cutover 2026-06-16.",
-    "directives": [
-      "prod cutover focused (criterion #4 / main#666) — get real data live on prod",
-      "pull in landing-page tickets (e.g. fake staff members still present)",
-      "heavy tech-debt: EXCEED the +20% intake — last wave of a phase has the TD ratio relaxed (standing policy, owner 2026-06-16)",
-      "precede scope with a cross-repo open-issue census (all repos incl. off-board) + disposition"
-    ]
+    "theme": "Production cutover — real data live on prod (+ full-corpus expansion, landing-page pre-launch polish, heavy relaxed-floor tech-debt). FINAL wave of Phase 5.",
+    "sequence": "expand corpus on staging (sunni multi-source + shia al-Kafi + itqan) -> validate -> prod data load + deploy-prod roll -> full-corpus cutover. Owner 2026-06-16.",
+    "tier_1_prod_cutover": [
+      {
+        "id": "noorinalabs-deploy#470",
+        "ref": "deploy#470",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-deploy#467",
+        "ref": "deploy#467",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "feature"
+      }
+    ],
+    "tier_2_corpus": [
+      {
+        "id": "noorinalabs-data-acquisition#167",
+        "ref": "da#167",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#174",
+        "ref": "da#174",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#175",
+        "ref": "da#175",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#176",
+        "ref": "da#176",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#177",
+        "ref": "da#177",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "feature"
+      }
+    ],
+    "tier_2_landing": [
+      {
+        "id": "noorinalabs-landing-page#138",
+        "ref": "lp#138",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "bug"
+      },
+      {
+        "id": "noorinalabs-landing-page#139",
+        "ref": "lp#139",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-landing-page#37",
+        "ref": "lp#37",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-landing-page#116",
+        "ref": "lp#116",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-design-system#110",
+        "ref": "ds#110",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "feature"
+      }
+    ],
+    "tier_3_tech_debt": [
+      {
+        "id": "noorinalabs-data-acquisition#172",
+        "ref": "da#172",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#434",
+        "ref": "deploy#434",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#442",
+        "ref": "deploy#442",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-design-system#108",
+        "ref": "ds#108",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-design-system#109",
+        "ref": "ds#109",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-design-system#115",
+        "ref": "ds#115",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#975",
+        "ref": "ig#975",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#993",
+        "ref": "ig#993",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1034",
+        "ref": "ig#1034",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1035",
+        "ref": "ig#1035",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1054",
+        "ref": "ig#1054",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1087",
+        "ref": "ig#1087",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1095",
+        "ref": "ig#1095",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#642",
+        "ref": "main#642",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#663",
+        "ref": "main#663",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#664",
+        "ref": "main#664",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#671",
+        "ref": "main#671",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#683",
+        "ref": "main#683",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#684",
+        "ref": "main#684",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#686",
+        "ref": "main#686",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#687",
+        "ref": "main#687",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#690",
+        "ref": "main#690",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-ingest-platform#81",
+        "ref": "ingest#81",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      }
+    ],
+    "deliberately_not_in_w5": [
+      "da#136 (bihar source_id prereq) -> Phase 6",
+      "da#139 (geographic disambiguation) -> Phase 6 data-quality",
+      "da#178 + da#161-166 (Bihar crawl + date-extraction epic) -> Phase 6",
+      "ig#706 / ig#712 / lp#35 (CDN / Core Web Vitals / asset caching) -> post-traffic ops, unscoped"
+    ],
+    "counts": {
+      "total": 35,
+      "prod_cutover": 2,
+      "corpus": 5,
+      "landing_design": 5,
+      "td_intake": 23,
+      "td_pool": 25,
+      "td_base_feature_bug": 10,
+      "td_floor_20pct": 2,
+      "td_relaxed_floor_final_wave": true
+    }
   },
-  "wave_5_scope_reconciled_at": "2026-06-13T14:40:00Z",
+  "wave_5_scope_reconciled_at": "2026-06-16T21:45:09Z",
   "wave_5_repos_in_scope": [
     "noorinalabs-main",
     "noorinalabs-isnad-graph",
     "noorinalabs-deploy",
-    "noorinalabs-design-system"
+    "noorinalabs-design-system",
+    "noorinalabs-landing-page",
+    "noorinalabs-data-acquisition",
+    "noorinalabs-isnad-ingest-platform"
   ],
   "wave_5_meta_issue": "noorinalabs-main#692",
   "wave_4_carry_forward": null,
