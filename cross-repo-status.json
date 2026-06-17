@@ -221,6 +221,14 @@
         "reviewer": "Kavitha Sundaramurthy",
         "reviewer_2": "Oyunbileg Batbayar",
         "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#182",
+        "ref": "da#182",
+        "implementer": "Jean-Claude Habimana",
+        "reviewer": "Kwesi Boateng",
+        "reviewer_2": "Kavitha Sundaramurthy",
+        "priority": "feature"
       }
     ],
     "tier_2_landing": [
@@ -490,9 +498,9 @@
       "ig#706 / ig#712 / lp#35 (CDN / Core Web Vitals / asset caching) -> post-traffic ops, unscoped"
     ],
     "counts": {
-      "total": 39,
+      "total": 40,
       "prod_cutover": 2,
-      "corpus": 5,
+      "corpus": 6,
       "landing_design": 5,
       "td_intake": 27,
       "td_pool": 25,
@@ -510,7 +518,10 @@
           "ingest#96",
           "us#175"
         ]
-      }
+      },
+      "split_da175_four_books": [
+        "da#182"
+      ]
     }
   },
   "wave_5_scope_reconciled_at": "2026-06-16T21:45:09Z",
