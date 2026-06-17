@@ -9,7 +9,7 @@
 # local pre-commit and in CI.
 #
 # Stage split:
-#   pre-commit (fast, every commit) — ruff-format, ruff-lint.
+#   pre-commit (fast, every commit) — ruff-format, ruff-lint, actionlint, cspell.
 #   pre-push   (heavier, every push) — mypy typecheck, pytest suite. These run
 #     the whole hooks+lib surface, so they're push-time not commit-time to keep
 #     the commit loop snappy while still catching everything before it leaves
@@ -56,6 +56,28 @@ repos:
     hooks:
       - id: actionlint
         name: actionlint
+
+  # cspell mirrors the `Spellcheck (cspell)` CI job in .github/workflows/docs.yml
+  # (the sync-drift gate now classifies the `cspell` kind — #684 — so a
+  # CI-enforced spell gate not mirrored here turns the gate red, same contract as
+  # actionlint above). New domain vocabulary then fails `pre-commit run` locally
+  # instead of only surfacing as a CI red after push (the P5W4 reds: ig#1080
+  # "Aqidah", deploy#460 "Webauth"). Pinned to v8.4.0 of cspell-cli to match the
+  # exact cspell the `streetsidesoftware/cspell-action@…v8.4.0` CI step bundles —
+  # same engine + dictionaries on both sides. `language: node`, so pre-commit
+  # provisions its own node/cspell env (no system cspell required).
+  #
+  # `files` is the regex equivalent of the CI action's authored-prose glob set
+  # (charter, skills, ontology, root docs); `--config .cspell.json` reuses the
+  # same dictionaries + ignore rules CI loads, so a word that passes locally
+  # passes in CI and vice-versa.
+  - repo: https://github.com/streetsidesoftware/cspell-cli
+    rev: v8.4.0
+    hooks:
+      - id: cspell
+        name: cspell
+        args: ["--no-must-find-files", "--no-progress", "--no-summary", "--config", ".cspell.json"]
+        files: ^(\.claude/team/charter/.*\.md|\.claude/skills/.*\.md|ontology/.*\.md|CLAUDE\.md|ONBOARDING\.md|docs/.*\.md)$
 
   # Heavier checks run at pre-push (mirror CI's mypy + pytest jobs). Running as
   # `local`/`system` hooks so we use the system tools and don't drift from
