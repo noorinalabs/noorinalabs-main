@@ -244,5 +244,405 @@ class CarryForwardDetection(unittest.TestCase):
         self.assertFalse(hook._has_carry_forward("count: #123 -> 456"))
 
 
+class WaveBranchDerivation(unittest.TestCase):
+    """Coverage on _read_current_wave_branch (#664 exemption target)."""
+
+    def _write_status(self, payload: dict) -> Path:
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8")
+        json.dump(payload, tmp)
+        tmp.close()
+        return Path(tmp.name)
+
+    def test_phase5_wave5_derives_branch(self) -> None:
+        path = self._write_status(
+            {"wave_active": True, "current_wave": "wave-5", "phase": "phase-5"}
+        )
+        try:
+            with mock.patch.object(hook, "_STATUS_PATH", path):
+                self.assertEqual(hook._read_current_wave_branch(), "deployments/phase-5/wave-5")
+        finally:
+            path.unlink()
+
+    def test_inactive_wave_returns_none(self) -> None:
+        path = self._write_status(
+            {"wave_active": False, "current_wave": "wave-5", "phase": "phase-5"}
+        )
+        try:
+            with mock.patch.object(hook, "_STATUS_PATH", path):
+                self.assertIsNone(hook._read_current_wave_branch())
+        finally:
+            path.unlink()
+
+    def test_missing_file_returns_none(self) -> None:
+        with mock.patch.object(hook, "_STATUS_PATH", Path("/tmp/nope-664.json")):
+            self.assertIsNone(hook._read_current_wave_branch())
+
+    def test_label_and_branch_share_phase_wave(self) -> None:
+        """Label and branch must derive from the SAME phase/wave (no drift)."""
+        path = self._write_status(
+            {"wave_active": True, "current_wave": "wave-12", "phase": "phase-3"}
+        )
+        try:
+            with mock.patch.object(hook, "_STATUS_PATH", path):
+                self.assertEqual(hook._read_current_wave_label(), "p3-wave-12")
+                self.assertEqual(hook._read_current_wave_branch(), "deployments/phase-3/wave-12")
+        finally:
+            path.unlink()
+
+
+class ChecksGreen(unittest.TestCase):
+    """Coverage on _checks_green — the green-CI half of merge-ready (#664)."""
+
+    def test_empty_rollup_is_green(self) -> None:
+        """No checks configured → green (linkage + base guards carry safety)."""
+        self.assertTrue(hook._checks_green([]))
+        self.assertTrue(hook._checks_green(None))
+
+    def test_all_success_checkruns_green(self) -> None:
+        rollup = [
+            {"status": "COMPLETED", "conclusion": "SUCCESS"},
+            {"status": "COMPLETED", "conclusion": "SKIPPED"},
+            {"status": "COMPLETED", "conclusion": "NEUTRAL"},
+        ]
+        self.assertTrue(hook._checks_green(rollup))
+
+    def test_failing_checkrun_not_green(self) -> None:
+        rollup = [
+            {"status": "COMPLETED", "conclusion": "SUCCESS"},
+            {"status": "COMPLETED", "conclusion": "FAILURE"},
+        ]
+        self.assertFalse(hook._checks_green(rollup))
+
+    def test_pending_checkrun_not_green(self) -> None:
+        """NEG: an in-progress check is NOT green (conservative — no false-exempt)."""
+        rollup = [{"status": "IN_PROGRESS", "conclusion": ""}]
+        self.assertFalse(hook._checks_green(rollup))
+
+    def test_statuscontext_success_green(self) -> None:
+        self.assertTrue(hook._checks_green([{"state": "SUCCESS"}]))
+
+    def test_statuscontext_pending_not_green(self) -> None:
+        self.assertFalse(hook._checks_green([{"state": "PENDING"}]))
+
+    def test_statuscontext_failure_not_green(self) -> None:
+        self.assertFalse(hook._checks_green([{"state": "ERROR"}]))
+
+    def test_unrecognized_shape_not_green(self) -> None:
+        """NEG: a shape with neither conclusion/status nor state → not green."""
+        self.assertFalse(hook._checks_green([{"weird": "value"}]))
+
+    def test_non_dict_element_not_green(self) -> None:
+        self.assertFalse(hook._checks_green(["not-a-dict"]))
+
+
+class PrIsMergeReady(unittest.TestCase):
+    """Coverage on _pr_is_merge_ready — the false-exempt guard (#664 acc. #3)."""
+
+    _WAVE = "deployments/phase-5/wave-5"
+
+    def _pr(self, **overrides) -> dict:
+        pr = {
+            "number": 700,
+            "isDraft": False,
+            "state": "OPEN",
+            "baseRefName": self._WAVE,
+            "mergeable": "MERGEABLE",
+            "statusCheckRollup": [{"status": "COMPLETED", "conclusion": "SUCCESS"}],
+        }
+        pr.update(overrides)
+        return pr
+
+    def test_ready_pr_is_ready(self) -> None:
+        self.assertTrue(hook._pr_is_merge_ready(self._pr(), self._WAVE))
+
+    def test_draft_not_ready(self) -> None:
+        self.assertFalse(hook._pr_is_merge_ready(self._pr(isDraft=True), self._WAVE))
+
+    def test_wrong_base_not_ready(self) -> None:
+        """NEG: a PR into main (not the wave branch) must NOT exempt — acc. #3."""
+        self.assertFalse(hook._pr_is_merge_ready(self._pr(baseRefName="main"), self._WAVE))
+
+    def test_conflicting_not_ready(self) -> None:
+        self.assertFalse(hook._pr_is_merge_ready(self._pr(mergeable="CONFLICTING"), self._WAVE))
+
+    def test_unknown_mergeable_not_ready(self) -> None:
+        """NEG: UNKNOWN (GitHub still computing) is conservatively not-ready."""
+        self.assertFalse(hook._pr_is_merge_ready(self._pr(mergeable="UNKNOWN"), self._WAVE))
+
+    def test_red_checks_not_ready(self) -> None:
+        self.assertFalse(
+            hook._pr_is_merge_ready(
+                self._pr(statusCheckRollup=[{"status": "COMPLETED", "conclusion": "FAILURE"}]),
+                self._WAVE,
+            )
+        )
+
+    def test_closed_state_not_ready(self) -> None:
+        self.assertFalse(hook._pr_is_merge_ready(self._pr(state="MERGED"), self._WAVE))
+
+
+class CountOpenWithExemption(unittest.TestCase):
+    """Coverage on _count_open_for_repo merge-ready-PR exemption (#664)."""
+
+    def test_no_open_issues_returns_zero(self) -> None:
+        with mock.patch.object(hook, "_open_issue_numbers_for_repo", return_value=[]):
+            self.assertEqual(
+                hook._count_open_for_repo(
+                    "noorinalabs-main", "p5-wave-5", "deployments/phase-5/wave-5"
+                ),
+                0,
+            )
+
+    def test_issue_list_failure_returns_none(self) -> None:
+        """NEG: issue-list subprocess failure → None (caller fails open)."""
+        with mock.patch.object(hook, "_open_issue_numbers_for_repo", return_value=None):
+            self.assertIsNone(
+                hook._count_open_for_repo(
+                    "noorinalabs-main", "p5-wave-5", "deployments/phase-5/wave-5"
+                )
+            )
+
+    def test_no_wave_branch_counts_all(self) -> None:
+        """NEG: branch underivable → no exemption applied, every issue counts."""
+        with mock.patch.object(hook, "_open_issue_numbers_for_repo", return_value=[1, 2, 3]):
+            self.assertEqual(hook._count_open_for_repo("noorinalabs-main", "p5-wave-5", None), 3)
+
+    def test_exempt_issues_subtracted(self) -> None:
+        """POS: issues with a merge-ready wave-branch PR are subtracted."""
+        with (
+            mock.patch.object(hook, "_open_issue_numbers_for_repo", return_value=[10, 11, 12]),
+            mock.patch.object(hook, "_mergeready_exempt_issues", return_value={11, 12}),
+        ):
+            self.assertEqual(
+                hook._count_open_for_repo(
+                    "noorinalabs-main", "p5-wave-5", "deployments/phase-5/wave-5"
+                ),
+                1,
+            )
+
+    def test_all_exempt_returns_zero(self) -> None:
+        """POS: every open issue exempt → 0 (the wrapup chicken-and-egg fix)."""
+        with (
+            mock.patch.object(hook, "_open_issue_numbers_for_repo", return_value=[10, 11]),
+            mock.patch.object(hook, "_mergeready_exempt_issues", return_value={10, 11}),
+        ):
+            self.assertEqual(
+                hook._count_open_for_repo(
+                    "noorinalabs-main", "p5-wave-5", "deployments/phase-5/wave-5"
+                ),
+                0,
+            )
+
+    def test_exempt_set_failure_counts_all(self) -> None:
+        """NEG: PR-list failure → empty exempt set → all issues count (fail strict)."""
+        with (
+            mock.patch.object(hook, "_open_issue_numbers_for_repo", return_value=[10, 11]),
+            mock.patch.object(hook, "_mergeready_exempt_issues", return_value=set()),
+        ):
+            self.assertEqual(
+                hook._count_open_for_repo(
+                    "noorinalabs-main", "p5-wave-5", "deployments/phase-5/wave-5"
+                ),
+                2,
+            )
+
+
+class ClosingRefsInText(unittest.TestCase):
+    """Coverage on _closing_refs_in_text — PR-body/title linkage parse (#664).
+
+    Linkage is parsed from body/title because GitHub's structured
+    closingIssuesReferences is always empty for wave-branch-based PRs (it only
+    populates for default-branch PRs).
+    """
+
+    def test_closes_matches(self) -> None:
+        self.assertEqual(hook._closing_refs_in_text("Closes #664."), {664})
+
+    def test_keyword_conjugations_match(self) -> None:
+        for text in (
+            "close #1",
+            "closed #1",
+            "Fixes #1",
+            "fix #1",
+            "fixed #1",
+            "Resolves #1",
+            "resolved #1",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(hook._closing_refs_in_text(text), {1})
+
+    def test_colon_separator_matches(self) -> None:
+        self.assertEqual(hook._closing_refs_in_text("Closes: #5"), {5})
+
+    def test_multiple_refs_collected(self) -> None:
+        text = "Closes #1\nbody\nFixes #2 and resolves #3"
+        self.assertEqual(hook._closing_refs_in_text(text), {1, 2, 3})
+
+    def test_bare_mention_does_not_match(self) -> None:
+        """NEG: a passing '#664' mention without a keyword must NOT exempt (acc. #3)."""
+        self.assertEqual(hook._closing_refs_in_text("see #664 for context"), set())
+
+    def test_cross_repo_ref_not_matched(self) -> None:
+        """NEG: 'Closes octo/repo#5' is a different repo's issue — not local."""
+        self.assertEqual(hook._closing_refs_in_text("Closes octo/repo#5"), set())
+
+    def test_prefix_word_not_matched(self) -> None:
+        """NEG: 'prefix #5' must not match the 'fix' substring."""
+        self.assertEqual(hook._closing_refs_in_text("prefix #5"), set())
+
+    def test_no_separator_not_matched(self) -> None:
+        """NEG: GitHub requires whitespace/colon; 'Closes#5' does not link."""
+        self.assertEqual(hook._closing_refs_in_text("Closes#5"), set())
+
+    def test_empty_text(self) -> None:
+        self.assertEqual(hook._closing_refs_in_text(""), set())
+
+
+class MergereadyExemptIssuesSubprocess(unittest.TestCase):
+    """Coverage on _mergeready_exempt_issues gh shell-out + body-linkage parse."""
+
+    _WAVE = "deployments/phase-5/wave-5"
+
+    def _completed(self, stdout: str, returncode: int = 0):
+        m = mock.Mock()
+        m.stdout = stdout
+        m.returncode = returncode
+        return m
+
+    def _ready_pr(self, number: int, body: str = "", title: str = "") -> dict:
+        return {
+            "number": number,
+            "isDraft": False,
+            "state": "OPEN",
+            "baseRefName": self._WAVE,
+            "mergeable": "MERGEABLE",
+            "statusCheckRollup": [{"status": "COMPLETED", "conclusion": "SUCCESS"}],
+            "body": body,
+            "title": title,
+        }
+
+    def test_collects_declared_closes_of_ready_prs(self) -> None:
+        """POS: a ready PR's body closing-keyword refs become the exempt set."""
+        prs = json.dumps([self._ready_pr(700, body="Fix.\n\nCloses #42\nFixes #43")])
+        with mock.patch.object(hook.subprocess, "run", return_value=self._completed(prs)):
+            result = hook._mergeready_exempt_issues("noorinalabs-main", self._WAVE)
+        self.assertEqual(result, {42, 43})
+
+    def test_title_ref_also_collected(self) -> None:
+        """POS: a closing keyword in the title also links."""
+        prs = json.dumps([self._ready_pr(700, body="no refs", title="thing (resolves #44)")])
+        with mock.patch.object(hook.subprocess, "run", return_value=self._completed(prs)):
+            result = hook._mergeready_exempt_issues("noorinalabs-main", self._WAVE)
+        self.assertEqual(result, {44})
+
+    def test_not_ready_pr_links_ignored(self) -> None:
+        """NEG: a draft PR's closing refs never become exempt."""
+        draft = self._ready_pr(701, body="Closes #50")
+        draft["isDraft"] = True
+        prs = json.dumps([draft])
+        with mock.patch.object(hook.subprocess, "run", return_value=self._completed(prs)):
+            result = hook._mergeready_exempt_issues("noorinalabs-main", self._WAVE)
+        self.assertEqual(result, set())
+
+    def test_bare_mention_in_ready_pr_not_exempt(self) -> None:
+        """NEG: a ready PR that only *mentions* #50 (no keyword) does not exempt it."""
+        prs = json.dumps([self._ready_pr(700, body="related to #50 but does other work")])
+        with mock.patch.object(hook.subprocess, "run", return_value=self._completed(prs)):
+            result = hook._mergeready_exempt_issues("noorinalabs-main", self._WAVE)
+        self.assertEqual(result, set())
+
+    def test_pr_list_failure_returns_empty_set(self) -> None:
+        """NEG: gh pr list nonzero exit → empty set (fail strict, no false-exempt)."""
+        with mock.patch.object(
+            hook.subprocess, "run", return_value=self._completed("", returncode=1)
+        ):
+            self.assertEqual(hook._mergeready_exempt_issues("noorinalabs-main", self._WAVE), set())
+
+    def test_pr_list_filenotfound_returns_empty_set(self) -> None:
+        with mock.patch.object(hook.subprocess, "run", side_effect=FileNotFoundError):
+            self.assertEqual(hook._mergeready_exempt_issues("noorinalabs-main", self._WAVE), set())
+
+    def test_pr_list_malformed_json_returns_empty_set(self) -> None:
+        with mock.patch.object(hook.subprocess, "run", return_value=self._completed("not json")):
+            self.assertEqual(hook._mergeready_exempt_issues("noorinalabs-main", self._WAVE), set())
+
+
+class OpenIssueNumbersSubprocess(unittest.TestCase):
+    """Coverage on _open_issue_numbers_for_repo gh shell-out."""
+
+    def _completed(self, stdout: str, returncode: int = 0):
+        m = mock.Mock()
+        m.stdout = stdout
+        m.returncode = returncode
+        return m
+
+    def test_parses_numbers(self) -> None:
+        payload = json.dumps([{"number": 1}, {"number": 2}, {"number": 3}])
+        with mock.patch.object(hook.subprocess, "run", return_value=self._completed(payload)):
+            self.assertEqual(
+                hook._open_issue_numbers_for_repo("noorinalabs-main", "p5-wave-5"),
+                [1, 2, 3],
+            )
+
+    def test_empty_output_is_empty_list(self) -> None:
+        with mock.patch.object(hook.subprocess, "run", return_value=self._completed("")):
+            self.assertEqual(hook._open_issue_numbers_for_repo("noorinalabs-main", "p5-wave-5"), [])
+
+    def test_failure_returns_none(self) -> None:
+        with mock.patch.object(
+            hook.subprocess, "run", return_value=self._completed("", returncode=1)
+        ):
+            self.assertIsNone(hook._open_issue_numbers_for_repo("noorinalabs-main", "p5-wave-5"))
+
+    def test_malformed_json_returns_none(self) -> None:
+        with mock.patch.object(hook.subprocess, "run", return_value=self._completed("nope")):
+            self.assertIsNone(hook._open_issue_numbers_for_repo("noorinalabs-main", "p5-wave-5"))
+
+
+class CheckEndToEndExemption(unittest.TestCase):
+    """check() integration: a fully-exempt wave allows /wave-wrapup (#664)."""
+
+    def test_all_issues_exempt_allows_wrapup(self) -> None:
+        """POS: the only open wave issues have merge-ready wave-branch PRs → allow.
+
+        Exercises the real _audit_open_count → _count_open_for_repo exemption
+        path, mocking only the subprocess-touching leaves.
+        """
+
+        def _issues(repo, label):
+            return [664] if repo == "noorinalabs-main" else []
+
+        with (
+            mock.patch.object(hook, "_read_current_wave_label", return_value="p5-wave-5"),
+            mock.patch.object(
+                hook, "_read_current_wave_branch", return_value="deployments/phase-5/wave-5"
+            ),
+            mock.patch.object(hook, "_open_issue_numbers_for_repo", side_effect=_issues),
+            mock.patch.object(hook, "_mergeready_exempt_issues", return_value={664}),
+        ):
+            result = hook.check(_skill_input("wave-wrapup"))
+        self.assertIsNone(result)
+
+    def test_non_exempt_issue_still_blocks(self) -> None:
+        """NEG: an open wave issue WITHOUT a merge-ready PR still blocks wrapup."""
+
+        def _issues(repo, label):
+            return [664] if repo == "noorinalabs-main" else []
+
+        with (
+            mock.patch.object(hook, "_read_current_wave_label", return_value="p5-wave-5"),
+            mock.patch.object(
+                hook, "_read_current_wave_branch", return_value="deployments/phase-5/wave-5"
+            ),
+            mock.patch.object(hook, "_open_issue_numbers_for_repo", side_effect=_issues),
+            mock.patch.object(hook, "_mergeready_exempt_issues", return_value=set()),
+        ):
+            result = hook.check(_skill_input("wave-wrapup"))
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("noorinalabs-main", result["reason"])
+        self.assertIn("Open items across the org: 1", result["reason"])
+
+
 if __name__ == "__main__":
     unittest.main()
