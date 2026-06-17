@@ -489,6 +489,22 @@
         "reviewer": "Mateo Salazar",
         "reviewer_2": "Idris Yusuf",
         "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-ingest-platform#99",
+        "ref": "ingest#99",
+        "implementer": "Kalinda Ranasinghe",
+        "reviewer": "Bjørn Henriksen",
+        "reviewer_2": "Petra Vidović",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#188",
+        "ref": "da#188",
+        "implementer": "Tarek Mansour",
+        "reviewer": "Oyunbileg Batbayar",
+        "reviewer_2": "Jean-Claude Habimana",
+        "priority": "tech-debt"
       }
     ],
     "deliberately_not_in_w5": [
@@ -498,11 +514,11 @@
       "ig#706 / ig#712 / lp#35 (CDN / Core Web Vitals / asset caching) -> post-traffic ops, unscoped"
     ],
     "counts": {
-      "total": 40,
+      "total": 42,
       "prod_cutover": 2,
       "corpus": 6,
       "landing_design": 5,
-      "td_intake": 27,
+      "td_intake": 29,
       "td_pool": 25,
       "td_base_feature_bug": 10,
       "td_floor_20pct": 2,
@@ -521,7 +537,12 @@
       },
       "split_da175_four_books": [
         "da#182"
-      ]
+      ],
+      "bleach_drift_fix": [
+        "ingest#99",
+        "da#188"
+      ],
+      "bleach_standing_tracker": "main#703"
     }
   },
   "wave_5_scope_reconciled_at": "2026-06-16T21:45:09Z",
