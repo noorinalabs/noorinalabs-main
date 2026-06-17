@@ -64,10 +64,38 @@ Audit shell-out:
     Iterates the 8 org-known repos (charter skills.md § Audit command),
     running:
         gh issue list --repo "noorinalabs/<repo>" --state open \\
-            --label "p2-wave-<N>" --json number --jq 'length'
+            --label "p2-wave-<N>" --json number
     Wave label `<N>` is derived from `cross-repo-status.json` field
     `current_wave` (e.g. "wave-10" → "10"). Total open count is the sum
     across all repos.
+
+Merge-ready-PR exemption (issue #664, owner-adopted P4W7 retro):
+    The `/wave-wrapup` gate had a chicken-and-egg: the wave's own open
+    work-issues only close as part of wrapup's merge steps, but the gate
+    counted them and blocked wrapup from running — forcing a merge+close
+    first then a re-run. Fix: an open wave-labeled issue does NOT count
+    against the blocking total if it has a *merge-ready PR targeting the
+    wave branch*. "Merge-ready" is defined narrowly to guard against
+    false-exempt (acceptance criterion #3):
+        - the PR is OPEN and not a draft,
+        - its base branch is EXACTLY the active wave branch
+          `deployments/phase-<P>/wave-<M>` (derived from the same
+          cross-repo-status.json phase/wave that yields the label) — an
+          arbitrary PR into main or another branch does NOT qualify,
+        - `mergeable == "MERGEABLE"` (no conflicts; UNKNOWN is treated as
+          not-ready — conservative),
+        - every status check is green (all checks SUCCESS/NEUTRAL/SKIPPED;
+          any FAILURE/ERROR/pending → not-ready), and
+        - the PR is *linked* to the issue via GitHub's structured
+          `closingIssuesReferences` (a "Closes #N" relationship), not a
+          body-text regex.
+    Implementation: per repo, list open PRs based on the wave branch
+    (`gh pr list --base <wave-branch>`), keep the merge-ready ones, read
+    each one's `closingIssuesReferences` (`gh pr view`), and subtract that
+    set of issue numbers from the open-issue list before counting. If the
+    wave branch can't be derived, or any of the PR queries fail, NO
+    exemption is applied (fail toward the stricter count — never
+    false-exempt).
 
 Failure modes (all fail-open with system warning, never block):
     - `gh` not installed / not authenticated → cannot audit, allow.
@@ -143,13 +171,14 @@ _STATUS_PATH = Path(__file__).resolve().parent.parent.parent / "cross-repo-statu
 _PER_REPO_TIMEOUT_SECONDS = 3
 
 
-def _read_current_wave_label() -> str | None:
-    """Return the active wave label (e.g. 'p2-wave-10') or None.
+def _read_phase_wave_nums() -> tuple[int, int] | None:
+    """Return the active (phase_num, wave_num) from cross-repo-status.json or None.
 
-    Derives the label from cross-repo-status.json `current_wave` field.
-    Expected format: "wave-<N>" with `phase` field giving "phase-2" → label
-    "p2-wave-<N>". Returns None on any failure (missing file, malformed
-    JSON, missing fields, unparseable wave value).
+    Reads `cross-repo-status.json`, requires `wave_active` truthy, and parses
+    the `phase` ("phase-<P>") and `current_wave` ("wave-<M>") fields. Returns
+    None on any failure (missing file, malformed JSON, inactive wave, missing
+    or unparseable fields). Single source of truth for both the wave *label*
+    and the wave *branch* derivations below so they cannot drift apart.
     """
     try:
         data = json.loads(_STATUS_PATH.read_text(encoding="utf-8"))
@@ -159,23 +188,49 @@ def _read_current_wave_label() -> str | None:
     if not data.get("wave_active"):
         return None
 
-    current = data.get("current_wave", "")
-    phase = data.get("phase", "")
-
-    wave_match = re.fullmatch(r"wave-(\d+)", str(current))
-    phase_match = re.fullmatch(r"phase-(\d+)", str(phase))
+    wave_match = re.fullmatch(r"wave-(\d+)", str(data.get("current_wave", "")))
+    phase_match = re.fullmatch(r"phase-(\d+)", str(data.get("phase", "")))
     if not wave_match or not phase_match:
         return None
 
-    return f"p{phase_match.group(1)}-wave-{wave_match.group(1)}"
+    return int(phase_match.group(1)), int(wave_match.group(1))
 
 
-def _count_open_for_repo(repo: str, label: str) -> int | None:
-    """Return open-issue count for `noorinalabs/<repo>` filtered by `label`.
+def _read_current_wave_label() -> str | None:
+    """Return the active wave label (e.g. 'p2-wave-10') or None.
 
-    Returns the integer count on success, None on subprocess failure (gh
-    missing, network error, auth failure). Caller decides whether to
-    treat None as fail-open or partial.
+    Derives the label from cross-repo-status.json (see `_read_phase_wave_nums`).
+    Returns None on any failure (missing file, malformed JSON, missing fields,
+    unparseable wave value).
+    """
+    nums = _read_phase_wave_nums()
+    if nums is None:
+        return None
+    phase_num, wave_num = nums
+    return f"p{phase_num}-wave-{wave_num}"
+
+
+def _read_current_wave_branch() -> str | None:
+    """Return the active wave branch (e.g. 'deployments/phase-2/wave-10') or None.
+
+    Derives the branch from the same cross-repo-status.json phase/wave that
+    yields the label (see `_read_phase_wave_nums`), so the merge-ready-PR
+    exemption (#664) targets exactly the branch the wave's PRs base on.
+    Returns None on any failure.
+    """
+    nums = _read_phase_wave_nums()
+    if nums is None:
+        return None
+    phase_num, wave_num = nums
+    return f"deployments/phase-{phase_num}/wave-{wave_num}"
+
+
+def _open_issue_numbers_for_repo(repo: str, label: str) -> list[int] | None:
+    """Return the open-issue numbers for `noorinalabs/<repo>` filtered by `label`.
+
+    Returns the list of issue numbers on success (possibly empty), None on
+    subprocess failure (gh missing, network error, auth failure). Caller
+    decides whether to treat None as fail-open or partial.
     """
     try:
         result = subprocess.run(
@@ -191,8 +246,6 @@ def _count_open_for_repo(repo: str, label: str) -> int | None:
                 label,
                 "--json",
                 "number",
-                "--jq",
-                "length",
             ],
             capture_output=True,
             text=True,
@@ -206,14 +259,196 @@ def _count_open_for_repo(repo: str, label: str) -> int | None:
 
     out = result.stdout.strip()
     if not out:
-        return 0
+        return []
     try:
-        return int(out)
-    except ValueError:
+        data = json.loads(out)
+    except json.JSONDecodeError:
+        return None
+    try:
+        return [int(item["number"]) for item in data]
+    except (TypeError, KeyError, ValueError):
         return None
 
 
-def _audit_open_count(label: str) -> tuple[int | None, dict[str, int]]:
+def _checks_green(rollup: list | None) -> bool:
+    """Return True iff every status check in `rollup` is passing (or none exist).
+
+    `rollup` is the `statusCheckRollup` array from `gh pr list --json`. Each
+    element is either a CheckRun (has `conclusion` once `status == COMPLETED`)
+    or a StatusContext (has `state`). Green means:
+        - CheckRun: status COMPLETED and conclusion in {SUCCESS, NEUTRAL, SKIPPED}
+        - StatusContext: state == SUCCESS
+    Any pending (non-COMPLETED / PENDING / EXPECTED) or failing check makes the
+    whole rollup not-green. An empty/absent rollup is treated as green (no
+    checks configured) — the base-branch + linkage guards carry the
+    false-exempt protection in that case.
+    """
+    if not rollup:
+        return True
+    for check in rollup:
+        if not isinstance(check, dict):
+            return False
+        if "conclusion" in check or "status" in check:
+            # CheckRun shape.
+            if str(check.get("status", "")).upper() != "COMPLETED":
+                return False
+            if str(check.get("conclusion", "")).upper() not in {
+                "SUCCESS",
+                "NEUTRAL",
+                "SKIPPED",
+            }:
+                return False
+        elif "state" in check:
+            # StatusContext shape.
+            if str(check.get("state", "")).upper() != "SUCCESS":
+                return False
+        else:
+            # Unrecognized shape → conservatively not-green (never false-exempt).
+            return False
+    return True
+
+
+def _pr_is_merge_ready(pr: dict, wave_branch: str) -> bool:
+    """Return True iff `pr` is a merge-ready PR targeting `wave_branch`.
+
+    Narrow definition to guard against false-exempt (issue #664 acceptance #3):
+    open + not draft + base == wave_branch + mergeable (no conflicts, not
+    UNKNOWN) + all status checks green. The `--base` filter on `gh pr list`
+    already constrains the base; this re-checks `baseRefName` defensively so a
+    mis-filtered or future call site can't slip an off-branch PR through.
+    """
+    if not isinstance(pr, dict):
+        return False
+    if pr.get("isDraft"):
+        return False
+    if str(pr.get("state", "OPEN")).upper() != "OPEN":
+        return False
+    if pr.get("baseRefName") != wave_branch:
+        return False
+    if str(pr.get("mergeable", "")).upper() != "MERGEABLE":
+        return False
+    return _checks_green(pr.get("statusCheckRollup"))
+
+
+def _linked_issues_for_pr(repo: str, pr_number: int) -> set[int]:
+    """Return the issue numbers a PR closes, via structured closingIssuesReferences.
+
+    Uses GitHub's `closingIssuesReferences` (the "Closes #N" relationship), not
+    a body-text regex (per charter `pull-requests.md` § Trust the Artifact —
+    and the hook-authorship preference for structured signals over prose
+    scraping). Returns an empty set on any subprocess/parse failure — failing
+    toward NO exemption keeps the gate strict (never false-exempt).
+    """
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                "pr",
+                "view",
+                str(pr_number),
+                "--repo",
+                f"noorinalabs/{repo}",
+                "--json",
+                "closingIssuesReferences",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=_PER_REPO_TIMEOUT_SECONDS,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return set()
+
+    if result.returncode != 0:
+        return set()
+
+    out = result.stdout.strip()
+    if not out:
+        return set()
+    try:
+        data = json.loads(out)
+        refs = data.get("closingIssuesReferences", [])
+        return {int(ref["number"]) for ref in refs}
+    except (json.JSONDecodeError, TypeError, KeyError, ValueError, AttributeError):
+        return set()
+
+
+def _mergeready_exempt_issues(repo: str, wave_branch: str) -> set[int]:
+    """Return the set of issue numbers exempt via a merge-ready wave-branch PR.
+
+    Lists open PRs based on `wave_branch`, keeps the merge-ready ones
+    (`_pr_is_merge_ready`), and unions their linked-issue numbers. Returns an
+    empty set on PR-list failure — failing toward NO exemption keeps the gate
+    strict (never false-exempt; issue #664 acceptance #3).
+    """
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                "pr",
+                "list",
+                "--repo",
+                f"noorinalabs/{repo}",
+                "--state",
+                "open",
+                "--base",
+                wave_branch,
+                "--json",
+                "number,isDraft,state,baseRefName,mergeable,statusCheckRollup",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=_PER_REPO_TIMEOUT_SECONDS,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return set()
+
+    if result.returncode != 0:
+        return set()
+
+    out = result.stdout.strip()
+    if not out:
+        return set()
+    try:
+        prs = json.loads(out)
+    except json.JSONDecodeError:
+        return set()
+    if not isinstance(prs, list):
+        return set()
+
+    exempt: set[int] = set()
+    for pr in prs:
+        if not _pr_is_merge_ready(pr, wave_branch):
+            continue
+        try:
+            pr_number = int(pr["number"])
+        except (TypeError, KeyError, ValueError):
+            continue
+        exempt |= _linked_issues_for_pr(repo, pr_number)
+    return exempt
+
+
+def _count_open_for_repo(repo: str, label: str, wave_branch: str | None) -> int | None:
+    """Return the *blocking* open-issue count for `noorinalabs/<repo>`.
+
+    Counts open issues carrying `label`, minus those exempted by a merge-ready
+    PR targeting `wave_branch` (issue #664). Returns the integer count on
+    success, None on issue-list subprocess failure (so the caller can fail-open
+    on full infrastructure failure). When `wave_branch` is None, no exemption
+    is applied (every open wave issue counts).
+    """
+    numbers = _open_issue_numbers_for_repo(repo, label)
+    if numbers is None:
+        return None
+    if not numbers:
+        return 0
+    if wave_branch is None:
+        return len(numbers)
+
+    exempt = _mergeready_exempt_issues(repo, wave_branch)
+    return sum(1 for n in numbers if n not in exempt)
+
+
+def _audit_open_count(label: str, wave_branch: str | None) -> tuple[int | None, dict[str, int]]:
     """Run the cross-repo audit. Returns (total_or_None, per_repo_counts).
 
     `total_or_None` is None only if EVERY repo's audit failed (full
@@ -221,14 +456,16 @@ def _audit_open_count(label: str) -> tuple[int | None, dict[str, int]]:
     successfully-audited repos, even if some individual repos failed
     (partial result is more useful than None).
 
-    `per_repo_counts` maps repo name → count for repos with non-zero
-    open issues. Repos with zero opens or with audit failures are omitted.
+    Each repo's count excludes wave issues exempted by a merge-ready PR on
+    `wave_branch` (issue #664). `per_repo_counts` maps repo name → blocking
+    count for repos with a non-zero blocking count. Repos with zero blocking
+    issues (none open, or all exempted) or with audit failures are omitted.
     """
     per_repo: dict[str, int] = {}
     successes = 0
 
     for repo in _ORG_REPOS:
-        count = _count_open_for_repo(repo, label)
+        count = _count_open_for_repo(repo, label, wave_branch)
         if count is None:
             continue
         successes += 1
@@ -288,7 +525,13 @@ def check(input_data: dict) -> dict | None:
             ),
         }
 
-    total, per_repo = _audit_open_count(label)
+    # Wave branch drives the merge-ready-PR exemption (#664). Derived from the
+    # same status fields as the label, so if the label resolved, the branch
+    # does too; None only on a race that mutates the file mid-check, in which
+    # case the audit simply applies no exemption (stricter, never false-exempt).
+    wave_branch = _read_current_wave_branch()
+
+    total, per_repo = _audit_open_count(label, wave_branch)
 
     if total is None:
         return {
@@ -331,6 +574,11 @@ def check(input_data: dict) -> dict | None:
             "     - 'Carry-forward: #N → next-wave, #M → backlog' inline\n"
             "     - '## Carry-forward' markdown heading followed by item list\n"
             "     - '#N → destination' arrow patterns naming items individually\n\n"
+            "Note (#664): an open wave issue is already auto-exempt from this count "
+            "if it has a merge-ready PR (open, not draft, mergeable, all checks green) "
+            f"based on `{wave_branch or '<wave-branch>'}`. The items above are NOT "
+            "exempt — their wave-branch PR is missing, conflicting, red, or still in "
+            f"review. Get those PRs merge-ready and re-run /{skill_name}.\n\n"
             "There is no in-band bypass flag — see charter/hooks.md § Hook 17 for "
             "emergency procedure."
         ),
