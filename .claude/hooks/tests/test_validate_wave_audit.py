@@ -447,8 +447,59 @@ class CountOpenWithExemption(unittest.TestCase):
             )
 
 
+class ClosingRefsInText(unittest.TestCase):
+    """Coverage on _closing_refs_in_text — PR-body/title linkage parse (#664).
+
+    Linkage is parsed from body/title because GitHub's structured
+    closingIssuesReferences is always empty for wave-branch-based PRs (it only
+    populates for default-branch PRs).
+    """
+
+    def test_closes_matches(self) -> None:
+        self.assertEqual(hook._closing_refs_in_text("Closes #664."), {664})
+
+    def test_keyword_conjugations_match(self) -> None:
+        for text in (
+            "close #1",
+            "closed #1",
+            "Fixes #1",
+            "fix #1",
+            "fixed #1",
+            "Resolves #1",
+            "resolved #1",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(hook._closing_refs_in_text(text), {1})
+
+    def test_colon_separator_matches(self) -> None:
+        self.assertEqual(hook._closing_refs_in_text("Closes: #5"), {5})
+
+    def test_multiple_refs_collected(self) -> None:
+        text = "Closes #1\nbody\nFixes #2 and resolves #3"
+        self.assertEqual(hook._closing_refs_in_text(text), {1, 2, 3})
+
+    def test_bare_mention_does_not_match(self) -> None:
+        """NEG: a passing '#664' mention without a keyword must NOT exempt (acc. #3)."""
+        self.assertEqual(hook._closing_refs_in_text("see #664 for context"), set())
+
+    def test_cross_repo_ref_not_matched(self) -> None:
+        """NEG: 'Closes octo/repo#5' is a different repo's issue — not local."""
+        self.assertEqual(hook._closing_refs_in_text("Closes octo/repo#5"), set())
+
+    def test_prefix_word_not_matched(self) -> None:
+        """NEG: 'prefix #5' must not match the 'fix' substring."""
+        self.assertEqual(hook._closing_refs_in_text("prefix #5"), set())
+
+    def test_no_separator_not_matched(self) -> None:
+        """NEG: GitHub requires whitespace/colon; 'Closes#5' does not link."""
+        self.assertEqual(hook._closing_refs_in_text("Closes#5"), set())
+
+    def test_empty_text(self) -> None:
+        self.assertEqual(hook._closing_refs_in_text(""), set())
+
+
 class MergereadyExemptIssuesSubprocess(unittest.TestCase):
-    """Coverage on _mergeready_exempt_issues / _linked_issues_for_pr gh shell-outs."""
+    """Coverage on _mergeready_exempt_issues gh shell-out + body-linkage parse."""
 
     _WAVE = "deployments/phase-5/wave-5"
 
@@ -458,49 +509,47 @@ class MergereadyExemptIssuesSubprocess(unittest.TestCase):
         m.returncode = returncode
         return m
 
-    def test_collects_linked_issues_of_ready_prs(self) -> None:
-        """POS: ready PR's closingIssuesReferences become the exempt set."""
-        prs = json.dumps(
-            [
-                {
-                    "number": 700,
-                    "isDraft": False,
-                    "state": "OPEN",
-                    "baseRefName": self._WAVE,
-                    "mergeable": "MERGEABLE",
-                    "statusCheckRollup": [{"status": "COMPLETED", "conclusion": "SUCCESS"}],
-                }
-            ]
-        )
-        with (
-            mock.patch.object(hook.subprocess, "run", return_value=self._completed(prs)),
-            mock.patch.object(hook, "_linked_issues_for_pr", return_value={42, 43}) as linked,
-        ):
+    def _ready_pr(self, number: int, body: str = "", title: str = "") -> dict:
+        return {
+            "number": number,
+            "isDraft": False,
+            "state": "OPEN",
+            "baseRefName": self._WAVE,
+            "mergeable": "MERGEABLE",
+            "statusCheckRollup": [{"status": "COMPLETED", "conclusion": "SUCCESS"}],
+            "body": body,
+            "title": title,
+        }
+
+    def test_collects_declared_closes_of_ready_prs(self) -> None:
+        """POS: a ready PR's body closing-keyword refs become the exempt set."""
+        prs = json.dumps([self._ready_pr(700, body="Fix.\n\nCloses #42\nFixes #43")])
+        with mock.patch.object(hook.subprocess, "run", return_value=self._completed(prs)):
             result = hook._mergeready_exempt_issues("noorinalabs-main", self._WAVE)
         self.assertEqual(result, {42, 43})
-        linked.assert_called_once_with("noorinalabs-main", 700)
 
-    def test_not_ready_pr_not_queried_for_links(self) -> None:
-        """NEG: a draft/red PR is skipped — its links never become exempt."""
-        prs = json.dumps(
-            [
-                {
-                    "number": 701,
-                    "isDraft": True,
-                    "state": "OPEN",
-                    "baseRefName": self._WAVE,
-                    "mergeable": "MERGEABLE",
-                    "statusCheckRollup": [],
-                }
-            ]
-        )
-        with (
-            mock.patch.object(hook.subprocess, "run", return_value=self._completed(prs)),
-            mock.patch.object(hook, "_linked_issues_for_pr") as linked,
-        ):
+    def test_title_ref_also_collected(self) -> None:
+        """POS: a closing keyword in the title also links."""
+        prs = json.dumps([self._ready_pr(700, body="no refs", title="thing (resolves #44)")])
+        with mock.patch.object(hook.subprocess, "run", return_value=self._completed(prs)):
+            result = hook._mergeready_exempt_issues("noorinalabs-main", self._WAVE)
+        self.assertEqual(result, {44})
+
+    def test_not_ready_pr_links_ignored(self) -> None:
+        """NEG: a draft PR's closing refs never become exempt."""
+        draft = self._ready_pr(701, body="Closes #50")
+        draft["isDraft"] = True
+        prs = json.dumps([draft])
+        with mock.patch.object(hook.subprocess, "run", return_value=self._completed(prs)):
             result = hook._mergeready_exempt_issues("noorinalabs-main", self._WAVE)
         self.assertEqual(result, set())
-        linked.assert_not_called()
+
+    def test_bare_mention_in_ready_pr_not_exempt(self) -> None:
+        """NEG: a ready PR that only *mentions* #50 (no keyword) does not exempt it."""
+        prs = json.dumps([self._ready_pr(700, body="related to #50 but does other work")])
+        with mock.patch.object(hook.subprocess, "run", return_value=self._completed(prs)):
+            result = hook._mergeready_exempt_issues("noorinalabs-main", self._WAVE)
+        self.assertEqual(result, set())
 
     def test_pr_list_failure_returns_empty_set(self) -> None:
         """NEG: gh pr list nonzero exit → empty set (fail strict, no false-exempt)."""
@@ -516,17 +565,6 @@ class MergereadyExemptIssuesSubprocess(unittest.TestCase):
     def test_pr_list_malformed_json_returns_empty_set(self) -> None:
         with mock.patch.object(hook.subprocess, "run", return_value=self._completed("not json")):
             self.assertEqual(hook._mergeready_exempt_issues("noorinalabs-main", self._WAVE), set())
-
-    def test_linked_issues_parses_references(self) -> None:
-        payload = json.dumps({"closingIssuesReferences": [{"number": 42}, {"number": 43}]})
-        with mock.patch.object(hook.subprocess, "run", return_value=self._completed(payload)):
-            self.assertEqual(hook._linked_issues_for_pr("noorinalabs-main", 700), {42, 43})
-
-    def test_linked_issues_failure_returns_empty_set(self) -> None:
-        with mock.patch.object(
-            hook.subprocess, "run", return_value=self._completed("", returncode=1)
-        ):
-            self.assertEqual(hook._linked_issues_for_pr("noorinalabs-main", 700), set())
 
 
 class OpenIssueNumbersSubprocess(unittest.TestCase):

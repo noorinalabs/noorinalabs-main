@@ -86,16 +86,24 @@ Merge-ready-PR exemption (issue #664, owner-adopted P4W7 retro):
           not-ready — conservative),
         - every status check is green (all checks SUCCESS/NEUTRAL/SKIPPED;
           any FAILURE/ERROR/pending → not-ready), and
-        - the PR is *linked* to the issue via GitHub's structured
-          `closingIssuesReferences` (a "Closes #N" relationship), not a
-          body-text regex.
+        - the PR *declares it closes the issue* via a closing keyword in its
+          body/title (`Closes #N` / `Fixes #N` / `Resolves #N`, conjugations,
+          case-insensitive) — NOT a bare `#N` mention.
+    Linkage caveat — why body text and not `closingIssuesReferences`: GitHub
+    only registers a closing reference when the PR's base is the repository
+    *default* branch. Wave-branch PRs base on `deployments/phase-<P>/wave-<M>`,
+    so the structured `closingIssuesReferences` API field is ALWAYS empty for
+    exactly the PRs this exemption targets (same root cause as `Closes #N` not
+    auto-closing on wave-branch merges — memory feedback_wave_branch_issue_close).
+    So we parse the PR's body/title for GitHub's own closing-keyword grammar
+    (the same grammar GitHub parses); restricting to closing keywords keeps a
+    passing `#N` mention from false-exempting an unrelated issue.
     Implementation: per repo, list open PRs based on the wave branch
-    (`gh pr list --base <wave-branch>`), keep the merge-ready ones, read
-    each one's `closingIssuesReferences` (`gh pr view`), and subtract that
-    set of issue numbers from the open-issue list before counting. If the
-    wave branch can't be derived, or any of the PR queries fail, NO
-    exemption is applied (fail toward the stricter count — never
-    false-exempt).
+    (`gh pr list --base <wave-branch> --json ...,body,title`), keep the
+    merge-ready ones, extract their declared-closes issue numbers, and subtract
+    that set from the open-issue list before counting. If the wave branch can't
+    be derived, or any of the PR queries fail, NO exemption is applied (fail
+    toward the stricter count — never false-exempt).
 
 Failure modes (all fail-open with system warning, never block):
     - `gh` not installed / not authenticated → cannot audit, allow.
@@ -162,6 +170,18 @@ _CARRY_FORWARD_PATTERNS = (
     re.compile(r"carry[\s-]forward\s*:", re.IGNORECASE),
     re.compile(r"^#{1,6}\s+carry[\s-]forward\b", re.IGNORECASE | re.MULTILINE),
     re.compile(r"#\d+\s*(?:->|→)\s*[A-Za-z_]", re.IGNORECASE),
+)
+
+# PR-body/title closing-keyword → issue linkage for the merge-ready-PR
+# exemption (#664). GitHub's documented closing keywords (close/closes/closed,
+# fix/fixes/fixed, resolve/resolves/resolved), optional colon, then `#<N>`.
+# Requires the keyword (not a bare `#N` mention) so a passing reference can't
+# false-exempt an unrelated issue. The mandatory `[\s:]+` separator before `#`
+# also excludes cross-repo `owner/repo#N` refs (the `#` there is preceded by a
+# repo-name char, not whitespace/colon).
+_CLOSING_KEYWORD_RE = re.compile(
+    r"\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?)\b[\s:]+#(\d+)\b",
+    re.IGNORECASE,
 )
 
 # Path to cross-repo-status.json relative to this hook file.
@@ -330,55 +350,42 @@ def _pr_is_merge_ready(pr: dict, wave_branch: str) -> bool:
     return _checks_green(pr.get("statusCheckRollup"))
 
 
-def _linked_issues_for_pr(repo: str, pr_number: int) -> set[int]:
-    """Return the issue numbers a PR closes, via structured closingIssuesReferences.
+def _closing_refs_in_text(text: str) -> set[int]:
+    """Return the issue numbers a PR's body/title declares it will close.
 
-    Uses GitHub's `closingIssuesReferences` (the "Closes #N" relationship), not
-    a body-text regex (per charter `pull-requests.md` § Trust the Artifact —
-    and the hook-authorship preference for structured signals over prose
-    scraping). Returns an empty set on any subprocess/parse failure — failing
-    toward NO exemption keeps the gate strict (never false-exempt).
+    Parses GitHub's documented closing-keyword syntax (`Closes #N`, `Fixes #N`,
+    `Resolves #N`, and their conjugations, optional colon, case-insensitive).
+
+    Why text and not the structured `closingIssuesReferences` API field:
+    GitHub only *registers* a closing reference when the PR's base is the
+    repository default branch. Wave-branch PRs base on
+    `deployments/phase-<P>/wave-<M>`, so `closingIssuesReferences` is ALWAYS
+    empty for exactly the PRs this exemption targets (the same reason
+    `Closes #N` doesn't auto-close on wave-branch merges — see memory
+    `feedback_wave_branch_issue_close`). The PR body's closing keyword is the
+    actual linkage signal for wave PRs, and we parse the *same* keyword grammar
+    GitHub itself parses — restricting to closing keywords (not a bare `#N`
+    mention) keeps a passing reference from false-exempting an unrelated issue
+    (#664 acceptance #3).
+
+    Bare `owner/repo#N` cross-repo refs are intentionally not matched (a
+    different repo's issue isn't in this repo's wave-label set anyway).
     """
-    try:
-        result = subprocess.run(
-            [
-                "gh",
-                "pr",
-                "view",
-                str(pr_number),
-                "--repo",
-                f"noorinalabs/{repo}",
-                "--json",
-                "closingIssuesReferences",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=_PER_REPO_TIMEOUT_SECONDS,
-        )
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+    if not text:
         return set()
-
-    if result.returncode != 0:
-        return set()
-
-    out = result.stdout.strip()
-    if not out:
-        return set()
-    try:
-        data = json.loads(out)
-        refs = data.get("closingIssuesReferences", [])
-        return {int(ref["number"]) for ref in refs}
-    except (json.JSONDecodeError, TypeError, KeyError, ValueError, AttributeError):
-        return set()
+    # Don't treat `org/repo#N` (cross-repo) as a local close — require the `#`
+    # to NOT be immediately preceded by a repo-name character.
+    return {int(m.group(1)) for m in _CLOSING_KEYWORD_RE.finditer(text)}
 
 
 def _mergeready_exempt_issues(repo: str, wave_branch: str) -> set[int]:
     """Return the set of issue numbers exempt via a merge-ready wave-branch PR.
 
     Lists open PRs based on `wave_branch`, keeps the merge-ready ones
-    (`_pr_is_merge_ready`), and unions their linked-issue numbers. Returns an
-    empty set on PR-list failure — failing toward NO exemption keeps the gate
-    strict (never false-exempt; issue #664 acceptance #3).
+    (`_pr_is_merge_ready`), and unions the issues each declares it closes (via
+    `_closing_refs_in_text` over body+title). Returns an empty set on PR-list
+    failure — failing toward NO exemption keeps the gate strict (never
+    false-exempt; issue #664 acceptance #3).
     """
     try:
         result = subprocess.run(
@@ -393,7 +400,7 @@ def _mergeready_exempt_issues(repo: str, wave_branch: str) -> set[int]:
                 "--base",
                 wave_branch,
                 "--json",
-                "number,isDraft,state,baseRefName,mergeable,statusCheckRollup",
+                "number,isDraft,state,baseRefName,mergeable,statusCheckRollup,body,title",
             ],
             capture_output=True,
             text=True,
@@ -419,11 +426,8 @@ def _mergeready_exempt_issues(repo: str, wave_branch: str) -> set[int]:
     for pr in prs:
         if not _pr_is_merge_ready(pr, wave_branch):
             continue
-        try:
-            pr_number = int(pr["number"])
-        except (TypeError, KeyError, ValueError):
-            continue
-        exempt |= _linked_issues_for_pr(repo, pr_number)
+        text = f"{pr.get('body', '') or ''}\n{pr.get('title', '') or ''}"
+        exempt |= _closing_refs_in_text(text)
     return exempt
 
 
