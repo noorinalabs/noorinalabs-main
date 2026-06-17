@@ -413,7 +413,17 @@ def count_skill_invocations(skill_name: str, repo_root: str) -> int:
     D4 lightweight: we do NOT scan transcripts. `git log --grep="/{skill}"`
     finds commit messages that reference the skill, which is a stable and
     durable signal for "this skill got invoked during real work."
+
+    An empty or whitespace-only `skill_name` returns 0 — never the full
+    commit count. `git log --grep=/` matches (nearly) every commit because
+    almost all commit messages contain a slash, so a blank slug would
+    report a huge invocation count and spuriously cross any threshold.
+    This guard is the root-cause fix for the P5W4 24-spurious-AUTO mis-fire
+    (main#690): hand-rolled callers passed an empty `section.promoted_to`
+    slug straight through to this counter.
     """
+    if not skill_name or not skill_name.strip():
+        return 0
     try:
         result = subprocess.run(
             [

@@ -24,37 +24,51 @@ Skill-to-hook **ALWAYS** produces a DECIDE-tier draft issue — never auto-appli
 
 ## Instructions
 
-### 1. Resolve wave name
+> **Do NOT hand-roll the `classify_*` call sequence.** Run the canonical
+> driver (`run.py`) — it wires the helper calls, slug resolution, and
+> thresholds in exactly one place. Hand-rolling the sequence inline is what
+> produced the P5W4 24-spurious-AUTO mis-fire (main#690): the section→skill
+> tier called `count_skill_invocations(section.promoted_to, …)` over an
+> empty `promoted_to` slug, and `git log --grep=/` matched ~every commit,
+> crossing the threshold for 24 not-yet-promoted sections. The driver
+> derives the candidate-skill slug from the heading for not-yet-promoted sections,
+> and `helpers.count_skill_invocations` now returns 0 for a blank slug.
 
-If invoked with no argument, read `cross-repo-status.json` for `current_wave`. Use that slug (e.g., `wave-9`) as the audit wave name. If the arg is provided, trust it.
+### 1. Run the canonical driver
 
-### 2. Gather inputs (all deterministic — helpers.py)
+```bash
+# Human-readable audit table + summary line:
+python3 .claude/skills/promotion-audit/run.py [wave]
 
-```python
-from helpers import (
-    read_all_memories,
-    read_all_charter_sections,
-    read_all_skills,
-    find_already_promoted_in_charter,
-    count_retro_citations,
-    count_skill_invocations,
-    classify_memory,
-    classify_section,
-    classify_skill,
-    render_audit_table,
-)
-
-memories  = read_all_memories(memory_dir)                  # list[Memory]
-sections  = read_all_charter_sections(charter_parent)      # list[Section] — only sections with a promotion-target marker
-skills    = read_all_skills(skills_dir)                    # list[Skill]
-already   = find_already_promoted_in_charter(charter_parent)  # set[str] — aggregates Promotion provenance: blocks AND <!-- Promoted from memory: X --> markers across all charter sub-docs (#283)
-# NOTE: `charter_parent` is the directory CONTAINING `charter/` (e.g. `.claude/team`),
-# NOT the `charter/` directory itself. Passing `.claude/team/charter` raises ValueError (#418).
+# Machine-readable decisions, to drive artifact emission in step 4:
+python3 .claude/skills/promotion-audit/run.py [wave] --json
 ```
 
-### 3. Classify each candidate (pure function)
+- **Wave resolution.** With no `wave` argument the driver reads
+  `current_phase` + `current_wave` from `cross-repo-status.json` and emits
+  the canonical phase-prefixed form `p{N}-wave-{M}` (e.g. `p5-wave-5`). A
+  bare `wave-{M}` or `{M}` arg is auto-prefixed; an already-canonical
+  `p{N}-wave-{M}` passes through. Bare `wave-{M}` output is forbidden (#442).
+- **Audit date** is pinned to the wave boundary (`wave_{M}_kicked_off_at`,
+  else `_started_at`, else `_scope_reconciled_at`) — never `datetime.now()`,
+  so re-runs on unchanged state are byte-identical. Override with `--date`.
+- The driver performs ONLY the deterministic classification + rendering. It
+  makes no `gh` calls and emits no artifacts — that is step 4, which reads
+  the driver's `--json` output.
 
-There is no single `classify()` entry point — each tier transition has its own classifier with a distinct signature, because the signal sources differ (retro citations for memory → charter; invocation counts for charter → skill and skill → hook) and `classify_section` has no `already_promoted` analogue (sections carry their own `promoted_to` back-reference instead).
+The `--json` payload is `{wave_name, audit_date, threshold, counts,
+decisions[]}` where each decision carries `kind, item_id, from_tier,
+to_tier, signal, reason, artifact_ref, extra`. Drive step 4 off the
+`AUTO` and `DECIDE` decisions in that list.
+
+### 2. How the driver classifies (reference — do not re-implement)
+
+The driver reads inputs via `read_all_memories` / `read_all_charter_sections`
+/ `read_all_skills` / `find_already_promoted_in_charter` (the latter
+aggregates `Promotion provenance:` blocks AND `<!-- Promoted from memory: X -->`
+markers across all charter sub-docs, #283), then routes each candidate to
+its tier-specific classifier. There is no single `classify()` entry point —
+each transition has a distinct signature because the signal sources differ:
 
 | Function | Signature | `signals` keys consumed |
 |---|---|---|
@@ -62,36 +76,18 @@ There is no single `classify()` entry point — each tier transition has its own
 | `classify_section(section, signals)` | `(CharterSection, dict[str,int]) -> Decision` | `skill_invocations`, `threshold` |
 | `classify_skill(skill, signals, already_promoted)` | `(Skill, dict[str,int], set[str]) -> Decision` | `skill_invocations`, `threshold` |
 
-Worked example (one item per tier):
+Signal derivation (wired once in `run.py`): memory→charter uses
+`count_retro_citations`; charter→skill counts invocations of the section's
+candidate-skill slug (`promoted_to` with the `skills/` prefix stripped if
+already promoted, else `_slugify(heading)` — never an empty slug);
+skill→hook counts invocations of the skill name (always DECIDE, D6).
 
-```python
-mem_decision = classify_memory(
-    memories[0],
-    signals={"retro_citations": count_retro_citations(memories[0], feedback_log_path)},
-    already_promoted=already,
-)
+> `charter_parent` is the directory CONTAINING `charter/` (e.g.
+> `.claude/team`), NOT `charter/` itself — passing `.claude/team/charter`
+> raises ValueError (#418). The driver resolves this correctly; this note
+> matters only if you call the helpers directly in a one-off.
 
-sec_decision = classify_section(
-    sections[0],
-    signals={
-        "skill_invocations": count_skill_invocations(sections[0].promoted_to_slug or "", repo_root),
-        "threshold": 5,
-    },
-)
-
-skill_decision = classify_skill(
-    skills[0],
-    signals={
-        "skill_invocations": count_skill_invocations(skills[0].name, repo_root),
-        "threshold": 5,
-    },
-    already_promoted=already,
-)
-```
-
-Common failure mode: passing the citation/invocation count as a bare int (`classify_memory(mem, cite, already)`) rather than wrapping it in the `signals` dict (`classify_memory(mem, {"retro_citations": cite}, already)`). The classifiers all do `signals.get(...)` and will raise `AttributeError: 'int' object has no attribute 'get'` on a bare int. Always pass a dict.
-
-Each call returns a `Decision` in one of these kinds:
+Each `Decision` has one of these kinds:
 
 - **AUTO** — thresholds met, promotion target is charter or skill, NOT already promoted
 - **DECIDE** — thresholds met, target is hook (always DECIDE), OR `requires_decision: true` override, OR signals ambiguous
@@ -106,7 +102,7 @@ Resolve the **current wave label** once at the top of this step from `cross-repo
 
 #### AUTO artifacts
 
-For each AUTO decision:
+For each `AUTO` decision in the driver's `--json` output (step 1):
 - **memory → charter:** apply `templates/charter-section.md` to the memory, append to the appropriate charter file, mark memory `superseded_by: charter:{file} § {section}`. Stage the diff.
 - **charter → skill:** apply `templates/skill-scaffold.md` to the section, write `.claude/skills/{slug}/SKILL.md`, add a back-reference comment `<!-- promoted-to: skills/{slug} -->` after the section's `promotion-target` marker. Stage.
 
@@ -172,7 +168,7 @@ Q3 decision: auto-promote artifacts land via PR (2-reviewer gate), not direct co
 
 #### DECIDE artifacts
 
-For each DECIDE decision:
+For each `DECIDE` decision in the driver's `--json` output (step 1):
 - Apply `templates/hook-draft.md` to generate an issue title + body. Write the body to `.claude/scratch/promotion-audit-{wave}-decide-{slug}.md`.
 - Create the issue with the **same three-label set** as AUTO PRs (`tech-debt` + `enhancement` + current-wave label) and the same project-board treatment:
 
@@ -205,7 +201,10 @@ The `gh` calls in this step (PR/issue creation, project-board adds, label/board 
 
 ### 5. Render the audit table
 
-Use `render_audit_table(decisions)` to produce deterministic markdown with four subsections:
+The driver already renders this table — its default (non-`--json`) stdout
+**is** the audit table followed by the summary line. Capture that stdout
+for steps 6–7 rather than calling `render_audit_table` by hand. The table
+has four subsections:
 
 ```
 ## Promotion Audit — {wave_name}
@@ -246,13 +245,14 @@ Log: .claude/team/promotion_audit_log/p{N}-wave-{M}.md
 
 ## Determinism
 
-The audit MUST produce byte-identical output when re-run on unchanged repo state. To guarantee this:
-- Sort every list by a stable key before iteration (memory name, charter path+heading, skill name).
-- Use UTC dates pinned to the wave boundary (read from `cross-repo-status.json`), never `datetime.now()`.
+The audit MUST produce byte-identical output when re-run on unchanged repo state. The canonical driver (`run.py`) is what guarantees this — it wires the helpers exactly once so the classification logic cannot drift between runs or operators:
+- Sort every list by a stable key before iteration (memory name, charter path+heading, skill name) — done inside the helpers the driver calls.
+- Use UTC dates pinned to the wave boundary (`run.py` reads `wave_{M}_kicked_off_at`/`_started_at`/`_scope_reconciled_at` from `cross-repo-status.json`), never `datetime.now()`.
+- Never count invocations for an empty/blank slug (`count_skill_invocations` guards this; `--grep=/` would otherwise match ~every commit — the main#690 mis-fire).
 - Never read transcript files (per D4(i)).
 - Never invoke external tools with nondeterministic output (no `gh api` except for issue creation at the end).
 
-Tests in `.claude/skills/promotion-audit/tests/` cover each helper and a smoke test that verifies the first-run expected outcome (zero AUTO, zero DECIDE on current repo state).
+Tests in `.claude/skills/promotion-audit/tests/` cover each helper (`test_helpers.py`), a smoke test verifying the first-run expected outcome (zero AUTO, zero DECIDE on current repo state — `test_smoke.py`), and the driver itself including the empty-slug regression and steady-state-through-the-driver (`test_run.py`).
 
 ## Integration
 
