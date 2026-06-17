@@ -587,6 +587,15 @@ else
     '{declared_refs: $d, carry_forwards: $c, must_includes: $m}')
 fi
 
+# Stamp the owning phase into the scope object regardless of which branch built
+# it. This is the per-phase phase-stamp that /wave-start § 5a reads to detect a
+# same-number wave reused across phases (P4W4 ↔ P5W4) — the reliable signal that
+# replaces the broken `current_phase` guard (main#683). `current_phase` tracks
+# the LATEST phase, not the phase that owns these wave_{M}_* keys, so the stamp
+# must live INSIDE the wave's own scope. Force-set (not default) so a stale
+# WAVE_SCOPE_STRUCTURED carried over from a prior phase cannot poison it.
+SCOPE_JSON=$(echo "$SCOPE_JSON" | jq -c --argjson p "{P}" '.phase = $p')
+
 UPSERT_ARGS=(
   "wave_{M}_scope_reconciled_at=$(jq -nc --arg t "$TS" '$t')"
   "wave_{M}_repos_in_scope=$REPOS_IN_SCOPE_JSON"
