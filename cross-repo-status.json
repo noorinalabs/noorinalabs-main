@@ -505,6 +505,22 @@
         "reviewer": "Oyunbileg Batbayar",
         "reviewer_2": "Jean-Claude Habimana",
         "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#190",
+        "ref": "da#190",
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Kavitha Sundaramurthy",
+        "reviewer_2": "Kwesi Boateng",
+        "priority": "bug"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#191",
+        "ref": "da#191",
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Kavitha Sundaramurthy",
+        "reviewer_2": "Kwesi Boateng",
+        "priority": "tech-debt"
       }
     ],
     "deliberately_not_in_w5": [
@@ -514,11 +530,11 @@
       "ig#706 / ig#712 / lp#35 (CDN / Core Web Vitals / asset caching) -> post-traffic ops, unscoped"
     ],
     "counts": {
-      "total": 42,
+      "total": 44,
       "prod_cutover": 2,
       "corpus": 6,
       "landing_design": 5,
-      "td_intake": 29,
+      "td_intake": 31,
       "td_pool": 25,
       "td_base_feature_bug": 10,
       "td_floor_20pct": 2,
@@ -542,7 +558,12 @@
         "ingest#99",
         "da#188"
       ],
-      "bleach_standing_tracker": "main#703"
+      "bleach_standing_tracker": "main#703",
+      "corpus_audit_remediation": {
+        "drop_dup": "da open_hadith dropped (ops)",
+        "textless_fix": "da#190/PR#192",
+        "canonical_dedup": "da#191"
+      }
     }
   },
   "wave_5_scope_reconciled_at": "2026-06-16T21:45:09Z",
