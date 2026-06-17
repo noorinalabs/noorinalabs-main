@@ -269,5 +269,91 @@ class WaveBranchFallbackTests(unittest.TestCase):
             self.assertIsNone(hook.check(_bash_input(cmd)))
 
 
+class AmbientRepoResolutionTests(unittest.TestCase):
+    """main#663 MUST #2: `--repo`/`-R` omitted (in-repo create/edit) resolves
+    the ambient repo from the cwd origin (mirroring gh) instead of the old
+    empty-default `noorinalabs/` slug. Without resolution the hook would skip
+    (allow); these cases prove it reaches verification and blocks on a 404."""
+
+    def test_ambient_create_resolves_repo_and_blocks_on_404(self):
+        # No `--repo`: resolution must succeed for the hook to reach body
+        # verification at all (else it skips+allows). Cited path 404s → block.
+        body = "File at noorinalabs-main/.claude/hooks/missing.py is gone."
+        cmd = f"gh issue create --title T --body {body!r} --label 'p3-wave-9'"
+        fake = _fake_subprocess_factory(main_exists=set())
+        with (
+            mock.patch.object(hook, "resolve_repo_short_name", return_value="noorinalabs-main"),
+            mock.patch.object(hook.subprocess, "run", side_effect=fake),
+        ):
+            result = hook.check(_bash_input(cmd))
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("noorinalabs-main/.claude/hooks/missing.py", result["reason"])
+
+    def test_ambient_edit_resolves_repo_and_blocks_on_404(self):
+        # `gh issue edit` WITHOUT --repo: body fetched via `gh issue view`, the
+        # cited path 404s → block. Resolution feeds the ambient case.
+        body = "File at noorinalabs-main/.claude/hooks/old.py is gone."
+        cmd = "gh issue edit 100 --add-label 'p3-wave-9'"
+        fake = _fake_subprocess_factory(main_exists=set(), issue_body=body)
+        with (
+            mock.patch.object(hook, "resolve_repo_short_name", return_value="noorinalabs-main"),
+            mock.patch.object(hook.subprocess, "run", side_effect=fake),
+        ):
+            result = hook.check(_bash_input(cmd))
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("noorinalabs-main/.claude/hooks/old.py", result["reason"])
+
+    def test_ambient_unresolvable_logs_skip_and_allows(self):
+        # No `--repo` AND cwd origin unresolvable → skip diagnostic + fail-open
+        # (allow), never a silent drop and never a bogus-slug false-block.
+        body = "See .claude/hooks/gone.py."
+        cmd = f"gh issue create --title T --body {body!r} --label 'p3-wave-9'"
+        with (
+            mock.patch.object(hook, "resolve_repo_short_name", return_value=None),
+            mock.patch.object(hook, "log_pretooluse_diagnostic") as diag,
+            mock.patch.object(hook.subprocess, "run") as run,
+        ):
+            self.assertIsNone(hook.check(_bash_input(cmd)))
+            run.assert_not_called()
+            diag.assert_called_once()
+
+
+class BodyOverMatchScopingTests(unittest.TestCase):
+    """main#663: label-shaped tokens in `--body` must NOT be parsed as labels;
+    extraction is scoped to the actual `--label`/`--add-label` flag values."""
+
+    def test_wave_label_shape_in_body_not_treated_as_label(self):
+        # Real label is non-wave (`tech-debt`); the body documents a
+        # `--add-label 'p3-wave-9'` pattern. The hook must NOT fire — no real
+        # wave label is applied, so it never reaches body verification.
+        body = "Documents the --add-label 'p3-wave-9' wave-label sync flow."
+        cmd = (
+            "gh issue create --repo noorinalabs/noorinalabs-main --title T "
+            f"--body {body!r} --label 'tech-debt'"
+        )
+        with mock.patch.object(hook.subprocess, "run") as run:
+            self.assertIsNone(hook.check(_bash_input(cmd)))
+            run.assert_not_called()
+
+
+class LineContinuationTests(unittest.TestCase):
+    """main#663: shared tokenizer normalizes backslash-newline continuations
+    (#287) — the old private `shlex.split` reimplementation did not."""
+
+    def test_backslash_newline_create_still_detected(self):
+        body = "noorinalabs-main/.claude/hooks/missing.py"
+        cmd = (
+            "gh issue create --repo noorinalabs/noorinalabs-main \\\n"
+            f"  --title T --body {body!r} --label 'p3-wave-9'"
+        )
+        fake = _fake_subprocess_factory(main_exists=set())
+        with mock.patch.object(hook.subprocess, "run", side_effect=fake):
+            result = hook.check(_bash_input(cmd))
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+
 if __name__ == "__main__":
     unittest.main()
