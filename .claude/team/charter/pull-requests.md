@@ -618,6 +618,46 @@ When reviewing a new gate, ask "what wild artifact did this fire on?" If the onl
 
 `noorinalabs-main#194` Hook 14 (`validate_pr_ci_status.py`) fan-out, 2026-04-28. Marisol's PR landed the strongest acceptance signal across the entire fan-out series by **live-tracing `classify_check` against an actual in-flight failed security-audit CI run** at the time — not against a fabricated failure. The live-trace caught a behavior pattern that synthetic tests would have missed because the author didn't think to test for it. Aino flagged this as the strongest acceptance proof in the entire fan-out — distinct enough that it materially changed Hook 14's confidence floor.
 
+## Text-Processing / NER / Graph Fixtures Must Use Production-Realistic Input (Mandatory) <!-- promotion-target: hook -->
+
+Fixtures for **Arabic text processing, NER / segmentation, and graph-load invariants** MUST be derived from **real upstream samples** — never hand-authored from a schema that matches the parser's own assumptions, and never simplified into toy strings. A fixture that is *greener than real data* is masking a bug.
+
+### The rule
+
+- **Voweled (vocalized) Arabic** matching real corpus text — never un-voweled toy strings. Text-processing and segmentation logic behaves differently on vocalized input; a fixture stripped of diacritics exercises a code path the production corpus never takes.
+- **Real high-frequency structures.** An isnad-chain fixture MUST contain the high-frequency transmission particle عن (ʿan) AND at least one narrator name carrying an عن / قال substring — e.g. عنبسة (ʿAnbasa), معن (Maʿn), مقالة (maqāla). These are exactly the strings a naive segmenter over-splits; omitting them lets an over-segmentation bug pass.
+- **Real-shape rows.** Use the actual upstream column set / schema (a captured sample row), not a minimal hand-built dict. A fixture authored from the parser's assumed schema validates the assumption, not the data.
+- **Parse-path tests run against real-upstream fixtures.** The test that exercises the parse / NER / graph-load path asserts against a sample lifted from the real source, so the test fails when the parser's model of the source is wrong.
+
+### Why (the recurring class)
+
+The **fixture-masks-bug** class has recurred 5+ times, most damningly *inside its own fix*: da#146 (PR #151) replaced an un-voweled toy blob — but its Bukhari-h1 replacement fixture contained no عن, masking a new over-segmentation surfaced only later as da#155. The same shape recurred again in P5W5: da#175's thaqalayn (al-Kafi) parser shipped a fixture matching an *assumed* schema rather than the real upstream, so 0% extracted Arabic text went undetected. Earlier instances: `MockNeo4jClient` masking the APPEARS_IN null-property loader bug; toy h-1 fixtures masking the double-prefix hadith-id bug; local-only staging edges. The defect is always the same — the fixture encodes the author's mental model of the source instead of the source itself, so the test is green and the parser is wrong.
+
+This is the **input-side companion** to § Live-Trace Evidence > Synthetic-Test Acceptance: that rule says a gate's *acceptance* must be proven on a wild artifact; this rule says a parser's *fixture* must be lifted from one.
+
+### How to apply
+
+- When adding or changing a text-processing / NER / graph-load fixture, **lift the bytes from a real upstream sample** (a real hadith / isnad / rijāl row from the actual source) and commit that, not a minimal reconstruction. Note the provenance (source + identifier) in a comment or the test docstring.
+- If the real sample is large, trim it to a representative slice — but preserve vocalization, the عن particle, and at least one عن/قال-substring narrator name. Trimming MUST NOT make the fixture greener than the source.
+- Never author a fixture from the schema you *expect* the parser to consume; capture what the source actually emits and let the test prove the parser matches it.
+
+### Reviewer enforcement
+
+When reviewing a PR that adds or edits one of these fixtures, ask: **"was this lifted from real upstream, or authored to match the parser?"** If the Arabic is un-voweled, if the chain lacks عن, or if the row is a minimal hand-built dict, request the real-sample fixture before approving (Changes Requested). A fixture whose only virtue is that it passes the new code is not acceptance evidence.
+
+### Enforcement opportunity
+
+A lint / review-lens can flag Arabic-text fixtures that lack vocalization marks (no Arabic diacritic codepoints `ً–ْ`) or whose isnad strings lack عن — a cheap static signal that a fixture is a toy. Tracked as the optional half of #671; the charter rule is the floor, the lens is a plus.
+
+### Severity if violated
+
+- Shipping a text-processing / NER / graph fixture that is hand-authored from the parser's assumed schema or stripped of vocalization: **moderate** (it actively masks the next bug in that path — the failure mode that recurred 5+ times).
+- Reviewer approving such a fixture without asking for the real-upstream sample: **minor**, **moderate** if it lets a masked bug merge.
+
+### Worked example
+
+da#146 / PR #151 (fix), da#155 (the bug it masked), 2026-06: the fix for an un-voweled-toy-fixture bug shipped a replacement Bukhari-h1 e2e fixture with no عن, masking a fresh over-segmentation. Surfaced independently by Alejandra Reyes-Fuentes and Jean-Claude Habimana on PR #151. The class recurred in P5W5 on da#175 (thaqalayn / al-Kafi), where a schema-assumed fixture hid 0% extracted Arabic — the recurrence that motivated codifying this rule (owner-adopted P5W1 retro, main#671).
+
 <!-- Promoted from memory: feedback_pr_vs_runtime_acceptance_criteria.md (P3W9 #346 memory audit, 2026-05-10) -->
 
 ## PR-Time Acceptance vs Runtime Acceptance (Mandatory) <!-- promotion-target: none -->
