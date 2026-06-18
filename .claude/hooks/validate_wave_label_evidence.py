@@ -17,10 +17,22 @@ Input Language:
   Does NOT match: gh issue list/view, gh label create, gh pr create.
 
 Algorithm:
-  1. Tokenize command via shlex.
+  1. Tokenize command via the shared `_shell_parse` tokenizer (segment-aware,
+     line-continuation-normalized, heredoc-stripped) — NOT a private shlex
+     reimplementation. Flag VALUES are extracted via `walk_flag_values` and
+     `_repo_flag_parse.extract_repo`, so label-shaped / repo-shaped tokens in
+     `--body`/`--body-file` content cannot leak into extraction (main#663
+     gh-command parser invariant — see `charter/hooks.md`).
   2. Detect wave-label application (regex `p\\d+-wave-\\d+` in any --label /
      --add-label value).
-  3. Resolve issue body:
+  3. Resolve the target repo. When `--repo`/`-R` is OMITTED (in-repo
+     invocation, gh's ambient-git-context resolution), recover it from the
+     invocation cwd's `origin` via `resolve_repo_short_name` (mirroring gh)
+     instead of falling through to the old empty-default-repo `noorinalabs/`
+     slug (the #650/#659 ambient-omitted class — MUST #2 of the invariant).
+     If the ambient repo is unresolvable, log a `skip_no_repo_context`
+     diagnostic and ALLOW (fail-open) — never a silent drop.
+  4. Resolve issue body:
        - gh issue create: from --body, --body-file, or stdin (skip if neither)
        - gh issue edit:   from `gh api repos/{repo}/issues/{num} --jq .body`
   4. If body contains `Origin-Verification:` line → ALLOW (override).
@@ -45,12 +57,20 @@ Exit codes:
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from annunaki_log import log_pretooluse_block  # noqa: E402
+from _repo_flag_parse import extract_repo  # noqa: E402
+from _shell_parse import (  # noqa: E402
+    find_gh_subcommand,
+    iter_command_segments,
+    resolve_repo_short_name,
+    strip_heredocs,
+    tokenize,
+    walk_flag_values,
+)
+from annunaki_log import log_pretooluse_block, log_pretooluse_diagnostic  # noqa: E402
 
 _WAVE_LABEL_RE = re.compile(r"p\d+-wave-\d+")
 _PHASE_WAVE_RE = re.compile(r"p(\d+)-wave-(\d+)")
@@ -67,64 +87,53 @@ _CITED_PATH_RE = re.compile(
 _OVERRIDE_RE = re.compile(r"^Origin-Verification:\s*\S", re.MULTILINE)
 
 
-def _tokenize(command: str) -> list[str] | None:
-    try:
-        return shlex.split(command, posix=True)
-    except ValueError:
+def _find_issue_command(command: str) -> tuple[str, str | None, list[str]] | None:
+    """Locate the first `gh issue create` / `gh issue edit <NUM>` segment.
+
+    Routes through the shared `_shell_parse` primitives (heredoc-strip,
+    line-continuation-aware tokenize, segment split, gh-subcommand locate)
+    rather than a private shlex reimplementation (main#663 invariant). This
+    also gains the #287 backslash-line-continuation fix the old private
+    `_tokenize` lacked.
+
+    Returns `(kind, issue_number, rest_tokens)` where `kind` is `"create"` or
+    `"edit"`, `issue_number` is the bare positional after `edit` (else None),
+    and `rest_tokens` is the post-`gh` token tail (e.g.
+    `["issue", "create", "--label", ...]`). Returns None when no matching
+    segment is present or the command does not tokenize.
+    """
+    tokens = tokenize(strip_heredocs(command))
+    if tokens is None:
         return None
-
-
-def _is_gh_issue_create(tokens: list[str]) -> bool:
-    for i in range(len(tokens) - 2):
-        if tokens[i] == "gh" and tokens[i + 1] == "issue" and tokens[i + 2] == "create":
-            return True
-    return False
-
-
-def _is_gh_issue_edit(tokens: list[str]) -> tuple[bool, str | None]:
-    """Detect `gh issue edit <NUM>` and return the issue number."""
-    for i in range(len(tokens) - 3):
-        if tokens[i] == "gh" and tokens[i + 1] == "issue" and tokens[i + 2] == "edit":
-            num = tokens[i + 3]
-            if num.isdigit():
-                return True, num
-    return False, None
-
-
-def _walk_flag_values(tokens: list[str], wanted: set[str]) -> list[str]:
-    """Collect values for any flag in `wanted`. Supports `--flag value` and
-    `--flag=value`. Comma-separated values are split (gh's list-flag style)."""
-    out: list[str] = []
-    i = 0
-    while i < len(tokens):
-        tok = tokens[i]
-        if tok in wanted and i + 1 < len(tokens):
-            out.extend(p for p in tokens[i + 1].split(",") if p)
-            i += 2
+    for segment in iter_command_segments(tokens):
+        gh = find_gh_subcommand(segment)
+        if gh is None:
             continue
-        matched = False
-        for flag in wanted:
-            if flag.startswith("--") and tok.startswith(flag + "="):
-                out.extend(p for p in tok[len(flag) + 1 :].split(",") if p)
-                matched = True
-                break
-        i += 1 if not matched else 1
+        _globals, rest = gh
+        if len(rest) >= 2 and rest[0] == "issue" and rest[1] == "create":
+            return "create", None, rest
+        if len(rest) >= 3 and rest[0] == "issue" and rest[1] == "edit" and rest[2].isdigit():
+            return "edit", rest[2], rest
+    return None
+
+
+def _collect_labels(rest: list[str], flags: set[str]) -> list[str]:
+    """Return label values for `flags`, splitting gh's comma-separated form.
+
+    `walk_flag_values` scopes extraction to the actual flag VALUES (never
+    label-shaped tokens inside `--body`); gh additionally accepts a single
+    `--label a,b,c` token, so each value is comma-split here.
+    """
+    out: list[str] = []
+    for raw in walk_flag_values(rest, flags):
+        out.extend(p for p in raw.split(",") if p)
     return out
 
 
-def _walk_first_value(tokens: list[str], wanted: set[str]) -> str | None:
-    """Return the FIRST value for any flag in `wanted` (single-value flags
-    like --body or --body-file)."""
-    i = 0
-    while i < len(tokens):
-        tok = tokens[i]
-        if tok in wanted and i + 1 < len(tokens):
-            return tokens[i + 1]
-        for flag in wanted:
-            if flag.startswith("--") and tok.startswith(flag + "="):
-                return tok[len(flag) + 1 :]
-        i += 1
-    return None
+def _first_value(rest: list[str], flags: set[str]) -> str | None:
+    """First value for any single-value flag in `flags`, or None."""
+    values = walk_flag_values(rest, flags)
+    return values[0] if values else None
 
 
 def _read_body_file(path: str) -> str | None:
@@ -187,17 +196,14 @@ def check(input_data: dict) -> dict | None:
     if not command:
         return None
 
-    tokens = _tokenize(command)
-    if tokens is None:
+    found = _find_issue_command(command)
+    if found is None:
         return None
+    kind, issue_num, rest = found
+    is_create = kind == "create"
 
-    is_create = _is_gh_issue_create(tokens)
-    is_edit, issue_num = _is_gh_issue_edit(tokens)
-    if not is_create and not is_edit:
-        return None
-
-    label_flag = {"--label", "-l"} if is_create else {"--add-label"}
-    labels = _walk_flag_values(tokens, label_flag)
+    label_flags = {"--label", "-l"} if is_create else {"--add-label"}
+    labels = _collect_labels(rest, label_flags)
     wave_label = next(
         (lbl for lbl in labels if _WAVE_LABEL_RE.search(lbl)),
         None,
@@ -205,18 +211,34 @@ def check(input_data: dict) -> dict | None:
     if not wave_label:
         return None
 
-    repo_default = _walk_first_value(tokens, {"--repo", "-R"}) or ""
+    # Resolve the target repo. `--repo`/`-R` is OPTIONAL: an in-repo
+    # `gh issue create/edit` relies on gh's ambient-git-context resolution and
+    # carries no `--repo` token. Recover that case from the invocation cwd's
+    # origin (main#663 invariant MUST #2) instead of the old empty-default
+    # `noorinalabs/` slug. If the ambient repo is unresolvable, log a skip
+    # diagnostic and fail-open (allow) — never a silent drop.
+    repo = extract_repo(command)
+    if not repo:
+        short = resolve_repo_short_name(input_data)
+        if not short:
+            log_pretooluse_diagnostic(
+                "validate_wave_label_evidence",
+                command,
+                {"skip": "skip_no_repo_context", "wave_label": wave_label},
+            )
+            return None
+        repo = f"noorinalabs/{short}"
 
     # Resolve issue body
     body: str | None = None
     if is_create:
-        body = _walk_first_value(tokens, {"--body"})
+        body = _first_value(rest, {"--body"})
         if body is None:
-            bf = _walk_first_value(tokens, {"--body-file", "-F"})
+            bf = _first_value(rest, {"--body-file", "-F"})
             if bf:
                 body = _read_body_file(bf)
-    elif is_edit and issue_num is not None:
-        body = _resolve_issue_body_for_edit(issue_num, repo_default)
+    elif issue_num is not None:
+        body = _resolve_issue_body_for_edit(issue_num, repo)
 
     if not body:
         return None  # Nothing to verify against
@@ -240,10 +262,10 @@ def check(input_data: dict) -> dict | None:
     # Verify each cited path at origin
     unverified: list[str] = []
     for path in cited_paths:
-        repo, inner_path = _extract_repo_for_path(path, repo_default)
-        exists_at_main = _path_exists_at_ref(repo, inner_path, "main")
+        path_repo, inner_path = _extract_repo_for_path(path, repo)
+        exists_at_main = _path_exists_at_ref(path_repo, inner_path, "main")
         exists_at_wave = (
-            _path_exists_at_ref(repo, inner_path, wave_branch) if wave_branch else False
+            _path_exists_at_ref(path_repo, inner_path, wave_branch) if wave_branch else False
         )
         if not (exists_at_main or exists_at_wave):
             unverified.append(path)

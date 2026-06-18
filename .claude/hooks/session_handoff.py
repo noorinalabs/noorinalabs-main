@@ -14,6 +14,7 @@ Exit codes:
 """
 
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -120,17 +121,43 @@ def _get_ontology_staleness() -> str:
         return "Could not read checksums"
 
 
+def _wave_phase_started(data: dict) -> tuple[str, str, str]:
+    """Resolve (phase, wave, started) from a cross-repo-status.json dict.
+
+    Reads the canonical lifecycle keys maintained by the wave skills:
+      - phase   ← ``current_phase``
+      - wave    ← ``current_wave`` (e.g. "wave-5")
+      - started ← ``wave_<N>_started_at`` for N parsed from ``current_wave``,
+                  falling back to ``wave_<N>_kicked_off_at``, then "unknown".
+
+    The flat ``phase``/``wave``/``started``/``last_updated`` keys are NOT used
+    as the source of truth — ``phase`` lags a phase behind (cross-phase key
+    collision, #683) and ``wave``/``started`` do not exist (#708).
+    """
+    phase = data.get("current_phase", "unknown")
+    wave = data.get("current_wave", "unknown")
+    started = "unknown"
+    if isinstance(wave, str):
+        match = re.search(r"(\d+)", wave)
+        if match:
+            n = match.group(1)
+            # `or` chains past both missing keys AND present-but-null values.
+            started = (
+                data.get(f"wave_{n}_started_at") or data.get(f"wave_{n}_kicked_off_at") or "unknown"
+            )
+    return str(phase), str(wave), started
+
+
 def _get_wave_status() -> str:
-    """Read cross-repo status for active wave."""
+    """Read cross-repo status for the active phase/wave."""
     status_file = REPO_ROOT / "cross-repo-status.json"
     if not status_file.exists():
         return "No cross-repo-status.json found"
     try:
         with open(status_file) as f:
             data = json.load(f)
-        wave = data.get("wave", "unknown")
-        started = data.get("started", "unknown")
-        return f"Wave {wave} (started {started})"
+        phase, wave, started = _wave_phase_started(data)
+        return f"Phase {phase}, Wave {wave} (started {started})"
     except (json.JSONDecodeError, OSError):
         return "Could not read status file"
 

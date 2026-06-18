@@ -75,23 +75,29 @@ class ShouldSkipNegativeTests(unittest.TestCase):
         )
 
 
-class ShouldSkipPositiveTests(unittest.TestCase):
-    """Positive regression — real in-repo source files MUST still track.
+class _FakeRepoRootMixin:
+    """Monkeypatch ``hook.REPO_ROOT`` to a fresh non-worktree temp dir.
 
-    These tests construct paths inside a temporary fake "repo root" with
-    REPO_ROOT monkey-patched so they pass identically whether the test
-    runner is checked out in the main repo or a worktree (worktree paths
-    contain the ``.claude/worktrees/`` substring which is — correctly —
-    skipped by the new filter).
+    Any test that builds a fixture path under ``hook.REPO_ROOT`` must be
+    independent of *where pytest is invoked from*. The real ``REPO_ROOT`` is
+    derived from ``__file__`` (``…/parent/parent/parent``), so when the suite
+    runs from a linked worktree under ``.claude/worktrees/`` it itself
+    contains a ``.worktrees`` path component. A fixture like
+    ``REPO_ROOT / "docs" / "notes.worktrees.md"`` would then spuriously match
+    ``_is_worktree_path`` and the negative-case assertion would FALSE-fail
+    (#686) — even though the same test is green on a normal checkout and in
+    CI. Anchoring fixtures under a temp dir that is outside both ``/tmp/``
+    (skipped by ``SKIP_PREFIXES``) and any ``*/.worktrees/`` tree (skipped by
+    the segment check) keeps them invocation-location independent.
     """
 
     def setUp(self):
-        # Fake repo root must be outside both "/tmp/" (skipped by SKIP_PREFIXES)
-        # and any "/.claude/worktrees/" (skipped by SKIP_PATTERNS). Place it
-        # under the user's home directory.
+        super().setUp()
+        # Place the fake root under the user's home cache directory so it is
+        # outside /tmp/ and outside any worktree tree (see class docstring).
         base = Path.home() / ".cache" / "noorinalabs-test-ontology-tracker"
         base.mkdir(parents=True, exist_ok=True)
-        self._tmp = tempfile.TemporaryDirectory(prefix="ont_track_pos_", dir=str(base))
+        self._tmp = tempfile.TemporaryDirectory(prefix="ont_track_", dir=str(base))
         self._fake_root = Path(self._tmp.name).resolve()
         self._orig_root = hook.REPO_ROOT
         hook.REPO_ROOT = self._fake_root
@@ -99,6 +105,16 @@ class ShouldSkipPositiveTests(unittest.TestCase):
     def tearDown(self):
         hook.REPO_ROOT = self._orig_root
         self._tmp.cleanup()
+        super().tearDown()
+
+
+class ShouldSkipPositiveTests(_FakeRepoRootMixin, unittest.TestCase):
+    """Positive regression — real in-repo source files MUST still track.
+
+    These tests construct paths inside a temporary fake "repo root" (see
+    ``_FakeRepoRootMixin``) so they pass identically whether the test runner
+    is checked out in the main repo or a worktree.
+    """
 
     def test_in_repo_ontology_yaml_is_tracked(self):
         """ontology/services.yaml under REPO_ROOT — the canonical positive case."""
@@ -120,7 +136,7 @@ class ShouldSkipPositiveTests(unittest.TestCase):
         self.assertFalse(hook._should_skip(path))
 
 
-class ShouldSkipTopLevelWorktreesTests(unittest.TestCase):
+class ShouldSkipTopLevelWorktreesTests(_FakeRepoRootMixin, unittest.TestCase):
     """#525: top-level `.worktrees/` paths must be skipped.
 
     The change-tracker anchors on the orchestrator cwd; an Edit inside a
@@ -129,6 +145,10 @@ class ShouldSkipTopLevelWorktreesTests(unittest.TestCase):
     was skipped, so the top-level convention (gitignored as of #523) polluted
     the parent ``checksums.json`` with entries that never resolve and once
     aborted a ``git merge --ff-only``.
+
+    Uses ``_FakeRepoRootMixin`` so the ``REPO_ROOT``-anchored fixtures below
+    are independent of whether pytest runs from the main checkout or a linked
+    worktree (#686).
     """
 
     def test_relative_top_level_worktrees_path_is_skipped(self):

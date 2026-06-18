@@ -11,6 +11,7 @@ Exit codes:
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -66,14 +67,39 @@ def _handoff_summary() -> str | None:
         return None
 
 
+def _wave_phase_started(data: dict) -> tuple[str, str, str]:
+    """Resolve (phase, wave, started) from a cross-repo-status.json dict.
+
+    Reads the canonical lifecycle keys maintained by the wave skills:
+      - phase   ← ``current_phase``
+      - wave    ← ``current_wave`` (e.g. "wave-5")
+      - started ← ``wave_<N>_started_at`` for N parsed from ``current_wave``,
+                  falling back to ``wave_<N>_kicked_off_at``, then "unknown".
+
+    The flat ``phase``/``wave``/``last_updated`` keys are NOT used as the
+    source of truth — ``phase`` lags a phase behind (cross-phase key
+    collision, #683) and ``wave`` does not exist (#708).
+    """
+    phase = data.get("current_phase", "unknown")
+    wave = data.get("current_wave", "unknown")
+    started = "unknown"
+    if isinstance(wave, str):
+        match = re.search(r"(\d+)", wave)
+        if match:
+            n = match.group(1)
+            # `or` chains past both missing keys AND present-but-null values.
+            started = (
+                data.get(f"wave_{n}_started_at") or data.get(f"wave_{n}_kicked_off_at") or "unknown"
+            )
+    return str(phase), str(wave), started
+
+
 def _wave_status() -> str | None:
-    """Return a brief summary from cross-repo-status.json, or None."""
+    """Return a brief phase/wave summary from cross-repo-status.json, or None."""
     try:
         data = json.loads(_CROSS_REPO_STATUS.read_text(encoding="utf-8"))
-        phase = data.get("phase", "unknown")
-        wave = data.get("wave", "unknown")
-        updated = data.get("last_updated", "unknown")
-        return f"Phase {phase}, Wave {wave} (last updated: {updated})"
+        phase, wave, started = _wave_phase_started(data)
+        return f"Phase {phase}, Wave {wave} (started: {started})"
     except (OSError, json.JSONDecodeError):
         return None
 

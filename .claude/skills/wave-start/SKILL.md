@@ -118,59 +118,26 @@ done
 
 ### 5a. Wave-key per-phase reset (when a phase reuses a wave number)
 
-At phase boundaries, bare `wave_{M}_*` keys from the prior phase's wave M remain in `cross-repo-status.json` under the same names (e.g. `wave_3_final_pr_count`, `wave_3_completed_at`, `wave_3_annunaki_attack_ran_at`). These stale values bleed into the new phase's wave M if not explicitly cleared.
+At phase boundaries, bare `wave_{M}_*` keys from the prior phase's wave M remain in `cross-repo-status.json` under the same names (e.g. `wave_4_final_pr_count`, `wave_4_branches`, `wave_4_scope`). These stale values bleed into the new phase's wave M if not explicitly cleared. (Bare keys — NOT phase-prefixed `p{P}_wave_{M}_*` — are deliberate: the phase-prefix scheme was considered and rejected in main#611 because it would require a coordinated read-contract change across every wave skill. The fix is correct cleanup of the bare keys, not renaming them.)
 
-**Detection:** before writing any new active-state keys, check whether `wave_{M}_completed_at` or `wave_{M}_wrapped_up_at` exists in the current file AND `current_phase` in the file differs from the phase `{P}` you are starting:
+**This step is fully mechanized** by `.claude/lib/wave_key_reset.py` (main#683). Do NOT hand-roll the detection or the key list in bash — three defects in the old inline version (a `current_phase`-based guard that could never fire for an intra-phase same-number reuse; a detection probe that looked for the wrong key names; and a hand-enumerated reset list that missed ≥10 keys including the dangerous `wave_{M}_branches`) are exactly what that helper exists to prevent.
+
+**Detection signal:** the helper decides staleness from the **phase stamp carried inside the wave's own keys** — `wave_{M}_scope.phase` (written by `/wave-scope`) and the `phase-{X}` segment of `wave_{M}_branches.branch` (written by `/wave-kickoff`). It NEVER consults the global `current_phase` (which tracks the latest phase, not the phase that wrote the stale keys — the root cause of the old guard's blind spot). If any stamp differs from the phase `{P}` you are starting, the wave's keys are stale.
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 STATUS_FILE="$REPO_ROOT/cross-repo-status.json"
 
-FILE_PHASE=$(python3 -c "import json; d=json.load(open('$STATUS_FILE')); print(d.get('current_phase',''))")
-HAS_PRIOR=$(python3 -c "
-import json; d=json.load(open('$STATUS_FILE'))
-print('yes' if d.get('wave_{M}_completed_at') or d.get('wave_{M}_wrapped_up_at') else 'no')
-")
+# Dry-run first — prints the verdict and the exact keys that would be reset:
+python3 "$REPO_ROOT/.claude/lib/wave_key_reset.py" "$STATUS_FILE" {M} {P}
 
-if [ "$HAS_PRIOR" = "yes" ] && [ "$FILE_PHASE" != "{P}" ]; then
-  echo "Phase reuse detected: wave-{M} previously used in phase $FILE_PHASE; resetting stale keys before starting phase-{P}/wave-{M}."
-fi
+# Apply — removes every stale wave_{M}_* key (prefix-complete; no-op if not stale):
+python3 "$REPO_ROOT/.claude/lib/wave_key_reset.py" "$STATUS_FILE" {M} {P} --apply
 ```
 
-**When the condition is true, reset ALL of the following `wave_{M}_*` keys to `null` via `upsert_status_keys.py` — only for keys that exist in the file (skip non-existent keys to avoid inserting `null` noise):**
+The `--apply` path REMOVES the stale keys (the main#611 bare-key overwrite convention — the new phase's `/wave-start` § 6 and `/wave-scope` then write fresh `wave_{M}_*` keys). It is a safe no-op when the wave's stamps already match `{P}` — i.e. the first wave of a phase, or `/wave-start` re-run within the same phase (idempotent). Removal reuses `upsert_status_keys.remove_top_level_key`, so the file's mixed compact-inline / pretty-indented shape is preserved and the rewrite is JSON-validated before AND after (no 500-line cosmetic diff).
 
-```bash
-# Keys to reset (enumerate exactly — no glob, to keep the surface auditable):
-RESET_KEYS=(
-  wave_{M}_final_pr_count
-  wave_{M}_changes_requested_cycles
-  wave_{M}_top_concentration_pct
-  wave_{M}_completed_at
-  wave_{M}_wrapped_up_at
-  wave_{M}_kicked_off_at
-  wave_{M}_started_at
-  wave_{M}_scope_reconciled_at
-  wave_{M}_stg_promotion
-  wave_{M}_stg_promotion_url
-  wave_{M}_annunaki_attack_ran_at
-  wave_{M}_memory_audit_ran_at
-)
-
-for KEY in "${RESET_KEYS[@]}"; do
-  EXISTS=$(python3 -c "import json; d=json.load(open('$STATUS_FILE')); print('yes' if '$KEY' in d else 'no')")
-  if [ "$EXISTS" = "yes" ]; then
-    python3 "$REPO_ROOT/.claude/lib/upsert_status_keys.py" "$STATUS_FILE" "$KEY"=null
-    echo "  reset: $KEY"
-  fi
-done
-echo "Wave-key reset complete. Prior-phase values are cleared from the live file; git history preserves them."
-```
-
-This reset runs BEFORE the § 6 PUT-contents write so the active-state keys written in § 6 are the only non-null `wave_{M}_*` values once the step completes. Fold the null assignments into the same PUT-contents payload as § 6 to avoid a separate round-trip: `jq` can del() or set-to-null the stale keys in the same content transformation.
-
-**When the condition is false** (first wave of a phase, or `current_phase` already matches `{P}` because /wave-start is being re-run within the same phase): skip this step silently.
-
-**Why `upsert_status_keys.py` and not raw `jq`:** the file uses mixed compact-inline + pretty-indented style; a naive jq round-trip reformats every compact line, producing a 500+ line cosmetic diff per wave. `upsert_status_keys.py` performs targeted text-level upsert that preserves the existing style (see skills.md § Cross-repo-status.json upsert pattern).
+This reset runs BEFORE the § 6 PUT-contents write so the only `wave_{M}_*` values left once the step completes are the active-state keys § 6 writes. When operating on the `main` copy via PUT-contents, run the helper against a local working copy of the fetched content and fold the result into the same § 6 payload to avoid a separate round-trip.
 
 ### 6. Update cross-repo status — PUT-contents on `main`
 

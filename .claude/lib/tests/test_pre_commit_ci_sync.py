@@ -108,6 +108,84 @@ jobs:
         self.assertNotIn("ruff-lint", kinds)
 
 
+class CspellKindClassification(unittest.TestCase):
+    """#684: the spell-check blind spot. A CI Spellcheck job must classify as
+    the `cspell` kind on EITHER expression — the `streetsidesoftware/cspell-action`
+    `uses:` ref, the bundled-CLI `cspell` step/run, or the generic `spellcheck`
+    word — and a pre-commit cspell hook must classify too, so a CI spell gate
+    with no local mirror produces harmful drift instead of silence."""
+
+    def test_cspell_action_uses_ref_classified(self) -> None:
+        wf = """
+jobs:
+  spellcheck:
+    name: Spellcheck (cspell)
+    steps:
+      - name: cspell
+        uses: streetsidesoftware/cspell-action@de2a73e # v8.4.0
+"""
+        self.assertIn("cspell", kinds_from_ci(wf))
+
+    def test_cspell_cli_run_step_classified(self) -> None:
+        wf = """
+jobs:
+  spell:
+    steps:
+      - run: npx cspell --config .cspell.json "**/*.md"
+"""
+        self.assertIn("cspell", kinds_from_ci(wf))
+
+    def test_generic_spellcheck_word_classified(self) -> None:
+        # A repo that names the step/run with the generic word still registers.
+        self.assertIn("cspell", kinds_from_ci("      - run: make spellcheck\n"))
+
+    def test_precommit_cspell_hook_classified(self) -> None:
+        cfg = """
+repos:
+  - repo: https://github.com/streetsidesoftware/cspell-cli
+    rev: v8.4.0
+    hooks:
+      - id: cspell
+        name: cspell
+"""
+        self.assertIn("cspell", kinds_from_precommit(cfg))
+
+    def test_ci_cspell_without_precommit_is_harmful_drift(self) -> None:
+        # The exact divergence #684 exists to catch: CI enforces cspell, the
+        # pre-commit config does not mirror it.
+        wf = """
+jobs:
+  spellcheck:
+    steps:
+      - uses: streetsidesoftware/cspell-action@de2a73e
+"""
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+"""
+        harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
+        self.assertIn("cspell", harmful)
+
+    def test_ci_cspell_with_precommit_mirror_no_drift(self) -> None:
+        wf = """
+jobs:
+  spellcheck:
+    steps:
+      - uses: streetsidesoftware/cspell-action@de2a73e
+"""
+        cfg = """
+repos:
+  - repo: https://github.com/streetsidesoftware/cspell-cli
+    rev: v8.4.0
+    hooks:
+      - id: cspell
+"""
+        harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
+        self.assertNotIn("cspell", harmful)
+
+
 class BuildKindTightening(unittest.TestCase):
     """#576: runtime `docker build` / `docker buildx` steps are image-MOVING,
     not a build-QUALITY gate a local pre-commit hook can mirror — they must
@@ -291,6 +369,31 @@ class RealParentRepoHasNoDrift(unittest.TestCase):
             set(),
             f"parent pre-commit must mirror CI; missing locally: {sorted(harmful)}",
         )
+
+    def test_parent_precommit_mirrors_all_workflows(self) -> None:
+        # The CLI gate globs ALL workflow files, so the parent must have no
+        # harmful drift across the full set — in particular docs.yml carries the
+        # cspell + actionlint jobs (#684/#571). This is the gate exactly as the
+        # `Pre-commit ⇄ CI sync-drift gate` CI job runs it.
+        precommit = _REPO_ROOT / ".pre-commit-config.yaml"
+        wf_dir = _REPO_ROOT / ".github" / "workflows"
+        ci_paths = sorted(wf_dir.glob("*.y*ml"))
+        self.assertTrue(ci_paths, "parent must have workflow files")
+        harmful, _ = check_repo(precommit, ci_paths)
+        self.assertEqual(
+            harmful,
+            set(),
+            f"parent pre-commit must mirror ALL CI workflows; missing locally: {sorted(harmful)}",
+        )
+
+    def test_parent_ci_enforces_cspell(self) -> None:
+        # Guard against the docs.yml cspell job being removed/renamed without the
+        # mirror+kind being revisited: the kind must actually appear in CI.
+        wf_dir = _REPO_ROOT / ".github" / "workflows"
+        ci_text = "\n".join(
+            p.read_text(encoding="utf-8") for p in wf_dir.glob("*.y*ml") if p.is_file()
+        )
+        self.assertIn("cspell", kinds_from_ci(ci_text))
 
 
 if __name__ == "__main__":
