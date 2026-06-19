@@ -90,7 +90,11 @@ repos:
         language: system
         types: [python]
         files: ^\.claude/(hooks|lib|skills)/.*\.py$
-        exclude: ^\.claude/worktrees/
+        # Skip worktree copies, and conftest.py — two test dirs each ship a
+        # `conftest.py`, which collide under one flat mypy invocation ("Duplicate
+        # module named conftest"). CI type-checks them safely via its per-dir
+        # mypy loop (ci.yml); this file-list hook would pass both at once (#719).
+        exclude: (^\.claude/worktrees/|(^|/)conftest\.py$)
         pass_filenames: true
         stages: [pre-push]
       - id: pytest
