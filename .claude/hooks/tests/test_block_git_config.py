@@ -38,6 +38,27 @@ class PositiveMatchTests(unittest.TestCase):
         result = hook.check(_input("git -C /repo config user.name foo"))
         self.assertIsNotNone(result)
 
+    def test_unset_identity_blocked(self):
+        self.assertIsNotNone(hook.check(_input("git config --unset user.email")))
+
+    def test_user_namespace_blocked(self):
+        # The whole user.* identity namespace is protected, not just name/email.
+        self.assertIsNotNone(hook.check(_input("git config user.signingkey ABC123")))
+
+
+class OperationalKeyTests(unittest.TestCase):
+    """#717: non-identity (operational) config writes MUST be allowed."""
+
+    def test_core_hookspath_write_allowed(self):
+        self.assertIsNone(hook.check(_input("git config core.hooksPath .git/hooks")))
+
+    def test_core_hookspath_unset_allowed(self):
+        # The exact command #717 was filed for.
+        self.assertIsNone(hook.check(_input("git -C /repo config --unset core.hooksPath")))
+
+    def test_commit_gpgsign_allowed(self):
+        self.assertIsNone(hook.check(_input("git config commit.gpgsign false")))
+
 
 class NegativeMatchTests(unittest.TestCase):
     """#216: prose / --body / --body-file content must NOT trigger.
