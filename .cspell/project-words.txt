@@ -149,3 +149,4 @@ lastname
 Luciana
 Ferreyra
 Okonkwo
+ltrimstr
