@@ -57,6 +57,16 @@ resolve_repo_root() {
 }
 REPO_ROOT="$(resolve_repo_root)"
 
+# Pick up any merges/pushes to origin/main since last session (main#713) so the
+# session never runs pre-fix hooks/skills off a stale checkout (the failure this
+# session hit: opened 22 commits behind, ran the pre-#709 reader). The helper is
+# fully guarded — it fast-forwards only a clean, strictly-behind main and refuses
+# (no-op) on a diverged/ahead/dirty tree; it never forces or discards local work.
+# Non-fatal: a refusal or error must never block session-start.
+if [ -f "$REPO_ROOT/.claude/lib/sync_main.py" ]; then
+  python3 "$REPO_ROOT/.claude/lib/sync_main.py" "$REPO_ROOT" || true
+fi
+
 # Parent repo + the 7 canonical child repos (CLAUDE.md Repository Map).
 REPOS=("$REPO_ROOT")
 for child in \

@@ -77,6 +77,7 @@ _EDIT_WRITE_MODULES = [
 _REGISTRY: dict[str, list[str]] = {
     "Bash": [
         "annunaki_monitor",  # local: regex over stdout/stderr, JSONL append
+        "auto_sync_main",  # local: ff local main after a push/merge to origin/main (#713)
         "auto_add_issue_to_board",  # network: runs `gh project item-add`
         "post_wave_kickoff_comment",  # network: gh fetch + post comment
         "post_label_change_wave_field_sync",  # network: GraphQL updateProjectV2ItemFieldValue
