@@ -192,14 +192,16 @@ For each org repo, list the latest default-branch run of each workflow and flag 
 ```bash
 REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
 [ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
-# Primary: the most-recent `wave_<N>_repos_in_scope` array (the canonical org repo set;
-# there is no top-level `.repos` key). Falls through to the hardcoded list if the file is
-# missing/unparseable or has no such key.
+# Primary: resolve the repo set from the canonical `current_wave` lifecycle
+# pointer (e.g. "wave-5" -> `wave_5_repos_in_scope`), NOT `max_by` over the
+# wave NUMBER. Completed *prior-phase* waves (e.g. `wave_7_repos_in_scope` from
+# the P4 close-out) are legitimately retained, so "highest number" structurally
+# picks a stale 2-repo scope over the live one — main#712 (same defect class as
+# the current_wave reader fix #708/#709). `ltrimstr` is null-safe: a missing/
+# malformed `current_wave` yields an absent key -> empty -> the hardcoded list.
 REPOS=$(jq -r '
-  [to_entries[]
-   | select(.key | test("^wave_[0-9]+_repos_in_scope$"))
-   | {n: (.key | capture("^wave_(?<n>[0-9]+)_repos_in_scope$").n | tonumber), v: .value}]
-  | max_by(.n) | .v[]? // empty
+  (.current_wave // "" | ltrimstr("wave-")) as $n
+  | .["wave_\($n)_repos_in_scope"][]? // empty
 ' "$REPO_ROOT/cross-repo-status.json" 2>/dev/null)
 [ -n "$REPOS" ] || REPOS="noorinalabs-main noorinalabs-isnad-graph noorinalabs-user-service noorinalabs-deploy noorinalabs-design-system noorinalabs-data-acquisition noorinalabs-isnad-ingest-platform noorinalabs-landing-page"
 
