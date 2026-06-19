@@ -134,10 +134,10 @@
       "resolved_at": "2026-05-03T16:59:38.573672+00:00"
     },
     ".claude/team/charter/agents.md": {
-      "last_tracked": "2d88f9d901b855232666cca126b00558963480c3a8720edbdf3143b6550054ed",
-      "last_resolved": "2d88f9d901b855232666cca126b00558963480c3a8720edbdf3143b6550054ed",
-      "tracked_at": "2026-05-16T21:57:39.421700+00:00",
-      "resolved_at": "2026-05-16T22:20:43.893664+00:00"
+      "last_tracked": "581155d4059527fc6dcb90866a2366557a39486f40dcacf6cc49220c54012150",
+      "last_resolved": "581155d4059527fc6dcb90866a2366557a39486f40dcacf6cc49220c54012150",
+      "tracked_at": "2026-06-19T23:42:32.651267+00:00",
+      "resolved_at": "2026-06-19T23:44:09Z"
     },
     ".claude/team/charter/hooks.md": {
       "last_resolved": "6186be618f7580ee5cdc2af2682d1bef385ca54645025ce82f9ebdf38c127a01",
@@ -662,10 +662,10 @@
       "resolved_at": "2026-05-06T00:59:20.040752+00:00"
     },
     ".claude/team/charter/state-claims.md": {
-      "last_tracked": "0a27638d2ae460ef1730509b35a97b70cfb64498b5dba0b68897164b4a359f02",
-      "last_resolved": "0a27638d2ae460ef1730509b35a97b70cfb64498b5dba0b68897164b4a359f02",
-      "tracked_at": "2026-05-06T01:08:41.676774+00:00",
-      "resolved_at": "2026-05-06T01:11:01.420649+00:00"
+      "last_tracked": "53554684caefa256a77fd03b7a58ee8744b4d8812836ac6986f1e449b11407cb",
+      "last_resolved": "53554684caefa256a77fd03b7a58ee8744b4d8812836ac6986f1e449b11407cb",
+      "tracked_at": "2026-06-19T23:42:29.991302+00:00",
+      "resolved_at": "2026-06-19T23:44:09Z"
     },
     ".claude/team/phases/phase-3.md": {
       "last_tracked": "6ededd8608f01314fbeb5ebaa87a316e1f126ed6696218ba3ac44a2dcf86840c",

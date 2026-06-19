@@ -2,6 +2,8 @@
 
 This file documents the team's discipline for making claims about the state of artifacts (PRs, issues, branches, files, sha references) in coordination messages, review comments, and status updates.
 
+<!-- Promoted from memory: feedback_refresh_before_status_claim.md (already encoded as the claim-direction discipline below; marker reconciliation via /promotion-audit 2026-06-19) -->
+
 ## Refresh State Before Claim (Mandatory) <!-- promotion-target: skill -->
 
 Before any state-claim — phrases like `X/Y cleared`, `comprehensive coverage`, `all items addressed`, `merged at sha Y`, `PR head is Z`, `verified at head_sha=W`, or any assertion about the current state of an artifact you are NOT actively writing to — perform a fresh verification call (`gh api`, `git show <ref>`, or equivalent) within the same tool-block as the claim, with manual eyeball-check that the verification confirms the claim.

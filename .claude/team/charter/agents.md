@@ -641,6 +641,8 @@ This section covers the **zero-artifact stall**: the implementer has produced no
 
 P5W3 retro (2026-06-14) § Proposed Process Change #1 — recurred two consecutive waves. Part (a) (TaskCreate at spawn) was codified via P5W2 retro in `/wave-kickoff` § 9b. Part (b) (zero-artifact threshold) is the P5W3 addition. Both promoted here to charter level so the liveness rule applies across all spawn contexts, not just those initiated via `/wave-kickoff`.
 
+<!-- Promoted from memory: feedback_throttle_takeover.md (takeover mechanic encoded in this section; marker reconciliation via /promotion-audit 2026-06-19) -->
+
 ## Throttle-Stall Recovery — Trigger Thresholds <!-- promotion-target: hook -->
 
 `feedback_throttle_takeover` covers the takeover *mechanic* — when a spawned implementer throttle-stalls mid-task with sound partial work, the orchestrator finishes directly with the implementer's per-commit identity (~5min vs respawn's ~15min). This section encodes the **trigger**: when the orchestrator should detect the stall and invoke that mechanic, rather than discovering it reactively hours later.
