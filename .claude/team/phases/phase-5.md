@@ -59,7 +59,9 @@ On the **final wave (W5 — revised 2026-06-16, Phase 5 wraps at W5)** the +20% 
 
 ## Phase exit gate
 
-Owner runs `/phase-review 5` and verifies all 5 end-state rows are `Done` (#665, #602, #603, #666, #667 closed), including the standing per-wave TD-intake compliance (criterion-6 model carried from P4 — every wave took its +20%). On confirmation, `/plan-phase 6` defines the next phase before any P6 wave kicks off.
+Owner runs `/phase-review 5` and verifies the **4 core end-state rows** are `Done` (#665, #602, #603, #666 closed), including the standing per-wave TD-intake compliance (criterion-6 model carried from P4 — every wave took its +20%). **#667 (streaming-pipeline-repeatable) was moved to Phase 7 by owner direction 2026-06-19** — streaming/pipeline work is centered there; the P5W5 cutover delivered real data on prod via the batch path, so streaming-repeatable is no longer a P5 exit row. On confirmation, `/plan-phase 6` defines the next phase before any P6 wave kicks off.
+
+> **Note (2026-06-19):** prod **semantic search** also defers to Phase 7 ("a real model served in prod"). The P5W5 cutover put real data + the working product (keyword search / graph / app) live on prod; the prod re-embed is gated on promoting the embed image to a prod tag (`promote.yml` currently omits it) — see deploy#470. This is non-blocking for the 4 core P5 criteria.
 
 ## References
 
