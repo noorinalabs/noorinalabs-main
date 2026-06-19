@@ -52,8 +52,10 @@ On the **final wave (W5 — revised 2026-06-16, Phase 5 wraps at W5)** the +20% 
 - **Billing/payments** (ig#717/#718) — needs product traction first.
 - **CDN + performance ops**, **developer portal**, **notifications**, **visual-asset sourcing** — optimize after real traffic.
 - **Playwright live-site automation** (main#56/#57), **Hetzner sizing** (main#142) — revisit when prod load is real.
-- **Historical timeline & events** (#673, ig#1039–1043, da#161–166) — moved to **Phase 6** (was the original W5; deferred when P5 wrapped at W5/prod-cutover 2026-06-16).
-- **Deep data-quality epic** (da date-extraction #161–166, integrity da#153, disambiguation da#139, coverage da#98) — the **Phase 6 (Data Quality / ML)** nucleus: NER/entity-resolution accuracy, dedup, embedding quality at scale, a real model served **in prod**, validation/integrity gates.
+- **Historical timeline & events** (#673, ig#1039–1043, da#161–166) — **Phase 7** or later (was the original W5; deferred at P5W5/prod-cutover 2026-06-16; advanced P6→P7 by the 2026-06-19 roadmap revision below).
+- **Deep data-quality epic** (da date-extraction #161–166, integrity da#153, disambiguation da#139, coverage da#98) — the **Phase 7 (Data Quality / ML / demo)** nucleus: NER/entity-resolution accuracy, dedup, embedding quality at scale, a real model served **in prod**, validation/integrity gates, ML analysis to make data demo-ready.
+
+**Roadmap revision (owner 2026-06-19):** a new **Phase 6 = Claude Efficiency** is inserted next (audit/interaction: tighten memories, bias toward code over `.md`/memories, revisit the persona model, explore Google LLM-doc format + graphify to potentially drop the ontology stack, and absorb tech-debt + Claude fixes incl. non-phase-tied). The former **Phase 6 (Data Quality / ML)** advances to **Phase 7** (serious ML + pipeline to make data demo-ready). `/plan-phase 6` then `/plan-phase 7` write the formal plan docs at kickoff. See memory `project_p5w5_prodcutover_p6_dataquality`.
 
 ## Phase exit gate
 
