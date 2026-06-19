@@ -574,6 +574,55 @@ Run `/ontology-rebuild` to process any files that changed during this wave. This
 - The resolver will auto-update docs where appropriate and flag recommend-only changes
 - Include ontology changes in the final wave report
 
+### 12.5. Generic-prompt genericize checkpoint (main#716)
+
+The `suggest_generic_prompt` PostToolUse hook no longer nudges per-edit (that nudge was never actioned — a non-binding mid-task `systemMessage` with no state, no dedup, no closing loop → enforcement-hierarchy decay; `2real-team-framework/generic_prompts/` gained **zero** files across every wave despite it firing constantly). It now **silently tracks** every touched `.claude/` artifact into a pending ledger. This step is the closing loop: once per wave, enumerate the wave's new/changed `.claude/` artifacts (hooks/skills/charter/settings) that **lack a counterpart** in the framework's `generic_prompts/` **and aren't already decided**, and make ONE deliberate genericize-or-skip pass. Decisions are recorded so the same artifact is never re-surfaced.
+
+Two state files back this (see `.claude/lib/generic_prompt_tracker.py`): `.claude/generic_prompt_pending.json` (volatile, gitignored — the candidate set) and `.claude/generic_prompt_ledger.json` (**version-controlled** — the durable genericize/skip decisions, the dedup memory).
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+TRACKER="$REPO_ROOT/.claude/lib/generic_prompt_tracker.py"
+
+# (a) Belt-and-suspenders: the pending ledger is per-machine volatile state, so
+# augment it with a git-diff sweep of the meta repo's wave-window .claude/
+# changes (in case pending was wiped, or edits happened in a different session).
+# Diff the wave branch's merge-base with main against HEAD; degrade to a no-op
+# if the wave branch is absent. zsh-safe `while read` (main#688).
+WAVE_BRANCH="deployments/phase-{P}/wave-{M}"
+BASE=$(git -C "$REPO_ROOT" merge-base main "$WAVE_BRANCH" 2>/dev/null || true)
+if [ -n "$BASE" ]; then
+  git -C "$REPO_ROOT" diff --name-only --diff-filter=d "$BASE"..HEAD -- '.claude/**' 2>/dev/null \
+    | while IFS= read -r f; do
+        [ -n "$f" ] && python3 "$TRACKER" record-candidate "$REPO_ROOT/$f" >/dev/null
+      done
+fi
+
+# (b) List the undecided genericizable candidates — the deliberate worklist.
+python3 "$TRACKER" list --wave "P{P}W{M}"
+```
+
+For **each** candidate the list prints, make a genericize-or-skip call and record it (this is what stops the artifact re-surfacing next wave):
+
+```bash
+# Genericize: draft the product-neutral prompt file in the framework repo
+# (strip project-specific names/paths/team/repo), then record the decision with
+# the generic file as the detail:
+python3 "$TRACKER" record "hooks/<name>.py" genericized \
+  --detail "GENERIC_<NAME>_PROMPT.md" --wave "P{P}W{M}"
+
+# Skip: the artifact is too project-coupled to genericize (or not worth it) —
+# record WHY so it stays settled:
+python3 "$TRACKER" record "skills/<name>/SKILL.md" skipped \
+  --detail "<one-line reason — e.g. tightly coupled to noorinalabs wave lifecycle>" \
+  --wave "P{P}W{M}"
+```
+
+- If `list` reports no undecided candidates, report "Generic-prompt checkpoint: nothing to genericize this wave" and continue.
+- **Commit the ledger** (`.claude/generic_prompt_ledger.json`) as part of the wrapup — it is version-controlled durable state. The pending file is gitignored; do not commit it.
+- Include a one-line genericized/skipped tally in the Step 10 final wave report.
+- This is the deliberate batched replacement for the demoted per-edit hook; do NOT re-introduce a mid-task suggestion.
+
 ### 13. Annunaki error attack
 
 > **Preferred surface is `/wave-retro` Step 7.6 (P3W9 #344).** Retro is the natural moment for this audit — findings feed the retro's charter-change proposals. Wrapup retains this step as a fallback for cases where retro is delayed or skipped. The run-marker below prevents double-execution.
