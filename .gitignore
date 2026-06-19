@@ -48,6 +48,12 @@ temp/
 # /file-bug skill telemetry log (#357 — append-only, local-only, queried by /wave-retro)
 .claude/.file-bug-log.jsonl
 
+# Generic-prompt PENDING candidate set (main#716 — volatile, per-machine, fed by
+# the silent suggest_generic_prompt hook; rebuilds from edits / the wave-wrapup
+# git-diff sweep). The DECISIONS ledger (.claude/generic_prompt_ledger.json) is
+# NOT ignored — durable cross-wave genericize/skip state must be committed.
+.claude/generic_prompt_pending.json
+
 # Python lockfile for the virtual parent project (no real deps; auto-regen)
 /uv.lock
 
