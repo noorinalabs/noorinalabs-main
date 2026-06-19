@@ -1410,10 +1410,10 @@
       "resolved_at": "2026-06-14T17:25:07.569711+00:00"
     },
     ".claude/team/phases/phase-5.md": {
-      "last_tracked": "171d133214211ed885d7b1b2762afb32d6e77bb7491b9c0f0121b84c08d4af60",
-      "last_resolved": "171d133214211ed885d7b1b2762afb32d6e77bb7491b9c0f0121b84c08d4af60",
-      "tracked_at": "2026-06-19T18:56:27.042438+00:00",
-      "resolved_at": "2026-06-19T20:22:30Z"
+      "last_tracked": "37e913e545f1bdc755b34d0315f9e71f5855053d0609301dcce9f24e0dd5456b",
+      "last_resolved": "37e913e545f1bdc755b34d0315f9e71f5855053d0609301dcce9f24e0dd5456b",
+      "tracked_at": "2026-06-19T20:49:52.259418+00:00",
+      "resolved_at": "2026-06-19T21:30:42Z"
     }
   },
   "last_cleanup": {
