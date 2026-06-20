@@ -7,7 +7,7 @@ metadata:
   originSessionId: f3dcddd8-6ad9-48bf-b25e-92d034607282
 ---
 
-Prod validation 2026-06-19 (live app https://isnad.noorinalabs.com, signed-in admin, browser walkthrough). Supersedes the "prod is empty" state in [[project_p5w5_corpus_load_findings]].
+Prod validation 2026-06-19 (live app https://isnad.noorinalabs.com, signed-in admin, browser walkthrough). Supersedes the earlier "prod is empty" state from the p5w5 corpus-load findings (now homed in data-acquisition memory).
 
 **Prod IS loaded now** (cutover happened): 48 collections, sect tags correct incl. Al-Kāfī=Shia, real Arabic matn + translation, Timeline compilation dates correct (Bukhari 256 AH … Nasa'i 303 AH), auth/admin functional.
 
