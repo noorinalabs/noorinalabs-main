@@ -23,6 +23,7 @@
     "ontology/**/*.md",
     "CLAUDE.md",
     "ONBOARDING.md",
+    "README.md",
     "docs/**/*.md"
   ],
   "ignorePaths": [
