@@ -103,5 +103,21 @@ class WaveStatusWrapperTests(unittest.TestCase):
         self.assertIsNone(result)
 
 
+class HandoffPathLocationTests(unittest.TestCase):
+    """#741: the SessionStart hook must read the handoff from the in-repo,
+    version-controlled .claude/memory/ — NOT the user-space
+    ~/.claude/projects/<encoded>/memory/ auto-memory dir. Reading user-space
+    while the /session-start skill reads in-repo is the split-brain this fixes.
+    """
+
+    def test_handoff_is_in_repo_memory(self) -> None:
+        expected = hook._PROJECT / ".claude" / "memory" / "session_handoff.md"
+        self.assertEqual(hook._HANDOFF, expected)
+
+    def test_handoff_not_in_user_space(self) -> None:
+        self.assertNotIn("/.claude/projects/", hook._HANDOFF.as_posix())
+        self.assertFalse(hook._HANDOFF.is_relative_to(Path.home() / ".claude" / "projects"))
+
+
 if __name__ == "__main__":
     unittest.main()

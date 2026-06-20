@@ -19,9 +19,10 @@ _PROJECT = Path(__file__).resolve().parent.parent.parent
 _CHECKSUMS = _PROJECT / "ontology" / "checksums.json"
 _ERRORS_LOG = _PROJECT / ".claude" / "annunaki" / "errors.jsonl"
 _CROSS_REPO_STATUS = _PROJECT / "cross-repo-status.json"
-# Claude Code encodes project paths by replacing / with - (leading slash becomes leading -)
-_ENCODED_PROJECT = str(_PROJECT).replace("/", "-")
-_HANDOFF = Path.home() / ".claude" / "projects" / _ENCODED_PROJECT / "memory" / "session_handoff.md"
+# Handoff lives in-repo alongside the version-controlled memory corpus (#732, #741)
+# so this SessionStart hook and the /session-start skill read the SAME gitignored
+# file — no split-brain between the user-space auto-memory dir and the in-repo one.
+_HANDOFF = _PROJECT / ".claude" / "memory" / "session_handoff.md"
 
 
 def _ontology_staleness() -> tuple[int, int]:

@@ -22,12 +22,19 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
-# Project memory path — Claude auto-loads this at session start
-MEMORY_DIR = (
-    Path.home() / ".claude" / "projects" / "-home-parameterization-code-noorinalabs-main" / "memory"
-)
+# Project memory is version-controlled in-repo (#732 relocation) so it travels
+# with a git pull. The handoff file itself stays gitignored — it's per-session
+# machine-local churn — but it MUST live alongside the corpus so the SessionStart
+# hook (session_start.py) and the /session-start skill read the same file. When
+# this lived under the user-space ~/.claude/projects/ auto-memory dir while the
+# skill read in-repo, the two diverged (split-brain, #741).
+#
+# We deliberately do NOT auto-rewrite the tracked MEMORY.md index line from this
+# Stop hook: mutating a version-controlled file on every session exit is exactly
+# the churn the gitignore on the handoff file avoids. The /handoff skill owns the
+# committed index line (a deliberate, intentional write).
+MEMORY_DIR = REPO_ROOT / ".claude" / "memory"
 HANDOFF_FILE = MEMORY_DIR / "session_handoff.md"
-MEMORY_INDEX = MEMORY_DIR / "MEMORY.md"
 
 
 def _run(cmd: str, cwd: str | None = None, timeout: int = 10) -> str:
@@ -174,7 +181,6 @@ def main() -> None:
 
     now = datetime.now(timezone.utc)
     date_str = now.strftime("%Y-%m-%d %H:%M UTC")
-    date_short = now.strftime("%Y-%m-%d")
 
     git = _get_git_state()
     prs = _get_open_prs()
@@ -237,28 +243,9 @@ def main() -> None:
     except OSError:
         sys.exit(0)
 
-    # Update memory index — replace existing handoff entry or add new one
-    handoff_entry = (
-        f"- [Session handoff](session_handoff.md)"
-        f" — Pickup from {date_short}: auto-generated project state snapshot"
-    )
-    try:
-        if MEMORY_INDEX.exists():
-            index_content = MEMORY_INDEX.read_text(encoding="utf-8")
-            index_lines = index_content.splitlines()
-            new_lines = []
-            found = False
-            for line in index_lines:
-                if "session_handoff.md" in line.lower() or "Session handoff" in line:
-                    new_lines.append(handoff_entry)
-                    found = True
-                else:
-                    new_lines.append(line)
-            if not found:
-                new_lines.append(handoff_entry)
-            MEMORY_INDEX.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-    except OSError:
-        pass
+    # Note: the tracked MEMORY.md index line is intentionally NOT updated here —
+    # see the MEMORY_DIR comment above. The committed index line is owned by the
+    # /handoff skill so this Stop hook never dirties a version-controlled file.
 
     # Build a compact display version for the conversation
     display_lines = [
