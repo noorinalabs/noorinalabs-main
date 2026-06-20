@@ -28,9 +28,8 @@ import helpers as h  # noqa: E402
 import run  # noqa: E402
 
 _REPO_ROOT = _HERE.parent.parent.parent.parent
-_MEMORY_DIR = os.path.expanduser(
-    "~/.claude/projects/-home-parameterization-code-noorinalabs-main/memory"
-)
+# Memory is now in-repo (#732 relocation), not under ~/.claude/projects/.
+_MEMORY_DIR = str(_REPO_ROOT / ".claude" / "memory")
 
 
 def _write(path: Path, text: str) -> None:

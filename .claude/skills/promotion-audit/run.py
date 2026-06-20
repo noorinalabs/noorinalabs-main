@@ -70,9 +70,10 @@ import helpers as h  # noqa: E402
 
 # Walk up from .claude/skills/promotion-audit/run.py to the repo root.
 _REPO_ROOT = _HERE.parent.parent.parent
-_DEFAULT_MEMORY_DIR = os.path.expanduser(
-    "~/.claude/projects/-home-parameterization-code-noorinalabs-main/memory"
-)
+# Project memory now lives IN-REPO (version-controlled, transferable) at
+# .claude/memory/, not the user-space ~/.claude/projects/<cwd>/memory/ path it
+# used pre-relocation (#732 / CLAUDE.md § Project Memory). Derive from repo root.
+_DEFAULT_MEMORY_DIR = str(_REPO_ROOT / ".claude" / "memory")
 
 DEFAULT_THRESHOLD = 5
 
@@ -96,9 +97,9 @@ def resolve_paths(
 ) -> AuditPaths:
     """Resolve every input path from the repo root.
 
-    `memory_dir` defaults to the project's user-level memory area, which
-    lives OUTSIDE the repo (under ~/.claude/projects/...). It can be
-    overridden for tests against a fixture tree.
+    `memory_dir` defaults to the in-repo `.claude/memory/` corpus
+    (version-controlled since the #732 relocation). It can be overridden
+    for tests against a fixture tree.
     """
     root = Path(repo_root) if repo_root is not None else _REPO_ROOT
     team = root / ".claude" / "team"

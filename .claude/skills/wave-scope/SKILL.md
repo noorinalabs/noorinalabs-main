@@ -87,7 +87,9 @@ Collect into a `CARRY_FORWARDS=[]` working list. Each entry: `{id, source: "retr
 Project memory may carry must-include directives keyed to the next wave (e.g. `W{N+1} must include user-service#63`). Scan the project memory dir:
 
 ```bash
-MEMORY_DIR="$HOME/.claude/projects/-home-parameterization-code-noorinalabs-main/memory"
+# Memory is version-controlled in-repo since the #732 relocation (was the
+# user-space ~/.claude/projects/<cwd>/memory/ path).
+MEMORY_DIR="$(git rev-parse --show-toplevel)/.claude/memory"
 # `|| true` because grep -l exits 1 when there are no matches, which is the
 # normal case for waves with no filed must-includes — not an error.
 MUST_INCLUDE_FILES=$(grep -l -i "W{M} must include\|wave-{M} must\|w{M}.must.include" "$MEMORY_DIR"/*.md 2>/dev/null || true)

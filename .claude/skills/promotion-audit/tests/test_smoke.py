@@ -26,9 +26,8 @@ import helpers as h  # noqa: E402
 # tree (worktree during dev, main after merge).
 # Walk up from .claude/skills/promotion-audit/tests/ to repo root.
 _REPO_ROOT = _HERE.parent.parent.parent.parent
-_MEMORY_DIR = os.path.expanduser(
-    "~/.claude/projects/-home-parameterization-code-noorinalabs-main/memory"
-)
+# Memory is now in-repo (#732 relocation), not under ~/.claude/projects/.
+_MEMORY_DIR = str(_REPO_ROOT / ".claude" / "memory")
 _CHARTER_ROOT = _REPO_ROOT / ".claude" / "team"
 _SKILLS_DIR = _REPO_ROOT / ".claude" / "skills"
 _FEEDBACK_LOG = _CHARTER_ROOT / "feedback_log.md"

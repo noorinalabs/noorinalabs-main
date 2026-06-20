@@ -141,10 +141,10 @@ Report "Single implicit team (no create/delete tools in this harness)" and move 
 
 ### Step 2 — Handoff check
 
-Read the session handoff file from project memory:
+Read the session handoff file from in-repo project memory (relocated #732 — memory is now version-controlled at `.claude/memory/`, not the user-space `~/.claude/projects/<cwd>/memory/` path):
 
 ```
-Read: ~/.claude/projects/-home-parameterization-code-noorinalabs-main/memory/session_handoff.md
+Read: .claude/memory/session_handoff.md
 ```
 
 If it exists, extract:
