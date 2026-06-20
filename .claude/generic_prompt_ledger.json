@@ -1,4 +1,107 @@
 {
-  "decisions": {},
+  "decisions": {
+    "projects/-home-parameterization-code-noorinalabs-main/memory/MEMORY.md": {
+      "decided_at": "2026-06-20T00:23:38Z",
+      "decision": "skipped",
+      "detail": "project-specific memory/state, not a reusable framework prompt",
+      "wave": "P5W5"
+    },
+    "projects/-home-parameterization-code-noorinalabs-main/memory/feedback_refresh_before_status_claim.md": {
+      "decided_at": "2026-06-20T00:23:38Z",
+      "decision": "skipped",
+      "detail": "project-specific memory/state, not a reusable framework prompt",
+      "wave": "P5W5"
+    },
+    "projects/-home-parameterization-code-noorinalabs-main/memory/feedback_throttle_takeover.md": {
+      "decided_at": "2026-06-20T00:23:38Z",
+      "decision": "skipped",
+      "detail": "project-specific memory/state, not a reusable framework prompt",
+      "wave": "P5W5"
+    },
+    "projects/-home-parameterization-code-noorinalabs-main/memory/feedback_validate_labels_hook_gotchas.md": {
+      "decided_at": "2026-06-20T00:23:38Z",
+      "decision": "skipped",
+      "detail": "project-specific memory/state, not a reusable framework prompt",
+      "wave": "P5W5"
+    },
+    "projects/-home-parameterization-code-noorinalabs-main/memory/project_p5w5_prodcutover_p6_dataquality.md": {
+      "decided_at": "2026-06-20T00:23:39Z",
+      "decision": "skipped",
+      "detail": "project-specific memory/state, not a reusable framework prompt",
+      "wave": "P5W5"
+    },
+    "projects/-home-parameterization-code-noorinalabs-main/memory/project_prod_loaded_quality_broken.md": {
+      "decided_at": "2026-06-20T00:23:39Z",
+      "decision": "skipped",
+      "detail": "project-specific memory/state, not a reusable framework prompt",
+      "wave": "P5W5"
+    },
+    "projects/-home-parameterization-code-noorinalabs-main/memory/session_handoff.md": {
+      "decided_at": "2026-06-20T00:23:39Z",
+      "decision": "skipped",
+      "detail": "project-specific memory/state, not a reusable framework prompt",
+      "wave": "P5W5"
+    },
+    "team/charter/agents.md": {
+      "decided_at": "2026-06-20T00:23:38Z",
+      "decision": "skipped",
+      "detail": "marker-only provenance edit this wave; genericization deferred to P6 Claude-Efficiency",
+      "wave": "P5W5"
+    },
+    "team/charter/state-claims.md": {
+      "decided_at": "2026-06-20T00:23:38Z",
+      "decision": "skipped",
+      "detail": "marker-only provenance edit this wave; genericization deferred to P6 Claude-Efficiency",
+      "wave": "P5W5"
+    },
+    "team/phases/phase-5.md": {
+      "decided_at": "2026-06-20T00:23:39Z",
+      "decision": "skipped",
+      "detail": "project-specific phase doc, not genericizable",
+      "wave": "P5W5"
+    },
+    "worktrees/0105-readme-hook-install/README.md": {
+      "decided_at": "2026-06-20T00:23:39Z",
+      "decision": "skipped",
+      "detail": "transient per-worktree copy, not canonical source",
+      "wave": "P5W5"
+    },
+    "worktrees/0122-readme-hook-install/README.md": {
+      "decided_at": "2026-06-20T00:23:39Z",
+      "decision": "skipped",
+      "detail": "transient per-worktree copy, not canonical source",
+      "wave": "P5W5"
+    },
+    "worktrees/0147-readme-hook-install/README.md": {
+      "decided_at": "2026-06-20T00:23:39Z",
+      "decision": "skipped",
+      "detail": "transient per-worktree copy, not canonical source",
+      "wave": "P5W5"
+    },
+    "worktrees/0180-readme-hook-install/README.md": {
+      "decided_at": "2026-06-20T00:23:40Z",
+      "decision": "skipped",
+      "detail": "transient per-worktree copy, not canonical source",
+      "wave": "P5W5"
+    },
+    "worktrees/0200-readme-hook-install/README.md": {
+      "decided_at": "2026-06-20T00:23:40Z",
+      "decision": "skipped",
+      "detail": "transient per-worktree copy, not canonical source",
+      "wave": "P5W5"
+    },
+    "worktrees/0477-readme-hook-install/README.md": {
+      "decided_at": "2026-06-20T00:23:40Z",
+      "decision": "skipped",
+      "detail": "transient per-worktree copy, not canonical source",
+      "wave": "P5W5"
+    },
+    "worktrees/1108-readme-hook-install/README.md": {
+      "decided_at": "2026-06-20T00:23:40Z",
+      "decision": "skipped",
+      "detail": "transient per-worktree copy, not canonical source",
+      "wave": "P5W5"
+    }
+  },
   "version": 1
 }
