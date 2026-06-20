@@ -1426,6 +1426,12 @@
       "last_resolved": "",
       "tracked_at": "2026-06-20T00:46:31.644705+00:00",
       "resolved_at": ""
+    },
+    ".claude/memory/feedback_npmrc_node_auth_token_convention.md": {
+      "last_tracked": "17e012475ef1a6b2dfe24388db672609d36ec212a5d619471b3dcd648f054468",
+      "last_resolved": "",
+      "tracked_at": "2026-06-20T21:49:27.775824+00:00",
+      "resolved_at": ""
     }
   },
   "last_cleanup": {
