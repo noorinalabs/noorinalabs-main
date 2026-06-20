@@ -46,6 +46,7 @@
 - [actionlint needs shellcheck on PATH](feedback_actionlint_needs_shellcheck.md) — actionlint silently skips shellcheck if binary absent; local "clean" diverges from CI.
 - [Verify third-party integrity claims against source](feedback_verify_3p_integrity.md) — don't claim a downloader verifies SHA/GPG without grepping its source.
 - [Wave-branch merges don't auto-close issues](feedback_wave_branch_issue_close.md) — Closes #N only fires on default-branch merges; after wave-branch merge, manually close.
+- [Negated close-keyword still closes](feedback_github_negated_close_keyword.md) — "does not close #N" matches `close #N` substring → auto-closes on merge; use Part of/Re #N only, never close/fix/resolve adjacent.
 - [Review against artifact, not PR-body framing](feedback_review_against_artifact.md) — read diff/code at PR head via gh api contents, not PR body / commit msgs / line numbers.
 - [Full-read over tail for memory files](feedback_full_read_over_tail.md) — memory-file state-claims need full Read or grep -n, not tail; memory dir is outside repo.
 - [Run ruff format --check before pushing hook tests](feedback_ruff_format_check_before_push.md) — uvx ruff@<pin> format --check .claude/hooks/ pre-push catches what hooks-lint CI blocks.
