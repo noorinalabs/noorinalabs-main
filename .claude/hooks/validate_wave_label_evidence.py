@@ -20,9 +20,11 @@ Algorithm:
   1. Tokenize command via the shared `_shell_parse` tokenizer (segment-aware,
      line-continuation-normalized, heredoc-stripped) — NOT a private shlex
      reimplementation. Flag VALUES are extracted via `walk_flag_values` and
-     `_repo_flag_parse.extract_repo`, so label-shaped / repo-shaped tokens in
-     `--body`/`--body-file` content cannot leak into extraction (main#663
-     gh-command parser invariant — see `charter/hooks.md`).
+     `_repo_flag_parse.extract_repo_from_tokens` (the latter scoped to the
+     located issue segment's tokens, not the raw command), so label-shaped /
+     repo-shaped tokens in `--body`/`--body-file` content cannot leak into
+     extraction and a second `gh` segment's `--repo` cannot be mis-picked
+     (main#663 gh-command parser invariant — see `charter/hooks.md`).
   2. Detect wave-label application (regex `p\\d+-wave-\\d+` in any --label /
      --add-label value).
   3. Resolve the target repo. When `--repo`/`-R` is OMITTED (in-repo
@@ -61,7 +63,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _repo_flag_parse import extract_repo  # noqa: E402
+from _repo_flag_parse import extract_repo_from_tokens  # noqa: E402
 from _shell_parse import (  # noqa: E402
     find_gh_subcommand,
     iter_command_segments,
@@ -217,7 +219,14 @@ def check(input_data: dict) -> dict | None:
     # origin (main#663 invariant MUST #2) instead of the old empty-default
     # `noorinalabs/` slug. If the ambient repo is unresolvable, log a skip
     # diagnostic and fail-open (allow) — never a silent drop.
-    repo = extract_repo(command)
+    #
+    # Scope extraction to the LOCATED issue segment's tokens (`rest`), not the
+    # raw command: in a compound `gh issue create … --repo A && gh pr view …
+    # --repo B`, parsing the whole string could pick the wrong segment's
+    # `--repo`. `rest` is already tokenized (tokenize() succeeded in
+    # `_find_issue_command`), so the regex-fallback in `extract_repo` is not
+    # needed here.
+    repo = extract_repo_from_tokens(rest)
     if not repo:
         short = resolve_repo_short_name(input_data)
         if not short:

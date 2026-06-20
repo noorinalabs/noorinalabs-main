@@ -29,7 +29,7 @@ shape. For each such hook assert BOTH:
      the line-continuation #287 and heredoc fixes a private reimplementation
      would miss).
 
-  C. It contains no ad-hoc flag-value-capturing regex literal (a regex that
+  B. It contains no ad-hoc flag-value-capturing regex literal (a regex that
      captures the value following `--repo`/`--label`/`--add-label`/
      `--remove-label`/`-R`/`-l`). Such extraction is the #650/#659/#661 bug
      class — it leaks label-shaped tokens out of `--body` content. Pure

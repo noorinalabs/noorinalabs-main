@@ -26,6 +26,11 @@ _HOOKS_DIR = _HERE.parent
 sys.path.insert(0, str(_HOOKS_DIR))
 
 import _repo_flag_parse as parser  # noqa: E402
+from _shell_parse import (  # noqa: E402
+    find_gh_subcommand,
+    iter_command_segments,
+    tokenize,
+)
 
 
 class FourFormsTests(unittest.TestCase):
@@ -157,6 +162,67 @@ class IssueOrigin503ReproTests(unittest.TestCase):
             'RequestOrReplied: Approved\nTechDebt: none"'
         )
         self.assertEqual(parser.extract_repo(cmd), "noorinalabs/noorinalabs-deploy")
+
+
+class FromTokensTests(unittest.TestCase):
+    """`extract_repo_from_tokens` operates on already-tokenized command
+    tokens — the segment-scoped sibling of `extract_repo` (#704)."""
+
+    def test_space_form_over_tokens(self):
+        tokens = tokenize("gh pr comment 314 --repo owner/repo --body x")
+        self.assertEqual(parser.extract_repo_from_tokens(tokens), "owner/repo")
+
+    def test_equals_form_over_tokens(self):
+        tokens = tokenize("gh pr comment 314 --repo=owner/repo --body x")
+        self.assertEqual(parser.extract_repo_from_tokens(tokens), "owner/repo")
+
+    def test_short_form_over_tokens(self):
+        tokens = tokenize("gh pr comment 314 -R owner/repo --body x")
+        self.assertEqual(parser.extract_repo_from_tokens(tokens), "owner/repo")
+
+    def test_absent_returns_none(self):
+        tokens = tokenize("gh pr comment 314 --body x")
+        self.assertIsNone(parser.extract_repo_from_tokens(tokens))
+
+    def test_empty_tokens_returns_none(self):
+        self.assertIsNone(parser.extract_repo_from_tokens([]))
+
+    def test_body_token_does_not_leak(self):
+        """A `--repo` substring INSIDE a quoted `--body` value arrives as a
+        single token and must not be extracted (same protection as the
+        string-form parser, preserved over the token-list path)."""
+        tokens = tokenize('gh pr comment 99 --body "discussed --repo owner/repo in #123"')
+        self.assertIsNone(parser.extract_repo_from_tokens(tokens))
+
+    def test_segment_scoping_avoids_cross_segment_mispick(self):
+        """The motivating #704 case: a compound command whose FIRST `gh`
+        segment carries a different `--repo` than the segment being acted on.
+
+        `extract_repo` over the raw string returns the first `--repo` in
+        source order (the WRONG segment's). Scoping to the located segment's
+        tokens returns the right one. This test pins that the token-scoped
+        path disagrees with the whole-string path exactly where it should."""
+        command = (
+            "gh pr view 5 --repo noorinalabs/WRONG && "
+            "gh issue create --repo noorinalabs/CORRECT --title T --body B"
+        )
+        # Whole-string parse picks the first --repo (the leading pr-view segment).
+        self.assertEqual(parser.extract_repo(command), "noorinalabs/WRONG")
+
+        # Segment-scoped parse over the located `gh issue create` segment picks
+        # the segment's own --repo.
+        tokens = tokenize(command)
+        issue_segment_rest = None
+        for segment in iter_command_segments(tokens):
+            gh = find_gh_subcommand(segment)
+            if gh and gh[1][:2] == ["issue", "create"]:
+                issue_segment_rest = gh[1]
+                break
+        self.assertIsNotNone(issue_segment_rest)
+        self.assertEqual(
+            parser.extract_repo_from_tokens(issue_segment_rest),
+            "noorinalabs/CORRECT",
+        )
 
 
 if __name__ == "__main__":
