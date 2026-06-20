@@ -109,5 +109,25 @@ class GetWaveStatusTests(unittest.TestCase):
         self.assertEqual(result, "No cross-repo-status.json found")
 
 
+class HandoffPathLocationTests(unittest.TestCase):
+    """#741: the Stop hook must write the handoff into the in-repo,
+    version-controlled .claude/memory/ — NOT the user-space auto-memory dir —
+    so it and the /session-start skill agree on one file (no split-brain).
+    """
+
+    def test_handoff_file_is_in_repo_memory(self) -> None:
+        expected = hook.REPO_ROOT / ".claude" / "memory" / "session_handoff.md"
+        self.assertEqual(hook.HANDOFF_FILE, expected)
+
+    def test_handoff_not_in_user_space(self) -> None:
+        self.assertNotIn("/.claude/projects/", hook.HANDOFF_FILE.as_posix())
+        self.assertFalse(hook.HANDOFF_FILE.is_relative_to(Path.home() / ".claude" / "projects"))
+
+    def test_tracked_memory_index_autochurn_removed(self) -> None:
+        # The Stop hook no longer auto-rewrites the tracked MEMORY.md index line
+        # (#741); ensure the constant is gone so the churn can't silently return.
+        self.assertFalse(hasattr(hook, "MEMORY_INDEX"))
+
+
 if __name__ == "__main__":
     unittest.main()
