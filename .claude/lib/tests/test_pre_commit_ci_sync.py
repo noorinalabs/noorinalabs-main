@@ -10,6 +10,7 @@ Verifies:
 
 from __future__ import annotations
 
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -184,6 +185,70 @@ repos:
 """
         harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
         self.assertNotIn("cspell", harmful)
+
+
+class CspellMirrorGlobParity(unittest.TestCase):
+    r"""#706 (from #698 review): the pre-commit cspell `files` regex must mirror
+    the CI cspell-action `dir/**/*.md` globs EXACTLY across directory depth.
+    `**` is zero-or-more path segments, so each scoped directory must match a
+    `.md` file at its top level AND at any nesting depth; a narrowing edit (e.g.
+    a single-level `dir/[^/]+\.md`) would skip a nested `dir/a/b.md` that the CI
+    `**/*.md` glob still checks — a local-skip-but-CI-catches divergence. These
+    tests read the REAL config + workflow and lock the depth-agnostic behavior
+    so the two sides cannot silently drift."""
+
+    @staticmethod
+    def _precommit_cspell_files_regex() -> re.Pattern[str]:
+        # The cspell hook's `files:` is the only `files:` whose pattern targets
+        # .md (ruff/mypy scope .py), so pick the .md one out of the real config.
+        text = (_REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+        for raw in text.splitlines():
+            m = re.match(r"\s*files:\s*(\^.*\$)\s*$", raw)
+            if m and r"\.md" in m.group(1):
+                return re.compile(m.group(1))
+        raise AssertionError("no cspell .md `files:` regex in .pre-commit-config.yaml")
+
+    def setUp(self) -> None:
+        self.pattern = self._precommit_cspell_files_regex()
+
+    def _matches(self, path: str) -> bool:
+        # pre-commit applies `files` with re.search against the repo-relative path.
+        return self.pattern.search(path) is not None
+
+    def test_scoped_dirs_match_at_every_depth(self) -> None:
+        # CI `dir/**/*.md` matches a .md at the top level and at ANY depth — the
+        # exact divergence #706 guards: top-level must match AND nested must match.
+        for d in (".claude/team/charter", ".claude/skills", "ontology", "docs"):
+            for rel in ("top.md", "sub/nested.md", "a/b/deep.md"):
+                p = f"{d}/{rel}"
+                with self.subTest(path=p):
+                    self.assertTrue(self._matches(p), f"{p} must be spell-checked")
+
+    def test_root_docs_match(self) -> None:
+        self.assertTrue(self._matches("CLAUDE.md"))
+        self.assertTrue(self._matches("ONBOARDING.md"))
+
+    def test_out_of_scope_paths_not_matched(self) -> None:
+        for p in (
+            "README.md",  # root file, not CLAUDE/ONBOARDING
+            ".claude/team/feedback_log.md",  # under .claude/team but not charter/
+            ".claude/team/roster/standards_lead_aino.md",  # roster excluded by CI
+            "docs/notes.txt",  # not a .md file
+            ".claude/skills/helper.py",  # not a .md file
+            "noorinalabs-isnad-graph/docs/x.md",  # child-repo docs, out of parent scope
+            "src/docs/guide.md",  # `docs/` only scoped at the repo root
+        ):
+            with self.subTest(path=p):
+                self.assertFalse(self._matches(p), f"{p} must NOT be spell-checked")
+
+    def test_ci_still_uses_doublestar_md_globs(self) -> None:
+        # Guard the OTHER side: the mirror + the depth expectations above are only
+        # correct while CI globs each scoped dir as `dir/**/*.md`. If a CI edit
+        # changes that, this fails so the mirror is revisited (parity is bilateral).
+        docs = (_REPO_ROOT / ".github" / "workflows" / "docs.yml").read_text(encoding="utf-8")
+        for d in (".claude/team/charter", ".claude/skills", "ontology", "docs"):
+            with self.subTest(dir=d):
+                self.assertIn(f"{d}/**/*.md", docs)
 
 
 class BuildKindTightening(unittest.TestCase):

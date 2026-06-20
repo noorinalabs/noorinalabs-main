@@ -71,13 +71,21 @@ repos:
   # (charter, skills, ontology, root docs); `--config .cspell.json` reuses the
   # same dictionaries + ignore rules CI loads, so a word that passes locally
   # passes in CI and vice-versa.
+  #
+  # Each scoped directory uses `(?:[^/]+/)*[^/]+\.md` — the exact regex
+  # translation of the CI action's `dir/**/*.md` glob: `(?:[^/]+/)*` is the `**`
+  # (zero or more path segments), `[^/]+\.md` is the `*.md` leaf. This is the
+  # earlier `dir/.*\.md` form made depth-explicit (#706, from #698 review): a
+  # later edit that narrowed a directory to a single-level `dir/[^/]+\.md` would
+  # then SKIP a nested `dir/a/b.md` that the CI `**/*.md` glob still checks — a
+  # local-skip-but-CI-catches divergence the depth-coverage test now locks.
   - repo: https://github.com/streetsidesoftware/cspell-cli
     rev: v8.4.0
     hooks:
       - id: cspell
         name: cspell
         args: ["--no-must-find-files", "--no-progress", "--no-summary", "--config", ".cspell.json"]
-        files: ^(\.claude/team/charter/.*\.md|\.claude/skills/.*\.md|ontology/.*\.md|CLAUDE\.md|ONBOARDING\.md|docs/.*\.md)$
+        files: ^((\.claude/team/charter|\.claude/skills|ontology|docs)/(?:[^/]+/)*[^/]+\.md|(CLAUDE|ONBOARDING)\.md)$
 
   # Heavier checks run at pre-push (mirror CI's mypy + pytest jobs). Running as
   # `local`/`system` hooks so we use the system tools and don't drift from
