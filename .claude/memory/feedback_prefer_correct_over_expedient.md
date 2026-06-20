@@ -14,4 +14,4 @@ metadata:
 **How to apply:**
 - Don't reflexively defer/shrink a change because it has cross-file visual blast radius or trips a no-regression AC. Weigh correctness first; surface the right-but-bigger option to the owner rather than silently picking the expedient one.
 - Visual changes are acceptable **while pre-launch** — but still verify they're the *intended* render (light + dark), not accidental breakage. This is a pre-launch posture; revisit once there ARE users (then regression-avoidance reasserts).
-- Companion to [[feedback_security_guard_inline_not_followup]] (don't punt a real fix to a follow-up issue when it should be inline) and [[feedback_runtime_gate_scoping]] (what genuinely can't be done at PR-time). Tie-breaker pairs with [[project_p4_priority_data_first]].
+- Companion to [[feedback_security_guard_inline_not_followup]] (don't punt a real fix to a follow-up issue when it should be inline) and [[feedback_runtime_gate_scoping]] (what genuinely can't be done at PR-time).
