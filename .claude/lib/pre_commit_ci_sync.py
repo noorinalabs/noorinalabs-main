@@ -8,6 +8,29 @@ a PR is opened. This module is the drift GATE: it parses both sides into a set
 of canonical "check kinds" and reports any check CI enforces that the
 pre-commit config does NOT run locally.
 
+Structural YAML parse (#748 D3)
+===============================
+Both sides are parsed with ``yaml.safe_load`` and classified against the
+STRUCTURAL values that actually carry a check invocation — never raw lines,
+step ``name:`` text, or comments. Concretely:
+
+- CI workflow: only ``jobs[].steps[].run`` (the whole multi-line block scalar,
+  which ``safe_load`` folds for us — no hand-rolled ``run: |`` block emulation)
+  and ``jobs[].steps[].uses`` (action refs).
+- pre-commit config: only ``repos[].hooks[].id``, ``.entry`` and ``.name``.
+
+This deletes the previous line-scanner's false-positive class deterministically:
+a step *named* ``lint with ruff`` or a job *named* ``build-and-validate`` can no
+longer masquerade as a real ``ruff``/``build`` check, because names are never
+classified. A YAML comment cannot match either — the parser strips it.
+
+Robustness: on a YAML parse error, or a document that parses to a bare scalar,
+the classifier RAISES rather than returning an empty set. An empty set would be
+a silent false-green (the gate would report "no drift" for a file it could not
+read), which is the exact failure mode this gate exists to prevent. A genuinely
+empty/whitespace file (``safe_load`` -> ``None``) contributes nothing, which is
+correct — there is no check to mirror.
+
 Drift direction that matters
 ============================
 We gate on **CI-enforced-but-not-local** drift only. That is the harmful
@@ -33,53 +56,60 @@ understand. Closing a blind spot here means ADDING the kind to
 demanding a pre-commit mirror — an un-classified CI check is silently
 un-mirrored, which is the exact divergence this gate exists to prevent.
 
-Input Language
-==============
-- A pre-commit config is parsed for `id:` values AND `entry:`/`name:` text.
-- A CI workflow is parsed for `run:` shell lines AND `uses:` action refs.
-Both are matched against per-kind keyword patterns.
-
 Exit codes (CLI):
     0 — no harmful drift (every CI-enforced kind is mirrored in pre-commit)
     1 — harmful drift (a CI-enforced kind is missing from pre-commit)
-    2 — usage / file-not-found error
+    2 — usage / file-not-found / unparseable-config error
 """
 
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from pathlib import Path
+from typing import Any, Iterator
 
-# Each kind maps to the keyword patterns that identify it on EITHER side
-# (pre-commit id/entry text or CI run/uses text). Patterns are substrings
-# matched case-insensitively against the relevant lines.
+import yaml
+
+# Each kind maps to the keyword patterns that identify it in a STRUCTURAL value
+# (a pre-commit hook id/entry/name, or a CI step's run/uses string). Patterns
+# are substrings matched case-insensitively against that single value — they are
+# NOT raw-line fragments. So `ruff-lint` keys off the hook id VALUE `ruff` (or a
+# `ruff check` run), not the literal line `id: ruff`; `terraform-fmt` keys off
+# the id VALUE `terraform_fmt`/`terraform-fmt` (or a `terraform fmt` run), not
+# `id: terraform`.
 #
-# `build` matches only real build-QUALITY GATES — a job whose purpose is to
-# fail the PR if the project does not build/compile (`build-and-validate`,
+# `ruff-lint` is `("ruff",)` on purpose: structurally each value is ONE tool, so
+# the bare-`ruff` id (which carries no `-lint`/`check` suffix) must still map to
+# lint. A `ruff format` / `ruff-format` value would also contain `ruff`, so
+# `_classify_value` detects ruff-format FIRST and suppresses ruff-lint on that
+# value — preserving the format-before-lint ordering correctness without the old
+# span-removal hack.
+#
+# `build` matches only real build-QUALITY GATES — a step whose `run:`/`uses:`
+# fails the PR if the project does not build/compile (`build-and-validate`,
 # `build-and-test`, `npm run build`). It deliberately does NOT match bare
 # `docker build` / `docker buildx`: those are runtime image-MOVING (retag,
 # promote, publish to a registry, cold-rebuild dry-runs, digest resolution),
-# which is the deploy/publish job itself, not a quality gate a local
-# pre-commit hook could mirror. A bare `docker build` substring also matches
-# `docker buildx`, so a repo that uses buildx at runtime (deploy, the
-# image-publishing CI in isnad-graph / ingest-platform) would otherwise see a
-# permanent un-mirrorable `build` kind and the drift gate could never exit 0
-# (#576). If a repo ever adds a genuine docker-build-as-quality-gate, name
-# that job `build-and-validate` / `build-and-test` (or add an explicit
-# pattern) so it is mirror-tracked. Tightening lifted verbatim from the
+# which is the deploy/publish job itself, not a quality gate a local pre-commit
+# hook could mirror. A bare `docker build` substring also matches `docker
+# buildx`, so a repo that uses buildx at runtime (deploy, the image-publishing
+# CI in isnad-graph / ingest-platform) would otherwise see a permanent
+# un-mirrorable `build` kind and the drift gate could never exit 0 (#576). If a
+# repo ever adds a genuine docker-build-as-quality-gate, express it as a
+# `run:`/`uses:` matching `build-and-validate` / `build-and-test` (or add an
+# explicit pattern) so it is mirror-tracked. Tightening lifted verbatim from the
 # deploy-rollout form (deploy#391, A.Idrissi) and canonicalized here so all
 # vendored child copies converge.
 _KIND_PATTERNS: dict[str, tuple[str, ...]] = {
     "ruff-format": ("ruff-format", "ruff format"),
-    "ruff-lint": ("ruff check", "id: ruff", "- ruff"),
+    "ruff-lint": ("ruff",),
     "mypy": ("mypy",),
     "pytest": ("pytest",),
     "eslint": ("eslint",),
     "typescript": ("tsc", "typecheck", "type-check", "astro check"),
     "prettier": ("prettier",),
-    "terraform-fmt": ("terraform fmt", "terraform_fmt", "id: terraform"),
+    "terraform-fmt": ("terraform fmt", "terraform_fmt", "terraform-fmt"),
     "gitleaks": ("gitleaks",),
     "actionlint": ("actionlint",),
     "pip-audit": ("pip-audit", "pip audit"),
@@ -93,102 +123,147 @@ _KIND_PATTERNS: dict[str, tuple[str, ...]] = {
     "cspell": ("cspell", "spellcheck", "streetsidesoftware/cspell"),
 }
 
-# `ruff-lint` is a substring of nothing problematic, but `ruff format` also
-# contains `ruff`, so order the lint check to NOT fire on a format-only line.
-# We handle that by classifying format first and removing matched spans.
 
+def _classify_value(value: str) -> set[str]:
+    """Return the canonical kinds a single structural VALUE implies.
 
-def _classify_line(line: str) -> set[str]:
-    """Return the set of canonical kinds a single text line implies."""
-    low = line.lower()
+    A value is one tool now (an `id`, an `entry`, a `uses` ref, or one line of a
+    `run` script), so ruff disambiguation is a precise format-first check rather
+    than the old line-level span removal: a `ruff format` / `ruff-format` value
+    is ruff-format and is NOT also counted as ruff-lint.
+    """
+    low = value.lower()
     kinds: set[str] = set()
-    # Format must be tested before the bare-ruff lint pattern so that a
-    # `ruff format` line is not also counted as `ruff-lint`.
-    if any(p in low for p in _KIND_PATTERNS["ruff-format"]):
+    is_ruff_format = any(p in low for p in _KIND_PATTERNS["ruff-format"])
+    if is_ruff_format:
         kinds.add("ruff-format")
     for kind, patterns in _KIND_PATTERNS.items():
         if kind == "ruff-format":
             continue
-        if kind == "ruff-lint":
-            # Only count ruff-lint when it is not purely the format line.
-            if ("ruff format" in low) and ("ruff check" not in low and "id: ruff" not in low):
-                continue
+        if kind == "ruff-lint" and is_ruff_format:
+            # A ruff-format value (`ruff-format` id / `ruff format` run) must
+            # not also register ruff-lint via the bare `ruff` pattern.
+            continue
         if any(p in low for p in patterns):
             kinds.add(kind)
     return kinds
 
 
-def kinds_from_precommit(config_text: str) -> set[str]:
-    """Canonical check-kinds a `.pre-commit-config.yaml` runs locally."""
+def _classify_run(run: str) -> set[str]:
+    """Classify a (possibly multi-line) `run:` block scalar.
+
+    `safe_load` already folded `run: |` / `run: >` into one string, so we just
+    walk its lines, skipping blank and shell-comment (`#…`) lines so a commented
+    invocation is not mistaken for a real one.
+    """
     kinds: set[str] = set()
-    for raw in config_text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
+    for raw in run.splitlines():
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
             continue
-        # Only lines that name a hook matter: id:, entry:, name:, - repo refs.
-        if re.match(r"^(-\s*)?(id|entry|name|repo):", line) or line.startswith("- "):
-            kinds |= _classify_line(line)
+        kinds |= _classify_value(stripped)
     return kinds
 
 
-# A `run:` (or `- run:`) key opening a YAML block scalar (`|`, `>`, plus the
-# chomping/indentation indicators `-`/`+`/digits, e.g. `|-`, `>2`). The body
-# of such a block is one or more MORE-indented continuation lines that carry
-# the actual shell — tools invoked there (`uv run pip-audit`, a multi-line
-# `ruff check` / `mypy` / `pytest`) must be classified too, else the gate has
-# a blind spot (#577).
-_RUN_BLOCK_OPEN_RE = re.compile(r"^(?P<indent>\s*)-?\s*run:\s*[|>][+\-0-9]*\s*$")
+def _safe_load_or_raise(text: str, what: str) -> Any:
+    """Parse YAML, refusing to degrade a parse failure into a false-green.
+
+    Returns the parsed document (``dict``/``list``), or ``None`` for a genuinely
+    empty document. Raises ``ValueError`` on a YAML syntax error or a document
+    that parses to a bare scalar — either would otherwise yield an empty kind-set
+    and silently hide drift.
+    """
+    try:
+        doc = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise ValueError(f"{what} is not valid YAML: {exc}") from exc
+    if doc is not None and not isinstance(doc, (dict, list)):
+        raise ValueError(
+            f"{what} did not parse to a YAML mapping/sequence "
+            f"(got {type(doc).__name__}); refusing to treat it as 'no checks'."
+        )
+    return doc
+
+
+def _iter_ci_steps(doc: Any) -> Iterator[dict[str, Any]]:
+    """Yield the step mappings of a parsed CI workflow.
+
+    Handles the full workflow shape (``jobs[].steps[]``) and the bare
+    step-list / single-step shapes used by focused unit tests. Only mappings are
+    yielded; ``run``/``uses`` are read off them by the caller.
+    """
+    if isinstance(doc, dict):
+        jobs = doc.get("jobs")
+        if isinstance(jobs, dict):
+            for job in jobs.values():
+                if isinstance(job, dict):
+                    steps = job.get("steps")
+                    if isinstance(steps, list):
+                        for step in steps:
+                            if isinstance(step, dict):
+                                yield step
+            return
+        steps = doc.get("steps")
+        if isinstance(steps, list):
+            for step in steps:
+                if isinstance(step, dict):
+                    yield step
+            return
+        if "run" in doc or "uses" in doc:
+            yield doc
+    elif isinstance(doc, list):
+        for step in doc:
+            if isinstance(step, dict):
+                yield step
 
 
 def kinds_from_ci(workflow_text: str) -> set[str]:
-    """Canonical check-kinds a CI workflow enforces.
+    """Canonical check-kinds a single CI workflow enforces.
 
-    Classifies the line that names a `run:`/`uses:` step AND — for a
-    multi-line `run: |` / `run: >` block scalar — every continuation line in
-    that block's body (#577). Without the block-scan a tool invoked only on a
-    continuation line (e.g. `security-audit`'s `uv run pip-audit` under
-    `run: |`) is invisible to the classifier, so the drift gate silently fails
-    to require it be mirrored. The block ends at the first line whose
-    indentation is less-than-or-equal-to the `run:` key's own indent (a
-    sibling key or list item), matching YAML block-scalar scoping.
+    Classifies ONLY each step's `run:` shell (whole block scalar) and `uses:`
+    action ref. Step/job `name:` and comments are never classified — that
+    exclusion is the #748 false-positive fix.
     """
+    doc = _safe_load_or_raise(workflow_text, "CI workflow")
+    if doc is None:
+        return set()
     kinds: set[str] = set()
-    run_block_indent: int | None = None
-    for raw in workflow_text.splitlines():
-        stripped = raw.strip()
+    for step in _iter_ci_steps(doc):
+        run = step.get("run")
+        if isinstance(run, str):
+            kinds |= _classify_run(run)
+        uses = step.get("uses")
+        if isinstance(uses, str):
+            kinds |= _classify_value(uses)
+    return kinds
 
-        # Inside a multi-line run: block — classify body lines until the block
-        # closes (dedent to <= the run: key indent). Blank lines stay in the
-        # block (YAML block scalars permit interior blank lines).
-        if run_block_indent is not None:
-            if stripped:
-                line_indent = len(raw) - len(raw.lstrip())
-                if line_indent <= run_block_indent:
-                    run_block_indent = None  # block ended; fall through to re-handle
-                else:
-                    if not stripped.startswith("#"):
-                        kinds |= _classify_line(stripped)
-                    continue
 
-        if not stripped or stripped.startswith("#"):
+def kinds_from_precommit(config_text: str) -> set[str]:
+    """Canonical check-kinds a `.pre-commit-config.yaml` runs locally.
+
+    Classifies ONLY each hook's `id`, `entry` and `name` values. Comments and
+    the surrounding YAML structure are never classified.
+    """
+    doc = _safe_load_or_raise(config_text, "pre-commit config")
+    if not isinstance(doc, dict):
+        return set()
+    kinds: set[str] = set()
+    repos = doc.get("repos")
+    if not isinstance(repos, list):
+        return kinds
+    for repo in repos:
+        if not isinstance(repo, dict):
             continue
-
-        # Open a run: block scalar? Record its key indent so the body scan
-        # above can scope the block. The `run:` key line itself carries no
-        # tool text (the `|`/`>` is the only payload), so nothing to classify.
-        block_match = _RUN_BLOCK_OPEN_RE.match(raw)
-        if block_match is not None:
-            run_block_indent = len(block_match.group("indent"))
+        hooks = repo.get("hooks")
+        if not isinstance(hooks, list):
             continue
-
-        # CI expresses checks as `run:` shell or `uses:` actions.
-        if (
-            "run:" in stripped
-            or stripped.startswith("- run:")
-            or "uses:" in stripped
-            or stripped.startswith("-")
-        ):
-            kinds |= _classify_line(stripped)
+        for hook in hooks:
+            if not isinstance(hook, dict):
+                continue
+            for key in ("id", "entry", "name"):
+                value = hook.get(key)
+                if isinstance(value, str):
+                    kinds |= _classify_value(value)
     return kinds
 
 
@@ -204,10 +279,19 @@ def compute_drift(precommit_kinds: set[str], ci_kinds: set[str]) -> tuple[set[st
 
 
 def check_repo(precommit_path: Path, ci_paths: list[Path]) -> tuple[set[str], set[str]]:
-    """Read the files and compute drift. Missing files contribute nothing."""
+    """Read the files and compute drift. Missing files contribute nothing.
+
+    Each CI workflow is parsed independently and the kinds unioned — workflow
+    files are separate YAML documents and must not be concatenated into one
+    parse (duplicate top-level keys would raise).
+    """
     pc_text = precommit_path.read_text(encoding="utf-8") if precommit_path.is_file() else ""
-    ci_text = "\n".join(p.read_text(encoding="utf-8") for p in ci_paths if p.is_file())
-    return compute_drift(kinds_from_precommit(pc_text), kinds_from_ci(ci_text))
+    pc_kinds = kinds_from_precommit(pc_text)
+    ci_kinds: set[str] = set()
+    for path in ci_paths:
+        if path.is_file():
+            ci_kinds |= kinds_from_ci(path.read_text(encoding="utf-8"))
+    return compute_drift(pc_kinds, ci_kinds)
 
 
 def _default_ci_paths(repo_root: Path) -> list[Path]:
@@ -253,7 +337,12 @@ def main(argv: list[str]) -> int:
         )
         return 2
 
-    harmful, stricter = check_repo(precommit_path, ci_paths)
+    try:
+        harmful, stricter = check_repo(precommit_path, ci_paths)
+    except ValueError as exc:
+        # Unparseable config: fail loudly (exit 2), never silently green.
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
 
     if stricter:
         print(f"INFO: pre-commit runs (CI does not): {sorted(stricter)} — stricter local, OK.")
