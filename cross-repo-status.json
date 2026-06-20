@@ -933,38 +933,14 @@
       ]
     }
   },
-  "wave_1_kicked_off_at": "2026-06-14T01:20:00Z",
-  "wave_1_active": false,
+  "wave_1_kicked_off_at": "2026-06-20T04:39:50Z",
+  "wave_1_active": true,
   "wave_1_branches": {
-    "branch": "deployments/phase-4/wave-1",
-    "created_at": "2026-06-02T21:30:00Z",
+    "branch": "deployments/phase-6/wave-1",
+    "created_at": "2026-06-20T04:39:50Z",
     "repos": {
       "noorinalabs-main": {
-        "sha": "02a63f849797fdb88ed125ae2e08c7da959cb0b3",
-        "status": "created"
-      },
-      "noorinalabs-isnad-graph": {
-        "sha": "f6c2788778002f575e24d8a448d13e24c22479d9",
-        "status": "created"
-      },
-      "noorinalabs-user-service": {
-        "sha": "d87643c2d36ed399103c757238146f9c0e924bf0",
-        "status": "created"
-      },
-      "noorinalabs-deploy": {
-        "sha": "05770a75e219a3bee2682e7eac93123967078d32",
-        "status": "created"
-      },
-      "noorinalabs-design-system": {
-        "sha": "a29b0b96a1470a7d43cccdb41bc5e2882730f727",
-        "status": "created"
-      },
-      "noorinalabs-landing-page": {
-        "sha": "a51b9fb7071ed0beb9aa56925032ed28c6983d0c",
-        "status": "created"
-      },
-      "noorinalabs-data-acquisition": {
-        "sha": "54b9c98e17d1b1fe42f174c8ccd414ef6e4ac7a2",
+        "sha": "c9b9f3733f3874a54961d7cf31e89f6e1272714d",
         "status": "created"
       }
     }
