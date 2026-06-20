@@ -87,6 +87,33 @@ repos:
         args: ["--no-must-find-files", "--no-progress", "--no-summary", "--config", ".cspell.json"]
         files: ^((\.claude/team/charter|\.claude/skills|ontology|docs)/(?:[^/]+/)*[^/]+\.md|(CLAUDE|ONBOARDING)\.md)$
 
+  # Charter-prose→code gates (#735). Each runs a `.claude/lib/check_*.py` over
+  # the matching file class, mirroring a CI job of the same name (the sync-drift
+  # gate classifies both kinds — `dockerfile-base-pin`, `fixture-realism` — so
+  # this mirror is mandatory, not optional). Both are commit-stage (cheap
+  # static scans). `files:` scopes which paths are candidates; the check itself
+  # self-filters (a non-Arabic file is skipped, a scratch/exempt FROM passes).
+  # The parent repo ships no Dockerfiles or Arabic fixtures, so these match
+  # nothing here today — they are the reusable template the #735 follow-up rolls
+  # out to each child repo's real files.
+  - repo: local
+    hooks:
+      - id: dockerfile-base-pin
+        name: dockerfile-base-pin
+        entry: python3 .claude/lib/check_dockerfile_base_pin.py
+        language: system
+        files: ((^|/)Dockerfile(\.[^/]+)?$|\.dockerfile$)
+        exclude: ^\.claude/worktrees/
+        pass_filenames: true
+      - id: fixture-realism
+        name: fixture-realism
+        entry: python3 .claude/lib/check_fixture_realism.py
+        language: system
+        # Test-data / fixture conventions; the check skips any non-Arabic file.
+        files: (^|/)(fixtures|test_data|testdata)/.*\.(json|jsonl|txt|csv|tsv|ndjson|py)$
+        exclude: ^\.claude/worktrees/
+        pass_filenames: true
+
   # Heavier checks run at pre-push (mirror CI's mypy + pytest jobs). Running as
   # `local`/`system` hooks so we use the system tools and don't drift from
   # whatever CI pins.

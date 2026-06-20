@@ -477,6 +477,8 @@ Phase 3 Wave 1 produced 4 corroborating data points (above) where the design-rat
 
 ## Trust the Artifact, Not the Framing (Mandatory) <!-- promotion-target: skill -->
 
+> **Stays prose (intentionally-prose, per the [#734 inventory](../charter_prose_inventory.md)).** A representative judgment-class reviewer rule: "read the diff/code at HEAD, not the PR-body framing" is a *cognitive* discipline with no tool boundary to gate — there is no point where a tool can decide an agent reasoned from the artifact rather than the prose around it. Only the narrow mechanical corollary is convertible (HEAD-SHA stability is already enforced by `block_no_verify`/the ChangesRequested force-push prohibition above; verdict *format* by `validate_pr_review`); the core "was this read against ground truth" judgment is not. This is the boundary the inventory draws for the reviewer-judgment family (also § Security Guards Belong Inline, § Live-Trace Evidence > Synthetic-Test Acceptance, § Cross-Contract PRs): mechanize the format/structural shell, keep the judgment in prose.
+
 Both implementer and reviewer disciplines on the same axis: verify spec assumptions and PR-body framing against ground truth before action.
 
 ### Implementer side
@@ -618,7 +620,9 @@ When reviewing a new gate, ask "what wild artifact did this fire on?" If the onl
 
 `noorinalabs-main#194` Hook 14 (`validate_pr_ci_status.py`) fan-out, 2026-04-28. Marisol's PR landed the strongest acceptance signal across the entire fan-out series by **live-tracing `classify_check` against an actual in-flight failed security-audit CI run** at the time — not against a fabricated failure. The live-trace caught a behavior pattern that synthetic tests would have missed because the author didn't think to test for it. Aino flagged this as the strongest acceptance proof in the entire fan-out — distinct enough that it materially changed Hook 14's confidence floor.
 
-## Text-Processing / NER / Graph Fixtures Must Use Production-Realistic Input (Mandatory) <!-- promotion-target: hook -->
+## Text-Processing / NER / Graph Fixtures Must Use Production-Realistic Input (Mandatory) <!-- promotion-target: hook DONE: .claude/lib/check_fixture_realism.py (#735) -->
+
+> **Enforced by** [`.claude/lib/check_fixture_realism.py`](../../lib/check_fixture_realism.py) (#735) — the lint the *Enforcement opportunity* sub-section below names (the optional half of #671): it flags an Arabic-text fixture that carries no vocalization diacritic (U+064B–U+0652) or lacks the عن particle (searched after stripping harakat, since voweled عَنْ splits the bare bigram). Wired as a pre-commit hook + the `fixture-realism` CI job; classified by the sync-drift gate. The charter rule remains the floor; this is the cheap static lens. The cross-repo rollout onto each child's real fixtures is a #735 follow-up.
 
 Fixtures for **Arabic text processing, NER / segmentation, and graph-load invariants** MUST be derived from **real upstream samples** — never hand-authored from a schema that matches the parser's own assumptions, and never simplified into toy strings. A fixture that is *greener than real data* is masking a bug.
 
@@ -647,7 +651,7 @@ When reviewing a PR that adds or edits one of these fixtures, ask: **"was this l
 
 ### Enforcement opportunity
 
-A lint / review-lens can flag Arabic-text fixtures that lack vocalization marks (no Arabic diacritic codepoints `ً–ْ`) or whose isnad strings lack عن — a cheap static signal that a fixture is a toy. Tracked as the optional half of #671; the charter rule is the floor, the lens is a plus.
+**Built (#735):** the lint / review-lens is now `.claude/lib/check_fixture_realism.py` — it flags Arabic-text fixtures that lack vocalization marks (no Arabic diacritic codepoints `ً–ْ`) or whose isnad strings lack عن — a cheap static signal that a fixture is a toy. This was the optional half of #671; the charter rule remains the floor, the lens is the deterministic plus. Wired into pre-commit + CI (`fixture-realism` job) and classified by the sync-drift gate; the per-child-repo fixture-scanning rollout is a #735 follow-up.
 
 ### Severity if violated
 
