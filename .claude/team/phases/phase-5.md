@@ -2,9 +2,10 @@
 name: Phase 5 plan — real data, usable product
 description: Phase definition, end-state criteria, exit gate, wave plan
 phase: 5
-status: active
+status: exited
 created: 2026-06-14
-last_updated: 2026-06-16
+last_updated: 2026-06-20
+exited: 2026-06-20
 ---
 
 # Phase 5 — real data, usable product
@@ -62,6 +63,21 @@ On the **final wave (W5 — revised 2026-06-16, Phase 5 wraps at W5)** the +20% 
 Owner runs `/phase-review 5` and verifies the **4 core end-state rows** are `Done` (#665, #602, #603, #666 closed), including the standing per-wave TD-intake compliance (criterion-6 model carried from P4 — every wave took its +20%). **#667 (streaming-pipeline-repeatable) was moved to Phase 7 by owner direction 2026-06-19** — streaming/pipeline work is centered there; the P5W5 cutover delivered real data on prod via the batch path, so streaming-repeatable is no longer a P5 exit row. On confirmation, `/plan-phase 6` defines the next phase before any P6 wave kicks off.
 
 > **Note (2026-06-19):** prod **semantic search** also defers to Phase 7 ("a real model served in prod"). The P5W5 cutover put real data + the working product (keyword search / graph / app) live on prod; the prod re-embed is gated on promoting the embed image to a prod tag (`promote.yml` currently omits it) — see deploy#470. This is non-blocking for the 4 core P5 criteria.
+
+### Exit gate — MET (owner-confirmed 2026-06-20, `/phase-review 5`)
+
+All 4 core end-state trackers closed:
+
+| # | Criterion | Tracker | Outcome |
+|---|-----------|---------|---------|
+| 1 | Data real & queryable | #665 ✅ CLOSED | Cutover intent met (real corpus live, chains segmented); queryability/quality (sanadset orphans, sparse linkage) → **P7 #723** |
+| 2 | Product API functional on prod | #602 ✅ CLOSED | Timeline/graph live; **search correctness → P7** (ig#1110) |
+| 3 | Admin surface complete | #603 ✅ CLOSED | **Fully met** — validated working on prod, no carry-forward |
+| 4 | Production cutover + auth/session UX | #666 ✅ CLOSED | Cutover done (staging→prod, green); auth deep-link (ig#1111) + data-quality → **P7** |
+
+**#667** (streaming-repeatable) carried to **Phase 7** (already `phase-7`-labeled; #601 met via batch path). **#692** (P5W5 wave meta) closed at wrapup.
+
+Phase 5 closed on the **cutover bar** — real data + working product live on prod — with the explicit honest carry of **queryability/search/data-quality to Phase 7** (meta #723). The owner accepted the cutover-vs-queryability split at `/phase-review` rather than holding the phase open. Next: `/plan-phase 6` (Claude Efficiency), then `/plan-phase 7` (Data Quality / ML).
 
 ## References
 
