@@ -338,6 +338,44 @@ class BodyOverMatchScopingTests(unittest.TestCase):
             run.assert_not_called()
 
 
+class CompoundCommandRepoScopingTests(unittest.TestCase):
+    """#704: repo extraction is scoped to the LOCATED `gh issue` segment, so a
+    leading sibling `gh` segment carrying a different `--repo` cannot be
+    mis-picked. Pre-fix, `extract_repo` over the raw command returned the first
+    `--repo` in source order (the leading segment's)."""
+
+    def test_repo_taken_from_issue_segment_not_leading_segment(self):
+        # `gh issue edit` resolves the body via `gh issue view <num> --repo R`,
+        # so the extracted repo flows straight into a subprocess arg we can
+        # observe. The leading `gh pr view` segment carries a DIFFERENT --repo;
+        # pre-fix, the whole-string `extract_repo` returned that (first in
+        # source order). The fix scopes extraction to the edit segment.
+        calls: list[list[str]] = []
+
+        class _Result:
+            def __init__(self, returncode: int, stdout: str = ""):
+                self.returncode = returncode
+                self.stdout = stdout
+                self.stderr = ""
+
+        def fake_run(args, capture_output, text, timeout):
+            calls.append(args)
+            return _Result(0, "")  # empty body → hook allows after observing repo
+
+        cmd = (
+            "gh pr view 5 --repo noorinalabs/WRONG && "
+            "gh issue edit 42 --repo noorinalabs/CORRECT --add-label 'p3-wave-9'"
+        )
+        with mock.patch.object(hook.subprocess, "run", side_effect=fake_run):
+            hook.check(_bash_input(cmd))
+
+        view_calls = [a for a in calls if "issue" in a and "view" in a]
+        self.assertTrue(view_calls, "expected a `gh issue view` body fetch")
+        view = view_calls[0]
+        repo_idx = view.index("--repo") + 1
+        self.assertEqual(view[repo_idx], "noorinalabs/CORRECT")
+
+
 class LineContinuationTests(unittest.TestCase):
     """main#663: shared tokenizer normalizes backslash-newline continuations
     (#287) — the old private `shlex.split` reimplementation did not."""

@@ -39,6 +39,17 @@ Public API
         a conservative regex when shlex tokenization fails (e.g. command
         contains a malformed quote). Both paths recognize all four forms.
 
+    extract_repo_from_tokens(tokens: list[str]) -> str | None
+        Same extraction over an ALREADY-tokenized command segment. Use this
+        when the caller has tokenized + segment-scoped the command itself
+        (e.g. via `iter_command_segments` / `find_gh_subcommand`) and wants
+        repo extraction confined to that one segment rather than re-parsing
+        the whole command string. Confining to the segment avoids a
+        cross-segment mis-pick in a compound multi-`gh` command such as
+        `gh issue create … --repo A && gh pr view … --repo B`, where
+        `extract_repo` over the raw string would return whichever `--repo`
+        appears first regardless of which segment is the one being acted on.
+
 Design notes
 ============
 
@@ -75,11 +86,23 @@ _REPO_FLAGS = {"--repo", "-R"}
 _REPO_FALLBACK_RE = re.compile(r"(?:^|\s)(?:--repo|-R)(?:=|\s+)(\S+)")
 
 
+def extract_repo_from_tokens(tokens: list[str]) -> str | None:
+    """Extract the `--repo` / `-R` `OWNER/NAME` value from already-tokenized
+    command tokens, or None if absent.
+
+    For callers that have already tokenized (and, ideally, segment-scoped) the
+    command — see the module `Public API` note on cross-segment mis-pick. Both
+    the space form (`--repo X` / `-R X`) and the equals form (`--repo=X` /
+    `-R=X`) are recognized via the shared `walk_flag_values` walker.
+    """
+    values = walk_flag_values(tokens, _REPO_FLAGS)
+    return values[0] if values else None
+
+
 def extract_repo(command: str) -> str | None:
     """Extract the `--repo` / `-R` `OWNER/NAME` value, or None if absent."""
     tokens = tokenize(command)
     if tokens is None:
         match = _REPO_FALLBACK_RE.search(command)
         return match.group(1) if match else None
-    values = walk_flag_values(tokens, _REPO_FLAGS)
-    return values[0] if values else None
+    return extract_repo_from_tokens(tokens)
