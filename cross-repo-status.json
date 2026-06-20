@@ -829,58 +829,109 @@
   ],
   "wave_2_active": false,
   "wave_2_kicked_off_at": "2026-06-14T15:25:48Z",
-  "wave_1_scope_reconciled_at": "2026-06-14T01:05:00Z",
+  "wave_1_scope_reconciled_at": "2026-06-20T04:32:30Z",
   "wave_1_repos_in_scope": [
-    "noorinalabs-data-acquisition"
+    "noorinalabs-main"
   ],
-  "wave_1_meta_issue": 668,
+  "wave_1_meta_issue": 731,
   "wave_1_scope": {
-    "theme": "Data spine — segment isnad chains into narrator entities",
-    "tier_1_data": [
+    "phase": 6,
+    "theme": "Memory & code-over-prose",
+    "tier_1_features": [
       {
-        "id": "noorinalabs-data-acquisition#146",
-        "ref": "da#146",
-        "implementer": "Ivana Horvat",
-        "reviewer": "Alejandra Reyes-Fuentes",
-        "reviewer_2": "Jean-Claude Habimana",
-        "priority": "bug"
+        "id": "noorinalabs-main#732",
+        "ref": "main#732",
+        "implementer": "Wanjiku Mwangi",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Nadia Khoury",
+        "priority": "feature"
       },
       {
-        "id": "noorinalabs-data-acquisition#148",
-        "ref": "da#148",
-        "implementer": "Nikolaos Papadopoulos",
-        "reviewer": "Alejandra Reyes-Fuentes",
-        "reviewer_2": "Oyunbileg Batbayar",
-        "priority": "bug"
+        "id": "noorinalabs-main#733",
+        "ref": "main#733",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Santiago Ferreira",
+        "priority": "feature"
       },
       {
-        "id": "noorinalabs-data-acquisition#144",
-        "ref": "da#144",
-        "implementer": "Kwesi Boateng",
-        "reviewer": "Tarek Mansour",
-        "reviewer_2": "Jean-Claude Habimana",
-        "priority": "bug"
+        "id": "noorinalabs-main#734",
+        "ref": "main#734",
+        "implementer": "Nadia Khoury",
+        "reviewer": "Wanjiku Mwangi",
+        "reviewer_2": "Aino Virtanen",
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-main#735",
+        "ref": "main#735",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Santiago Ferreira",
+        "reviewer_2": "Wanjiku Mwangi",
+        "priority": "feature"
       }
     ],
     "tier_3_tech_debt": [
       {
-        "id": "noorinalabs-data-acquisition#138",
-        "ref": "da#138",
-        "implementer": "Alejandra Reyes-Fuentes",
-        "reviewer": "Ivana Horvat",
-        "reviewer_2": "Kavitha Sundaramurthy",
+        "id": "noorinalabs-main#684",
+        "ref": "main#684",
+        "implementer": "Santiago Ferreira",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Wanjiku Mwangi",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#706",
+        "ref": "main#706",
+        "implementer": "Santiago Ferreira",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Nadia Khoury",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#704",
+        "ref": "main#704",
+        "implementer": "Wanjiku Mwangi",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Santiago Ferreira",
         "priority": "tech-debt"
       }
     ],
-    "td_intake": "1/1",
-    "td_pool": 19,
-    "descoped_premise_false": [
-      {
-        "ref": "da#147",
-        "reason": "premise-false: narrator sect IS sect_affiliation (4-valued, populated 47086+113); db.propertyKeys() misread. Verified at wave branch. Closed not-planned 2026-06-14.",
-        "verified_by": "Kavitha Sundaramurthy + orchestrator"
-      }
-    ]
+    "epics": [
+      "noorinalabs-main#725",
+      "noorinalabs-main#726"
+    ],
+    "td_intake": "3/1",
+    "td_pool": 3,
+    "concentration": {
+      "Aino Virtanen": 2,
+      "Wanjiku Mwangi": 2,
+      "Santiago Ferreira": 2,
+      "Nadia Khoury": 1
+    },
+    "dependencies": {
+      "noorinalabs-main#733": [
+        "noorinalabs-main#732"
+      ],
+      "noorinalabs-main#735": [
+        "noorinalabs-main#734"
+      ]
+    },
+    "deliberately_not_in_w1": {
+      "w2": [
+        "noorinalabs-main#727",
+        "noorinalabs-main#728",
+        "noorinalabs-main#729",
+        "noorinalabs-main#730"
+      ],
+      "w3": [
+        "noorinalabs-main#718",
+        "noorinalabs-main#705",
+        "noorinalabs-main#703",
+        "noorinalabs-main#672",
+        "noorinalabs-main#663"
+      ]
+    }
   },
   "wave_1_kicked_off_at": "2026-06-14T01:20:00Z",
   "wave_1_active": false,
