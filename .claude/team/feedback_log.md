@@ -1,3 +1,45 @@
+## Retrospective: Phase 5 Wave 5 — 2026-06-20 — "Production cutover (real data live on prod)"
+
+### Team Performance
+**45 PRs merged** to the wave branch across all 8 in-scope repos (main 9, isnad-graph 8, data-acquisition 10, design-system 5, landing-page 5, ingest-platform 4, deploy 3, user-service 1). **0 ChangesRequested cycles** — every PR clean-to-merge. CI green throughout; staging promotion **success** ([deploy-stg 27844114147](https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/27844114147)); both fan-in publishes (isnad-graph, user-service) green on main. All 8 wave→main integration PRs merged (`ahead_by:0` for every wave branch — fully reachable). 11 stale merged worktrees cleaned. Wave meta #692 closed; ontology current (0 dirty).
+
+| Wave-shape | Value |
+|-----------|-------|
+| PRs merged | 45 (8 repos) |
+| ChangesRequested cycles | 0 |
+| Top-implementer concentration | 4/45 = **9%** (A.Virtanen) — **28 distinct implementers**, the lowest concentration of any wave (healthy, not fragile) |
+| Staging promotion | success (run 27844114147); fan-in publishes green |
+| Prior-wave pain points closed | **#690** (promotion-audit canonical driver, S.Ferreira #701) + **#683** (cross-phase wave-key reuse, W.Mwangi #699) — both flagged in P5W3/W4 retros |
+| Tech-debt / carry-forward | open `p5-wave-5` issues carried to /plan-phase triage (data-quality → P7; tooling → P6) |
+
+### Per-Engineer Assessments
+See `trust_matrix.md` § Phase 5 Wave 5 for the full table. Highlights: **S.Ferreira 4→5** (shipped the promotion-audit canonical driver #701 that *closes the P5W4 #690 hand-rolled mis-fire* + pr_review_state.py #710 + ontology-test fix #697); **W.Mwangi 3→4** (mechanized per-phase wave-key reset #699 closing #683, the cross-phase hazard flagged two waves running, + validate_wave_audit exemption #700); first numeric ratings for **J.Habimana 4** (da#186 — completed the Shia Four Books), **N.Papadopoulos 4** (da#183 — itqan 115,735 bios → 85,840 canonical Narrators), **L.Mbongo 4** (ingest SourceCorpus reconcile #98 + security floors #103), **K.Mensah-Williams 4** (3 lp PRs: dark-mode, Direction-C hero, removed fabricated pre-launch staff). The data-acquisition cutover spine (A.Reyes-Fuentes da#180 multi-source Sunni→staging, K.Sundaramurthy da#181 thaqalayn real-schema + Four Books, I.Horvat da#187 Riyad-complete) held at ceiling 5. ~17 single-clean-PR implementers held at current rating.
+
+### Top 3 Going Well
+1. **Two recurring prior-wave pain points durably closed in-wave** — the promotion-audit hand-rolled mis-fire (#690, flagged P5W4) is now a canonical driver (#701), and the `wave_{M}_*` cross-phase key-reuse hazard (#683, flagged P5W3 *and* P5W4) is now mechanically reset per phase (#699). The retro→fix loop actually closed.
+2. **Cleanest wave of the program** — 0 ChangesRequested cycles across 45 PRs, all CI green, staging + both fan-in publishes green, all 8 wave branches fully reachable from main. The no-force / green-before-push discipline (main#684) held at scale.
+3. **Lowest concentration ever (9%, 28 implementers)** — the production cutover load distributed across the entire roster with no single-engineer fragility, while the cutover-critical data spine (Four Books completion, itqan narrators, multi-source Sunni load) was delivered cleanly by the da team.
+
+### Top 3 Pain Points
+1. **Production loaded but quality-broken — the cutover criterion and the usability criterion diverged.** Real corpus is live on prod (~768k nodes) but only ~9% linked: chains sparse, narrators polluted, **sanadset loaded as ~650k orphan hadith nodes** (root cause: parser emits no `collections_sanadset.parquet`, ignores `books.csv` → 0 Collection nodes → all APPEARS_IN skipped), and prod search returns 0 hadiths (full-text mistypes as narrators; semantic 500s). Tracked as meta #723 → **Phase 7 data-quality**. The wave delivered the *cutover* (data present + app running) but not *queryability* — an honest gap, owner-accepted as P7-scoped at /phase-review.
+2. **Annunaki signal-to-noise is poor.** 47 "genuine errors" this wave = 40 exit-0 false positives (benign command output containing trigger words) + 5 correct `pretooluse_block`s (hooks working) + 2 informational events. 85% noise. Blanket exit-0 filtering is unsafe (the `git push | tail` rejection-masking class is a real exit-0 failure — `feedback_push_pipe_masks_rejection`), so precision needs a smarter rule, not a coarse one.
+3. **Phase-boundary ceremony was deferred, not run.** P5W5 merged all 45 PRs to main days before the wave was formally wrapped (`wave_5_wrapped_up_at` was null, `wave_5_active` true, no counters, no annunaki/memory markers) — the wrap/retro ran retroactively this session. The "merge-then-wrap-later" gap risks a phase closing on un-run audits.
+
+### Proposed Process Changes
+1. **Wrap-on-last-merge trigger** — when the final wave→main PR merges, surface a "wave unwrapped" flag at session-start (the `wave_{M}_active && wave_{M}_wrapped_up_at == null && 0 open wave PRs` condition) so the wrap/retro isn't deferred indefinitely. Rationale: P5W5 sat merged-but-unwrapped. Owner: Aino / session-start skill.
+2. **Annunaki exit-0 precision pass** — tag exit-0 records whose trigger match is in *echoed output* (not a real failure signal) as a distinct low-confidence sub-class, excluded from the `/annunaki` count but retained for forensics — preserving the exit-0-failure carve-out (`git push | tail`). Rationale: 85% of this wave's "errors" were exit-0 noise. Owner: Aino / annunaki_monitor.
+3. **Cutover vs queryability as separate exit criteria** — for data-bearing phases, split "data present on prod" from "data queryable on prod" so a cutover can close honestly while the quality bar is explicitly tracked forward. Rationale: P5 #665/#602/#666 met the cutover intent but not literal queryability; the split avoids re-litigating "is it done" at phase-review. Owner: owner / plan-phase.
+
+### Annunaki-attack (Step 7.6)
+47 genuine records triaged: 40 exit-0 false positives (benign output matched trigger words), 5 correct `pretooluse_block`s (a batch-loop `gh pr merge` and a label-validation `gh issue create` — hooks functioning as designed), 2 informational wave-field-sync events. **No novel actionable failure class → no new hook/skill/charter.** Dominant finding (exit-0 noise) folded into Proposed Process Change #2. Marker written (`wave_5_annunaki_attack_ran_at`).
+
+### Memory-to-automation audit (Step 7.7)
+Codification is handled deterministically by `/promotion-audit`, which this wave classified **0 AUTO · 0 DECIDE · 248 KEPT · 19 SUPERSEDED** — nothing crosses a promotion threshold; the 2 marker-reconciled memories (`feedback_refresh_before_status_claim`, `feedback_throttle_takeover`) now correctly read SUPERSEDED. No manual conversions warranted. Marker written (`wave_5_memory_audit_ran_at`).
+
+## Promotion Audit — p5-wave-5 (2026-06-20)
+
+0 AUTO · 0 DECIDE · 248 KEPT · 19 SUPERSEDED. No promotions warranted this wave. The marker-reconciliation pass earlier this session (provenance markers added for the two already-encoded memories) is reflected in the 19 SUPERSEDED. Standalone log: `.claude/team/promotion_audit_log/p5-wave-5.md`.
+
 ## Retrospective: Phase 5 Wave 3 — 2026-06-14 — "Trustworthy data & search"
 
 ### Team Performance
