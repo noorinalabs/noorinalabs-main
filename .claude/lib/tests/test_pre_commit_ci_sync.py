@@ -10,6 +10,7 @@ Verifies:
 
 from __future__ import annotations
 
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -208,10 +209,14 @@ jobs:
         self.assertNotIn("build", kinds_from_ci("      - run: docker build -t img .\n"))
 
     def test_real_build_quality_gates_still_detected(self) -> None:
-        # The classifier inspects step lines (run:/uses:/`- ` list items), so
-        # the build-quality markers are exercised in those positions.
+        # Structural parse classifies ONLY a step's run:/uses: value, never its
+        # name: — so the build-quality markers are exercised in run position. (A
+        # build gate named purely via `- name: build-and-validate` with an
+        # unrelated run is intentionally NOT a `build` kind now; that name-only
+        # match was the false-positive class #748 removes — see
+        # FalsePositiveDemo below.)
         for line in (
-            "      - name: build-and-validate\n",
+            "      - run: ./scripts/build-and-validate.sh\n",
             "      - run: ./scripts/build-and-test.sh\n",
             "      - run: npm run build\n",
         ):
@@ -389,11 +394,338 @@ class RealParentRepoHasNoDrift(unittest.TestCase):
     def test_parent_ci_enforces_cspell(self) -> None:
         # Guard against the docs.yml cspell job being removed/renamed without the
         # mirror+kind being revisited: the kind must actually appear in CI.
+        # Workflows are independent YAML documents, so we union per-file kinds
+        # (structural parse cannot concatenate them into one parse — duplicate
+        # top-level keys would either raise or silently drop a document).
         wf_dir = _REPO_ROOT / ".github" / "workflows"
-        ci_text = "\n".join(
-            p.read_text(encoding="utf-8") for p in wf_dir.glob("*.y*ml") if p.is_file()
-        )
-        self.assertIn("cspell", kinds_from_ci(ci_text))
+        ci_kinds: set[str] = set()
+        for p in wf_dir.glob("*.y*ml"):
+            if p.is_file():
+                ci_kinds |= kinds_from_ci(p.read_text(encoding="utf-8"))
+        self.assertIn("cspell", ci_kinds)
+
+
+# ---------------------------------------------------------------------------
+# Reference copy of the OLD line-scanner (verbatim from main @ a7d7b2e), kept
+# ONLY so the #748 D3 tests can prove (a) byte-for-byte kind-set parity with the
+# pre-structural-parse classifier across real configs and (b) the precise
+# false-positive class the structural parse removes. Production code no longer
+# contains any of this; do not import it elsewhere.
+# ---------------------------------------------------------------------------
+_OLD_KIND_PATTERNS = {
+    "ruff-format": ("ruff-format", "ruff format"),
+    "ruff-lint": ("ruff check", "id: ruff", "- ruff"),
+    "mypy": ("mypy",),
+    "pytest": ("pytest",),
+    "eslint": ("eslint",),
+    "typescript": ("tsc", "typecheck", "type-check", "astro check"),
+    "prettier": ("prettier",),
+    "terraform-fmt": ("terraform fmt", "terraform_fmt", "id: terraform"),
+    "gitleaks": ("gitleaks",),
+    "actionlint": ("actionlint",),
+    "pip-audit": ("pip-audit", "pip audit"),
+    "build": ("build-and-validate", "build-and-test", "npm run build"),
+    "cspell": ("cspell", "spellcheck", "streetsidesoftware/cspell"),
+}
+_OLD_RUN_BLOCK_OPEN_RE = re.compile(r"^(?P<indent>\s*)-?\s*run:\s*[|>][+\-0-9]*\s*$")
+
+
+def _old_classify_line(line: str) -> set:
+    low = line.lower()
+    kinds: set = set()
+    if any(p in low for p in _OLD_KIND_PATTERNS["ruff-format"]):
+        kinds.add("ruff-format")
+    for kind, patterns in _OLD_KIND_PATTERNS.items():
+        if kind == "ruff-format":
+            continue
+        if kind == "ruff-lint":
+            if ("ruff format" in low) and ("ruff check" not in low and "id: ruff" not in low):
+                continue
+        if any(p in low for p in patterns):
+            kinds.add(kind)
+    return kinds
+
+
+def _old_kinds_from_precommit(text: str) -> set:
+    kinds: set = set()
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if re.match(r"^(-\s*)?(id|entry|name|repo):", line) or line.startswith("- "):
+            kinds |= _old_classify_line(line)
+    return kinds
+
+
+def _old_kinds_from_ci(text: str) -> set:
+    kinds: set = set()
+    run_block_indent = None
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if run_block_indent is not None:
+            if stripped:
+                line_indent = len(raw) - len(raw.lstrip())
+                if line_indent <= run_block_indent:
+                    run_block_indent = None
+                else:
+                    if not stripped.startswith("#"):
+                        kinds |= _old_classify_line(stripped)
+                    continue
+        if not stripped or stripped.startswith("#"):
+            continue
+        block_match = _OLD_RUN_BLOCK_OPEN_RE.match(raw)
+        if block_match is not None:
+            run_block_indent = len(block_match.group("indent"))
+            continue
+        if (
+            "run:" in stripped
+            or stripped.startswith("- run:")
+            or "uses:" in stripped
+            or stripped.startswith("-")
+        ):
+            kinds |= _old_classify_line(stripped)
+    return kinds
+
+
+# Documented expected per-repo kind-sets (#748 D3 parity proof). Authoritative
+# 8-repo OLD-vs-NEW comparison was run at PR time against the real configs in a
+# full parent checkout: the NEW structural classifier produces an IDENTICAL
+# (pre-commit, CI) kind-set to the OLD line-scanner for ALL 8 repos — no
+# divergence. The false-positive class the structural parse removes is therefore
+# LATENT: no real config exercises a step-name/comment false-match today (proven
+# directly by FalsePositiveDemo). These expectations encode that NEW==expected;
+# ParityAcrossRealConfigs additionally asserts OLD==NEW wherever the config is
+# present (the parent always; sibling child repos only in a full multi-repo
+# checkout — they are independent gitignored repos absent from this repo's CI
+# checkout, so each is skipped when not present rather than false-failing).
+_EXPECTED_KINDS = {
+    ".": {
+        "precommit": {"actionlint", "cspell", "mypy", "pytest", "ruff-format", "ruff-lint"},
+        "ci": {"actionlint", "cspell", "mypy", "pytest", "ruff-format", "ruff-lint"},
+    },
+    "noorinalabs-isnad-graph": {
+        "precommit": {
+            "actionlint",
+            "build",
+            "eslint",
+            "gitleaks",
+            "mypy",
+            "pip-audit",
+            "pytest",
+            "ruff-format",
+            "ruff-lint",
+            "typescript",
+        },
+        "ci": {
+            "actionlint",
+            "build",
+            "cspell",
+            "eslint",
+            "gitleaks",
+            "mypy",
+            "pip-audit",
+            "pytest",
+            "ruff-format",
+            "ruff-lint",
+            "typescript",
+        },
+    },
+    "noorinalabs-user-service": {
+        "precommit": {"actionlint", "mypy", "pytest", "ruff-format", "ruff-lint"},
+        "ci": {"actionlint", "cspell", "pytest", "ruff-format", "ruff-lint"},
+    },
+    "noorinalabs-deploy": {
+        "precommit": {
+            "actionlint",
+            "gitleaks",
+            "mypy",
+            "pytest",
+            "ruff-format",
+            "ruff-lint",
+            "terraform-fmt",
+        },
+        "ci": {
+            "actionlint",
+            "cspell",
+            "mypy",
+            "pytest",
+            "ruff-format",
+            "ruff-lint",
+            "terraform-fmt",
+        },
+    },
+    "noorinalabs-design-system": {
+        "precommit": {"actionlint", "build", "eslint", "gitleaks", "prettier", "typescript"},
+        "ci": {"actionlint", "build", "cspell", "typescript"},
+    },
+    "noorinalabs-data-acquisition": {
+        "precommit": {"actionlint", "gitleaks", "mypy", "pytest", "ruff-format", "ruff-lint"},
+        "ci": {"actionlint", "cspell", "mypy", "pytest", "ruff-format", "ruff-lint"},
+    },
+    "noorinalabs-isnad-ingest-platform": {
+        "precommit": {"actionlint", "mypy", "pytest", "ruff-format", "ruff-lint"},
+        "ci": {
+            "actionlint",
+            "cspell",
+            "mypy",
+            "pip-audit",
+            "pytest",
+            "ruff-format",
+            "ruff-lint",
+        },
+    },
+    "noorinalabs-landing-page": {
+        "precommit": {"build", "eslint", "gitleaks", "prettier", "typescript"},
+        "ci": {"build", "eslint", "prettier", "typescript"},
+    },
+}
+
+
+class ParityAcrossRealConfigs(unittest.TestCase):
+    """(#748 D3 deliverable c) The NEW structural classifier must produce the
+    documented kind-set for every real config, and must equal the OLD line
+    scanner on every config present — proving the refactor is behavior
+    preserving. The parent (`.`) is always present; sibling child repos are
+    independent gitignored repos and are skipped when absent (this repo's CI
+    checkout has none), so this test cannot false-fail in CI."""
+
+    def _present_roots(self):
+        # Child repos live beside the parent tree at <REPO_ROOT>/<repo>/. Present
+        # only in a full multi-repo checkout, never in this repo's CI checkout.
+        for repo, expected in _EXPECTED_KINDS.items():
+            root = _REPO_ROOT if repo == "." else _REPO_ROOT / repo
+            pc = root / ".pre-commit-config.yaml"
+            if pc.is_file():
+                yield repo, root, pc, expected
+
+    def test_new_matches_documented_expectations(self) -> None:
+        seen = []
+        for repo, root, pc, expected in self._present_roots():
+            seen.append(repo)
+            new_pc = kinds_from_precommit(pc.read_text(encoding="utf-8"))
+            new_ci: set = set()
+            wf_dir = root / ".github" / "workflows"
+            for w in sorted(wf_dir.glob("*.y*ml")):
+                new_ci |= kinds_from_ci(w.read_text(encoding="utf-8"))
+            with self.subTest(repo=repo):
+                self.assertEqual(new_pc, expected["precommit"], f"{repo} pre-commit kinds")
+                self.assertEqual(new_ci, expected["ci"], f"{repo} CI kinds")
+        self.assertIn(".", seen, "parent config must always be present and checked")
+
+    def test_new_equals_old_on_present_configs(self) -> None:
+        # Behavior-preservation: identical kind-sets to the retired line scanner
+        # on every config present (no divergence found across all 8 at PR time).
+        for repo, root, pc, _expected in self._present_roots():
+            pc_text = pc.read_text(encoding="utf-8")
+            wf_dir = root / ".github" / "workflows"
+            new_ci: set = set()
+            for w in sorted(wf_dir.glob("*.y*ml")):
+                new_ci |= kinds_from_ci(w.read_text(encoding="utf-8"))
+            # OLD scanner concatenated workflows into one scan (line-based, so
+            # duplicate keys were harmless); reproduce that to compare fairly.
+            old_ci_text = "\n".join(
+                w.read_text(encoding="utf-8") for w in sorted(wf_dir.glob("*.y*ml"))
+            )
+            with self.subTest(repo=repo):
+                self.assertEqual(
+                    kinds_from_precommit(pc_text),
+                    _old_kinds_from_precommit(pc_text),
+                    f"{repo} pre-commit: NEW must equal OLD",
+                )
+                self.assertEqual(
+                    new_ci,
+                    _old_kinds_from_ci(old_ci_text),
+                    f"{repo} CI: NEW must equal OLD",
+                )
+
+
+class FalsePositiveDemo(unittest.TestCase):
+    """(#748 D3 deliverable d) The defect the structural parse fixes: the OLD
+    line scanner classified a tool token appearing in a step `name:` or a YAML
+    `#` comment as a real check; the NEW parser inspects only `run:`/`uses:`
+    values, so it does not. These synthetic configs do not occur in any real
+    repo today (parity proves it), which is why the fix is latent — but they ARE
+    the class of false-positive the structural parse makes impossible."""
+
+    def test_tool_token_in_step_name_is_a_false_positive_old_not_new(self) -> None:
+        # A step NAMED after ruff, doing something unrelated. The classifier must
+        # key off run:, which here is not a ruff invocation.
+        wf = """
+jobs:
+  ci:
+    steps:
+      - name: run ruff check on the changed files
+        run: echo "this step only prints a message"
+"""
+        self.assertIn("ruff-lint", _old_kinds_from_ci(wf))  # OLD false-matches the name
+        self.assertNotIn("ruff-lint", kinds_from_ci(wf))  # NEW ignores name:
+
+    def test_build_token_in_step_name_is_a_false_positive_old_not_new(self) -> None:
+        wf = """
+jobs:
+  deploy:
+    steps:
+      - name: build-and-validate the rendered manifest
+        run: terraform validate
+"""
+        self.assertIn("build", _old_kinds_from_ci(wf))  # OLD false-matches the name
+        self.assertNotIn("build", kinds_from_ci(wf))  # NEW ignores name:
+
+    def test_tool_token_in_yaml_comment_is_a_false_positive_old_not_new(self) -> None:
+        # The `# ruff check ...` is a YAML comment: the parser strips it, so the
+        # run value is just `echo hi`. The OLD line scanner saw the raw line.
+        wf = """
+jobs:
+  ci:
+    steps:
+      - run: echo hi  # ruff check goes here once we wire it up
+"""
+        self.assertIn("ruff-lint", _old_kinds_from_ci(wf))  # OLD false-matches the comment
+        self.assertNotIn("ruff-lint", kinds_from_ci(wf))  # NEW: comment is gone after parse
+
+
+class RobustnessAgainstFalseGreen(unittest.TestCase):
+    """A parse failure or a non-structural document must FAIL LOUDLY, never
+    degrade into an empty kind-set (a silent false-green that hides drift)."""
+
+    def test_malformed_yaml_raises_not_empty(self) -> None:
+        bad = "jobs:\n  ci:\n    steps:\n      - run: x\n  : : bad\n"
+        with self.assertRaises(ValueError):
+            kinds_from_ci(bad)
+
+    def test_scalar_document_raises_not_empty(self) -> None:
+        # A workflow that parses to a bare scalar is malformed; refuse to call it
+        # "no checks".
+        with self.assertRaises(ValueError):
+            kinds_from_ci("just a string, not a mapping or list")
+
+    def test_empty_document_is_genuinely_empty(self) -> None:
+        # A truly empty/whitespace/comment-only file has no checks to mirror.
+        self.assertEqual(kinds_from_ci(""), set())
+        self.assertEqual(kinds_from_ci("\n  \n"), set())
+        self.assertEqual(kinds_from_precommit("# only a comment\n"), set())
+
+    def test_precommit_malformed_yaml_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            kinds_from_precommit("repos:\n  - repo: x\n   bad-indent: y\n")
+
+    def test_main_exits_2_on_unparseable_ci(self) -> None:
+        # End-to-end: the CLI must return 2 (error), not 0 (clean), when a
+        # workflow cannot be parsed — a false-green here would defeat the gate.
+        import tempfile
+
+        from pre_commit_ci_sync import main
+
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / ".pre-commit-config.yaml").write_text(
+                "repos:\n  - repo: local\n    hooks:\n      - id: ruff\n",
+                encoding="utf-8",
+            )
+            wf_dir = root / ".github" / "workflows"
+            wf_dir.mkdir(parents=True)
+            (wf_dir / "ci.yml").write_text("this: is: not: valid: yaml:\n", encoding="utf-8")
+            self.assertEqual(main(["prog", str(root)]), 2)
 
 
 if __name__ == "__main__":

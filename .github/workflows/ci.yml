@@ -56,7 +56,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install mypy
+      # types-PyYAML: pre_commit_ci_sync.py imports `yaml` (PyYAML, #748 D3).
+      # PyYAML ships no inline types, so without the stubs mypy emits
+      # `import-untyped` — which `--ignore-missing-imports` does NOT suppress
+      # (it only silences `import-not-found`). Stubs keep this job green.
+      - run: pip install mypy types-PyYAML
       - run: mypy .claude/hooks/ .claude/lib/ --ignore-missing-imports --no-error-summary
       # .claude/skills/ added per #326. mypy is run PER-SKILL-DIRECTORY (not as
       # one flat tree) because two skills each ship a `tests/__init__.py`, which
@@ -107,7 +111,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pytest
+      # pyyaml: the .claude/lib test suite imports pre_commit_ci_sync, which now
+      # imports `yaml` (#748 D3). setup-python's interpreter has no PyYAML
+      # preinstalled, so declare it explicitly rather than relying on the
+      # ubuntu-runner system Python.
+      - run: pip install pytest pyyaml
       - name: Run hook and lib tests
         run: pytest .claude/hooks/tests/ .claude/lib/tests/ -q
       # .claude/skills/*/tests/ added per #326. Run PER-SKILL (each from its own
@@ -134,6 +142,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # pyyaml: the gate now parses both sides structurally with `yaml.safe_load`
+      # (#748 D3). Declared explicitly — setup-python's interpreter has no PyYAML
+      # preinstalled, and the gate must not depend on the runner's system Python.
+      - run: pip install pyyaml
       - name: Verify pre-commit config mirrors CI-enforced checks (#327)
         # Fails if a check CI enforces (ruff/mypy/pytest/…) is missing from
         # .pre-commit-config.yaml, so local hooks can't silently drift behind CI.
