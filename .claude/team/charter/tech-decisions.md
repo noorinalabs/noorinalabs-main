@@ -18,7 +18,9 @@ When agreement cannot be reached between parties, the decision escalates to the 
 | Release Coordinator ↔ Standards Lead | Program Director (Nadia) |
 | Any org-level member ↔ repo manager | Program Director (Nadia) |
 
-## Base Image Pinning <!-- promotion-target: none -->
+## Base Image Pinning <!-- promotion-target: hook DONE: .claude/lib/check_dockerfile_base_pin.py (#735) -->
+
+> **Enforced by** [`.claude/lib/check_dockerfile_base_pin.py`](../../lib/check_dockerfile_base_pin.py) (#735) — a deterministic lint that flags any `FROM` lacking a digest pin or the matching distro upgrade, honoring the exemptions below (`scratch`, distroless, stage-reference, vendor `# RATIONALE:`). Wired as a pre-commit hook + the `dockerfile-base-pin` CI job; classified by the sync-drift gate. The cross-repo rollout onto each child's real Dockerfiles is a #735 follow-up.
 
 All Dockerfile `FROM` statements MUST use a **digest-pinned tag** combined with an in-image package upgrade. This closes two failure modes that were each individually surfaced — floating-tag drift and within-tag package drift — by combining the two defenses.
 
@@ -63,7 +65,7 @@ RUN apk upgrade --no-cache
 
 **Reviewer enforcement:** Absence of a digest pin OR absence of the upgrade step on a `Dockerfile` PR is grounds for `ChangesRequested`. The pattern is mechanical; reviewers cite this section.
 
-**Promotion path:** This is step 1 + 2 (charter + memory) of the [enforcement hierarchy](hooks.md). A future `validate_dockerfile_base_pin` PreToolUse hook (step 3) is filed if the convention proves load-bearing across multiple Dockerfile PRs without manual reviewer reminders.
+**Promotion path:** Steps 1 + 2 (charter + memory) of the [enforcement hierarchy](hooks.md) are now joined by step 3 — the convention is mechanized as `.claude/lib/check_dockerfile_base_pin.py` (#735), a CLI lint wired into pre-commit + CI (the `validate_dockerfile_base_pin` role this section anticipated). It is a file-scanning lib gate rather than a PreToolUse hook because Dockerfiles live in the gitignored child repos, not the parent agent's edit surface; the per-child CI rollout is the remaining #735 follow-up.
 
 **Why:** Surfaced by Linh-review during P3W3 review of `noorinalabs-isnad-graph#854` (Idris-853's Trivy CVE fix). The combined `digest-pin + apk upgrade` pattern Idris chose was the right shape but had no normative reference; without it the next Dockerfile author would default to a floating `nginx:alpine` (the failure shape that produced #853 in the first place). Codifying the pattern closes that gap.
 
