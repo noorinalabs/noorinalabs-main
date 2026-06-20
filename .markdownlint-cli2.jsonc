@@ -62,6 +62,12 @@
     "noorinalabs-isnad-ingest-platform/**",
     "noorinalabs-landing-page/**",
     ".claude/worktrees/**",
+    // .claude/memory/** — the version-controlled project-memory corpus relocated
+    // in-repo (#732 enabler). Same rationale as the cspell/feedback_log exclusion:
+    // dense append-only personal-note prose (names, SHAs, [[wikilinks]], Arabic),
+    // not published docs — linting it to a style guide adds noise without catching
+    // real rendering breakage. Curation discipline lives in the memory budget hook.
+    ".claude/memory/**",
     "node_modules/**"
   ]
 }

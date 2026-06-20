@@ -32,6 +32,10 @@ exclude_path = [
   "noorinalabs-isnad-ingest-platform",
   "noorinalabs-landing-page",
   ".claude/worktrees",
+  # In-repo project-memory corpus (#732 enabler) — uses [[wikilink]] shorthand
+  # and bare refs, not lychee-checkable relative links; excluded like the other
+  # append-only records.
+  ".claude/memory",
   "node_modules",
 ]
 

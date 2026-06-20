@@ -1,0 +1,136 @@
+- [User profile](user_steven.md) — Steven French, owner; autonomous execution, charter compliance, hook enforcement, memory reliability.
+- [Reviewer brief needs TechDebt line](feedback_reviewer_brief_techdebt.md) — omit → Hook4 blocks all merges wave-wide; fix by EDIT-in-place. P5W5.
+- [closingIssuesReferences empty on wave-branch PRs](reference_closing_refs_empty_wave_prs.md) — not a gh --json field; parse body Closes/Fixes for non-default-base PRs. main#664.
+- [Shared Redis ratelimit → test 429s](feedback_shared_redis_ratelimit_test_429.md) — ig api tests flake 429 under parallel agents (shared ratelimit:testclient bucket). ig#1060.
+- [FastAPI Depends(get_settings) → 422](project_ig_fastapi_depends_get_settings_422.md) — bare Depends(get_settings) 422s under MagicMock-patched suites. ig#1070/PR#1084.
+- [ig integration test harness gaps](project_ig_integration_test_harness_gaps.md) — neo4j auth fixed (PR#1102); not e2e-green: 401 auth-override + ig#1034 redis ping.
+- [ontology_tracker test worktree-fragile](project_ontology_tracker_worktree_test.md) — test_worktrees_segment false-FAILS under .claude/worktrees/ (REPO_ROOT inherits it). PR#685.
+- [Promote gate stg-verify refresh](project_promote_gate_stg_verify_refresh.md) — promote.yml v2 honors only workflow_run-triggered verify; refresh via deploy-stg. deploy#423.
+- [Grafana forward_auth credential-carry](project_grafana_forward_auth.md) — SSO 3-repo; /grafana carries no credential (token localStorage-only). deploy#460.
+- [LP↔DS icon consumption](project_lp_ds_icon_consumption.md) — Astro LP can't import DS React icons; Icon.astro mirrors geometry; ds#103=neutral iconPaths. lp#119.
+- [Prefer correct over expedient (no users)](feedback_prefer_correct_over_expedient.md) — Owner 2026-06-12: pre-launch, UI/visual regression not a hard constraint; do the right fix.
+- [Semantic search = hashing embedder](project_semantic_search_hashing_embedder.md) — query-embed correct; arbitrary results = corpus embedded w/ HashingEmbedder. ig#1071.
+- [Wave-key cross-phase collision](project_wave_key_cross_phase_collision.md) — wave_{M}_* not phase-namespaced; P5 collides w/ P4; /wave-start §5a reset never fires. main#683.
+- [DS color utilities are no-ops](project_ds_theme_color_utilities_noop.md) — ig FE: bg-card/text-foreground emit 0 rules (DS dist=@theme+[data-theme], not :root). DS#111.
+- [DS component utilities are no-ops](project_ds_component_utilities_noop.md) — ig FE: DS Dialog utils live only in dist JS → 0 CSS; fix=@source inline. #812.
+- [Itqan license: proceed](project_itqan_license_proceed.md) — Owner 2026-06-12: use Itqan narrator source despite no upstream license (nonprofit + own-schema). PR#110.
+- [Bihar not in Thaqalayn](project_bihar_not_in_thaqalayn.md) — da#95 premise false; Owner 2026-06-12: build real bihar adapter vs hubeali.com (PR#134).
+- [STUDIED_UNDER network_edge allowlist](project_studied_under_allowlist.md) — load_edges globs network_edges_*.parquet as STUDIED_UNDER; only studentship allowlisted. da#133.
+- [Relocate mis-filed wave issues](feedback_relocate_misfiled_wave_issues.md) — issue whose code lands in another repo MUST be relocated at kickoff (close+recreate+split).
+- [TD intake 20%/wave](feedback_td_intake_20pct_per_wave.md) — per-wave TD intake (+20% of feature/bug scope, ceil; all if fewer) replaces cumulative ratio gate.
+- [Wave branch: every-wave merge + retain](feedback_wave_branch_merge_retain.md) — each wave merges to main at its /wave-wrapup; phase/wave branches RETAINED (--merge).
+- [Profile-only source needs bio-promote](project_profile_source_bio_promote.md) — rijal-DB source loads 0 Narrators via disambiguator; bio_promote.py promotes bios→canonical.
+- [P4 priority: data-first](project_p4_priority_data_first.md) — Owner 2026-06-10: get REAL DATA visible (E2E→loaded→viewable) before broader features. da#71.
+- [Staging Neo4j/frontend unreachable from sandbox](project_staging_unreachable_from_sandbox.md) — bolt/frontend resolve only in-cluster; ssh stg → cypher-shell or -L tunnel. da#73.
+- [thaqalayn parser broken vs real schema](project_thaqalayn_parser_schema.md) — parser maps wrong fields → 0% matn, 59-id collision; real clean=33,190 hadiths. da#175.
+- [Staging pipeline not wired](project_staging_pipeline_not_wired.md) — stg Neo4j = 47 sunni hadiths + 1 collection; ZERO narrators/edges; ingest never ran on stg. da#73.
+- [APPEARS_IN MERGE null-property bug](feedback_appears_in_merge_null.md) — _APPEARS_IN_QUERY MERGEs rel w/ hadith_number_in_book in pattern; Neo4j rejects null. main#139.
+- [hadith number: collection-ref vs in-book ordinal](project_hadith_number_collection_vs_inbook.md) — sunnah.com has 2 numbers; APPEARS_IN uses in-book ordinal; da#72 wrong. da#77.
+- [WSL2 local Docker](feedback_wsl2_no_local_docker.md) — RESOLVED 2026-06-12: local Docker works (neo4j:5 ran locally+CI); keep skip-guard, CI may flake. da#89.
+- [generate_source_id fail-fast breaks non-corpus keys](feedback_generate_source_id_failfast.md) — raises on non-SourceCorpus namespace; bio/aux adapters crash; latent. da#89.
+- [narrators_canonical two producers ordering](project_narrators_two_producers.md) — disambiguate OVERWRITES (da#99), bio_promote MERGES (da#110); run_all order matters.
+- [pip-audit --strict advisory-DB drift](feedback_pip_audit_strict_advisory_db_drift.md) — red on branch / green on main, identical uv.lock, when a new advisory publishes; not your bug.
+- [Hadith id double-prefix streaming vs batch](project_hadith_id_double_prefix.md) — normalize doubles corpus (sunnah:sunnah:) vs batch single → 2 nodes. main#139.
+- [stg deploy per-service tag routing](feedback_stg_deploy_per_service_tag_routing.md) — deploy-stg must route dispatch sha to ONLY that service's tag; shared IMAGE_TAG → wrong image. deploy#418.
+- [Prod frontend runtime-config lag](feedback_prod_frontend_runtime_config_lag.md) — frontend resolves us origin via window.RUNTIME_CONFIG from /runtime-config.js; stale image lags. deploy#420.
+- [Compose env change rollback safety](feedback_compose_env_change_rollback_safety.md) — compose config migration MUST keep old env form; rollback.yml rewrites only image tag. deploy#403.
+- [db-migrate gate EXPECTED_MERGE_HEAD drift](feedback_db_migrate_gate_expected_head_drift.md) — gate fails on any compose PR when pin lags us stg-latest alembic head; pre-existing. PR#409.
+- [ruff parent-config bleed in worktree](feedback_ruff_parent_config_bleed.md) — child worktree under parent: ruff finds parent pyproject (100-col); CI uses child (88-col).
+- [Org-wide artifact gate non-blocking](feedback_artifact_gate_non_blocking.md) — CI check over cross-repo-derived artifact must be continue-on-error, not a hard PR gate. deploy#363.
+- [Lint gate cover all syntactic forms](feedback_lint_gate_cover_all_syntactic_forms.md) — regex/line-scan gate must match every access form (dotted + from-import). deploy#363.
+- [Ruleset empty required_status_checks 422](feedback_ruleset_empty_checks_422.md) — rulesets API 422s on empty checks; path-filtered-CI repos must OMIT the rule. #322.
+- [Sync-gate build-kind false-fail on publish workflow](feedback_sync_gate_publish_build.md) — false-fails on repos w/ a publish/release workflow (docker build kind).
+- [Cross-repo GHCR/npm registry-auth proof](feedback_cross_repo_ghcr_registry_auth_proof.md) — before claiming a cross-repo @noorinalabs/* registry-auth fix: check pkg visibility + witness.
+- [zsh shell environment](feedback_zsh_shell_environment.md) — dev env uses zsh; write zsh-safe Bash commands, avoid bash-isms (declare -A, ${!arr[@]}).
+- [ProjectV2 field-option is orchestrator-doable](feedback_projectv2_field_option.md) — adding a single-select Wave-field option is mine via GraphQL updateProjectV2Field.
+- [i18n scope](project_i18n_scope.md) — i18n is UI/navigation toggle only; source API data stays untransformed.
+- [Ontology system](project_ontology_system.md) — three-role ontology (tracker hook, resolver skill, librarian skill); Hook 15 enforces consult.
+- [Bootstrap repo](project_bootstrap_repo.md) — separate repo to dogfood the team/workflow/ontology pattern for reuse across projects.
+- [Data pipeline arch](project_data_pipeline_architecture.md) — B2 storage, Kafka/KRaft pipeline, acquisition-vs-platform repo split, MinIO local dev.
+- [Session handoff](session_handoff.md) — Pickup from 2026-06-20: auto-generated project state snapshot
+- [Self-loop task replay glitch](feedback_self_loop_task_replay_glitch.md) — team task system may replay own completed tasks as fresh; verify via TaskGet + ignore self-loops.
+- [PR number placeholders](feedback_pr_number_placeholders.md) — never predict-then-cite PR numbers; parallel work consumes them fast; verify w/ gh pr view post-create.
+- [Wave planning from project board](feedback_wave_planning_from_board.md) — Project 2 is authoritative backlog; labels are post-scoping tags. 37% drift 2026-04-23.
+- [Enforcement hierarchy](feedback_enforcement_hierarchy.md) — prefer hook > skill > charter; charter rules without enforcement decay.
+- [Spawn-brief Requestor field](feedback_spawn_brief_requestor.md) — reviewer-spawn briefs name reviewer as Requestor, PR author as Requestee. PR#349.
+- [Hook 4 prose false-match](feedback_hook4_regex_prose_false_match.md) — NEVER reproduce literal Field:Value shape in review prose; Hook4 first-match grabs it as the verdict.
+- [SSH topology](reference_ssh_topology.md) — mental model, key-to-user mapping, owner pitfalls; verify w/ whoami each session.
+- [Verify diagnosis before delegating](feedback_verify_diagnosis_before_delegating.md) — run git log -- <path> before spawning a fix agent; API state ≠ ground truth. #162.
+- [Check accepted ADRs before spawn](feedback_check_accepted_adr_before_spawn.md) — an issue may propose what an accepted ADR rejected; that's an owner call, not implementer work.
+- [Commit msg via -F /tmp/msg.txt](feedback_heredoc_in_git_commit.md) — inline heredoc + git -c commit -m "$(cat<<EOF)" trips the identity-hook parser; use -F file.
+- [gh CLI silent-no-op family](feedback_gh_pr_edit_silent_noop.md) — gh pr edit, project item-add, item-list --limit, api -X PATCH -f body=@file silently no-op.
+- [git show over worktree for canonical source](feedback_canonical_source_via_git_show.md) — syncing "from sha X": local main may lag origin; fetch via git show <sha>:<path>.
+- [Child-repo implementer rule](feedback_child_repo_implementer_rule.md) — implementers for child-repo PRs come from that child's own roster, not the parent org team.
+- [Security guard inline, not followup](feedback_security_guard_inline_not_followup.md) — Changes-Requested when threat model needs a runtime guard; followup issue is tracking, not a fix. #77.
+- [Honest audit before "concluded"](feedback_honest_audit_over_conclusion_claim.md) — cross-repo open-item count required before claiming wave done; explicit carry-forward if non-zero.
+- [Stale-inbox manager failure mode](feedback_stale_inbox_manager.md) — before correcting a teammate's state, re-verify via artifact (gh api, Read, grep); inbox lags reality.
+- [Refresh PR state before status claims](feedback_refresh_before_status_claim.md) — gh pr view <N> before any "still at X / blocked / already done" assertion.
+- [Role-class-specific boundaries](feedback_role_class_specific_boundaries.md) — same person, different role classes (reviewer/escalation/advisor/implementer) → different rules.
+- [Cross-repo wave-aware sibling checkout](feedback_cross_repo_wave_ref_resolution.md) — CI checking out sibling repos must resolve ref to wave branch (main fallback). deploy#159.
+- [Runtime gate scoping](feedback_runtime_gate_scoping.md) — operational gates needing prod-only state are NOT PR acceptance; deliver unit-mechanic correctness.
+- [actionlint needs shellcheck on PATH](feedback_actionlint_needs_shellcheck.md) — actionlint silently skips shellcheck if binary absent; local "clean" diverges from CI.
+- [Verify third-party integrity claims against source](feedback_verify_3p_integrity.md) — don't claim a downloader verifies SHA/GPG without grepping its source.
+- [Wave-branch merges don't auto-close issues](feedback_wave_branch_issue_close.md) — Closes #N only fires on default-branch merges; after wave-branch merge, manually close.
+- [Review against artifact, not PR-body framing](feedback_review_against_artifact.md) — read diff/code at PR head via gh api contents, not PR body / commit msgs / line numbers.
+- [Full-read over tail for memory files](feedback_full_read_over_tail.md) — memory-file state-claims need full Read or grep -n, not tail; memory dir is outside repo.
+- [Run ruff format --check before pushing hook tests](feedback_ruff_format_check_before_push.md) — uvx ruff@<pin> format --check .claude/hooks/ pre-push catches what hooks-lint CI blocks.
+- [Throttle takeover by orchestrator](feedback_throttle_takeover.md) — when a spawned implementer throttle-stalls w/ sound partial work, finish directly w/ their identity.
+- [Agent color drift is UI quirk](feedback_agent_color_render_quirk.md) — same agent w/ different color tags ≠ duality; trust SendMessage routing.targetColor. PR#266.
+- [Manager pre-spawn verification at origin](feedback_pre_spawn_verify_at_origin.md) — manager-class: verify audit-deliverable issue premises against origin head_sha BEFORE spawning.
+- [Pre-spawn-brief verified-at-HEAD + caveat sweep](feedback_pre_spawn_brief_verified_at_head.md) — enumerate surface from wave-branch HEAD + rule each named caveat applicable or not.
+- [No head in surface enumeration](feedback_no_head_in_surface_enumeration.md) — pre-spawn briefs MUST count via grep -c per file then sum; never | head -N the per-file grep. deploy#280.
+- [validate_pr_review counts Approved-only](feedback_validate_pr_review_approved.md) — 2-reviewer hook counts RequestOrReplied: Approved only; Reply doesn't register.
+- [TechDebt literal-line is bare-text, not section](feedback_techdebt_literal_line_not_section.md) — Hook4 parses ^TechDebt: line-start regex; ## Tech Debt section prose does NOT register.
+- [Verdict-comment amendment must EDIT not append](feedback_verdict_amendment_edit_not_append.md) — retrofitting TechDebt onto a posted verdict requires EDITING the original comment.
+- [Reviewer-correction-vs-merge race](feedback_reviewer_correction_vs_merge_race.md) — pause merge until reviewer's in-flight correction lands AND updated_at re-verified.
+- [Spawn-brief field advisory pattern](feedback_spawn_brief_field_advisory_pattern.md) — spawn-brief declarative fields are ADVISORY; orchestrator must take explicit imperative action. #445.
+- [Hook brief grep-precedent pre-flight](feedback_hook_brief_grep_precedent_preflight.md) — before composing hook-tier briefs, grep .claude/hooks/*.py for existing parsers of the shape.
+- [Parallel reviewer /tmp filename collision](feedback_parallel_reviewer_tmp.md) — parallel reviewers writing /tmp/review.md clobber each other; use /tmp/<reviewer>_<PR#>.md.
+- [Bundle fixup instructions in one message](feedback_bundle_fixup_instructions.md) — orchestrator sends mid-PR fixup items as ONE bundle, not serial messages (drop-race risk).
+- [Owner-pivot supersedes protocol](feedback_owner_pivot_supersedes_protocol.md) — pivots reversing prior routing on in-flight tasks need supersedes-as-of header; refresh at origin.
+- [Consumer against in-flight upstream](feedback_consumer_against_in_flight_upstream.md) — reviewing a consumer PR on unmerged upstream needs dual-axis co-verify (read upstream source).
+- [Declarative-at-HEAD pattern](feedback_declarative_head_needs_action.md) — landed-at-HEAD artifacts need explicit orchestrator action OR session restart to take effect.
+- [Test-mock injection masks production failure](feedback_test_mock_masks_prod_failure.md) — unit-test injection mocks bypass server-side validation; pair w/ static-analysis/real-call gate.
+- [Verify PostToolUse firing before trusting hook](feedback_verify_posttooluse_firing.md) — at session start, fire one disposable Bash failure to verify annunaki_monitor logs it.
+- [Pre-spawn verify file existence at HEAD](feedback_pre_spawn_verify_file_exists.md) — per-file claims in briefs need git cat-file -e origin/<branch>:<path>, not ls/working-tree.
+- [Reviewer must not branch-switch parent](feedback_reviewer_no_branch_switch.md) — reviewers read PR code via gh api contents?ref=<sha>; MUST NOT git checkout in parent.
+- [Verdict count must match Hook 4 regex](feedback_verdict_count_hook_regex.md) — pre-spawn verdict counts must accept BOTH Requestor: bare AND **Requestor:** bold forms.
+- [Safety direction > UX friction](feedback_safety_direction_over_ux_friction.md) — when a hook can't auto-fix cleanly, HARD BLOCK with diagnostic, never allow_with_log. PR#494.
+- [Investigate before implement on unevidenced brief](feedback_investigate_before_implement.md) — brief asserts problem w/o evidence → origin-audit BEFORE Edit/Write. ds#81.
+- [Spawn-brief direct-instruction carveout](feedback_spawn_brief_direct_instruction.md) — a numbered imperative step in brief body IS the imperative action; don't bounce it. us#103.
+- [setup-node + .npmrc env-var name](feedback_setup_node_npmrc_env_var_name.md) — project-level frontend/.npmrc MUST use ${NODE_AUTH_TOKEN} (setup-node canonical), NOT ${NPM_TOKEN}.
+- [Dep-resolution change invalidates unchanged steps](feedback_dep_resolution_invalidates.md) — dep-resolution PR: reviewers read FULL workflow at HEAD, not diff. #924.
+- [gh API formal review 422](feedback_gh_review_self_approve_422.md) — gh api .../pulls/N/reviews w/ event:APPROVE always 422s (gh principal = PR author); use issue-comment.
+- [Brief-author verify roster surname](feedback_brief_author_verify_roster_surname.md) — read roster card content (not infer from slug) when naming a teammate in a spawn brief.
+- [statusCheckRollup before "CI clean"](feedback_statuscheckrollup_ci_clean.md) — local pass ≠ CI pass; run gh pr view --json statusCheckRollup before "ready" claims.
+- [.npmrc NODE_AUTH_TOKEN convention](feedback_npmrc_node_auth_token_convention.md) — project-level .npmrc for npm.pkg.github.com MUST use ${NODE_AUTH_TOKEN}; project-level wins.
+- [Hook cwd-anchor subagent worktree](feedback_hook_cwd_anchor_subagent_worktree.md) — hooks reading stdin cwd resolve to orchestrator dir, not subagent worktree → child gh ops misrouted.
+- [Sibling-issue overlap missed cross-close](feedback_sibling_issue_overlap.md) — PR for #A satisfying #B does NOT auto-close #B; pre-spawn overlap check. deploy#200.
+- [Batch-loop merge evades PR-review hook](feedback_batch_loop_merge_evades.md) — gh pr merge $pr in a shell loop fails open; standalone literal PR# is caught.
+- [CF plan doesn't validate expr; close-on-verified-live](feedback_cf_ruleset_apply_validation.md) — ruleset exprs validate at APPLY not plan; close after live-verify.
+- [update-branch async read-after-write window](feedback_update_branch_async_window.md) — gh api -X PUT .../update-branch returns 202; merge lands async; refetch head_sha first.
+- [Scope audit flips implementer via child-repo rule](feedback_scope_audit_child_repo_rule.md) — parent-repo tracking issue for child work goes in CHILD repo; stop, don't retarget.
+- [sync-gate build-kind false-match](feedback_sync_gate_build_kind_false_match.md) — pre_commit_ci_sync.py build pattern false-matches "Docker Buildx"/"docker build" step names.
+- [count>=0 masks empty graph](feedback_count_ge_zero_masks_empty_graph.md) — real-DB count(r)>=0 asserts nothing; read back the graph (concrete count + per-row keys).
+- [Neo4j SET null removes property](feedback_neo4j_set_null_removes_property.md) — MERGE {prop:null} aborts; null-safe=property-less MERGE+SET, but SET prop=null REMOVES the key. da#69.
+- [Trivy base-image CVE org-wide gate](feedback_trivy_base_image_cve_org_wide_gate.md) — ghcr Trivy fails on NEW debian base-image OS CVE, not your code; org-wide, not PR-caused.
+- [Passing repro masks bug (wrong invocation)](feedback_passing_repro_masks_bug.md) — green local repro proves nothing if it used a different invocation form than prod.
+- [DS tokens need data-theme attr](project_ds_tokens_need_data_theme_attr.md) — DS dist colors live in @theme{} (ignored) + [data-theme] (honored); empty unless <html> sets it.
+- [Parallel panels sharing a file must serialize-merge](feedback_parallel_panels_shared_file.md) — parallel PRs appending to a shared file git-conflict despite distinct ownership. #986.
+- [compose up --wait: non-app service aborts rollout](feedback_compose_up_wait_non_app_abort.md) — prod compose up --wait health-gates WHOLE stack; unhealthy kafka → 521; tier the rollout.
+- [Streaming E2E prereqs](project_streaming_e2e_prereqs.md) — Kafka pipeline E2E on stg deferred past P4W6 (#601 met via batch); dispatch-needs-main. deploy#443.
+- [validate_labels hook gotchas](feedback_validate_labels_hook_gotchas.md) — body over-match + stale label cache false-block gh issue create; verify+retry, keep tokens out of bodies.
+- [API pytest hangs on Redis ping offline](feedback_api_pytest_redis_ping.md) — ig test_api/* times out: RateLimitMiddleware.redis.ping() blocks; stub _get_redis→None.
+- [Full local⇄CI hook parity + no-force](feedback_local_ci_parity_no_force.md) — Owner 2026-06-14: pre-commit/push MUST mirror COMPLETE CI tooling; never push a failing check. main#684.
+- [git push piped masks rejection](feedback_push_pipe_masks_rejection.md) — git push ... | tail returns tail's 0, hiding a REJECTED push; use ; echo rc=$?. ig#1044.
+- [P5W5 cutover + roadmap revision](project_p5w5_prodcutover_p6_dataquality.md) — P5W5=prod cutover (#692). ROADMAP 2026-06-19: NEW P6=Claude Efficiency (memories/code-over-md/persona+ontology revisit/TD); Data-Quality/ML→P7.
+- [sunnah_scraper named-book truncation](project_sunnah_scraper_truncation.md) — digit-only book enum dropped /introduction; riyad lost 679/1896; others still truncated. da#177.
+- [P5W5 corpus-load findings](project_p5w5_corpus_load_findings.md) — lk=Sunni not al-Kafi; staging NOT empty; thaqalayn parser fixture-masked; Four Books partial→da#182.
+- [Staging graph-load transport](project_staging_graph_load_transport.md) — Neo4j only on noorinalabs_backend (no host port/egress); bake-deps-then-attach loader. da#174/PR#180.
+- [Generic-prompt hook never actioned](feedback_generic_prompt_hook_advisory_decay.md) — advisory systemMessage, no state → inert; FIXED via batched wave-wrapup checkpoint. main#716/PR#722.
+- [GIT_DIR leak corrupted live repo config](feedback_git_dir_leak_repo_config.md) — pre-#720 leak wrote core.bare=true + [user] t@t into parent .git/config; fix=Edit it. #720.
+- [Commit-author gate exclude merges](feedback_commit_author_gate_exclude_merges.md) — author/identity gate over a PR range MUST use git log --no-merges (merge commits = bare principal).
+- [Cross-persona task-claim hazard](feedback_cross_persona_task_claim_hazard.md) — TaskUpdate has no ownership-guard; a mistyped taskId silently completes another persona's work.
+- [Cross-spawn cwd collision](feedback_cwd_collision_cross_spawn.md) — two agents sharing one cwd on different branches: 2nd checkout moves the 1st → commits on wrong branch.
+- [main#136 E2E lands in ingest](project_main136_pipeline_e2e_lands_in_ingest.md) — main#136 pipeline-worker E2E scenarios land in ingest-platform (not deploy/not main), ingest persona.
+- [Prod loaded but quality-broken](project_prod_loaded_quality_broken.md) — prod NO LONGER empty; 768k nodes/8.98% linked, narrators polluted, chains empty, search 500s → P7 data-quality. meta main#723.

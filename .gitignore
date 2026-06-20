@@ -79,3 +79,13 @@ temp/
 # over-counting them as errors. Local diagnostic aid only; never committed.
 .claude/annunaki/traces.jsonl
 .claude/annunaki/traces.jsonl.bak.*
+
+# In-repo project memory (#732 relocation). The CURATED corpus (MEMORY.md +
+# topic files) IS version-controlled — only the machine-written, per-session
+# transient artifacts are local-only:
+#   - session_handoff.md : rewritten by the Stop hook every ~5min (churn) and is
+#     session/machine-specific, not shared knowledge.
+#   - memory.bak.* / .relink_probe : link_memory.py relocation safety artifacts.
+.claude/memory/session_handoff.md
+.claude/memory/memory.bak.*
+.claude/memory/.relink_probe

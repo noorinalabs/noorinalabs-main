@@ -34,6 +34,7 @@
     "noorinalabs-isnad-ingest-platform/**",
     "noorinalabs-landing-page/**",
     ".claude/worktrees/**",
+    ".claude/memory/**",
     "node_modules/**"
   ]
 }
