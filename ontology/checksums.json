@@ -1420,6 +1420,12 @@
       "last_resolved": "",
       "tracked_at": "2026-06-20T00:31:37.184885+00:00",
       "resolved_at": ""
+    },
+    ".claude/team/phases/phase-6.md": {
+      "last_tracked": "283d32eacce630b1d19cf9a39626a2879877c46b69fec7fcd30c177cf1d74663",
+      "last_resolved": "",
+      "tracked_at": "2026-06-20T00:46:31.644705+00:00",
+      "resolved_at": ""
     }
   },
   "last_cleanup": {
