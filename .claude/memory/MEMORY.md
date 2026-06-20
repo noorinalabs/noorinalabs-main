@@ -47,7 +47,7 @@
 - [Ontology system](project_ontology_system.md) — three-role ontology (tracker hook, resolver skill, librarian skill); Hook 15 enforces consult.
 - [Bootstrap repo](project_bootstrap_repo.md) — separate repo to dogfood the team/workflow/ontology pattern for reuse across projects.
 - [Data pipeline arch](project_data_pipeline_architecture.md) — B2 storage, Kafka/KRaft pipeline, acquisition-vs-platform repo split, MinIO local dev.
-- [Session handoff](session_handoff.md) — Pickup from 2026-06-20: auto-generated project state snapshot
+- [Session handoff](session_handoff.md) — Pickup 2026-06-20: P6W1 live; memory now git-transferable via CLAUDE.md @import; 3 W1 PRs merged; next = #735/#732/#733. (file is gitignored/local)
 - [Self-loop task replay glitch](feedback_self_loop_task_replay_glitch.md) — team task system may replay own completed tasks as fresh; verify via TaskGet + ignore self-loops.
 - [PR number placeholders](feedback_pr_number_placeholders.md) — never predict-then-cite PR numbers; parallel work consumes them fast; verify w/ gh pr view post-create.
 - [Wave planning from project board](feedback_wave_planning_from_board.md) — Project 2 is authoritative backlog; labels are post-scoping tags. 37% drift 2026-04-23.
