@@ -118,6 +118,20 @@ When the user reports a bug, broken behavior, or missing feature in conversation
 
 This is the default behavior for all bug reports. Filing alone is never sufficient.
 
+## Project Memory
+
+Project memory is **version-controlled in the repo** at `.claude/memory/`, not in the user-space auto-memory directory. This makes the accumulated state **transferable**: a developer who pulls a branch gets the memory with it, with zero per-machine setup. The index below is auto-loaded into every session via a committed CLAUDE.md import:
+
+@.claude/memory/MEMORY.md
+
+`MEMORY.md` is the always-loaded index (one line per memory); the individual topic files in `.claude/memory/*.md` are read on demand when a line looks relevant.
+
+**Why not the auto-memory feature:** Claude Code's auto-memory lives at `~/.claude/projects/<cwd-dashed>/memory/` — user-space, cwd-keyed (so it fragments across worktrees/child-repo cwds), and **not** git-shareable. Its directory override (`autoMemoryDirectory`) is deliberately **ignored when checked into `.claude/settings.json`** (a committed override could redirect the agent's trusted memory context — a prompt-injection vector), so there is no committed setting that makes auto-memory transferable. CLAUDE.md `@import` of committed files is the only zero-setup-on-pull mechanism.
+
+**Recording a memory (overrides the default auto-memory tool):** create or edit `.claude/memory/<kebab-slug>.md` with the standard frontmatter (`name`, `description`, `metadata.type` = `user` | `feedback` | `project` | `reference`), add a one-line pointer to `MEMORY.md` (`- [Title](file.md) — hook`), and **commit it** so it travels with the branch. Link related memories with `[[other-slug]]`. Do **not** write memories to the user-space auto-memory path — they would not transfer. Before adding, check for an existing file covering the same fact and update it instead of duplicating; delete memories that turn out to be wrong.
+
+> `.claude/memory/**` is excluded from the markdown/cspell/lychee linters (dense append-only note prose with names, SHAs, `[[wikilinks]]`, and Arabic — same call as `feedback_log.md`/`trust_matrix.md`). The Stop-hook `session_handoff.md` is gitignored (per-session, machine-local churn). Per-child-repo memory follows the same self-contained pattern: each repo commits its own `.claude/memory/` + `@import` in its own CLAUDE.md — repos do not import across directories.
+
 ## Ontology
 
 The project maintains a structured knowledge base in `ontology/` that captures domain entities, service topology, and conventions across all repos.
