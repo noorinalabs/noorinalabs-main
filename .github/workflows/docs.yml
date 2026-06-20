@@ -86,6 +86,7 @@ jobs:
             ontology/**/*.md
             CLAUDE.md
             ONBOARDING.md
+            README.md
             docs/**/*.md
           incremental_files_only: false
           strict: true

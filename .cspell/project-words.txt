@@ -153,3 +153,7 @@ ltrimstr
 wikilinks
 grype
 upsert
+
+# --- toolchain README (#748): contributor-facing tool/installer names ---
+corepack
+semgrep
