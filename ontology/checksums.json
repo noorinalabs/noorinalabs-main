@@ -164,9 +164,9 @@
       "resolved_at": "2026-05-16T22:20:43.893664+00:00"
     },
     ".claude/team/feedback_log.md": {
-      "last_tracked": "8dae573ad04bfd96198e5c274c58f7142599b183d652977247db12ee4d6272ad",
+      "last_tracked": "ab11f7b43589c76825fac3e0a51ffc3d95aaf31af5dcbdd21d23cd6c365d1d1c",
       "last_resolved": "8dae573ad04bfd96198e5c274c58f7142599b183d652977247db12ee4d6272ad",
-      "tracked_at": "2026-05-31T22:06:22.582846+00:00",
+      "tracked_at": "2026-06-20T00:29:48.826590+00:00",
       "resolved_at": "2026-06-01T21:17:00Z"
     },
     ".gitignore": {
@@ -650,9 +650,9 @@
       "resolved_at": "2026-05-06T00:49:39.816328+00:00"
     },
     ".claude/team/trust_matrix.md": {
-      "last_tracked": "1fc3acd9659826e73b734af691f87466b14b1b302503969b60037613801ffc67",
+      "last_tracked": "6054a90f958b69bb0559d65b80ee57ddb846b317cc3a0ce9503d596628a8139f",
       "last_resolved": "1fc3acd9659826e73b734af691f87466b14b1b302503969b60037613801ffc67",
-      "tracked_at": "2026-05-31T22:03:47.712634+00:00",
+      "tracked_at": "2026-06-20T00:31:13.523506+00:00",
       "resolved_at": "2026-06-01T21:17:00Z"
     },
     ".claude/team/promotion_audit_log/wave-5.md": {
@@ -1414,6 +1414,12 @@
       "last_resolved": "37e913e545f1bdc755b34d0315f9e71f5855053d0609301dcce9f24e0dd5456b",
       "tracked_at": "2026-06-19T20:49:52.259418+00:00",
       "resolved_at": "2026-06-19T21:30:42Z"
+    },
+    ".claude/team/promotion_audit_log/p5-wave-5.md": {
+      "last_tracked": "a6fe83b0cf838a3a67f8bb54cf11d8adc985f4a533e219c9221b45b4ffc0c30f",
+      "last_resolved": "",
+      "tracked_at": "2026-06-20T00:31:37.184885+00:00",
+      "resolved_at": ""
     }
   },
   "last_cleanup": {

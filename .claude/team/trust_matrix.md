@@ -1554,3 +1554,50 @@ Clean-but-not-frictionless wave: **17 PRs across 5 repos**, all 2× Approved + C
 ### Done Well / Needs Improvement (Phase 5 Wave 4)
 - **Done well:** staging-first capstone caught 2 latent bugs before prod and verified real recall; determinism principle codified *and* shipped as code same-session (#688); honest prod-empty surfacing instead of a forced cutover; lowest-friction review culture (TechDebt attestation held, useful follow-ups filed #1095/#467).
 - **Needs improvement (process):** (1) shell/gh fragility cost cycles before #688 landed; (2) `/promotion-audit` lacks a canonical driver → hand-rolled mis-fire (#690); (3) MEMORY.md oversized (38KB); (4) `wave_{M}_*` theme/key cross-phase staleness recurred (main#683 still the durable fix).
+
+## Phase 5 Wave 5 Trust Updates (2026-06-20) — Production cutover (real data live on prod)
+
+### Org-Level / Framework (main)
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Santiago Ferreira | 4 | **5** (▲) | Shipped the **promotion-audit canonical driver** (#701) — directly closes the P5W4 #690 hand-rolled mis-fire pain point — plus `pr_review_state.py` (#710, deterministic review-state) and the REPO_ROOT-independent ontology test (#697). Three clean tooling PRs, one of them a durable retro-loop close. Promote to ceiling. |
+| Wanjiku Mwangi | 3 | **4** (▲) | Mechanized **per-phase wave-key reset** (#699) closing #683 — the `wave_{M}_*` cross-phase reuse hazard flagged in *both* P5W3 and P5W4 retros — plus the validate_wave_audit wave-branch-PR exemption (#700). Two clean PRs that retired a recurring correctness hazard. |
+| Aino Virtanen | 5 | 5 | 4 charter/hook PRs (#696 fixture-realism charter, #698 cspell CI-parity, #702 gh-parser invariant + hook, #709 session-handoff phase reader). Clean. Maintain at ceiling. |
+
+### Data-acquisition (cutover data spine)
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Alejandra Reyes-Fuentes | 5 | 5 | da#180 (multi-source Sunni corpora → staging Neo4j, containerized loader) + da#192 (matn_ar fallback) + da#193 (canonical composition encode). 3 PRs on the cutover spine. Maintain at ceiling. |
+| Kavitha Sundaramurthy | 5 | 5 | da#181 — real-schema thaqalayn parse + loaded the Shia Four Books to staging (closed the fixture-masked parser gap). Cutover-critical. Maintain at ceiling. |
+| Ivana Horvat | 5 | 5 | da#187 — completed Riyad as-Salihin to 1,896 by enumerating named book segments (addresses the da#177 truncation class). Clean. Maintain at ceiling. |
+| Jamal Habimana | — | **4** | First numeric rating: da#186 — sourced Tahdhib al-Ahkam + al-Istibsar from ThaqalaynData (CC0), **completing the Shia Four Books**. Cutover-critical, clean. |
+| Nikos Papadopoulos | — | **4** | First numeric rating: da#183 — staging itqan narrator load (115,735 bios → 85,840 canonical Narrators), the largest narrator source. Clean. |
+| Tarek Mansour | 4 | 4 | da#184 (testcontainers neo4j pin) + da#189 (bleach security pin). Two clean infra/security PRs. Hold. |
+| Olzvoi Batbayar | — | **3** | First numeric rating: da#185 (tightened tautological cap-equivalence test). Small, clean. |
+
+### isnad-graph / user-service
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Mateo Salazar | 5 | 5 | ig#1100 (shared search-result helper) + ig#1106 (rate-limit Redis socket timeouts, closes #1034) + us#176 (security floors). 3 clean PRs. Maintain at ceiling. |
+| Linh Pham | 4 | 4 | ig#1097 + ig#1102 (testcontainers neo4j tag + password alignment). Two clean test-infra PRs. Hold. |
+
+### Ingest-platform / Deploy / Design-system / Landing-page
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Lerato Mbongo | — | **4** | First numeric rating: ingest#98 (reconcile vendored SourceCorpus with da canonical) + ingest#103 (starlette/cryptography security floors). Two clean PRs closing real drift. |
+| Astrid Lindqvist | 5 | 5 | ds#118 (motion primitives → framework-neutral CSS) + ds#119 (compiled component-utilities layer, closes the #115 no-op-utilities class) + ds#121 (release bump). 3 clean PRs. Maintain at ceiling. |
+| Kojo Mensah-Williams | — | **4** | First numeric rating: 3 lp PRs — #142 (dark-mode toggle), #145 (Direction-C architecture hero), #141 (removed fabricated pre-launch staff). Clean, product-facing. |
+| Nadia Hakim | 4 | 4 | deploy#473 (alert on corpus_reembed_last_run_* failed+stale). Clean observability extension. Hold. |
+| Lucas Ferreira | 4 | 4 | deploy#472 (gate tiered-rollout service lists ⊆ compose services, closes #434). Clean CI guard. Hold. |
+| Weronika Zielinska | 5 | 5 | deploy#471 (sweep stale Kafka topic in preflight fixture). Clean. Maintain at ceiling. |
+
+**Single-clean-PR implementers held at current rating** (no significant directional signal — clean single deliveries): A.Diop-Sarr (lp#143 brand assets), C.Novak (lp#140 candidate assets), B.Henriksen (ingest#97 neo4j-tag centralization), I.Lindqvist (ig#1099 GRADE_LABELS single-source), J.Mwangi (ig#1101 embed-image package install), J.Park (ig#1098 readJsonResponse guard), K.Ranasinghe (ingest#100 bleach security), M.Reyes (ds#116 icons criticalExports), N.Pham (ds#117 a11y color-scheme), N.Obi (ig#1103 i18n page-body extension).
+
+### Orchestrator (Self-Assessment)
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Orchestrator (Steven via Claude) | 4 | 4 | (hold) Drove the cleanest wave of the program to a verified close (45 PRs, 0 CR, staging+fan-in green, all 8 wave branches reachable) and surfaced the prod data-quality reality **honestly** (sanadset orphans, sparse chains, broken search → meta #723/P7) rather than declaring a hollow cutover. Self-corrected a "zero chains" overstatement mid-validation against the actual graph counts. Offset by: the **wave was merged days before being wrapped** (P5W5 sat `active:true / wrapped_up_at:null` with un-run audits), and the marker-reconciliation push-block had to be resolved reactively. Clean execution + honest reporting, one deferred-ceremony gap (now Proposed Change #1) → hold 4. |
+
+### Done Well / Needs Improvement (Phase 5 Wave 5)
+- **Done well:** retro→fix loop genuinely closed (two recurring pain points #690/#683 retired in-wave); cleanest wave of the program (0 CR / 45 PRs, all gates green); lowest concentration ever (9%, 28 implementers) with the cutover data spine still delivered cleanly; honest prod-quality surfacing instead of a hollow "cutover done."
+- **Needs improvement (process):** (1) **deferred wrap** — wave merged-then-wrapped-later, audits un-run until this session (Proposed Change #1: wrap-on-last-merge trigger); (2) **annunaki noise** — 85% exit-0 false positives drown the real signal (Proposed Change #2); (3) **cutover ≠ queryability** — prod data present but not usable (search broken, sanadset orphans), carried to P7 #723 (Proposed Change #3: split the two as distinct exit criteria).
