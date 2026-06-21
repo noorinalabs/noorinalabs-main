@@ -144,6 +144,13 @@ _KIND_PATTERNS: dict[str, tuple[str, ...]] = {
     # PR time. Patterns cover the hook `id`/`name` token (`office-drift`) and the
     # generator both sides invoke (`gen-office`).
     "office-drift": ("office-drift", "gen-office"),
+    # `mermaid` is the mermaid render gate (#787): the CI `Mermaid render gate`
+    # job installs mermaid-cli and runs `scripts/check-mermaid.py` to render every
+    # fenced mermaid block, failing on a non-rendering diagram. Classifying it
+    # makes the drift gate DEMAND the pre-commit mirror (#684). Patterns cover the
+    # tool/hook token (`mermaid`) and the validator both sides invoke
+    # (`check-mermaid`).
+    "mermaid": ("mermaid", "check-mermaid"),
 }
 
 
