@@ -1601,3 +1601,38 @@ Clean-but-not-frictionless wave: **17 PRs across 5 repos**, all 2× Approved + C
 ### Done Well / Needs Improvement (Phase 5 Wave 5)
 - **Done well:** retro→fix loop genuinely closed (two recurring pain points #690/#683 retired in-wave); cleanest wave of the program (0 CR / 45 PRs, all gates green); lowest concentration ever (9%, 28 implementers) with the cutover data spine still delivered cleanly; honest prod-quality surfacing instead of a hollow "cutover done."
 - **Needs improvement (process):** (1) **deferred wrap** — wave merged-then-wrapped-later, audits un-run until this session (Proposed Change #1: wrap-on-last-merge trigger); (2) **annunaki noise** — 85% exit-0 false positives drown the real signal (Proposed Change #2); (3) **cutover ≠ queryability** — prod data present but not usable (search broken, sanadset orphans), carried to P7 #723 (Proposed Change #3: split the two as distinct exit criteria).
+
+## Phase 6 Wave 1 Trust Updates (2026-06-21) — Memory & code-over-prose
+
+### Org-Level Team
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Aino Virtanen | 5 | 5 | 22 in-scope parent PRs (cspell parent fix, mermaid gate widening, branding, squash-safe office epoch) + the **#799 stranding reconciliation**, which she handled exemplarily — extended rather than copied against main's newer #748 structural-parse/parity-table divergence. Theme-fit dominance, all green, 0 CR. Maintain at ceiling. |
+| Santiago Ferreira | 5 | 5 | Clean reviewer verdict on #796 (mermaid scope). Hold at ceiling. |
+| Nadia Khoury | 5 | 5 | Clean reviewer verdict on #799 (byte-identical file verification). Hold at ceiling. |
+| Wanjiku Mwangi | 4 | 4 | Reviewer on #796 + the **decisive completeness re-diff on #799** (proved exactly 5 files stranded, no more — closed the "is the reconciliation complete?" question). Strong diligence; hold 4 (one review-heavy wave). |
+
+### Child-Repo Implementers (emergent cspell rollout, #684)
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Luciana Ferreyra | — | **4** (new) | design-system#129. Standout first entry: verify-before-trust caught the brief's false premise (gate existed, didn't classify cspell → extended to a full parity fix instead of mirror-only + deferred follow-up), then recovered a silently-dropped CI trigger via close/reopen. 0 CR. New entry above default for exceptional diligence. |
+| Linh Pham | 4 | 4 | isnad-graph#1122 clean full-fix + surfaced two latent local⇄CI parity gaps (#1123). Hold 4. |
+| Mateo Salazar | 5 | 5 | user-service#189 clean; flagged the build-kind false-match caveat. Maintain at ceiling. |
+| Lucas Ferreira | 4 | 4 | deploy#487 clean; correctly diagnosed + ignored a self-loop task-replay glitch. Hold 4. |
+| Fatima Bensalah | — | **3** (new) | ingest-platform#113 clean full-fix; correctly identified the self-loop replay. Standard first numeric entry for a clean single delivery. |
+| Tarek Mansour | 4 | 4 | data-acquisition#211 clean full-fix (green, complete; went idle without a written report — minor hygiene note). Hold 4. |
+
+### Reviewer Corps (credit — held, clean Hook-4 verdicts, no rubber-stamps)
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Oyunbileg Batbayar | 5 | 5 | #211 review — non-tautology test verification (assert cspell-in-kinds + both drift directions). Maintain. |
+| Anya Kowalczyk | 5 | 5 | Reviewed BOTH us#189 and ig#1122. Maintain. |
+| Keanu Tama | 3 | 3 | #129 full-parity review (held approval until validate-package finished). Hold. |
+| Petra Vidović | — | **3** (new) | ingest#113 review — independent non-tautology test check. First numeric entry. |
+
+**Held at current rating (clean single reviews, no directional signal):** Jelani Mwangi (4, ig#1122 infra-lens), Idris Yusuf (4, us#189 security-lens pin check), Nurul Hakim (4, deploy#487 regex-coverage check), Bjørn Henriksen (4, ingest#113), Jean-Claude Habimana (4, da#211), Weronika Zielinska (5, deploy#487), Kofi Mensah-Williams (docs-lens glob check on #129).
+
+### Done Well / Needs Improvement (Phase 6 Wave 1)
+- **Done well:** cleanest possible fan-out (8 PRs, 0 CR / 0 CI-fail / 0 must-fix-after-merge); verify-before-trust caught two real issues (Luciana's gate-premise correction, the reachability gate's stranding catch); reviewers did genuine independent verification.
+- **Needs improvement (process):** (1) **mixed merge model stranded #734/#735 off main** — only caught at wrapup (Proposed Change #1: one merge model per wave + mid-wave reachability check); (2) **wave-key collision (#683)** corrupted wrapup markers for the 3rd consecutive retro (Proposed Change #2: phase-namespaced keys, must-fix next wave); (3) **silent CI-trigger drop** on #129 produced "no checks reported" — treat as hard not-ready (Proposed Change #3).
+- **Concentration:** 81% A.Virtanen (22/27) — **theme-fit** (framework/standards/code-over-prose is her surface), not fragility. Forward-flag: P6W2 (persona/ontology revisits) is also framework-heavy and may re-concentrate on Aino — consider distributing or accepting + documenting at scope time.

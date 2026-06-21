@@ -3198,3 +3198,47 @@ No new conversions. 140 memory files; this wave's promotion-worthy patterns are 
 
 ### Proposed Charter Change
 - **Promote the determinism-codification reflex to a charter principle.** It currently lives as memory `feedback_codify_determinism_on_shell_fragility` + the narrow `charter/skills.md § zsh-safe iteration`. Broaden to a general rule under the enforcement hierarchy: *the first time a shell/gh syntax fragility bites a load-bearing path, write a deterministic `.claude/lib` helper, not a workaround.* (Rationale: bit 3× this wave; the targeted fix (#688) and the audit-driver gap (#690) are the same pattern.)
+
+## Retrospective: Phase 6 Wave 1 — Memory & code-over-prose — 2026-06-21
+
+### Team Performance
+P6W1 closed clean. **27 parent PRs** (in-scope `[noorinalabs-main]`) + **6 emergent child-repo cspell-parity PRs** (#684 rolled beyond the parent-only declared scope). **0 CI failures, 0 reviewer Changes-Requested cycles, 0 must-fix-after-merge.** All canonical scope (#732/#733 memory leanness, #734/#735 code-over-prose, #684/#706/#704 TD intake) delivered + closed. Annunaki: **0 genuine failures** (log was 50 exit-0 + 13 exit-None false-positives — the exact class #729 targets).
+
+### Wave-shape table
+| Metric | Value |
+|--------|-------|
+| Parent PRs merged (in-scope) | 27 |
+| Emergent child cspell-parity PRs | 6 (ig#1122, us#189, deploy#487, da#211, ingest#113, ds#129) |
+| Reviewer Changes-Requested cycles | 0 |
+| CI failures across wave | 0 |
+| Tech-debt / follow-ups filed | #797, ig#1123, #798(→#799 resolved), #744 unblocked |
+| Top-implementer concentration | 22/27 = **81%** A.Virtanen (theme-fit — framework/standards domain) |
+| Staging promotion | overridden (no deployable surface) |
+
+### Per-Engineer Assessments
+- **Aino Virtanen** — 22 parent PRs (cspell parent fix, mermaid gate, branding, office-epoch, + the #799 stranding reconciliation). All green, 2-reviewer-approved. The #799 reconciliation was exemplary: handled the wave-vs-main test-file divergence (main's newer #748 structural-parse + parity table) by extending rather than copying. Severity: none (strongly positive). Theme-fit concentration, not fragility.
+- **Luciana Ferreyra** — design-system #129. **Standout.** Verify-before-trust caught the brief's false premise (the repo *did* have a sync gate that simply didn't classify cspell — the exact #684 blind spot), and rather than shipping mirror-only behind a follow-up, extended to a full parity fix. Then independently recovered a silently-dropped CI trigger via close/reopen (working around the gh-pr-edit projects-classic error). Severity: none (strongly positive).
+- **Linh Pham** — isnad-graph #1122. Clean full-fix; surfaced two latent local⇄CI parity gaps (actionlint `if:false`, no CI job running `.claude/lib/tests/`) → filed as #1123. Positive.
+- **Mateo Salazar** — user-service #189. Clean; flagged the known `build`-kind false-match on unscoped sync-gate invocation. Positive.
+- **Lucas Ferreira** — deploy #487. Clean; correctly diagnosed + ignored a self-loop task-replay glitch. Positive.
+- **Fatima Bensalah** — ingest-platform #113. Clean full-fix; also correctly identified the self-loop replay. Positive (first numeric entry).
+- **Tarek Mansour** — data-acquisition #211. Clean full-fix (went idle without a written report, but PR was green and complete). Positive (minor: report hygiene).
+- **Reviewer corps** (Nadia, Wanjiku, Santiago, Jelani, Anya, Idris, Weronika, Nurul, Bjørn, Petra, Jean-Claude, Oyunbileg, Keanu, Kofi) — Hook-4-compliant verdicts, **zero rubber-stamps**. Notable independent diligence: Wanjiku's decisive completeness re-diff on #799 (proved exactly 5 files stranded, no more), Oyunbileg's + Petra's non-tautology test checks, Nurul's regex-coverage check, Kofi's docs-lens glob check.
+
+### Top 3 Going Well
+1. **Clean parallel fan-out** — 8 PRs through full lifecycle, 0 CI failures / 0 reviewer CR / 0 must-fix-after-merge. Hub-and-spoke spawn model held under load.
+2. **Verify-before-trust earned its keep twice** — Luciana caught the design-system gate premise error; the wrapup reachability gate caught the stranding. Quality culture is real, not ceremonial.
+3. **Reviewers reviewed** — independent completeness/tautology/coverage checks, not approvals-by-assertion.
+
+### Top 3 Pain Points
+1. **Mixed merge model → stranding.** P6W1 merged #704/#706/#734/#735 to the wave branch but the doc batch + cspell/mermaid direct to main, and **never opened the wave→main PR** — stranding 5 net-new #734/#735 deliverables off main. Caught only at wrapup by the Step 11.5 reachability gate; resolved via #799. The gate worked, but the stranding should have been impossible / caught earlier.
+2. **Wave-key collision (#683) corrupted wrapup markers.** `wave_1_*` keys aren't phase-namespaced, so stale P4W1 completion markers (annunaki/memory/wrapup timestamps, final_pr_count=4, stg=success) masqueraded as P6W1 until overwritten. This is the *third* consecutive retro to flag #683.
+3. **Silent CI-trigger drop** (design-system #129) — GitHub dropped the `synchronize` event (zero runs on the new head); recovered via close/reopen. Environmental, but a merge on "no checks reported" would have been a green-looking gap had it not been verified.
+
+### Proposed Process Changes
+1. **One merge model per wave, recorded at kickoff** — Rationale: the mixed model is what stranded #734/#735. A wave should be all-direct-to-main OR all-wave-branch, decided at `/wave-kickoff` and recorded in `cross-repo-status.json`; a mid-wave check (session-start) flags any wave-branch commit not reachable from main without an open wave→main PR, so stranding surfaces within hours, not at wrapup.
+2. **Bump #683 (phase-namespaced wave keys) to next-wave must-fix** — Rationale: flagged in P5W3, P5W4, and now P6W1; it actively corrupted this wrapup's markers. The per-phase reset (#699) did not prevent the collision. Durable fix is phase-namespaced keys (`p6_wave_1_*`).
+3. **Treat "no checks reported" as a hard not-ready state** — Rationale: #129's dropped trigger produced zero runs, which is not the same as green. A merge-readiness check should assert `statusCheckRollup` is non-empty AND all-success, never empty.
+
+### Proposed Charter Change
+- **Single merge model per wave** under `charter/pull-requests.md` (or wave-lifecycle): a wave declares its merge model at kickoff; mixing wave-branch and direct-to-main merges within one wave is prohibited because it strands wave-branch work when the wave→main PR is forgotten (P6W1 #734/#735 → #799). Pair with strengthening the reachability gate to fire mid-wave, not only at wrapup.
