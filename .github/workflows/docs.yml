@@ -34,6 +34,8 @@ on:
       # check (binaries are not matched by the **/*.md|json|yaml globs above).
       - "docs/office/**"
       - "scripts/gen-office.sh"
+      # Mermaid render gate (#787): a changed doc or the validator must re-run.
+      - "scripts/check-mermaid.py"
       - ".github/workflows/docs.yml"
   pull_request:
     branches: [main, "deployments/**"]
@@ -55,6 +57,8 @@ on:
       # check (binaries are not matched by the **/*.md|json|yaml globs above).
       - "docs/office/**"
       - "scripts/gen-office.sh"
+      # Mermaid render gate (#787): a changed doc or the validator must re-run.
+      - "scripts/check-mermaid.py"
       - ".github/workflows/docs.yml"
 
 permissions:
@@ -208,6 +212,30 @@ jobs:
         # shellcheck integration runs (per the actionlint-needs-shellcheck
         # discipline) rather than silently skipping.
         run: actionlint -color
+
+  mermaid-render:
+    name: Mermaid render gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned mermaid-cli
+        # Pinned to @mermaid-js/mermaid-cli@11.12.0 (matches the version the gate
+        # was verified against). mermaid-cli bundles puppeteer, which downloads a
+        # headless Chromium on install. Keep this version in lock-step with the
+        # pre-commit mirror's note (alongside the ruff/actionlint/cspell/pandoc pins).
+        run: npm install -g @mermaid-js/mermaid-cli@11.12.0
+      - name: Render every fenced mermaid block (fail on non-rendering)
+        # check-mermaid.py extracts each ```mermaid block from docs/*.md +
+        # ontology/*.md and renders it with mmdc; a syntactically-broken block
+        # (the #786 `<unset>` class) fails the build instead of shipping a blank
+        # box into the rendered docs and the #767 Office pipeline.
+        run: python3 scripts/check-mermaid.py
 
   office-drift:
     name: Office docs drift gate

@@ -248,6 +248,66 @@ repos:
         self.assertNotIn("office-drift", harmful)
 
 
+class MermaidKind(unittest.TestCase):
+    """#787: the mermaid render gate must be a classified kind so the sync-drift
+    gate DEMANDS a pre-commit mirror of the CI render job (an un-mirrored gate
+    lets a non-rendering diagram fail only at PR time)."""
+
+    def test_ci_mermaid_run_step_classified(self) -> None:
+        wf = """
+jobs:
+  mermaid-render:
+    steps:
+      - run: npm install -g @mermaid-js/mermaid-cli@11.12.0
+      - run: python3 scripts/check-mermaid.py
+"""
+        self.assertIn("mermaid", kinds_from_ci(wf))
+
+    def test_precommit_mermaid_hook_classified(self) -> None:
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: mermaid-render
+        name: mermaid-render (pre-push)
+        entry: python3 scripts/check-mermaid.py
+"""
+        self.assertIn("mermaid", kinds_from_precommit(cfg))
+
+    def test_ci_mermaid_without_precommit_is_harmful_drift(self) -> None:
+        wf = """
+jobs:
+  mermaid-render:
+    steps:
+      - run: python3 scripts/check-mermaid.py
+"""
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+"""
+        harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
+        self.assertIn("mermaid", harmful)
+
+    def test_ci_mermaid_with_precommit_mirror_no_drift(self) -> None:
+        wf = """
+jobs:
+  mermaid-render:
+    steps:
+      - run: python3 scripts/check-mermaid.py
+"""
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: mermaid-render
+        entry: python3 scripts/check-mermaid.py
+"""
+        harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
+        self.assertNotIn("mermaid", harmful)
+
+
 class BuildKindTightening(unittest.TestCase):
     """#576: runtime `docker build` / `docker buildx` steps are image-MOVING,
     not a build-QUALITY gate a local pre-commit hook can mirror — they must
@@ -492,6 +552,7 @@ _OLD_KIND_PATTERNS = {
     "memory-budget": ("memory-budget", "memory_budget"),
     "doc-freshness": ("doc-freshness", "doc_freshness"),
     "office-drift": ("office-drift", "gen-office"),
+    "mermaid": ("mermaid", "check-mermaid"),
 }
 _OLD_RUN_BLOCK_OPEN_RE = re.compile(r"^(?P<indent>\s*)-?\s*run:\s*[|>][+\-0-9]*\s*$")
 
@@ -571,6 +632,7 @@ _EXPECTED_KINDS = {
             "cspell",
             "doc-freshness",
             "memory-budget",
+            "mermaid",
             "mypy",
             "office-drift",
             "pytest",
@@ -582,6 +644,7 @@ _EXPECTED_KINDS = {
             "cspell",
             "doc-freshness",
             "memory-budget",
+            "mermaid",
             "mypy",
             "office-drift",
             "pytest",

@@ -174,3 +174,19 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+      # mermaid-render mirrors the `Mermaid render gate` CI job in
+      # .github/workflows/docs.yml (the sync-drift gate classifies the `mermaid`
+      # kind — #787/#684 — so the CI gate must be mirrored here or the gate goes
+      # red). Renders every fenced ```mermaid block in docs/*.md + ontology/*.md
+      # and HARD-BLOCKS the push on any block that fails to render (#786). Needs
+      # mmdc locally — check-mermaid.py resolves $MMDC, then `mmdc` on PATH, then
+      # `npx -y @mermaid-js/mermaid-cli` (pin 11.12.0 to match CI). `always_run`
+      # because it scans the whole doc set, not the staged file list; pre-push so
+      # it doesn't fire (and spin up Chromium) on every incremental commit.
+      - id: mermaid-render
+        name: mermaid-render (pre-push)
+        entry: python3 scripts/check-mermaid.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
