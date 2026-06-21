@@ -13,3 +13,18 @@ select = ["E", "F", "W", "I"]
 
 [tool.ruff.lint.isort]
 known-first-party = []
+
+[tool.mypy]
+# Intentionally minimal — the CI/pre-commit invocations still pass their own
+# CLI flags (--ignore-missing-imports --no-error-summary). This section exists
+# only to host the per-module override below.
+
+[[tool.mypy.overrides]]
+# bashlex (the Bash-AST shell parser the commit-identity hooks use, #748 D3b)
+# ships no type stubs. `--ignore-missing-imports` silences import-not-found
+# (degraded / uninstalled) but NOT import-untyped (installed-but-untyped — the
+# CI typecheck job installs bashlex, so mypy would otherwise emit import-untyped
+# there; same situation the ci.yml comment documents for PyYAML). This
+# per-module override suppresses both, keeping mypy green in either mode.
+module = "bashlex.*"
+ignore_missing_imports = true

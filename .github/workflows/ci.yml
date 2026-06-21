@@ -64,7 +64,10 @@ jobs:
       # PyYAML ships no inline types, so without the stubs mypy emits
       # `import-untyped` — which `--ignore-missing-imports` does NOT suppress
       # (it only silences `import-not-found`). Stubs keep this job green.
-      - run: pip install mypy types-PyYAML
+      # bashlex (#748 D3b): the commit-identity hooks import it for the Bash-AST
+      # parse. Installed here so mypy resolves the real module; its missing
+      # stubs are handled by the `bashlex.*` override in pyproject.toml.
+      - run: pip install mypy types-PyYAML bashlex
       - run: mypy .claude/hooks/ .claude/lib/ --ignore-missing-imports --no-error-summary
       # .claude/skills/ added per #326. mypy is run PER-SKILL-DIRECTORY (not as
       # one flat tree) because two skills each ship a `tests/__init__.py`, which
@@ -119,7 +122,10 @@ jobs:
       # imports `yaml` (#748 D3). setup-python's interpreter has no PyYAML
       # preinstalled, so declare it explicitly rather than relying on the
       # ubuntu-runner system Python.
-      - run: pip install pytest pyyaml
+      # bashlex (#748 D3b): required so the commit-identity tests exercise the
+      # ENFORCED structural Bash-AST parse path (the bashlex-specific cases
+      # skip when it is absent; this install makes CI run them, not skip them).
+      - run: pip install pytest pyyaml bashlex
       - name: Run hook and lib tests
         run: pytest .claude/hooks/tests/ .claude/lib/tests/ -q
       # .claude/skills/*/tests/ added per #326. Run PER-SKILL (each from its own
