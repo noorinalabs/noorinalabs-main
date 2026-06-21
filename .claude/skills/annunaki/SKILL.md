@@ -3,7 +3,7 @@ name: annunaki
 description: View Annunaki error monitor status — shows recent captured errors and monitoring health
 ---
 
-Display the current state of the Annunaki error monitor. This skill is the **status viewer** for the always-on error monitoring hook (`annunaki_monitor.py`).
+Display the current state of the Annunaki error monitor. This skill is the **status viewer** for the always-on error monitor (`annunaki_monitor`, dispatched on every `PostToolUse` Bash call via `post_dispatcher.py` — see § 1).
 
 > Note: all repo paths in bash blocks below are rooted at `$REPO_ROOT` to avoid cwd drift when the skill is invoked from a worktree or child-repo subdirectory (#149).
 
@@ -26,14 +26,19 @@ Pre-#625 both kinds shared `errors.jsonl` and dispatch traces (76% of the P4W1 l
 
 ### 1. Verify the hook is active
 
-Check that `annunaki_monitor.py` is registered in `.claude/settings.json` under `PostToolUse`:
+Confirm that `annunaki_monitor` runs on `PostToolUse` Bash. **Post-#625 it is NOT wired directly in `settings.json`** — it is a module dispatched by `post_dispatcher.py` (the single PostToolUse entry point), registered in that file's `_REGISTRY["Bash"]`. `settings.json` only references `post_dispatcher.py`. So a bare `grep annunaki_monitor settings.json` returns `0` and **falsely** reports the monitor inactive. Check both legs of the indirection instead:
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-grep -c annunaki_monitor "$REPO_ROOT/.claude/settings.json"
+if grep -q post_dispatcher "$REPO_ROOT/.claude/settings.json" \
+   && grep -q '"annunaki_monitor"' "$REPO_ROOT/.claude/hooks/post_dispatcher.py"; then
+  echo "active"
+else
+  echo "NOT ACTIVE"
+fi
 ```
 
-If 0, warn the user that monitoring is not active and offer to wire it up.
+`active` requires BOTH legs: the dispatcher must be wired on `PostToolUse` Bash in `settings.json` AND `annunaki_monitor` must be present in its `_REGISTRY`. If it prints `NOT ACTIVE`, warn the user that monitoring is not active and offer to wire it up. (Do not collapse this back to a single `grep` of `settings.json` — that is the #788 false-negative.)
 
 ### 2. Read the error log
 
