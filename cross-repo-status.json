@@ -749,7 +749,7 @@
     "carry_forward_dropped": "deploy#452/#453, us#167, ig#1038 auto-dropped (closed before scope)",
     "assignments_pending": "implementer/reviewer slate filled at /wave-kickoff (reviewer-slate step); current_wave advance deferred to kickoff Step 1a"
   },
-  "wave_2_meta_issue": 670,
+  "wave_2_meta_issue": "noorinalabs-main#803",
   "wave_2_scope": {
     "theme": "API light-up",
     "serves": "phase-5 criterion #2 (noorinalabs-main#602) — Product API surface functional",
@@ -1607,6 +1607,7 @@
   "wave_2_wrapup_completed_at": "2026-06-14T17:26:51Z",
   "wave_2_annunaki_attack_ran_at": "2026-06-14T17:31:47Z",
   "wave_2_memory_audit_ran_at": "2026-06-14T17:31:47Z",
+  "wave_2_phase": 6,
   "wave_3_started_at": "2026-06-14T18:40:00Z",
   "wave_3_wrapped_up_at": "2026-06-14T23:05:00Z",
   "wave_5_started_at": "2026-06-16T22:51:14Z",
