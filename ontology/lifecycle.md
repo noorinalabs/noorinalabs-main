@@ -248,11 +248,18 @@ errors (excluding benign traces) and surfaces recent ones; suggests
 > **Adjacent (invoked by the wrapup/retro engines, not part of the linear happy
 > path):** `/annunaki-attack` (analyze captured errors, file issues, implement
 > fixes — GitHub `gh issue`/PR side effects), and `/watch-deploy {stg|prod}`
-> (polls a deploy run in `noorinalabs-deploy` to terminal via `gh run`,
-> classifies failures, bounded fix-forward on staging only). A live-app E2E pass
-> drives the deployed UI through the **Chrome MCP** (`claude-in-chrome`) using
-> the operator's already-authenticated session and files findings per the
-> bug→issue→PR workflow — the one place an MCP server enters the lifecycle.
+> (polls a GitHub Actions deploy run in `noorinalabs-deploy` to terminal via
+> `gh run`, classifies failures, bounded fix-forward on staging only — a
+> GitHub-API health check, **no browser/MCP usage**).
+>
+> **MCP is absent throughout the lifecycle.** No lifecycle command —
+> `/watch-deploy` included — calls an MCP server; the entire flow is `git` +
+> `gh`/`gh api` + `.claude/lib` helpers. The only place the **Chrome MCP**
+> (`claude-in-chrome`) is used anywhere in the org workflow is the **on-demand
+> live-app E2E pass** (lifecycle.md § Mid-wave "Exploratory / E2E live-app
+> pass") — driving the deployed UI through the operator's already-authenticated
+> session and filing findings per the bug→issue→PR workflow. That pass is not a
+> slash command and not part of the lifecycle happy path.
 
 ---
 
@@ -267,8 +274,8 @@ counter keys `wave_{M}_final_pr_count`, `wave_{M}_changes_requested_cycles`,
 `wave_{M}_top_concentration_pct` (Step 10.5).
 
 - **(a) code/repo actions:** reads `cross-repo-status.json` (`wave_{M}_repos_in_scope`, `wave_{M}_kicked_off_at`); `git worktree prune/list/remove`; `git push origin --delete {feature-branch}` (feature branches only — wave branches are retained); `git merge-base` / `git diff --name-only … -- '.claude/**'` (artifact-change detection); `git reset --hard origin/{branch}` (high-volume re-sync). Helpers: `.claude/lib/wave_status.py counters … --write` (counter computation with cross-window filter + loud-fail on count mismatch), `.claude/lib/upsert_status_keys.py`, `.claude/lib/generic_prompt_tracker.py`. Sub-skills: `/ontology-rebuild` (Step 12), `/wave-audit` logic (Step 6 issue close), and fallback `/annunaki-attack` (Step 13) + memory-to-automation audit (Step 14), both run-marker-guarded; `/watch-deploy stg {sha}` per fan-in merge (Step 11.6a).
-- **(b) GitHub API:** `gh pr list --base deployments/phase-{P}/wave-{M}` and `--base main --label p{P}-wave-{M}` (inventory); `gh pr checks` / `gh pr diff` / `gh pr view --json` (review + Closes/Fixes parse); `gh pr merge --merge` (no `--delete-branch`); `gh issue list`/`close`; `gh run list --workflow deploy-stg.yml` (staging-deploy status); `gh api …/git/refs/heads/{branch|main}` + `…/compare/main...{branch}` (final-wave reachability gate, Step 11.5) and `gh pr create --base main --head {wave-branch}` (wave→main PR); `gh api …/actions/workflows/ghcr-publish.yml/runs` + `gh run view --log-failed` (publish-freshness / base-image-CVE classification); retro-PR body-vs-diff check via `gh pr list --search 'retro('` + `gh pr view --json files,body`.
-- **(c) MCP calls:** none directly (a `/watch-deploy` or E2E pass it triggers may use Chrome MCP — see the mid-wave note).
+- **(b) GitHub API:** `gh pr list --base deployments/phase-{P}/wave-{M}` and `--base main --label p{P}-wave-{M}` (inventory); `gh pr checks` / `gh pr diff` / `gh pr view --json` (review + Closes/Fixes parse); `gh pr merge --merge --delete-branch` for feature PRs (Step 5), but `gh pr merge --merge` **without** `--delete-branch` for the wave→main merge (Step 11 — wave branches are retained permanently); `gh issue list`/`close`; `gh run list --workflow deploy-stg.yml` (staging-deploy status); `gh api …/git/refs/heads/{branch|main}` + `…/compare/main...{branch}` (final-wave reachability gate, Step 11.5) and `gh pr create --base main --head {wave-branch}` (wave→main PR); `gh api …/actions/workflows/ghcr-publish.yml/runs` + `gh run view --log-failed` (publish-freshness / base-image-CVE classification); retro-PR body-vs-diff check via `gh pr list --search 'retro('` + `gh pr view --json files,body`.
+- **(c) MCP calls:** none. The `/watch-deploy stg` it triggers is a GitHub-Actions health check (`gh run`), not a browser/MCP pass.
 - **(d) other external services:** GitHub Actions (workflow runs/conclusions/logs via `gh run`); staging/production deploys are triggered indirectly through `noorinalabs-deploy` workflows (staging auto, production only after owner approval).
 
 ### `/wave-retro {P} {M}`
@@ -304,9 +311,10 @@ writes) the three counter keys; drift > ±2 or > ±5% blocks the retro.
 | `/wave-wrapup` | ✓ worktrees, counters, ontology rebuild | ✓ PRs merge, issues, refs, runs | — | ✓ Actions/deploys |
 | `/wave-retro` | ✓ trust matrix, feedback log, status | ✓ PRs, runs, meta-issue, board | — | — |
 
-*(Chrome MCP, `claude-in-chrome`, is the lone MCP server in the lifecycle and
-only via the on-demand live-app E2E pass / `/watch-deploy`, not the linear
-happy-path commands above.)*
+*(The MCP column is empty for every lifecycle command — no lifecycle skill,
+`/watch-deploy` included, calls an MCP server. The only Chrome MCP
+(`claude-in-chrome`) usage in the org workflow is the on-demand live-app E2E
+pass, which is not a lifecycle command.)*
 
 ---
 
