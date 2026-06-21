@@ -192,6 +192,48 @@ convenience vs. a wired proof-of-pattern gate) is tracked in #748 / #760.
 
 ---
 
+## Document generation (markdown → MS Office)
+
+Microsoft Office documents (Word `.docx`, PowerPoint `.pptx`, Excel `.xlsx`)
+are **generated from markdown**, which stays the single source of truth — the
+office binaries are build artifacts and are never hand-edited
+([#767](https://github.com/noorinalabs/noorinalabs-main/issues/767)). Generated
+files live under [`office/`](office/README.md); the source→target mapping is the
+manifest [`office/office-docs.json`](office/office-docs.json).
+
+**Engine — `pandoc`.** One tool renders both `.docx` and `.pptx` natively from
+GitHub-Flavored Markdown, so there is no per-format Python glue to maintain.
+`.xlsx` is the exception: spreadsheets are tabular data, not prose, so they use
+`openpyxl` from a structured source rather than pandoc (wired when a first
+spreadsheet source exists). `python-docx` / `python-pptx` remain available as
+escape hatches when a specific document needs finer control than pandoc gives.
+
+**Install `pandoc`:**
+
+| Platform | Command |
+|----------|---------|
+| Debian / Ubuntu / WSL | `apt install pandoc` |
+| macOS | `brew install pandoc` |
+| Any (no system package) | `pip install pypandoc-binary` — ships a pandoc binary the generator auto-detects |
+
+`scripts/gen-office.sh` resolves pandoc from `$PANDOC`, then `PATH`, then the
+pip-bundled `pypandoc` binary, so `make docs` works with whichever of the above
+you have.
+
+**Regenerate:**
+
+```sh
+make docs                 # regenerate every enabled doc in the manifest
+scripts/gen-office.sh     # same, without make
+```
+
+Output is reproducible: the embedded OOXML timestamp is pinned to each source's
+last git commit time (`SOURCE_DATE_EPOCH`). A CI check that flags a committed
+binary as drifted from its markdown is a tracked follow-up (it needs the pandoc
+version pinned in CI, since bytes differ across pandoc versions).
+
+---
+
 ## See also
 
 - [`../ontology/conventions.md`](../ontology/conventions.md) — § Shell

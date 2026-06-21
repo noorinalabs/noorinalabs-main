@@ -1,0 +1,6 @@
+# Generated Microsoft Office binaries (docs/office/) are produced from markdown
+# sources by scripts/gen-office.sh — see docs/office/README.md. Mark them binary
+# so git never attempts a text diff/merge or line-ending normalization on them.
+*.docx binary
+*.xlsx binary
+*.pptx binary
