@@ -60,9 +60,9 @@ flowchart TD
     subgraph "End of wave"
         WE1[/wave-wrapup P M/]
         WE2[/wave-retro P M/]
-        WE2_5[/promotion-audit/<br/>Step 7.5]
-        WE2_6[/annunaki-attack/<br/>Step 7.6]
-        WE3[/wave-scope P M+1/<br/>Step 9 auto-invoke]
+        WE2_5[/promotion-audit<br/>Step 7.5/]
+        WE2_6[/annunaki-attack<br/>Step 7.6/]
+        WE3[/wave-scope P M+1<br/>Step 9 auto-invoke/]
         WE1 --> WE2
         WE2 --> WE2_5
         WE2_5 --> WE2_6

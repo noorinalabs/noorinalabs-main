@@ -8,7 +8,12 @@ closes that gap: it extracts each fenced mermaid block and renders it with
 mermaid-cli (`mmdc`, headless Chromium), failing the build on any block that
 does not render.
 
-Scope (default): docs/*.md + ontology/*.md. Pass explicit file paths to override.
+Scope (default): every tracked `*.md` in the parent tree that contains a fenced
+mermaid block — discovered from the git index, not a fixed docs/ + ontology/
+glob, so a diagram added to README.md, the charter, the lifecycle docs, or any
+future authored doc is gated automatically instead of shipping unguarded (#795).
+`.claude/memory/**` and `.claude/worktrees/**` are excluded (see _default_files).
+Pass explicit file paths to override.
 
 Detection: a block fails if `mmdc` exits non-zero (genuine syntax errors,
 unknown diagram types, malformed structure) OR if the produced SVG carries a
@@ -48,11 +53,51 @@ _ERROR_MARKERS = ("syntax error", "error in text", "aborted", "parse error")
 _RAW_ANGLE = re.compile(r"<(?!br\b|/|--|==|\.)|(?<![-=.])>")
 
 
+# Authored-doc scope exclusions. `.claude/memory/**` is excluded to match the
+# markdown/cspell/lychee linters (dense append-only notes, not rendered docs);
+# `.claude/worktrees/**` is excluded so a scratch worktree checkout isn't
+# double-scanned. The gitignored child repos never appear in this repo's index,
+# so they need no explicit exclusion under the git-ls-files path.
+_SCOPE_EXCLUDE_PREFIXES = (".claude/memory/", ".claude/worktrees/")
+
+
+def _has_mermaid_block(path: Path) -> bool:
+    try:
+        return "```mermaid" in path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+
+
+def _tracked_markdown() -> list[Path] | None:
+    """Tracked `*.md` paths from the git index, or None if git is unavailable."""
+    try:
+        proc = subprocess.run(
+            ["git", "ls-files", "-z", "*.md"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return [Path(p) for p in proc.stdout.split("\0") if p]
+
+
 def _default_files() -> list[Path]:
-    files: list[Path] = []
-    for d in ("docs", "ontology"):
-        files.extend(sorted(Path(d).glob("*.md")))
-    return files
+    tracked = _tracked_markdown()
+    if tracked is None:
+        # Not a git work tree (never the case for the CI / pre-push gate): fall
+        # back to the original docs/ + ontology/ glob so the gate still runs.
+        candidates: list[Path] = []
+        for d in ("docs", "ontology"):
+            candidates.extend(Path(d).glob("*.md"))
+    else:
+        candidates = tracked
+    files = [
+        p
+        for p in candidates
+        if not p.as_posix().startswith(_SCOPE_EXCLUDE_PREFIXES) and _has_mermaid_block(p)
+    ]
+    return sorted(files)
 
 
 def _resolve_mmdc() -> list[str] | None:
