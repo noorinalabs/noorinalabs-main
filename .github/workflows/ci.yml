@@ -174,3 +174,30 @@ jobs:
         # byte size exceed the budget in memory_budget.py. Mirrored locally by the
         # `memory-budget` pre-push hook; the sync-drift gate classifies the kind.
         run: python3 .claude/lib/memory_budget.py .
+
+  doc-freshness:
+    name: Doc-freshness gate (advisory)
+    runs-on: ubuntu-latest
+    # ADVISORY (#768): doc_freshness.py always exits 0, so this job is green by
+    # construction; continue-on-error makes the advisory intent explicit so a
+    # future edit can't silently turn a heuristic freshness nudge into a hard
+    # gate. The report still surfaces in the job log. Mirrored locally by the
+    # `doc-freshness` pre-push hook; the sync-drift gate classifies the kind
+    # (#684 parity) — the advisory check is mirrored, not exempt.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the merge-base three-dot diff against the PR base
+          # resolves (the default shallow checkout has no merge-base).
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Report code surfaces changed without a matching doc update (#768)
+        # Base ref comes from origin/$GITHUB_BASE_REF on a pull_request, falling
+        # back to origin/main. The PR body is passed so a `Docs-N/A` opt-out in
+        # the body (not just a commit message) is honored.
+        env:
+          DOC_FRESHNESS_OPT_OUT_TEXT: ${{ github.event.pull_request.body }}
+        run: python3 .claude/lib/doc_freshness.py .

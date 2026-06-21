@@ -128,6 +128,14 @@ _KIND_PATTERNS: dict[str, tuple[str, ...]] = {
     # Patterns cover the hook `id`/`name` token (`memory-budget`) and the CI
     # `run` invocation token (`memory_budget`).
     "memory-budget": ("memory-budget", "memory_budget"),
+    # `doc-freshness` is the advisory PR-time doc-freshness gate
+    # (`.claude/lib/doc_freshness.py`, #768). It is ADVISORY (always exits 0), but
+    # it is still a real CI check, so it must be mirrored in pre-commit for
+    # local⇄CI parity (#684) — classifying it makes the drift gate DEMAND that
+    # mirror rather than silently ignoring an un-classified kind. Patterns cover
+    # the hook `id`/`name` token (`doc-freshness`) and the CI `run` invocation
+    # token (`doc_freshness`).
+    "doc-freshness": ("doc-freshness", "doc_freshness"),
 }
 
 

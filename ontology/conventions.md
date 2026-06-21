@@ -241,6 +241,11 @@ Existing 3-digit ADRs are not merge-blockers; renames are mechanical and reversi
 | `suggest_generic_prompt.py` | PostToolUse (Edit/Write) | Suggest generic prompts for `.claude/` changes |
 | `session_handoff.py` | Stop | Auto-generate handoff on session exit |
 
+### Ontology: code is the arbiter of truth (#768)
+
+- **Code wins on conflict.** `/ontology-rebuild` derives the ontology (`ontology/*.yaml`, this file) AND the auto-updatable docs (READMEs, CLAUDE.md, inline docs) **FROM the code**. When code and a doc/ontology entry disagree, the doc/ontology is wrong and is updated to match the code — the code is never edited to match a stale doc. The resolver processes files code → docs → high-level-docs (`ontology-rebuild` SKILL.md § Code is the final arbiter of truth) precisely so code is resolved before anything derived from it. Recommend-only docs (high-level-docs/, architecture diagrams, mermaid) are flagged for human review rather than auto-rewritten, but the conflict is still reported with code as the reference.
+- **PR doc-freshness (advisory).** Every PR is expected to carry the doc updates its code changes imply. The advisory gate `.claude/lib/doc_freshness.py` (#768) computes the three-dot diff against the PR base and reports any **documented code surface** (`SURFACE_RULES`: a new org hook/lib module, a new skill, a CI-workflow/pre-commit-config change) touched without a matching README/`docs/`/ontology/CLAUDE.md update. It is **advisory — always exits 0**, never blocking (a heuristic freshness signal has an irreducible false-positive class — pure refactors, typo fixes). It runs as the `Doc-freshness gate (advisory)` CI job (`continue-on-error`) and the `doc-freshness` pre-push hook; the sync-drift gate classifies the `doc-freshness` kind so the local⇄CI mirror is enforced (#684). A legitimately doc-irrelevant change opts out with a `Docs-N/A:` or `Skip-Doc-Check:` trailer line (the trailing colon is required, so prose that merely names the marker does not self-trigger) in a commit message or the PR body. The charter PR Review Checklist carries the human-side reminder (`charter/pull-requests.md`).
+
 ## Shared tooling
 
 ### Package management
