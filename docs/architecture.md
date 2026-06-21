@@ -12,7 +12,9 @@ docs-render pipeline (#767).
 - **L2** — container systems (#770): every container on the VPS (all 30
   compose services) with its ingress and egress points (container-to-container
   plus external in/out).
-- L3 per-container internals are a separate issue (#771) and out of scope here.
+- **L3** — per-container internals (#771): the internal data/logic flow of each
+  container and what moves in/out of it, in a companion doc
+  [`architecture-l3.md`](architecture-l3.md).
 
 Each diagram is followed by a **Sources** note so the derivation is auditable.
 Anything not directly evidenced in the deploy repo or ontology is flagged

@@ -197,3 +197,14 @@ appleboy
 tfstate
 healthz
 renderable
+
+# --- Architecture L3 doc (#771): per-container identifiers + config tokens ---
+vhosts
+envsubst
+pgvector
+allkeys
+maxmemory
+requirepass
+webauth
+danielqsj
+provectuslabs
