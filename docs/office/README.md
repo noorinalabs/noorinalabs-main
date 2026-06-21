@@ -50,7 +50,22 @@ install options.
 
 Each document's embedded OOXML timestamp is pinned to its source file's last
 git commit time (`SOURCE_DATE_EPOCH`), so regenerating from an unchanged
-source on the same `pandoc` version produces byte-identical output. A CI check
-that flags a committed binary as drifted from its markdown source is a
-tracked follow-up (it requires pinning the `pandoc` version in CI, since
-output bytes differ across pandoc versions).
+source on the same `pandoc` version produces byte-identical output.
+
+### Drift gate (#781)
+
+The **`Office docs drift gate`** CI job (`.github/workflows/docs.yml`)
+regenerates every enabled manifest entry and fails the build if a committed
+binary differs from its markdown source — catching a source edited without
+`make docs`, or a hand-edited binary. It is mirrored at pre-push by the
+`office-drift` pre-commit hook, and the `office-drift` kind is classified by
+the [`pre_commit_ci_sync.py`](../../.claude/lib/pre_commit_ci_sync.py) drift gate
+so the CI⇄local mirror is enforced (#684).
+
+**Pandoc version pin.** Because OOXML output bytes differ across pandoc
+versions, the gate is only deterministic if local and CI use the *same* pandoc.
+Both are pinned to the official **pandoc 3.9** bundled by **`pypandoc-binary==1.17`**
+(the binary `gen-office.sh` resolves as its no-system-package fallback). This pin
+sits alongside the other tool pins (ruff `0.15.11`, actionlint `1.7.12`, cspell
+`8.4.0`); bump all three of CI (`docs.yml`), the pre-commit note, and this line
+together, and regenerate + commit the binaries in the same change.
