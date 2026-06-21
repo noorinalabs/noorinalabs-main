@@ -121,6 +121,13 @@ _KIND_PATTERNS: dict[str, tuple[str, ...]] = {
     # domain vocabulary then failed only after push. Patterns cover the action
     # ref, the bundled-CLI step name, and the generic job/step word.
     "cspell": ("cspell", "spellcheck", "streetsidesoftware/cspell"),
+    # `memory-budget` is the project-memory corpus size/count gate
+    # (`.claude/lib/memory_budget.py`, #733). Classifying it makes the drift gate
+    # actively DEMAND the local⇄CI mirror (#684): a `memory_budget.py` CI run
+    # with no pre-commit hook is harmful drift, not a silently-ignored unknown.
+    # Patterns cover the hook `id`/`name` token (`memory-budget`) and the CI
+    # `run` invocation token (`memory_budget`).
+    "memory-budget": ("memory-budget", "memory_budget"),
 }
 
 

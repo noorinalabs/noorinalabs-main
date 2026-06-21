@@ -426,6 +426,9 @@ _OLD_KIND_PATTERNS = {
     "pip-audit": ("pip-audit", "pip audit"),
     "build": ("build-and-validate", "build-and-test", "npm run build"),
     "cspell": ("cspell", "spellcheck", "streetsidesoftware/cspell"),
+    # Kept in lock-step with the production _KIND_PATTERNS so the OLD-vs-NEW
+    # parity proof stays valid as new kinds are added (cf. memory-budget, #733).
+    "memory-budget": ("memory-budget", "memory_budget"),
 }
 _OLD_RUN_BLOCK_OPEN_RE = re.compile(r"^(?P<indent>\s*)-?\s*run:\s*[|>][+\-0-9]*\s*$")
 
@@ -500,8 +503,24 @@ def _old_kinds_from_ci(text: str) -> set:
 # checkout, so each is skipped when not present rather than false-failing).
 _EXPECTED_KINDS = {
     ".": {
-        "precommit": {"actionlint", "cspell", "mypy", "pytest", "ruff-format", "ruff-lint"},
-        "ci": {"actionlint", "cspell", "mypy", "pytest", "ruff-format", "ruff-lint"},
+        "precommit": {
+            "actionlint",
+            "cspell",
+            "memory-budget",
+            "mypy",
+            "pytest",
+            "ruff-format",
+            "ruff-lint",
+        },
+        "ci": {
+            "actionlint",
+            "cspell",
+            "memory-budget",
+            "mypy",
+            "pytest",
+            "ruff-format",
+            "ruff-lint",
+        },
     },
     "noorinalabs-isnad-graph": {
         "precommit": {

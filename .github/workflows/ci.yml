@@ -7,6 +7,9 @@ on:
       - ".claude/hooks/**"
       - ".claude/lib/**"
       - ".claude/skills/**"
+      # The memory-budget gate (#733) caps the project-memory corpus, so a
+      # change that only touches memory must still run CI to enforce it.
+      - ".claude/memory/**"
       - ".github/workflows/ci.yml"
       - ".pre-commit-config.yaml"
       - "pyproject.toml"
@@ -16,6 +19,7 @@ on:
       - ".claude/hooks/**"
       - ".claude/lib/**"
       - ".claude/skills/**"
+      - ".claude/memory/**"
       - ".github/workflows/ci.yml"
       - ".pre-commit-config.yaml"
       - "pyproject.toml"
@@ -150,3 +154,17 @@ jobs:
         # Fails if a check CI enforces (ruff/mypy/pytest/…) is missing from
         # .pre-commit-config.yaml, so local hooks can't silently drift behind CI.
         run: python3 .claude/lib/pre_commit_ci_sync.py .
+
+  memory-budget:
+    name: Memory budget gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Enforce the project-memory corpus size/count budget (#733)
+        # HARD-BLOCKS if MEMORY.md index entries / memory-file count / MEMORY.md
+        # byte size exceed the budget in memory_budget.py. Mirrored locally by the
+        # `memory-budget` pre-push hook; the sync-drift gate classifies the kind.
+        run: python3 .claude/lib/memory_budget.py .
