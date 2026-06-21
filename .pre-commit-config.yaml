@@ -114,3 +114,18 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+      # memory-budget mirrors the `Memory budget gate` CI job in ci.yml (the
+      # sync-drift gate classifies the `memory-budget` kind — #733/#684 — so a
+      # CI-enforced budget not mirrored here turns the gate red, same contract as
+      # mypy/pytest above). HARD-BLOCKS a commit/push that grows the project
+      # memory corpus past its size/count budget (a budget overflow can't be
+      # auto-fixed — it needs a human consolidate/retire decision). `always_run`
+      # because the budget is over the whole corpus, not the changed files; this
+      # is a project-level check so it lives at pre-push alongside mypy/pytest.
+      - id: memory-budget
+        name: memory-budget (pre-push)
+        entry: python3 .claude/lib/memory_budget.py .
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
