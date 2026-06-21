@@ -187,6 +187,67 @@ repos:
         self.assertNotIn("cspell", harmful)
 
 
+class OfficeDriftKind(unittest.TestCase):
+    """#781: the generated-Office-binary drift gate must be a classified kind so
+    the sync-drift gate DEMANDS a pre-commit mirror of the CI job (an un-mirrored
+    office gate lets a stale binary fail only at PR time)."""
+
+    def test_ci_office_drift_run_step_classified(self) -> None:
+        wf = """
+jobs:
+  office-drift:
+    steps:
+      - run: |
+          scripts/gen-office.sh
+          git diff --exit-code -- 'docs/office/*.docx'
+"""
+        self.assertIn("office-drift", kinds_from_ci(wf))
+
+    def test_precommit_office_drift_hook_classified(self) -> None:
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: office-drift
+        name: office-drift (pre-push)
+        entry: bash -c 'scripts/gen-office.sh && git diff --exit-code'
+"""
+        self.assertIn("office-drift", kinds_from_precommit(cfg))
+
+    def test_ci_office_drift_without_precommit_is_harmful_drift(self) -> None:
+        wf = """
+jobs:
+  office-drift:
+    steps:
+      - run: scripts/gen-office.sh
+"""
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+"""
+        harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
+        self.assertIn("office-drift", harmful)
+
+    def test_ci_office_drift_with_precommit_mirror_no_drift(self) -> None:
+        wf = """
+jobs:
+  office-drift:
+    steps:
+      - run: scripts/gen-office.sh
+"""
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: office-drift
+        entry: bash -c 'scripts/gen-office.sh'
+"""
+        harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
+        self.assertNotIn("office-drift", harmful)
+
+
 class BuildKindTightening(unittest.TestCase):
     """#576: runtime `docker build` / `docker buildx` steps are image-MOVING,
     not a build-QUALITY gate a local pre-commit hook can mirror — they must
@@ -430,6 +491,7 @@ _OLD_KIND_PATTERNS = {
     # parity proof stays valid as new kinds are added (cf. memory-budget, #733).
     "memory-budget": ("memory-budget", "memory_budget"),
     "doc-freshness": ("doc-freshness", "doc_freshness"),
+    "office-drift": ("office-drift", "gen-office"),
 }
 _OLD_RUN_BLOCK_OPEN_RE = re.compile(r"^(?P<indent>\s*)-?\s*run:\s*[|>][+\-0-9]*\s*$")
 
@@ -510,6 +572,7 @@ _EXPECTED_KINDS = {
             "doc-freshness",
             "memory-budget",
             "mypy",
+            "office-drift",
             "pytest",
             "ruff-format",
             "ruff-lint",
@@ -520,6 +583,7 @@ _EXPECTED_KINDS = {
             "doc-freshness",
             "memory-budget",
             "mypy",
+            "office-drift",
             "pytest",
             "ruff-format",
             "ruff-lint",

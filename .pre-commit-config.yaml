@@ -156,3 +156,21 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+      # office-drift mirrors the `Office docs drift gate` CI job in
+      # .github/workflows/docs.yml (the sync-drift gate classifies the
+      # `office-drift` kind — #781/#684 — so the CI gate must be mirrored here or
+      # the gate goes red). Regenerates the committed Office binaries from their
+      # markdown sources and HARD-BLOCKS the push if the bytes differ (a source
+      # changed without `make docs`, or a binary was hand-edited). `always_run`
+      # because it regenerates the whole manifest, not the staged file list;
+      # pre-push (not pre-commit) so it doesn't fire on every incremental commit.
+      # Needs a pandoc locally — gen-office.sh resolves the bundled pandoc from
+      # the pinned `pypandoc-binary==1.17` (pip install it for zero-setup parity
+      # with CI); the same version pin keeps local⇄CI output byte-identical.
+      - id: office-drift
+        name: office-drift (pre-push)
+        entry: bash -c 'scripts/gen-office.sh && git diff --exit-code -- "docs/office/*.docx" "docs/office/*.xlsx" "docs/office/*.pptx"'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

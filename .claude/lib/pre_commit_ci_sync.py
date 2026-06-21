@@ -136,6 +136,14 @@ _KIND_PATTERNS: dict[str, tuple[str, ...]] = {
     # the hook `id`/`name` token (`doc-freshness`) and the CI `run` invocation
     # token (`doc_freshness`).
     "doc-freshness": ("doc-freshness", "doc_freshness"),
+    # `office-drift` is the generated-Office-binary drift gate (#781): the CI
+    # `Office docs drift gate` job regenerates the committed .docx/.xlsx/.pptx
+    # from their markdown sources via `scripts/gen-office.sh` and fails on a byte
+    # diff. Classifying it makes the drift gate DEMAND the pre-commit mirror
+    # (#684) — an un-mirrored office gate would let a stale binary fail only at
+    # PR time. Patterns cover the hook `id`/`name` token (`office-drift`) and the
+    # generator both sides invoke (`gen-office`).
+    "office-drift": ("office-drift", "gen-office"),
 }
 
 
