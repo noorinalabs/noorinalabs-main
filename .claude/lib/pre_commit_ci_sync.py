@@ -47,7 +47,7 @@ kind tokens so they compare:
 
     ruff-lint, ruff-format, mypy, pytest, eslint, typescript, prettier,
     terraform-fmt, gitleaks, actionlint, astro-check, pip-audit, build,
-    cspell
+    cspell, dockerfile-base-pin, fixture-realism
 
 Unknown tools are ignored (neither side gates on a kind we can't classify),
 which keeps the gate conservative — it never fails on something it doesn't
@@ -151,6 +151,15 @@ _KIND_PATTERNS: dict[str, tuple[str, ...]] = {
     # tool/hook token (`mermaid`) and the validator both sides invoke
     # (`check-mermaid`).
     "mermaid": ("mermaid", "check-mermaid"),
+    # `dockerfile-base-pin` and `fixture-realism` are the two charter-prose→code
+    # gates built in #735 (worklist #4 + #1 of the #734 inventory). Each is a
+    # `.claude/lib/check_*.py` invoked identically by a CI job and a pre-commit
+    # hook; classifying them here is what makes the sync-drift gate DEMAND the
+    # mirror (the #684 contract: an un-classified CI check is a silent blind
+    # spot). Patterns match the script basename (present on both sides' invoke
+    # line) and the hook id / job name.
+    "dockerfile-base-pin": ("check_dockerfile_base_pin", "dockerfile-base-pin"),
+    "fixture-realism": ("check_fixture_realism", "fixture-realism"),
 }
 
 

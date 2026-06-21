@@ -308,6 +308,124 @@ repos:
         self.assertNotIn("mermaid", harmful)
 
 
+class DockerfileBasePinKind(unittest.TestCase):
+    """#735: the dockerfile-base-pin charter-prose→code gate must be a classified
+    kind so the sync-drift gate DEMANDS a pre-commit mirror of the CI lint job (an
+    un-mirrored gate lets an unpinned base image fail only at PR time)."""
+
+    def test_ci_dockerfile_base_pin_run_step_classified(self) -> None:
+        wf = """
+jobs:
+  dockerfile-base-pin:
+    steps:
+      - run: python3 .claude/lib/check_dockerfile_base_pin.py $files
+"""
+        self.assertIn("dockerfile-base-pin", kinds_from_ci(wf))
+
+    def test_precommit_dockerfile_base_pin_hook_classified(self) -> None:
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: dockerfile-base-pin
+        name: dockerfile-base-pin
+        entry: python3 .claude/lib/check_dockerfile_base_pin.py
+"""
+        self.assertIn("dockerfile-base-pin", kinds_from_precommit(cfg))
+
+    def test_ci_dockerfile_base_pin_without_precommit_is_harmful_drift(self) -> None:
+        wf = """
+jobs:
+  dockerfile-base-pin:
+    steps:
+      - run: python3 .claude/lib/check_dockerfile_base_pin.py $files
+"""
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+"""
+        harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
+        self.assertIn("dockerfile-base-pin", harmful)
+
+    def test_ci_dockerfile_base_pin_with_precommit_mirror_no_drift(self) -> None:
+        wf = """
+jobs:
+  dockerfile-base-pin:
+    steps:
+      - run: python3 .claude/lib/check_dockerfile_base_pin.py $files
+"""
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: dockerfile-base-pin
+        entry: python3 .claude/lib/check_dockerfile_base_pin.py
+"""
+        harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
+        self.assertNotIn("dockerfile-base-pin", harmful)
+
+
+class FixtureRealismKind(unittest.TestCase):
+    """#735: the fixture-realism charter-prose→code gate must be a classified kind
+    so the sync-drift gate DEMANDS a pre-commit mirror of the CI lint job (an
+    un-mirrored gate lets an un-voweled Arabic fixture fail only at PR time)."""
+
+    def test_ci_fixture_realism_run_step_classified(self) -> None:
+        wf = """
+jobs:
+  fixture-realism:
+    steps:
+      - run: python3 .claude/lib/check_fixture_realism.py $files
+"""
+        self.assertIn("fixture-realism", kinds_from_ci(wf))
+
+    def test_precommit_fixture_realism_hook_classified(self) -> None:
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: fixture-realism
+        name: fixture-realism
+        entry: python3 .claude/lib/check_fixture_realism.py
+"""
+        self.assertIn("fixture-realism", kinds_from_precommit(cfg))
+
+    def test_ci_fixture_realism_without_precommit_is_harmful_drift(self) -> None:
+        wf = """
+jobs:
+  fixture-realism:
+    steps:
+      - run: python3 .claude/lib/check_fixture_realism.py $files
+"""
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+"""
+        harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
+        self.assertIn("fixture-realism", harmful)
+
+    def test_ci_fixture_realism_with_precommit_mirror_no_drift(self) -> None:
+        wf = """
+jobs:
+  fixture-realism:
+    steps:
+      - run: python3 .claude/lib/check_fixture_realism.py $files
+"""
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: fixture-realism
+        entry: python3 .claude/lib/check_fixture_realism.py
+"""
+        harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
+        self.assertNotIn("fixture-realism", harmful)
+
+
 class BuildKindTightening(unittest.TestCase):
     """#576: runtime `docker build` / `docker buildx` steps are image-MOVING,
     not a build-QUALITY gate a local pre-commit hook can mirror — they must
@@ -553,6 +671,8 @@ _OLD_KIND_PATTERNS = {
     "doc-freshness": ("doc-freshness", "doc_freshness"),
     "office-drift": ("office-drift", "gen-office"),
     "mermaid": ("mermaid", "check-mermaid"),
+    "dockerfile-base-pin": ("check_dockerfile_base_pin", "dockerfile-base-pin"),
+    "fixture-realism": ("check_fixture_realism", "fixture-realism"),
 }
 _OLD_RUN_BLOCK_OPEN_RE = re.compile(r"^(?P<indent>\s*)-?\s*run:\s*[|>][+\-0-9]*\s*$")
 
@@ -630,7 +750,9 @@ _EXPECTED_KINDS = {
         "precommit": {
             "actionlint",
             "cspell",
+            "dockerfile-base-pin",
             "doc-freshness",
+            "fixture-realism",
             "memory-budget",
             "mermaid",
             "mypy",
@@ -642,7 +764,9 @@ _EXPECTED_KINDS = {
         "ci": {
             "actionlint",
             "cspell",
+            "dockerfile-base-pin",
             "doc-freshness",
+            "fixture-realism",
             "memory-budget",
             "mermaid",
             "mypy",

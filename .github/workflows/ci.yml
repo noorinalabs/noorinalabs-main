@@ -144,6 +144,58 @@ jobs:
           done
           exit $status
 
+  dockerfile-base-pin:
+    name: Dockerfile base-image pinning lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Charter-prose→code gate (#735, tech-decisions.md § Base Image Pinning).
+      # Discovers every Dockerfile and asserts each FROM is digest-pinned with the
+      # matching distro upgrade. Mirrors the `dockerfile-base-pin` pre-commit hook
+      # (sync-drift gate classifies the kind). The parent ships no Dockerfiles, so
+      # this is a no-op template here; child repos inherit it to scan their real
+      # Dockerfiles (#735 follow-up rollout).
+      - name: Lint Dockerfile FROM digest-pin + distro upgrade
+        run: |
+          files=$(find . -path ./.claude/worktrees -prune -o \
+            \( -name 'Dockerfile' -o -name 'Dockerfile.*' -o -name '*.dockerfile' \) -print)
+          if [ -z "$files" ]; then
+            echo "No Dockerfiles in this repo — base-pin lint is a no-op template here (#735)."
+            exit 0
+          fi
+          # shellcheck disable=SC2086  # word-splitting is intended (one path per arg)
+          python3 .claude/lib/check_dockerfile_base_pin.py $files
+
+  fixture-realism:
+    name: Arabic fixture production-realism lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Charter-prose→code gate (#735, pull-requests.md § Production-Realistic
+      # Input). Discovers fixture files and flags Arabic-text fixtures that are
+      # un-voweled or lack the عن particle. Mirrors the `fixture-realism`
+      # pre-commit hook. The parent ships no Arabic fixtures, so this is a no-op
+      # template here; child repos inherit it for their real fixtures (#735
+      # follow-up rollout).
+      - name: Lint Arabic-text fixtures for vocalization + عن particle
+        run: |
+          files=$(find . -path ./.claude/worktrees -prune -o \
+            \( -path '*/fixtures/*' -o -path '*/test_data/*' -o -path '*/testdata/*' \) \
+            -type f \( -name '*.json' -o -name '*.jsonl' -o -name '*.ndjson' \
+            -o -name '*.txt' -o -name '*.csv' -o -name '*.tsv' -o -name '*.py' \) -print)
+          if [ -z "$files" ]; then
+            echo "No fixture files in this repo — realism lint is a no-op template here (#735)."
+            exit 0
+          fi
+          # shellcheck disable=SC2086  # word-splitting is intended (one path per arg)
+          python3 .claude/lib/check_fixture_realism.py $files
+
   precommit-ci-sync:
     name: Pre-commit ⇄ CI sync-drift gate
     runs-on: ubuntu-latest
