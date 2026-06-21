@@ -15,6 +15,50 @@ Updated by `/ontology-rebuild`. Manual edits require `checksums.json` update.
 - **TypeScript/JS:** ESLint + Prettier
 - **All repos:** pre-commit hooks enforced
 
+### Shell environment (zsh)
+
+The org dev environment's interactive shell **and** the agent Bash tool run
+under **`zsh`**, not bash. Write zsh-safe commands; bash-only idioms silently
+break. Lifted from `feedback_zsh_shell_environment` so it is a real convention,
+not buried in a memory file (per `feedback_enforcement_hierarchy`):
+
+- **No** `declare -A name` associative arrays or `${!arr[@]}` key expansion —
+  `zsh` rejects/treats them differently (the P3W12 `(eval):3: bad substitution`
+  failure). Use paired strings + a `while IFS=: read -r k v` loop, or
+  newline-delimited lists.
+- **Quote** URLs and globs — an unquoted argument with `?`/`*` is
+  pathname-expanded by `zsh` (`no matches found`). Quote it.
+- `zsh` arrays are 1-indexed and don't word-split unquoted variables by
+  default — prefer explicit loops over relying on bash word-splitting.
+- Default to **POSIX-portable** constructs (`for x in …; do`, `case`, `[ … ]`) —
+  identical under both shells.
+- When a one-off genuinely needs bash, invoke `bash -c '…'` explicitly (and
+  comment why) rather than assuming the default shell is bash.
+
+Contributor-facing form with the same list: `docs/TOOLCHAIN.md` § Shell
+environment.
+
+### Structural search & replace
+
+Prefer a **structural (AST) tool over regex/line-scan** for anything that
+depends on code/markup *structure* — the correct-by-construction fix for our
+recurring regex-blindness class (`feedback_lint_gate_cover_all_syntactic_forms`,
+the `_shell_parse.py` bug trail).
+
+- **`ast-grep`** for structural source-code search/replace and codemods
+  (Python/TS/JS/bash via `tree-sitter`) — it matches the syntax tree, so one
+  rule catches the dotted **and** from-import call forms a regex would miss.
+  ⚠ Invoke it as **`ast-grep`**, never `sg`: `/usr/bin/sg` is shadow-utils
+  (run-with-group-id), and a script shelling `sg …` silently runs that instead.
+- **`yq`** (mikefarah) for structural YAML query/edit (workflows, compose,
+  pre-commit) instead of `re.match`/substring over lines.
+- **`rg`/`sed`/`sd`** stay the right tools for *literal* / line-oriented work;
+  `sd` is the literal-by-default replace companion (no `sed` regex foot-guns).
+
+Install commands + worked examples: `docs/TOOLCHAIN.md` § Structural & AST
+tooling. Adoption depth (documented convenience vs. wired gate) is tracked in
+issues #748 / #760.
+
 ### Data modeling
 - **Python:** Pydantic v2 frozen models (`ConfigDict(frozen=True)`)
 - **Enums:** StrEnum for clean JSON/Parquet serialization

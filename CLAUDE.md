@@ -78,6 +78,10 @@ The full constraint and delegation mechanics (orchestrator checklist, spawn-requ
 - These three (Projects, Issues, Actions) are the **core orchestration layer** — do not introduce alternative tools for these concerns
 - **Branching strategy:** Feature branches named `{FirstInitial}.{LastName}/{IIII}-{issue-name}` (e.g., `N.Khoury/0042-update-charter`) merged to `main` via PR
 
+### Shell environment: zsh
+
+The dev environment's shell — interactive **and** the agent Bash tool — is **`zsh`**, not bash. Write zsh-safe commands: bash-only idioms (`declare -A`, `${!arr[@]}`, unquoted URLs/globs) silently break under `zsh`. Default to POSIX-portable constructs; use `bash -c '…'` explicitly when bash is genuinely required. Full do/don't list: [`docs/TOOLCHAIN.md`](docs/TOOLCHAIN.md) § Shell environment, codified as a convention in [`ontology/conventions.md`](ontology/conventions.md) § Shell environment (zsh). For structural code search/replace prefer `ast-grep` (invoke as `ast-grep`, never `sg`) over `grep`/`sed` — see [`docs/TOOLCHAIN.md`](docs/TOOLCHAIN.md) § Structural & AST tooling.
+
 ### Local Hooks (pre-commit + pre-push)
 
 This repo ships a `.pre-commit-config.yaml` that **mirrors `.github/workflows/ci.yml`** so a local commit/push fails fast instead of surfacing a lint/type/test error only after a PR is opened (Phase-3 end-state criterion #6 / #327). Install BOTH hook types once:
