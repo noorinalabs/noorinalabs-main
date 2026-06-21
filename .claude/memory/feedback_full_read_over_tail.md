@@ -1,6 +1,6 @@
 ---
 name: feedback_full_read_over_tail
-description: "Memory-file state-claims (not-written / not-present) require full Read or targeted grep, not tail-only. Tail-read misses mid-file additive clarifications. Sibling to [[feedback-review-against-artifact-not-framing]] applied to non-canonical storage."
+description: "Memory-file state-claims (not-written / not-present) require full Read or targeted grep, not tail-only. Tail-read misses mid-file additive clarifications. Sibling to [[feedback_review_against_artifact]] applied to non-canonical storage."
 metadata: 
   node_type: memory
   type: feedback
@@ -9,7 +9,7 @@ metadata:
 
 When a state-claim is about a **memory file** (under `~/.claude/projects/.../memory/`) — "the forward-pointer is/isn't written", "the citation is/isn't present", "the clarification is/isn't there" — verify via **full `Read` or `grep -n <token>`**, NOT via `tail -N`.
 
-**Why:** Memory files are append-mostly but not append-only — additive clarifications are commonly inserted mid-file near the relevant heading, not at the file tail. A `tail -10` read sees only the historical "**Origin:**" paragraph (which sits at the file's actual tail) and produces a false-negative "not written" inference when the new line is at L13. Sibling to [[feedback-review-against-artifact-not-framing]] (reviewer-class, applied to in-repo files via `gh api contents`); this is the same primitive applied to **non-canonical storage** — memory dir is outside the repo, not reachable via `gh api`, so the verifying read is filesystem `Read`/`grep`, not artifact-API.
+**Why:** Memory files are append-mostly but not append-only — additive clarifications are commonly inserted mid-file near the relevant heading, not at the file tail. A `tail -10` read sees only the historical "**Origin:**" paragraph (which sits at the file's actual tail) and produces a false-negative "not written" inference when the new line is at L13. Sibling to [[feedback_review_against_artifact]] (reviewer-class, applied to in-repo files via `gh api contents`); this is the same primitive applied to **non-canonical storage** — memory dir is outside the repo, not reachable via `gh api`, so the verifying read is filesystem `Read`/`grep`, not artifact-API.
 
 The trap is double-layered: (1) memory dir is outside the repo so `gh api .../contents` doesn't apply, which correctly redirects the reader to filesystem, but (2) the reader then under-applies the filesystem read by tail'ing instead of grep'ing.
 

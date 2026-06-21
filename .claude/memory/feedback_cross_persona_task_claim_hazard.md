@@ -28,7 +28,7 @@ For every `TaskUpdate` call:
 
 **Promotion target — charter or hook (post-wave-retro)**:
 
-Hook-tier preferred per [[enforcement-hierarchy]]: `TaskUpdate` should require the calling agent's identity to match the task's existing owner field (or be empty for unclaimed tasks). PreToolUse hook on TaskUpdate blocks the call if `caller != existing.owner AND existing.owner != ""`. Implementation sketch:
+Hook-tier preferred per [[feedback_enforcement_hierarchy]]: `TaskUpdate` should require the calling agent's identity to match the task's existing owner field (or be empty for unclaimed tasks). PreToolUse hook on TaskUpdate blocks the call if `caller != existing.owner AND existing.owner != ""`. Implementation sketch:
 
 ```python
 # .claude/hooks/validate_task_ownership.py (sketch)
@@ -45,7 +45,7 @@ def on_pre_tool_use(tool_name, tool_input):
 Authorization to write this memory granted by team-lead 2026-05-13 mid-P3W10. Hook implementation deferred to /wave-retro per "introducing new enforcement mid-cascade is high-risk" (charter freshness check pattern).
 
 **Related memories:**
-- [[self-loop-task-replay-glitch]] — task-system replays the agent's own completed tasks back as fresh task_assignments. Related but distinct: self-loop is the agent's own task replaying; cross-persona-claim is the agent erroneously claiming OTHER personas' tasks. Same inbound-replay shape but different failure root.
-- [[enforcement-hierarchy]] — hook > skill > charter; this discipline belongs as hook.
-- [[refresh-before-status-claim]] — read-back-verify-before-status-claim discipline. The TaskUpdate identity-check is the task-system flavor of the same pattern.
-- [[owner-pivot-supersedes-protocol]] — sibling P3W10 race-protocol memory. Coordination-friction at high tempo produces both this hazard and the routing-race hazard.
+- [[feedback_self_loop_task_replay_glitch]] — task-system replays the agent's own completed tasks back as fresh task_assignments. Related but distinct: self-loop is the agent's own task replaying; cross-persona-claim is the agent erroneously claiming OTHER personas' tasks. Same inbound-replay shape but different failure root.
+- [[feedback_enforcement_hierarchy]] — hook > skill > charter; this discipline belongs as hook.
+- [[feedback_refresh_before_status_claim]] — read-back-verify-before-status-claim discipline. The TaskUpdate identity-check is the task-system flavor of the same pattern.
+- [[feedback_owner_pivot_supersedes_protocol]] — sibling P3W10 race-protocol memory. Coordination-friction at high tempo produces both this hazard and the routing-race hazard.

@@ -20,7 +20,7 @@ The canonical-comment-at-HEAD post-merge IS correct (because EDIT not APPEND was
 - If the merge has already fired and the correction lands seconds later, the situation is recoverable IF the verdict-outcome was stable across the edit (no harm done, just a transient hook-eval-on-wrong-state). If the verdict-outcome would have CHANGED, the merge is at minimum a process violation and at maximum needs a revert-then-redo cycle.
 - For high-stakes PRs (security-sensitive, breaking-change-class), the discipline tightens: do not merge until ALL reviewer-side amendments have landed AND been re-verified at origin via `updated_at`.
 
-**Sibling rules:** [[owner-pivot-supersedes-protocol]] (same primitive at owner-pivot-on-in-flight-task layer), [[verdict-amendment-edit-not-append]] (the EDIT-not-APPEND discipline that makes post-merge canonical-state correct even when the eval-time state was wrong), [[refresh-before-status-claim]] (eval-time-state-at-origin discipline).
+**Sibling rules:** [[feedback_owner_pivot_supersedes_protocol]] (same primitive at owner-pivot-on-in-flight-task layer), [[feedback_verdict_amendment_edit_not_append]] (the EDIT-not-APPEND discipline that makes post-merge canonical-state correct even when the eval-time state was wrong), [[feedback_refresh_before_status_claim]] (eval-time-state-at-origin discipline).
 
 **Severity:** Minor when verdict-outcome is stable across the edit (the case observed in #444). Moderate when the edit would change the verdict (would have been a hook-eval false-positive merge). Severe when applied to a breaking-change-class PR.
 
