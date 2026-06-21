@@ -187,3 +187,11 @@ OOXML
 # --- lifecycle doc (#766): git-flag fragment + wave-scope temp-file prefix ---
 oneline
 wavescope
+
+# --- Architecture doc (#769/#770) ---
+Ashburn
+reembed
+appleboy
+tfstate
+healthz
+renderable
