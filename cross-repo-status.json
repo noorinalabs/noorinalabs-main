@@ -1,10 +1,26 @@
 {
-  "phase_6_criteria_trackers": {"1":"noorinalabs-main#725","2":"noorinalabs-main#726","3":"noorinalabs-main#727","4":"noorinalabs-main#728","5":"framework-TD:#718,#706,#705,#704,#703,#684,#672,#663"},
+  "phase_6_criteria_trackers": {
+    "1": "noorinalabs-main#725",
+    "2": "noorinalabs-main#726",
+    "3": "noorinalabs-main#727",
+    "4": "noorinalabs-main#728",
+    "5": "framework-TD:#718,#706,#705,#704,#703,#684,#672,#663"
+  },
   "phase_6_wave_1_meta_issue": "noorinalabs-main#731",
   "phase_6_plan_doc": ".claude/team/phases/phase-6.md",
   "phase_6_started_at": "2026-06-20T00:50:16Z",
   "phase_6_active": true,
-  "phase_5_exit_record": {"criteria_closed":"4/4 core (#665,#602,#603,#666)","basis":"cutover bar — real data + working product live on prod","carried_to_p7":["#665 queryability/quality","#602 search","#666 auth-UX/data-quality","#667 streaming"],"p7_meta":"#723"},
+  "phase_5_exit_record": {
+    "criteria_closed": "4/4 core (#665,#602,#603,#666)",
+    "basis": "cutover bar — real data + working product live on prod",
+    "carried_to_p7": [
+      "#665 queryability/quality",
+      "#602 search",
+      "#666 auth-UX/data-quality",
+      "#667 streaming"
+    ],
+    "p7_meta": "#723"
+  },
   "phase_5_completed_at": "2026-06-20T00:50:16Z",
   "wave_7_meta_issue": 657,
   "wave_7_scope_reconciled_at": "2026-06-13T23:20:00Z",
@@ -750,10 +766,155 @@
     "assignments_pending": "implementer/reviewer slate filled at /wave-kickoff (reviewer-slate step); current_wave advance deferred to kickoff Step 1a"
   },
   "wave_2_meta_issue": "noorinalabs-main#803",
-  "wave_2_scope": {"phase": 6, "theme": "durable phase-key fix (#804) + persona/ontology architectural revisits + retro mechanization", "headline_correction": "original #683 closed by PR#699 (per-phase-reset band-aid only); durable phase-namespace fix tracked by #804", "tier_1_headline_td": [{"id": "noorinalabs-main#804", "ref": "main#804", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "tech-debt"}], "tier_2_architectural_spikes": [{"id": "noorinalabs-main#727", "ref": "main#727", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "spike"}, {"id": "noorinalabs-main#728", "ref": "main#728", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "spike"}], "tier_3_retro_mechanization": [{"id": "noorinalabs-main#729", "ref": "main#729", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "tech-debt"}, {"id": "noorinalabs-main#730", "ref": "main#730", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "process"}], "tier_4_adopted_charter": [{"id": "noorinalabs-main#801", "ref": "main#801", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "process"}, {"id": "noorinalabs-main#802", "ref": "main#802", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "process"}], "tier_5_cross_repo": [{"id": "noorinalabs-main#744", "ref": "main#744", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "cross-repo"}], "tier_3_tech_debt": [{"id": "noorinalabs-main#703", "ref": "main#703", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "security"}, {"id": "noorinalabs-main#736", "ref": "main#736", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "tech-debt"}, {"id": "noorinalabs-main#797", "ref": "main#797", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "tech-debt"}, {"id": "noorinalabs-isnad-graph#1120", "ref": "isnad-graph#1120", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "tech-debt"}, {"id": "noorinalabs-isnad-graph#1123", "ref": "isnad-graph#1123", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "tech-debt"}, {"id": "noorinalabs-user-service#187", "ref": "user-service#187", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "tech-debt"}], "td_intake": "6 selected of 10 pool (front-loaded framework debt; +20% cap target was 1; owner override 2026-06-21)", "td_pool": 10, "deferred": ["noorinalabs-main#775 -> Phase 7", "noorinalabs-data-acquisition#136/#139 + noorinalabs-isnad-graph#1104 (product/data/i18n) -> Phase 7"], "assignment_note": "implementer/reviewer slates filled at /wave-kickoff (child-repo items use that repo's own roster per child-repo-implementer rule)", "deliberately_not_in_w2": ["noorinalabs-main#775", "noorinalabs-data-acquisition#136", "noorinalabs-data-acquisition#139", "noorinalabs-isnad-graph#1104"]},
+  "wave_2_scope": {
+    "phase": 6,
+    "theme": "durable phase-key fix (#804) + persona/ontology architectural revisits + retro mechanization",
+    "headline_correction": "original #683 closed by PR#699 (per-phase-reset band-aid only); durable phase-namespace fix tracked by #804",
+    "tier_1_headline_td": [
+      {
+        "id": "noorinalabs-main#804",
+        "ref": "main#804",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      }
+    ],
+    "tier_2_architectural_spikes": [
+      {
+        "id": "noorinalabs-main#727",
+        "ref": "main#727",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "spike"
+      },
+      {
+        "id": "noorinalabs-main#728",
+        "ref": "main#728",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "spike"
+      }
+    ],
+    "tier_3_retro_mechanization": [
+      {
+        "id": "noorinalabs-main#729",
+        "ref": "main#729",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#730",
+        "ref": "main#730",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "process"
+      }
+    ],
+    "tier_4_adopted_charter": [
+      {
+        "id": "noorinalabs-main#801",
+        "ref": "main#801",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "process"
+      },
+      {
+        "id": "noorinalabs-main#802",
+        "ref": "main#802",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "process"
+      }
+    ],
+    "tier_5_cross_repo": [
+      {
+        "id": "noorinalabs-main#744",
+        "ref": "main#744",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "cross-repo"
+      }
+    ],
+    "tier_3_tech_debt": [
+      {
+        "id": "noorinalabs-main#703",
+        "ref": "main#703",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "security"
+      },
+      {
+        "id": "noorinalabs-main#736",
+        "ref": "main#736",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#797",
+        "ref": "main#797",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1120",
+        "ref": "isnad-graph#1120",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1123",
+        "ref": "isnad-graph#1123",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-user-service#187",
+        "ref": "user-service#187",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      }
+    ],
+    "td_intake": "6 selected of 10 pool (front-loaded framework debt; +20% cap target was 1; owner override 2026-06-21)",
+    "td_pool": 10,
+    "deferred": [
+      "noorinalabs-main#775 -> Phase 7",
+      "noorinalabs-data-acquisition#136/#139 + noorinalabs-isnad-graph#1104 (product/data/i18n) -> Phase 7"
+    ],
+    "assignment_note": "implementer/reviewer slates filled at /wave-kickoff (child-repo items use that repo's own roster per child-repo-implementer rule)",
+    "deliberately_not_in_w2": [
+      "noorinalabs-main#775",
+      "noorinalabs-data-acquisition#136",
+      "noorinalabs-data-acquisition#139",
+      "noorinalabs-isnad-graph#1104"
+    ]
+  },
   "wave_2_scope_reconciled_at": "2026-06-21T21:53:25Z",
-  "wave_2_repos_in_scope": ["noorinalabs-main", "noorinalabs-isnad-graph", "noorinalabs-user-service"],
-  "wave_2_active": false,
+  "wave_2_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-isnad-graph",
+    "noorinalabs-user-service"
+  ],
+  "wave_2_active": true,
   "wave_1_scope_reconciled_at": "2026-06-20T04:32:30Z",
   "wave_1_repos_in_scope": [
     "noorinalabs-main"
@@ -935,7 +1096,7 @@
     "mirror_of": ".claude/team/phases/phase-3.md § Sweep-wave reservation (W12, possibly W13)"
   },
   "wave_active": true,
-  "current_wave": "wave-1",
+  "current_wave": "wave-2",
   "wave_5_active": false,
   "wave_5_kicked_off_at": "2026-06-16T23:12:45Z",
   "wave_5_final_pr_count": 45,
@@ -1203,7 +1364,7 @@
   "wave_3_wrapped_at": "2026-06-12T17:33:59Z",
   "wave_3_annunaki_attack_ran_at": "2026-06-14T23:45:00Z",
   "wave_3_memory_audit_ran_at": "2026-06-14T23:45:00Z",
-  "last_updated": "2026-06-15T01:52:55Z",
+  "last_updated": "2026-06-21T23:14:01Z",
   "deployments_branch": "deployments/phase-4/wave-3",
   "phase_2_status": "CLOSED 2026-04-30. wave-10 final retro PR #230 merged 20:47:41Z. 5-repo wave-merge ceremony completed (#229 main, #74 landing, #851 isnad, #196 deploy, #89 user-service). 3 carry-forwards into phase-3: deploy#86 (async routine trig_01Bif8T51pdaYFjkbM5bERyL — fires post-merge), deploy#151 (manual SRE B2 tfstate-key migration), user-service#84 (manual DEPLOY_REPO_PAT secret). All p2-wave-* labels cleared from open issues; 218 open issues re-labeled `phase-3` across 8 repos.",
   "phase_3_status": "Phase 3 COMPLETE 2026-06-02 at 9/9 criteria (criterion #9 closed-with-caveat). All end-state issues #322-#330 closed. Exit record in .claude/team/phases/phase-3.md. Next: /roadmap for Phase 4.",
@@ -1551,5 +1712,6 @@
       }
     },
     "created_at": "2026-06-16T23:12:45Z"
-  }
+  },
+  "wave_2_started_at": "2026-06-21T23:14:01Z"
 }
