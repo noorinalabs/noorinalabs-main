@@ -1,0 +1,19 @@
+{
+  "_comment": "Markdown -> Microsoft Office generation manifest. Markdown is the single source of truth; the office binaries under each entry's 'target' are GENERATED artifacts and must never be hand-edited. Regenerate with `make docs` or scripts/gen-office.sh. See docs/office/README.md. Set 'enabled' to false to register a doc whose markdown source has not landed yet.",
+  "documents": [
+    {
+      "source": "docs/TOOLCHAIN.md",
+      "target": "docs/office/TOOLCHAIN.docx",
+      "format": "docx",
+      "enabled": true,
+      "note": "Round-trip demonstration of the pipeline (#767)."
+    },
+    {
+      "source": "ontology/lifecycle.md",
+      "target": "docs/office/lifecycle.docx",
+      "format": "docx",
+      "enabled": false,
+      "note": "Canonical first office doc (#766). Flip 'enabled' to true once ontology/lifecycle.md lands; `make docs` then renders it."
+    }
+  ]
+}

@@ -175,3 +175,11 @@ difft
 comby
 gron
 tomnomnom
+pandoc
+pypandoc
+openpyxl
+docx
+xlsx
+pptx
+gfm
+OOXML
