@@ -475,7 +475,7 @@ flowchart LR
     route["routing tree — alertmanager.prod.yml"]
     recv["receivers — Slack / SMTP / Healthchecks via api_url_file + secret files"]
   end
-  cfg[("config + secret files — slack_webhook / smtp_password / healthchecks_url, default <unset>")]
+  cfg[("config + secret files — slack_webhook / smtp_password / healthchecks_url, default &lt;unset&gt;")]
   store[("/alertmanager — storage.path")]
   slack["Slack webhook — egress hooks.slack.com"]
   smtp["SMTP — egress"]
