@@ -2,11 +2,8 @@
 - [Reviewer brief needs TechDebt line](feedback_reviewer_brief_techdebt.md) — omit → Hook4 blocks all merges wave-wide; fix by EDIT-in-place. P5W5.
 - [closingIssuesReferences empty on wave-branch PRs](reference_closing_refs_empty_wave_prs.md) — not a gh --json field; parse body Closes/Fixes for non-default-base PRs. main#664.
 - [ontology_tracker test worktree-fragile](project_ontology_tracker_worktree_test.md) — test_worktrees_segment false-FAILS under .claude/worktrees/ (REPO_ROOT inherits it). PR#685.
-- [LP↔DS icon consumption](project_lp_ds_icon_consumption.md) — Astro LP can't import DS React icons; Icon.astro mirrors geometry; ds#103=neutral iconPaths. lp#119.
 - [Prefer correct over expedient (no users)](feedback_prefer_correct_over_expedient.md) — Owner 2026-06-12: pre-launch, UI/visual regression not a hard constraint; do the right fix.
 - [Wave-key cross-phase collision](project_wave_key_cross_phase_collision.md) — wave_{M}_* not phase-namespaced; P5 collides w/ P4; /wave-start §5a reset never fires. main#683.
-- [DS color utilities are no-ops](project_ds_theme_color_utilities_noop.md) — ig FE: bg-card/text-foreground emit 0 rules (DS dist=@theme+[data-theme], not :root). DS#111.
-- [DS component utilities are no-ops](project_ds_component_utilities_noop.md) — ig FE: DS Dialog utils live only in dist JS → 0 CSS; fix=@source inline. #812.
 - [Relocate mis-filed wave issues](feedback_relocate_misfiled_wave_issues.md) — issue whose code lands in another repo MUST be relocated at kickoff (close+recreate+split).
 - [TD intake 20%/wave](feedback_td_intake_20pct_per_wave.md) — per-wave TD intake (+20% of feature/bug scope, ceil; all if fewer) replaces cumulative ratio gate.
 - [Wave branch: every-wave merge + retain](feedback_wave_branch_merge_retain.md) — each wave merges to main at its /wave-wrapup; phase/wave branches RETAINED (--merge).
@@ -21,7 +18,6 @@
 - [ProjectV2 field-option is orchestrator-doable](feedback_projectv2_field_option.md) — adding a single-select Wave-field option is mine via GraphQL updateProjectV2Field.
 - [Ontology system](project_ontology_system.md) — three-role ontology (tracker hook, resolver skill, librarian skill); Hook 15 enforces consult.
 - [Bootstrap repo](project_bootstrap_repo.md) — separate repo to dogfood the team/workflow/ontology pattern for reuse across projects.
-- [Data pipeline arch](project_data_pipeline_architecture.md) — B2 storage, Kafka/KRaft pipeline, acquisition-vs-platform repo split, MinIO local dev.
 - [Session handoff](session_handoff.md) — Pickup 2026-06-20: P6W1 live; memory now git-transferable via CLAUDE.md @import; 3 W1 PRs merged; next = #735/#732/#733. (file is gitignored/local)
 - [Self-loop task replay glitch](feedback_self_loop_task_replay_glitch.md) — team task system may replay own completed tasks as fresh; verify via TaskGet + ignore self-loops.
 - [PR number placeholders](feedback_pr_number_placeholders.md) — never predict-then-cite PR numbers; parallel work consumes them fast; verify w/ gh pr view post-create.
@@ -87,7 +83,6 @@
 - [sync-gate build-kind false-match](feedback_sync_gate_build_kind_false_match.md) — pre_commit_ci_sync.py build pattern false-matches "Docker Buildx"/"docker build" step names.
 - [Trivy base-image CVE org-wide gate](feedback_trivy_base_image_cve_org_wide_gate.md) — ghcr Trivy fails on NEW debian base-image OS CVE, not your code; org-wide, not PR-caused.
 - [Passing repro masks bug (wrong invocation)](feedback_passing_repro_masks_bug.md) — green local repro proves nothing if it used a different invocation form than prod.
-- [DS tokens need data-theme attr](project_ds_tokens_need_data_theme_attr.md) — DS dist colors live in @theme{} (ignored) + [data-theme] (honored); empty unless <html> sets it.
 - [Parallel panels sharing a file must serialize-merge](feedback_parallel_panels_shared_file.md) — parallel PRs appending to a shared file git-conflict despite distinct ownership. #986.
 - [validate_labels hook gotchas](feedback_validate_labels_hook_gotchas.md) — body over-match + stale label cache false-block gh issue create; verify+retry, keep tokens out of bodies.
 - [Full local⇄CI hook parity + no-force](feedback_local_ci_parity_no_force.md) — Owner 2026-06-14: pre-commit/push MUST mirror COMPLETE CI tooling; never push a failing check. main#684.
@@ -98,5 +93,4 @@
 - [Commit-author gate exclude merges](feedback_commit_author_gate_exclude_merges.md) — author/identity gate over a PR range MUST use git log --no-merges (merge commits = bare principal).
 - [Cross-persona task-claim hazard](feedback_cross_persona_task_claim_hazard.md) — TaskUpdate has no ownership-guard; a mistyped taskId silently completes another persona's work.
 - [Cross-spawn cwd collision](feedback_cwd_collision_cross_spawn.md) — two agents sharing one cwd on different branches: 2nd checkout moves the 1st → commits on wrong branch.
-- [main#136 E2E lands in ingest](project_main136_pipeline_e2e_lands_in_ingest.md) — main#136 pipeline-worker E2E scenarios land in ingest-platform (not deploy/not main), ingest persona.
 - [Prod loaded but quality-broken](project_prod_loaded_quality_broken.md) — prod NO LONGER empty; 768k nodes/8.98% linked, narrators polluted, chains empty, search 500s → P7 data-quality. meta main#723.
