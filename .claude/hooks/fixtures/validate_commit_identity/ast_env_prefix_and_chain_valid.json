@@ -1,0 +1,5 @@
+{
+  "description": "AST/#748 D3b: env-var prefix (GIT_PAGER=cat) on a valid-identity commit inside an && chain — the env assignment must be stripped (AssignmentNode in AST; leading KEY=val in shlex) and the commit allowed",
+  "command": "cd /repo && GIT_PAGER=cat git -c user.name=\"Aino Virtanen\" -c user.email=\"parametrization+Aino.Virtanen@gmail.com\" commit -m \"env prefixed\"",
+  "expect": "allow"
+}

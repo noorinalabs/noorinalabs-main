@@ -1,0 +1,5 @@
+{
+  "description": "AST/#748 D3b negative: a bare `git commit` (no -c identity) as the second command in an && chain must still be blocked in both modes",
+  "command": "git status && git commit -m \"no identity flags in a chain\"",
+  "expect": "block:missing user.name"
+}
