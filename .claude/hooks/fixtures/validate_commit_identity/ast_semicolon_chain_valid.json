@@ -1,0 +1,5 @@
+{
+  "description": "AST/#748 D3b: a `;`-separated chain where the second command is a valid-identity commit — must be allowed (both modes split on ;)",
+  "command": "git status ; git -c user.name=\"Aino Virtanen\" -c user.email=\"parametrization+Aino.Virtanen@gmail.com\" commit -m \"after status\"",
+  "expect": "allow"
+}

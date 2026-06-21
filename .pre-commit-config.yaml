@@ -15,6 +15,17 @@
 #     the commit loop snappy while still catching everything before it leaves
 #     the machine.
 #
+# Optional hook dependency — bashlex (#748 D3b): the commit-identity hooks
+# import bashlex for a structural Bash-AST parse, falling back to a shlex/regex
+# path when it is absent (runtime zero-setup-on-pull is preserved). The
+# mypy/pytest hooks below are `language: system`, so `additional_dependencies`
+# does NOT apply to them — install bashlex into the same system Python that runs
+# mypy/pytest (`pip install bashlex`) so local pre-push exercises the SAME
+# enforced AST path CI does. Without it, the bashlex-specific tests skip and
+# pre-push validates only the fallback path (still green, but not the enforced
+# path). bashlex is NOT a new sync-gate check kind — it is a library dependency
+# of an existing hook, so .pre-commit-config ⇄ CI kind parity is unaffected.
+#
 # Scope: `.claude/hooks/` + `.claude/lib/` + `.claude/skills/` — the Python that
 # CI checks (CI runs ruff/mypy/pytest on all three; the pre_commit_ci_sync gate
 # enforces this mirror). `.claude/skills/` was added per #326 (criterion #5 —

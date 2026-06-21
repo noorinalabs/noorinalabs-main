@@ -1,0 +1,5 @@
+{
+  "description": "AST/#748 D3b: valid identity commit whose -m message contains a $(...) command substitution — the outer git commit is validated, the inner command is irrelevant (allow in both AST and shlex-fallback modes)",
+  "command": "git -c user.name=\"Aino Virtanen\" -c user.email=\"parametrization+Aino.Virtanen@gmail.com\" commit -m \"$(echo done)\"",
+  "expect": "allow"
+}

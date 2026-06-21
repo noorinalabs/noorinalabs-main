@@ -70,6 +70,20 @@ Substring-bug history fixed by tokenization:
     #188 — nested $(cat <<'EOF' ... EOF) no longer mangles the parser
     Both root in regex-against-raw-string parsing; switched to shlex tokens.
 
+Structural Bash-AST parse (#748 D3b):
+    The direct `git commit` detector now prefers a real Bash AST parse via
+    bashlex (`_shell_parse.iter_command_segments_ast`) over the shlex
+    tokenizer. A true grammar distinguishes a command-position `git commit`
+    from the literal phrase inside a heredoc body / quoted arg / `--body`
+    value, and surfaces commits hidden inside `$(...)` substitutions — closing
+    the long regex/shlex bug trail #118/#134/#144/#188/#189/#216/#223/#226/
+    #227. bashlex is an OPTIONAL dependency: when it is absent (a bare
+    zero-setup checkout) the hook prints one stderr warning and falls back to
+    the existing shlex/regex path, so a freshly-pulled checkout's hooks keep
+    working with no install step. The indirect-exec bypass layer below is
+    unchanged — bashlex does not re-parse a shell's own `-c '...'` string arg,
+    so those wrappers are still caught by the regex detectors that run first.
+
 Exit codes:
   0 — allow (not a git commit, or identity is valid)
   2 — block (missing or invalid identity flags, OR indirect-exec wrapper
@@ -85,14 +99,40 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _shell_parse import (  # noqa: E402
+    bashlex_available,
     extract_dash_c_pairs,
     find_git_subcommand,
     iter_command_segments,
+    iter_command_segments_ast,
     resolve_tool_cwd,
     strip_heredocs,
     tokenize,
 )
 from annunaki_log import log_pretooluse_block  # noqa: E402
+
+# Emitted at most once per process when bashlex is unavailable so the degraded
+# parse mode is visible rather than silent. Each PreToolUse invocation is its
+# own short-lived process, so this is effectively once per checked command.
+_DEGRADED_WARNED = False
+
+
+def _warn_degraded_mode_once() -> None:
+    """Print a single concise stderr warning that the structural parse is off.
+
+    bashlex is the enforced parser in CI + pre-commit (where the dependency is
+    declared); on a bare checkout without it the hook still validates identity
+    via the shlex/regex fallback, but we surface that a parser-correctness gap
+    exists rather than letting it pass silently.
+    """
+    global _DEGRADED_WARNED
+    if _DEGRADED_WARNED:
+        return
+    _DEGRADED_WARNED = True
+    print(
+        "warning: bashlex not installed — shell-identity check running in degraded "
+        "regex mode (install bashlex for structural Bash-AST parsing).",
+        file=sys.stderr,
+    )
 
 
 def _read_roster(roster_path: Path) -> dict[str, str]:
@@ -423,9 +463,34 @@ def _find_commit_segment(command: str) -> list[str] | None | object:
       - _PARSE_FAILURE — tokenize failed (unbalanced quotes); caller must use
                          regex fallback
 
-    Strips heredocs first so a heredoc body containing the literal phrase
-    "git commit" cannot be confused with a real invocation.
+    Resolution order (#748 D3b):
+      1. Structural bashlex AST parse — a real grammar treats a heredoc body
+         as redirect data (not commands), keeps quoted args as data, and
+         surfaces commits hidden in `$(...)` substitutions. When bashlex parses
+         the command we trust its result completely (including "no commit
+         found" → allow).
+      2. bashlex unavailable (degraded mode) → warn once, fall through.
+      3. bashlex present but parse failed → fall through.
+      4. shlex tokenize + segment split (the prior path). Strips heredocs first
+         so a heredoc body containing the literal phrase "git commit" cannot be
+         confused with a real invocation.
+      5. shlex parse failure → _PARSE_FAILURE (caller's regex fail-closed path).
     """
+    if bashlex_available():
+        ast_segments = iter_command_segments_ast(command)
+        if ast_segments is not None:
+            for segment in ast_segments:
+                decoded = find_git_subcommand(segment)
+                if decoded is None:
+                    continue
+                _globals, rest = decoded
+                if rest and rest[0] == "commit":
+                    return segment
+            return None
+        # bashlex present but could not parse → fall through to shlex/regex.
+    else:
+        _warn_degraded_mode_once()
+
     cleaned = strip_heredocs(command)
     tokens = tokenize(cleaned)
     if tokens is None:

@@ -1,0 +1,5 @@
+{
+  "description": "AST/#748 D3b: valid-identity commit whose -m message contains escaped nested double quotes — quoting must be parsed correctly and the commit allowed in both modes",
+  "command": "git -c user.name=\"Aino Virtanen\" -c user.email=\"parametrization+Aino.Virtanen@gmail.com\" commit -m \"fix: handle \\\"quoted\\\" path segment\"",
+  "expect": "allow"
+}

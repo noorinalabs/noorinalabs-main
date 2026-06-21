@@ -1,0 +1,5 @@
+{
+  "description": "AST/#748 D3b: valid-identity commit piped into another command — the commit is in the first pipeline segment and must be allowed (both modes split on |)",
+  "command": "git -c user.name=\"Aino Virtanen\" -c user.email=\"parametrization+Aino.Virtanen@gmail.com\" commit -m \"piped\" | cat",
+  "expect": "allow"
+}

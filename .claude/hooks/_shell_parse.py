@@ -39,6 +39,31 @@ Public API
         inside quotes), strips leading `KEY=value` env-var assignments from
         each segment, and yields the surviving tokens.
 
+    iter_command_segments_ast(command) -> list[list[str]] | None
+        Structural (bashlex) alternative to tokenize + iter_command_segments:
+        parses `command` into a real Bash AST and returns every
+        command-position token segment, walking `&&`/`;`/`||` lists, `|`
+        pipelines, `$(...)`/backtick command substitutions, and compound
+        bodies. Each segment is the command's word tokens (env-var
+        AssignmentNode prefixes excluded) in the SAME shape the shlex path
+        emits — so `find_git_subcommand` / `extract_dash_c_pairs` consume AST
+        segments unchanged. Returns None when bashlex is unavailable (degraded
+        mode) OR the command fails to parse; callers MUST fall back to the
+        shlex/regex path and must never treat None as "allow" for a
+        security-relevant matcher. A real grammar removes the regex/shlex
+        confusion between a command-position `git commit` and the literal
+        phrase inside a heredoc body, a quoted arg, or a `--body` value — the
+        root of the #118/#134/#144/#188/#189/#216/#223/#226/#227 bug trail
+        (#748 D3b).
+
+    bashlex_available() -> bool
+        True iff the optional `bashlex` dependency imported successfully at
+        module load. The commit-identity hook checks this to decide whether
+        the structural path is active or it must warn + run in degraded
+        regex-fallback mode. bashlex is the ENFORCED parser in CI + pre-commit
+        (where the dependency is declared); a bare checkout without it still
+        works via the shlex/regex fallback (zero-setup-on-pull is preserved).
+
     find_git_subcommand(segment) -> tuple[list[str], list[str]] | None
         Given a single segment's tokens, returns (global_opts, [subcommand,
         ...rest]) if it's a `git ...` invocation, else None. Skips git
@@ -155,6 +180,23 @@ import shlex
 import subprocess
 from typing import Iterator
 
+# Optional structural dependency (#748 D3b). bashlex gives a real Bash-AST
+# parse for the commit-identity matcher. It is imported defensively so a
+# freshly-pulled checkout's hooks keep working with ZERO install step (the same
+# zero-setup-on-pull guarantee as the git-transferable memory) — if bashlex is
+# absent the parser silently degrades to the shlex/regex path and the consuming
+# hook surfaces a single stderr warning. bashlex.* missing stubs are handled by
+# the `[[tool.mypy.overrides]]` entry in pyproject.toml.
+try:
+    import bashlex
+    from bashlex import ast as bashlex_ast
+
+    _BASHLEX_AVAILABLE = True
+except ImportError:  # pragma: no cover - degraded mode is exercised via monkeypatch
+    bashlex = None
+    bashlex_ast = None
+    _BASHLEX_AVAILABLE = False
+
 # Shell control tokens that segment a compound command. Any of these,
 # appearing as their OWN token after shlex.split, separates one pipeline
 # segment from the next.
@@ -252,6 +294,65 @@ def _strip_leading_env_assignments(segment: list[str]) -> list[str]:
     while i < len(segment) and _ENV_ASSIGN_RE.match(segment[i]):
         i += 1
     return segment[i:]
+
+
+def bashlex_available() -> bool:
+    """True iff the optional bashlex Bash-AST parser imported successfully.
+
+    Read at call time so tests can monkeypatch `_BASHLEX_AVAILABLE` to simulate
+    a bare checkout. The commit-identity hook uses this to decide between the
+    structural (bashlex) parse and the shlex/regex degraded fallback.
+    """
+    return _BASHLEX_AVAILABLE
+
+
+def iter_command_segments_ast(command: str) -> list[list[str]] | None:
+    """Structural (bashlex) extraction of command-position token segments.
+
+    Parses `command` into a real Bash AST and walks every CommandNode —
+    descending through `&&`/`;`/`||` lists, `|` pipelines, `$(...)`/backtick
+    command substitutions, and compound (`{ }`, `( )`, if/while/for) bodies.
+    Each yielded segment is the command's WordNode values in source order;
+    `KEY=value` env-var prefixes arrive as AssignmentNodes and are naturally
+    excluded because only `word`-kind parts are collected — matching the
+    leading-env-strip behaviour of the shlex-based `iter_command_segments`.
+
+    Token shape is identical to the shlex path: `-c user.name="A B"` yields
+    `["-c", "user.name=A B"]`, so the existing `find_git_subcommand` /
+    `extract_dash_c_pairs` consumers work unchanged on AST segments.
+
+    Returns:
+      list[list[str]] — the segments (an empty list when the input parsed but
+                        held no command, e.g. a bare comment).
+      None            — bashlex is unavailable (degraded mode) OR the command
+                        failed to parse. The caller MUST fall back to the
+                        shlex/regex path; per the tokenize() security contract
+                        a None here is NEVER treated as "allow".
+    """
+    if not _BASHLEX_AVAILABLE:
+        return None
+    try:
+        trees = bashlex.parse(command)
+    except Exception:
+        # Any bashlex failure — unbalanced quotes, an unsupported construct,
+        # etc. — signals the caller to fall back. Fallback is always safe, so a
+        # broad catch matches the resilience posture of `tokenize` returning
+        # None on a parse error (never crash the hook).
+        return None
+
+    segments: list[list[str]] = []
+
+    class _SegmentCollector(bashlex_ast.nodevisitor):
+        def visitcommand(self, n, parts):
+            tokens = [p.word for p in parts if p.kind == "word"]
+            if tokens:
+                segments.append(tokens)
+            return True  # keep descending into command substitutions, compounds, ...
+
+    collector = _SegmentCollector()
+    for tree in trees:
+        collector.visit(tree)
+    return segments
 
 
 def _is_equals_form_global(tok: str) -> bool:
