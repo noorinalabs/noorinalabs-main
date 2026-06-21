@@ -95,3 +95,4 @@
 - [Cross-persona task-claim hazard](feedback_cross_persona_task_claim_hazard.md) — TaskUpdate has no ownership-guard; a mistyped taskId silently completes another persona's work.
 - [Cross-spawn cwd collision](feedback_cwd_collision_cross_spawn.md) — two agents sharing one cwd on different branches: 2nd checkout moves the 1st → commits on wrong branch.
 - [Prod loaded but quality-broken](project_prod_loaded_quality_broken.md) — prod NO LONGER empty; 768k nodes/8.98% linked, narrators polluted, chains empty, search 500s → P7 data-quality. meta main#723.
+- [Brand is "Noorina Labs" (two words)](feedback_brand_noorina_labs.md) — camel-case "NoorinALabs" WRONG in prose; lowercase slug stays; cspell now enforces (dict entry removed). main#792.
