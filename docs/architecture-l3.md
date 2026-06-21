@@ -857,15 +857,18 @@ documented above:
 
 ## Corrections to L2
 
-While reading ground truth for L3, one L2 caveat was resolved against the actual
-Prometheus config:
+While reading ground truth for L3, one L2 caveat turned out to be wrong, and is
+**fixed in the same PR as this doc** (so `main` lands self-consistent):
 
-- **Prometheus scrape set (resolves the L2 "unverified" note).** L2 drew
-  `prometheus` scraping `loki` and `grafana` and flagged the scrape edges as
-  *unverified pending a read of the Prometheus config*. Reading
-  `infra/prometheus/prometheus.prod.yml` at 273f220, the prod job set is exactly:
-  `api`, `user-service`, `node-exporter`, `postgres-exporter`,
-  `user-postgres-exporter`, `kafka` (target `kafka-exporter:9308`), `alloy`, and
-  `blackbox` (`/probe`). **`loki` and `grafana` are not scraped in prod** — C.1
-  reflects the verified set. (`alertmanager:9093` is the alert *receiver*, not a
-  scrape job.)
+- **Prometheus scrape set.** L2 drew `prometheus` scraping `loki` and `grafana`
+  (and omitted `alloy`), with the scrape edges flagged *unverified pending a read
+  of the Prometheus config*. Reading `infra/prometheus/prometheus.prod.yml` at
+  273f220, the prod job set is exactly: `api`, `user-service`, `node-exporter`,
+  `postgres-exporter`, `user-postgres-exporter`, `kafka` (target
+  `kafka-exporter:9308`), `alloy`, and `blackbox` (`/probe`). **`loki` and
+  `grafana` are not scraped in prod** (`alertmanager:9093` is the alert
+  *receiver*, not a scrape job). Both the L2 diagram and prose in
+  [`architecture.md`](architecture.md#l2--container-systems-770) have been
+  corrected (loki/grafana scrape edges removed, the `alloy` scrape edge added,
+  and the caveat replaced with a verified Sources note); C.1 above reflects the
+  same verified set.
