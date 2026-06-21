@@ -39,8 +39,8 @@ When the team-lead, PD, or owner issues a "supersedes prior routing" SendMessage
 7. #64 a/b/c routing race (Marcia recommend (a) → team-lead approve (a) → owner pivot to Cédric → Marcia already closed → α accept-as-is)
 8. Cross-persona-task-claim hazard via task-system mistyping (Marcia accidentally completing Marisol's task #56)
 
-[[cwd-collision-cross-spawn]] is the sibling W10 charter-promotion-target memory (cwd-collision chain Nadia→Wanjiku→Aino + Nazia self-recovery). Both promote together at /promotion-audit alongside [[stale-snapshot-scope-pre-kickoff-audit]] (#67 + #64 stale-snapshot scope pattern) and [[cross-persona-task-claim-hazard]] (task-system mistyping, task #56 incident).
+[[feedback_cwd_collision_cross_spawn]] is the sibling W10 charter-promotion-target memory (cwd-collision chain Nadia→Wanjiku→Aino + Nazia self-recovery). Both promote together at /promotion-audit alongside [[stale-snapshot-scope-pre-kickoff-audit]] (#67 + #64 stale-snapshot scope pattern) and [[feedback_cross_persona_task_claim_hazard]] (task-system mistyping, task #56 incident).
 
 **Promotion path**: /promotion-audit at end-of-wave picks this up via memory→charter pipeline (PR #422 precedent). Split into 3 sub-rules at promotion-time (Sender / Receiver / Authority hierarchy) for citation clarity per team-lead's recommendation 2026-05-13.
 
-Related memories: [[bundle-fixup-instructions]] (serial-send drop risk), [[refresh-before-status-claim]] (state-refresh discipline), [[stale-inbox-manager]] (artifact-vs-inbox truth-source), [[gh-cli-silent-no-op]] (read-back-verify post-write).
+Related memories: [[feedback_bundle_fixup_instructions]] (serial-send drop risk), [[feedback_refresh_before_status_claim]] (state-refresh discipline), [[feedback_stale_inbox_manager]] (artifact-vs-inbox truth-source), [[feedback_gh_pr_edit_silent_noop]] (read-back-verify post-write).

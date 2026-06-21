@@ -27,9 +27,9 @@ The unifying principle: **spawn-brief fields are declarative descriptions of int
 **Charter promotion candidate (W11 retro):** Generalize the advisory-pattern across all spawn-brief fields by writing an `agents.md § Spawn-Brief Declarative Fields Are Advisory; Orchestrator-Imperative Actions Are Canonical` charter rule. The pattern is the same as the proposal-#4 carve-out we landed in #444 — just generalized to other declarative fields. Wanjiku-2 named this primitive at #445 checkpoint 1 (2026-05-16).
 
 **Sibling rules:**
-- [[cwd-collision-cross-spawn]] — concrete instance of the pattern at the worktree-isolation declarative-field layer
-- [[refresh-before-status-claim]] — verify-at-canonical-source primitive that this pattern extends to spawn-brief-fields
-- [[verify-diagnosis-before-delegating]] — verify-via-artifact-before-action primitive that this pattern extends to spawn-time
+- [[feedback_cwd_collision_cross_spawn]] — concrete instance of the pattern at the worktree-isolation declarative-field layer
+- [[feedback_refresh_before_status_claim]] — verify-at-canonical-source primitive that this pattern extends to spawn-brief-fields
+- [[feedback_verify_diagnosis_before_delegating]] — verify-via-artifact-before-action primitive that this pattern extends to spawn-time
 
 **Severity:**
 - Minor when the spawned agent surfaces the discrepancy pre-Edit (Wanjiku #445 case — caught before any destructive action).

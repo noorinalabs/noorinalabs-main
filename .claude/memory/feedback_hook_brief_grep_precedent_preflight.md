@@ -37,9 +37,9 @@ The lesson generalizes the Process-Doc Authorship rule to a layer the rule's #44
 **Cost of the pre-flight**: ~30-60 seconds (2-3 grep commands + 1-2 file reads). Cost of skipping: implementer-class surface-and-pause + round-trip + ~30 minutes of decision-bundling delay (the P3W10 #445 case).
 
 **Sibling rules:**
-- [[spawn-brief-field-advisory-pattern]] — same class of brief-author-discipline issue applied to declarative fields (`isolation: "worktree"`, `implementer: <name>`, `cwd: <path>`).
-- [[review-against-artifact-not-framing]] — reviewer-class application of the same primitive.
-- [[verify-diagnosis-before-delegating]] — generalized verify-via-artifact-before-action that this pre-flight extends to brief composition.
+- [[feedback_spawn_brief_field_advisory_pattern]] — same class of brief-author-discipline issue applied to declarative fields (`isolation: "worktree"`, `implementer: <name>`, `cwd: <path>`).
+- [[feedback_review_against_artifact]] — reviewer-class application of the same primitive.
+- [[feedback_verify_diagnosis_before_delegating]] — generalized verify-via-artifact-before-action that this pre-flight extends to brief composition.
 
 **Charter promotion candidate (W11 retro):** If this recurs in W11 hook-tier work, promote to `skills.md` as a sub-section under the new `§ Process-Doc Authorship: Derived-From-SKILL.md-At-HEAD` — would land as `§ Process-Doc Authorship Applies at Brief-Author Layer: Grep Precedents Before Specifying Parsers` (or similar). Currently single-instance; memory-tier only until cross-wave recurrence confirms.
 

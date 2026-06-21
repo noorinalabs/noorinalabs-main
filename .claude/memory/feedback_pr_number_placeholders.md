@@ -19,7 +19,7 @@ Rule: NEVER use a predicted/sequential PR number in a SendMessage, spawn-request
 4. If you have to forward-reference a PR before opening it (e.g. "after #430 merges, I'll open the manifest PR"), say "the manifest PR" not "#431".
 
 **Companion rules:**
-- [[refresh-before-status-claim]] — same principle for PRs you DO know exist: re-verify the number resolves to what you think it does before claiming state.
+- [[feedback_refresh_before_status_claim]] — same principle for PRs you DO know exist: re-verify the number resolves to what you think it does before claiming state.
 - [[origin-over-local-for-still-has-claims]] — verify against origin, not local prediction.
 - Parallel cluster work in same repo (multiple agents opening PRs against same base branch) accelerates PR# consumption. Common during Lucas-style cross-repo cluster + Aisha-style precursor + main pair patterns. Don't assume sequential allocation.
 
