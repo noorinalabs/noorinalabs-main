@@ -183,3 +183,7 @@ xlsx
 pptx
 gfm
 OOXML
+
+# --- lifecycle doc (#766): git-flag fragment + wave-scope temp-file prefix ---
+oneline
+wavescope
