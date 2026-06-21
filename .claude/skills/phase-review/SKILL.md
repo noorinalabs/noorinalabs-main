@@ -52,12 +52,17 @@ Extract tracking issue numbers from the phase plan and pull live state for each:
 ```bash
 TRACKING_ISSUES=$(grep -oE 'noorinalabs-main#[0-9]+' "$PHASE_DOC" | sort -u)
 
-for issue in $TRACKING_ISSUES; do
+# `while read`, NOT `for issue in $TRACKING_ISSUES` — zsh does not word-split an
+# unquoted scalar, so the multi-line list would collapse into one bogus iteration
+# (#759, same class as main#688). The `[ -n ]` guard keeps the no-op-on-empty
+# behaviour `for` gives when no tracking issues are found.
+while IFS= read -r issue; do
+  [ -n "$issue" ] || continue
   num=${issue#noorinalabs-main#}
-  gh issue view $num --repo noorinalabs/noorinalabs-main \
+  gh issue view "$num" --repo noorinalabs/noorinalabs-main \
     --json number,title,state,labels,closedAt \
     --jq '"\(.state)\t#\(.number)\t[\(.labels|map(.name)|join(","))]\t\(.title)"'
-done
+done <<< "$TRACKING_ISSUES"
 ```
 
 Categorize each criterion:
