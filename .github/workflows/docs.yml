@@ -34,7 +34,10 @@ on:
       # check (binaries are not matched by the **/*.md|json|yaml globs above).
       - "docs/office/**"
       - "scripts/gen-office.sh"
-      # Mermaid render gate (#787): a changed doc or the validator must re-run.
+      # Mermaid render gate (#787, scope widened #795): a changed doc or the
+      # validator must re-run. Every authored *.md is now in the gate's scan, so
+      # the `**/*.md` glob above already triggers it for README, charter, and
+      # lifecycle docs — no per-file path entry is needed here.
       - "scripts/check-mermaid.py"
       - ".github/workflows/docs.yml"
   pull_request:
@@ -57,7 +60,10 @@ on:
       # check (binaries are not matched by the **/*.md|json|yaml globs above).
       - "docs/office/**"
       - "scripts/gen-office.sh"
-      # Mermaid render gate (#787): a changed doc or the validator must re-run.
+      # Mermaid render gate (#787, scope widened #795): a changed doc or the
+      # validator must re-run. Every authored *.md is now in the gate's scan, so
+      # the `**/*.md` glob above already triggers it for README, charter, and
+      # lifecycle docs — no per-file path entry is needed here.
       - "scripts/check-mermaid.py"
       - ".github/workflows/docs.yml"
 
@@ -231,10 +237,12 @@ jobs:
         # pre-commit mirror's note (alongside the ruff/actionlint/cspell/pandoc pins).
         run: npm install -g @mermaid-js/mermaid-cli@11.12.0
       - name: Render every fenced mermaid block (fail on non-rendering)
-        # check-mermaid.py extracts each ```mermaid block from docs/*.md +
-        # ontology/*.md and renders it with mmdc; a syntactically-broken block
-        # (the #786 `<unset>` class) fails the build instead of shipping a blank
-        # box into the rendered docs and the #767 Office pipeline.
+        # check-mermaid.py extracts each ```mermaid block from every tracked
+        # *.md that contains one (the whole parent tree — README, charter, and
+        # lifecycle docs included as of #795 — minus .claude/memory/** and
+        # .claude/worktrees/**) and renders it with mmdc; a syntactically-broken
+        # block (the #786 `<unset>` class) fails the build instead of shipping a
+        # blank box into the rendered docs and the #767 Office pipeline.
         run: python3 scripts/check-mermaid.py
 
   office-drift:
