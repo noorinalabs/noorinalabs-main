@@ -240,7 +240,7 @@ with drafts, writes a per-wave audit log. Driven by a byte-deterministic
 errors (excluding benign traces) and surfaces recent ones; suggests
 `/annunaki-attack` at 5+ unprocessed errors. Does not fix anything.
 
-- **(a) code/repo actions:** `grep` for `annunaki_monitor` in `.claude/settings.json` (hook-active check); reads `.claude/annunaki/errors.jsonl` via `.claude/lib/annunaki_parse.py` (skips blanks/corrupt lines and benign `traces.jsonl`-class records). No writes.
+- **(a) code/repo actions:** hook-active check — confirms `post_dispatcher.py` is wired on `PostToolUse` Bash in `.claude/settings.json` **and** `annunaki_monitor` is registered in its `_REGISTRY` (post-#625 the monitor is dispatched, not wired directly — see #788); reads `.claude/annunaki/errors.jsonl` via `.claude/lib/annunaki_parse.py` (skips blanks/corrupt lines and benign `traces.jsonl`-class records). No writes.
 - **(b) GitHub API:** none.
 - **(c) MCP calls:** none.
 - **(d) other external services:** none.
@@ -260,6 +260,23 @@ errors (excluding benign traces) and surfaces recent ones; suggests
 > pass") — driving the deployed UI through the operator's already-authenticated
 > session and filing findings per the bug→issue→PR workflow. That pass is not a
 > slash command and not part of the lifecycle happy path.
+
+### Exploratory / E2E live-app pass
+
+**Purpose:** the one on-demand, non-command step in the org workflow that uses
+the **Chrome MCP** (`claude-in-chrome`). An operator-initiated pass that drives
+the **deployed** app's UI (staging or prod) through the operator's
+already-authenticated browser session — clicking through real flows, reading the
+rendered DOM/console/network, and spotting behaviour a unit/integration test
+would not (visual regressions, broken auth redirects, empty-state rendering,
+500s behind a button). Findings are filed through the normal bug→issue→PR
+workflow. It is **not** a slash command and **not** part of the linear happy
+path — it is invoked only when a human wants eyes on the live product.
+
+- **(a) code/repo actions:** none directly; any fix lands as a normal issue→PR.
+- **(b) GitHub API:** only via the downstream bug→issue→PR workflow (`gh issue`/PR).
+- **(c) MCP calls:** the Chrome MCP (`claude-in-chrome`) — the sole MCP usage anywhere in the org workflow.
+- **(d) other external services:** the deployed app under test (staging/prod URL).
 
 ---
 

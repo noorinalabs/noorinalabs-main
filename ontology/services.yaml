@@ -203,6 +203,34 @@ data_stores:
     consumers: [user-service]
     purpose: [session_state, rate_limiting, verification_tracking]
 
+# --- Deploy runtime topology (compose-derived ground truth) ---
+# The `services:` block above is the SEMANTIC app model (logical names, APIs).
+# This section is the LITERAL container roster + network split, derived from the
+# deploy compose at origin HEAD, so the semantic model and the running stack do
+# not silently drift (#783). Re-derive via /ontology-rebuild when compose changes.
+deploy_runtime_topology:
+  source:
+    repo: noorinalabs-deploy
+    path: compose/docker-compose.prod.yml
+    ref: 273f2201e54e82ca2bf9527c9a092c45bb988ec5
+  service_count: 30
+  networks:
+    backend:      { driver: bridge, internal: true,  purpose: "internal mesh — DBs, app, observability, kafka (25 attachments)" }
+    frontend:     { driver: bridge, internal: false, purpose: "caddy-facing edge — api, frontend, landing, blackbox probes" }
+    user-backend: { driver: bridge, internal: true,  purpose: "user-service ↔ user-postgres / user-redis isolation" }
+    egress:       { driver: bridge, internal: false, purpose: "outbound-only — alertmanager notify, embed model pulls, ingest workers" }
+  long_running:   # restart: unless-stopped (26)
+    [neo4j, postgres, redis, api, frontend, landing, caddy, user-service, user-postgres,
+     user-redis, prometheus, alertmanager, grafana, loki, alloy, node-exporter,
+     postgres-exporter, user-postgres-exporter, blackbox-exporter, kafka, kafka-exporter,
+     kafka-ui, dedup-worker, enrich-worker, normalize-worker, graph-load-worker]
+  init_one_shot:  # restart: "no" — run once then exit (3)
+    kafka-init:           { image: apache/kafka:3.9.2,  purpose: "create kafka topics before workers connect" }
+    user-service-migrate: { image: "ghcr.io/noorinalabs/noorinalabs-user-service:${USER_SERVICE_IMAGE_TAG:-latest}", network: user-backend, purpose: "alembic migrations before user-service starts" }
+    loki-runtime-init:    { image: busybox:1.37,        purpose: "prepare loki runtime dirs/permissions" }
+  optional_profiles:  # not started by default (1)
+    isnad-graph-embed: { profile: embed, image: "${EMBED_IMAGE:-ghcr.io/noorinalabs/noorinalabs-isnad-graph-embed:stg-latest}", networks: [backend, egress], purpose: "on-demand semantic-search re-embed job" }
+
 # --- Cross-repo repository_dispatch contracts ---
 # Each entry pairs a sender workflow (`peter-evans/repository-dispatch` step) with the
 # listener workflow whose `on.repository_dispatch.types` accepts the literal `event_type`
@@ -305,7 +333,7 @@ infrastructure:
     # per main#212 owner direction), DNS-flip, decommission old prod (#86 retitle pending).
     servers:
       stg:  { hetzner_name: noorinalabs-1box-stg,  system_hostname: noorinalabs-1box-stg,  ipv4: 87.99.137.225, type: CPX21, specs: { vcpu: 3, ram_gb: 4 }, state_key: hetzner/stg.tfstate,  notes: "Cloned from prod template — same package set incl. openssh-server + fail2ban. deploy#82 provisioned VPSes via TF but did NOT inject cloud-init SSH keys (real gap, 2026-04-24); first-access required Hetzner password reset + manual key paste. Cloning artifacts: /home/deploy was root-owned with deploy-owned subdirs (chown -R recovered 2026-04-24); old system hostname was 'noorinalabs-isnad-graph-prod' (renamed). Option C cutover plan retires this clone and rebuilds via clean cloud-init." }
-      prod: { hetzner_name: noorinalabs-1box-prod, system_hostname: noorinalabs-1box-prod, ipv4: 87.99.134.161, type: CPX41, specs: { vcpu: 8, ram_gb: 16 }, state_key: hetzner/prod.tfstate, notes: "Full stack: caddy + landing + isnad-graph (api+frontend) + user-service + neo4j + 2x postgres + 2x redis + kafka (bitnamilegacy, deploy#100 owner-decision pending) + kafka-ui + prometheus + grafana + loki + promtail + alertmanager + 2x postgres-exporter + node-exporter." }
+      prod: { hetzner_name: noorinalabs-1box-prod, system_hostname: noorinalabs-1box-prod, ipv4: 87.99.134.161, type: CPX41, specs: { vcpu: 8, ram_gb: 16 }, state_key: hetzner/prod.tfstate, notes: "Full stack: caddy + landing + isnad-graph (api+frontend) + user-service + neo4j + 2x postgres + 2x redis + kafka (apache/kafka:3.9.2) + kafka-ui + prometheus + grafana + loki + alloy + alertmanager + 2x postgres-exporter + node-exporter + blackbox-exporter + kafka-exporter. Full compose-derived roster (30 services incl. init/one-shot + embed profile, 4 networks) in deploy_runtime_topology below." }
 
   dns:
     provider: Cloudflare
@@ -332,9 +360,9 @@ infrastructure:
   observability:
     metrics: { tool: Prometheus v3.4.0, retention: 30d }
     dashboards: { tool: Grafana 11.6.0, path: /grafana }
-    logs: { tool: Loki 2.9.10, shipper: Promtail 2.9.10, retention: 7d }
+    logs: { tool: Loki 2.9.10, shipper: Grafana Alloy v1.16.1, retention: 7d }  # alloy replaced promtail in the live stack (#783)
     alerting: { tool: Alertmanager v0.28.1 }
-    exporters: [node-exporter v1.9.1, postgres-exporter v0.16.0]
+    exporters: [node-exporter v1.9.1, postgres-exporter v0.16.0, user-postgres-exporter v0.16.0, blackbox-exporter v0.25.0, kafka-exporter v1.9.0]
 
   ci_cd:
     platform: GitHub Actions
