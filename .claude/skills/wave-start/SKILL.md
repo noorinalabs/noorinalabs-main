@@ -144,8 +144,10 @@ This reset runs BEFORE the § 6 PUT-contents write so the only `wave_{M}_*` valu
 Set the active-wave fields for this repo in `cross-repo-status.json`. This is a **main-targeting** status write, so use the **`gh api` PUT-contents recipe** — the atomic, no-local-orphan pattern documented in `/wave-kickoff` Step 1a (added P3W6 retro, supersedes local-commit-then-push). Do **not** `git add/commit/push` the file from the local tree: a local commit here re-introduces the orphan / stale-tree hazard this issue (#653) closes, and the local `main` parked in § 2 races the remote after the PUT lands.
 
 ```bash
-# Read current status (for reference / field-setting)
-gh api repos/noorinalabs/noorinalabs-main/contents/cross-repo-status.json?ref=main \
+# Read current status (for reference / field-setting). Quote the URL: the
+# unquoted `?` is a zsh glob metacharacter and, with NOMATCH on by default, zsh
+# aborts the command with "no matches found" before gh ever runs (#759).
+gh api "repos/noorinalabs/noorinalabs-main/contents/cross-repo-status.json?ref=main" \
   --jq '.content' | base64 -d
 ```
 

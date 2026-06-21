@@ -202,10 +202,15 @@ The user MUST type `y` to proceed. Any other answer aborts with `BLOCK: user dec
 ### 6. Bulk-add orphans
 
 ```bash
-for url in $ORPHANS; do
+# `while read` over the newline-list, NOT `for url in $ORPHANS` — zsh does not
+# word-split an unquoted scalar, so the whole list would collapse into one bogus
+# iteration (#759, same class as main#688). The `[ -n ]` guard preserves the
+# zero-iteration-on-empty behaviour `for` gives when $ORPHANS is empty.
+while IFS= read -r url; do
+  [ -n "$url" ] || continue
   gh project item-add 2 --owner noorinalabs --url "$url" || \
     echo "WARN: failed to add $url"
-done
+done <<< "$ORPHANS"
 ```
 
 Per memory `feedback_gh_pr_edit_silent_noop` family, `gh project item-add` can silently no-op — `gh` is being deprecated for project-classic operations (see `pull-requests.md § gh pr edit projects-classic deprecation`). If the bulk-add appears to succeed but the orphan count doesn't drop on the next audit run, fall back to the GraphQL `addProjectV2ItemById` mutation:
@@ -244,7 +249,12 @@ query {
 WAVE_FIELD_ID=$(jq -r '.data.organization.projectV2.field.id' /tmp/wave-options.json)
 declare -A WAVE_OPTION_IDS
 while IFS=$'\t' read -r name id; do
-  WAVE_OPTION_IDS["$name"]="$id"
+  # Unquoted subscript on assignment — zsh keeps quotes *inside* a subscript as
+  # part of the key (`WAVE_OPTION_IDS["$name"]=` would store key `"P6W1"`, with
+  # the quotes, so later `${WAVE_OPTION_IDS[$expected]}` lookups miss). Bash
+  # strips them; the unquoted form is correct in both. Keys are wave names
+  # (no spaces), so no word-split risk. (zsh-safety, #759)
+  WAVE_OPTION_IDS[$name]=$id
 done < <(jq -r '.data.organization.projectV2.field.options[] | "\(.name)\t\(.id)"' /tmp/wave-options.json)
 
 # Project node ID — same response.

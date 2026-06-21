@@ -213,7 +213,14 @@ REPOS=$(jq -r '
   (.current_wave // "" | ltrimstr("wave-")) as $n
   | .["wave_\($n)_repos_in_scope"][]? // empty
 ' "$REPO_ROOT/cross-repo-status.json" 2>/dev/null)
-[ -n "$REPOS" ] || REPOS="noorinalabs-main noorinalabs-isnad-graph noorinalabs-user-service noorinalabs-deploy noorinalabs-design-system noorinalabs-data-acquisition noorinalabs-isnad-ingest-platform noorinalabs-landing-page"
+# Newline-separated fallback (one repo per line) so the `while read` loop below
+# is correct under zsh — a space-separated string would be read as ONE line
+# (zsh does not word-split an unquoted scalar; #759 / main#688). jq above already
+# emits newlines, so both sources share the same shape.
+[ -n "$REPOS" ] || REPOS=$(printf '%s\n' \
+  noorinalabs-main noorinalabs-isnad-graph noorinalabs-user-service \
+  noorinalabs-deploy noorinalabs-design-system noorinalabs-data-acquisition \
+  noorinalabs-isnad-ingest-platform noorinalabs-landing-page)
 
 # Best-effort cause classification for a red run (main#647). Echoes "base-image-drift"
 # when the failed job log carries a base-image-CVE signal, else "code/other". Never fatal:
@@ -229,7 +236,11 @@ classify_red() {  # $1=repo  $2=run_id
 }
 
 RED=()
-for repo in $REPOS; do
+# `while read` over the newline-list, NOT `for repo in $REPOS` — zsh does not
+# word-split an unquoted scalar (#759 / main#688). A here-string (not a `|` pipe)
+# keeps the loop in the current shell so the RED array survives past `done`.
+while IFS= read -r repo; do
+  [ -n "$repo" ] || continue
   branch=$(gh api "repos/noorinalabs/$repo" --jq '.default_branch' 2>/dev/null || echo main)
   # Latest run per workflow on the default branch; keep only publish/deploy/release-class names with a non-success conclusion.
   while IFS=$'\t' read -r name conclusion url run_id; do
@@ -244,7 +255,7 @@ for repo in $REPOS; do
             | group_by(.workflow_id) | map(max_by(.run_started_at))
             | .[] | [(.name // .display_title), .conclusion, .html_url, .id] | @tsv' 2>/dev/null
   )
-done
+done <<< "$REPOS"
 if [ ${#RED[@]} -gt 0 ]; then
   printf 'RED default-branch publish/deploy run(s) — investigate before relying on staging:\n'
   printf '  %s\n' "${RED[@]}"
