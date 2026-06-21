@@ -37,12 +37,13 @@ by `uv` / `npm` / `pre-commit`):
 | `shellcheck` | **must be on `PATH`** or `actionlint` silently skips shell-lint | `brew install shellcheck` · `apt install shellcheck` |
 | `docker` + compose | build/run the containerized services | <https://docs.docker.com/get-docker/> |
 
-Pinned versions matter: ruff `0.15.11`, actionlint `1.7.12`, gitleaks `8.24.3`,
-cspell `8.4.0`. Matching them keeps local "clean" equal to CI "clean" — org-wide
-local⇄CI parity is mandatory
-([#684](https://github.com/noorinalabs/noorinalabs-main/issues/684)). `pre-commit`
-provisions the pinned `ruff`/`actionlint`/`cspell` for you; `mypy`/`pytest` run
-against your system Python at pre-push, so install those yourself.
+Pinned versions matter: ruff `0.15.11`, actionlint `1.7.12`, cspell `8.4.0` (and,
+across the org's service repos, gitleaks `8.24.3`). Matching them keeps local
+"clean" equal to CI "clean" — org-wide local⇄CI parity is the mandated end-state
+([#684](https://github.com/noorinalabs/noorinalabs-main/issues/684), whose
+rollout — including gitleaks — is still in progress). `pre-commit` provisions the
+pinned `ruff`/`actionlint`/`cspell` for you; `mypy`/`pytest` run against your
+system Python at pre-push, so install those yourself.
 
 **2. Install the git hooks** (one-time per clone — both stages):
 
@@ -65,8 +66,10 @@ fill in real values locally (`cp .env.example .env`). In CI the same names are
 supplied as GitHub Actions secrets. The names below are grouped by purpose — the
 authoritative per-repo list is always that repo's `.env.example`.
 
-> Only **names and purposes** are documented here — no values. The secret
-> scanner (`gitleaks`) gates every diff.
+> Only **names and purposes** are documented here — no values. Across the org's
+> service repos, `gitleaks` scans diffs for leaked secrets; extending that gate
+> to every repo (this one included) is the [#684](https://github.com/noorinalabs/noorinalabs-main/issues/684)
+> end-state.
 
 **Shell-exported for org tooling and package auth** (export in your `zsh`
 profile, or let `gh auth login` manage the token):
@@ -152,7 +155,7 @@ integration/e2e tiers are opt-in and need running services.
 **Org root (`noorinalabs-main`) — hook/lib/skill suites** (pure-Python, offline):
 
 ```bash
-python3 -m pytest .claude/hooks/tests/ .claude/lib/tests/   # or: make test (mirrors pre-push)
+python3 -m pytest .claude/hooks/tests/ .claude/lib/tests/   # same suites the pre-push hook runs
 ```
 
 These also run at the `pre-push` stage and in the `ci.yml` Pytest job, so a
@@ -193,8 +196,11 @@ Per-repo build/test/architecture details live in each repo's own `CLAUDE.md`.
 | [`noorinalabs-isnad-ingest-platform`](https://github.com/noorinalabs/noorinalabs-isnad-ingest-platform) | pipeline processing — Kafka workers (dedup/enrich/normalize/graph-load) | Python · Kafka |
 | [`noorinalabs-deploy`](https://github.com/noorinalabs/noorinalabs-deploy) | deployment orchestration | Terraform · Docker Compose · GH Actions |
 
-Inter-repo dependencies (the source of truth is
-[`dependencies.yml`](dependencies.yml), which CI reads to sequence builds):
+Inter-repo dependencies. The **build/release** edges — npm-package and
+container-image triggers that CI reads to sequence builds — are declared in
+[`dependencies.yml`](dependencies.yml); the **runtime/architectural** edges (the
+user-service auth origin and the data-pipeline flow) are not in that file and are
+shown here for the full picture:
 
 ```text
   design-system ──(npm @noorinalabs/design-system, on release)──► landing-page
