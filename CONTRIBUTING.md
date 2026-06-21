@@ -1,6 +1,6 @@
-# Contributing to NoorinALabs
+# Contributing to Noorina Labs
 
-Thanks for your interest in contributing. **NoorinALabs** is a platform for
+Thanks for your interest in contributing. **Noorina Labs** is a platform for
 Islamic scholarly research, computational hadith analysis, and community tools.
 This document is the org-level entry point for three kinds of contributor —
 **data scientists**, **developers**, and **dataset providers** — and points each

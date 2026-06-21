@@ -4,8 +4,11 @@
 # gate. One term per line; cspell matches case-insensitively.
 
 # --- Org / product ---
+# Display brand is "Noorina Labs" (two words); the lowercase one-word slug below
+# is the code identifier (org/repo/registry). The camel-cased wrong form is
+# deliberately NOT listed here — removing it lets the spell gate ENFORCE the brand
+# (.claude/team/charter/brand.md): a reintroduced wrong form now fails cspell (#792).
 noorinalabs
-NoorinALabs
 isnad
 isnads
 hadith

@@ -2,7 +2,7 @@
 
 ## Organization
 
-**NoorinALabs** — Islamic scholarly research and computational analysis platform.
+**Noorina Labs** — Islamic scholarly research and computational analysis platform.
 
 - **GitHub Org:** `noorinalabs` (Team plan). Transferred from personal account `parametrization` on 2026-04-04.
 - **Org-level GitHub Project:** https://github.com/orgs/noorinalabs/projects/1

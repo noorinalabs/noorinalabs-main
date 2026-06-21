@@ -2,7 +2,7 @@
 
 - **Timezone:** US Eastern
 - **GitHub account:** parametrization
-- **Non-profit transfer:** Planning to transfer all NoorinALabs assets to a non-profit once paperwork completes
+- **Non-profit transfer:** Planning to transfer all Noorina Labs assets to a non-profit once paperwork completes
 - **Working style:** Prefers to push through pain now rather than defer complexity. Willing to live dangerously with migrations.
 
 ## References

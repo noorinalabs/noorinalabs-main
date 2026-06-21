@@ -1,4 +1,4 @@
-# NoorinALabs — Contributor Toolchain
+# Noorina Labs — Contributor Toolchain
 
 What a fresh clone needs installed, the shell we run under, and which tool to
 reach for when you need to scan or rewrite code structurally rather than by

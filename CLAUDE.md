@@ -1,10 +1,10 @@
 # CLAUDE.md — noorinalabs (Organization)
 
-This file provides guidance to Claude Code when working from the parent `noorinalabs-main` directory, which orchestrates all NoorinALabs repositories.
+This file provides guidance to Claude Code when working from the parent `noorinalabs-main` directory, which orchestrates all Noorina Labs repositories.
 
 ## Organization Overview
 
-**NoorinALabs** is a platform hosting multiple projects related to Islamic scholarly research, computational analysis, and community tools. This parent repository manages shared team configuration, cross-repo coordination, and org-wide conventions.
+**Noorina Labs** is a platform hosting multiple projects related to Islamic scholarly research, computational analysis, and community tools. This parent repository manages shared team configuration, cross-repo coordination, and org-wide conventions.
 
 ## Repository Map
 

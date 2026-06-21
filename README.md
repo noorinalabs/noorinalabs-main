@@ -1,6 +1,6 @@
 # noorinalabs
 
-**NoorinALabs** is a platform for Islamic scholarly research, computational
+**Noorina Labs** is a platform for Islamic scholarly research, computational
 hadith analysis, and community tools. This repository — `noorinalabs-main` — is
 the org-level parent that orchestrates the child repos (isnad-graph,
 user-service, deploy, design-system, data-acquisition, isnad-ingest-platform,

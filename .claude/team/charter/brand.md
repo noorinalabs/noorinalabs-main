@@ -1,3 +1,8 @@
+<!-- cspell:ignore NoorinALabs -->
+<!-- This is the ONE file allowed to contain the camel-cased wrong form, because
+     the table below documents it AS wrong. The global dictionary deliberately
+     does NOT bless it, so the spell gate flags it everywhere else (#792). -->
+
 # Brand Name
 
 The display name is **Noorina Labs** (two words, with a space). All user-facing text — page titles, headings, meta tags, copy, documentation, error messages — MUST use "Noorina Labs."

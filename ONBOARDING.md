@@ -1,4 +1,4 @@
-# Welcome to NoorinALabs
+# Welcome to Noorina Labs
 
 ## How We Use Claude
 

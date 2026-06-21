@@ -1,4 +1,4 @@
-# Crowdfunding / Recurring-Revenue Options for NoorinALabs
+# Crowdfunding / Recurring-Revenue Options for Noorina Labs
 
 **Research spike — 2026-06-14**
 **Author:** CrowdfundingSpike (research agent, team `noorinalabs`)
