@@ -1107,9 +1107,9 @@
   "wave_5_wrapped_up_at": "2026-06-20T00:21:27Z",
   "wave_5_annunaki_attack_ran_at": "2026-06-20T00:26:39Z",
   "wave_5_memory_audit_ran_at": "2026-06-20T00:26:39Z",
-  "next_wave": "wave-2",
+  "next_wave": "wave-3",
   "wave_started": "2026-06-12T00:12:20Z",
-  "last_completed_wave": "wave-5",
+  "last_completed_wave": "wave-1",
   "last_completed_at": "2026-06-20T00:21:27Z",
   "phase": "phase-4",
   "wave_3_meta_issue": 675,
@@ -1364,7 +1364,7 @@
   "wave_3_wrapped_at": "2026-06-12T17:33:59Z",
   "wave_3_annunaki_attack_ran_at": "2026-06-14T23:45:00Z",
   "wave_3_memory_audit_ran_at": "2026-06-14T23:45:00Z",
-  "last_updated": "2026-06-21T23:14:01Z",
+  "last_updated": "2026-06-21T23:20:20Z",
   "deployments_branch": "deployments/phase-4/wave-3",
   "phase_2_status": "CLOSED 2026-04-30. wave-10 final retro PR #230 merged 20:47:41Z. 5-repo wave-merge ceremony completed (#229 main, #74 landing, #851 isnad, #196 deploy, #89 user-service). 3 carry-forwards into phase-3: deploy#86 (async routine trig_01Bif8T51pdaYFjkbM5bERyL — fires post-merge), deploy#151 (manual SRE B2 tfstate-key migration), user-service#84 (manual DEPLOY_REPO_PAT secret). All p2-wave-* labels cleared from open issues; 218 open issues re-labeled `phase-3` across 8 repos.",
   "phase_3_status": "Phase 3 COMPLETE 2026-06-02 at 9/9 criteria (criterion #9 closed-with-caveat). All end-state issues #322-#330 closed. Exit record in .claude/team/phases/phase-3.md. Next: /roadmap for Phase 4.",
@@ -1713,5 +1713,24 @@
     },
     "created_at": "2026-06-16T23:12:45Z"
   },
-  "wave_2_started_at": "2026-06-21T23:14:01Z"
+  "wave_2_started_at": "2026-06-21T23:14:01Z",
+  "wave_2_kicked_off_at": "2026-06-21T23:20:20Z",
+  "wave_2_branches": {
+    "branch": "deployments/phase-6/wave-2",
+    "created_at": "2026-06-21T23:20:20Z",
+    "repos": {
+      "noorinalabs-main": {
+        "sha": "2e074ff734526649838e55875b06f6747f14bd77",
+        "status": "created"
+      },
+      "noorinalabs-isnad-graph": {
+        "sha": "5fc144db3de883a30e8d86360fae137bc62541d6",
+        "status": "created"
+      },
+      "noorinalabs-user-service": {
+        "sha": "18eb980908be38fbd5f3c132500f93a304c1bd0e",
+        "status": "created"
+      }
+    }
+  }
 }
