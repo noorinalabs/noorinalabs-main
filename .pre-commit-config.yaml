@@ -88,7 +88,7 @@ repos:
       - id: cspell
         name: cspell
         args: ["--no-must-find-files", "--no-progress", "--no-summary", "--config", ".cspell.json"]
-        files: ^(\.claude/team/charter/.*\.md|\.claude/skills/.*\.md|ontology/.*\.md|CLAUDE\.md|ONBOARDING\.md|README\.md|docs/.*\.md)$
+        files: ^(\.claude/team/charter/.*\.md|\.claude/skills/.*\.md|ontology/.*\.md|CLAUDE\.md|CONTRIBUTING\.md|ONBOARDING\.md|README\.md|docs/.*\.md)$
 
   # Heavier checks run at pre-push (mirror CI's mypy + pytest jobs). Running as
   # `local`/`system` hooks so we use the system tools and don't drift from
