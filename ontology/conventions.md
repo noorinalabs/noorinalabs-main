@@ -188,6 +188,7 @@ Existing 3-digit ADRs are not merge-blockers; renames are mechanical and reversi
 - **End-state/rollout criterion = mechanism APPLIED + verified at origin, not just delivered** — rollout/end-state issues distinguish "shipped" (specs/scripts merged) from "enforced" (API-verifiable at origin, e.g. rulesets endpoint returns the ruleset) before the criterion is closed as met (W14 retro proposal #3, adopted PR #583; charter `pull-requests.md`)
 
 ### Wave lifecycle
+- Full phase→wave→close cycle as a slash-command flow, with each command's code/GitHub-API/MCP/external-service surface: [`lifecycle.md`](lifecycle.md) (source of truth for the Word companion, main#767). Skill *ordering* + preconditions are canonical in [`.claude/team/lifecycle.md`](../.claude/team/lifecycle.md).
 - `/wave-start` → `/wave-kickoff` → work → `/wave-wrapup` → `/wave-retro`
 - Kickoff MUST advance the `current_wave` pointer in `cross-repo-status.json` to `wave-{M}` — `validate_wave_audit` depends on it; a stale pointer blocks the retro (W14 retro proposal #1, adopted PR #583)
 - Wrapup includes: PR merge sequencing, ontology rebuild, Annunaki attack, memory audit
