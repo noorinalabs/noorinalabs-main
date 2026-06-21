@@ -429,6 +429,7 @@ _OLD_KIND_PATTERNS = {
     # Kept in lock-step with the production _KIND_PATTERNS so the OLD-vs-NEW
     # parity proof stays valid as new kinds are added (cf. memory-budget, #733).
     "memory-budget": ("memory-budget", "memory_budget"),
+    "doc-freshness": ("doc-freshness", "doc_freshness"),
 }
 _OLD_RUN_BLOCK_OPEN_RE = re.compile(r"^(?P<indent>\s*)-?\s*run:\s*[|>][+\-0-9]*\s*$")
 
@@ -506,6 +507,7 @@ _EXPECTED_KINDS = {
         "precommit": {
             "actionlint",
             "cspell",
+            "doc-freshness",
             "memory-budget",
             "mypy",
             "pytest",
@@ -515,6 +517,7 @@ _EXPECTED_KINDS = {
         "ci": {
             "actionlint",
             "cspell",
+            "doc-freshness",
             "memory-budget",
             "mypy",
             "pytest",

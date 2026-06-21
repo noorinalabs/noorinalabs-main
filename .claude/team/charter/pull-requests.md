@@ -298,6 +298,7 @@ Closes #<issue-number>
 - [ ] Reviewed by another team member
 - [ ] Must-fix items resolved
 - [ ] Tech debt items filed as GitHub Issues (if any)
+- [ ] Docs updated for the code change (README / docs/ / ontology), or a `Docs-N/A:` opt-out trailer is justified
 
 Co-Authored-By: Firstname Lastname <parametrization+Firstname.Lastname@gmail.com>
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
@@ -308,6 +309,10 @@ EOF
 - PR title should be concise (under 70 characters).
 - The body must reference the related GitHub Issue(s) with `Closes #N`.
 - The submitting team member is responsible for creating the PR immediately upon branch completion.
+
+### Documentation freshness (advisory gate — #768)
+
+Code is the arbiter of truth for the docs: when a PR changes a **documented code surface**, the docs it implies (README / `docs/` / ontology / CLAUDE.md) are expected to move with it. The advisory `doc-freshness` gate (`.claude/lib/doc_freshness.py`, mirrored as the `Doc-freshness gate (advisory)` CI job and the `doc-freshness` pre-push hook) reports surfaces changed without a matching doc update. It is **advisory — never blocks** (it always exits 0; a heuristic freshness signal has unavoidable false-positives). When a change legitimately needs no doc update, declare it with a `Docs-N/A:` or `Skip-Doc-Check:` trailer line (the trailing colon is required) in a commit message or the PR body. Canonical rule: `ontology/conventions.md` § Ontology: code is the arbiter of truth.
 
 ## Closes-vs-Refs Disposition — Decided at Brief Time, Never Flipped <!-- promotion-target: none -->
 

@@ -17,6 +17,10 @@ The ontology system has three roles:
 
 A file is "dirty" when `last_tracked != last_resolved` in `checksums.json`.
 
+### Code is the final arbiter of truth
+
+This skill derives the ontology and the auto-updatable docs **FROM the code**. When the code and a doc/ontology entry disagree, **the code wins**: update the ontology/doc to match the code — never edit the code to match a stale doc. Source code (`.py`/`.ts`/`.tf`/`.yaml` config/schemas/…) is read first (step 2 orders code → docs → high-level-docs precisely so code is resolved before anything derived from it); READMEs, CLAUDE.md, inline docs, and the ontology files are downstream artifacts that must be brought into agreement with it. Recommend-only docs (high-level-docs/, architecture diagrams) are flagged for human review rather than auto-rewritten, but the conflict is still reported with code as the reference. This is the canonical statement of the org convention in `ontology/conventions.md` § Ontology: code is the arbiter of truth, enforced PR-side by the advisory `doc-freshness` gate (`.claude/lib/doc_freshness.py`, #768).
+
 ## Instructions
 
 ### 1. Read checksums and identify dirty files

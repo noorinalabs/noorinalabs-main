@@ -140,3 +140,19 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+      # doc-freshness mirrors the `Doc-freshness gate (advisory)` CI job in
+      # ci.yml (the sync-drift gate classifies the `doc-freshness` kind — #768/#684
+      # — so the CI advisory check must be mirrored here or the gate goes red).
+      # ADVISORY: doc_freshness.py always exits 0, so this hook never blocks a
+      # push — it prints which code surfaces changed without a matching doc
+      # update so the author sees the nudge before the PR opens. `always_run`
+      # because it computes its own three-dot diff against origin/main, not the
+      # staged file list; pre-push (not pre-commit) so the base/merge-base
+      # resolves and incremental in-progress commits aren't each flagged.
+      - id: doc-freshness
+        name: doc-freshness (pre-push, advisory)
+        entry: python3 .claude/lib/doc_freshness.py .
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
