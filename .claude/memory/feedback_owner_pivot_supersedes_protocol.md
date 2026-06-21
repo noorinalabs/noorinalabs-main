@@ -39,7 +39,7 @@ When the team-lead, PD, or owner issues a "supersedes prior routing" SendMessage
 7. #64 a/b/c routing race (Marcia recommend (a) → team-lead approve (a) → owner pivot to Cédric → Marcia already closed → α accept-as-is)
 8. Cross-persona-task-claim hazard via task-system mistyping (Marcia accidentally completing Marisol's task #56)
 
-[[feedback_cwd_collision_cross_spawn]] is the sibling W10 charter-promotion-target memory (cwd-collision chain Nadia→Wanjiku→Aino + Nazia self-recovery). Both promote together at /promotion-audit alongside [[stale-snapshot-scope-pre-kickoff-audit]] (#67 + #64 stale-snapshot scope pattern) and [[feedback_cross_persona_task_claim_hazard]] (task-system mistyping, task #56 incident).
+[[feedback_cwd_collision_cross_spawn]] is the sibling W10 charter-promotion-target memory (cwd-collision chain Nadia→Wanjiku→Aino + Nazia self-recovery). Both promote together at /promotion-audit alongside the stale-snapshot scope-pre-kickoff-audit pattern (#67 + #64) and [[feedback_cross_persona_task_claim_hazard]] (task-system mistyping, task #56 incident).
 
 **Promotion path**: /promotion-audit at end-of-wave picks this up via memory→charter pipeline (PR #422 precedent). Split into 3 sub-rules at promotion-time (Sender / Receiver / Authority hierarchy) for citation clarity per team-lead's recommendation 2026-05-13.
 

@@ -24,6 +24,6 @@ Both must verify against the upstream's CURRENT `head_sha`, not its PR-body fram
    - Reviewer B (dist-output): "Fetch the upstream PR's built artifact (or run its build locally if dist isn't checked in) at the same `head_sha` and attest the symbols/tokens/exports the consumer will actually consume match."
 3. Both verdict comments must name the upstream `head_sha` and the artifact path inspected — co-credit them on the consumer PR's merge.
 4. If the upstream rebases between the two reviews, BOTH reviewers must re-attest at the new `head_sha`. Stale attestation at superseded SHA does not count.
-5. This is sibling to [[feedback_review_against_artifact]] (don't trust PR body) and [[feedback-origin-over-local-for-still-has-claims]] (refresh at origin) — both are about reviewer evidence discipline, but this rule covers a specific upstream/consumer race where one layer alone is insufficient.
+5. This is sibling to [[feedback_review_against_artifact]] (don't trust PR body) and the discipline of refreshing at origin rather than trusting a local snapshot — both are about reviewer evidence discipline, but this rule covers a specific upstream/consumer race where one layer alone is insufficient.
 
 **Co-credits / first instance:** Anika (source) + Nazia (dist-output) on PR #96 (noorinalabs-landing-page). Authored by Marcia (Project Lead, landing-page) per W10 retro authorization; written into memory by orchestrator under takeover after agent-mass-stall 2026-05-14.

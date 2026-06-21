@@ -20,7 +20,7 @@ Rule: NEVER use a predicted/sequential PR number in a SendMessage, spawn-request
 
 **Companion rules:**
 - [[feedback_refresh_before_status_claim]] — same principle for PRs you DO know exist: re-verify the number resolves to what you think it does before claiming state.
-- [[origin-over-local-for-still-has-claims]] — verify against origin, not local prediction.
+- Verify against origin, not a local prediction (origin-over-local for still-open claims).
 - Parallel cluster work in same repo (multiple agents opening PRs against same base branch) accelerates PR# consumption. Common during Lucas-style cross-repo cluster + Aisha-style precursor + main pair patterns. Don't assume sequential allocation.
 
 **Trigger:** Any time you're about to write a "#N" reference in an outbound message AND PR #N has not been confirmed via `gh pr view` in the current session, stop and either (a) verify or (b) use a placeholder.
