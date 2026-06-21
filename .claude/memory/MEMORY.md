@@ -45,6 +45,7 @@
 - [Negated close-keyword still closes](feedback_github_negated_close_keyword.md) — "does not close #N" still matches `close #N` → auto-closes on merge; use Part of/Re #N, not close/fix adjacent.
 - [Review against artifact, not PR-body framing](feedback_review_against_artifact.md) — read diff/code at PR head via gh api contents, not PR body / commit msgs / line numbers.
 - [Full-read over tail for memory files](feedback_full_read_over_tail.md) — memory-file state-claims need full Read or grep -n, not tail; memory dir is outside repo.
+- [Wikilink grep: bare slug, not [[slug]]](feedback_wikilink_md_suffix_grep.md) — removing a memory: grep bare slug to catch [[slug.md]] suffixed form a bracket grep misses. #758/#752.
 - [Run ruff format --check before pushing hook tests](feedback_ruff_format_check_before_push.md) — uvx ruff@<pin> format --check .claude/hooks/ pre-push catches what hooks-lint CI blocks.
 - [Throttle takeover by orchestrator](feedback_throttle_takeover.md) — when a spawned implementer throttle-stalls w/ sound partial work, finish directly w/ their identity.
 - [Agent color drift is UI quirk](feedback_agent_color_render_quirk.md) — same agent w/ different color tags ≠ duality; trust SendMessage routing.targetColor. PR#266.
