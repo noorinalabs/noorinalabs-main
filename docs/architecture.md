@@ -12,7 +12,9 @@ docs-render pipeline (#767).
 - **L2** — container systems (#770): every container on the VPS (all 30
   compose services) with its ingress and egress points (container-to-container
   plus external in/out).
-- L3 per-container internals are a separate issue (#771) and out of scope here.
+- **L3** — per-container internals (#771): the internal data/logic flow of each
+  container and what moves in/out of it, in a companion doc
+  [`architecture-l3.md`](architecture-l3.md).
 
 Each diagram is followed by a **Sources** note so the derivation is auditable.
 Anything not directly evidenced in the deploy repo or ontology is flagged
@@ -137,11 +139,13 @@ an operator/workflow-triggered re-embedding runner (ADR 0008, 384-dim
 sentence-transformer) that reads the same `neo4j` (bolt 7687) / `postgres`
 (5432) / `redis` (6379) backends as `api`; it is dormant on an ordinary deploy.
 
-**Observability:** `prometheus` scrapes the app `/metrics` (`api`,
-`user-service`) plus every exporter (`node-exporter`, `postgres-exporter`,
-`user-postgres-exporter`, `kafka-exporter`, `blackbox-exporter`) and the
-`loki`/`grafana`/`alertmanager` self-metrics over `backend`, and pushes alerts
-to `alertmanager`. `grafana` queries `prometheus` (9090) and `loki` (3100).
+**Observability:** `prometheus` scrapes exactly eight jobs (verified against
+`prometheus.prod.yml` @ 273f220): the app `/metrics` (`api`, `user-service`),
+every exporter (`node-exporter`, `postgres-exporter`, `user-postgres-exporter`,
+`kafka-exporter` as job `kafka`, `blackbox-exporter` via its `/probe` job), and
+`alloy`'s self-metrics over `backend`; it pushes alerts to `alertmanager` (the
+alert receiver, not a scrape job). `loki` and `grafana` are **not** scraped in
+prod. `grafana` queries `prometheus` (9090) and `loki` (3100).
 `alloy` (the promtail successor) reads the Docker socket + container log files
 and pushes to `loki` (3100). The one-shot `loki-runtime-init` (busybox) seeds
 the `loki_runtime` overrides volume before `loki` starts (`loki` declares
@@ -235,8 +239,7 @@ flowchart LR
     prom -.scrape.-> upgexp
     prom -.scrape.-> kexp
     prom -.scrape.-> bb
-    prom -.scrape.-> loki
-    prom -.scrape.-> graf
+    prom -.scrape.-> alloy
     prom -.alerts.-> am
     graf -->|query 9090| prom
     graf -->|query 3100| loki
@@ -277,10 +280,11 @@ flowchart LR
 - **api → user-service JWT/JWKS** — `compose/docker-compose.prod.yml` `api.AUTH_USER_SERVICE_URL=http://user-service:8000`; `ontology/services.yaml` § `integrations.jwt_validation`.
 - **Pipeline stage/topic flow** — `compose/docker-compose.prod.yml` worker block comment (`pipeline.raw.landed → dedup → … → ingest → Neo4j`, `pipeline.dlq`); `ontology/services.yaml` § `isnad-ingest-platform.workers`.
 - **Per-image / observability versions** — `ontology/repos/deploy.yaml` § `docker_services` (cross-checked against the compose `image:` pins).
+- **Prometheus scrape set** — verified against `infra/prometheus/prometheus.prod.yml` at `noorinalabs-deploy` `origin/main` 273f220 (`scrape_configs`): eight jobs — `api` (`api:8000` `/metrics`), `node-exporter` (`node-exporter:9100`), `postgres-exporter` (`postgres-exporter:9187`), `user-service` (`user-service:8000` `/metrics`), `user-postgres-exporter` (`user-postgres-exporter:9187`), `kafka` (target `kafka-exporter:9308`), `alloy` (`alloy:12345`), and `blackbox` (`/probe`, 6 prod routes via `blackbox-exporter:9115`). `alertmanager:9093` is the `alerting:` receiver, not a `scrape_configs` job. `loki` and `grafana` have no scrape job.
 
 **Unverified / flagged (L2):**
 
 - **Two services are profile-gated / dormant on an ordinary deploy** — the four `*-worker` services carry `profiles: ["pipeline"]` (image `ghcr.io/noorinalabs/noorinalabs-isnad-ingest-platform` not yet published; per the compose comment the streaming pipeline "has never run on staging", main#601), and `isnad-graph-embed` carries `profiles: ["embed"]` (operator/workflow-triggered re-embed via `reembed-corpus.yml`). All five are drawn dotted to indicate they do not start under a plain `docker compose up`.
 - **alloy vs promtail** — the live stack runs `grafana/alloy` (deploy#132 successor); `ontology/services.yaml` § `infrastructure.observability` still names Promtail. Ground truth (compose) wins — diagram shows `alloy`.
-- **Prometheus scrape edges are summarized** — the exact scrape target list lives in `infra/prometheus/prometheus.{prod,stg}.yml` (env-selected via `PROM_CONFIG_FILE`), which was not opened for this diagram; the scrape edges shown are inferred from each exporter's purpose + the `/metrics` blocks in the Caddyfile and are labelled `scrape`. Treat the precise per-job set as **unverified** pending a read of the Prometheus config.
+- **Prometheus scrape edges — now verified (corrected here).** An earlier draft summarized the scrape edges from each exporter's purpose without opening the Prometheus config, and drew `prometheus` scraping `loki` and `grafana`. Reading `infra/prometheus/prometheus.prod.yml` @ 273f220 (see Sources) shows that is wrong: `loki`/`grafana` have no scrape job, and `alloy` (which the draft omitted) does. The diagram above is corrected to the eight real `scrape_configs` jobs; the per-env `prometheus.stg.yml` variant is not drawn (the diagram reflects prod).
 - **services.yaml drift** — `ontology/services.yaml` predates several deploy changes (it lacks `blackbox-exporter`, `kafka-exporter`, `kafka-init`, `user-service-migrate`, `isnad-graph-embed`, `loki-runtime-init`, the `egress` network, and the pipeline workers; it lists `promtail`). The diagrams above follow the compose file at `origin/main` 273f220, which is newer.
