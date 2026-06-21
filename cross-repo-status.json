@@ -750,85 +750,10 @@
     "assignments_pending": "implementer/reviewer slate filled at /wave-kickoff (reviewer-slate step); current_wave advance deferred to kickoff Step 1a"
   },
   "wave_2_meta_issue": "noorinalabs-main#803",
-  "wave_2_scope": {
-    "theme": "API light-up",
-    "serves": "phase-5 criterion #2 (noorinalabs-main#602) — Product API surface functional",
-    "tier_2_bugs": [
-      {
-        "id": "noorinalabs-isnad-graph#1024",
-        "ref": "isnad-graph#1024",
-        "implementer": "Ingrid Lindqvist",
-        "reviewer": "Anya Kowalczyk",
-        "reviewer_2": "Arjun Raghavan",
-        "priority": "bug",
-        "note": "keystone — narrators API 500 (NarratorResponse Optional-fields unblock; real segmented data behind it)"
-      },
-      {
-        "id": "noorinalabs-isnad-graph#1025",
-        "ref": "isnad-graph#1025",
-        "implementer": "Jun-Seo Park",
-        "reviewer": "Marisol Vega-Cruz",
-        "reviewer_2": "Farhan Malik",
-        "priority": "bug",
-        "note": "search results 422 — frontend limit exceeds endpoint cap"
-      },
-      {
-        "id": "noorinalabs-isnad-graph#1026",
-        "ref": "isnad-graph#1026",
-        "implementer": "Mateo Salazar",
-        "reviewer": "Ravi Wickramasinghe",
-        "reviewer_2": "Marisol Vega-Cruz",
-        "priority": "bug",
-        "note": "subscriptions/me 404 + hardcoded collection facet (derive from /collections)"
-      },
-      {
-        "id": "noorinalabs-isnad-graph#1023",
-        "ref": "isnad-graph#1023",
-        "implementer": "Nneka Obi",
-        "reviewer": "Jelani Mwangi",
-        "reviewer_2": "Linh Pham",
-        "priority": "bug",
-        "note": "user-service/health 404 on staging (gateway proxy)"
-      },
-      {
-        "id": "noorinalabs-isnad-graph#1021",
-        "ref": "isnad-graph#1021",
-        "implementer": "Idris Yusuf",
-        "reviewer": "Anya Kowalczyk",
-        "reviewer_2": "Arjun Raghavan",
-        "priority": "bug",
-        "note": "admin/profile-client auth refresh-on-401 (follow-up to #1016)"
-      }
-    ],
-    "tier_3_tech_debt": [
-      {
-        "id": "noorinalabs-isnad-graph#998",
-        "ref": "isnad-graph#998",
-        "implementer": "Ravi Wickramasinghe",
-        "reviewer": "Marisol Vega-Cruz",
-        "reviewer_2": "Mateo Salazar",
-        "priority": "tech-debt",
-        "note": "i18n: extend translation to feature/admin page-BODY strings (owner-reported; +20% TD intake)"
-      }
-    ],
-    "td_intake": "1/1",
-    "td_pool": 22,
-    "base_feature_bug": 5,
-    "projected_top_concentration_pct": 17,
-    "carry_forward_watch": [
-      "da#155 (عن-anchor) gates W4 real-data load, not W2",
-      "re-measure da#148 #2 (51 hadith w/o NARRATED) after da#146 lands",
-      "producer-parity reviewer-checklist item (batch vs streaming)"
-    ],
-    "reconciled_at": "2026-06-14T03:30:00Z"
-  },
-  "wave_2_scope_reconciled_at": "2026-06-14T03:30:00Z",
-  "wave_2_repos_in_scope": [
-    "noorinalabs-main",
-    "noorinalabs-isnad-graph"
-  ],
+  "wave_2_scope": {"phase": 6, "theme": "durable phase-key fix (#804) + persona/ontology architectural revisits + retro mechanization", "headline_correction": "original #683 closed by PR#699 (per-phase-reset band-aid only); durable phase-namespace fix tracked by #804", "tier_1_headline_td": [{"id": "noorinalabs-main#804", "ref": "main#804", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "tech-debt"}], "tier_2_architectural_spikes": [{"id": "noorinalabs-main#727", "ref": "main#727", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "spike"}, {"id": "noorinalabs-main#728", "ref": "main#728", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "spike"}], "tier_3_retro_mechanization": [{"id": "noorinalabs-main#729", "ref": "main#729", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "tech-debt"}, {"id": "noorinalabs-main#730", "ref": "main#730", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "process"}], "tier_4_adopted_charter": [{"id": "noorinalabs-main#801", "ref": "main#801", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "process"}, {"id": "noorinalabs-main#802", "ref": "main#802", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "process"}], "tier_5_cross_repo": [{"id": "noorinalabs-main#744", "ref": "main#744", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "cross-repo"}], "tier_3_tech_debt": [{"id": "noorinalabs-main#703", "ref": "main#703", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "security"}, {"id": "noorinalabs-main#736", "ref": "main#736", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "tech-debt"}, {"id": "noorinalabs-main#797", "ref": "main#797", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "tech-debt"}, {"id": "noorinalabs-isnad-graph#1120", "ref": "isnad-graph#1120", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "tech-debt"}, {"id": "noorinalabs-isnad-graph#1123", "ref": "isnad-graph#1123", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "tech-debt"}, {"id": "noorinalabs-user-service#187", "ref": "user-service#187", "implementer": null, "reviewer": null, "reviewer_2": null, "priority": "tech-debt"}], "td_intake": "6 selected of 10 pool (front-loaded framework debt; +20% cap target was 1; owner override 2026-06-21)", "td_pool": 10, "deferred": ["noorinalabs-main#775 -> Phase 7", "noorinalabs-data-acquisition#136/#139 + noorinalabs-isnad-graph#1104 (product/data/i18n) -> Phase 7"], "assignment_note": "implementer/reviewer slates filled at /wave-kickoff (child-repo items use that repo's own roster per child-repo-implementer rule)", "deliberately_not_in_w2": ["noorinalabs-main#775", "noorinalabs-data-acquisition#136", "noorinalabs-data-acquisition#139", "noorinalabs-isnad-graph#1104"]},
+  "wave_2_scope_reconciled_at": "2026-06-21T21:53:25Z",
+  "wave_2_repos_in_scope": ["noorinalabs-main", "noorinalabs-isnad-graph", "noorinalabs-user-service"],
   "wave_2_active": false,
-  "wave_2_kicked_off_at": "2026-06-14T15:25:48Z",
   "wave_1_scope_reconciled_at": "2026-06-20T04:32:30Z",
   "wave_1_repos_in_scope": [
     "noorinalabs-main"
@@ -1585,28 +1510,6 @@
   "wave_1_stranding_resolution": "Wave-branch commits (#704/#706/#734/#735) were stranded off main (wave->main PR never opened). Deliverables reconciled to main surgically via #799 (5 net-new files + ci/pre-commit/sync-gate wiring); deployments/phase-6/wave-1 branch retained as historical per owner directive, not merged.",
   "wave_1_scope_addition": "cspell CI-parity (#684) rolled to 6 child repos beyond the parent-only declared scope (emergent): ig1122, us189, deploy487, da211, ingest113, ds129.",
   "wave_1_wavekey_collision_note": "wave_1_* keys are not phase-namespaced (#683); P6W1 values overwrote stale P4W1 markers. Counters scoped to the P6W1 in-window set (mergedAt>=2026-06-20T04:39).",
-  "wave_2_branches": {
-    "branch": "deployments/phase-5/wave-2",
-    "created_at": "2026-06-14T15:25:48Z",
-    "repos": {
-      "noorinalabs-main": {
-        "sha": "3df67d66",
-        "status": "created"
-      },
-      "noorinalabs-isnad-graph": {
-        "sha": "3bd8426a",
-        "status": "created"
-      }
-    }
-  },
-  "wave_2_final_pr_count": 5,
-  "wave_2_changes_requested_cycles": 0,
-  "wave_2_top_concentration_pct": 20,
-  "wave_2_stg_promotion": "success",
-  "wave_2_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/27506467050",
-  "wave_2_wrapup_completed_at": "2026-06-14T17:26:51Z",
-  "wave_2_annunaki_attack_ran_at": "2026-06-14T17:31:47Z",
-  "wave_2_memory_audit_ran_at": "2026-06-14T17:31:47Z",
   "wave_2_phase": 6,
   "wave_3_started_at": "2026-06-14T18:40:00Z",
   "wave_3_wrapped_up_at": "2026-06-14T23:05:00Z",
