@@ -112,6 +112,64 @@ profile, or let `gh auth login` manage the token):
 > `LOG_LEVEL`, `LOG_FORMAT`, `RATE_LIMIT_*`, the `AUTH_*_TOKEN_EXPIRE_*` /
 > `*_IMAGE_TAG` values) — safe defaults, override per environment.
 
+## Usage flow — how you operate this project day to day
+
+Picking this up cold? This is the **operating cycle**: how the work actually
+gets driven, from a fresh clone, through one execution sprint, to its close.
+It is deliberately short and points elsewhere for detail — the canonical,
+command-by-command reference (every slash command and the exact git / GitHub /
+file actions it performs) is [`ontology/lifecycle.md`](ontology/lifecycle.md).
+Read this section for the **shape**; read that doc for the **detail**, and
+[§ Development workflow](#development-workflow) below for the per-PR mechanics.
+
+All work runs through the simulated team and its
+[charter](.claude/team/charter.md) — nothing starts without spawning the team.
+The cycle nests three brackets: a **session** (every working day), a **wave**
+(one execution sprint), and a **phase** (a body of strategic work spanning many
+waves). The happy path:
+
+```mermaid
+flowchart LR
+    A["Clone + set up<br/>(Prerequisites)"] --> B["/session-start<br/>(every session)"]
+    B --> C["Pick up wave work<br/>(Project 2 board)"]
+    C --> D["Make a change<br/>(§ Development workflow:<br/>branch → worktree → PR)"]
+    D --> E["Review + merge<br/>(two reviewers)"]
+    E --> F["/wave-wrapup<br/>(merge wave → main, close issues)"]
+    F --> G["/wave-retro<br/>(assess; auto-seeds next wave)"]
+    G -->|next sprint| C
+    B -.->|end of day| H["/handoff"]
+```
+
+1. **Set up once.** Clone, install the toolchain + git hooks, and provide
+   secrets — see [§ Prerequisites](#prerequisites) and
+   [§ Environment variables](#environment-variables-external-to-source-control).
+2. **Start every session with `/session-start`.** It is the mandatory first
+   action of any session: it syncs `main`, prunes worktrees, reads the prior
+   handoff, rebuilds the ontology, checks the error monitor, and orients you on
+   the active wave. Never skip it.
+3. **Pick up work.** GitHub Issues on **Project 2** are the authoritative
+   backlog, grouped into waves by a `p{P}-wave-{M}` label. A wave is opened by
+   `/wave-scope` → `/wave-start` → `/board-audit` → `/wave-kickoff`, which
+   creates the wave branch in each scoped repo and spawns implementers.
+4. **Do the work, one change at a time.** Each change follows the per-PR loop in
+   [§ Development workflow](#development-workflow): branch off fresh `main` in a
+   worktree, commit with per-commit identity, stay green, and open a PR to
+   `main` with `Closes #NNN`. The charter requires **two reviewers**.
+5. **Close the wave.** Once the wave's PRs are in, `/wave-wrapup` reviews and
+   merges them in dependency order, merges the wave branch to `main`, closes the
+   resolved issues, and rebuilds the ontology. `/wave-retro` then runs the
+   assessments and **auto-seeds the next wave** (`/wave-scope` for `M+1`),
+   looping back to step 3.
+6. **Hand off at end of session with `/handoff`** so the next session resumes
+   cleanly (a `Stop` hook also writes an automatic handoff).
+
+Mid-wave, on demand: `/ontology-librarian {topic}` (**mandatory before any
+edit** — a hook blocks `Edit`/`Write` until you have run it), `/retro` (health
+pulse), `/promotion-audit`, and `/annunaki` (error monitor). The full
+command-by-command breakdown — including the **phase** bracket (`/plan-phase`,
+`/phase-review`) that brackets a run of waves — is in
+[`ontology/lifecycle.md`](ontology/lifecycle.md).
+
 ## Development workflow
 
 All work runs through the simulated team and its charter
