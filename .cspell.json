@@ -22,6 +22,7 @@
     ".claude/skills/**/*.md",
     "ontology/**/*.md",
     "CLAUDE.md",
+    "CONTRIBUTING.md",
     "ONBOARDING.md",
     "README.md",
     "docs/**/*.md"

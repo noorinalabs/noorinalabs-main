@@ -12,6 +12,11 @@ identity, ontology, and project memory — see [`CLAUDE.md`](CLAUDE.md). This
 README is the new-clone entry point: what to **install**, what **secrets** to
 provide, how to **develop and test**, and how the seven repos fit together.
 
+## Contributing
+
+New contributors — data scientists, developers, and dataset providers — start
+at [`CONTRIBUTING.md`](CONTRIBUTING.md), the org-level contribution model.
+
 ## Prerequisites
 
 The repos share one toolchain. The canonical, version-pinned inventory — every

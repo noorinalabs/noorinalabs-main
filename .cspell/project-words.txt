@@ -12,6 +12,8 @@ hadith
 hadiths
 narrator
 narrators
+sunnah
+thaqalayn
 chronospatial
 annunaki
 
