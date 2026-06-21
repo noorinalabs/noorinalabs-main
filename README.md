@@ -12,6 +12,11 @@ identity, ontology, and project memory — see [`CLAUDE.md`](CLAUDE.md). This
 README covers only what a fresh clone needs to **install** before it can build,
 test, and pass the local hooks.
 
+## Contributing
+
+New contributors — data scientists, developers, and dataset providers — start
+at [`CONTRIBUTING.md`](CONTRIBUTING.md), the org-level contribution model.
+
 ## Toolchain / Prerequisites
 
 The repos share one toolchain. Install the tools below once; the per-repo
