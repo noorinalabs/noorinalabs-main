@@ -1,6 +1,6 @@
-# NoorinALabs — System Architecture
+# Noorina Labs — System Architecture
 
-Two levels of architecture diagram for the NoorinALabs platform, both derived
+Two levels of architecture diagram for the Noorina Labs platform, both derived
 from ground truth in `noorinalabs-deploy/` (Terraform, Docker Compose, the
 Caddyfile) and the org ontology (`ontology/services.yaml`,
 `ontology/repos/deploy.yaml`). Markdown is the source of truth; the mermaid

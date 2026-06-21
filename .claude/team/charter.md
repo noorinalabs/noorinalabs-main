@@ -1,4 +1,4 @@
-# Team Charter — NoorinALabs (Organization)
+# Team Charter — Noorina Labs (Organization)
 
 ## Purpose <!-- promotion-target: none -->
 This is the **org-wide coordination charter** for the `noorinalabs-main` parent repository. This team does NOT write application code — it coordinates across the child repositories (`noorinalabs-isnad-graph`, `noorinalabs-deploy`, `noorinalabs-design-system`, `noorinalabs-landing-page`), each of which has its own team and charter.

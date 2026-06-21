@@ -1,4 +1,4 @@
-# NoorinALabs — Architecture L3: per-container data/logic flow (#771)
+# Noorina Labs — Architecture L3: per-container data/logic flow (#771)
 
 The L3 zoom below the [L2 container-systems diagram](architecture.md#l2--container-systems-770).
 Where L2 shows *every* container and the edges *between* them, L3 opens each

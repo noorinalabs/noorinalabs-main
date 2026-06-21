@@ -1,4 +1,4 @@
-# NoorinALabs — Phase → Wave Lifecycle as a Slash-Command Flow
+# Noorina Labs — Phase → Wave Lifecycle as a Slash-Command Flow
 
 This document describes the **entire** org operating cycle — starting a phase,
 setting up a wave, executing it, and closing waves — as the ordered sequence of

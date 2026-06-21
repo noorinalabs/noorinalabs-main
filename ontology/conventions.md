@@ -1,4 +1,4 @@
-# NoorinALabs — Conventions & Patterns
+# Noorina Labs — Conventions & Patterns
 
 Cross-repo conventions, shared patterns, and architectural decisions.
 Updated by `/ontology-rebuild`. Manual edits require `checksums.json` update.

@@ -48,9 +48,12 @@ install options.
 
 ## Reproducibility
 
-Each document's embedded OOXML timestamp is pinned to its source file's last
-git commit time (`SOURCE_DATE_EPOCH`), so regenerating from an unchanged
-source on the same `pandoc` version produces byte-identical output.
+Each document's embedded OOXML timestamp is pinned to a **fixed project epoch**
+(`SOURCE_DATE_EPOCH=1735689600`, 2025-01-01), so regenerating on the same
+`pandoc` version produces byte-identical output. The epoch is deliberately a
+fixed constant rather than the source's git commit time: squash-merge and rebase
+re-time commits, so a commit-time epoch would change the bytes and turn the drift
+gate red on `main` after any source edit (#792).
 
 ### Drift gate (#781)
 
