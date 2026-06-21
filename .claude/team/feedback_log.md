@@ -3242,3 +3242,6 @@ P6W1 closed clean. **27 parent PRs** (in-scope `[noorinalabs-main]`) + **6 emerg
 
 ### Proposed Charter Change
 - **Single merge model per wave** under `charter/pull-requests.md` (or wave-lifecycle): a wave declares its merge model at kickoff; mixing wave-branch and direct-to-main merges within one wave is prohibited because it strands wave-branch work when the wave→main PR is forgotten (P6W1 #734/#735 → #799). Pair with strengthening the reachability gate to fire mid-wave, not only at wrapup.
+
+### Promotion Audit (Step 7.5)
+0 AUTO · 0 DECIDE · 210 KEPT · 19 SUPERSEDED — nothing crossed a promotion threshold this wave (steady state). Log: `.claude/team/promotion_audit_log/p6-wave-1.md`.
