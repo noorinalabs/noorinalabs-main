@@ -157,3 +157,21 @@ upsert
 # --- toolchain README (#748): contributor-facing tool/installer names ---
 corepack
 semgrep
+
+# --- toolchain doc (#748/#759/#760): structural tooling + shell + installers ---
+zsh
+codemod
+codemods
+Homebrew
+mikefarah
+metavariables
+vuln
+ast
+lang
+shfmt
+bashlex
+difftastic
+difft
+comby
+gron
+tomnomnom
