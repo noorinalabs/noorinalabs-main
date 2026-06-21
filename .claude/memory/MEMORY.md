@@ -18,7 +18,7 @@
 - [ProjectV2 field-option is orchestrator-doable](feedback_projectv2_field_option.md) — adding a single-select Wave-field option is mine via GraphQL updateProjectV2Field.
 - [Ontology system](project_ontology_system.md) — three-role ontology (tracker hook, resolver skill, librarian skill); Hook 15 enforces consult.
 - [Bootstrap repo](project_bootstrap_repo.md) — separate repo to dogfood the team/workflow/ontology pattern for reuse across projects.
-- [Session handoff](session_handoff.md) — Pickup 2026-06-20: P6W1 live; memory now git-transferable via CLAUDE.md @import; 3 W1 PRs merged; next = #735/#732/#733. (file is gitignored/local)
+- [Session handoff](session_handoff.md) — Pickup 2026-06-21: P6W1 doc/arch/onboarding batch (#765) DONE — 8 PRs merged (#776-780,784-786); J #775 deferred; follow-ups #781/782/783/787 open; 3 owner-decisions pending. (file is gitignored/local)
 - [Self-loop task replay glitch](feedback_self_loop_task_replay_glitch.md) — team task system may replay own completed tasks as fresh; verify via TaskGet + ignore self-loops.
 - [PR number placeholders](feedback_pr_number_placeholders.md) — never predict-then-cite PR numbers; parallel work consumes them fast; verify w/ gh pr view post-create.
 - [Wave planning from project board](feedback_wave_planning_from_board.md) — Project 2 is authoritative backlog; labels are post-scoping tags. 37% drift 2026-04-23.
