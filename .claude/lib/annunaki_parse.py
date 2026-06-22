@@ -19,6 +19,14 @@ module imports it so the writer and reader never drift. If that import fails
 (e.g. the lib is vendored without the hook), a local fallback copy keeps the
 reader working.
 
+#729 adds a second reader-side exclusion: records the monitor tagged
+`confidence: "low"` — exit-0 stdout-only matches where the trigger word is in
+echoed output (displayed source `except ImportError:`, a `gh pr view --json`
+body), not a real failure. These are excluded from the genuine-error count but
+retained in the log for forensics (pass `include_low_confidence=True`). The
+genuine exit-0-failure carve-out (a `git push | tail` masking a REJECTED push)
+is tagged `confidence: "high"` by the monitor and so is still counted.
+
 Exit codes (CLI):
     0 — always (this is a read-only summarizer; it never fails the caller)
 """
@@ -42,12 +50,21 @@ except Exception:  # noqa: BLE001 — vendored-without-hooks fallback
     TRACE_RECORD_TYPES = frozenset({"posttooluse_dispatch", "pretooluse_diagnostic"})
 
 
-def iter_records(path: Path, *, include_traces: bool = False) -> Iterator[dict]:
+def iter_records(
+    path: Path, *, include_traces: bool = False, include_low_confidence: bool = False
+) -> Iterator[dict]:
     """Yield parsed JSONL records from `path`, skipping blank/corrupt lines.
 
-    By default, records whose `type` is in `TRACE_RECORD_TYPES` are skipped
-    (the #625 genuine-error filter). Pass `include_traces=True` to yield every
-    parseable record (used by a trace-specific viewer or by tests).
+    By default two sub-classes are skipped so the caller sees only genuine
+    errors:
+      - records whose `type` is in `TRACE_RECORD_TYPES` (the #625 benign-trace
+        filter) — pass `include_traces=True` to keep them;
+      - records whose `confidence` is "low" (the #729 exit-0 echoed-output
+        false-positive class — a trigger word matched in displayed source/body
+        at exit 0) — pass `include_low_confidence=True` to keep them for
+        forensics. Records with no `confidence` field (legacy logs written
+        before #729) are treated as genuine and kept, so historical errors are
+        never silently dropped.
 
     A missing file yields nothing. Each line is `.strip()`-ed before parsing,
     because the log has historically contained blank lines from manual edits;
@@ -70,17 +87,29 @@ def iter_records(path: Path, *, include_traces: bool = False) -> Iterator[dict]:
                 continue
             if not include_traces and rec.get("type") in TRACE_RECORD_TYPES:
                 continue
+            if not include_low_confidence and rec.get("confidence") == "low":
+                continue
             yield rec
 
 
 def count_errors(path: Path) -> int:
-    """Return the number of genuine error records (benign traces excluded)."""
+    """Return the genuine-error count (benign traces AND #729 low-confidence
+    echoed-output records excluded)."""
     return sum(1 for _ in iter_records(path))
 
 
 def is_trace(record: dict) -> bool:
     """True iff `record` is a benign forensic trace, not a genuine error."""
     return record.get("type") in TRACE_RECORD_TYPES
+
+
+def is_low_confidence(record: dict) -> bool:
+    """True iff `record` is the #729 exit-0 echoed-output low-confidence class.
+
+    These are retained in the log for forensics but excluded from the
+    genuine-error count by `iter_records`/`count_errors`.
+    """
+    return record.get("confidence") == "low"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -97,6 +126,11 @@ def main(argv: list[str] | None = None) -> int:
         help="include benign-trace records in the output/count",
     )
     parser.add_argument(
+        "--include-low-confidence",
+        action="store_true",
+        help="include #729 low-confidence echoed-output records in the output",
+    )
+    parser.add_argument(
         "--count",
         action="store_true",
         help="print only the genuine-error count and exit",
@@ -108,7 +142,11 @@ def main(argv: list[str] | None = None) -> int:
         print(count_errors(path))
         return 0
 
-    for rec in iter_records(path, include_traces=args.include_traces):
+    for rec in iter_records(
+        path,
+        include_traces=args.include_traces,
+        include_low_confidence=args.include_low_confidence,
+    ):
         print(json.dumps(rec, ensure_ascii=False))
     return 0
 
