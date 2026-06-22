@@ -168,6 +168,16 @@ def upsert_top_level_key(text: str, key: str, json_value: str) -> str:
     either invalid JSON or a logical/text divergence aborted by the
     post-write validation.
 
+    Multi-line existing value on replace (main#736): when the key already
+    exists and its current value spans multiple lines (a pretty-printed object
+    or array — the common shape in cross-repo-status.json), the replace path
+    excises the value through `_find_value_end`, not just the opener line. The
+    pre-#736 code spliced at the opener line's end, leaving the old multi-line
+    body dangling after the new compact value and producing invalid JSON that
+    aborted the whole upsert batch (the `/wave-scope` replace-`wave_{M}_scope`
+    failure). Single-line values are unaffected — `_find_value_end` returns the
+    opener-line end unchanged for them.
+
     Indent-tolerance (main#595/#611): the replace-in-place and sibling-finder
     regexes accept ANY leading whitespace, not just exactly 2 spaces. The
     file mixes 1-space legacy keys (P3W1-era, e.g. `current_wave` /
@@ -196,11 +206,20 @@ def upsert_top_level_key(text: str, key: str, json_value: str) -> str:
         if not _is_top_level_position(text, m.start()):
             continue
         indent = m.group(1)
-        existing = m.group(0).rstrip()
+        # `line_re` is line-anchored (`.*$` with no DOTALL), so `m.end()` is
+        # the end of the OPENER line only. For a multi-line existing value
+        # (the opener line ends with `{` or `[`), the value body continues on
+        # following lines — `_find_value_end` walks past it to the value's true
+        # terminator. The pre-#736 code spliced at `m.end()`, which for a
+        # multi-line value left the old body dangling after the new compact
+        # value and produced invalid JSON (`Expecting ',' delimiter`), aborting
+        # the whole batch. For a single-line value `_find_value_end` returns
+        # `m.end()` unchanged, so this is a no-op for the cases that worked.
+        value_end = _find_value_end(text, m.end())
         replacement = f'{indent}"{key}": {json_value}'
-        if existing.endswith(","):
+        if value_end > 0 and text[value_end - 1] == ",":
             replacement += ","
-        return text[: m.start()] + replacement + text[m.end() :]
+        return text[: m.start()] + replacement + text[value_end:]
 
     new_line = f'  "{key}": {json_value},'
     wave_num_match = re.match(r"wave_(\d+)_", key)
