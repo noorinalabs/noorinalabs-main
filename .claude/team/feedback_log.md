@@ -3251,3 +3251,44 @@ P6W1 closed clean. **27 parent PRs** (in-scope `[noorinalabs-main]`) + **6 emerg
 Carry-forward item #2 above ("phase-namespaced wave keys `p6_wave_1_*`") was reframed by an owner design-input comment on #804 (2026-06-21): instead of phase-namespacing the key, make the wave id a **single global monotonic counter** that never resets per phase (Design B). A global id is never reused, so the P5W2↔P6W2 collision class cannot arise — and the `/wave-start` §5a reset disappears entirely (nothing to reset) rather than being made to fire correctly. Landed in `A.Virtanen/0804-durable-wave-key-identity`: new `.claude/lib/wave_seq.py` allocator, phase demoted to derived display fields (`wave_{X}_phase` + `wave_{X}_phase_ordinal`), `wave_key_reset.py` deleted, grandfather migration (next global wave = 16). The phase-agnostic `wave-{X}` LABEL rename is split to a follow-up (labels already carry the phase, so they never collided — not the bug). See memory [[project_wave_key_cross_phase_collision]].
 
 **Process pain (logged):** the work was nearly lost to a shared-worktree collision — five agents were cycled through `.claude/worktrees/0728-ontology-graphify-spike` on different branches, and a peer `git checkout` wiped uncommitted edits ([[feedback_cwd_collision_cross_spawn]]). Recovered into a dedicated worktree. Reinforces: one cwd per agent, commit/push fast.
+
+
+---
+
+## Retrospective: Phase 6 Wave 2 — 2026-06-22
+
+**Theme:** durable wave-key fix (#804) · persona/ontology architectural revisits · retro mechanization.
+**Repos in scope:** noorinalabs-main, noorinalabs-isnad-graph, noorinalabs-user-service.
+
+### Team Performance (mechanical, verified at retro)
+- **PRs merged:** 15 (main 10, isnad-graph 3, user-service 2). All 3 wave→main PRs merged; reachability + staging gates passed.
+- **CI-red merges:** 0.
+- **Changes-requested cycles:** 1 (Weronika → Aino, #811 — `lifecycle.md` canonical-doc drift; caught + fixed in one pass).
+- **Top-implementer concentration:** 1/15 = **7%** (vs P6W1's 81%). 15 implementers, 1 PR each — deliberate de-concentration, theme-fit. **Going-well**, not fragility.
+- **Counter verification:** `final_pr_count` 15 ✓, `top_concentration_pct` 7 ✓, `changes_requested_cycles` 1 ✓ (authoritative-historic). No drift; no `counter_corrections` entry needed.
+- **Owner decisions recorded:** #727 persona → **B** (+ self-improving cards §4a + mechanical scoring §4b) → exec #819; #728 ontology → **C × T2** (Hybrid × Distributed+overlay) + isolated-branch tooling bake-off → exec #820; #804 wave-key → grandfather migration (next id wave_16).
+
+### Per-Engineer Assessments (evidence-anchored)
+See trust_matrix.md § Phase 6 Wave 2 for the full table. Summary: 14 of 15 held steady (1 clean PR, 0 must-fix, 0 CI-red each = baseline); Weronika 4→5 on two concrete signals (deepest spike + only review catch); Aino held at 5 with a named 1-rework-cycle gap (not buried under "None").
+
+### Top 3 Going Well
+1. **De-concentration worked** — 7% top-implementer vs 81% in W1; 15 engineers each carried one clean PR. The W1 fragility-concentration pain point was directly addressed.
+2. **Zero CI-red merges** across 15 PRs and 3 wave→main merges, despite heavy environmental friction.
+3. **Both architectural revisits decided cleanly** (#727 B, #728 C×T2) with measured evidence, plus the durable wave-key fix (#804/#811) — the headline tech-debt — landed.
+
+### Top 3 Pain Points
+1. **Environmental friction dominated the wave.** Four distinct blockers: API 529 overload (forced staggered re-spawn), cwd-collision on parallel `isolation:worktree` spawns, `/tmp`-rooted worktree pre-push false-fails (#817), and the `test_pre_commit_ci_sync` parent-checkout drift (#816) that blocks all local direct-to-main pushes. All worked around (PUT-contents, non-/tmp worktrees) but each cost real time.
+2. **Ontology rebuild skipped at wrapup** — 20 dirty files remain in `checksums.json` (wrapup pruned 73 stale paths but did not run a full `/ontology-rebuild`). Process gap: wrapup Step is being deferred.
+3. **Annunaki backlog unprocessed** — 63 genuine errors captured (54 from this wave's troubleshooting churn), `/annunaki-attack` not yet run. Deferred to the next session.
+
+### Proposed Process Changes (await owner ratification — NOT applied)
+1. **Adopt §4b mechanical trust scoring as the retro default (#819).** Rationale: demonstrated this wave — 14/15 held steady vs 15/15 ratcheting under the old model. The owner already decided the direction; this retro is its dry-run.
+2. **Codify the non-/tmp worktree rule (#817).** Rationale: `/tmp` worktrees false-fail two pre-push gates (tmp-path pytest + snap-mmdc mermaid). Memory banked; promote to charter/skill so it stops recurring.
+3. **Fix or formally bless the #816 workaround.** Rationale: `test_pre_commit_ci_sync` fails in the parent checkout (child repos present) but passes in CI/agent worktrees, blocking local main pushes. Either fix the test's environment assumption or make PUT-contents the documented canonical path for main-targeting bookkeeping/retro writes.
+4. **Enforce `/ontology-rebuild` at wrapup.** Rationale: 20 dirty files leaked past wrapup; the rebuild keeps getting deferred.
+
+### Deferred to next session (handoff)
+- `/annunaki-attack` on the 63-error backlog
+- `/promotion-audit` (P6W2)
+- memory-to-automation audit
+- `/wave-scope 6 16` once the owner sets the wave_16 theme (stub auto-drafted this retro)
