@@ -685,46 +685,10 @@
       "tracked_at": "2026-06-16T18:30:11.564057+00:00",
       "resolved_at": "2026-06-16T22:10:10.346202+00:00"
     },
-    ".claude/scratch/w8-kickoff-866.md": {
-      "last_tracked": "5c407cebd5195c5423e6cbd413d09a53a6e01993d5d273acbfbced0af735d3b8",
-      "last_resolved": "5c407cebd5195c5423e6cbd413d09a53a6e01993d5d273acbfbced0af735d3b8",
-      "tracked_at": "2026-05-09T00:31:43.110220+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/w8-kickoff-867.md": {
-      "last_tracked": "a5df5101457ba166c7fbe777909312d7b23e84be1993fee05122f1e9c0b85ab4",
-      "last_resolved": "a5df5101457ba166c7fbe777909312d7b23e84be1993fee05122f1e9c0b85ab4",
-      "tracked_at": "2026-05-09T00:31:49.226868+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/w8-kickoff-869.md": {
-      "last_tracked": "0b32f10b2238d9c9cacb28a8afdd1b50fccba6eb3a06e864d3a1e9f01cbd11d4",
-      "last_resolved": "0b32f10b2238d9c9cacb28a8afdd1b50fccba6eb3a06e864d3a1e9f01cbd11d4",
-      "tracked_at": "2026-05-09T00:31:54.742485+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/w8-kickoff-us98.md": {
-      "last_tracked": "24d3f853b37716bd567b053a16b9725db21dd05b5cb8e35222201570a277b06c",
-      "last_resolved": "24d3f853b37716bd567b053a16b9725db21dd05b5cb8e35222201570a277b06c",
-      "tracked_at": "2026-05-09T00:32:06.527003+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
     "noorinalabs-isnad-graph/.claude/hooks/tests/test_block_git_config.py": {
       "last_tracked": "6b66a519249f2d3604d2d18b5b625e0cc75e257b8b5208e2b6fe98a796427aaf",
       "last_resolved": "6b66a519249f2d3604d2d18b5b625e0cc75e257b8b5208e2b6fe98a796427aaf",
       "tracked_at": "2026-05-09T00:34:38.254500+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/0867-msg.txt": {
-      "last_tracked": "89d61df253c4e4b893c0ef6926b1aa1c6c0c8eb93511debdbbc3ec717c3fc610",
-      "last_resolved": "89d61df253c4e4b893c0ef6926b1aa1c6c0c8eb93511debdbbc3ec717c3fc610",
-      "tracked_at": "2026-05-09T00:35:06.580472+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/0867-pr-body.md": {
-      "last_tracked": "cbd76ef04bd82040eaf3c81fe04452c74167c058653004c578bc0fa1ebd2e8de",
-      "last_resolved": "cbd76ef04bd82040eaf3c81fe04452c74167c058653004c578bc0fa1ebd2e8de",
-      "tracked_at": "2026-05-09T00:35:43.610598+00:00",
       "resolved_at": "2026-05-10T14:39:49.331048+00:00"
     },
     "noorinalabs-landing-page/docs/adr/0001-astro-build-output-hook-coverage.md": {
@@ -733,64 +697,10 @@
       "tracked_at": "2026-05-09T00:40:34.360596+00:00",
       "resolved_at": "2026-05-10T14:39:49.331048+00:00"
     },
-    "noorinalabs-landing-page/.claude/scratch/86-msg.txt": {
-      "last_tracked": "6f5ed1ecad8524608b20b1a8518a23801bb435cbdba3df67d66b546bcce508a8",
-      "last_resolved": "6f5ed1ecad8524608b20b1a8518a23801bb435cbdba3df67d66b546bcce508a8",
-      "tracked_at": "2026-05-09T00:40:46.892417+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-landing-page/.claude/scratch/86-pr-body.md": {
-      "last_tracked": "5e3f5d2b368a37a55e07c9876560f4a2c55690486804d6b19492d55de91c5b3c",
-      "last_resolved": "5e3f5d2b368a37a55e07c9876560f4a2c55690486804d6b19492d55de91c5b3c",
-      "tracked_at": "2026-05-09T00:41:15.401511+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
     "noorinalabs-landing-page/.claude/settings.json": {
       "last_tracked": "420cb93da8d8e749efa74a6f6f905947266b27c1f5b9b5bcfdf328bbb9719f60",
       "last_resolved": "420cb93da8d8e749efa74a6f6f905947266b27c1f5b9b5bcfdf328bbb9719f60",
       "tracked_at": "2026-05-09T00:41:53.379559+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-landing-page/.claude/scratch/85-msg.txt": {
-      "last_tracked": "2042af8dd61ecc3cf6c9a30190f30858831373a09b8f804d90621970aa590ca8",
-      "last_resolved": "2042af8dd61ecc3cf6c9a30190f30858831373a09b8f804d90621970aa590ca8",
-      "tracked_at": "2026-05-09T00:42:13.072519+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-landing-page/.claude/scratch/85-pr-body.md": {
-      "last_tracked": "3a9f4cb692824bbd3f7cbf67fbd8132538607d2ab4a64b6ca513d6693859c268",
-      "last_resolved": "3a9f4cb692824bbd3f7cbf67fbd8132538607d2ab4a64b6ca513d6693859c268",
-      "tracked_at": "2026-05-09T00:42:41.814436+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/0867-close-comment.md": {
-      "last_tracked": "4bc7513a2164e1b56ce13c05689aba81b896373e631e506c16aaa74c9056ac63",
-      "last_resolved": "4bc7513a2164e1b56ce13c05689aba81b896373e631e506c16aaa74c9056ac63",
-      "tracked_at": "2026-05-09T00:43:54.087816+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/0866-close.md": {
-      "last_tracked": "fda75c399e0dd9a5c608b44e29a4afbcb3b158d32aa6ab50ae1a98b1a66388a7",
-      "last_resolved": "fda75c399e0dd9a5c608b44e29a4afbcb3b158d32aa6ab50ae1a98b1a66388a7",
-      "tracked_at": "2026-05-09T00:44:31.232431+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/0867-close-anya.md": {
-      "last_tracked": "fa602792f80f0d28ebdfb6eeea297b688787a9334bfecfb5d594da910dd650e5",
-      "last_resolved": "fa602792f80f0d28ebdfb6eeea297b688787a9334bfecfb5d594da910dd650e5",
-      "tracked_at": "2026-05-09T00:46:31.632748+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/0868-close.md": {
-      "last_tracked": "5e75249b43d1185787edf33ea99ed84e75b4b39221c597f3188543e55dbd23a0",
-      "last_resolved": "5e75249b43d1185787edf33ea99ed84e75b4b39221c597f3188543e55dbd23a0",
-      "tracked_at": "2026-05-09T00:46:34.472087+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/0869-close.md": {
-      "last_tracked": "bb1c4fa4606451bcfc2010e145a957c7f78028f31090ccd1fdea83eb8b28d9df",
-      "last_resolved": "bb1c4fa4606451bcfc2010e145a957c7f78028f31090ccd1fdea83eb8b28d9df",
-      "tracked_at": "2026-05-09T00:45:14.066698+00:00",
       "resolved_at": "2026-05-10T14:39:49.331048+00:00"
     },
     "noorinalabs-landing-page/.github/workflows/ci.yml": {
@@ -798,264 +708,6 @@
       "last_resolved": "58af4c768339beb2f97a1d6e770084368d44f309d93dcd8b7dc6af59631a7035",
       "tracked_at": "2026-05-09T00:45:20.912730+00:00",
       "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/0870-close.md": {
-      "last_tracked": "d0acf34940e5ba3e646041c24209c9e4c6d14b26994e98ae4e567f77efb6a197",
-      "last_resolved": "d0acf34940e5ba3e646041c24209c9e4c6d14b26994e98ae4e567f77efb6a197",
-      "tracked_at": "2026-05-09T00:46:37.592879+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-landing-page/.claude/scratch/0088-msg.txt": {
-      "last_tracked": "2ad887b9dca188e4aaf5a58a5774d9722e4a53f6ca8027fc078cb0080435eb3f",
-      "last_resolved": "2ad887b9dca188e4aaf5a58a5774d9722e4a53f6ca8027fc078cb0080435eb3f",
-      "tracked_at": "2026-05-09T00:45:50.690040+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/parent-augment-body.md": {
-      "last_tracked": "deb65bfad29d455e4a777df7245dcf38cdacd9641f241843e2789551f3c47ffe",
-      "last_resolved": "deb65bfad29d455e4a777df7245dcf38cdacd9641f241843e2789551f3c47ffe",
-      "tracked_at": "2026-05-09T00:46:07.757504+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-landing-page/.claude/scratch/0088-pr-body.md": {
-      "last_tracked": "6f0eaa9b720d38a4a6ef90f71fb4e0ff4d8140373dab78c0f45942a17b4fced2",
-      "last_resolved": "6f0eaa9b720d38a4a6ef90f71fb4e0ff4d8140373dab78c0f45942a17b4fced2",
-      "tracked_at": "2026-05-09T00:46:16.602971+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/parent-augment-stash-body.md": {
-      "last_tracked": "4b3e9bb399e0f40872ae21fbbc88652ab2f0857fbcaa1649571593a519bb974e",
-      "last_resolved": "4b3e9bb399e0f40872ae21fbbc88652ab2f0857fbcaa1649571593a519bb974e",
-      "tracked_at": "2026-05-09T00:51:20.686676+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/0336-supersede-comment.md": {
-      "last_tracked": "55d8934e2c62386c531a3c74b744fe75ff3c9b252e9f7cf664adb3554c1dfae5",
-      "last_resolved": "55d8934e2c62386c531a3c74b744fe75ff3c9b252e9f7cf664adb3554c1dfae5",
-      "tracked_at": "2026-05-09T00:51:31.513393+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/336-rescope-body.md": {
-      "last_tracked": "315108b54f311d999b25815dd574ba43e90a422e611e433fc70f8a27bb374f67",
-      "last_resolved": "315108b54f311d999b25815dd574ba43e90a422e611e433fc70f8a27bb374f67",
-      "tracked_at": "2026-05-09T00:52:07.516173+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/336-rescope-comment.md": {
-      "last_tracked": "b6c3d8619e68aa5cae342df003e672d5fff3e399c2bdb5a54d96edb77329b9ea",
-      "last_resolved": "b6c3d8619e68aa5cae342df003e672d5fff3e399c2bdb5a54d96edb77329b9ea",
-      "tracked_at": "2026-05-09T00:52:18.250541+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/0866-followup.md": {
-      "last_tracked": "067eeddbee039543de4462c288923a51bac716aac8b07a8bb763823c6e0ff6ad",
-      "last_resolved": "067eeddbee039543de4462c288923a51bac716aac8b07a8bb763823c6e0ff6ad",
-      "tracked_at": "2026-05-09T00:52:35.472096+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/0867-followup.md": {
-      "last_tracked": "27f3b2287408eaa09c7b44b47512b8b259cbbaaea1e8ef5e1ff1b330978889b4",
-      "last_resolved": "27f3b2287408eaa09c7b44b47512b8b259cbbaaea1e8ef5e1ff1b330978889b4",
-      "tracked_at": "2026-05-09T00:52:41.895548+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/0868-followup.md": {
-      "last_tracked": "4fcf4178db8afd5bd0008c1a6ffea3f44bc1510c077e50a9ac3cf5b172c49714",
-      "last_resolved": "4fcf4178db8afd5bd0008c1a6ffea3f44bc1510c077e50a9ac3cf5b172c49714",
-      "tracked_at": "2026-05-09T00:52:47.157563+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/0869-followup.md": {
-      "last_tracked": "9e72d2fb451f78b32b09bd0bf37f58a64324def27870c584a3a3f9c11c2b4f01",
-      "last_resolved": "9e72d2fb451f78b32b09bd0bf37f58a64324def27870c584a3a3f9c11c2b4f01",
-      "tracked_at": "2026-05-09T00:52:49.004864+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/0870-followup.md": {
-      "last_tracked": "08bb321392bdba3d89308a5536597aa1b8b14da2f78c16ac027d41b3598945ce",
-      "last_resolved": "08bb321392bdba3d89308a5536597aa1b8b14da2f78c16ac027d41b3598945ce",
-      "tracked_at": "2026-05-09T00:52:53.733342+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/w8-hook-proposal-validate-wave-label-evidence.md": {
-      "last_tracked": "a2028a020b209ed4fefe4556af456d488bad38db2c0574807965d51c7e6cc723",
-      "last_resolved": "a2028a020b209ed4fefe4556af456d488bad38db2c0574807965d51c7e6cc723",
-      "tracked_at": "2026-05-09T00:53:20.633468+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/337-crosslink-335.md": {
-      "last_tracked": "50943e32344a76b7916d743badd431bfc12547509481c530790a7ea81e834bdb",
-      "last_resolved": "50943e32344a76b7916d743badd431bfc12547509481c530790a7ea81e834bdb",
-      "tracked_at": "2026-05-09T00:53:41.142766+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/337-crosslink-334.md": {
-      "last_tracked": "a42577feea0420f44919e5a6015ed79158225a2873b0ab1c9b3de9bc09ba00d5",
-      "last_resolved": "a42577feea0420f44919e5a6015ed79158225a2873b0ab1c9b3de9bc09ba00d5",
-      "tracked_at": "2026-05-09T00:53:48.276104+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/ds-74-body.md": {
-      "last_tracked": "caea8a9f92feeb05b9a7212d407523492b0c1bf60e0a578ac4b48042e4b819e0",
-      "last_resolved": "caea8a9f92feeb05b9a7212d407523492b0c1bf60e0a578ac4b48042e4b819e0",
-      "tracked_at": "2026-05-09T00:54:18.287882+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/w8-wave-7-propagation-issue.md": {
-      "last_tracked": "4e30e0175cfb9fd6e03fb0324f46bd885d7595f259ee6595e6fa0d2edf626bda",
-      "last_resolved": "4e30e0175cfb9fd6e03fb0324f46bd885d7595f259ee6595e6fa0d2edf626bda",
-      "tracked_at": "2026-05-09T00:59:29.085026+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/w9-isnad-graph-node20-cleanup.md": {
-      "last_tracked": "7f04869be049958cd5518c4f69b4a3caedabec27533ecc27e7f7d5fb05ca6ed5",
-      "last_resolved": "7f04869be049958cd5518c4f69b4a3caedabec27533ecc27e7f7d5fb05ca6ed5",
-      "tracked_at": "2026-05-09T01:02:25.654180+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/ds-pr75-r2-review.md": {
-      "last_tracked": "cedd9adb2d8fce2134ec6f465829e87259c75b7f4daa99aac5c7f9b66a2db5c3",
-      "last_resolved": "cedd9adb2d8fce2134ec6f465829e87259c75b7f4daa99aac5c7f9b66a2db5c3",
-      "tracked_at": "2026-05-09T01:03:45.667132+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/336-validate-labels-audit-trail.md": {
-      "last_tracked": "8364e3c7fba2d3c802aa5286e15836357e244de9070f7b33712fd0e95cff826d",
-      "last_resolved": "8364e3c7fba2d3c802aa5286e15836357e244de9070f7b33712fd0e95cff826d",
-      "tracked_at": "2026-05-09T01:18:23.153908+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/ds-pr75-r2-approved.md": {
-      "last_tracked": "9291fb4d55f514266e1e1386808f651f719c5dc5464150f7c3eba7700119baa1",
-      "last_resolved": "9291fb4d55f514266e1e1386808f651f719c5dc5464150f7c3eba7700119baa1",
-      "tracked_at": "2026-05-09T01:31:48.502993+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-deploy/.claude/scratch/0281-r1-review.md": {
-      "last_tracked": "0f40fc0d92531043948e53181af1170ddbb8bddd81b717a942c7c5244497bb8e",
-      "last_resolved": "0f40fc0d92531043948e53181af1170ddbb8bddd81b717a942c7c5244497bb8e",
-      "tracked_at": "2026-05-09T01:32:58.604144+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-deploy/.claude/scratch/0282-r2-review.md": {
-      "last_tracked": "13f5a4a5e71f97655c678ef2014f5bc1bbfee31894593d5280b867b5cce9cc8a",
-      "last_resolved": "13f5a4a5e71f97655c678ef2014f5bc1bbfee31894593d5280b867b5cce9cc8a",
-      "tracked_at": "2026-05-09T01:33:52.572678+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/0340-r2-review.md": {
-      "last_tracked": "56ec527f7a673589f772d286534eb553e0cadedd887acb34bc6c096306d96255",
-      "last_resolved": "56ec527f7a673589f772d286534eb553e0cadedd887acb34bc6c096306d96255",
-      "tracked_at": "2026-05-09T01:43:39.978278+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/ds-74-close-comment.md": {
-      "last_tracked": "f964dc0feda5f75b0527f8b56477e750ec11dbce376a1803a7609c44942181dd",
-      "last_resolved": "f964dc0feda5f75b0527f8b56477e750ec11dbce376a1803a7609c44942181dd",
-      "tracked_at": "2026-05-09T01:40:40.734963+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/0340-r1-review.md": {
-      "last_tracked": "3f1b055205c8d558827c35d4a8c867979a04193050664736cc01af4ce9994e9b",
-      "last_resolved": "3f1b055205c8d558827c35d4a8c867979a04193050664736cc01af4ce9994e9b",
-      "tracked_at": "2026-05-09T01:44:37.835621+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/0290-close-comment.md": {
-      "last_tracked": "d94717bfdaae8a18eb542485f9fca789ee487047c199591f256c9f1976ac527b",
-      "last_resolved": "d94717bfdaae8a18eb542485f9fca789ee487047c199591f256c9f1976ac527b",
-      "tracked_at": "2026-05-09T01:49:19.386231+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-deploy/.claude/scratch/0281-approved-addendum.md": {
-      "last_tracked": "345f738755305616bf9c90d441be0c72b4fbed7f3fdf40592dd99158976bc064",
-      "last_resolved": "345f738755305616bf9c90d441be0c72b4fbed7f3fdf40592dd99158976bc064",
-      "tracked_at": "2026-05-09T01:57:29.101773+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    "noorinalabs-deploy/.claude/scratch/0282-approved-addendum.md": {
-      "last_tracked": "1d4064c4443bc3c79a68df10856251752569a91cf2a350e4ca1200ad47817ece",
-      "last_resolved": "1d4064c4443bc3c79a68df10856251752569a91cf2a350e4ca1200ad47817ece",
-      "tracked_at": "2026-05-09T01:57:34.647816+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/wave-merge-bodies/main.md": {
-      "last_tracked": "ad79041ea1ea94f41fba3d32e1c275167ce7d22a03c6540c7c74658b774fd3c9",
-      "last_resolved": "ad79041ea1ea94f41fba3d32e1c275167ce7d22a03c6540c7c74658b774fd3c9",
-      "tracked_at": "2026-05-10T14:25:40.924926+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/wave-merge-bodies/deploy.md": {
-      "last_tracked": "1568d8e3f6b3bac040a196ef6e76301e8165f9f7ae4ccaab1c62e1c29de8d0fc",
-      "last_resolved": "1568d8e3f6b3bac040a196ef6e76301e8165f9f7ae4ccaab1c62e1c29de8d0fc",
-      "tracked_at": "2026-05-10T14:25:47.613163+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/wave-merge-bodies/design-system.md": {
-      "last_tracked": "e551139593ffe1800dfe1bbffd6f5010d92151eebe2e868e9257935eab6cc010",
-      "last_resolved": "e551139593ffe1800dfe1bbffd6f5010d92151eebe2e868e9257935eab6cc010",
-      "tracked_at": "2026-05-10T14:25:58.068836+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/wave-merge-bodies/landing-page.md": {
-      "last_tracked": "95b9d6c2d4aac0b3c94066389fa768eab154c44492dc9eabb59171e6cfc2a6cd",
-      "last_resolved": "95b9d6c2d4aac0b3c94066389fa768eab154c44492dc9eabb59171e6cfc2a6cd",
-      "tracked_at": "2026-05-10T14:26:04.795598+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/wave-merge-bodies/data-acquisition.md": {
-      "last_tracked": "21abb00d304e05ede8b6851365748b169d6fe765e526de68a951db8169282121",
-      "last_resolved": "21abb00d304e05ede8b6851365748b169d6fe765e526de68a951db8169282121",
-      "tracked_at": "2026-05-10T14:26:14.568209+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/wave-merge-bodies/approval-wanjiku.md": {
-      "last_tracked": "6fae223fa4f073ac7534569530fb9a477c06f45246eed190c31e6ca13e07a7e8",
-      "last_resolved": "6fae223fa4f073ac7534569530fb9a477c06f45246eed190c31e6ca13e07a7e8",
-      "tracked_at": "2026-05-10T14:28:13.403075+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/wave-merge-bodies/approval-nadia.md": {
-      "last_tracked": "055e3b4cc5407846052d83700bcc1428cbd1afedb486df8ae4c87760b535bdce",
-      "last_resolved": "055e3b4cc5407846052d83700bcc1428cbd1afedb486df8ae4c87760b535bdce",
-      "tracked_at": "2026-05-10T14:28:28.344353+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/wave-merge-bodies/status-commit.py": {
-      "last_tracked": "0b7256aaa24e7e40bc7f3f8d0622e9739580797e1548c309b636d0b60d27c451",
-      "last_resolved": "0b7256aaa24e7e40bc7f3f8d0622e9739580797e1548c309b636d0b60d27c451",
-      "tracked_at": "2026-05-10T14:31:42.301831+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/wave-merge-bodies/309-close.md": {
-      "last_tracked": "0b596e29383e7fbb2dd608adcd26cb95e9b1142f23958db8fd23ac1a6dc86541",
-      "last_resolved": "0b596e29383e7fbb2dd608adcd26cb95e9b1142f23958db8fd23ac1a6dc86541",
-      "tracked_at": "2026-05-10T14:33:22.531154+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/wave-merge-bodies/carry-forward.md": {
-      "last_tracked": "0e40a6bfee4ba6a649fa8844c4486c4570895f787a9ab7183538c9bd0decafbe",
-      "last_resolved": "0e40a6bfee4ba6a649fa8844c4486c4570895f787a9ab7183538c9bd0decafbe",
-      "tracked_at": "2026-05-10T14:33:42.520689+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/wave-merge-bodies/carry-forward.py": {
-      "last_tracked": "103110af835c7c3a7b46f36ae35298700d1140ad26c4b51f71bff7f8475b6441",
-      "last_resolved": "103110af835c7c3a7b46f36ae35298700d1140ad26c4b51f71bff7f8475b6441",
-      "tracked_at": "2026-05-10T14:34:04.545800+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/wave-merge-bodies/ontology-resolve.py": {
-      "last_tracked": "8bbd3b630d8c3019f97faee03ea499cf7d8a6f97cd77b86502d38946519afec9",
-      "last_resolved": "8bbd3b630d8c3019f97faee03ea499cf7d8a6f97cd77b86502d38946519afec9",
-      "tracked_at": "2026-05-10T14:39:45.596726+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
-    ".claude/scratch/wave-merge-bodies/ontology-commit.py": {
-      "last_tracked": "54fccbaa40c96a7d38e4aef311866228cc0829130c077fe9cf9bcb1eb5e73740",
-      "last_resolved": "54fccbaa40c96a7d38e4aef311866228cc0829130c077fe9cf9bcb1eb5e73740",
-      "tracked_at": "2026-05-10T14:40:22.639809+00:00",
-      "resolved_at": "2026-05-10T16:15:15.921230+00:00"
     },
     ".claude/skills/file-bug/SKILL.md": {
       "last_resolved": "0e8e6660e3a6691aa4835428e39d39f00432effdfd6e39fb5f11205ffbbe391f",
@@ -1074,12 +726,6 @@
       "last_tracked": "4ffe18574d54b6ae624373d2203aa699a1a7a841a5abbfeae1d44605bb669a0d",
       "resolved_at": "2026-05-11T01:41:41.840576+00:00",
       "tracked_at": "2026-05-11T01:41:41.840576+00:00"
-    },
-    ".claude/scratch/aino-w9-wrapup-commit.txt": {
-      "last_tracked": "ac4830389bcadfbb2236ba1d3ac5cd5c7671e25beae3755c1dd9bfbeadf818b0",
-      "last_resolved": "ac4830389bcadfbb2236ba1d3ac5cd5c7671e25beae3755c1dd9bfbeadf818b0",
-      "tracked_at": "2026-05-12T23:00:11.656672+00:00",
-      "resolved_at": "2026-05-13T03:21:08.894134+00:00"
     },
     ".claude/hooks/_wave_label_parse.py": {
       "last_tracked": "838a15e0c3901445765338dc80ea992e0db55bb3e8ac0c35939d26f27daf375f",
@@ -1219,60 +865,6 @@
       "tracked_at": "2026-05-17T04:32:03.828774+00:00",
       "resolved_at": "2026-05-17T21:28:10.746396+00:00"
     },
-    "noorinalabs-deploy/.claude/scratch/aisha_review_290.md": {
-      "last_tracked": "a461581f0c78d206727cf97ce4a055ef2117a3e9597d92694bfeb1841aad5dbb",
-      "last_resolved": "a461581f0c78d206727cf97ce4a055ef2117a3e9597d92694bfeb1841aad5dbb",
-      "tracked_at": "2026-05-17T09:32:36.662814+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/anya_review_920.md": {
-      "last_tracked": "6faea4382b03e7c954fc596f8ea743546f0aa942a3ca5ae52e9383ddb85ca138",
-      "last_resolved": "6faea4382b03e7c954fc596f8ea743546f0aa942a3ca5ae52e9383ddb85ca138",
-      "tracked_at": "2026-05-17T09:33:45.307748+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-deploy/.claude/scratch/aisha_review_291.md": {
-      "last_tracked": "aec99c8432e6e10e6263b4bb6592bb0cad3ed48c6cbc501341c74fee662812a4",
-      "last_resolved": "aec99c8432e6e10e6263b4bb6592bb0cad3ed48c6cbc501341c74fee662812a4",
-      "tracked_at": "2026-05-17T09:33:55.319281+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-deploy/.claude/scratch/aisha_review_292.md": {
-      "last_tracked": "9e922a5ed508d2a29f237e9629a7dba11472f043b364cb8b8c11a1042a23cb45",
-      "last_resolved": "9e922a5ed508d2a29f237e9629a7dba11472f043b364cb8b8c11a1042a23cb45",
-      "tracked_at": "2026-05-17T09:34:37.323862+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-deploy/.claude/scratch/aisha_review_294.md": {
-      "last_tracked": "d1db15f0a921d7aa03013fdfdeef34648aa40b4fa42c7dcb9106d40bd8c35fd6",
-      "last_resolved": "d1db15f0a921d7aa03013fdfdeef34648aa40b4fa42c7dcb9106d40bd8c35fd6",
-      "tracked_at": "2026-05-17T09:43:19.451833+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/anya_review_920_current.md": {
-      "last_tracked": "a282f1fd6c9347cd738c8656bbe32c24959f8dbe311d8a31eafb02e04123be6f",
-      "last_resolved": "a282f1fd6c9347cd738c8656bbe32c24959f8dbe311d8a31eafb02e04123be6f",
-      "tracked_at": "2026-05-17T09:39:39.488141+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    ".claude/scratch/weronika_review_294_current.md": {
-      "last_tracked": "103ada711646098275be5f9d3c0f6643ef9eb9e7fecdb668cbff90e772fd00a1",
-      "last_resolved": "103ada711646098275be5f9d3c0f6643ef9eb9e7fecdb668cbff90e772fd00a1",
-      "tracked_at": "2026-05-17T09:45:03.326973+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/anya_review_919_current.md": {
-      "last_tracked": "ca47dec8ebe10dc87ee82dfa98ffc6fb472efc48b888487301a6640c706ebd1d",
-      "last_resolved": "ca47dec8ebe10dc87ee82dfa98ffc6fb472efc48b888487301a6640c706ebd1d",
-      "tracked_at": "2026-05-17T14:50:46.243673+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-graph/.claude/scratch/anya_review_920_for_reanchor.md": {
-      "last_tracked": "d4296b3d3533cd6a79e01af5c35d76bea7fba25929f58cbbe513bff01e88f95a",
-      "last_resolved": "d4296b3d3533cd6a79e01af5c35d76bea7fba25929f58cbbe513bff01e88f95a",
-      "tracked_at": "2026-05-17T14:50:53.973822+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
     "noorinalabs-isnad-ingest-platform-bjorn-0011/workers/lib/checkpoint_pg.py": {
       "last_tracked": "1f555b30062015d4c49002f40352f1893542440c9cf3b8c124a2763126e48156",
       "last_resolved": "1f555b30062015d4c49002f40352f1893542440c9cf3b8c124a2763126e48156",
@@ -1309,12 +901,6 @@
       "tracked_at": "2026-05-17T20:10:03.137823+00:00",
       "resolved_at": "2026-05-17T21:28:10.746396+00:00"
     },
-    ".claude/scratch/aisling_review_921.md": {
-      "last_tracked": "93c8216659387770f240d8527171abe7bf32488b05807ff77ed53e3d1f857c0d",
-      "last_resolved": "93c8216659387770f240d8527171abe7bf32488b05807ff77ed53e3d1f857c0d",
-      "tracked_at": "2026-05-17T20:10:07.701505+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
     "noorinalabs-isnad-ingest-platform-bjorn-0011/tests/workers/test_checkpoint_pg.py": {
       "last_tracked": "dfa288043b3ffbfda31665ce7904892e57c803267b3b3b37915228fbaa0530a9",
       "last_resolved": "dfa288043b3ffbfda31665ce7904892e57c803267b3b3b37915228fbaa0530a9",
@@ -1337,30 +923,6 @@
       "last_tracked": "0795b5f6761cfbd52e30b8b5d5ddc7dff9fe3da97b81b4433167ce36fb4797f3",
       "last_resolved": "0795b5f6761cfbd52e30b8b5d5ddc7dff9fe3da97b81b4433167ce36fb4797f3",
       "tracked_at": "2026-06-02T15:42:18.322489+00:00",
-      "resolved_at": "2026-06-04T20:50:14.260341+00:00"
-    },
-    ".claude/scratch/nurul_pr_0403.txt": {
-      "last_tracked": "b65795b7e34e5e691ba73fa43024cbc29a29227acb952872f192bbeeac59594b",
-      "last_resolved": "b65795b7e34e5e691ba73fa43024cbc29a29227acb952872f192bbeeac59594b",
-      "tracked_at": "2026-06-03T00:19:37.217207+00:00",
-      "resolved_at": "2026-06-04T20:50:14.260341+00:00"
-    },
-    ".claude/scratch/nurul_review_409.md": {
-      "last_tracked": "efb3d4d05ad373554f976e96935ecb6d15c34d3bfdf1fc5ff7d98f6a0e52ab95",
-      "last_resolved": "efb3d4d05ad373554f976e96935ecb6d15c34d3bfdf1fc5ff7d98f6a0e52ab95",
-      "tracked_at": "2026-06-03T00:28:51.421832+00:00",
-      "resolved_at": "2026-06-04T20:50:14.260341+00:00"
-    },
-    ".claude/scratch/nurul_msg_0403_fixup.txt": {
-      "last_tracked": "95992e2da1cbcd110dc3361084a2c96361c1b2926cfabbbea0d12f63c785fadd",
-      "last_resolved": "95992e2da1cbcd110dc3361084a2c96361c1b2926cfabbbea0d12f63c785fadd",
-      "tracked_at": "2026-06-03T00:31:12.640468+00:00",
-      "resolved_at": "2026-06-04T20:50:14.260341+00:00"
-    },
-    ".claude/scratch/pr415_current_body.md": {
-      "last_tracked": "5b7a8c9aea09b1bf745af3cead503a89788605da4ec1351097617aab6549ba2f",
-      "last_resolved": "5b7a8c9aea09b1bf745af3cead503a89788605da4ec1351097617aab6549ba2f",
-      "tracked_at": "2026-06-03T00:31:58.859099+00:00",
       "resolved_at": "2026-06-04T20:50:14.260341+00:00"
     },
     "noorinalabs-design-system/package.json": {
