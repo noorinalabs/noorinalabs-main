@@ -270,6 +270,26 @@ fi
 
 Report any red runs prominently — a red publish/deploy on a default branch is a stop-and-investigate signal, not background noise: it usually means the artifact consumers (staging, downstream pulls) are silently running stale or broken bits. A run tagged `base-image-drift` is a different remediation path than generic redness: the wave's code did not break it — an upstream base image grew a new advisory (e.g. the W4 openssl CVE-2026-45447) — so fix it forward by rebuilding/bumping the base image, not by reverting wave work. If `gh api` calls fail (auth/rate-limit), say so rather than reporting a false all-green; the classifier itself is best-effort and degrades to the unclassified `code/other` tag on any log-fetch failure.
 
+### Step 5b — Wave-merged-but-unwrapped nudge (P5W5 retro Proposed Change #1 / #730)
+
+Surface a wave whose PRs **merged to main but which was never formally wrapped**. *Rationale:* P5W5 merged all 45 of its PRs days before `/wave-wrapup` ran — `wave_5_wrapped_up_at` stayed null, `wave_5_active` stayed true, and the post-wave audits (annunaki-attack, memory) never ran — because nothing at session-start surfaced the gap, so wrap/retro deferred indefinitely.
+
+The signal is the conjunction `wave_{M}_active == true` AND no wrapup marker present (`wave_{M}_wrapped_up_at` / `wave_{M}_wrapup_completed_at` / `wave_{M}_wrapped_at`) AND **0 open wave PRs** across the wave's in-scope repos — scoped to the **current** wave (`current_wave`) only. Scoping to `current_wave` is load-bearing: wave keys are NOT phase-namespaced (memory `project_wave_key_cross_phase_collision` / #683), so the status file legitimately retains stale `wave_4_active: true` rows from a prior phase's W4 — an "any active+unwrapped wave" scan would false-fire on those ghosts. The detection is **non-fatal** and degrades gracefully: a missing `current_wave`, missing scope keys, or a failed `gh` probe yields a benign verdict (never a hard block, never a false nudge mid-wave).
+
+```bash
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
+[ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+# Always exits 0 (informational nudge, not a gate). Prints a line beginning
+# "NUDGE:" only when the wave is merged-but-unwrapped (or active+unwrapped with
+# an undetermined open-PR count); otherwise a one-line in-flight/ok status.
+if [ -f "$REPO_ROOT/.claude/lib/wave_unwrapped.py" ]; then
+  python3 "$REPO_ROOT/.claude/lib/wave_unwrapped.py" check \
+    --status "$REPO_ROOT/cross-repo-status.json" || true
+fi
+```
+
+If the verdict is `unwrapped` (0 open wave PRs) — or the softer `unwrapped_unverified` (open-PR count undetermined because `gh` failed or the wave's scope keys are missing) — surface it prominently as **"wave merged but unwrapped — run `/wave-wrapup`"**. An `in_flight` verdict (open wave PRs remain) is a normal active wave: no nudge. This is informational only — it never blocks the session.
+
 ### Step 6 — Charter freshness check
 
 Read the tail of the feedback log:
@@ -304,6 +324,7 @@ After all steps complete, present a single status block:
 | 4. Annunaki | {N errors, action needed? / clear} |
 | 5. Wave | {active wave, stale?, issues} |
 | 5a. Red default-branch runs | {N red publish/deploy runs (M base-image-drift) / all green} |
+| 5b. Wave wrap state | {wave merged but unwrapped — run /wave-wrapup / in flight / wrapped} |
 | 6. Charter | {current / proposals pending} |
 
 {Then address the user's actual message/request}
