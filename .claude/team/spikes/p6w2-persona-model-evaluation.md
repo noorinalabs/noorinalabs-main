@@ -107,6 +107,95 @@ role-class set.
 
 ---
 
+## 4a. Finding C — the personality attributes are non-load-bearing context bloat (owner question 1)
+
+Owner question (2026-06-22): the cards carry a lot of descriptive personality / non-technical
+likes-dislikes that "don't seem to affect anything and just add context bloat." Tested directly: does any
+persona personality attribute ever influence an output? Searched **every team doc except the roster cards
+themselves** (the 1,639-line `trust_matrix.md` + all retro/feedback docs) for 12 distinct personality
+tokens lifted from the cards.
+
+| Tokens searched (drawn from the cards) | References found outside the roster cards |
+|----------------------------------------|-------------------------------------------|
+| jiu-jitsu · Finnish · sauna · churrasco · Nightwish · Sibelius · Lutheran · Catholic · rye bread · Codeforces · lo-fi · skiing | **0 (zero) — all twelve** |
+
+**Result: zero.** Not one assessment, review, or retro in the project's history references a persona's
+national origin, religion, sex, gender, musical taste, hobbies, or likes/dislikes. **Every** trust/feedback
+entry is grounded in *technical delivery* (PRs, review catches, CI state, rework). The personality block is
+**read on every spawn and referenced by nothing** — the owner's read is correct, and it is now measured.
+
+Composition of the bloat (10 parent cards; the 60 child cards mirror the shape):
+- Each card is ~50–64 lines. The static **Personality Profile** block — Communication Style + Background
+  (incl. `National/Cultural Origin`, `Religion`, `Gender`, `Sex at Birth`) + Personal
+  (`Likes` / `Dislikes` / `Music`) — is **~16–18 lines, roughly one third of every card.**
+- That third is duplicated across **70 canonical cards + 279 worktree copies** (Finding B) and re-read on
+  every persona spawn.
+
+**The self-improvement scaffold the owner wants already half-exists but is under-used.** Every card already
+carries `Tech Preferences — *Evolves based on project experience*` and 3 carry a `Performance History` with
+per-session entries and trust deltas. Personas that *self-improve on retro feedback* is therefore a
+**promotion of fields already in the schema**, not a new invention.
+
+**Recommendation C (folds into Option B execution):** in the slim, **drop the demographic / taste
+attributes that 0 assessments reference** (`National/Cultural Origin`, `Religion`, `Gender`, `Sex at Birth`,
+`Music`, `Likes`, `Dislikes`). Keep at most a single terse, behaviour-shaping line where it demonstrably
+affects routing (e.g. "review focus: systemic patterns" for a reviewer-class) — and only where a metric
+supports it. Replace the freed space with a structured, **retro-fed `Learned Adjustments`** section: the
+*only* evolving prose on a card becomes evidence-based feedback the retro appends, turning each persona into
+a self-improving artifact instead of static fiction. Net: ~⅓ smaller cards, every remaining line either
+load-bearing or evidence-derived.
+
+---
+
+## 4b. Finding D — the trust/feedback scoring is inflationary, with no firing path (owner question 2)
+
+Owner observation (2026-06-22): "feedback is overly positive… everyone gravitates to a perfect score… no
+one ever gets fired and after a few waves everyone is perfect." **Confirmed quantitatively** from
+`trust_matrix.md`:
+
+| Signal | Count | Reading |
+|--------|-------|---------|
+| Score **increases** (↑) | 35 | — |
+| Score **decreases** (↓) | 3 | **~12:1 upward bias** |
+| "Already at max" (pinned at 5) | 33 | ceiling-and-stick: once 5, never re-examined |
+| Raised to **5** | 25 | — |
+| Lowered to **2** | 2 | — |
+| Lowered to **1** | 0 | no one is ever rated untrustworthy |
+| "None this wave" / "None this phase" in the *Needs-Improvement* column | **139** | the improvement column is a formality |
+
+Mechanics driving the inflation:
+1. **Narrative, self-graded rubric.** Scores move on prose praise ("clean delivery," "reliable") rather
+   than a mechanical metric. Praise is cheap; the default sentiment is positive.
+2. **Monotone ratchet to a ceiling.** Increases vastly outnumber decreases and there is no decay, so scores
+   only climb, then pin at 5 ("Already at max, no change" ×33).
+3. **No negative-signal default.** Needs-Improvement defaults to "None this wave" (139×) instead of forcing
+   either a specific gap or an explicit, evidence-backed "no actionable gap."
+4. **No exit path.** Archival exists (Tariq / Mei-Lin "archived after Phase 8 reorganization") but it is
+   **org-restructure-driven, never performance-driven.** Nothing maps sustained low delivery to
+   non-spawn / retirement — hence "no one ever gets fired."
+
+**Recommendation D (folds into Option B execution) — make scoring mechanical and bidirectional:**
+- **Evidence-anchored deltas.** A trust change must cite a *countable* wave metric, not a narrative. The
+  wrapup already computes per-wave counters (`changes_requested_cycles`, CI-red merges,
+  `top_concentration_pct`); extend to per-engineer signals derivable from the merged-PR set: PRs merged,
+  must-fix items *received* as author, must-fix items *caught* as reviewer, CI-red merges, rework cycles,
+  review false-positives.
+- **Decay toward neutral.** Absent a trust-relevant signal for N waves, a score drifts back toward 3 —
+  defeats the ratchet-and-stick at 5.
+- **Distribution discipline.** Reserve 5 for genuinely exceptional *relative* performance in the wave; not
+  everyone can be 5 simultaneously. Calibrate against the mechanical metrics, not vibes.
+- **Forced negative-signal pass.** Each retro records, per active engineer, either a specific evidence-backed
+  gap or an explicit "metrics clean: {the numbers}." Ban bare "None."
+- **Performance-triggered exit.** Define the demotion / retirement trigger (e.g. sustained bottom-tier
+  mechanical metrics across K waves, or repeated CI-red merges) → persona archived / not spawned. Gives
+  "fired" a concrete meaning and closes the loop the owner flagged.
+
+These compose with the P6 thesis (criterion #1): **bias toward enforced, mechanical budgets / metrics over
+unmanaged narrative.** Just as the memory-budget hook replaced unbounded prose memory, mechanical trust
+metrics replace unbounded narrative praise.
+
+---
+
 ## 5. Options
 
 ### Option A — Keep as-is
@@ -148,6 +237,14 @@ role-class set.
 
 ## 6. Recommendation (for owner decision)
 
+> **Owner decision (2026-06-22): Option B — DECIDED.** The owner has chosen to do Option B, and has
+> scoped **two mandatory components into its execution**: (C) strip the non-load-bearing personality
+> attributes and make personas self-improve on retro feedback (Finding C / §4a); and (D) replace the
+> inflationary, self-graded scoring with mechanical, bidirectional, evidence-anchored trust metrics plus a
+> performance-triggered exit path (Finding D / §4b). Both are now proven-out by the measurements above, not
+> hypotheses. Execution remains deferred to a follow-up wave/phase per the P6 spike-and-decide directive;
+> this wave records the decision and the scope.
+
 **Recommend Option B (slim, governed) now, with Option C scoped as a deferred follow-up — NOT executed this wave.**
 
 Rationale:
@@ -178,11 +275,12 @@ follow-up should be an Option-C ADR rather than an Option-B audit.
 
 ## 7. Owner decision
 
-> Recorded in `phase-6.md` § Criterion #3 — Persona-model decision. Status: **AWAITING OWNER**.
+> Recorded in `phase-6.md` § Criterion #3 — Persona-model decision. Status: **DECIDED (owner, 2026-06-22).**
 
 | Field | Value |
 |-------|-------|
-| Decision | ☐ A (keep) · ☐ B (slim, governed) · ☐ C (restructure to role-classes) |
-| Recommended | **B now + C as deferred ADR candidate** |
+| Decision | ☐ A (keep) · ☑ **B (slim, governed)** · ☐ C (restructure to role-classes) |
+| Execution scope (folded in by owner) | **B + C-finding** (slim out non-load-bearing personality attrs → self-improving, retro-fed cards, §4a) **+ D-finding** (mechanical, bidirectional, decaying trust metrics + performance-triggered exit path, §4b) |
 | Teardown this phase? | **No** (P6 = spike-and-decide; execution deferred per owner 2026-06-20) |
-| Follow-up tracker | TBD at decision time |
+| Option C (role-classes) | Captured as a **deferred future-phase ADR candidate**, taken up only if governed-slim B still shows named-individual overhead dominating |
+| Follow-up tracker | [noorinalabs-main#819](https://github.com/noorinalabs/noorinalabs-main/issues/819) — execution (B + §4a self-improving cards + §4b mechanical scoring), deferred to a later wave/phase |
