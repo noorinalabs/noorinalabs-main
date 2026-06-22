@@ -15,25 +15,28 @@ This helper does targeted text-level upsert:
     the most-recent wave_{N}_* sibling (or before the closing `}`).
 
 It also supports REMOVING a top-level key (`--remove-key` mode / the
-`remove_top_level_key` function) — needed at phase boundaries where bare
-`wave_{M}_*` keys from a prior phase must be cleared before the new phase
-writes its own (main#611).
+`remove_top_level_key` function) — a general-purpose top-level key excision
+that preserves the file shape and validates JSON either side of the rewrite.
 
 Validates JSON before AND after the rewrite so a malformed write is caught.
 
-Phase-boundary key convention (main#611)
-----------------------------------------
-Wave bookkeeping uses BARE `wave_{M}_*` top-level keys (e.g. `wave_1_scope`),
-NOT phase-prefixed ones. A bare `wave_{M}_*` key always belongs to the
-**current** phase. At the first `/wave-scope` of each new phase, the prior
-phase's `wave_{M}_*` keys are REMOVED (their record is preserved in git
-history and the relevant `.claude/team/phases/phase-{N}.md`) before the new
-phase writes its own `wave_{M}_*` keys. This is the "overwrite convention":
-phase-prefixed keys (`p4_wave_1_*`) were considered and rejected because they
-would require a coordinated read-contract change across /wave-kickoff,
-/wave-wrapup, /wave-retro, /wave-scope and the post_wave_kickoff_comment hook.
-Use `--remove-key` for the phase-boundary cleanup so it no longer needs an
-ad-hoc script.
+Wave-key identity convention (main#804 — supersedes the main#611 overwrite scheme)
+----------------------------------------------------------------------------------
+Wave bookkeeping uses BARE `wave_{X}_*` top-level keys (e.g. `wave_16_scope`)
+where `X` is a **global monotonic wave id** — a single counter (`global_wave_seq`)
+that NEVER resets per phase and is never reused (allocated by `.claude/lib/wave_seq.py`
+at `/wave-scope` Step 0). Phase is a derived display attribute (`wave_{X}_phase`
++ `wave_{X}_phase_ordinal`), not part of the key.
+
+This replaces the pre-#804 per-phase scheme where `X` was a per-phase wave
+number that reset to 1 each phase, so a same-numbered wave in a later phase
+(P5W2 ↔ P6W2) collided on `wave_2_*`. That scheme relied on a `/wave-start`
+§ 5a per-phase *reset* (the deleted `wave_key_reset.py`) to clear the prior
+phase's stale keys — a band-aid that only cleaned up after the collision bit.
+Under global ids the collision class cannot arise (a number is never reused),
+so there is nothing to reset. Grandfathered in-flight P6 keys (`wave_1_*` /
+`wave_2_*`) are preserved; the counter is seeded above all historical per-phase
+numbers so the first new global wave is `wave_16`.
 
 Invocation:
   upsert_status_keys.py <path> <key>=<json-encoded-value> [<key>=<json-encoded-value> ...]
@@ -44,7 +47,7 @@ Example (upsert):
     wave_5_scope_reconciled_at='"2026-05-05T22:31:00Z"' \
     wave_5_scope_reconciliation_note='"manual run"'
 
-Example (phase-boundary cleanup):
+Example (key removal):
   upsert_status_keys.py cross-repo-status.json --remove-key \
     wave_1_scope wave_1_wrap_status wave_1_completed_at
 
@@ -255,9 +258,10 @@ def upsert_top_level_key(text: str, key: str, json_value: str) -> str:
 def remove_top_level_key(text: str, key: str) -> str:
     """Remove the top-level `"<key>": ...` entry from `text` entirely.
 
-    Used at phase boundaries to clear a prior phase's bare `wave_{M}_*` keys
-    before the new phase writes its own (main#611). Reuses the same structural
-    primitives as the upsert path:
+    A general-purpose top-level key excision (historically used at phase
+    boundaries to clear stale `wave_{M}_*` keys before main#804's global wave
+    ids removed that need). Reuses the same structural primitives as the upsert
+    path:
       - `_is_top_level_position` rejects a name match that is nested inside a
         multi-line value, so removing `wave_1_scope` never deletes a nested
         key that happens to share the name.

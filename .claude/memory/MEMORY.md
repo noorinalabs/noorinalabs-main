@@ -3,7 +3,7 @@
 - [closingIssuesReferences empty on wave-branch PRs](reference_closing_refs_empty_wave_prs.md) — not a gh --json field; parse body Closes/Fixes for non-default-base PRs. main#664.
 - [ontology_tracker test worktree-fragile](project_ontology_tracker_worktree_test.md) — test_worktrees_segment false-FAILS under .claude/worktrees/ (REPO_ROOT inherits it). PR#685.
 - [Prefer correct over expedient (no users)](feedback_prefer_correct_over_expedient.md) — Owner 2026-06-12: pre-launch, UI/visual regression not a hard constraint; do the right fix.
-- [Wave-key cross-phase collision](project_wave_key_cross_phase_collision.md) — wave_{M}_* not phase-namespaced; P5 collides w/ P4; /wave-start §5a reset never fires. main#683.
+- [Wave-key cross-phase collision — RESOLVED](project_wave_key_cross_phase_collision.md) — main#804 Design B: global monotonic wave id (never resets), phase is derived display; §5a reset retired + wave_key_reset.py deleted.
 - [Relocate mis-filed wave issues](feedback_relocate_misfiled_wave_issues.md) — issue whose code lands in another repo MUST be relocated at kickoff (close+recreate+split).
 - [TD intake 20%/wave](feedback_td_intake_20pct_per_wave.md) — per-wave TD intake (+20% of feature/bug scope, ceil; all if fewer) replaces cumulative ratio gate.
 - [Wave branch: every-wave merge + retain](feedback_wave_branch_merge_retain.md) — each wave merges to main at its /wave-wrapup; phase/wave branches RETAINED (--merge).

@@ -1,4 +1,5 @@
 {
+  "global_wave_seq": 15,
   "phase_6_criteria_trackers": {
     "1": "noorinalabs-main#725",
     "2": "noorinalabs-main#726",
@@ -1671,6 +1672,7 @@
   "wave_1_stranding_resolution": "Wave-branch commits (#704/#706/#734/#735) were stranded off main (wave->main PR never opened). Deliverables reconciled to main surgically via #799 (5 net-new files + ci/pre-commit/sync-gate wiring); deployments/phase-6/wave-1 branch retained as historical per owner directive, not merged.",
   "wave_1_scope_addition": "cspell CI-parity (#684) rolled to 6 child repos beyond the parent-only declared scope (emergent): ig1122, us189, deploy487, da211, ingest113, ds129.",
   "wave_1_wavekey_collision_note": "wave_1_* keys are not phase-namespaced (#683); P6W1 values overwrote stale P4W1 markers. Counters scoped to the P6W1 in-window set (mergedAt>=2026-06-20T04:39).",
+  "wave_1_phase_ordinal": 1,
   "wave_2_phase": 6,
   "wave_3_started_at": "2026-06-14T18:40:00Z",
   "wave_3_wrapped_up_at": "2026-06-14T23:05:00Z",
@@ -1713,5 +1715,6 @@
     },
     "created_at": "2026-06-16T23:12:45Z"
   },
-  "wave_2_started_at": "2026-06-21T23:14:01Z"
+  "wave_2_started_at": "2026-06-21T23:14:01Z",
+  "wave_2_phase_ordinal": 2
 }
