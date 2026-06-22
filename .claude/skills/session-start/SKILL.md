@@ -290,6 +290,30 @@ fi
 
 If the verdict is `unwrapped` (0 open wave PRs) — or the softer `unwrapped_unverified` (open-PR count undetermined because `gh` failed or the wave's scope keys are missing) — surface it prominently as **"wave merged but unwrapped — run `/wave-wrapup`"**. An `in_flight` verdict (open wave PRs remain) is a normal active wave: no nudge. This is informational only — it never blocks the session.
 
+### Step 5c — Wave-branch reachability / merge-model check (main#801)
+
+Surface **mid-wave** any wave-branch commit that is not reachable from `origin/main`, classified against the wave's declared merge model — so model-mixing or stranding surfaces within hours instead of only at the `/wave-wrapup` Step 11.5 gate. *Origin:* P6W1 mixed merge models (some PRs to the wave branch, the doc batch direct to main, no wave→main PR opened) → 5 deliverables stranded off main, caught only at wrapup (charter `pull-requests.md § One Merge Model Per Wave`).
+
+This is a deterministic helper (`.claude/lib/wave_merge_model.py reachability`), model-aware: a `direct-to-main` wave with commits on its wave branch is a hard **VIOLATION** (the P6W1 mixing); a `wave-branch` wave ahead of main with an open wave→main PR is **OK**, and ahead with no PR is an **ADVISORY** stranding-risk reminder. A wave with no declared model (legacy / pre-#801) degrades to advisory-only with a nudge — never a false violation. Non-fatal: a gh/scope error must not block session-start.
+
+```bash
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
+[ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+# Derive the live phase/wave from the canonical lifecycle pointers (NOT a max
+# over wave numbers — retained prior-phase scopes would mis-select; cf. #712).
+PHASE=$(jq -r '.current_phase // empty' "$REPO_ROOT/cross-repo-status.json" 2>/dev/null)
+WAVE=$(jq -r '(.current_wave // "" | ltrimstr("wave-"))' "$REPO_ROOT/cross-repo-status.json" 2>/dev/null)
+if [ -n "$PHASE" ] && [ -n "$WAVE" ] && [ -f "$REPO_ROOT/.claude/lib/wave_merge_model.py" ]; then
+  # Helper prints the per-repo report; exit 1 ONLY on a model VIOLATION.
+  python3 "$REPO_ROOT/.claude/lib/wave_merge_model.py" reachability "$PHASE" "$WAVE" \
+    || echo "⚠ merge-model VIOLATION above — a wave branch carries commits the declared model forbids (#801). Investigate before merging more."
+else
+  echo "reachability check skipped — current_phase/current_wave not set or helper absent."
+fi
+```
+
+Report any **VIOLATION** prominently (stop-and-investigate: a wave branch is accumulating work the declared model forbids — the P6W1 mixing). **ADVISORY** lines are reminders that wave-branch work will strand unless `/wave-wrapup` opens the wave→main PR — surface them but they do not block. **OK** across the board needs no action.
+
 ### Step 6 — Charter freshness check
 
 Read the tail of the feedback log:
@@ -325,6 +349,7 @@ After all steps complete, present a single status block:
 | 5. Wave | {active wave, stale?, issues} |
 | 5a. Red default-branch runs | {N red publish/deploy runs (M base-image-drift) / all green} |
 | 5b. Wave wrap state | {wave merged but unwrapped — run /wave-wrapup / in flight / wrapped} |
+| 5c. Wave reachability | {OK / N advisory (stranding risk) / VIOLATION (merge-model mixing) / skipped} |
 | 6. Charter | {current / proposals pending} |
 
 {Then address the user's actual message/request}

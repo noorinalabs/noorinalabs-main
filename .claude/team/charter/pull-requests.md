@@ -243,6 +243,27 @@ When multiple PRs in the same wave have dependencies (e.g., PR B depends on chan
 4. **After merging the base PR**, the dependent PR must rebase/merge the updated base before its CI result is trusted
 5. **Document dependencies** in PR descriptions: "Depends on PR #N (must merge first)"
 
+## One Merge Model Per Wave (Mandatory) <!-- promotion-target: skill -->
+
+A wave uses **exactly one merge model for its entire lifetime**, chosen and recorded at `/wave-kickoff`. Mixing the two within a single wave is **prohibited**.
+
+| Model | Where per-issue PRs base | Wave→main integration PR |
+|-------|--------------------------|--------------------------|
+| `direct-to-main` | every PR bases on `main` | none — work is already on `main`; the `deployments/phase-{P}/wave-{M}` branch stays at the kickoff point and never accumulates commits |
+| `wave-branch` | every PR bases on `deployments/phase-{P}/wave-{M}` | opened at `/wave-wrapup` Step 11, merged via the `wave-merge` admin exception |
+
+**Origin (P6W1 retro, owner-approved 2026-06-21, [#801](https://github.com/noorinalabs/noorinalabs-main/issues/801)):** P6W1 *mixed* models — #704/#706/#734/#735 merged to the `deployments/phase-6/wave-1` branch while the doc batch + cspell/mermaid work went **direct to main**, and the wave→main PR was never opened. Five net-new deliverables sat stranded off `main`, caught only at `/wave-wrapup` Step 11.5 (resolved via #799).
+
+**Declared at kickoff.** `/wave-kickoff` records the chosen model in `cross-repo-status.json` under `wave_{M}_merge_model` (one of `direct-to-main` / `wave-branch`) via `.claude/lib/wave_merge_model.py set {P} {M} <model>`. The default for cross-repo waves is `wave-branch`; a meta-only or single-repo wave may declare `direct-to-main`.
+
+**Enforced mid-wave, not only at wrapup.** `/session-start` runs `wave_merge_model.py reachability {P} {M}`, which compares each in-scope repo's wave branch against `origin/main` and classifies the gap **against the declared model** — so model-mixing or stranding surfaces within hours instead of at the Step 11.5 wrapup gate (the durable strengthening #801 adds on top of that gate):
+
+- `direct-to-main` + the wave branch carries commits ahead of `main` → **VIOLATION** (someone merged to the wave branch under a direct-to-main wave — the exact P6W1 mixing). Non-zero exit.
+- `wave-branch` + ahead + an **open** wave→main PR → **OK** (the integration PR is tracking the work).
+- `wave-branch` + ahead + **no** open wave→main PR → **ADVISORY** (expected mid-wave, but it *will* strand unless `/wave-wrapup` opens the PR).
+
+Advisories are expected mid-wave states and do **not** fail `/session-start` (a non-fatal step); only a model VIOLATION exits non-zero. A wave whose `wave_{M}_merge_model` is absent (legacy / pre-#801) degrades to advisory-only with a nudge to declare it — never a false VIOLATION. The classification logic is unit-tested (`.claude/lib/tests/test_wave_merge_model.py`) and the gh I/O layer is shell-free (explicit arg-list, main#688).
+
 ## Wave Merge PR Verification <!-- promotion-target: skill -->
 At the **end of a wave or phase**, the Manager creates a PR from the deployments branch into `main`. Before presenting the PR to the user:
 
