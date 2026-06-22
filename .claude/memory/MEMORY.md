@@ -74,7 +74,7 @@
 - [Dep-resolution change invalidates unchanged steps](feedback_dep_resolution_invalidates.md) — dep-resolution PR: reviewers read FULL workflow at HEAD, not diff. #924.
 - [gh API formal review 422](feedback_gh_review_self_approve_422.md) — gh api .../pulls/N/reviews w/ event:APPROVE always 422s (gh principal = PR author); use issue-comment.
 - [Brief-author verify roster surname](feedback_brief_author_verify_roster_surname.md) — read roster card content (not infer from slug) when naming a teammate in a spawn brief.
-- [statusCheckRollup before "CI clean"](feedback_statuscheckrollup_ci_clean.md) — local pass ≠ CI pass; run gh pr view --json statusCheckRollup before "ready" claims.
+- [statusCheckRollup before "CI clean"](feedback_statuscheckrollup_ci_clean.md) — local pass ≠ CI pass; run gh pr view --json statusCheckRollup before "ready" claims. EMPTY rollup = hard not-ready (main#802); oracle .claude/lib/pr_ci_state.py.
 - [.npmrc NODE_AUTH_TOKEN convention](feedback_npmrc_node_auth_token_convention.md) — project-level .npmrc for npm.pkg.github.com MUST use ${NODE_AUTH_TOKEN}; project-level wins.
 - [Hook cwd-anchor subagent worktree](feedback_hook_cwd_anchor_subagent_worktree.md) — hooks reading stdin cwd resolve to orchestrator dir, not subagent worktree → child gh ops misrouted.
 - [Sibling-issue overlap missed cross-close](feedback_sibling_issue_overlap.md) — PR for #A satisfying #B does NOT auto-close #B; pre-spawn overlap check. deploy#200.

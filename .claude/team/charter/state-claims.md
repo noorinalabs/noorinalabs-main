@@ -71,6 +71,22 @@ gh pr view <N> --repo <owner>/<repo> --json state,mergedAt,headRefOid,statusChec
 
 Posthumous review noise — posting a fresh review comment on a PR that merged before SendMessage delivery — is the recurring failure mode this field set guards against. **Six occurrences in 36 hours** across the noorinalabs-main#194 fan-out (Nazia/Tarek/Oyun/Keanu/Luciana posthumous on data-acquisition + design-system PRs, plus Linh OPEN-blocked-vs-mergeable on isnad-graph#845) made this the load-bearing pre-comment refresh discipline. Reviewers must include `state,mergedAt` in EVERY pre-post `gh pr view --json` call; if `state != OPEN`, escalate to the spawning agent with the resolved state instead of posting.
 
+### Sub-rule: empty `statusCheckRollup` is hard not-ready (never green) <!-- promotion-target: none -->
+
+<!-- Promoted from memory: feedback_statuscheckrollup_ci_clean.md (P6W1 retro, owner-approved 2026-06-21, main#802) -->
+
+An **empty** `statusCheckRollup` (`[]` — "no checks reported") is a **hard not-ready** state. It is NOT the same as green. Any "CI is green" / "all checks passed" / "ready to merge" claim MUST assert the rollup is **non-empty AND all-success** — never empty. An empty rollup means *no check ever validated this commit*, which is the absence of a verdict, not a passing verdict.
+
+**Origin:** design-system #129 (P6W1) had its GitHub `synchronize` event silently dropped — **zero** workflow runs were created, so `statusCheckRollup` was `[]`. A naive "no failing checks" merge-readiness test would have passed it as green. Recovered by close/reopen.
+
+**How to apply (claim direction):** the canonical PR-state refresh query (§ Sub-rule: PR-state field set) already includes `statusCheckRollup`; before any readiness claim, additionally assert `len(statusCheckRollup) > 0` AND every entry's `conclusion ∈ {SUCCESS, SKIPPED}` (or `NEUTRAL` outside the pending-allowlist). An empty list is a STOP, not a pass.
+
+**Code (preferring code over prose):** `.claude/lib/pr_ci_state.py <PR#> --repo <owner/repo>` is the deterministic merge-readiness oracle — it reuses the merge gate's own classifier (`validate_pr_ci_status.classify_rollup`) and exits **0 = ready** (non-empty, all-success), **1 = not-ready** (empty rollup, or any failing/pending check), **2 = undeterminable**. It treats empty as not-ready **unconditionally** — that is the query-time readiness assertion this sub-rule pins.
+
+**Reconciliation with the two path-filtered repos:** `noorinalabs-main` and `noorinalabs-deploy` can legitimately produce zero check-runs for a docs-only PR (`pull-requests.md` § Two path-filtered repos require PR-before-merge only). "Hard not-ready" there does NOT mean "never mergeable" — it means *never assume green*: verify the empty is the legitimate path-filtered case (e.g. confirm no covering `on.pull_request` workflow without a `paths:` filter should have run — `noorinalabs-main`'s `commit-identity.yml` runs on every PR, so a truly-empty rollup there is anomalous) before merging. The **merge gate** (`validate_pr_ci_status`, the hard PreToolUse block) encodes exactly this: it BLOCKS an empty rollup when a covering unfiltered-`paths` workflow exists (the #129 / unconditional-CI case) and warn-allows it when the repo is fully path-filtered, so the gate enforces #802 without deadlocking the two path-filtered repos. The readiness oracle and state-claim discipline are the always-on layer; the gate is the merge-time enforcement.
+
+Cross-references: `feedback_statuscheckrollup_ci_clean` (the local-tests-pass-but-CI-fails axis this extends), `validate_pr_ci_status` hook (the merge gate), `validate_workflow_paths_coverage` hook (workflow-orphan sibling), `pull-requests.md` § CI Must Be Green Before Merge.
+
 ### Sub-rule: Issue-state field set
 
 The canonical pre-claim refresh field set for issue state is:
