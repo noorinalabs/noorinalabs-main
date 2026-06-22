@@ -47,7 +47,7 @@ Every wave takes its **+20%** TD intake (`/wave-scope` Step 8.5) — `ceil(20% o
 
 On the **final wave (W3)** the +20% becomes a **floor, not a cap** (owner 2026-06-16 standing rule): deliberately pull in a large chunk of framework debt to clear before phase exit, sized by the owner at `/wave-scope`.
 
-## Criterion #4 — Ontology-vs-graphify decision (owner stub)
+## Criterion #4 — Ontology-vs-graphify decision — **DECIDED: C × T2 (owner, 2026-06-22)**
 
 Spike complete (main#728, P6W2): [`.claude/team/spikes/p6w2-ontology-vs-graphify.md`](../spikes/p6w2-ontology-vs-graphify.md).
 
@@ -78,9 +78,13 @@ for TS/Cypher/HCL). Pure-Replace rejected (loses the semantic layer); Keep is th
 Hybrid-on-Centralized (C × T1) leaves the parent generating from unseeable child source, so the drift
 survives.
 
-**Owner decision:** representation ☐ Keep ☐ Hybrid ☐ Replace · topology ☐ Centralized ☐ Distributed+overlay
-— recommended **C × T2** — _pending_. Per owner 2026-06-20, no teardown in P6; any implementation is a
-later-phase follow-up issue whose first task is the per-language derivability re-measurement.
+**Owner decision (2026-06-22): C × T2** — representation ☑ **Hybrid**, topology ☑ **Distributed + overlay**.
+Tooling is **not** pre-picked: chosen via an isolated-branch **bake-off** comparing candidates (structural:
+`llms.txt`+graph / SCIP-LSIF / tree-sitter / Neo4j code graph; overlay: Obsidian vault / markdown /
+NotebookLM) on two lenses — agent/Claude token-cost + query behavior, and human knowledge-base usability —
+starting on a polyglot repo (isnad-graph) to stress per-language derivability. Per owner 2026-06-20, no
+teardown in P6; implementation is a later-phase follow-up whose first tasks are the per-language
+derivability re-measurement and the tooling bake-off. Execution tracker: [#820](https://github.com/noorinalabs/noorinalabs-main/issues/820).
 
 ## Out of scope for P6 (deferred)
 
