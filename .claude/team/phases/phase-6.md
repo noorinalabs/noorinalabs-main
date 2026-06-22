@@ -76,7 +76,7 @@ The two spike-and-decide criteria record their owner decisions here. A decision 
 restructure" (#3) or "keep / replace / hybrid" (#4); teardown of either subsystem is **deferred to a later
 phase** regardless of the decision.
 
-### #3 — Persona-model decision — **AWAITING OWNER**
+### #3 — Persona-model decision — **DECIDED: B (owner, 2026-06-22)**
 
 - **Spike:** `.claude/team/spikes/p6w2-persona-model-evaluation.md` (Nadia Khoury, P6W2, [#727](https://github.com/noorinalabs/noorinalabs-main/issues/727)).
 - **Quantified:** roster is **78 named identities / 70 canonical cards** across 8 rosters — ~2.5× the
@@ -84,12 +84,25 @@ phase** regardless of the decision.
   Per-spawn persona tax = card-read + per-commit identity plumbing + reviewer-naming (the worktree +
   librarian costs are isolation/ontology costs, not persona costs, and survive any restructuring).
 - **Options:** A keep · B slim (governed headcount + budget hook) · C restructure to role-classes.
-- **Recommendation (PD):** **B now + C as a deferred ADR candidate.** The measured problem is ungoverned
-  drift, which B fixes at low–moderate, mostly-mechanical cost (same enforced-budget pattern as the W1
-  memory-budget hook); C is the cleaner long-term end-state but is a high-blast-radius teardown that P6
-  explicitly defers. Not A (answers "revisit" with "no change" while data shows overhead dominates at the
-  margin).
-- **Owner decision:** ☐ A · ☐ B · ☐ C — _record here_; follow-up tracker TBD at decision time.
+- **Owner decision (2026-06-22): B**, with two execution components folded in by the owner and now
+  proven-out by measurement:
+  - **§4a / Finding C — personality bloat → self-improving cards.** 0/12 personality tokens (origin,
+    religion, sex, music, hobbies) appear in *any* assessment across the 1,639-line trust matrix + all
+    retros — the block is ~⅓ of every card, read on every spawn, referenced by nothing. Slim it out; promote
+    the already-present `Tech Preferences (Evolves)` / `Performance History` fields into a structured,
+    **retro-fed `Learned Adjustments`** section so personas self-improve on feedback instead of carrying
+    static fiction.
+  - **§4b / Finding D — inflationary scoring → mechanical, bidirectional metrics + exit path.** Trust matrix
+    shows **35 ↑ vs 3 ↓** (~12:1), 33 "Already at max," **139** "None this wave" in Needs-Improvement, 0
+    ever rated 1 — everyone ratchets to a ceiling and no one is ever retired for performance. Replace
+    narrative self-grading with evidence-anchored deltas (per-engineer mechanical wave metrics),
+    decay-toward-neutral, distribution discipline, a forced negative-signal pass, and a
+    performance-triggered retirement trigger.
+- **Option C (role-classes):** deferred future-phase ADR candidate, only if governed-slim B still shows
+  named-individual overhead dominating.
+- **Execution:** deferred to a later wave/phase per P6 spike-and-decide; this wave records the decision +
+  scope. Follow-up tracker: [#819](https://github.com/noorinalabs/noorinalabs-main/issues/819) (B + §4a
+  self-improving cards + §4b mechanical scoring).
 
 ### #4 — Ontology-vs-graphify decision — _(spike in progress, [#728](https://github.com/noorinalabs/noorinalabs-main/issues/728))_
 
