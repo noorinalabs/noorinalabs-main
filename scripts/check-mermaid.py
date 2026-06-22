@@ -47,10 +47,27 @@ from pathlib import Path
 
 _MERMAID_BLOCK = re.compile(r"^([ \t]*)```mermaid[ \t]*\n(.*?)^[ \t]*```", re.DOTALL | re.MULTILINE)
 _ERROR_MARKERS = ("syntax error", "error in text", "aborted", "parse error")
+# HTML line-break tags mermaid renders natively inside node labels (`<br>`,
+# `<br/>`, `<br />`, any case). Stripped before the raw-angle scan so a valid
+# multi-line label doesn't trip the advisory warning — the closing `>` of a
+# break tag would otherwise match `_RAW_ANGLE` (#797).
+_BR_TAG = re.compile(r"<br\s*/?>", re.IGNORECASE)
 # A raw `<` or `>` that is not part of a mermaid edge token (`-->`, `<--`,
-# `<==`, `-.->`) and not a `<br>` line-break tag. Used only for an advisory
-# footgun warning, never to fail the gate (heuristic; full render is the gate).
-_RAW_ANGLE = re.compile(r"<(?!br\b|/|--|==|\.)|(?<![-=.])>")
+# `<==`, `-.->`). Break tags are removed by `_BR_TAG` first; what remains and
+# matches here is a genuinely raw angle bracket (the #786 `<unset>` class).
+# Used only for an advisory footgun warning, never to fail the gate (heuristic;
+# full render is the gate).
+_RAW_ANGLE = re.compile(r"<(?!/|--|==|\.)|(?<![-=.])>")
+
+
+def _has_raw_angle(body: str) -> bool:
+    """True if a mermaid block carries a raw `<`/`>` that renders degraded.
+
+    Valid HTML break tags (`<br>`/`<br/>`/`<br />`) are stripped before the scan
+    so multi-line labels don't false-warn (#797); a genuinely unescaped angle
+    bracket in a label (the #786 `<unset>` class) still trips it.
+    """
+    return bool(_RAW_ANGLE.search(_BR_TAG.sub("", body)))
 
 
 # Authored-doc scope exclusions. `.claude/memory/**` is excluded to match the
@@ -170,7 +187,7 @@ def main(argv: list[str]) -> int:
             text = f.read_text(encoding="utf-8")
             for idx, (line_no, body) in enumerate(_iter_blocks(text)):
                 total += 1
-                if _RAW_ANGLE.search(body):
+                if _has_raw_angle(body):
                     print(
                         f"  warning {f}:{line_no} — raw '<'/'>' in a mermaid block; "
                         "escape as #lt;/#gt; in labels (renders degraded otherwise, #786)."
