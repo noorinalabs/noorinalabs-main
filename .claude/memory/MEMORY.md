@@ -96,3 +96,4 @@
 - [Cross-spawn cwd collision](feedback_cwd_collision_cross_spawn.md) — two agents sharing one cwd on different branches: 2nd checkout moves the 1st → commits on wrong branch.
 - [Prod loaded but quality-broken](project_prod_loaded_quality_broken.md) — prod NO LONGER empty; 768k nodes/8.98% linked, narrators polluted, chains empty, search 500s → P7 data-quality. meta main#723.
 - [Brand is "Noorina Labs" (two words)](feedback_brand_noorina_labs.md) — camel-case "NoorinALabs" WRONG in prose; lowercase slug stays; cspell now enforces (dict entry removed). main#792.
+- [bleach ReDoS standing item](project_bleach_redos_standing_item.md) — GHSA-g75f-g53v-794x no fix + bleach EOL 2026-06-05; per-repo --ignore-vuln stays; revisit each wave; close only when kaggle dropped. main#703.
