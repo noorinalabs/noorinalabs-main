@@ -87,3 +87,22 @@ The four `AUTH_GOOGLE_CLIENT_ID/SECRET` + `AUTH_GITHUB_CLIENT_ID/SECRET` secrets
 **Adjacent conventions:** env-scope-by-default for service-internal secrets (`USER_POSTGRES_*`, `JWT_*`, `KAFKA_*`, `NEO4J_PASSWORD`) per [secrets-audit § 3.9](../../../docs/secrets-audit-2026-04-24.md). OAuth credentials follow the same env-scope pattern; this convention codifies the "per-env" requirement that makes the env-scope pattern necessary in the first place.
 
 **Promotion provenance:** Surfaced from [deploy#244](https://github.com/noorinalabs/noorinalabs-deploy/issues/244) — runbook landed in deploy repo, but the org-wide convention is the right altitude for charter. Filed as main#240 to capture in this charter so future env splits inherit the pattern from day 1 instead of re-deriving it from incident reflection.
+
+## Ontology-vs-graphify — owner decision <!-- promotion-target: none -->
+
+**Status:** spike complete (main#728, P6W2); owner decision **pending**.
+
+The three-role ontology stack (Tracker hook → `checksums.json`, Resolver `/ontology-rebuild`,
+Librarian `/ontology-librarian`, + Hook-15 consult gate) was spiked against a Google
+LLM-doc-format (`llms.txt`) + graphify approach. Full analysis and the four-axis comparison live in
+[`.claude/team/spikes/p6w2-ontology-vs-graphify.md`](spikes/p6w2-ontology-vs-graphify.md);
+the owner-decision stub is in [`phase-6.md`](../phases/phase-6.md) §criterion #4.
+
+**Spike recommendation — Hybrid:** auto-derive the code-structural layer (measured 100% derivable —
+54/54 modules self-document — in ~60 LOC, vs the current 1,347 LOC of freshness machinery + 1,760
+lines of curated payload + a per-edit Hook-15 tax), retain hand-curated **semantics/intent** (domain
+entities, service topology, ADR "why") as low-churn markdown, and soften Hook 15 to advisory.
+
+**Decision options:** ☐ Keep ☐ Hybrid (recommended) ☐ Replace. Per owner 2026-06-20, this is
+spike-and-decide — **no teardown in Phase 6**; implementation of the chosen option is a later-phase
+follow-up. This entry is updated in place once the owner records the decision.

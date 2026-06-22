@@ -47,6 +47,23 @@ Every wave takes its **+20%** TD intake (`/wave-scope` Step 8.5) — `ceil(20% o
 
 On the **final wave (W3)** the +20% becomes a **floor, not a cap** (owner 2026-06-16 standing rule): deliberately pull in a large chunk of framework debt to clear before phase exit, sized by the owner at `/wave-scope`.
 
+## Criterion #4 — Ontology-vs-graphify decision (owner stub)
+
+Spike complete (main#728, P6W2): [`.claude/team/spikes/p6w2-ontology-vs-graphify.md`](spikes/p6w2-ontology-vs-graphify.md).
+
+Measured on the meta-repo `.claude/` machinery slice (54 modules, 54/54 already docstring'd):
+the code-structural layer of the ontology is **100% auto-derivable** by a ~60-LOC generator,
+versus **1,347 LOC** of freshness machinery + **1,760 lines** of hand-curated payload +
+an 88 KB / 248-file `checksums.json` + a per-edit Hook-15 tax in the current stack.
+
+**Spike recommendation:** **Hybrid (Option C)** — generate the structural layer (`llms.txt` +
+code graph, always-fresh), retain hand-curated **semantics/intent** (domain, service topology,
+ADR "why") as low-churn markdown, and **soften Hook 15** from a blocking gate to advisory.
+Pure-Replace rejected (loses the semantic layer a graph cannot derive); Keep is the do-nothing tax.
+
+**Owner decision:** ☐ Keep ☐ Hybrid (recommended) ☐ Replace — _pending_. Per owner 2026-06-20,
+no teardown in P6; any implementation is a later-phase follow-up issue.
+
 ## Out of scope for P6 (deferred)
 
 - **All product/data-quality/ML work** — that is **Phase 7** (Data Quality / ML / demo): the 15 issues relabeled `phase-6`→`phase-7` at this plan time (main#673, ig#1039–1043, da#161–166, da#136/139/178), plus the prod data-quality cluster under meta #723 (sanadset orphans, sparse linkage, broken search, narrator pollution), ig#1110/#1111.
