@@ -201,6 +201,11 @@ tfstate
 healthz
 renderable
 
+# --- CI readiness (#802): gh statusCheckRollup field + the lowercase memory
+#     slug `feedback_statuscheckrollup_ci_clean` (camelCase splits fine; the
+#     all-lowercase slug concatenation does not) ---
+statusCheckRollup
+
 # --- Architecture L3 doc (#771): per-container identifiers + config tokens ---
 vhosts
 envsubst
