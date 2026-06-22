@@ -56,13 +56,31 @@ the code-structural layer of the ontology is **100% auto-derivable** by a ~60-LO
 versus **1,347 LOC** of freshness machinery + **1,760 lines** of hand-curated payload +
 an 88 KB / 248-file `checksums.json` + a per-edit Hook-15 tax in the current stack.
 
-**Spike recommendation:** **Hybrid (Option C)** — generate the structural layer (`llms.txt` +
-code graph, always-fresh), retain hand-curated **semantics/intent** (domain, service topology,
-ADR "why") as low-churn markdown, and **soften Hook 15** from a blocking gate to advisory.
-Pure-Replace rejected (loses the semantic layer a graph cannot derive); Keep is the do-nothing tax.
+**Revised forward (owner, 2026-06-22) — the product lives in the child repos.** The spike measured
+only the parent's `.claude/` Python; the ontology's real job is to describe the **polyglot product**
+(TS/React, Neo4j/Cypher, Terraform/HCL) in the child repos. Two corrections fold in:
+- **Topology now a first-class axis.** Today's model is **centralized-in-parent**, and the parent
+  hand-curates structural snapshots of child source it **cannot see** (children gitignored) → that is
+  the drift source and the `checksums.json` worktree-churn. Alternative: **distribute** the generated
+  structural layer into each child repo (built where its source is visible) + keep only a **central
+  system overlay** (semantics, cross-repo topology, ADRs) in main + a thin aggregator. Evaluated on the
+  owner's four axes (implementation complexity, per-agent token cost, context-locality for implementing
+  agents, maintenance cost), distributed wins all four at the cost of a cross-repo aggregation step.
+- **Tooling broadened** beyond Google `llms.txt`/NotebookLM: SCIP/LSIF code-intelligence, tree-sitter,
+  a Neo4j-backed code graph (dogfoods the stack) for structure; an **Obsidian (user+LLM) vault** or
+  markdown for the curated overlay. Survey is non-exhaustive.
 
-**Owner decision:** ☐ Keep ☐ Hybrid (recommended) ☐ Replace — _pending_. Per owner 2026-06-20,
-no teardown in P6; any implementation is a later-phase follow-up issue.
+**Spike recommendation (revised): C × T2** — **Hybrid representation** (generate structural layer,
+hand-curate semantics/intent, soften Hook 15 to advisory) on a **Distributed + system-overlay topology**
+(per-child generated index, central overlay, aggregator). **Gated** on a per-language derivability
+re-measurement on the actual product repos before any commit (Python's 54/54 docstring rate is unproven
+for TS/Cypher/HCL). Pure-Replace rejected (loses the semantic layer); Keep is the do-nothing tax;
+Hybrid-on-Centralized (C × T1) leaves the parent generating from unseeable child source, so the drift
+survives.
+
+**Owner decision:** representation ☐ Keep ☐ Hybrid ☐ Replace · topology ☐ Centralized ☐ Distributed+overlay
+— recommended **C × T2** — _pending_. Per owner 2026-06-20, no teardown in P6; any implementation is a
+later-phase follow-up issue whose first task is the per-language derivability re-measurement.
 
 ## Out of scope for P6 (deferred)
 
