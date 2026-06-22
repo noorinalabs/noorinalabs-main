@@ -53,6 +53,29 @@ On the **final wave (W3)** the +20% becomes a **floor, not a cap** (owner 2026-0
 - **Streaming pipeline repeatable** (#667) — Phase 7.
 - **Actively ripping out the persona or ontology subsystems** — P6 decides; teardown (if chosen) is a later phase.
 
+## Architectural-revisit decisions (criteria #3, #4)
+
+The two spike-and-decide criteria record their owner decisions here. A decision is "keep / slim /
+restructure" (#3) or "keep / replace / hybrid" (#4); teardown of either subsystem is **deferred to a later
+phase** regardless of the decision.
+
+### #3 — Persona-model decision — **AWAITING OWNER**
+
+- **Spike:** `.claude/team/spikes/p6w2-persona-model-evaluation.md` (Nadia Khoury, P6W2, [#727](https://github.com/noorinalabs/noorinalabs-main/issues/727)).
+- **Quantified:** roster is **78 named identities / 70 canonical cards** across 8 rosters — ~2.5× the
+  "≈28" the issue assumed (drift, ungoverned); 279/349 on-disk card copies are worktree duplicates.
+  Per-spawn persona tax = card-read + per-commit identity plumbing + reviewer-naming (the worktree +
+  librarian costs are isolation/ontology costs, not persona costs, and survive any restructuring).
+- **Options:** A keep · B slim (governed headcount + budget hook) · C restructure to role-classes.
+- **Recommendation (PD):** **B now + C as a deferred ADR candidate.** The measured problem is ungoverned
+  drift, which B fixes at low–moderate, mostly-mechanical cost (same enforced-budget pattern as the W1
+  memory-budget hook); C is the cleaner long-term end-state but is a high-blast-radius teardown that P6
+  explicitly defers. Not A (answers "revisit" with "no change" while data shows overhead dominates at the
+  margin).
+- **Owner decision:** ☐ A · ☐ B · ☐ C — _record here_; follow-up tracker TBD at decision time.
+
+### #4 — Ontology-vs-graphify decision — _(spike in progress, [#728](https://github.com/noorinalabs/noorinalabs-main/issues/728))_
+
 ## Phase exit gate
 
 Owner runs `/phase-review 6` and verifies the **5 end-state rows** are `Done` (their trackers closed), including the standing per-wave TD-intake compliance. The two decision criteria (#3 persona, #4 ontology) are satisfied by a **recorded owner decision** (keep/slim/restructure; keep/replace/hybrid), not by a teardown. On confirmation, `/plan-phase 7` defines the Data-Quality / ML phase before any P7 wave kicks off.
