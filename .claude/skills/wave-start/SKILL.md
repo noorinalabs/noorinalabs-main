@@ -116,28 +116,12 @@ for label in "tech-debt" "feature" "bug" "security" "infra" "process"; do
 done
 ```
 
-### 5a. Wave-key per-phase reset (when a phase reuses a wave number)
+### 5a. Wave-key per-phase reset — RETIRED (main#804)
 
-At phase boundaries, bare `wave_{M}_*` keys from the prior phase's wave M remain in `cross-repo-status.json` under the same names (e.g. `wave_4_final_pr_count`, `wave_4_branches`, `wave_4_scope`). These stale values bleed into the new phase's wave M if not explicitly cleared. (Bare keys — NOT phase-prefixed `p{P}_wave_{M}_*` — are deliberate: the phase-prefix scheme was considered and rejected in main#611 because it would require a coordinated read-contract change across every wave skill. The fix is correct cleanup of the bare keys, not renaming them.)
+**There is no per-phase reset anymore.** Design B (main#804) made wave ids a single **global monotonic counter** that never resets per phase — `{M}` is a global wave id (P6's first wave is `wave_16`, not `wave_1`), allocated once at `/wave-scope` Step 0.0 via `.claude/lib/wave_seq.py`. Because a global id is never reused, two same-ordinal waves in different phases (the old P5W2 ↔ P6W2 collision) get DISTINCT keys by construction. There are no stale prior-phase `wave_{M}_*` keys to clear — the collision class is gone, so the reset (and its `wave_key_reset.py` helper) is deleted.
 
-**This step is fully mechanized** by `.claude/lib/wave_key_reset.py` (main#683). Do NOT hand-roll the detection or the key list in bash — three defects in the old inline version (a `current_phase`-based guard that could never fire for an intra-phase same-number reuse; a detection probe that looked for the wrong key names; and a hand-enumerated reset list that missed ≥10 keys including the dangerous `wave_{M}_branches`) are exactly what that helper exists to prevent.
-
-**Detection signal:** the helper decides staleness from the **phase stamp carried inside the wave's own keys** — `wave_{M}_scope.phase` (written by `/wave-scope`) and the `phase-{X}` segment of `wave_{M}_branches.branch` (written by `/wave-kickoff`). It NEVER consults the global `current_phase` (which tracks the latest phase, not the phase that wrote the stale keys — the root cause of the old guard's blind spot). If any stamp differs from the phase `{P}` you are starting, the wave's keys are stale.
-
-```bash
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-STATUS_FILE="$REPO_ROOT/cross-repo-status.json"
-
-# Dry-run first — prints the verdict and the exact keys that would be reset:
-python3 "$REPO_ROOT/.claude/lib/wave_key_reset.py" "$STATUS_FILE" {M} {P}
-
-# Apply — removes every stale wave_{M}_* key (prefix-complete; no-op if not stale):
-python3 "$REPO_ROOT/.claude/lib/wave_key_reset.py" "$STATUS_FILE" {M} {P} --apply
-```
-
-The `--apply` path REMOVES the stale keys (the main#611 bare-key overwrite convention — the new phase's `/wave-start` § 6 and `/wave-scope` then write fresh `wave_{M}_*` keys). It is a safe no-op when the wave's stamps already match `{P}` — i.e. the first wave of a phase, or `/wave-start` re-run within the same phase (idempotent). Removal reuses `upsert_status_keys.remove_top_level_key`, so the file's mixed compact-inline / pretty-indented shape is preserved and the rewrite is JSON-validated before AND after (no 500-line cosmetic diff).
-
-This reset runs BEFORE the § 6 PUT-contents write so the only `wave_{M}_*` values left once the step completes are the active-state keys § 6 writes. When operating on the `main` copy via PUT-contents, run the helper against a local working copy of the fetched content and fold the result into the same § 6 payload to avoid a separate round-trip.
+Phase is now a **derived display attribute** of the wave, never part of the key:
+`wave_{M}_phase` + `wave_{M}_phase_ordinal` (the human-friendly "Phase {P}, Wave {ordinal}" framing) are written alongside the scope at `/wave-scope` Step 0.0. Nothing to do here at `/wave-start`.
 
 ### 6. Update cross-repo status — PUT-contents on `main`
 
