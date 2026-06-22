@@ -237,10 +237,18 @@ class NonMatchingTests(unittest.TestCase):
     def test_non_tmp_path_not_matched(self):
         """Stale file outside /tmp must not trigger — non-/tmp paths are safe.
 
-        Use the cwd (test run dir) for the temp dir, since the system tempfile
-        default is /tmp on Linux which would defeat the purpose of this test.
+        Needs a directory NOT under /tmp (the system tempfile default on Linux
+        is /tmp, which would defeat the purpose of this test). `os.getcwd()` is
+        the natural choice, but a /tmp worktree checkout (the wave isolation
+        convention) puts cwd itself under /tmp — so fall back to $HOME, and
+        skip only if no non-/tmp location is available (main#802).
         """
-        with tempfile.TemporaryDirectory(dir=os.getcwd()) as td:
+        base = os.getcwd()
+        if base == "/tmp" or base.startswith("/tmp/"):
+            base = os.path.expanduser("~")
+        if base == "/tmp" or base.startswith("/tmp/"):
+            self.skipTest("no non-/tmp directory available for the negative-path case")
+        with tempfile.TemporaryDirectory(dir=base) as td:
             msg = f"{td}/msg.txt"
             _touch(msg, age_seconds=120)
             self.assertFalse(msg.startswith("/tmp/"))
