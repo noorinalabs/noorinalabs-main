@@ -1636,3 +1636,41 @@ Clean-but-not-frictionless wave: **17 PRs across 5 repos**, all 2× Approved + C
 - **Done well:** cleanest possible fan-out (8 PRs, 0 CR / 0 CI-fail / 0 must-fix-after-merge); verify-before-trust caught two real issues (Luciana's gate-premise correction, the reachability gate's stranding catch); reviewers did genuine independent verification.
 - **Needs improvement (process):** (1) **mixed merge model stranded #734/#735 off main** — only caught at wrapup (Proposed Change #1: one merge model per wave + mid-wave reachability check); (2) **wave-key collision (#683)** corrupted wrapup markers for the 3rd consecutive retro (Proposed Change #2: phase-namespaced keys, must-fix next wave); (3) **silent CI-trigger drop** on #129 produced "no checks reported" — treat as hard not-ready (Proposed Change #3).
 - **Concentration:** 81% A.Virtanen (22/27) — **theme-fit** (framework/standards/code-over-prose is her surface), not fragility. Forward-flag: P6W2 (persona/ontology revisits) is also framework-heavy and may re-concentrate on Aino — consider distributing or accepting + documenting at scope time.
+
+
+---
+
+## Phase 6 Wave 2 Trust Updates (2026-06-22) — Architectural revisits + retro mechanization
+
+> **First wave scored under the §4b mechanical-scoring _spirit_ (#819), at the owner's request.**
+> Under the prior model, all 15 implementers delivered one clean PR each → 15× "clean, +1, None this
+> wave" — the exact ratchet the owner flagged. Under evidence-anchored, distribution-disciplined scoring:
+> **a clean routine PR with 0 must-fix / 0 CI-red is baseline expected performance → no trust change.**
+> Only moves backed by a concrete differentiator are applied. Result this wave: **14 of 15 hold steady; 1 moves.**
+> (The mechanism itself is not yet implemented — that is #819 Task; this is a manual dry-run of its discipline.)
+
+### Org-Level Team (noorinalabs-main)
+
+| Rated | Old | New | Mechanical basis |
+|-------|-----|-----|------------------|
+| Weronika Zielinska (PA) | 4 | **5** ↑ | Two distinct evidence-anchored signals: (1) the deeper of the two architectural evals (#813 ontology spike), and (2) the wave's **only** must-fix catch as reviewer — caught the canonical-doc drift on Aino's #811 (`ontology/lifecycle.md` still referencing the deleted `wave_key_reset.py`/§5a), which was the sole changes-requested cycle of the wave. The one defensible increase. |
+| Aino Virtanen (SQL) | 5 | 5 | #811 headline wave-key Design B (global monotonic identity — complex, clean final state). **Named gap (not "None"):** the initial #811 carried the `lifecycle.md` drift Weronika caught → 1 rework cycle. Caught + fixed in one pass; net no change, already at ceiling. |
+| Lucas Ferreira · Nurul Hakim · Aisha Idrissi · Nino Kavtaradze · Bereket Tadesse · Santiago Ferreira · Wanjiku Mwangi · Nadia Khoury | hold | hold | **Held steady — explicitly NOT ratcheted.** Each delivered 1 clean PR, 0 must-fix received, 0 CI-red. Baseline expected delivery is not an increase under the #819 discipline. |
+
+### Child-Repo Teams
+
+| Rated | Old | New | Mechanical basis |
+|-------|-----|-----|------------------|
+| Marisol Vega-Cruz · Linh Pham · Jelani Mwangi (isnad-graph) | hold | hold | 1 clean PR each (#1124/#1125/#1126), 0 must-fix, 0 CI-red. Baseline — held. |
+| Mateo Salazar · Idris Yusuf (user-service) | hold | hold | 1 clean PR each (#190/#191), 0 must-fix, 0 CI-red. Baseline — held. |
+
+### Done Well / Needs Improvement (Phase 6 Wave 2) — evidence-anchored, bare "None" banned
+
+| Member | Done Well (with evidence) | Gap (metric, or explicit "clean: numbers") |
+|--------|---------------------------|--------------------------------------------|
+| **Weronika Zielinska** | #813 spike depth (real AST probe) + the wave's only must-fix catch (#811) | clean: 0 must-fix received, 0 CI-red |
+| **Aino Virtanen** | #811 Design B headline tech-debt fix | 1 rework cycle — `lifecycle.md` drift, caught in review |
+| **All 13 others** | 1 clean on-theme PR each; the deliberate de-concentration (7% top vs P6W1's 81%) worked | clean: 0 must-fix, 0 CI-red — baseline, not exceptional; no ratchet |
+
+**Fire/hire:** none. The performance-triggered exit path the owner asked for (#819 §4b) is not yet
+implemented, so "fired" still has no mechanical meaning this wave — that is exactly what #819 closes.
