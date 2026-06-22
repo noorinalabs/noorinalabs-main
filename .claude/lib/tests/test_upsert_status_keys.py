@@ -385,6 +385,120 @@ class UpsertUpdateExistingScalarTests(unittest.TestCase):
         self.assertEqual(out.count('"wave_1_branches"'), 1)
 
 
+class UpsertReplaceMultilineExistingValueTests(unittest.TestCase):
+    """main#736 — REPLACING an existing top-level key whose current value
+    spans multiple lines (pretty-printed object/array).
+
+    Pre-#736 the replace path spliced at the opener line's end (`m.end()`).
+    For a multi-line value the opener line ends with `{`/`[` and the value
+    body continues on following lines, so the old body was left dangling after
+    the new compact value — invalid JSON (`Expecting ',' delimiter`) that
+    aborted the whole upsert batch. This is the real `/wave-scope` failure
+    where a prior-phase `wave_{M}_scope` was stored as pretty JSON.
+    """
+
+    def test_replace_multiline_object_value(self):
+        """The /wave-scope reproducer: replace a multi-line wave_1_scope
+        object with a compact value. Surrounding keys (incl. a compact-inline
+        sibling) must be preserved byte-for-byte."""
+        text = (
+            "{\n"
+            '  "phase": "phase-4",\n'
+            '  "wave_1_scope": {\n'
+            '    "tier_1_data": ["#1", "#2"],\n'
+            '    "tier_2": {"a": 1}\n'
+            "  },\n"
+            '  "wave_1_meta_issue": 731\n'
+            "}\n"
+        )
+        out = upsert_top_level_key(text, "wave_1_scope", '"narrow"')
+        parsed = json.loads(out)
+        self.assertEqual(parsed["wave_1_scope"], "narrow")
+        # Surrounding keys intact, no duplicate, no truncation.
+        self.assertEqual(parsed["phase"], "phase-4")
+        self.assertEqual(parsed["wave_1_meta_issue"], 731)
+        self.assertEqual(out.count('"wave_1_scope"'), 1)
+        # Compact-inline siblings preserved byte-for-byte.
+        self.assertIn('  "phase": "phase-4",\n', out)
+        self.assertIn('  "wave_1_meta_issue": 731\n', out)
+
+    def test_replace_multiline_array_value(self):
+        text = (
+            "{\n"
+            '  "keep": 1,\n'
+            '  "wave_1_carry_forward": [\n'
+            '    "#341",\n'
+            '    "#342"\n'
+            "  ],\n"
+            '  "tail": 2\n'
+            "}\n"
+        )
+        out = upsert_top_level_key(text, "wave_1_carry_forward", '["#999"]')
+        parsed = json.loads(out)
+        self.assertEqual(parsed["wave_1_carry_forward"], ["#999"])
+        self.assertEqual(parsed["keep"], 1)
+        self.assertEqual(parsed["tail"], 2)
+        self.assertEqual(out.count('"wave_1_carry_forward"'), 1)
+
+    def test_replace_multiline_final_object_value(self):
+        """Multi-line value that is ALSO the JSON-final key (its `}` has no
+        trailing comma). The replacement must not introduce a stray comma."""
+        text = '{\n  "keep": 1,\n  "wave_1_scope": {\n    "a": 1,\n    "b": 2\n  }\n}\n'
+        out = upsert_top_level_key(text, "wave_1_scope", '"narrow"')
+        parsed = json.loads(out)
+        self.assertEqual(parsed["wave_1_scope"], "narrow")
+        self.assertEqual(parsed["keep"], 1)
+        self.assertEqual(out.count('"wave_1_scope"'), 1)
+
+    def test_replace_multiline_value_with_compact_object(self):
+        """Replacing a multi-line value with a NEW multi-line (pretty) value —
+        the helper produces this when json_value itself is pretty-printed."""
+        text = (
+            "{\n"
+            '  "wave_4_active": true,\n'
+            '  "wave_4_scope": {\n'
+            '    "old": 1\n'
+            "  },\n"
+            '  "wave_4_meta": 5\n'
+            "}\n"
+        )
+        new_val = '{\n    "new": 2\n  }'
+        out = upsert_top_level_key(text, "wave_4_scope", new_val)
+        parsed = json.loads(out)
+        self.assertEqual(parsed["wave_4_scope"], {"new": 2})
+        self.assertTrue(parsed["wave_4_active"])
+        self.assertEqual(parsed["wave_4_meta"], 5)
+
+    def test_replace_multiline_value_with_brackets_in_nested_strings(self):
+        """The old multi-line value contains string values with `{`/`[`/`}`/`]`
+        and escaped quotes — depth/string tracking must locate the true end."""
+        text = (
+            "{\n"
+            '  "wave_5_scope": {\n'
+            '    "note": "scope is {tight} and [bounded]",\n'
+            '    "quote": "He said \\"go\\" then }",\n'
+            '    "n": 3\n'
+            "  },\n"
+            '  "keep": 1\n'
+            "}\n"
+        )
+        out = upsert_top_level_key(text, "wave_5_scope", '"done"')
+        parsed = json.loads(out)
+        self.assertEqual(parsed["wave_5_scope"], "done")
+        self.assertEqual(parsed["keep"], 1)
+        self.assertEqual(out.count('"wave_5_scope"'), 1)
+
+    def test_replace_multiline_does_not_touch_nested_same_name(self):
+        """A nested key sharing the outer key's name must NOT be the replace
+        target — the _is_top_level_position guard still applies on the
+        multi-line replace path."""
+        text = '{\n  "wave_6_scope": {\n    "wave_6_scope": 99\n  },\n  "keep": 1\n}\n'
+        out = upsert_top_level_key(text, "wave_6_scope", '"narrow"')
+        parsed = json.loads(out)
+        self.assertEqual(parsed["wave_6_scope"], "narrow")
+        self.assertEqual(parsed["keep"], 1)
+
+
 class RemoveTopLevelKeyTests(unittest.TestCase):
     """main#611 — `remove_top_level_key` / `--remove-key` mode for phase-
     boundary cleanup of bare `wave_{M}_*` keys.
