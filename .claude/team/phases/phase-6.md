@@ -49,7 +49,7 @@ On the **final wave (W3)** the +20% becomes a **floor, not a cap** (owner 2026-0
 
 ## Criterion #4 — Ontology-vs-graphify decision (owner stub)
 
-Spike complete (main#728, P6W2): [`.claude/team/spikes/p6w2-ontology-vs-graphify.md`](spikes/p6w2-ontology-vs-graphify.md).
+Spike complete (main#728, P6W2): [`.claude/team/spikes/p6w2-ontology-vs-graphify.md`](../spikes/p6w2-ontology-vs-graphify.md).
 
 Measured on the meta-repo `.claude/` machinery slice (54 modules, 54/54 already docstring'd):
 the code-structural layer of the ontology is **100% auto-derivable** by a ~60-LOC generator,

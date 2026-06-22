@@ -95,7 +95,7 @@ The four `AUTH_GOOGLE_CLIENT_ID/SECRET` + `AUTH_GITHUB_CLIENT_ID/SECRET` secrets
 The three-role ontology stack (Tracker hook → `checksums.json`, Resolver `/ontology-rebuild`,
 Librarian `/ontology-librarian`, + Hook-15 consult gate) was spiked against a Google
 LLM-doc-format (`llms.txt`) + graphify approach. Full analysis and the four-axis comparison live in
-[`.claude/team/spikes/p6w2-ontology-vs-graphify.md`](spikes/p6w2-ontology-vs-graphify.md);
+[`.claude/team/spikes/p6w2-ontology-vs-graphify.md`](../spikes/p6w2-ontology-vs-graphify.md);
 the owner-decision stub is in [`phase-6.md`](../phases/phase-6.md) §criterion #4.
 
 **Spike recommendation — Hybrid:** auto-derive the code-structural layer (measured 100% derivable —
