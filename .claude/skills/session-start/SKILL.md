@@ -270,6 +270,50 @@ fi
 
 Report any red runs prominently — a red publish/deploy on a default branch is a stop-and-investigate signal, not background noise: it usually means the artifact consumers (staging, downstream pulls) are silently running stale or broken bits. A run tagged `base-image-drift` is a different remediation path than generic redness: the wave's code did not break it — an upstream base image grew a new advisory (e.g. the W4 openssl CVE-2026-45447) — so fix it forward by rebuilding/bumping the base image, not by reverting wave work. If `gh api` calls fail (auth/rate-limit), say so rather than reporting a false all-green; the classifier itself is best-effort and degrades to the unclassified `code/other` tag on any log-fetch failure.
 
+### Step 5b — Wave-merged-but-unwrapped nudge (P5W5 retro Proposed Change #1 / #730)
+
+Surface a wave whose PRs **merged to main but which was never formally wrapped**. *Rationale:* P5W5 merged all 45 of its PRs days before `/wave-wrapup` ran — `wave_5_wrapped_up_at` stayed null, `wave_5_active` stayed true, and the post-wave audits (annunaki-attack, memory) never ran — because nothing at session-start surfaced the gap, so wrap/retro deferred indefinitely.
+
+The signal is the conjunction `wave_{M}_active == true` AND no wrapup marker present (`wave_{M}_wrapped_up_at` / `wave_{M}_wrapup_completed_at` / `wave_{M}_wrapped_at`) AND **0 open wave PRs** across the wave's in-scope repos — scoped to the **current** wave (`current_wave`) only. Scoping to `current_wave` is load-bearing: wave keys are NOT phase-namespaced (memory `project_wave_key_cross_phase_collision` / #683), so the status file legitimately retains stale `wave_4_active: true` rows from a prior phase's W4 — an "any active+unwrapped wave" scan would false-fire on those ghosts. The detection is **non-fatal** and degrades gracefully: a missing `current_wave`, missing scope keys, or a failed `gh` probe yields a benign verdict (never a hard block, never a false nudge mid-wave).
+
+```bash
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
+[ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+# Always exits 0 (informational nudge, not a gate). Prints a line beginning
+# "NUDGE:" only when the wave is merged-but-unwrapped (or active+unwrapped with
+# an undetermined open-PR count); otherwise a one-line in-flight/ok status.
+if [ -f "$REPO_ROOT/.claude/lib/wave_unwrapped.py" ]; then
+  python3 "$REPO_ROOT/.claude/lib/wave_unwrapped.py" check \
+    --status "$REPO_ROOT/cross-repo-status.json" || true
+fi
+```
+
+If the verdict is `unwrapped` (0 open wave PRs) — or the softer `unwrapped_unverified` (open-PR count undetermined because `gh` failed or the wave's scope keys are missing) — surface it prominently as **"wave merged but unwrapped — run `/wave-wrapup`"**. An `in_flight` verdict (open wave PRs remain) is a normal active wave: no nudge. This is informational only — it never blocks the session.
+
+### Step 5c — Wave-branch reachability / merge-model check (main#801)
+
+Surface **mid-wave** any wave-branch commit that is not reachable from `origin/main`, classified against the wave's declared merge model — so model-mixing or stranding surfaces within hours instead of only at the `/wave-wrapup` Step 11.5 gate. *Origin:* P6W1 mixed merge models (some PRs to the wave branch, the doc batch direct to main, no wave→main PR opened) → 5 deliverables stranded off main, caught only at wrapup (charter `pull-requests.md § One Merge Model Per Wave`).
+
+This is a deterministic helper (`.claude/lib/wave_merge_model.py reachability`), model-aware: a `direct-to-main` wave with commits on its wave branch is a hard **VIOLATION** (the P6W1 mixing); a `wave-branch` wave ahead of main with an open wave→main PR is **OK**, and ahead with no PR is an **ADVISORY** stranding-risk reminder. A wave with no declared model (legacy / pre-#801) degrades to advisory-only with a nudge — never a false violation. Non-fatal: a gh/scope error must not block session-start.
+
+```bash
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
+[ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+# Derive the live phase/wave from the canonical lifecycle pointers (NOT a max
+# over wave numbers — retained prior-phase scopes would mis-select; cf. #712).
+PHASE=$(jq -r '.current_phase // empty' "$REPO_ROOT/cross-repo-status.json" 2>/dev/null)
+WAVE=$(jq -r '(.current_wave // "" | ltrimstr("wave-"))' "$REPO_ROOT/cross-repo-status.json" 2>/dev/null)
+if [ -n "$PHASE" ] && [ -n "$WAVE" ] && [ -f "$REPO_ROOT/.claude/lib/wave_merge_model.py" ]; then
+  # Helper prints the per-repo report; exit 1 ONLY on a model VIOLATION.
+  python3 "$REPO_ROOT/.claude/lib/wave_merge_model.py" reachability "$PHASE" "$WAVE" \
+    || echo "⚠ merge-model VIOLATION above — a wave branch carries commits the declared model forbids (#801). Investigate before merging more."
+else
+  echo "reachability check skipped — current_phase/current_wave not set or helper absent."
+fi
+```
+
+Report any **VIOLATION** prominently (stop-and-investigate: a wave branch is accumulating work the declared model forbids — the P6W1 mixing). **ADVISORY** lines are reminders that wave-branch work will strand unless `/wave-wrapup` opens the wave→main PR — surface them but they do not block. **OK** across the board needs no action.
+
 ### Step 6 — Charter freshness check
 
 Read the tail of the feedback log:
@@ -304,6 +348,8 @@ After all steps complete, present a single status block:
 | 4. Annunaki | {N errors, action needed? / clear} |
 | 5. Wave | {active wave, stale?, issues} |
 | 5a. Red default-branch runs | {N red publish/deploy runs (M base-image-drift) / all green} |
+| 5b. Wave wrap state | {wave merged but unwrapped — run /wave-wrapup / in flight / wrapped} |
+| 5c. Wave reachability | {OK / N advisory (stranding risk) / VIOLATION (merge-model mixing) / skipped} |
 | 6. Charter | {current / proposals pending} |
 
 {Then address the user's actual message/request}

@@ -252,10 +252,13 @@ Carry-forward and memory-must-include state is freshest immediately after retro,
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-NEXT_WAVE=$(({M} + 1))
+# Global wave ids (main#804) are monotonic and NOT sequential-per-phase, so the
+# next wave id is NOT {M}+1 (e.g. after the grandfathered wave_2 the next id is
+# wave_16). Read it from the counter instead of computing it.
+NEXT_WAVE=$(python3 "$REPO_ROOT/.claude/lib/wave_seq.py" peek "$REPO_ROOT/cross-repo-status.json")
 
 # Anchored title pattern + open-state filter. Meta-issue title format is
-# "Phase {N} Wave {M+1} — <theme>" — the dash-space tail prevents bleed into
+# "Phase {N} Wave <next-global-id> — <theme>" — the dash-space tail prevents bleed into
 # retro tracking issues like "Phase 3 Wave 5 retro tracking" that some teams
 # file separately. Asserting exactly-one-hit surfaces ambiguity as a blocker
 # instead of silently picking whichever issue GitHub orders first.

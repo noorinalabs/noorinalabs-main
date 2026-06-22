@@ -3,7 +3,7 @@
 - [closingIssuesReferences empty on wave-branch PRs](reference_closing_refs_empty_wave_prs.md) — not a gh --json field; parse body Closes/Fixes for non-default-base PRs. main#664.
 - [ontology_tracker test worktree-fragile](project_ontology_tracker_worktree_test.md) — test_worktrees_segment false-FAILS under .claude/worktrees/ (REPO_ROOT inherits it). PR#685.
 - [Prefer correct over expedient (no users)](feedback_prefer_correct_over_expedient.md) — Owner 2026-06-12: pre-launch, UI/visual regression not a hard constraint; do the right fix.
-- [Wave-key cross-phase collision](project_wave_key_cross_phase_collision.md) — wave_{M}_* not phase-namespaced; P5 collides w/ P4; /wave-start §5a reset never fires. main#683.
+- [Wave-key cross-phase collision — RESOLVED](project_wave_key_cross_phase_collision.md) — main#804 Design B: global monotonic wave id (never resets), phase is derived display; §5a reset retired + wave_key_reset.py deleted.
 - [Relocate mis-filed wave issues](feedback_relocate_misfiled_wave_issues.md) — issue whose code lands in another repo MUST be relocated at kickoff (close+recreate+split).
 - [TD intake 20%/wave](feedback_td_intake_20pct_per_wave.md) — per-wave TD intake (+20% of feature/bug scope, ceil; all if fewer) replaces cumulative ratio gate.
 - [Wave branch: every-wave merge + retain](feedback_wave_branch_merge_retain.md) — each wave merges to main at its /wave-wrapup; phase/wave branches RETAINED (--merge).
@@ -74,7 +74,7 @@
 - [Dep-resolution change invalidates unchanged steps](feedback_dep_resolution_invalidates.md) — dep-resolution PR: reviewers read FULL workflow at HEAD, not diff. #924.
 - [gh API formal review 422](feedback_gh_review_self_approve_422.md) — gh api .../pulls/N/reviews w/ event:APPROVE always 422s (gh principal = PR author); use issue-comment.
 - [Brief-author verify roster surname](feedback_brief_author_verify_roster_surname.md) — read roster card content (not infer from slug) when naming a teammate in a spawn brief.
-- [statusCheckRollup before "CI clean"](feedback_statuscheckrollup_ci_clean.md) — local pass ≠ CI pass; run gh pr view --json statusCheckRollup before "ready" claims.
+- [statusCheckRollup before "CI clean"](feedback_statuscheckrollup_ci_clean.md) — local pass ≠ CI pass; run gh pr view --json statusCheckRollup before "ready" claims. EMPTY rollup = hard not-ready (main#802); oracle .claude/lib/pr_ci_state.py.
 - [.npmrc NODE_AUTH_TOKEN convention](feedback_npmrc_node_auth_token_convention.md) — project-level .npmrc for npm.pkg.github.com MUST use ${NODE_AUTH_TOKEN}; project-level wins.
 - [Hook cwd-anchor subagent worktree](feedback_hook_cwd_anchor_subagent_worktree.md) — hooks reading stdin cwd resolve to orchestrator dir, not subagent worktree → child gh ops misrouted.
 - [Sibling-issue overlap missed cross-close](feedback_sibling_issue_overlap.md) — PR for #A satisfying #B does NOT auto-close #B; pre-spawn overlap check. deploy#200.
@@ -96,3 +96,4 @@
 - [Cross-spawn cwd collision](feedback_cwd_collision_cross_spawn.md) — two agents sharing one cwd on different branches: 2nd checkout moves the 1st → commits on wrong branch.
 - [Prod loaded but quality-broken](project_prod_loaded_quality_broken.md) — prod NO LONGER empty; 768k nodes/8.98% linked, narrators polluted, chains empty, search 500s → P7 data-quality. meta main#723.
 - [Brand is "Noorina Labs" (two words)](feedback_brand_noorina_labs.md) — camel-case "NoorinALabs" WRONG in prose; lowercase slug stays; cspell now enforces (dict entry removed). main#792.
+- [bleach ReDoS standing item](project_bleach_redos_standing_item.md) — GHSA-g75f-g53v-794x no fix + bleach EOL 2026-06-05; per-repo --ignore-vuln stays; revisit each wave; close only when kaggle dropped. main#703.

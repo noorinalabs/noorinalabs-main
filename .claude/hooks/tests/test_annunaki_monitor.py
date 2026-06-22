@@ -325,6 +325,150 @@ class SilentBooleanTestIdiomTests(unittest.TestCase):
         self.assertIsNone(result)
 
 
+class ConfidenceTaggingTests(unittest.TestCase):
+    """#729: exit-0 stdout-only matches are tagged with a `confidence` field so
+    the reader can exclude echoed-output false positives from the genuine-error
+    count while RETAINING the genuine exit-0-failure carve-out (a `git push |
+    tail` masking a REJECTED push). Every record is still LOGGED — confidence
+    refines the count, it never drops a record."""
+
+    def setUp(self):
+        self._saved_env = {
+            "ENVIRONMENT": os.environ.pop("ENVIRONMENT", None),
+            "NOORIN_HOOK_TEST_MODE": os.environ.pop("NOORIN_HOOK_TEST_MODE", None),
+        }
+        am._seen_hashes.clear()
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._errors_path = Path(self._tmpdir.name) / "errors.jsonl"
+        self._orig_monitor_file = am.ERRORS_FILE
+        self._orig_log_file = alog.ERRORS_FILE
+        am.ERRORS_FILE = self._errors_path
+        alog.ERRORS_FILE = self._errors_path
+
+    def tearDown(self):
+        am.ERRORS_FILE = self._orig_monitor_file
+        alog.ERRORS_FILE = self._orig_log_file
+        self._tmpdir.cleanup()
+        for k, v in self._saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    def _logged(self, **kw):
+        result = am.check(_bash_event(**kw))
+        self.assertIsNotNone(result, "expected the command to be logged")
+        return _read_records(self._errors_path)[0], result
+
+    # --- (a) benign exit-0-with-trigger-word is LOGGED but LOW confidence ---
+
+    def test_echoed_source_clause_tagged_low(self):
+        """Displaying source with `except ImportError:` (the dominant #729
+        false class) at exit 0 → logged, but confidence=low. The `cd … &&`
+        prefix breaks the anchored #596 content-display IGNORE, so the record
+        survives to be tagged (this is exactly the residual class #729 fixes)."""
+        rec, result = self._logged(
+            command="cd /repo && cat .claude/lib/foo.py",
+            stdout="        except ImportError:\n            continue\n",
+            exit_code=0,
+        )
+        self.assertEqual(rec["exit_code"], 0)
+        self.assertEqual(rec["confidence"], "low")
+        self.assertEqual(result["confidence"], "low")
+
+    def test_echoed_source_clause_low_even_with_setup_prefix(self):
+        """The compound `cd … && echo …` shape that slips past the anchored
+        #596 content-display IGNORE is still demoted to low by line shape."""
+        rec, _ = self._logged(
+            command='cd /repo/child && echo "=== src ===" && sed -n 1,20p mod.py',
+            stdout="    except ImportError:  # pragma: no cover\n        import x\n",
+            exit_code=0,
+        )
+        self.assertEqual(rec["confidence"], "low")
+
+    def test_echoed_json_body_tagged_low(self):
+        """A `gh pr view --json` body that quotes 'ModuleNotFoundError' → the
+        JSON-body line shape demotes it to low. The `cd … &&` prefix again
+        slips past the anchored #596 IGNORE so the record reaches the tagger."""
+        rec, _ = self._logged(
+            command="cd /repo && gh pr view 1094 --repo o/r --json title,body",
+            stdout='{"body":"## Summary\\nfix ModuleNotFoundError: no module x"}\n',
+            exit_code=0,
+        )
+        self.assertEqual(rec["confidence"], "low")
+
+    # --- (b) genuine exit-0 FAILURE is LOGGED and HIGH confidence (kept) ---
+
+    def test_git_push_pipe_masking_rejection_tagged_high(self):
+        """The feedback_push_pipe_masks_rejection case: `git push … | tail`
+        exits 0 (pager rc) while the push was REJECTED. The 'failed to push'
+        strong signal keeps it confidence=high → still counted."""
+        rec, result = self._logged(
+            command="git push origin N.Hakim/x --force-with-lease 2>&1 | tail -3",
+            stdout=(
+                "To github.com:o/r.git\n"
+                " ! [rejected]        N.Hakim/x -> N.Hakim/x (non-fast-forward)\n"
+                "error: failed to push some refs to 'github.com:o/r.git'\n"
+            ),
+            exit_code=0,
+        )
+        self.assertEqual(rec["exit_code"], 0, "pipe masked the non-zero rc")
+        self.assertEqual(rec["confidence"], "high")
+        self.assertEqual(result["confidence"], "high")
+
+    def test_script_self_reported_exit_code_tagged_high(self):
+        """A wrapper that echoes 'ERROR: … failed (exit 1)' at pipeline exit 0
+        is a genuine masked failure → high."""
+        rec, _ = self._logged(
+            command="run_checks.sh | tee /tmp/log",
+            stdout="ERROR: gh call failed (exit 1): gh api repos/o/r\n",
+            exit_code=0,
+        )
+        self.assertEqual(rec["confidence"], "high")
+
+    def test_real_traceback_with_raise_frame_tagged_high(self):
+        """A genuine exit-0 traceback contains a `raise ValueError(...)` source
+        frame; the STRONG Traceback keeper must win so the `raise` line does
+        NOT mis-demote it via the echoed-source signal."""
+        rec, _ = self._logged(
+            command="cd /repo && python3 parse.py | tail",
+            stdout=(
+                "Traceback (most recent call last):\n"
+                '  File "parse.py", line 3, in <module>\n'
+                '    raise ValueError("bad yaml")\n'
+                "ValueError: bad yaml\n"
+            ),
+            exit_code=0,
+        )
+        self.assertEqual(rec["confidence"], "high")
+
+    # --- hard failure signals always win ---
+
+    def test_nonzero_exit_tagged_high(self):
+        """A non-zero exit is a hard failure signal → high regardless of text."""
+        rec, _ = self._logged(command="pytest", stdout="FAILED test_x\n", exit_code=1)
+        self.assertEqual(rec["confidence"], "high")
+
+    def test_stderr_pattern_tagged_high(self):
+        """A stderr-pattern match is a hard failure signal → high."""
+        rec, _ = self._logged(
+            command="some_tool",
+            stderr="fatal: unexpected internal state\n",
+            exit_code=0,
+        )
+        self.assertEqual(rec["confidence"], "high")
+
+    def test_unrecognized_exit_zero_match_defaults_high(self):
+        """An exit-0 stdout match we cannot positively recognize as echoed
+        stays high — the precision pass never silences an unclassified error."""
+        rec, _ = self._logged(
+            command="deploy.sh | tee /tmp/log",
+            stdout="error while interpolating services.grafana.environment: required\n",
+            exit_code=0,
+        )
+        self.assertEqual(rec["confidence"], "high")
+
+
 class AinoFollowupTests(unittest.TestCase):
     """Aino's two non-blocking follow-up cases from PR #473 review."""
 

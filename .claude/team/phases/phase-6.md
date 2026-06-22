@@ -47,11 +47,51 @@ Every wave takes its **+20%** TD intake (`/wave-scope` Step 8.5) — `ceil(20% o
 
 On the **final wave (W3)** the +20% becomes a **floor, not a cap** (owner 2026-06-16 standing rule): deliberately pull in a large chunk of framework debt to clear before phase exit, sized by the owner at `/wave-scope`.
 
+## Criterion #4 — Ontology-vs-graphify decision (owner stub)
+
+Spike complete (main#728, P6W2): [`.claude/team/spikes/p6w2-ontology-vs-graphify.md`](../spikes/p6w2-ontology-vs-graphify.md).
+
+Measured on the meta-repo `.claude/` machinery slice (54 modules, 54/54 already docstring'd):
+the code-structural layer of the ontology is **100% auto-derivable** by a ~60-LOC generator,
+versus **1,347 LOC** of freshness machinery + **1,760 lines** of hand-curated payload +
+an 88 KB / 248-file `checksums.json` + a per-edit Hook-15 tax in the current stack.
+
+**Spike recommendation:** **Hybrid (Option C)** — generate the structural layer (`llms.txt` +
+code graph, always-fresh), retain hand-curated **semantics/intent** (domain, service topology,
+ADR "why") as low-churn markdown, and **soften Hook 15** from a blocking gate to advisory.
+Pure-Replace rejected (loses the semantic layer a graph cannot derive); Keep is the do-nothing tax.
+
+**Owner decision:** ☐ Keep ☐ Hybrid (recommended) ☐ Replace — _pending_. Per owner 2026-06-20,
+no teardown in P6; any implementation is a later-phase follow-up issue.
+
 ## Out of scope for P6 (deferred)
 
 - **All product/data-quality/ML work** — that is **Phase 7** (Data Quality / ML / demo): the 15 issues relabeled `phase-6`→`phase-7` at this plan time (main#673, ig#1039–1043, da#161–166, da#136/139/178), plus the prod data-quality cluster under meta #723 (sanadset orphans, sparse linkage, broken search, narrator pollution), ig#1110/#1111.
 - **Streaming pipeline repeatable** (#667) — Phase 7.
 - **Actively ripping out the persona or ontology subsystems** — P6 decides; teardown (if chosen) is a later phase.
+
+## Architectural-revisit decisions (criteria #3, #4)
+
+The two spike-and-decide criteria record their owner decisions here. A decision is "keep / slim /
+restructure" (#3) or "keep / replace / hybrid" (#4); teardown of either subsystem is **deferred to a later
+phase** regardless of the decision.
+
+### #3 — Persona-model decision — **AWAITING OWNER**
+
+- **Spike:** `.claude/team/spikes/p6w2-persona-model-evaluation.md` (Nadia Khoury, P6W2, [#727](https://github.com/noorinalabs/noorinalabs-main/issues/727)).
+- **Quantified:** roster is **78 named identities / 70 canonical cards** across 8 rosters — ~2.5× the
+  "≈28" the issue assumed (drift, ungoverned); 279/349 on-disk card copies are worktree duplicates.
+  Per-spawn persona tax = card-read + per-commit identity plumbing + reviewer-naming (the worktree +
+  librarian costs are isolation/ontology costs, not persona costs, and survive any restructuring).
+- **Options:** A keep · B slim (governed headcount + budget hook) · C restructure to role-classes.
+- **Recommendation (PD):** **B now + C as a deferred ADR candidate.** The measured problem is ungoverned
+  drift, which B fixes at low–moderate, mostly-mechanical cost (same enforced-budget pattern as the W1
+  memory-budget hook); C is the cleaner long-term end-state but is a high-blast-radius teardown that P6
+  explicitly defers. Not A (answers "revisit" with "no change" while data shows overhead dominates at the
+  margin).
+- **Owner decision:** ☐ A · ☐ B · ☐ C — _record here_; follow-up tracker TBD at decision time.
+
+### #4 — Ontology-vs-graphify decision — _(spike in progress, [#728](https://github.com/noorinalabs/noorinalabs-main/issues/728))_
 
 ## Phase exit gate
 

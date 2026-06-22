@@ -3245,3 +3245,9 @@ P6W1 closed clean. **27 parent PRs** (in-scope `[noorinalabs-main]`) + **6 emerg
 
 ### Promotion Audit (Step 7.5)
 0 AUTO · 0 DECIDE · 210 KEPT · 19 SUPERSEDED — nothing crossed a promotion threshold this wave (steady state). Log: `.claude/team/promotion_audit_log/p6-wave-1.md`.
+
+### Update (P6W2, 2026-06-21) — wave-key collision RESOLVED, but via Design B not phase-namespacing
+
+Carry-forward item #2 above ("phase-namespaced wave keys `p6_wave_1_*`") was reframed by an owner design-input comment on #804 (2026-06-21): instead of phase-namespacing the key, make the wave id a **single global monotonic counter** that never resets per phase (Design B). A global id is never reused, so the P5W2↔P6W2 collision class cannot arise — and the `/wave-start` §5a reset disappears entirely (nothing to reset) rather than being made to fire correctly. Landed in `A.Virtanen/0804-durable-wave-key-identity`: new `.claude/lib/wave_seq.py` allocator, phase demoted to derived display fields (`wave_{X}_phase` + `wave_{X}_phase_ordinal`), `wave_key_reset.py` deleted, grandfather migration (next global wave = 16). The phase-agnostic `wave-{X}` LABEL rename is split to a follow-up (labels already carry the phase, so they never collided — not the bug). See memory [[project_wave_key_cross_phase_collision]].
+
+**Process pain (logged):** the work was nearly lost to a shared-worktree collision — five agents were cycled through `.claude/worktrees/0728-ontology-graphify-spike` on different branches, and a peer `git checkout` wiped uncommitted edits ([[feedback_cwd_collision_cross_spawn]]). Recovered into a dedicated worktree. Reinforces: one cwd per agent, commit/push fast.

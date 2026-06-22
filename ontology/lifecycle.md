@@ -150,13 +150,16 @@ plus the tech-debt ratio against the exit gate. **Mandatory before every
 
 ### `/wave-scope {P} {M}`
 
-**Purpose:** reconcile declared scope (meta-issue) against the actually-labeled
-scope across repos, fold in retro carry-forwards and memory must-includes, apply
-label churn per owner dispositions, top up with the +20% tech-debt intake, and
-refresh the meta-issue body. **Writes** `wave_{M}_scope_reconciled_at`,
-`wave_{M}_repos_in_scope`, `wave_{M}_meta_issue`, `wave_{M}_scope`.
+**Purpose:** allocate the global wave id (Step 0.0), reconcile declared scope
+(meta-issue) against the actually-labeled scope across repos, fold in retro
+carry-forwards and memory must-includes, apply label churn per owner
+dispositions, top up with the +20% tech-debt intake, and refresh the meta-issue
+body. **Writes** `global_wave_seq`, `wave_{M}_phase`, `wave_{M}_phase_ordinal`,
+`wave_{M}_scope_reconciled_at`, `wave_{M}_repos_in_scope`, `wave_{M}_meta_issue`,
+`wave_{M}_scope`. (`{M}` is a **global monotonic wave id** — main#804; phase is a
+derived display field, never part of the key.)
 
-- **(a) code/repo actions:** reads `cross-repo-status.json` (carry-forwards), `.claude/team/feedback_log.md`, `.claude/memory/*.md` (W{M} must-includes), `.claude/team/phases/phase-{P}.md`; writes `/tmp/wavescope-{M}-*` working files; runs `.claude/lib/upsert_status_keys.py` (Step 13 key upserts) and `.claude/skills/wave-scope/validate_matrix_names.py` (roster-name validation). Precondition: `/phase-review {P}` ran this session (Gate A); owner theme written (Gate B).
+- **(a) code/repo actions:** Step 0.0 allocates the next global wave id + stamps the phase/ordinal display fields via `.claude/lib/wave_seq.py` (`peek` then `allocate --phase {P} --write`); reads `cross-repo-status.json` (carry-forwards), `.claude/team/feedback_log.md`, `.claude/memory/*.md` (W{M} must-includes), `.claude/team/phases/phase-{P}.md`; writes `/tmp/wavescope-{M}-*` working files; runs `.claude/lib/upsert_status_keys.py` (Step 13 key upserts) and `.claude/skills/wave-scope/validate_matrix_names.py` (roster-name validation). Precondition: `/phase-review {P}` ran this session (Gate A); owner theme written (Gate B).
 - **(b) GitHub API:** `gh issue view/list --label` across all 8 repos to compare declared vs. labeled scope; `gh issue create` (stub meta-issue if absent); `gh label list` / `gh label create` (next-wave label); `gh issue edit --add-label/--remove-label` and `gh issue close --comment` (label churn / obsolete close); `gh api PATCH …/issues/{meta}` to rewrite the meta-issue body (with read-back verify); `gh project item-add 2` for selected tech-debt issues.
 - **(c) MCP calls:** none.
 - **(d) other external services:** none.
@@ -164,11 +167,14 @@ refresh the meta-issue body. **Writes** `wave_{M}_scope_reconciled_at`,
 ### `/wave-start {P} {M}`
 
 **Purpose:** local hygiene + setup — park the orchestrator checkout on fresh
-`main`, prune stale worktrees, ensure the `p{P}-wave-{M}` label, reset stale
-cross-phase wave keys, and stamp active-wave state onto `main`. Does **not**
-create the wave branch (that is `/wave-kickoff` Step 1).
+`main`, prune stale worktrees, ensure the `p{P}-wave-{M}` label, and stamp
+active-wave state onto `main`. Does **not** create the wave branch (that is
+`/wave-kickoff` Step 1). The former § 5a per-phase wave-key reset is **retired**
+(main#804): global monotonic wave ids never reuse a number, so there are no
+stale cross-phase `wave_{M}_*` keys to clear — allocation happens once at
+`/wave-scope` Step 0.0.
 
-- **(a) code/repo actions:** `git worktree prune` / `worktree list`; `git fetch origin main`, guarded `git stash push` of only regenerable churn (`errors.jsonl`, `cross-repo-status.json`, `checksums.json`), `git checkout main`, `git pull --ff-only` — STOPs (never auto-discards) on non-regenerable dirty state or unmerged local commits; `git ls-remote --heads origin` to check the prior wave branch; runs `.claude/lib/wave_key_reset.py` (dry-run then `--apply`) to clear stale cross-phase `wave_{M}_*` keys. Sub-skill: `/retro` (Step 7, when not Wave 1).
+- **(a) code/repo actions:** `git worktree prune` / `worktree list`; `git fetch origin main`, guarded `git stash push` of only regenerable churn (`errors.jsonl`, `cross-repo-status.json`, `checksums.json`), `git checkout main`, `git pull --ff-only` — STOPs (never auto-discards) on non-regenerable dirty state or unmerged local commits; `git ls-remote --heads origin` to check the prior wave branch. (No per-phase wave-key reset — `wave_key_reset.py` was deleted in main#804.) Sub-skill: `/retro` (Step 7, when not Wave 1).
 - **(b) GitHub API:** `gh label list` / `gh label create` for the wave + standard category labels; the **PUT-contents recipe** — `gh api …/contents/cross-repo-status.json?ref=main` (read) then `gh api -X PUT …/contents/cross-repo-status.json` (atomic write of active-wave fields on `main`, with read-back verify) — instead of a local commit+push.
 - **(c) MCP calls:** none.
 - **(d) other external services:** none.
@@ -318,7 +324,7 @@ writes) the three counter keys; drift > ±2 or > ±5% blocks the retro.
 | `/plan-phase` | ✓ tmp board files | ✓ issues, board, comments | — | — |
 | `/phase-review` | ✓ phase doc | ✓ issues, TD ratio | — | — |
 | `/wave-scope` | ✓ status, memory, tmp | ✓ issues, labels, board, meta-issue | — | — |
-| `/wave-start` | ✓ worktrees, git park, status reset | ✓ labels, PUT-contents | — | — |
+| `/wave-start` | ✓ worktrees, git park | ✓ labels, PUT-contents | — | — |
 | `/board-audit` | ✓ tmp board files | ✓ issues, project GraphQL | — | — |
 | `/wave-kickoff` | ✓ status, orchestration | ✓ refs, labels, board, PUT-contents | — | — |
 | `/ontology-librarian` | ✓ sentinel, ontology read | — | — | — |

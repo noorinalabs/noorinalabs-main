@@ -27,7 +27,7 @@ Reconcile **declared scope** (next-wave meta-issue body) with **actual scope** (
 
 Before invoking, the user provides:
 - `{P}` — phase number for the next wave (e.g. `3`)
-- `{M}` — wave number for the next wave (e.g. `5`)
+- `{M}` — the **global wave id** for the next wave. Since main#804 (Design B) wave ids are a single never-resetting monotonic counter, NOT a per-phase number — P6's first wave is `wave_16`, not `wave_1`. Do not hand-pick `{M}`; allocate it deterministically in Step 0.0 below. The human-friendly "Phase {P}, Wave {ordinal}" framing is preserved as the *display* fields `wave_{M}_phase` + `wave_{M}_phase_ordinal`; the bare `wave_{M}_*` KEY is always the global id.
 
 The skill **either reconciles or authors** the next-wave meta-issue:
 - If it already exists (drafted at the prior retro or before), Step 3 reads it and Step 11 refreshes the body.
@@ -40,6 +40,24 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 WAVE_LABEL="p{P}-wave-{M}"
 PRIOR_WAVE_LABEL="p{P}-wave-$(({M} - 1))"  # for retro carry-forward cross-ref
 ```
+
+### 0.0. Allocate the global wave id (main#804)
+
+The wave id is a global monotonic counter (`global_wave_seq` in `cross-repo-status.json`). Allocate the next id and stamp the phase/ordinal display fields with `.claude/lib/wave_seq.py` — the value it prints is your `{M}` (run this before the steps below depend on it). This replaces the retired `/wave-start` § 5a per-phase reset: a never-reused id cannot collide, so there is nothing to reset.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+STATUS_FILE="$REPO_ROOT/cross-repo-status.json"
+
+# Peek: print the next global wave id (no write) — this is your {M}.
+python3 "$REPO_ROOT/.claude/lib/wave_seq.py" peek "$STATUS_FILE"
+
+# Allocate: persist global_wave_seq + wave_{M}_phase + wave_{M}_phase_ordinal
+# (ordinal auto-computed as 1 + waves already stamped to phase {P}). Run ONCE per wave.
+python3 "$REPO_ROOT/.claude/lib/wave_seq.py" allocate "$STATUS_FILE" --phase {P} --write
+```
+
+The `--write` path goes through `upsert_status_keys.py`, so the compact-inline file shape is preserved and the rewrite is JSON-validated before AND after. The counter self-seeds above all historical per-phase wave numbers if `global_wave_seq` is absent. When operating on the `main` copy, run against the fetched content and fold the result into the PUT-contents write `/wave-kickoff` Step 1a uses.
 
 ### 0.5. Phase-review prerequisite + owner-set theme (MANDATORY)
 
@@ -325,7 +343,11 @@ Record `td_intake: <selected>/<target>` (and `td_pool: <POOL>`) for the Step 12 
 If any disposition in step 7 was `defer-to-w{M+1}`, ensure the label exists in every relevant repo:
 
 ```bash
-NEXT_LABEL="p{P}-wave-$(({M} + 1))"
+# Global wave ids (main#804) are monotonic, NOT sequential-per-phase: the next
+# wave id is the counter's peek value, not {M}+1. (Label SHAPE is unchanged in
+# this PR — the phase-agnostic `wave-{X}` rename is the deferred follow-up.)
+NEXT_WAVE_ID=$(python3 "$REPO_ROOT/.claude/lib/wave_seq.py" peek "$REPO_ROOT/cross-repo-status.json")
+NEXT_LABEL="p{P}-wave-${NEXT_WAVE_ID}"
 # Match the color/description of the current wave label for consistency
 CURRENT_COLOR=$(gh label list --repo noorinalabs/noorinalabs-main --search "$WAVE_LABEL" --json color --jq '.[0].color')
 
@@ -337,7 +359,7 @@ CURRENT_COLOR=$(gh label list --repo noorinalabs/noorinalabs-main --search "$WAV
 for repo in "${REPOS_WITH_DEFER[@]}"; do
     gh label list --repo "noorinalabs/$repo" --search "$NEXT_LABEL" --json name --jq '.[].name' | grep -q "$NEXT_LABEL" || \
         gh label create "$NEXT_LABEL" --repo "noorinalabs/$repo" \
-            --description "Phase {P} Wave $(({M} + 1))" --color "$CURRENT_COLOR"
+            --description "Phase {P} Wave ${NEXT_WAVE_ID} (global id)" --color "$CURRENT_COLOR"
 done
 ```
 

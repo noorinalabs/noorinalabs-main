@@ -25,6 +25,13 @@ Input Language:
                   session-dedup hits
   Flag pass-through: stdin JSON is forwarded verbatim to `check()` by the
                      PostToolUse dispatcher (`post_dispatcher.py`)
+  Confidence tag (#729): every logged record carries `confidence` in
+                     {"high", "low"}. An exit-0 stdout-only match that is
+                     echoed content (displayed source `except ImportError:`,
+                     a `gh pr view --json` body) is "low" and excluded from the
+                     genuine-error count by annunaki_parse, but retained for
+                     forensics; a STRONG masked-failure signal (e.g. a `git
+                     push | tail` REJECTED push) stays "high" and counted.
 
 Exit codes:
   0 — always (advisory hook, never blocks)
@@ -211,6 +218,69 @@ CONTENT_DISPLAY_STDOUT_MERGE = re.compile(r"2>&1")
 # that nonetheless emitted a No-such-file failure must still log (#517 outlier).
 CONTENT_DISPLAY_EXCLUDED_PATTERN = "stdout:No such file or directory"
 
+# Confidence classification (#729) -------------------------------------------
+# A record matched purely by a stdout pattern at exit 0 is ambiguous. The
+# trigger word may be a REAL failure masked by a pipe — `git push ... | tail`
+# swallows a REJECTED push because the pipeline rc is the pager's 0, not git's
+# (feedback_push_pipe_masks_rejection) — OR it may be a trigger word sitting in
+# ECHOED OUTPUT the command merely displayed: source code (`except ImportError:`,
+# a `re.compile(...)` from this monitor's own body), a `gh pr view --json` PR
+# body, an issue body quoting "ERROR: ...". The second class is not a failure;
+# it drowned the real signal (85% / 40-of-47 of the P5W5 window — #729).
+#
+# Rather than DROP these (the #517/#596 ignore families do that for the cases
+# they can prove benign), we TAG every surviving record with a `confidence`
+# field and let the reader (annunaki_parse) exclude the low-confidence sub-class
+# from the genuine-error COUNT while keeping every record for forensics:
+#   high — a hard failure signal (non-zero exit, a stderr-pattern match) OR an
+#          exit-0 stdout match carrying a STRONG masked-failure signal.
+#   low  — exit-0, stdout-only, no strong signal, and the matched line is
+#          positively recognized as echoed content (displayed source / body).
+# An exit-0 stdout match we CANNOT positively recognize as echoed stays `high`:
+# we only ever demote display we are confident about, never an unclassified
+# failure (recall-preserving — the precision pass must not silence real errors).
+
+# Strong masked-failure signals: phrases marking a REAL failure even when the
+# pipeline exited 0. Kept counted — this is the acceptance-criterion carve-out
+# preserving the genuine exit-0-failure class (the `git push | tail` REJECTED
+# case and script self-reports like "... failed (exit 1)"). A real Python
+# `Traceback` is included so its source frames (a `  raise ValueError(...)`
+# line) cannot mis-trip the echoed-source signal below; pure cat/gh-api
+# displays of error-shaped content were already dropped upstream by #596.
+STRONG_MASKED_FAILURE = re.compile(
+    r"failed to push"  # git push rejection masked by a pager pipe
+    r"|\[rejected\]|\[remote rejected\]|non-fast-forward"
+    r"|exit status [1-9]"
+    r"|failed with exit code"
+    r"|\(exit [1-9][0-9]*\)"  # self-report: "ERROR: gh call failed (exit 1)"
+    r"|Traceback \(most recent call last\)",
+    re.IGNORECASE,
+)
+
+# Echoed-content signal 1: the matched line is a Python source clause being
+# DISPLAYED (a `cat`/`echo`/diff/`gh api .../contents` dump), not a raised
+# error. `except ImportError:` / a displayed `re.compile(...)` are the dominant
+# #729 false class. A genuinely-raised error reads `ImportError: <msg>` (or
+# pytest `E   ImportError:`) — start-of-line error name then a message — which
+# this deliberately does NOT match. `raise`/`except` lines inside a genuine
+# traceback are guarded by the STRONG `Traceback` keeper, which wins first.
+SOURCE_CLAUSE_LINE = re.compile(
+    r"^\s*[+-]?\s*(?:except|raise)\s+[\w.(]"  # except/raise <Error>[(]
+    r"|^\s*[+-]?\s*re\.compile\(",  # displayed monitor/source regex
+)
+
+# Echoed-content signal 2: the matched line opens a JSON object/array body —
+# `{"` or `[{` / `["` at line start (after an optional diff +/-). A
+# `gh ... --json` / `gh api` body dump that quotes an error string inside the
+# emitted JSON lands here. The trailing quote is required so a bare `[]` array,
+# a `[WARNING] ...` log prefix, or a markdown `[link]` line does NOT match
+# (recall guard — those appear in genuine failure output). A genuinely-raised
+# error never starts its extracted line with a quoted-key JSON brace (it leads
+# with an error name, `error:`/`fatal:`, or pytest `E `). Keyed on the LINE
+# shape, not the command, so a compound command that buries a `gh pr view`
+# alongside a real failing build/test step is NOT demoted on that substring.
+JSON_BODY_LINE = re.compile(r'^\s*[+-]?\s*[{\[]\s*["{]')
+
 
 def _is_content_display(command: str, exit_code: int, matched_patterns: list[str]) -> bool:
     """Return True if this matches the #596 content-display idiom.
@@ -323,6 +393,47 @@ def _should_ignore(command: str, output: str) -> bool:
     return False
 
 
+def _is_echoed_content(command: str, error_lines: list[str]) -> bool:
+    """Return True if the trigger match looks like displayed content (#729).
+
+    Two positive signals on the matched line(s): a displayed Python source
+    clause (`except`/`raise`/`re.compile(` — signal 1), or a JSON-data-shaped
+    line (`{`/`[` at line start — signal 2, a `gh --json`/body dump). Either
+    marks the trigger as echoed output rather than a failure. `command` is
+    accepted for signature symmetry with the other classifiers but the
+    decision is line-shape-based (see JSON_BODY_LINE for why).
+    """
+    for line in error_lines:
+        if SOURCE_CLAUSE_LINE.search(line) or JSON_BODY_LINE.search(line):
+            return True
+    return False
+
+
+def _classify_confidence(
+    command: str, exit_code: int, matched_patterns: list[str], error_lines: list[str]
+) -> str:
+    """Return "high" or "low" confidence for a logged error record (#729).
+
+    "high" — a non-zero exit, a stderr-pattern match, or an exit-0 stdout match
+             carrying a STRONG masked-failure signal (the genuine exit-0-failure
+             carve-out, e.g. `git push | tail` masking a REJECTED push).
+    "low"  — exit-0, stdout-only, no strong signal, and the matched line is
+             positively recognized as echoed content.
+
+    An exit-0 stdout match not recognized as echoed stays "high": only display
+    we can positively recognize is demoted, never an unclassified failure.
+    """
+    if exit_code and exit_code != 0:
+        return "high"
+    if any(p.startswith("stderr:") for p in matched_patterns):
+        return "high"
+    if STRONG_MASKED_FAILURE.search("\n".join(error_lines)):
+        return "high"
+    if _is_echoed_content(command, error_lines):
+        return "low"
+    return "high"
+
+
 def check(input_data: dict) -> dict | None:
     """Dispatcher-compatible entry point for PostToolUse Bash.
 
@@ -402,6 +513,11 @@ def check(input_data: dict) -> dict | None:
 
     error_lines = _extract_error_lines(combined_output)
 
+    # #729 confidence tag: exit-0 stdout-only matches that are echoed content
+    # (displayed source/body) are low-confidence; the reader excludes them from
+    # the genuine-error count but keeps every record for forensics.
+    confidence = _classify_confidence(command, exit_code, matched_patterns, error_lines)
+
     dedup_input = command[:200] + "|||" + "\n".join(error_lines)[:500]
     dedup_hash = hashlib.md5(dedup_input.encode("utf-8")).hexdigest()
     if dedup_hash in _seen_hashes:
@@ -413,6 +529,7 @@ def check(input_data: dict) -> dict | None:
         "command": command[:500],
         "exit_code": exit_code,
         "matched_patterns": matched_patterns[:5],
+        "confidence": confidence,
         "error_lines": error_lines,
         "stderr_excerpt": stderr[:300] if stderr else "",
         "_dedup_hash": dedup_hash,
@@ -420,7 +537,7 @@ def check(input_data: dict) -> dict | None:
 
     append_jsonl_record(ERRORS_FILE, record)
 
-    return {"action": "logged", "dedup_hash": dedup_hash}
+    return {"action": "logged", "dedup_hash": dedup_hash, "confidence": confidence}
 
 
 def main() -> None:

@@ -5,6 +5,23 @@ Queries `gh pr view --json statusCheckRollup` and blocks merge when any
 required check has failed, been cancelled, timed out, or requires action.
 Pending checks block unless the user passes `--auto` (warn-but-allow).
 
+Empty rollup (main#802)
+=======================
+
+An EMPTY `statusCheckRollup` ("no checks reported") is NOT the same as green
+(origin: design-system #129's silently-dropped `synchronize` event produced
+zero runs). Per main#802 (P6W1 retro, owner-approved 2026-06-21) it is a hard
+not-ready state — but only where a check SHOULD have run. The hook
+discriminates via the sibling `validate_workflow_paths_coverage` coverage
+signal (`covering_pr_workflow_exists`): if the repo has an `on.pull_request`
+workflow with no `paths:` filter (runs on every PR), an empty rollup is the
+anomalous dropped-trigger case → BLOCK; if the repo is fully path-filtered
+(noorinalabs-main/deploy per `pull-requests.md` § Two path-filtered repos), an
+empty rollup may be the legitimate docs-only zero-check case → warn-allow (no
+deadlock). The `.claude/lib/pr_ci_state.py` readiness oracle treats empty as
+not-ready unconditionally — it is the query-time merge-readiness assertion,
+distinct from this hard PreToolUse gate.
+
 Input Language
 ==============
 
@@ -75,9 +92,11 @@ rather than "no opinion." Charter `pull-requests.md § CI Must Be Green`
 governs the rule; this allowlist is the operational mapping.
 
 Exit codes:
-  0 — allow (not a merge command, validated --admin exception, or all checks green)
-  2 — block (failing/pending checks without --auto, or --admin without a valid
-      charter exception)
+  0 — allow (not a merge command, validated --admin exception, all checks green,
+      or a legitimately-empty rollup on a fully path-filtered repo)
+  2 — block (failing/pending checks without --auto, an anomalous empty rollup
+      where a covering workflow should have run (main#802), or --admin without a
+      valid charter exception)
 """
 
 import json
@@ -226,6 +245,63 @@ def fetch_checks(pr_number: str | None, repo: str | None) -> list[dict] | None:
         return None
 
 
+def fetch_pr_base_ref(pr_number: str | None, repo: str | None) -> str | None:
+    """Return the PR's base branch name (e.g. `main`), or None on failure.
+
+    Used only on the empty-rollup path to anchor the covering-workflow lookup
+    against the branch the PR actually merges into (a wave-branch PR's base is
+    its wave branch, whose workflow set may differ from main's).
+    """
+    try:
+        cmd = ["gh", "pr", "view"]
+        if pr_number:
+            cmd.append(pr_number)
+        if repo:
+            cmd.extend(["--repo", repo])
+        cmd.extend(["--json", "baseRefName"])
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        if result.returncode != 0:
+            return None
+        return json.loads(result.stdout).get("baseRefName") or None
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
+        return None
+
+
+def covering_pr_workflow_exists(repo: str | None, base: str | None) -> bool | None:
+    """Discriminate an anomalous empty rollup from a legitimately-empty one (main#802).
+
+    Returns:
+      True  — the repo has at least one `on.pull_request` workflow with NO
+              `paths:` filter on `base`, i.e. a workflow that runs on EVERY PR.
+              When such a workflow exists, an empty `statusCheckRollup` means
+              that always-running check produced zero runs — the anomalous
+              dropped-trigger case (design-system #129) → the empty rollup is a
+              hard not-ready state and `check()` blocks.
+      False — every `on.pull_request` workflow on `base` is `paths:`-filtered.
+              The repo is fully path-filtered by design (e.g. noorinalabs-deploy
+              per `pull-requests.md` § Two path-filtered repos): a docs-only PR
+              there legitimately produces zero check-runs, so the empty rollup
+              is warn-allowed rather than hard-blocked (no deadlock).
+      None  — undeterminable (no repo/base, or an API/import failure). Caller
+              fails open to the warn-allow branch.
+
+    Reuses the sibling hook's `_build_coverage_signal` so the empty-rollup
+    discriminator and the workflow-orphan gate share one paths-filter parser
+    and cannot drift.
+    """
+    if not repo or not base:
+        return None
+    try:
+        import validate_workflow_paths_coverage as coverage_hook
+    except ImportError:
+        return None
+    signal = coverage_hook._build_coverage_signal(repo, base)
+    if signal is None:
+        return None
+    _covered_globs, any_no_paths = signal
+    return any_no_paths
+
+
 def classify_check(check: dict) -> str:
     """Return 'fail', 'pending', or 'pass' for a single check entry.
 
@@ -257,6 +333,35 @@ def classify_check(check: dict) -> str:
     if bucket in _PASS_BUCKETS or conclusion in {"SUCCESS", "NEUTRAL", "SKIPPED"}:
         return "pass"
     return "pass"
+
+
+def classify_rollup(rollup: list[dict]) -> str:
+    """Classify a whole statusCheckRollup into a single readiness verdict.
+
+    Returns exactly one of:
+      "empty"   — no checks reported. Per main#802 (P6W1 retro, owner-approved
+                  2026-06-21) this is a HARD not-ready state, NEVER green:
+                  "no checks reported" is not the same as "all checks passed"
+                  (origin: design-system #129's silently-dropped `synchronize`
+                  event produced zero runs that a naive "no failing checks"
+                  gate would have waved through).
+      "failing" — at least one check classifies as fail.
+      "pending" — no failing checks, but at least one is still pending.
+      "ready"   — non-empty AND every check passes.
+
+    This is the single source of truth for the empty/fail/pending/ready
+    taxonomy, shared verbatim by this hook's `check()` (the gh-pr-merge gate)
+    and the `.claude/lib/pr_ci_state.py` readiness oracle, so the gate and the
+    oracle cannot drift (same reader/writer-share-one-module pattern
+    `pr_review_state.py` uses for `validate_pr_review`).
+    """
+    if not rollup:
+        return "empty"
+    if any(classify_check(c) == "fail" for c in rollup):
+        return "failing"
+    if any(classify_check(c) == "pending" for c in rollup):
+        return "pending"
+    return "ready"
 
 
 def check_name(check: dict) -> str:
@@ -325,18 +430,50 @@ def check(input_data: dict) -> dict | None:
         }
 
     if not rollup:
-        # Empty statusCheckRollup — no CI checks have run. Root cause of
-        # deploy#153 (workflow orphan): no on.pull_request trigger covers
-        # this branch/paths, so the merge gate has nothing to evaluate.
-        # Allow (preserves prior behavior; behavior change requires charter
-        # decision per #307), but warn so the operator can investigate.
+        # Empty statusCheckRollup — no CI checks reported. main#802 (P6W1 retro,
+        # owner-approved 2026-06-21): an empty rollup is NOT the same as green
+        # ("no checks reported" ≠ "all checks passed"; origin: design-system
+        # #129's dropped `synchronize` event produced zero runs that a naive
+        # "no failing checks" gate would have passed). But the two fully
+        # path-filtered repos (noorinalabs-main, noorinalabs-deploy) can
+        # legitimately produce zero check-runs for a docs-only PR
+        # (`pull-requests.md` § Two path-filtered repos), and hard-blocking
+        # those would deadlock the majority of their PRs. So we discriminate:
+        #   - covering unfiltered-`paths` workflow EXISTS → an always-running
+        #     check reported nothing → anomalous dropped-trigger → BLOCK (#802).
+        #   - fully path-filtered (or undeterminable) → legitimate docs-only
+        #     empty may apply → warn-allow (preserves the path-filtered design;
+        #     deploy#153 incident pattern), operator verifies via
+        #     `validate_workflow_paths_coverage`.
+        base_ref = fetch_pr_base_ref(pr_number, repo)
+        if covering_pr_workflow_exists(repo, base_ref) is True:
+            result = {
+                "decision": "block",
+                "reason": (
+                    f"BLOCKED: PR {pr_display} has an EMPTY statusCheckRollup (no checks "
+                    "reported), but this repo has an on.pull_request workflow with no "
+                    "`paths:` filter that runs on every PR — so a covering check SHOULD "
+                    "have reported. An empty rollup here is an anomalous dropped-trigger, "
+                    "NOT green CI (main#802; origin design-system #129's dropped "
+                    "`synchronize` event).\n"
+                    "Investigate the missing run (re-trigger via close/reopen or an empty "
+                    "commit, or check `validate_workflow_paths_coverage`); silent absence "
+                    "of CI ≠ green CI. If this is a genuine charter-listed exception, pass "
+                    "`--admin` with an ADMIN_MERGE_EXCEPTION."
+                ),
+            }
+            log_pretooluse_block("validate_pr_ci_status", command, result["reason"])
+            return result
         return {
             "decision": "allow",
             "systemMessage": (
                 f"WARNING: PR {pr_display} has no CI checks (empty statusCheckRollup). "
-                "This usually means no workflow's on.pull_request trigger covers this PR. "
-                "Verify the workflow coverage via `validate_workflow_paths_coverage` or "
-                "`gh pr checks` before merging — silent absence of CI ≠ green CI.\n"
+                "Every on.pull_request workflow on this repo is `paths:`-filtered, so this "
+                "may be the legitimate docs-only zero-check case — but an empty rollup is "
+                "NOT green CI (main#802). Verify the workflow coverage via "
+                "`validate_workflow_paths_coverage` or `gh pr checks`, or query "
+                "`.claude/lib/pr_ci_state.py <PR#>` before asserting merge-readiness — "
+                "silent absence of CI ≠ green CI.\n"
                 "See deploy#153 for the root-cause incident pattern."
             ),
         }

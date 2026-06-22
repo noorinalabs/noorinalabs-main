@@ -214,6 +214,19 @@ fi
 
 **Verify step 0.1 holds for every repo before moving on** — every entry in the status table must be `created`, `exists-clean`, `exists-ancestor`, or (with explicit user sign-off) `exists-drift`. A missing or errored wave branch in any child repo is a stop-the-line condition.
 
+**Declare the wave's merge model (Mandatory — one model per wave, main#801).** A wave uses exactly ONE merge model for its whole lifetime — `wave-branch` (every per-issue PR bases on `deployments/phase-{P}/wave-{M}`; the wave→main integration PR is opened at `/wave-wrapup`) OR `direct-to-main` (every PR bases on `main`; the wave branch never accumulates commits). Mixing the two within a wave is the P6W1 stranding bug (charter `pull-requests.md § One Merge Model Per Wave`). Record it now so the `/session-start` reachability check can enforce it mid-wave:
+
+```bash
+# Default for a cross-repo wave is wave-branch; a meta-only / single-repo wave
+# may declare direct-to-main. Pick deliberately, then record it.
+MERGE_MODEL="wave-branch"   # or: direct-to-main
+python3 "$REPO_ROOT/.claude/lib/wave_merge_model.py" set {P} {M} "$MERGE_MODEL"
+# Read-back-verify:
+python3 "$REPO_ROOT/.claude/lib/wave_merge_model.py" model {P} {M}
+```
+
+The helper validates the model against the fixed `{direct-to-main, wave-branch}` set and upserts `wave_{M}_merge_model` through the shared `upsert_status_keys.py` (preserving the compact-inline file shape). A typo is rejected (exit 1) rather than silently persisted.
+
 ### 1a. Status commits — use `gh api` PUT contents (atomic, no local orphan)
 
 **Status commit pattern (added P3W6 retro 2026-05-08, supersedes local-then-push):**

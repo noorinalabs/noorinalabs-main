@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from annunaki_parse import (  # noqa: E402
     TRACE_RECORD_TYPES,
     count_errors,
+    is_low_confidence,
     is_trace,
     iter_records,
     main,
@@ -111,6 +112,69 @@ class IsTrace(unittest.TestCase):
         self.assertFalse(is_trace(_GENUINE_MONITOR))
         self.assertFalse(is_trace(_GENUINE_BLOCK))
         self.assertFalse(is_trace(_GENUINE_EVENT))
+
+
+# #729: exit-0 echoed-output records are tagged confidence="low" by the monitor.
+# The reader excludes them from the genuine-error count but retains them in the
+# log (include_low_confidence=True) for forensics. A genuine masked failure is
+# tagged "high" and counted; a legacy record with no `confidence` field counts.
+_LOW_CONF_ECHO = {
+    "timestamp": "t",
+    "command": "cat mod.py",
+    "exit_code": 0,
+    "matched_patterns": ["stdout:ImportError:"],
+    "confidence": "low",
+}
+_HIGH_CONF_MASKED = {
+    "timestamp": "t",
+    "command": "git push ... | tail",
+    "exit_code": 0,
+    "matched_patterns": ["stdout:^error\\b"],
+    "confidence": "high",
+}
+
+
+class LowConfidenceFilter(unittest.TestCase):
+    def _write(self, path: Path) -> None:
+        lines = [
+            json.dumps(_GENUINE_MONITOR),  # legacy, no confidence → counted
+            json.dumps(_LOW_CONF_ECHO),  # excluded from count
+            json.dumps(_HIGH_CONF_MASKED),  # genuine masked failure → counted
+        ]
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def test_count_excludes_low_confidence(self) -> None:
+        with TemporaryDirectory() as td:
+            p = Path(td) / "errors.jsonl"
+            self._write(p)
+            # legacy + high-confidence masked failure = 2; low excluded.
+            self.assertEqual(count_errors(p), 2)
+
+    def test_iter_default_skips_low_confidence(self) -> None:
+        with TemporaryDirectory() as td:
+            p = Path(td) / "errors.jsonl"
+            self._write(p)
+            cmds = [r["command"] for r in iter_records(p)]
+            self.assertEqual(cmds, ["pytest", "git push ... | tail"])
+
+    def test_include_low_confidence_retains_for_forensics(self) -> None:
+        with TemporaryDirectory() as td:
+            p = Path(td) / "errors.jsonl"
+            self._write(p)
+            recs = list(iter_records(p, include_low_confidence=True))
+            self.assertEqual(len(recs), 3)
+            self.assertIn("cat mod.py", [r["command"] for r in recs])
+
+    def test_is_low_confidence_helper(self) -> None:
+        self.assertTrue(is_low_confidence(_LOW_CONF_ECHO))
+        self.assertFalse(is_low_confidence(_HIGH_CONF_MASKED))
+        self.assertFalse(is_low_confidence(_GENUINE_MONITOR))  # legacy → not low
+
+    def test_cli_include_low_confidence_flag(self) -> None:
+        with TemporaryDirectory() as td:
+            p = Path(td) / "errors.jsonl"
+            self._write(p)
+            self.assertEqual(main([str(p), "--include-low-confidence"]), 0)
 
 
 class TraceTypeSourceOfTruth(unittest.TestCase):
