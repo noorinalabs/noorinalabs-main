@@ -1,11 +1,10 @@
 # Spike — Ontology-vs-graphify (P6 end-state #4)
 
-> **Status:** SPIKE COMPLETE — **revised forward 2026-06-22** to add the cross-repo *topology* dimension
-> (the product lives in the child repos). Awaiting owner decision on **two coupled axes** —
-> representation (keep / replace / hybrid) **×** topology (centralized / distributed + overlay).
+> **Status:** **DECIDED 2026-06-22 — C × T2** (Hybrid representation on a Distributed + system-overlay
+> topology). Tooling chosen by an isolated-branch bake-off (see OWNER DECISION). Teardown deferred to a
+> later phase per the P6 spike-and-decide directive.
 > **Issue:** noorinalabs-main#728 · **Wave:** P6W2 (Architectural revisits) · **Author:** Weronika Zielinska (Platform Architect)
-> **Decision nature:** spike-and-decide, NOT pre-commit (owner 2026-06-20). No teardown this phase; teardown (if chosen) follows the recorded decision in a later phase.
-> **Combined recommendation:** **C × T2** (Hybrid representation on a Distributed + system-overlay topology), gated on a per-language derivability re-measurement on the actual product repos (§2a-i, §5).
+> **Decision nature:** spike-and-decide, NOT pre-commit (owner 2026-06-20). No teardown this phase; teardown follows the recorded decision in a later phase, gated on a per-language derivability re-measurement on the actual product repos (§2a-i, §5).
 
 ## 1. The question
 
@@ -228,25 +227,41 @@ Rejected / deferred:
 
 ---
 
-## OWNER DECISION — to be recorded here and in `phase-6.md`
-
-**Two coupled choices — pick one representation and one topology:**
+## OWNER DECISION — **DECIDED 2026-06-22: C × T2**
 
 _Representation:_
-- [ ] **A — Keep** the current 3-role stack as-is.
-- [ ] **C — Hybrid** (recommended): generate the structural layer, retain hand-curated semantics/intent
-      as low-churn markdown, soften Hook 15 to advisory.
-- [ ] **B — Replace** entirely with a generated index (accepting loss of the semantic/intent layer).
+- [ ] A — Keep · [x] **C — Hybrid** (generate structural layer, hand-curate semantics/intent, soften Hook 15 to advisory) · [ ] B — Replace
 
 _Topology:_
-- [ ] **T1 — Centralized** in `noorinalabs-main` (status quo).
-- [ ] **T2 — Distributed + system overlay** (recommended): per-child generated structural index +
-      central hand-curated semantic overlay + aggregator.
+- [ ] T1 — Centralized · [x] **T2 — Distributed + system overlay** (per-child generated structural index + central hand-curated semantic overlay + aggregator)
 
-**Combined recommendation: C × T2**, gated on per-language derivability re-measurement, teardown deferred
-to a later phase.
+**Owner:** Steven French · **Date:** 2026-06-22 · **Notes:** tooling is **not** decided up front — chosen
+by an isolated-branch **bake-off** (below). Teardown remains deferred to a later phase per the P6
+spike-and-decide directive.
 
-**Owner:** _______________  **Date:** _______________  **Notes:** _______________
+### Tooling bake-off — owner directive (2026-06-22)
 
-_Follow-up implementation issue (only if a change is chosen): file against a later phase; do not action in
-P6. Must include the per-language derivability re-measurement as its first task._
+Rather than pre-pick a structural-index tool or overlay format, **test-drive a few candidates on isolated
+branches** (no merge → fully revertible, satisfies "no teardown this phase") and compare on **two lenses**:
+
+1. **Agent / Claude consumption** — token cost to load + query, answer quality on real "what calls X / what
+   lives in module Y / cross-repo impact" questions, freshness behavior, regeneration cost.
+2. **Human-as-knowledge-base** — browsability, authoring ergonomics, backlink/navigation quality, whether
+   it's pleasant to actually read and maintain.
+
+**Candidate matrix (test on isolated branches):**
+
+| Layer | Candidates to bake off |
+|-------|------------------------|
+| Structural (per child repo) | per-repo `llms.txt` + code-graph · **SCIP/LSIF** (Sourcegraph) · tree-sitter/ctags · **Neo4j-backed code graph** (dogfoods the product DB) |
+| Semantic overlay (parent) | **Obsidian vault** (user+LLM, `[[backlinks]]`) · plain markdown/YAML · NotebookLM (read-only Q&A) · MkDocs/Docusaurus site |
+
+**Method:** pick ≥2 structural candidates + ≥2 overlay candidates, stand each up on its own branch against a
+real product repo (start with a polyglot one — isnad-graph: Python + TS + Cypher — to stress the
+per-language derivability question from §2a-i), capture token-usage + behavior numbers and a short
+human-usability read, then choose per layer. Each branch is throwaway; only the chosen approach graduates
+to the implementation phase.
+
+**Execution tracker:** [noorinalabs-main#820](https://github.com/noorinalabs/noorinalabs-main/issues/820) —
+Task 1 (per-language derivability re-measurement, blocking) · Task 2 (this bake-off) · Task 3 (implement
+chosen approach). Deferred to a later phase.
