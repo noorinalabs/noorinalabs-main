@@ -734,17 +734,23 @@ def _old_kinds_from_ci(text: str) -> set:
     return kinds
 
 
-# Documented expected per-repo kind-sets (#748 D3 parity proof). Authoritative
-# 8-repo OLD-vs-NEW comparison was run at PR time against the real configs in a
-# full parent checkout: the NEW structural classifier produces an IDENTICAL
-# (pre-commit, CI) kind-set to the OLD line-scanner for ALL 8 repos — no
-# divergence. The false-positive class the structural parse removes is therefore
-# LATENT: no real config exercises a step-name/comment false-match today (proven
-# directly by FalsePositiveDemo). These expectations encode that NEW==expected;
-# ParityAcrossRealConfigs additionally asserts OLD==NEW wherever the config is
-# present (the parent always; sibling child repos only in a full multi-repo
-# checkout — they are independent gitignored repos absent from this repo's CI
-# checkout, so each is skipped when not present rather than false-failing).
+# Documented expected kind-set (#748 D3 parity proof). The ONLY repo whose
+# configs are version-controlled IN this repo is the parent (noorinalabs-main),
+# so it is the only one with a stable, hardcoded kind snapshot. The NEW
+# structural classifier must reproduce this snapshot exactly, and must equal the
+# retired OLD line-scanner on it — the false-positive class the structural parse
+# removes is therefore LATENT (no real config exercises a step-name/comment
+# false-match today, proven directly by FalsePositiveDemo).
+#
+# Child repos are deliberately NOT given a documented snapshot (#816, relates to
+# #744). They are independent gitignored repos whose local checkout beside the
+# parent can sit on any branch / lag origin by an arbitrary amount, so a
+# hardcoded snapshot of THEIR files is not a property of this repo: it false-fails
+# the parent-only pre-push suite whenever a child checkout is stale (the original
+# #816 symptom — isnad-graph/user-service checked out behind origin). Present
+# child configs are instead covered by the checkout-INDEPENDENT OLD==NEW parity
+# invariant (test_new_equals_old_on_present_configs), which needs no snapshot and
+# is correct regardless of how stale the local child checkouts are.
 _EXPECTED_KINDS = {
     ".": {
         "precommit": {
@@ -776,104 +782,63 @@ _EXPECTED_KINDS = {
             "ruff-lint",
         },
     },
-    "noorinalabs-isnad-graph": {
-        "precommit": {
-            "actionlint",
-            "build",
-            "eslint",
-            "gitleaks",
-            "mypy",
-            "pip-audit",
-            "pytest",
-            "ruff-format",
-            "ruff-lint",
-            "typescript",
-        },
-        "ci": {
-            "actionlint",
-            "build",
-            "cspell",
-            "eslint",
-            "gitleaks",
-            "mypy",
-            "pip-audit",
-            "pytest",
-            "ruff-format",
-            "ruff-lint",
-            "typescript",
-        },
-    },
-    "noorinalabs-user-service": {
-        "precommit": {"actionlint", "mypy", "pytest", "ruff-format", "ruff-lint"},
-        "ci": {"actionlint", "cspell", "pytest", "ruff-format", "ruff-lint"},
-    },
-    "noorinalabs-deploy": {
-        "precommit": {
-            "actionlint",
-            "gitleaks",
-            "mypy",
-            "pytest",
-            "ruff-format",
-            "ruff-lint",
-            "terraform-fmt",
-        },
-        "ci": {
-            "actionlint",
-            "cspell",
-            "mypy",
-            "pytest",
-            "ruff-format",
-            "ruff-lint",
-            "terraform-fmt",
-        },
-    },
-    "noorinalabs-design-system": {
-        "precommit": {"actionlint", "build", "eslint", "gitleaks", "prettier", "typescript"},
-        "ci": {"actionlint", "build", "cspell", "typescript"},
-    },
-    "noorinalabs-data-acquisition": {
-        "precommit": {"actionlint", "gitleaks", "mypy", "pytest", "ruff-format", "ruff-lint"},
-        "ci": {"actionlint", "cspell", "mypy", "pytest", "ruff-format", "ruff-lint"},
-    },
-    "noorinalabs-isnad-ingest-platform": {
-        "precommit": {"actionlint", "mypy", "pytest", "ruff-format", "ruff-lint"},
-        "ci": {
-            "actionlint",
-            "cspell",
-            "mypy",
-            "pip-audit",
-            "pytest",
-            "ruff-format",
-            "ruff-lint",
-        },
-    },
-    "noorinalabs-landing-page": {
-        "precommit": {"build", "eslint", "gitleaks", "prettier", "typescript"},
-        "ci": {"build", "eslint", "prettier", "typescript"},
-    },
 }
+
+# Child repo directory names, used ONLY to LOCATE sibling configs for the
+# checkout-independent OLD==NEW parity scan — never to assert a hardcoded kind
+# snapshot (see the _EXPECTED_KINDS note above). A child is scanned when its
+# checkout is present beside the parent and skipped when absent, so this can
+# never false-fail in the parent-less CI checkout. Keep in step with the
+# Repository Map in the org CLAUDE.md.
+_CHILD_REPO_DIRS = (
+    "noorinalabs-isnad-graph",
+    "noorinalabs-user-service",
+    "noorinalabs-deploy",
+    "noorinalabs-design-system",
+    "noorinalabs-data-acquisition",
+    "noorinalabs-isnad-ingest-platform",
+    "noorinalabs-landing-page",
+)
 
 
 class ParityAcrossRealConfigs(unittest.TestCase):
     """(#748 D3 deliverable c) The NEW structural classifier must produce the
-    documented kind-set for every real config, and must equal the OLD line
+    documented kind-set for the parent config, and must equal the OLD line
     scanner on every config present — proving the refactor is behavior
-    preserving. The parent (`.`) is always present; sibling child repos are
-    independent gitignored repos and are skipped when absent (this repo's CI
-    checkout has none), so this test cannot false-fail in CI."""
+    preserving.
 
-    def _present_roots(self):
-        # Child repos live beside the parent tree at <REPO_ROOT>/<repo>/. Present
-        # only in a full multi-repo checkout, never in this repo's CI checkout.
+    Two distinct guarantees, deliberately decoupled (#816):
+
+    * Documented-snapshot — asserted for the PARENT ONLY, whose configs are
+      version-controlled in this repo so the snapshot is checkout-stable.
+    * OLD==NEW parity — asserted for every PRESENT config (parent always; each
+      sibling child repo when its checkout is present beside the parent). This
+      is checkout-INDEPENDENT: it compares two classifiers on the same bytes, so
+      it holds no matter how stale a child checkout is. Children are skipped when
+      absent (this repo's CI checkout has none), so neither test false-fails."""
+
+    def _documented_roots(self):
+        # Only repos with a checkout-stable documented snapshot: the parent.
         for repo, expected in _EXPECTED_KINDS.items():
             root = _REPO_ROOT if repo == "." else _REPO_ROOT / repo
             pc = root / ".pre-commit-config.yaml"
             if pc.is_file():
                 yield repo, root, pc, expected
 
+    def _present_config_roots(self):
+        # Every present config: the parent (always) plus any sibling child repo
+        # physically checked out beside it. Child repos live at <REPO_ROOT>/<repo>/
+        # and are present only in a full multi-repo checkout, never in CI.
+        candidates = [(".", _REPO_ROOT)]
+        candidates += [(repo, _REPO_ROOT / repo) for repo in _CHILD_REPO_DIRS]
+        for repo, root in candidates:
+            pc = root / ".pre-commit-config.yaml"
+            if pc.is_file():
+                yield repo, root, pc
+
     def test_new_matches_documented_expectations(self) -> None:
         seen = []
-        for repo, root, pc, expected in self._present_roots():
+        for repo, root, pc, expected in self._documented_roots():
             seen.append(repo)
             new_pc = kinds_from_precommit(pc.read_text(encoding="utf-8"))
             new_ci: set = set()
@@ -887,8 +852,9 @@ class ParityAcrossRealConfigs(unittest.TestCase):
 
     def test_new_equals_old_on_present_configs(self) -> None:
         # Behavior-preservation: identical kind-sets to the retired line scanner
-        # on every config present (no divergence found across all 8 at PR time).
-        for repo, root, pc, _expected in self._present_roots():
+        # on every config present — the checkout-independent guarantee for child
+        # repos (no hardcoded snapshot, so staleness cannot false-fail it).
+        for repo, root, pc in self._present_config_roots():
             pc_text = pc.read_text(encoding="utf-8")
             wf_dir = root / ".github" / "workflows"
             new_ci: set = set()
