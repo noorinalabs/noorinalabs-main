@@ -102,26 +102,28 @@ class WaveNameResolution(unittest.TestCase):
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
-    def test_phase_prefixed_passthrough(self) -> None:
-        self.assertEqual(run.resolve_wave_name("p3-wave-11", str(self.status)), "p3-wave-11")
+    def test_legacy_form_normalized_to_global(self) -> None:
+        # #810: legacy p{N}-wave-{M} input normalizes to phase-agnostic wave-{X}.
+        self.assertEqual(run.resolve_wave_name("p3-wave-11", str(self.status)), "wave-11")
 
-    def test_bare_wave_is_prefixed(self) -> None:
-        self.assertEqual(run.resolve_wave_name("wave-5", str(self.status)), "p5-wave-5")
+    def test_bare_wave_passthrough(self) -> None:
+        self.assertEqual(run.resolve_wave_name("wave-5", str(self.status)), "wave-5")
 
-    def test_bare_number_is_prefixed(self) -> None:
-        self.assertEqual(run.resolve_wave_name("7", str(self.status)), "p5-wave-7")
+    def test_bare_number_becomes_global(self) -> None:
+        self.assertEqual(run.resolve_wave_name("7", str(self.status)), "wave-7")
 
     def test_no_arg_reads_status(self) -> None:
-        self.assertEqual(run.resolve_wave_name(None, str(self.status)), "p5-wave-5")
+        self.assertEqual(run.resolve_wave_name(None, str(self.status)), "wave-5")
 
-    def test_output_is_never_bare(self) -> None:
-        # #442: output must always be phase-prefixed, never bare wave-{M}.
-        self.assertRegex(run.resolve_wave_name(None, str(self.status)), r"^p\d+-wave-\d+$")
+    def test_output_is_phase_agnostic_global(self) -> None:
+        # #810 (retires #442): canonical output is the phase-agnostic wave-{X}.
+        self.assertRegex(run.resolve_wave_name(None, str(self.status)), r"^wave-\d+$")
 
-    def test_missing_phase_raises(self) -> None:
+    def test_missing_phase_no_longer_required(self) -> None:
+        # #810: current_phase is not needed to build the (phase-agnostic) name.
         self.status.write_text('{"current_wave": "wave-5"}')
-        with self.assertRaises(ValueError):
-            run.resolve_wave_name("wave-5", str(self.status))
+        self.assertEqual(run.resolve_wave_name("wave-5", str(self.status)), "wave-5")
+        self.assertEqual(run.resolve_wave_name(None, str(self.status)), "wave-5")
 
 
 class AuditDateResolution(unittest.TestCase):
@@ -237,7 +239,9 @@ class MainEntrypoint(unittest.TestCase):
         with redirect_stdout(buf):
             rc = run.main(["p5-wave-5", "--repo-root", str(_REPO_ROOT), "--date", "2026-06-16"])
         self.assertEqual(rc, 0)
-        self.assertIn("Promotion audit p5-wave-5 complete:", buf.getvalue())
+        # #810: main normalizes the legacy `p5-wave-5` arg to the phase-agnostic
+        # canonical `wave-5` before rendering.
+        self.assertIn("Promotion audit wave-5 complete:", buf.getvalue())
 
     def test_json_flag_emits_parseable_payload(self) -> None:
         import json
@@ -249,7 +253,8 @@ class MainEntrypoint(unittest.TestCase):
             )
         self.assertEqual(rc, 0)
         payload = json.loads(buf.getvalue())
-        self.assertEqual(payload["wave_name"], "p5-wave-5")
+        # #810: legacy arg normalized to phase-agnostic canonical form.
+        self.assertEqual(payload["wave_name"], "wave-5")
         self.assertIn("counts", payload)
         self.assertIn("decisions", payload)
 

@@ -62,9 +62,9 @@ For each deduplicated error, classify it:
 ### 3. Determine the target wave
 
 ```bash
-# Check for current wave
+# Check for current wave. Canonical label is the phase-agnostic `wave-{X}`
+# (#810); legacy `p{N}-wave-{M}` is grandfathered — the `wave` search catches both.
 gh label list --search "wave" --json name --limit 50
-gh issue list --state open --label "p*-wave-*" --json labels --limit 1
 ```
 
 - If a wave is currently active (open issues with a wave label), use that wave label

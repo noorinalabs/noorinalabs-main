@@ -580,6 +580,18 @@ class WaveLabelToOptionNameTests(unittest.TestCase):
         self.assertIsNone(hook._wave_label_to_option_name("p3-wave-10-special"))
         self.assertIsNone(hook._wave_label_to_option_name("bug"))
 
+    def test_global_form_maps_to_WX(self):
+        """#810: phase-agnostic `wave-16` → `W16`."""
+        self.assertEqual(hook._wave_label_to_option_name("wave-16"), "W16")
+
+    def test_placeholder_maps_to_WX_literal(self):
+        """#810: the `wave-x` placeholder → `WX`."""
+        self.assertEqual(hook._wave_label_to_option_name("wave-x"), "WX")
+
+    def test_suffixed_global_form_returns_none(self):
+        """#810 anchor guard: `wave-10-frozen` is out of pattern."""
+        self.assertIsNone(hook._wave_label_to_option_name("wave-10-frozen"))
+
 
 class KillSwitchPureTests(unittest.TestCase):
     """Pure-function coverage for the kill-switch helper."""
@@ -1151,6 +1163,30 @@ class CanonicalWaveLabelRegexTests(unittest.TestCase):
         self.assertIsNone(
             result,
             "suffixed label at spaced-bare EOF must NOT trigger parser-skip log",
+        )
+
+    def test_global_form_quoted_matches(self):
+        """#810: phase-agnostic `wave-16` must match the heuristic regex."""
+        self.assertIsNotNone(
+            hook._CANONICAL_WAVE_LABEL_IN_CMD.search('gh issue edit 1 --add-label "wave-16"')
+        )
+
+    def test_global_form_spaced_eof_matches(self):
+        """#810: `--add-label wave-16` at command end must match."""
+        self.assertIsNotNone(
+            hook._CANONICAL_WAVE_LABEL_IN_CMD.search("gh issue edit 1 --add-label wave-16")
+        )
+
+    def test_placeholder_form_matches(self):
+        """#810: the `wave-x` placeholder must match the heuristic regex."""
+        self.assertIsNotNone(
+            hook._CANONICAL_WAVE_LABEL_IN_CMD.search('gh issue edit 1 --add-label "wave-x"')
+        )
+
+    def test_suffixed_global_form_does_not_match(self):
+        """#810: `wave-10-frozen` must NOT match (anchor regression guard)."""
+        self.assertIsNone(
+            hook._CANONICAL_WAVE_LABEL_IN_CMD.search('gh issue edit 1 --add-label "wave-10-frozen"')
         )
 
 

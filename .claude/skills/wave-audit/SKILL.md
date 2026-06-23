@@ -25,14 +25,19 @@ Build a map: `{issue_number → [PR_number, PR_title]}`.
 
 ### 3. List open issues for the wave
 
+The canonical wave label is the phase-agnostic `wave-{X}` (#810); legacy
+`p{N}-wave-{M}` labels are grandfathered. Query BOTH and union (gh ANDs
+multiple `--label` flags, so run them separately):
+
 ```bash
-gh issue list --state open --label "p{N}-wave-{M}" --json number,title,labels
+gh issue list --state open --label "wave-{X}" --json number,title,labels
+gh issue list --state open --label "p{N}-wave-{M}" --json number,title,labels  # grandfathered
 ```
 
 ### 4. Identify orphans
 
 An orphan is an open issue that:
-- Is labeled with the wave label (`p{N}-wave-{M}`)
+- Is labeled with the wave label (`wave-{X}` or grandfathered `p{N}-wave-{M}`)
 - Was referenced by a merged PR's `Closes`/`Fixes`/`Resolves` but was not auto-closed
 
 Cross-reference the two lists. Also check for issues that may have been implemented but the PR forgot to include the `Closes` reference — match by branch name pattern:

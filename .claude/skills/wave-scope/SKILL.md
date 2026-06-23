@@ -4,7 +4,7 @@ description: Reconcile declared-vs-labeled wave scope between /wave-retro and /w
 args: Phase number, Wave number
 ---
 
-Reconcile **declared scope** (next-wave meta-issue body) with **actual scope** (issues labeled `p{P}-wave-{M}` across all repos) before kickoff. Surfaces drift that accumulated during the prior wave, folds in retro carry-forwards and memory-tracked must-includes, and produces a clean meta-issue + label set for `/wave-kickoff` to act on.
+Reconcile **declared scope** (next-wave meta-issue body) with **actual scope** (issues labeled `wave-{M}` across all repos) before kickoff. Surfaces drift that accumulated during the prior wave, folds in retro carry-forwards and memory-tracked must-includes, and produces a clean meta-issue + label set for `/wave-kickoff` to act on.
 
 > See [`.claude/team/lifecycle.md`](../../team/lifecycle.md) § Wave Lifecycle for the canonical skill order and preconditions.
 
@@ -37,8 +37,10 @@ This was changed 2026-05-10 (P3W9 owner directive): `/wave-retro` does not curre
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-WAVE_LABEL="p{P}-wave-{M}"
-PRIOR_WAVE_LABEL="p{P}-wave-$(({M} - 1))"  # for retro carry-forward cross-ref
+# Canonical wave label is the phase-agnostic `wave-{X}` (#810; {X} == global
+# wave id). Legacy `p{N}-wave-{M}` labels on in-flight issues are grandfathered.
+WAVE_LABEL="wave-{M}"
+PRIOR_WAVE_LABEL="wave-$(({M} - 1))"  # for retro carry-forward cross-ref
 ```
 
 ### 0.0. Allocate the global wave id (main#804)
@@ -168,7 +170,7 @@ gh issue view "$META_ISSUE" --repo noorinalabs/noorinalabs-main --json body,comm
     --jq '.body, (.comments[] | .body)' > /tmp/wavescope-{M}-declared.txt
 ```
 
-**Meta-issue label set:** `meta-issue, process, phase-{P}` only. Do NOT add `p{P}-wave-{M}` to the meta-issue itself — `phase-{P}` is the canonical bucket label for meta-issues per the W8 precedent (#331). The wave label `p{P}-wave-{M}` is reserved for in-scope work items, not the meta.
+**Meta-issue label set:** `meta-issue, process, phase-{P}` only. Do NOT add `wave-{M}` to the meta-issue itself — `phase-{P}` is the canonical bucket label for meta-issues per the W8 precedent (#331). The wave label `wave-{M}` is reserved for in-scope work items, not the meta.
 
 **WAVE_THEME and WAVE_THEME_SHORT** are environment variables the orchestrator sets after Gate B's theme dialogue. `WAVE_THEME` is the full theme string written to `cross-repo-status.json`. `WAVE_THEME_SHORT` is a ~50-char title-friendly version for the issue title.
 
@@ -230,7 +232,7 @@ comm -13 <(cut -f1 /tmp/wavescope-{M}-actual-issues.txt | sort) \
 For each item in `ACTUAL − DECLARED`, group by repo and show:
 
 ```
-**Unscoped Drift — `p{P}-wave-{M}` labeled but not in meta-issue**
+**Unscoped Drift — `wave-{M}` labeled but not in meta-issue**
 
 ### noorinalabs-deploy ({count} items)
 
@@ -256,8 +258,8 @@ For each unscoped item, the owner picks one of:
 | Disposition | Mechanic |
 |---|---|
 | `keep-in-w{M}` | Add to declared scope (step 11 will fold it into the meta-issue body) |
-| `defer-to-w{M+1}` | Strip `p{P}-wave-{M}` label, apply `p{P}-wave-{M+1}` (create label if needed in step 9) |
-| `strip-label` | Strip `p{P}-wave-{M}` label, no other label change |
+| `defer-to-w{M+1}` | Strip `wave-{M}` label, apply `wave-{M+1}` (create label if needed in step 9) |
+| `strip-label` | Strip `wave-{M}` label, no other label change |
 | `close-as-obsolete` | Close issue with a comment referencing the disposition |
 
 Record dispositions in a working table. Do NOT apply any label changes until step 10. Do NOT close any issues until step 10.
@@ -306,7 +308,7 @@ TARGET=$(( (BASE * 20 + 99) / 100 ))   # ceil(0.20 * BASE)
 echo "feature/bug/security in-scope: $BASE  →  TD intake target: $TARGET"
 ```
 
-**2. Build candidate pool** — open, `tech-debt`-labeled, NOT `meta-issue`, and NOT already carrying any `p{P}-wave-*` label (un-scheduled debt), pooled across all repos. Oldest-first so long-lived debt drains first; the owner may reorder.
+**2. Build candidate pool** — open, `tech-debt`-labeled, NOT `meta-issue`, and NOT already carrying any `wave-*` label (un-scheduled debt), pooled across all repos. Oldest-first so long-lived debt drains first; the owner may reorder.
 
 ```bash
 > /tmp/wavescope-{M}-td-pool.txt
@@ -338,16 +340,16 @@ Record `td_intake: <selected>/<target>` (and `td_pool: <POOL>`) for the Step 12 
 
 **Interaction with phase criterion #6.** This step is the operational mechanism behind the TD goal. The cumulative-ratio reading stays *informational*, but the gate the team actually works to is "did the wave take its 20% intake," not a brittle ratio threshold — which avoids the small-backlog whipsaw the owner flagged. Cross-ref `phase-4.md` § criterion #6.
 
-### 9. Create next-wave label (`p{P}-wave-{M+1}`) if any defer dispositions
+### 9. Create next-wave label (`wave-{M+1}`) if any defer dispositions
 
 If any disposition in step 7 was `defer-to-w{M+1}`, ensure the label exists in every relevant repo:
 
 ```bash
 # Global wave ids (main#804) are monotonic, NOT sequential-per-phase: the next
-# wave id is the counter's peek value, not {M}+1. (Label SHAPE is unchanged in
-# this PR — the phase-agnostic `wave-{X}` rename is the deferred follow-up.)
+# wave id is the counter's peek value, not {M}+1. The label is the phase-agnostic
+# `wave-{X}` form (main#810, the follow-up that retired the phase prefix).
 NEXT_WAVE_ID=$(python3 "$REPO_ROOT/.claude/lib/wave_seq.py" peek "$REPO_ROOT/cross-repo-status.json")
-NEXT_LABEL="p{P}-wave-${NEXT_WAVE_ID}"
+NEXT_LABEL="wave-${NEXT_WAVE_ID}"
 # Match the color/description of the current wave label for consistency
 CURRENT_COLOR=$(gh label list --repo noorinalabs/noorinalabs-main --search "$WAVE_LABEL" --json color --jq '.[0].color')
 
@@ -371,9 +373,9 @@ Group all label edits per repo and apply with explicit user confirmation:
 **Label changes about to apply** ({total} edits across {repos} repos)
 
 ### noorinalabs-deploy
-- Add `p{P}-wave-{M}` to: #A, #B
-- Strip `p{P}-wave-{M}` from: #C
-- Strip `p{P}-wave-{M}` AND add `p{P}-wave-{M+1}` to: #D, #E
+- Add `wave-{M}` to: #A, #B
+- Strip `wave-{M}` from: #C
+- Strip `wave-{M}` AND add `wave-{M+1}` to: #D, #E
 - Close as obsolete (with comment): #F
 
 ### noorinalabs-isnad-graph

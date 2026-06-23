@@ -40,10 +40,12 @@ Usage
     python3 .claude/skills/promotion-audit/run.py [wave] [--json] [--date YYYY-MM-DD]
     python3 -m run [wave] ...        # when CWD is the skill dir
 
-With no `wave` argument the driver reads `current_phase` / `current_wave`
-from `cross-repo-status.json` and emits the phase-prefixed canonical form
-`p{N}-wave-{M}` (bare `wave-{M}` is forbidden per #442 to avoid
-cross-phase collisions).
+With no `wave` argument the driver reads `current_wave` from
+`cross-repo-status.json` and emits the phase-agnostic canonical form
+`wave-{X}` (#810). Design B (#804) made the wave id global/monotonic, so the
+cross-phase collision that #442 guarded against (which forbade bare
+`wave-{M}`) no longer exists; #810 retires that prohibition. Legacy
+`p{N}-wave-{M}` input is accepted and normalized to `wave-{X}`.
 
 The driver performs ONLY the deterministic classification + rendering.
 Artifact emission (PR/issue creation, project-board adds) stays in the
@@ -118,16 +120,18 @@ _PHASE_PREFIXED_RE = re.compile(r"^p(?P<n>\d+)-wave-(?P<m>\d+)$")
 
 
 def resolve_wave_name(arg: str | None, status_path: str) -> str:
-    """Return the canonical phase-prefixed wave name `p{N}-wave-{M}`.
+    """Return the canonical phase-agnostic wave name `wave-{X}` (#810).
 
-    - Already-canonical `p{N}-wave-{M}` args pass through unchanged.
-    - Bare `wave-{M}` or `{M}` args are prefixed with `current_phase`
-      from `cross-repo-status.json`.
-    - No arg reads `current_phase` + `current_wave` from the status file.
+    - Legacy `p{N}-wave-{M}` args are normalized to `wave-{M}`.
+    - Bare `wave-{M}` or `{M}` args yield `wave-{M}`.
+    - No arg reads `current_wave` from `cross-repo-status.json`.
 
-    Bare `wave-{M}` output is forbidden (#442): every consumer of this name
-    (audit logs, feedback-log headers) must be phase-namespaced to avoid the
-    cross-phase collision documented in the P2W10/P3W10 overwrite.
+    Design B (#804) made the wave id global/monotonic, so the cross-phase
+    collision that #442 guarded against (which forbade bare `wave-{M}`) no
+    longer exists. #810 retires that prohibition: the canonical wave name —
+    used for artifact labels, audit-log filenames, and feedback-log headers —
+    is now the phase-agnostic `wave-{X}`. (`current_phase` is no longer needed
+    to build the name; it remains in the status file as a derived display.)
     """
     data: dict = {}
     if os.path.isfile(status_path):
@@ -135,8 +139,8 @@ def resolve_wave_name(arg: str | None, status_path: str) -> str:
 
     if arg:
         arg = arg.strip()
-        if _PHASE_PREFIXED_RE.match(arg):
-            return arg
+        # `_WAVE_M_RE` (`(?:wave-)?(\d+)$`) extracts the wave id from the legacy
+        # `p{N}-wave-{M}`, the new `wave-{M}`, and the bare `{M}` forms alike.
         m = _WAVE_M_RE.search(arg)
         if not m:
             raise ValueError(f"Cannot parse wave from {arg!r} (expected p5-wave-5 or wave-5 or 5)")
@@ -148,10 +152,7 @@ def resolve_wave_name(arg: str | None, status_path: str) -> str:
             raise ValueError(f"cross-repo-status.json current_wave={current_wave!r} is unparseable")
         wave_m = m.group("m")
 
-    phase = data.get("current_phase")
-    if phase is None:
-        raise ValueError("cross-repo-status.json is missing current_phase")
-    return f"p{int(phase)}-wave-{wave_m}"
+    return f"wave-{wave_m}"
 
 
 def resolve_audit_date(wave_name: str, status_path: str) -> str:

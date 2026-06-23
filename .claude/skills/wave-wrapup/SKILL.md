@@ -23,6 +23,9 @@ gh pr list --state open --base "deployments/phase-{P}/wave-{M}" --json number,ti
 Also check for PRs targeting `main` that belong to this wave (by label or branch pattern):
 
 ```bash
+# Canonical label is the phase-agnostic `wave-{X}` (#810); legacy
+# `p{N}-wave-{M}` is grandfathered — query both forms.
+gh pr list --state open --base main --label "wave-{M}" --json number,title,author,headRefName,reviews
 gh pr list --state open --base main --label "p{P}-wave-{M}" --json number,title,author,headRefName,reviews
 ```
 
@@ -119,7 +122,8 @@ Close referenced issues with audit comments. Also check for issues matched by br
 Check that all wave issues are resolved:
 
 ```bash
-gh issue list --state open --label "p{P}-wave-{M}" --json number,title
+gh issue list --state open --label "wave-{M}" --json number,title
+gh issue list --state open --label "p{P}-wave-{M}" --json number,title  # grandfathered
 ```
 
 For any remaining open issues:

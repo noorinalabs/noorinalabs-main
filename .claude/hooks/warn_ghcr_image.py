@@ -4,14 +4,43 @@
 Warns (does not block) when `gh workflow run` triggers a deploy-related workflow
 and the expected GHCR image might not exist.
 
+gh-command parser invariant (charter `hooks.md` § 7, main#663)
+=============================================================
+This hook reads the incoming `gh workflow run` command and resolves the target
+repo from its `-R`/`--repo` VALUE. Per the invariant it MUST route both the
+shape detection and the flag-value extraction through the shared parsers
+(`_shell_parse`, `_repo_flag_parse`) rather than ad-hoc regexes:
+
+  * `is_gh_subcommand(tokens, "workflow", "run")` for command-position shape
+    detection (a `gh workflow run` inside a quoted arg or heredoc body is not a
+    real invocation), and
+  * `_repo_flag_parse.extract_repo` for the `-R OWNER/NAME` / `--repo` value
+    (handles all four `-R X` / `-R=X` / `--repo X` / `--repo=X` forms and does
+    NOT leak an `-R`-shaped token out of a quoted `--field` value — the
+    #650/#659/#661 bug class), and
+  * `_shell_parse.resolve_repo_short_name` to resolve the flag-OMITTED ambient
+    git-context case (mirroring gh) instead of silently dropping it.
+
+main#663 closed the `gh workflow`/`gh api` follow-up that the original
+`gh issue`/`gh pr`-scoped invariant deferred.
+
 Exit codes:
   0 — always allow (this is a warning-only hook)
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _repo_flag_parse import extract_repo  # noqa: E402
+from _shell_parse import (  # noqa: E402
+    is_gh_subcommand,
+    resolve_repo_short_name,
+    tokenize,
+)
 
 # Deploy-related workflow names/files
 DEPLOY_PATTERNS = re.compile(r"deploy|release|cd[.-]|deliver", re.IGNORECASE)
@@ -57,17 +86,27 @@ def check_ghcr_image(image: str, tag: str = "latest") -> bool:
         return True
 
 
-def extract_repo_from_command(command: str) -> str | None:
-    """Try to extract repo context from the workflow run command."""
-    # Check for -R flag
-    match = re.search(r"-R\s+[\"']?(\S+)[\"']?", command)
-    if match:
-        repo = match.group(1)
-        # noorinalabs/noorinalabs-isnad-graph -> noorinalabs-isnad-graph
-        if "/" in repo:
-            return repo.split("/")[-1]
-        return repo
-    return None
+def _short_name(repo: str | None) -> str | None:
+    """Normalize an `OWNER/NAME` (or bare `NAME`) repo specifier to `NAME`."""
+    if not repo:
+        return None
+    return repo.split("/")[-1] if "/" in repo else repo
+
+
+def resolve_target_repo(input_data: dict, command: str) -> str | None:
+    """Resolve the target repo short-name for a `gh workflow run` command.
+
+    Flag-value first (`-R`/`--repo` via the shared `_repo_flag_parse.extract_repo`,
+    which scopes to the actual flag VALUE and ignores `-R`-shaped tokens inside a
+    quoted `--field` value), then the flag-OMITTED ambient git-context case
+    (`resolve_repo_short_name`, mirroring gh). Returns the bare repo NAME or
+    None when neither path resolves — the caller fails open to a generic
+    warning rather than silently dropping the command (invariant requirement 2).
+    """
+    flag_repo = _short_name(extract_repo(command))
+    if flag_repo:
+        return flag_repo
+    return resolve_repo_short_name(input_data)
 
 
 def check(input_data: dict) -> dict | None:
@@ -78,13 +117,14 @@ def check(input_data: dict) -> dict | None:
 
     command = input_data.get("tool_input", {}).get("command", "")
 
-    if not re.search(r"\bgh\s+workflow\s+run\b", command):
+    tokens = tokenize(command)
+    if tokens is None or not is_gh_subcommand(tokens, "workflow", "run"):
         return None
 
     if not DEPLOY_PATTERNS.search(command):
         return None
 
-    repo = extract_repo_from_command(command)
+    repo = resolve_target_repo(input_data, command)
     if not repo:
         return {
             "decision": "allow",

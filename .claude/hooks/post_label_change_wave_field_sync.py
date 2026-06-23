@@ -134,21 +134,22 @@ import re  # noqa: E402
 from _shell_parse import resolve_repo_short_name  # noqa: E402
 from _wave_label_parse import (  # noqa: E402
     WaveLabelChange,
-    parse_wave_label,
     parse_wave_label_changes,
+    wave_label_to_option_name,
 )
 from annunaki_log import log_posttooluse_event  # noqa: E402
 
 # Heuristic: command "looks like" it should have parsed as a wave-label change
 # but `parse_wave_label_changes` returned empty. Used by the parser-skip logger
 # to distinguish "no gh issue edit at all" (silent OK) from "had gh issue edit
-# AND a canonical wave-label" (worth logging per #455). The regex matches the
-# canonical `p{N}-wave-{M}` shape inside a flag value (quoted, equals-form, or
-# spaced-bare), bounded so suffixed labels like `p3-wave-10-special` do NOT
-# match. Right anchor accepts a closing quote, whitespace, OR end-of-string
-# so spaced-bare values at command-EOF (e.g. `--add-label p3-wave-11<EOF>`)
-# still trigger the parser-skip detection — see #463.
-_CANONICAL_WAVE_LABEL_IN_CMD = re.compile(r'["= ]p\d+-wave-\d+(?:["\s]|$)')
+# AND a canonical wave-label" (worth logging per #455). The regex matches every
+# accepted wave-label shape (#810) inside a flag value (quoted, equals-form, or
+# spaced-bare): the legacy `p{N}-wave-{M}`, the phase-agnostic `wave-{X}`, and
+# the `wave-x` placeholder. Bounded so suffixed labels like `p3-wave-10-special`
+# or `wave-10-frozen` do NOT match. Right anchor accepts a closing quote,
+# whitespace, OR end-of-string so spaced-bare values at command-EOF (e.g.
+# `--add-label p3-wave-11<EOF>`) still trigger the parser-skip detection — #463.
+_CANONICAL_WAVE_LABEL_IN_CMD = re.compile(r'["= ](?:p\d+-wave-\d+|wave-(?:\d+|x))(?:["\s]|$)')
 
 ORG = "noorinalabs"
 PROJECT_NUMBER = 2
@@ -440,20 +441,16 @@ mutation($project: ID!, $item: ID!, $field: ID!) {
 
 
 def _wave_label_to_option_name(label: str) -> str | None:
-    """Convert `p3-wave-11` → `P3W11` (the option-name shape on project 2).
+    """Convert a wave label to its project-2 Wave option name.
 
-    `board-audit` SKILL.md § Pre-requisite documents this naming convention
-    explicitly: every active wave's option in the project's Wave field
-    follows `P{N}W{M}`. Returns None if `label` is not a canonical wave
-    label (defensive — caller's input has already been validated by
-    `parse_wave_label_change`, but a None here is safer than a wrong
-    option name).
+    Thin wrapper over the shared `_wave_label_parse.wave_label_to_option_name`
+    so the EDIT-path (here) and CREATE-path (`auto_add_issue_to_board`, which
+    calls this private name) stay on one grammar. Mapping (#810):
+    `p3-wave-11` → `P3W11`, `wave-11` → `W11`, `wave-x` → `WX`. Returns None if
+    `label` is not a recognized wave label (defensive — callers have already
+    validated the shape, but a None here is safer than a wrong option name).
     """
-    parsed = parse_wave_label(label)
-    if parsed is None:
-        return None
-    phase_num, wave_num = parsed
-    return f"P{phase_num}W{wave_num}"
+    return wave_label_to_option_name(label)
 
 
 def _ensure_auth_warned_once(reason: str) -> None:

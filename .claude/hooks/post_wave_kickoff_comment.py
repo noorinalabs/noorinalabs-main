@@ -66,7 +66,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _shell_parse import resolve_repo_short_name  # noqa: E402
-from _wave_label_parse import parse_wave_label, parse_wave_label_change  # noqa: E402
+from _wave_label_parse import parse_wave_label_change, parse_wave_label_spec  # noqa: E402
 from annunaki_log import log_posttooluse_event  # noqa: E402
 
 # Dispatcher opt-in (#425): when post_dispatcher sees this attribute set
@@ -138,6 +138,27 @@ def _read_status() -> dict | None:
                 return json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 return None
+    return None
+
+
+def _phase_from_status(status: dict) -> int | None:
+    """Recover the active phase number from a loaded status dict, or None (#810).
+
+    The new phase-agnostic `wave-{X}` label carries no phase, so the kickoff
+    comment recovers it here. Prefers the live `current_phase` integer; falls
+    back to the `phase-{N}` string. (`phase` can lag `current_phase` — see the
+    stale-pointer note in /wave-kickoff SKILL.md.) Returns None when neither
+    field resolves.
+    """
+    cp = status.get("current_phase")
+    if cp is not None:
+        try:
+            return int(cp)
+        except (TypeError, ValueError):
+            pass
+    m = re.fullmatch(r"phase-(\d+)", str(status.get("phase", "")))
+    if m:
+        return int(m.group(1))
     return None
 
 
@@ -455,10 +476,15 @@ def check(
             )
             return {"action": "skip_no_repo_context", "issue": issue_number}
 
-    parsed_label = parse_wave_label(wave_label)
-    if parsed_label is None:
+    # Accept all wave-label forms (#810). The new phase-agnostic `wave-{X}`
+    # carries no phase, so `phase_num` may be None here and is recovered from
+    # cross-repo-status.json below. The `wave-x` placeholder (wave is None) is
+    # not a per-issue kickoff — skip it.
+    spec = parse_wave_label_spec(wave_label)
+    if spec is None or spec.wave is None:
         return None
-    phase_num, wave_num = parsed_label
+    wave_num = spec.wave
+    phase_num = spec.phase
 
     status = (status_loader or _read_status)()
     if status is None:
@@ -468,6 +494,21 @@ def check(
             "cross-repo-status.json missing or malformed; cannot resolve assignment row.",
         )
         return {"action": "skip_no_scope", "repo": repo, "issue": issue_number}
+
+    # New-form label: recover the (derived-display) phase from status. Prefer the
+    # live `current_phase` integer; fall back to the `phase-{N}` string. If
+    # neither resolves, skip rather than render a "Phase None" comment.
+    if phase_num is None:
+        phase_num = _phase_from_status(status)
+        if phase_num is None:
+            log_posttooluse_event(
+                "post_wave_kickoff_comment",
+                command,
+                f"wave label {wave_label!r} is phase-agnostic and cross-repo-status.json "
+                "has no resolvable phase (current_phase / phase); cannot render kickoff "
+                f"comment for {repo}#{issue_number}.",
+            )
+            return {"action": "skip_no_phase", "repo": repo, "issue": issue_number}
 
     # Meta-issue skip: this hook is for per-issue kickoff; the meta-issue
     # gets a different all-hands comment owned by /wave-kickoff Step 8b.

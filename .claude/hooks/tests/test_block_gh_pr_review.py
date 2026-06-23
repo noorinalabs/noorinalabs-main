@@ -186,19 +186,18 @@ class NegativeMatchTests(unittest.TestCase):
 
 
 class HeredocBoundaryTests(unittest.TestCase):
-    """Document hook behavior on heredoc bodies.
+    """Heredoc bodies are NOT treated as command position (main#663).
 
-    The hook splits on `&&`, `||`, `|`, `;` without heredoc-awareness. A
-    heredoc body containing any of those separators will be split and each
-    fragment treated as its own segment. This pins current behavior so any
-    future change is intentional.
+    Post-#663 the hook strips heredoc bodies via `_shell_parse.strip_heredocs`
+    before tokenizing, so a `gh pr review` mentioned inside a `cat <<EOF ... EOF`
+    body is never matched — regardless of whether the body contains shell
+    separators. This corrects the pre-#663 over-block where the private
+    `re.split` segmenter split a heredoc body on `;` and blocked a documented
+    code/prose fragment.
     """
 
     def test_heredoc_body_starting_with_phrase_no_separator(self):
-        """No shell-separator inside the body → whole heredoc is one segment.
-
-        First non-whitespace token is `cat`, so the regex does not match.
-        """
+        """No shell-separator inside the body → heredoc body is stripped."""
         cmd = (
             "cat > /tmp/x.md <<'EOF'\n"
             "gh pr review is blocked by hook policy\n"
@@ -207,19 +206,16 @@ class HeredocBoundaryTests(unittest.TestCase):
         )
         self.assertIsNone(hook.check(_input(cmd)))
 
-    def test_heredoc_body_with_semicolon_splits_segments(self):
-        """KNOWN LIMITATION: `;` inside a heredoc body splits the segment.
+    def test_heredoc_body_with_semicolon_no_longer_false_blocks(self):
+        """Regression for the pre-#663 over-block.
 
-        If a literal `gh pr review` appears as the start of a segment after a
-        `;`, even inside a heredoc body, the hook DOES block. This is
-        intentional fail-closed: the hook errs on the side of blocking when
-        shell-separator semantics are ambiguous. Documented for future tuning;
-        no production occurrence to date.
+        A `gh pr review` phrase inside a heredoc body, even preceded by a `;`,
+        is documentation/prose — NOT a real invocation. After routing through
+        `strip_heredocs` the body is removed before tokenization, so the hook
+        correctly allows the command.
         """
         cmd = "cat <<'EOF'\nstep 1; gh pr review is bad; step 2\nEOF"
-        # Documents current behavior. If this changes, update the comment.
-        result = hook.check(_input(cmd))
-        self.assertIsNotNone(result)
+        self.assertIsNone(hook.check(_input(cmd)))
 
 
 if __name__ == "__main__":

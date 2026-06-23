@@ -45,10 +45,11 @@ python3 .claude/skills/promotion-audit/run.py [wave] --json
 ```
 
 - **Wave resolution.** With no `wave` argument the driver reads
-  `current_phase` + `current_wave` from `cross-repo-status.json` and emits
-  the canonical phase-prefixed form `p{N}-wave-{M}` (e.g. `p5-wave-5`). A
-  bare `wave-{M}` or `{M}` arg is auto-prefixed; an already-canonical
-  `p{N}-wave-{M}` passes through. Bare `wave-{M}` output is forbidden (#442).
+  `current_wave` from `cross-repo-status.json` and emits the canonical
+  phase-agnostic form `wave-{X}` (e.g. `wave-16`), #810. A bare `{M}` arg or a
+  legacy `p{N}-wave-{M}` arg is normalized to `wave-{X}`. Design B (#804) made
+  the wave id global/monotonic, so the cross-phase collision #442 guarded
+  against no longer exists; #810 retires the bare-form prohibition.
 - **Audit date** is pinned to the wave boundary (`wave_{M}_kicked_off_at`,
   else `_started_at`, else `_scope_reconciled_at`) — never `datetime.now()`,
   so re-runs on unchanged state are byte-identical. Override with `--date`.
@@ -98,7 +99,7 @@ Each `Decision` has one of these kinds:
 
 ### 4. Produce artifacts
 
-Resolve the **current wave label** once at the top of this step from `cross-repo-status.json` `current_wave` (e.g. `wave-9` → label `p3-wave-9`). Every artifact created below — AUTO PRs AND DECIDE issues — MUST carry this label so the GitHub Project board's Wave-field sync (see `/board-audit`) routes the artifact to the current wave column. Missing this label is the failure mode #401 was filed against — PRs/issues land off-board and off-wave.
+Resolve the **current wave label** once at the top of this step from `cross-repo-status.json` `current_wave` (e.g. `wave-9` → label `wave-9`, #810 phase-agnostic form). Every artifact created below — AUTO PRs AND DECIDE issues — MUST carry this label so the GitHub Project board's Wave-field sync (see `/board-audit`) routes the artifact to the current wave column. Missing this label is the failure mode #401 was filed against — PRs/issues land off-board and off-wave.
 
 #### AUTO artifacts
 
@@ -132,14 +133,14 @@ gh pr create \
   --body-file .claude/scratch/promotion-audit-{wave}-pr-body.md \
   --label tech-debt \
   --label enhancement \
-  --label p3-{wave}
+  --label {wave-label}
 ```
 
-The label set is **non-negotiable**: `tech-debt` (this is process/quality work), `enhancement` (functional addition to charter/skills), AND the current wave label (`p3-{wave}`). Validate the labels actually stuck — `gh pr edit` silently no-ops on bad label names (memory `feedback_gh_pr_edit_silent_noop.md`):
+The label set is **non-negotiable**: `tech-debt` (this is process/quality work), `enhancement` (functional addition to charter/skills), AND the current wave label `{wave-label}` (the phase-agnostic `wave-{X}` form, #810). Validate the labels actually stuck — `gh pr edit` silently no-ops on bad label names (memory `feedback_gh_pr_edit_silent_noop.md`):
 
 ```bash
 gh pr view <PR#> --json labels --jq '.labels[].name'
-# Expect: enhancement, p3-{wave}, tech-debt (any order)
+# Expect: enhancement, {wave-label}, tech-debt (any order)
 ```
 
 If any label is missing, retry with `gh pr edit <PR#> --add-label <name>` and re-verify.
@@ -179,7 +180,7 @@ gh issue create \
   --body-file .claude/scratch/promotion-audit-{wave}-decide-{slug}.md \
   --label tech-debt \
   --label enhancement \
-  --label p3-{wave}
+  --label {wave-label}
 ```
 
 Use `--body-file`, NOT `--body` — the `|` hook bug #146 surfaces on long-prose `--body` arguments.
@@ -231,16 +232,16 @@ has four subsections:
 
 ### 6. Write outputs (Q4 — BOTH)
 
-1. **Append to feedback_log.md** — if the audit runs inside a retro (detect by checking if the most recent `## Retrospective:` entry is on today's date), append under the current retro. Otherwise prepend a fresh `## Promotion Audit — {wave_name} ({DATE})` entry at the top of the log. `{wave_name}` is always the phase-prefixed form `p{N}-wave-{M}` (e.g., `p3-wave-11`); bare `wave-{M}` is forbidden per #442 to prevent cross-phase collisions like the P2W10 vs P3W10 overwrite caught 2026-05-16.
-2. **Standalone log** — always write to `.claude/team/promotion_audit_log/{wave_name}.md` where `{wave_name}` is the phase-prefixed form `p{N}-wave-{M}` (e.g., `.claude/team/promotion_audit_log/p3-wave-11.md`). Create the directory if it doesn't exist. Overwrite if re-run. Never write a bare `wave-{M}.md` — it will collide with a same-numbered file from a different phase.
+1. **Append to feedback_log.md** — if the audit runs inside a retro (detect by checking if the most recent `## Retrospective:` entry is on today's date), append under the current retro. Otherwise prepend a fresh `## Promotion Audit — {wave_name} ({DATE})` entry at the top of the log. `{wave_name}` is the phase-agnostic form `wave-{X}` (e.g., `wave-16`), #810. The bare form is now SAFE: Design B (#804) made the wave id global/monotonic, so the cross-phase collision #442 guarded against (P2W10 vs P3W10) can no longer occur — `wave-{X}` is unique across all phases.
+2. **Standalone log** — always write to `.claude/team/promotion_audit_log/{wave_name}.md` where `{wave_name}` is the phase-agnostic form `wave-{X}` (e.g., `.claude/team/promotion_audit_log/wave-16.md`). Create the directory if it doesn't exist. Overwrite if re-run. (Pre-#810 logs named `p{N}-wave-{M}.md` remain valid on disk; new runs use `wave-{X}.md`.)
 
 ### 7. Report
 
 Print a two-line summary to stdout: counts per decision category and a link to the standalone log:
 
 ```
-Promotion audit p{N}-wave-{M} complete: 0 AUTO · 0 DECIDE · 13 KEPT · 1 SUPERSEDED
-Log: .claude/team/promotion_audit_log/p{N}-wave-{M}.md
+Promotion audit wave-{X} complete: 0 AUTO · 0 DECIDE · 13 KEPT · 1 SUPERSEDED
+Log: .claude/team/promotion_audit_log/wave-{X}.md
 ```
 
 ## Determinism
