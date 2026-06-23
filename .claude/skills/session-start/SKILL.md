@@ -89,6 +89,11 @@ for repo in "${REPOS[@]}"; do
 
   # Walk worktrees in porcelain form. Records are blank-line separated;
   # fields we care about: worktree <path>, HEAD <sha>, locked [<reason>].
+  # Capture porcelain output to a temp file (with a trailing blank line so the
+  # last record is flushed) and feed the loop from it — see the note at `done`
+  # below for why a temp file rather than `< <(...)` process substitution.
+  _wtfile="$(mktemp)"
+  { git -C "$repo" worktree list --porcelain; echo; } > "$_wtfile"
   wt="" head="" locked=0
   while IFS= read -r line; do
     case "$line" in
@@ -110,7 +115,16 @@ for repo in "${REPOS[@]}"; do
         fi
         wt="" ;;
     esac
-  done < <(git -C "$repo" worktree list --porcelain; echo)
+    # NB: the loop is fed from a temp FILE (not a `< <(...)` process
+    # substitution) so the whole Step-0 block stays statically analyzable by
+    # the Claude Code permission engine — process substitution trips the
+    # "shell syntax that cannot be statically analyzed" path and forces a
+    # prompt regardless of the allowlist (main, 2026-06-23). A file redirect
+    # is analyzable AND keeps the loop in the current shell, so the FLAGGED
+    # array accumulation below survives past `done` (a `| while` pipe would
+    # run the body in a subshell and silently drop it).
+  done < "$_wtfile"
+  rm -f "$_wtfile"
 done
 
 echo "--- remaining worktrees (parent + children) ---"
@@ -237,25 +251,34 @@ classify_red() {  # $1=repo  $2=run_id
 
 RED=()
 # `while read` over the newline-list, NOT `for repo in $REPOS` — zsh does not
-# word-split an unquoted scalar (#759 / main#688). A here-string (not a `|` pipe)
-# keeps the loop in the current shell so the RED array survives past `done`.
+# word-split an unquoted scalar (#759 / main#688). Both loops below are fed from
+# temp FILES rather than a `<<<` here-string / `< <(...)` process substitution:
+# those constructs trip the Claude Code permission engine's "shell syntax that
+# cannot be statically analyzed" path and force a prompt regardless of the
+# allowlist (main, 2026-06-23). A file redirect is analyzable AND — like the
+# here-string it replaces — keeps the loop in the current shell, so the RED
+# array survives past `done` (a `| while` pipe would drop it to a subshell).
+_repofile="$(mktemp)"
+printf '%s\n' "$REPOS" > "$_repofile"
 while IFS= read -r repo; do
   [ -n "$repo" ] || continue
   branch=$(gh api "repos/noorinalabs/$repo" --jq '.default_branch' 2>/dev/null || echo main)
   # Latest run per workflow on the default branch; keep only publish/deploy/release-class names with a non-success conclusion.
+  _runsfile="$(mktemp)"
+  gh api "repos/noorinalabs/$repo/actions/runs?branch=$branch&per_page=50" \
+    --jq '[.workflow_runs[] | select((.name // .display_title) | test("publish|deploy|release|promote|ghcr|image";"i"))]
+          | group_by(.workflow_id) | map(max_by(.run_started_at))
+          | .[] | [(.name // .display_title), .conclusion, .html_url, .id] | @tsv' 2>/dev/null > "$_runsfile"
   while IFS=$'\t' read -r name conclusion url run_id; do
     case "$conclusion" in
       failure|timed_out|cancelled|startup_failure)
         cls=$(classify_red "$repo" "$run_id")
         RED+=("$repo :: $name :: $conclusion :: $cls :: $url") ;;
     esac
-  done < <(
-    gh api "repos/noorinalabs/$repo/actions/runs?branch=$branch&per_page=50" \
-      --jq '[.workflow_runs[] | select((.name // .display_title) | test("publish|deploy|release|promote|ghcr|image";"i"))]
-            | group_by(.workflow_id) | map(max_by(.run_started_at))
-            | .[] | [(.name // .display_title), .conclusion, .html_url, .id] | @tsv' 2>/dev/null
-  )
-done <<< "$REPOS"
+  done < "$_runsfile"
+  rm -f "$_runsfile"
+done < "$_repofile"
+rm -f "$_repofile"
 if [ ${#RED[@]} -gt 0 ]; then
   printf 'RED default-branch publish/deploy run(s) — investigate before relying on staging:\n'
   printf '  %s\n' "${RED[@]}"
