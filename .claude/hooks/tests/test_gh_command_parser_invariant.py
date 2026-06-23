@@ -3,17 +3,17 @@ r"""Smoke/lint gate for the main#663 gh-command parser invariant.
 Charter rule: `charter/hooks.md` § Hook Authorship Requirements
               "7. gh-command Parser Invariant".
 
-> Any hook that parses a `gh issue`/`gh pr` command MUST scope label/repo
-> extraction to the actual flag VALUES (via the shared `_shell_parse` /
-> `_wave_label_parse` / `_repo_flag_parse` tokenizer) and resolve the
-> flag-omitted (ambient git-context) case — never reimplement the shell
-> tokenizer privately, and never match flag-shaped / label-shaped strings
-> elsewhere in the command (especially `--body`/`--body-file` content).
+> Any hook that parses a `gh` command (`gh issue`/`gh pr`/`gh workflow`/`gh
+> api`) MUST scope label/repo extraction to the actual flag VALUES (via the
+> shared `_shell_parse` / `_wave_label_parse` / `_repo_flag_parse` tokenizer)
+> and resolve the flag-omitted (ambient git-context) case — never reimplement
+> the shell tokenizer privately, and never match flag-shaped / label-shaped
+> strings elsewhere in the command (especially `--body`/`--body-file` content).
 
 This gate is the machine-enforcement of that invariant (per
 `feedback_enforcement_hierarchy.md`: "Charter rules without enforcement
 decay"). It is the gh-command analogue of the deferred grep-gate noted in
-§5a, scoped to the `gh issue`/`gh pr` parser class the invariant governs.
+§5a, scoped to the gh-command value-flag parser class the invariant governs.
 
 Mechanics
 =========
@@ -21,8 +21,9 @@ Mechanics
 For every top-level hook in `.claude/hooks/*.py` (excluding the three
 sanctioned shared parsers, which ARE the canonical tokenizer/flag-walker),
 classify whether it is a **gh-command parser** — i.e. it reads the incoming
-Bash command (`tool_input` / `command`) AND matches a `gh issue`/`gh pr`
-shape. For each such hook assert BOTH:
+Bash command (`tool_input` / `command`) AND matches a
+`gh issue`/`gh pr`/`gh workflow`/`gh api` shape. For each such hook assert
+BOTH:
 
   A. It does NOT call `shlex.split` / `shlex.shlex` directly — all shell
      tokenization must route through `_shell_parse.tokenize` (which carries
@@ -35,10 +36,11 @@ shape. For each such hook assert BOTH:
      class — it leaks label-shaped tokens out of `--body` content. Pure
      shape-detection regexes (`\bgh\s+issue\s+create\b`) are allowed.
 
-Scope: `gh issue`/`gh pr` per the invariant text. `gh workflow`/`gh api`
-parsers (e.g. `warn_ghcr_image` extracting `-R` from `gh workflow run`) are
-the same latent class but out of the invariant's stated scope — tracked as a
-follow-up, not enforced here.
+Scope: the full gh-command value-flag parser class — `gh issue`/`gh pr`
+(the original invariant) PLUS `gh workflow`/`gh api` (e.g. `warn_ghcr_image`
+extracting `-R` from `gh workflow run`), which main#663 (wave-16) migrated
+onto the shared parser and folded into enforcement here, closing the
+follow-up the original `gh issue`/`gh pr`-scoped gate had deferred.
 """
 
 from __future__ import annotations
@@ -80,8 +82,9 @@ _RE_PATTERN_FUNCS = {
 
 # Minimum gh-command parsers the classifier must find. Guards against a
 # refactor that silently breaks the classifier into matching nothing (which
-# would make this gate vacuously green).
-_MIN_GH_HOOKS = 6
+# would make this gate vacuously green). The live set is 14 (P6W16); 10 leaves
+# margin for legitimate hook removal while still catching a classifier regress.
+_MIN_GH_HOOKS = 10
 
 
 def _iter_hook_files() -> list[str]:
@@ -144,7 +147,7 @@ def _is_gh_command_parser(src: str) -> bool:
     if not reads_command:
         return False
     gh_shape = (
-        re.search(r"gh\s+(?:issue|pr)\b", code) is not None
+        re.search(r"gh\s+(?:issue|pr|workflow|api)\b", code) is not None
         or "is_gh_subcommand" in code
         or "find_gh_subcommand" in code
         or "--add-label" in code
@@ -215,6 +218,12 @@ class GhCommandParserInvariantTests(unittest.TestCase):
     def test_migrated_hook_is_classified(self):
         # Regression guard: the hook migrated for main#663 must stay in scope.
         self.assertIn("validate_wave_label_evidence.py", _gh_command_parser_hooks())
+
+    def test_workflow_api_class_is_classified(self):
+        # Regression guard for the main#663 (wave-16) scope extension: the
+        # `gh workflow run` parser must stay enforced, not slip back out of
+        # scope (the deferred-follow-up state the original gate had).
+        self.assertIn("warn_ghcr_image.py", _gh_command_parser_hooks())
 
     def test_shared_parsers_present(self):
         for name in _SHARED_PARSERS:
