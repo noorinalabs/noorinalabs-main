@@ -14,7 +14,7 @@ Automate the wave kickoff process for the `{team_name}` team.
 
 ### 0. Run `/board-audit` (Mandatory precondition — added per main#199)
 
-Run `/board-audit` once to ensure project 2 reflects current open-issue state and the `Wave` field is in sync with `p{N}-wave-{M}` labels. Without a current board, downstream steps (scope reconciliation, label application, kickoff comments) can silently miss orphan issues per memory `feedback_wave_planning_from_board.md` (the 37% drift discovery on 2026-04-23).
+Run `/board-audit` once to ensure project 2 reflects current open-issue state and the `Wave` field is in sync with the wave labels (the new `wave-{X}` form and grandfathered `p{N}-wave-{M}`, #810). Without a current board, downstream steps (scope reconciliation, label application, kickoff comments) can silently miss orphan issues per memory `feedback_wave_planning_from_board.md` (the 37% drift discovery on 2026-04-23).
 
 If `/board-audit` reports drift, address it before proceeding. Labels are canonical; the Wave field is a derived projection synced by the skill (charter `issues.md § Wave Planning — Project Board Is Authoritative`).
 
@@ -102,7 +102,7 @@ For each issue flagged by check 0.3 (`actual_repo_for_changes` ≠ filed repo):
 
 1. **Re-create in the actual repo(s).** Author a new issue in the repo where the code changes, with a faithful body (carry the original scope) plus a `## Provenance` line naming the closed source issue and this relocation rule. If the work splits across *multiple* repos (e.g. a UI in one repo + an HTTP endpoint in another, or per-repo lockfile bumps), create **one issue per repo** — this also serves the smaller-PR / parallelize preference. Apply the category label(s) but NOT the wave label yet.
 2. **Board + scope.** `gh project item-add 2 --owner noorinalabs --url <new-url>` for each new issue. Replace the source issue's entry in `cross-repo-status.json` `wave_{M}_scope.tier_*` with the new ref(s) + the drafted implementer/reviewer slate, keyed to the actual repo (`id`).
-3. **Close the source issue.** Post a relocation comment on it pointing to the new issue(s), `--remove-label "p{N}-wave-{M}"`, then `gh issue close … --reason "not planned"`.
+3. **Close the source issue.** Post a relocation comment on it pointing to the new issue(s), `--remove-label "wave-{X}"` (or the grandfathered `p{N}-wave-{M}` if that is what the issue carries), then `gh issue close … --reason "not planned"`.
 4. **Then** proceed to the wave-label apply (§ 7) on the NEW issues so the auto-kickoff-comment hook fires against the correct repo + slate.
 
 Relocation happens BEFORE the slate is persisted and BEFORE any wave-label apply, so the scope and kickoff comments reference the real repos from the start. Precedent: P4W3 relocated main#138 → isnad-graph#970 (UI) + ingest-platform#70 (HTTP endpoint), and main#633 → ingest-platform#71 (pip) + isnad-graph#971 (authlib+pip).
@@ -252,7 +252,7 @@ Recipe:
 }
 ```
 
-`validate_wave_audit` derives the current wave **label** (`p{N}-wave-{M}`) from `current_wave` to count open wave issues; if the pointer still names the prior wave, the wave-conclusion audit blocks the **next** wave's `/wave-retro`. This was the one W14 annunaki capture — W14 kicked off without advancing `current_wave`, leaving it at `wave-13`, and the retro was blocked until the pointer was manually corrected. Read-back-verify after the PUT: `gh api .../contents/cross-repo-status.json?ref=main --jq '.content' | base64 -d | jq -r '.current_wave'` MUST print `wave-{M}`.
+`validate_wave_audit` derives the current wave **labels** (both the new `wave-{X}` and the legacy `p{N}-wave-{M}`, #810) from `current_wave` to count open wave issues; if the pointer still names the prior wave, the wave-conclusion audit blocks the **next** wave's `/wave-retro`. This was the one W14 annunaki capture — W14 kicked off without advancing `current_wave`, leaving it at `wave-13`, and the retro was blocked until the pointer was manually corrected. Read-back-verify after the PUT: `gh api .../contents/cross-repo-status.json?ref=main --jq '.content' | base64 -d | jq -r '.current_wave'` MUST print `wave-{M}`.
 
 Attribution: kickoff status commits use Wanjiku Mwangi (TPM); reconciliation/wrapup commits use the role-running implementer.
 
@@ -260,16 +260,22 @@ The local-then-push `jq | mv | git commit | git push` pattern at the end of Step
 
 ### 2. Create wave label
 
-Check if label `p{N}-wave-{M}` exists:
+The canonical wave label is the **phase-agnostic** `wave-{X}` (#810, completing
+Design B #804), where `{X}` is the global monotonic wave id (== `current_wave`).
+Use `wave-x` as a placeholder only when the phase/scope is genuinely undecided.
+Legacy `p{N}-wave-{M}` labels on in-flight issues are grandfathered — every
+parser/hook still accepts them — but NEW issues get `wave-{X}`.
+
+Check if label `wave-{X}` exists:
 
 ```bash
-gh label list --search "p{N}-wave-{M}"
+gh label list --search "wave-{X}"
 ```
 
 If missing, create it:
 
 ```bash
-gh label create "p{N}-wave-{M}" --description "Phase {N} Wave {M}" --color "8B5CF6"
+gh label create "wave-{X}" --description "Wave {X} (global id)" --color "8B5CF6"
 ```
 
 ### 3. Pre-wave auth/scope audit
@@ -307,8 +313,8 @@ For each repo:
 - If `conclusion` is `"success"`, mark it green.
 - If `conclusion` is `"failure"` or missing, create a GitHub issue in that repo:
   ```bash
-  gh issue create --repo noorinalabs/{repo} --title "CI red on main — triage before p{N}-wave-{M}" \
-    --label "bug" --label "p{N}-wave-{M}" \
+  gh issue create --repo noorinalabs/{repo} --title "CI red on main — triage before wave-{X}" \
+    --label "bug" --label "wave-{X}" \
     --body "CI is failing on main. This must be triaged before wave work begins on this repo."
   ```
 - Present a summary table to the user:
@@ -357,10 +363,10 @@ Create any missing labels before applying.
 For each issue, apply the wave label and assignee label:
 
 ```bash
-gh issue edit {NUMBER} --add-label "p{N}-wave-{M}" --add-label "{FIRSTNAME_LASTNAME}"
+gh issue edit {NUMBER} --add-label "wave-{X}" --add-label "{FIRSTNAME_LASTNAME}"
 ```
 
-**The kickoff comment is posted automatically.** A `PostToolUse` hook (`.claude/hooks/post_wave_kickoff_comment.py`, closes #286) fires on the `--add-label "p{N}-wave-{M}"` pattern, reads the matching assignment row from `cross-repo-status.json` `wave_{M}_scope.tier_*` arrays, and posts the charter-format kickoff comment to the issue. Per `feedback_enforcement_hierarchy`: hook > skill > charter — the prior manual loop (old Step 8) could be skipped or partial-fail, the hook fires deterministically.
+**The kickoff comment is posted automatically.** A `PostToolUse` hook (`.claude/hooks/post_wave_kickoff_comment.py`, closes #286) fires on the `--add-label "wave-{X}"` pattern (and the legacy `p{N}-wave-{M}` form), reads the matching assignment row from `cross-repo-status.json` `wave_{X}_scope.tier_*` arrays, and posts the charter-format kickoff comment to the issue. For the phase-agnostic label the hook recovers the (derived-display) phase from `current_phase`. Per `feedback_enforcement_hierarchy`: hook > skill > charter — the prior manual loop (old Step 8) could be skipped or partial-fail, the hook fires deterministically.
 
 Hook behavior:
 - Idempotent: re-applying the wave label after disposition correction does NOT double-post (the hook detects the charter heading `**Wave {M} Kickoff — Phase {N}**` in existing comments and skips).

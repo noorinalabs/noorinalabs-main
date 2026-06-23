@@ -99,12 +99,16 @@ The old local `git checkout main && git pull && git checkout -b …` flow was th
 
 ### 5. Create wave label
 
+The canonical wave label is the phase-agnostic `wave-{X}` (#810; `{X}` is the
+global wave id == `current_wave`). Legacy `p{N}-wave-{M}` labels are
+grandfathered but new waves use `wave-{X}`.
+
 ```bash
 # Check if label exists
-gh label list --search "p{P}-wave-{M}" --json name
+gh label list --search "wave-{X}" --json name
 
 # Create if missing
-gh label create "p{P}-wave-{M}" --description "Phase {P} Wave {M}" --color "8B5CF6"
+gh label create "wave-{X}" --description "Wave {X} (global id)" --color "8B5CF6"
 ```
 
 Also ensure standard category labels exist:

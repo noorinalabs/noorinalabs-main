@@ -610,5 +610,79 @@ class AmbientRepoResolutionTests(unittest.TestCase):
         self.assertEqual(calls[0], 0, "explicit --repo must not trigger ambient resolution")
 
 
+class PhaseAgnosticLabelForm(unittest.TestCase):
+    """#810: the kickoff hook fires on the new `wave-{X}` label form, recovering
+    the (derived-display) phase from cross-repo-status.json, and skips the
+    `wave-x` placeholder (not a per-issue kickoff)."""
+
+    def _status(self):
+        return {
+            "current_phase": 4,
+            "phase": "phase-4",
+            "wave_7_scope": {
+                "tier_1_close_out": [
+                    {
+                        "id": "noorinalabs-main#601",
+                        "implementer": "Aino Virtanen",
+                        "reviewer": "Weronika Zielinska",
+                        "reviewer_2": "Nino Kavtaradze",
+                    }
+                ]
+            },
+        }
+
+    def test_global_form_posts_with_phase_from_status(self):
+        captured = {}
+
+        def fake_post(repo, num, body_path):
+            captured["body"] = Path(body_path).read_text(encoding="utf-8")
+            return True
+
+        with tempfile.TemporaryDirectory() as td:
+
+            def fake_writer(body, repo, num):
+                path = Path(td) / f"body-{repo}-{num}.md"
+                path.write_text(body, encoding="utf-8")
+                return path
+
+            result = hook.check(
+                _bash('gh issue edit 601 --repo noorinalabs/noorinalabs-main --add-label "wave-7"'),
+                status_loader=self._status,
+                comment_fetcher=lambda repo, num: [],
+                comment_poster=fake_post,
+                body_writer=fake_writer,
+            )
+        self.assertEqual(result["action"], "post")
+        # Phase 4 was recovered from status (the new label carries no phase).
+        self.assertIn("Phase 4", captured["body"])
+        self.assertIn("Wave 7", captured["body"])
+
+    def test_placeholder_form_is_not_a_kickoff(self):
+        """`wave-x` carries no wave id → not a per-issue kickoff → None."""
+        result = hook.check(
+            _bash('gh issue edit 601 --repo noorinalabs/noorinalabs-main --add-label "wave-x"'),
+            status_loader=self._status,
+        )
+        self.assertIsNone(result)
+
+    def test_global_form_no_phase_in_status_skips(self):
+        """New-form label but status has no resolvable phase → skip_no_phase."""
+
+        def _status_no_phase():
+            return {
+                "wave_7_scope": {
+                    "tier_1_close_out": [
+                        {"id": "noorinalabs-main#601", "implementer": "Aino Virtanen"}
+                    ]
+                }
+            }
+
+        result = hook.check(
+            _bash('gh issue edit 601 --repo noorinalabs/noorinalabs-main --add-label "wave-7"'),
+            status_loader=_status_no_phase,
+        )
+        self.assertEqual(result["action"], "skip_no_phase")
+
+
 if __name__ == "__main__":
     unittest.main()

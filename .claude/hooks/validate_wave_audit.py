@@ -62,12 +62,15 @@ Allow condition:
 
 Audit shell-out:
     Iterates the 8 org-known repos (charter skills.md § Audit command),
-    running:
+    running, for EACH accepted wave-label form (#810):
         gh issue list --repo "noorinalabs/<repo>" --state open \\
-            --label "p2-wave-<N>" --json number
-    Wave label `<N>` is derived from `cross-repo-status.json` field
-    `current_wave` (e.g. "wave-10" → "10"). Total open count is the sum
-    across all repos.
+            --label "<wave-label>" --json number
+    The wave id `<N>` is derived from `cross-repo-status.json` field
+    `current_wave` (e.g. "wave-16" → "16"); the audit queries BOTH the legacy
+    `p<P>-wave-<N>` and the new phase-agnostic `wave-<N>` form and UNIONS the
+    issue numbers per repo (gh ANDs multiple `--label` flags, so the forms are
+    queried separately). This grandfathers in-flight legacy-labeled issues
+    while counting new-scheme issues. Total open count is the sum across repos.
 
 Merge-ready-PR exemption (issue #664, owner-adopted P4W7 retro):
     The `/wave-wrapup` gate had a chicken-and-egg: the wave's own open
@@ -216,18 +219,22 @@ def _read_phase_wave_nums() -> tuple[int, int] | None:
     return int(phase_match.group(1)), int(wave_match.group(1))
 
 
-def _read_current_wave_label() -> str | None:
-    """Return the active wave label (e.g. 'p2-wave-10') or None.
+def _read_current_wave_labels() -> list[str] | None:
+    """Return the active wave's labels in ALL accepted forms, or None.
 
-    Derives the label from cross-repo-status.json (see `_read_phase_wave_nums`).
-    Returns None on any failure (missing file, malformed JSON, missing fields,
-    unparseable wave value).
+    Returns BOTH the legacy phase-prefixed `p{N}-wave-{M}` AND the new
+    phase-agnostic `wave-{X}` form (#810). The audit must count issues under
+    either label so the transition is seamless: in-flight issues labeled the
+    legacy way (e.g. this very wave's `p6-wave-16`) and issues created under the
+    new scheme (`wave-16`) both register against the active wave. The two share
+    the same global wave id `X == M` (Design B #804). Returns None on any
+    failure (missing file, malformed JSON, missing fields, unparseable wave).
     """
     nums = _read_phase_wave_nums()
     if nums is None:
         return None
     phase_num, wave_num = nums
-    return f"p{phase_num}-wave-{wave_num}"
+    return [f"p{phase_num}-wave-{wave_num}", f"wave-{wave_num}"]
 
 
 def _read_current_wave_branch() -> str | None:
@@ -245,12 +252,11 @@ def _read_current_wave_branch() -> str | None:
     return f"deployments/phase-{phase_num}/wave-{wave_num}"
 
 
-def _open_issue_numbers_for_repo(repo: str, label: str) -> list[int] | None:
-    """Return the open-issue numbers for `noorinalabs/<repo>` filtered by `label`.
+def _open_issue_numbers_for_label(repo: str, label: str) -> list[int] | None:
+    """Return open-issue numbers for `noorinalabs/<repo>` filtered by one `label`.
 
     Returns the list of issue numbers on success (possibly empty), None on
-    subprocess failure (gh missing, network error, auth failure). Caller
-    decides whether to treat None as fail-open or partial.
+    subprocess failure (gh missing, network error, auth failure).
     """
     try:
         result = subprocess.run(
@@ -288,6 +294,25 @@ def _open_issue_numbers_for_repo(repo: str, label: str) -> list[int] | None:
         return [int(item["number"]) for item in data]
     except (TypeError, KeyError, ValueError):
         return None
+
+
+def _open_issue_numbers_for_repo(repo: str, labels: list[str]) -> list[int] | None:
+    """Return the UNION of open-issue numbers across each label form (#810).
+
+    `gh issue list --label A --label B` ANDs the labels, so each accepted wave
+    label (legacy `p{N}-wave-{M}` AND new `wave-{X}`) is queried separately and
+    the results are unioned — an issue carrying EITHER form counts once. Returns
+    None if ANY per-label query fails (so the caller fails open per-repo, the
+    pre-existing conservative-toward-allow stance), the deduplicated number list
+    otherwise.
+    """
+    union: set[int] = set()
+    for label in labels:
+        nums = _open_issue_numbers_for_label(repo, label)
+        if nums is None:
+            return None
+        union.update(nums)
+    return sorted(union)
 
 
 def _checks_green(rollup: list | None) -> bool:
@@ -431,16 +456,16 @@ def _mergeready_exempt_issues(repo: str, wave_branch: str) -> set[int]:
     return exempt
 
 
-def _count_open_for_repo(repo: str, label: str, wave_branch: str | None) -> int | None:
+def _count_open_for_repo(repo: str, labels: list[str], wave_branch: str | None) -> int | None:
     """Return the *blocking* open-issue count for `noorinalabs/<repo>`.
 
-    Counts open issues carrying `label`, minus those exempted by a merge-ready
-    PR targeting `wave_branch` (issue #664). Returns the integer count on
-    success, None on issue-list subprocess failure (so the caller can fail-open
-    on full infrastructure failure). When `wave_branch` is None, no exemption
-    is applied (every open wave issue counts).
+    Counts open issues carrying ANY accepted wave-label form in `labels` (#810),
+    minus those exempted by a merge-ready PR targeting `wave_branch` (issue
+    #664). Returns the integer count on success, None on issue-list subprocess
+    failure (so the caller can fail-open on full infrastructure failure). When
+    `wave_branch` is None, no exemption is applied (every open wave issue counts).
     """
-    numbers = _open_issue_numbers_for_repo(repo, label)
+    numbers = _open_issue_numbers_for_repo(repo, labels)
     if numbers is None:
         return None
     if not numbers:
@@ -452,7 +477,9 @@ def _count_open_for_repo(repo: str, label: str, wave_branch: str | None) -> int 
     return sum(1 for n in numbers if n not in exempt)
 
 
-def _audit_open_count(label: str, wave_branch: str | None) -> tuple[int | None, dict[str, int]]:
+def _audit_open_count(
+    labels: list[str], wave_branch: str | None
+) -> tuple[int | None, dict[str, int]]:
     """Run the cross-repo audit. Returns (total_or_None, per_repo_counts).
 
     `total_or_None` is None only if EVERY repo's audit failed (full
@@ -469,7 +496,7 @@ def _audit_open_count(label: str, wave_branch: str | None) -> tuple[int | None, 
     successes = 0
 
     for repo in _ORG_REPOS:
-        count = _count_open_for_repo(repo, label, wave_branch)
+        count = _count_open_for_repo(repo, labels, wave_branch)
         if count is None:
             continue
         successes += 1
@@ -517,8 +544,8 @@ def check(input_data: dict) -> dict | None:
     if skill_name not in _GATED_SKILLS:
         return None
 
-    label = _read_current_wave_label()
-    if label is None:
+    labels = _read_current_wave_labels()
+    if labels is None:
         return {
             "decision": "allow",
             "systemMessage": (
@@ -529,21 +556,24 @@ def check(input_data: dict) -> dict | None:
             ),
         }
 
+    # Display form for messages: both accepted label forms (#810) are queried.
+    label_display = " | ".join(f"`{lbl}`" for lbl in labels)
+
     # Wave branch drives the merge-ready-PR exemption (#664). Derived from the
     # same status fields as the label, so if the label resolved, the branch
     # does too; None only on a race that mutates the file mid-check, in which
     # case the audit simply applies no exemption (stricter, never false-exempt).
     wave_branch = _read_current_wave_branch()
 
-    total, per_repo = _audit_open_count(label, wave_branch)
+    total, per_repo = _audit_open_count(labels, wave_branch)
 
     if total is None:
         return {
             "decision": "allow",
             "systemMessage": (
                 f"WARNING: Wave-audit hook could not query any of the {len(_ORG_REPOS)} "
-                f"org repos for label `{label}` (gh CLI missing, unauthenticated, or "
-                f"all calls failed). Allowing /{skill_name} to proceed without an audit. "
+                f"org repos for label(s) {label_display} (gh CLI missing, unauthenticated, "
+                f"or all calls failed). Allowing /{skill_name} to proceed without an audit. "
                 "Run the canonical audit manually before claiming the wave is concluded."
             ),
         }
@@ -556,9 +586,9 @@ def check(input_data: dict) -> dict | None:
         return {
             "decision": "allow",
             "systemMessage": (
-                f"NOTE: {total} open item(s) for `{label}` across {len(per_repo)} repo(s); "
-                f"carry-forward marker detected in args, allowing /{skill_name} to proceed.\n"
-                f"Per-repo open counts:\n{_format_per_repo(per_repo)}\n"
+                f"NOTE: {total} open item(s) for {label_display} across {len(per_repo)} "
+                f"repo(s); carry-forward marker detected in args, allowing /{skill_name} "
+                f"to proceed.\nPer-repo open counts:\n{_format_per_repo(per_repo)}\n"
                 "Verify the carry-forward list in your output names every item above."
             ),
         }
@@ -569,7 +599,7 @@ def check(input_data: dict) -> dict | None:
             f"BLOCKED: /{skill_name} cannot claim wave conclusion. "
             f"Charter § Wave Lifecycle — Open-Item Audit requires zero open items "
             f"for the active wave OR an explicit carry-forward list in the skill's args.\n\n"
-            f"Active wave: {label}\n"
+            f"Active wave label(s): {label_display}\n"
             f"Open items across the org: {total}\n"
             f"Per-repo breakdown:\n{_format_per_repo(per_repo)}\n\n"
             "To proceed, either:\n"

@@ -165,6 +165,65 @@ class CitedPathNotFoundTests(unittest.TestCase):
             self.assertIsNone(hook.check(_bash_input(cmd)))
 
 
+class PhaseAgnosticLabelFormTests(unittest.TestCase):
+    """#810: the evidence gate triggers on the new `wave-{X}` and `wave-x`
+    label forms — a new-form label must not bypass the cited-path check."""
+
+    def test_global_form_404_blocks(self):
+        """New `wave-16` form with an all-404 cited path → block (gate fires).
+
+        Phase is recovered from status to build the wave branch ref; the cited
+        path 404s at both `main` and the derived branch → block.
+        """
+        body = (
+            "## Summary\n"
+            "Remove noorinalabs-isnad-graph/.claude/hooks/auto_set_env_test.py per spec.\n"
+        )
+        cmd = (
+            "gh issue create --repo noorinalabs/noorinalabs-main --title T "
+            f"--body {body!r} --label 'tech-debt,wave-16'"
+        )
+        fake = _fake_subprocess_factory(main_exists=set(), wave_exists=set())
+        with (
+            mock.patch.object(hook, "_read_status_phase", return_value=6),
+            mock.patch.object(hook.subprocess, "run", side_effect=fake),
+        ):
+            result = hook.check(_bash_input(cmd))
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("wave-16", result["reason"])
+        # Wave branch ref was built from the status-recovered phase.
+        self.assertIn("deployments/phase-6/wave-16", result["reason"])
+
+    def test_placeholder_form_404_blocks(self):
+        """`wave-x` placeholder with an all-404 cited path → block (main-only check)."""
+        body = "Remove noorinalabs-main/.claude/hooks/gone.py per spec.\n"
+        cmd = (
+            "gh issue create --repo noorinalabs/noorinalabs-main --title T "
+            f"--body {body!r} --label 'wave-x'"
+        )
+        fake = _fake_subprocess_factory(main_exists=set(), wave_exists=set())
+        with mock.patch.object(hook.subprocess, "run", side_effect=fake):
+            result = hook.check(_bash_input(cmd))
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("wave-x", result["reason"])
+
+    def test_global_form_path_exists_allows(self):
+        """New-form label but cited path verifies at main → allow."""
+        body = "Refs noorinalabs-main/.claude/hooks/exists.py\n"
+        cmd = (
+            "gh issue create --repo noorinalabs/noorinalabs-main --title T "
+            f"--body {body!r} --label 'wave-16'"
+        )
+        fake = _fake_subprocess_factory(main_exists={".claude/hooks/exists.py"})
+        with (
+            mock.patch.object(hook, "_read_status_phase", return_value=6),
+            mock.patch.object(hook.subprocess, "run", side_effect=fake),
+        ):
+            self.assertIsNone(hook.check(_bash_input(cmd)))
+
+
 class OriginVerificationOverrideTests(unittest.TestCase):
     """Acceptance (d): `Origin-Verification: <reason>` override bypasses check."""
 
