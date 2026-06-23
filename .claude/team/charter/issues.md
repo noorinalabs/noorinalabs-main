@@ -41,7 +41,7 @@ This applies to ALL issue-filing surfaces: orchestrator, team members, `/file-bu
 
 ## Wave Planning — Project Board Is Authoritative <!-- promotion-target: skill -->
 
-Wave and phase planning MUST begin with the full project board as the candidate pool, not with the subset of issues carrying a `p{N}-wave-{M}` label or listed in a meta-issue body.
+Wave and phase planning MUST begin with the full project board as the candidate pool, not with the subset of issues carrying a wave label (`wave-{X}` or grandfathered `p{N}-wave-{M}`, main#810) or listed in a meta-issue body.
 
 1. **Source of truth:** project 2 (`gh project item-list 2 --owner noorinalabs`). Every open issue across all repos should appear there.
 2. **Labels are post-scoping tags**, not pre-scoping filters. When a wave is planned, in-scope issues get labeled; the labels document decisions but do not bound which issues could have been considered.
@@ -66,7 +66,7 @@ Any URL printed by the final `comm` is an open issue missing from the board — 
 
 **Why:** On 2026-04-23, running this check during P2W10 execution revealed **72 of 193 open issues (37%) were missing from the board**. Those issues were invisible to any wave-planning pass that read labels or meta-issue bodies. Planning from labels alone systematically excludes work the team forgot to triage.
 
-**Skill:** `/board-audit` (main#199) automates both the orphan-detection check above AND the `p{N}-wave-{M}` label → project Wave-field sync. Labels are canonical for phase/wave assignment; the project's `Wave` single-select field is a **derived projection** of labels, maintained by `/board-audit`. The skill is wired into `/wave-kickoff`, `/wave-retro`, and `/session-start` step 5 so the board stays current at every wave boundary. Manual invocation is also valid whenever drift is suspected.
+**Skill:** `/board-audit` (main#199) automates both the orphan-detection check above AND the wave-label → project Wave-field sync (`wave-{X}`→`W{X}`, grandfathered `p{N}-wave-{M}`→`P{N}W{M}`, main#810). Labels are canonical for phase/wave assignment; the project's `Wave` single-select field is a **derived projection** of labels, maintained by `/board-audit`. The skill is wired into `/wave-kickoff`, `/wave-retro`, and `/session-start` step 5 so the board stays current at every wave boundary. Manual invocation is also valid whenever drift is suspected.
 
 ## Multi-Step Meta-Issue Freshness Re-Audit <!-- promotion-target: skill -->
 

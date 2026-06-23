@@ -7,7 +7,7 @@ args: (none — runs against project 2 and all 8 org repos)
 Detect drift between GitHub Project 2 (the Cross-Repo Wave Plan board) and the actual issue/PR state across all 8 `noorinalabs` repos. Two failure modes are gated:
 
 1. **Orphan detection** — issues that exist but are NOT on the project board (invisible to any planning pass that reads the board).
-2. **Wave-field drift** — issues whose `p{N}-wave-{M}` label disagrees with the project's `Wave` single-select field.
+2. **Wave-field drift** — issues whose wave label (`wave-{X}` or grandfathered `p{N}-wave-{M}`) disagrees with the project's `Wave` single-select field.
 
 Closes main#199.
 
@@ -28,9 +28,15 @@ Decision (owner, 2026-04-25): **labels are canonical for phase/wave assignment; 
 
 ## Pre-requisite — Wave-field options exist
 
-The project's `Wave` single-select field MUST have option `P{N}W{M}` for every active phase/wave (e.g., `P3W9`). Owner adds new options once per phase via the Project Settings → Fields → Wave UI (or `gh project field-create` with project-edit scope).
+The project's `Wave` single-select field MUST have an option for every active wave. Option-name grammar (#810, matching `_wave_label_parse.wave_label_to_option_name`):
 
-If an option is missing for a label encountered during sync (e.g., issues labeled `p3-wave-10` but no `P3W10` option), the skill reports the missing options and skips those issues' field-sync (does NOT block; orphan detection still runs).
+- new phase-agnostic label `wave-{X}` → option `W{X}` (e.g. `wave-16` → `W16`)
+- grandfathered legacy label `p{N}-wave-{M}` → option `P{N}W{M}` (e.g. `P3W9`)
+- placeholder label `wave-x` → option `WX` ("Wave (TBD)")
+
+Owner adds new options via the Project Settings → Fields → Wave UI (or `gh project field-create` with project-edit scope).
+
+If an option is missing for a label encountered during sync (e.g., issues labeled `wave-16` but no `W16` option, or legacy `p3-wave-10` but no `P3W10`), the skill reports the missing options and skips those issues' field-sync (does NOT block; orphan detection still runs).
 
 ## Instructions
 
@@ -115,10 +121,11 @@ echo "$ORPHANS" | head -20
 
 ### 4. Detect Wave-field drift
 
-For each board item that maps to an issue/PR with a `p{N}-wave-{M}` label, compute the expected `P{N}W{M}` Wave-field value. Compare against the actual Wave-field value:
+For each board item that maps to an issue/PR with a wave label, compute the expected Wave-field option using the grammar above (`wave-{X}` → `W{X}`, legacy `p{N}-wave-{M}` → `P{N}W{M}`, `wave-x` → `WX`). Compare against the actual Wave-field value:
 
 ```bash
-# For each board item, walk the labels of the linked issue/PR and find p{N}-wave-{M}.
+# For each board item, walk the labels of the linked issue/PR and find the wave label
+# (new `wave-{X}` or grandfathered `p{N}-wave-{M}`).
 jq -r '.data.organization.projectV2.items.nodes[]
        | select(.content.url != null)
        | "\(.content.url)\t\(.id)\t\(
@@ -313,7 +320,7 @@ If read-back actionable drift > 0, raise a warning and link to charter `pull-req
 
 - [x] Skill `/board-audit` exists at `.claude/skills/board-audit/SKILL.md`.
 - [x] Skill detects orphans across all 8 repos and project 2 (steps 1-3).
-- [x] Skill detects `p{N}-wave-{M}` label / Wave-field drift (step 4).
+- [x] Skill detects wave label (`wave-{X}` / grandfathered `p{N}-wave-{M}`) / Wave-field drift (step 4).
 - [x] Skill bulk-adds orphans with user confirmation (steps 5-6).
 - [x] Skill bulk-syncs Wave field via GraphQL `updateProjectV2ItemFieldValue` mutation (step 7).
 - [ ] Project 2 Wave-field options extended with `P2W10` + `P3W1`+ — **OWNER ACTION REQUIRED** (one-time per phase; not a code change).

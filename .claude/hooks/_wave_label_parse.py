@@ -1,5 +1,21 @@
 #!/usr/bin/env python3
-"""Shared parser for `gh issue edit <num> --add-label|--remove-label "p{N}-wave-{M}"`.
+"""Shared parser for wave-label `gh issue edit/create` commands.
+
+Wave-label grammar (#810, completing Design B #804)
+===================================================
+
+Three forms are accepted everywhere a wave label is recognized:
+
+  - legacy `p{N}-wave-{M}` (e.g. `p6-wave-16`) — grandfathered; in-flight
+    issues labeled this way keep working.
+  - global `wave-{X}` (e.g. `wave-16`) — phase-agnostic; the owner-preferred
+    going-forward form. `X` is the global monotonic wave id (#804); the phase
+    is a derived display carried by branches/status, not the label.
+  - placeholder `wave-x` — the literal label for phase/scope-undecided work.
+
+`is_wave_label` / `parse_wave_label_spec` / `wave_label_to_option_name` accept
+all three. `parse_wave_label` is legacy-form-only (its `(phase, wave)` tuple
+cannot express a missing phase) — see its docstring.
 
 Background
 ==========
@@ -109,7 +125,37 @@ from _shell_parse import (  # noqa: E402
     tokenize,
 )
 
-_WAVE_LABEL_RE = re.compile(r"^p(\d+)-wave-(\d+)$")
+# Legacy phase-prefixed form: `p6-wave-16` (grandfathered, still accepted).
+_LEGACY_WAVE_LABEL_RE = re.compile(r"^p(\d+)-wave-(\d+)$")
+# Phase-agnostic global form (#810, completes Design B #804): `wave-16`.
+_GLOBAL_WAVE_LABEL_RE = re.compile(r"^wave-(\d+)$")
+# Phase/scope-undecided placeholder (#810): the literal label `wave-x`.
+_PLACEHOLDER_WAVE_LABEL = "wave-x"
+
+# Back-compat alias: some external readers referenced `_WAVE_LABEL_RE` as the
+# canonical legacy matcher. It remains the *legacy-form* matcher only.
+_WAVE_LABEL_RE = _LEGACY_WAVE_LABEL_RE
+
+
+@dataclass(frozen=True)
+class WaveLabelSpec:
+    """Parsed wave label spanning all three accepted forms (#810).
+
+    Forms and the fields they populate:
+      - legacy `p{N}-wave-{M}`  → phase=N, wave=M, is_placeholder=False
+      - global `wave-{X}`        → phase=None, wave=X, is_placeholder=False
+      - placeholder `wave-x`     → phase=None, wave=None, is_placeholder=True
+
+    `phase` is None for every phase-agnostic form (Design B #804 made the wave
+    id global/monotonic and the phase a derived display, so the label no longer
+    carries it). `wave` is None only for the `wave-x` placeholder. `raw` is the
+    original label string.
+    """
+
+    raw: str
+    phase: int | None
+    wave: int | None
+    is_placeholder: bool
 
 
 @dataclass(frozen=True)
@@ -153,20 +199,71 @@ class WaveLabelCreate:
 
 
 def is_wave_label(value: str) -> bool:
-    """True if `value` is exactly a `p{N}-wave{M}` canonical wave label.
+    """True if `value` is a canonical wave label in ANY accepted form (#810).
 
-    Anchored fullmatch: `p3-wave-10-special` returns False (the trailing
-    `-special` defeats the end anchor); `p3-wave-10` returns True.
+    Accepts the legacy phase-prefixed `p{N}-wave-{M}` (grandfathered), the
+    phase-agnostic global `wave-{X}`, and the `wave-x` placeholder. Anchored
+    fullmatch: suffixed labels like `p3-wave-10-special` or `wave-10-frozen`
+    return False (the trailing segment defeats the end anchor); `p3-wave-10`,
+    `wave-10`, and `wave-x` return True.
     """
-    return bool(_WAVE_LABEL_RE.match(value))
+    return parse_wave_label_spec(value) is not None
+
+
+def parse_wave_label_spec(value: str) -> WaveLabelSpec | None:
+    """Parse a label string into a `WaveLabelSpec` spanning all forms, or None.
+
+    Single source of truth for the wave-label grammar (#810). Returns None for
+    any string that is not one of the three accepted forms.
+    """
+    if value == _PLACEHOLDER_WAVE_LABEL:
+        return WaveLabelSpec(raw=value, phase=None, wave=None, is_placeholder=True)
+    m = _LEGACY_WAVE_LABEL_RE.match(value)
+    if m is not None:
+        return WaveLabelSpec(
+            raw=value, phase=int(m.group(1)), wave=int(m.group(2)), is_placeholder=False
+        )
+    m = _GLOBAL_WAVE_LABEL_RE.match(value)
+    if m is not None:
+        return WaveLabelSpec(raw=value, phase=None, wave=int(m.group(1)), is_placeholder=False)
+    return None
 
 
 def parse_wave_label(value: str) -> tuple[int, int] | None:
-    """Parse a wave-label string into `(phase_num, wave_num)` or None."""
-    m = _WAVE_LABEL_RE.match(value)
+    """Parse a LEGACY `p{N}-wave-{M}` label into `(phase_num, wave_num)` or None.
+
+    Legacy-form only by contract: the return type cannot express a missing
+    phase, so phase-agnostic forms (`wave-{X}`, `wave-x`) return None here.
+    Callers that must handle the new forms use `parse_wave_label_spec` instead
+    (e.g. `wave_label_to_option_name`). Retained unchanged for the grandfathered
+    callers and their tests.
+    """
+    m = _LEGACY_WAVE_LABEL_RE.match(value)
     if m is None:
         return None
     return int(m.group(1)), int(m.group(2))
+
+
+def wave_label_to_option_name(value: str) -> str | None:
+    """Convert a wave label to the project-2 Wave single-select option name.
+
+    Mapping (#810), board option-name grammar:
+      - legacy `p{N}-wave-{M}` → `P{N}W{M}`  (e.g. `p6-wave-16` → `P6W16`)
+      - global `wave-{X}`       → `W{X}`       (e.g. `wave-16`    → `W16`)
+      - placeholder `wave-x`    → `WX`         ("Wave (TBD)")
+
+    Returns None when `value` is not a recognized wave label. Single source of
+    truth so the EDIT-path and CREATE-path field-sync hooks (and `/board-audit`)
+    agree on the option name for every form.
+    """
+    spec = parse_wave_label_spec(value)
+    if spec is None:
+        return None
+    if spec.is_placeholder:
+        return "WX"
+    if spec.phase is None:
+        return f"W{spec.wave}"
+    return f"P{spec.phase}W{spec.wave}"
 
 
 def _parse_edit_segment(rest: list[str]) -> WaveLabelChange | None:

@@ -191,7 +191,7 @@ Report:
 - Open issue count and any blockers
 - Open PRs across repos
 
-If the report surfaces unexpected gaps between board view and open-issue counts (e.g., wave-labeled issues missing from project 2, or Wave-field values out of sync with `p{N}-wave-{M}` labels), invoke `/board-audit` to detect and (with confirmation) repair the drift. Per main#199, labels are canonical and the project's Wave field is a derived projection synced by `/board-audit`.
+If the report surfaces unexpected gaps between board view and open-issue counts (e.g., wave-labeled issues missing from project 2, or Wave-field values out of sync with the wave labels (`wave-{X}` or grandfathered `p{N}-wave-{M}`, #810)), invoke `/board-audit` to detect and (with confirmation) repair the drift. Per main#199, labels are canonical and the project's Wave field is a derived projection synced by `/board-audit`.
 
 ### Step 5a — Red default-branch workflow detection (P3W14 retro Proposed Change #2)
 

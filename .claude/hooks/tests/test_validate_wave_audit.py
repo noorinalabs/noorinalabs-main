@@ -47,8 +47,14 @@ def _patch_audit(total: int | None, per_repo: dict[str, int] | None = None):
 
 
 def _patch_label(label: str | None):
-    """Context manager: patch hook._read_current_wave_label."""
-    return mock.patch.object(hook, "_read_current_wave_label", return_value=label)
+    """Context manager: patch hook._read_current_wave_labels.
+
+    Accepts a single label for call-site brevity and wraps it in the
+    list the hook now returns (#810 dual-form). `None` passes through to
+    model the no-active-wave / underivable case.
+    """
+    labels = None if label is None else [label]
+    return mock.patch.object(hook, "_read_current_wave_labels", return_value=labels)
 
 
 class GatedSkillBlocking(unittest.TestCase):
@@ -165,7 +171,7 @@ class FailOpenInfrastructure(unittest.TestCase):
 
 
 class WaveLabelDerivation(unittest.TestCase):
-    """Coverage on _read_current_wave_label."""
+    """Coverage on _read_current_wave_labels (#810 dual-form)."""
 
     def _write_status(self, payload: dict) -> Path:
         """Write a temp cross-repo-status.json and patch hook._STATUS_PATH at it."""
@@ -174,13 +180,14 @@ class WaveLabelDerivation(unittest.TestCase):
         tmp.close()
         return Path(tmp.name)
 
-    def test_phase2_wave10_derives_correctly(self) -> None:
+    def test_phase2_wave10_derives_both_forms(self) -> None:
+        """Returns BOTH the legacy p{N}-wave-{M} AND the new wave-{X} form (#810)."""
         path = self._write_status(
             {"wave_active": True, "current_wave": "wave-10", "phase": "phase-2"}
         )
         try:
             with mock.patch.object(hook, "_STATUS_PATH", path):
-                self.assertEqual(hook._read_current_wave_label(), "p2-wave-10")
+                self.assertEqual(hook._read_current_wave_labels(), ["p2-wave-10", "wave-10"])
         finally:
             path.unlink()
 
@@ -190,13 +197,13 @@ class WaveLabelDerivation(unittest.TestCase):
         )
         try:
             with mock.patch.object(hook, "_STATUS_PATH", path):
-                self.assertIsNone(hook._read_current_wave_label())
+                self.assertIsNone(hook._read_current_wave_labels())
         finally:
             path.unlink()
 
     def test_missing_file_returns_none(self) -> None:
         with mock.patch.object(hook, "_STATUS_PATH", Path("/tmp/nonexistent-no-thanks.json")):
-            self.assertIsNone(hook._read_current_wave_label())
+            self.assertIsNone(hook._read_current_wave_labels())
 
     def test_malformed_current_wave_returns_none(self) -> None:
         path = self._write_status(
@@ -204,7 +211,7 @@ class WaveLabelDerivation(unittest.TestCase):
         )
         try:
             with mock.patch.object(hook, "_STATUS_PATH", path):
-                self.assertIsNone(hook._read_current_wave_label())
+                self.assertIsNone(hook._read_current_wave_labels())
         finally:
             path.unlink()
 
@@ -284,7 +291,7 @@ class WaveBranchDerivation(unittest.TestCase):
         )
         try:
             with mock.patch.object(hook, "_STATUS_PATH", path):
-                self.assertEqual(hook._read_current_wave_label(), "p3-wave-12")
+                self.assertEqual(hook._read_current_wave_labels(), ["p3-wave-12", "wave-12"])
                 self.assertEqual(hook._read_current_wave_branch(), "deployments/phase-3/wave-12")
         finally:
             path.unlink()
@@ -384,11 +391,13 @@ class PrIsMergeReady(unittest.TestCase):
 class CountOpenWithExemption(unittest.TestCase):
     """Coverage on _count_open_for_repo merge-ready-PR exemption (#664)."""
 
+    _LABELS = ["p5-wave-5", "wave-5"]
+
     def test_no_open_issues_returns_zero(self) -> None:
         with mock.patch.object(hook, "_open_issue_numbers_for_repo", return_value=[]):
             self.assertEqual(
                 hook._count_open_for_repo(
-                    "noorinalabs-main", "p5-wave-5", "deployments/phase-5/wave-5"
+                    "noorinalabs-main", self._LABELS, "deployments/phase-5/wave-5"
                 ),
                 0,
             )
@@ -398,14 +407,14 @@ class CountOpenWithExemption(unittest.TestCase):
         with mock.patch.object(hook, "_open_issue_numbers_for_repo", return_value=None):
             self.assertIsNone(
                 hook._count_open_for_repo(
-                    "noorinalabs-main", "p5-wave-5", "deployments/phase-5/wave-5"
+                    "noorinalabs-main", self._LABELS, "deployments/phase-5/wave-5"
                 )
             )
 
     def test_no_wave_branch_counts_all(self) -> None:
         """NEG: branch underivable → no exemption applied, every issue counts."""
         with mock.patch.object(hook, "_open_issue_numbers_for_repo", return_value=[1, 2, 3]):
-            self.assertEqual(hook._count_open_for_repo("noorinalabs-main", "p5-wave-5", None), 3)
+            self.assertEqual(hook._count_open_for_repo("noorinalabs-main", self._LABELS, None), 3)
 
     def test_exempt_issues_subtracted(self) -> None:
         """POS: issues with a merge-ready wave-branch PR are subtracted."""
@@ -415,7 +424,7 @@ class CountOpenWithExemption(unittest.TestCase):
         ):
             self.assertEqual(
                 hook._count_open_for_repo(
-                    "noorinalabs-main", "p5-wave-5", "deployments/phase-5/wave-5"
+                    "noorinalabs-main", self._LABELS, "deployments/phase-5/wave-5"
                 ),
                 1,
             )
@@ -428,7 +437,7 @@ class CountOpenWithExemption(unittest.TestCase):
         ):
             self.assertEqual(
                 hook._count_open_for_repo(
-                    "noorinalabs-main", "p5-wave-5", "deployments/phase-5/wave-5"
+                    "noorinalabs-main", self._LABELS, "deployments/phase-5/wave-5"
                 ),
                 0,
             )
@@ -441,7 +450,7 @@ class CountOpenWithExemption(unittest.TestCase):
         ):
             self.assertEqual(
                 hook._count_open_for_repo(
-                    "noorinalabs-main", "p5-wave-5", "deployments/phase-5/wave-5"
+                    "noorinalabs-main", self._LABELS, "deployments/phase-5/wave-5"
                 ),
                 2,
             )
@@ -567,8 +576,8 @@ class MergereadyExemptIssuesSubprocess(unittest.TestCase):
             self.assertEqual(hook._mergeready_exempt_issues("noorinalabs-main", self._WAVE), set())
 
 
-class OpenIssueNumbersSubprocess(unittest.TestCase):
-    """Coverage on _open_issue_numbers_for_repo gh shell-out."""
+class OpenIssueNumbersForLabelSubprocess(unittest.TestCase):
+    """Coverage on _open_issue_numbers_for_label gh shell-out (per single label)."""
 
     def _completed(self, stdout: str, returncode: int = 0):
         m = mock.Mock()
@@ -580,23 +589,64 @@ class OpenIssueNumbersSubprocess(unittest.TestCase):
         payload = json.dumps([{"number": 1}, {"number": 2}, {"number": 3}])
         with mock.patch.object(hook.subprocess, "run", return_value=self._completed(payload)):
             self.assertEqual(
-                hook._open_issue_numbers_for_repo("noorinalabs-main", "p5-wave-5"),
+                hook._open_issue_numbers_for_label("noorinalabs-main", "p5-wave-5"),
                 [1, 2, 3],
             )
 
     def test_empty_output_is_empty_list(self) -> None:
         with mock.patch.object(hook.subprocess, "run", return_value=self._completed("")):
-            self.assertEqual(hook._open_issue_numbers_for_repo("noorinalabs-main", "p5-wave-5"), [])
+            self.assertEqual(
+                hook._open_issue_numbers_for_label("noorinalabs-main", "p5-wave-5"), []
+            )
 
     def test_failure_returns_none(self) -> None:
         with mock.patch.object(
             hook.subprocess, "run", return_value=self._completed("", returncode=1)
         ):
-            self.assertIsNone(hook._open_issue_numbers_for_repo("noorinalabs-main", "p5-wave-5"))
+            self.assertIsNone(hook._open_issue_numbers_for_label("noorinalabs-main", "p5-wave-5"))
 
     def test_malformed_json_returns_none(self) -> None:
         with mock.patch.object(hook.subprocess, "run", return_value=self._completed("nope")):
-            self.assertIsNone(hook._open_issue_numbers_for_repo("noorinalabs-main", "p5-wave-5"))
+            self.assertIsNone(hook._open_issue_numbers_for_label("noorinalabs-main", "p5-wave-5"))
+
+
+class OpenIssueNumbersUnion(unittest.TestCase):
+    """Coverage on _open_issue_numbers_for_repo dual-form UNION (#810)."""
+
+    def test_unions_across_label_forms_dedup(self) -> None:
+        """POS: legacy + new label results are unioned and deduplicated."""
+
+        def _per_label(repo, label):
+            return {"p5-wave-5": [10, 11], "wave-5": [11, 12]}[label]
+
+        with mock.patch.object(hook, "_open_issue_numbers_for_label", side_effect=_per_label):
+            self.assertEqual(
+                hook._open_issue_numbers_for_repo("noorinalabs-main", ["p5-wave-5", "wave-5"]),
+                [10, 11, 12],
+            )
+
+    def test_any_label_query_failure_returns_none(self) -> None:
+        """NEG: if ANY per-label query fails → None (caller fails open per-repo)."""
+
+        def _per_label(repo, label):
+            return [10] if label == "p5-wave-5" else None
+
+        with mock.patch.object(hook, "_open_issue_numbers_for_label", side_effect=_per_label):
+            self.assertIsNone(
+                hook._open_issue_numbers_for_repo("noorinalabs-main", ["p5-wave-5", "wave-5"])
+            )
+
+    def test_new_form_only_issue_counts(self) -> None:
+        """POS: an issue carrying ONLY the new wave-{X} form still registers."""
+
+        def _per_label(repo, label):
+            return [] if label == "p5-wave-5" else [42]
+
+        with mock.patch.object(hook, "_open_issue_numbers_for_label", side_effect=_per_label):
+            self.assertEqual(
+                hook._open_issue_numbers_for_repo("noorinalabs-main", ["p5-wave-5", "wave-5"]),
+                [42],
+            )
 
 
 class CheckEndToEndExemption(unittest.TestCase):
@@ -609,11 +659,13 @@ class CheckEndToEndExemption(unittest.TestCase):
         path, mocking only the subprocess-touching leaves.
         """
 
-        def _issues(repo, label):
+        def _issues(repo, labels):
             return [664] if repo == "noorinalabs-main" else []
 
         with (
-            mock.patch.object(hook, "_read_current_wave_label", return_value="p5-wave-5"),
+            mock.patch.object(
+                hook, "_read_current_wave_labels", return_value=["p5-wave-5", "wave-5"]
+            ),
             mock.patch.object(
                 hook, "_read_current_wave_branch", return_value="deployments/phase-5/wave-5"
             ),
@@ -626,11 +678,13 @@ class CheckEndToEndExemption(unittest.TestCase):
     def test_non_exempt_issue_still_blocks(self) -> None:
         """NEG: an open wave issue WITHOUT a merge-ready PR still blocks wrapup."""
 
-        def _issues(repo, label):
+        def _issues(repo, labels):
             return [664] if repo == "noorinalabs-main" else []
 
         with (
-            mock.patch.object(hook, "_read_current_wave_label", return_value="p5-wave-5"),
+            mock.patch.object(
+                hook, "_read_current_wave_labels", return_value=["p5-wave-5", "wave-5"]
+            ),
             mock.patch.object(
                 hook, "_read_current_wave_branch", return_value="deployments/phase-5/wave-5"
             ),

@@ -70,10 +70,46 @@ from _shell_parse import (  # noqa: E402
     tokenize,
     walk_flag_values,
 )
+from _wave_label_parse import is_wave_label, parse_wave_label_spec  # noqa: E402
 from annunaki_log import log_pretooluse_block, log_pretooluse_diagnostic  # noqa: E402
 
-_WAVE_LABEL_RE = re.compile(r"p\d+-wave-\d+")
-_PHASE_WAVE_RE = re.compile(r"p(\d+)-wave-(\d+)")
+# cross-repo-status.json lives at the noorinalabs-main repo root, two levels up
+# from `.claude/hooks/`. Used to recover the (derived-display) phase for the new
+# phase-agnostic `wave-{X}` label form (#810) when building the wave branch ref.
+_STATUS_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "cross-repo-status.json",
+)
+
+
+def _read_status_phase() -> int | None:
+    """Return the active phase number from cross-repo-status.json, or None.
+
+    The new `wave-{X}` label form carries no phase (Design B #804 made phase a
+    derived display). To build the `deployments/phase-{P}/wave-{X}` branch ref
+    for the second existence check, recover the phase from status. Returns None
+    on any failure (missing/malformed file, missing/unparseable `phase`); the
+    caller then checks `main` only — never a hard failure.
+    """
+    try:
+        with open(_STATUS_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+    # Prefer `current_phase` (the live integer); fall back to the `phase-{N}`
+    # string. (`phase` can lag `current_phase` — see the stale-pointer note in
+    # /wave-kickoff SKILL.md.)
+    cp = data.get("current_phase")
+    if cp is not None:
+        try:
+            return int(cp)
+        except (TypeError, ValueError):
+            pass
+    m = re.fullmatch(r"phase-(\d+)", str(data.get("phase", "")))
+    if m:
+        return int(m.group(1))
+    return None
+
 
 # Python paths in the .claude tree (hooks, skills, tests). Broad-enough to catch
 # the W8 reproducer shape `noorinalabs-isnad-graph/.claude/hooks/<name>.py`
@@ -204,8 +240,11 @@ def check(input_data: dict) -> dict | None:
 
     label_flags = {"--label", "-l"} if is_create else {"--add-label"}
     labels = _collect_labels(rest, label_flags)
+    # Accept ALL wave-label forms (#810): legacy `p{N}-wave-{M}`, phase-agnostic
+    # `wave-{X}`, and the `wave-x` placeholder — via the shared anchored grammar
+    # so a new-form label can't bypass the cited-path evidence gate.
     wave_label = next(
-        (lbl for lbl in labels if _WAVE_LABEL_RE.search(lbl)),
+        (lbl for lbl in labels if is_wave_label(lbl)),
         None,
     )
     if not wave_label:
@@ -252,11 +291,20 @@ def check(input_data: dict) -> dict | None:
     if not cited_paths:
         return None  # No paths to verify
 
-    # Resolve wave branch ref
-    pw = _PHASE_WAVE_RE.search(wave_label)
-    phase_num, wave_num = pw.groups() if pw else (None, None)
+    # Resolve wave branch ref. Legacy `p{N}-wave-{M}` carries the phase inline;
+    # the new `wave-{X}` form (#810) does not, so recover the phase from
+    # cross-repo-status.json. If the phase is unavailable (or the label is the
+    # `wave-x` placeholder with no wave id), wave_branch stays None and only
+    # `main` is checked — a graceful degradation, never a hard failure.
+    spec = parse_wave_label_spec(wave_label)
+    phase_num = spec.phase if spec else None
+    wave_num = spec.wave if spec else None
+    if phase_num is None and wave_num is not None:
+        phase_num = _read_status_phase()
     wave_branch = (
-        f"deployments/phase-{phase_num}/wave-{wave_num}" if phase_num and wave_num else None
+        f"deployments/phase-{phase_num}/wave-{wave_num}"
+        if phase_num is not None and wave_num is not None
+        else None
     )
 
     # Verify each cited path at origin
