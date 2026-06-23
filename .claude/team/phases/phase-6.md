@@ -37,15 +37,18 @@ Owner directive (2026-06-20, `/plan-phase 6`): the two architectural revisits (p
 |------|-------|---------------|--------|
 | **W1** | **Memory & code-over-prose** | The core efficiency thesis: memory audit + consolidation (retire stale, merge duplicates) + a MEMORY.md size/count-budget hook; a charter-prose→code conversion pass (identify prose rules that can be deterministic hooks/lib checks; document what stays prose). + framework TD intake (main#684 cspell parity, #706 cspell regex, #704 classifier nits). | #1, #2, #5 |
 | **W2** | **Architectural revisits** | Spike-and-decide: persona-model evaluation (value-vs-overhead of the 28-persona roster → owner decision) + ontology-vs-graphify spike (Google LLM-doc + graph approach vs the 3-role stack → owner decision). + P5W5 retro process changes: annunaki exit-0 precision pass, wrap-on-last-merge trigger. | #3, #4, #5 |
-| **W3** (FINAL) | **Framework debt burn-down + phase exit** | Absorb remaining framework/Claude tech-debt (main#718 README hook-install, #705 wave_key_reset CLI test, #703 bleach security revisit, #672 reviewer-brief producer-parity, #663 gh-parser invariant) + whatever W1/W2 audits surface; phase-exit verification of all 5 criteria. **Heavy TD floor** (final wave). | #5 |
+| **W3** (global 16) | **Framework / gate hardening** | Absorb remaining framework/Claude tech-debt: main#718 README hook-install, #705 wave_key_reset CLI test, #672 reviewer-brief producer-parity, #663 gh-parser invariant, #810 phase-agnostic wave-label scheme, #744 validators→child CI, #745 liveness/throttle mechanization, #816/#817/#822 toolchain pre-push/ff fixes + whatever W1/W2 audits surface. **Heavy TD floor.** | #5 |
+| **W4** (global 17, FINAL) | **Architectural execution + phase exit** | Execute the recorded architectural decisions: #819 persona-model **Option B** (governed headcount + slim/self-improving cards + mechanical trust scoring) + #820 ontology **C×T2** (per-language derivability re-measure → tooling bake-off → distributed structural index + central semantic overlay). Close #725/#726 epics; phase-exit verification of all 5 criteria. | #1, #2, #3, #4, #5 |
 
 Wave themes are confirmed (not re-chosen) at each `/wave-scope`; scope reconciliation may move issues between waves.
+
+> **Plan revision (owner, 2026-06-22):** the original single final "W3 — framework burn-down + phase exit" was split into **W3 (global 16) framework/gate hardening** and a new **W4 (global 17) architectural execution** (#819/#820 carry the criteria #3/#4 *execution* — the *decisions* are already recorded and #727/#728 closed). Phase exit moves from W3 to W4. Later-wave work advanced by +1.
 
 ## Tech-debt intake (standing policy)
 
 Every wave takes its **+20%** TD intake (`/wave-scope` Step 8.5) — `ceil(20% of feature/bug/security scope)`, all available if fewer. The pooled TD ratio is **informational only** (cumulative-ratio gate superseded 2026-06-09). Because Phase 6 *is itself* a framework/quality phase, much of its "feature" content is indistinguishable from tech-debt; the intake policy still applies to any net-new tooling work.
 
-On the **final wave (W3)** the +20% becomes a **floor, not a cap** (owner 2026-06-16 standing rule): deliberately pull in a large chunk of framework debt to clear before phase exit, sized by the owner at `/wave-scope`.
+On the **framework-hardening wave (W3, global 16)** the +20% becomes a **floor, not a cap** (owner 2026-06-16 standing rule): deliberately pull in a large chunk of framework debt to clear, sized by the owner at `/wave-scope`. The **final wave (W4, global 17)** is the architectural-execution + phase-exit wave.
 
 ## Criterion #4 — Ontology-vs-graphify decision — **DECIDED: C × T2 (owner, 2026-06-22)**
 
