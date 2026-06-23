@@ -17,6 +17,8 @@ importable module) and it lives under scripts/, not .claude/lib/.
 from __future__ import annotations
 
 import importlib.util
+import os
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -27,6 +29,41 @@ check_mermaid = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(check_mermaid)
 
 _has_raw_angle = check_mermaid._has_raw_angle
+
+
+class WorkdirBaseIsSnapReadable(unittest.TestCase):
+    """#817: the render scratch dir must be anchored under a snap-readable base
+    ($HOME), never cwd-relative. A cwd under /tmp put the old `dir="."` scratch
+    tree inside the mmdc snap's private /tmp namespace → "Input file doesn't
+    exist" for every block. These tests pin that the base is absolute, under
+    $HOME when HOME is set, and never the cwd marker `.`.
+    """
+
+    def _with_home(self, home: str | None) -> str:
+        old = os.environ.get("HOME")
+        if home is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = home
+        try:
+            return check_mermaid._workdir_base()
+        finally:
+            if old is None:
+                os.environ.pop("HOME", None)
+            else:
+                os.environ["HOME"] = old
+
+    def test_anchors_under_home_not_cwd(self) -> None:
+        with tempfile.TemporaryDirectory() as home:
+            base = self._with_home(home)
+            self.assertEqual(os.path.realpath(base), os.path.realpath(home))
+
+    def test_base_is_absolute_never_cwd_relative(self) -> None:
+        with tempfile.TemporaryDirectory() as home:
+            base = self._with_home(home)
+        self.assertTrue(os.path.isabs(base))
+        self.assertNotEqual(base, ".")
+        self.assertFalse(base.startswith("."))
 
 
 class BreakTagsDoNotWarn(unittest.TestCase):
