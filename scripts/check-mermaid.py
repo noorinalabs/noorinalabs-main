@@ -117,6 +117,27 @@ def _default_files() -> list[Path]:
     return sorted(files)
 
 
+def _workdir_base() -> str:
+    """Base dir for the render scratch tree — snap-readable, never cwd-relative.
+
+    The local `mmdc` is the mermaid-cli *snap*, which runs in a private mount
+    namespace where `/tmp` is NOT the host `/tmp`. The earlier behaviour anchored
+    the scratch dir under the cwd (`dir="."`); when an agent worktree's cwd is
+    itself under `/tmp`, that scratch dir lands in the snap's private `/tmp` and
+    mmdc reports `Input file doesn't exist` for *every* block — a content-
+    independent false-fail of the whole gate (#817). The snap can read the real
+    `$HOME`, so anchor the scratch tree there to make the gate location-agnostic.
+
+    Fall back to the platform temp dir (`$TMPDIR`/…) only when `$HOME` is unusable
+    (e.g. a CI runner without HOME), where mmdc is the unconfined `npx` build and
+    any writable location renders fine. CI is unaffected either way.
+    """
+    home = os.path.expanduser("~")
+    if home and home != "~" and os.path.isdir(home):
+        return home
+    return tempfile.gettempdir()
+
+
 def _resolve_mmdc() -> list[str] | None:
     env = os.environ.get("MMDC")
     if env:
@@ -174,9 +195,10 @@ def main(argv: list[str]) -> int:
         )
         return 2
 
-    # Temp dir under cwd so a snap-confined local mmdc can read it (snap cannot
-    # access /tmp); CI's npm mmdc is unconfined and works either way.
-    workdir = Path(tempfile.mkdtemp(prefix=".mmcheck-", dir="."))
+    # Scratch dir anchored under a snap-readable base ($HOME), NOT cwd-relative:
+    # the local mmdc snap has a private /tmp namespace, so a cwd-under-/tmp
+    # worktree made the old `dir="."` scratch tree invisible to mmdc (#817).
+    workdir = Path(tempfile.mkdtemp(prefix=".mmcheck-", dir=_workdir_base()))
     pp = workdir / "puppeteer.json"
     pp.write_text('{"args":["--no-sandbox"]}', encoding="utf-8")
 
