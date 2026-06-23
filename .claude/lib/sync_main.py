@@ -17,10 +17,10 @@ local ``branch`` to ``remote/branch`` ONLY when:
     outside :data:`GENERATED_ALLOWLIST` abort the sync.
 
 It NEVER force-updates, NEVER creates a merge commit (``--ff-only``), and NEVER
-discards real local work. Generated, append-only files (the annunaki error log)
-are stashed around the fast-forward and restored, so a perpetually-dirty log
-does not block the sync. Anything it cannot do safely it reports and refuses
-(``ok=False``) rather than guessing.
+discards real local work. Machine-generated files (the annunaki error log, the
+ontology checksums) are stashed around the fast-forward and restored, so a
+perpetually-dirty generated file does not block the sync. Anything it cannot do
+safely it reports and refuses (``ok=False``) rather than guessing.
 
 CLI: ``python3 .claude/lib/sync_main.py [REPO_ROOT]`` — prints a one-line status
 and exits non-zero on a hard failure (``status == "error"``). A refusal
@@ -37,10 +37,21 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Tracked, machine-generated, append-only files that are safe to stash around a
-# fast-forward. They are perpetually dirty in an active session and would
-# otherwise block every sync. Repo-root-relative POSIX paths.
-GENERATED_ALLOWLIST: frozenset[str] = frozenset({".claude/annunaki/errors.jsonl"})
+# Tracked, machine-generated files that are safe to stash around a fast-forward.
+# They are perpetually dirty in an active session and would otherwise block
+# every sync. Repo-root-relative POSIX paths.
+#
+#  * ``.claude/annunaki/errors.jsonl`` — append-only error log.
+#  * ``ontology/checksums.json`` — rewritten by the ontology change-tracker
+#    PostToolUse hook on every Edit/Write, so it is dirty in any session that
+#    has touched a file (i.e. all of them). Unlike the append-only log it can
+#    carry genuine pending resolutions, but the stash/pop restores its content;
+#    if an incoming origin rewrite conflicts the pop, the ff still lands and the
+#    stash is left for manual recovery (see the pop path below) — graceful, not
+#    lossy.
+GENERATED_ALLOWLIST: frozenset[str] = frozenset(
+    {".claude/annunaki/errors.jsonl", "ontology/checksums.json"}
+)
 
 
 @dataclass
@@ -171,10 +182,19 @@ def sync_main(
     dirty = _parse_dirty(runner(["status", "--porcelain"], root).stdout)
     blocking = [p for p in dirty if p not in GENERATED_ALLOWLIST]
     if blocking:
+        # behind > 0 is guaranteed here (we are past the behind == 0 return), so
+        # every refused-dirty is a STALE BASE: local main cannot pick up origin's
+        # commits. Make the detail loud — behind-count + the blocking paths — so
+        # the operator does not silently start main-targeting work off a stale
+        # tree (main#822: a quiet single line was missed and a superseded
+        # ontology rebuild was nearly pushed).
         return SyncResult(
             True,
             "refused-dirty",
-            f"local tracked changes block ff: {', '.join(blocking)} — commit/stash first",
+            f"STALE BASE: '{branch}' is {behind} commit(s) behind {remote}/{branch} "
+            f"and cannot fast-forward — local tracked changes block it: "
+            f"{', '.join(blocking)}. Reconcile (commit/stash) before doing "
+            f"{branch}-targeting work.",
             behind,
             ahead,
             from_sha,
@@ -230,7 +250,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     repo_root = args[0] if args else "."
     result = sync_main(repo_root)
-    print(f"sync_main: {result.status} — {result.detail}")
+    if result.status == "refused-dirty" and result.behind > 0:
+        # A refused ff while behind is a stale-base hazard — render it as a
+        # multi-line banner so it stands out in session-start Step 0 output
+        # rather than scrolling past as one quiet line (main#822).
+        bar = "!" * 72
+        print(bar)
+        print(f"⚠  sync_main: {result.detail}")
+        print(bar)
+    else:
+        print(f"sync_main: {result.status} — {result.detail}")
     return 1 if result.status == "error" else 0
 
 
