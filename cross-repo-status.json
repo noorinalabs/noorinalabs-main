@@ -1782,5 +1782,7 @@
   "wave_16_stg_promotion_url": "",
   "wave_16_stg_promotion_override_rationale": "P6W16 (global 16) is framework/gate-hardening in noorinalabs-main (.claude/ hooks+lib+skills, scripts/, charter) + child-repo CI configs (#744). No service image changed, so no deploy-stg.yml run is produced. Criterion #3 unaffected (no deployable surface to promote).",
   "wave_16_wrapped_up_at": "2026-06-23T18:30:06Z",
+  "wave_16_annunaki_attack_ran_at": "2026-06-23T19:05:00Z",
+  "wave_16_memory_audit_ran_at": "2026-06-23T19:05:00Z",
   "wave_2_retro_completed_at": "2026-06-22T00:00:00Z"
 }

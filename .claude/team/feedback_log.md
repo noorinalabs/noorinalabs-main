@@ -3292,3 +3292,51 @@ See trust_matrix.md § Phase 6 Wave 2 for the full table. Summary: 14 of 15 held
 - `/promotion-audit` (P6W2)
 - memory-to-automation audit
 - `/wave-scope 6 16` once the owner sets the wave_16 theme (stub auto-drafted this retro)
+
+## Retrospective: Phase 6 Wave 16 (global) — Framework / gate hardening — 2026-06-23
+
+**Theme:** burn down framework/toolchain tech-debt — the pre-push/CI-parity gates actively creating friction (local push-to-main blocked, `/tmp`-worktree false-fails, stale-base session starts). Heavy-TD floor (final-but-one framework wave before W17 architectural exit). Owner-set 2026-06-22.
+**Repos in scope (counters):** noorinalabs-main only (wave-branch model). Child rollout of #744/#718 landed via direct PRs to each child's own main (counted separately below).
+
+### Team Performance (mechanical, verified at retro)
+- **Parent PRs merged:** 7 (all main, via wave branch → main #834). #744/#718 child rollout: 5 child PRs (da #213, ingest #115, lp #154, deploy #491+#489); isnad-graph/user-service/design-system already-done on origin (no-op).
+- **CI-red merges:** 0. (deploy #489 E2E flaked once — `httpx.ReadError` on `test_verification` after rebase — re-ran green; not a real regression.)
+- **Changes-requested cycles:** parent **0** (counter authoritative); child **1** (both da reviewers on #213 — a real bug: the hook `files:` regex `^tests/.*/fixtures/…` missed the top-level curated corpus; Tarek widened to `^tests/(.*/)?fixtures/…`, verified staged-edit fires).
+- **Top-implementer concentration (by commit identity):** 3/7 = **43%** (Wanjiku Mwangi). **Caveat — true concentration is ~100%:** this was an orchestrator-executed framework wave; the 7 parent PRs carry persona commit identity (`-c` flags) but were driven directly by the orchestrator (the throttle-takeover / direct-framework-execution pattern). 43% understates that. **Theme-fit, not fragility** — framework/gate work is orchestrator-owned by nature — but named explicitly so W17 (architectural execution) is planned as real distributed implementer work, not more orchestrator-solo.
+- **Counter verification:** `final_pr_count` 7 ✓ (= 7 merged parent PRs), `changes_requested_cycles` 0 ✓ (parent-scoped; child da#213 CR is out-of-scope for the parent counter and stands as context), `top_concentration_pct` 43 ✓ (3/7). No drift; no `counter_corrections` entry needed.
+- **Ontology:** current (0 dirty) — wrapup ran the rebuild; the P6W2 "20 dirty leaked past wrapup" pain point did not recur.
+
+### Per-Engineer Assessments (evidence-anchored)
+See trust_matrix.md § Phase 6 Wave 16 for the full table. Summary (commit identity):
+- **Aino Virtanen** — #833 (#816 root-fix: decoupled `test_pre_commit_ci_sync` from stale child checkouts — the wave's most consequential PR, unblocked local push-to-main, verified by the wrapup push succeeding) + #829 (#663 gh-parser invariant extended to `gh workflow`/`gh api`). Two clean framework PRs; #833 was the inverted-premise root-fix chosen over the expedient #826 (closed). At ceiling (5) — hold with named done-well.
+- **Wanjiku Mwangi** — #825 (#822 sync_main allowlist + loud stale-base refusal), #827 (#672 producer-parity checklist), #830 (#810 phase-agnostic wave-label scheme). 3 clean PRs, 0 must-fix. Baseline — hold.
+- **Santiago Ferreira** — #824 (#817 mermaid render dir → `$HOME`). 1 clean PR. Baseline — hold.
+- **Nadia Khoury** — #828 (#745 liveness/throttle mechanization). 1 clean PR. Baseline — hold.
+- **Tarek Mansour** (da) — #213. 1 caught-and-fixed rework cycle (hook regex too narrow). The review system working as designed; not a decrease under §4b. Named gap, hold.
+- **Lucas Ferreira** (deploy) — #491 (E2E harness fix: OAuth fragment-vs-query + 429 rate-limit, deploy-side only, no cross-roster contract change) + #489 (base-pin). 2 PRs, 0 must-fix. Baseline — hold.
+- **Bjørn Henriksen** (#115), **Kofi Mensah-Williams** (#154) — 1 clean PR each. Baseline — hold.
+
+### Top 3 Going Well
+1. **The wave closed three of P6W2's own four pain points.** #816 (local push-to-main block) fixed at root via #833 — *verified* by the wrapup push landing on origin; #817 (`/tmp`-worktree false-fail) fixed via #824; the annunaki backlog was processed this retro (not deferred a third time). The framework-friction theme delivered on its premise.
+2. **Honest inverted-premise handling.** Two scoped issues had stale premises discovered at execution — #816 (root cause was stale local child checkouts, not the assumed cspell map-drift; expedient #826 closed, root-fix #833 done) and #705 (targeted the already-deleted `wave_key_reset.py` from #804; closed not-planned, descoped). Both surfaced and corrected rather than implemented-as-briefed.
+3. **Annunaki + memory audits actually ran at retro** — first wave where the #344 co-location worked as intended (W14/W15/P6W2 all deferred them). 47 captures triaged: 0 unresolved failures.
+
+### Top 3 Pain Points
+1. **Scope-time premise rot.** #705 (deleted-file target) and #816 (inverted root cause) both slipped to execution before their stale premises were caught. `/wave-scope` does not verify that a scoped issue's named file/symbol still exists or that its premise still holds at origin HEAD. Reinforces [[feedback_verify_diagnosis_before_delegating]] + [[feedback_pre_spawn_verify_file_exists]] — but at *scope* time, not just spawn time.
+2. **Meta-wave concentration is structural and un-distributed.** Framework/gate work is orchestrator-executed by nature, so persona commit-identity (43% top) is bookkeeping, not real distribution. Acceptable here; flagged so W17 is planned as genuine implementer fan-out.
+3. **Annunaki monitor over-captures rc=0 output.** 40 of 47 captures are `exit_code==0` records that pattern-matched `stdout:^FAILED` — pytest "FAILED" lines surfacing through `… | tail` (rc-masking, the [[feedback_push_pipe_masks_rejection]] class) or benign demo output — logged with an empty `hook` field, inflating the count. The 5 `pretooluse_block` + 2 `posttooluse_event` records are hooks working correctly, not errors. Follow-up filed to gate stdout-pattern matches on nonzero rc (or down-rank/relabel rc=0 pipe-mask captures).
+
+### Process Changes — ALL ACCEPTED (owner-ratified 2026-06-23), tracked for implementation
+1. **Add a scope-time premise-verification step to `/wave-scope`.** For any scoped issue naming a concrete file/symbol/path, assert it exists at origin HEAD (`git cat-file -e origin/main:<path>`) and surface a STOP if absent. Rationale: #705/#816 both wasted execution cycles on rotted premises this wave. → **#837**.
+2. **Tighten the annunaki monitor's rc=0 handling.** Suppress (or relabel as `pipe-mask-suspect`) stdout-pattern matches when `exit_code==0`; populate the `hook` field so counts aren't dominated by "unknown". Rationale: 85% of this wave's captures were rc=0 noise. → **#835**.
+3. **Promote the push/merge-pipe-mask rule to a hook (#1044 memory).** A PostToolUse check flagging `git push|gh pr merge … | tail/head` (rc-masking) is a concrete DECIDE-tier candidate — the annunaki data this wave is direct evidence the class recurs. Rationale: surfaced by the memory-to-automation audit (Step 7.7). → **#838**.
+
+> Owner ratified all 3 on 2026-06-23. Implementation tracked via #837/#835/#838 (labeled tech-debt+process, boarded) — to be folded into a wave at `/wave-scope` (W17 +20% TD intake pool). Direction accepted; code lands via the normal PR path.
+
+### Audits run this retro (markers written)
+- **/annunaki-attack** (Step 7.6): 47 captures triaged — 40 rc=0 false-positives (historical worktree dev-iteration, all merged green), 5 `pretooluse_block` (enforcement working), 2 `posttooluse_event`. **0 unresolved failures, 0 fixes needed.** 1 monitor-tuning follow-up filed.
+- **Memory-to-automation audit** (Step 7.7): one DECIDE-tier candidate surfaced — [[feedback_push_pipe_masks_rejection]] → PostToolUse pipe-mask hook (see Proposed Change #3). Remaining memories are already-enforced or judgment-class; no auto-promotions.
+
+### Handoff to W17 (#823 — FINAL, phase exit)
+- W17 = architectural execution: #819 (persona Option B) + #820 (ontology C×T2). Meta-issue #823 exists with a set theme → `/wave-scope 6 17` is the next lifecycle step.
+- Open follow-ups carried (not W16): #831 (status-drift), #832 (stale child checkouts), + the annunaki monitor-tuning follow-up filed this retro.

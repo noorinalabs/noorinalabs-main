@@ -1674,3 +1674,43 @@ Clean-but-not-frictionless wave: **17 PRs across 5 repos**, all 2× Approved + C
 
 **Fire/hire:** none. The performance-triggered exit path the owner asked for (#819 §4b) is not yet
 implemented, so "fired" still has no mechanical meaning this wave — that is exactly what #819 closes.
+
+## Phase 6 Wave 16 Trust Updates (2026-06-23) — Framework / gate hardening
+
+> **Orchestrator-executed framework wave.** The 7 parent PRs carry persona commit identity (`-c` flags)
+> but were driven directly by the orchestrator — framework/gate work is orchestrator-owned by nature.
+> Trust signal is therefore weak this wave: a clean framework PR under orchestrator drive is baseline,
+> not a distributed-implementer differentiator. Under the #819 §4b discipline (clean routine PR with
+> 0 must-fix / 0 CI-red = baseline → no change), **all hold.** No defensible increase; no decrease.
+
+### Org-Level Team (noorinalabs-main)
+
+| Rated | Old | New | Mechanical basis |
+|-------|-----|-----|------------------|
+| Aino Virtanen (SQL) | 5 | 5 | #833 (#816 root-fix — decoupled the parity test from stale child checkouts; the wave's most consequential PR, *verified* by the wrapup push landing on origin) chosen over the expedient #826, plus #829 (#663 parser invariant). At ceiling — hold with named done-well; the inverted-premise handling is the kind of signal that would move a non-ceiling rating. |
+| Wanjiku Mwangi (TPM) | hold | hold | 3 clean PRs (#825/#827/#830), 0 must-fix, 0 CI-red. Baseline under §4b — held. |
+| Santiago Ferreira (RC) | hold | hold | #824 (#817 mermaid dir) — 1 clean PR, 0 must-fix. Baseline — held. |
+| Nadia Khoury (PD) | hold | hold | #828 (#745 liveness mechanization) — 1 clean PR. Baseline — held. |
+
+### Child-Repo Teams
+
+| Rated | Old | New | Mechanical basis |
+|-------|-----|-----|------------------|
+| Lucas Ferreira (deploy) | hold | hold | #491 (E2E harness fix, deploy-side only) + #489 (base-pin), 0 must-fix. One E2E flake (`httpx.ReadError`) re-ran green — infra, not the PR. Baseline — held. |
+| Tarek Mansour (data-acquisition) | hold | hold | #213 — **1 caught-and-fixed rework cycle** (hook `files:` regex missed the top-level curated corpus; widened + verified in one pass). Under §4b a single review-caught-and-fixed cycle is the system working, not a decrease. Named gap, held. |
+| Bjørn Henriksen (ingest-platform) · Kofi Mensah-Williams (landing-page) | hold | hold | 1 clean PR each (#115/#154), 0 must-fix, 0 CI-red. Baseline — held. |
+
+### Done Well / Needs Improvement (Phase 6 Wave 16) — evidence-anchored, bare "None" banned
+
+| Member | Done Well (with evidence) | Gap (metric, or explicit "clean: numbers") |
+|--------|---------------------------|--------------------------------------------|
+| **Aino Virtanen** | #833 root-fix unblocked local push-to-main (verified by wrapup push) — chose root over expedient #826 | clean: 0 must-fix received, 0 CI-red |
+| **Wanjiku Mwangi** | 3 on-theme framework PRs, 0 must-fix | clean: 0 must-fix, 0 CI-red |
+| **Tarek Mansour** | #213 corpus-fixture realism check landed | 1 review-caught regex-scope bug, fixed same pass |
+| **All others** | 1 clean on-theme PR each | clean: 0 must-fix, 0 CI-red — baseline, no ratchet |
+
+**Fire/hire:** none. (Same as P6W2: §4b mechanical exit path is #819, not yet implemented.)
+
+**Concentration note:** 43% top by commit identity, but true orchestrator concentration ~100% (meta-wave).
+Theme-fit, not fragility — but W17 (architectural execution) is planned as genuine distributed
+implementer work to avoid carrying orchestrator-solo execution into non-framework scope.
