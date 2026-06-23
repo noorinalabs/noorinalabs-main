@@ -311,6 +311,45 @@ The harness provides a **single implicit team per orchestrator session** — the
 >
 > **Origin:** P3W7 retro feedback log § Proposed process changes #5 (orchestrator-class). Promoted via #320.
 
+### Reviewer spawn brief — producer-parity watch (data/graph integrity invariants, #672) <!-- promotion-target: none -->
+
+> **Every reviewer-class spawn brief for a data/graph PR that adds or changes an integrity / load invariant MUST include a "Producer-parity watch" instruction.** Integrity invariants — a normalized field, a dedup/identity key, a node/edge constraint, a grading or validation rule — are produced on TWO paths that must stay in sync:
+> - the **batch** load path — noorinalabs-data-acquisition `src/graph/load_*`, and
+> - the **streaming** Kafka worker — noorinalabs-isnad-ingest-platform.
+>
+> A fix landed on one path silently diverges the other. This check makes the batch-vs-streaming parity question **default reviewer discipline** rather than a memorial catch that depends on a reviewer happening to remember it.
+>
+> **Required template block (copy-paste verbatim into reviewer-class spawn briefs for data/graph integrity/load PRs):**
+>
+> ```
+> ## Producer-parity watch (data/graph integrity/load invariant PRs)
+>
+> This PR adds or changes an integrity / load invariant (e.g. a normalized
+> field, a dedup/identity key, a node or edge constraint, a grading or
+> validation rule). Such invariants are produced on TWO paths that must stay
+> in sync:
+>   - the BATCH load path  — noorinalabs-data-acquisition `src/graph/load_*`
+>   - the STREAMING worker — noorinalabs-isnad-ingest-platform (Kafka)
+>
+> Ask explicitly, and answer in your review: did the producer (the
+> implementer) apply the SAME invariant on the OTHER path? If this PR
+> changes only one path, the sibling path's parity work MUST be tracked by a
+> linked follow-up issue, or the PR MUST state why the other path is exempt.
+> Surface your answer under a `## Producer-parity` section in your review
+> comment — do not let batch-vs-streaming parity stay memorial.
+>
+> If the PR does not touch a data/graph integrity/load invariant, record
+> under a `## Producer-parity` section: "N/A — not an integrity/load
+> invariant change." The explicit no-op record is useful signal, same
+> rationale as throughline-watch.
+> ```
+>
+> **When it applies:** PRs in noorinalabs-data-acquisition `src/graph/load_*`, noorinalabs-isnad-ingest-platform workers, or any PR that adds/alters a node/edge/field invariant consumed by the graph. The reviewer always records the `## Producer-parity` answer — N/A included.
+>
+> **Format discipline (Hook 4):** emit the producer-parity answer under the `## Producer-parity` markdown header as prose — NOT as a `Field: value` trailer line. The verdict-trailer field names parsed by `validate_pr_review.py` (`Requestor` / `Requestee` / `RequestOrReplied` / `TechDebt`) are reserved; a stray `Field:`-shaped line in prose risks Hook 4 first-match capture (per memory `feedback_hook4_regex_prose_false_match`).
+>
+> **Origin:** P5W1 retro Proposed Change #3, owner-adopted 2026-06-14 ("Both → file as P5 issues"). Reviewer-surfaced by Alejandra Reyes-Fuentes on da#148 (PR #150 added `grade_normalized` on the batch path only; the streaming mirror is tracked in da#153 #4). Promoted via #672.
+
 ### Orchestrator checklist when spawning an implementer
 
 Every implementer spawn prompt MUST include, **in order**:
@@ -333,7 +372,8 @@ Every reviewer-class spawn prompt MUST include, **in order**:
 1. **PR + author identity** — the specific PR# and head-SHA being reviewed, the author's name (NOT the reviewer's), and the angle the reviewer is being asked to take (TPM angle, charter/QA angle, domain angle, release coordinator angle, etc.).
 2. **MANDATORY first-action** instruction to run `/ontology-librarian {topic}` — Hook 15 scans the reviewer's own transcript and blocks Edit/Write otherwise. Reviewer-class spawns don't typically Edit/Write (they post comments), but the librarian is also load-bearing for understanding what the PR touches.
 3. **Throughline-watch block** (per § Reviewer spawn brief — throughline-watch above) — copy-paste the verbatim template block. Default, not per-wave addition (#320).
-4. **`Requestor: <reviewer name>` / `Requestee: <PR author name>` / `RequestOrReplied: Approved | ChangesRequested` / `TechDebt:` format** — explicit reminder using the canonical Direction-table form (per `pull-requests.md` § Comment-Based Reviews, post-#372 / PR #375 fix). **Every reviewer spawn brief MUST embed the verbatim verdict-comment template block below — copy-pasted into the brief, not paraphrased, summarized, or referenced by pointer — so the verdict trailer carries all four lines (`Requestor:` / `Requestee:` / `RequestOrReplied:` / `TechDebt:`) together in one block.** The `TechDebt:` line is mandatory on **every** verdict even when there is no debt (`TechDebt: none`), Approved and ChangesRequested alike — never optional, never deferred. A brief that does not paste the block verbatim is non-conformant. Embedding the block verbatim prevents W9 PR#349-style cascades from re-emerging (per memory `feedback_spawn_brief_requestor_field_semantics`).
+4. **Producer-parity block** (per § Reviewer spawn brief — producer-parity watch above) — for any data/graph PR that adds or changes an integrity/load invariant, copy-paste the verbatim Producer-parity-watch template block so the reviewer asks whether the producer applied the SAME invariant on the sibling path (batch ↔ streaming). Conditional on the PR class (data-acquisition `src/graph/load_*` / isnad-ingest-platform / graph-invariant PRs); for non-data/graph PRs the block is omitted (#672).
+5. **`Requestor: <reviewer name>` / `Requestee: <PR author name>` / `RequestOrReplied: Approved | ChangesRequested` / `TechDebt:` format** — explicit reminder using the canonical Direction-table form (per `pull-requests.md` § Comment-Based Reviews, post-#372 / PR #375 fix). **Every reviewer spawn brief MUST embed the verbatim verdict-comment template block below — copy-pasted into the brief, not paraphrased, summarized, or referenced by pointer — so the verdict trailer carries all four lines (`Requestor:` / `Requestee:` / `RequestOrReplied:` / `TechDebt:`) together in one block.** The `TechDebt:` line is mandatory on **every** verdict even when there is no debt (`TechDebt: none`), Approved and ChangesRequested alike — never optional, never deferred. A brief that does not paste the block verbatim is non-conformant. Embedding the block verbatim prevents W9 PR#349-style cascades from re-emerging (per memory `feedback_spawn_brief_requestor_field_semantics`).
    - TechDebt MUST be in the SAME comment as the verdict — edit-appending after the fact gets the verdict-comment dropped from hook counting (per memory `feedback_verdict_amendment_edit_not_append`).
    - **P4W6 incident (why this is MUST, not "should"):** the orchestrator authored that wave's reviewer briefs WITHOUT embedding this template; the first wave→main merge was blocked because 7 verdict comments lacked the `TechDebt:` line, and all 7 had to be retrofitted via REST `PATCH` after the fact before the merge could proceed. The template already lived in this very section — the failure was non-use, not absence. This is exactly the cascade the MUST above exists to prevent.
 
@@ -383,11 +423,11 @@ Every reviewer-class spawn prompt MUST include, **in order**:
 
    **Why literal:** P3W9 PR #409 cascade — both reviewers followed the prior prose template that prescribed `## TechDebt\n\n…` section header; `gh pr merge` blocked with `BLOCKED: PR #409 has review(s) missing the mandatory TechDebt: attestation line` at merge time, requiring per-comment PATCH amendments. Sibling pattern to P3W8 Approved-vs-Reply cascade — both fixable by spawning-brief template fixed-literal rewrite.
 
-5. **`gh pr review` vs `gh pr comment` discipline** — explicit reminder NOT to use `gh pr review` (`block_gh_pr_review` enforces; spawn-brief mention prevents the trip).
-6. **Read-the-diff-at-HEAD discipline** — `gh api repos/.../contents/<path>?ref=<head_sha>` not local clone (per `pull-requests.md` § Origin > Local Clone for "Still-Has-X" File-Content Claims).
-7. **Pre-enumeration discipline** — `grep -c` per file then sum, never `| head -N` (per memory `feedback_no_head_in_surface_enumeration`).
-8. **Verdict literal-string requirements** — `RequestOrReplied: Approved` (or `ChangesRequested`), NOT `Reply`. `validate_pr_review` counts Approved-verdict comments only; Reply doesn't gate-count (per memory `feedback_validate_pr_review_approved_not_reply`).
-9. **Reporting pattern** — who to report verdict + literal-strings-confirmation to (typically team-lead or the manager who requested the review).
+6. **`gh pr review` vs `gh pr comment` discipline** — explicit reminder NOT to use `gh pr review` (`block_gh_pr_review` enforces; spawn-brief mention prevents the trip).
+7. **Read-the-diff-at-HEAD discipline** — `gh api repos/.../contents/<path>?ref=<head_sha>` not local clone (per `pull-requests.md` § Origin > Local Clone for "Still-Has-X" File-Content Claims).
+8. **Pre-enumeration discipline** — `grep -c` per file then sum, never `| head -N` (per memory `feedback_no_head_in_surface_enumeration`).
+9. **Verdict literal-string requirements** — `RequestOrReplied: Approved` (or `ChangesRequested`), NOT `Reply`. `validate_pr_review` counts Approved-verdict comments only; Reply doesn't gate-count (per memory `feedback_validate_pr_review_approved_not_reply`).
+10. **Reporting pattern** — who to report verdict + literal-strings-confirmation to (typically team-lead or the manager who requested the review).
 
 ### Origin
 
