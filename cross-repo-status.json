@@ -1114,7 +1114,7 @@
     },
     "mirror_of": ".claude/team/phases/phase-3.md § Sweep-wave reservation (W12, possibly W13)"
   },
-  "wave_active": true,
+  "wave_active": false,
   "current_wave": "wave-16",
   "wave_5_active": false,
   "wave_5_kicked_off_at": "2026-06-16T23:12:45Z",
@@ -1128,8 +1128,8 @@
   "wave_5_memory_audit_ran_at": "2026-06-20T00:26:39Z",
   "next_wave": "wave-17",
   "wave_started": "2026-06-23T00:21:35Z",
-  "last_completed_wave": "wave-1",
-  "last_completed_at": "2026-06-20T00:21:27Z",
+  "last_completed_wave": "wave-16",
+  "last_completed_at": "2026-06-23T18:30:06Z",
   "phase": "phase-4",
   "wave_3_meta_issue": 675,
   "wave_3_scope": {
@@ -1771,9 +1771,16 @@
   "wave_16_repos_in_scope": ["noorinalabs-main"],
   "wave_16_scope": {"phase": 6, "phase_ordinal_display": "Phase 6 Wave 3 (global wave 16)", "theme": "Framework / gate hardening", "merge_model": "wave-branch", "tier_1_toolchain_unblock": [{"id": "noorinalabs-main#816", "ref": "main#816", "implementer": "Aino Virtanen", "reviewer": "Wanjiku Mwangi", "reviewer_2": "Santiago Ferreira", "priority": "tech-debt"}, {"id": "noorinalabs-main#817", "ref": "main#817", "implementer": "Santiago Ferreira", "reviewer": "Aino Virtanen", "reviewer_2": "Wanjiku Mwangi", "priority": "tech-debt"}, {"id": "noorinalabs-main#822", "ref": "main#822", "implementer": "Wanjiku Mwangi", "reviewer": "Aino Virtanen", "reviewer_2": "Santiago Ferreira", "priority": "tech-debt"}], "tier_2_wave_mechanics": [{"id": "noorinalabs-main#810", "ref": "main#810", "implementer": "Wanjiku Mwangi", "reviewer": "Santiago Ferreira", "reviewer_2": "Aino Virtanen", "priority": "tech-debt"}, {"id": "noorinalabs-main#745", "ref": "main#745", "implementer": "Nadia Khoury", "reviewer": "Aino Virtanen", "reviewer_2": "Wanjiku Mwangi", "priority": "process"}], "tier_3_cross_repo": [{"id": "noorinalabs-main#744", "ref": "main#744", "implementer": "Aino Virtanen", "reviewer": "Santiago Ferreira", "reviewer_2": "Wanjiku Mwangi", "priority": "cross-repo"}, {"id": "noorinalabs-main#718", "ref": "main#718", "implementer": "Santiago Ferreira", "reviewer": "Nadia Khoury", "reviewer_2": "Wanjiku Mwangi", "priority": "process"}], "tier_3_tech_debt": [{"id": "noorinalabs-main#672", "ref": "main#672", "implementer": "Wanjiku Mwangi", "reviewer": "Aino Virtanen", "reviewer_2": "Santiago Ferreira", "priority": "process"}, {"id": "noorinalabs-main#663", "ref": "main#663", "implementer": "Aino Virtanen", "reviewer": "Santiago Ferreira", "reviewer_2": "Nadia Khoury", "priority": "tech-debt"}], "td_intake": "framework-floor wave (final-of-phase relaxation): base feature/bug=0; all 10 items framework/process TD (floor not cap). #672/#663 beyond owner core 8.", "td_pool": 9, "td_base_feature_bug": 0, "deferred_to_w17": ["noorinalabs-main#819", "noorinalabs-main#820"], "concentration": {"Aino Virtanen": 3, "Wanjiku Mwangi": 3, "Santiago Ferreira": 2, "Nadia Khoury": 1}, "744_cross_repo_note": "main#744 cross-repo; child slices (deploy/data-acquisition/ingest-platform/landing-page) filed+labeled+branched at /wave-kickoff via child rosters.", "705_closed_obsolete": "#705 closed as obsolete at kickoff \u2014 wave_key_reset.py deleted by #804; nothing to test. Scope 10->9."},
   "wave_16_scope_reconciliation_note": "Fresh wave, 0 drift, no must-includes. Framework/gate-hardening (P6 final-of-phase relaxation); 10 items all in noorinalabs-main. #819/#820 -> W17 (#823). global id 16 stamped manually (retro pre-wrote wave_16_meta_issue without bumping global_wave_seq).",
-  "wave_16_active": true,
+  "wave_16_active": false,
   "wave_16_merge_model": "wave-branch",
   "wave_16_kicked_off_at": "2026-06-23T00:23:15Z",
   "wave_16_branches": {"branch":"deployments/phase-6/wave-16","created_at":"2026-06-23T00:23:15Z","repos":{"noorinalabs-main":{"sha":"69f221599b26cf09a5952cebc37a8765eb2520c3","status":"created"}}},
+  "wave_16_final_pr_count": 7,
+  "wave_16_changes_requested_cycles": 0,
+  "wave_16_top_concentration_pct": 43,
+  "wave_16_stg_promotion": "overridden",
+  "wave_16_stg_promotion_url": "",
+  "wave_16_stg_promotion_override_rationale": "P6W16 (global 16) is framework/gate-hardening in noorinalabs-main (.claude/ hooks+lib+skills, scripts/, charter) + child-repo CI configs (#744). No service image changed, so no deploy-stg.yml run is produced. Criterion #3 unaffected (no deployable surface to promote).",
+  "wave_16_wrapped_up_at": "2026-06-23T18:30:06Z",
   "wave_2_retro_completed_at": "2026-06-22T00:00:00Z"
 }
