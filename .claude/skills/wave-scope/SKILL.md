@@ -251,6 +251,69 @@ Per-item body excerpt:
 gh issue view {N} --repo "noorinalabs/{repo}" --json body --jq '.body | .[0:80]'
 ```
 
+### 6.5. Premise-rot gate — verify named files/symbols exist at origin HEAD (#837)
+
+P6W16 shipped two issues to execution on **rotted premises**: #705 targeted
+`wave_key_reset.py`, a file #804 had already deleted, and #816's named root cause
+was inverted. `/wave-scope` reconciled labels-vs-meta but never asserted that a
+scoped issue's named *file / path / symbol* still exists at origin HEAD. This
+gate closes that — it is the scope-time twin of [[feedback_pre_spawn_verify_file_exists]]
+(spawn-time) and [[feedback_verify_diagnosis_before_delegating]].
+
+The deterministic check is `.claude/lib/premise_check.py`. It auto-extracts
+path-like tokens from each in-scope issue's body (backtick spans + a strict path
+regex, so prose never produces a false STOP), then runs `git cat-file -e
+<ref>:<path>` per path (and `git grep` per explicitly-declared symbol) against
+the repo's origin HEAD. Verdicts: a path/symbol the ref can read but does not
+contain → **STOP** (premise rot); a repo/ref that cannot be read at all (child
+not cloned, origin not fetched) → **WARN** (an environment gap, deliberately not
+a STOP); everything present → **OK**.
+
+Run it over the actual labeled scope (Step 4 output). Fetch each in-scope repo's
+`origin` first so the check resolves against real HEADs (an unfetched repo only
+downgrades to WARN, never a false STOP):
+
+```bash
+PREMISE_CHECK="$REPO_ROOT/.claude/lib/premise_check.py"
+PREMISE_ROWS="/tmp/wavescope-{M}-premise-rows.jsonl"
+PREMISE_INPUT="/tmp/wavescope-{M}-premise-issues.json"
+
+# Best-effort fetch of every in-scope repo so origin/main resolves locally.
+for repo in "${REPOS[@]}"; do
+    dir="$REPO_ROOT"
+    [ "$repo" != "noorinalabs-main" ] && dir="$REPO_ROOT/$repo"
+    [ -d "$dir/.git" ] && git -C "$dir" fetch -q origin 2>/dev/null || true
+done
+
+# Build the issues JSON from the actual labeled set (repo#N\ttitle\tcreatedAt).
+: > "$PREMISE_ROWS"
+while IFS="$(printf '\t')" read -r ref title created; do
+    [ -z "$ref" ] && continue
+    repo="${ref%%#*}"
+    num="${ref##*#}"
+    body=$(gh issue view "$num" --repo "noorinalabs/$repo" --json body --jq '.body' 2>/dev/null || true)
+    jq -nc --arg ref "$ref" --arg repo "$repo" --arg body "$body" \
+        '{ref:$ref, repo:$repo, body:$body}' >> "$PREMISE_ROWS"
+done < /tmp/wavescope-{M}-actual-issues.txt
+jq -s '.' "$PREMISE_ROWS" > "$PREMISE_INPUT"
+
+python3 "$PREMISE_CHECK" check --issues "$PREMISE_INPUT" --ref origin/main
+PREMISE_RC=$?
+if [ "$PREMISE_RC" -ne 0 ]; then
+    echo "STOP: premise-rot detected (see above). For each flagged issue, either"
+    echo "  re-point it to the current file/symbol, re-scope it, or close it,"
+    echo "  BEFORE collecting dispositions (Step 7). Re-run /wave-scope after."
+    exit 1
+fi
+```
+
+WARN-level rows (unverifiable) are surfaced but do not block; verify those
+manually when the named repo could not be read. To declare a concrete symbol (or
+a path the body phrasing is too loose to auto-extract) add explicit `paths` /
+`symbols` arrays to that issue's row before the `jq -s` merge — see the module
+docstring for the per-issue shape. `--warn-only` downgrades a STOP to advisory
+for a dry run, but the gate is a hard STOP by default.
+
 ### 7. Collect dispositions per item (manual — owner judgment)
 
 For each unscoped item, the owner picks one of:
