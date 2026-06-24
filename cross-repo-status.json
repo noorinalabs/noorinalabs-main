@@ -6,6 +6,10 @@
   "wave_17_meta_issue": 823,
   "wave_17_scope": {"theme":"Architectural execution + phase exit","final_wave":true,"tier_1_core":[{"id":"noorinalabs-main#819","ref":"main#819","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"architectural","note":"persona Option B — all three components (governed headcount+hook, §4a slim+self-improving cards, §4b mechanical trust scoring)"},{"id":"noorinalabs-main#820","ref":"main#820","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"architectural","note":"ontology C×T2 — FULL incl Task 3 (re-measure → bake-off → implement distributed index + overlay, retire checksums/rebuild, soften Hook 15)"}],"tier_3_tech_debt":[{"id":"noorinalabs-main#831","ref":"main#831","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-main#832","ref":"main#832","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-main#835","ref":"main#835","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-main#837","ref":"main#837","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-main#838","ref":"main#838","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"}],"phase_exit_closures":["noorinalabs-main#725","noorinalabs-main#726"],"deliberately_not_in_w17":["persona Option C (role-class restructure)","noorinalabs-isnad-graph#1104","noorinalabs-data-acquisition#139","noorinalabs-data-acquisition#136","product/data-quality (Phase 7, #723)"],"td_intake":{"selected":5,"pool":10,"basis":"final-wave floor-not-cap","excluded_product":["ig#1104","da#139","da#136"]},"child_fan_out":"Every concrete W17 issue is in noorinalabs-main at scope time. #820 Task 3 (per-child distributed structural index) + persona child-roster caps expand to child repos via child issues created at /wave-kickoff Step 0.4 decomposition or mid-wave when Task 3 begins; isnad-graph is the polyglot bake-off target (Task 1+2).","carry_forwards":[],"must_includes":[],"phase":6},
   "wave_17_scope_reconciliation_note": "W17 (global 17, P6 final/phase-exit). No drift (0 pre-existing wave-17 labels). Core #819+#820 (owner: full execution incl #820 Task 3); TD intake = 5 framework items (floor-not-cap), 3 product items excluded. repos_in_scope=main; child fan-out for #820 Task3 + persona caps expands at kickoff/mid-wave.",
+  "wave_17_merge_model": "wave-branch",
+  "wave_17_active": true,
+  "wave_17_kicked_off_at": "2026-06-24T02:20:37Z",
+  "wave_17_branches": {"branch":"deployments/phase-6/wave-17","created_at":"2026-06-24T02:20:37Z","repos":{"noorinalabs-main":{"sha":"664aeb9fac1c55216ab3aefee82483ce573d7e87","status":"created"}}},
   "global_wave_seq": 17,
   "phase_6_criteria_trackers": {
     "1": "noorinalabs-main#725",
@@ -1122,7 +1126,7 @@
     "mirror_of": ".claude/team/phases/phase-3.md § Sweep-wave reservation (W12, possibly W13)"
   },
   "wave_active": false,
-  "current_wave": "wave-16",
+  "current_wave": "wave-17",
   "wave_5_active": false,
   "wave_5_kicked_off_at": "2026-06-16T23:12:45Z",
   "wave_5_final_pr_count": 45,
@@ -1133,7 +1137,7 @@
   "wave_5_wrapped_up_at": "2026-06-20T00:21:27Z",
   "wave_5_annunaki_attack_ran_at": "2026-06-20T00:26:39Z",
   "wave_5_memory_audit_ran_at": "2026-06-20T00:26:39Z",
-  "next_wave": "wave-17",
+  "next_wave": "wave-18",
   "wave_started": "2026-06-23T00:21:35Z",
   "last_completed_wave": "wave-16",
   "last_completed_at": "2026-06-23T18:30:06Z",
