@@ -181,7 +181,40 @@ class WaveLabelDerivation(unittest.TestCase):
         return Path(tmp.name)
 
     def test_phase2_wave10_derives_both_forms(self) -> None:
-        """Returns BOTH the legacy p{N}-wave-{M} AND the new wave-{X} form (#810)."""
+        """Returns BOTH the legacy p{N}-wave-{M} AND the new wave-{X} form (#810).
+
+        Phase comes from the authoritative `current_phase` integer (#831).
+        """
+        path = self._write_status(
+            {"wave_active": True, "current_wave": "wave-10", "current_phase": 2}
+        )
+        try:
+            with mock.patch.object(hook, "_STATUS_PATH", path):
+                self.assertEqual(hook._read_current_wave_labels(), ["p2-wave-10", "wave-10"])
+        finally:
+            path.unlink()
+
+    def test_current_phase_wins_over_stale_phase_string(self) -> None:
+        """#831 regression: the live `current_phase` integer is authoritative;
+        a stale top-level `phase` string (the never-advanced phase-4 legacy
+        field) must be IGNORED for label derivation."""
+        path = self._write_status(
+            {
+                "wave_active": True,
+                "current_wave": "wave-17",
+                "current_phase": 6,
+                "phase": "phase-4",  # stale legacy field — must not win
+            }
+        )
+        try:
+            with mock.patch.object(hook, "_STATUS_PATH", path):
+                self.assertEqual(hook._read_current_wave_labels(), ["p6-wave-17", "wave-17"])
+        finally:
+            path.unlink()
+
+    def test_legacy_phase_string_fallback(self) -> None:
+        """Defensive fallback: when `current_phase` is absent, the legacy
+        `phase` ("phase-{N}") string still resolves (robustness)."""
         path = self._write_status(
             {"wave_active": True, "current_wave": "wave-10", "phase": "phase-2"}
         )
@@ -193,7 +226,7 @@ class WaveLabelDerivation(unittest.TestCase):
 
     def test_inactive_wave_returns_none(self) -> None:
         path = self._write_status(
-            {"wave_active": False, "current_wave": "wave-10", "phase": "phase-2"}
+            {"wave_active": False, "current_wave": "wave-10", "current_phase": 2}
         )
         try:
             with mock.patch.object(hook, "_STATUS_PATH", path):
@@ -207,8 +240,17 @@ class WaveLabelDerivation(unittest.TestCase):
 
     def test_malformed_current_wave_returns_none(self) -> None:
         path = self._write_status(
-            {"wave_active": True, "current_wave": "not-a-wave", "phase": "phase-2"}
+            {"wave_active": True, "current_wave": "not-a-wave", "current_phase": 2}
         )
+        try:
+            with mock.patch.object(hook, "_STATUS_PATH", path):
+                self.assertIsNone(hook._read_current_wave_labels())
+        finally:
+            path.unlink()
+
+    def test_missing_both_phase_fields_returns_none(self) -> None:
+        """No `current_phase` AND no `phase` → phase unresolvable → None."""
+        path = self._write_status({"wave_active": True, "current_wave": "wave-10"})
         try:
             with mock.patch.object(hook, "_STATUS_PATH", path):
                 self.assertIsNone(hook._read_current_wave_labels())
@@ -262,7 +304,7 @@ class WaveBranchDerivation(unittest.TestCase):
 
     def test_phase5_wave5_derives_branch(self) -> None:
         path = self._write_status(
-            {"wave_active": True, "current_wave": "wave-5", "phase": "phase-5"}
+            {"wave_active": True, "current_wave": "wave-5", "current_phase": 5}
         )
         try:
             with mock.patch.object(hook, "_STATUS_PATH", path):
@@ -270,9 +312,27 @@ class WaveBranchDerivation(unittest.TestCase):
         finally:
             path.unlink()
 
+    def test_branch_uses_current_phase_not_stale_phase_string(self) -> None:
+        """#831 core regression: branch derivation must read the authoritative
+        `current_phase` (6), NOT the stale top-level `phase` ("phase-4"). The
+        bug derived `deployments/phase-4/...`; the fix derives phase-6."""
+        path = self._write_status(
+            {
+                "wave_active": True,
+                "current_wave": "wave-17",
+                "current_phase": 6,
+                "phase": "phase-4",  # stale legacy field — must not win
+            }
+        )
+        try:
+            with mock.patch.object(hook, "_STATUS_PATH", path):
+                self.assertEqual(hook._read_current_wave_branch(), "deployments/phase-6/wave-17")
+        finally:
+            path.unlink()
+
     def test_inactive_wave_returns_none(self) -> None:
         path = self._write_status(
-            {"wave_active": False, "current_wave": "wave-5", "phase": "phase-5"}
+            {"wave_active": False, "current_wave": "wave-5", "current_phase": 5}
         )
         try:
             with mock.patch.object(hook, "_STATUS_PATH", path):
@@ -287,7 +347,7 @@ class WaveBranchDerivation(unittest.TestCase):
     def test_label_and_branch_share_phase_wave(self) -> None:
         """Label and branch must derive from the SAME phase/wave (no drift)."""
         path = self._write_status(
-            {"wave_active": True, "current_wave": "wave-12", "phase": "phase-3"}
+            {"wave_active": True, "current_wave": "wave-12", "current_phase": 3}
         )
         try:
             with mock.patch.object(hook, "_STATUS_PATH", path):
@@ -295,6 +355,29 @@ class WaveBranchDerivation(unittest.TestCase):
                 self.assertEqual(hook._read_current_wave_branch(), "deployments/phase-3/wave-12")
         finally:
             path.unlink()
+
+
+class PhaseNumDerivation(unittest.TestCase):
+    """Direct coverage on _read_phase_num — the authoritative phase reader (#831)."""
+
+    def test_current_phase_int_preferred(self) -> None:
+        self.assertEqual(hook._read_phase_num({"current_phase": 6, "phase": "phase-4"}), 6)
+
+    def test_current_phase_string_coerced(self) -> None:
+        """A stringified `current_phase` ("6") still coerces to int."""
+        self.assertEqual(hook._read_phase_num({"current_phase": "6"}), 6)
+
+    def test_falls_back_to_phase_string(self) -> None:
+        self.assertEqual(hook._read_phase_num({"phase": "phase-2"}), 2)
+
+    def test_unparseable_current_phase_falls_back_to_phase_string(self) -> None:
+        self.assertEqual(hook._read_phase_num({"current_phase": "n/a", "phase": "phase-7"}), 7)
+
+    def test_neither_field_returns_none(self) -> None:
+        self.assertIsNone(hook._read_phase_num({}))
+
+    def test_malformed_phase_string_returns_none(self) -> None:
+        self.assertIsNone(hook._read_phase_num({"phase": "phase-x"}))
 
 
 class ChecksGreen(unittest.TestCase):
