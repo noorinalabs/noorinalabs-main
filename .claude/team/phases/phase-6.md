@@ -89,11 +89,20 @@ starting on a polyglot repo (isnad-graph) to stress per-language derivability. P
 teardown in P6; implementation is a later-phase follow-up whose first tasks are the per-language
 derivability re-measurement and the tooling bake-off. Execution tracker: [#820](https://github.com/noorinalabs/noorinalabs-main/issues/820).
 
+> **Revision (owner, 2026-06-23, at `/wave-scope 6 17`):** the "no teardown in P6 / later-phase follow-up"
+> deferral above is **superseded** — W17 (global 17) executes #820 **in full, including Task 3**
+> (implement the distributed per-repo structural index + central semantic overlay, retire `checksums.json` +
+> `/ontology-rebuild` for the structural layer, soften Hook 15 to advisory). Teardown of the current
+> ontology stack now happens **within P6** as part of the phase-exit wave, not in a later phase.
+
 ## Out of scope for P6 (deferred)
 
 - **All product/data-quality/ML work** — that is **Phase 7** (Data Quality / ML / demo): the 15 issues relabeled `phase-6`→`phase-7` at this plan time (main#673, ig#1039–1043, da#161–166, da#136/139/178), plus the prod data-quality cluster under meta #723 (sanadset orphans, sparse linkage, broken search, narrator pollution), ig#1110/#1111.
 - **Streaming pipeline repeatable** (#667) — Phase 7.
 - **Actively ripping out the persona or ontology subsystems** — P6 decides; teardown (if chosen) is a later phase.
+  **Superseded for the ontology stack (owner, 2026-06-23):** the ontology teardown (#820 Task 3) is pulled **into**
+  the P6 phase-exit wave W17 — see the criterion #4 revision note above. The persona-model execution (#819) likewise
+  runs in W17 in full (all three Option-B components). Only Option C (persona role-class restructure) remains deferred.
 
 ## Architectural-revisit decisions (criteria #3, #4)
 
