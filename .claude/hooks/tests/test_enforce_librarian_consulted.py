@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Tests for enforce_librarian_consulted hook.
 
+As of #857 the hook is ADVISORY, not blocking: it never denies an edit. When
+the librarian has not been consulted it returns a dict with a `systemMessage`
+advisory; otherwise it returns None (allow silently). `main()` always exits 0.
+
 Covers the W8 hook-authorship-spec requirement: NEGATIVE MATCH coverage.
 Each test documents which negative-space case it guards against.
 
@@ -24,6 +28,20 @@ _HOOKS_DIR = _HERE.parent
 sys.path.insert(0, str(_HOOKS_DIR))
 
 import enforce_librarian_consulted as hook  # noqa: E402
+
+
+def _assert_advisory(testcase: unittest.TestCase, result: dict | None) -> None:
+    """Assert `result` is the advisory form (non-blocking systemMessage)."""
+    assert result is not None  # mypy narrowing
+    testcase.assertIn("systemMessage", result, "advisory must carry a systemMessage")
+    testcase.assertIn(
+        "/ontology-librarian",
+        result["systemMessage"],
+        "advisory message must reference the librarian skill",
+    )
+    # An advisory must NOT carry a blocking decision (regression guard for the
+    # #857 softening — a stray `decision: block` would re-introduce the gate).
+    testcase.assertNotEqual(result.get("decision"), "block", "advisory must not block")
 
 
 def _write_transcript(lines: list[dict]) -> str:
@@ -90,13 +108,13 @@ def _unrelated_skill_call() -> dict:
 
 
 class AllowListTests(unittest.TestCase):
-    """Paths that should NEVER require a librarian (negative-match cases)."""
+    """Paths that should NEVER trigger an advisory (negative-match cases)."""
 
     def _transcript_no_librarian(self) -> str:
         return _write_transcript([_unrelated_user_text(), _unrelated_skill_call()])
 
     def test_tmp_path_allowed_without_librarian(self) -> None:
-        """NEG: /tmp/foo.md edits must not fire — out-of-repo scratch."""
+        """NEG: /tmp/foo.md edits must not warn — out-of-repo scratch."""
         result = hook.check(
             {
                 "tool_name": "Edit",
@@ -104,7 +122,7 @@ class AllowListTests(unittest.TestCase):
                 "transcript_path": self._transcript_no_librarian(),
             }
         )
-        self.assertIsNone(result, "edits under /tmp must be allowed without librarian")
+        self.assertIsNone(result, "edits under /tmp must be silent without librarian")
 
     def test_memory_md_allowed_without_librarian(self) -> None:
         """NEG: MEMORY.md (any location) is the auto-memory index, not code."""
@@ -117,7 +135,7 @@ class AllowListTests(unittest.TestCase):
                 "transcript_path": self._transcript_no_librarian(),
             }
         )
-        self.assertIsNone(result, "MEMORY.md must be allowed without librarian")
+        self.assertIsNone(result, "MEMORY.md must be silent without librarian")
 
     def test_memory_subdir_allowed_without_librarian(self) -> None:
         """NEG: files under .../memory/ are project memory, not code."""
@@ -128,7 +146,7 @@ class AllowListTests(unittest.TestCase):
                 "transcript_path": self._transcript_no_librarian(),
             }
         )
-        self.assertIsNone(result, "memory/ files must be allowed")
+        self.assertIsNone(result, "memory/ files must be silent")
 
     def test_user_claude_config_allowed_without_librarian(self) -> None:
         """NEG: ~/.claude/** is user config, not source code."""
@@ -139,7 +157,7 @@ class AllowListTests(unittest.TestCase):
                 "transcript_path": self._transcript_no_librarian(),
             }
         )
-        self.assertIsNone(result, "~/.claude/** must be allowed")
+        self.assertIsNone(result, "~/.claude/** must be silent")
 
     def test_annunaki_error_log_allowed_without_librarian(self) -> None:
         """NEG: .claude/annunaki/errors.jsonl is hook-managed, not hand-edited."""
@@ -152,13 +170,13 @@ class AllowListTests(unittest.TestCase):
                 "transcript_path": self._transcript_no_librarian(),
             }
         )
-        self.assertIsNone(result, ".claude/annunaki/ must be allowed")
+        self.assertIsNone(result, ".claude/annunaki/ must be silent")
 
 
 class NonMatchedToolTests(unittest.TestCase):
-    """Tools OTHER than Edit/Write/NotebookEdit must never block."""
+    """Tools OTHER than Edit/Write/NotebookEdit must never warn."""
 
-    def test_bash_does_not_block(self) -> None:
+    def test_bash_does_not_warn(self) -> None:
         """NEG: Bash is not in the matcher set — must return None."""
         result = hook.check(
             {
@@ -169,7 +187,7 @@ class NonMatchedToolTests(unittest.TestCase):
         )
         self.assertIsNone(result)
 
-    def test_read_does_not_block(self) -> None:
+    def test_read_does_not_warn(self) -> None:
         """NEG: Read is not a code-change tool; must not match."""
         result = hook.check(
             {
@@ -180,7 +198,7 @@ class NonMatchedToolTests(unittest.TestCase):
         )
         self.assertIsNone(result)
 
-    def test_grep_does_not_block(self) -> None:
+    def test_grep_does_not_warn(self) -> None:
         """NEG: Grep is read-only discovery, not a code-change tool."""
         result = hook.check(
             {
@@ -192,11 +210,14 @@ class NonMatchedToolTests(unittest.TestCase):
         self.assertIsNone(result)
 
 
-class BlockingTests(unittest.TestCase):
-    """In-scope code edits without librarian must BLOCK."""
+class AdvisoryTests(unittest.TestCase):
+    """In-scope code edits without librarian must ADVISE (not block)."""
 
-    def test_compose_edit_without_librarian_blocks(self) -> None:
-        """POS: the canonical case from #150 — compose edit without librarian."""
+    def test_compose_edit_without_librarian_advises(self) -> None:
+        """POS: the canonical case from #150 — compose edit without librarian.
+
+        Pre-#857 this BLOCKED; now it must advise and allow.
+        """
         result = hook.check(
             {
                 "tool_name": "Edit",
@@ -208,11 +229,9 @@ class BlockingTests(unittest.TestCase):
                 ),
             }
         )
-        assert result is not None  # mypy narrowing
-        self.assertEqual(result["decision"], "block")
-        self.assertIn("/ontology-librarian", result["reason"])
+        _assert_advisory(self, result)
 
-    def test_notebook_edit_without_librarian_blocks(self) -> None:
+    def test_notebook_edit_without_librarian_advises(self) -> None:
         """POS: NotebookEdit is in the matcher set."""
         result = hook.check(
             {
@@ -221,13 +240,12 @@ class BlockingTests(unittest.TestCase):
                 "transcript_path": _write_transcript([]),
             }
         )
-        assert result is not None  # mypy narrowing
-        self.assertEqual(result["decision"], "block")
+        _assert_advisory(self, result)
 
-    def test_write_on_charter_blocks_without_librarian(self) -> None:
-        """POS: .claude/team/ files are project state — require librarian.
+    def test_write_on_charter_advises_without_librarian(self) -> None:
+        """POS: .claude/team/ files are project state — advise librarian.
 
-        (Stance documented in the hook docstring: meta-files require librarian.)
+        (Stance documented in the hook docstring: meta-files advise librarian.)
         """
         result = hook.check(
             {
@@ -236,11 +254,10 @@ class BlockingTests(unittest.TestCase):
                 "transcript_path": _write_transcript([]),
             }
         )
-        assert result is not None  # mypy narrowing
-        self.assertEqual(result["decision"], "block")
+        _assert_advisory(self, result)
 
-    def test_empty_transcript_blocks_real_code_edit(self) -> None:
-        """POS: no transcript evidence -> block."""
+    def test_empty_transcript_advises_real_code_edit(self) -> None:
+        """POS: no transcript evidence -> advise."""
         result = hook.check(
             {
                 "tool_name": "Edit",
@@ -248,14 +265,13 @@ class BlockingTests(unittest.TestCase):
                 "transcript_path": _write_transcript([]),
             }
         )
-        assert result is not None  # mypy narrowing
-        self.assertEqual(result["decision"], "block")
+        _assert_advisory(self, result)
 
 
 class AllowWithLibrarianTests(unittest.TestCase):
-    """Transcripts WITH a librarian call must allow in-scope edits."""
+    """Transcripts WITH a librarian call must stay silent on in-scope edits."""
 
-    def test_compose_edit_with_slash_command_allowed(self) -> None:
+    def test_compose_edit_with_slash_command_silent(self) -> None:
         """POS: same compose path, but transcript has /ontology-librarian user line."""
         result = hook.check(
             {
@@ -268,10 +284,10 @@ class AllowWithLibrarianTests(unittest.TestCase):
                 ),
             }
         )
-        self.assertIsNone(result, "librarian consulted -> edit must be allowed")
+        self.assertIsNone(result, "librarian consulted -> no advisory")
 
-    def test_compose_edit_with_skill_call_allowed(self) -> None:
-        """POS: librarian invoked via Skill tool -> allow."""
+    def test_compose_edit_with_skill_call_silent(self) -> None:
+        """POS: librarian invoked via Skill tool -> silent."""
         result = hook.check(
             {
                 "tool_name": "Edit",
@@ -302,15 +318,16 @@ class AllowWithLibrarianTests(unittest.TestCase):
 
 
 class FailOpenTests(unittest.TestCase):
-    """If we cannot read the transcript, FAIL OPEN (don't block on our own bug)."""
+    """Transcript-readability edge cases.
 
-    def test_missing_transcript_file_fails_open(self) -> None:
-        """NEG-shape: nonexistent transcript path -> return None (false returned
-        from _transcript_has_librarian in not-found case would actually BLOCK;
-        OSError path fails open. Non-existence -> we cannot prove librarian was
-        not called, but the strict choice here is to block; the function
-        currently returns False for not-exists. Test the CURRENT stance so a
-        future change is deliberate.)"""
+    Since the hook is advisory (#857), the worst case is a spurious advisory,
+    never a blocked edit. An UNREADABLE transcript (OSError) fails open and
+    stays silent; an ABSENT/empty transcript path yields the advisory (no
+    evidence the librarian ran).
+    """
+
+    def test_missing_transcript_file_advises(self) -> None:
+        """A nonexistent transcript path -> no librarian evidence -> advise."""
         result = hook.check(
             {
                 "tool_name": "Edit",
@@ -318,12 +335,10 @@ class FailOpenTests(unittest.TestCase):
                 "transcript_path": "/nonexistent/transcript.jsonl",
             }
         )
-        # Current stance: missing file -> block (strict).
-        assert result is not None  # mypy narrowing
-        self.assertEqual(result["decision"], "block")
+        _assert_advisory(self, result)
 
-    def test_no_transcript_path_blocks(self) -> None:
-        """NEG-shape: empty transcript_path -> block (no evidence = no librarian)."""
+    def test_no_transcript_path_advises(self) -> None:
+        """Empty transcript_path -> no evidence -> advise."""
         result = hook.check(
             {
                 "tool_name": "Edit",
@@ -331,8 +346,7 @@ class FailOpenTests(unittest.TestCase):
                 "transcript_path": "",
             }
         )
-        assert result is not None  # mypy narrowing
-        self.assertEqual(result["decision"], "block")
+        _assert_advisory(self, result)
 
 
 class SignalDetectionTests(unittest.TestCase):
@@ -397,7 +411,7 @@ class SentinelFallbackTests(unittest.TestCase):
     """Sentinel fallback for #169 — transcript-flush race in worktree subagents.
 
     Each test uses an isolated tmp cwd so sentinel state cannot leak across
-    tests or across the host's real .claude/.librarian-consulted/ dir.
+    tests or across the host's real .claude/.consulted/ dir.
     Tmp roots are placed outside /tmp so the hook's /tmp allow-list does not
     short-circuit the sentinel/transcript checks we are exercising.
     """
@@ -428,8 +442,8 @@ class SentinelFallbackTests(unittest.TestCase):
             os.utime(sentinel, (new_time, new_time))
         return sentinel
 
-    def test_fresh_sentinel_allows_edit(self) -> None:
-        """POS: sentinel written just now -> allow even with empty transcript.
+    def test_fresh_sentinel_silent(self) -> None:
+        """POS: sentinel written just now -> silent even with empty transcript.
 
         This is the #169 worktree-subagent path: transcript flush lagged, but
         the librarian skill wrote a sentinel synchronously.
@@ -444,10 +458,10 @@ class SentinelFallbackTests(unittest.TestCase):
                 "cwd": cwd,
             }
         )
-        self.assertIsNone(result, "fresh sentinel must allow edit")
+        self.assertIsNone(result, "fresh sentinel must suppress the advisory")
 
-    def test_stale_sentinel_blocks_edit(self) -> None:
-        """NEG: sentinel older than TTL -> must not attest, edit blocks."""
+    def test_stale_sentinel_advises(self) -> None:
+        """NEG: sentinel older than TTL -> must not attest, edit advises."""
         cwd = self._make_cwd("stale")
         # Older than TTL.
         self._write_sentinel(cwd, mtime_offset=-(hook.SENTINEL_TTL_SECONDS + 60))
@@ -459,14 +473,14 @@ class SentinelFallbackTests(unittest.TestCase):
                 "cwd": cwd,
             }
         )
-        assert result is not None  # mypy narrowing
-        self.assertEqual(result["decision"], "block", "stale sentinel must not attest")
+        _assert_advisory(self, result)
 
-    def test_sentinel_in_different_cwd_blocks(self) -> None:
+    def test_sentinel_in_different_cwd_advises(self) -> None:
         """NEG: a sentinel keyed to a DIFFERENT cwd must not attest.
 
         Guards the cwd-keyed isolation property: an orchestrator sentinel
-        in the main-repo cwd must not unlock a subagent in a worktree cwd.
+        in the main-repo cwd must not suppress the advisory for a subagent
+        in a worktree cwd.
         """
         other_cwd = self._make_cwd("other")
         my_cwd = self._make_cwd("mine")
@@ -480,11 +494,10 @@ class SentinelFallbackTests(unittest.TestCase):
                 "cwd": my_cwd,  # different cwd — no matching sentinel here
             }
         )
-        assert result is not None  # mypy narrowing
-        self.assertEqual(result["decision"], "block", "cross-cwd sentinel must not attest")
+        _assert_advisory(self, result)
 
-    def test_no_sentinel_but_librarian_in_transcript_allows(self) -> None:
-        """POS regression guard: sentinel absent, transcript has librarian -> allow.
+    def test_no_sentinel_but_librarian_in_transcript_silent(self) -> None:
+        """POS regression guard: sentinel absent, transcript has librarian -> silent.
 
         Ensures the sentinel addition did not break the pre-existing
         transcript-scan acceptance signal.
@@ -499,10 +512,10 @@ class SentinelFallbackTests(unittest.TestCase):
                 "cwd": cwd,
             }
         )
-        self.assertIsNone(result, "transcript signal must still allow when sentinel absent")
+        self.assertIsNone(result, "transcript signal must still suppress when sentinel absent")
 
-    def test_no_sentinel_and_no_librarian_blocks(self) -> None:
-        """NEG: neither signal present -> block (baseline #150 enforcement holds)."""
+    def test_no_sentinel_and_no_librarian_advises(self) -> None:
+        """NEG: neither signal present -> advise (baseline nudge holds)."""
         cwd = self._make_cwd("neither")
         result = hook.check(
             {
@@ -512,8 +525,7 @@ class SentinelFallbackTests(unittest.TestCase):
                 "cwd": cwd,
             }
         )
-        assert result is not None  # mypy narrowing
-        self.assertEqual(result["decision"], "block")
+        _assert_advisory(self, result)
 
     def test_cwd_hash_matches_shell_pwd_sha1sum(self) -> None:
         """Parity guard: Python hash must match `pwd | sha1sum | cut -c1-16`.
@@ -653,7 +665,7 @@ class ShellPythonHashParityTests(unittest.TestCase):
 class TolerantSentinelReadTests(unittest.TestCase):
     """#429 regression — Hook 15 accepts non-canonical-hash markers whose
     body cwd matches. Mirrors `FindAttestingSentinelTests` at the hook
-    integration layer to lock in the end-to-end allow path."""
+    integration layer to lock in the end-to-end silence path."""
 
     def setUp(self) -> None:
         self._tmp_root = tempfile.mkdtemp(prefix="librarian_tolerant_", dir=os.path.expanduser("~"))
@@ -668,7 +680,7 @@ class TolerantSentinelReadTests(unittest.TestCase):
         os.makedirs(cwd, exist_ok=True)
         return cwd
 
-    def test_noncanonical_hash_marker_with_matching_body_allows_edit(self) -> None:
+    def test_noncanonical_hash_marker_with_matching_body_silent(self) -> None:
         """POS: marker filename uses sha1(cwd) without trailing \\n; body
         records the correct cwd. Hook must accept it — this is the
         live-evidence case from #429 (cedric-0066-dark-mode-tokens)."""
@@ -694,11 +706,11 @@ class TolerantSentinelReadTests(unittest.TestCase):
                 "cwd": cwd,
             }
         )
-        self.assertIsNone(result, "non-canonical-hash marker with matching body must allow edit")
+        self.assertIsNone(result, "non-canonical-hash marker with matching body must be silent")
 
-    def test_noncanonical_hash_marker_with_wrong_body_still_blocks(self) -> None:
+    def test_noncanonical_hash_marker_with_wrong_body_still_advises(self) -> None:
         """NEG: a marker with non-canonical hash AND a body pointing at a
-        different cwd must still block — preserves isolation."""
+        different cwd must still advise — preserves isolation."""
         cwd = self._make_cwd("strict")
         other_cwd = self._make_cwd("elsewhere")
         skill_dir = Path(cwd) / hook.SENTINEL_DIR_NAME
@@ -714,156 +726,40 @@ class TolerantSentinelReadTests(unittest.TestCase):
                 "cwd": cwd,
             }
         )
-        assert result is not None  # mypy narrowing
-        self.assertEqual(
-            result["decision"],
-            "block",
-            "body cwd pointing elsewhere must not attest",
-        )
+        _assert_advisory(self, result)
 
 
-class DiagnosticEmissionTests(unittest.TestCase):
-    """#429: every block emits a `pretooluse_diagnostic` annunaki record
-    with enough forensic context to debug WHY the hook returned block."""
+class MainExitCodeTests(unittest.TestCase):
+    """#857: `main()` must ALWAYS exit 0 — the hook never blocks an edit."""
 
-    def setUp(self) -> None:
-        import annunaki_log
+    def _run_hook_main_with(self, input_data: dict) -> tuple[int, str]:
+        """Invoke `hook.main()` with `input_data` on stdin.
 
-        # #452 test-mode suppression skips ALL annunaki writes when
-        # ENVIRONMENT=test / NOORIN_HOOK_TEST_MODE=1. These tests assert a
-        # pretooluse_diagnostic record IS written, so clear both env vars for
-        # the test body (restored in tearDown) — same pattern test_annunaki_log
-        # uses for its production-write assertions.
-        self._saved_env = {
-            "ENVIRONMENT": os.environ.pop("ENVIRONMENT", None),
-            "NOORIN_HOOK_TEST_MODE": os.environ.pop("NOORIN_HOOK_TEST_MODE", None),
-        }
-        self._tmp_dir = tempfile.mkdtemp(prefix="librarian_diag_")
-        # #625: pretooluse_diagnostic records now go to TRACES_FILE, not
-        # ERRORS_FILE. Redirect both so the diagnostic assertions read the
-        # right stream and a stray error write doesn't leak to the real log.
-        self._orig_errors_file = annunaki_log.ERRORS_FILE
-        self._orig_traces_file = annunaki_log.TRACES_FILE
-        self._errors_file = Path(self._tmp_dir) / "errors.jsonl"
-        self._traces_file = Path(self._tmp_dir) / "traces.jsonl"
-        annunaki_log.ERRORS_FILE = self._errors_file
-        annunaki_log.TRACES_FILE = self._traces_file
-
-    def tearDown(self) -> None:
-        import shutil
-
-        import annunaki_log
-
-        annunaki_log.ERRORS_FILE = self._orig_errors_file
-        annunaki_log.TRACES_FILE = self._orig_traces_file
-        shutil.rmtree(self._tmp_dir, ignore_errors=True)
-        for k, v in self._saved_env.items():
-            if v is None:
-                os.environ.pop(k, None)
-            else:
-                os.environ[k] = v
-
-    def _read_records(self) -> list[dict]:
-        # #625: a librarian block now writes the pretooluse_block to ERRORS_FILE
-        # and the pretooluse_diagnostic to TRACES_FILE. This test asserts on
-        # BOTH, so read the union of the two streams.
-        records: list[dict] = []
-        for f_path in (self._errors_file, self._traces_file):
-            if not f_path.exists():
-                continue
-            with f_path.open("r", encoding="utf-8") as f:
-                records.extend(json.loads(line) for line in f if line.strip())
-        return records
-
-    def _run_hook_main_with(self, input_data: dict) -> int:
-        """Invoke `hook.main()` with `input_data` on stdin, return exit code."""
+        Returns (exit_code, stdout_text).
+        """
         import io
 
         original_stdin = sys.stdin
         original_stdout = sys.stdout
         sys.stdin = io.StringIO(json.dumps(input_data))
-        sys.stdout = io.StringIO()
+        captured = io.StringIO()
+        sys.stdout = captured
         try:
             try:
                 hook.main()
+                code = 0
             except SystemExit as e:
-                return int(e.code) if e.code is not None else 0
-            return 0
+                code = int(e.code) if e.code is not None else 0
+            return code, captured.getvalue()
         finally:
             sys.stdin = original_stdin
             sys.stdout = original_stdout
 
-    def test_block_emits_diagnostic_record(self) -> None:
-        """POS: a real block writes BOTH a pretooluse_block record and a
-        pretooluse_diagnostic record with structured fields."""
-        cwd = tempfile.mkdtemp(prefix="diag_cwd_", dir=os.path.expanduser("~"))
+    def test_advisory_path_exits_zero_with_system_message(self) -> None:
+        """POS: librarian absent -> exit 0 AND a systemMessage is printed."""
+        cwd = tempfile.mkdtemp(prefix="adv_cwd_", dir=os.path.expanduser("~"))
         try:
-            transcript = _write_transcript([])
-            exit_code = self._run_hook_main_with(
-                {
-                    "tool_name": "Edit",
-                    "tool_input": {"file_path": os.path.join(cwd, "src/foo.py")},
-                    "transcript_path": transcript,
-                    "cwd": cwd,
-                }
-            )
-            self.assertEqual(exit_code, 2, "block path must exit 2")
-            records = self._read_records()
-            block_records = [r for r in records if r["type"] == "pretooluse_block"]
-            diag_records = [r for r in records if r["type"] == "pretooluse_diagnostic"]
-            self.assertEqual(len(block_records), 1, "exactly one block record per block")
-            self.assertEqual(len(diag_records), 1, "exactly one diagnostic record per block")
-
-            diag = diag_records[0]["diagnostic"]
-            self.assertEqual(diag["cwd"], cwd)
-            self.assertEqual(diag["cwd_realpath"], os.path.realpath(cwd))
-            self.assertIn(".consulted/ontology-librarian/", diag["expected_sentinel_path"])
-            self.assertFalse(diag["sentinel_exists"])
-            self.assertIsNone(diag["sentinel_age_s"])
-            self.assertEqual(diag["transcript_path"], transcript)
-            self.assertTrue(diag["transcript_exists"])
-            self.assertEqual(diag["transcript_line_count"], 0)
-        finally:
-            import shutil
-
-            shutil.rmtree(cwd, ignore_errors=True)
-
-    def test_allow_path_emits_no_diagnostic(self) -> None:
-        """NEG: when the hook ALLOWS the edit, no diagnostic record is
-        written. Diagnostics are a block-path-only side channel."""
-        cwd = tempfile.mkdtemp(prefix="diag_allow_", dir=os.path.expanduser("~"))
-        try:
-            exit_code = self._run_hook_main_with(
-                {
-                    "tool_name": "Edit",
-                    "tool_input": {"file_path": os.path.join(cwd, "src/foo.py")},
-                    "transcript_path": _write_transcript([_librarian_skill_call()]),
-                    "cwd": cwd,
-                }
-            )
-            self.assertEqual(exit_code, 0, "allow path exits 0")
-            records = self._read_records()
-            self.assertEqual(records, [], "allow path must not write any annunaki records")
-        finally:
-            import shutil
-
-            shutil.rmtree(cwd, ignore_errors=True)
-
-    def test_diagnostic_captures_existing_sentinel_age(self) -> None:
-        """POS: when a STALE canonical marker is present, diagnostic
-        reports its age and dir-count so the operator sees that a marker
-        existed and was rejected for staleness (not absence)."""
-        cwd = tempfile.mkdtemp(prefix="diag_stale_", dir=os.path.expanduser("~"))
-        try:
-            canonical_hash = hook._cwd_sentinel_hash(cwd)
-            skill_dir = Path(cwd) / hook.SENTINEL_DIR_NAME
-            skill_dir.mkdir(parents=True, exist_ok=True)
-            marker = skill_dir / f"{canonical_hash}.marker"
-            marker.write_text("2026-05-01T00:00:00Z cwd\n", encoding="utf-8")
-            stale_time = time.time() - (hook.SENTINEL_TTL_SECONDS + 600)
-            os.utime(marker, (stale_time, stale_time))
-
-            exit_code = self._run_hook_main_with(
+            exit_code, out = self._run_hook_main_with(
                 {
                     "tool_name": "Edit",
                     "tool_input": {"file_path": os.path.join(cwd, "src/foo.py")},
@@ -871,16 +767,29 @@ class DiagnosticEmissionTests(unittest.TestCase):
                     "cwd": cwd,
                 }
             )
-            self.assertEqual(exit_code, 2)
-            diag = next(
-                r["diagnostic"]
-                for r in self._read_records()
-                if r["type"] == "pretooluse_diagnostic"
+            self.assertEqual(exit_code, 0, "advisory hook must never block (exit 0)")
+            payload = json.loads(out)
+            self.assertIn("systemMessage", payload)
+            self.assertIn("/ontology-librarian", payload["systemMessage"])
+        finally:
+            import shutil
+
+            shutil.rmtree(cwd, ignore_errors=True)
+
+    def test_silent_path_exits_zero_no_output(self) -> None:
+        """NEG: librarian consulted -> exit 0 and NO stdout payload."""
+        cwd = tempfile.mkdtemp(prefix="adv_silent_", dir=os.path.expanduser("~"))
+        try:
+            exit_code, out = self._run_hook_main_with(
+                {
+                    "tool_name": "Edit",
+                    "tool_input": {"file_path": os.path.join(cwd, "src/foo.py")},
+                    "transcript_path": _write_transcript([_librarian_skill_call()]),
+                    "cwd": cwd,
+                }
             )
-            self.assertTrue(diag["sentinel_exists"])
-            self.assertGreater(diag["sentinel_age_s"], hook.SENTINEL_TTL_SECONDS)
-            self.assertFalse(diag["sentinel_within_ttl"])
-            self.assertGreaterEqual(diag["sentinel_dir_marker_count"], 1)
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(out.strip(), "", "silent path must not print a systemMessage")
         finally:
             import shutil
 

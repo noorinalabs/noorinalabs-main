@@ -324,6 +324,25 @@ Optionally also write a richer `wave_{M}_summary` block with wave-shape detail (
 
 If a key cannot be computed (e.g., no PRs merged this wave), write the literal `0` — `/wave-retro` Step 2.5 distinguishes "0 cycles" from "key missing" and only the latter is treated as drift.
 
+### 10.6. Per-engineer trust signals (added P6W17 #842 — Option B §4b)
+
+The wave-level counters above describe the *wave*; the trust matrix needs the same evidence broken down **per engineer**. Extract the countable per-engineer signals from the merged-PR set so `/wave-retro` applies mechanical, evidence-anchored trust deltas instead of narrative self-grading. The signals are: `prs_merged`, `must_fix_received` (author), `must_fix_caught` (reviewer), `ci_red_merges`, `rework_cycles`, `review_false_positives`. The helper reuses `wave_status.merged_prs` (so the #423 cross-window filter and the no-shell list-arg-vector contract of main#688 carry over) and parses each PR's verdict comments for the `Requestor:` / `RequestOrReplied:` shape.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# Per-engineer signal JSON, persisted as a single top-level key so /wave-retro
+# Step 4 reads deterministic numbers rather than re-deriving them by hand.
+SIGNALS=$(python3 "$REPO_ROOT/.claude/lib/trust_signals.py" extract {P} {M})
+python3 "$REPO_ROOT/.claude/lib/upsert_status_keys.py" "$REPO_ROOT/cross-repo-status.json" \
+    "wave_{M}_trust_signals=$SIGNALS"
+
+# Read-back verify (gh silent-no-op family) — the block must be present and parse.
+jq -e --arg m "{M}" '.["wave_" + $m + "_trust_signals"]' "$REPO_ROOT/cross-repo-status.json" >/dev/null \
+    && echo "trust signals written" || echo "ERROR: trust signals not written"
+```
+
+**Acceptance:** `wave_{M}_trust_signals` exists at top-level after wrapup, mapping each active engineer to their integer signal counts. `/wave-retro` Step 4 consumes it; if absent, retro re-extracts it directly (the helper is idempotent and reads from the same merged-PR set).
+
 ### 11. Merge to main per repo (every wave)
 
 **Every wave's wrapup merges its wave branch to main** (changed 2026-06-09 — owner directive; previously gated to the final wave only). Each repo in `wave_{M}_repos_in_scope` has its OWN `deployments/phase-{P}/wave-{M}` branch (created by `/wave-kickoff` step 1) that needs its own PR to main. This is the symmetric counterpart of the multi-repo branch creation gap (main#238). Merging each wave keeps `main` continuously current: the next wave bases off main (`/wave-start` § 3 base determination; ref cut by `/wave-kickoff` Step 1), so an unmerged wave would strand its work the moment the following wave starts.

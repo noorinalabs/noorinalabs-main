@@ -26,6 +26,7 @@ from annunaki_parse import (  # noqa: E402
     TRACE_RECORD_TYPES,
     count_errors,
     is_low_confidence,
+    is_pipe_mask_suspect,
     is_trace,
     iter_records,
     main,
@@ -175,6 +176,60 @@ class LowConfidenceFilter(unittest.TestCase):
             p = Path(td) / "errors.jsonl"
             self._write(p)
             self.assertEqual(main([str(p), "--include-low-confidence"]), 0)
+
+
+# #835: the pipe-mask-suspect class — exit-0 stdout-only matches with no STRONG
+# masked-failure signal, not recognized as echoed (e.g. a pytest `FAILED`
+# surfacing through `… | tail` rc-masking). The monitor tags these
+# confidence="low" so the existing low-confidence filter excludes them from the
+# count; `category="pipe-mask-suspect"` lets callers triage the sub-class.
+_PIPE_MASK_SUSPECT = {
+    "timestamp": "t",
+    "hook": "annunaki_monitor",
+    "command": "python3 -m pytest 2>&1 | tail",
+    "exit_code": 0,
+    "matched_patterns": ["stdout:^FAILED"],
+    "confidence": "low",
+    "category": "pipe-mask-suspect",
+}
+
+
+class PipeMaskSuspectFilter(unittest.TestCase):
+    def _write(self, path: Path) -> None:
+        lines = [
+            json.dumps(_GENUINE_MONITOR),  # legacy, no confidence → counted
+            json.dumps(_PIPE_MASK_SUSPECT),  # #835 suspect → excluded from count
+            json.dumps(_HIGH_CONF_MASKED),  # genuine masked failure → counted
+        ]
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def test_count_excludes_pipe_mask_suspect(self) -> None:
+        with TemporaryDirectory() as td:
+            p = Path(td) / "errors.jsonl"
+            self._write(p)
+            # legacy + high masked failure = 2; pipe-mask-suspect excluded.
+            self.assertEqual(count_errors(p), 2)
+
+    def test_iter_default_skips_pipe_mask_suspect(self) -> None:
+        with TemporaryDirectory() as td:
+            p = Path(td) / "errors.jsonl"
+            self._write(p)
+            cmds = [r["command"] for r in iter_records(p)]
+            self.assertNotIn("python3 -m pytest 2>&1 | tail", cmds)
+
+    def test_include_low_confidence_retains_suspect(self) -> None:
+        with TemporaryDirectory() as td:
+            p = Path(td) / "errors.jsonl"
+            self._write(p)
+            recs = list(iter_records(p, include_low_confidence=True))
+            self.assertEqual(len(recs), 3)
+            self.assertIn("python3 -m pytest 2>&1 | tail", [r["command"] for r in recs])
+
+    def test_is_pipe_mask_suspect_helper(self) -> None:
+        self.assertTrue(is_pipe_mask_suspect(_PIPE_MASK_SUSPECT))
+        self.assertFalse(is_pipe_mask_suspect(_LOW_CONF_ECHO))  # low but echoed, not suspect
+        self.assertFalse(is_pipe_mask_suspect(_HIGH_CONF_MASKED))
+        self.assertFalse(is_pipe_mask_suspect(_GENUINE_MONITOR))
 
 
 class TraceTypeSourceOfTruth(unittest.TestCase):

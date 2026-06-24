@@ -67,6 +67,20 @@ if [ -f "$REPO_ROOT/.claude/lib/sync_main.py" ]; then
   python3 "$REPO_ROOT/.claude/lib/sync_main.py" "$REPO_ROOT" || true
 fi
 
+# Refresh + staleness-guard the embedded child-repo checkouts (#832) — the
+# sibling of the sync_main parent fast-forward above, for the children. The
+# parent .gitignore's its child clones and they drift badly (during p6-wave-16
+# user-service was parked on a phase-3 commit and isnad-graph sat ~207 commits
+# behind origin/main — the root cause of #816 and of any agent that reads a
+# stale child clone directly). Same safety stance as sync_main: a child that is
+# clean and on main is fast-forwarded to origin/main (--ff-only, never force);
+# a child that is dirty, diverged, or parked on an old feature branch is FLAGGED
+# for a manual decision and left untouched — there is no force-discard path.
+# Non-fatal: a flagged/refused child is a SAFE outcome and never blocks session-start.
+if [ -f "$REPO_ROOT/.claude/lib/check_child_checkouts.py" ]; then
+  python3 "$REPO_ROOT/.claude/lib/check_child_checkouts.py" "$REPO_ROOT" --refresh || true
+fi
+
 # Parent repo + the 7 canonical child repos (CLAUDE.md Repository Map).
 REPOS=("$REPO_ROOT")
 for child in \
@@ -139,6 +153,13 @@ fi
 Report how many merged worktrees were auto-removed and surface the FLAGGED
 list (locked + unmerged) to the user for a manual call. Do not force-remove a
 FLAGGED worktree without explicit confirmation.
+
+Also report the **child-repo checkout** result from `check_child_checkouts.py`
+(#832): how many child clones were fast-forwarded to `origin/main`, and surface
+its FLAGGED block (children that are dirty, diverged, or parked on an old feature
+branch — these are left untouched and need a manual call). A child sitting many
+commits behind `origin/main` is the root cause of stale on-disk child configs
+(#816) and of any agent that reads the clone directly drawing wrong conclusions.
 
 ### Step 1 — Team orientation
 
@@ -365,6 +386,7 @@ After all steps complete, present a single status block:
 | Step | Status |
 |------|--------|
 | 0. Worktree | {clean / N stale removed} |
+| 0b. Child checkouts | {N fast-forwarded / M flagged (dirty/diverged/feature-branch) / all current} |
 | 1. Team | {created fresh / error} |
 | 2. Handoff | {summary} |
 | 3. Ontology | {N dirty resolved / current} |

@@ -1,13 +1,35 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: Block Edit/Write/NotebookEdit unless /ontology-librarian was consulted.
+"""PreToolUse hook: Advise (not block) when /ontology-librarian was not consulted.
 
 Per CLAUDE.md § Ontology:
-  "Every agent — orchestrator, team member, or one-off — MUST run
+  "Every agent — orchestrator, team member, or one-off — SHOULD run
    /ontology-librarian {topic} before making code changes."
 
-This hook enforces that charter rule. It fires before Edit/Write/NotebookEdit
-and scans the current session's transcript for evidence of a librarian
-consultation. If none is found, the edit is blocked with guidance.
+This hook surfaces that charter guidance. It fires before Edit/Write/NotebookEdit
+and scans the current session's transcript (and a cwd-keyed sentinel) for
+evidence of a librarian consultation. If none is found, it emits an **advisory**
+`systemMessage` warning — the edit is **allowed** to proceed.
+
+Advisory, not blocking (softened in #857)
+=========================================
+
+This hook was originally a HARD BLOCK (exit 2, deny the edit) — see #150. It was
+softened to advisory by #857 (P6W17, parent #820 / C×T2 decision). Rationale:
+
+  The hard block existed to guarantee an agent had loaded *current ontology
+  context* — chiefly the **structural** layer (module/service topology) — before
+  editing code. That layer is now **generated** (committed `ontology/structural/`,
+  owned generator #855) and therefore *always current by regeneration* rather than
+  hand-resolved and potentially stale. The staleness risk the block defended
+  against no longer exists for the structural layer, so a hard pre-Edit block is
+  heavier than warranted (cf. memory `feedback_safety_direction_over_ux_friction`:
+  soften a guard only once the safety it provided is demonstrably redundant — it is
+  here, because structural context is regenerated, not stale).
+
+  The hand-curated **semantic overlay** (`domain.yaml` / `services.yaml` /
+  `conventions.md` / `*.md`) is still valuable to consult, so the advisory warning
+  remains — it nudges without gating. The librarian is still the right first move
+  for understanding intent/topology; it is simply no longer a blocking precondition.
 
 Input Language
 ==============
@@ -23,7 +45,7 @@ Matches (tool_input.file_path or tool_input.notebook_path):
     transcript file whose path is passed as `input_data["transcript_path"]`
     (Claude Code agent SDK convention).
 
-Does NOT match (allow-listed paths — no librarian required):
+Does NOT warn (allow-listed paths — no librarian expected):
     /tmp/**                — out-of-repo scratch (issue body drafts, etc.)
     **/memory/*.md         — project memory files written by handoff/retro
     **/MEMORY.md           — auto-memory index
@@ -31,10 +53,8 @@ Does NOT match (allow-listed paths — no librarian required):
     .claude/annunaki/*     — error log (hook-managed, not hand-edited code)
 
 Stance on meta-files (.claude/team/feedback_log.md, trust_matrix.md, etc.):
-    REQUIRES librarian. These ARE project-state artifacts that the ontology
-    tracks and conventions describe. Treating them as "free edits" replays
-    the very decay pattern #150 is fixing. If false-positives accumulate,
-    add a sentinel-comment bypass — do not broaden the path allow-list.
+    ADVISES librarian. These ARE project-state artifacts that the ontology
+    tracks and conventions describe, so the nudge still fires for them.
 
 Transcript shape expected (JSONL, one object per line):
     Form A (string content):
@@ -54,7 +74,7 @@ Transcript shape expected (JSONL, one object per line):
                                   "input": {"skill": "ontology-librarian",
                                             "args": "..."}}]}}
 
-Detection signals (any ONE is sufficient):
+Detection signals (any ONE suppresses the advisory):
     1. A `user` line whose text contains the literal substring
        "/ontology-librarian" OR "<command-name>/ontology-librarian".
     2. An `assistant` `tool_use` block with name == "Skill" and
@@ -68,8 +88,8 @@ Sentinel fallback (second acceptance signal, added for #169):
     where <hash> is the first 16 hex chars of sha1(abspath(cwd)). The hook
     accepts the marker if its mtime is within SENTINEL_TTL_SECONDS (1 hour)
     of now AND the cwd reported in `input_data["cwd"]` matches the hashed
-    cwd. Either the transcript scan OR a fresh matching sentinel is
-    sufficient to allow the edit.
+    cwd. Either the transcript scan OR a fresh matching sentinel suppresses
+    the advisory.
 
     Rationale (#169): subagents in worktree sessions repeatedly had
     /ontology-librarian Skill tool_use entries ignored by the transcript
@@ -82,26 +102,20 @@ Sentinel fallback (second acceptance signal, added for #169):
     the librarian ITSELF — the orchestrator in the main repo cwd and a
     subagent in a worktree cwd do not share a sentinel.
 
-    Known limitation: a subagent operating in the SAME cwd as its parent
-    (non-worktree — rare) would be covered by the parent's sentinel. This
-    is an accepted trade-off; the dominant failure mode (#169) is worktree
-    subagents, which this fix addresses.
-
 Scope of scan:
     Entire transcript file (a Claude Code session == one transcript). Each
     new session starts a fresh transcript, so a previous session's
-    invocation cannot carry over. This matches the issue body's
-    "since the last /clear or session start" requirement. Sentinel TTL of
-    1 hour bounds cross-session carryover on the sentinel path.
+    invocation cannot carry over. Sentinel TTL of 1 hour bounds
+    cross-session carryover on the sentinel path.
 
 Exit codes (per Claude Code hook convention):
-    0 — allow (not a matched tool, allow-listed path, librarian found in
-        transcript, or fresh sentinel matches cwd)
-    2 — block (writable path AND no librarian signal from either source)
+    0 — ALWAYS. This is an advisory hook; it never blocks an edit. When the
+        librarian has not been consulted it prints a `systemMessage` warning
+        to stdout (and still exits 0).
 
-Enforcement artifact for: noorinalabs/noorinalabs-main#150
-Sentinel fallback for:   noorinalabs/noorinalabs-main#169
-Promotion pattern example: memory -> charter (CLAUDE.md § Ontology) -> hook.
+Enforcement artifact for: noorinalabs/noorinalabs-main#150 (original hard block)
+Softened to advisory by:  noorinalabs/noorinalabs-main#857 (#820 / C×T2)
+Sentinel fallback for:    noorinalabs/noorinalabs-main#169
 """
 
 from __future__ import annotations
@@ -119,7 +133,6 @@ from _consultation_sentinel import (  # noqa: E402
     cwd_sentinel_hash,
     find_attesting_sentinel,
 )
-from annunaki_log import log_pretooluse_block, log_pretooluse_diagnostic  # noqa: E402
 
 # Sentinel-fallback config — delegated to `_consultation_sentinel` per #176.
 # These module-level names are preserved as back-compat shims for tests that
@@ -130,7 +143,7 @@ _SKILL_KEY = "ontology-librarian"
 SENTINEL_DIR_NAME = f"{SENTINEL_PARENT_DIR}/{_SKILL_KEY}"
 SENTINEL_TTL_SECONDS = DEFAULT_TTL_SECONDS  # 1 hour, inherits from helper
 
-# Tool matchers this hook enforces on.
+# Tool matchers this hook advises on.
 _MATCHED_TOOLS = {"Edit", "Write", "NotebookEdit"}
 
 # Detection signals in transcript.
@@ -140,7 +153,7 @@ _SLASH_CMD_MARKERS = (
 )
 _SKILL_NAME = "ontology-librarian"
 
-# Allow-listed path prefixes / suffix patterns (no librarian required).
+# Allow-listed path prefixes / suffix patterns (no librarian advisory).
 # Absolute-path globs; matched against the resolved, absolute path.
 _ALLOW_ABS_PREFIXES = (
     "/tmp/",
@@ -157,9 +170,9 @@ _ALLOW_PATH_CONTAINS = (
 
 
 def _is_allowlisted(file_path: str) -> bool:
-    """Return True if the path is exempt from the librarian requirement."""
+    """Return True if the path is exempt from the librarian advisory."""
     if not file_path:
-        # No file_path means we cannot evaluate; default to enforcing.
+        # No file_path means we cannot evaluate; default to advising.
         return False
 
     try:
@@ -244,8 +257,9 @@ def _transcript_has_librarian(transcript_path: str) -> bool:
                 if _content_has_librarian_signal(content):
                     return True
     except OSError:
-        # If we cannot read the transcript, FAIL OPEN — do not block on our
-        # own inability to read state. Parent dispatcher fail-open convention.
+        # If we cannot read the transcript, suppress the advisory — do not
+        # nag on our own inability to read state. (Mirrors the original
+        # fail-open stance; now even cheaper since nothing is blocked.)
         return True
 
     return False
@@ -268,7 +282,7 @@ def _sentinel_attests_librarian(cwd: str) -> bool:
 
     Fresh = mtime within SENTINEL_TTL_SECONDS of now. Absent, stale, or
     unreadable sentinels return False (do not attest). OSError paths fail
-    open (return True) to match the transcript-scan fail-open stance.
+    open (return True) to match the transcript-scan stance.
 
     Per #176: the path is `.claude/.consulted/ontology-librarian/<hash>.marker`
     (was `.claude/.librarian-consulted/<hash>.marker`); the path move
@@ -279,9 +293,7 @@ def _sentinel_attests_librarian(cwd: str) -> bool:
 
     Per #429: when the canonical-hash marker is absent, falls back to a
     tolerant-read scan (`find_attesting_sentinel`) that accepts any fresh
-    marker whose BODY records this same realpath cwd. Rescues markers
-    written by ad-hoc one-liners that picked a non-canonical hash
-    formula (live evidence in cedric-0066-dark-mode-tokens worktree).
+    marker whose BODY records this same realpath cwd.
     """
     if not cwd:
         return False
@@ -299,111 +311,27 @@ def _sentinel_attests_librarian(cwd: str) -> bool:
             return True
         return False
     except OSError:
-        # Fail open — do not block on our own inability to stat. (Preserved
-        # from pre-#176 behavior; the shared helper fails CLOSED on OSError
-        # for cleaner generic semantics — Hook 15 wraps it here to keep the
-        # legacy fail-open stance that its tests pin.)
+        # Fail open — do not nag on our own inability to stat.
         return True
 
 
-def _build_block_diagnostic(input_data: dict) -> dict:
-    """Build a structured forensic record for a block decision.
-
-    Captures what the hook saw at decision time so #429-class "why did
-    it block?" questions are answerable from logs without rerunning the
-    failing session. Every field is JSON-safe and bounded in size; OSError
-    on any field-build falls back to a sentinel string rather than raising.
-
-    Recorded fields:
-      cwd, cwd_realpath, expected_sentinel_path, sentinel_exists,
-      sentinel_age_s, sentinel_skill_dir, sentinel_dir_marker_count,
-      transcript_path, transcript_exists, transcript_size_bytes,
-      transcript_line_count, errors (list of stringified OSError per field).
-    """
-    import time
-
-    diag: dict = {}
-    errors: list[str] = []
-    cwd = input_data.get("cwd", "") or ""
-    diag["cwd"] = cwd
-    try:
-        diag["cwd_realpath"] = os.path.realpath(os.path.expanduser(cwd)) if cwd else ""
-    except (OSError, ValueError) as e:
-        diag["cwd_realpath"] = ""
-        errors.append(f"realpath:{e}")
-
-    sentinel: Path | None = None
-    try:
-        sentinel = consultation_sentinel_path(cwd, _SKILL_KEY) if cwd else None
-    except (OSError, ValueError) as e:
-        errors.append(f"sentinel_path:{e}")
-
-    if sentinel is not None:
-        diag["expected_sentinel_path"] = str(sentinel)
-        diag["sentinel_skill_dir"] = str(sentinel.parent)
-        try:
-            exists = sentinel.exists()
-            diag["sentinel_exists"] = exists
-            if exists:
-                age = time.time() - sentinel.stat().st_mtime
-                diag["sentinel_age_s"] = round(age, 2)
-                diag["sentinel_within_ttl"] = bool(0 <= age <= SENTINEL_TTL_SECONDS)
-            else:
-                diag["sentinel_age_s"] = None
-                diag["sentinel_within_ttl"] = False
-        except OSError as e:
-            diag["sentinel_exists"] = None
-            errors.append(f"sentinel_stat:{e}")
-        try:
-            if sentinel.parent.is_dir():
-                diag["sentinel_dir_marker_count"] = sum(1 for _ in sentinel.parent.glob("*.marker"))
-            else:
-                diag["sentinel_dir_marker_count"] = 0
-        except OSError as e:
-            diag["sentinel_dir_marker_count"] = None
-            errors.append(f"sentinel_dir_scan:{e}")
-
-    transcript_path = input_data.get("transcript_path", "") or ""
-    diag["transcript_path"] = transcript_path
-    if transcript_path:
-        try:
-            tp = Path(transcript_path)
-            t_exists = tp.exists()
-            diag["transcript_exists"] = t_exists
-            if t_exists:
-                diag["transcript_size_bytes"] = tp.stat().st_size
-                # Bounded line-count: stop at 50k to avoid runaway scan
-                # cost on pathological transcripts.
-                line_count = 0
-                with tp.open("r", encoding="utf-8", errors="replace") as f:
-                    for line_count, _ in enumerate(f, start=1):
-                        if line_count >= 50000:
-                            break
-                diag["transcript_line_count"] = line_count
-            else:
-                diag["transcript_size_bytes"] = None
-                diag["transcript_line_count"] = 0
-        except OSError as e:
-            diag["transcript_exists"] = None
-            errors.append(f"transcript_read:{e}")
-
-    if errors:
-        diag["errors"] = errors[:10]
-    return diag
-
-
-_BLOCK_MESSAGE = (
-    "BLOCKED: /ontology-librarian must be consulted before code edits in this session.\n"
-    'Per CLAUDE.md § Ontology: "Every agent — orchestrator, team member, or one-off —\n'
-    'MUST run /ontology-librarian {topic} before making code changes."\n'
-    "Run /ontology-librarian {topic} first, then retry the edit."
+_ADVISORY_MESSAGE = (
+    "ADVISORY: /ontology-librarian was not consulted earlier in this session "
+    "before this code edit.\n"
+    'Per CLAUDE.md § Ontology: "Every agent — orchestrator, team member, or one-off — '
+    'SHOULD run /ontology-librarian {topic} before making code changes."\n'
+    "This is a non-blocking reminder (the edit will proceed). Consulting the "
+    "librarian first helps you load the hand-curated semantic overlay (domain "
+    "entities, service topology, conventions) for the area you are touching."
 )
 
 
 def check(input_data: dict) -> dict | None:
     """Dispatcher-compatible entry point.
 
-    Returns None to allow; returns a block-dict to block.
+    Returns None to allow silently (no advisory needed); returns a dict with a
+    `systemMessage` advisory when the librarian was not consulted. The advisory
+    NEVER blocks — the caller (`main`) always exits 0.
     """
     tool_name = input_data.get("tool_name", "")
     if tool_name not in _MATCHED_TOOLS:
@@ -422,15 +350,12 @@ def check(input_data: dict) -> dict | None:
         return None
 
     # Fallback signal: cwd-keyed sentinel (see docstring § "Sentinel fallback").
-    # Survives the transcript-flush race that blocks subagents in worktrees (#169).
+    # Survives the transcript-flush race that affected subagents in worktrees (#169).
     cwd = input_data.get("cwd", "")
     if _sentinel_attests_librarian(cwd):
         return None
 
-    return {
-        "decision": "block",
-        "reason": _BLOCK_MESSAGE,
-    }
+    return {"systemMessage": _ADVISORY_MESSAGE}
 
 
 def main() -> None:
@@ -440,34 +365,9 @@ def main() -> None:
         sys.exit(0)
 
     result = check(input_data)
-    if result is None:
-        sys.exit(0)
-
-    print(json.dumps(result))
-    if result.get("decision") == "block":
-        # Log to Annunaki so the block shows up in /annunaki reports.
-        tool_name = input_data.get("tool_name", "")
-        tool_input = input_data.get("tool_input") or {}
-        file_path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
-        log_pretooluse_block(
-            "enforce_librarian_consulted",
-            f"{tool_name} {file_path}",
-            result["reason"],
-            tool_name=tool_name,
-        )
-        # Per #429: emit structured forensics on the block path so future
-        # regressions show WHY the hook returned block, not just THAT it
-        # did. Best-effort — never let logging crash the hook.
-        try:
-            log_pretooluse_diagnostic(
-                "enforce_librarian_consulted",
-                f"{tool_name} {file_path}",
-                _build_block_diagnostic(input_data),
-                tool_name=tool_name,
-            )
-        except Exception:  # noqa: BLE001
-            pass
-        sys.exit(2)
+    if result and result.get("systemMessage"):
+        print(json.dumps({"systemMessage": result["systemMessage"]}))
+    # Advisory hook: always allow the edit to proceed.
     sys.exit(0)
 
 

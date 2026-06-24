@@ -135,6 +135,36 @@ class ShouldSkipPositiveTests(_FakeRepoRootMixin, unittest.TestCase):
         path = str(self._fake_root / ".claude" / "hooks" / "ontology_tracker.py")
         self.assertFalse(hook._should_skip(path))
 
+    def test_semantic_overlay_repo_yaml_is_tracked(self):
+        """#857: the hand-curated overlay (ontology/repos/*.yaml) IS still tracked.
+
+        Only the GENERATED structural layer is dropped from tracking; the
+        semantic overlay remains under the tracker/resolver.
+        """
+        path = str(self._fake_root / "ontology" / "repos" / "isnad-graph.yaml")
+        self.assertFalse(hook._should_skip(path))
+
+
+class ShouldSkipStructuralLayerTests(_FakeRepoRootMixin, unittest.TestCase):
+    """#857: the GENERATED structural layer must NOT be checksum-tracked.
+
+    ``ontology/structural/`` is regenerated wholesale by an owned generator
+    (#855); it is always-current-by-regeneration, so dirty-tracking it would be
+    meaningless churn and ``/ontology-rebuild`` has nothing to resolve there.
+    The tracker skips it exactly like it skips ``checksums.json`` itself.
+    """
+
+    def test_structural_yaml_is_skipped_absolute(self):
+        path = str(self._fake_root / "ontology" / "structural" / "modules.yaml")
+        self.assertTrue(hook._should_skip(path))
+
+    def test_structural_nested_is_skipped(self):
+        path = str(self._fake_root / "ontology" / "structural" / "isnad-graph" / "index.json")
+        self.assertTrue(hook._should_skip(path))
+
+    def test_structural_relative_path_is_skipped(self):
+        self.assertTrue(hook._should_skip("ontology/structural/services.yaml"))
+
 
 class ShouldSkipTopLevelWorktreesTests(_FakeRepoRootMixin, unittest.TestCase):
     """#525: top-level `.worktrees/` paths must be skipped.

@@ -194,14 +194,38 @@ _STATUS_PATH = Path(__file__).resolve().parent.parent.parent / "cross-repo-statu
 _PER_REPO_TIMEOUT_SECONDS = 3
 
 
+def _read_phase_num(data: dict) -> int | None:
+    """Recover the active phase number from a loaded status dict, or None (#831).
+
+    `current_phase` (the live integer) is the AUTHORITATIVE phase pointer. The
+    legacy top-level `phase` ("phase-{N}") string was never advanced past
+    phase-4 — deriving the wave branch/label from it yielded a wrong
+    `deployments/phase-4/...` (#831), so it is retired from the status file. A
+    defensive `phase`-string fallback is retained for robustness and to mirror
+    the sibling readers `validate_wave_label_evidence._read_current_phase` and
+    `post_wave_kickoff_comment._phase_from_status` (#810).
+    """
+    cp = data.get("current_phase")
+    if cp is not None:
+        try:
+            return int(cp)
+        except (TypeError, ValueError):
+            pass
+    m = re.fullmatch(r"phase-(\d+)", str(data.get("phase", "")))
+    if m:
+        return int(m.group(1))
+    return None
+
+
 def _read_phase_wave_nums() -> tuple[int, int] | None:
     """Return the active (phase_num, wave_num) from cross-repo-status.json or None.
 
     Reads `cross-repo-status.json`, requires `wave_active` truthy, and parses
-    the `phase` ("phase-<P>") and `current_wave` ("wave-<M>") fields. Returns
-    None on any failure (missing file, malformed JSON, inactive wave, missing
-    or unparseable fields). Single source of truth for both the wave *label*
-    and the wave *branch* derivations below so they cannot drift apart.
+    the authoritative `current_phase` integer (via `_read_phase_num`) and the
+    `current_wave` ("wave-<M>") field. Returns None on any failure (missing
+    file, malformed JSON, inactive wave, missing or unparseable fields). Single
+    source of truth for both the wave *label* and the wave *branch* derivations
+    below so they cannot drift apart.
     """
     try:
         data = json.loads(_STATUS_PATH.read_text(encoding="utf-8"))
@@ -212,11 +236,11 @@ def _read_phase_wave_nums() -> tuple[int, int] | None:
         return None
 
     wave_match = re.fullmatch(r"wave-(\d+)", str(data.get("current_wave", "")))
-    phase_match = re.fullmatch(r"phase-(\d+)", str(data.get("phase", "")))
-    if not wave_match or not phase_match:
+    phase_num = _read_phase_num(data)
+    if not wave_match or phase_num is None:
         return None
 
-    return int(phase_match.group(1)), int(wave_match.group(1))
+    return phase_num, int(wave_match.group(1))
 
 
 def _read_current_wave_labels() -> list[str] | None:

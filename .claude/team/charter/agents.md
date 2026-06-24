@@ -26,6 +26,48 @@ When starting any work session, the orchestrating Claude instance should:
 6. All code-writing agents use `isolation: "worktree"`
 7. Coordinate via named agents and SendMessage
 
+## Governed Headcount (Roster Budget) <!-- promoted-to: lib/headcount_budget.py -->
+
+The persona roster is **budgeted and machine-enforced** (persona Option B, P6 criterion #3 — decision in
+`phase-6.md` § Criterion #3; analysis in `.claude/team/spikes/p6w2-persona-model-evaluation.md`). The spike
+found the roster had drifted to ~2.5× the headcount the owner believed, with no budget and no gate — exactly
+the "prose rule that decays because nothing enforces it" failure the enforcement hierarchy
+(`feedback_enforcement_hierarchy.md`) warns about.
+
+**The caps (single source of truth: `.claude/lib/headcount_budget.py`):**
+
+| Roster | Cap (persona cards in `.claude/team/roster/`) |
+|--------|-----------------------------------------------|
+| Parent (`noorinalabs-main`) | **≤ 9** |
+| Each child repo | **≤ 6** |
+
+> **Cap history.** P6W17 (#841) first set the parent cap at 8 and slimmed the roster to 7. An owner revision
+> (2026-06-24) raised it to **9**: two personas slated for retirement on a "0 parent commits" premise had in
+> fact authored merged parent PRs that wave (Bereket #832/#846, Nino #838/#851 + review of #835), so they were
+> kept; only the genuine duplicate (Aisha → Lucas) stays retired, leaving the parent roster AT 9.
+
+**Enforcement.** `headcount_budget.py` counts `*.md` cards in `.claude/team/roster/` and HARD-BLOCKS (exit 1)
+when the count exceeds the cap. It is wired exactly like the memory-budget gate (criterion #1): a `pre-push`
+hook + a `Headcount budget gate` CI job, with the `headcount-budget` kind classified in
+`pre_commit_ci_sync.py` so the sync-drift gate demands the local⇄CI mirror (#684). The parent run uses the
+default (parent) budget; a child repo vendoring the gate invokes with `--budget 6`.
+
+**Staying under budget — retire / merge, don't pile up.** When a roster is at cap and a new persona is
+genuinely needed:
+
+1. **Retire personas with no commits in the last N waves.** Removal is *card removal*: `git rm` the
+   `roster/*.md` card. **Preserve history** — keep the name in `.claude/team/roster.json` (the commit-identity
+   union manifest, so authored commits still resolve and `roster_union_sync.py` stays green) and **archive,
+   don't delete,** their trust-matrix entries (add an "Archived Personas" note; leave their change-log rows in
+   place). A deploy-repo persona whose canonical card lives in `noorinalabs-deploy` is retired from the parent
+   by removing only the duplicate parent copy.
+2. **Merge near-duplicate roles** (e.g. two same-titled engineers) into one card, retiring the staler.
+3. Only if the roster has genuinely outgrown the cap, **raise the number deliberately** in
+   `headcount_budget.py` (one reviewed line) — that is the surfaced decision the gate exists to force, the
+   same posture as the memory-budget cap.
+
+This composes with the P6 thesis: bias toward enforced, mechanical budgets over unmanaged narrative growth.
+
 ## Agent Lifecycle Management <!-- promotion-target: skill -->
 **Agents MUST be shut down as soon as their work is complete.** The orchestrator is responsible for:
 
@@ -245,7 +287,7 @@ The harness provides a **single implicit team per orchestrator session** — the
 
 1. **Orchestrator** spawns managers (Program Director + per-repo managers) via the `Agent` tool with `team_name: "noorinalabs"` — the single implicit team (no `TeamCreate` call exists in the current harness).
 2. **Managers** do NOT have the Agent tool. When they need implementers, they `SendMessage` the orchestrator (team-lead) with a spawn request: "please spawn {Name} from {repo}/{roster-card} for {issue}, branch {X}, reviewers {Y, Z}."
-3. **Orchestrator spawns implementers** with the context the manager provided PLUS the Ontology Context bake (per `enforce_ontology_context.py` hook — see § Orchestrator checklist below) PLUS the MANDATORY `/ontology-librarian` first-action instruction (per Hook 15 in `hooks.md`).
+3. **Orchestrator spawns implementers** with the context the manager provided PLUS the Ontology Context bake (per `enforce_ontology_context.py` hook — see § Orchestrator checklist below) PLUS the expected `/ontology-librarian` first-action instruction (per Hook 15 in `hooks.md` — advisory since #857; still best practice in every spawn brief).
 4. **Implementers report** back to their assigning manager via `SendMessage`. Cross-manager coordination is in-band (`SendMessage`) plus on-GitHub (meta-issue comments + Cross-Contract PRs).
 5. **Per-repo rosters remain canonical** for commit identity, domain ownership, and reviewer pairing — the session team is a logical overlay on top of them.
 
@@ -253,7 +295,7 @@ The harness provides a **single implicit team per orchestrator session** — the
 
 > **Position-first rule (resolves [main#201](https://github.com/noorinalabs/noorinalabs-main/issues/201)).** The reviewer slate is the first decision the spawn prompt forces the orchestrator (or PD-via-spawn-request) to make — not buried mid-checklist where it gets back-filled after scope/branch/sequencing have already framed the assignment. Every spawn prompt template MUST place this section immediately after the identity / git-identity preamble and BEFORE the `## Ontology Context` section (when that section is present — see coordinator-class exemption note below).
 >
-> **Coordinator-class exemption (#468):** the `## Ontology Context` section is MANDATORY for implementer-class spawns and OPTIONAL for coordinator-class spawns (Manager, Pipeline Manager, Project Lead, Program Director, TPM / Technical Program Manager, Release Coordinator). Coordinators communicate primarily via SendMessage and rarely Edit/Write directly; `enforce_ontology_context.py` matches the canonical `You are **{Name}**, {Role}[ for {repo}]` opener and exempts these roles from the spawn-time Agent block. Hook 15 (`enforce_librarian_consulted.py`) still fires at the Edit/Write surface for the few coordinators that do edit. When a coordinator brief DOES include `## Ontology Context`, the position-first rule above continues to apply — the section retains its required location.
+> **Coordinator-class exemption (#468):** the `## Ontology Context` section is MANDATORY for implementer-class spawns and OPTIONAL for coordinator-class spawns (Manager, Pipeline Manager, Project Lead, Program Director, TPM / Technical Program Manager, Release Coordinator). Coordinators communicate primarily via SendMessage and rarely Edit/Write directly; `enforce_ontology_context.py` matches the canonical `You are **{Name}**, {Role}[ for {repo}]` opener and exempts these roles from the spawn-time Agent block. Hook 15 (`enforce_librarian_consulted.py`) still fires (advisory, non-blocking since #857) at the Edit/Write surface for the few coordinators that do edit. When a coordinator brief DOES include `## Ontology Context`, the position-first rule above continues to apply — the section retains its required location.
 >
 > **You MUST NOT name as reviewer:**
 > - The **manager of the implementer's repo** (manager-boundary rule — see `pull-requests.md` § Two-Reviewer Assignment, observed-and-corrected ≥4× across three managers in P2W10).
@@ -356,7 +398,7 @@ Every implementer spawn prompt MUST include, **in order**:
 
 1. **Reviewer slate** (first-line per § Reviewer slate discipline above) — both reviewers named, manager-boundary verified, valid-source check applied.
 2. **`## Ontology Context`** section (literal heading) with librarian output baked in — `enforce_ontology_context.py` scans for this heading and blocks the spawn if absent. **Coordinator-class spawns are exempt** (Manager, Pipeline Manager, Project Lead, Program Director, TPM / Technical Program Manager, Release Coordinator) per the carveout above and #468; the hook's `COORDINATOR_ROLE_OPENER` regex matches the canonical `You are **{Name}**, {Role}[ for {repo}]` opener and skips the block. This item remains MANDATORY for implementer-class spawns (any role not matched by `COORDINATOR_ROLE_OPENER`). Note: spawn-brief composers must canonicalize role titles to the exempt enumeration — e.g., `"Infrastructure Manager"` → `, Manager` for the regex match.
-3. **MANDATORY first-action** instruction to run `/ontology-librarian {topic}` in the spawned agent's own session — Hook 15 scans the agent's transcript independently and blocks Edit/Write otherwise.
+3. **Expected first-action** instruction to run `/ontology-librarian {topic}` in the spawned agent's own session — Hook 15 scans the agent's transcript independently and emits an advisory `systemMessage` on Edit/Write otherwise (non-blocking since #857). The consult remains best practice for loading the semantic overlay.
 4. **Git identity** flags (`git -c user.name="..." -c user.email="parametrization+FirstName.LastName@gmail.com"`).
 5. **Branch name** matching `{FirstInitial}.{LastName}/{IIII}-{slug}` and **PR target** (typically `deployments/phase-{N}/wave-{M}`).
 6. **Cross-Contract rule** reference if the PR is part of a cross-contract cluster (charter `pull-requests.md`).
@@ -370,7 +412,7 @@ Every implementer spawn prompt MUST include, **in order**:
 Every reviewer-class spawn prompt MUST include, **in order**:
 
 1. **PR + author identity** — the specific PR# and head-SHA being reviewed, the author's name (NOT the reviewer's), and the angle the reviewer is being asked to take (TPM angle, charter/QA angle, domain angle, release coordinator angle, etc.).
-2. **MANDATORY first-action** instruction to run `/ontology-librarian {topic}` — Hook 15 scans the reviewer's own transcript and blocks Edit/Write otherwise. Reviewer-class spawns don't typically Edit/Write (they post comments), but the librarian is also load-bearing for understanding what the PR touches.
+2. **Expected first-action** instruction to run `/ontology-librarian {topic}` — Hook 15 scans the reviewer's own transcript and emits an advisory `systemMessage` on Edit/Write otherwise (non-blocking since #857). Reviewer-class spawns don't typically Edit/Write (they post comments), but the librarian is also load-bearing for understanding what the PR touches.
 3. **Throughline-watch block** (per § Reviewer spawn brief — throughline-watch above) — copy-paste the verbatim template block. Default, not per-wave addition (#320).
 4. **Producer-parity block** (per § Reviewer spawn brief — producer-parity watch above) — for any data/graph PR that adds or changes an integrity/load invariant, copy-paste the verbatim Producer-parity-watch template block so the reviewer asks whether the producer applied the SAME invariant on the sibling path (batch ↔ streaming). Conditional on the PR class (data-acquisition `src/graph/load_*` / isnad-ingest-platform / graph-invariant PRs); for non-data/graph PRs the block is omitted (#672).
 5. **`Requestor: <reviewer name>` / `Requestee: <PR author name>` / `RequestOrReplied: Approved | ChangesRequested` / `TechDebt:` format** — explicit reminder using the canonical Direction-table form (per `pull-requests.md` § Comment-Based Reviews, post-#372 / PR #375 fix). **Every reviewer spawn brief MUST embed the verbatim verdict-comment template block below — copy-pasted into the brief, not paraphrased, summarized, or referenced by pointer — so the verdict trailer carries all four lines (`Requestor:` / `Requestee:` / `RequestOrReplied:` / `TechDebt:`) together in one block.** The `TechDebt:` line is mandatory on **every** verdict even when there is no debt (`TechDebt: none`), Approved and ChangesRequested alike — never optional, never deferred. A brief that does not paste the block verbatim is non-conformant. Embedding the block verbatim prevents W9 PR#349-style cascades from re-emerging (per memory `feedback_spawn_brief_requestor_field_semantics`).
