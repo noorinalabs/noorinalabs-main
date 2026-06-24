@@ -32,6 +32,22 @@ Input Language:
                      genuine-error count by annunaki_parse, but retained for
                      forensics; a STRONG masked-failure signal (e.g. a `git
                      push | tail` REJECTED push) stays "high" and counted.
+  rc=0 precision (#835): every logged record also carries a `hook` field
+                     (always "annunaki_monitor" for command-failure captures,
+                     so the /annunaki breakdown stops bucketing them as
+                     "unknown") and a `category` triage label. The P6W16 retro
+                     found 85% of captures were exit-0 stdout-pattern matches
+                     (a pytest `FAILED` line surfacing through `… | tail`
+                     rc-masking, or benign demo output containing the literal)
+                     that #729's recall-preserving default tagged "high" and
+                     counted. #835 demotes that residual class — exit-0,
+                     stdout-only, NOT a STRONG masked-failure signal, NOT
+                     positively-recognized echoed content — to
+                     `confidence="low"` + `category="pipe-mask-suspect"`:
+                     retained for forensics and specifically triageable, but
+                     excluded from the count. The genuine exit-0-failure
+                     carve-out (STRONG masked-failure) stays "high"/counted as
+                     `category="masked-failure"`.
 
 Exit codes:
   0 — always (advisory hook, never blocks)
@@ -49,6 +65,26 @@ from annunaki_log import append_jsonl_record
 # Where we log errors — JSONL for easy dedup and processing
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 ERRORS_FILE = REPO_ROOT / ".claude" / "annunaki" / "errors.jsonl"
+
+# Hook attribution (#835): command-failure captures from this monitor carry a
+# `hook` field so /annunaki's `rec.get("hook", "unknown")` breakdown attributes
+# them to the monitor instead of bucketing them all as "unknown". The pretooluse
+# / posttooluse records written by annunaki_log set `hook` to the blocking hook
+# name; this is the analogous attribution for the auto-capture path.
+MONITOR_HOOK_NAME = "annunaki_monitor"
+
+# Triage categories (#835) — a coarse classification of WHY a record was logged,
+# orthogonal to `confidence`. Lets /annunaki-attack triage by class (e.g. batch-
+# dismiss `pipe-mask-suspect`, prioritize `masked-failure`) instead of re-deriving
+# it from the raw fields. `confidence` decides COUNTING; `category` describes KIND.
+CATEGORY_NONZERO_EXIT = "nonzero-exit"  # exit_code != 0 — hard failure (high)
+CATEGORY_STDERR_MATCH = "stderr-match"  # stderr pattern matched (high)
+CATEGORY_MASKED_FAILURE = "masked-failure"  # STRONG exit-0 masked failure (high)
+CATEGORY_ECHOED_CONTENT = "echoed-content"  # #729 displayed source/body (low)
+# The dominant P6W16 false-positive class: exit-0, stdout-only, no strong signal,
+# not positively-recognized echoed content — e.g. a pytest `FAILED` surfacing
+# through `… | tail` rc-masking, or benign demo output. Retained but NOT counted.
+CATEGORY_PIPE_MASK_SUSPECT = "pipe-mask-suspect"
 
 # Session-level dedup: skip errors we've already logged this session
 _seen_hashes: set = set()
@@ -411,27 +447,44 @@ def _is_echoed_content(command: str, error_lines: list[str]) -> bool:
 
 def _classify_confidence(
     command: str, exit_code: int, matched_patterns: list[str], error_lines: list[str]
-) -> str:
-    """Return "high" or "low" confidence for a logged error record (#729).
+) -> tuple[str, str]:
+    """Return (confidence, category) for a logged error record (#729, #835).
 
-    "high" — a non-zero exit, a stderr-pattern match, or an exit-0 stdout match
-             carrying a STRONG masked-failure signal (the genuine exit-0-failure
-             carve-out, e.g. `git push | tail` masking a REJECTED push).
-    "low"  — exit-0, stdout-only, no strong signal, and the matched line is
-             positively recognized as echoed content.
+    `confidence` ∈ {"high", "low"} decides whether annunaki_parse COUNTS the
+    record as a genuine error. `category` (#835) is a coarse triage label for
+    WHY it was logged. The branches, in precedence order:
 
-    An exit-0 stdout match not recognized as echoed stays "high": only display
-    we can positively recognize is demoted, never an unclassified failure.
+      nonzero-exit     — exit_code != 0                          → high
+      stderr-match     — a stderr-pattern match                  → high
+      masked-failure   — exit-0 stdout match with a STRONG       → high
+                         masked-failure signal (the genuine
+                         exit-0-failure carve-out, e.g. a
+                         `git push | tail` masking a REJECTED push)
+      echoed-content   — exit-0 stdout match positively          → low
+                         recognized as displayed source/body (#729)
+      pipe-mask-suspect — exit-0, stdout-only, no strong signal,  → low
+                         not recognized as echoed (#835). This is the
+                         dominant P6W16 false-positive class (a pytest
+                         `FAILED` surfacing through `… | tail` rc-masking,
+                         or benign demo output containing the literal).
+
+    #835 supersedes #729's recall-preserving "unrecognized exit-0 stdout match
+    defaults high" policy: the P6W16 retro measured that class at 85% false
+    positive, so it is now demoted to low/pipe-mask-suspect — retained in the
+    log for forensics (and specifically triageable by category) but excluded
+    from the genuine-error count. Recall is preserved for any RECOGNIZABLE
+    failure signal: a non-zero exit, a stderr pattern, or a STRONG masked-
+    failure phrase all still count.
     """
     if exit_code and exit_code != 0:
-        return "high"
+        return "high", CATEGORY_NONZERO_EXIT
     if any(p.startswith("stderr:") for p in matched_patterns):
-        return "high"
+        return "high", CATEGORY_STDERR_MATCH
     if STRONG_MASKED_FAILURE.search("\n".join(error_lines)):
-        return "high"
+        return "high", CATEGORY_MASKED_FAILURE
     if _is_echoed_content(command, error_lines):
-        return "low"
-    return "high"
+        return "low", CATEGORY_ECHOED_CONTENT
+    return "low", CATEGORY_PIPE_MASK_SUSPECT
 
 
 def check(input_data: dict) -> dict | None:
@@ -513,10 +566,12 @@ def check(input_data: dict) -> dict | None:
 
     error_lines = _extract_error_lines(combined_output)
 
-    # #729 confidence tag: exit-0 stdout-only matches that are echoed content
-    # (displayed source/body) are low-confidence; the reader excludes them from
-    # the genuine-error count but keeps every record for forensics.
-    confidence = _classify_confidence(command, exit_code, matched_patterns, error_lines)
+    # #729/#835 confidence + category tag: exit-0 stdout-only matches that are
+    # echoed content (displayed source/body, #729) OR an unrecognized rc=0
+    # stdout match (the P6W16 pipe-mask-suspect class, #835) are low-confidence;
+    # the reader excludes them from the genuine-error count but keeps every
+    # record for forensics. The category labels WHY each was logged.
+    confidence, category = _classify_confidence(command, exit_code, matched_patterns, error_lines)
 
     dedup_input = command[:200] + "|||" + "\n".join(error_lines)[:500]
     dedup_hash = hashlib.md5(dedup_input.encode("utf-8")).hexdigest()
@@ -526,10 +581,14 @@ def check(input_data: dict) -> dict | None:
 
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        # #835: attribute the capture to this monitor so /annunaki's by-hook
+        # breakdown stops bucketing command-failure records as "unknown".
+        "hook": MONITOR_HOOK_NAME,
         "command": command[:500],
         "exit_code": exit_code,
         "matched_patterns": matched_patterns[:5],
         "confidence": confidence,
+        "category": category,
         "error_lines": error_lines,
         "stderr_excerpt": stderr[:300] if stderr else "",
         "_dedup_hash": dedup_hash,
@@ -537,7 +596,12 @@ def check(input_data: dict) -> dict | None:
 
     append_jsonl_record(ERRORS_FILE, record)
 
-    return {"action": "logged", "dedup_hash": dedup_hash, "confidence": confidence}
+    return {
+        "action": "logged",
+        "dedup_hash": dedup_hash,
+        "confidence": confidence,
+        "category": category,
+    }
 
 
 def main() -> None:

@@ -27,6 +27,15 @@ retained in the log for forensics (pass `include_low_confidence=True`). The
 genuine exit-0-failure carve-out (a `git push | tail` masking a REJECTED push)
 is tagged `confidence: "high"` by the monitor and so is still counted.
 
+#835 widens the low-confidence class (same reader machinery, no change here) to
+include the `category: "pipe-mask-suspect"` records — exit-0 stdout-only matches
+with no STRONG masked-failure signal that are NOT positively recognized as
+echoed content (e.g. a pytest `FAILED` surfacing through `… | tail` rc-masking,
+or benign demo output). The P6W16 retro measured that class at 85% false
+positive, so the monitor now tags it `confidence: "low"`; it is excluded from
+the count by the existing low-confidence filter and retained for forensics. The
+`is_pipe_mask_suspect` helper lets callers triage that sub-class specifically.
+
 Exit codes (CLI):
     0 — always (this is a read-only summarizer; it never fails the caller)
 """
@@ -104,12 +113,27 @@ def is_trace(record: dict) -> bool:
 
 
 def is_low_confidence(record: dict) -> bool:
-    """True iff `record` is the #729 exit-0 echoed-output low-confidence class.
+    """True iff `record` is a low-confidence class (#729 echoed-output OR #835
+    pipe-mask-suspect).
 
     These are retained in the log for forensics but excluded from the
     genuine-error count by `iter_records`/`count_errors`.
     """
     return record.get("confidence") == "low"
+
+
+def is_pipe_mask_suspect(record: dict) -> bool:
+    """True iff `record` is the #835 exit-0 pipe-mask-suspect class.
+
+    A subset of the low-confidence records: an exit-0 stdout-only match with no
+    STRONG masked-failure signal that the monitor could not positively classify
+    as echoed content (e.g. a pytest `FAILED` surfacing through `… | tail`
+    rc-masking, or benign demo output). Excluded from the genuine-error count
+    like all low-confidence records; this helper lets `/annunaki-attack` triage
+    the suspect sub-class specifically (e.g. batch-dismiss, or promote a true
+    masked failure that slipped through).
+    """
+    return record.get("category") == "pipe-mask-suspect"
 
 
 def main(argv: list[str] | None = None) -> int:
