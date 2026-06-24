@@ -32,6 +32,7 @@
 - [gh CLI silent-no-op family](feedback_gh_pr_edit_silent_noop.md) — gh pr edit, project item-add, item-list --limit, api -X PATCH -f body=@file silently no-op.
 - [git show over worktree for canonical source](feedback_canonical_source_via_git_show.md) — syncing "from sha X": local main may lag origin; fetch via git show <sha>:<path>.
 - [Child-repo implementer rule](feedback_child_repo_implementer_rule.md) — implementers for child-repo PRs come from that child's own roster, not the parent org team.
+- [Consumer wave-merge ordering](feedback_consumer_wave_merge_ordering.md) — consumer repo's wave→main whose CI resolves a tool from producer's base branch must merge AFTER producer's; else tool-dep check false-reds. P6W17 #1130.
 - [Security guard inline, not followup](feedback_security_guard_inline_not_followup.md) — Changes-Requested when threat model needs a runtime guard; followup issue is tracking, not a fix. #77.
 - [Honest audit before "concluded"](feedback_honest_audit_over_conclusion_claim.md) — cross-repo open-item count required before claiming wave done; explicit carry-forward if non-zero.
 - [Stale-inbox manager failure mode](feedback_stale_inbox_manager.md) — before correcting a teammate's state, re-verify via artifact (gh api, Read, grep); inbox lags reality.
