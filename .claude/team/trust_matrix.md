@@ -20,6 +20,49 @@ All team members maintain a trust score for every other team member they interac
 - **Updates:** This file is updated on `main` whenever a trust-relevant interaction occurs (typically during wave retros). Changes should include a brief log entry explaining the adjustment.
 - **Scope:** Trust is directional — A's trust in B may differ from B's trust in A.
 
+## Mechanical Scoring (evidence-anchored) — authoritative as of P6W17 (#842 / Option B §4b)
+
+Narrative self-grading is **retired** for the orchestrator → team direction. A trust delta is no longer "felt"; it is **derived from countable wave signals** and must cite them. The executable model lives in [`.claude/lib/trust_signals.py`](../lib/trust_signals.py) (`/wave-wrapup` extracts the signals, `/wave-retro` applies the deltas); the rules below are the human-readable contract that file implements. The five legacy scale points (1–5) and the directional semantics above are unchanged — only *how a change is justified* changes.
+
+### Per-engineer signals (countable, from the merged-PR set)
+
+Each is an integer extracted by `trust_signals.extract_signals(phase, wave)` over the wave's merged PRs (author = head-commit author name; reviewer = the verdict comment's `Requestor:` field):
+
+| Signal | Direction | Definition |
+|--------|-----------|------------|
+| `prs_merged` | + | PRs merged this wave authored by the engineer |
+| `must_fix_caught` | + | ChangesRequested verdicts the engineer issued as reviewer |
+| `must_fix_received` | − | ChangesRequested verdicts on PRs the engineer authored |
+| `ci_red_merges` | − | authored PRs that merged with a failing required check |
+| `rework_cycles` | − | authored PRs that needed ≥1 rework round |
+| `review_false_positives` | − | must-fix items the engineer raised that were later self-marked withdrawn / false-positive |
+
+### Evidence-anchored, bidirectional delta
+
+`trust_signals.score_delta(signals)` — pure, symmetric, clamped to **[−2, +2]** (one wave cannot swing trust across the whole scale):
+
+- **−1** per CI-red merge; **−1** per review false-positive; **−1** if `must_fix_received ≥ 3`.
+- **+1** if `prs_merged ≥ 2` *and* the wave is clean of the negatives above; **+1** if `must_fix_caught ≥ 2` and no false-positives.
+- A single clean PR is **not** an increase (it is baseline expected delivery, not exceptional).
+
+`new = clamp(old + delta, 1, 5)`. Every retro trust-table row MUST cite the numbers behind its delta — a row with no signal citation is rejected at review.
+
+### Decay toward neutral
+
+`trust_signals.decay(old, waves_since_signal)` — if an engineer produced **no** trust-relevant signal for **3** consecutive waves, drift the score **one step toward 3** (a stale 4 or 2 is no longer earned). Decay is gradual (one step per qualifying wave), never a reset.
+
+### Distribution discipline
+
+`trust_signals.apply_distribution_discipline(...)` — **5 is reserved** for exceptional *relative* wave performance, not handed out for merely-clean work. A proposed 5 is allowed only for the engineer(s) with the wave's top composite signal score (and that score must be strictly positive); every other proposed 5 is capped to 4.
+
+### Forced negative-signal pass (bare "None" is banned)
+
+Each retro records, **per active engineer**, either a specific evidence-backed gap **or** an explicit `metrics clean: {numbers}` line — produced by `trust_signals.negative_signal_line(name, signals)`. A bare `None` / `N/A` / `-` is a forced-pass violation; `/wave-retro` rejects it via `trust_signals.validate_negative_signal_pass(...)`.
+
+### Performance-triggered retirement
+
+`trust_signals.retirement_trigger(score_history, ci_red_history)` — a persona is flagged for archive / not-spawned when, over the most recent **3** waves, **either** the score stayed bottom-tier (≤2) every wave **or** there was ≥1 CI-red merge every wave. Fewer than 3 waves of history never triggers (insufficient evidence). The trigger is a *recommendation surfaced at retro* for owner confirmation, not an automatic deletion.
+
 ## Matrix
 
 Rows = the team member rating. Columns = the team member being rated.
