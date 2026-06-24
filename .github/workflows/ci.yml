@@ -227,6 +227,22 @@ jobs:
         # `memory-budget` pre-push hook; the sync-drift gate classifies the kind.
         run: python3 .claude/lib/memory_budget.py .
 
+  headcount-budget:
+    name: Headcount budget gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Enforce the persona-roster headcount budget (#841)
+        # HARD-BLOCKS if the parent persona roster (.claude/team/roster/*.md)
+        # exceeds the cap in headcount_budget.py (parent <=9). Mirrored locally by
+        # the `headcount-budget` pre-push hook; the sync-drift gate classifies the
+        # kind. Runs with the default (parent) budget — a child repo vendoring
+        # this gate invokes with `--budget 6`.
+        run: python3 .claude/lib/headcount_budget.py .
+
   doc-freshness:
     name: Doc-freshness gate (advisory)
     runs-on: ubuntu-latest

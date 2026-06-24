@@ -308,6 +308,66 @@ repos:
         self.assertNotIn("mermaid", harmful)
 
 
+class HeadcountBudgetKind(unittest.TestCase):
+    """#841: the persona-roster headcount gate must be a classified kind so the
+    sync-drift gate DEMANDS a pre-commit mirror of the CI budget job (an
+    un-mirrored gate lets roster drift fail only at PR time) — same #684
+    contract as the memory-budget kind."""
+
+    def test_ci_headcount_budget_run_step_classified(self) -> None:
+        wf = """
+jobs:
+  headcount-budget:
+    steps:
+      - run: python3 .claude/lib/headcount_budget.py .
+"""
+        self.assertIn("headcount-budget", kinds_from_ci(wf))
+
+    def test_precommit_headcount_budget_hook_classified(self) -> None:
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: headcount-budget
+        name: headcount-budget (pre-push)
+        entry: python3 .claude/lib/headcount_budget.py .
+"""
+        self.assertIn("headcount-budget", kinds_from_precommit(cfg))
+
+    def test_ci_headcount_budget_without_precommit_is_harmful_drift(self) -> None:
+        wf = """
+jobs:
+  headcount-budget:
+    steps:
+      - run: python3 .claude/lib/headcount_budget.py .
+"""
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+"""
+        harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
+        self.assertIn("headcount-budget", harmful)
+
+    def test_ci_headcount_budget_with_precommit_mirror_no_drift(self) -> None:
+        wf = """
+jobs:
+  headcount-budget:
+    steps:
+      - run: python3 .claude/lib/headcount_budget.py .
+"""
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: headcount-budget
+        entry: python3 .claude/lib/headcount_budget.py .
+"""
+        harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
+        self.assertNotIn("headcount-budget", harmful)
+
+
 class DockerfileBasePinKind(unittest.TestCase):
     """#735: the dockerfile-base-pin charter-prose→code gate must be a classified
     kind so the sync-drift gate DEMANDS a pre-commit mirror of the CI lint job (an
@@ -668,6 +728,7 @@ _OLD_KIND_PATTERNS = {
     # Kept in lock-step with the production _KIND_PATTERNS so the OLD-vs-NEW
     # parity proof stays valid as new kinds are added (cf. memory-budget, #733).
     "memory-budget": ("memory-budget", "memory_budget"),
+    "headcount-budget": ("headcount-budget", "headcount_budget"),
     "doc-freshness": ("doc-freshness", "doc_freshness"),
     "office-drift": ("office-drift", "gen-office"),
     "mermaid": ("mermaid", "check-mermaid"),
@@ -759,6 +820,7 @@ _EXPECTED_KINDS = {
             "dockerfile-base-pin",
             "doc-freshness",
             "fixture-realism",
+            "headcount-budget",
             "memory-budget",
             "mermaid",
             "mypy",
@@ -773,6 +835,7 @@ _EXPECTED_KINDS = {
             "dockerfile-base-pin",
             "doc-freshness",
             "fixture-realism",
+            "headcount-budget",
             "memory-budget",
             "mermaid",
             "mypy",
