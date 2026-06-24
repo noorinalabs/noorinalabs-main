@@ -128,6 +128,14 @@ _KIND_PATTERNS: dict[str, tuple[str, ...]] = {
     # Patterns cover the hook `id`/`name` token (`memory-budget`) and the CI
     # `run` invocation token (`memory_budget`).
     "memory-budget": ("memory-budget", "memory_budget"),
+    # `headcount-budget` is the persona-roster headcount gate
+    # (`.claude/lib/headcount_budget.py`, #841 — persona Option B / criterion #3).
+    # Same contract as `memory-budget` above: a `headcount_budget.py` CI run with
+    # no pre-commit hook is harmful drift (#684), not a silently-ignored unknown,
+    # so classifying it makes the drift gate actively DEMAND the local⇄CI mirror.
+    # Patterns cover the hook `id`/`name` token (`headcount-budget`) and the CI
+    # `run` invocation token (`headcount_budget`).
+    "headcount-budget": ("headcount-budget", "headcount_budget"),
     # `doc-freshness` is the advisory PR-time doc-freshness gate
     # (`.claude/lib/doc_freshness.py`, #768). It is ADVISORY (always exits 0), but
     # it is still a real CI check, so it must be mirrored in pre-commit for

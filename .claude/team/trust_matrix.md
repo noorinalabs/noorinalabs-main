@@ -1757,3 +1757,26 @@ implemented, so "fired" still has no mechanical meaning this wave — that is ex
 **Concentration note:** 43% top by commit identity, but true orchestrator concentration ~100% (meta-wave).
 Theme-fit, not fragility — but W17 (architectural execution) is planned as genuine distributed
 implementer work to avoid carrying orchestrator-solo execution into non-framework scope.
+
+---
+
+## Archived Personas — parent roster (P6W17 governed headcount, #841)
+
+Persona Option B (criterion #3, spike `.claude/team/spikes/p6w2-persona-model-evaluation.md`) caps the
+parent roster at **8** cards and retires personas with **no parent-repo commits in the last N waves** plus
+**merges near-duplicate roles**. The cards below were removed from `.claude/team/roster/` to bring the parent
+roster from 10 → 7 (under the cap, one slot of headroom). **History is preserved, not deleted:** every
+trust/feedback entry these personas earned remains in the change logs and per-wave sections above, and each
+name stays in `.claude/team/roster.json` (the org-wide commit-identity union manifest) so the
+commit-identity gate still resolves their authored commits. Each is a **deploy-repo persona** whose
+*canonical* card lives in `noorinalabs-deploy/.claude/team/roster/` — only the duplicate parent copy was
+retired; they remain active in `noorinalabs-deploy`.
+
+| Persona | Parent role | Reason retired (parent roster) | Last parent-repo commit | Canonical card |
+|---------|-------------|--------------------------------|-------------------------|----------------|
+| Bereket Tadesse | Infrastructure Manager | No commits to `noorinalabs-main`, ever (0) | never | `noorinalabs-deploy` (`manager_bereket.md`) |
+| Nino Kavtaradze | Security Engineer | No commits to `noorinalabs-main`, ever (0) | never | `noorinalabs-deploy` (`security_engineer_nino.md`) |
+| Aisha Idrissi | SRE Engineer | Near-duplicate of SRE Lucas Ferreira (roles merged) + stale (outside last-N-waves window) | 2026-04-21 | `noorinalabs-deploy` (`sre_engineer_aisha.md`) |
+
+Re-instating a retired parent persona is a deliberate, reviewed change (restore the card + drop back under
+the headcount budget) — the same surfaced-decision posture the `headcount_budget.py` gate enforces.
