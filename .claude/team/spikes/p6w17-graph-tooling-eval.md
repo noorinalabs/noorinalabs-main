@@ -168,8 +168,8 @@ Scores 1–5 (5 = best); columns identical to the bake-off so this slots into th
 |-----------|:---------:|:------------:|:--------:|
 | (a) plain artifact, **no required running service** | ✅ | ✅ (offline `graph.json` + offline CLIs) | ❌ **hard fail** (DB required) |
 | (b) regenerable in each child's **own CI** (distributed) | ✅ | ✅ (one pip tool, 4 s, `--update`) | ❌ (DB+API per build) |
-| (c) git-diffable / versioned | ✅ | ✅* (JSON in git; *2.5 MB, noisy diffs; merge-driver mitigates) | ❌ (state in DB) |
-| (d) low token cost for scoped queries | ✅ (read a section) | ✅* (offline `explain`/`path`/`query`; *whole-load 6× heavier; needs CLI) | ❌ (service-gated) |
+| (c) git-diffable / versioned | ✅ | ✅\* (JSON in git; \*2.5 MB, noisy diffs; merge-driver mitigates) | ❌ (state in DB) |
+| (d) low token cost for scoped queries | ✅ (read a section) | ✅\* (offline `explain`/`path`/`query`; \*whole-load 6× heavier; needs CLI) | ❌ (service-gated) |
 | (e) human-as-knowledge-base usability | ✅ (Obsidian vault) | ✅✅ (vault+wiki+html+report — but full outputs need LLM key) | ~ (infra-gated) |
 
 graphify **clears all five**; Graphiti **fails (a)–(d)**.
