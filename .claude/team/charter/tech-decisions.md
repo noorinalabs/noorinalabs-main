@@ -103,6 +103,21 @@ the owner-decision stub is in [`phase-6.md`](../phases/phase-6.md) §criterion #
 lines of curated payload + a per-edit Hook-15 tax), retain hand-curated **semantics/intent** (domain
 entities, service topology, ADR "why") as low-churn markdown, and soften Hook 15 to advisory.
 
-**Decision options:** ☐ Keep ☐ Hybrid (recommended) ☐ Replace. Per owner 2026-06-20, this is
-spike-and-decide — **no teardown in Phase 6**; implementation of the chosen option is a later-phase
-follow-up. This entry is updated in place once the owner records the decision.
+**Decision options:** ☐ Keep ☑ Hybrid ☐ Replace. (Spike recommendation adopted as the
+**C×T2** decision, tracked under [#820](https://github.com/noorinalabs/noorinalabs-main/issues/820).)
+The earlier 2026-06-20 "no teardown in Phase 6" note is superseded — the owner greenlit the
+Hybrid implementation in **P6W17** under #820.
+
+**Implementation (P6W17, #820 / C×T2):**
+- [#855](https://github.com/noorinalabs/noorinalabs-main/issues/855) — owned generator building the
+  regenerable **structural** layer at `ontology/structural/`.
+- [#857](https://github.com/noorinalabs/noorinalabs-main/issues/857) — Hook 15 softened from hard
+  block → **advisory** (`systemMessage`, never denies), and the change-tracker/`ontology-rebuild`
+  machinery **retired for the structural layer** (the tracker skips `ontology/structural/`; the
+  resolver never touches it). The hand-curated **semantic overlay**
+  (`domain.yaml`/`services.yaml`/`conventions.md`/`repos/*.yaml`/`*.md`) **retains** its tracker +
+  resolver. The Hook-15 softening is safe because the structural context the block guarded is now
+  current-by-regeneration, not stale.
+
+This entry is updated in place as the remaining C×T2 streams (#3b aggregator/overlay, #3d
+isnad-graph wiring) land.
