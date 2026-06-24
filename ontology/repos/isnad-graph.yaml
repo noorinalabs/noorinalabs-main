@@ -1,5 +1,12 @@
 # noorinalabs-isnad-graph — Repo Ontology
 # Updated by /ontology-rebuild.
+#
+# Overlay → structural references (C×T2, #856): `structural_ref` / `structural_refs`
+# keys below point at generated structural nodes (by their cross-repo-namespaced id,
+# `isnad-graph/<path>[::<qualname>]`) instead of re-describing structure. They resolve
+# against ontology/structural/cross-repo-graph.json once isnad-graph's per-repo index is
+# generated + aggregated (ig#1128); until then they are valid forward pointers. The
+# convention is defined in ontology/conventions.md § "Overlay → structural references".
 
 repo: noorinalabs-isnad-graph
 description: Computational hadith analysis platform (FastAPI + React + Neo4j)
@@ -14,10 +21,10 @@ modules:
       path: src/api/
       description: FastAPI application — routes, middleware, auth, dependencies
       sub_modules:
-        app: { path: src/api/app.py, description: "App factory, lifespan, middleware stack, router registration" }
-        auth: { path: src/api/auth.py, description: "JWT validation via user-service JWKS, User model" }
-        middleware: { path: src/api/middleware.py, description: "CORS, rate limit, request logging, security headers, size limit" }
-        deps: { path: src/api/deps.py, description: "FastAPI dependency injection (get_neo4j, get_pg)" }
+        app: { path: src/api/app.py, structural_ref: "isnad-graph/src/api/app.py", description: "App factory, lifespan, middleware stack, router registration" }
+        auth: { path: src/api/auth.py, structural_ref: "isnad-graph/src/api/auth.py", description: "JWT validation via user-service JWKS, User model" }
+        middleware: { path: src/api/middleware.py, structural_ref: "isnad-graph/src/api/middleware.py", description: "CORS, rate limit, request logging, security headers, size limit" }
+        deps: { path: src/api/deps.py, structural_ref: "isnad-graph/src/api/deps.py", description: "FastAPI dependency injection (get_neo4j, get_pg)" }
         routes: { path: src/api/routes/, description: "Endpoint handlers by domain" }
     models:
       path: src/models/

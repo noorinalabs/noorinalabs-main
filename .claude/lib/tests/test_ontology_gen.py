@@ -330,6 +330,39 @@ class TestMergeDriver(unittest.TestCase):
             merged = union_merge(str(same), str(same), str(same))
             self.assertEqual(merged, canonical)
 
+    def test_plain_script_invocation_merges(self) -> None:
+        """Git invokes the driver as a PLAIN SCRIPT (not ``-m``); that path must work.
+
+        Regression guard for main#856: the in-process ``union_merge`` import masked a
+        relative-import failure on the actual git invocation form documented in
+        .gitattributes (``python3 .claude/lib/ontology_gen/merge_driver.py %O %A %B %P``).
+        This runs the script exactly as git would and asserts ``%A`` is union-merged.
+        """
+        import subprocess
+
+        driver = Path(__file__).resolve().parent.parent / "ontology_gen" / "merge_driver.py"
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            g1 = CodeGraph()
+            g1.add_node(Node("a.py", "module", "a.py", 1, "python"))
+            g2 = CodeGraph()
+            g2.add_node(Node("b.py", "module", "b.py", 1, "python"))
+            base = root / "base.json"
+            ours = root / "ours.json"
+            theirs = root / "theirs.json"
+            base.write_text(serialize_graph(CodeGraph().to_dict()), encoding="utf-8")
+            ours.write_text(serialize_graph(g1.to_dict()), encoding="utf-8")
+            theirs.write_text(serialize_graph(g2.to_dict()), encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, str(driver), str(base), str(ours), str(theirs), "code-graph.json"],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            parsed = json.loads(ours.read_text(encoding="utf-8"))
+            self.assertEqual(sorted(n["path"] for n in parsed["nodes"]), ["a.py", "b.py"])
+
 
 class TestEndToEnd(unittest.TestCase):
     def _make_repo(self, root: Path) -> None:

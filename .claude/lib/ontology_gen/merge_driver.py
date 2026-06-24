@@ -25,7 +25,19 @@ from __future__ import annotations
 import json
 import sys
 
-from .model import CodeGraph, Edge, Node, serialize_graph
+# Git invokes a merge-driver as a PLAIN SCRIPT (``python3 .../merge_driver.py %O %A %B``),
+# not as ``python3 -m`` — so at runtime there is no parent package and the relative
+# ``from .model import`` fails with ImportError. Bootstrap ``.claude/lib`` onto sys.path
+# and fall back to the absolute import so the exact invocation documented below (and wired
+# in .gitattributes / `make setup-ontology-merge-driver`, main#856) actually runs. The
+# package-relative import is kept as the primary path for ``-m`` / in-package callers.
+try:
+    from .model import CodeGraph, Edge, Node, serialize_graph
+except ImportError:  # pragma: no cover - exercised via the plain-script subprocess test
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from ontology_gen.model import CodeGraph, Edge, Node, serialize_graph
 
 
 def _load(path: str) -> tuple[list[Node], list[Edge]]:
