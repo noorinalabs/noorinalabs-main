@@ -20,10 +20,13 @@ from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
 _HOOKS_DIR = _HERE.parent
+_LIB_DIR = _HOOKS_DIR.parent / "lib"
 sys.path.insert(0, str(_HOOKS_DIR))
+sys.path.insert(0, str(_LIB_DIR))
 
 import annunaki_log as alog  # noqa: E402
 import annunaki_monitor as am  # noqa: E402
+import annunaki_parse as ap  # noqa: E402
 
 
 def _bash_event(command: str, stdout: str = "", stderr: str = "", exit_code: int = 0) -> dict:
@@ -458,15 +461,20 @@ class ConfidenceTaggingTests(unittest.TestCase):
         )
         self.assertEqual(rec["confidence"], "high")
 
-    def test_unrecognized_exit_zero_match_defaults_high(self):
-        """An exit-0 stdout match we cannot positively recognize as echoed
-        stays high — the precision pass never silences an unclassified error."""
-        rec, _ = self._logged(
+    def test_unrecognized_exit_zero_match_demoted_pipe_mask_suspect(self):
+        """#835 supersedes the #729 default-high policy for this class: an
+        exit-0 stdout-only match with no STRONG masked-failure signal that the
+        monitor cannot positively recognize as echoed content is now demoted to
+        low/pipe-mask-suspect. The P6W16 retro measured this class at 85% false
+        positive; it is retained for forensics but excluded from the count."""
+        rec, result = self._logged(
             command="deploy.sh | tee /tmp/log",
             stdout="error while interpolating services.grafana.environment: required\n",
             exit_code=0,
         )
-        self.assertEqual(rec["confidence"], "high")
+        self.assertEqual(rec["confidence"], "low")
+        self.assertEqual(rec["category"], "pipe-mask-suspect")
+        self.assertEqual(result["category"], "pipe-mask-suspect")
 
 
 class AinoFollowupTests(unittest.TestCase):
@@ -1188,6 +1196,149 @@ class ContentDisplayTests(unittest.TestCase):
                 matched_patterns=["stdout:Traceback \\(most recent call last\\)"],
             )
         )
+
+
+class Rc0PrecisionTests(unittest.TestCase):
+    """#835: rc=0 stdout-pattern precision + hook attribution.
+
+    The P6W16 retro found 85% of captures were exit-0 stdout-pattern matches
+    (a pytest `FAILED` line surfacing through `… | tail` rc-masking, or benign
+    demo output) that #729's recall-preserving default tagged "high" and
+    counted, logged with no `hook` field so they bucketed as "unknown". This
+    suite covers the two headline cases the issue requires:
+      (a) the rc=0 false-positive class → low / pipe-mask-suspect (not counted);
+      (b) the genuine nonzero-rc capture → high / nonzero-exit (still counted);
+    plus the `hook` field population that fixes the /annunaki breakdown.
+    """
+
+    def setUp(self):
+        self._saved_env = {
+            "ENVIRONMENT": os.environ.pop("ENVIRONMENT", None),
+            "NOORIN_HOOK_TEST_MODE": os.environ.pop("NOORIN_HOOK_TEST_MODE", None),
+        }
+        am._seen_hashes.clear()
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._errors_path = Path(self._tmpdir.name) / "errors.jsonl"
+        self._orig_monitor_file = am.ERRORS_FILE
+        self._orig_log_file = alog.ERRORS_FILE
+        am.ERRORS_FILE = self._errors_path
+        alog.ERRORS_FILE = self._errors_path
+
+    def tearDown(self):
+        am.ERRORS_FILE = self._orig_monitor_file
+        alog.ERRORS_FILE = self._orig_log_file
+        self._tmpdir.cleanup()
+        for k, v in self._saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    def _logged(self, **kw):
+        result = am.check(_bash_event(**kw))
+        self.assertIsNotNone(result, "expected the command to be logged")
+        return _read_records(self._errors_path)[0], result
+
+    # --- (a) HEADLINE rc=0 false-positive: pytest FAILED via `| tail` ---
+
+    def test_pytest_failed_rc0_via_tail_is_pipe_mask_suspect(self):
+        """The dominant P6W16 false-positive: `pytest … | tail` exits 0 (tail's
+        rc) while a `FAILED` line surfaces on stdout. No STRONG masked-failure
+        signal, not echoed → demoted to low / pipe-mask-suspect. Still LOGGED
+        (retained for forensics), but excluded from the genuine-error count."""
+        rec, result = self._logged(
+            command="python3 -m pytest tests/ 2>&1 | tail -20",
+            stdout="FAILED tests/test_x.py::test_one\nFAILED tests/test_x.py::test_two\n",
+            exit_code=0,
+        )
+        self.assertEqual(rec["exit_code"], 0)
+        self.assertEqual(rec["confidence"], "low")
+        self.assertEqual(rec["category"], "pipe-mask-suspect")
+        self.assertEqual(result["category"], "pipe-mask-suspect")
+
+    def test_benign_demo_output_with_failed_literal_is_pipe_mask_suspect(self):
+        """Benign demo/probe output that merely contains the literal `FAILED`
+        at exit 0 → pipe-mask-suspect, not a counted error."""
+        rec, _ = self._logged(
+            command="./demo_runner.sh",
+            stdout="check 1 OK\nFAILED would be printed here on error\ncheck 2 OK\n",
+            exit_code=0,
+        )
+        self.assertEqual(rec["confidence"], "low")
+        self.assertEqual(rec["category"], "pipe-mask-suspect")
+
+    def test_pipe_mask_suspect_excluded_from_genuine_count(self):
+        """End-to-end: a pipe-mask-suspect record is excluded from the
+        annunaki_parse genuine-error count (it is confidence=low), while a
+        genuine nonzero-rc failure in the same log IS counted."""
+        am.check(
+            _bash_event(
+                "python3 -m pytest 2>&1 | tail -5",
+                stdout="FAILED tests/test_x.py::test_one\n",
+                exit_code=0,
+            )
+        )
+        am.check(_bash_event("false", exit_code=1))  # genuine nonzero-rc
+
+        all_records = _read_records(self._errors_path)
+        self.assertEqual(len(all_records), 2, "both records are logged/retained")
+        self.assertEqual(
+            ap.count_errors(self._errors_path),
+            1,
+            "only the genuine nonzero-rc failure counts; the suspect is excluded",
+        )
+        suspects = [r for r in all_records if ap.is_pipe_mask_suspect(r)]
+        self.assertEqual(len(suspects), 1)
+        self.assertEqual(suspects[0]["exit_code"], 0)
+
+    # --- (b) genuine nonzero-rc capture is unchanged (counted, high) ---
+
+    def test_genuine_nonzero_rc_capture_high_and_counted(self):
+        """A real nonzero-rc failure stays high / nonzero-exit → counted. The
+        rc=0 precision pass must not weaken genuine-failure capture."""
+        rec, _ = self._logged(
+            command="python3 -m pytest tests/",
+            stdout="FAILED tests/test_x.py::test_one\n",
+            exit_code=1,
+        )
+        self.assertEqual(rec["exit_code"], 1)
+        self.assertEqual(rec["confidence"], "high")
+        self.assertEqual(rec["category"], "nonzero-exit")
+
+    def test_strong_masked_failure_rc0_stays_high_masked_failure(self):
+        """The genuine exit-0-failure carve-out is preserved: a `git push |
+        tail` masking a REJECTED push (STRONG signal) stays high and is now
+        labeled category=masked-failure — flagged, not hidden (issue point 3)."""
+        rec, _ = self._logged(
+            command="git push origin N.Hakim/x 2>&1 | tail -3",
+            stdout=(
+                " ! [rejected]        N.Hakim/x -> N.Hakim/x (non-fast-forward)\n"
+                "error: failed to push some refs\n"
+            ),
+            exit_code=0,
+        )
+        self.assertEqual(rec["confidence"], "high")
+        self.assertEqual(rec["category"], "masked-failure")
+
+    # --- hook field population (fixes the /annunaki "unknown" bucket) ---
+
+    def test_hook_field_populated_on_command_failure_record(self):
+        """#835: every monitor capture carries hook=annunaki_monitor so the
+        /annunaki by-hook breakdown (rec.get("hook", "unknown")) stops
+        attributing them all to "unknown"."""
+        rec, _ = self._logged(command="false", exit_code=1)
+        self.assertEqual(rec["hook"], am.MONITOR_HOOK_NAME)
+        self.assertEqual(rec["hook"], "annunaki_monitor")
+
+    def test_hook_field_present_on_suspect_record_too(self):
+        """The hook field is set regardless of confidence/category — a suspect
+        record is still attributed to the monitor, not "unknown"."""
+        rec, _ = self._logged(
+            command="python3 -m pytest 2>&1 | tail",
+            stdout="FAILED tests/test_x.py::test_one\n",
+            exit_code=0,
+        )
+        self.assertEqual(rec["hook"], "annunaki_monitor")
 
 
 if __name__ == "__main__":
