@@ -237,7 +237,7 @@ jobs:
           python-version: "3.12"
       - name: Enforce the persona-roster headcount budget (#841)
         # HARD-BLOCKS if the parent persona roster (.claude/team/roster/*.md)
-        # exceeds the cap in headcount_budget.py (parent <=8). Mirrored locally by
+        # exceeds the cap in headcount_budget.py (parent <=9). Mirrored locally by
         # the `headcount-budget` pre-push hook; the sync-drift gate classifies the
         # kind. Runs with the default (parent) budget — a child repo vendoring
         # this gate invokes with `--budget 6`.

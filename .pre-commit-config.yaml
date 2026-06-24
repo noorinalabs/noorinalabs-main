@@ -171,7 +171,7 @@ repos:
       # (the sync-drift gate classifies the `headcount-budget` kind — #841/#684 —
       # so a CI-enforced budget not mirrored here turns the gate red, same
       # contract as memory-budget above). HARD-BLOCKS a commit/push that grows
-      # the parent persona roster past its cap (parent <=8); an over-budget
+      # the parent persona roster past its cap (parent <=9); an over-budget
       # roster can't be auto-fixed — it needs a human retire/merge decision.
       # Runs with the default (parent) budget; a child repo vendoring this gate
       # wires its own hook to pass `--budget 6`. `always_run` because the budget

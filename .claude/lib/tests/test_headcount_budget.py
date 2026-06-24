@@ -81,7 +81,7 @@ class OverBudgetTests(unittest.TestCase):
             self.assertEqual(evaluate(roster_dir, PARENT_ROSTER_BUDGET), 1)
 
     def test_child_budget_binds_tighter(self) -> None:
-        # 7 cards passes the parent cap (8) but fails the child cap (6).
+        # 7 cards passes the parent cap (9) but fails the child cap (6).
         with TemporaryDirectory() as d:
             roster_dir = _build_roster(Path(d), cards=7)
             self.assertEqual(evaluate(roster_dir, PARENT_ROSTER_BUDGET), 0)
@@ -113,7 +113,7 @@ class CliAndErrorTests(unittest.TestCase):
     def test_main_budget_flag_override(self) -> None:
         with TemporaryDirectory() as d:
             _build_roster(Path(d), cards=7)
-            # Default (parent=8) passes; --budget 6 (child) blocks.
+            # Default (parent=9) passes; --budget 6 (child) blocks.
             self.assertEqual(main(["headcount_budget.py", d]), 0)
             self.assertEqual(main(["headcount_budget.py", d, "--budget", "6"]), 1)
 

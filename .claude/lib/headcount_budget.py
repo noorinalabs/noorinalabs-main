@@ -32,12 +32,14 @@ The two module constants below are the ONLY place the caps are defined:
 
 Calibration (spike ground-truth, 2026-06-21): per-repo roster sizes were
 parent 10, isnad-graph 16, ingest 11, data-acquisition 10, design-system 8,
-deploy 6, landing-page 5, user-service 4. The owner-set caps (parent <=8,
+deploy 6, landing-page 5, user-service 4. The owner-set caps (parent <=9,
 child <=6) bind first where the drift is worst. The parent roster is slimmed to
-7 in this change (retire the personas with no parent-repo commits in the last N
-waves + merge the duplicate SRE role), leaving one slot of headroom under the 8
-cap — enough that a normal org-team change does not trip the gate, tight enough
-that it forces a retire/merge decision before the roster drifts back up.
+9 in this change (merge the duplicate SRE role — Aisha Idrissi into Lucas
+Ferreira; the two personas first slated for retirement on a "0 parent commits"
+premise were KEPT once that premise proved stale — both authored merged parent
+PRs this wave), sitting AT the 9 cap. The cap is inclusive (at-limit passes),
+so the roster has zero headroom: any further growth forces a deliberate
+retire/merge decision before the roster drifts back up.
 
 What counts as a persona card
 =============================
@@ -73,7 +75,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 # --- Budget: the single source of truth. Edit a number here and nowhere else. ---
-PARENT_ROSTER_BUDGET = 8
+PARENT_ROSTER_BUDGET = 9
 CHILD_ROSTER_BUDGET = 6
 
 # Roster cards live under <repo_root>/.claude/team/roster/. roster.json is one

@@ -38,8 +38,13 @@ the "prose rule that decays because nothing enforces it" failure the enforcement
 
 | Roster | Cap (persona cards in `.claude/team/roster/`) |
 |--------|-----------------------------------------------|
-| Parent (`noorinalabs-main`) | **≤ 8** |
+| Parent (`noorinalabs-main`) | **≤ 9** |
 | Each child repo | **≤ 6** |
+
+> **Cap history.** P6W17 (#841) first set the parent cap at 8 and slimmed the roster to 7. An owner revision
+> (2026-06-24) raised it to **9**: two personas slated for retirement on a "0 parent commits" premise had in
+> fact authored merged parent PRs that wave (Bereket #832/#846, Nino #838/#851 + review of #835), so they were
+> kept; only the genuine duplicate (Aisha → Lucas) stays retired, leaving the parent roster AT 9.
 
 **Enforcement.** `headcount_budget.py` counts `*.md` cards in `.claude/team/roster/` and HARD-BLOCKS (exit 1)
 when the count exceeds the cap. It is wired exactly like the memory-budget gate (criterion #1): a `pre-push`
