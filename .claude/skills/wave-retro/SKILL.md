@@ -77,36 +77,62 @@ Collect:
 
 ### 4. Per-engineer assessment
 
-For each engineer who had PRs in this wave, assess:
+Per-engineer trust scoring is **mechanical and evidence-anchored** as of P6W17 (#842 / Option B §4b) — narrative self-grading is retired. Read the per-engineer signals `/wave-wrapup` Step 10.6 wrote, or re-extract them (the helper is idempotent over the same merged-PR set):
 
-- **Positive findings:** clean PRs, fast turnaround, good reviews given, helpful collaboration
-- **Negative findings:** CI failures, must-fix items from reviews, late delivery, missing tests
-- **Severity:** minor / moderate / severe (per charter § Feedback System)
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# Prefer the wrapup-written block; fall back to a live re-extract if absent.
+jq -e --arg m "{M}" '.["wave_" + $m + "_trust_signals"]' "$REPO_ROOT/cross-repo-status.json" \
+  || python3 "$REPO_ROOT/.claude/lib/trust_signals.py" extract {N} {M}
 
-Structure as:
+# `score` emits, per engineer: signals, the bidirectional delta, the
+# distribution-disciplined proposed score, and the forced negative-signal line.
+python3 "$REPO_ROOT/.claude/lib/trust_signals.py" score {N} {M}
+```
+
+For each engineer who had PRs in this wave, assess from the **countable signals** (`prs_merged`, `must_fix_caught`, `must_fix_received`, `ci_red_merges`, `rework_cycles`, `review_false_positives`) — not from narrative impressions:
 
 ```
 ### {Engineer Name}
 - PRs: #{N1}, #{N2}
-- CI failures: {count}
-- Must-fix items received: {count}
-- Tech-debt items created: {count}
-- Assessment: {positive/negative findings}
+- Signals: prs_merged={x}, must_fix_caught={x}, must_fix_received={x}, ci_red_merges={x}, rework_cycles={x}, review_false_positives={x}
+- Delta: {trust_signals.score_delta} (cite the signal(s) behind it)
+- Negative-signal line: {trust_signals.negative_signal_line — a specific gap OR "metrics clean: {numbers}", NEVER bare "None"}
 - Severity: {minor|moderate|severe|none}
+```
+
+**Forced negative-signal pass (banned: bare "None").** Every active engineer MUST get a `negative_signal_line` — a specific evidence-backed gap or an explicit `metrics clean: {numbers}`. Mechanically reject a bare `None` / `N/A` / `-` before continuing:
+
+```bash
+# Collect the negative-signal lines you wrote (one per engineer) into a file,
+# then validate. A non-empty result is a forced-pass violation — fix it.
+python3 - <<'PY'
+import sys
+sys.path.insert(0, ".claude/lib")
+import trust_signals
+lines = [ln.rstrip("\n") for ln in open("/tmp/negative_signal_lines.txt")]
+bad = trust_signals.validate_negative_signal_pass(lines)
+if bad:
+    print("FORCED-PASS VIOLATION (bare None banned):", bad)
+    sys.exit(1)
+print("negative-signal pass clean")
+PY
 ```
 
 ### 5. Update trust matrix
 
 **Trust matrix lives on `main`**, not a side branch. Edit `.claude/team/trust_matrix.md` directly on the retro branch so the update lands in the same retro PR as the feedback log. Do NOT use a separate worktree or push to `CEO/0000-Trust_Matrix` — that pattern (retired 2026-04-17) orphaned trust updates off-main for months.
 
-Apply directional trust changes based on wave performance:
-- Reliable delivery, clean reviews → increase trust (+1, max 5)
-- CI failures, must-fix items, broken commitments → decrease trust (-1, min 1)
-- No significant signal → no change
+Trust deltas are **mechanical** (`.claude/team/trust_matrix.md` § Mechanical Scoring, implemented in `.claude/lib/trust_signals.py`) — every row cites the countable signal behind it:
+
+- **Delta:** `new = clamp(old + score_delta(signals), 1, 5)` — bidirectional, clamped to ±2/wave. Each CI-red merge / false-positive is −1; clean multi-PR delivery or strong reviewing (`must_fix_caught ≥ 2`) is +1. A single clean PR is **not** a bump.
+- **Decay:** an engineer with no signal for 3 consecutive waves drifts one step toward 3 (`trust_signals.decay`).
+- **Distribution discipline:** 5 is reserved for the wave's top relative performer (`trust_signals.apply_distribution_discipline`) — never handed out for merely-clean work.
+- **Retirement trigger:** run `trust_signals.retirement_trigger(score_history, ci_red_history)` per engineer; if it fires (bottom-tier ≤2 or ≥1 CI-red merge in each of the last 3 waves), surface a **persona-archive recommendation** for owner confirmation — do not auto-delete.
 
 Append a new `## Phase {N} Wave {M} Trust Updates ({DATE}) — {theme}` section with:
-- A `| Rated | Old | New | Reason |` table for each relevant team grouping (e.g., `### Org-Level Team`)
-- A `### Done Well / Needs Improvement (Phase {N} Wave {M})` matrix
+- A `| Rated | Old | New | Reason |` table for each relevant team grouping (e.g., `### Org-Level Team`) — the `Reason` MUST cite the signal numbers, not prose impressions.
+- A `### Done Well / Needs Improvement (Phase {N} Wave {M})` matrix whose "Needs Improvement" column is the forced negative-signal line (no bare "None").
 
 The edit will be committed as part of the retro PR (see Step 6). Do NOT create a separate commit or PR for the trust matrix update.
 
