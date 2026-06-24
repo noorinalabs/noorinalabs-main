@@ -4,3 +4,22 @@
 *.docx binary
 *.xlsx binary
 *.pptx binary
+
+# Structural ontology graph artifacts (main#855/#856, #820 C×T2) are generated,
+# sorted JSON that parallel branches regenerate independently — a textual 3-way
+# merge spuriously conflicts on the sorted node/edge arrays even when the two
+# sides touched different source files (the feedback_parallel_panels_shared_file
+# hazard). Route them through the union merge-driver
+# (.claude/lib/ontology_gen/merge_driver.py): it parses both sides + base, unions
+# nodes by id and edges by (src,dst,type), and re-serializes canonically — so a
+# merge result is byte-identical to a fresh regenerate.
+#
+# .gitattributes only NAMES the driver; the driver COMMAND must be registered in
+# each clone's local git config (it cannot live here). Run once per clone:
+#     make setup-ontology-merge-driver
+# or manually:
+#     git config merge.ontology-codegraph.name 'ontology code-graph union merge'
+#     git config merge.ontology-codegraph.driver \
+#       'python3 .claude/lib/ontology_gen/merge_driver.py %O %A %B %P'
+ontology/structural/code-graph.json merge=ontology-codegraph
+ontology/structural/cross-repo-graph.json merge=ontology-codegraph
