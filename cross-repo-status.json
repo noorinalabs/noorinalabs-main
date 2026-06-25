@@ -3397,7 +3397,7 @@
   "wave_5_memory_audit_ran_at": "2026-06-20T00:26:39Z",
   "next_wave": "wave-19",
   "wave_started": "2026-06-23T00:21:35Z",
-  "last_completed_wave": "wave-18",
+  "last_completed_wave": "wave-19",
   "last_completed_at": "2026-06-23T18:30:06Z",
   "wave_3_meta_issue": 675,
   "wave_3_scope": {
@@ -4353,7 +4353,7 @@
   "wave_18_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/28186704314",
   "wave_18_annunaki_attack_ran_at": "2026-06-25T17:38:36Z",
   "wave_18_memory_audit_ran_at": "2026-06-25T17:38:36Z",
-  "wave_19_active": true,
+  "wave_19_active": false,
   "wave_19_started_at": "2026-06-25T19:11:55Z",
   "wave_19_ordinal": 2,
   "wave_19_branches": {"branch":"deployments/phase-7/wave-19","created_at":"2026-06-25T21:26:04Z","repos":{"noorinalabs-main":{"sha":"7c5d0378046b996fc770f9931475272f38e15fe4","status":"created"},"noorinalabs-data-acquisition":{"sha":"210bc2ff3e0006fc5bf48e3aaebb6ca83a82e009","status":"created"},"noorinalabs-isnad-graph":{"sha":"e264e6176dfa3618ab140a9bcfa7a0899f9d6391","status":"created"}}},
@@ -4442,5 +4442,10 @@
     "review_false_positives": 0,
     "rework_cycles": 0
   }
-}
+},
+  "wave_19_stg_promotion": "success",
+  "wave_19_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/28207680166",
+  "wave_19_wrapup_completed_at": "2026-06-25T00:00:00Z",
+  "wave_19_deployable_verified": true,
+  "wave_19_reachability": "all-reachable"
 }
