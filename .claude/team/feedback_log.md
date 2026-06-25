@@ -3340,3 +3340,38 @@ See trust_matrix.md § Phase 6 Wave 16 for the full table. Summary (commit ident
 ### Handoff to W17 (#823 — FINAL, phase exit)
 - W17 = architectural execution: #819 (persona Option B) + #820 (ontology C×T2). Meta-issue #823 exists with a set theme → `/wave-scope 6 17` is the next lifecycle step.
 - Open follow-ups carried (not W16): #831 (status-drift), #832 (stale child checkouts), + the annunaki monitor-tuning follow-up filed this retro.
+
+---
+
+## Retrospective: Phase 6 Wave 17 — 2026-06-25 (Architectural execution + phase exit; FINAL wave of Phase 6)
+
+### Team Performance
+14 per-issue PRs merged across 2 repos (13 noorinalabs-main + 1 isnad-graph), **9 distinct implementers**, top-concentration **28%** (Weronika 4/14). Both wave→main integration PRs merged (main#861 producer, isnad-graph#1130 consumer, producer-before-consumer ordering). **0 CI-red merges, 0 must-fix received, 0 rework cycles.** Counters verified mechanically (14 / 0 / 28-29%; the 1pt is a round-vs-floor convention diff, within tolerance). Phase 6 exits here.
+
+### Per-Engineer Assessments (mechanical — trust_signals.py score 6 17)
+- **Weronika Zielinska** — #845/#853/#854/#859; delta +1; the wave's deepest architectural work (bake-off → owned C×T2 generator). clean: 0 CI-red, 0 must-fix.
+- **Bereket Tadesse** — #860/#846; delta +1; aggregator + caught the merge-driver invocation-form bug pre-merge. clean.
+- **Aino Virtanen** — #858/#852; delta -1 (1 review false-positive, single occurrence); at ceiling, held.
+- **Nino Kavtaradze** — #851 + reviewed #835; delta -1 (1 review false-positive); held.
+- **Nurul Hakim / Nadia Khoury / Santiago Ferreira / Wanjiku Mwangi** — 1 clean on-theme PR each (#850/#847/#844/#849); baseline, held.
+- **Linh Pham** (isnad-graph) — #1129; clean; baseline, held.
+
+### Top 3 Going Well
+1. **Genuine distributed execution.** 28% concentration vs W16's ~100% meta-wave — the W16 retro caveat was met: architectural execution ran as real fan-out across 9 implementers, zero CI-red.
+2. **Both architectural decisions executed in full.** #820 C×T2 (per-repo structural generator + central aggregator + Hook-15 softening + checksums-scope) AND #819 persona Option B (governed headcount + mechanical bidirectional trust + card slim) landed and exited Phase 6.
+3. **Clean cross-repo merge discipline.** Producer-before-consumer wave→main ordering held (isnad-graph#1130's tool-dep check resolved only after main#861 landed); captured as [[feedback_consumer_wave_merge_ordering]].
+
+### Top 3 Pain Points
+1. **Post-merge-only deployable gates have no PR signal.** isnad-graph#1131 — a base-image CVE (libexpat CVE-2026-45186) reddened the GHCR publish on main AFTER #1130's green PR; the Trivy gate is push-to-main-only. Already addressed mid-retro: fixed (#1132) + built `verify_deployable_merge.py` (main#864/#865/#866) + wired into wrapup Step 11.5a.
+2. **Wave-field option missing at label-apply.** 8 annunaki captures: Project-2 Wave field had no `W17` option when kickoff applied labels. Per [[feedback_projectv2_field_option]] this is orchestrator-doable via GraphQL — should be created at kickoff before labels, not surfaced as repeated PostToolUse advisories.
+3. **Branch-freshness churn during fast fan-out.** 15 validate_branch_freshness blocks — implementer branches go stale vs the fast-moving wave branch, requiring rebase-before-PR-create. The gate worked (no stale merges), but the friction is high in a 14-PR parallel wave.
+
+### Proposed Process Changes
+1. **Auto-create the Wave-field option at /wave-kickoff (or /wave-scope) before label-apply** — Rationale: eliminates the 8 repeated "no option W{X}" PostToolUse captures; the GraphQL `createProjectV2FieldOption`-equivalent is orchestrator-doable ([[feedback_projectv2_field_option]]). Move it ahead of the label step.
+2. **Deployable-merge verification is now standing practice** — Rationale: ratified by this wave's incident; `verify_deployable_merge.py` + wrapup Step 11.5a already merged. Recorded as [[feedback_deployable_merge_verification]].
+
+### Annunaki-attack
+53 captures this wave; **no genuine defects.** Breakdown: 15 validate_branch_freshness (gate working — stale implementer branches), 13 post_label_change_wave_field_sync (8 = missing W17 option → proposal #1 above; 4 = for-loop parse-skip, known limitation), 3 validate_commit_identity (heredoc/identity friction), gates firing as designed (ontology-context/pr-review/ci-status ×1 each), and dev-time test-failure noise (rc=0 stdout-pattern, the #835-fixed over-capture class). No new hooks/issues warranted.
+
+### Memory-to-automation audit
+1 promotion realized this wave: the deployable-merge-verification pattern was codified memory→lib+skill (`verify_deployable_merge.py` + wrapup Step 11.5a, main#864). No other memory crossed a promotion threshold; the ontology-path memories are tracked for P7W1 framework-alignment (#862).

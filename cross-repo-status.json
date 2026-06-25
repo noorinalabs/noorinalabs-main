@@ -4023,5 +4023,8 @@
   "wave_17_top_concentration_pct": 29,
   "wave_17_distinct_implementers": 9,
   "wave_17_wrapped_up_at": "2026-06-25T01:14:39Z",
-  "wave_17_staging_promotion": "overridden: meta/framework wave (ontology generator + persona/trust + framework TD); no deployable service surface in scope (noorinalabs-main + isnad-graph framework wiring only)"
+  "wave_17_staging_promotion": "overridden: meta/framework wave (ontology generator + persona/trust + framework TD); no deployable service surface in scope (noorinalabs-main + isnad-graph framework wiring only)",
+  "wave_17_annunaki_attack_ran_at": "2026-06-25T02:06:26Z",
+  "wave_17_memory_audit_ran_at": "2026-06-25T02:06:26Z",
+  "wave_17_retro_completed_at": "2026-06-25T02:06:26Z"
 }
