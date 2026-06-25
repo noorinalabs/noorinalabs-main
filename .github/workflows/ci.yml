@@ -196,6 +196,31 @@ jobs:
           # shellcheck disable=SC2086  # word-splitting is intended (one path per arg)
           python3 .claude/lib/check_fixture_realism.py $files
 
+  skill-graphql-pagination:
+    name: GraphQL pagination over-cap lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Skill-markdown GraphQL over-cap guard (#888/#892, wired by #893). Flags any
+      # `first: > 100` inside a `gh api graphql` block in a skill markdown file —
+      # GitHub caps connection `first:` at 100, and the silent zero-row read made
+      # `/board-audit` treat every issue as an orphan. Mirrors the
+      # `skill-graphql-pagination` pre-commit hook (the sync-drift gate classifies
+      # the kind, so this mirror is mandatory). The lint self-scopes to
+      # gh-api-graphql blocks, so a `first:` in prose is ignored.
+      - name: "Lint skill markdown for GraphQL first: > 100 over-cap"
+        run: |
+          files=$(find .claude/skills -name '*.md' -print)
+          if [ -z "$files" ]; then
+            echo "No skill markdown files found — pagination lint is a no-op here."
+            exit 0
+          fi
+          # shellcheck disable=SC2086  # word-splitting is intended (one path per arg)
+          python3 .claude/lib/lint_skill_graphql_pagination.py $files
+
   precommit-ci-sync:
     name: Pre-commit ⇄ CI sync-drift gate
     runs-on: ubuntu-latest
