@@ -4340,5 +4340,7 @@
   "wave_18_wrapped_up_at": "2026-06-25T17:00:10Z",
   "wave_18_wrapup_completed_at": "2026-06-25T17:00:10Z",
   "wave_18_stg_promotion": "success",
-  "wave_18_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/28186704314"
+  "wave_18_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/28186704314",
+  "wave_18_annunaki_attack_ran_at": "2026-06-25T17:38:36Z",
+  "wave_18_memory_audit_ran_at": "2026-06-25T17:38:36Z"
 }
