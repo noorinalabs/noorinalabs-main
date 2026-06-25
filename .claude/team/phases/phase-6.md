@@ -2,9 +2,9 @@
 name: Phase 6 plan — Claude Efficiency
 description: Phase definition, end-state criteria, exit gate, wave plan
 phase: 6
-status: active
+status: exited
 created: 2026-06-20
-last_updated: 2026-06-20
+last_updated: 2026-06-25
 ---
 
 # Phase 6 — Claude Efficiency
