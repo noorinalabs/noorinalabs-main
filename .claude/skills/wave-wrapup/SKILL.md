@@ -646,13 +646,58 @@ Landing-page and meta-only repos do not participate in the stg fan-in (no dispat
 
 **Production counterpart:** prod deploys are gated on owner approval (owner directive 2026-06-09). `/wave-wrapup` must NOT approve or trigger them. When the owner approves a queued prod deploy for this wave's promotion, run `/watch-deploy prod <sha>` to monitor it the same way; `/watch-deploy` never advances or auto-remediates prod.
 
-### 12. Ontology rebuild
+### 12. Ontology update — semantic overlay + structural index (#862)
 
-Run `/ontology-rebuild` to process any files that changed during this wave. This ensures the ontology reflects the current state of all repos before the wave closes.
+The ontology has two independent layers to update at wave close (#820/C×T2):
 
-- If no dirty files exist in `ontology/checksums.json`, report "Ontology: up to date" and skip
-- The resolver will auto-update docs where appropriate and flag recommend-only changes
-- Include ontology changes in the final wave report
+**12a. Semantic overlay** — run `/ontology-rebuild` to process any hand-curated files that changed during this wave. Scope is `ontology/checksums.json` dirty files only; structural is never resolved here.
+- If no dirty files, report "Semantic overlay: up to date" and skip
+- The resolver auto-updates docs where appropriate and flags recommend-only changes
+
+**12b. Structural index** — regenerate the parent repo's structural index and refresh the cross-repo aggregator. The wave may have added/changed hooks, skills, or lib modules that should be reflected in the index before the wave is closed.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# Check how many source files changed since the index was last generated
+STRUCT_SHA=$(git -C "$REPO_ROOT" log -1 --format="%H" -- ontology/structural/llms.txt 2>/dev/null || echo "")
+if [ -z "$STRUCT_SHA" ]; then
+  CHANGED="new"
+else
+  CHANGED=$(git -C "$REPO_ROOT" diff --name-only "$STRUCT_SHA"..HEAD -- \
+    '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.cypher' '*.cql' 2>/dev/null | wc -l | tr -d ' ')
+fi
+
+if [ "${CHANGED:-0}" = "0" ]; then
+  echo "Structural index: current — no source files changed since last generation."
+else
+  echo "Structural index: ${CHANGED} source file(s) changed — regenerating."
+  PYTHONPATH="$REPO_ROOT/.claude/lib" python3 -m ontology_gen \
+    "$REPO_ROOT" --out "$REPO_ROOT/ontology/structural/" 2>&1
+  # Refresh the central cross-repo graph
+  PYTHONPATH="$REPO_ROOT/.claude/lib" python3 -m ontology_gen.aggregate \
+    "$REPO_ROOT" 2>&1 || true
+
+  # Commit if anything changed
+  if ! git -C "$REPO_ROOT" diff --quiet ontology/structural/; then
+    git -C "$REPO_ROOT" add ontology/structural/
+    MSGFILE="$(mktemp)"
+    printf 'ontology: regenerate structural index (wave-wrapup step 12b)\n\n%s source files changed this wave; re-ran ontology_gen + aggregate.\n' \
+      "${CHANGED}" > "$MSGFILE"
+    git -C "$REPO_ROOT" \
+      -c user.name="Aino Virtanen" \
+      -c user.email="parametrization+Aino.Virtanen@gmail.com" \
+      commit -F "$MSGFILE"
+    rm -f "$MSGFILE"
+    echo "Structural index committed."
+  fi
+fi
+```
+
+Include both results in the final wave report (Step 10):
+- `Ontology: Semantic {N files resolved / up to date}; Structural {current / regenerated + committed}`
+
+**Note:** the structural layer at `ontology/structural/` is always-current-by-regeneration — `/ontology-rebuild` does NOT resolve it (that was retired per #857/C×T2). The generator above IS the structural resolve path.
 
 ### 12.5. Generic-prompt genericize checkpoint (main#716)
 

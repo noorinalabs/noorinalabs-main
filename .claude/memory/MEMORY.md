@@ -16,7 +16,7 @@
 - [Cross-repo GHCR/npm registry-auth proof](feedback_cross_repo_ghcr_registry_auth_proof.md) — before claiming a cross-repo @noorinalabs/* registry-auth fix: check pkg visibility + witness.
 - [zsh shell environment](feedback_zsh_shell_environment.md) — dev env uses zsh; write zsh-safe Bash commands, avoid bash-isms (declare -A, ${!arr[@]}).
 - [ProjectV2 field-option is orchestrator-doable](feedback_projectv2_field_option.md) — adding a single-select Wave-field option is mine via GraphQL updateProjectV2Field.
-- [Ontology system](project_ontology_system.md) — three-role ontology (tracker/resolver = semantic overlay only; structural layer generated); Hook 15 ADVISORY since #857.
+- [Ontology system](project_ontology_system.md) — two-layer model: curate-semantic (/ontology-rebuild + checksums) + generate-structural (ontology_gen + aggregate); librarian surfaces both; lifecycle integrated by #862; Hook 15 ADVISORY since #857.
 - [Bootstrap repo](project_bootstrap_repo.md) — separate repo to dogfood the team/workflow/ontology pattern for reuse across projects.
 - [Session handoff](session_handoff.md) — Pickup 2026-06-24: P7 planned (#869); P7W1/global-18 SCOPED (theme=framework carry-forward lead-in, meta #872, 8 new issues, pushed c135878), NOT kicked off; next `/wave-start 7 18`→`/board-audit`→`/wave-kickoff 7 18` (awaiting go). (file is gitignored/local)
 - [Self-loop task replay glitch](feedback_self_loop_task_replay_glitch.md) — team task system may replay own completed tasks as fresh; verify via TaskGet + ignore self-loops.
