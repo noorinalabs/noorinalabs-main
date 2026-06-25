@@ -1032,10 +1032,10 @@
       "resolved_at": "2026-06-21T21:02:19.551435+00:00"
     },
     ".claude/memory/MEMORY.md": {
-      "last_tracked": "3ef5b7137e8b30d9c64ce34170fb45210fcc64cccddf3a5e875665a192841b3b",
-      "last_resolved": "3ef5b7137e8b30d9c64ce34170fb45210fcc64cccddf3a5e875665a192841b3b",
-      "tracked_at": "2026-06-25T17:22:08.941597+00:00",
-      "resolved_at": "2026-06-25T17:38:36Z"
+      "last_tracked": "56e31a42ef63e4e56b3c5742fc8cd8fb0c99bddc208615df31989bd9e523c40e",
+      "last_resolved": "56e31a42ef63e4e56b3c5742fc8cd8fb0c99bddc208615df31989bd9e523c40e",
+      "tracked_at": "2026-06-25T23:48:32.865504+00:00",
+      "resolved_at": "2026-06-25T00:00:00Z"
     },
     "noorinalabs-isnad-graph/.claude/lib/tests/test_pre_commit_ci_sync.py": {
       "last_tracked": "aa209279deec3844b51e384157ba3e67a6d0f325410941f63f38d57535e6498c",
@@ -1084,6 +1084,12 @@
       "last_resolved": "57eb87f6ca34dc2cdf5f3b7052e949e8fd7e2d246d1d915c288327c0efed6fb7",
       "tracked_at": "2026-06-25T17:22:02.345556+00:00",
       "resolved_at": "2026-06-25T17:38:36Z"
+    },
+    ".claude/memory/feedback_wave_branch_merge_not_squash.md": {
+      "last_tracked": "770dd8aac2e3c1ce3a6540c3b306febe2af7cbc7536407cc6414989126d60b68",
+      "last_resolved": "770dd8aac2e3c1ce3a6540c3b306febe2af7cbc7536407cc6414989126d60b68",
+      "tracked_at": "2026-06-25T23:48:03.781328+00:00",
+      "resolved_at": "2026-06-25T00:00:00Z"
     }
   },
   "last_cleanup": {
