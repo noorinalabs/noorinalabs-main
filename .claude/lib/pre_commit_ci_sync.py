@@ -47,7 +47,7 @@ kind tokens so they compare:
 
     ruff-lint, ruff-format, mypy, pytest, eslint, typescript, prettier,
     terraform-fmt, gitleaks, actionlint, astro-check, pip-audit, build,
-    cspell, dockerfile-base-pin, fixture-realism
+    cspell, dockerfile-base-pin, fixture-realism, skill-graphql-pagination
 
 Unknown tools are ignored (neither side gates on a kind we can't classify),
 which keeps the gate conservative — it never fails on something it doesn't
@@ -168,6 +168,19 @@ _KIND_PATTERNS: dict[str, tuple[str, ...]] = {
     # line) and the hook id / job name.
     "dockerfile-base-pin": ("check_dockerfile_base_pin", "dockerfile-base-pin"),
     "fixture-realism": ("check_fixture_realism", "fixture-realism"),
+    # `skill-graphql-pagination` is the skill-markdown GraphQL over-cap lint
+    # (`.claude/lib/lint_skill_graphql_pagination.py`, #888/#892 → wired by #893):
+    # it flags any `first: > 100` inside a `gh api graphql` block in
+    # `.claude/skills/**/*.md` (the over-cap footgun that made `/board-audit` read
+    # every issue as an orphan). Same contract as the two charter-prose→code gates
+    # above — a CI run of the lint with no pre-commit hook is harmful drift (#684),
+    # not a silently-ignored unknown, so classifying it makes the drift gate
+    # actively DEMAND the local⇄CI mirror. Patterns match the script basename
+    # (present on both sides' invoke line) and the hook id / job name.
+    "skill-graphql-pagination": (
+        "lint_skill_graphql_pagination",
+        "skill-graphql-pagination",
+    ),
 }
 
 

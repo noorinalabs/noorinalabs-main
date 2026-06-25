@@ -486,6 +486,66 @@ repos:
         self.assertNotIn("fixture-realism", harmful)
 
 
+class SkillGraphqlPaginationKind(unittest.TestCase):
+    """#888/#893: the skill-markdown GraphQL over-cap lint must be a classified kind
+    so the sync-drift gate DEMANDS a pre-commit mirror of the CI lint job (an
+    un-mirrored gate lets a `first: > 100` over-cap reintroduce the silent
+    zero-row read that made `/board-audit` treat every issue as an orphan)."""
+
+    def test_ci_skill_graphql_pagination_run_step_classified(self) -> None:
+        wf = """
+jobs:
+  skill-graphql-pagination:
+    steps:
+      - run: python3 .claude/lib/lint_skill_graphql_pagination.py $files
+"""
+        self.assertIn("skill-graphql-pagination", kinds_from_ci(wf))
+
+    def test_precommit_skill_graphql_pagination_hook_classified(self) -> None:
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: skill-graphql-pagination
+        name: skill-graphql-pagination
+        entry: python3 .claude/lib/lint_skill_graphql_pagination.py
+"""
+        self.assertIn("skill-graphql-pagination", kinds_from_precommit(cfg))
+
+    def test_ci_skill_graphql_pagination_without_precommit_is_harmful_drift(self) -> None:
+        wf = """
+jobs:
+  skill-graphql-pagination:
+    steps:
+      - run: python3 .claude/lib/lint_skill_graphql_pagination.py $files
+"""
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+"""
+        harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
+        self.assertIn("skill-graphql-pagination", harmful)
+
+    def test_ci_skill_graphql_pagination_with_precommit_mirror_no_drift(self) -> None:
+        wf = """
+jobs:
+  skill-graphql-pagination:
+    steps:
+      - run: python3 .claude/lib/lint_skill_graphql_pagination.py $files
+"""
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: skill-graphql-pagination
+        entry: python3 .claude/lib/lint_skill_graphql_pagination.py
+"""
+        harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
+        self.assertNotIn("skill-graphql-pagination", harmful)
+
+
 class BuildKindTightening(unittest.TestCase):
     """#576: runtime `docker build` / `docker buildx` steps are image-MOVING,
     not a build-QUALITY gate a local pre-commit hook can mirror — they must
@@ -734,6 +794,10 @@ _OLD_KIND_PATTERNS = {
     "mermaid": ("mermaid", "check-mermaid"),
     "dockerfile-base-pin": ("check_dockerfile_base_pin", "dockerfile-base-pin"),
     "fixture-realism": ("check_fixture_realism", "fixture-realism"),
+    "skill-graphql-pagination": (
+        "lint_skill_graphql_pagination",
+        "skill-graphql-pagination",
+    ),
 }
 _OLD_RUN_BLOCK_OPEN_RE = re.compile(r"^(?P<indent>\s*)-?\s*run:\s*[|>][+\-0-9]*\s*$")
 
@@ -828,6 +892,7 @@ _EXPECTED_KINDS = {
             "pytest",
             "ruff-format",
             "ruff-lint",
+            "skill-graphql-pagination",
         },
         "ci": {
             "actionlint",
@@ -843,6 +908,7 @@ _EXPECTED_KINDS = {
             "pytest",
             "ruff-format",
             "ruff-lint",
+            "skill-graphql-pagination",
         },
     },
 }
