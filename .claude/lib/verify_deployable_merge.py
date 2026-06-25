@@ -42,11 +42,13 @@ Usage:
     python3 .claude/lib/verify_deployable_merge.py <owner/repo> <sha> --timeout 1200 --json
 
 Exit codes:
-    0 — VERIFIED: every expected workflow ran for the SHA and concluded success.
-    1 — NOT VERIFIED: a failed run, a missing expected workflow, or still
-        pending at timeout.
-    2 — UNDETERMINED: a gh/API call failed, or no expected workflows could be
-        resolved (nothing to verify).
+    0 — VERIFIED: every required workflow ran and concluded success AND no run
+        that executed for the SHA went red. This includes the "nothing required"
+        case (no post-merge-only / merge-triggered workflow at this ref, e.g. a
+        meta repo) — verified by the no-red safety net alone.
+    1 — NOT VERIFIED: a failed run, a required workflow that produced no run at
+        all (silent drop), or still pending at timeout.
+    2 — UNDETERMINED: a gh/API call failed — cannot determine.
 """
 
 from __future__ import annotations
@@ -241,6 +243,7 @@ class Aggregate:
     pending: bool
     rows: list[dict]  # per-expected-workflow: name, bucket, conclusion, url
     missing: list[str]  # expected workflows with no run for the SHA
+    expected: list[str]  # the required workflow set (empty == nothing required)
 
 
 def aggregate(expected: list[str], runs: list[dict]) -> Aggregate:
@@ -308,7 +311,13 @@ def aggregate(expected: list[str], runs: list[dict]) -> Aggregate:
 
     pending = any_pending or bool(missing)
     verified = not any_fail and not pending
-    return Aggregate(verified=verified, pending=pending, rows=rows, missing=missing)
+    return Aggregate(
+        verified=verified,
+        pending=pending,
+        rows=rows,
+        missing=missing,
+        expected=list(expected),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -421,12 +430,12 @@ def verify(
     time. Raises GhError (→ exit 2) if expected resolution finds nothing.
     """
     expected = resolve_expected(repo, sha, explicit_workflows, require_deployable)
-    if not expected:
-        raise GhError(
-            "no expected workflows resolved — nothing to verify "
-            "(check the ref has workflows, or pass --workflows)"
-        )
-
+    # An empty required set is NOT an error: a repo may have no post-merge-only
+    # workflow (e.g. a meta repo whose CI is path-partitioned and PR-visible).
+    # We still fetch the runs and apply the no-red safety net — a red run is
+    # caught regardless of whether anything was "required" — so "nothing
+    # required" resolves to verified iff nothing that ran went red. GhError
+    # (a real gh/API failure → exit 2) is raised only by the fetch calls.
     deadline = clock() + timeout
     result = aggregate(expected, fetch_runs_for_sha(repo, sha))
     while result.pending and clock() < deadline:
@@ -437,6 +446,8 @@ def verify(
 
 def _format_report(repo: str, sha: str, result: Aggregate) -> str:
     lines = [f"Deployable-merge verification — {repo} @ {sha[:8]}"]
+    if not result.expected:
+        lines.append("  (no required post-merge workflows at this ref — no-red safety net only)")
     for row in result.rows:
         mark = {"pass": "✓", "fail": "✗", "pending": "…", "missing": "∅"}.get(row["bucket"], "?")
         detail = row["conclusion"] or row["bucket"]

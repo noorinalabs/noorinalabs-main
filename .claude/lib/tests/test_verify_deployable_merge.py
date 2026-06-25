@@ -299,13 +299,37 @@ class VerifyPollLoopTests(unittest.TestCase):
         self.assertFalse(result.verified)
         self.assertTrue(result.pending)
 
-    def test_no_expected_raises(self) -> None:
-        def empty_files(repo: str, ref: str) -> dict[str, str]:
-            return {"pr.yml": PR_ONLY_YAML}  # not deployable
+    def test_no_required_verifies_when_nothing_red(self) -> None:
+        # A repo with no post-merge-only workflow (only PR-visible CI) and a
+        # clean run set: "nothing required" → verified, NOT an error.
+        def only_pr(repo: str, ref: str) -> dict[str, str]:
+            return {"pr.yml": PR_ONLY_YAML, "tag.yml": TAG_ONLY_YAML}
 
-        self._patch(vdm, "fetch_workflow_files", empty_files)
-        with self.assertRaises(vdm.GhError):
-            vdm.verify("o/r", "sha", timeout=1, poll=1, sleep=lambda _s: None)
+        def clean_runs(repo: str, sha: str) -> list[dict]:
+            return []
+
+        self._patch(vdm, "fetch_workflow_files", only_pr)
+        self._patch(vdm, "fetch_runs_for_sha", clean_runs)
+        result = vdm.verify("o/r", "sha", timeout=1, poll=1, sleep=lambda _s: None)
+        self.assertTrue(result.verified)
+        self.assertEqual(result.expected, [])
+
+    def test_no_required_but_red_run_is_caught_by_net(self) -> None:
+        # Even with nothing "required", a run that executed and failed must fail
+        # verification via the no-red safety net.
+        def only_pr(repo: str, ref: str) -> dict[str, str]:
+            return {"pr.yml": PR_ONLY_YAML}
+
+        def red_run(repo: str, sha: str) -> list[dict]:
+            return [
+                {"name": "Deploy", "status": "completed", "conclusion": "failure", "html_url": "u"}
+            ]
+
+        self._patch(vdm, "fetch_workflow_files", only_pr)
+        self._patch(vdm, "fetch_runs_for_sha", red_run)
+        result = vdm.verify("o/r", "sha", timeout=1, poll=1, sleep=lambda _s: None)
+        self.assertFalse(result.verified)
+        self.assertEqual(result.expected, [])
 
     # -- helper: monkeypatch a module attr for the duration of one test --
     def _patch(self, mod: object, attr: str, value) -> None:

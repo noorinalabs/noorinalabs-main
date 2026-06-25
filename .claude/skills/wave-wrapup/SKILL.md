@@ -473,13 +473,16 @@ while IFS= read -r R; do
   # pull_request) — the genuinely blind ones. Drop the flag to verify every
   # merge-triggered workflow. The no-red safety net fails on ANY run that
   # executed for the SHA and went red, so path-filtered workflows that fired are
-  # still covered.
-  if python3 "$REPO_ROOT/.claude/lib/verify_deployable_merge.py" \
-       "noorinalabs/$R" "$MAIN_SHA" --require-deployable --timeout 1200 --poll 30; then
-    echo "$R: deployable merge verified green @ ${MAIN_SHA:0:8}"
-  else
-    UNVERIFIED+=("$R @ ${MAIN_SHA:0:8}")
-  fi
+  # still covered. Exit codes: 0 = verified (incl. "nothing required" + no red),
+  # 1 = NOT verified (a red or silently-dropped required run), 2 = UNDETERMINED
+  # (gh/API failure — cannot tell, so surface and treat as blocking).
+  python3 "$REPO_ROOT/.claude/lib/verify_deployable_merge.py" \
+    "noorinalabs/$R" "$MAIN_SHA" --require-deployable --timeout 1200 --poll 30
+  case $? in
+    0) echo "$R: deployable merge verified green @ ${MAIN_SHA:0:8}" ;;
+    1) UNVERIFIED+=("$R @ ${MAIN_SHA:0:8} — a post-merge workflow failed / was dropped") ;;
+    2) UNVERIFIED+=("$R @ ${MAIN_SHA:0:8} — UNDETERMINED (gh/API error; re-run or investigate)") ;;
+  esac
 done <<< "$WAVE_REPOS_IN_SCOPE"
 
 if [ ${#UNVERIFIED[@]} -gt 0 ]; then
