@@ -38,9 +38,13 @@ def _dedup(seq: list[str]) -> list[str]:
 
 def _render_symbol(sym: SymbolInfo, depth: int, lines: list[str]) -> None:
     indent = "  " * depth
-    if sym.kind == "class":
+    if sym.kind in ("class", "interface"):
+        # class/interface: show base/extends names in parentheses, no params.
         bases = f"({', '.join(sym.bases)})" if sym.bases else ""
-        lines.append(f"{indent}- class {sym.name}{bases} @{sym.line}")
+        lines.append(f"{indent}- {sym.kind} {sym.name}{bases} @{sym.line}")
+    elif sym.kind == "type":
+        # type alias: no params or bases, just the name.
+        lines.append(f"{indent}- type {sym.name} @{sym.line}")
     else:
         params = ", ".join(sym.params)
         lines.append(f"{indent}- {sym.kind} {sym.name}({params}) @{sym.line}")

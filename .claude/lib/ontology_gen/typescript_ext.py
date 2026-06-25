@@ -19,7 +19,9 @@ later (the function signature is the seam) if/when richer call-graph fidelity is
 that is explicitly out of scope for #855's pilot.
 
 Captured: imports (incl. relative re-exports → ``references``), exported & top-level
-classes, functions, arrow-function consts, and React components (PascalCase consts).
+classes, functions, arrow-function consts, React components (PascalCase consts),
+interface declarations, and type-alias declarations (#870 — ~82 previously-invisible
+isnad-graph pilot decls).
 Block comments / strings are not fully tokenized — this is a pragmatic scanner, not a
 parser — so exotic constructs may be missed; that is an accepted fidelity trade for
 zero deps and is documented for #856/#1128.
@@ -55,10 +57,34 @@ _RE_ARROW_CONST = re.compile(
     r"(?::\s*[^=]+)?=\s*(?:async\s*)?(?:\(([^)]*)\)|[A-Za-z_$][\w$]*)\s*=>",
     re.MULTILINE,
 )
+# interface Foo [extends Bar, Baz] {   (#870)
+_RE_INTERFACE = re.compile(
+    r"^\s*(?:export\s+)?interface\s+([A-Za-z_$][\w$]*)"
+    r"(?:\s+extends\s+([^{]+?))?(?=\s*\{|\s*$)",
+    re.MULTILINE,
+)
+# type Foo[<...>] = ...   (type-alias declaration, not a type-guard or parameter)  (#870)
+_RE_TYPE_ALIAS = re.compile(
+    r"^\s*(?:export\s+)?type\s+([A-Za-z_$][\w$]*)(?:\s*<[^>]*>)?\s*=(?!=)",
+    re.MULTILINE,
+)
 
 
 def _line_of(text: str, pos: int) -> int:
     return text.count("\n", 0, pos) + 1
+
+
+def _parse_extends_bases(raw: str) -> list[str]:
+    """Return base names from a raw ``extends A, B<T>`` clause (drops generics).
+
+    Splits on top-level commas and strips generic type-parameters so ``Foo<T>`` → ``Foo``.
+    """
+    bases: list[str] = []
+    for part in raw.split(","):
+        name = part.strip().split("<")[0].strip()
+        if name and re.match(r"^[A-Za-z_$][\w$]*$", name):
+            bases.append(name)
+    return bases
 
 
 def _split_params(raw: str) -> list[str]:
@@ -150,6 +176,14 @@ def extract_typescript(rel_path: str, source: str) -> FileInfo:
         name = m.group(1)
         params = _split_params(m.group(2) or "")
         _add("func", name, _line_of(source, m.start()), params, [])
+    for m in _RE_INTERFACE.finditer(source):
+        name = m.group(1)
+        raw_extends = m.group(2) or ""
+        bases = _parse_extends_bases(raw_extends) if raw_extends.strip() else []
+        _add("interface", name, _line_of(source, m.start()), [], bases)
+    for m in _RE_TYPE_ALIAS.finditer(source):
+        name = m.group(1)
+        _add("type", name, _line_of(source, m.start()), [], [])
 
     return FileInfo(
         path=rel_path,
