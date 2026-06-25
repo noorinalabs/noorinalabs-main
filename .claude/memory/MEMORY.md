@@ -14,7 +14,7 @@
 - [Lint gate cover all syntactic forms](feedback_lint_gate_cover_all_syntactic_forms.md) — regex/line-scan gate must match every access form (dotted + from-import). deploy#363.
 - [Sync-gate build-kind false-fail on publish workflow](feedback_sync_gate_publish_build.md) — false-fails on repos w/ a publish/release workflow (docker build kind).
 - [Cross-repo GHCR/npm registry-auth proof](feedback_cross_repo_ghcr_registry_auth_proof.md) — before claiming a cross-repo @noorinalabs/* registry-auth fix: check pkg visibility + witness.
-- [zsh shell environment](feedback_zsh_shell_environment.md) — dev env uses zsh; write zsh-safe Bash commands, avoid bash-isms (declare -A, ${!arr[@]}).
+- [zsh shell environment](feedback_zsh_shell_environment.md) — dev env uses zsh; write zsh-safe Bash, avoid bash-isms (declare -A, ${!arr[@]}, unquoted word-split, $status read-only). Now enforced by advisory hook warn_zsh_wordsplit (main#879).
 - [ProjectV2 field-option is orchestrator-doable](feedback_projectv2_field_option.md) — adding a single-select Wave-field option is mine via GraphQL updateProjectV2Field.
 - [Ontology system](project_ontology_system.md) — two-layer model: curate-semantic (/ontology-rebuild + checksums) + generate-structural (ontology_gen + aggregate); librarian surfaces both; lifecycle integrated by #862; Hook 15 ADVISORY since #857.
 - [Bootstrap repo](project_bootstrap_repo.md) — separate repo to dogfood the team/workflow/ontology pattern for reuse across projects.
