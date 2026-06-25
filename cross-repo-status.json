@@ -1,5 +1,10 @@
 {
   "wave_19_meta_issue": "noorinalabs-main#882",
+  "wave_19_phase": 7,
+  "wave_19_phase_ordinal": 2,
+  "wave_19_scope_reconciled_at": "2026-06-25T18:57:43Z",
+  "wave_19_repos_in_scope": ["noorinalabs-main","noorinalabs-data-acquisition","noorinalabs-isnad-graph"],
+  "wave_19_scope": {"theme":"Prod data-quality root cause — sanadset orphan resolution, search repair, composition semantics","phase":7,"serves_criteria":[1,2,3],"sanadset_ab_decision":"in-wave owner pick (Path A purge vs Path B parse) after da#202 investigation; purge owner-run only","tier_1_core":[{"id":"noorinalabs-data-acquisition#202","ref":"da#202","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug","note":"sanadset investigate→A/B→execute"},{"id":"noorinalabs-isnad-graph#1110","ref":"ig#1110","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug","note":"search broken (full-text + semantic 500s)"}],"tier_2_coupled":[{"id":"noorinalabs-data-acquisition#196","ref":"da#196","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt","note":"composition.py None-value; couples to fix; TD floor"}],"tier_3_tech_debt":[{"id":"noorinalabs-main#885","ref":"main#885","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt","note":"wave_seq double-alloc"},{"id":"noorinalabs-main#886","ref":"main#886","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt","note":"validate_pr_review over-broad"},{"id":"noorinalabs-main#887","ref":"main#887","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt","note":"generics-splitter / tree-sitter"}],"td_intake":"4 of floor-1 (owner pulled 3 framework TD above the +20% floor)","deliberately_not_in_w19":["da#153 graph-integrity sweep (W3)","dedup/parallels pipeline (W3)","chain segmentation STUDIED_UNDER (W3)","narrator dating da#161-166 / ig#1039-1043 / main#673 (W4)","ig#1111 auth deep-link (W5)","main#667 Kafka streaming (W5)","main#775 local ML env (W5)"],"reconciled_at":"2026-06-25T18:57:43Z"},
   "wave_18_phase": 7,
   "wave_18_phase_ordinal": 1,
   "wave_18_scope_reconciled_at": "2026-06-25T03:19:45Z",
@@ -2259,7 +2264,7 @@
     "pilot_completed_at": "2026-06-24"
   },
   "wave_17_task3_checkpoint_resolved_at": "2026-06-24T18:12:00Z",
-  "global_wave_seq": 18,
+  "global_wave_seq": 19,
   "phase_6_criteria_trackers": {
     "1": "noorinalabs-main#725",
     "2": "noorinalabs-main#726",
