@@ -24,6 +24,11 @@
       "id": "820-ontology-readme",
       "type": "documentation",
       "note": "P7W1 (#863): author an ontology README (setup / purpose / getting started / usage) as the canonical entry point. Owner directive 2026-06-24. Land WITH #862 framework-alignment + #820 fan-out so it documents the aligned end-state, not the pre-alignment system."
+    },
+    {
+      "id": "868-wavefield-autocreate",
+      "type": "process",
+      "note": "P7W1 (#868): auto-create Project-2 Wave-field option at /wave-kickoff before label-apply (GraphQL updateProjectV2Field). Owner-adopted P6W17 retro 2026-06-25. Eliminates the recurring no-option-W{X} capture class."
     }
   ],
   "wave_17_phase": 6,
