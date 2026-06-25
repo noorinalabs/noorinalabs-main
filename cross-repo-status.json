@@ -3,8 +3,92 @@
   "wave_19_phase": 7,
   "wave_19_phase_ordinal": 2,
   "wave_19_scope_reconciled_at": "2026-06-25T18:57:43Z",
-  "wave_19_repos_in_scope": ["noorinalabs-main","noorinalabs-data-acquisition","noorinalabs-isnad-graph"],
-  "wave_19_scope": {"theme":"Prod data-quality root cause — sanadset orphan resolution, search repair, composition semantics","phase":7,"serves_criteria":[1,2,3],"sanadset_ab_decision":"in-wave owner pick (Path A purge vs Path B parse) after da#202 investigation; purge owner-run only","tier_1_core":[{"id":"noorinalabs-data-acquisition#202","ref":"da#202","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug","note":"sanadset investigate→A/B→execute"},{"id":"noorinalabs-isnad-graph#1110","ref":"ig#1110","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug","note":"search broken (full-text + semantic 500s)"}],"tier_2_coupled":[{"id":"noorinalabs-data-acquisition#196","ref":"da#196","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt","note":"composition.py None-value; couples to fix; TD floor"}],"tier_3_tech_debt":[{"id":"noorinalabs-main#885","ref":"main#885","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt","note":"wave_seq double-alloc"},{"id":"noorinalabs-main#886","ref":"main#886","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt","note":"validate_pr_review over-broad"},{"id":"noorinalabs-main#887","ref":"main#887","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt","note":"generics-splitter / tree-sitter"}],"td_intake":"4 of floor-1 (owner pulled 3 framework TD above the +20% floor)","deliberately_not_in_w19":["da#153 graph-integrity sweep (W3)","dedup/parallels pipeline (W3)","chain segmentation STUDIED_UNDER (W3)","narrator dating da#161-166 / ig#1039-1043 / main#673 (W4)","ig#1111 auth deep-link (W5)","main#667 Kafka streaming (W5)","main#775 local ML env (W5)"],"reconciled_at":"2026-06-25T18:57:43Z"},
+  "wave_19_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-data-acquisition",
+    "noorinalabs-isnad-graph"
+  ],
+  "wave_19_scope": {
+    "theme": "Prod data-quality root cause — sanadset orphan resolution, search repair, composition semantics",
+    "phase": 7,
+    "serves_criteria": [
+      1,
+      2,
+      3
+    ],
+    "sanadset_ab_decision": "in-wave owner pick (Path A purge vs Path B parse) after da#202 investigation; purge owner-run only",
+    "tier_1_core": [
+      {
+        "id": "noorinalabs-data-acquisition#202",
+        "ref": "da#202",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "bug",
+        "note": "sanadset investigate→A/B→execute"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1110",
+        "ref": "ig#1110",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "bug",
+        "note": "search broken (full-text + semantic 500s)"
+      }
+    ],
+    "tier_2_coupled": [
+      {
+        "id": "noorinalabs-data-acquisition#196",
+        "ref": "da#196",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt",
+        "note": "composition.py None-value; couples to fix; TD floor"
+      }
+    ],
+    "tier_3_tech_debt": [
+      {
+        "id": "noorinalabs-main#885",
+        "ref": "main#885",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt",
+        "note": "wave_seq double-alloc"
+      },
+      {
+        "id": "noorinalabs-main#886",
+        "ref": "main#886",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt",
+        "note": "validate_pr_review over-broad"
+      },
+      {
+        "id": "noorinalabs-main#887",
+        "ref": "main#887",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt",
+        "note": "generics-splitter / tree-sitter"
+      }
+    ],
+    "td_intake": "4 of floor-1 (owner pulled 3 framework TD above the +20% floor)",
+    "deliberately_not_in_w19": [
+      "da#153 graph-integrity sweep (W3)",
+      "dedup/parallels pipeline (W3)",
+      "chain segmentation STUDIED_UNDER (W3)",
+      "narrator dating da#161-166 / ig#1039-1043 / main#673 (W4)",
+      "ig#1111 auth deep-link (W5)",
+      "main#667 Kafka streaming (W5)",
+      "main#775 local ML env (W5)"
+    ],
+    "reconciled_at": "2026-06-25T18:57:43Z"
+  },
   "wave_18_phase": 7,
   "wave_18_phase_ordinal": 1,
   "wave_18_scope_reconciled_at": "2026-06-25T03:19:45Z",
@@ -3380,7 +3464,7 @@
     "mirror_of": ".claude/team/phases/phase-3.md § Sweep-wave reservation (W12, possibly W13)"
   },
   "wave_active": false,
-  "current_wave": "wave-18",
+  "current_wave": "wave-19",
   "wave_5_active": false,
   "wave_5_kicked_off_at": "2026-06-16T23:12:45Z",
   "wave_5_final_pr_count": 45,
@@ -3647,7 +3731,7 @@
   "wave_3_wrapped_at": "2026-06-12T17:33:59Z",
   "wave_3_annunaki_attack_ran_at": "2026-06-14T23:45:00Z",
   "wave_3_memory_audit_ran_at": "2026-06-14T23:45:00Z",
-  "last_updated": "2026-06-25T03:48:00Z",
+  "last_updated": "2026-06-25T19:11:55Z",
   "deployments_branch": "deployments/phase-4/wave-3",
   "phase_2_status": "CLOSED 2026-04-30. wave-10 final retro PR #230 merged 20:47:41Z. 5-repo wave-merge ceremony completed (#229 main, #74 landing, #851 isnad, #196 deploy, #89 user-service). 3 carry-forwards into phase-3: deploy#86 (async routine trig_01Bif8T51pdaYFjkbM5bERyL — fires post-merge), deploy#151 (manual SRE B2 tfstate-key migration), user-service#84 (manual DEPLOY_REPO_PAT secret). All p2-wave-* labels cleared from open issues; 218 open issues re-labeled `phase-3` across 8 repos.",
   "phase_3_status": "Phase 3 COMPLETE 2026-06-02 at 9/9 criteria (criterion #9 closed-with-caveat). All end-state issues #322-#330 closed. Exit record in .claude/team/phases/phase-3.md. Next: /roadmap for Phase 4.",
@@ -4211,142 +4295,145 @@
   "wave_18_changes_requested_cycles": 0,
   "wave_18_top_concentration_pct": 9,
   "wave_18_trust_signals": {
-  "Aino Virtanen": {
-    "authored_prs": [
-      875
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 1,
-    "rework_cycles": 0
+    "Aino Virtanen": {
+      "authored_prs": [
+        875
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 1,
+      "rework_cycles": 0
+    },
+    "Aisha Idrissi": {
+      "authored_prs": [
+        494
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Astrid Lindqvist": {
+      "authored_prs": [
+        131
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Bereket Tadesse": {
+      "authored_prs": [],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 0,
+      "review_false_positives": 1,
+      "rework_cycles": 0
+    },
+    "Kavitha Sundaramurthy": {
+      "authored_prs": [
+        215
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Kofi Mensah-Williams": {
+      "authored_prs": [
+        156
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Mateo Salazar": {
+      "authored_prs": [
+        195
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Nino Kavtaradze": {
+      "authored_prs": [
+        876
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Nurul Hakim": {
+      "authored_prs": [
+        877
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Santiago Ferreira": {
+      "authored_prs": [
+        874
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Weronika Zielinska": {
+      "authored_prs": [
+        873
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Yusuke Inoue": {
+      "authored_prs": [
+        117
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    }
   },
-  "Aisha Idrissi": {
-    "authored_prs": [
-      494
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Astrid Lindqvist": {
-    "authored_prs": [
-      131
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Bereket Tadesse": {
-    "authored_prs": [],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 0,
-    "review_false_positives": 1,
-    "rework_cycles": 0
-  },
-  "Kavitha Sundaramurthy": {
-    "authored_prs": [
-      215
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Kofi Mensah-Williams": {
-    "authored_prs": [
-      156
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Mateo Salazar": {
-    "authored_prs": [
-      195
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Nino Kavtaradze": {
-    "authored_prs": [
-      876
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Nurul Hakim": {
-    "authored_prs": [
-      877
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Santiago Ferreira": {
-    "authored_prs": [
-      874
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Weronika Zielinska": {
-    "authored_prs": [
-      873
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Yusuke Inoue": {
-    "authored_prs": [
-      117
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  }
-},
   "wave_18_started_at": "2026-06-25T03:45:00Z",
   "wave_18_wrapped_up_at": "2026-06-25T17:00:10Z",
   "wave_18_wrapup_completed_at": "2026-06-25T17:00:10Z",
   "wave_18_stg_promotion": "success",
   "wave_18_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/28186704314",
   "wave_18_annunaki_attack_ran_at": "2026-06-25T17:38:36Z",
-  "wave_18_memory_audit_ran_at": "2026-06-25T17:38:36Z"
+  "wave_18_memory_audit_ran_at": "2026-06-25T17:38:36Z",
+  "wave_19_active": true,
+  "wave_19_started_at": "2026-06-25T19:11:55Z",
+  "wave_19_ordinal": 2
 }
