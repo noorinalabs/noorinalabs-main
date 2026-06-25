@@ -1,4 +1,11 @@
 {
+  "wave_18_phase": 7,
+  "wave_18_phase_ordinal": 1,
+  "wave_18_scope_reconciled_at": "2026-06-25T03:19:45Z",
+  "wave_18_repos_in_scope": ["noorinalabs-main","noorinalabs-user-service","noorinalabs-deploy","noorinalabs-design-system","noorinalabs-landing-page","noorinalabs-data-acquisition","noorinalabs-isnad-ingest-platform"],
+  "wave_18_meta_issue": 872,
+  "wave_18_scope": {"phase":7,"theme":"Framework carry-forward lead-in — fan out C×T2 structural ontology to remaining child repos, align framework to the generated path, author ontology README, land wave-field auto-create. Closes the P6 framework thread before P7 data-quality work. Serves phase-7 criterion #8.","tier_1_core_fanout":[{"id":"noorinalabs-main#820","ref":"main#820","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"feature"},{"id":"noorinalabs-user-service#194","ref":"user-service#194","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"enhancement"},{"id":"noorinalabs-data-acquisition#214","ref":"data-acquisition#214","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"enhancement"},{"id":"noorinalabs-isnad-ingest-platform#116","ref":"isnad-ingest-platform#116","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"enhancement"},{"id":"noorinalabs-deploy#493","ref":"deploy#493","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"enhancement"},{"id":"noorinalabs-design-system#130","ref":"design-system#130","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"enhancement"},{"id":"noorinalabs-landing-page#155","ref":"landing-page#155","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"enhancement"}],"tier_2_framework":[{"id":"noorinalabs-main#862","ref":"main#862","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"architecture"},{"id":"noorinalabs-main#863","ref":"main#863","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"documentation"},{"id":"noorinalabs-main#870","ref":"main#870","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"enhancement"}],"tier_3_tech_debt":[{"id":"noorinalabs-main#868","ref":"main#868","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-main#871","ref":"main#871","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"}],"td_intake":"2/2","td_pool":2,"deliberately_not_in_w18":["isnad-graph fan-out (pilot already proven; not a remaining target)","data-quality / search / auth — P7 W2+"]},
+  "wave_18_scope_reconciliation_note": "Greenfield wave (no prior wave-18 drift). 6 P6 framework carry-forwards decomposed per owner decision into 6 per-repo fan-out issues + 2 generator-refinement (ts-enum #870, merge-driver #871) + 3 framework (#862/#863/#868). isnad-graph excluded (pilot). Slates null at scope; kickoff Step 0.4 drafts per-repo 2-reviewer slate from each child roster.",
   "phase_7_carry_forwards": [
     {
       "id": "820-fanout",
@@ -2127,7 +2134,7 @@
     "pilot_completed_at": "2026-06-24"
   },
   "wave_17_task3_checkpoint_resolved_at": "2026-06-24T18:12:00Z",
-  "global_wave_seq": 17,
+  "global_wave_seq": 18,
   "phase_6_criteria_trackers": {
     "1": "noorinalabs-main#725",
     "2": "noorinalabs-main#726",
