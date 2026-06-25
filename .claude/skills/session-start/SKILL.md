@@ -190,13 +190,61 @@ If it exists, extract:
 
 Summarize in 2-3 sentences. If the file doesn't exist, note "No handoff from previous session."
 
-### Step 3 — Ontology rebuild
+### Step 3 — Ontology freshness (semantic overlay + structural index)
 
-Run `/ontology-rebuild` to resolve any dirty files from the previous session.
+The ontology has two independent layers that need separate freshness checks (#820/C×T2, #862):
 
-- If 0 dirty files, report "Ontology is current" and move on
+**3a. Semantic overlay** — run `/ontology-rebuild` to resolve dirty checksums from the previous session:
+- If 0 dirty files in `checksums.json`, report "Semantic overlay: current" and move on
 - If dirty files exist, process them and commit the result
-- This ensures the ontology reflects all changes before any new work begins
+
+**3b. Structural index** — check whether the generated index at `ontology/structural/llms.txt` is stale relative to the current source tree, and regenerate if it is:
+
+```bash
+# Re-anchor REPO_ROOT to the parent (independent shell block — see Step 0 / #533).
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
+[ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+
+# Commit that last produced the structural index
+STRUCT_SHA=$(git -C "$REPO_ROOT" log -1 --format="%H" -- ontology/structural/llms.txt 2>/dev/null || echo "")
+
+if [ -z "$STRUCT_SHA" ]; then
+  CHANGED="new"
+else
+  CHANGED=$(git -C "$REPO_ROOT" diff --name-only "$STRUCT_SHA"..HEAD -- \
+    '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.cypher' '*.cql' 2>/dev/null | wc -l | tr -d ' ')
+fi
+
+if [ "${CHANGED:-0}" = "0" ]; then
+  echo "Structural index: current (${STRUCT_SHA:0:8})."
+else
+  echo "Structural index: ${CHANGED} source file(s) changed since ${STRUCT_SHA:0:8} — regenerating."
+  PYTHONPATH="$REPO_ROOT/.claude/lib" python3 -m ontology_gen \
+    "$REPO_ROOT" --out "$REPO_ROOT/ontology/structural/" 2>&1 \
+    && PYTHONPATH="$REPO_ROOT/.claude/lib" python3 -m ontology_gen.aggregate \
+       "$REPO_ROOT" 2>&1 \
+    || echo "WARN: structural index regeneration failed — index stays at last committed state."
+fi
+
+# Commit regenerated files (if any changed)
+if ! git -C "$REPO_ROOT" diff --quiet ontology/structural/; then
+  git -C "$REPO_ROOT" add ontology/structural/
+  MSGFILE="$(mktemp)"
+  printf 'ontology: regenerate structural index (session-start 3b)\n\nSource files changed since last generation; re-ran ontology_gen + aggregate.\n' \
+    > "$MSGFILE"
+  git -C "$REPO_ROOT" \
+    -c user.name="Aino Virtanen" \
+    -c user.email="parametrization+Aino.Virtanen@gmail.com" \
+    commit -F "$MSGFILE"
+  rm -f "$MSGFILE"
+  echo "Structural index regenerated and committed."
+fi
+```
+
+Report both results in the Step output table:
+- `3. Ontology | Semantic: {N dirty resolved / current}; Structural: {current @ sha / regenerated}`
+
+**Non-fatal:** a generator failure MUST NOT block session-start. Report the failure and move on — the structural index stays at its last committed state until the next regeneration.
 
 ### Step 4 — Annunaki error check
 
@@ -389,7 +437,7 @@ After all steps complete, present a single status block:
 | 0b. Child checkouts | {N fast-forwarded / M flagged (dirty/diverged/feature-branch) / all current} |
 | 1. Team | {created fresh / error} |
 | 2. Handoff | {summary} |
-| 3. Ontology | {N dirty resolved / current} |
+| 3. Ontology | Semantic: {N dirty resolved / current}; Structural: {current @ sha / regenerated / regen-failed} |
 | 4. Annunaki | {N errors, action needed? / clear} |
 | 5. Wave | {active wave, stale?, issues} |
 | 5a. Red default-branch runs | {N red publish/deploy runs (M base-image-drift) / all green} |

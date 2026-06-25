@@ -10,11 +10,47 @@ it parses both sides (and the base), unions nodes by ``id`` and edges by
 so concurrent regenerations merge cleanly and deterministically.
 
 Wiring (the ``.gitattributes`` + ``git config`` lines) lands in #856; this is the script
-that wiring points at. To register it manually:
+that wiring points at.
 
+Canonical invocation form (#871)
+---------------------------------
+The **plain-script form** is canonical across all repos::
+
+    python3 <path-to>/merge_driver.py %O %A %B %P
+
+This script is self-contained: the ``ImportError`` fallback below (#860) bootstraps
+``.claude/lib`` onto ``sys.path`` via ``Path(__file__).resolve().parent.parent``, so
+package-relative imports resolve without any ``PYTHONPATH`` manipulation. Git invokes
+the driver via the shell, so a relative path works when the driver lives in the same
+repo; child repos that locate the driver from the sibling noorinalabs-main checkout use
+an absolute path resolved at registration time via ``locate_generator()``.
+
+**noorinalabs-main** (driver lives here — relative path from repo root)::
+
+    git config merge.ontology-codegraph.name 'ontology code-graph union merge'
     git config merge.ontology-codegraph.driver \\
         'python3 .claude/lib/ontology_gen/merge_driver.py %O %A %B %P'
-    echo 'ontology/structural/code-graph.json merge=ontology-codegraph' >> .gitattributes
+
+    # or via the Makefile target:
+    make setup-ontology-merge-driver
+
+**Child repos** (driver lives in the sibling noorinalabs-main — absolute path resolved
+at registration time by ``scripts/structural_ontology.py register-merge-driver`` using
+``locate_generator()`` / ``$ONTOLOGY_GEN_LIB``)::
+
+    # Run once per clone (``make setup-hooks`` calls this automatically):
+    python3 scripts/structural_ontology.py register-merge-driver
+
+    # Which emits (with the absolute path substituted at registration time):
+    git config merge.ontology-codegraph.name 'ontology code-graph union merge'
+    git config merge.ontology-codegraph.driver \\
+        'python3 /abs/path/noorinalabs-main/.claude/lib/ontology_gen/merge_driver.py %O %A %B %P'
+
+The Python module form (``PYTHONPATH=<lib> python3 -m ontology_gen.merge_driver``) also
+works but is NOT canonical — it requires explicit ``PYTHONPATH`` at registration time and
+bakes that into the git config. The plain-script self-contained fallback makes it
+unnecessary. See ``docs/devops/ontology-structural.md`` for the full rationale and the
+six-repo fan-out checklist (#871, #820 C×T2).
 
 Git calls the driver as ``driver %O %A %B [%P]`` where %O=base, %A=ours (result is
 written back here), %B=theirs. Exit 0 = merged cleanly.
