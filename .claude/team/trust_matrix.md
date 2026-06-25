@@ -1782,3 +1782,42 @@ roster and the cap raised 8 → 9 to fit them; only the genuine duplicate (Aisha
 
 Re-instating a retired parent persona is a deliberate, reviewed change (restore the card + drop back under
 the headcount budget) — the same surfaced-decision posture the `headcount_budget.py` gate enforces.
+
+---
+
+## Phase 6 Wave 17 Trust Updates (2026-06-25) — Architectural execution + phase exit
+
+> **Genuinely distributed wave** (unlike the W16 meta-wave caveat): 14 per-issue PRs across **9 implementers**,
+> top-concentration **28%** (Weronika 4/14) — well under the 0.6 fragility line. Clean wave: **0 CI-red merges,
+> 0 must-fix received, 0 rework cycles** across all engineers. Two minor review false-positives (mechanical
+> signal, single occurrence each). Deltas are mechanical (`trust_signals.py score 6 17`).
+
+### Org-Level Team (noorinalabs-main)
+
+| Rated | Old | New | Mechanical basis |
+|-------|-----|-----|------------------|
+| Weronika Zielinska | hold | **+1** | 4 PRs — the wave's deepest architectural work: #845 (per-language derivability re-measure), #853 (tooling bake-off), #854 (Graphiti/graphify eval), #859 (the owned C×T2 structural generator). Top relative performer by volume AND consequence; 0 must-fix, 0 CI-red. Distribution-discipline ratchet. |
+| Bereket Tadesse | hold | **+1** | 2 PRs — #860 (cross-repo aggregator) + #846 (env staleness guard); caught + fixed the merge-driver invocation-form bug pre-merge (`from .model import` under plain-script git). 0 must-fix, 0 CI-red. |
+| Aino Virtanen (SQL) | 5 | 5 | #858 (Hook 15 → advisory + checksums scope) + #852 (persona Option B governance). At ceiling — hold. Mechanical signal: 1 review false-positive (single occurrence, senior baseline — named, not a decrease). |
+| Nino Kavtaradze | hold | hold | #851 (#838 pipe-mask hook) + reviewed #835. Mechanical signal: 1 review false-positive (single occurrence — named gap, held). 0 must-fix, 0 CI-red. |
+| Nurul Hakim · Nadia Khoury · Santiago Ferreira · Wanjiku Mwangi | hold | hold | 1 clean on-theme PR each (#850 annunaki precision / #847 trust scoring / #844 status phase-field / #849 wave-scope premise gate). Baseline under §4b — held. |
+
+### Child-Repo Teams
+
+| Rated | Old | New | Mechanical basis |
+|-------|-----|-----|------------------|
+| Linh Pham (isnad-graph) | hold | hold | #1129 (structural-ontology CI wiring — sibling-checkout + ref resolution). 0 must-fix, 0 CI-red. Baseline — held. (Post-wrap #1132 CVE re-pin not counted in wave-17 scope.) |
+
+### Done Well / Needs Improvement (Phase 6 Wave 17) — evidence-anchored, bare "None" banned
+
+| Member | Done Well (with evidence) | Gap (metric, or explicit "clean: numbers") |
+|--------|---------------------------|--------------------------------------------|
+| **Weronika Zielinska** | C×T2 owned generator + the full bake-off chain (4 PRs) | clean: 0 must-fix received, 0 CI-red |
+| **Bereket Tadesse** | aggregator + caught merge-driver invocation-form bug pre-merge | clean: 0 must-fix received, 0 CI-red |
+| **Aino Virtanen** | Hook 15 softening + persona governance | 1 review false-positive (single occurrence) |
+| **Nino Kavtaradze** | pipe-mask hook (#838) | 1 review false-positive (single occurrence) |
+| **All others** | 1 clean on-theme PR each | clean: 0 must-fix received, 0 CI-red — baseline, no ratchet |
+
+**Fire/hire:** none. (#841 persona governance executed this wave: Aisha→Lucas duplicate retired; Bereket + Nino restored after stale-premise correction — owner revision 2026-06-24.)
+
+**Concentration note:** 28% top by implementer — genuine distribution. The W16 retro's caveat ("carry distributed implementer work into W17") was met: architectural execution ran as real fan-out, not orchestrator-solo.
