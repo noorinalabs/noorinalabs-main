@@ -1821,3 +1821,45 @@ the headcount budget) — the same surfaced-decision posture the `headcount_budg
 **Fire/hire:** none. (#841 persona governance executed this wave: Aisha→Lucas duplicate retired; Bereket + Nino restored after stale-premise correction — owner revision 2026-06-24.)
 
 **Concentration note:** 28% top by implementer — genuine distribution. The W16 retro's caveat ("carry distributed implementer work into W17") was met: architectural execution ran as real fan-out, not orchestrator-solo.
+
+## Phase 7 Wave 18 Trust Updates (2026-06-25) — C×T2 framework rollout (carry-forward lead-in)
+
+**No score changes — all hold.** 11 PRs, one per engineer, 9% concentration (perfectly flat → no distribution-discipline ratchet); 0 CR cycles, 0 CI-red merges, 0 genuine must-fix; no decay triggers (every active member signalled). The only mechanical deltas proposed (Aino −1, Bereket −1, both "review false-positive") are **verified extractor artifacts** and are **rejected, not applied** — see the note below.
+
+### Org-Level Team (noorinalabs-main)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Weronika Zielinska | hold | hold | #873 (extend NODE_KINDS interface/type for TS, #870). 0 must-fix, 0 CI-red. Baseline — held. |
+| Santiago Ferreira | hold | hold | #874 (author ontology/README.md, #863). 0 must-fix, 0 CI-red. Baseline — held. |
+| Aino Virtanen (SQL) | 5 | 5 | #875 (align framework to C×T2 path, #862) + thorough review on #873. At ceiling — hold. Proposed −1 review-false-positive REJECTED as extractor artifact (see note; #881). |
+| Nino Kavtaradze | hold | hold | #876 (standardize merge-driver to plain-script, #871). 0 must-fix, 0 CI-red. Baseline — held. |
+| Nurul Hakim | hold | hold | #877 (auto-create Project-2 Wave field option, #868). 0 must-fix, 0 CI-red. Baseline — held. |
+| Bereket Tadesse | hold | hold | Substantive approving review on #873 (no authored PR this wave). Proposed −1 review-false-positive REJECTED as extractor artifact (see note; #881). |
+
+### Child-Repo Teams
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Mateo Salazar (user-service) | hold | hold | us#195 — wire C×T2 structural index. 0 must-fix, 0 CI-red. Baseline — held. |
+| Aisha Idrissi (deploy) | hold | hold | dep#494 — wire C×T2 structural index stub. 0 must-fix, 0 CI-red. Baseline — held. |
+| Astrid Lindqvist (design-system) | hold | hold | ds#131 — wire C×T2 structural index. 0 must-fix, 0 CI-red. Baseline — held. |
+| Kofi Mensah-Williams (landing-page) | hold | hold | lp#156 — wire C×T2 structural index (#155). 0 must-fix, 0 CI-red. Baseline — held. |
+| Kavitha Sundaramurthy (data-acquisition) | hold | hold | da#215 — wire C×T2 per-repo structural index. 0 must-fix, 0 CI-red. Baseline — held. |
+| Yusuke Inoue (isnad-ingest-platform) | hold | hold | ig#117 — wire C×T2 structural index (#116). 0 must-fix, 0 CI-red. Baseline — held. |
+
+**Extractor-artifact note (rejected deltas):** `trust_signals.py score 7 18` proposed −1 for Aino and Bereket on a `review_false_positive` signal. Verified spurious: on **PR #873** both posted `RequestOrReplied: Approved`, and their comment bodies contain "false-positive" only because they were praising the PR's `test_no_false_positive_type_in_non_decl_context` coverage. `_FALSE_POSITIVE_RE` substring-matches approving prose and ignores the Approved verdict. Same misfire recurred from W17 (Aino + Nino). Both deltas rejected; scores held. Bug filed as **#881**, fix in flight at this retro. This is the Step-2.5 "don't narrate a wrong counter as authoritative" discipline applied to trust signals.
+
+### Done Well / Needs Improvement (Phase 7 Wave 18) — evidence-anchored, bare "None" banned
+
+| Member | Done Well (with evidence) | Gap (metric, or explicit "clean: numbers") |
+|--------|---------------------------|--------------------------------------------|
+| **Weronika Zielinska** | TS NODE_KINDS extension (#873), unblocking the TS fan-out | clean: 0 must-fix received, 0 CI-red |
+| **Aino Virtanen** | C×T2 framework alignment (#875) + thorough #873 review | review-false-positive signal is a verified extractor artifact (#881), not a real gap; metrics clean |
+| **Bereket Tadesse** | substantive approving review on #873 (regex/test-coverage lens) | review-false-positive signal is a verified extractor artifact (#881), not a real gap; metrics clean |
+| **Santiago / Nino / Nurul** | 1 clean on-theme main PR each (#874/#876/#877) | clean: 0 must-fix received, 0 CI-red — baseline, no ratchet |
+| **Mateo / Aisha / Astrid / Kofi / Kavitha / Yusuke** | C×T2 structural-index wiring in their child repo (1 clean PR each) | clean: 0 must-fix received, 0 CI-red — baseline, no ratchet |
+
+**Fire/hire:** none.
+
+**Concentration note:** 9% top by implementer — the most evenly distributed wave to date (one PR per engineer across all 7 repos). Theme-fit fan-out; no fragility concentration. The W17 caveat ("carry distributed implementer work forward") was met again.

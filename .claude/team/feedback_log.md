@@ -3375,3 +3375,40 @@ See trust_matrix.md § Phase 6 Wave 16 for the full table. Summary (commit ident
 
 ### Memory-to-automation audit
 1 promotion realized this wave: the deployable-merge-verification pattern was codified memory→lib+skill (`verify_deployable_merge.py` + wrapup Step 11.5a, main#864). No other memory crossed a promotion threshold; the ontology-path memories are tracked for P7W1 framework-alignment (#862).
+
+---
+
+## Retrospective: Phase 7 Wave 18 — 2026-06-25
+
+### Team Performance
+**11 per-issue PRs merged across all 7 in-scope repos** (5 noorinalabs-main + 6 child-repo C×T2 structural-index wirings), **12 active members** (11 authors + Bereket reviewing), top-concentration **9%** (1/11 — textbook distributed fan-out). **0 CR cycles, 0 CI-red merges, 0 genuine must-fix, 0 rework.** Theme: C×T2 structural-ontology framework rollout (carry-forward lead-in). Counters verified mechanically (11 authored PRs == final_pr_count; max-by-author 1/11 == 9%).
+
+### Per-Engineer Assessments (mechanical — trust_signals.py score 7 18)
+- **All 11 authors** — one clean on-theme PR each (#873 Weronika / #874 Santiago / #875 Aino / #876 Nino / #877 Nurul / us#195 Mateo / dep#494 Aisha / ds#131 Astrid / lp#156 Kofi / da#215 Kavitha / ig#117 Yusuke); 0 must-fix received, 0 CI-red. Baseline — held. No standout relative performer in a perfectly-flat wave → no distribution ratchet.
+- **Bereket Tadesse** — substantive approving review on #873 (no authored PR this wave); baseline, held.
+- **Aino Virtanen** — #875 + thorough review on #873; at ceiling (5), held.
+
+**Spurious mechanical signal REJECTED (the wave's key finding):** `trust_signals.py score` proposed −1 for **Aino** and **Bereket** ("1 review false-positive" each). Verified spurious: on **PR #873** both posted `RequestOrReplied: Approved`, and their bodies contain "false-positive" only because they were *praising the PR's `test_no_false_positive_type_in_non_decl_context` coverage*. `_FALSE_POSITIVE_RE` substring-matches the phrase in approving prose and ignores the Approved verdict. **This recurs** — the W17 matrix shows the identical misfire (Aino + Nino). Both −1 deltas rejected with evidence; held flat. Filed as **#881** (fix in flight this retro).
+
+### Top 3 Going Well
+1. **Perfect distribution.** 11 PRs, one per engineer, 9% concentration — genuine fan-out across all 7 repos, not orchestrator-solo. The W17 "carry distributed work forward" caveat met again.
+2. **Zero rework.** 0 CR cycles, 0 CI-red merges, 0 genuine must-fix — clean carry-forward execution of the C×T2 rollout.
+3. **Honest audit caught its own drift.** The retro's evidence discipline rejected a spurious mechanical trust signal (the Step-2.5 "don't narrate a wrong counter as authoritative" principle, applied to trust signals) rather than mechanically applying two wrong −1 deltas.
+
+### Top 3 Pain Points
+1. **`trust_signals.py` review-false-positive over-count (#881).** Recurring across W17→W18. `_FALSE_POSITIVE_RE` substring-matches "false-positive"/"withdrawn"/"retracted" anywhere in a verdict body and ignores the `RequestOrReplied:` verdict, so approving prose that merely *mentions* the concept scores a −1. Especially misfires on FP-suppression-themed waves. **The headline finding.**
+2. **`validate_pr_review` over-broad block.** Annunaki logged it firing on a non-merge `gh run rerun` command during wrapup (no `gh pr merge` present). Candidate for matcher tightening, or confirm acceptable conservatism per [[feedback_safety_direction_over_ux_friction]].
+3. **Post-wrapup overlay re-dirtying.** 2 memory files edited after wrapup Step 12a left the semantic overlay dirty; resolved manually at retro. Minor inherent seam when session work continues past wrapup.
+
+### Proposed Process Changes
+1. **Fix #881** — scope the FP detector to actual self-withdrawals (gate on verdict != Approved; strip code-spans/identifiers like `test_no_false_positive_*`); add regression tests from the real #873 Aino+Bereket bodies. Rationale: eliminates a recurring spurious trust delta that has now distorted two consecutive matrices.
+2. **Evaluate `validate_pr_review` matcher scope** — Rationale: it blocked a non-merge `gh run rerun`; either narrow to `gh pr merge` invocations or document the conservatism. Low-priority; the gate is fail-safe.
+
+### Annunaki-attack
+2 captures in-window (both `pretooluse_block`, **0 genuine command failures**): 1 legitimate `validate_branch_freshness` block (handled by rebase), 1 over-broad `validate_pr_review` match on `gh run rerun` (→ pain point #2). No new hooks/issues warranted beyond #881. Marker `wave_18_annunaki_attack_ran_at` written.
+
+### Memory-to-automation audit
+1 promotion realized this session: the zsh unquoted-scalar word-split footgun was codified memory→hook (`warn_zsh_wordsplit.py`, main#879/PR#880, advisory PreToolUse), per [[feedback_enforcement_hierarchy]] and recorded in [[feedback_zsh_shell_environment]]. No other memory crossed a promotion threshold in a clean carry-forward wave. Marker `wave_18_memory_audit_ran_at` written.
+
+### Next-wave scope
+W19 stub auto-drafted + boarded (**#882**), `wave_19_meta_issue` recorded; carry-forward pre-loaded (#881, #873 generics-splitter, validate_pr_review matcher). Theme TBD — owner to set, then `/wave-scope 7 19` proceeds.
