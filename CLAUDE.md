@@ -138,7 +138,7 @@ Project memory is **version-controlled in the repo** at `.claude/memory/`, not i
 
 ## Ontology
 
-The project maintains a structured knowledge base in `ontology/` that captures domain entities, service topology, and conventions across all repos.
+The project maintains a structured knowledge base in `ontology/` that captures domain entities, service topology, and conventions across all repos. See [`ontology/README.md`](ontology/README.md) for the canonical entry point — setup, purpose, getting started, and day-to-day usage.
 
 ### Two-layer model (C×T2, #820/#862)
 
