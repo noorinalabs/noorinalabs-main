@@ -4358,5 +4358,89 @@
   "wave_19_ordinal": 2,
   "wave_19_branches": {"branch":"deployments/phase-7/wave-19","created_at":"2026-06-25T21:26:04Z","repos":{"noorinalabs-main":{"sha":"7c5d0378046b996fc770f9931475272f38e15fe4","status":"created"},"noorinalabs-data-acquisition":{"sha":"210bc2ff3e0006fc5bf48e3aaebb6ca83a82e009","status":"created"},"noorinalabs-isnad-graph":{"sha":"e264e6176dfa3618ab140a9bcfa7a0899f9d6391","status":"created"}}},
   "wave_19_merge_model": "wave-branch",
-  "wave_19_kicked_off_at": "2026-06-25T21:26:04Z"
+  "wave_19_kicked_off_at": "2026-06-25T21:26:04Z",
+  "wave_19_final_pr_count": 9,
+  "wave_19_changes_requested_cycles": 0,
+  "wave_19_top_concentration_pct": 33,
+  "wave_19_trust_signals": {
+  "Aino Virtanen": {
+    "authored_prs": [
+      896,
+      895,
+      890
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 3,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Alejandra Reyes-Fuentes": {
+    "authored_prs": [
+      218
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Kavitha Sundaramurthy": {
+    "authored_prs": [
+      217
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Lucas Ferreira": {
+    "authored_prs": [
+      891
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Nneka Obi": {
+    "authored_prs": [
+      1133
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Nurul Hakim": {
+    "authored_prs": [
+      892
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Weronika Zielinska": {
+    "authored_prs": [
+      889
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  }
+}
 }
