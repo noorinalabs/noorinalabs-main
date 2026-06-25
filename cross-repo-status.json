@@ -2084,7 +2084,7 @@
   },
   "wave_17_scope_reconciliation_note": "W17 (global 17, P6 final/phase-exit). No drift (0 pre-existing wave-17 labels). Core #819+#820 (owner: full execution incl #820 Task 3); TD intake = 5 framework items (floor-not-cap), 3 product items excluded. repos_in_scope=main; child fan-out for #820 Task3 + persona caps expands at kickoff/mid-wave.",
   "wave_17_merge_model": "wave-branch",
-  "wave_17_active": true,
+  "wave_17_active": false,
   "wave_17_kicked_off_at": "2026-06-24T02:20:37Z",
   "wave_17_branches": {
     "branch": "deployments/phase-6/wave-17",
@@ -3251,7 +3251,7 @@
   "wave_5_memory_audit_ran_at": "2026-06-20T00:26:39Z",
   "next_wave": "wave-18",
   "wave_started": "2026-06-23T00:21:35Z",
-  "last_completed_wave": "wave-16",
+  "last_completed_wave": "wave-17",
   "last_completed_at": "2026-06-23T18:30:06Z",
   "wave_3_meta_issue": 675,
   "wave_3_scope": {
@@ -4017,5 +4017,11 @@
   "wave_16_wrapped_up_at": "2026-06-23T18:30:06Z",
   "wave_16_annunaki_attack_ran_at": "2026-06-23T19:05:00Z",
   "wave_16_memory_audit_ran_at": "2026-06-23T19:05:00Z",
-  "wave_2_retro_completed_at": "2026-06-22T00:00:00Z"
+  "wave_2_retro_completed_at": "2026-06-22T00:00:00Z",
+  "wave_17_final_pr_count": 14,
+  "wave_17_changes_requested_cycles": 0,
+  "wave_17_top_concentration_pct": 29,
+  "wave_17_distinct_implementers": 9,
+  "wave_17_wrapped_up_at": "2026-06-25T01:14:39Z",
+  "wave_17_staging_promotion": "overridden: meta/framework wave (ontology generator + persona/trust + framework TD); no deployable service surface in scope (noorinalabs-main + isnad-graph framework wiring only)"
 }
