@@ -45,6 +45,7 @@ _BASH_HOOKS = [
     "validate_workflow_paths_coverage",
     "validate_vps_host",
     "warn_ghcr_image",
+    "warn_zsh_wordsplit",
 ]
 
 
