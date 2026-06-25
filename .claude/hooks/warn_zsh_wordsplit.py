@@ -40,6 +40,11 @@ What it does NOT flag (false-positive guards)
 
 - Quoted forms: ``set -- "$@"``, ``for x in "$list"``, ``"${arr[@]}"``
 - ``for x in *.py``, ``for x in $(ls)``, ``for x in {1..5}``, ``for x in a b c``
+- Path/glob/concat prefixes where ``$NAME`` is only PART of a word:
+  ``for f in $HOME/*.py``, ``for w in $REPO_ROOT/.claude/*/``,
+  ``for f in $dir/known_hosts``, ``set -- $dir/*.txt`` — in zsh ``$VAR/...`` is
+  a single scalar path component (no word-splitting), so it is SAFE (#879). The
+  scalar must be a STANDALONE word to fire.
 - Any occurrence inside a heredoc body (stripped before scanning)
 - ``declare -A`` / ``typeset`` — zsh supports these; NOT flagged
 
@@ -92,42 +97,49 @@ _INDIRECT_EXPANSION_RE = re.compile(r"\$\{!")
 _MAPFILE_RE = re.compile(r"\b(mapfile|readarray)\b")
 
 # ---------------------------------------------------------------------------
-# Pattern 2: ``for VAR in $scalar`` — unquoted plain scalar in for-in list.
+# Scalar reference + standalone-word boundary (#879 FP fix).
 #
-# Matches: ``for <WORD> in $<IDENTIFIER>`` where the $ is NOT followed by:
-#   - ``(``  → command substitution ($(...)) — always safe
-#   - ``{``  → brace/array expansion (${arr[@]} etc.) — may be safe; handled
-#               by the _SAFE_DOLLAR_FORMS guard below
-#   - ``@``/``*``/``#``/``!`` → special parameter — safe / caught by pattern 3
-#   - a digit → positional ($1) — safe
+# The canonical gotcha is a BARE scalar reference standing as its OWN word in
+# the list: ``for x in $list`` / ``set -- $spec``. The fire condition is
+# therefore: ``$NAME`` (or ``${NAME}``) immediately followed by a WORD
+# BOUNDARY — end-of-string, whitespace, or one of ``; | & )`` / backtick.
+#
+# If the char immediately after the identifier is anything else
+# (``/ . * ? [ ] { } : @ % = + ,`` …), the ``$NAME`` is only a PREFIX of a
+# compound word (a path/glob/concatenation like ``$dir/*.py`` or
+# ``$HOME/.config``). In zsh ``$VAR/...`` is a single scalar path component —
+# NO word-splitting — so it is SAFE and must NOT fire. This silences the
+# path/glob-prefix false positives reported on PR #880 while keeping the bare
+# ``$list`` / ``$a $b $c`` cases firing.
+#
+# ``${NAME}`` (braced, no subscript/operator) is the same standalone scalar and
+# is matched; ``${arr[@]}`` / ``${!x}`` / ``$@`` / ``$*`` / ``$(...)`` are NOT
+# (the alternation only accepts a bare identifier, with or without braces, and
+# the lexer/array forms fail the boundary or the identifier class).
 # ---------------------------------------------------------------------------
+# A bare scalar reference: ``$NAME`` or ``${NAME}`` (identifier only — no
+# subscript, no ``!``/``#`` operator, no ``@``/``*``).
+_SCALAR_REF = r"\$(?:\{[A-Za-z_]\w*\}|[A-Za-z_]\w*)"
+
+# Standalone-word boundary lookahead: the scalar ref must be the WHOLE word.
+# ``\s`` already covers space/tab/newline; the explicit set adds the shell
+# control/grouping operators that also terminate a word.
+_STANDALONE_BOUNDARY = r"(?=$|[\s;|&)`])"
+
+# Pattern 2: ``for VAR in $scalar`` (standalone bare scalar in the list).
 _FOR_UNQUOTED_RE = re.compile(
     r"\bfor\s+\w+\s+in\s+"  # for VAR in
-    r"(\$)"  # literal $
-    r"([A-Za-z_]\w*)"  # identifier name only (not @, *, digits, {, ()
+    + _SCALAR_REF  # $NAME or ${NAME}
+    + _STANDALONE_BOUNDARY  # … as its own word
 )
 
-# Pattern 1: ``set -- $scalar`` — unquoted plain scalar after ``--``.
-# Must not match: ``set -- "$@"``, ``set -- "$scalar"``, ``set -- $@``, ``set -- $*``
+# Pattern 1: ``set -- $scalar`` (standalone bare scalar after ``--``).
+# Quoted forms (``set -- "$@"`` / ``set -- "$scalar"``) never match because the
+# ``"`` sits between ``--`` and the ``$``, breaking the ``\s+\$`` adjacency.
 _SET_DASHDASH_RE = re.compile(
     r"\bset\s+--\s+"  # set --
-    r"(\$)"  # literal $
-    r"([A-Za-z_]\w*)"  # identifier name only
-)
-
-# Safe forms that a matched ``$`` may be part of — used to suppress FPs after
-# the initial regex match. If the text around the match contains any of these,
-# the match is considered safe and should not be flagged.
-_SAFE_DOLLAR_FORMS_RE = re.compile(
-    r"""
-    \$\{[^}]*\[@\]\}   |   # ${arr[@]}
-    \$\{[^}]*\[\*\]\}  |   # ${arr[*]}
-    \$@                |   # $@
-    \$\*               |   # $*
-    \$\(               |   # $(...)
-    `                      # backtick command substitution
-    """,
-    re.VERBOSE,
+    + _SCALAR_REF  # $NAME or ${NAME}
+    + _STANDALONE_BOUNDARY  # … as its own word
 )
 
 
@@ -147,27 +159,24 @@ def _scan_for_wordsplit(command: str) -> list[tuple[str, str]]:
     Returns a list of ``(pattern_id, matched_text)`` pairs. The caller decides
     how to compose the advisory.
 
-    We scan the heredoc-stripped string. The ``$`` must expand to an identifier
-    (not ``@``, ``*``, ``(``, ``{``) — the regex ensures this. We then do a
-    secondary check to reject any match context that contains a safe form
-    (command substitution, array expansion, etc.).
+    Scans the heredoc-stripped string. The match is fully decided by the
+    regexes themselves: ``_SCALAR_REF`` accepts only a bare ``$NAME`` /
+    ``${NAME}`` identifier (so ``$@`` / ``$*`` / ``${arr[@]}`` / ``$(...)`` are
+    excluded by construction), and ``_STANDALONE_BOUNDARY`` requires the scalar
+    to be its OWN word (so path/glob prefixes like ``$dir/*.py`` are excluded,
+    #879 FP fix). No secondary safe-form filter is needed — the previous
+    ``_SAFE_DOLLAR_FORMS_RE`` guard was unreachable once the regex enforced both
+    constraints, so it was removed.
     """
     findings: list[tuple[str, str]] = []
 
     # Pattern 1: set -- $scalar
     for m in _SET_DASHDASH_RE.finditer(command):
-        full = m.group(0)
-        # Skip if a safe dollar form is present anywhere nearby
-        if _SAFE_DOLLAR_FORMS_RE.search(full):
-            continue
-        findings.append(("set_dashdash", full.strip()))
+        findings.append(("set_dashdash", m.group(0).strip()))
 
     # Pattern 2: for VAR in $scalar
     for m in _FOR_UNQUOTED_RE.finditer(command):
-        full = m.group(0)
-        if _SAFE_DOLLAR_FORMS_RE.search(full):
-            continue
-        findings.append(("for_unquoted", full.strip()))
+        findings.append(("for_unquoted", m.group(0).strip()))
 
     return findings
 

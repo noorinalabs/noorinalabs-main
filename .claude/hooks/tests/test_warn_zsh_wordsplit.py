@@ -91,17 +91,33 @@ class NoMatchCases(unittest.TestCase):
         self.assertIsNone(wzw.check(_event("for x in a b c; do echo $x; done")))
 
     def test_for_quoted_scalar(self):
-        # "for x in "$list"" — the "$" is inside double-quotes; the regex checks
-        # for a literal $ followed immediately by an identifier, so this should
-        # not match because the preceding " makes it a quoted token.
-        # NOTE: our regex is on the raw stripped string, so "for x in "$list""
-        # DOES match the regex — we intentionally accept this FP risk in exchange
-        # for no bashlex dependency at advisory-hook level.  This test documents
-        # the KNOWN limitation: the advisory may fire on a quoted form when the
-        # quotes are not space-separated from the dollar. We test the common case
-        # only: `for x in "$list"` (with a space before the quote).
-        # The advisory is non-blocking, so this is acceptable friction.
-        pass  # documented limitation — not testing this exact form
+        # `for x in "$list"` — the `"` sits between `in ` and `$`, so the
+        # `\s+` + `_SCALAR_REF` adjacency never matches. Quoted scalars do not
+        # word-split in either shell, so this MUST stay silent.
+        self.assertIsNone(wzw.check(_event('for x in "$list"; do echo $x; done')))
+
+    def test_set_dashdash_quoted_scalar_explicit(self):
+        # `set -- "$list"` — quoted; must stay silent (companion to the for case).
+        self.assertIsNone(wzw.check(_event('set -- "$list"')))
+
+    # --- path / glob / concat prefixes: $NAME is only PART of a word (#879) ---
+
+    def test_for_path_glob_prefix_home(self):
+        # for f in $HOME/*.py — $HOME is a path prefix, not a standalone scalar.
+        self.assertIsNone(wzw.check(_event("for f in $HOME/*.py; do echo $f; done")))
+
+    def test_for_path_glob_prefix_repo_root(self):
+        self.assertIsNone(
+            wzw.check(_event("for w in $REPO_ROOT/.claude/worktrees/*/; do echo $w; done"))
+        )
+
+    def test_for_path_concat_prefix(self):
+        # for f in $dir/known_hosts — concatenation, single scalar path word.
+        self.assertIsNone(wzw.check(_event("for f in $dir/known_hosts; do echo $f; done")))
+
+    def test_set_dashdash_path_glob_prefix(self):
+        # set -- $dir/*.txt — glob with a scalar prefix; SAFE in zsh.
+        self.assertIsNone(wzw.check(_event("set -- $dir/*.txt")))
 
     def test_for_dollar_at_positional(self):
         # $@ and $* in for-in are safe
@@ -165,6 +181,10 @@ class DetectionCases(unittest.TestCase):
     def test_set_dashdash_different_varname(self):
         self._assert_fires("set -- $spec", "bash-ism")
 
+    def test_set_dashdash_braced_scalar_still_fires(self):
+        # `set -- ${spec}` — braced standalone scalar must still fire (#879).
+        self._assert_fires("set -- ${spec}", "set --")
+
     # Pattern 2: for VAR in $scalar
 
     def test_for_unquoted_scalar(self):
@@ -177,6 +197,19 @@ class DetectionCases(unittest.TestCase):
         # multi-line form
         cmd = "for x in $list\ndo\n  echo $x\ndone"
         self._assert_fires(cmd, "for")
+
+    def test_for_multiple_scalars_still_fires(self):
+        # `for x in $a $b $c` — each is a standalone bare scalar; the canonical
+        # gotcha must still fire after the #879 word-boundary FP fix.
+        self._assert_fires("for x in $a $b $c; do echo $x; done", "for")
+
+    def test_for_two_scalars_still_fires(self):
+        # `for x in $a $b` — coordinator acceptance case (bare, space-separated).
+        self._assert_fires("for x in $a $b", "for")
+
+    def test_for_braced_scalar_still_fires(self):
+        # `${list}` is a standalone scalar (braced, no subscript) — must fire.
+        self._assert_fires("for x in ${list}; do echo $x; done", "for")
 
     # Pattern 3: ${!indirect}
 
