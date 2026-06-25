@@ -177,7 +177,7 @@ For `noorinalabs-main` itself:
 
 ```bash
 cd .claude/lib
-python3 -m ontology_gen ../.. --out ../../ontology/structural/
+python3 -m ontology_gen ../.. --out ontology/structural/
 ```
 
 Optional flags:
@@ -192,7 +192,7 @@ Run after regenerating one or more per-repo indices:
 
 ```bash
 cd .claude/lib
-python3 -m ontology_gen.aggregate ../.. --out ../ontology/structural/cross-repo-graph.json
+python3 -m ontology_gen.aggregate ../.. --out ontology/structural/cross-repo-graph.json
 ```
 
 The aggregator degrades gracefully — repos whose index is absent are skipped and
@@ -212,7 +212,7 @@ reported; the central graph is built from whatever is present on disk.
 
    ```bash
    cd .claude/lib
-   python3 -m ontology_gen ../.. --out ../../ontology/structural/
+   python3 -m ontology_gen ../.. --out ontology/structural/
    ```
 
 3. **Read the structural digest** to get a quick feel for the codebase shape:
@@ -280,9 +280,9 @@ resolved by `/ontology-rebuild`. To refresh it after code changes:
 
 ```bash
 cd .claude/lib
-python3 -m ontology_gen ../.. --out ../../ontology/structural/
+python3 -m ontology_gen ../.. --out ontology/structural/
 # Then re-aggregate (if working in noorinalabs-main with child repos present):
-python3 -m ontology_gen.aggregate ../.. --out ../ontology/structural/cross-repo-graph.json
+python3 -m ontology_gen.aggregate ../.. --out ontology/structural/cross-repo-graph.json
 ```
 
 Regenerate the structural layer whenever significant code structure changes
