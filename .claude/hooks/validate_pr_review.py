@@ -19,18 +19,20 @@ Input Language:
                the PR in the repo the user named, not the cwd-resolved repo.
     --admin  → short-circuits (emergency override — allows merge).
 
-  Batch-loop guard (#567, narrowed #886): a `gh pr merge <shell-var>` located
-  INSIDE a for/while/until loop body (e.g.
+  Batch-loop guard (#567, narrowed #886, broadened #894): a `gh pr merge` with
+  a NON-LITERAL PR argument located INSIDE a for/while/until loop body (e.g.
   `for pr in 48 49; do gh pr merge "$pr" …; done`) is HARD BLOCKED. The
-  literal-PR parse cannot resolve a loop variable, so the gate would fail-open
-  and merge every iteration unverified (observed P3W11 + P3W13). The operator is
-  told to run one literal merge per call so each PR is gate-checked. The merge
-  must sit between a `do` and its matching `done` to trip the guard — an
-  unrelated loop in the same block (e.g. a `gh run rerun "$r" --failed`
-  staleness recheck) alongside a non-loop variable merge does NOT (#886).
-  `--admin` still overrides; a literal `gh pr merge 54` is unaffected.
-  Conservative DECIDE-tier shape (no conditional-allow) per
-  `feedback_safety_direction_over_ux_friction`.
+  literal-PR parse cannot resolve a non-integer argument, so the gate would
+  fail-open and merge every iteration unverified (observed P3W11 + P3W13). The
+  operator is told to run one literal merge per call so each PR is gate-checked.
+  The merge must sit between a `do` and its matching `done` to trip the guard —
+  an unrelated loop in the same block (e.g. a `gh run rerun "$r" --failed`
+  staleness recheck) alongside a non-loop variable merge does NOT (#886). #894
+  extended the matched argument forms from `$pr`/`${pr}` to ANY non-literal
+  argument — also `${prs[$i]}`, `$(get_pr)`, and a subshell-wrapped
+  `(gh pr merge $pr)` — closing two residual fail-open evasions. `--admin` still
+  overrides; a literal `gh pr merge 54` is unaffected. Conservative DECIDE-tier
+  shape (no conditional-allow) per `feedback_safety_direction_over_ux_friction`.
 
 Charter-format review comments (canonical per `pull-requests.md` § Comment-Based Reviews,
 resolves #233):
@@ -144,14 +146,33 @@ def extract_pr_number(command: str) -> str | None:
     return None
 
 
-# A `gh pr merge` whose PR-number argument is a shell variable rather than a
-# literal: `$pr` or `${pr}` (the surrounding double-quotes of a `"$pr"` arg are
-# normalized away by `_strip_quoted_runs_keep_var_args` before this matches).
-# The lookahead lets the arg end at whitespace, a shell terminator, or EOS.
-_GH_MERGE_VAR_PR = re.compile(
-    r"\bgh\s+pr\s+merge\s+"  # the merge verb
-    r"\$\{?[A-Za-z_][A-Za-z0-9_]*\}?"  # $pr | ${pr}
-    r"(?=\s|;|&|\||$)"  # arg ends at whitespace, a shell terminator, or EOS
+# A `gh pr merge` whose positional PR argument is NON-LITERAL — i.e. anything
+# other than a bare integer PR number (the only form the literal-PR gate can
+# resolve) or an absent positional (flags-only / current-branch merge). This
+# deliberately matches on the FIRST character of the argument rather than on a
+# fully-shaped `$var` token, so it is agnostic to how the argument is spelled or
+# terminated. That single change closes two residual fail-open evasions of the
+# old `$var`-only matcher (#894):
+#
+#   1. Subshell-wrapped merge — `(gh pr merge $pr)`. The old terminator lookahead
+#      `(?=\s|;|&|\||$)` did not admit the `)` that ends the arg, so `$pr)` never
+#      matched. Matching the leading `$` needs no terminator, so the `)` (and the
+#      `}` of a `{ …; }` brace group, which already ends at `;` anyway) require no
+#      special-casing.
+#   2. Subscripted / compound / command-substitution arg — `"${prs[$i]}"`,
+#      `"$(get_pr)"`. These survive quote-normalization now that
+#      `_strip_quoted_runs_keep_var_args` unwraps any single-word expansion
+#      (not only a lone `$pr`), and their leading `$` matches here.
+#
+# `(?![-\d])` keeps the two LITERAL/absent forms allowed: a flag (`--merge`,
+# leading `-`) means no positional arg (current-branch merge, out of scope for
+# #567), and a leading digit is the bare integer the gate resolves. The class
+# `[^\s;&|()]` requires a real argument character — a bare terminator left behind
+# by a stripped quoted run (`gh pr merge ;`) is NOT treated as an argument.
+_GH_MERGE_NONLITERAL_ARG = re.compile(
+    r"\bgh\s+pr\s+merge\s+"  # the merge verb + separating whitespace
+    r"(?![-\d])"  # NOT a flag and NOT a bare-integer literal PR number
+    r"[^\s;&|()]"  # a present, non-terminator positional argument character
 )
 
 # `do` / `done` loop keywords as standalone tokens (delimited by start-of-string,
@@ -187,21 +208,78 @@ def _loop_body_spans(view: str) -> list[tuple[int, int]]:
     return spans
 
 
+def _strip_expansions(text: str) -> str:
+    """Return `text` with balanced `${…}` and `$(…)` expansion groups removed.
+
+    Used by `_is_single_expansion_word` to decide whether a double-quoted run is
+    a single shell WORD argument: a run like `"$(get_pr $i)"` or `"${prs[$i]}"`
+    is one argument even though it contains whitespace INSIDE the expansion,
+    whereas a prose run like `"do gh pr merge $pr"` carries whitespace OUTSIDE
+    any expansion. Nested groups are paired with a depth counter over the group's
+    own `(`/`)` or `{`/`}`. A bare `$pr` (no brace/paren) is left intact — it has
+    no internal whitespace to hide, so the surrounding-whitespace test handles it.
+    """
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        if text[i] == "$" and i + 1 < n and text[i + 1] in "({":
+            opener = text[i + 1]
+            closer = ")" if opener == "(" else "}"
+            depth = 0
+            j = i + 1
+            while j < n:
+                if text[j] == opener:
+                    depth += 1
+                elif text[j] == closer:
+                    depth -= 1
+                    if depth == 0:
+                        j += 1
+                        break
+                j += 1
+            i = j  # skip the whole (possibly unbalanced) expansion group
+            continue
+        out.append(text[i])
+        i += 1
+    return "".join(out)
+
+
+def _is_single_expansion_word(text: str) -> bool:
+    """True if `text` is a single shell-word argument carrying an expansion.
+
+    `text` qualifies when it (a) contains a `$` expansion and (b) has no
+    whitespace OUTSIDE any `${…}`/`$(…)` group. This admits the real merge-arg
+    forms a loop can carry — `$pr`, `${pr}`, `${prs[$i]}`, `$(get_pr)`,
+    `$(get_pr $i)` — while rejecting a `--body "for … do gh pr merge $pr; done"`
+    prose payload (whitespace outside the expansion) and a quoted literal word
+    like `"done"` (no `$`, so it is not unwrapped into a stray loop keyword).
+    """
+    if "$" not in text:
+        return False
+    return not any(ch.isspace() for ch in _strip_expansions(text))
+
+
 def _strip_quoted_runs_keep_var_args(command: str) -> str:
-    """Return `command` with quoted regions removed, EXCEPT a quoted region
-    that is exactly a single variable reference (`"$pr"` / `"${pr}"`), which
-    is unwrapped to its bare `$pr` / `${pr}` form.
+    """Return `command` with quoted regions removed, EXCEPT a double-quoted
+    region that is a single-word expansion argument (`"$pr"`, `"${pr}"`,
+    `"${prs[$i]}"`, `"$(get_pr)"`), which is unwrapped to its bare inner form.
 
     Why: the loop-merge detector must (a) NOT see a `gh pr merge $pr` that
     lives inside a `--body "..."` payload (quoted argument data — strip it),
     yet (b) STILL see the real arg in `gh pr merge "$pr"` where only the
-    variable itself is quoted (unwrap it). Shell semantics agree: double
-    quotes around a lone variable are removed and the variable remains the
+    argument itself is quoted (unwrap it). Shell semantics agree: double
+    quotes around a single expansion word are removed and the word remains the
     program's argument, whereas a quoted run of prose is one opaque arg.
 
+    The unwrap predicate is `_is_single_expansion_word` (#894): the earlier
+    matcher only unwrapped a LONE simple variable (`\\$\\{?name\\}?`), so a
+    subscripted / compound / command-substitution arg failed that fullmatch and
+    was stripped as opaque prose — making the real merge arg vanish and the
+    guard fail-open. Keying on "single expansion word" keeps every such arg.
+
     Single-quoted runs are always opaque data (no expansion) and are removed
-    wholesale. Double-quoted runs are unwrapped to the inner text ONLY when
-    the inner text is a lone variable reference; otherwise removed.
+    wholesale. Double-quoted runs are unwrapped only when the inner text is a
+    single expansion word; otherwise removed.
     """
     out: list[str] = []
     i = 0
@@ -220,8 +298,8 @@ def _strip_quoted_runs_keep_var_args(command: str) -> str:
             if j == -1:
                 break  # unbalanced
             inner = command[i + 1 : j]
-            # Keep a lone-variable double-quoted arg as the bare variable.
-            if re.fullmatch(r"\$\{?[A-Za-z_][A-Za-z0-9_]*\}?", inner):
+            # Keep a single-word expansion double-quoted arg as its bare form.
+            if _is_single_expansion_word(inner):
                 out.append(inner)
             i = j + 1
             continue
@@ -231,45 +309,44 @@ def _strip_quoted_runs_keep_var_args(command: str) -> str:
 
 
 def is_variable_pr_merge_in_loop(command: str) -> bool:
-    """True if `command` runs `gh pr merge <shell-var>` inside a for/while/until
-    loop — the batch-loop merge shape that fail-opens the 2-reviewer gate
-    (#567, memory `feedback_batch_loop_merge_evades_pr_review_hook`).
+    """True if `command` runs a `gh pr merge` with a NON-LITERAL PR argument
+    inside a for/while/until loop — the batch-loop merge shape that fail-opens
+    the 2-reviewer gate (#567/#886/#894, memory `feedback_batch_loop_merge_evades`).
 
     The gate parses a LITERAL PR number from `gh pr merge <N>` to fetch that
-    PR's reviews. When the PR number is a loop variable (`$pr`), the literal
-    parse returns None, `get_pr_data(None)` resolves the cwd branch's PR (or
-    nothing), and the merge fail-opens — the gate is silently disabled for
-    every iteration. Both observed instances (P3W11 wave→main 4-merge loop,
-    P3W13 ingest 6-PR loop) merged with the gate effectively off.
+    PR's reviews. When the argument is not a bare integer (`$pr`, `${pr}`,
+    `${prs[$i]}`, `$(get_pr)`, or a subshell-wrapped `(gh pr merge $pr)`), the
+    literal parse returns None, `get_pr_data(None)` resolves the cwd branch's PR
+    (or nothing), and the merge fail-opens — the gate is silently disabled for
+    every iteration. Both originally-observed instances (P3W11 wave→main 4-merge
+    loop, P3W13 ingest 6-PR loop) merged with the gate effectively off.
 
     Conservative DECIDE-tier design (per #567 + `feedback_safety_direction_
-    over_ux_friction`): we HARD BLOCK the variable-PR-in-loop shape outright.
+    over_ux_friction`): we HARD BLOCK the non-literal-PR-in-loop shape outright.
     We do NOT attempt to enumerate loop values and gate-verify each — that is
-    the explicitly-deferred conditional-allow path. A literal
-    `gh pr merge 54` is untouched (its PR number parses, the gate runs).
+    the explicitly-deferred conditional-allow path. A literal `gh pr merge 54`
+    is untouched (its PR number parses, the gate runs).
 
-    Detection, evaluated on a quote-normalized view of the command (quoted
-    prose stripped, a lone `"$pr"` arg unwrapped — see
-    `_strip_quoted_runs_keep_var_args`) so a `--body "... for … do gh pr
-    merge $pr … done"` payload that merely MENTIONS the shape is not matched:
-    a `gh pr merge` whose PR-number arg is a shell variable
-    (`$pr` / `${pr}` / `"$pr"` / `"${pr}"`) that is located INSIDE a loop body
-    (the text between a `do` keyword and its matching `done`).
+    Mechanic (#894 broadening). Detection runs on a quote-normalized view of the
+    command (quoted prose stripped, a single-word expansion arg such as `"$pr"`
+    or `"${prs[$i]}"` unwrapped — see `_strip_quoted_runs_keep_var_args`) so a
+    `--body "... for … do gh pr merge $pr … done"` payload that merely MENTIONS
+    the shape is not matched. On that view, `_GH_MERGE_NONLITERAL_ARG` matches a
+    `gh pr merge` whose first positional-argument character is non-literal (not a
+    flag, not a bare integer). Matching the argument's leading character rather
+    than a fully-shaped `$var` token closes the two residual #886 evasions:
+      - subshell `(gh pr merge $pr)` — old terminator lookahead omitted `)`;
+      - compound `${prs[$i]}` / `$(get_pr)` — old unwrap dropped it as prose.
 
-    Co-location matters (#886). The earlier form required only that a
-    variable-PR merge AND loop keywords each appear SOMEWHERE in the command,
-    independently. That over-matched any multi-line block that happened to pair
-    an unrelated loop with a non-loop variable merge — e.g. a `/wave-wrapup`
-    block doing a single `gh pr merge "$PR"` AND, separately, a staleness
-    recheck loop `for r in …; do gh run rerun "$r" --failed; done`. The merge
-    was not in the loop, so the gate did not fail-open, yet the guard blocked.
-    Requiring the merge to sit inside a `do … done` body fires on the real
-    batch-loop shape (`for pr in …; do gh pr merge "$pr"; done`) while leaving
-    unrelated loops (and one-off variable merges outside any loop — out of
-    scope for #567) alone.
+    Co-location is preserved (#886). The match must sit INSIDE a `do … done`
+    loop body. A one-off `gh pr merge "$PR"` OUTSIDE any loop, co-occurring with
+    an unrelated `for r in …; do gh run rerun "$r" --failed; done`, does NOT
+    fail-open (the merge resolves its own PR) and so MUST NOT block — the
+    co-location requirement leaves it alone, while the real batch-loop shape
+    (`for pr in …; do gh pr merge "$pr"; done`) still trips.
     """
     view = _strip_quoted_runs_keep_var_args(command)
-    merge_matches = list(_GH_MERGE_VAR_PR.finditer(view))
+    merge_matches = list(_GH_MERGE_NONLITERAL_ARG.finditer(view))
     if not merge_matches:
         return False
     spans = _loop_body_spans(view)
