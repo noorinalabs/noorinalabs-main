@@ -4200,5 +4200,140 @@
         "status": "created"
       }
     }
+  },
+  "wave_18_final_pr_count": 11,
+  "wave_18_changes_requested_cycles": 0,
+  "wave_18_top_concentration_pct": 9,
+  "wave_18_trust_signals": {
+  "Aino Virtanen": {
+    "authored_prs": [
+      875
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 1,
+    "rework_cycles": 0
+  },
+  "Aisha Idrissi": {
+    "authored_prs": [
+      494
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Astrid Lindqvist": {
+    "authored_prs": [
+      131
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Bereket Tadesse": {
+    "authored_prs": [],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 0,
+    "review_false_positives": 1,
+    "rework_cycles": 0
+  },
+  "Kavitha Sundaramurthy": {
+    "authored_prs": [
+      215
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Kofi Mensah-Williams": {
+    "authored_prs": [
+      156
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Mateo Salazar": {
+    "authored_prs": [
+      195
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Nino Kavtaradze": {
+    "authored_prs": [
+      876
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Nurul Hakim": {
+    "authored_prs": [
+      877
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Santiago Ferreira": {
+    "authored_prs": [
+      874
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Weronika Zielinska": {
+    "authored_prs": [
+      873
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Yusuke Inoue": {
+    "authored_prs": [
+      117
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
   }
+}
 }
