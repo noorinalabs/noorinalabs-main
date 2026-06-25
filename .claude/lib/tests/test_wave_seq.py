@@ -135,6 +135,89 @@ class TestNoCrossPhaseCollision(unittest.TestCase):
         self.assertEqual(status["wave_17_phase_ordinal"], 2)
 
 
+class TestRetroReservationAwareness(unittest.TestCase):
+    """Regression for main#885: ``/wave-retro`` Step 9 reserves the next id by
+    writing ``wave_{N}_meta_issue`` WITHOUT bumping ``global_wave_seq`` (it stays
+    N-1). The subsequent ``/wave-scope`` ``allocate`` must claim N — NOT skip to
+    N+1 as it did in the P7 W18→W19 transition (allocated 20 instead of 19)."""
+
+    def _post_retro_reservation(self) -> dict:
+        """Status exactly as /wave-retro Step 9 leaves it: P7W18 committed
+        (global_wave_seq=18, wave_18 stamped phase 7 ordinal 1), and wave_19
+        reserved via its meta_issue key ONLY — counter NOT advanced, no phase
+        stamp on 19 yet (mirrors the upsert the retro skill actually performs)."""
+        return {
+            "current_phase": 7,
+            "current_wave": "wave-18",
+            "global_wave_seq": 18,
+            "wave_18_phase": 7,
+            "wave_18_phase_ordinal": 1,
+            "wave_18_scope": {"phase": 7, "theme": "P7W1"},
+            # Retro Step 9 reservation: meta_issue key, counter still 18.
+            "wave_19_meta_issue": "noorinalabs-main#882",
+        }
+
+    def test_reserved_wave_detects_pending_reservation(self) -> None:
+        self.assertEqual(wave_seq.reserved_wave(self._post_retro_reservation()), 19)
+
+    def test_reserved_wave_none_without_meta_issue_key(self) -> None:
+        status = self._post_retro_reservation()
+        del status["wave_19_meta_issue"]
+        self.assertIsNone(wave_seq.reserved_wave(status))
+
+    def test_reserved_wave_none_when_counter_absent(self) -> None:
+        # No committed counter → cannot distinguish reserved from committed;
+        # fall back to the seed-safe monotonic path.
+        status = self._post_retro_reservation()
+        del status["global_wave_seq"]
+        self.assertIsNone(wave_seq.reserved_wave(status))
+
+    def test_allocation_target_returns_reserved_id(self) -> None:
+        # The headline bug: bare next_global_wave skips to 20; the
+        # reservation-aware target claims the reserved 19.
+        status = self._post_retro_reservation()
+        self.assertEqual(wave_seq.next_global_wave(status), 20)  # the old (wrong) value
+        self.assertEqual(wave_seq.allocation_target(status), 19)
+
+    def test_allocation_target_falls_through_when_no_reservation(self) -> None:
+        # Normal mid-wave state (no pending meta_issue at counter+1) is unchanged.
+        status = _grandfathered_p6_status()
+        self.assertEqual(wave_seq.allocation_target(status), wave_seq.next_global_wave(status))
+
+    def test_peek_returns_reserved_id_not_skip(self) -> None:
+        with TemporaryDirectory() as d:
+            path = Path(d) / "cross-repo-status.json"
+            path.write_text(json.dumps(self._post_retro_reservation(), indent=2) + "\n")
+            import io
+            from contextlib import redirect_stdout
+
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                rc = wave_seq.main(["peek", str(path)])
+            self.assertEqual(rc, 0)
+            self.assertEqual(buf.getvalue().strip(), "19")
+
+    def test_allocate_write_claims_reserved_id_and_advances_counter(self) -> None:
+        with TemporaryDirectory() as d:
+            path = Path(d) / "cross-repo-status.json"
+            path.write_text(json.dumps(self._post_retro_reservation(), indent=2) + "\n")
+
+            rc = wave_seq.main(["allocate", str(path), "--phase", "7", "--write"])
+            self.assertEqual(rc, 0)
+
+            after = json.loads(path.read_text())
+            # Counter advances to the RESERVED id (19), not past it (20).
+            self.assertEqual(after["global_wave_seq"], 19)
+            self.assertEqual(after["wave_19_phase"], 7)
+            # P7 already has wave 18 (ordinal 1); the reserved 19 is ordinal 2.
+            self.assertEqual(after["wave_19_phase_ordinal"], 2)
+            # No wave_20_* keys were ever created.
+            self.assertNotIn("wave_20_phase", after)
+            self.assertNotIn("wave_20_phase_ordinal", after)
+            # The reservation key is preserved.
+            self.assertEqual(after["wave_19_meta_issue"], "noorinalabs-main#882")
+
+
 class TestAllocateWritesPreserveShape(unittest.TestCase):
     """End-to-end --write goes through upsert_status_keys, so the compact-inline
     file shape is preserved and the result is valid JSON."""

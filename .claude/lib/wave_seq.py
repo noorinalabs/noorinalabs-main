@@ -36,12 +36,28 @@ collide with any historical ``wave_1``..``wave_9``. Prior-phase graveyard keys
 are preserved (git history + the phase docs hold them; they are inert because no
 future wave is ever numbered ≤ 15).
 
+Reservation-awareness (main#885)
+--------------------------------
+``/wave-retro`` Step 9 *reserves* the next wave id by writing a
+``wave_{N}_meta_issue`` key **without** bumping ``global_wave_seq`` (the counter
+stays at N-1). A naive ``next = current_seq + 1`` then SKIPS the reserved id,
+because ``seed_value()`` counts the reserved ``wave_{N}_*`` key as an
+already-allocated id (so ``max(global_wave_seq=N-1, seed=N) + 1 = N+1`` — the
+P7 W18→W19 transition allocated 20 instead of 19). The allocator is therefore
+**reservation-aware**: if the id one above the *committed* counter
+(``global_wave_seq + 1``) already carries a ``wave_{N}_meta_issue`` reservation,
+``allocate``/``peek`` claim THAT id rather than incrementing past it. This makes
+the tool correct regardless of caller ordering — the keyspace and
+``global_wave_seq`` can never disagree by construction.
+
 CLI:
   wave_seq.py peek     <status_path>
       Print the next global wave id that WOULD be allocated (no write).
+      Honours a pending retro reservation (see Reservation-awareness above).
   wave_seq.py allocate <status_path> --phase P [--write]
-      Allocate the next global wave id for phase P. ``--write`` persists the
-      incremented ``global_wave_seq`` AND stamps ``wave_{X}_phase`` +
+      Allocate the next global wave id for phase P (a pending retro reservation
+      if one exists, else the monotonic next). ``--write`` persists the
+      ``global_wave_seq`` advance AND stamps ``wave_{X}_phase`` +
       ``wave_{X}_phase_ordinal`` (auto-computed: 1 + waves already in phase P).
       Without ``--write`` it is a dry-run that only prints the id + ordinal.
 """
@@ -108,6 +124,42 @@ def next_global_wave(status: dict) -> int:
     return current_seq(status) + 1
 
 
+def reserved_wave(status: dict) -> int | None:
+    """A wave id reserved by ``/wave-retro`` Step 9 but not yet committed (#885).
+
+    The retro reserves the next id by writing a ``wave_{N}_meta_issue`` key while
+    leaving the **committed** counter (``global_wave_seq``) at N-1 — the id is
+    claimed in the keyspace before the counter advances. That makes ``seed_value``
+    treat N as already-allocated, so a naive ``next_global_wave`` would SKIP it
+    (``+1`` past it). Detect the pending reservation as: the id one above the
+    *explicit committed counter* whose ``wave_{N}_meta_issue`` key already exists.
+
+    Only the explicit ``global_wave_seq`` is consulted (NOT the seed-inflated
+    ``current_seq``) — using the seed would re-introduce the skip this guards
+    against. Returns ``None`` when there is no committed counter (migration: fall
+    back to the seed-safe monotonic next) or no reservation at ``committed + 1``.
+    """
+    committed = status.get("global_wave_seq")
+    if not isinstance(committed, int):
+        return None
+    candidate = committed + 1
+    if f"wave_{candidate}_meta_issue" in status:
+        return candidate
+    return None
+
+
+def allocation_target(status: dict) -> int:
+    """The id ``allocate``/``peek`` will claim.
+
+    A pending retro reservation (``reserved_wave``) if one exists — so the tool
+    is correct regardless of caller ordering — else the monotonic
+    ``next_global_wave``. This is the single source of truth that keeps the
+    keyspace and ``global_wave_seq`` from disagreeing (#885).
+    """
+    reserved = reserved_wave(status)
+    return reserved if reserved is not None else next_global_wave(status)
+
+
 def phase_of(status: dict, wave: int) -> int | None:
     """The phase a recorded global wave belongs to, or None if unstamped.
 
@@ -139,13 +191,13 @@ def _load(status_path: Path) -> dict:
 
 def _cmd_peek(args: argparse.Namespace) -> int:
     status = _load(args.status)
-    print(next_global_wave(status))
+    print(allocation_target(status))
     return 0
 
 
 def _cmd_allocate(args: argparse.Namespace) -> int:
     status = _load(args.status)
-    wave_id = next_global_wave(status)
+    wave_id = allocation_target(status)
     ordinal = phase_ordinal(status, args.phase)
 
     print(f"global wave id: {wave_id}")
