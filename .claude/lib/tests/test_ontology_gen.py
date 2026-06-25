@@ -30,7 +30,11 @@ from ontology_gen.model import (  # noqa: E402
     serialize_graph,
 )
 from ontology_gen.python_ext import extract_python  # noqa: E402
-from ontology_gen.typescript_ext import extract_typescript  # noqa: E402
+from ontology_gen.typescript_ext import (  # noqa: E402
+    _parse_extends_bases,
+    _split_top_level_commas,
+    extract_typescript,
+)
 
 
 class TestModel(unittest.TestCase):
@@ -299,6 +303,55 @@ type MaybeNull<T> = T | null;
         by_name = {s.qualname: s for s in iter_symbols(py_info.symbols)}
         self.assertEqual(by_name["Foo"].kind, "class")
         self.assertEqual(by_name["Foo.bar"].kind, "method")
+
+
+class TestExtendsBaseSplitter(unittest.TestCase):
+    """Depth-aware top-level-comma splitting of ``extends``/``implements`` lists (#887)."""
+
+    def test_nested_generic_not_split(self) -> None:
+        # The inner ``, `` of ``Map<K, V>`` must NOT be a split point.
+        self.assertEqual(_parse_extends_bases("Bar<Map<K, V>>, Baz"), ["Bar", "Baz"])
+
+    def test_two_generics_each_with_args(self) -> None:
+        self.assertEqual(_parse_extends_bases("Foo<A, B>, Bar<C>"), ["Foo", "Bar"])
+
+    def test_paren_and_bracket_nesting(self) -> None:
+        # Commas inside ``()`` and ``[]`` are likewise depth-protected.
+        self.assertEqual(
+            _parse_extends_bases("Foo<[A, B]>, Bar<(C, D)>, Baz"),
+            ["Foo", "Bar", "Baz"],
+        )
+
+    def test_deeply_nested_generic(self) -> None:
+        self.assertEqual(
+            _parse_extends_bases("A<B<C, D<E, F>>>, G"),
+            ["A", "G"],
+        )
+
+    def test_plain_list_unchanged(self) -> None:
+        self.assertEqual(_parse_extends_bases("Alpha, Beta, Gamma"), ["Alpha", "Beta", "Gamma"])
+
+    def test_single_base(self) -> None:
+        self.assertEqual(_parse_extends_bases("OnlyBase"), ["OnlyBase"])
+
+    def test_empty_clause(self) -> None:
+        self.assertEqual(_parse_extends_bases(""), [])
+        self.assertEqual(_parse_extends_bases("   "), [])
+
+    def test_splitter_keeps_nested_segment_intact(self) -> None:
+        # The low-level splitter returns the whole nested segment as one part.
+        self.assertEqual(
+            _split_top_level_commas("Bar<Map<K, V>>, Baz"),
+            ["Bar<Map<K, V>>", " Baz"],
+        )
+
+    def test_interface_with_nested_generic_base(self) -> None:
+        # End-to-end through the extractor: a real interface declaration.
+        src = "export interface Repo extends Bar<Map<K, V>>, Baz {\n  x: number;\n}\n"
+        info = extract_typescript("src/repo.ts", src)
+        by_name = {s.name: s for s in info.symbols}
+        self.assertIn("Repo", by_name)
+        self.assertEqual(by_name["Repo"].bases, ["Bar", "Baz"])
 
 
 class TestCypherExtractor(unittest.TestCase):

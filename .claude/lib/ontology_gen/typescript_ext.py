@@ -74,13 +74,43 @@ def _line_of(text: str, pos: int) -> int:
     return text.count("\n", 0, pos) + 1
 
 
+def _split_top_level_commas(raw: str) -> list[str]:
+    """Split ``raw`` on commas that sit at bracket-nesting depth 0.
+
+    Commas nested inside ``<>`` / ``()`` / ``[]`` / ``{}`` are NOT split points, so a
+    base list like ``Bar<Map<K, V>>, Baz`` splits into ``["Bar<Map<K, V>>", "Baz"]``
+    rather than naively at the inner ``, `` (#887). Empty / whitespace-only segments
+    are dropped. Shared by both the ``extends``/``implements`` base-list parser and the
+    parameter splitter so neither re-implements the depth tracking.
+    """
+    parts: list[str] = []
+    depth = 0
+    current = ""
+    for ch in raw:
+        if ch in "([{<":
+            depth += 1
+        elif ch in ")]}>":
+            depth = max(0, depth - 1)
+        if ch == "," and depth == 0:
+            if current.strip():
+                parts.append(current)
+            current = ""
+        else:
+            current += ch
+    if current.strip():
+        parts.append(current)
+    return parts
+
+
 def _parse_extends_bases(raw: str) -> list[str]:
     """Return base names from a raw ``extends A, B<T>`` clause (drops generics).
 
-    Splits on top-level commas and strips generic type-parameters so ``Foo<T>`` → ``Foo``.
+    Splits on top-level commas (depth-aware, so a comma inside a nested generic such as
+    ``Map<K, V>`` does not split — #887) and strips generic type-parameters so
+    ``Foo<T>`` → ``Foo``.
     """
     bases: list[str] = []
-    for part in raw.split(","):
+    for part in _split_top_level_commas(raw):
         name = part.strip().split("<")[0].strip()
         if name and re.match(r"^[A-Za-z_$][\w$]*$", name):
             bases.append(name)
@@ -88,27 +118,8 @@ def _parse_extends_bases(raw: str) -> list[str]:
 
 
 def _split_params(raw: str) -> list[str]:
-    raw = raw.strip()
-    if not raw:
-        return []
-    params: list[str] = []
-    depth = 0
-    current = ""
-    # Split on top-level commas only (object/array/generic destructuring may nest).
-    for ch in raw:
-        if ch in "([{<":
-            depth += 1
-        elif ch in ")]}>":
-            depth -= 1
-        if ch == "," and depth == 0:
-            params.append(current)
-            current = ""
-        else:
-            current += ch
-    if current.strip():
-        params.append(current)
     out: list[str] = []
-    for part in params:
+    for part in _split_top_level_commas(raw):
         # Keep just the parameter name (drop type annotations / defaults).
         name = part.strip().split(":")[0].split("=")[0].strip()
         name = name.lstrip(".")  # rest params ...args
