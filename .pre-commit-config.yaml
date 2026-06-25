@@ -116,6 +116,23 @@ repos:
         files: (^|/)(fixtures|test_data|testdata)/.*\.(json|jsonl|txt|csv|tsv|ndjson|py)$
         exclude: ^\.claude/worktrees/
         pass_filenames: true
+      # skill-graphql-pagination mirrors the `GraphQL pagination over-cap lint` CI
+      # job in ci.yml (the sync-drift gate classifies the `skill-graphql-pagination`
+      # kind — #888/#893 — so a CI-enforced lint not mirrored here turns the gate
+      # red, same contract as the two prose gates above). Flags any `first: > 100`
+      # inside a `gh api graphql` block in a skill markdown file — the over-cap
+      # footgun that made `/board-audit` read every issue as an orphan (#888). The
+      # lint self-scopes to `gh api graphql` blocks, so a `first:` in prose or a
+      # non-GraphQL recipe is ignored. Commit-stage (cheap static scan); `files:`
+      # restricts candidates to the skills tree, `pass_filenames` hands the changed
+      # *.md to the lint (whose CLI takes file args, like the prose gates above).
+      - id: skill-graphql-pagination
+        name: skill-graphql-pagination
+        entry: python3 .claude/lib/lint_skill_graphql_pagination.py
+        language: system
+        files: ^\.claude/skills/.*\.md$
+        exclude: ^\.claude/worktrees/
+        pass_filenames: true
 
   # Heavier checks run at pre-push (mirror CI's mypy + pytest jobs). Running as
   # `local`/`system` hooks so we use the system tools and don't drift from
