@@ -220,3 +220,6 @@ provectuslabs
 # --- Ontology-vs-graphify spike (#728): LLM-doc + code-graph terms ---
 llms
 graphify
+
+# --- Merge-driver canonical form (#871): compound driver name ---
+codegraph

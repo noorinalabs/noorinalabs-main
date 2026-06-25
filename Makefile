@@ -21,6 +21,11 @@ setup-hooks:
 # per-clone local git config (it cannot be committed), so run this once per clone
 # (main#856, #820 C×T2). Without it git falls back to the default text merge and
 # the sorted JSON spuriously conflicts on parallel regenerations.
+#
+# CANONICAL FORM (#871): plain-script — self-contained via the ImportError
+# fallback in merge_driver.py (#860), no PYTHONPATH needed. Child repos use the
+# same form with an absolute path resolved by ``structural_ontology.py
+# register-merge-driver``. See docs/devops/ontology-structural.md.
 setup-ontology-merge-driver:
 	git config merge.ontology-codegraph.name 'ontology code-graph union merge'
 	git config merge.ontology-codegraph.driver \
