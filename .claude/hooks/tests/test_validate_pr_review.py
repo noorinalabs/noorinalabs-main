@@ -1608,6 +1608,43 @@ class BatchLoopMergeDetectorTests(unittest.TestCase):
             hook.is_variable_pr_merge_in_loop('for pr in 1 2; do gh pr view "$pr"; done')
         )
 
+    def test_886_gh_run_rerun_loop_not_blocked(self):
+        # #886 regression — the EXACT non-merge shape that false-blocked at the
+        # P7W18 wrapup: a `gh run rerun "$ds_run" --failed` staleness recheck
+        # inside a for-loop. No `gh pr merge` anywhere → must not match.
+        self.assertFalse(
+            hook.is_variable_pr_merge_in_loop(
+                "for ds_run in $(gh run list --repo noorinalabs/noorinalabs-deploy "
+                '--json databaseId --jq ".[].databaseId"); do '
+                'gh run rerun "$ds_run" --repo noorinalabs/noorinalabs-deploy --failed; done'
+            )
+        )
+
+    def test_886_nonloop_merge_with_unrelated_rerun_loop_not_blocked(self):
+        # #886 regression (the actual false-positive mechanism): a multi-line
+        # block pairing a NON-loop variable merge with a SEPARATE, unrelated
+        # `gh run rerun` staleness loop. The merge is not inside the loop body,
+        # so the gate does not fail-open and the guard must NOT fire. Before the
+        # #886 narrowing this returned True (merge-var pattern + loop keywords
+        # matched independently anywhere in the command).
+        cmd = (
+            'gh pr merge "$PR" --repo noorinalabs/noorinalabs-deploy --merge\n'
+            'echo "wave merged"\n'
+            "for ds_run in 11 12 13; do "
+            'gh run rerun "$ds_run" --repo noorinalabs/noorinalabs-deploy --failed; done'
+        )
+        self.assertFalse(hook.is_variable_pr_merge_in_loop(cmd))
+
+    def test_886_batch_loop_merge_still_blocked(self):
+        # #886 must NOT weaken the real protection: a `gh pr merge "$pr"` that is
+        # genuinely INSIDE the loop body (the fail-open evasion class from
+        # `feedback_batch_loop_merge_evades`) is still detected.
+        self.assertTrue(
+            hook.is_variable_pr_merge_in_loop(
+                'for pr in 48 49 50; do gh pr merge "$pr" --repo o/r --merge; done'
+            )
+        )
+
 
 class BatchLoopMergeEndToEndTests(unittest.TestCase):
     """#567 end-to-end: check() HARD BLOCKS a batch-loop variable merge, and a
