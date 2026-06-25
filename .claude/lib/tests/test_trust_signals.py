@@ -128,6 +128,66 @@ class ParseVerdicts(unittest.TestCase):
         v = ts.parse_verdicts([body])[0]
         self.assertTrue(v.false_positive)
 
+    # -- Regression: #881 -- Approving verdicts must never score as FP even when
+    # the prose mentions "false-positive" (real evidence from PR #873).
+
+    def test_approved_verdict_with_fp_prose_is_not_a_fp(self) -> None:
+        """Aino's #873 body: approval praising a false-positive test — must score 0."""
+        body = (
+            _verdict("Aino Virtanen", "Santiago Ferreira", "Approved")
+            + "\nThe false-positive test (`type` keyword inside a function param list…)"
+            " validates the anchor correctly rejects it."
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertFalse(v.false_positive)
+
+    def test_approved_verdict_with_fp_in_identifier_is_not_a_fp(self) -> None:
+        """Bereket's #873 body: 'No false-positive on type in non-declaration contexts'."""
+        body = (
+            _verdict("Bereket Tadesse", "Santiago Ferreira", "Approved")
+            + "\nNo false-positive on `type` in non-declaration contexts."
+            " test_no_false_positive_type_in_non_decl_context passes cleanly."
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertFalse(v.false_positive)
+
+    def test_fp_in_code_span_is_not_a_fp(self) -> None:
+        """FP keyword inside an inline code span in a non-approving verdict is ignored."""
+        body = (
+            _verdict("Idris Yusuf", "Nadia Khoury", "Reply")
+            + "\nSee `test_no_false_positive_case` for coverage."
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertFalse(v.false_positive)
+
+    def test_fp_in_fenced_block_is_not_a_fp(self) -> None:
+        """FP keyword inside a fenced code block is ignored."""
+        body = (
+            _verdict("Aino Virtanen", "Nadia Khoury", "ChangesRequested")
+            + "\n```\n# test_no_false_positive_type passes\nretracted = False\n```\n"
+            "Looks good otherwise."
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertFalse(v.false_positive)
+
+    def test_genuine_withdrawal_on_changes_requested_still_counts(self) -> None:
+        """A real self-retraction on a ChangesRequested verdict must still score 1."""
+        body = (
+            _verdict("Idris Yusuf", "Mateo Salazar", "ChangesRequested")
+            + "\nOn reflection this was invalid — withdrawn, my mistake."
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertTrue(v.false_positive)
+
+    def test_withdrawal_keyword_in_plain_prose_on_non_approval_counts(self) -> None:
+        """'retracted' outside any code markup on a non-Approved verdict counts."""
+        body = (
+            _verdict("Wanjiku Mwangi", "Nadia Khoury", "Reply")
+            + "\nI retracted my earlier finding after re-reading the spec."
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertTrue(v.false_positive)
+
 
 # --------------------------------------------------------------------------- #
 # Extraction (gh-mocked)
@@ -208,6 +268,40 @@ class Extract(unittest.TestCase):
         self._run(prs)
         self.assertTrue(self.fake.calls)
         self.assertTrue(all(isinstance(c, list) and c[0] == "gh" for c in self.fake.calls))
+
+    def test_approved_with_fp_prose_does_not_ding_reviewer(self) -> None:
+        """Regression #881: Aino + Bereket both Approved on PR #873 with FP prose.
+
+        Both bodies mention 'false-positive' but in the context of praising the
+        PR's own test coverage — neither is a retraction.  review_false_positives
+        must remain 0 for both reviewers.
+        """
+        aino_body = (
+            _verdict("Aino Virtanen", "Santiago Ferreira", "Approved")
+            + "\nThe false-positive test (`type` keyword inside a function param list…)"
+            " validates the … anchor correctly rejects it."
+        )
+        bereket_body = (
+            _verdict("Bereket Tadesse", "Santiago Ferreira", "Approved")
+            + "\nNo false-positive on `type` in non-declaration contexts."
+            " test_no_false_positive_type_in_non_decl_context passes."
+        )
+        prs = [
+            {
+                "repo": _REPOS[0],
+                "number": 873,
+                "sha": "s873",
+                "mergedAt": "2026-06-24T02:00:00Z",
+                "commit_author": "Santiago Ferreira",
+                "comments": [aino_body, bereket_body],
+                "ci_red": False,
+            },
+        ]
+        sigs = self._run(prs)
+        aino_sig = sigs.get("Aino Virtanen", ts.Signals())
+        bereket_sig = sigs.get("Bereket Tadesse", ts.Signals())
+        self.assertEqual(aino_sig.review_false_positives, 0)
+        self.assertEqual(bereket_sig.review_false_positives, 0)
 
 
 # --------------------------------------------------------------------------- #

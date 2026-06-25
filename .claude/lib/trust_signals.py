@@ -98,6 +98,25 @@ _FALSE_POSITIVE_RE = re.compile(
 )
 
 
+def _strip_code_markup(text: str) -> str:
+    """Remove fenced code blocks and inline code spans from *text*.
+
+    Called before :data:`_FALSE_POSITIVE_RE` is applied so that symbol names
+    and test identifiers that happen to contain the retraction vocabulary
+    (e.g. ``test_no_false_positive_type`` inside a code span) are not
+    mistaken for genuine self-withdrawal language.  The removal is
+    positional — we replace each code region with whitespace of the same
+    length so that surrounding context positions are preserved for any
+    subsequent line-oriented parsing, though :data:`_FALSE_POSITIVE_RE`
+    does not rely on positions.
+    """
+    # Fenced blocks first (```...``` or ~~~...~~~, possibly multiline).
+    text = re.sub(r"```.*?```|~~~.*?~~~", lambda m: " " * len(m.group()), text, flags=re.DOTALL)
+    # Inline code spans (`...`); single-backtick, non-newline interior.
+    text = re.sub(r"`[^`\n]+`", lambda m: " " * len(m.group()), text)
+    return text
+
+
 @dataclass
 class Signals:
     """Countable per-engineer signals for one wave. All fields are evidence."""
@@ -152,12 +171,22 @@ def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
             continue
         req_m = _FIELD_RE["requestor"].search(body)
         ree_m = _FIELD_RE["requestee"].search(body)
+        verdict_str = verdict_m.group(1).strip()
+        # A retraction only counts when the reviewer actually raised a
+        # finding — approvals are never retractions.  Also strip code
+        # spans and fenced blocks first so symbol/test names that contain
+        # the retraction vocabulary (e.g. `test_no_false_positive_*`) are
+        # not matched.
+        if verdict_str.lower() == "approved":
+            is_false_positive = False
+        else:
+            is_false_positive = bool(_FALSE_POSITIVE_RE.search(_strip_code_markup(body)))
         out.append(
             Verdict(
                 requestor=req_m.group(1).strip() if req_m else None,
                 requestee=ree_m.group(1).strip() if ree_m else None,
-                verdict=verdict_m.group(1).strip(),
-                false_positive=bool(_FALSE_POSITIVE_RE.search(body)),
+                verdict=verdict_str,
+                false_positive=is_false_positive,
             )
         )
     return out
