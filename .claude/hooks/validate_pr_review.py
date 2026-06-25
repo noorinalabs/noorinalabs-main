@@ -19,13 +19,17 @@ Input Language:
                the PR in the repo the user named, not the cwd-resolved repo.
     --admin  → short-circuits (emergency override — allows merge).
 
-  Batch-loop guard (#567): a `gh pr merge <shell-var>` inside a
-  for/while/until loop (e.g. `for pr in 48 49; do gh pr merge "$pr" …; done`)
-  is HARD BLOCKED. The literal-PR parse cannot resolve a loop variable, so the
-  gate would fail-open and merge every iteration unverified (observed P3W11 +
-  P3W13). The operator is told to run one literal merge per call so each PR is
-  gate-checked. `--admin` still overrides; a literal `gh pr merge 54` is
-  unaffected. Conservative DECIDE-tier shape (no conditional-allow) per
+  Batch-loop guard (#567, narrowed #886): a `gh pr merge <shell-var>` located
+  INSIDE a for/while/until loop body (e.g.
+  `for pr in 48 49; do gh pr merge "$pr" …; done`) is HARD BLOCKED. The
+  literal-PR parse cannot resolve a loop variable, so the gate would fail-open
+  and merge every iteration unverified (observed P3W11 + P3W13). The operator is
+  told to run one literal merge per call so each PR is gate-checked. The merge
+  must sit between a `do` and its matching `done` to trip the guard — an
+  unrelated loop in the same block (e.g. a `gh run rerun "$r" --failed`
+  staleness recheck) alongside a non-loop variable merge does NOT (#886).
+  `--admin` still overrides; a literal `gh pr merge 54` is unaffected.
+  Conservative DECIDE-tier shape (no conditional-allow) per
   `feedback_safety_direction_over_ux_friction`.
 
 Charter-format review comments (canonical per `pull-requests.md` § Comment-Based Reviews,
@@ -150,11 +154,37 @@ _GH_MERGE_VAR_PR = re.compile(
     r"(?=\s|;|&|\||$)"  # arg ends at whitespace, a shell terminator, or EOS
 )
 
-# A shell loop construct: a `for`/`while`/`until` opener token paired with a
-# `do` body keyword. Requiring BOTH (not just `for`) keeps the detector
-# conservative — a bare `for` in a flag value won't trip it on its own.
-_LOOP_OPENER = re.compile(r"\b(?:for|while|until)\b")
-_LOOP_BODY = re.compile(r"(?:^|[\s;])do(?:[\s;]|$)")
+# `do` / `done` loop keywords as standalone tokens (delimited by start-of-string,
+# whitespace, or `;`). `do`/`done` are loop-only keywords in shell, so every
+# balanced `do … done` pair delimits a loop BODY. The alternation lists `done`
+# first so the longer keyword wins (otherwise `do` would match the `do` prefix
+# of `done`). The keyword span is captured via the lookahead so the surrounding
+# delimiters are not consumed and adjacent tokens are not swallowed (#886).
+_LOOP_DO_DONE = re.compile(r"(?:^|[\s;])(done|do)(?=[\s;]|$)")
+
+
+def _loop_body_spans(view: str) -> list[tuple[int, int]]:
+    """Return the (start, end) character spans of each shell loop BODY in `view`.
+
+    A loop body is the text between a `do` keyword and its matching `done`.
+    `do`/`done` are loop-only keywords in shell, so every balanced `do … done`
+    pair delimits one body; nested loops are paired via a stack (each `done`
+    closes the most recent unmatched `do`). Unbalanced tokens are ignored.
+
+    `view` is expected to be the quote-normalized command produced by
+    `_strip_quoted_runs_keep_var_args`, so `do`/`done` mentioned inside a quoted
+    `--body "…"` payload have already been stripped and do not create spans.
+    """
+    spans: list[tuple[int, int]] = []
+    do_stack: list[int] = []  # end-offsets of open `do` keywords (body starts here)
+    for m in _LOOP_DO_DONE.finditer(view):
+        keyword = m.group(1)
+        if keyword == "do":
+            do_stack.append(m.end(1))
+        elif do_stack:  # `done` — close the most recent `do`
+            body_start = do_stack.pop()
+            spans.append((body_start, m.start(1)))
+    return spans
 
 
 def _strip_quoted_runs_keep_var_args(command: str) -> str:
@@ -218,21 +248,38 @@ def is_variable_pr_merge_in_loop(command: str) -> bool:
     the explicitly-deferred conditional-allow path. A literal
     `gh pr merge 54` is untouched (its PR number parses, the gate runs).
 
-    Detection requires BOTH, evaluated on a quote-normalized view of the
-    command (quoted prose stripped, a lone `"$pr"` arg unwrapped — see
+    Detection, evaluated on a quote-normalized view of the command (quoted
+    prose stripped, a lone `"$pr"` arg unwrapped — see
     `_strip_quoted_runs_keep_var_args`) so a `--body "... for … do gh pr
     merge $pr … done"` payload that merely MENTIONS the shape is not matched:
-      1. a `gh pr merge` whose PR-number arg is a shell variable
-         (`$pr` / `${pr}` / `"$pr"` / `"${pr}"`), AND
-      2. a loop construct (`for`/`while`/`until` opener + a `do` body keyword).
-    Requiring the loop keyword pair avoids blocking a one-off
-    `gh pr merge "$PR"` typed outside any loop (out of scope for #567, and
-    rare) — only the batch-loop shape the gate actually fail-opens on.
+    a `gh pr merge` whose PR-number arg is a shell variable
+    (`$pr` / `${pr}` / `"$pr"` / `"${pr}"`) that is located INSIDE a loop body
+    (the text between a `do` keyword and its matching `done`).
+
+    Co-location matters (#886). The earlier form required only that a
+    variable-PR merge AND loop keywords each appear SOMEWHERE in the command,
+    independently. That over-matched any multi-line block that happened to pair
+    an unrelated loop with a non-loop variable merge — e.g. a `/wave-wrapup`
+    block doing a single `gh pr merge "$PR"` AND, separately, a staleness
+    recheck loop `for r in …; do gh run rerun "$r" --failed; done`. The merge
+    was not in the loop, so the gate did not fail-open, yet the guard blocked.
+    Requiring the merge to sit inside a `do … done` body fires on the real
+    batch-loop shape (`for pr in …; do gh pr merge "$pr"; done`) while leaving
+    unrelated loops (and one-off variable merges outside any loop — out of
+    scope for #567) alone.
     """
     view = _strip_quoted_runs_keep_var_args(command)
-    if not _GH_MERGE_VAR_PR.search(view):
+    merge_matches = list(_GH_MERGE_VAR_PR.finditer(view))
+    if not merge_matches:
         return False
-    return bool(_LOOP_OPENER.search(view) and _LOOP_BODY.search(view))
+    spans = _loop_body_spans(view)
+    if not spans:
+        return False
+    return any(
+        body_start <= mm.start() < body_end
+        for mm in merge_matches
+        for (body_start, body_end) in spans
+    )
 
 
 def get_pr_data(pr_number: str | None, repo: str | None = None) -> dict | None:
