@@ -220,3 +220,6 @@ provectuslabs
 # --- Ontology-vs-graphify spike (#728): LLM-doc + code-graph terms ---
 llms
 graphify
+
+# --- Ontology README (#863): merge-driver config key identifier ---
+codegraph
