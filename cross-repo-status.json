@@ -4163,7 +4163,7 @@
   "wave_17_annunaki_attack_ran_at": "2026-06-25T02:06:26Z",
   "wave_17_memory_audit_ran_at": "2026-06-25T02:06:26Z",
   "wave_17_retro_completed_at": "2026-06-25T02:06:26Z",
-  "wave_18_active": true,
+  "wave_18_active": false,
   "wave_18_ordinal": 1,
   "wave_18_kicked_off_at": "2026-06-25T03:45:00Z",
   "wave_18_merge_model": "wave-branch",
@@ -4335,5 +4335,10 @@
     "review_false_positives": 0,
     "rework_cycles": 0
   }
-}
+},
+  "wave_18_started_at": "2026-06-25T03:45:00Z",
+  "wave_18_wrapped_up_at": "2026-06-25T17:00:10Z",
+  "wave_18_wrapup_completed_at": "2026-06-25T17:00:10Z",
+  "wave_18_stg_promotion": "success",
+  "wave_18_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/28186704314"
 }
