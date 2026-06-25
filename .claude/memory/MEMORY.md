@@ -99,3 +99,4 @@
 - [Brand is "Noorina Labs" (two words)](feedback_brand_noorina_labs.md) — camel-case "NoorinALabs" WRONG in prose; lowercase slug stays; cspell now enforces (dict entry removed). main#792.
 - [bleach ReDoS standing item](project_bleach_redos_standing_item.md) — GHSA-g75f-g53v-794x no fix + bleach EOL 2026-06-05; per-repo --ignore-vuln stays; revisit each wave; close only when kaggle dropped. main#703.
 - [P6W2 carry-forward trackers](project_p6w2_carryforward_trackers.md) — exec #819 (persona Option B/#727) + #820 (ontology C×T2/#728); W16 placeholder #821; live: push-via-gh-api #816, no /tmp worktrees #817.
+- [Deployable-merge verification](feedback_deployable_merge_verification.md) — wave→main/push-to-main merge: verify post-merge-only workflows (publish/Trivy) via verify_deployable_merge.py; green PR ≠ proof. wave-wrapup Step 11.5a. main#864.
