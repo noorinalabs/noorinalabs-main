@@ -3316,7 +3316,7 @@
   "phase_3_criterion9_caveat_outcome": "gate over (raw 22.2%, re-baselined 23.6%) — owner re-baseline (meta-issue scaffolding excluded) + waiver; hard re-measure at P4W1 wrapup",
   "phase_3_criterion9_caveat_resolved_at": "2026-06-02T15:41:06Z",
   "phase_4_first_review_ran_at": "2026-06-02T15:41:06Z",
-  "current_phase": 6,
+  "current_phase": 7,
   "phase_4_wave_1_meta_issue": 608,
   "phase_4_criteria_issues": [
     601,
@@ -3369,7 +3369,7 @@
     "mirror_of": ".claude/team/phases/phase-3.md § Sweep-wave reservation (W12, possibly W13)"
   },
   "wave_active": false,
-  "current_wave": "wave-17",
+  "current_wave": "wave-18",
   "wave_5_active": false,
   "wave_5_kicked_off_at": "2026-06-16T23:12:45Z",
   "wave_5_final_pr_count": 45,
@@ -3380,7 +3380,7 @@
   "wave_5_wrapped_up_at": "2026-06-20T00:21:27Z",
   "wave_5_annunaki_attack_ran_at": "2026-06-20T00:26:39Z",
   "wave_5_memory_audit_ran_at": "2026-06-20T00:26:39Z",
-  "next_wave": "wave-18",
+  "next_wave": "wave-19",
   "wave_started": "2026-06-23T00:21:35Z",
   "last_completed_wave": "wave-17",
   "last_completed_at": "2026-06-23T18:30:06Z",
@@ -3636,7 +3636,7 @@
   "wave_3_wrapped_at": "2026-06-12T17:33:59Z",
   "wave_3_annunaki_attack_ran_at": "2026-06-14T23:45:00Z",
   "wave_3_memory_audit_ran_at": "2026-06-14T23:45:00Z",
-  "last_updated": "2026-06-25T03:40:00Z",
+  "last_updated": "2026-06-25T03:45:00Z",
   "deployments_branch": "deployments/phase-4/wave-3",
   "phase_2_status": "CLOSED 2026-04-30. wave-10 final retro PR #230 merged 20:47:41Z. 5-repo wave-merge ceremony completed (#229 main, #74 landing, #851 isnad, #196 deploy, #89 user-service). 3 carry-forwards into phase-3: deploy#86 (async routine trig_01Bif8T51pdaYFjkbM5bERyL — fires post-merge), deploy#151 (manual SRE B2 tfstate-key migration), user-service#84 (manual DEPLOY_REPO_PAT secret). All p2-wave-* labels cleared from open issues; 218 open issues re-labeled `phase-3` across 8 repos.",
   "phase_3_status": "Phase 3 COMPLETE 2026-06-02 at 9/9 criteria (criterion #9 closed-with-caveat). All end-state issues #322-#330 closed. Exit record in .claude/team/phases/phase-3.md. Next: /roadmap for Phase 4.",
@@ -4159,5 +4159,41 @@
   "wave_17_memory_audit_ran_at": "2026-06-25T02:06:26Z",
   "wave_17_retro_completed_at": "2026-06-25T02:06:26Z",
   "wave_18_active": true,
-  "wave_18_ordinal": 1
+  "wave_18_ordinal": 1,
+  "wave_18_kicked_off_at": "2026-06-25T03:45:00Z",
+  "wave_18_merge_model": "wave-branch",
+  "wave_18_branches": {
+    "branch": "deployments/phase-7/wave-18",
+    "created_at": "2026-06-25T03:45:00Z",
+    "repos": {
+      "noorinalabs-main": {
+        "sha": "3d8d11558a98e05342a48eee930bc3f8d11f45bb",
+        "status": "created"
+      },
+      "noorinalabs-user-service": {
+        "sha": "d1c2d86d7c2849f5b7369a37a078c4e0e20dc988",
+        "status": "created"
+      },
+      "noorinalabs-deploy": {
+        "sha": "f9e96547c552229f33c245eb881f4647ea69db4c",
+        "status": "created"
+      },
+      "noorinalabs-design-system": {
+        "sha": "6b0b39d4d73bab97f4ff53dd2bbfcf9bc45829af",
+        "status": "created"
+      },
+      "noorinalabs-landing-page": {
+        "sha": "99cc31fdcb99421f43e53edf8cdb90b6751d2971",
+        "status": "created"
+      },
+      "noorinalabs-data-acquisition": {
+        "sha": "ce7f98d4a72c8156b6df4ba4e7179b1167d0e7ac",
+        "status": "created"
+      },
+      "noorinalabs-isnad-ingest-platform": {
+        "sha": "346a887864207dc481b107d655f5ed8f3435dc9a",
+        "status": "created"
+      }
+    }
+  }
 }
