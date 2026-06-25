@@ -1,19 +1,28 @@
 ---
 name: ontology-rebuild
-description: Resolve dirty ontology entries — scan changed files, update ontology and auto-updatable docs, mark resolved
+description: Reconcile the hand-curated semantic overlay — scan dirty checksums, update ontology files and auto-updatable docs, mark resolved
 args: scope
 ---
 
-Rebuild the ontology for files that have changed since the last resolution pass. The `scope` argument is optional — if omitted, processes all dirty files. If provided, can be `code`, `docs`, or a specific repo name to limit scope.
+Rebuild the **semantic overlay** for files that have changed since the last resolution pass. The `scope` argument is optional — if omitted, processes all dirty files. If provided, can be `code`, `docs`, or a specific repo name to limit scope.
 
 > Note: all repo paths in bash blocks below are rooted at `$REPO_ROOT` to avoid cwd drift when the skill is invoked from a worktree or child-repo subdirectory (#149).
 
-## Context
+> **This skill resolves the SEMANTIC OVERLAY only.** For the generated structural index (`ontology/structural/llms.txt`, `code-graph.json`), run the generator: `PYTHONPATH=.claude/lib python3 -m ontology_gen . --out ontology/structural/` and the aggregator: `PYTHONPATH=.claude/lib python3 -m ontology_gen.aggregate .`. The lifecycle skills (`/session-start` Step 3b, `/wave-wrapup` Step 12b) do this automatically.
 
-The ontology system has three roles:
-- **Change Tracker** (hook) — automatically updates `ontology/checksums.json` whenever files are edited. Sets `last_tracked` hash.
-- **Change Resolver** (this skill) — reads dirty entries from checksums, processes files, updates ontology. Sets `last_resolved` = `last_tracked`.
-- **Librarian** (`/ontology-librarian`) — read-only reference to the ontology.
+## Context — generate-structural + curate-semantic model (C×T2, #820/#862)
+
+The ontology uses two cooperating layers, each with its own update path:
+
+| Layer | Contents | Update path |
+|-------|----------|-------------|
+| **Semantic overlay** | `domain.yaml`, `services.yaml`, `conventions.md`, `repos/*.yaml`, hand-edited `*.md` | This skill (`/ontology-rebuild`) — reads `checksums.json` dirty entries, reconciles against code |
+| **Structural index** | `ontology/structural/llms.txt`, `code-graph.json`, `cross-repo-graph.json` | Generator (`ontology_gen` + `ontology_gen.aggregate`) — regenerated wholesale, never hand-edited |
+
+**This skill** (the Resolver) and the Change Tracker hook operate exclusively on the semantic overlay:
+- **Change Tracker** (hook) — auto-updates `ontology/checksums.json` on every Edit/Write to hand-curated files. Sets `last_tracked` hash.
+- **Change Resolver** (this skill) — reads dirty entries from checksums, processes files, updates semantic overlay + auto-updatable docs. Sets `last_resolved` = `last_tracked`.
+- **Librarian** (`/ontology-librarian`) — read-only reference, surfaces BOTH layers; staleness check for each.
 
 A file is "dirty" when `last_tracked != last_resolved` in `checksums.json`.
 
@@ -121,3 +130,8 @@ cd "$REPO_ROOT" && \
 - Recommend-only doc updates require human review and decision
 - Ontology structure changes (adding new top-level categories) should be discussed first
 - Removing entities requires confirmation — prefer marking as deprecated
+- **The structural index is never resolved here** — to refresh it, run the generator directly or use `/session-start` Step 3b / `/wave-wrapup` Step 12b which do it automatically:
+  ```bash
+  PYTHONPATH=.claude/lib python3 -m ontology_gen . --out ontology/structural/
+  PYTHONPATH=.claude/lib python3 -m ontology_gen.aggregate .
+  ```

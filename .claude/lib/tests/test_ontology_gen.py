@@ -194,6 +194,113 @@ export const Button = (props) => {
         self.assertEqual(info.lang, "javascript")
 
 
+class TestTypeScriptInterfaceTypeExtractor(unittest.TestCase):
+    """Tests for interface and type-alias extraction added in main#870."""
+
+    INTERFACE_SRC = """\
+// API types for narrator service.
+import { Base } from './base';
+
+export interface NarratorId {
+  id: string;
+  chain: number;
+}
+
+export interface NarratorRecord extends NarratorBase {
+  fullName: string;
+}
+
+interface InternalHelper extends NarratorBase, Serializable {
+  secret: boolean;
+}
+"""
+
+    TYPE_SRC = """\
+// Shared type aliases.
+export type NarratorKind = 'transmitter' | 'collector';
+export type Chain<T> = T[];
+type MaybeNull<T> = T | null;
+"""
+
+    def test_interface_kind_emitted(self) -> None:
+        info = extract_typescript("src/types.ts", self.INTERFACE_SRC)
+        by_name = {s.name: s for s in info.symbols}
+        self.assertIn("NarratorId", by_name)
+        self.assertEqual(by_name["NarratorId"].kind, "interface")
+        self.assertEqual(by_name["NarratorId"].bases, [])
+        self.assertIn("NarratorRecord", by_name)
+        self.assertEqual(by_name["NarratorRecord"].kind, "interface")
+        self.assertEqual(by_name["NarratorRecord"].bases, ["NarratorBase"])
+        self.assertIn("InternalHelper", by_name)
+        self.assertEqual(by_name["InternalHelper"].kind, "interface")
+        self.assertEqual(by_name["InternalHelper"].bases, ["NarratorBase", "Serializable"])
+
+    def test_type_alias_kind_emitted(self) -> None:
+        info = extract_typescript("src/aliases.ts", self.TYPE_SRC)
+        by_name = {s.name: s for s in info.symbols}
+        self.assertIn("NarratorKind", by_name)
+        self.assertEqual(by_name["NarratorKind"].kind, "type")
+        self.assertIn("Chain", by_name)
+        self.assertEqual(by_name["Chain"].kind, "type")
+        self.assertIn("MaybeNull", by_name)
+        self.assertEqual(by_name["MaybeNull"].kind, "type")
+
+    def test_interface_in_graph(self) -> None:
+        """Interface symbols become nodes in the assembled graph."""
+        info = extract_typescript("src/t.ts", self.INTERFACE_SRC)
+        from ontology_gen.assemble import assemble
+
+        graph = assemble([info])
+        kinds = {n.kind for n in graph.nodes}
+        self.assertIn("interface", kinds)
+
+    def test_type_in_graph(self) -> None:
+        """Type-alias symbols become nodes in the assembled graph."""
+        info = extract_typescript("src/a.ts", self.TYPE_SRC)
+        from ontology_gen.assemble import assemble
+
+        graph = assemble([info])
+        kinds = {n.kind for n in graph.nodes}
+        self.assertIn("type", kinds)
+
+    def test_interface_llms_rendering(self) -> None:
+        info = extract_typescript("src/t.ts", self.INTERFACE_SRC)
+        from ontology_gen.assemble import assemble
+        from ontology_gen.llms import render_llms
+
+        graph = assemble([info]).to_dict()
+        text = render_llms([info], "demo", len(graph["nodes"]), len(graph["edges"]))
+        self.assertIn("- interface NarratorId @", text)
+        self.assertIn("- interface NarratorRecord(NarratorBase) @", text)
+        self.assertIn("- interface InternalHelper(NarratorBase, Serializable) @", text)
+
+    def test_type_llms_rendering(self) -> None:
+        info = extract_typescript("src/a.ts", self.TYPE_SRC)
+        from ontology_gen.assemble import assemble
+        from ontology_gen.llms import render_llms
+
+        graph = assemble([info]).to_dict()
+        text = render_llms([info], "demo", len(graph["nodes"]), len(graph["edges"]))
+        self.assertIn("- type NarratorKind @", text)
+        self.assertIn("- type Chain @", text)
+
+    def test_no_false_positive_type_in_non_decl_context(self) -> None:
+        """``type`` keyword inside a function body / as a param name is not matched."""
+        src = "function foo(type: string): void {\n  const type = 'x';\n}\n"
+        info = extract_typescript("src/fn.ts", src)
+        by_name = {s.name: s for s in info.symbols}
+        # Only the function itself should appear, not a spurious 'type' symbol.
+        self.assertNotIn("type", by_name)
+        self.assertIn("foo", by_name)
+
+    def test_no_regression_existing_kinds(self) -> None:
+        """Python/class/func/method kinds are unaffected by #870."""
+        py_info = extract_python("mod.py", "class Foo:\n    def bar(self):\n        pass\n")
+        by_name = {s.qualname: s for s in iter_symbols(py_info.symbols)}
+        self.assertEqual(by_name["Foo"].kind, "class")
+        self.assertEqual(by_name["Foo.bar"].kind, "method")
+
+
 class TestCypherExtractor(unittest.TestCase):
     SRC = """\
 // Narrator chain loader.

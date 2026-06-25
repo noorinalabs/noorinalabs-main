@@ -221,5 +221,5 @@ provectuslabs
 llms
 graphify
 
-# --- Ontology README (#863): merge-driver config key identifier ---
+# --- Ontology README (#863) + merge-driver canonical form (#871): codegraph driver key ---
 codegraph

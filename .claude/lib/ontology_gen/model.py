@@ -10,8 +10,12 @@ Two layers of types live here:
       {"nodes": [{id, kind, path, line, lang}],
        "edges": [{src, dst, type}]}
 
-  with ``kind ∈ {file, module, class, func, method}`` and
+  with ``kind ∈ {file, module, class, interface, type, func, method}`` and
   ``type ∈ {contains, imports, imports_from, calls, inherits, references}``.
+
+  ``interface`` and ``type`` were added in main#870 to capture TypeScript interface and
+  type-alias declarations that were previously invisible in TS-heavy repos (~82 decls
+  invisible in the isnad-graph pilot).
 
 * The **intermediate extraction** types — :class:`FileInfo`, :class:`SymbolInfo`,
   :class:`ImportInfo` — are the language-agnostic shape every per-language extractor
@@ -32,7 +36,8 @@ from typing import TypedDict
 
 # Contract enums — the fixed vocabulary #856/#1128 build against. Do not extend
 # without flagging the #855 owner (the JSON is an interface, not an internal detail).
-NODE_KINDS = ("file", "module", "class", "func", "method")
+# ``interface`` and ``type`` added in main#870 for TypeScript interface/type-alias decls.
+NODE_KINDS = ("file", "module", "class", "interface", "type", "func", "method")
 EDGE_TYPES = ("contains", "imports", "imports_from", "calls", "inherits", "references")
 
 # Stable tie-break rank for sorting nodes that share (path, line).

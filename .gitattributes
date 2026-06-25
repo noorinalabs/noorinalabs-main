@@ -21,5 +21,13 @@
 #     git config merge.ontology-codegraph.name 'ontology code-graph union merge'
 #     git config merge.ontology-codegraph.driver \
 #       'python3 .claude/lib/ontology_gen/merge_driver.py %O %A %B %P'
+#
+# CANONICAL FORM (#871): plain-script, NOT ``python3 -m``. The script is
+# self-contained (ImportError fallback #860 bootstraps sys.path via
+# Path(__file__).resolve()), so no PYTHONPATH setup is required.
+# Child repos use the same plain-script form with an absolute path resolved
+# at registration time via ``python3 scripts/structural_ontology.py
+# register-merge-driver`` (or ``make setup-hooks``). See
+# docs/devops/ontology-structural.md (#871, #820 C×T2).
 ontology/structural/code-graph.json merge=ontology-codegraph
 ontology/structural/cross-repo-graph.json merge=ontology-codegraph
