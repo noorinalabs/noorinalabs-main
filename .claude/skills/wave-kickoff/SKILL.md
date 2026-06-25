@@ -278,6 +278,40 @@ If missing, create it:
 gh label create "wave-{X}" --description "Wave {X} (global id)" --color "8B5CF6"
 ```
 
+### 2a. Pre-create the Project-2 Wave field option (MANDATORY — before label-apply)
+
+**Run this BEFORE Step 7 (label-apply).** The `post_label_change_wave_field_sync`
+PostToolUse hook syncs the Wave single-select field when a wave label is applied;
+if the option for the new wave does not exist yet the hook can't sync and emits
+"Project 2 Wave field has no option 'W{X}'" for every labeled issue — 8 such
+captures in P6W17 alone (issue #868, P6W17 retro proposed change #1).
+
+Option-name grammar (#810): `wave-{X}` → `W{X}`; `p{N}-wave-{M}` → `P{N}W{M}`;
+`wave-x` → `WX`.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# Idempotent: no-op if W{X} already exists; creates it if absent and
+# read-back-verifies it stuck.  Exits 1 on auth/network/mutation error.
+python3 "$REPO_ROOT/.claude/lib/wave_field_option.py" ensure "wave-{X}"
+```
+
+**Stop-the-line if this exits non-zero.** A non-zero exit means either the `project`
+OAuth scope is missing (`gh auth refresh -s project` to fix) or the GraphQL
+mutation failed. Label-apply MUST NOT proceed while the option is absent — every
+labeled issue will fire an unresolvable hook capture.
+
+**Verification (read-only check after creation):**
+
+```bash
+python3 "$REPO_ROOT/.claude/lib/wave_field_option.py" check "wave-{X}"
+# exit 0 = present (proceed); exit 2 = absent (stop); exit 1 = error (stop)
+```
+
+Implementation: `.claude/lib/wave_field_option.py` (issue #868). Uses
+`updateProjectV2Field` with the full-list-preserve recipe — re-reads all
+existing options and re-sends them plus the new one so no option is wiped.
+
 ### 3. Pre-wave auth/scope audit
 
 Verify the gh token has the scopes needed for this wave's operations. GitHub periodically hardens scope enforcement (e.g., Projects v2 requires the explicit `project` write scope; classic-Projects API deprecation). A missing scope mid-wave consumes orchestrator + user time chasing OAuth flows.
