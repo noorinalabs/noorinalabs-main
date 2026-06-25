@@ -332,6 +332,12 @@ MD
     --body "$STUB_BODY")
   NEW_NUM=$(echo "$NEW_URL" | grep -oE '[0-9]+$')
   gh project item-add 2 --owner noorinalabs --url "$NEW_URL" 2>/dev/null || true
+  # NOTE (main#885): this reserves the id via the meta_issue key only and does
+  # NOT bump global_wave_seq (the counter advances at /wave-scope `allocate
+  # --write`). That split is SAFE because `wave_seq.py` is reservation-aware:
+  # `allocate`/`peek` detect this `wave_${NEXT_WAVE}_meta_issue` reservation at
+  # `global_wave_seq + 1` and claim THAT id instead of skipping past it. Do not
+  # "fix" this by adding a counter bump here — that would double-advance.
   python3 "$REPO_ROOT/.claude/lib/upsert_status_keys.py" "$REPO_ROOT/cross-repo-status.json" \
     "wave_${NEXT_WAVE}_meta_issue=\"noorinalabs-main#$NEW_NUM\""
   echo "AUTO-DRAFTED next-wave meta-issue stub: $NEW_URL"
