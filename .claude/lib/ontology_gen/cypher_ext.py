@@ -6,10 +6,11 @@ Zero-dependency regex scanner. Each query file becomes a single ``file`` node (l
 **clauses/operations** used — is captured into ``FileInfo.extra`` and rendered into the
 file's ``llms.txt`` section.
 
-Contract note (flagged for #856/#1128): the fixed ``code-graph.json`` node-kind enum is
-``{file, module, class, func, method}`` with no ``label``/``relationship`` kind, so
+Contract note (flagged for #856/#1128): the ``code-graph.json`` node-kind enum is
+``{file, module, class, interface, type, func, method}`` (``interface`` and ``type``
+added in main#870 for TypeScript). There is still no ``label``/``relationship`` kind, so
 Cypher labels and relationship types are intentionally **not** minted as graph nodes —
-that would require extending the contract enum. They live in the per-file ``llms.txt``
+that would require a further enum extension. They live in the per-file ``llms.txt``
 section (where an agent reads them) and in ``FileInfo.extra``. The graph contribution of
 a Cypher file is its ``file`` node. This is a deliberate decision, not an omission.
 """
