@@ -1645,6 +1645,74 @@ class BatchLoopMergeDetectorTests(unittest.TestCase):
             )
         )
 
+    # ---- #894 residual fail-open evasions ----
+
+    def test_894_subshell_wrapped_merge_blocked(self):
+        # Gap 1: a merge wrapped in a `( … )` subshell leaves the arg as `$pr)`.
+        # The pre-#894 terminator lookahead `(?=\s|;|&|\||$)` omitted `)`, so the
+        # merge verb never matched and the loop fail-opened. Now BLOCKED.
+        self.assertTrue(
+            hook.is_variable_pr_merge_in_loop("for pr in 1 2; do (gh pr merge $pr); done")
+        )
+
+    def test_894_subshell_wrapped_quoted_merge_blocked(self):
+        # Gap 1 variant: subshell + quoted var arg.
+        self.assertTrue(
+            hook.is_variable_pr_merge_in_loop('for pr in 1 2; do (gh pr merge "$pr" --merge); done')
+        )
+
+    def test_894_subscripted_array_arg_blocked(self):
+        # Gap 2: a subscripted `"${prs[$i]}"` arg failed the lone-simple-var
+        # unwrap fullmatch and was stripped as opaque prose — the merge arg
+        # vanished and the loop fail-opened. Now BLOCKED.
+        self.assertTrue(
+            hook.is_variable_pr_merge_in_loop('for i in 0 1; do gh pr merge "${prs[$i]}"; done')
+        )
+
+    def test_894_command_substitution_arg_blocked(self):
+        # Gap 2 variant: a command-substitution `"$(cmd)"` arg, likewise stripped
+        # pre-#894. Now BLOCKED.
+        self.assertTrue(
+            hook.is_variable_pr_merge_in_loop(
+                'for i in 0 1; do gh pr merge "$(get_pr)" --merge; done'
+            )
+        )
+
+    def test_894_command_substitution_arg_with_inner_space_blocked(self):
+        # Gap 2 robustness: whitespace INSIDE the `$(…)` expansion must not make
+        # the quoted run look like prose — it is still one shell-word argument.
+        self.assertTrue(
+            hook.is_variable_pr_merge_in_loop('for i in 0 1; do gh pr merge "$(get_pr $i)"; done')
+        )
+
+    def test_894_literal_merge_inside_loop_not_blocked(self):
+        # Over-broadening guard: a bare-integer `gh pr merge 54` INSIDE a loop is
+        # still NOT blocked — the literal parses and the normal gate runs.
+        self.assertFalse(
+            hook.is_variable_pr_merge_in_loop("for n in 1; do gh pr merge 54 --merge; done")
+        )
+
+    def test_894_nonliteral_merge_outside_loop_not_blocked(self):
+        # #886 co-location preserved under the #894 broadening: a one-off
+        # subscripted/compound merge OUTSIDE any loop, co-occurring with an
+        # unrelated `gh run rerun` loop, does NOT fail-open and MUST NOT block.
+        cmd = (
+            'gh pr merge "${prs[0]}" --repo noorinalabs/noorinalabs-deploy --merge\n'
+            "for r in 11 12 13; do "
+            'gh run rerun "$r" --repo noorinalabs/noorinalabs-deploy --failed; done'
+        )
+        self.assertFalse(hook.is_variable_pr_merge_in_loop(cmd))
+
+    def test_894_body_mention_of_compound_merge_not_blocked(self):
+        # The #894 unwrap broadening must not re-open the prose-mention guard:
+        # a `--body "…"` payload mentioning the compound-arg loop shape (it
+        # carries whitespace OUTSIDE the expansion) is still stripped, not matched.
+        self.assertFalse(
+            hook.is_variable_pr_merge_in_loop(
+                'gh pr create --body "for i in 0 1; do gh pr merge ${prs[$i]}; done"'
+            )
+        )
+
 
 class BatchLoopMergeEndToEndTests(unittest.TestCase):
     """#567 end-to-end: check() HARD BLOCKS a batch-loop variable merge, and a
@@ -1667,6 +1735,27 @@ class BatchLoopMergeEndToEndTests(unittest.TestCase):
         self.assertEqual(result.get("decision"), "block")
         self.assertIn("Batch-loop", result["reason"])
         self.assertIn("one pr per call", result["reason"].lower())
+
+    def test_894_subscripted_loop_merge_hard_blocked(self):
+        # #894 end-to-end: a subscripted in-loop merge reaches check() and HARD
+        # BLOCKS. Patch get_pr_data so a pass proves the LOOP guard fired, not
+        # the downstream gate.
+        with mock.patch.object(hook, "get_pr_data", return_value=None):
+            result = hook.check(
+                self._input('for i in 0 1; do gh pr merge "${prs[$i]}" --merge; done')
+            )
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("Batch-loop", result["reason"])
+
+    def test_894_subshell_loop_merge_hard_blocked(self):
+        # #894 end-to-end: a subshell-wrapped in-loop merge HARD BLOCKS.
+        with mock.patch.object(hook, "get_pr_data", return_value=None):
+            result = hook.check(self._input("for pr in 1 2; do (gh pr merge $pr); done"))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
 
     def test_loop_var_merge_with_admin_still_overrides(self):
         # --admin is the emergency override and bypasses the loop guard too.
@@ -1717,6 +1806,73 @@ class StripQuotedRunsKeepVarArgsTests(unittest.TestCase):
     def test_single_quoted_run_dropped(self):
         out = hook._strip_quoted_runs_keep_var_args("echo 'for pr in 1; do gh pr merge $pr; done'")
         self.assertNotIn("gh pr merge", out)
+
+    # ---- #894: broadened single-word-expansion unwrap ----
+
+    def test_subscripted_array_arg_unwrapped(self):
+        out = hook._strip_quoted_runs_keep_var_args('gh pr merge "${prs[$i]}" --merge')
+        self.assertIn("${prs[$i]}", out)
+        self.assertNotIn('"', out)
+
+    def test_command_substitution_arg_unwrapped(self):
+        out = hook._strip_quoted_runs_keep_var_args('gh pr merge "$(get_pr)" --merge')
+        self.assertIn("$(get_pr)", out)
+
+    def test_command_substitution_with_inner_space_unwrapped(self):
+        # Whitespace inside the expansion does not make the run prose.
+        out = hook._strip_quoted_runs_keep_var_args('gh pr merge "$(get_pr $i)" --merge')
+        self.assertIn("$(get_pr $i)", out)
+
+    def test_quoted_literal_word_not_unwrapped(self):
+        # A non-expansion single word (e.g. a stray `"done"`) must NOT be
+        # unwrapped — that would inject a spurious loop keyword into the view.
+        out = hook._strip_quoted_runs_keep_var_args('gh pr comment --body "done"')
+        self.assertNotIn("done", out)
+
+    def test_prose_with_expansion_outside_dropped(self):
+        # Whitespace OUTSIDE the expansion ⇒ prose ⇒ dropped wholesale.
+        out = hook._strip_quoted_runs_keep_var_args('--body "merge ${prs[$i]} now"')
+        self.assertNotIn("prs", out)
+
+
+class StripExpansionsTests(unittest.TestCase):
+    """#894 pure-parser: `_strip_expansions` removes balanced ${…}/$(…) groups so
+    `_is_single_expansion_word` can tell a one-word arg from prose."""
+
+    def test_brace_group_removed(self):
+        self.assertEqual(hook._strip_expansions("${prs[$i]}").strip(), "")
+
+    def test_paren_group_with_inner_space_removed(self):
+        self.assertEqual(hook._strip_expansions("$(get_pr $i)").strip(), "")
+
+    def test_nested_paren_group_removed(self):
+        self.assertEqual(hook._strip_expansions("$(a $(b) c)").strip(), "")
+
+    def test_bare_var_left_intact(self):
+        # A bare `$pr` has no internal whitespace to hide, so it is not a group.
+        self.assertEqual(hook._strip_expansions("$pr"), "$pr")
+
+    def test_prose_whitespace_survives(self):
+        self.assertTrue(any(c.isspace() for c in hook._strip_expansions("do merge $pr")))
+
+
+class IsSingleExpansionWordTests(unittest.TestCase):
+    """#894: predicate gating the double-quoted-run unwrap."""
+
+    def test_bare_var_is_word(self):
+        self.assertTrue(hook._is_single_expansion_word("$pr"))
+
+    def test_subscripted_is_word(self):
+        self.assertTrue(hook._is_single_expansion_word("${prs[$i]}"))
+
+    def test_command_sub_with_space_is_word(self):
+        self.assertTrue(hook._is_single_expansion_word("$(get_pr $i)"))
+
+    def test_prose_is_not_word(self):
+        self.assertFalse(hook._is_single_expansion_word("do gh pr merge $pr"))
+
+    def test_literal_word_is_not_word(self):
+        self.assertFalse(hook._is_single_expansion_word("done"))
 
 
 if __name__ == "__main__":
