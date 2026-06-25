@@ -451,6 +451,60 @@ export STRANDING_OVERRIDE_RATIONALE="P3W7 work descoped post-#339 audit; \
 
 The override is intentionally noisy: rationale is required (no empty string), logged to the wrapup report, and persisted to `cross-repo-status.json` under `wave_{M}_stranding_override` so subsequent /wave-retro and audit passes can surface it.
 
+### 11.5a. Deployable-merge verification gate — post-merge workflows went green (every wave)
+
+A wave→main merge is a **deployable merge**: it triggers push-to-main workflows that **never ran on the per-issue PRs** (publish/Trivy, schema-drift, structural-ontology, …). Their CI gives **no pre-merge signal**, so a wave can be reachable-on-main (Step 11.5 green) yet have reddened `main` post-merge. This is exactly how `isnad-graph#1131` (libexpat `CVE-2026-45186`) slipped past `#1130`'s green PR and failed the GHCR publish on `main` (main#864).
+
+After Step 11.5 confirms reachability, verify each repo's wave→main merge commit actually went green across its post-merge-only workflows, using the deterministic oracle `.claude/lib/verify_deployable_merge.py` (it polls the Actions runs for the exact merge SHA; a failed run, or a required workflow that produced **no** run at all, is a hard not-verified — the same empty-is-not-ready discipline as `pr_ci_state.py`). `gh pr merge` returns 0 the instant the merge commit exists — long before these workflows even start — so the merge's own exit status proves nothing.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+WAVE_REPOS_IN_SCOPE=$(jq -r ".wave_{M}_repos_in_scope[]" "$REPO_ROOT/cross-repo-status.json")
+BRANCH="deployments/phase-{P}/wave-{M}"
+
+UNVERIFIED=()
+while IFS= read -r R; do
+  # The deployable merge commit is origin/main's HEAD for the repo after Step 11
+  # merged the wave→main PR. Resolve it at origin (not the local clone).
+  MAIN_SHA=$(gh api "repos/noorinalabs/$R/git/refs/heads/main" --jq '.object.sha' 2>/dev/null || true)
+  [ -z "$MAIN_SHA" ] && { echo "$R: cannot read main — skip"; continue; }
+
+  # --require-deployable verifies the post-merge-ONLY workflows (push/tag AND not
+  # pull_request) — the genuinely blind ones. Drop the flag to verify every
+  # merge-triggered workflow. The no-red safety net fails on ANY run that
+  # executed for the SHA and went red, so path-filtered workflows that fired are
+  # still covered.
+  if python3 "$REPO_ROOT/.claude/lib/verify_deployable_merge.py" \
+       "noorinalabs/$R" "$MAIN_SHA" --require-deployable --timeout 1200 --poll 30; then
+    echo "$R: deployable merge verified green @ ${MAIN_SHA:0:8}"
+  else
+    UNVERIFIED+=("$R @ ${MAIN_SHA:0:8}")
+  fi
+done <<< "$WAVE_REPOS_IN_SCOPE"
+
+if [ ${#UNVERIFIED[@]} -gt 0 ]; then
+  echo "════════════════════════════════════════════════════════════"
+  echo "BLOCKED: /wave-wrapup cannot close wave {M} — deployable merge NOT verified:"
+  for u in "${UNVERIFIED[@]}"; do echo "  $u"; done
+  echo ""
+  echo "A post-merge workflow failed (or never ran) on main after the wave→main merge."
+  echo "This is a RED main gate — a stop, not a speed bump (charter no-force-merge)."
+  echo "Fix-forward options:"
+  echo "  (a) Fix the regression on main via a normal bug→PR→merge cycle (e.g. a"
+  echo "      base-image CVE re-pin like isnad-graph#1132), then re-run /wave-wrapup."
+  echo "  (b) If the failure is a documented external/standing item (advisory-DB"
+  echo "      drift, a no-fix base-image CVE under an active --ignore-vuln), set"
+  echo "      DEPLOYABLE_VERIFY_OVERRIDE_RATIONALE=\"<reason + tracking issue>\" and"
+  echo "      re-invoke. The override is logged to the report and to"
+  echo "      cross-repo-status.json under wave_{M}_deployable_verify_override."
+  echo "════════════════════════════════════════════════════════════"
+  [ -z "${DEPLOYABLE_VERIFY_OVERRIDE_RATIONALE:-}" ] && exit 1
+  echo "OVERRIDDEN: $DEPLOYABLE_VERIFY_OVERRIDE_RATIONALE"
+fi
+```
+
+A genuinely external red (e.g. a newly-published advisory the fix has not yet propagated for — `feedback_pip_audit_strict_advisory_db_drift`, `feedback_trivy_base_image_cve_org_wide_gate`) is the only case for the override, and it MUST name a tracking issue. A red caused by the wave's own change is fixed forward — never overridden. Include the per-repo result in the Step 10 report; `/wave-retro` records it in the wave history row.
+
 ### 11.6. Staging-promotion gate (Phase-3 end-state criterion #3)
 
 A wave is **not closeable until its merged code has been promoted to staging green**. This is the wrapup-time enforcement of Phase-3 end-state criterion #3 (`main#325`) and the charter rule `pull-requests.md § Wave-Wrapup Staging-Promotion Gate`. It runs AFTER the Step 11.5 reachability-to-main gate (code must be on main before it can be promoted to staging) and BEFORE the ontology rebuild.
