@@ -48,35 +48,81 @@ Per Hook 15 (`enforce_librarian_consulted`). The board-audit work edits no sourc
 /ontology-librarian board-audit drift orphan project field-sync
 ```
 
-### 1. Fetch all open issues across the 8 org repos
+### 1. Fetch all open issues (with labels) across the 8 org repos
+
+Fetch `url` **and** `labels` in one call per repo. The labels feed Step 4's drift
+detection **in memory** — there is NO per-board-item `gh issue view` later (#888 defect 2).
+Each call is wrapped in a `timeout` and skip-and-warns rather than hanging the whole
+audit on a single stalled `gh` call (#888 defect 3 — the org-wide loop hung at the 2-min
+mark twice, though each repo returns in <0.4 s alone).
 
 ```bash
-REPOS=(noorinalabs-main noorinalabs-isnad-graph noorinalabs-user-service \
-       noorinalabs-deploy noorinalabs-design-system noorinalabs-landing-page \
-       noorinalabs-data-acquisition noorinalabs-isnad-ingest-platform)
+# Literal repo list in the `for` (NOT `for repo in $SCALAR`) — under zsh an unquoted
+# scalar is not word-split, so a "$REPOS"-string would collapse to one bogus iteration
+# (#759). A literal word-list is split correctly in both bash and zsh.
+: > /tmp/issue-labels.tsv      # url \t expected-Wave-option (computed from the wave label)
+: > /tmp/all-issue-urls.txt    # every open issue url across the org
 
-ALL_ISSUES=()
-for repo in "${REPOS[@]}"; do
-  while read -r url; do
-    ALL_ISSUES+=("$url")
-  done < <(gh issue list --repo "noorinalabs/$repo" --state open \
-             --limit 500 --json url --jq '.[].url')
+for repo in noorinalabs-main noorinalabs-isnad-graph noorinalabs-user-service \
+            noorinalabs-deploy noorinalabs-design-system noorinalabs-landing-page \
+            noorinalabs-data-acquisition noorinalabs-isnad-ingest-platform; do
+  # Per-call timeout: one stalled call must not hang the whole audit (#888 defect 3).
+  # `timeout` exits 124 on stall → the `if !` branch warns and `continue`s.
+  if ! timeout 45 gh issue list --repo "noorinalabs/$repo" --state open \
+         --limit 500 --json url,labels > "/tmp/issues-$repo.json" 2>/dev/null; then
+    echo "WARN: gh issue list for $repo stalled/failed — skipping (audit continues)" >&2
+    continue
+  fi
+
+  # url + the highest-numbered wave label, mapped to its expected Wave-field option:
+  #   wave-{X}  -> W{X}      p{N}-wave-{M} -> P{N}W{M}      wave-x -> WX
+  # Ties on multiple wave labels (rare, transitional) resolve to highest-numbered, matching
+  # the issue body's "highest-numbered wins" rule. Issues with no wave label are omitted here.
+  jq -r '.[]
+         | .url as $u
+         | ([.labels[].name
+             | select(test("^wave-[0-9]+$") or test("^p[0-9]+-wave-[0-9]+$") or . == "wave-x")]
+            | sort_by(if . == "wave-x" then -1 else (capture("(?<n>[0-9]+)$").n | tonumber) end)
+            | last) as $lbl
+         | select($lbl != null)
+         | ($lbl
+            | if . == "wave-x" then "WX"
+              elif startswith("wave-") then "W" + ltrimstr("wave-")
+              else (capture("p(?<n>[0-9]+)-wave-(?<m>[0-9]+)") | "P\(.n)W\(.m)")
+              end) as $opt
+         | "\($u)\t\($opt)"' "/tmp/issues-$repo.json" >> /tmp/issue-labels.tsv
+
+  jq -r '.[].url' "/tmp/issues-$repo.json" >> /tmp/all-issue-urls.txt
+  printf '  %s: done\n' "$repo"          # progress flush — unbuffered, per-repo
 done
 
-echo "Open issues across org: ${#ALL_ISSUES[@]}"
+echo "Open issues across org: $(wc -l < /tmp/all-issue-urls.txt | tr -d ' ')"
+echo "Issues carrying a wave label: $(wc -l < /tmp/issue-labels.tsv | tr -d ' ')"
 ```
 
 `--limit 500` is intentional — the default 30 truncates silently per memory `feedback_gh_pr_edit_silent_noop` family. Adjust upward if any single repo crosses 500 open issues (unlikely but capture as an annunaki event if hit).
 
-### 2. Fetch all items on project 2
+### 2. Fetch all items on project 2 (paginated — connections cap at 100)
+
+**`items(first: …)` MUST be ≤ 100.** GitHub's GraphQL API caps every connection's
+`first:` at 100 — `first: 500` errors with *"Requesting 500 records on the connection
+exceeds the `first` limit of 100 records"* and returns **0 nodes**, which downstream
+reads as "every issue is an orphan" (#888 defect 1; project 2 had 1394 items at the
+P7W19 run, so this is not an edge case). Page with `first: 100` + a `$endCursor` cursor
+var + `pageInfo { hasNextPage endCursor }`, let `gh api graphql --paginate` walk the
+pages, then merge them with `jq -s`.
 
 ```bash
-gh api graphql -f query='
-query($org: String!, $project: Int!) {
+# `--paginate` re-runs the query with $endCursor for each page (it keys off
+# `pageInfo.endCursor` — the cursor var MUST be named endCursor). It emits one JSON
+# document per page on stdout; `jq -s` (Step below) slurps them into one array.
+gh api graphql --paginate -f org=noorinalabs -F project=2 -f query='
+query($org: String!, $project: Int!, $endCursor: String) {
   organization(login: $org) {
     projectV2(number: $project) {
       id
-      items(first: 500) {
+      items(first: 100, after: $endCursor) {
+        pageInfo { hasNextPage endCursor }
         nodes {
           id
           content {
@@ -97,10 +143,23 @@ query($org: String!, $project: Int!) {
       }
     }
   }
-}' -f org=noorinalabs -F project=2 > /tmp/board-items.json
+}' > /tmp/board-items-pages.json
+
+# Merge the per-page documents into the single-object shape downstream jq expects:
+# `.data.organization.projectV2.{id,items.nodes[]}`. `jq -s` slurps the page stream
+# into an array; we flatten every page's nodes[] and keep page 0's project id (stable
+# across pages). Works whether there were 1 page or 14.
+jq -s '{ data: { organization: { projectV2: {
+          id: .[0].data.organization.projectV2.id,
+          items: { nodes: [ .[].data.organization.projectV2.items.nodes[] ] }
+        } } } }' /tmp/board-items-pages.json > /tmp/board-items.json
+
+echo "Board items fetched: $(jq '.data.organization.projectV2.items.nodes | length' /tmp/board-items.json)"
 ```
 
-Save raw to `/tmp/` (or `.claude/scratch/`) for downstream parsing.
+Save raw to `/tmp/` (or `.claude/scratch/`) for downstream parsing. A board-item count
+of **0** here is a red flag (the over-cap symptom) — investigate before treating every
+issue as an orphan, never run the apply steps off a zero-item fetch.
 
 ### 3. Detect orphans
 
@@ -108,8 +167,8 @@ Save raw to `/tmp/` (or `.claude/scratch/`) for downstream parsing.
 # Build set of URLs on the board
 BOARD_URLS=$(jq -r '.data.organization.projectV2.items.nodes[] | .content.url // empty' /tmp/board-items.json | sort -u)
 
-# Set of URLs found in repo issue lists
-ISSUE_URLS=$(printf '%s\n' "${ALL_ISSUES[@]}" | sort -u)
+# Set of URLs found in repo issue lists (collected to a file in Step 1)
+ISSUE_URLS=$(sort -u /tmp/all-issue-urls.txt)
 
 # Orphans = issues NOT on the board
 ORPHANS=$(comm -23 <(echo "$ISSUE_URLS") <(echo "$BOARD_URLS"))
@@ -121,11 +180,15 @@ echo "$ORPHANS" | head -20
 
 ### 4. Detect Wave-field drift
 
-For each board item that maps to an issue/PR with a wave label, compute the expected Wave-field option using the grammar above (`wave-{X}` → `W{X}`, legacy `p{N}-wave-{M}` → `P{N}W{M}`, `wave-x` → `WX`). Compare against the actual Wave-field value:
+Drift is computed **entirely in memory** by cross-referencing two maps already on disk —
+no per-board-item `gh issue view` (#888 defect 2; the old loop was ~1394 serial network
+calls). The expected Wave-field option per issue comes from `/tmp/issue-labels.tsv` (built
+in Step 1 from the bulk `--json url,labels` fetch, grammar `wave-{X}` → `W{X}`,
+`p{N}-wave-{M}` → `P{N}W{M}`, `wave-x` → `WX`); the board's actual Wave-field value comes
+from the Step-2 GraphQL response. A single hash-join `awk` matches them by URL.
 
 ```bash
-# For each board item, walk the labels of the linked issue/PR and find the wave label
-# (new `wave-{X}` or grandfathered `p{N}-wave-{M}`).
+# Board side: url \t item_id \t current-Wave-field (from the merged Step-2 response).
 jq -r '.data.organization.projectV2.items.nodes[]
        | select(.content.url != null)
        | "\(.content.url)\t\(.id)\t\(
@@ -135,49 +198,51 @@ jq -r '.data.organization.projectV2.items.nodes[]
              | .name] | first // "(unset)")
          )"' /tmp/board-items.json > /tmp/board-wave-values.tsv
 
-# Cross-join with issue labels.
-# (For each url in the tsv, fetch its labels via gh and compare.)
-#
-# Drift bucketing (see #427 for the regression that motivated the split):
+# In-memory hash join (NO network): first file builds url -> expected-option, second
+# file (board) is streamed and annotated with the expected option (or "(unset)" when the
+# issue carries no wave label / isn't an open issue — e.g. a PR or closed item).
+# NB: the map array is `want`, NOT `exp` — `exp` is awk's built-in exponential fn and
+# using it as an array name is a syntax error.
+awk -F'\t' '
+  NR==FNR { want[$1] = $2; next }                # /tmp/issue-labels.tsv : url -> W{X}
+  { e = ($1 in want) ? want[$1] : "(unset)";
+    print $1 "\t" $3 "\t" e }                     # url \t current_wave \t expected
+' /tmp/issue-labels.tsv /tmp/board-wave-values.tsv > /tmp/board-drift-join.tsv
+
+# Bucket the join rows (see #427 for the regression that motivated the split):
 #   DRIFT      — actionable rows where a mutation will change board state.
-#   NOOP_COUNT — issues with no wave label AND Wave field already (unset).
-#                Functionally `(unset) → (clear)`; the apply step's
-#                clearProjectV2ItemFieldValue is a no-op against a field
-#                already cleared. Counted separately so the operator sees
-#                "audit is clean" even when the no-op equivalence class is
-#                non-empty; MUST stay out of DRIFT so Step 7 doesn't emit
-#                redundant clear mutations and Step 5's gate doesn't
-#                over-report.
+#   NOOP_COUNT — no wave label AND Wave field already (unset). Functionally
+#                `(unset) → (clear)`; the apply step's clearProjectV2ItemFieldValue is a
+#                no-op against an already-cleared field. Counted separately so the operator
+#                sees "audit is clean" even when the no-op equivalence class is non-empty;
+#                MUST stay out of DRIFT so Step 7 doesn't emit redundant clear mutations and
+#                Step 5's gate doesn't over-report.
+# DRIFT rows carry REAL tab separators (`$'\t'`, not the literal backslash-t that a
+# double-quoted "\t" would store) so Step 7's `while IFS=$'\t' read` actually splits them.
 DRIFT=()
 NOOP_COUNT=0
-while IFS=$'\t' read -r url item_id current_wave; do
-  REPO=$(echo "$url" | sed -E 's#https://github.com/[^/]+/([^/]+)/.*#\1#')
-  NUM=$(echo "$url" | sed -E 's#.*/(issues|pull)/##')
-  LABEL=$(gh issue view "$NUM" --repo "noorinalabs/$REPO" --json labels \
-            --jq '.labels[].name' 2>/dev/null \
-          | grep -E '^p[0-9]+-wave-[0-9]+$' | sort -V | tail -1)
-
-  if [ -n "$LABEL" ]; then
-    EXPECTED=$(echo "$LABEL" | sed -E 's#p([0-9]+)-wave-([0-9]+)#P\1W\2#')
-    if [ "$current_wave" != "$EXPECTED" ]; then
-      DRIFT+=("$url\t$current_wave\t$EXPECTED")
+while IFS=$'\t' read -r url current_wave expected; do
+  [ -n "$url" ] || continue
+  if [ "$expected" != "(unset)" ]; then
+    if [ "$current_wave" != "$expected" ]; then
+      DRIFT+=("$url"$'\t'"$current_wave"$'\t'"$expected")
     fi
   elif [ "$current_wave" != "(unset)" ]; then
-    # Labeled with no wave label but Wave field is populated — should clear.
-    DRIFT+=("$url\t$current_wave\t(clear)")
+    # No wave label but Wave field is populated — should clear.
+    DRIFT+=("$url"$'\t'"$current_wave"$'\t'"(clear)")
   else
-    # No wave label AND Wave field already (unset) — already in desired
-    # state. Count for visibility; do NOT add to DRIFT.
+    # No wave label AND Wave field already (unset) — already in desired state.
     NOOP_COUNT=$((NOOP_COUNT + 1))
   fi
-done < /tmp/board-wave-values.tsv
+done < /tmp/board-drift-join.tsv
 
 echo "Actionable Wave-field drift:        ${#DRIFT[@]}"
 echo "No-op equivalents (unset == clear): ${NOOP_COUNT}"
 printf '%s\n' "${DRIFT[@]}" | head -30
 ```
 
-"Multiple wave labels (rare, transitional)" — `sort -V | tail -1` takes the highest-numbered which matches the issue body's "highest-numbered wins" rule.
+"Multiple wave labels (rare, transitional)" — Step 1's `sort_by(... | tonumber) | last`
+takes the highest-numbered, matching the issue body's "highest-numbered wins" rule.
 
 ### 5. Confirmation gate (mandatory)
 
@@ -333,6 +398,36 @@ If read-back actionable drift > 0, raise a warning and link to charter `pull-req
 - Daily cron (issue body Option B) — deferred unless drift recurs after this skill ships.
 - Auto-add via Hook 13 extension — Hook 13 catches in-session creates; extending it to cron-style cross-repo scans is the Option B path, deferred for the same reason.
 - Wave-field option auto-creation — `gh project field-create` requires project-edit scope; one-time owner action.
+
+## Skill-authoring notes — GitHub API access patterns
+
+These are the footguns this skill hit (main#888, surfaced during the P7W19 `/board-audit`
+run). Any skill that queries the GitHub GraphQL or REST APIs over a growing collection
+should heed them:
+
+- **GraphQL connections cap at 100 — always paginate.** Every GraphQL *connection*
+  (`items`, `nodes`, `issues`, …) rejects `first:` > 100 with a hard error and returns
+  zero rows. Use `first: 100` + `pageInfo { hasNextPage endCursor }` + a `$endCursor`
+  query var + `gh api graphql --paginate`, then merge pages with `jq -s`. Never raise
+  `first:` to "fit the dataset" — that is the over-cap regression (Step 2).
+- **Derive in memory; don't loop network calls per row.** If you already have the data in
+  a bulk response (or can get it in one `gh … --json` call per repo), cross-reference it
+  in memory (an `awk`/`jq` hash join) rather than an `O(collection)` per-item `gh view`
+  loop (Step 1 + Step 4).
+- **Wrap each external call in a `timeout` and skip-and-warn.** A single stalled `gh`/HTTP
+  call must not hang a whole multi-repo sweep; bound it and continue (Step 1).
+
+A cheap regression lint for the first item ships at
+[`.claude/lib/lint_skill_graphql_pagination.py`](../../lib/lint_skill_graphql_pagination.py):
+it flags `first: <n≥100>` inside a `gh api graphql` block across `.claude/skills/**/*.md`.
+Run it over the skills tree with:
+
+```bash
+python3 .claude/lib/lint_skill_graphql_pagination.py .claude/skills/**/*.md
+```
+
+Wiring it into pre-commit/CI is a deliberate follow-up (it is not yet a blocking gate); its
+detection logic is covered by `.claude/lib/tests/test_lint_skill_graphql_pagination.py`.
 
 ## Promotion provenance
 
