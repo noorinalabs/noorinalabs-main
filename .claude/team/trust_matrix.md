@@ -1863,3 +1863,39 @@ the headcount budget) — the same surfaced-decision posture the `headcount_budg
 **Fire/hire:** none.
 
 **Concentration note:** 9% top by implementer — the most evenly distributed wave to date (one PR per engineer across all 7 repos). Theme-fit fan-out; no fragility concentration. The W17 caveat ("carry distributed implementer work forward") was met again.
+
+## Phase 7 Wave 19 Trust Updates (2026-06-25) — framework tooling carry-forward + prod-data quality
+
+Mechanical scoring (`trust_signals.py score 7 19`): 9 PRs, 7 engineers, **0 changes-requested cycles**, 0 CI-red merges, 0 must-fix received/caught, top-concentration 33% (Aino, 3/9). The helper proposed Aino +1 (clean 3-PR delivery); **owner decision 2026-06-25 held all engineers flat** — the whole wave was clean-but-unremarkable, no single-reviewer-catch or other ratchet signal, so no deltas this wave. No `review_false_positive` misfires this wave (the #881 extractor bug did not trigger — all false-positive counts 0).
+
+### Org-Level Team (noorinalabs-main)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Aino Virtanen | hold | hold | #896 (Hook-4 subshell/compound guard, #894), #895 (lint wiring, #893), #890 (wave_seq reservation-aware, #885). prs_merged=3, 0 must-fix, 0 CI-red. Helper proposed +1; **owner held flat** (clean delivery, no reviewing-catch ratchet). |
+| Lucas Ferreira | hold | hold | #891 (narrow validate_pr_review batch-loop guard, #886). 0 must-fix, 0 CI-red. Baseline — held. |
+| Nurul Hakim | hold | hold | #892 (board-audit GraphQL pagination + resilient loop, #888). 0 must-fix, 0 CI-red. Baseline — held. |
+| Weronika Zielinska | hold | hold | #889 (ontology_gen depth-aware TS extends splitter, #887). 0 must-fix, 0 CI-red. Baseline — held. |
+
+### Child-Repo Teams
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Alejandra Reyes-Fuentes (data-acquisition) | hold | hold | da#218 (ADR-003 sanadset orphan + narrator-pollution investigation A/B, da#202). 0 must-fix, 0 CI-red. Baseline — held. |
+| Kavitha Sundaramurthy (data-acquisition) | hold | hold | da#217 (honor explicit None as load-all in HADITH_COMPOSITION, da#196). 0 must-fix, 0 CI-red. Baseline — held. |
+| Nneka Obi (isnad-graph) | hold | hold | ig#1133 (repair prod full-text starvation + semantic 500, ig#1110). 0 must-fix, 0 CI-red. Baseline — held. |
+
+### Done Well / Needs Improvement (Phase 7 Wave 19) — evidence-anchored, bare "None" banned
+
+| Member | Done Well (with evidence) | Gap (metric, or explicit "clean: numbers") |
+|--------|---------------------------|--------------------------------------------|
+| **Aino Virtanen** | 3 clean framework-hardening PRs (#896/#895/#890) — Hook-4 guard, lint wiring, wave_seq reservation | clean: 0 must-fix received, 0 CI-red, 0 false-positives |
+| **Lucas / Nurul / Weronika** | 1 clean on-theme main PR each (#891/#892/#889) — guard-narrowing, board-audit pagination, TS extractor | clean: 0 must-fix received, 0 CI-red — baseline, no ratchet |
+| **Alejandra / Kavitha** | data-quality fixes in data-acquisition (da#218 investigation, da#217 parser) | clean: 0 must-fix received, 0 CI-red — baseline, no ratchet |
+| **Nneka Obi** | prod search repair (full-text starvation + semantic 500, ig#1133) | clean: 0 must-fix received, 0 CI-red — baseline, no ratchet |
+
+**Fire/hire:** none.
+
+**Concentration note:** 33% top by implementer (Aino, 3/9) — below the 60% fragility threshold. Theme-fit: Aino owns the framework-tooling surface this wave themed on. No redistribution action required.
+
+**Process note (not a per-engineer signal):** two wave→main *integration* PRs needed orchestrator fix-forward — #898 (squash collapsed persona authorship → commit-author gate) and da#222 (child structural index not regenerated for a new `.cypher`). Neither is an implementer must-fix (the per-issue PRs were clean); both are orchestrator/process gaps now codified — **Hook 22** (`block_squash_wave_merge`) + **`/wave-wrapup` Step 10.7** (child structural pre-regen). See this wave's feedback_log entry.

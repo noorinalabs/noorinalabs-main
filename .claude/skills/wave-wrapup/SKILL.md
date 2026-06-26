@@ -343,6 +343,35 @@ jq -e --arg m "{M}" '.["wave_" + $m + "_trust_signals"]' "$REPO_ROOT/cross-repo-
 
 **Acceptance:** `wave_{M}_trust_signals` exists at top-level after wrapup, mapping each active engineer to their integer signal counts. `/wave-retro` Step 4 consumes it; if absent, retro re-extracts it directly (the helper is idempotent and reads from the same merged-PR set).
 
+### 10.7. Child structural-index pre-regen — BEFORE the wave→main PRs (added P7W19 retro)
+
+The structural-ontology `staleness-check` only gates PRs to **main**, NOT wave-branch PRs. So a per-issue PR that added a tracked source file (`.py`/`.cypher`/`.ts`/`.tsx`) without regenerating that child's structural index passes its own wave-branch CI but **reddens the wave→main PR** the moment Step 11 opens it — a fix-forward scramble mid-wrapup. Caught in P7W19: da#218 added `queries/validation/sanadset_orphan_inventory.cypher` and the wave→main PR (da#222) went red on staleness-check until the index was regenerated (`b84b478`).
+
+Close it pre-emptively: for each child repo in `wave_{M}_repos_in_scope` (i.e. excluding `noorinalabs-main`, whose index is handled by Step 12b), regenerate the child's structural index from the wave-branch HEAD and commit any diff to the wave branch BEFORE opening the integration PR, so the wave→main PR is green on staleness-check from the start.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+BRANCH="deployments/phase-{P}/wave-{M}"
+while IFS= read -r R; do
+  [ "$R" = "noorinalabs-main" ] && continue
+  CHILD="$REPO_ROOT/$R"
+  [ -d "$CHILD" ] || { echo "$R: not checked out locally — regenerate manually if it added tracked source"; continue; }
+  # Child generator fetches ontology_gen from noorinalabs-main; regenerate in place.
+  ( cd "$CHILD" \
+    && git fetch --quiet origin "$BRANCH" && git checkout --quiet "$BRANCH" && git pull --ff-only --quiet origin "$BRANCH" \
+    && python3 scripts/structural_ontology.py emit --gen-lib "$REPO_ROOT/.claude/lib" \
+    && if ! git diff --quiet -- ontology/structural/; then
+         git add ontology/structural/ \
+         && git -c user.name="Aino Virtanen" -c user.email="parametrization+Aino.Virtanen@gmail.com" \
+              commit -m "ontology(structural): regenerate $R index pre-wave-merge ({P}W{M})" \
+         && git push origin "$BRANCH" \
+         && echo "$R: structural index regenerated + pushed"
+       else echo "$R: structural index already current"; fi )
+done <<< "$(jq -r ".wave_{M}_repos_in_scope[]" "$REPO_ROOT/cross-repo-status.json")"
+```
+
+This is the child analog of Step 12b (which regenerates the **parent** index). Run it here, before Step 11, not at 12b — by Step 12 the integration PRs are already open and would have already gone red. If a child repo is not checked out locally, surface it so the operator regenerates manually (or accepts the Step-11 fix-forward for that one repo). Source: memory `feedback_wave_branch_merge_not_squash` § Related child-repo wrap gotcha (P7W19 #222).
+
 ### 11. Merge to main per repo (every wave)
 
 **Every wave's wrapup merges its wave branch to main** (changed 2026-06-09 — owner directive; previously gated to the final wave only). Each repo in `wave_{M}_repos_in_scope` has its OWN `deployments/phase-{P}/wave-{M}` branch (created by `/wave-kickoff` step 1) that needs its own PR to main. This is the symmetric counterpart of the multi-repo branch creation gap (main#238). Merging each wave keeps `main` continuously current: the next wave bases off main (`/wave-start` § 3 base determination; ref cut by `/wave-kickoff` Step 1), so an unmerged wave would strand its work the moment the following wave starts.

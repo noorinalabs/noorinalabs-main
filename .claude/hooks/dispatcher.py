@@ -46,6 +46,9 @@ _BASH_HOOKS = [
     "validate_vps_host",
     "warn_ghcr_image",
     "warn_zsh_wordsplit",
+    # Network-calling checks LAST: resolves a PR's base ref via `gh pr view`.
+    # Cheap-prefiltered on `--squash` and fails open on any gh error. P7W19.
+    "block_squash_wave_merge",
 ]
 
 
