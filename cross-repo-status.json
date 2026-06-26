@@ -1,5 +1,11 @@
 {
   "wave_21_meta_issue": "noorinalabs-main#903",
+  "wave_21_phase": 7,
+  "wave_21_phase_ordinal": 4,
+  "wave_21_scope_reconciled_at": "2026-06-26T17:09:35Z",
+  "wave_21_repos_in_scope": ["noorinalabs-main","noorinalabs-data-acquisition","noorinalabs-isnad-graph"],
+  "wave_21_scope": {"theme":"Narrator dating + prod re-validation","phase":7,"phase_ordinal":4,"tracking_meta":["noorinalabs-main#673","noorinalabs-main#723"],"sizing_decision":"foundation-split (owner 2026-06-26): da date-foundation + ig#1039 loader this wave; ig#1041/1042/1043 APIs deferred to W22 (depend on ig#1039 loaded dates)","tier_1_narrator_foundation":[{"id":"noorinalabs-data-acquisition#161","ref":"da#161","implementer":"Alejandra Reyes-Fuentes","reviewer":"Kavitha Sundaramurthy","reviewer_2":"Nikolaos Papadopoulos","priority":"feature"},{"id":"noorinalabs-data-acquisition#162","ref":"da#162","implementer":"Kavitha Sundaramurthy","reviewer":"Ivana Horvat","reviewer_2":"Alejandra Reyes-Fuentes","priority":"feature"},{"id":"noorinalabs-data-acquisition#163","ref":"da#163","implementer":"Nikolaos Papadopoulos","reviewer":"Oyunbileg Batbayar","reviewer_2":"Kwesi Boateng","priority":"feature"},{"id":"noorinalabs-data-acquisition#164","ref":"da#164","implementer":"Ivana Horvat","reviewer":"Alejandra Reyes-Fuentes","reviewer_2":"Nikolaos Papadopoulos","priority":"feature"},{"id":"noorinalabs-data-acquisition#165","ref":"da#165","implementer":"Alejandra Reyes-Fuentes","reviewer":"Kavitha Sundaramurthy","reviewer_2":"Jean-Claude Habimana","priority":"feature"},{"id":"noorinalabs-data-acquisition#166","ref":"da#166","implementer":"Nikolaos Papadopoulos","reviewer":"Ivana Horvat","reviewer_2":"Oyunbileg Batbayar","priority":"feature"},{"id":"noorinalabs-data-acquisition#228","ref":"da#228","implementer":"Kavitha Sundaramurthy","reviewer":"Nikolaos Papadopoulos","reviewer_2":"Kwesi Boateng","priority":"feature"},{"id":"noorinalabs-isnad-graph#1039","ref":"ig#1039","implementer":"Jun-Seo Park","reviewer":"Mateo Salazar","reviewer_2":"Aisling Brennan","priority":"feature"}],"tier_2_prod_revalidation":[{"id":"noorinalabs-main#723","ref":"main#723","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"ops","note":"owner-run prod re-validation: run sanadset/dedup/chain pipeline on prod, verify criteria #1-#4, close on confirmation"}],"tier_3_tech_debt":[{"id":"noorinalabs-data-acquisition#139","ref":"da#139","implementer":"Ivana Horvat","reviewer":"Alejandra Reyes-Fuentes","reviewer_2":"Oyunbileg Batbayar","priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#229","ref":"da#229","implementer":"Kavitha Sundaramurthy","reviewer":"Nikolaos Papadopoulos","reviewer_2":"Jean-Claude Habimana","priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#230","ref":"da#230","implementer":"Alejandra Reyes-Fuentes","reviewer":"Kavitha Sundaramurthy","reviewer_2":"Kwesi Boateng","priority":"tech-debt"}],"deliberately_not_in_w21":["ig#1041 (GET /timeline/narrators) -> W22: needs ig#1039 loaded dates","ig#1042 (GET /hadith/{id}/dating) -> W22: needs ig#1039 loaded dates","ig#1043 (tabaqa graph layering) -> W22: needs ig#1039 loaded dates","ip#119 (grade parity) -> later: separate from narrator theme"],"td_intake":"3/2 (target ceil(0.20*8)=2; owner pulled 3 theme-coherent da data-quality items)","td_pool":20,"concentration":"top implementer 3/11 = 27% (Alejandra / Kavitha tied) — below 60%; da-heavy (10/11) is narrator-theme-fit"},
+  "wave_21_scope_reconciliation_note": "clean-slate wave (no drift, no must-includes); foundation-split sizing (owner 2026-06-26); TD intake 3 theme-coherent da items; ig#1041/1042/1043 deferred to W22",
   "wave_20_meta_issue": "noorinalabs-main#899",
   "wave_20_phase": 7,
   "wave_20_phase_ordinal": 3,
@@ -2350,7 +2356,7 @@
     "pilot_completed_at": "2026-06-24"
   },
   "wave_17_task3_checkpoint_resolved_at": "2026-06-24T18:12:00Z",
-  "global_wave_seq": 20,
+  "global_wave_seq": 21,
   "phase_6_criteria_trackers": {
     "1": "noorinalabs-main#725",
     "2": "noorinalabs-main#726",
