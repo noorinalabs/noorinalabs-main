@@ -1899,3 +1899,32 @@ Mechanical scoring (`trust_signals.py score 7 19`): 9 PRs, 7 engineers, **0 chan
 **Concentration note:** 33% top by implementer (Aino, 3/9) — below the 60% fragility threshold. Theme-fit: Aino owns the framework-tooling surface this wave themed on. No redistribution action required.
 
 **Process note (not a per-engineer signal):** two wave→main *integration* PRs needed orchestrator fix-forward — #898 (squash collapsed persona authorship → commit-author gate) and da#222 (child structural index not regenerated for a new `.cypher`). Neither is an implementer must-fix (the per-issue PRs were clean); both are orchestrator/process gaps now codified — **Hook 22** (`block_squash_wave_merge`) + **`/wave-wrapup` Step 10.7** (child structural pre-regen). See this wave's feedback_log entry.
+
+## Phase 7 Wave 20 Trust Updates (2026-06-26) — graph integrity + dedup + chains
+
+Mechanical scoring (`trust_signals.py score 7 20`): 6 PRs, 5 implementers, **0 changes-requested cycles**, 0 CI-red merges, 0 must-fix received/caught, top-concentration 33% (Alejandra, 2/6). The helper proposed Alejandra +1 (clean 2-PR delivery); she is already at ceiling **5**, so the bump is absorbed (`clamp(5+1)=5`). All other engineers delta 0 (a single clean PR is not a bump). No `review_false_positive` misfires. Baseline-hold wave — same shape as W18/W19: clean-but-unremarkable, no single-reviewer-catch or other ratchet signal.
+
+**Validation note:** the W19 process changes proved out this wave — **Hook 22** silently did its job (every per-issue PR merged with `--merge`; no squash attempt to block) and **Step 10.7** (child structural pre-regen) meant both wave→main PRs (da#231, ig#1136) were green on staleness-check from the first push, with **zero** fix-forward scrambles (vs two in W19). The two pain points that drove W19's codification did not recur.
+
+### Child-Repo Teams (data-acquisition + isnad-graph)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Alejandra Reyes-Fuentes (data-acquisition) | 5 | 5 | da#224 (Path B/B1 — emit `collections_sanadset.parquet` foundation, da#219) + da#227 (Path B parent integration verify, da#202). prs_merged=2 (wave top), 0 must-fix, 0 CI-red. Helper proposed +1; **absorbed at ceiling**. Led the two coupled B1+parent items per kickoff plan. |
+| Kavitha Sundaramurthy (data-acquisition) | 5 | 5 | da#225 (cross-edition canonical-identity dedup, Path B/B2, da#220). 0 must-fix, 0 CI-red. Baseline — held at ceiling. |
+| Ivana Horvat (data-acquisition) | 5 | 5 | da#226 (narrator re-segmentation — `<NAR>` firehose filter, Path B/B3, da#221). 0 must-fix, 0 CI-red. Baseline — held at ceiling. |
+| Nikolaos Papadopoulos (data-acquisition) | 5 | 5 | da#223 (da#153 integrity sweep — explicit-null / no-fabrication contracts + inventory). 0 must-fix, 0 CI-red. Baseline — held at ceiling. |
+| Jun-Seo Park (isnad-graph) | 4 | 4 | ig#1135 (`GET /validate/chains` — chronological isnad plausibility, ig#1040). 0 must-fix, 0 CI-red. Baseline — held (at 4 since W4). |
+
+### Done Well / Needs Improvement (Phase 7 Wave 20) — evidence-anchored, bare "None" banned
+
+| Member | Done Well (with evidence) | Gap (metric, or explicit "clean: numbers") |
+|--------|---------------------------|--------------------------------------------|
+| **Alejandra Reyes-Fuentes** | 2 clean coupled PRs on the Path B spine (da#224 B1 foundation + da#227 parent integration verify) — the orphan-resolution acceptance gate | clean: 0 must-fix received, 0 CI-red, 0 false-positives |
+| **Kavitha / Ivana / Nikolaos** | 1 clean on-theme data-acquisition PR each (da#225 dedup / da#226 re-segmentation / da#223 integrity contracts) | clean: 0 must-fix received, 0 CI-red — baseline, no ratchet |
+| **Jun-Seo Park** | chain-validation endpoint shipped clean (ig#1135 `GET /validate/chains`) — doubles as the segmentation regression signal | clean: 0 must-fix received, 0 CI-red — baseline, no ratchet |
+| **Reviewers** (Kavitha, Nikolaos, Ivana, Mateo Salazar, Aisling Brennan, Oyunbileg Batbayar, Kwesi Boateng, Jean-Claude Habimana) | 2 first-pass approvals per PR, 0 CR cycles wave-wide | clean: 0 must-fix-caught because 0 must-fixes existed — no reviewing ratchet either way |
+
+**Fire/hire:** none. Retirement trigger (`trust_signals.retirement_trigger`) fired for no engineer — no bottom-tier-or-CI-red streak.
+
+**Concentration note:** 33% top by implementer (Alejandra, 2/6) — below the 60% fragility threshold. Theme-fit: Path B's sanadset parsing lives in data-acquisition and Alejandra owns the B1+parent coupling by design. No redistribution action required. 5 of 6 implementer-issues in data-acquisition is inherent to the Path B theme, spread across 4 da personas — not fragility.

@@ -3453,3 +3453,43 @@ Mechanical (`trust_signals.py score 7 19`). All clean (0 must-fix received/caugh
 
 ### Next-wave scope
 W20 stub auto-drafted + boarded, `wave_20_meta_issue` recorded; carry-forward pre-loaded. Theme TBD — owner to set, then `/wave-scope 7 20` proceeds.
+
+## Retrospective: Phase 7 Wave 20 — 2026-06-26
+
+**Theme:** Graph integrity + dedup + chains (Phase 7 ordinal 3, global wave id 20). Turn the prod data-quality findings (umbrella main#723) into fixes — Path B sanadset orphan resolution, cross-edition dedup, narrator re-segmentation, chain validation. Serves Phase-7 end-state criteria 1, 2, 4.
+
+### Team Performance
+6 per-issue PRs merged green to `deployments/phase-7/wave-20`, **0 changes-requested cycles**, 0 CI-red merges, 0 must-fix items wave-wide. 6 issues closed (da#219/220/221/153/202, ig#1040). Both wave→main integration PRs (da#231, ig#1136) merged clean with `--merge`; main no-op (meta-only). Wave branches retained. All post-merge gates green (reachability, deployable-merge, staging deploy-stg success, ig ghcr-publish). Counters verified at retro against PR evidence — no drift (6 / 0 / 33%).
+
+### Per-Engineer Assessments (mechanical — `trust_signals.py score 7 20`)
+- **Alejandra Reyes-Fuentes** (da) — da#224 (B1) + da#227 (parent verify), prs_merged=2 (wave top). Clean. Helper +1 absorbed at ceiling 5.
+- **Kavitha Sundaramurthy** (da) — da#225 (B2 dedup). Clean. Hold 5.
+- **Ivana Horvat** (da) — da#226 (B3 re-segmentation). Clean. Hold 5.
+- **Nikolaos Papadopoulos** (da) — da#223 (da#153 integrity sweep). Clean. Hold 5.
+- **Jun-Seo Park** (ig) — ig#1135 (GET /validate/chains). Clean. Hold 4.
+- Reviewers (Kavitha, Nikolaos, Ivana, Mateo Salazar, Aisling Brennan, Oyunbileg Batbayar, Kwesi Boateng, Jean-Claude Habimana): 2 first-pass approvals/PR, 0 CR cycles → no reviewing ratchet (0 must-fixes existed to catch).
+
+### Top 3 Going Well
+1. **W19's process fixes proved out** — Hook 22 + Step 10.7 meant **zero** wave→main fix-forward scrambles (vs two in W19). The exact pain points that drove last wave's codification did not recur — the codification worked.
+2. **Path B sequenced cleanly** — B1 (da#219, collections foundation) → B2 (da#220, dedup) → B3 (da#221, re-segmentation) parallel; da#202 parent integration-verify last as the orphan-resolution acceptance gate. No dependency stalls.
+3. **Third consecutive clean wave** (W18/W19/W20) — 0 CR cycles, healthy 33% concentration, all gates green. Steady-state execution.
+
+### Top 3 Pain Points
+1. **Kickoff PostToolUse hook-parser brittleness** — `post_wave_kickoff_comment` + `post_label_change_wave_field_sync` both returned `skip_parser_returned_empty` on the `cd "$(...)"`-prefixed / newline-prefixed wave-label command, so no kickoff comment auto-posted and no Wave-field auto-synced. Worked around with bare commands mid-kickoff; filed as **#901** (parser) + **#902** (board-audit closed-issue false-clear). Recurring shape (same class hit P4W3/P5W3 per stale annunaki entries) — now tracked.
+2. **Board-audit Step 4 false-clears closed-issue Wave fields** — the open-only label join vs all-board-items diff proposed clearing 6 closed issues' Wave fields. Owner chose full-literal sync anyway; defect filed as **#902**.
+3. **Stale annunaki backlog** — `errors.jsonl` carries 54 unprocessed entries from prior waves (2026-06-12 → 06-19), dominated by the #901 parser-shape class, known false-matches (PR-body text matching `ModuleNotFoundError:`/`^FAILED`), and the worktree-fragile `test_ontology_tracker` ([[project_ontology_tracker_worktree_test]]). The per-wave marker pattern means the cross-wave backlog never gets swept — minor hygiene gap, no data impact.
+
+### Proposed Process Changes
+**None this wave.** W19 already shipped the two structural fixes (Hook 22, Step 10.7) and they validated this wave. The two defects surfaced (#901 parser, #902 board-audit) are already filed as tooling-bug follow-ups against the hook/skill — no charter amendment needed; they are bugs in existing automation, not missing rules.
+
+### Annunaki-attack
+**0 captured in the P7W20 window.** `errors.jsonl` holds 54 stale entries (all 2026-06-12 → 06-19, prior waves) — nothing appended during this wave (2026-06-25/26). This wave's only real glitch (kickoff hook-parser) was filed live as #901/#902 during the wave, not via post-hoc capture. Backlog content is non-actionable-or-already-filed: the parser-shape bug (→#901), known stdout false-matches (PR-body text, dev-iteration test failures), and the memory'd worktree-fragile test. **0 new actionable artifacts.** Marker `wave_20_annunaki_attack_ran_at` written.
+
+### Promotion audit
+**0 AUTO · 0 DECIDE · 213 KEPT · 23 SUPERSEDED** (`promotion-audit/run.py wave-20`) — nothing crossed a threshold mechanically. [[feedback_wave_branch_merge_not_squash]] now shows under SUPERSEDED (codified to Hook 22 in W19). Standalone log: `promotion_audit_log/p7-wave-20.md`.
+
+### Memory-to-automation audit
+**0 new promotions.** The wave's two tooling defects map to already-filed bugs (#901/#902), not soft memories needing codification. Recently-added memories ([[feedback_wave_branch_merge_not_squash]] already promoted to Hook 22 in W19; [[feedback_local_ci_parity_no_force]] tracked for full rollout by #684) are either codified or appropriately situational. No memory crossed a promotion threshold. Marker `wave_20_memory_audit_ran_at` written.
+
+### Next-wave scope
+W21 stub auto-drafted + boarded, `wave_21_meta_issue` recorded; carry-forward pre-loaded. Theme TBD — owner to set, then run `/phase-review 7` → `/wave-scope 7 21`.

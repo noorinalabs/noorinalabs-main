@@ -1,5 +1,5 @@
 {
-  "description": "Tracks file checksums for ontology change detection. last_tracked = current file hash (updated by tracker hook). last_resolved = hash when ontology was last rebuilt from this file (updated by resolver). When last_tracked != last_resolved, the file is dirty. SCOPE (#857, #820/C×T2): tracking + /ontology-rebuild cover the hand-curated SEMANTIC OVERLAY only (ontology/domain.yaml, ontology/services.yaml, ontology/conventions.md, ontology/repos/*.yaml, other hand-edited *.md). The GENERATED structural layer at ontology/structural/ (owned generator #855) is NOT tracked here — it is always-current-by-regeneration, so the tracker skips it (see ontology_tracker.py SKIP_PATTERNS).",
+  "description": "Tracks file checksums for ontology change detection. last_tracked = current file hash (updated by tracker hook). last_resolved = hash when ontology was last rebuilt from this file (updated by resolver). When last_tracked != last_resolved, the file is dirty. SCOPE (#857, #820/C\u00d7T2): tracking + /ontology-rebuild cover the hand-curated SEMANTIC OVERLAY only (ontology/domain.yaml, ontology/services.yaml, ontology/conventions.md, ontology/repos/*.yaml, other hand-edited *.md). The GENERATED structural layer at ontology/structural/ (owned generator #855) is NOT tracked here \u2014 it is always-current-by-regeneration, so the tracker skips it (see ontology_tracker.py SKIP_PATTERNS).",
   "files": {
     ".claude/drafts/secrets-migration-tonight-2026-04-23.md": {
       "last_resolved": "acc0d25da0c7fcf3792ade1703f7c75f2215a29daafe0367db907f4e8d2e990f",
@@ -164,9 +164,9 @@
       "resolved_at": "2026-05-16T22:20:43.893664+00:00"
     },
     ".claude/team/feedback_log.md": {
-      "last_tracked": "ab11f7b43589c76825fac3e0a51ffc3d95aaf31af5dcbdd21d23cd6c365d1d1c",
+      "last_tracked": "955dcf61ab90313049710f813856c982a08707f1f729a28b56f54a250e7e7da9",
       "last_resolved": "ab11f7b43589c76825fac3e0a51ffc3d95aaf31af5dcbdd21d23cd6c365d1d1c",
-      "tracked_at": "2026-06-20T00:29:48.826590+00:00",
+      "tracked_at": "2026-06-26T16:12:15.409078+00:00",
       "resolved_at": "2026-06-21T02:32:49Z"
     },
     ".gitignore": {
@@ -650,9 +650,9 @@
       "resolved_at": "2026-05-06T00:49:39.816328+00:00"
     },
     ".claude/team/trust_matrix.md": {
-      "last_tracked": "6054a90f958b69bb0559d65b80ee57ddb846b317cc3a0ce9503d596628a8139f",
+      "last_tracked": "427a705496bc476f59c6b32391063a989f373abbd052b7c429a00f4f8a8bc7d2",
       "last_resolved": "6054a90f958b69bb0559d65b80ee57ddb846b317cc3a0ce9503d596628a8139f",
-      "tracked_at": "2026-06-20T00:31:13.523506+00:00",
+      "tracked_at": "2026-06-26T16:10:02.643756+00:00",
       "resolved_at": "2026-06-21T02:32:49Z"
     },
     ".claude/team/promotion_audit_log/wave-5.md": {
