@@ -85,6 +85,21 @@ SKIP_PATTERNS = (
     "annunaki/errors.jsonl",
 )
 
+# Rel-path PREFIXES that are never genericize candidates — whole subtrees under
+# .claude/ that hold ephemeral or project-private content, not reusable
+# framework artifacts. Checked against the NORMALIZED rel-path only (NOT the raw
+# file_path), so a real artifact merely *edited inside a worktree*
+# (.../worktrees/<wt>/.claude/hooks/foo.py, which collapses to rel "hooks/foo.py")
+# is still tracked, while a path that normalizes TO "worktrees/<wt>/..." (a
+# transient worktree file), "memory/..." (project-private memory notes), or
+# "scratch..." (transient scratch) is dropped. Closes the Step-12.5 noise inflow
+# (P7W19: 117 of 270 pending candidates were worktree/memory/scratch churn).
+SKIP_REL_PREFIXES = (
+    "worktrees/",
+    "memory/",
+    "scratch",
+)
+
 # Artifact classification — the same category taxonomy the per-edit hook used,
 # now centralized here so the hook can record minimally and the checkpoint can
 # present a meaningful "what kind of generic prompt would this be" hint.
@@ -148,6 +163,11 @@ def normalize_rel_path(file_path: str) -> str | None:
     if not rel:
         return None
     if any(p in rel or p in file_path for p in SKIP_PATTERNS):
+        return None
+    # Whole-subtree noise (worktrees/ memory/ scratch) — checked against the
+    # normalized rel only, so a real artifact edited inside a worktree (which
+    # collapses to its inner rel like "hooks/foo.py") is still tracked.
+    if any(rel.startswith(pfx) for pfx in SKIP_REL_PREFIXES):
         return None
     # The pending/decisions ledgers themselves are under .claude/ — never track
     # the tracker's own state files, or the checkpoint would surface itself.

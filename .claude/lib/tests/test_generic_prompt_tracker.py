@@ -53,6 +53,21 @@ class NormalizeRelPathTest(unittest.TestCase):
         self.assertIsNone(gpt.normalize_rel_path("/r/.claude/ontology/checksums.json"))
         self.assertIsNone(gpt.normalize_rel_path("/r/.claude/annunaki/errors.jsonl"))
 
+    def test_noise_subtree_rel_prefixes_return_none(self) -> None:
+        # worktrees/ memory/ scratch are whole-subtree noise — a path that
+        # NORMALIZES to one of these rel prefixes is not a genericize candidate.
+        self.assertIsNone(gpt.normalize_rel_path("/r/.claude/worktrees/agent-x/foo.txt"))
+        self.assertIsNone(gpt.normalize_rel_path(".claude/memory/feedback_x.md"))
+        self.assertIsNone(gpt.normalize_rel_path("/r/.claude/scratch/tmp.md"))
+        self.assertIsNone(gpt.normalize_rel_path(".claude/scratch_pr_768.md"))
+
+    def test_real_artifact_edited_inside_worktree_still_tracked(self) -> None:
+        # The rel-prefix skip is checked against the NORMALIZED rel, not the raw
+        # path, so a real artifact edited in a worktree (collapses to its inner
+        # rel) is still tracked — the worktrees/ prefix must not over-match it.
+        p = "/home/u/repo/.claude/worktrees/0716-x/.claude/hooks/foo.py"
+        self.assertEqual(gpt.normalize_rel_path(p), "hooks/foo.py")
+
     def test_tracker_own_state_files_not_tracked(self) -> None:
         self.assertIsNone(gpt.normalize_rel_path("/r/.claude/generic_prompt_pending.json"))
         self.assertIsNone(gpt.normalize_rel_path("/r/.claude/generic_prompt_ledger.json"))
