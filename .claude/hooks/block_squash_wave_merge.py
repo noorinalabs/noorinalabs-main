@@ -75,7 +75,9 @@ def _iter_squash_merges(command):
         _globals, rest = gh
         if rest[:2] != ["pr", "merge"]:
             continue
-        if "--squash" not in rest:
+        # gh accepts both the long `--squash` and the documented short `-s`
+        # (cover-all-syntactic-forms, memory feedback_lint_gate_cover_all_syntactic_forms).
+        if not ({"--squash", "-s"} & set(rest)):
             continue
         # PR number is the first bare-digit positional after `pr merge`.
         pr = next((t for t in rest[2:] if t.isdigit()), None)
@@ -134,9 +136,14 @@ def check(input_data, *, base_runner=None):
         return None
     command = input_data.get("tool_input", {}).get("command", "")
     # Cheap pre-filter: skip all parsing AND the network call unless the command
-    # even mentions `--squash`. This hook runs on every Bash call, so the
-    # common case must be a single substring test.
-    if "--squash" not in command:
+    # even mentions `merge`. This hook runs on every Bash call, so the common
+    # case must be a single substring test. Gating on `merge` (not `--squash`)
+    # is required to also catch the short `-s` form of `--squash` — `-s` is too
+    # generic to substring-match safely, but every `gh pr merge` contains
+    # `merge`. A non-merge command that happens to contain `merge` (e.g.
+    # `git merge`) parses cheaply and yields no `gh pr merge` segment → allow,
+    # with no network call.
+    if "merge" not in command:
         return None
     for pr, repo in _iter_squash_merges(command):
         base = _resolve_base_ref(pr, repo, runner=base_runner)

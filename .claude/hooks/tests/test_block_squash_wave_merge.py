@@ -75,6 +75,26 @@ class BlocksSquashIntoWaveBranch(unittest.TestCase):
         assert result is not None
         self.assertEqual(result["decision"], "block")
 
+    def test_short_squash_flag_into_wave_blocks(self):
+        # gh's documented short form `-s` == `--squash` must also block
+        # (cover-all-syntactic-forms — caught in PR #900 review).
+        result = hook.check(
+            _input("gh pr merge 890 -s"),
+            base_runner=_runner({"890": WAVE}),
+        )
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_short_squash_with_delete_branch_blocks(self):
+        result = hook.check(
+            _input("gh pr merge 218 -s -d"),
+            base_runner=_runner({"218": WAVE}),
+        )
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
 
 class AllowsLegitimateMerges(unittest.TestCase):
     def test_squash_into_main_allows(self):
@@ -123,13 +143,30 @@ class FailsOpen(unittest.TestCase):
         result = hook.check(_input("gh pr merge $pr --squash"), base_runner=explode)
         self.assertIsNone(result)
 
-    def test_squash_prefilter_short_circuits(self):
-        # No `--squash` substring → return before any parse/network. A runner
-        # that explodes proves the network path is never reached.
+    def test_prefilter_short_circuits_non_merge_command(self):
+        # No `merge` substring → return before any parse/network. A runner that
+        # explodes proves the network path is never reached for the common case.
         def explode(pr, repo):  # noqa: ANN001
-            raise AssertionError("runner must not be called when --squash absent")
+            raise AssertionError("runner must not be called when 'merge' absent")
+
+        result = hook.check(_input("ls -la && git status"), base_runner=explode)
+        self.assertIsNone(result)
+
+    def test_merge_flag_does_not_consult_runner(self):
+        # `gh pr merge --merge` passes the `merge` pre-filter but yields no
+        # squash segment, so the base-runner is never consulted → allow.
+        def explode(pr, repo):  # noqa: ANN001
+            raise AssertionError("runner must not be called for a --merge merge")
 
         result = hook.check(_input("gh pr merge 890 --merge"), base_runner=explode)
+        self.assertIsNone(result)
+
+    def test_short_squash_into_main_allows(self):
+        # `-s` into main is the standard feature-work squash — untouched.
+        result = hook.check(
+            _input("gh pr merge 500 -s"),
+            base_runner=_runner({"500": "main"}),
+        )
         self.assertIsNone(result)
 
 
