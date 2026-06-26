@@ -36,6 +36,12 @@
       "detail": "GENERIC_HOOK_BLOCK_GH_PR_REVIEW_PROMPT.md",
       "wave": "P7W19"
     },
+    "hooks/block_squash_wave_merge.py": {
+      "decided_at": "2026-06-26T15:55:34Z",
+      "decision": "skipped",
+      "detail": "coupled to noorinalabs wave-branch model (deployments/phase-*/wave-* regex) + verify_commit_identity wave\u2192main gate; squash-authorship-collapse meaningful only with that exact gate. Revisit if framework adopts a per-commit-author integration gate.",
+      "wave": "P7W20"
+    },
     "hooks/dispatcher.py": {
       "decided_at": "2026-06-26T00:37:43Z",
       "decision": "genericized",
@@ -137,6 +143,12 @@
       "decision": "skipped",
       "detail": "test file",
       "wave": "P7W19"
+    },
+    "hooks/tests/test_block_squash_wave_merge.py": {
+      "decided_at": "2026-06-26T15:55:34Z",
+      "decision": "skipped",
+      "detail": "test of the wave-branch-coupled Hook 22; skipped with its hook.",
+      "wave": "P7W20"
     },
     "hooks/tests/test_block_stale_tmp_message_file.py": {
       "decided_at": "2026-06-26T00:37:43Z",
