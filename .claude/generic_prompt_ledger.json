@@ -1,5 +1,665 @@
 {
   "decisions": {
+    "hooks/_repo_flag_parse.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_REPO_FLAG_PARSE_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/_shell_parse.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_SHELL_PARSE_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/_wave_label_parse.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_WAVE_LABEL_PARSE_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/annunaki_log.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_ANNUNAKI_LOG_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/annunaki_monitor.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_ANNUNAKI_MONITOR_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/block_gh_pr_review.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_BLOCK_GH_PR_REVIEW_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/dispatcher.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_DISPATCHER_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/enforce_librarian_consulted.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_ENFORCE_LIBRARIAN_CONSULTED_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/fixtures/validate_commit_identity/ast_chain_missing_identity_blocks.json": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test fixture",
+      "wave": "P7W19"
+    },
+    "hooks/fixtures/validate_commit_identity/ast_command_sub_in_message_valid.json": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test fixture",
+      "wave": "P7W19"
+    },
+    "hooks/fixtures/validate_commit_identity/ast_env_prefix_and_chain_valid.json": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test fixture",
+      "wave": "P7W19"
+    },
+    "hooks/fixtures/validate_commit_identity/ast_nested_double_quotes_valid.json": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test fixture",
+      "wave": "P7W19"
+    },
+    "hooks/fixtures/validate_commit_identity/ast_pipe_chain_valid.json": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test fixture",
+      "wave": "P7W19"
+    },
+    "hooks/fixtures/validate_commit_identity/ast_semicolon_chain_valid.json": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test fixture",
+      "wave": "P7W19"
+    },
+    "hooks/ontology_tracker.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_ONTOLOGY_TRACKER_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/post_dispatcher.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_POST_DISPATCHER_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/post_label_change_wave_field_sync.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_POST_LABEL_CHANGE_WAVE_FIELD_SYNC_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/post_wave_kickoff_comment.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_POST_WAVE_KICKOFF_COMMENT_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/session_handoff.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_SESSION_HANDOFF_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/session_start.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_SESSION_START_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test__wave_label_parse.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_annunaki_monitor.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_block_gh_pr_review.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_block_stale_tmp_message_file.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_enforce_librarian_consulted.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_gh_command_parser_invariant.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_ontology_tracker.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_post_label_change_wave_field_sync.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_post_wave_kickoff_comment.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_repo_flag_parse.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_session_handoff.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_session_start.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_validate_commit_identity_ast.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_validate_pr_ci_status.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_validate_pr_review.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_validate_wave_audit.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_validate_wave_label_evidence.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_warn_ghcr_image.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_warn_pipe_mask_rc.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/tests/test_warn_zsh_wordsplit.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "hooks/validate_commit_identity.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_VALIDATE_COMMIT_IDENTITY_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/validate_pr_ci_status.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_VALIDATE_PR_CI_STATUS_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/validate_pr_review.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_VALIDATE_PR_REVIEW_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/validate_wave_audit.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_VALIDATE_WAVE_AUDIT_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/validate_wave_label_evidence.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_VALIDATE_WAVE_LABEL_EVIDENCE_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/warn_ghcr_image.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_WARN_GHCR_IMAGE_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/warn_pipe_mask_rc.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_WARN_PIPE_MASK_RC_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "hooks/warn_zsh_wordsplit.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_HOOK_WARN_ZSH_WORDSPLIT_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/annunaki_parse.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_ANNUNAKI_PARSE_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/check_agent_liveness.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_CHECK_AGENT_LIVENESS_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/check_child_checkouts.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_CHECK_CHILD_CHECKOUTS_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/check_dockerfile_base_pin.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_CHECK_DOCKERFILE_BASE_PIN_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/check_fixture_realism.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_CHECK_FIXTURE_REALISM_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/doc_freshness.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_DOC_FRESHNESS_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/generic_prompt_tracker.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_GENERIC_PROMPT_TRACKER_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/headcount_budget.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_HEADCOUNT_BUDGET_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/link_memory.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "source no longer exists in repo (renamed/removed)",
+      "wave": "P7W19"
+    },
+    "lib/lint_skill_graphql_pagination.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_LINT_SKILL_GRAPHQL_PAGINATION_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/memory_budget.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_MEMORY_BUDGET_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/ontology_gen/__init__.py": {
+      "decided_at": "2026-06-26T00:38:20Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_ONTOLOGY_GEN___INIT___PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/ontology_gen/__main__.py": {
+      "decided_at": "2026-06-26T00:38:20Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_ONTOLOGY_GEN___MAIN___PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/ontology_gen/aggregate.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_ONTOLOGY_GEN_AGGREGATE_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/ontology_gen/assemble.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_ONTOLOGY_GEN_ASSEMBLE_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/ontology_gen/cypher_ext.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_ONTOLOGY_GEN_CYPHER_EXT_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/ontology_gen/generate.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_ONTOLOGY_GEN_GENERATE_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/ontology_gen/llms.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_ONTOLOGY_GEN_LLMS_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/ontology_gen/merge_driver.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_ONTOLOGY_GEN_MERGE_DRIVER_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/ontology_gen/model.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_ONTOLOGY_GEN_MODEL_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/ontology_gen/python_ext.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_ONTOLOGY_GEN_PYTHON_EXT_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/ontology_gen/typescript_ext.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_ONTOLOGY_GEN_TYPESCRIPT_EXT_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/pr_ci_ready.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "source no longer exists in repo (renamed/removed)",
+      "wave": "P7W19"
+    },
+    "lib/pr_ci_state.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_PR_CI_STATE_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/pre_commit_ci_sync.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_PRE_COMMIT_CI_SYNC_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/premise_check.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_PREMISE_CHECK_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/sync_main.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_SYNC_MAIN_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_annunaki_parse.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_check_agent_liveness.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_check_child_checkouts.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_check_dockerfile_base_pin.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_check_fixture_realism.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_check_mermaid.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_doc_freshness.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_generic_prompt_tracker.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_headcount_budget.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_link_memory.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "source no longer exists in repo (renamed/removed)",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_lint_skill_graphql_pagination.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_memory_budget.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_ontology_aggregate.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_ontology_gen.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_pr_ci_ready.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "source no longer exists in repo (renamed/removed)",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_pr_ci_state.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_pre_commit_ci_sync.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_premise_check.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_sync_main.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_trust_signals.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_upsert_status_keys.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_verify_deployable_merge.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_wave_field_option.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_wave_merge_model.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_wave_seq.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/tests/test_wave_unwrapped.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "lib/trust_signals.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_TRUST_SIGNALS_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/upsert_status_keys.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_UPSERT_STATUS_KEYS_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/verify_deployable_merge.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_VERIFY_DEPLOYABLE_MERGE_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/wave_branch_reachability.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "source no longer exists in repo (renamed/removed)",
+      "wave": "P7W19"
+    },
+    "lib/wave_field_option.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_WAVE_FIELD_OPTION_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/wave_merge_model.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_WAVE_MERGE_MODEL_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/wave_seq.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_WAVE_SEQ_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/wave_unwrapped.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_WAVE_UNWRAPPED_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "lib/wave_wrapup_nudge.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "source no longer exists in repo (renamed/removed)",
+      "wave": "P7W19"
+    },
     "projects/-home-parameterization-code-noorinalabs-main/memory/MEMORY.md": {
       "decided_at": "2026-06-20T00:23:38Z",
       "decision": "skipped",
@@ -42,11 +702,143 @@
       "detail": "project-specific memory/state, not a reusable framework prompt",
       "wave": "P5W5"
     },
+    "skills/annunaki-attack/SKILL.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_SKILL_ANNUNAKI_ATTACK_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "skills/annunaki/SKILL.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_SKILL_ANNUNAKI_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "skills/board-audit/SKILL.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_SKILL_BOARD_AUDIT_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "skills/ontology-librarian/SKILL.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_SKILL_ONTOLOGY_LIBRARIAN_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "skills/ontology-rebuild/SKILL.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_SKILL_ONTOLOGY_REBUILD_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "skills/phase-review/SKILL.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_SKILL_PHASE_REVIEW_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "skills/promotion-audit/SKILL.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_SKILL_PROMOTION_AUDIT_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "skills/promotion-audit/run.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_SKILL_PROMOTION_AUDIT_RUN_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "skills/promotion-audit/tests/test_run.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "skills/promotion-audit/tests/test_smoke.py": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "test file",
+      "wave": "P7W19"
+    },
+    "skills/session-start/SKILL.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_SKILL_SESSION_START_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "skills/wave-audit/SKILL.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_SKILL_WAVE_AUDIT_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "skills/wave-kickoff/SKILL.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_SKILL_WAVE_KICKOFF_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "skills/wave-retro/SKILL.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_SKILL_WAVE_RETRO_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "skills/wave-scope/SKILL.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_SKILL_WAVE_SCOPE_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "skills/wave-start/SKILL.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_SKILL_WAVE_START_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "skills/wave-wrapup/SKILL.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_SKILL_WAVE_WRAPUP_PROMPT.md",
+      "wave": "P7W19"
+    },
     "team/charter/agents.md": {
       "decided_at": "2026-06-20T00:23:38Z",
       "decision": "skipped",
       "detail": "marker-only provenance edit this wave; genericization deferred to P6 Claude-Efficiency",
       "wave": "P5W5"
+    },
+    "team/charter/artifact-ownership.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_CHARTER_ARTIFACT_OWNERSHIP_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "team/charter/brand.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_CHARTER_BRAND_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "team/charter/hooks.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_CHARTER_HOOKS_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "team/charter/issues.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_CHARTER_ISSUES_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "team/charter/pull-requests.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_CHARTER_PULL_REQUESTS_PROMPT.md",
+      "wave": "P7W19"
     },
     "team/charter/state-claims.md": {
       "decided_at": "2026-06-20T00:23:38Z",
@@ -54,11 +846,149 @@
       "detail": "marker-only provenance edit this wave; genericization deferred to P6 Claude-Efficiency",
       "wave": "P5W5"
     },
+    "team/charter/tech-decisions.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_CHARTER_TECH_DECISIONS_PROMPT.md",
+      "wave": "P7W19"
+    },
+    "team/charter_prose_inventory.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "append-only project record",
+      "wave": "P7W19"
+    },
+    "team/feedback_log.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "append-only project record",
+      "wave": "P7W19"
+    },
+    "team/lifecycle.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "genericized",
+      "detail": "GENERIC_CHARTER_LIFECYCLE_PROMPT.md",
+      "wave": "P7W19"
+    },
     "team/phases/phase-5.md": {
       "decided_at": "2026-06-20T00:23:39Z",
       "decision": "skipped",
       "detail": "project-specific phase doc, not genericizable",
       "wave": "P5W5"
+    },
+    "team/phases/phase-6.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "phase plan doc",
+      "wave": "P7W19"
+    },
+    "team/phases/phase-7.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "phase plan doc",
+      "wave": "P7W19"
+    },
+    "team/promotion_audit_log/p5-wave-5.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "promotion audit log",
+      "wave": "P7W19"
+    },
+    "team/promotion_audit_log/p6-wave-1.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "promotion audit log",
+      "wave": "P7W19"
+    },
+    "team/roster/manager_bereket.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "persona roster card",
+      "wave": "P7W19"
+    },
+    "team/roster/observability_engineer_nurul.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "persona roster card",
+      "wave": "P7W19"
+    },
+    "team/roster/platform_architect_weronika.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "persona roster card",
+      "wave": "P7W19"
+    },
+    "team/roster/program_director_nadia.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "persona roster card",
+      "wave": "P7W19"
+    },
+    "team/roster/release_coordinator_santiago.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "persona roster card",
+      "wave": "P7W19"
+    },
+    "team/roster/security_engineer_nino.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "persona roster card",
+      "wave": "P7W19"
+    },
+    "team/roster/sre_engineer_lucas.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "persona roster card",
+      "wave": "P7W19"
+    },
+    "team/roster/standards_lead_aino.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "persona roster card",
+      "wave": "P7W19"
+    },
+    "team/roster/tpm_wanjiku.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "persona roster card",
+      "wave": "P7W19"
+    },
+    "team/spikes/p6w17-derivability-remeasure.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "spike/eval record",
+      "wave": "P7W19"
+    },
+    "team/spikes/p6w17-graph-tooling-eval.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "spike/eval record",
+      "wave": "P7W19"
+    },
+    "team/spikes/p6w17-tooling-bakeoff.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "spike/eval record",
+      "wave": "P7W19"
+    },
+    "team/spikes/p6w2-ontology-vs-graphify.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "spike/eval record",
+      "wave": "P7W19"
+    },
+    "team/spikes/p6w2-persona-model-evaluation.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "spike/eval record",
+      "wave": "P7W19"
+    },
+    "team/trust_matrix.md": {
+      "decided_at": "2026-06-26T00:37:43Z",
+      "decision": "skipped",
+      "detail": "append-only project record",
+      "wave": "P7W19"
     },
     "worktrees/0105-readme-hook-install/README.md": {
       "decided_at": "2026-06-20T00:23:39Z",
