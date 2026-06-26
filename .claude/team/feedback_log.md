@@ -3412,3 +3412,44 @@ See trust_matrix.md § Phase 6 Wave 16 for the full table. Summary (commit ident
 
 ### Next-wave scope
 W19 stub auto-drafted + boarded (**#882**), `wave_19_meta_issue` recorded; carry-forward pre-loaded (#881, #873 generics-splitter, validate_pr_review matcher). Theme TBD — owner to set, then `/wave-scope 7 19` proceeds.
+
+## Retrospective: Phase 7 Wave 19 — 2026-06-25 (framework tooling carry-forward + prod-data quality)
+
+### Team Performance
+**9 PRs merged** (6 noorinalabs-main · 2 data-acquisition · 1 isnad-graph), 7 engineers, **0 changes-requested cycles**, 0 CI-red merges, top-concentration 33% (Aino, 3/9 — below the 60% threshold). All per-issue PRs green at merge. Post-merge gates all passed: reachability `all-reachable`, staging promotion `success`, deployable-verify `verified`. 0 new tech-debt issues. Ontology 2 dirty (this session's retro/ledger churn — minor). Plus the **155-candidate generic-prompt backlog cleared** (76 genericized → `2real-team-framework`, 79 skipped, pending now 0).
+
+### Per-Engineer Assessments
+Mechanical (`trust_signals.py score 7 19`). All clean (0 must-fix received/caught, 0 CI-red, 0 false-positives). Helper proposed Aino +1 (3-PR delivery); **owner held all flat** (clean-but-unremarkable, no reviewing-catch ratchet).
+- **Aino Virtanen** — #896 (Hook-4 subshell/compound guard, #894), #895 (lint wiring, #893), #890 (wave_seq reservation-aware, #885). prs_merged=3.
+- **Lucas Ferreira** — #891 (narrow validate_pr_review batch-loop guard, #886).
+- **Nurul Hakim** — #892 (board-audit GraphQL pagination + resilient loop, #888).
+- **Weronika Zielinska** — #889 (ontology_gen depth-aware TS extends splitter, #887).
+- **Alejandra Reyes-Fuentes** — da#218 (ADR-003 sanadset orphan / narrator-pollution investigation A/B, da#202).
+- **Kavitha Sundaramurthy** — da#217 (honor explicit None as load-all, da#196).
+- **Nneka Obi** — ig#1133 (prod full-text starvation + semantic 500 repair, ig#1110).
+
+### Top 3 Going Well
+1. **Clean delivery** — 9/9 per-issue PRs merged green, 0 changes-requested cycles, healthy 33% concentration across 7 engineers.
+2. **Generic-prompt framework matured** — 155-candidate backlog cleared; 76 reusable product-neutral prompts seed `2real-team-framework`; tracker SKIP_PREFIXES fix closes the noise inflow at source.
+3. **All post-merge gates green** — reachability/staging/deployable-verify all passed; prod-data fixes (search 500s, sanadset orphans, parser None-handling) landed.
+
+### Top 3 Pain Points
+1. **Wave→main integration PRs went red twice and needed fix-forward** — #898 (squash collapsed persona authorship → commit-author gate) and da#222 (child structural index not regenerated for a new `.cypher`). Captured in memory mid-wave, but the *process* let them reach the integration PR.
+2. **Squash-vs-merge footgun was latent** — only memory protected against it; nothing mechanical stopped a `--squash` into a wave branch.
+3. **Generic-prompt agents' idle-heartbeat glitch** ([[feedback_self_loop_task_replay_glitch]]) — agents produced correct files but couldn't reliably return structured JSON; verdicts had to be reconstructed deterministically from disk. No data loss, some orchestration cost.
+
+### Proposed Process Changes (owner-decided 2026-06-25)
+1. **Hook 22 (`block_squash_wave_merge.py`)** — PreToolUse hard-block on `gh pr merge <N> --squash` into a `deployments/phase-*/wave-*` base (squash-into-main untouched; network base-resolution fails open). Closes pain-point #1/#2. Owner: "build the hook this retro." Codifies [[feedback_wave_branch_merge_not_squash]] + charter `pull-requests.md § One Merge Model Per Wave`.
+2. **`/wave-wrapup` Step 10.7 (child structural pre-regen)** — regenerate each child's structural index before opening the wave→main PR, so the staleness-check is green from the start (closes the da#222 class). Owner: "propose as charter/skill change."
+
+### Annunaki-attack
+7 records in the wave window — **all benign hook-fires from the orchestrator's own wave→main recovery** (batch-loop merge guard, stale-tmp block during re-auth, identity-hook on cherry-pick replay, wave-field sync on relocation). Hooks working as designed; **0 actionable**. Marker `wave_19_annunaki_attack_ran_at` written.
+
+### Promotion audit
+0 AUTO · 0 DECIDE · 214 KEPT · 22 SUPERSEDED — nothing crossed a threshold mechanically. Standalone log: `promotion_audit_log/p7-wave-19.md`.
+
+### Memory-to-automation audit
+1 promotion realized this retro: [[feedback_wave_branch_merge_not_squash]] → **Hook 22** (`--merge`-not-`--squash` rule) + **`/wave-wrapup` Step 10.7** (child structural staleness gotcha). Both halves now codified; the memory carries a promotion provenance note. No other memory crossed a threshold. Marker `wave_19_memory_audit_ran_at` written.
+
+### Next-wave scope
+W20 stub auto-drafted + boarded, `wave_20_meta_issue` recorded; carry-forward pre-loaded. Theme TBD — owner to set, then `/wave-scope 7 20` proceeds.

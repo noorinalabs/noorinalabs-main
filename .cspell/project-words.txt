@@ -11,6 +11,9 @@
 noorinalabs
 isnad
 isnads
+sanad
+sanads
+sanadset
 hadith
 hadiths
 narrator
