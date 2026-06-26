@@ -10,6 +10,69 @@
   "wave_20_kicked_off_at": "2026-06-26T03:13:14Z",
   "wave_20_merge_model": "wave-branch",
   "wave_20_branches": {"branch":"deployments/phase-7/wave-20","created_at":"2026-06-26T03:12:00Z","repos":{"noorinalabs-main":{"sha":"c645e00ce09865973649142f29b339bd1982db4f","status":"created"},"noorinalabs-data-acquisition":{"sha":"ac4f313fb45ef52ca0d8a466ba26ec75847734b2","status":"created"},"noorinalabs-isnad-graph":{"sha":"5118a845ff028471587a85b608ad88a15eb0aa37","status":"created"}}},
+  "wave_20_final_pr_count": 6,
+  "wave_20_changes_requested_cycles": 0,
+  "wave_20_top_concentration_pct": 33,
+  "wave_20_trust_signals": {
+  "Alejandra Reyes-Fuentes": {
+    "authored_prs": [
+      227,
+      224
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 2,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Ivana Horvat": {
+    "authored_prs": [
+      226
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Jun-Seo Park": {
+    "authored_prs": [
+      1135
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Kavitha Sundaramurthy": {
+    "authored_prs": [
+      225
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Nikolaos Papadopoulos": {
+    "authored_prs": [
+      223
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  }
+},
+  "wave_20_scope_drop_reconciliation": {"noorinalabs-main":"meta-only (benign): wave meta-issue #899 + prod-data-quality tracking #723 live here; no code surface this wave (Path B in data-acquisition, /validate/chains in isnad-graph). wave→main merge is a no-op.","data-acquisition":"5 PRs (#223,#224,#225,#226,#227)","isnad-graph":"1 PR (#1135)"},
+  "wave_20_implementer_substitutions": [],
   "wave_19_meta_issue": "noorinalabs-main#882",
   "wave_19_phase": 7,
   "wave_19_phase_ordinal": 2,

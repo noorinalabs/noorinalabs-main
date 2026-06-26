@@ -1090,6 +1090,12 @@
       "last_resolved": "770dd8aac2e3c1ce3a6540c3b306febe2af7cbc7536407cc6414989126d60b68",
       "tracked_at": "2026-06-25T23:48:03.781328+00:00",
       "resolved_at": "2026-06-25T00:00:00Z"
+    },
+    ".claude/scratch/w20-allhands.md": {
+      "last_tracked": "473d9aa86d65d563fb69702ea7ec85b7a94bf8ef49229e5d4daeb97a70cf8076",
+      "last_resolved": "",
+      "tracked_at": "2026-06-26T03:22:54.351162+00:00",
+      "resolved_at": ""
     }
   },
   "last_cleanup": {
