@@ -4,7 +4,7 @@ description: Phase definition, end-state criteria, exit gate, wave plan
 phase: 7
 status: active
 created: 2026-06-25
-last_updated: 2026-06-25
+last_updated: 2026-06-26
 ---
 
 # Phase 7 — Production Readiness (Data Quality + Platform Hardening)
@@ -39,7 +39,7 @@ Owner directive (`/plan-phase 7`, 2026-06-25): scope this as a **broad productio
 | **W1** (global 18) | **Framework carry-forward lead-in** | Close the P6 ontology thread before product work: `#820` structural-generator fan-out → remaining 6 child repos; `#862` framework-align (librarian surfaces `structural/llms.txt`, lifecycle regenerates/staleness-checks, CLAUDE.md §Ontology reframed, memories reconciled); `#863` ontology README; `#868` auto-create Wave-field option at kickoff; generator refinements (ts-enum interface/type kinds, merge-driver invocation-form). No data-acq contention (framework + child-repo CI). | #8 |
 | **W2** | **Data-quality root cause** | The urgent prod fix. `da#202` **sanadset investigation → A/B recommendation → execute**; `da#196` composition.py None-value map semantics (couples to the fix); `ig#1110` search broken (full-text + semantic 500s). | #1, #2, #3 |
 | **W3** | **Graph integrity + dedup + chains** | After the sanadset decision lands: `da#153` integrity sweep (orphans, NARRATED gaps, grade-parity, collection metadata); dedup/parallels pipeline run on prod; chain segmentation (`STUDIED_UNDER`). | #1, #2, #4 |
-| **W4** | **Narrator dating / chronology / timeline** | `da#161–166` (DatePrecision model → rijāl date parse → multi-source reconciliation → ṭabaqa fallback + hijri conversion); `ig#1039–1043` (loader writes date props + dating/validate-chains/timeline-narrators APIs + ṭabaqa layering); `main#673` meta. | #5 |
+| **W4** (global 21) | **Narrator dating + prod re-validation** | `da#161–166` (DatePrecision model → rijāl date parse → multi-source reconciliation → ṭabaqa fallback + hijri conversion); `ig#1039–1043` (loader writes date props + dating/validate-chains/timeline-narrators APIs + ṭabaqa layering); `main#673` meta. **+ prod re-validation checkpoint** (owner 2026-06-26): run the W19/W20 sanadset/dedup/chain code on prod and verify criteria #1–#4 (orphan % down, `STUDIED_UNDER` populated, search 200, dedup pairs non-empty), closing `main#723`. da#228 (link muhaddithat) folds into the narrator thread. | #5 (+ verify #1–#4) |
 | **W5** (FINAL) | **Productionization breadth + ML/streaming infra** | `ig#1111` auth deep-link; `main#667` Kafka streaming repeatable; `main#775` local ML dev env; `da#136`→`da#178` Bihar corpus (gated); `da#139` geo disambiguation; landing-page / design-system / deploy polish backlog triaged in at `/wave-scope`. **Heavy TD floor** before phase exit. | #6, #7, + breadth |
 
 ## Tech-debt intake
