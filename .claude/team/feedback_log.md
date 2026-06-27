@@ -3493,3 +3493,39 @@ W20 stub auto-drafted + boarded, `wave_20_meta_issue` recorded; carry-forward pr
 
 ### Next-wave scope
 W21 stub auto-drafted + boarded, `wave_21_meta_issue` recorded; carry-forward pre-loaded. Theme TBD — owner to set, then run `/phase-review 7` → `/wave-scope 7 21`.
+
+## Retrospective: Phase 7 Wave 21 — 2026-06-26
+
+### Team Performance
+**11 PRs merged** (10 data-acquisition + 1 isnad-graph), 5 implementers, **0 CI-red merges**, top-implementer concentration **27%** (Alejandra & Kavitha tied 3/11). Both wave→main integration PRs merged clean (da#243 → `9cc3969`, ig#1138 → `e4c0c542`); wave branches retained. CR-cycles historic **4** (recomputed 0 — all edited-in-place to Approved; `wave_21_counter_corrections` documents the conflict; historic stands). Theme: narrator-dating foundation (Phase-7 end-state criterion #5) + prod re-validation umbrella (main#723, owner-run, unmerged).
+
+### Per-Engineer Assessments (mechanical — `trust_signals.py score 7 21`)
+- **Alejandra Reyes-Fuentes** — da#233/#241/#236, prs_merged=3, +1 absorbed at ceiling 5. Clean fix on range→EXACT precision over-claim (da#241).
+- **Kavitha Sundaramurthy** — da#237/#235/#234, prs_merged=3, +1 absorbed at ceiling 5. Absorbed TRANSMITTED_TO fabrication catch (da#235).
+- **Ivana Horvat** — da#240/#238, prs_merged=2, held at 5. Death-anchored date parser + geo disambiguation.
+- **Nikolaos Papadopoulos** — da#242/#232, prs_merged=2, held at 5. Hijri util + ṭabaqa fallback.
+- **Jun-Seo Park** — ig#1137, prs_merged=1, held at 4 (single clean PR = no bump). Fixed always-0 narrators_dated count under review.
+
+### Top 3 Going Well
+1. **Dependency-batched spawn held.** Batch A (6 roots: model/hijri/independent TD) before Batch B (parse→reconcile→fallback) kept the shared Narrator model/schema from conflict-thrashing — zero cross-PR rebase churn on the foundation chain.
+2. **2-reviewer gate caught 4 real data-correctness defects** — TRANSMITTED_TO provenance fabrication, narrators_dated always-0, single-source range→EXACT over-claim, order-dependent consensus-band widening — each fixed with a regression test that fails on pre-fix code. The gate is doing genuine work, not rubber-stamping.
+3. **W19/W20 process changes held a third wave.** Hook 22 (`--merge` not squash) and Step 10.7 (child structural pre-regen) meant both wave→main PRs were green on staleness-check from first push — zero fix-forward scrambles, same as W20.
+
+### Top 3 Pain Points
+1. **Mechanical trust scoring can't see reviewer catches when verdicts are edited-in-place.** This wave had 4 substantive must-fix catches, but `must_fix_caught` reads 0 for every reviewer because verdict-amendment rewrites the verdict surface to Approved. The reviewers who caught real defects get no mechanical credit. Same root conflict as the CR-cycle counter — the amendment rule and the recompute read the same surface with opposite intent.
+2. **Structural-index serial-merge queue.** Every da PR commits a regenerated `ontology/structural/llms.txt`, so each merge conflicted the next pending PR on that generated file → forced a one-at-a-time merge queue (resolve via regenerate-and-merge). Mechanical but slow; 10 da PRs = 10 serialized merges.
+3. **main#723 (prod re-validation) cannot close from code merges alone.** The fixes are on each repo's `main`, but #723 needs the W20/W21 merges *deployed to prod* + the dedup/segmentation pipeline *re-run on prod* — an owner-gated stg/prod deployment, not a spawnable PR. It remains the single open wave item.
+
+### Proposed Process Changes
+1. **Credit reviewer catches before verdict-amendment erases them.** — Rationale: `trust_signals.extract` should capture `must_fix_caught` from the PR's review *timeline* (first-pass ChangesRequested verdicts) rather than only current comment state, so edit-in-place amendment doesn't zero out real catching. Mirrors the CR-cycle "wrapup-time historic is authoritative" resolution. (Proposal only — owner decides; ties to a `trust_signals.py` change.)
+2. **Consider a wholesale-regenerate merge driver for `ontology/structural/llms.txt`** so same-file structural-index conflicts auto-resolve instead of serializing the merge queue. — Rationale: the file is generated, never hand-merged; a regenerate-on-conflict driver removes the serial bottleneck. (Proposal only.)
+
+### Wave-shape table
+| Metric | Value |
+|--------|-------|
+| PRs merged | 11 (10 da + 1 ig) |
+| CI-red merges | 0 |
+| Changes-requested cycles (historic) | 4 (recomputed 0 — edit-in-place; historic authoritative) |
+| Top-implementer concentration | 3/11 = 27% (Alejandra & Kavitha tied) |
+| Tech-debt filed | 0 new (2 proposals above, not yet filed) |
+| Fire/hire | none |
