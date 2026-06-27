@@ -1928,3 +1928,34 @@ Mechanical scoring (`trust_signals.py score 7 20`): 6 PRs, 5 implementers, **0 c
 **Fire/hire:** none. Retirement trigger (`trust_signals.retirement_trigger`) fired for no engineer — no bottom-tier-or-CI-red streak.
 
 **Concentration note:** 33% top by implementer (Alejandra, 2/6) — below the 60% fragility threshold. Theme-fit: Path B's sanadset parsing lives in data-acquisition and Alejandra owns the B1+parent coupling by design. No redistribution action required. 5 of 6 implementer-issues in data-acquisition is inherent to the Path B theme, spread across 4 da personas — not fragility.
+
+## Phase 7 Wave 21 Trust Updates (2026-06-26) — narrator dating foundation + prod re-validation
+
+Mechanical scoring (`trust_signals.py score 7 21`): **11 PRs** (10 data-acquisition + 1 isnad-graph), 5 implementers, top-concentration **27%** (Alejandra & Kavitha tied at 3/11), **0 CI-red merges**, 0 `review_false_positives`. Helper-proposed deltas: Alejandra/Kavitha/Ivana/Nikolaos **+1** (clean multi-PR delivery) — all four already at ceiling **5**, so absorbed (`clamp(5+1)=5`); Jun-Seo Park **+0** (single clean PR is not a bump) — held at **4**. Distribution discipline: no new 5s handed out; the four ceiling-holders earned theirs in prior waves.
+
+**Measurement-conflict note (load-bearing — same class as the CR-cycle counter):** the helper reports `must_fix_received=0` and `must_fix_caught=0` for **every** engineer, but this wave had **4 genuine changes-requested cycles** (da#161/#233, da#228/#235, da#165/#241, ig#1039/#1137) that caught **real data-correctness defects** — `TRANSMITTED_TO` provenance-row fabrication, `narrators_dated` always-0 count, single-source range→EXACT precision over-claim, and order-dependent consensus-band widening. All four verdicts were **edited-in-place to Approved** per the charter verdict-amendment rule, which erased the `must_fix_*` surface the helper reads. Per `wave_21_counter_corrections`, the wrapup-time historic **CR-cycles=4 stands as authoritative-historic**; the recomputed 0 is the amendment artifact, NOT a correction. Consequence for trust: the reviewers who made these catches (Kavitha, Nikolaos, Kwesi Boateng, Aisling Brennan) get **no mechanical `must_fix_caught` credit** this wave even though they did substantive catching — a known gap in mechanical scoring vs verdict-amendment, surfaced as a W21 pain point.
+
+### Child-Repo Teams (data-acquisition + isnad-graph)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Alejandra Reyes-Fuentes (data-acquisition) | 5 | 5 | da#233 (DatePrecision model + date bounds, da#161 root), da#241 (multi-source date reconciliation, da#165), da#236 (collection metadata enrichment, da#230). prs_merged=3 (wave top, tied). Helper proposed +1; **absorbed at ceiling**. da#241 absorbed a real must-fix (single-source range→EXACT over-claim) and shipped the fix clean. |
+| Kavitha Sundaramurthy (data-acquisition) | 5 | 5 | da#237 (extend `NARRATORS_CANONICAL_SCHEMA`, da#162), da#235 (mention-link 8 orphan muhaddithat + provenance, da#228), da#234 (in-book ordinal, da#229). prs_merged=3 (wave top, tied). da#235 absorbed the `TRANSMITTED_TO` provenance-fabrication must-fix. Held at ceiling. |
+| Ivana Horvat (data-acquisition) | 5 | 5 | da#240 (death-anchored narrator-date extraction, da#164), da#238 (geographic disambiguation stage, da#139). prs_merged=2, 0 CI-red. Held at ceiling. |
+| Nikolaos Papadopoulos (data-acquisition) | 5 | 5 | da#242 (ṭabaqa→estimated-window fallback, da#166), da#232 (`src/utils/hijri.py` AH↔CE + pin convertdate, da#163). prs_merged=2, 0 CI-red. Also reviewed/caught on the foundation chain. Held at ceiling. |
+| Jun-Seo Park (isnad-graph) | 4 | 4 | ig#1137 (loader writes resolved narrator date props to Neo4j + `_active_window` enricher upgrade, ig#1039). prs_merged=1, 0 CI-red. Absorbed the `narrators_dated` always-0 count must-fix and shipped the `RETURN count(n) AS matched` fix. Single clean PR — not a bump; held at 4. |
+
+### Done Well / Needs Improvement (Phase 7 Wave 21) — evidence-anchored, bare "None" banned
+
+| Member | Done Well (with evidence) | Gap (metric, or explicit "clean: numbers") |
+|--------|---------------------------|--------------------------------------------|
+| **Alejandra Reyes-Fuentes** | 3 PRs across the date-foundation spine (model root da#233 → reconcile da#241 → metadata da#236); clean fix on the range→EXACT precision defect | clean: 0 CI-red, 0 false-positives, prs_merged=3 — must_fix_received understated by edit-in-place (see conflict note) |
+| **Kavitha Sundaramurthy** | 3 PRs (schema da#237, muhaddithat-link da#235, ordinal da#234); absorbed the TRANSMITTED_TO fabrication catch on da#235 | clean: 0 CI-red, 0 false-positives, prs_merged=3 |
+| **Ivana Horvat** | death-anchored date parser (da#240) — the extraction heart of the chain — + geo disambiguation (da#238), both clean | clean: 0 CI-red, 0 false-positives, prs_merged=2 |
+| **Nikolaos Papadopoulos** | hijri conversion util + convertdate pin (da#232) and ṭabaqa fallback (da#242) — the two arithmetic-sensitive ends of the chain, clean | clean: 0 CI-red, 0 false-positives, prs_merged=2 |
+| **Jun-Seo Park** | cross-repo Neo4j loader for date props (ig#1137) — the single isnad-graph consumer of the da chain; fixed the always-0 count under review | clean: 0 CI-red, prs_merged=1 — single PR, no ratchet; held at 4 |
+| **Reviewers** (Kavitha, Nikolaos, Kwesi Boateng, Aisling Brennan, Mateo Salazar, + slate) | **4 substantive defect catches** across da#233/#235/#241/#1137 — fabrication, always-0, precision over-claim, order-dependent widening; all with regression tests that fail on pre-fix code | `must_fix_caught` shows 0 mechanically (verdicts edited-in-place to Approved) — real catching is uncredited by the helper; see measurement-conflict note |
+
+**Fire/hire:** none. Retirement trigger (`trust_signals.retirement_trigger`) fired for no engineer.
+
+**Concentration note:** 27% top by implementer (Alejandra & Kavitha tied 3/11) — below the 60% fragility threshold. Theme-fit: narrator dating lives in data-acquisition (10/11 PRs); ig#1039 is the single isnad-graph loader. Load spread across 5 da personas + 1 ig persona. Not fragility.
