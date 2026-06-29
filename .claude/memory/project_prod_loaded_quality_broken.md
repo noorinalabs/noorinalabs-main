@@ -1,11 +1,22 @@
 ---
 name: project_prod_loaded_quality_broken
-description: "Prod is NO LONGER empty — corpus loaded but segmentation/linkage/search broken; Phase-7 data-quality. meta main#723."
+description: "RESOLVED 2026-06-29 — prod reloaded with #723-corrected graph (1.66M nodes, chains 100% populated, pollution 0). History of the prior broken state below."
 metadata: 
   node_type: memory
   type: project
   originSessionId: f3dcddd8-6ad9-48bf-b25e-92d034607282
 ---
+
+**RESOLVED 2026-06-29 — #723 corrected graph deployed to prod.** Prod Neo4j was reloaded from the pollution-fixed, chains-populated curated artifacts (same set validated on stage). Live prod validation (cypher, https://isnad.noorinalabs.com → 200):
+- Nodes **1,665,760** (Hadith 776,242 / Chain 585,129 / Narrator 232,766 / Grading 69,465 / Collection 55) + 22 app AUDIT_LOG (preserved); edges **8,707,661**.
+- Chains **100% populated** (585,129, **0 hollow**); narrator linkage **68.7%** (was 8.98%); top narrators all real (سفيان/شعبة/أبو هريرة/الزهري …), **أبيه gone**; relational + English-fragment pollution **0**.
+- Infra: deploy#505 merged+applied to prod host — 8G swap (fstab-persisted) + Neo4j recreated at 10G limit / 5G heap / 3G pagecache (matches the proven-good stage config). [[feedback_local_ci_parity_no_force]] N/A.
+- **Surprise found at execution:** prod's isnad graph was ALREADY EMPTY (only 22 AUDIT_LOG nodes; neostore an 8KB empty store, zeroed sometime after 2026-06-18) — NOT the 768k polluted graph below. So the planned destructive wipe was unnecessary; went straight to a clean MERGE load. How/when prod lost its prior data between 06-19 and 06-29 is unexplained (no orphaned volume) — open question, but moot since replaced.
+- **Loader gotcha:** the loader's internal `chain_integrity` validation query ran pathologically slow on the full prod graph (>40min, never finished, stopped manually). Data load itself (nodes 21:01Z, edges 21:46Z) completed cleanly with 0 errors; validated independently via direct cypher. Relates to da#248 (chain cycles) — the cycle-detection validation may need a perf/timeout fix.
+
+---
+
+## History — the prior broken state (pre-2026-06-29, now remediated)
 
 Prod validation 2026-06-19 (live app https://isnad.noorinalabs.com, signed-in admin, browser walkthrough). Supersedes the earlier "prod is empty" state from the p5w5 corpus-load findings (now homed in data-acquisition memory).
 
