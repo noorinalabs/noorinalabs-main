@@ -165,9 +165,9 @@
     },
     ".claude/team/feedback_log.md": {
       "last_tracked": "955dcf61ab90313049710f813856c982a08707f1f729a28b56f54a250e7e7da9",
-      "last_resolved": "ab11f7b43589c76825fac3e0a51ffc3d95aaf31af5dcbdd21d23cd6c365d1d1c",
+      "last_resolved": "955dcf61ab90313049710f813856c982a08707f1f729a28b56f54a250e7e7da9",
       "tracked_at": "2026-06-26T16:12:15.409078+00:00",
-      "resolved_at": "2026-06-21T02:32:49Z"
+      "resolved_at": "2026-06-30T00:00:00Z"
     },
     ".gitignore": {
       "last_tracked": "78d915777b9d1fcb638d4f7185c73364db6cf6cd9cfe72d8030b37e617020bde",
@@ -651,9 +651,9 @@
     },
     ".claude/team/trust_matrix.md": {
       "last_tracked": "548f1357e9a3f3d568123fc9528541d18bae57cbd1f46c4281dc76e3a0007274",
-      "last_resolved": "6054a90f958b69bb0559d65b80ee57ddb846b317cc3a0ce9503d596628a8139f",
+      "last_resolved": "548f1357e9a3f3d568123fc9528541d18bae57cbd1f46c4281dc76e3a0007274",
       "tracked_at": "2026-06-27T00:45:52.043254+00:00",
-      "resolved_at": "2026-06-21T02:32:49Z"
+      "resolved_at": "2026-06-30T00:00:00Z"
     },
     ".claude/team/promotion_audit_log/wave-5.md": {
       "last_tracked": "85263be2a3a83a8d84e4334aac290bed766cc5a2b08e238ffbc5b26563791002",
@@ -956,10 +956,10 @@
       "resolved_at": "2026-06-13T02:28:20Z"
     },
     "noorinalabs-deploy/compose/.env.example": {
-      "last_tracked": "dcd46e3d78f4de5fbd5fa33adfd28b1532f3a9e69c1a8d4e18c35282622e8500",
-      "last_resolved": "dcd46e3d78f4de5fbd5fa33adfd28b1532f3a9e69c1a8d4e18c35282622e8500",
-      "tracked_at": "2026-06-13T01:15:22.325960+00:00",
-      "resolved_at": "2026-06-13T02:28:20Z"
+      "last_tracked": "a31520cf7f66d141ede33d47e929af7158a1dca6b3ea5d57537dc797b8a63763",
+      "last_resolved": "a31520cf7f66d141ede33d47e929af7158a1dca6b3ea5d57537dc797b8a63763",
+      "tracked_at": "2026-06-29T04:00:26.267363+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
     },
     "noorinalabs-deploy/.github/branch-protection/apply-ruleset.sh": {
       "last_resolved": null,
@@ -1020,10 +1020,10 @@
       "resolved_at": "2026-06-21T02:32:49Z"
     },
     ".claude/memory/project_prod_loaded_quality_broken.md": {
-      "last_tracked": "e21754182dc6c294d9f477d20cb597d84dbe75750f8e443606422eb8933cb7b1",
-      "last_resolved": "e21754182dc6c294d9f477d20cb597d84dbe75750f8e443606422eb8933cb7b1",
-      "tracked_at": "2026-06-20T22:00:59.554310+00:00",
-      "resolved_at": "2026-06-21T02:32:49Z"
+      "last_tracked": "dc3e2d550d6ce2326a3eddc9de32b50ddb70d1789356c94dd79e1333571be3cb",
+      "last_resolved": "dc3e2d550d6ce2326a3eddc9de32b50ddb70d1789356c94dd79e1333571be3cb",
+      "tracked_at": "2026-06-29T22:29:21.911594+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
     },
     ".claude/memory/feedback_brand_noorina_labs.md": {
       "last_tracked": "626460eabc17bef806ebf376cc94c1e7c6659e73661ab588976da1e5059002f6",
@@ -1032,10 +1032,10 @@
       "resolved_at": "2026-06-21T21:02:19.551435+00:00"
     },
     ".claude/memory/MEMORY.md": {
-      "last_tracked": "56e31a42ef63e4e56b3c5742fc8cd8fb0c99bddc208615df31989bd9e523c40e",
-      "last_resolved": "56e31a42ef63e4e56b3c5742fc8cd8fb0c99bddc208615df31989bd9e523c40e",
-      "tracked_at": "2026-06-25T23:48:32.865504+00:00",
-      "resolved_at": "2026-06-25T00:00:00Z"
+      "last_tracked": "b7fedfc0f7ba29f9f7ac860684f1553b84c54b77778c96d36625dcc77062e802",
+      "last_resolved": "b7fedfc0f7ba29f9f7ac860684f1553b84c54b77778c96d36625dcc77062e802",
+      "tracked_at": "2026-06-29T22:29:36.983075+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
     },
     "noorinalabs-isnad-graph/.claude/lib/tests/test_pre_commit_ci_sync.py": {
       "last_tracked": "aa209279deec3844b51e384157ba3e67a6d0f325410941f63f38d57535e6498c",
@@ -1050,10 +1050,10 @@
       "resolved_at": "2026-06-21T22:15:52Z"
     },
     ".claude/memory/session_handoff.md": {
-      "last_tracked": "cb30d9a2cfbe4e97902ee0927c7fd14bb4fbaee5514e02fc78538481c5cf848a",
-      "last_resolved": "cb30d9a2cfbe4e97902ee0927c7fd14bb4fbaee5514e02fc78538481c5cf848a",
-      "tracked_at": "2026-06-23T19:40:14.949430+00:00",
-      "resolved_at": "2026-06-23T20:07:27Z"
+      "last_tracked": "605b31fd6eac32f1dee594ca685c9718578d9e5d6babb0274b8ed3b06c4c32ba",
+      "last_resolved": "605b31fd6eac32f1dee594ca685c9718578d9e5d6babb0274b8ed3b06c4c32ba",
+      "tracked_at": "2026-06-28T16:17:52.878400+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
     },
     ".claude/lib/verify_deployable_merge.py": {
       "last_tracked": "7c2545f87d17c5c35967612f88381444ff510ceb81ba6553ba37497b0d5c3302",
@@ -1075,9 +1075,9 @@
     },
     ".claude/team/phases/phase-7.md": {
       "last_tracked": "7d1768a191ba5555d2490e35e7de08d7806d41931ced503478de80d36db3d000",
-      "last_resolved": "5b51d2feda803045f7ea6c1e3097d7e277f61b58766845f52213882d5adfd46f",
+      "last_resolved": "7d1768a191ba5555d2490e35e7de08d7806d41931ced503478de80d36db3d000",
       "tracked_at": "2026-06-26T16:39:25.627443+00:00",
-      "resolved_at": "2026-06-25T02:57:59Z"
+      "resolved_at": "2026-06-30T00:00:00Z"
     },
     ".claude/memory/feedback_zsh_shell_environment.md": {
       "last_tracked": "57eb87f6ca34dc2cdf5f3b7052e949e8fd7e2d246d1d915c288327c0efed6fb7",
@@ -1090,6 +1090,174 @@
       "last_resolved": "770dd8aac2e3c1ce3a6540c3b306febe2af7cbc7536407cc6414989126d60b68",
       "tracked_at": "2026-06-25T23:48:03.781328+00:00",
       "resolved_at": "2026-06-25T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/src/parse/narrator_extraction.py": {
+      "last_tracked": "3577e51c598c15422dfbeac3d41911138fb28ed328bde1824281f49d676f3464",
+      "last_resolved": "3577e51c598c15422dfbeac3d41911138fb28ed328bde1824281f49d676f3464",
+      "tracked_at": "2026-06-27T19:28:47.758806+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/tests/test_parse/test_narrator_extraction.py": {
+      "last_tracked": "1e67414ee03f750f0b02635710936748ae7281708e9178a67d4b40d9407b069c",
+      "last_resolved": "1e67414ee03f750f0b02635710936748ae7281708e9178a67d4b40d9407b069c",
+      "tracked_at": "2026-06-27T19:30:55.754892+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/src/resolve/ner.py": {
+      "last_tracked": "cfe059a5742926f4b217415dab1d6f8d1f93750a6db120a2c489536d01998343",
+      "last_resolved": "cfe059a5742926f4b217415dab1d6f8d1f93750a6db120a2c489536d01998343",
+      "tracked_at": "2026-06-28T16:23:24.143540+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/tests/test_resolve/test_ner.py": {
+      "last_tracked": "69408db3ff487d162553ee9f91a1a6f1d79ed9b4e9c81e8c59225813fde1f3b7",
+      "last_resolved": "69408db3ff487d162553ee9f91a1a6f1d79ed9b4e9c81e8c59225813fde1f3b7",
+      "tracked_at": "2026-06-27T20:00:24.619400+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    ".claude/memory/project_p7_narrator_pollution_resolve_fixes.md": {
+      "last_tracked": "4433f32f467e58c1709fc78a08799626932293fec3990f87fdc463c78827b43f",
+      "last_resolved": "4433f32f467e58c1709fc78a08799626932293fec3990f87fdc463c78827b43f",
+      "tracked_at": "2026-06-28T16:16:17.471438+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/src/resolve/fuzzy_cluster.py": {
+      "last_tracked": "492791e9a07dff35df114f4e7345efe7430ceb77ff4ea152482a0d9716343b8d",
+      "last_resolved": "492791e9a07dff35df114f4e7345efe7430ceb77ff4ea152482a0d9716343b8d",
+      "tracked_at": "2026-06-28T21:47:43.330468+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/scripts/rerun_cluster_tail.py": {
+      "last_tracked": "96a0c3093c80bd7676d065aea7ccaa3c988820f6776aa995f23d296ffc0d9199",
+      "last_resolved": "96a0c3093c80bd7676d065aea7ccaa3c988820f6776aa995f23d296ffc0d9199",
+      "tracked_at": "2026-06-28T22:11:19.199362+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/scripts/load_staging.sh": {
+      "last_tracked": "2cb3f30d371d93ed88bd853be86ac3e3a67c5fb9a745c253a1b7325c25a498c6",
+      "last_resolved": "2cb3f30d371d93ed88bd853be86ac3e3a67c5fb9a745c253a1b7325c25a498c6",
+      "tracked_at": "2026-06-29T15:36:17.985165+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/src/graph/load_edges.py": {
+      "last_tracked": "054b04ce299bf7f9c01094a902404e2b95088f03b0d6a0414cc6d527b4459fae",
+      "last_resolved": "054b04ce299bf7f9c01094a902404e2b95088f03b0d6a0414cc6d527b4459fae",
+      "tracked_at": "2026-06-29T02:48:05.768466+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/src/parse/identity.py": {
+      "last_tracked": "31e7692cfe158da01a058b27b00332700506ae64e5f6677ada95fa185701cb36",
+      "last_resolved": "31e7692cfe158da01a058b27b00332700506ae64e5f6677ada95fa185701cb36",
+      "tracked_at": "2026-06-29T02:55:08.066237+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-deploy/compose/docker-compose.prod.yml": {
+      "last_tracked": "450fb269cda1eccd7a1221126b6fc5d5d19205f8a8737781ba0a53b8fe0524b3",
+      "last_resolved": "450fb269cda1eccd7a1221126b6fc5d5d19205f8a8737781ba0a53b8fe0524b3",
+      "tracked_at": "2026-06-29T03:59:23.227337+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-deploy/env/base.env": {
+      "last_tracked": "e644289f5cd1be6557f8ffa2af78bd0ecfccde39ecdd6e0cfe8af01db3f0ca3d",
+      "last_resolved": "e644289f5cd1be6557f8ffa2af78bd0ecfccde39ecdd6e0cfe8af01db3f0ca3d",
+      "tracked_at": "2026-06-29T03:59:33.143564+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-deploy/scripts/bootstrap-vps.sh": {
+      "last_tracked": "d3202b78c20260c57f5e18a7dffae5b3113a173b45ea4fd2433ef07ce3f5d196",
+      "last_resolved": "d3202b78c20260c57f5e18a7dffae5b3113a173b45ea4fd2433ef07ce3f5d196",
+      "tracked_at": "2026-06-29T04:01:10.851882+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/src/graph/load_nodes.py": {
+      "last_tracked": "80998433e3a47d622d342e4ff74366d7c92c08104dc4bfedb02b599cfed4719d",
+      "last_resolved": "80998433e3a47d622d342e4ff74366d7c92c08104dc4bfedb02b599cfed4719d",
+      "tracked_at": "2026-06-29T15:33:33.236114+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/tests/test_graph/test_load_nodes.py": {
+      "last_tracked": "54c1c98adb2d91aecd207e80e01c1c7683487d4f9f664f7630c548a6d731a493",
+      "last_resolved": "54c1c98adb2d91aecd207e80e01c1c7683487d4f9f664f7630c548a6d731a493",
+      "tracked_at": "2026-06-29T15:34:31.127114+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/src/parse/name_quality.py": {
+      "last_tracked": "c8ef7a521e62a0b0f538de45c5f51875ebf4b8a140130e9c3dd8455ca7f69035",
+      "last_resolved": "c8ef7a521e62a0b0f538de45c5f51875ebf4b8a140130e9c3dd8455ca7f69035",
+      "tracked_at": "2026-06-29T19:08:13.502784+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/tests/test_parse/test_name_quality.py": {
+      "last_tracked": "8cb1a5fbdf1a00fb3c4f9ae4d0b72630b8b0293361c02b387a41ff64b340e56e",
+      "last_resolved": "8cb1a5fbdf1a00fb3c4f9ae4d0b72630b8b0293361c02b387a41ff64b340e56e",
+      "tracked_at": "2026-06-29T19:08:41.631556+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/scripts/scrub_relational_pollution.py": {
+      "last_tracked": "3c59ef507598eac4b8be0db289ef7902c7b81bc67432fe79658265a289befa7f",
+      "last_resolved": "3c59ef507598eac4b8be0db289ef7902c7b81bc67432fe79658265a289befa7f",
+      "tracked_at": "2026-06-29T19:09:36.897492+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/.claude/memory/project_chain_hollow_reads_staging.md": {
+      "last_tracked": "6f27a22160894f4436f47ce1ab3e16f6c6aadb127d51a0612f9feffc823a4bc7",
+      "last_resolved": "6f27a22160894f4436f47ce1ab3e16f6c6aadb127d51a0612f9feffc823a4bc7",
+      "tracked_at": "2026-06-29T16:59:07.498566+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/.claude/memory/project_relational_pollution_scrub_equiv.md": {
+      "last_tracked": "4c3089c3c7913eca044ac3e96ac97ca67c3f525462ac576f7fd01f251253cb9d",
+      "last_resolved": "4c3089c3c7913eca044ac3e96ac97ca67c3f525462ac576f7fd01f251253cb9d",
+      "tracked_at": "2026-06-29T16:59:25.239991+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/.claude/memory/feedback_structural_gate_commit_friction.md": {
+      "last_tracked": "2df30a6d43e285a2dd84ee3c6fdd072072c63ff8918152f4f0bac110842a8626",
+      "last_resolved": "2df30a6d43e285a2dd84ee3c6fdd072072c63ff8918152f4f0bac110842a8626",
+      "tracked_at": "2026-06-29T16:59:38.879805+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/.claude/memory/MEMORY.md": {
+      "last_tracked": "1d0e7958de30dd016c32500b624bd9df49e211ae20ad17e0bd4faf966ce5a60e",
+      "last_resolved": "1d0e7958de30dd016c32500b624bd9df49e211ae20ad17e0bd4faf966ce5a60e",
+      "tracked_at": "2026-06-29T16:59:52.410539+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-data-acquisition/docs/PROD_RELOAD_RUNBOOK_723.md": {
+      "last_tracked": "c36b212656b3ec564d47ff2390a5d018ed20b54d621dc84a4f4472b89d078458",
+      "last_resolved": "c36b212656b3ec564d47ff2390a5d018ed20b54d621dc84a4f4472b89d078458",
+      "tracked_at": "2026-06-29T20:40:50.968936+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-user-service/scripts/bootstrap_test_user.py": {
+      "last_tracked": "ed920164a4d72ed8478d925ee67a169fd438c7362d02ff57a7bfa4646afcb899",
+      "last_resolved": "ed920164a4d72ed8478d925ee67a169fd438c7362d02ff57a7bfa4646afcb899",
+      "tracked_at": "2026-06-29T23:25:36.702339+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-user-service/tests/test_bootstrap_test_user.py": {
+      "last_tracked": "ccc6bfd6f18d0f32bb491847af17d442ba08292f9bcc0bf702ad9b675bbfc13a",
+      "last_resolved": "ccc6bfd6f18d0f32bb491847af17d442ba08292f9bcc0bf702ad9b675bbfc13a",
+      "tracked_at": "2026-06-29T23:25:43.096891+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-user-service/Makefile": {
+      "last_tracked": "2fa8699646c78229ef3114774204b5ad7acfaf805b2bc61f8b07c1c7d508a601",
+      "last_resolved": "2fa8699646c78229ef3114774204b5ad7acfaf805b2bc61f8b07c1c7d508a601",
+      "tracked_at": "2026-06-29T23:17:48.037949+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-isnad-graph/frontend/src/pages/LoginPage.tsx": {
+      "last_tracked": "68bd91ed20d112ca03a38a2ca3df97e63039cb9b495a509103d01d7dd755fba9",
+      "last_resolved": "68bd91ed20d112ca03a38a2ca3df97e63039cb9b495a509103d01d7dd755fba9",
+      "tracked_at": "2026-06-29T23:36:56.237682+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
+    },
+    "noorinalabs-isnad-graph/frontend/src/pages/__tests__/LoginPage.test.tsx": {
+      "last_tracked": "1a7879457d93499db3c67386cb21e9f74dd2c98cc97a0718022f4e1c98731ca4",
+      "last_resolved": "1a7879457d93499db3c67386cb21e9f74dd2c98cc97a0718022f4e1c98731ca4",
+      "tracked_at": "2026-06-29T23:37:46.788994+00:00",
+      "resolved_at": "2026-06-30T00:00:00Z"
     }
   },
   "last_cleanup": {
