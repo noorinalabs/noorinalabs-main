@@ -103,6 +103,14 @@ Once the work gate is cleared, the Program Director delegates to the appropriate
 - Each team member works only on issues labeled with their name.
 - **No branch may be created without an existing ticket.** The branch name must reference the issue number (per [Branching Rules](branching.md)).
 
+#### Implementor label — reliably applied (reinstated 2026-06-30, owner)
+
+The `FIRSTNAME_LASTNAME` label is **both** the assignment tag **and** the durable record of **who implemented** an issue. It MUST be present on every issue that carries implementation work, applied at assignment **and re-verified when the implementing PR lands** — never silently dropped. (The practice lapsed for several waves; the owner reinstated it on 2026-06-30 and the full backlog was retroactively labeled across all 8 repos — 949 issues, 26 new persona labels — by the tool below.)
+
+- **Authoritative source of "who implemented":** the **commit-author identity** of the issue's implementing PR (per-commit `-c user.name` / `parametrization+First.Last@gmail.com`, charter [`commits.md`](commits.md)). The branch prefix `{FirstInitial}.{LastName}/{NNNN}-…` encodes it; when the branch prefix and the commit author **disagree** (stale branch or a takeover — `feedback_throttle_takeover`), the **commit author wins**. Co-implementors (multiple non-trivial commit authors on the PR) each get their label.
+- **New labels** are created in `FIRSTNAME_LASTNAME` form, **ASCII-folded** (an accented commit-author surname reconciles to the established plain-ASCII canonical, e.g. an acute-accented `MENDEZ-RIOS`); existing labels in any form — including the legacy `First Last` space form still present in isnad-graph — are **reused, never duplicated**.
+- **Enforcement (tool):** [`.claude/lib/apply_implementor_labels.py`](../../lib/apply_implementor_labels.py) re-derives and applies the labels idempotently (dry-run by default; `--apply` to write; `--repo` to scope). It is run at every `/wave-wrapup` (Step: implementor-label sweep) so the convention cannot lapse again, and may be run manually any time. It applies via the REST labels endpoint (the GraphQL primary limit exhausts after a few hundred `gh issue edit` mutations).
+
 ### Reassignment on Termination
 
 When a team member is fired:
