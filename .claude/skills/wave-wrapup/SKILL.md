@@ -117,6 +117,27 @@ gh pr view {NUMBER} --json body
 
 Close referenced issues with audit comments. Also check for issues matched by branch naming convention.
 
+### 6.5. Implementor-label sweep (reinstated 2026-06-30)
+
+Every issue that carried implementation work this wave MUST end up with its
+**`FIRSTNAME_LASTNAME`** implementor label (charter [`issues.md` § Implementor label](../../team/charter/issues.md)).
+The label is both the assignee tag and the durable record of *who implemented*;
+the practice lapsed for several waves, so this sweep is now a wrapup step so it
+cannot lapse again. The tool re-derives the label from each merged PR (branch
+prefix → existing label; else the **commit-author identity** is authoritative)
+and applies it idempotently — safe to run repeatedly.
+
+```bash
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
+[ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+# Dry-run first to see the plan, then apply. Scope to the wave's repos with
+# repeated --repo flags, or omit --repo to sweep all 8.
+python3 "$REPO_ROOT/.claude/lib/apply_implementor_labels.py" --repo noorinalabs-<repo>            # preview
+python3 "$REPO_ROOT/.claude/lib/apply_implementor_labels.py" --repo noorinalabs-<repo> --apply    # write
+```
+
+Report how many labels were applied and any new persona labels created.
+
 ### 7. Verify completeness
 
 Check that all wave issues are resolved:
