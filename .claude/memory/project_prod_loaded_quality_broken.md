@@ -1,13 +1,24 @@
 ---
 name: project_prod_loaded_quality_broken
-description: "RESOLVED 2026-06-29 — prod reloaded with #723-corrected graph (1.66M nodes, chains 100% populated, pollution 0). History of the prior broken state below."
+description: "PARTIALLY RESOLVED — 2026-06-29 reload fixed orphans/chains/linkage, BUT 2026-06-30 owner re-validation found prod STILL broken: matn-as-narrator pollution persists (da#253), semantic search fails on prod (ig#1148), search capped at 50 (ig#1147). #723 NOT closeable as validated. History below."
 metadata: 
   node_type: memory
   type: project
   originSessionId: f3dcddd8-6ad9-48bf-b25e-92d034607282
 ---
 
-**RESOLVED 2026-06-29 — #723 corrected graph deployed to prod.** Prod Neo4j was reloaded from the pollution-fixed, chains-populated curated artifacts (same set validated on stage). Live prod validation (cypher, https://isnad.noorinalabs.com → 200):
+## ⚠ CORRECTION 2026-06-30 — prod re-validation FAILED; "RESOLVED" below was premature
+
+Owner re-checked the **live prod UI** 2026-06-30 and found prod is NOT in the validated state the 2026-06-29 cypher pass below claimed. Three defects filed into **wave-22** (the #723 closeout wave):
+- **da#253** — **matn-as-narrator pollution PERSISTS on prod.** Example narrator `nar:00063b2c-b33c-5168-8dbb-71dc8038f64b` is named with a hadith matn fragment ("Thawban:The Messenger of Allah (ﷺ) sacrificed during a journey and then…"). This contradicts the "pollution 0" line below. **Most likely cause: the 06-29 reload predates the `da#247` NER fix (whose integrated re-run was *pending* at the 06-28 handoff) — i.e. prod was loaded with PRE-FIX narrator data.** The 06-29 cypher pass measured *relational + English-fragment* pollution (which read 0), NOT matn-as-narrator name pollution — so "pollution 0" was a narrower claim than it sounded. To confirm in da#253.
+- **ig#1148** — **semantic search still 500s/fails on prod** despite `ig#1110` being closed. prod ≠ stg (embeddings likely not backfilled on the 06-29 prod load).
+- **ig#1147** — full-text search **hard-capped at 50 results** (5 pages × 10) on stg AND prod — a separate code/config ceiling bug.
+
+**Net:** criteria #1 (corpus integrity) and #3 (search) are NOT validated on prod. **#723 stays open.** Lesson: a cypher-metric pass is not a UI walkthrough — validate the actual narrator *names* and the search *endpoints*, not just aggregate counts. See [[feedback_honest_audit_over_conclusion_claim]], [[feedback_verify_diagnosis_before_delegating]].
+
+---
+
+**[SUPERSEDED — see correction above] 2026-06-29 — #723 corrected graph deployed to prod.** Prod Neo4j was reloaded from the pollution-fixed, chains-populated curated artifacts (same set validated on stage). Live prod validation (cypher, https://isnad.noorinalabs.com → 200):
 - Nodes **1,665,760** (Hadith 776,242 / Chain 585,129 / Narrator 232,766 / Grading 69,465 / Collection 55) + 22 app AUDIT_LOG (preserved); edges **8,707,661**.
 - Chains **100% populated** (585,129, **0 hollow**); narrator linkage **68.7%** (was 8.98%); top narrators all real (سفيان/شعبة/أبو هريرة/الزهري …), **أبيه gone**; relational + English-fragment pollution **0**.
 - Infra: deploy#505 merged+applied to prod host — 8G swap (fstab-persisted) + Neo4j recreated at 10G limit / 5G heap / 3G pagecache (matches the proven-good stage config). [[feedback_local_ci_parity_no_force]] N/A.
