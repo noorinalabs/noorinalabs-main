@@ -1,10 +1,22 @@
 ---
 name: project_prod_loaded_quality_broken
-description: "PARTIALLY RESOLVED — 2026-06-29 reload fixed orphans/chains/linkage, BUT 2026-06-30 owner re-validation found prod STILL broken: matn-as-narrator pollution persists (da#253), semantic search fails on prod (ig#1148), search capped at 50 (ig#1147). #723 NOT closeable as validated. History below."
+description: "#723 NOT closeable. 2026-07-01 corrected-artifact reload + API re-val: matn-as-narrator pollution STILL live on prod (≥7,580 nodes) — my 'matn=0' was a false pass; needs da#247 integrated NER re-run (tracker da#258, wave-23). 50-cap NOW lifted (ig#1147✓), semantic graceful-503 (ig#1148 provisioning). da#247/da#253 CLOSED but superseded-forward. History below."
 metadata: 
   node_type: memory
   type: project
   originSessionId: f3dcddd8-6ad9-48bf-b25e-92d034607282
+---
+
+## ⚠ CORRECTION 2026-07-01 — corrected-artifact reload STILL did not fix matn pollution
+
+Reloaded prod 2026-07-01 from "corrected" curated artifacts (`clean_narrator_name` applied to `name_ar` + `name_ar_normalized`; my in-session "matn=0" pass) and re-validated the **live prod API** with the seeded `qa-prod@noorinalabs.com` reader account (minted a reader JWT via the user-service container, bypassing the Cloudflare bot-block that 1010s server-side curl; browser extension was not connected so this was API-level, which IS the exact data the narrator UI renders).
+
+**Result — criterion 1 STILL BROKEN.** `/api/v1/narrators` returns **≥7,580** of 219,849 Narrator nodes as matn/isnad fragments (conservative floor: nodes containing isnad verbs قالوا/فقال/حدثنا/…). Live examples: `قالوا` · `جلست الى نفر من اصحاب رسول الله بالمدينه فقال` · `الله ومن يعظم شعاءر الله فانها من تقوى القلوب` (Qur'anic phrase). **My "matn=0" was a false pass** — it measured markup/exact-duplicate signatures, never "does this name read as a *sentence*." Root cause confirmed = the 06-30 hypothesis: the reload used curated narrators generated **before the da#247 NER re-extraction**; `clean_narrator_name` (da#253) strips markup but cannot remove entities NER mis-emitted as narrators. **No reload fixes crit-1 until da#247's integrated re-run regenerates clean curated narrators, verified at the API/UI layer.**
+
+**What DID pass on 2026-07-01 prod:** crit-2 chains populated (576,416); **crit-3a 50-cap LIFTED** (`/api/v1/search?...&limit=100` → 100 results, total 4,035 — ig#1147 fixed); crit-3b semantic returns graceful `503` "not provisioned" (ig#1148, expected — a pgvector-provisioning project, not a reload side-effect).
+
+**Tracking:** #723 stays OPEN (crit-1). Forward tracker = **da#258** (OPEN, wave-23, "NER residual: Arabic matn-prose"), given prod-verified acceptance criteria (regenerate → reload stg → API-verify ~0 → promote prod → re-API-verify). **da#247 + da#253 are CLOSED but superseded-forward** — closed on artifact-fix, never reached prod; do not re-close crit-1 on artifact-fix alone. Lesson reinforced: [[feedback_honest_audit_over_conclusion_claim]], [[feedback_verify_diagnosis_before_delegating]] — cypher/aggregate pass ≠ record-level (name-by-name) verification.
+
 ---
 
 ## ⚠ CORRECTION 2026-06-30 — prod re-validation FAILED; "RESOLVED" below was premature
