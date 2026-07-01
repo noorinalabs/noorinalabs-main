@@ -187,8 +187,24 @@ in Step 1 from the bulk `--json url,labels` fetch, grammar `wave-{X}` → `W{X}`
 `p{N}-wave-{M}` → `P{N}W{M}`, `wave-x` → `WX`); the board's actual Wave-field value comes
 from the Step-2 GraphQL response. A single hash-join `awk` matches them by URL.
 
+> **Closed-issue guard (main#902).** Step 1 fetches labels for **OPEN issues only**
+> (`--state open`), but Step 2 pulls **all** board items (open AND closed). A *closed*
+> issue that legitimately retains its wave label falls out of the open-only map, so its
+> expected option resolves to `(unset)` — and the naive "field populated but expected
+> unset → clear" rule would falsely flag it as drift-to-clear and **erase correct
+> historical Wave attribution** (P7W20: a closed `p3-wave-10` + several closed `wave-19`
+> flagged `<W..> → (clear)`). The fix carries each board item's `content.state` into the
+> join and delegates bucketing to the tested classifier
+> [`.claude/lib/board_audit_drift.py`](../../lib/board_audit_drift.py), which **protects**
+> any CLOSED/MERGED item still holding a *valid* Wave option (`W{X}` / grandfathered
+> `P{N}W{M}` / `WX`) from clearing. The genuine drift signal is untouched: an **open**
+> item whose Wave field mismatches its label is always flagged, and a populated field with
+> no wave label on an OPEN item is still cleared as before.
+
 ```bash
-# Board side: url \t item_id \t current-Wave-field (from the merged Step-2 response).
+# Board side: url \t item_id \t current-Wave-field \t content-state (Step-2 response).
+# `content.state` is OPEN|CLOSED (issues) / OPEN|CLOSED|MERGED (PRs); it drives the
+# main#902 closed-item protection below.
 jq -r '.data.organization.projectV2.items.nodes[]
        | select(.content.url != null)
        | "\(.content.url)\t\(.id)\t\(
@@ -196,48 +212,48 @@ jq -r '.data.organization.projectV2.items.nodes[]
              | select(.__typename == "ProjectV2ItemFieldSingleSelectValue")
              | select(.field.name == "Wave")
              | .name] | first // "(unset)")
-         )"' /tmp/board-items.json > /tmp/board-wave-values.tsv
+         )\t\(.content.state // "")"' /tmp/board-items.json > /tmp/board-wave-values.tsv
 
 # In-memory hash join (NO network): first file builds url -> expected-option, second
 # file (board) is streamed and annotated with the expected option (or "(unset)" when the
-# issue carries no wave label / isn't an open issue — e.g. a PR or closed item).
+# issue carries no wave label / isn't an OPEN issue — e.g. a PR or closed item) plus the
+# board item's state (carried through for the main#902 guard).
 # NB: the map array is `want`, NOT `exp` — `exp` is awk's built-in exponential fn and
 # using it as an array name is a syntax error.
 awk -F'\t' '
   NR==FNR { want[$1] = $2; next }                # /tmp/issue-labels.tsv : url -> W{X}
   { e = ($1 in want) ? want[$1] : "(unset)";
-    print $1 "\t" $3 "\t" e }                     # url \t current_wave \t expected
+    print $1 "\t" $3 "\t" e "\t" $4 }             # url \t current_wave \t expected \t state
 ' /tmp/issue-labels.tsv /tmp/board-wave-values.tsv > /tmp/board-drift-join.tsv
 
-# Bucket the join rows (see #427 for the regression that motivated the split):
-#   DRIFT      — actionable rows where a mutation will change board state.
-#   NOOP_COUNT — no wave label AND Wave field already (unset). Functionally
-#                `(unset) → (clear)`; the apply step's clearProjectV2ItemFieldValue is a
-#                no-op against an already-cleared field. Counted separately so the operator
-#                sees "audit is clean" even when the no-op equivalence class is non-empty;
-#                MUST stay out of DRIFT so Step 7 doesn't emit redundant clear mutations and
-#                Step 5's gate doesn't over-report.
+# Bucket the join rows via the tested classifier (single source of truth; see #427 for the
+# split-regression it guards and main#902 for the closed-item protection). It reads the
+# 4-column join and emits actionable DRIFT rows (url \t current \t target) on stdout plus a
+# `noop=.. protected=.. in_sync=.. drift=..` summary on stderr:
+#   DRIFT      — actionable rows where a mutation will change board state (target is the
+#                expected option, or "(clear)").
+#   NOOP       — no wave label AND Wave field already (unset); apply-step clear is a no-op.
+#   IN_SYNC    — label present AND field already matches (nothing to do).
+#   PROTECTED  — main#902: a CLOSED/MERGED item retaining a valid Wave option; NOT cleared,
+#                so correct historical attribution survives.
+# NOOP/IN_SYNC/PROTECTED MUST stay out of DRIFT so Step 7 emits no redundant mutation and
+# Step 5's gate doesn't over-report.
 # DRIFT rows carry REAL tab separators (`$'\t'`, not the literal backslash-t that a
 # double-quoted "\t" would store) so Step 7's `while IFS=$'\t' read` actually splits them.
 DRIFT=()
-NOOP_COUNT=0
-while IFS=$'\t' read -r url current_wave expected; do
+while IFS=$'\t' read -r url current_wave target; do
   [ -n "$url" ] || continue
-  if [ "$expected" != "(unset)" ]; then
-    if [ "$current_wave" != "$expected" ]; then
-      DRIFT+=("$url"$'\t'"$current_wave"$'\t'"$expected")
-    fi
-  elif [ "$current_wave" != "(unset)" ]; then
-    # No wave label but Wave field is populated — should clear.
-    DRIFT+=("$url"$'\t'"$current_wave"$'\t'"(clear)")
-  else
-    # No wave label AND Wave field already (unset) — already in desired state.
-    NOOP_COUNT=$((NOOP_COUNT + 1))
-  fi
-done < /tmp/board-drift-join.tsv
+  DRIFT+=("$url"$'\t'"$current_wave"$'\t'"$target")
+done < <(python3 .claude/lib/board_audit_drift.py /tmp/board-drift-join.tsv \
+           2>/tmp/board-drift-summary.txt)
 
-echo "Actionable Wave-field drift:        ${#DRIFT[@]}"
-echo "No-op equivalents (unset == clear): ${NOOP_COUNT}"
+# Counts from the classifier summary (protected = closed items shielded from clearing).
+NOOP_COUNT=$(sed -n 's/.*noop=\([0-9]*\).*/\1/p' /tmp/board-drift-summary.txt)
+PROTECTED_COUNT=$(sed -n 's/.*protected=\([0-9]*\).*/\1/p' /tmp/board-drift-summary.txt)
+
+echo "Actionable Wave-field drift:              ${#DRIFT[@]}"
+echo "No-op equivalents (unset == clear):       ${NOOP_COUNT}"
+echo "Protected closed items (retain label):    ${PROTECTED_COUNT}"
 printf '%s\n' "${DRIFT[@]}" | head -30
 ```
 
@@ -253,6 +269,7 @@ Board audit results:
 - Orphan issues:                       12 (in repo, missing from board)
 - Actionable Wave-field drift:          7 (label and Wave field disagree; mutation will change state)
 - No-op equivalents (unset == clear): 83 (functional duplicates; skipped by apply, shown for visibility)
+- Protected closed items (retain lbl):  6 (closed/merged w/ valid Wave option; NOT cleared — main#902)
 - Missing Wave-field options:           0 (P3W9, P3W10 all present)
 
 Orphan issues:
@@ -267,7 +284,7 @@ Actionable Wave-field drift:
 Proceed with bulk-add and bulk-sync? [y/N]
 ```
 
-The confirmation gate is keyed off the **actionable** drift count (`${#DRIFT[@]}`) plus the orphan count. No-op equivalents never appear under "Actionable Wave-field drift" and never gate the prompt — the apply step would skip them anyway, per the Step 4 forensic note.
+The confirmation gate is keyed off the **actionable** drift count (`${#DRIFT[@]}`) plus the orphan count. No-op equivalents and main#902 protected closed items never appear under "Actionable Wave-field drift" and never gate the prompt — the apply step would skip them anyway, per the Step 4 forensic note.
 
 The user MUST type `y` to proceed. Any other answer aborts with `BLOCK: user declined; no mutations made`.
 
@@ -366,7 +383,7 @@ done <<< "$(printf '%s\n' "${DRIFT[@]}")"
 
 ### 8. Read-back verify
 
-Re-run step 2 (board fetch) and re-compute step 3 (orphans) + step 4 (drift). Success criterion is **actionable drift == 0** AND **orphan count == 0** — the `NOOP_COUNT` bucket is expected to be non-zero on a healthy board (any issue intentionally left unlabeled lives here) and MUST NOT fail the read-back. If actionable drift or orphans are non-zero post-sync, surface to the user — the gh / GraphQL mutations may have silently no-op'd per the projects-classic deprecation family.
+Re-run step 2 (board fetch) and re-compute step 3 (orphans) + step 4 (drift). Success criterion is **actionable drift == 0** AND **orphan count == 0** — the `NOOP_COUNT` and `PROTECTED_COUNT` buckets are expected to be non-zero on a healthy board (issues intentionally left unlabeled live in NOOP; closed items retaining a valid wave label live in PROTECTED, main#902) and MUST NOT fail the read-back. If actionable drift or orphans are non-zero post-sync, surface to the user — the gh / GraphQL mutations may have silently no-op'd per the projects-classic deprecation family.
 
 ### 9. Report
 
@@ -375,11 +392,12 @@ Board audit complete:
 - Orphans added: {count} (was {pre} → board now has {post} items)
 - Wave fields synced: {count} (pre-actionable-drift: {pre} → post-actionable-drift: {post})
 - No-op equivalents (unset == clear): {count} (informational; unchanged by sync)
+- Protected closed items (retain label): {count} (main#902; NOT cleared, attribution preserved)
 - Missing Wave-field options: {list, if any}
 - Read-back actionable drift remaining: {count}
 ```
 
-If read-back actionable drift > 0, raise a warning and link to charter `pull-requests.md § gh pr edit projects-classic deprecation` (the same silent-no-op family). A non-zero no-op count is normal and does NOT warrant escalation.
+If read-back actionable drift > 0, raise a warning and link to charter `pull-requests.md § gh pr edit projects-classic deprecation` (the same silent-no-op family). A non-zero no-op or protected-closed-item count is normal and does NOT warrant escalation.
 
 ## Acceptance criteria status (per main#199)
 
