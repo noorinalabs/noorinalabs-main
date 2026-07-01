@@ -121,6 +121,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _shell_parse import (  # noqa: E402
     find_gh_subcommand,
     iter_command_segments,
+    normalize_command_separators,
     strip_heredocs,
     tokenize,
 )
@@ -373,7 +374,11 @@ def parse_wave_label_changes(command: str) -> list[WaveLabelChange]:
     `gh issue edit 1 ... && gh issue edit 2 ...` shapes which is the
     dominant batch shape.
     """
-    cleaned = strip_heredocs(command)
+    # Strip heredocs FIRST (its regex needs the raw newlines to find the body),
+    # THEN normalize command separators so a leading `cd "$(...)"`-newline or a
+    # non-space-padded `;` prefix still segments the `gh issue edit/create`
+    # invocation into its own command segment (#901).
+    cleaned = normalize_command_separators(strip_heredocs(command))
     tokens = tokenize(cleaned)
     if tokens is None:
         return []
@@ -431,7 +436,11 @@ def parse_wave_label_create(command: str) -> list[WaveLabelCreate]:
     not the command tokens). The caller extracts the number from the
     PostToolUse `tool_response.stdout` URL.
     """
-    cleaned = strip_heredocs(command)
+    # Strip heredocs FIRST (its regex needs the raw newlines to find the body),
+    # THEN normalize command separators so a leading `cd "$(...)"`-newline or a
+    # non-space-padded `;` prefix still segments the `gh issue edit/create`
+    # invocation into its own command segment (#901).
+    cleaned = normalize_command_separators(strip_heredocs(command))
     tokens = tokenize(cleaned)
     if tokens is None:
         return []
