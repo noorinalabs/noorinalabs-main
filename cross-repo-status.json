@@ -6,11 +6,196 @@
   "wave_22_repos_in_scope": ["noorinalabs-main","noorinalabs-isnad-graph","noorinalabs-deploy","noorinalabs-data-acquisition"],
   "wave_22_scope": {"theme":"Timeline/dating APIs + #723 closeout + auth + heavy TD floor","phase":7,"phase_ordinal":5,"is_final_wave_of_phase":true,"tier_1_date_apis":[{"id":"noorinalabs-isnad-graph#1041","ref":"isnad-graph#1041","implementer":"Jun-Seo Park","reviewer":"Anya Kowalczyk","reviewer_2":"Mateo Salazar","priority":"feature"},{"id":"noorinalabs-isnad-graph#1042","ref":"isnad-graph#1042","implementer":"Mateo Salazar","reviewer":"Anya Kowalczyk","reviewer_2":"Nneka Obi","priority":"feature"},{"id":"noorinalabs-isnad-graph#1043","ref":"isnad-graph#1043","implementer":"Nneka Obi","reviewer":"Ravi Wickramasinghe","reviewer_2":"Anya Kowalczyk","priority":"feature"}],"tier_2_auth":[{"id":"noorinalabs-isnad-graph#1111","ref":"isnad-graph#1111","implementer":"Ingrid Lindqvist","reviewer":"Idris Yusuf","reviewer_2":"Jun-Seo Park","priority":"bug"}],"tier_3_closeout":[{"id":"noorinalabs-main#723","ref":"main#723","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"closeout"},{"id":"noorinalabs-main#673","ref":"main#673","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"meta"}],"tier_4_tech_debt":[{"id":"noorinalabs-main#897","ref":"main#897","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-main#901","ref":"main#901","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-main#902","ref":"main#902","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-deploy#498","ref":"deploy#498","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-deploy#500","ref":"deploy#500","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-deploy#506","ref":"deploy#506","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-deploy#507","ref":"deploy#507","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-deploy#513","ref":"deploy#513","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-isnad-graph#1104","ref":"isnad-graph#1104","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-isnad-graph#1139","ref":"isnad-graph#1139","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-isnad-graph#1146","ref":"isnad-graph#1146","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#239","ref":"data-acquisition#239","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#246","ref":"data-acquisition#246","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"}],"deliberately_not_in_w22":["data-acquisition#136","isnad-ingest-platform#119","main#775","data-acquisition#178","data-acquisition#139"],"base_feature_bug":4,"td_floor_20pct":1,"td_intake":"13/1 (final-wave floor-not-cap)","td_pool":15,"serves_criteria":["#4","#5","#6","verify #1-#3"],"criterion_7_streaming":"deferred -> Phase 8","tier_3b_prod_revalidation_findings":[{"id":"noorinalabs-isnad-graph#1147","ref":"isnad-graph#1147","implementer":"Mateo Salazar","reviewer":"Anya Kowalczyk","reviewer_2":"Marisol Vega-Cruz","priority":"bug","note":"search results hard-capped at 50 (stg+prod) — criterion #3"},{"id":"noorinalabs-isnad-graph#1148","ref":"isnad-graph#1148","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug","note":"semantic search fails on prod despite ig#1110 closure — criterion #3"},{"id":"noorinalabs-data-acquisition#253","ref":"data-acquisition#253","implementer":"Kavitha Sundaramurthy","reviewer":"Ivana Horvat","reviewer_2":"Alejandra Reyes-Fuentes","priority":"bug","note":"matn-as-narrator pollution persists on prod post-reload — criterion #1; BLOCKS #723 close-as-validated"},{"id":"noorinalabs-deploy#470","ref":"deploy#470","implementer":"Lucas Ferreira","reviewer":"Weronika Zielinska","reviewer_2":"Nino Kavtaradze","priority":"bug","note":"prod embed-service cutover + corpus re-embed — the true blocker for ig#1148 semantic search on prod (criterion #3); owner-gated prod deploy"}],"prod_revalidation_status":"FAILED — prod != stg; #723 cannot close as validated until ig#1147 (search cap), ig#1148/deploy#470 (semantic embeddings on prod), and da#253 (matn-as-narrator code gap) resolve (owner-reported+investigated 2026-06-30)"},
   "wave_22_scope_reconciliation_note": "clean-slate wave (nothing pre-labeled wave-22; no must-includes; phase_7_carry_forwards all closed P7W1 framework). FINAL P7 wave: heavy TD floor=13 (floor-not-cap); da#136+ip#119 P8-coupled, left for /plan-phase 8. Theme re-confirmed post-reboot via /phase-review 7.",
-  "wave_22_active": true,
+  "wave_22_active": false,
   "wave_22_started_at": "2026-07-01T01:38:27Z",
   "wave_22_merge_model": "wave-branch",
   "wave_22_branches": {"branch":"deployments/phase-7/wave-22","created_at":"2026-07-01T01:40:19Z","repos":{"noorinalabs-main":{"sha":"2df4fcdb7","status":"created"},"noorinalabs-isnad-graph":{"sha":"20e403488","status":"created"},"noorinalabs-deploy":{"sha":"9337ebcd5","status":"created"},"noorinalabs-data-acquisition":{"sha":"a217d06b7","status":"created"}}},
   "wave_22_kicked_off_at": "2026-07-01T01:40:19Z",
+  "wave_22_final_pr_count": 22,
+  "wave_22_changes_requested_cycles": 1,
+  "wave_22_top_concentration_pct": 14,
+  "wave_22_trust_signals": {
+  "Aino Virtanen": {
+    "authored_prs": [
+      910
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Aisha Idrissi": {
+    "authored_prs": [
+      517,
+      515
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 2,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Alejandra Reyes-Fuentes": {
+    "authored_prs": [],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 0,
+    "review_false_positives": 1,
+    "rework_cycles": 0
+  },
+  "Bereket Tadesse": {
+    "authored_prs": [],
+    "ci_red_merges": 0,
+    "must_fix_caught": 1,
+    "must_fix_received": 0,
+    "prs_merged": 0,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Farhan Malik": {
+    "authored_prs": [
+      1162
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Ingrid Lindqvist": {
+    "authored_prs": [
+      1160,
+      1152
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 1,
+    "prs_merged": 2,
+    "review_false_positives": 0,
+    "rework_cycles": 1
+  },
+  "Jun-Seo Park": {
+    "authored_prs": [
+      1161,
+      1156
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 2,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Kavitha Sundaramurthy": {
+    "authored_prs": [
+      255,
+      254
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 2,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Lucas Ferreira": {
+    "authored_prs": [
+      519,
+      516,
+      514
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 1,
+    "prs_merged": 3,
+    "review_false_positives": 0,
+    "rework_cycles": 1
+  },
+  "Marisol Vega-Cruz": {
+    "authored_prs": [],
+    "ci_red_merges": 0,
+    "must_fix_caught": 1,
+    "must_fix_received": 0,
+    "prs_merged": 0,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Mateo Salazar": {
+    "authored_prs": [
+      1159,
+      1154,
+      1149
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 1,
+    "prs_merged": 3,
+    "review_false_positives": 0,
+    "rework_cycles": 1
+  },
+  "Nikolaos Papadopoulos": {
+    "authored_prs": [
+      256
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Nino Kavtaradze": {
+    "authored_prs": [
+      518
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Nneka Obi": {
+    "authored_prs": [
+      1158,
+      1153
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 1,
+    "must_fix_received": 0,
+    "prs_merged": 2,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Santiago Ferreira": {
+    "authored_prs": [
+      913
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Wanjiku Mwangi": {
+    "authored_prs": [
+      912
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  }
+},
+  "wave_22_completed_at": "2026-07-01T21:11:48Z",
   "wave_21_meta_issue": "noorinalabs-main#903",
   "wave_21_phase": 7,
   "wave_21_phase_ordinal": 4,
@@ -257,38 +442,7 @@
     ]
   },
   "wave_18_scope_reconciliation_note": "Greenfield wave (no prior wave-18 drift). 6 P6 framework carry-forwards decomposed per owner decision into 6 per-repo fan-out issues + 2 generator-refinement (ts-enum #870, merge-driver #871) + 3 framework (#862/#863/#868). isnad-graph excluded (pilot). Slates null at scope; kickoff Step 0.4 drafts per-repo 2-reviewer slate from each child roster.",
-  "phase_7_carry_forwards": [
-    {
-      "id": "820-fanout",
-      "type": "feature",
-      "note": "P7W1: fan out structural ontology generator to remaining 6 child repos (#820 #855); pilot proven on main+isnad-graph"
-    },
-    {
-      "id": "820-ts-enum",
-      "type": "enhancement",
-      "note": "P7W1: extend generator contract node-kind enum with interface/type kinds (~82 TS decls invisible in isnad-graph pilot) before any tree-sitter backend"
-    },
-    {
-      "id": "820-mergedriver-form",
-      "type": "tech-debt",
-      "note": "P7W1: standardize merge-driver invocation form across repos (main=plain-script via #860 fallback, isnad-graph=module form)"
-    },
-    {
-      "id": "820-framework-align",
-      "type": "architecture",
-      "note": "P7W1 (#862): wire framework to USE the C×T2 ontology — librarian surfaces ontology/structural/llms.txt, session-start/wave-wrapup regenerate+staleness-check, ontology-rebuild re-scoped to semantic overlay, CLAUDE.md §Ontology reframed, ontology memories reconciled. Couple with #820 fan-out."
-    },
-    {
-      "id": "820-ontology-readme",
-      "type": "documentation",
-      "note": "P7W1 (#863): author an ontology README (setup / purpose / getting started / usage) as the canonical entry point. Owner directive 2026-06-24. Land WITH #862 framework-alignment + #820 fan-out so it documents the aligned end-state, not the pre-alignment system."
-    },
-    {
-      "id": "868-wavefield-autocreate",
-      "type": "process",
-      "note": "P7W1 (#868): auto-create Project-2 Wave-field option at /wave-kickoff before label-apply (GraphQL updateProjectV2Field). Owner-adopted P6W17 retro 2026-06-25. Eliminates the recurring no-option-W{X} capture class."
-    }
-  ],
+  "phase_7_carry_forwards": [],
   "wave_17_phase": 6,
   "wave_17_phase_ordinal": 4,
   "wave_17_scope_reconciled_at": "2026-06-24T01:48:21Z",
