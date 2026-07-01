@@ -414,5 +414,72 @@ class LineContinuationTests(unittest.TestCase):
         self.assertEqual(result["decision"], "block")
 
 
+class CdPrefixedCommandTests(unittest.TestCase):
+    """#901 fourth surface: a `cd <dir>`-prefixed `gh issue edit --add-label
+    wave-*` command must NOT bypass the evidence gate.
+
+    Root cause: `_find_issue_command` used the UNFIXED
+    `tokenize(strip_heredocs(command))` path. shlex treats a bare NEWLINE as
+    ordinary whitespace and only emits `;`/`&&` as standalone tokens when they
+    are ALREADY space-padded, so the two dominant orchestrator idioms —
+
+        cd "$(git rev-parse --show-toplevel)"\\n gh issue edit N --add-label ...
+        cd /repo; gh issue edit N --add-label ...            (no space before gh)
+
+    — collapse `cd`, its argument, and `gh` into ONE command segment whose
+    first token is `cd`. `find_gh_subcommand` bails, `_find_issue_command`
+    returns None, and the cited-path evidence gate is SILENTLY skipped
+    (fail-open). Applying `normalize_command_separators` before `tokenize`
+    (matching `_wave_label_parse.py`) restores segmentation so the gate
+    evaluates the command instead of bypassing it.
+
+    Each case cites an all-404 path → the gate must BLOCK (proving it reached
+    verification, i.e. was NOT bypassed). Pre-fix every case returned None
+    (allow/skip).
+    """
+
+    def test_newline_cd_prefixed_edit_does_not_bypass_gate(self):
+        # Canonical #901 repro: `cd "$(...)"`<newline>`gh issue edit ...`.
+        body = "## Summary\nFile at noorinalabs-main/.claude/hooks/gone.py is removed.\n"
+        cmd = (
+            'cd "$(git rev-parse --show-toplevel)"\n'
+            "gh issue edit 100 --repo noorinalabs/noorinalabs-main --add-label 'wave-22'"
+        )
+        fake = _fake_subprocess_factory(main_exists=set(), issue_body=body)
+        with mock.patch.object(hook.subprocess, "run", side_effect=fake):
+            result = hook.check(_bash_input(cmd))
+        assert result is not None, "cd-newline-prefixed edit bypassed the evidence gate (fail-open)"
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("noorinalabs-main/.claude/hooks/gone.py", result["reason"])
+        self.assertIn("wave-22", result["reason"])
+
+    def test_semicolon_cd_prefixed_edit_does_not_bypass_gate(self):
+        # `cd /repo;gh issue edit ...` — the `;` sticks to `/repo` under raw
+        # shlex, so no separator token is produced pre-fix.
+        body = "## Summary\nFile at noorinalabs-main/.claude/hooks/gone.py is removed.\n"
+        cmd = "cd /repo;gh issue edit 100 --repo noorinalabs/noorinalabs-main --add-label 'wave-22'"
+        fake = _fake_subprocess_factory(main_exists=set(), issue_body=body)
+        with mock.patch.object(hook.subprocess, "run", side_effect=fake):
+            result = hook.check(_bash_input(cmd))
+        assert result is not None, "cd-semicolon-prefixed edit bypassed the evidence gate"
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("noorinalabs-main/.claude/hooks/gone.py", result["reason"])
+
+    def test_newline_cd_prefixed_create_does_not_bypass_gate(self):
+        # Create surface of the same shape: `cd <dir>`<newline>`gh issue create`.
+        body = "## Summary\nFile at noorinalabs-main/.claude/hooks/gone.py is removed.\n"
+        cmd = (
+            'cd "$(git rev-parse --show-toplevel)"\n'
+            "gh issue create --repo noorinalabs/noorinalabs-main --title T "
+            f"--body {body!r} --label 'wave-22'"
+        )
+        fake = _fake_subprocess_factory(main_exists=set())
+        with mock.patch.object(hook.subprocess, "run", side_effect=fake):
+            result = hook.check(_bash_input(cmd))
+        assert result is not None, "cd-newline-prefixed create bypassed the evidence gate"
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("noorinalabs-main/.claude/hooks/gone.py", result["reason"])
+
+
 if __name__ == "__main__":
     unittest.main()

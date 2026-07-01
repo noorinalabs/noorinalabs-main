@@ -65,6 +65,7 @@ from _repo_flag_parse import extract_repo  # noqa: E402
 from _shell_parse import (  # noqa: E402
     find_gh_subcommand,
     iter_command_segments,
+    normalize_command_separators,
     resolve_repo_short_name,
     strip_heredocs,
     tokenize,
@@ -137,8 +138,17 @@ def _find_issue_command(command: str) -> tuple[str, str | None, list[str]] | Non
     and `rest_tokens` is the post-`gh` token tail (e.g.
     `["issue", "create", "--label", ...]`). Returns None when no matching
     segment is present or the command does not tokenize.
+
+    Strip heredocs FIRST (its regex needs the raw newlines to find the body),
+    THEN normalize command separators so a leading `cd "$(...)"`-newline or a
+    non-space-padded `;`/`&&` prefix still segments the `gh issue edit/create`
+    invocation into its own command segment. Without this the evidence gate
+    fails OPEN on a `cd x && gh issue edit N --add-label wave-22` command:
+    `find_gh_subcommand` returns None on the collapsed `cd ... gh ...` segment,
+    `_find_issue_command` returns None, and the cited-path check is skipped
+    (#901 — the fourth surface of the same cd-prefix blind spot).
     """
-    tokens = tokenize(strip_heredocs(command))
+    tokens = tokenize(normalize_command_separators(strip_heredocs(command)))
     if tokens is None:
         return None
     for segment in iter_command_segments(tokens):

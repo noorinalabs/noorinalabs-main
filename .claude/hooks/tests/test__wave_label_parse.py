@@ -155,5 +155,124 @@ class ParseChangesAcceptsNewForms(unittest.TestCase):
         self.assertEqual(changes[0].add_label, "p6-wave-16")
 
 
+class CdPrefixedCommand(unittest.TestCase):
+    """#901: a `cd ...`-prefixed `gh issue edit/create` must still parse.
+
+    Before the `normalize_command_separators` fix, a leading `cd` joined to the
+    `gh` invocation by a NEWLINE (shlex eats newlines as whitespace) or by a
+    non-space-padded `;` (`/dir;` sticks together) collapsed `cd` and `gh` into
+    one command segment whose first token was `cd`. `find_gh_subcommand` bailed
+    and the parser returned an empty list — so both PostToolUse hooks
+    (`post_wave_kickoff_comment`, `post_label_change_wave_field_sync`) silently
+    skipped (`skip_parser_returned_empty`). These are the regression cases.
+    """
+
+    # The exact P7W20-kickoff shape from the issue repro: `cd "$(...)"` then a
+    # newline then the label-apply. This is the case that FAILS pre-fix.
+    _NEWLINE_CD = (
+        'cd "$(git rev-parse --show-toplevel)"\n'
+        'gh issue edit 901 --repo noorinalabs/noorinalabs-main --add-label "wave-20"'
+    )
+
+    def test_edit_newline_cd_subst_prefix(self) -> None:
+        changes = p.parse_wave_label_changes(self._NEWLINE_CD)
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0].issue_number, "901")
+        self.assertEqual(changes[0].add_label, "wave-20")
+        self.assertEqual(changes[0].repo, "noorinalabs-main")
+
+    def test_edit_newline_cd_subst_prefix_singular(self) -> None:
+        change = p.parse_wave_label_change(self._NEWLINE_CD)
+        assert change is not None  # the kickoff-comment hook's entry point
+        self.assertEqual(change.add_label, "wave-20")
+
+    def test_edit_andand_cd_prefix(self) -> None:
+        changes = p.parse_wave_label_changes(
+            'cd "$(git rev-parse --show-toplevel)" && '
+            'gh issue edit 901 --repo noorinalabs/noorinalabs-main --add-label "wave-20"'
+        )
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0].add_label, "wave-20")
+
+    def test_edit_semicolon_nospace_cd_prefix(self) -> None:
+        """`cd /dir; gh ...` — the `;` is not space-padded, so shlex keeps it
+        attached to `/dir` pre-fix; the normalizer splits it out."""
+        changes = p.parse_wave_label_changes(
+            'cd /some/dir; gh issue edit 5 --add-label "p6-wave-16"'
+        )
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0].issue_number, "5")
+        self.assertEqual(changes[0].add_label, "p6-wave-16")
+
+    def test_create_newline_cd_prefix(self) -> None:
+        creates = p.parse_wave_label_create(
+            'cd "$(git rev-parse --show-toplevel)"\n'
+            "gh issue create --repo noorinalabs/noorinalabs-main "
+            '--title t --label "wave-20"'
+        )
+        self.assertEqual(len(creates), 1)
+        self.assertEqual(creates[0].add_label, "wave-20")
+        self.assertEqual(creates[0].repo, "noorinalabs-main")
+
+    def test_bare_command_unchanged(self) -> None:
+        """Regression guard: an un-prefixed command still parses identically."""
+        changes = p.parse_wave_label_changes(
+            'gh issue edit 42 --repo noorinalabs/noorinalabs-main --add-label "wave-16"'
+        )
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0].add_label, "wave-16")
+
+    def test_operators_inside_quoted_arg_not_split(self) -> None:
+        """A `;`/`&&`/`|` INSIDE a quoted `--body` is data, not a separator:
+        the edit still parses and no spurious segment is introduced."""
+        changes = p.parse_wave_label_changes(
+            'cd /repo && gh issue edit 7 --add-label "wave-20" --body "run x && y; then z | w"'
+        )
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0].issue_number, "7")
+        self.assertEqual(changes[0].add_label, "wave-20")
+
+
+class NormalizeCommandSeparators(unittest.TestCase):
+    """Direct tests for the shared `_shell_parse.normalize_command_separators`.
+
+    Assertions are whitespace-insensitive on purpose: the contract is that
+    after normalization + `tokenize`, the separator survives as its own token
+    so `iter_command_segments` splits correctly (exact space padding is an
+    implementation detail shlex collapses)."""
+
+    def setUp(self) -> None:
+        import _shell_parse as sp  # noqa: PLC0415
+
+        self.sp = sp
+
+    def _segments(self, cmd: str) -> list[list[str]]:
+        normalized = self.sp.normalize_command_separators(cmd)
+        tokens = self.sp.tokenize(normalized)
+        assert tokens is not None
+        return list(self.sp.iter_command_segments(tokens))
+
+    def test_unquoted_newline_becomes_separator(self) -> None:
+        self.assertEqual(self._segments("cmd1 a\ncmd2 b"), [["cmd1", "a"], ["cmd2", "b"]])
+
+    def test_nonspaced_semicolon_becomes_separator(self) -> None:
+        self.assertEqual(self._segments("cd /x; gh"), [["cd", "/x"], ["gh"]])
+
+    def test_andand_and_pipe_split(self) -> None:
+        self.assertEqual(self._segments("cd /x&&gh|jq"), [["cd", "/x"], ["gh"], ["jq"]])
+
+    def test_quoted_newline_preserved_as_single_token(self) -> None:
+        self.assertEqual(self._segments('echo "a\nb"'), [["echo", "a\nb"]])
+
+    def test_quoted_operators_not_split(self) -> None:
+        self.assertEqual(self._segments('echo "a && b; c | d"'), [["echo", "a && b; c | d"]])
+
+    def test_single_quote_operators_not_split(self) -> None:
+        self.assertEqual(self._segments("echo 'a; b'"), [["echo", "a; b"]])
+
+    def test_line_continuation_joined_not_split(self) -> None:
+        self.assertEqual(self._segments("echo a \\\n  b"), [["echo", "a", "b"]])
+
+
 if __name__ == "__main__":
     unittest.main()

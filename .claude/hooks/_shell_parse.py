@@ -253,6 +253,90 @@ def tokenize(cmd: str) -> list[str] | None:
         return None
 
 
+def normalize_command_separators(cmd: str) -> str:
+    """Quote/escape-aware normalization of shell command separators.
+
+    shlex.split treats a NEWLINE as ordinary whitespace and only recognizes
+    `;`/`&&`/`||`/`|` as standalone tokens when they are ALREADY surrounded by
+    whitespace. So two very common orchestrator idioms defeat
+    `iter_command_segments`, which relies on those separators surviving
+    tokenization as their own tokens:
+
+        cd "$(git rev-parse --show-toplevel)"\\n gh issue edit N --add-label ...
+        cd /some/dir; gh issue edit N --add-label ...
+
+    In the first the newline vanishes into whitespace, so `cd`, the command
+    substitution, and `gh` collapse into ONE segment whose first token is
+    `cd` — `find_gh_subcommand` bails and the parser returns empty (issue
+    #901: kickoff-comment + Wave-field-sync PostToolUse hooks silently skip).
+    In the second the `;` sticks to `/some/dir` (`/some/dir;`), so again no
+    separator token is produced.
+
+    This helper rewrites the raw command so shlex WILL emit the separators as
+    standalone tokens:
+      - line-continuation `\\<newline>` -> a single space (a continued command
+        is ONE command, not two — done first so a continuation newline is not
+        misread as a command separator);
+      - an unquoted, unescaped NEWLINE -> ` ; ` (newline is a command
+        terminator in shell, equivalent to `;`);
+      - an unquoted, unescaped `;` / `|` / `&&` / `||` -> the same operator
+        space-padded on both sides.
+
+    Quote/escape awareness is essential: a `|`/`;`/`&&`/newline INSIDE a single
+    or double quoted string (e.g. `--body "x && y"`, a multi-line
+    `--body "line1\\nline2"`) or preceded by a backslash is DATA, not a
+    separator, and is left byte-for-byte untouched. The result is only ever
+    fed back through `tokenize` (which re-applies line-continuation
+    normalization harmlessly), so injecting extra spaces around genuine
+    operators cannot change the parsed argument values.
+    """
+    cmd = _LINE_CONTINUATION_RE.sub(" ", cmd)
+    out: list[str] = []
+    i = 0
+    n = len(cmd)
+    quote: str | None = None  # active quote char: "'" or '"', else None
+    while i < n:
+        c = cmd[i]
+        if quote is not None:
+            out.append(c)
+            # Inside double quotes a backslash escapes the next char; inside
+            # single quotes nothing is special (shell single-quote semantics).
+            if c == "\\" and quote == '"' and i + 1 < n:
+                out.append(cmd[i + 1])
+                i += 2
+                continue
+            if c == quote:
+                quote = None
+            i += 1
+            continue
+        if c in ("'", '"'):
+            quote = c
+            out.append(c)
+            i += 1
+            continue
+        if c == "\\" and i + 1 < n:
+            # Escaped char outside quotes — emit both, do not treat as separator.
+            out.append(c)
+            out.append(cmd[i + 1])
+            i += 2
+            continue
+        if c == "\n":
+            out.append(" ; ")
+            i += 1
+            continue
+        if cmd[i : i + 2] in ("&&", "||"):
+            out.append(" " + cmd[i : i + 2] + " ")
+            i += 2
+            continue
+        if c in (";", "|"):
+            out.append(" " + c + " ")
+            i += 1
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
 def strip_heredocs(cmd: str) -> str:
     """Remove all heredoc bodies. Iterates until no more matches (handles nested)."""
     prev = None

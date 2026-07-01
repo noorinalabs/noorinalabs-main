@@ -1713,6 +1713,54 @@ class BatchLoopMergeDetectorTests(unittest.TestCase):
             )
         )
 
+    # ---- #897 no-positional-argument (current-branch) in-loop evasion ----
+
+    def test_897_no_arg_merge_in_checkout_loop_blocked(self):
+        # The canonical #897 fail-open: a NO-positional-argument `gh pr merge`
+        # (current-branch form) inside a `do … done` body that iterates
+        # `git checkout $b`. With pr_number=None the gate resolves the cwd
+        # branch's PR — the branch THIS iteration just checked out — sweeping
+        # every branch's PR unverified. #896's non-literal-only matcher missed
+        # it (no positional to match). Now BLOCKED.
+        self.assertTrue(
+            hook.is_variable_pr_merge_in_loop(
+                "for b in branch-a branch-b; do git checkout $b && gh pr merge; done"
+            )
+        )
+
+    def test_897_bare_merge_in_unrelated_loop_blocked(self):
+        # A bare `gh pr merge` co-located inside ANY `do … done` body blocks —
+        # co-location is the trigger, the absent positional is the fail-open.
+        self.assertTrue(hook.is_variable_pr_merge_in_loop("for x in 1 2; do gh pr merge; done"))
+
+    def test_897_flags_only_merge_in_loop_blocked(self):
+        # Flags-only (no positional PR) inside a loop is still the no-literal
+        # fail-open — `--merge` is not a PR number.
+        self.assertTrue(
+            hook.is_variable_pr_merge_in_loop("for b in a b; do gh pr merge --merge; done")
+        )
+
+    def test_897_bare_merge_outside_loop_not_blocked(self):
+        # #886 guard MUST hold: a bare current-branch `gh pr merge` OUTSIDE any
+        # loop is legitimate (it resolves its own current PR) and MUST PASS.
+        self.assertFalse(hook.is_variable_pr_merge_in_loop("gh pr merge"))
+
+    def test_897_bare_merge_with_flags_outside_loop_not_blocked(self):
+        # #886 guard: a flags-only current-branch merge OUTSIDE any loop passes.
+        self.assertFalse(hook.is_variable_pr_merge_in_loop("gh pr merge --merge --repo o/r"))
+
+    def test_897_bare_merge_with_unrelated_rerun_loop_not_blocked(self):
+        # #886 co-location under the #897 broadening: a one-off bare
+        # current-branch merge co-occurring with an unrelated `gh run rerun`
+        # loop is NOT inside the loop body, does not fail-open, and MUST NOT
+        # block.
+        cmd = (
+            "gh pr merge --repo noorinalabs/noorinalabs-deploy --merge\n"
+            "for r in 11 12 13; do "
+            'gh run rerun "$r" --repo noorinalabs/noorinalabs-deploy --failed; done'
+        )
+        self.assertFalse(hook.is_variable_pr_merge_in_loop(cmd))
+
 
 class BatchLoopMergeEndToEndTests(unittest.TestCase):
     """#567 end-to-end: check() HARD BLOCKS a batch-loop variable merge, and a
@@ -1763,6 +1811,41 @@ class BatchLoopMergeEndToEndTests(unittest.TestCase):
             self._input('for pr in 1 2; do gh pr merge "$pr" --admin --merge; done')
         )
         self.assertIsNone(result, "--admin must bypass the batch-loop guard")
+
+    def test_897_no_arg_loop_merge_hard_blocked(self):
+        # #897 end-to-end: the no-positional-argument current-branch merge inside
+        # a `git checkout $b` loop reaches check() and HARD BLOCKS. Patch
+        # get_pr_data so a pass proves the LOOP guard fired (get_pr_data(None)
+        # would otherwise resolve the cwd branch and fail-open).
+        with mock.patch.object(hook, "get_pr_data", return_value=None):
+            result = hook.check(
+                self._input("for b in branch-a branch-b; do git checkout $b && gh pr merge; done")
+            )
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("Batch-loop", result["reason"])
+
+    def test_897_bare_merge_outside_loop_reaches_gate(self):
+        # #886 guard end-to-end: a bare current-branch `gh pr merge` OUTSIDE any
+        # loop must NOT trip the loop guard — it flows to the normal 2-reviewer
+        # gate, which with two distinct approvers ALLOWS. Proves the #897
+        # broadening did not regress the legitimate current-branch merge.
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen", "nadia khoury"}
+        pr_data = {
+            "author": "parametrization",
+            "number": 200,
+            "reviews": [],
+            "headRefName": "L.Pham/0002-fix",
+            "labels": [],
+        }
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=pr_data),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input("gh pr merge --merge"))
+        self.assertIsNone(result, "bare current-branch merge with 2 approvals must pass")
 
     def test_literal_merge_unaffected_by_loop_guard(self):
         # A bare literal merge is NOT loop-shaped; it reaches the normal gate.
