@@ -19,20 +19,25 @@ Input Language:
                the PR in the repo the user named, not the cwd-resolved repo.
     --admin  → short-circuits (emergency override — allows merge).
 
-  Batch-loop guard (#567, narrowed #886, broadened #894): a `gh pr merge` with
-  a NON-LITERAL PR argument located INSIDE a for/while/until loop body (e.g.
-  `for pr in 48 49; do gh pr merge "$pr" …; done`) is HARD BLOCKED. The
-  literal-PR parse cannot resolve a non-integer argument, so the gate would
-  fail-open and merge every iteration unverified (observed P3W11 + P3W13). The
+  Batch-loop guard (#567, narrowed #886, broadened #894/#897): a `gh pr merge`
+  with NO resolvable literal PR number located INSIDE a for/while/until loop body
+  (e.g. `for pr in 48 49; do gh pr merge "$pr" …; done`) is HARD BLOCKED. The
+  literal-PR parse cannot resolve a non-integer OR absent argument, so the gate
+  would fail-open and merge every iteration unverified (observed P3W11 + P3W13).
+  The
   operator is told to run one literal merge per call so each PR is gate-checked.
   The merge must sit between a `do` and its matching `done` to trip the guard —
   an unrelated loop in the same block (e.g. a `gh run rerun "$r" --failed`
   staleness recheck) alongside a non-loop variable merge does NOT (#886). #894
   extended the matched argument forms from `$pr`/`${pr}` to ANY non-literal
   argument — also `${prs[$i]}`, `$(get_pr)`, and a subshell-wrapped
-  `(gh pr merge $pr)` — closing two residual fail-open evasions. `--admin` still
-  overrides; a literal `gh pr merge 54` is unaffected. Conservative DECIDE-tier
-  shape (no conditional-allow) per `feedback_safety_direction_over_ux_friction`.
+  `(gh pr merge $pr)`. #897 further covers a NO-positional-argument merge — the
+  current-branch form `for b in …; do git checkout $b && gh pr merge; done`,
+  which with `pr_number=None` sweeps each checked-out branch's PR unverified. A
+  BARE `gh pr merge` OUTSIDE any loop still PASSES (legitimate current-branch
+  merge, #886). `--admin` still overrides; a literal `gh pr merge 54` is
+  unaffected. Conservative DECIDE-tier shape (no conditional-allow) per
+  `feedback_safety_direction_over_ux_friction`.
 
 Charter-format review comments (canonical per `pull-requests.md` § Comment-Based Reviews,
 resolves #233):
@@ -146,33 +151,44 @@ def extract_pr_number(command: str) -> str | None:
     return None
 
 
-# A `gh pr merge` whose positional PR argument is NON-LITERAL — i.e. anything
-# other than a bare integer PR number (the only form the literal-PR gate can
-# resolve) or an absent positional (flags-only / current-branch merge). This
-# deliberately matches on the FIRST character of the argument rather than on a
-# fully-shaped `$var` token, so it is agnostic to how the argument is spelled or
-# terminated. That single change closes two residual fail-open evasions of the
-# old `$var`-only matcher (#894):
+# A `gh pr merge` whose positional PR argument is NOT a resolvable bare-integer
+# literal — i.e. the positional is EITHER non-literal (`$pr`, `${prs[$i]}`,
+# `$(get_pr)`, a subshell-wrapped `(gh pr merge $pr)`, a URL) OR ABSENT entirely
+# (a flags-only / current-branch `gh pr merge`). In a loop body EITHER form
+# fail-opens the 2-reviewer gate: the literal-PR parse returns None, so
+# `get_pr_data(None)` resolves the cwd branch's PR (moved by the loop's per-
+# iteration `git checkout $b`) instead of a per-iteration literal, silently
+# disabling the gate every iteration. The only in-loop-safe form is a bare
+# integer, which the gate resolves and checks.
 #
-#   1. Subshell-wrapped merge — `(gh pr merge $pr)`. The old terminator lookahead
-#      `(?=\s|;|&|\||$)` did not admit the `)` that ends the arg, so `$pr)` never
-#      matched. Matching the leading `$` needs no terminator, so the `)` (and the
-#      `}` of a `{ …; }` brace group, which already ends at `;` anyway) require no
-#      special-casing.
+# The matcher fires on `gh pr merge` UNLESS immediately followed (after
+# separating whitespace) by a bare integer. The single negative lookahead
+# `(?!\s+\d)` expresses exactly that in one pass, subsuming the earlier
+# first-non-flag/non-digit-argument-character matcher. It keeps everything #894
+# closed AND catches the no-positional-argument evasion #896 left open (#897):
+#
+#   1. Subshell-wrapped merge — `(gh pr merge $pr)`. `merge` is followed by
+#      ` $pr)`; `\s+\d` fails on the leading `$`, so the lookahead admits it.
 #   2. Subscripted / compound / command-substitution arg — `"${prs[$i]}"`,
-#      `"$(get_pr)"`. These survive quote-normalization now that
-#      `_strip_quoted_runs_keep_var_args` unwraps any single-word expansion
-#      (not only a lone `$pr`), and their leading `$` matches here.
+#      `"$(get_pr)"`. Quote-normalization (`_strip_quoted_runs_keep_var_args`)
+#      unwraps any single-word expansion to its bare `${…}` / `$(…)` form, whose
+#      leading `$` is not a digit → matched.
+#   3. Absent positional / flags-only — `gh pr merge`, `gh pr merge --merge`,
+#      `gh pr merge;` (#897). `merge` is followed by end-of-string, a terminator,
+#      or ` --flag`; none is `\s+\d`, so the lookahead admits them.
 #
-# `(?![-\d])` keeps the two LITERAL/absent forms allowed: a flag (`--merge`,
-# leading `-`) means no positional arg (current-branch merge, out of scope for
-# #567), and a leading digit is the bare integer the gate resolves. The class
-# `[^\s;&|()]` requires a real argument character — a bare terminator left behind
-# by a stripped quoted run (`gh pr merge ;`) is NOT treated as an argument.
-_GH_MERGE_NONLITERAL_ARG = re.compile(
-    r"\bgh\s+pr\s+merge\s+"  # the merge verb + separating whitespace
-    r"(?![-\d])"  # NOT a flag and NOT a bare-integer literal PR number
-    r"[^\s;&|()]"  # a present, non-terminator positional argument character
+# `(?!\s+\d)` admits every form EXCEPT a bare-integer literal: a non-literal
+# positional (`$pr`, `${prs[$i]}`, `$(get_pr)`, a subshell `(gh pr merge $pr)`,
+# a URL) OR an ABSENT positional (`gh pr merge`, `gh pr merge --merge`,
+# `gh pr merge;`) both match, because none is followed by `\s+\d`. Only a bare
+# integer (`gh pr merge 54`) is rejected — that PR number resolves and the gate
+# runs. Matching the ABSENT form (not only the non-literal one) is what closes
+# the #897 no-positional-argument evasion #896 left open; co-location inside a
+# `do … done` body (see `is_variable_pr_merge_in_loop`) keeps a bare
+# current-branch `gh pr merge` OUTSIDE any loop legitimately passing (#886).
+_GH_MERGE_NO_LITERAL_PR = re.compile(
+    r"\bgh\s+pr\s+merge\b"  # the merge verb (word-bounded — not `merged`, etc.)
+    r"(?!\s+\d)"  # NOT immediately followed by a bare-integer literal PR number
 )
 
 # `do` / `done` loop keywords as standalone tokens (delimited by start-of-string,
@@ -309,44 +325,50 @@ def _strip_quoted_runs_keep_var_args(command: str) -> str:
 
 
 def is_variable_pr_merge_in_loop(command: str) -> bool:
-    """True if `command` runs a `gh pr merge` with a NON-LITERAL PR argument
-    inside a for/while/until loop — the batch-loop merge shape that fail-opens
-    the 2-reviewer gate (#567/#886/#894, memory `feedback_batch_loop_merge_evades`).
+    """True if `command` runs a `gh pr merge` with NO resolvable literal PR
+    number inside a for/while/until loop — the batch-loop merge shape that
+    fail-opens the 2-reviewer gate (#567/#886/#894/#897, memory
+    `feedback_batch_loop_merge_evades`).
 
     The gate parses a LITERAL PR number from `gh pr merge <N>` to fetch that
-    PR's reviews. When the argument is not a bare integer (`$pr`, `${pr}`,
-    `${prs[$i]}`, `$(get_pr)`, or a subshell-wrapped `(gh pr merge $pr)`), the
+    PR's reviews. When the argument is not a bare integer — non-literal (`$pr`,
+    `${pr}`, `${prs[$i]}`, `$(get_pr)`, a subshell-wrapped `(gh pr merge $pr)`)
+    OR ABSENT entirely (a bare `gh pr merge` / `gh pr merge --merge`, #897) — the
     literal parse returns None, `get_pr_data(None)` resolves the cwd branch's PR
-    (or nothing), and the merge fail-opens — the gate is silently disabled for
-    every iteration. Both originally-observed instances (P3W11 wave→main 4-merge
-    loop, P3W13 ingest 6-PR loop) merged with the gate effectively off.
+    (moved by the loop's per-iteration `git checkout $b`), and the merge
+    fail-opens — the gate is silently disabled for every iteration. The three
+    originally-observed instances (P3W11 wave→main 4-merge loop, P3W13 ingest
+    6-PR loop, both non-literal; #897 no-arg `git checkout $b && gh pr merge`)
+    all swept other branches' PRs with the gate effectively off.
 
     Conservative DECIDE-tier design (per #567 + `feedback_safety_direction_
-    over_ux_friction`): we HARD BLOCK the non-literal-PR-in-loop shape outright.
-    We do NOT attempt to enumerate loop values and gate-verify each — that is
-    the explicitly-deferred conditional-allow path. A literal `gh pr merge 54`
-    is untouched (its PR number parses, the gate runs).
+    over_ux_friction`): we HARD BLOCK the no-resolvable-literal-PR-in-loop shape
+    outright. We do NOT attempt to enumerate loop values and gate-verify each —
+    that is the explicitly-deferred conditional-allow path. A literal
+    `gh pr merge 54` is untouched (its PR number parses, the gate runs).
 
-    Mechanic (#894 broadening). Detection runs on a quote-normalized view of the
-    command (quoted prose stripped, a single-word expansion arg such as `"$pr"`
-    or `"${prs[$i]}"` unwrapped — see `_strip_quoted_runs_keep_var_args`) so a
-    `--body "... for … do gh pr merge $pr … done"` payload that merely MENTIONS
-    the shape is not matched. On that view, `_GH_MERGE_NONLITERAL_ARG` matches a
-    `gh pr merge` whose first positional-argument character is non-literal (not a
-    flag, not a bare integer). Matching the argument's leading character rather
-    than a fully-shaped `$var` token closes the two residual #886 evasions:
-      - subshell `(gh pr merge $pr)` — old terminator lookahead omitted `)`;
-      - compound `${prs[$i]}` / `$(get_pr)` — old unwrap dropped it as prose.
+    Mechanic (#894/#897 broadening). Detection runs on a quote-normalized view of
+    the command (quoted prose stripped, a single-word expansion arg such as
+    `"$pr"` or `"${prs[$i]}"` unwrapped — see `_strip_quoted_runs_keep_var_args`)
+    so a `--body "... for … do gh pr merge $pr … done"` payload that merely
+    MENTIONS the shape is not matched. On that view, `_GH_MERGE_NO_LITERAL_PR`
+    matches a `gh pr merge` UNLESS it is immediately followed by a bare integer —
+    so a non-literal positional AND an absent positional both match, closing:
+      - subshell `(gh pr merge $pr)` — old terminator lookahead omitted `)` (#894);
+      - compound `${prs[$i]}` / `$(get_pr)` — old unwrap dropped it as prose (#894);
+      - no positional at all — `git checkout $b && gh pr merge` (#897).
 
-    Co-location is preserved (#886). The match must sit INSIDE a `do … done`
-    loop body. A one-off `gh pr merge "$PR"` OUTSIDE any loop, co-occurring with
-    an unrelated `for r in …; do gh run rerun "$r" --failed; done`, does NOT
-    fail-open (the merge resolves its own PR) and so MUST NOT block — the
-    co-location requirement leaves it alone, while the real batch-loop shape
-    (`for pr in …; do gh pr merge "$pr"; done`) still trips.
+    Co-location is preserved (#886/#897). The match must sit INSIDE a `do … done`
+    loop body. A one-off `gh pr merge "$PR"` — or a bare current-branch
+    `gh pr merge` — OUTSIDE any loop, co-occurring with an unrelated
+    `for r in …; do gh run rerun "$r" --failed; done`, does NOT fail-open (the
+    merge resolves its own current PR) and so MUST NOT block — the co-location
+    requirement leaves it alone, while the real batch-loop shapes
+    (`for pr in …; do gh pr merge "$pr"; done`,
+    `for b in …; do git checkout $b && gh pr merge; done`) still trip.
     """
     view = _strip_quoted_runs_keep_var_args(command)
-    merge_matches = list(_GH_MERGE_NONLITERAL_ARG.finditer(view))
+    merge_matches = list(_GH_MERGE_NO_LITERAL_PR.finditer(view))
     if not merge_matches:
         return False
     spans = _loop_body_spans(view)
@@ -901,12 +923,15 @@ def check(input_data: dict) -> dict | None:
     if "--admin" in command:
         return None
 
-    # Batch-loop merge guard (#567): a `gh pr merge $pr` inside a for/while
-    # loop fail-opens the 2-reviewer gate (the literal-PR parse can't resolve
-    # the loop variable, so get_pr_data falls back to the cwd branch and the
-    # gate is silently disabled per iteration). HARD BLOCK and instruct
-    # one-literal-merge-per-call so the gate stays active — fail in the safe
-    # direction (`feedback_safety_direction_over_ux_friction`).
+    # Batch-loop merge guard (#567/#894/#897): a `gh pr merge` with no resolvable
+    # literal PR number inside a for/while loop fail-opens the 2-reviewer gate.
+    # That covers a loop-variable arg (`$pr`, `${prs[$i]}`, `$(get_pr)`) AND a
+    # NO-positional-argument current-branch merge (`git checkout $b && gh pr
+    # merge`, #897): in both cases the literal-PR parse returns None, get_pr_data
+    # falls back to the cwd branch, and the gate is silently disabled per
+    # iteration. HARD BLOCK and instruct one-literal-merge-per-call so the gate
+    # stays active — fail in the safe direction
+    # (`feedback_safety_direction_over_ux_friction`).
     #
     # This runs BEFORE the `is_merge_command` early-return below ON PURPOSE:
     # `is_merge_command` splits on `&&`/`;`/`|` and checks each segment's
@@ -919,12 +944,16 @@ def check(input_data: dict) -> dict | None:
         result = {
             "decision": "block",
             "reason": (
-                "Batch-loop `gh pr merge` with a shell-variable PR number "
-                '(e.g. `for pr in 48 49 50; do gh pr merge "$pr" ...; done`) is '
+                "Batch-loop `gh pr merge` with no resolvable literal PR number "
+                '(e.g. `for pr in 48 49 50; do gh pr merge "$pr" ...; done`, or a '
+                "no-argument current-branch merge "
+                "`for b in a b; do git checkout $b && gh pr merge; done`) is "
                 "BLOCKED. The 2-reviewer gate parses a LITERAL PR number to fetch "
-                "that PR's reviews; a loop variable cannot be resolved at parse "
-                "time, so the gate fail-opens and the merge proceeds UNVERIFIED "
-                "(this happened twice — P3W11 and P3W13). Merge one PR per call "
+                "that PR's reviews; a loop variable — or an absent positional, "
+                "which resolves to the per-iteration checked-out branch — cannot "
+                "be gate-verified at parse time, so the gate fail-opens and the "
+                "merge proceeds UNVERIFIED (this happened twice — P3W11 and "
+                "P3W13). Merge one PR per call "
                 "with a literal number so the gate verifies each PR:\n"
                 "  gh pr merge 48 --repo <owner/repo> --merge\n"
                 "  gh pr merge 49 --repo <owner/repo> --merge\n"
