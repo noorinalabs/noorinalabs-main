@@ -1,4 +1,10 @@
 {
+  "wave_23_phase": 8,
+  "wave_23_phase_ordinal": 1,
+  "wave_23_scope_reconciled_at": "2026-07-02T04:47:05Z",
+  "wave_23_repos_in_scope": ["noorinalabs-main","noorinalabs-data-acquisition","noorinalabs-isnad-graph","noorinalabs-deploy"],
+  "wave_23_meta_issue": 919,
+  "wave_23_scope": {"theme":"Data-quality closeout (#723) + promotion-path fix","phase":8,"tier_1_precursor":[{"id":"noorinalabs-deploy#521","ref":"deploy#521","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug","note":"promote.yml 403 enabler — merge first"}],"tier_2_core":[{"id":"noorinalabs-data-acquisition#258","ref":"da#258","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt","note":"integrated NER re-run; regenerate clean curated narrators"},{"id":"noorinalabs-data-acquisition#248","ref":"da#248","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug","note":"TRANSMITTED_TO transmission cycles"},{"id":"noorinalabs-data-acquisition#259","ref":"da#259","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt","note":"loader chain_integrity hang"},{"id":"noorinalabs-isnad-graph#1148","ref":"ig#1148","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug","note":"semantic search on prod (pgvector)"}],"closeout_targets":["noorinalabs-main#723","noorinalabs-main#916"],"td_intake":"target 1 (20% of 2 base); met by 3 in-core TD — no additional pull","declared_refs":["deploy#521","da#258","da#248","da#259","ig#1148"],"carry_forwards":[],"must_includes":[]},
   "wave_22_meta_issue": 904,
   "wave_22_phase": 7,
   "wave_22_phase_ordinal": 5,
@@ -2541,7 +2547,7 @@
     "pilot_completed_at": "2026-06-24"
   },
   "wave_17_task3_checkpoint_resolved_at": "2026-06-24T18:12:00Z",
-  "global_wave_seq": 22,
+  "global_wave_seq": 23,
   "phase_6_criteria_trackers": {
     "1": "noorinalabs-main#725",
     "2": "noorinalabs-main#726",
