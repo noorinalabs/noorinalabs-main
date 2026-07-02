@@ -146,7 +146,18 @@ An **end-state criterion** (or any rollout/enforcement issue) is **MET only when
 
 **Disposition shorthand:** while the mechanism is delivered-but-not-fully-applied, the tracking issue uses `Refs #N` on the delivering PR (NOT `Closes #N`) and stays open as the rollout tracker; it is closed only after the applied-and-verified-at-origin check passes for all targets. (`Closes` on a wave-branch PR would not fire anyway — see `feedback_wave_branch_issue_close` — but the substantive reason is the delivered-vs-applied distinction, not the merge mechanics.)
 
+### Data-quality criteria: record-level verification + stg-gated close + stg↔prod parity tracking
+
+Data-quality / corpus criteria (narrator-name integrity, chain population, search results, dedup pairs — anything asserting a property of the loaded graph) are a **specialization** of the applied-and-verified rule above, with two extra requirements. Both come from the P7W22 miss where an aggregate cypher `matn=0` was treated as sign-off while ≥7,580 matn-as-narrator nodes were live on prod (owner-ratified 2026-07-01):
+
+1. **Record-level, not aggregate.** An aggregate metric (a COUNT, a cypher rollup) is **necessary but never sufficient** to close a data-quality issue. Sign-off requires sampling **N actual rendered records** through the same API/UI surface the criterion is about, and reading the records themselves — not a count that measures a *narrower* signature than the criterion claims. `matn=0` as a count did not test "does this narrator name read as a *sentence*"; a per-record API/UI read did. Cite the sampled records in the closing comment.
+
+2. **Close on stg; validate prod as a promotion; track the parity.** A data-quality fix issue closes only after its corpus change is **record-level-verified on stg** — the artifact existing (a fixed parquet, a merged PR) is *delivered*, not *verified*. Closure does **not** block on prod: prod is reached later by promotion of the verified-good stg change (charter/memory `feedback_stg_gate_before_prod`). But because a stg-verified change is not yet proven live, **every stg-closed data-quality issue is entered on the standing stg↔prod parity tracker**, which re-verifies the record-level property on prod (or compares stg-vs-prod results) after promotion. A criterion is not "live" until that prod re-verification passes — the parity tracker, not the closed fix issue, is the live-state record.
+
+**Why:** an artifact-level or aggregate-level "fixed + closed" can leave the live corpus still broken and invisible (P7W22 #723: da#247/da#253 closed on the artifact, the reload used pre-fix narrators, and the pollution stayed live). Record-level verification catches the narrow-signature metric; the stg-close + parity-tracker split keeps closure moving at the validated gate while guaranteeing the prod state is actually checked rather than assumed.
+
 <!-- Promoted from: P3W14 retro (2026-06-01) Proposed Process Change #3, owner-approved. Rationale: #322 specs+scripts delivered but unapplied; GHCR publish red on main 12 days undetected. Generalizes pull-requests.md § criterion #4's per-criterion note into a standing close-condition rule. -->
+<!-- Data-quality subsection promoted from: P7W22 retro (2026-07-01) Proposed Process Changes #1+#2, owner-ratified (#2 amended to stg-gated close + parity tracker). Rationale: #723 aggregate matn=0 false pass while ≥7,580 matn nodes live on prod; da#247/da#253 closed on artifact, never reached prod. -->
 
 ## Comment Format <!-- promotion-target: none -->
 All issue comments MUST follow this format:

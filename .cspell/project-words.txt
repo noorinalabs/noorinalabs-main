@@ -16,6 +16,8 @@ sanads
 sanadset
 hadith
 hadiths
+matn
+matns
 narrator
 narrators
 sunnah
