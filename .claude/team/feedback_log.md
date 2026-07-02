@@ -3529,3 +3529,35 @@ W21 stub auto-drafted + boarded, `wave_21_meta_issue` recorded; carry-forward pr
 | Top-implementer concentration | 3/11 = 27% (Alejandra & Kavitha tied) |
 | Tech-debt filed | 0 new (2 proposals above, not yet filed) |
 | Fire/hire | none |
+
+## Retrospective: Phase 7 Wave 22 — 2026-07-01
+
+**Final wave of Phase 7.** Theme: prod cutover hardening + #723 data-quality closeout attempt + hook/tooling fixes.
+
+### Team Performance
+22 PRs merged (10 isnad-graph, 6 deploy, 3 main, 3 data-acquisition); 16 implementers; **0 CI-red merges**; top-implementer concentration **14%** (Lucas Ferreira & Mateo Salazar tied 3/22); 1 changes-requested cycle; 1 review false-positive. Counter block (`wave_22_final_pr_count=22`, `changes_requested_cycles=1`, `top_concentration_pct=14`) matches PR-level recomputation — no drift. Alongside the PR wave, an out-of-band prod operational window ran (corrected-artifact graph reload + code promotion to stg→prod, code+graph parity achieved).
+
+### Per-Engineer Assessments
+Mechanical (`trust_signals.py score 7 22`). Changes: **Nneka Obi 4→5** (2 PRs + a real review catch — the wave's single distribution-discipline new-5); **Alejandra Reyes-Fuentes 5→4** (1 review false-positive); Aisha & Kavitha +1 absorbed at ceiling 5; Jun-Seo +1 held at 4 (merely-clean, no catch). All others held (delta 0). No retirement triggers.
+
+### Top 3 Going Well
+1. **CI health: 0 red merges across 22 PRs** — the local⇄CI parity discipline (main#684) is holding across all 4 repos.
+2. **Healthy load distribution** — 14% top concentration (lowest of Phase 7), 16 implementers; no fragility.
+3. **Prod window executed** — corrected-artifact reload + stg→prod promotion reached exact code+graph parity; 2 of 4 #723 criteria (50-cap lift ig#1147, chains) genuinely landed and are now API/UI-verified.
+
+### Top 3 Pain Points
+1. **#723 criterion 1 falsely reported "resolved" (orchestrator validation-discipline miss).** An aggregate cypher "matn=0" pass was treated as sign-off, but a record-level API/UI check (prompted by the owner) found **≥7,580 matn-as-narrator nodes live on prod** — Qur'anic phrases, sentence fragments, whole hadiths rendered as narrator names. Aggregate metric ≠ record-level truth. This is the recurring "cypher-pass ≠ UI walkthrough" lesson, now with a hard number.
+2. **da#247 + da#253 were closed on artifact-fix but never reached prod.** The prod reload used curated narrators generated *before* the da#247 NER re-extraction, so a "closed" fix was invisible on the live environment. Closure without target-environment verification.
+3. **`must_fix_caught` mechanical blind spot persists (recurring from W21).** Verdict edit-in-place to Approved erases the catch surface the helper reads, so real reviewer catches go uncredited. Same measurement-conflict class as the CR-cycle counter.
+
+### Proposed Process Changes — OWNER-RATIFIED 2026-07-01 (#2 amended)
+
+> **Owner ratification 2026-07-01:** all three approved. **#2 amended** — the close-verification gate is **stg**, not prod (aligns with [[feedback_stg_gate_before_prod]]: prod changes only as promotion of a verified-good stg change). A **standing stg↔prod parity tracking issue** collects data-quality issues verified/closed on stg so they are re-verified — or their stg vs prod results compared — after prod promotion. #1+#2 codified in charter `issues.md § End-State Criterion` (this retro PR #915); #3 filed as a `trust_signals.py` tooling issue; parity tracker filed.
+
+1. **Record-level verification gate for data-quality criteria** — Rationale: a data-quality/corpus criterion may not be signed off on an aggregate metric (count/cypher) alone; sign-off requires sampling **N actual rendered records** via the API or UI. "matn=0" as a COUNT is necessary but not sufficient; the failure mode is a metric that measures a narrower signature than the criterion claims. (Charter validation/acceptance section.) **→ codified: `issues.md § End-State Criterion`.**
+2. **A data-quality issue closes on STG record-level verification; prod is validated separately as a promotion** — Rationale (amended by owner): da#247/da#253 were artifact-fixed and closed, but the fix never reached even stg. stg is the validated gate before prod, so a data-quality fix issue stays open until the corpus change is record-level-verified **on stg**. Closure does **not** wait on prod — prod is reached later by promotion — but every stg-closed data-quality issue is entered on a **standing stg↔prod parity tracker** so its live prod state is re-verified (or stg-vs-prod results compared) after promotion, per [[feedback_stg_gate_before_prod]]. **→ codified: `issues.md § End-State Criterion` + standing parity tracker filed.**
+3. **Credit reviewer catches that were later edited-in-place** — Rationale: recurring W21/W22 gap; the verdict-amendment rule erases `must_fix_caught`. Either preserve a pre-amendment catch record or read the review timeline, so reviewers aren't mechanically uncredited for real catches. (trust_signals / wrapup Step 10.6.) **→ filed as a `trust_signals.py` tooling issue.**
+
+### Sub-audits
+- **Annunaki-attack:** 88 errors captured this wave — all session-local exploration command-failures (62 `cd`-prefix compound-command exit flags from the prod ssh/curl work, plus gh/cat/echo probes). No wave-code defect or systemic pattern; no hook/skill/charter change warranted. Marker written.
+- **Memory-to-automation audit:** no new memory→hook/skill/charter promotion candidate this wave; the session's memory work was a correction (prod-pollution state) already captured. Marker written.
