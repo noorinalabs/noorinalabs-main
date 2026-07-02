@@ -1959,3 +1959,35 @@ Mechanical scoring (`trust_signals.py score 7 21`): **11 PRs** (10 data-acquisit
 **Fire/hire:** none. Retirement trigger (`trust_signals.retirement_trigger`) fired for no engineer.
 
 **Concentration note:** 27% top by implementer (Alejandra & Kavitha tied 3/11) — below the 60% fragility threshold. Theme-fit: narrator dating lives in data-acquisition (10/11 PRs); ig#1039 is the single isnad-graph loader. Load spread across 5 da personas + 1 ig persona. Not fragility.
+
+## Phase 7 Wave 22 Trust Updates (2026-07-01) — final Phase-7 wave: prod hardening + #723 closeout attempt + tooling fixes
+
+Mechanical scoring (`trust_signals.py score 7 22`): **22 PRs** (10 isnad-graph, 6 deploy, 3 main, 3 data-acquisition), 16 implementers, top-concentration **14%** (Lucas Ferreira & Mateo Salazar tied 3/22 — well below the 60% fragility line), **0 CI-red merges**, **1** `review_false_positives`, 1 changes-requested cycle. Helper-proposed deltas: Aisha/Jun-Seo/Kavitha/Nneka **+1**; Alejandra **−1** (1 review false-positive). Distribution discipline applied: **one** new 5 handed out (Nneka — the only +1 earner who also caught a real defect); Jun-Seo's +1 was on two merely-clean PRs (no catch) so held at 4 per the never-a-new-5-for-merely-clean rule; Aisha & Kavitha at ceiling absorb their +1.
+
+### Org-Level Team
+No org-level (`noorinalabs-main`) scored changes this wave — the 3 main PRs (Aino #910, Wanjiku #912, Santiago #913) were single clean tooling/hook fixes (delta 0, held). Wanjiku & Santiago held; Aino held at prior.
+
+### Child-Repo Teams (isnad-graph + deploy + data-acquisition)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Nneka Obi (isnad-graph) | 4 | 5 | prs_merged=2 (ig#1153, ig#1158) + must_fix_caught=1, 0 CI-red, 0 false-positives. Only +1 earner with a substantive review catch this wave; distribution-discipline new-5 goes to the wave's strongest quality+volume signal. |
+| Alejandra Reyes-Fuentes (data-acquisition) | 5 | 4 | review_false_positives=1 (mechanical signal — specific review to be identified at PR level). −1 per mechanical scoring. First dock off ceiling; recoverable next clean wave. |
+| Aisha Idrissi (deploy) | 5 | 5 | prs_merged=2 (deploy#515, #517), 0 CI-red. Helper proposed +1; absorbed at ceiling. |
+| Kavitha Sundaramurthy (data-acquisition) | 5 | 5 | prs_merged=2 (da#254, #255), 0 CI-red. Helper proposed +1; absorbed at ceiling. |
+| Jun-Seo Park (isnad-graph) | 4 | 4 | prs_merged=2 (ig#1156, ig#1161), 0 CI-red. +1 earned but on merely-clean PRs (no catch); distribution discipline holds at 4. |
+
+### Done Well / Needs Improvement (Phase 7 Wave 22) — evidence-anchored, bare "None" banned
+
+| Member | Done Well (with evidence) | Gap (metric, or explicit "clean: numbers") |
+|--------|---------------------------|--------------------------------------------|
+| **Nneka Obi** | 2 isnad-graph PRs + a real review catch; earned the wave's single new 5 | clean: 0 CI-red, 0 false-positives, prs_merged=2, must_fix_caught=1 |
+| **Alejandra Reyes-Fuentes** | (no PRs this wave; review participation) | 1 review false-positive (mechanical) — the wave's only negative implementer signal; identify the specific review and calibrate |
+| **Aisha Idrissi** | 2 clean deploy PRs on the prod-hardening spine | clean: 0 CI-red, 0 false-positives, prs_merged=2 |
+| **Kavitha Sundaramurthy** | 2 clean da PRs (narrator-quality area) | clean: 0 CI-red, 0 false-positives, prs_merged=2 |
+| **Lucas Ferreira / Mateo Salazar** | wave top by volume (3 PRs each), 0 CI-red | clean: 0 CI-red — each absorbed 1 must_fix_received (delta 0, held) |
+| **Orchestrator (Nadia)** | ran the prod window + full wrapup | **prematurely reported #723 crit-1 "resolved" on an aggregate cypher "matn=0" that a record-level API/UI check refuted (≥7,580 matn nodes live) — validation-discipline miss, caught only by owner prompting the UI walkthrough** |
+
+**Fire/hire:** none. Retirement trigger (`trust_signals.retirement_trigger`) fired for no engineer.
+
+**Concentration note:** 14% top by implementer — lowest of Phase 7; 16 implementers across 4 repos. Healthy spread, not fragility.
