@@ -1,10 +1,26 @@
 ---
 name: project_prod_loaded_quality_broken
-description: "#723 NOT closeable. 2026-07-01 corrected-artifact reload + API re-val: matn-as-narrator pollution STILL live on prod (≥7,580 nodes) — my 'matn=0' was a false pass; needs da#247 integrated NER re-run (tracker da#258, wave-23). 50-cap NOW lifted (ig#1147✓), semantic graceful-503 (ig#1148 provisioning). da#247/da#253 CLOSED but superseded-forward. History below."
+description: "#723 crit-1: 2026-07-02 record-level graph check (stg+prod, direct Neo4j) — UI-visible HEAD IS CLEAN (219,849 narrators, real top-20, 0 mubham, English-matn class gone) + stg↔prod parity confirmed. The ≥7,580 isnad-verb pollution is REAL but 96.6% mention≤1 TAIL (only 11 at mention≥5); da#258 (NER split/truncate/matn-guard) is the tail fix, da#248 mononym-cycles, da#259 loader-hang. Owner-reported class resolved. History below."
 metadata: 
   node_type: memory
   type: project
   originSessionId: f3dcddd8-6ad9-48bf-b25e-92d034607282
+---
+
+## ✅ RECONCILIATION 2026-07-02 — record-level graph check: UI head CLEAN, pollution is a mention≤1 TAIL
+
+Did a **record-level** check directly against both Neo4j graphs (`ssh noorinalabs-{stg,prod}` → `cypher-shell`), reading the actual `name_ar` strings of high-mention narrators — the sentence-level detection the 07-01 "false pass" lacked. **stg and prod are byte-identical** (same 219,849 narrators, same top-20, same residual counts) → **stg↔prod parity holds (#916)**.
+
+**Both the 07-01 memory AND da#258 were right, at different framings — reconciled:**
+- The 07-01 raw isnad-verb count is REAL and still present: **7,451** narrator nodes contain قالوا/فقال/حدثنا/… on prod (7,451 on stg too). The memory was NOT wrong that they exist.
+- **But 96.6% are the mention≤1 tail:** of those 7,451 → mention≥5 = **11**, mention 2–4 = 88, mention≤1 = **7,352**. The mention-ranked narrator views surface the *head*, which is clean.
+- **UI-visible head IS clean** (the owner-reported class is resolved): top-20 by mention are all real (أبو هريرة/سفيان/شعبة/الزهري/مالك…); relational-pronoun mubham (ابيه/جده) = **0 rows**; the English `Thawban:matn` class (da#253) = **0 sentences** (the ASCII hits are romanized real names).
+- The high-mention isnad-verb nodes are mostly da#258 **class-2 compound joins** ("يحيى بن ايوب وقتيبه وابن حجر قالوا" = three real narrators + "they said"), not pure matn — they need **splitting**, not deletion.
+
+**True da#258 residual at mention≥5:** ~6 genuine Arabic matn bodies (incl. the exact `كان علي بن ابي طالب بالكوفه…` cited in da#258) + ~19 compound joins (`… جميعا`) + ~74 chain-connective fragments (`… عن …`). The 30-token cap alone can't catch these because real *ibn*-lineage names legitimately reach ~30 tokens (a crude ≥8-token filter false-flags 2,102 real names). Fix = NER-stage split/truncate + Arabic-stop-word density guard, mirroring da#253's English handling.
+
+**Net:** #723 crit-1 (matn-as-narrator) is satisfied at the **record-level, mention-weighted** layer (the charter data-quality rule) for the owner-reported class, on stg AND prod. The remaining work is the **tail cleanup** tracked by **da#258** (NER split/truncate/guard) + **da#248** (mononym over-merge → transmission cycles) + **da#259** (loader validation hang). These reduce the 7,352-node tail on the next regenerate→reload. Do NOT re-frame this as "prod still broken / not closeable" — the head is clean and parity holds; da#258 is a tail refinement, not a catastrophe. [[feedback_honest_audit_over_conclusion_claim]] cuts both ways: don't overclaim clean, don't overclaim broken — weight by mention_count.
+
 ---
 
 ## ⚠ CORRECTION 2026-07-01 — corrected-artifact reload STILL did not fix matn pollution
