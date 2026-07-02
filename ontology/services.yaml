@@ -181,6 +181,15 @@ data_stores:
     extensions: [pgvector]
     consumers: [isnad-graph-api]
     description: Relational metadata and vector embeddings for semantic search
+    known_issues:
+      embedder_parity_gap: >
+        Prod+stg API embeds queries with the lexical HashingEmbedder (torch-free image,
+        no EMBEDDING_MODEL in compose) while the corpus re-embed job bakes
+        EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2. Both are vector(384),
+        so mismatched queries return HTTP 200 with meaningless rankings — a silent
+        failure a plain 200-probe passes on. Fix must change API image+model and
+        corpus embedder in lockstep. Tracked deploy#523 (wave-23); detail in
+        .claude/memory/project_semantic_embedder_parity.md.
 
   postgres-user:
     type: relational_database

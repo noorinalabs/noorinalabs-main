@@ -1,5 +1,5 @@
 {
-  "description": "Tracks file checksums for ontology change detection. last_tracked = current file hash (updated by tracker hook). last_resolved = hash when ontology was last rebuilt from this file (updated by resolver). When last_tracked != last_resolved, the file is dirty. SCOPE (#857, #820/C\u00d7T2): tracking + /ontology-rebuild cover the hand-curated SEMANTIC OVERLAY only (ontology/domain.yaml, ontology/services.yaml, ontology/conventions.md, ontology/repos/*.yaml, other hand-edited *.md). The GENERATED structural layer at ontology/structural/ (owned generator #855) is NOT tracked here \u2014 it is always-current-by-regeneration, so the tracker skips it (see ontology_tracker.py SKIP_PATTERNS).",
+  "description": "Tracks file checksums for ontology change detection. last_tracked = current file hash (updated by tracker hook). last_resolved = hash when ontology was last rebuilt from this file (updated by resolver). When last_tracked != last_resolved, the file is dirty. SCOPE (#857, #820/C×T2): tracking + /ontology-rebuild cover the hand-curated SEMANTIC OVERLAY only (ontology/domain.yaml, ontology/services.yaml, ontology/conventions.md, ontology/repos/*.yaml, other hand-edited *.md). The GENERATED structural layer at ontology/structural/ (owned generator #855) is NOT tracked here — it is always-current-by-regeneration, so the tracker skips it (see ontology_tracker.py SKIP_PATTERNS).",
   "files": {
     ".claude/drafts/secrets-migration-tonight-2026-04-23.md": {
       "last_resolved": "acc0d25da0c7fcf3792ade1703f7c75f2215a29daafe0367db907f4e8d2e990f",
@@ -146,10 +146,10 @@
       "tracked_at": "2026-05-11T01:41:41.840576+00:00"
     },
     ".claude/team/charter/issues.md": {
-      "last_tracked": "6b7e6f24cb140b969df2451db832dad5ac4cbaabe517672fd8590549546f6fc8",
-      "last_resolved": "6b7e6f24cb140b969df2451db832dad5ac4cbaabe517672fd8590549546f6fc8",
-      "tracked_at": "2026-06-02T13:30:25.811795+00:00",
-      "resolved_at": "2026-06-04T20:50:14.260341+00:00"
+      "last_tracked": "a30aa3534a7cece31a47887d952bc4c1e564bf19999e33f449efe1d4908f3f24",
+      "last_resolved": "a30aa3534a7cece31a47887d952bc4c1e564bf19999e33f449efe1d4908f3f24",
+      "tracked_at": "2026-07-02T03:51:17.511949+00:00",
+      "resolved_at": "2026-07-02T23:26:29Z"
     },
     ".claude/team/charter/pull-requests.md": {
       "last_tracked": "df75d7e64166855e0f12591358e64d06a34c2d782db742caf15e857fff86b872",
@@ -164,10 +164,10 @@
       "resolved_at": "2026-05-16T22:20:43.893664+00:00"
     },
     ".claude/team/feedback_log.md": {
-      "last_tracked": "955dcf61ab90313049710f813856c982a08707f1f729a28b56f54a250e7e7da9",
-      "last_resolved": "955dcf61ab90313049710f813856c982a08707f1f729a28b56f54a250e7e7da9",
-      "tracked_at": "2026-06-26T16:12:15.409078+00:00",
-      "resolved_at": "2026-06-30T00:00:00Z"
+      "last_tracked": "58375366f7e8545846cd4ff01cfe5aa36eb460c732bf3b7ea3dee18a852762cd",
+      "last_resolved": "58375366f7e8545846cd4ff01cfe5aa36eb460c732bf3b7ea3dee18a852762cd",
+      "tracked_at": "2026-07-02T03:50:50.108176+00:00",
+      "resolved_at": "2026-07-02T23:26:29Z"
     },
     ".gitignore": {
       "last_tracked": "78d915777b9d1fcb638d4f7185c73364db6cf6cd9cfe72d8030b37e617020bde",
@@ -518,10 +518,10 @@
       "resolved_at": "2026-05-13T03:21:08.894134+00:00"
     },
     "ontology/services.yaml": {
-      "last_resolved": "13e4ac381c3767fcb076cac6463d1f0796ef2f0c8e46d3f9059b5babe51758c6",
-      "last_tracked": "13e4ac381c3767fcb076cac6463d1f0796ef2f0c8e46d3f9059b5babe51758c6",
-      "resolved_at": "2026-05-13T03:21:08.894134+00:00",
-      "tracked_at": "2026-05-12T22:33:09.401126+00:00"
+      "last_tracked": "1c7675a29126bd344a86cdf996d02dc6d6886c8543adee2d9126af81a3c35a14",
+      "last_resolved": "1c7675a29126bd344a86cdf996d02dc6d6886c8543adee2d9126af81a3c35a14",
+      "tracked_at": "2026-07-02T23:26:20.588363+00:00",
+      "resolved_at": "2026-07-02T23:26:29Z"
     },
     "aino-ig-0194/.claude/settings.json": {
       "last_tracked": "d002e78433abf04bc3cc28f432bd23b9250ce3ca2a3e52290b1fb380f8868011",
@@ -1020,10 +1020,10 @@
       "resolved_at": "2026-06-21T02:32:49Z"
     },
     ".claude/memory/project_prod_loaded_quality_broken.md": {
-      "last_tracked": "dc3e2d550d6ce2326a3eddc9de32b50ddb70d1789356c94dd79e1333571be3cb",
-      "last_resolved": "dc3e2d550d6ce2326a3eddc9de32b50ddb70d1789356c94dd79e1333571be3cb",
-      "tracked_at": "2026-06-29T22:29:21.911594+00:00",
-      "resolved_at": "2026-06-30T00:00:00Z"
+      "last_tracked": "ce5814901395e2af5b570aea09d40dc6793f0d0e38756d63d156e3f024be74dd",
+      "last_resolved": "ce5814901395e2af5b570aea09d40dc6793f0d0e38756d63d156e3f024be74dd",
+      "tracked_at": "2026-07-02T16:10:55.605754+00:00",
+      "resolved_at": "2026-07-02T23:26:29Z"
     },
     ".claude/memory/feedback_brand_noorina_labs.md": {
       "last_tracked": "626460eabc17bef806ebf376cc94c1e7c6659e73661ab588976da1e5059002f6",
@@ -1032,10 +1032,10 @@
       "resolved_at": "2026-06-21T21:02:19.551435+00:00"
     },
     ".claude/memory/MEMORY.md": {
-      "last_tracked": "68b0e3f9369a084a7c8778bfca99ed5ef2ae0264137c2ae7143d7790cedf9c0d",
-      "last_resolved": "68b0e3f9369a084a7c8778bfca99ed5ef2ae0264137c2ae7143d7790cedf9c0d",
-      "tracked_at": "2026-07-01T16:47:10.307517+00:00",
-      "resolved_at": "2026-07-01T21:14:36Z"
+      "last_tracked": "d3ba7c98e471dd7181301380a409bd744e5df0f3fa43723ddcb19f39dc047c55",
+      "last_resolved": "d3ba7c98e471dd7181301380a409bd744e5df0f3fa43723ddcb19f39dc047c55",
+      "tracked_at": "2026-07-01T22:05:04.271753+00:00",
+      "resolved_at": "2026-07-02T23:26:29Z"
     },
     "noorinalabs-isnad-graph/.claude/lib/tests/test_pre_commit_ci_sync.py": {
       "last_tracked": "aa209279deec3844b51e384157ba3e67a6d0f325410941f63f38d57535e6498c",
@@ -1288,6 +1288,24 @@
       "last_resolved": "ae02a1d3420c8ac37fd16627f74d796854684baf3e495b9fd55f2065fedf0019",
       "tracked_at": "2026-07-01T16:47:05.363945+00:00",
       "resolved_at": "2026-07-01T21:14:36Z"
+    },
+    ".cspell/project-words.txt": {
+      "last_tracked": "e48dd6fc048a817bbc4bc1f8d73b54847c8932b02e7e1a4f4bd0b1b2dabbbf10",
+      "last_resolved": "e48dd6fc048a817bbc4bc1f8d73b54847c8932b02e7e1a4f4bd0b1b2dabbbf10",
+      "tracked_at": "2026-07-02T03:51:56.674053+00:00",
+      "resolved_at": "2026-07-02T23:26:29Z"
+    },
+    ".claude/team/phases/phase-8.md": {
+      "last_tracked": "885ed95a36cebfc3c28da5528bfb558d2a5da93267437da8961a1ef290a770fe",
+      "last_resolved": "885ed95a36cebfc3c28da5528bfb558d2a5da93267437da8961a1ef290a770fe",
+      "tracked_at": "2026-07-02T04:17:20.641739+00:00",
+      "resolved_at": "2026-07-02T23:26:29Z"
+    },
+    ".claude/memory/project_semantic_embedder_parity.md": {
+      "last_tracked": "3db988b6264177b4d45a309401e0dec15f7234e232e49182afa141e1032f3f85",
+      "last_resolved": "3db988b6264177b4d45a309401e0dec15f7234e232e49182afa141e1032f3f85",
+      "tracked_at": "2026-07-02T15:11:02.981541+00:00",
+      "resolved_at": "2026-07-02T23:26:29Z"
     }
   },
   "last_cleanup": {
