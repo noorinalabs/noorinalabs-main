@@ -5,6 +5,31 @@
   "wave_23_repos_in_scope": ["noorinalabs-main","noorinalabs-data-acquisition","noorinalabs-isnad-graph","noorinalabs-deploy"],
   "wave_23_meta_issue": 919,
   "wave_23_scope": {"theme":"Data-quality closeout (#723) + promotion-path fix","phase":8,"tier_1_precursor":[{"id":"noorinalabs-deploy#521","ref":"deploy#521","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug","note":"promote.yml 403 enabler — merge first"}],"tier_2_core":[{"id":"noorinalabs-data-acquisition#258","ref":"da#258","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt","note":"integrated NER re-run; regenerate clean curated narrators"},{"id":"noorinalabs-data-acquisition#248","ref":"da#248","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug","note":"TRANSMITTED_TO transmission cycles"},{"id":"noorinalabs-data-acquisition#259","ref":"da#259","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt","note":"loader chain_integrity hang"},{"id":"noorinalabs-isnad-graph#1148","ref":"ig#1148","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug","note":"semantic search on prod (pgvector)"}],"closeout_targets":["noorinalabs-main#723","noorinalabs-main#916"],"td_intake":"target 1 (20% of 2 base); met by 3 in-core TD — no additional pull","declared_refs":["deploy#521","da#258","da#248","da#259","ig#1148"],"carry_forwards":[],"must_includes":[]},
+  "wave_23_merge_model": "wave-branch",
+  "wave_23_active": true,
+  "wave_23_kicked_off_at": "2026-07-02T04:50:36Z",
+  "wave_23_branches": {
+  "branch": "deployments/phase-8/wave-23",
+  "created_at": "2026-07-02T04:50:36Z",
+  "repos": {
+    "noorinalabs-main": {
+      "sha": "b8e4e2883c6b8ba6d417c472768ec9078a866d54",
+      "status": "created"
+    },
+    "noorinalabs-data-acquisition": {
+      "sha": "f7598ef0c24a52fad1f037a6b458f3cbb825848b",
+      "status": "created"
+    },
+    "noorinalabs-isnad-graph": {
+      "sha": "5e76ebfd73b434dcc7f46f635e1db7342f1dcfd7",
+      "status": "created"
+    },
+    "noorinalabs-deploy": {
+      "sha": "e6bd90a01bf394a1be1ee4d85ab9aab436611621",
+      "status": "created"
+    }
+  }
+},
   "wave_22_meta_issue": 904,
   "wave_22_phase": 7,
   "wave_22_phase_ordinal": 5,
@@ -3663,7 +3688,7 @@
     "mirror_of": ".claude/team/phases/phase-3.md § Sweep-wave reservation (W12, possibly W13)"
   },
   "wave_active": false,
-  "current_wave": "wave-22",
+  "current_wave": "wave-23",
   "wave_5_active": false,
   "wave_5_kicked_off_at": "2026-06-16T23:12:45Z",
   "wave_5_final_pr_count": 45,
@@ -3674,9 +3699,9 @@
   "wave_5_wrapped_up_at": "2026-06-20T00:21:27Z",
   "wave_5_annunaki_attack_ran_at": "2026-06-20T00:26:39Z",
   "wave_5_memory_audit_ran_at": "2026-06-20T00:26:39Z",
-  "next_wave": "wave-23",
+  "next_wave": "wave-24",
   "wave_started": "2026-06-23T00:21:35Z",
-  "last_completed_wave": "wave-21",
+  "last_completed_wave": "wave-22",
   "last_completed_at": "2026-06-23T18:30:06Z",
   "wave_3_meta_issue": 675,
   "wave_3_scope": {
