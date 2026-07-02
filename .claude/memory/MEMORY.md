@@ -106,3 +106,4 @@
 - [Deployable-merge verification](feedback_deployable_merge_verification.md) — wave→main/push-to-main merge: verify post-merge-only workflows (publish/Trivy) via verify_deployable_merge.py; green PR ≠ proof. wave-wrapup Step 11.5a. main#864.
 - [Wave-branch merge: --merge not --squash](feedback_wave_branch_merge_not_squash.md) — squash collapses persona authors to bare parametrization → commit-author gate red on wave→main; child structural staleness only gates PRs to main. P7W19 #898/#222.
 - [Implementor-label convention](project_implementor_label_convention.md) — FIRSTNAME_LASTNAME reinstated #907/PR#908 + tool apply_implementor_labels.py (wave-wrapup 6.5); branch-first/commit-author-fallback; bulk label-apply via REST not GraphQL (5000-pt limit). 949 issues backfilled.
+- [Semantic embedder parity gap](project_semantic_embedder_parity.md) — prod+stg API on hashing vs corpus on MiniLM → 200-with-garbage; stg-gate NOT valid for semantic until fixed. deploy#523.
