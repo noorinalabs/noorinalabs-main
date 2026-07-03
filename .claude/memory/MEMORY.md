@@ -69,6 +69,7 @@
 - [Pre-spawn verify file existence at HEAD](feedback_pre_spawn_verify_file_exists.md) — per-file claims in briefs need git cat-file -e origin/<branch>:<path>, not ls/working-tree.
 - [Reviewer must not branch-switch parent](feedback_reviewer_no_branch_switch.md) — reviewers read PR code via gh api contents?ref=<sha>; MUST NOT git checkout in parent.
 - [Verdict count must match Hook 4 regex](feedback_verdict_count_hook_regex.md) — pre-spawn verdict counts must accept BOTH Requestor: bare AND **Requestor:** bold forms.
+- [Requestor must be space-form roster name](feedback_requestor_roster_name_form.md) — Hook4 roster-validates Requestor; dotted First.Last counts as non-roster → 0/2 block; dictate exact name in briefs, fix by REST PATCH. da PR#269.
 - [Safety direction > UX friction](feedback_safety_direction_over_ux_friction.md) — when a hook can't auto-fix cleanly, HARD BLOCK with diagnostic, never allow_with_log. PR#494.
 - [Investigate before implement on unevidenced brief](feedback_investigate_before_implement.md) — brief asserts problem w/o evidence → origin-audit BEFORE Edit/Write. ds#81.
 - [Spawn-brief direct-instruction carveout](feedback_spawn_brief_direct_instruction.md) — a numbered imperative step in brief body IS the imperative action; don't bounce it. us#103.
