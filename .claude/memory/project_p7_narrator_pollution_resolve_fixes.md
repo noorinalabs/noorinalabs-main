@@ -64,3 +64,46 @@ clean_narrator_name; sanadset mentions are 100% Arabic. Residual follow-ups: kag
 **Owner decision 2026-07-03 (supersedes "deferred"): run 3 KILLED at 34% clustering; full resolve re-run
 (run 4) from fresh NER once PR#277 (cluster caps) + #284 + #286 merge to the wave branch** — capped
 cluster ~12–18h vs ~40h uncapped remaining; NER mention cache invalid after #286 (use `--no-resume`).
+
+## Wave-23 run 4/4b — clustering crisis + matn-sentence defect (2026-07-04)
+
+Run 4's `fuzzy_cluster` **safe-partition** phase sat silent 24h+. Diagnosed as a single
+**172,378-member mega-group** out of union-find (Latin/common-name chain-glue bridging), which
+`_safe_partition` re-split into `_can_merge`-clean cliques via a **quadratic greedy linear scan**
+(~14.2B guard checks) with no progress logging → looked hung.
+
+- **da#306 / PR#307 (merged 3194d50f)** — token-indexed candidate-subcluster lookup (superset
+  property: a subcluster sharing `< _MIN_SHARED_TOKENS`=2 significant tokens can never accept a
+  member → index by significant token, test only ≥1-shared-token candidates in creation order,
+  first-accepting wins) + `_can_merge_cached` per-record key/token caching + telemetry
+  (`cluster_group_sizes`, `safe_partition_progress`). **Byte-identical output, 17–19× speedup.**
+  Fingerprint invariant #295 preserved (touches only post-union-find partition) → run 4b resumed
+  from checkpoint at launch commit `9cd97be`+fix; safe-partition then finished in ~2.5h with telemetry.
+- **Run 4b output: `narrators_canonical.parquet` = 172,532 rows** (healthy: below run-3's polluted
+  210,494, well above the naive 62k over-merge floor; top narrators all real — أبو هريرة mc 53,327;
+  0 bare relational pronouns; Latin nodes 23k→5,853). Log:
+  `resolve-wave23-reload-20260704-run4b-resume.log`.
+- **Quality defect found in 4b:** 25,971 canonical rows (~15%) are **hadith-matn / grading-commentary
+  sentences** — `clean_narrator_name` scrubbed honorifics but KEPT the sentence body as a "narrator."
+  Also **dedup silently skipped** (`dedup_missing_deps`): the `ml` uv dependency-group (sentence-
+  transformers/faiss/torch/transformers/camel-tools) is **non-default** — `uv sync` prunes it; host
+  needs `uv sync --group ml` (da#309, kept open for a fail-loud + reproducibility code fix; the plain
+  `uv sync` also PRUNES the group, a repeatable trap).
+- **da#308 / PR#310 (merged 0a3c2a41)** — `_is_matn_sentence` drop-gate in `clean_narrator_name`
+  (verb/matn openers, token-anchored grading formulae, «»؟ matn punctuation as CO-FACTOR, nasab-
+  connector density guard diacritics-insensitive via `normalize_arabic`). Precision defect caught in
+  review: punctuation signal read pre-truncation text and dropped real names trailed by truncated-off
+  matn tails (al-Awzāʿī, al-Aʿmash) → fixed by deriving `kept_text` from RETAINED tokens post-
+  truncation. Corpus audit on the 172,532 rows: 6,254 drops (3.62% rows / 0.37% mention-weighted),
+  100/100 random-drop sample genuinely matn, residual benediction 0.058% (<1% target). Applies at
+  BOTH call sites (ner.py, bio_promote.py).
+
+**Owner decision 2026-07-04 ("Fix filter + full re-run"): one more full clean resolve BEFORE any
+staging reload** — `run 5`, `--no-resume`, fresh NER (sentence-gate now active at NER, not just
+post-hoc) + dedup actually running (host synced `--group ml`). Log
+`resolve-wave23-reload-20260704-run5-clean.log`, launched 2026-07-04 20:18Z from wave-23 head
+`0a3c2a4`. **Crash-resume note:** a run-5 resume must use `--from-step <stage>` off the CURRENT
+wave-23 head — NOT `9cd97be` (that was run-4b's fingerprint baseline; run 5 establishes a new one).
+After a clean run 5: verify output vs run-3/4b baselines → stg reload → **owner-gated** prod
+promotion (#723, parity tracker main#916). Prod=178.156.214.225 off-limits w/o sign-off;
+stg=87.99.137.225.
