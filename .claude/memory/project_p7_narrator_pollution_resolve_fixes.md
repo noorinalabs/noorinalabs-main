@@ -138,3 +138,41 @@ Acceptance: contamination <1%, 0 orphans, real long-nasab/kunya/Imam-honorific n
 Precedent for curated-scrub≡NER-filter equivalence: [[project_relational_pollution_scrub_equiv]]
 (singleton case; mc>1 rows here need explicit mention/edge re-prune). Scrub RUN against live data =
 orchestrator post-merge, THEN verify → stg reload → owner-gated prod.
+
+---
+
+**da#311 RESOLVED — PR #312 merged 2026-07-05 (merge 27d9098 → deployments/phase-8/wave-23).**
+Four passes in `src/parse/name_quality.py` (`clean_narrator_name`), each caught a distinct
+prod-affecting defect by an INDEPENDENT pyarrow probe on the **load-bearing `name_ar` field**
+(not the gate's own output, not `name_ar_normalized` — graph loader reads `name_ar` first,
+`load_nodes.py:169`):
+- Pass 1-2: matn openers (سالت/سءل/subject-led قالت/short-residue) + clean the RIGHT field.
+- Pass 3: cleaned name_ar correctly BUT over-dropped numeric-prefixed real narrators.
+- **Round-4 (numeric-prefix recovery, 90af93e):** rule **3b** was DROPPING any span whose first
+  token is a bare digit (thaqalayn enumeration artifact "1 علي بن ابراهيم"). False assumption that a
+  clean un-numbered canonical existed elsewhere — **Ali ibn Ibrahim al-Qummi (علي بن ابراهيم),
+  al-Kafi's most prolific isnad head, existed SOLELY as numbered forms and vanished (0 rows).**
+  Fix: STRIP leading ordinal(s) + re-gate remainder → recovered (32 rows/mc2886).
+- **Round-4b (all-residue floor, ac0f121 — Kavitha's ChangesRequested):** the numeric-strip
+  re-ADMITTED 793 rows/929 mentions of junk round-3 had dropped: passive verb **روي** ("was
+  narrated", ya-final — DISTINCT token from روى, `normalize_arabic` does NOT fold ى→ي) at 541
+  mentions, attached-waw isnad fragments (وعنه/وباسناده — my waw-strip only handled a SEPARATE و),
+  bare mubham. Fix: add روي to `_MATN_OPENERS`; new `_is_isnad_residue_token` (folds leading
+  attached-waw so وعنه→عنه drops but real وهب→هب survives) + general **rule 5b** drops a span whose
+  EVERY token is residue. **5b also closed the pre-existing guard-5 bare-collective gap** (rule 5
+  needs a partitive من): **رجل ("a man") mc-4920**, بعض/شيخ/ناس/نفر/قوم — same أبيه-class pollution
+  as [[project_relational_pollution_scrub_equiv]], independent of any numeric prefix.
+
+**Final scrub (merged code) → `data/curated.run5-scrubbed/`:** 165,939 → **150,187** canonical
+(15,752 dropped, 64,348 recovered/rewritten). Precision mw-matn 1.03%→**0.054%**; all-residue
+survivors **0**. Recall: Ali 32/mc2886, retain سالم 4072 / الزهري 24925. Referential **0 orphans,
+0 nulls** / 3,276,238 mentions. 274 tests, 7/7 CI, 2 independent reviews (Nikolaos+Kavitha).
+Tool: `scripts/scrub_matn_canonical.py`. Non-blocking tech-debt: da#314 (matn-provenance leakage),
+da#315 (particle nodes ما/وبه 0.006%), da#316 (RLM-shielded trailing punct, 49 low-mc canonicals).
+
+**LESSON: independent measurement on the load-bearing field caught what self-reports (circular gate)
+AND a first reviewer both missed** — round-4b's روي(541)/رجل(4920) regression was found only by
+Kavitha's independent probe after Nikolaos + orchestrator both passed round-4. Two-reviewer rigor paid.
+
+**HELD: artifact ready; staging reload (#723, stg=87.99.137.225) awaits explicit OWNER sign-off.
+Prod=178.156.214.225 off-limits without owner sign-off.**
