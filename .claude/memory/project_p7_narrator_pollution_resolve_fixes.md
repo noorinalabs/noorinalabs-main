@@ -212,3 +212,19 @@ data-quality issue closes on STG record-level verification), #723 crit-1 is now 
 Prod promotion remains owner-gated; re-verify on prod after promotion via parity tracker main#916.
 Under-merge variants (وأبي هريرة mc150, أبو هريرة الدوسي mc73) = accepted Latin/variant under-merge
 tech-debt, not matn.
+
+## Wave-23 PROD promotion — #723 CLOSED, all 4 criteria prod-verified at exact stg parity (2026-07-05, owner "prod promotion now")
+Owner approved prod promotion. **Purge+full reload of the scrubbed artifact to prod** (purge 22:41→22:44Z
+graph-empty verified; load complete 23:50Z). Record-level battery run on BOTH hosts returns **identical**
+values → exact parity: Narrator 150,187 · Hadith 776,239 · Chain 587,932 populated · PARALLEL_OF 4,490,659 ·
+APPEARS_IN 775,916 (99.96%) · **matn-opener pollution 0/3,276,238 = 0.000%** (name prop is `name_ar`; head
+#1 = أبو هريرة mc54,550, all real) · orphan narrators 44,073 (both) · both fulltext indexes ONLINE · total
+mentions 3,276,238 (both). **All 4 #723 criteria PASS on prod; #723 CLOSED.** Parity logged to main#916.
+**Loader exited rc=1 — NON-BLOCKING, fully triaged:** load converged (1,585,981 nodes/8,629,160 edges); the
+rc=1 is the post-load *validation harness*, not the data — (a) `graph_integrity_deferred_inventory` +
+`sanadset_orphan_inventory` = `CypherSyntaxError: Expected exactly one statement per query but got: 5` (this
+Neo4j build rejects multi-statement Cypher — SAME quirk that broke my manual `count{}` queries) → filed
+**da#319** to split them; (b) `orphan_narrators 44073` = exact stg parity (bio-promoted/profile-only rijal
+tail, no isnad edge) — accepted, not a regression; (c) `chain_integrity` timeout→WARN (da#259); (d)
+`collection_coverage` PASS. Takeaway: the loader's `validation_passed=False`/rc=1 does NOT imply a bad load —
+read the per-check breakdown; a false-FAIL from the harness ≠ data defect.
