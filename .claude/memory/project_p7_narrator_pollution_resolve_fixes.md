@@ -176,3 +176,39 @@ Kavitha's independent probe after Nikolaos + orchestrator both passed round-4. T
 
 **HELD: artifact ready; staging reload (#723, stg=87.99.137.225) awaits explicit OWNER sign-off.
 Prod=178.156.214.225 off-limits without owner sign-off.**
+
+## Wave-23 STG record-level verification — PASSES all 4 #723 criteria (2026-07-05, owner-approved reload)
+
+Owner approved the staging reload 2026-07-05. **Ground truth on checking stg: the scrubbed artifact
+is ALREADY loaded** — `noorinalabs-neo4j-1` holds **exactly 150,187 Narrator nodes** (== scrubbed
+`narrators_canonical` count; corpus split itqan 46,616 / fawaz 37,107 / thaqalayn 32,428 / sanadset
+27,862 / lk 4,886 / sunnah 1,285 / muhaddithat 3). So the "HELD awaits sign-off" line above was
+stale vs actual stg state — did NOT re-run a redundant destructive purge+reload; **verified at
+record level instead** (per charter: surface reality-vs-described contradiction, don't proceed with
+a redundant destructive op). Record-level cypher on the LOAD-BEARING `name_ar` field (the graph
+loader reads name_ar first — [[project_relational_pollution_scrub_equiv]] / load_nodes.py:169):
+
+- **Crit #1 matn-as-narrator: PASS.** Known run-5 high-mc pollution GONE — رجل(was mc4920)=0,
+  عائشة…قالت(mc196)=0, نهى النبي(mc49)=0. Mention-weighted matn residual = **437 mentions /
+  3,276,238 = 0.013%** (target <1%): the `>140`-char non-nasab tail (372 nodes, 59 mc>1) — longer
+  matn passages that don't start with an opener token (ما انهر الدم mc3, اقول اللهم باعد mc3). This
+  is the da#314/#315/#316 NON-BLOCKING tail, not a criterion failure. NB the opener-filter's "11
+  matn-smell" were mostly FALSE positives — رويفع بن ثابت الأنصاري mc42 + رويم بن يزيد mc17 are the
+  REAL companion Ruwayfiʿ/Ruwaym (start with روي). Real recovered names present: علي بن ابراهيم
+  (al-Qummi), الزهري 379 nodes, top-15 all real (أبو هريرة 54,550).
+- **Crit #1 collection linkage: PASS.** APPEARS_IN 775,916 / 776,239 Hadith = **99.96%** (baseline 8.98%).
+- **Crit #2: PASS.** STUDIED_UNDER 80,203 (>>186). Chains NOT hollow: 587,932 Chain nodes carry
+  `narrator_ids` ARRAY + `hadith_id` as PROPERTIES (not edges) — `id,hadith_id,classification,
+  narrator_ids,chain_index,chain_length,is_complete,is_elevated`; TRANSMITTED_TO (2.68M) groups by
+  `hadith_id`+`position_in_chain`, NOT `chain_id`. "connected_chains=0" is by design (property model),
+  NOT the [[project_chain_hollow_reads_staging]] defect.
+- **Crit #3 search: PASS (data layer).** fulltext `hadith_search`(matn_ar/en)+`narrator_search`
+  (name_ar/en) both ONLINE; queryNodes returns real Hadith matn + Abu Hurayra. API /search /narrators
+  are 401-gated (need users.stg JWT) — verified the index layer the API calls, not the HTTP surface.
+- **Crit #4: PASS.** PARALLEL_OF 4,490,659 edges.
+
+stg API image = `stg-5e76ebf` (isnad-graph wave-23 head — current). **Per W22-retro rule (a
+data-quality issue closes on STG record-level verification), #723 crit-1 is now stg-VALIDATED.**
+Prod promotion remains owner-gated; re-verify on prod after promotion via parity tracker main#916.
+Under-merge variants (وأبي هريرة mc150, أبو هريرة الدوسي mc73) = accepted Latin/variant under-merge
+tech-debt, not matn.
