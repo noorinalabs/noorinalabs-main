@@ -107,3 +107,34 @@ wave-23 head — NOT `9cd97be` (that was run-4b's fingerprint baseline; run 5 es
 After a clean run 5: verify output vs run-3/4b baselines → stg reload → **owner-gated** prod
 promotion (#723, parity tracker main#916). Prod=178.156.214.225 off-limits w/o sign-off;
 stg=87.99.137.225.
+
+## Wave-23 run 5 — COMPLETE but verification FAILED; da#308 gate gap (2026-07-05)
+
+Run 5 ran fully clean end-to-end (NER→disambiguate→bio_promote→cluster→dedup→parallels),
+**dedup ran this time** (host synced `--group ml`), 100% resolution, **165,939 canonical**
+(down from 4b's 172,532). da#306 clustering fix worked perfectly: mega-group 165,636,
+safe-partition ~2.9h with telemetry. Top narrators all real, 0 bare pronouns, dedup 6.72M
+parallel links. **Those parts are solid.**
+
+**BUT the matn contamination is essentially UNCHANGED from 4b** — ~25,708 canonical rows (15.5%)
+still carry benediction/matn text, **10,185 mention-backed** (mc>1, drag real edges into graph).
+Concentrated in **thaqalayn (28.3%) + fawaz (18.8%)**; itqan/lk clean (0.3%). Examples:
+`عائشة، زوج النبي ﷺ قالت` (mc196), `سألت أبا الحسن (عليه السلام` (mc149), `نهى النبي ﷺ` (mc49).
+
+**Root cause (confirmed `src/parse/name_quality.py:447`): `_MATN_OPENERS` is Sunni/Tirmidhī-tuned
+(13 words) and misses the dominant Shia dialogue-hadith openers** — (1) `سألت`/`سُئل` ("I asked/
+was asked"), `سمعت`, `حدثنا`, `أخبرنا`, `روى` absent (must match post-`normalize_arabic`: `سالت`,
+`سءل`); (2) subject-led matn `عائشة … قالت` — verb 2nd-position, gate only tests `bare[0]`;
+(3) short residue `نهى النبي` (2 tok after benediction-strip) < `_MATN_SENTENCE_MIN_TOKENS`.
+da#308's own audit missed this (narrower benediction regex on Sunni-weighted cleaned data). This is
+why thaqalayn/fawaz (isnad-extraction sources) contaminate while itqan/lk (bio sources) don't.
+
+**da#311 filed. Owner decision 2026-07-05: "fix gate + post-hoc SCRUB" (NOT another 7h re-run).**
+Ivana Horvat implementing on `I.Horvat/0311-matn-openers-scrub`: (A) extend `_MATN_OPENERS` +
+subject-led + short-residue in `_is_matn_sentence`; (B) scrub tool modeled on existing
+`scripts/scrub_relational_pollution.py` — applies corrected gate over run-5 curated + re-prunes
+mentions/parallel_links/merge_log for referential consistency, writing to `data/curated.run5-scrubbed/`.
+Acceptance: contamination <1%, 0 orphans, real long-nasab/kunya/Imam-honorific names retained.
+Precedent for curated-scrub≡NER-filter equivalence: [[project_relational_pollution_scrub_equiv]]
+(singleton case; mc>1 rows here need explicit mention/edge re-prune). Scrub RUN against live data =
+orchestrator post-merge, THEN verify → stg reload → owner-gated prod.
