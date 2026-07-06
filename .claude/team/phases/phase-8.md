@@ -4,7 +4,7 @@ description: Phase definition, end-state criteria, exit gate, wave plan
 phase: 8
 status: active
 created: 2026-07-01
-last_updated: 2026-07-02
+last_updated: 2026-07-05
 ---
 
 # Phase 8 — Analytical Depth: ML Modeling + Streaming
@@ -57,6 +57,7 @@ Per-wave **+20%** of the wave's feature/bug/security content (rounded up), enfor
 
 - ML *serving at scale* / model-ops platform beyond the first-model nucleus — a later phase; P8 delivers the modeling nucleus + its local enablement, not a production inference platform.
 - Any product surface not blocking the 5 in-scope criteria — triaged at each `/wave-scope`.
+- **Donor-readiness wave (product polish, narrator-centric demo walkthrough)** — owner prioritized a fundraising demo (2026-07-05) but chose to run it **after** the committed analytical-depth work (streaming W24 → ML W25), no hard date. Off-theme for P8 (Analytical Depth), so it seeds the **Phase 9 opener** (or a P8 tail wave) — decided at `/plan-phase 9` on P8 exit. Headline scope: **deploy#523** semantic-search quality (hardens criterion #2 from "200 with garbage" to good results), **da#317** narrator matn-sentence tail, **ig#1166** graph deep-link, **da#318** matn markup leak, + a visual-credibility pass. Critical-path analysis preserved in `.claude/memory/project_donor_readiness_wave.md`.
 
 ## References
 

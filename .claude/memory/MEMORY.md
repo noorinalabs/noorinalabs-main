@@ -108,3 +108,4 @@
 - [Wave-branch merge: --merge not --squash](feedback_wave_branch_merge_not_squash.md) — squash collapses persona authors to bare parametrization → commit-author gate red on wave→main; child structural staleness only gates PRs to main. P7W19 #898/#222.
 - [Implementor-label convention](project_implementor_label_convention.md) — FIRSTNAME_LASTNAME reinstated #907/PR#908 + tool apply_implementor_labels.py (wave-wrapup 6.5); branch-first/commit-author-fallback; bulk label-apply via REST not GraphQL (5000-pt limit). 949 issues backfilled.
 - [Semantic embedder parity gap](project_semantic_embedder_parity.md) — prod+stg API on hashing vs corpus on MiniLM → 200-with-garbage; stg-gate NOT valid for semantic until fixed. deploy#523.
+- [Donor-readiness wave (deferred)](project_donor_readiness_wave.md) — narrator-centric demo polish; runs AFTER streaming W24 + ML W25 (owner 2026-07-05); seeds P9 opener. Scope: da#317/ig#1166/deploy#523/da#318 + visual pass.
