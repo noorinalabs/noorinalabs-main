@@ -1991,3 +1991,39 @@ No org-level (`noorinalabs-main`) scored changes this wave — the 3 main PRs (A
 **Fire/hire:** none. Retirement trigger (`trust_signals.retirement_trigger`) fired for no engineer.
 
 **Concentration note:** 14% top by implementer — lowest of Phase 7; 16 implementers across 4 repos. Healthy spread, not fragility.
+
+## Phase 8 Wave 23 Trust Updates (2026-07-06) — #723 data-quality closeout landed on prod + promotion-path fix
+
+Mechanical scoring (`trust_signals.py score 8 23`): **20 PRs** (19 at wrapup + PR#322 da#321 fix merged post-wrapup; counter-corrected 19→20), 4 repos in scope, top-concentration **30%** (Alejandra Reyes-Fuentes 6/20 — well below the 60% fragility line), **0 CI-red merges**, **0** `review_false_positives`, 2 changes-requested cycles. Helper-proposed deltas: Alejandra **+1**, Nikolaos **+1**; all others delta 0. Distribution discipline: the single ceiling move goes to **Alejandra** — she was the wave's clear top relative performer (6 clean data-quality PRs) and recovers the −1 she took in W22 for a review false-positive. Nikolaos's +1 is absorbed at ceiling.
+
+### Org-Level Team
+
+No org-level (`noorinalabs-main`) scored *implementer* changes this wave — the main-repo activity was orchestrator-run bookkeeping (status keys, memory, ontology, wave-branch merges). Orchestrator self-assessment in the Done/Needs matrix below.
+
+### Child-Repo Teams (data-acquisition + isnad-graph + deploy)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Alejandra Reyes-Fuentes (data-acquisition) | 4 | 5 | prs_merged=6 (da#307/#305/#302/#285/#275/#263 — the data-quality/scrub spine), 0 CI-red, 0 must-fix received, 0 false-positives. Wave top by volume; +1 restores the W22 false-positive dock. Distribution-discipline new-5 → the wave's strongest volume+clean signal. |
+| Nikolaos Papadopoulos (data-acquisition) | 5 | 5 | prs_merged=5 (da#286/#284/#274/#267/#264) + must_fix_caught=1, 0 CI-red. Helper proposed +1; absorbed at ceiling. |
+| Ivana Horvat (data-acquisition) | 5 | 5 | prs_merged=4 wave-branch (da#312/#310/#277/#269) + PR#322 (da#321 root-cause fix, post-wrapup, 2-reviewer clean). must_fix_received=2 / rework_cycles=2 on the wave-branch set offset clean delivery → delta 0, held at ceiling. |
+| Kavitha Sundaramurthy (data-acquisition) | 5 | 5 | prs_merged=1 (da#260) + must_fix_caught=1, 0 CI-red. Delta 0; held at ceiling. |
+| Oyunbileg Batbayar (data-acquisition/QA) | 5 | 5 | prs_merged=1 (da#294) + a substantive PR#322 QA review-catch verification (confirmed the two detectors now read the identical authoritative signal, no gaps). Delta 0; held at ceiling. |
+| Nneka Obi (isnad-graph) | 5 | 5 | prs_merged=1 (ig#1164), 0 CI-red. Delta 0; held at ceiling. |
+| Lucas Ferreira (deploy) | hold | hold | prs_merged=1 (deploy#522), 0 CI-red, 0 must-fix. Baseline — held. |
+
+### Done Well / Needs Improvement (Phase 8 Wave 23) — evidence-anchored, bare "None" banned
+
+| Member | Done Well (with evidence) | Gap (metric, or explicit "clean: numbers") |
+|--------|---------------------------|--------------------------------------------|
+| **Alejandra Reyes-Fuentes** | 6 clean PRs on the scrub/data-quality spine that produced the 150,187-narrator artifact; wave workhorse | clean: prs_merged=6, must_fix_received=0, ci_red_merges=0, false_positives=0 |
+| **Nikolaos Papadopoulos** | 5 clean PRs + a real review catch (must_fix_caught=1) | clean: prs_merged=5, must_fix_received=0, ci_red_merges=0, false_positives=0 |
+| **Ivana Horvat** | authored the da#321 root-cause fix (real correctness bug: dual-detector cross_sect divergence), not a test-weakening | 2 must-fix received + 2 rework cycles on the wave-branch NER/segmentation PRs — the wave's main author-side rework signal |
+| **Oyunbileg Batbayar** | genuine QA verification on PR#322 (traced both detectors to the same authoritative column) | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0 |
+| **Kavitha Sundaramurthy** | 1 clean PR + a review catch | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0, must_fix_caught=1 |
+| **Nneka Obi / Lucas Ferreira** | 1 clean cross-repo PR each (ig#1164 / deploy#522) supporting the closeout | clean: 0 CI-red, 0 must-fix each |
+| **Orchestrator (Nadia)** | ran the prod purge+reload window, record-level verified all 4 #723 criteria at exact stg↔prod parity, closed #723, root-caused + landed da#321 | **initially framed the 44,073 orphan tail as purely "accepted bio narrators"; a preserved stranded-worktree memory surfaced ~26% is da#317 matn-sentence pollution — corrected in-session, but the first framing under-described the tail** |
+
+**Fire/hire:** none. Retirement trigger (`trust_signals.retirement_trigger`) fired for no engineer.
+
+**Concentration note:** 30% top by implementer (Alejandra 6/20) — theme-fit, not fragility: W23 was a single-theme data-quality closeout that her scrub-pipeline ownership naturally concentrated. Below the 60% line; no redistribution action required, but the da#317 matn-sentence carry-forward sits in the same surface, so W24 planning should confirm coverage isn't single-owner.
