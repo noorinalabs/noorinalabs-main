@@ -260,6 +260,8 @@ This step mirrors `/wave-retro` Step 6.5 by design — the same check fires from
 **Next step:** Run `/wave-retro` for full retrospective with assessments and trust updates.
 ```
 
+> **Dominant-class characterization of a weighted remainder** (P8W23 retro, owner-approved 2026-07-05 — main#923; mirrors charter [`issues.md` § Data-quality criteria item 3](../../team/charter/issues.md)). When a criterion is closed on a **weighted** basis (a metric that discounts part of the population — e.g. weighting narrator-name pollution by `mention_count`), the closure note MUST also state what the **un-weighted remainder** actually *is*, characterized by its **dominant class** — the largest real category of what remains — never by its most-favorable class. Give the remainder's size and its predominant makeup. For instance, the #723 orphan-tail of 44,073 narrators was first framed as "accepted bio narrators" (the favorable class), when the honest dominant class was da#317 matn-sentence pollution (~26% of the tail); the weighting kept the closure honest but the characterization did not. Relates to `feedback_honest_audit_over_conclusion_claim`.
+
 ### 10.5. Write canonical counter keys to `cross-repo-status.json`
 
 > **High-volume remote-merge checkpoint (added P3W13 #566 — 2026-05-31).** Before the **first local bookkeeping commit** of the wrapup (the counter-key write below, the ontology rebuild commit, the wrap-marker commit), if this wave merged **N ≥ 10 PRs via `gh` against remote branches**, the local checkout may be many commits behind origin. Re-sync first:
@@ -821,6 +823,31 @@ Run `/annunaki-attack` to process any errors captured by the Annunaki monitor du
 - Include Annunaki-created issues and PRs in the final wave report totals
 - This step runs **before** the memory-to-automation audit so that new hooks/skills from error analysis are visible to the memory audit
 - On completion, write `wave_${M}_annunaki_attack_ran_at = <ISO-8601 UTC timestamp>` to `cross-repo-status.json`
+
+#### 13a. Archive-then-reset the error log once triaged benign (P8W23 retro, owner-approved 2026-07-05 — main#923)
+
+After the attack has triaged this wave's captured errors and found them **all benign** — session-local exploration failures, correctly-logged hook blocks, no wave-code defect that warranted new automation — **archive** `.claude/annunaki/errors.jsonl` to a dated per-wave file and **reset** (truncate) the live log. This must be **archive, not delete**: the records move to the archive, they are never silently discarded. Resetting the live log means the next wave's captured-error count reflects genuinely-new signal instead of a growing pile in which a real defect could hide (P8W23: 109 genuine records, all benign — the S/N ratio, not any single record, was the risk).
+
+Run this **only** once the errors are confirmed benign — an unresolved / defect-bearing error must stay in the live log until its automation lands. If the attack created issues/hooks/skills, leave those records for the next wave's audit and skip the reset.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ERR_LOG="$REPO_ROOT/.claude/annunaki/errors.jsonl"
+if [ -s "$ERR_LOG" ]; then
+  mkdir -p "$REPO_ROOT/.claude/annunaki/archive"
+  ARCHIVE="$REPO_ROOT/.claude/annunaki/archive/wave-${M}.jsonl"
+  # Append (never overwrite) so a re-run within the same wave accretes rather
+  # than clobbers a prior archive; then truncate the live log IN PLACE — the
+  # file stays present but empty (a reset, never an `rm`/silent delete).
+  cat "$ERR_LOG" >> "$ARCHIVE"
+  : > "$ERR_LOG"
+  echo "Annunaki: archived $(wc -l < "$ARCHIVE" | tr -d ' ') records to $ARCHIVE and reset the live log."
+else
+  echo "Annunaki: live error log already empty — nothing to archive."
+fi
+```
+
+Commit the archive + reset log with the wrapup bookkeeping. (If the errors were NOT all benign, skip this block — do not archive an error whose automation has not yet landed.)
 
 ### 14. Memory-to-automation audit
 
