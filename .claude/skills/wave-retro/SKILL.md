@@ -276,6 +276,8 @@ P3W8 surfaced the gap (2026-05-10): user explicitly noted "these should be a par
 
 Carry-forward and memory-must-include state is freshest immediately after retro, so this is the highest-value moment to run `/wave-scope`. Auto-invoke if the next-wave meta-issue exists; **otherwise auto-draft a stub meta-issue** (the scaffold is mechanical — only the theme is an owner decision) and surface "set the theme," rather than re-emitting a manual "go draft an issue" blocker every retro (owner directive, P4W1 retro 2026-06-10 — the blocker recurred every wave).
 
+> **Dominant-class characterization of a weighted remainder** (P8W23 retro, owner-approved 2026-07-05 — main#923; mirrors charter [`issues.md` § Data-quality criteria item 3](../../team/charter/issues.md)). This governs any carry-forward item that is the un-weighted remainder of a weighted closure. When a criterion is closed on a **weighted** basis (a metric that discounts part of the population — e.g. weighting narrator-name pollution by `mention_count`), the closure note MUST also state what the **un-weighted remainder** actually *is*, characterized by its **dominant class** — the largest real category of what remains — never by its most-favorable class. Give the remainder's size and its predominant makeup. For instance, the #723 orphan-tail of 44,073 narrators was first framed as "accepted bio narrators" (the favorable class), when the honest dominant class was da#317 matn-sentence pollution (~26% of the tail); the weighting kept the closure honest but the characterization did not. Relates to `feedback_honest_audit_over_conclusion_claim`.
+
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # Global wave ids (main#804) are monotonic and NOT sequential-per-phase, so the
