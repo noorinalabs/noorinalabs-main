@@ -1,5 +1,5 @@
 {
-  "description": "Tracks file checksums for ontology change detection. last_tracked = current file hash (updated by tracker hook). last_resolved = hash when ontology was last rebuilt from this file (updated by resolver). When last_tracked != last_resolved, the file is dirty. SCOPE (#857, #820/C×T2): tracking + /ontology-rebuild cover the hand-curated SEMANTIC OVERLAY only (ontology/domain.yaml, ontology/services.yaml, ontology/conventions.md, ontology/repos/*.yaml, other hand-edited *.md). The GENERATED structural layer at ontology/structural/ (owned generator #855) is NOT tracked here — it is always-current-by-regeneration, so the tracker skips it (see ontology_tracker.py SKIP_PATTERNS).",
+  "description": "Tracks file checksums for ontology change detection. last_tracked = current file hash (updated by tracker hook). last_resolved = hash when ontology was last rebuilt from this file (updated by resolver). When last_tracked != last_resolved, the file is dirty. SCOPE (#857, #820/C\u00d7T2): tracking + /ontology-rebuild cover the hand-curated SEMANTIC OVERLAY only (ontology/domain.yaml, ontology/services.yaml, ontology/conventions.md, ontology/repos/*.yaml, other hand-edited *.md). The GENERATED structural layer at ontology/structural/ (owned generator #855) is NOT tracked here \u2014 it is always-current-by-regeneration, so the tracker skips it (see ontology_tracker.py SKIP_PATTERNS).",
   "files": {
     ".claude/drafts/secrets-migration-tonight-2026-04-23.md": {
       "last_resolved": "acc0d25da0c7fcf3792ade1703f7c75f2215a29daafe0367db907f4e8d2e990f",
@@ -164,9 +164,9 @@
       "resolved_at": "2026-05-16T22:20:43.893664+00:00"
     },
     ".claude/team/feedback_log.md": {
-      "last_tracked": "58375366f7e8545846cd4ff01cfe5aa36eb460c732bf3b7ea3dee18a852762cd",
+      "last_tracked": "d32863b0e54360cdad98e1867ab6d36a198674445ccbb670e92b3a5daa0423de",
       "last_resolved": "58375366f7e8545846cd4ff01cfe5aa36eb460c732bf3b7ea3dee18a852762cd",
-      "tracked_at": "2026-07-02T03:50:50.108176+00:00",
+      "tracked_at": "2026-07-06T01:35:16.851191+00:00",
       "resolved_at": "2026-07-02T23:26:29Z"
     },
     ".gitignore": {
@@ -200,9 +200,9 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "cross-repo-status.json": {
-      "last_tracked": "cb322a972c169e65e8e998cdcb7e8ce319683e3a96caa3be7cf1037c1ea8b71d",
+      "last_tracked": "f95ce3ddbf3119990d9dba244fa33e3fc7250020a01aef42259253eb1f3cbe73",
       "last_resolved": "cb322a972c169e65e8e998cdcb7e8ce319683e3a96caa3be7cf1037c1ea8b71d",
-      "tracked_at": "2026-06-12T00:13:58.128709+00:00",
+      "tracked_at": "2026-07-06T01:46:58.082819+00:00",
       "resolved_at": "2026-06-12T17:36:37Z"
     },
     "dependencies.yml": {
@@ -650,9 +650,9 @@
       "resolved_at": "2026-05-06T00:49:39.816328+00:00"
     },
     ".claude/team/trust_matrix.md": {
-      "last_tracked": "548f1357e9a3f3d568123fc9528541d18bae57cbd1f46c4281dc76e3a0007274",
+      "last_tracked": "d35ea070bb22a5f00c1d38b05be83fa2a96ea43dba30c54e0dce059b53c55f56",
       "last_resolved": "548f1357e9a3f3d568123fc9528541d18bae57cbd1f46c4281dc76e3a0007274",
-      "tracked_at": "2026-06-27T00:45:52.043254+00:00",
+      "tracked_at": "2026-07-06T01:34:32.383903+00:00",
       "resolved_at": "2026-06-30T00:00:00Z"
     },
     ".claude/team/promotion_audit_log/wave-5.md": {
@@ -1032,9 +1032,9 @@
       "resolved_at": "2026-06-21T21:02:19.551435+00:00"
     },
     ".claude/memory/MEMORY.md": {
-      "last_tracked": "fca2cb70dced90f80ad1e16d563c21a371b9f100a068a00744bcf7f165c4c30d",
+      "last_tracked": "39896b616d373483b6ba2150e5ba3d6087214c0a8d730f704ad727e2ec400cd7",
       "last_resolved": "fca2cb70dced90f80ad1e16d563c21a371b9f100a068a00744bcf7f165c4c30d",
-      "tracked_at": "2026-07-05T23:56:32.866850+00:00",
+      "tracked_at": "2026-07-06T02:40:04.590561+00:00",
       "resolved_at": "2026-07-06T00:47:21Z"
     },
     "noorinalabs-isnad-graph/.claude/lib/tests/test_pre_commit_ci_sync.py": {
@@ -1218,9 +1218,9 @@
       "resolved_at": "2026-06-30T00:00:00Z"
     },
     "noorinalabs-data-acquisition/.claude/memory/MEMORY.md": {
-      "last_tracked": "32db882433d17a841fc4735a6a8e872b595b7f0a48de2d81bd36fd5e28744873",
+      "last_tracked": "fb63088d7fb3ac8c2590c5c2ed7c817395052b5b11988e0f29d2c23b8f35073a",
       "last_resolved": "32db882433d17a841fc4735a6a8e872b595b7f0a48de2d81bd36fd5e28744873",
-      "tracked_at": "2026-07-03T00:11:14.403697+00:00",
+      "tracked_at": "2026-07-06T01:28:59.844571+00:00",
       "resolved_at": "2026-07-05T21:03:28Z"
     },
     "noorinalabs-data-acquisition/docs/PROD_RELOAD_RUNBOOK_723.md": {
@@ -1296,9 +1296,9 @@
       "resolved_at": "2026-07-02T23:26:29Z"
     },
     ".claude/team/phases/phase-8.md": {
-      "last_tracked": "885ed95a36cebfc3c28da5528bfb558d2a5da93267437da8961a1ef290a770fe",
+      "last_tracked": "b6986bab80a304df0bdcf02c828c03456cd2f1b36c0e47ad6176f3b266800943",
       "last_resolved": "885ed95a36cebfc3c28da5528bfb558d2a5da93267437da8961a1ef290a770fe",
-      "tracked_at": "2026-07-02T04:17:20.641739+00:00",
+      "tracked_at": "2026-07-06T02:39:39.614684+00:00",
       "resolved_at": "2026-07-02T23:26:29Z"
     },
     ".claude/memory/project_semantic_embedder_parity.md": {
@@ -1318,6 +1318,66 @@
       "last_resolved": "24195781e20cc2521ead25b061d0508d370397ab813a265c60a9dadb4f7e5ad5",
       "tracked_at": "2026-07-03T00:35:04.030125+00:00",
       "resolved_at": "2026-07-05T21:03:28Z"
+    },
+    "noorinalabs-data-acquisition/.claude/scratch/review-oyunbileg-322.md": {
+      "last_tracked": "93ee124c25d5f06eb5f3ac5375decf4c53c74aa020448238f213b5785f6f1bd2",
+      "last_resolved": "",
+      "tracked_at": "2026-07-06T01:23:33.893567+00:00",
+      "resolved_at": ""
+    },
+    "noorinalabs-data-acquisition/.claude/scratch/jeanclaude_322.md": {
+      "last_tracked": "e573c90902066e48c4e9d0e2402092dcfe18223cd0c44699f12aa644239590cd",
+      "last_resolved": "",
+      "tracked_at": "2026-07-06T01:23:39.808043+00:00",
+      "resolved_at": ""
+    },
+    "noorinalabs-data-acquisition/.claude/memory/feedback_dual_detector_cross_sect_authority.md": {
+      "last_tracked": "1cfd9a41974d9666fabadc2c173f8914f9647efba7991e6edd5a383877eb74ff",
+      "last_resolved": "",
+      "tracked_at": "2026-07-06T01:28:47.984759+00:00",
+      "resolved_at": ""
+    },
+    ".claude/scratch/w24_stub.md": {
+      "last_tracked": "8d3f7c6a456e7fc20253cc58d2d2fe6597d47814dcd2d5eb1e00ea8b2c4d08a9",
+      "last_resolved": "",
+      "tracked_at": "2026-07-06T02:39:03.599057+00:00",
+      "resolved_at": ""
+    },
+    ".claude/scratch/aino_921.md": {
+      "last_tracked": "cd016a1cd7ac821d0c58a10e0f4fac2f9eb2b5d96b494bc8fdbfcbe0afa2cecf",
+      "last_resolved": "",
+      "tracked_at": "2026-07-06T01:43:01.519279+00:00",
+      "resolved_at": ""
+    },
+    ".claude/scratch/santiago_921.md": {
+      "last_tracked": "98eba0c885ebde411a6c84686084f6a384820b9fb906caa673bb6ae60b4a66c2",
+      "last_resolved": "",
+      "tracked_at": "2026-07-06T01:43:18.432634+00:00",
+      "resolved_at": ""
+    },
+    ".claude/scratch/santiago_921_v2.md": {
+      "last_tracked": "71913929d2f6ca76be130495bdb1fb7192e9c9201757514d146f07f4033393c8",
+      "last_resolved": "",
+      "tracked_at": "2026-07-06T01:49:42.734167+00:00",
+      "resolved_at": ""
+    },
+    ".claude/memory/project_donor_readiness_wave.md": {
+      "last_tracked": "5d3fb7503a26bf41f10e296fd02ec18cde4093fd73bb06468d78689e5d798943",
+      "last_resolved": "",
+      "tracked_at": "2026-07-06T02:39:55.114332+00:00",
+      "resolved_at": ""
+    },
+    "noorinalabs-isnad-ingest-platform/src/utils/grade.py": {
+      "last_tracked": "36787632654106bacbb7a7e4613a03ad03ab276f028028eeee641445148ac170",
+      "last_resolved": "",
+      "tracked_at": "2026-07-06T03:22:10.130794+00:00",
+      "resolved_at": ""
+    },
+    ".claude/memory/feedback_gh_pr_edit_silent_noop.md": {
+      "last_tracked": "0177c362361ec849a3a2fc6f991a58e781e42cdc73685e449cd9af6780c63afd",
+      "last_resolved": "",
+      "tracked_at": "2026-07-06T03:31:42.731843+00:00",
+      "resolved_at": ""
     }
   },
   "last_cleanup": {
