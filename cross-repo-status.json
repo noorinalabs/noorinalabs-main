@@ -33,9 +33,9 @@
   "wave_23_scope_reconciliation": {"deploy#521":"landed+closed (PR#522, actions:write)","da#258":"landed on wave-branch (PR#260); closes via PR#320","da#248":"landed (PR#264); closes via PR#320","da#259":"landed (PR#263); closes via PR#320","ig#1148":"landed (PR#1164); closes via PR#1167","closeout_main#723":"CLOSED prod-verified at stg parity","closeout_main#916":"parity logged","outcome":"scrubbed 150,187-narrator artifact loaded+verified stg AND prod; 0 declared refs dropped"},
   "wave_23_carry_forward": ["da#319 (validation-harness multi-stmt cypher — filed this wave)", "da#318 (matn markup leak)", "da#317 (zero-degree tail matn pollution ~26% — non-blocking mc<=1 tail)", "da#313 (merge_log orphaned ids)", "da#309 (dedup missing-dep fail-loud)", "da#301/#300/#299/#296 (name-quality follow-ups)", "da#281/#280 (source-corpora research/backlog)", "ig#1166 (graph explorer deep-link)", "deploy#523 (semantic embedder parity — blocks ig#1148 full prod validation)", "da#321 (test green-in-CI/red-locally: embedder-env cross_sect divergence — blocks local pre-push)"],
   "wave_23_wave_branch_main_prs": {"noorinalabs-data-acquisition":320,"noorinalabs-isnad-graph":1167,"noorinalabs-deploy":524,"noorinalabs-main":"none (behind-by-8, memory commits direct to main)"},
-  "wave_23_final_pr_count": 19,
+  "wave_23_final_pr_count": 20,
   "wave_23_changes_requested_cycles": 2,
-  "wave_23_top_concentration_pct": 32,
+  "wave_23_top_concentration_pct": 30,
   "wave_23_trust_signals": {
   "Alejandra Reyes-Fuentes": {
     "authored_prs": [
@@ -128,6 +128,9 @@
   }
 },
   "wave_23_notes": "da#321 RESOLVED 2026-07-06 (PR#322, root cause = dedup cross_sect derived from corpus-name allowlist vs parallels.py authoritative sect column; run_all compose let the semantic row clobber the deterministic True; model loads locally, absent in CI = the split). Fix aligns dedup on the sect column; also fixes latent prod mislabel (fawaz cross-edition + 4 non-allowlisted corpora). da#317 memory commit rebased+pushed clean (8236087), pre-push suite green. Wave 23 fully closed.",
+  "wave_23_counter_corrections": [{"counter": "final_pr_count", "claimed": 19, "actual": 20, "reason": "PR#322 (da#321 fix) merged post-wrapup 2026-07-06, wave-23 labeled, resolves wave-23 tech-debt", "corrected_at": "2026-07-06"}, {"counter": "top_concentration_pct", "claimed": 32, "actual": 30, "reason": "Alejandra 6/20 after PR#322 added (was 6/19=32%)", "corrected_at": "2026-07-06"}],
+  "wave_23_annunaki_attack_ran_at": "2026-07-06T01:30:00Z",
+  "wave_23_memory_audit_ran_at": "2026-07-06T01:30:00Z",
   "wave_22_meta_issue": 904,
   "wave_22_phase": 7,
   "wave_22_phase_ordinal": 5,
