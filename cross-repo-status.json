@@ -127,7 +127,7 @@
     "rework_cycles": 0
   }
 },
-  "wave_23_notes": "da main local has 1 unpushed memory-only commit (067776b, da#317 preservation) blocked by da#321 local-flaky pre-push; content preserved in scratchpad + captured in carry-forward. Push pending da#321 fix or owner permission.",
+  "wave_23_notes": "da#321 RESOLVED 2026-07-06 (PR#322, root cause = dedup cross_sect derived from corpus-name allowlist vs parallels.py authoritative sect column; run_all compose let the semantic row clobber the deterministic True; model loads locally, absent in CI = the split). Fix aligns dedup on the sect column; also fixes latent prod mislabel (fawaz cross-edition + 4 non-allowlisted corpora). da#317 memory commit rebased+pushed clean (8236087), pre-push suite green. Wave 23 fully closed.",
   "wave_22_meta_issue": 904,
   "wave_22_phase": 7,
   "wave_22_phase_ordinal": 5,
