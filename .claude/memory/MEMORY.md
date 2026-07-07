@@ -1,4 +1,5 @@
 - [User profile](user_steven.md) — Steven French, owner; autonomous execution, charter compliance, hook enforcement, memory reliability.
+- [IaC over one-offs](feedback_iac_over_oneoffs.md) — Owner 2026-07-07: repeatable data loads/transforms/infra behind GH Actions+IaC, not box one-offs; Neo4j graph ops need a NEW deploy workflow (cypher-shell in neo4j container; db-migrate.yml is PG-only, da has no image).
 - [Reviewer brief needs TechDebt line](feedback_reviewer_brief_techdebt.md) — omit → Hook4 blocks all merges wave-wide; fix by EDIT-in-place. P5W5.
 - [closingIssuesReferences empty on wave-branch PRs](reference_closing_refs_empty_wave_prs.md) — not a gh --json field; parse body Closes/Fixes for non-default-base PRs. main#664.
 - [ontology_tracker test worktree-fragile](project_ontology_tracker_worktree_test.md) — test_worktrees_segment false-FAILS under .claude/worktrees/ (REPO_ROOT inherits it). PR#685.
