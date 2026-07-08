@@ -101,9 +101,9 @@ ci:
     workflow: .github/workflows/ghcr-publish.yml
     notify_deploy:
       job: notify-deploy
-      action: peter-evans/repository-dispatch@v3
-      gates: ["github.event_name == 'push'", "github.ref == 'refs/heads/main'", "needs: build-and-push success"]
-      description: "Fires repository_dispatch to noorinalabs-deploy after both api+frontend images are published. Replaces the legacy standalone notify-deploy.yml which fired before publish (race condition)."
+      action: peter-evans/repository-dispatch@v4
+      gates: ["github.event_name == 'push'", "github.ref == 'refs/heads/main'", "needs: [build-and-push, build-and-push-embed] success"]
+      description: "Fires repository_dispatch to noorinalabs-deploy after ALL THREE images (api, frontend, embed) are published. Gates on both build-and-push AND build-and-push-embed (ig#1179): since deploy#523 the stg/prod api pulls the model-capable -embed image, so embed is a standing deploy gate; gating on api+frontend only raced the embed publish and tripped deploy-stg's manifest preflight (deploy#418). Replaces the legacy standalone notify-deploy.yml which fired before publish (race condition)."
 
 dispatch_contracts_sent:
   # Cross-link: services.yaml § cross_repo_dispatch_contracts[name=deploy-isnad-graph]
