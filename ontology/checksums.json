@@ -1032,10 +1032,10 @@
       "resolved_at": "2026-06-21T21:02:19.551435+00:00"
     },
     ".claude/memory/MEMORY.md": {
-      "last_tracked": "39896b616d373483b6ba2150e5ba3d6087214c0a8d730f704ad727e2ec400cd7",
-      "last_resolved": "39896b616d373483b6ba2150e5ba3d6087214c0a8d730f704ad727e2ec400cd7",
-      "tracked_at": "2026-07-06T02:40:04.590561+00:00",
-      "resolved_at": "2026-07-06T16:50:47.724297+00:00"
+      "last_tracked": "21c453c7c8fc67b95f1d6c0cdbb486c8223a7c8d92eb84ca6dce63e249a3e301",
+      "last_resolved": "21c453c7c8fc67b95f1d6c0cdbb486c8223a7c8d92eb84ca6dce63e249a3e301",
+      "tracked_at": "2026-07-08T01:40:53.617935+00:00",
+      "resolved_at": "2026-07-07T00:00:00Z"
     },
     "noorinalabs-isnad-graph/.claude/lib/tests/test_pre_commit_ci_sync.py": {
       "last_tracked": "aa209279deec3844b51e384157ba3e67a6d0f325410941f63f38d57535e6498c",
@@ -1050,10 +1050,10 @@
       "resolved_at": "2026-06-21T22:15:52Z"
     },
     ".claude/memory/session_handoff.md": {
-      "last_tracked": "605b31fd6eac32f1dee594ca685c9718578d9e5d6babb0274b8ed3b06c4c32ba",
-      "last_resolved": "605b31fd6eac32f1dee594ca685c9718578d9e5d6babb0274b8ed3b06c4c32ba",
-      "tracked_at": "2026-06-28T16:17:52.878400+00:00",
-      "resolved_at": "2026-06-30T00:00:00Z"
+      "last_tracked": "ac83b903400566a7372f79848614141df19676a08bedb47d710afa635c6fe070",
+      "last_resolved": "ac83b903400566a7372f79848614141df19676a08bedb47d710afa635c6fe070",
+      "tracked_at": "2026-07-08T01:47:39.419275+00:00",
+      "resolved_at": "2026-07-07T00:00:00Z"
     },
     ".claude/lib/verify_deployable_merge.py": {
       "last_tracked": "7c2545f87d17c5c35967612f88381444ff510ceb81ba6553ba37497b0d5c3302",
@@ -1302,10 +1302,10 @@
       "resolved_at": "2026-07-06T16:50:47.724297+00:00"
     },
     ".claude/memory/project_semantic_embedder_parity.md": {
-      "last_tracked": "3db988b6264177b4d45a309401e0dec15f7234e232e49182afa141e1032f3f85",
-      "last_resolved": "3db988b6264177b4d45a309401e0dec15f7234e232e49182afa141e1032f3f85",
-      "tracked_at": "2026-07-02T15:11:02.981541+00:00",
-      "resolved_at": "2026-07-02T23:26:29Z"
+      "last_tracked": "8d0d0786a15eaf4011ab853ad3c896b1ec9778cf81a9858b0482bec3f7d8f711",
+      "last_resolved": "8d0d0786a15eaf4011ab853ad3c896b1ec9778cf81a9858b0482bec3f7d8f711",
+      "tracked_at": "2026-07-07T19:59:00.410822+00:00",
+      "resolved_at": "2026-07-07T00:00:00Z"
     },
     "noorinalabs-data-acquisition/.claude/memory/project_disambiguate_checkpoint_resume.md": {
       "last_tracked": "7e63fc736e57023801e75dbee24deba0146d31b2147ae84d73c832bd0fe1f45f",
@@ -1378,6 +1378,24 @@
       "last_resolved": "0177c362361ec849a3a2fc6f991a58e781e42cdc73685e449cd9af6780c63afd",
       "tracked_at": "2026-07-06T03:31:42.731843+00:00",
       "resolved_at": "2026-07-06T16:50:47.724297+00:00"
+    },
+    ".claude/memory/feedback_iac_over_oneoffs.md": {
+      "last_tracked": "dc093c357f3bb08de5ffa1375faaea5133486d16e563323a140ab3a72e332ee8",
+      "last_resolved": "dc093c357f3bb08de5ffa1375faaea5133486d16e563323a140ab3a72e332ee8",
+      "tracked_at": "2026-07-07T21:13:22.635077+00:00",
+      "resolved_at": "2026-07-07T00:00:00Z"
+    },
+    ".claude/memory/project_fawaz_lk_namespace_orphan_chains.md": {
+      "last_tracked": "2afdc6a794ee034f1b15df9a3cb8b9c5b405223c21c8d459629749dd5f6c4664",
+      "last_resolved": "2afdc6a794ee034f1b15df9a3cb8b9c5b405223c21c8d459629749dd5f6c4664",
+      "tracked_at": "2026-07-08T01:40:20.824239+00:00",
+      "resolved_at": "2026-07-07T00:00:00Z"
+    },
+    ".claude/memory/reference_graph_ops_cypher_shell.md": {
+      "last_tracked": "b3d4c1dc439ced0be5c249526beb2aecb322209728317405f1772c963c06ab2d",
+      "last_resolved": "b3d4c1dc439ced0be5c249526beb2aecb322209728317405f1772c963c06ab2d",
+      "tracked_at": "2026-07-08T01:40:39.619527+00:00",
+      "resolved_at": "2026-07-07T00:00:00Z"
     }
   },
   "last_cleanup": {
