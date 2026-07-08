@@ -88,6 +88,20 @@ workflows:
   deploy_stg: { trigger: "repository_dispatch + workflow_dispatch", target: "stg fan-in for isnad-graph + user-service + landing-page", note: "Active listener — see dispatch_contracts_received below." }
   deploy_all: { trigger: workflow_dispatch, target: all, health_check: 120s }
   verify_deploy: { trigger: workflow_run, checks: [HTTPS, health, TLS] }
+  data_load:
+    workflow: .github/workflows/deploy-data-load.yml
+    pr: "deploy#547"
+    issue: "#546"
+    status: merged
+    trigger: workflow_dispatch
+    inputs: [env (stg|prod), parquet_ref, "load_args (load | load --nodes-only)", image, "dry_run (default true)"]
+    target: "batch Neo4j node/edge graph-load on the env VPS via the profile-gated `graph-load` compose service (--no-deps run)"
+    source: "reads resolved curated+staging Parquet from B2 noorinalabs-pipeline/<parquet_ref> via rclone ON the VPS — large Parquet never transits the GitHub runner"
+    image: "ghcr.io/noorinalabs/noorinalabs-data-acquisition-load:<env>-latest (da#329 loader image family)"
+    credentials: "PIPELINE_B2_KEY_ID/PIPELINE_B2_KEY (rclone native env, never argv); GHCR runtime token; NEO4J password from VPS .env via compose interpolation (never transported — CWE-214)"
+    gating: "stg-gated — prod runs ONLY as a promotion of a verified-good stg load; production GH Environment approval; dry_run defaults true (verifies B2 presence + prints load plan, writes nothing)"
+    retires: "scripts/load_staging.sh build-host rsync one-off (IaC-over-one-offs). Producer = data-acquisition scripts/publish_parquet.py (da#343, make publish-parquet)."
+    note: "IaC batch-load half only. RESOLVE (NER→disambiguate→dedup→curated Parquet) stays a VM/pipeline step; in-graph remediation (migrate-ids/enrich/prune-orphans) stays in graph-ops.yml."
   terraform:
     trigger: "pull_request + push to main (terraform/**)"
     jobs:

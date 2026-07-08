@@ -1,5 +1,5 @@
 {
-  "description": "Tracks file checksums for ontology change detection. last_tracked = current file hash (updated by tracker hook). last_resolved = hash when ontology was last rebuilt from this file (updated by resolver). When last_tracked != last_resolved, the file is dirty. SCOPE (#857, #820/C\u00d7T2): tracking + /ontology-rebuild cover the hand-curated SEMANTIC OVERLAY only (ontology/domain.yaml, ontology/services.yaml, ontology/conventions.md, ontology/repos/*.yaml, other hand-edited *.md). The GENERATED structural layer at ontology/structural/ (owned generator #855) is NOT tracked here \u2014 it is always-current-by-regeneration, so the tracker skips it (see ontology_tracker.py SKIP_PATTERNS).",
+  "description": "Tracks file checksums for ontology change detection. last_tracked = current file hash (updated by tracker hook). last_resolved = hash when ontology was last rebuilt from this file (updated by resolver). When last_tracked != last_resolved, the file is dirty. SCOPE (#857, #820/C×T2): tracking + /ontology-rebuild cover the hand-curated SEMANTIC OVERLAY only (ontology/domain.yaml, ontology/services.yaml, ontology/conventions.md, ontology/repos/*.yaml, other hand-edited *.md). The GENERATED structural layer at ontology/structural/ (owned generator #855) is NOT tracked here — it is always-current-by-regeneration, so the tracker skips it (see ontology_tracker.py SKIP_PATTERNS).",
   "files": {
     ".claude/drafts/secrets-migration-tonight-2026-04-23.md": {
       "last_resolved": "acc0d25da0c7fcf3792ade1703f7c75f2215a29daafe0367db907f4e8d2e990f",
@@ -476,10 +476,10 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "ontology/repos/deploy.yaml": {
-      "last_tracked": "02ebd7547f0d92efbcdcea581018dae3ff90cc34ddb39de0fb492d9af36def98",
-      "last_resolved": "02ebd7547f0d92efbcdcea581018dae3ff90cc34ddb39de0fb492d9af36def98",
-      "tracked_at": "2026-05-26T00:56:33.360841+00:00",
-      "resolved_at": "2026-05-28T14:14:26.645376+00:00"
+      "last_tracked": "0107ad9a6e4a20bd6641fbc7542321c3f895dd6c5e40bc4a16c79ca0b958f217",
+      "last_resolved": "0107ad9a6e4a20bd6641fbc7542321c3f895dd6c5e40bc4a16c79ca0b958f217",
+      "tracked_at": "2026-07-08T20:15:52.253221+00:00",
+      "resolved_at": "2026-07-08T20:16:12Z"
     },
     "ontology/repos/design-system.yaml": {
       "last_resolved": "64f1eb7a16e3c9284f92d018eed4ce2a0da2aa761f60353c98117f3b2319a1a8",
@@ -494,10 +494,10 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "ontology/repos/isnad-graph.yaml": {
-      "last_resolved": "f3e768d33c227f9b51e1cdb80b5d28fb9b0e413a098218bec7029fba406d44a8",
-      "last_tracked": "f3e768d33c227f9b51e1cdb80b5d28fb9b0e413a098218bec7029fba406d44a8",
-      "resolved_at": "2026-05-13T03:21:08.894134+00:00",
-      "tracked_at": "2026-05-12T22:33:09.401126+00:00"
+      "last_tracked": "ba76e10a48b7548e5e1d894ad25b7d5dc66b5732d64ac7bb67f5e4bb5ce9c3cd",
+      "last_resolved": "ba76e10a48b7548e5e1d894ad25b7d5dc66b5732d64ac7bb67f5e4bb5ce9c3cd",
+      "tracked_at": "2026-07-08T03:06:28.642113+00:00",
+      "resolved_at": "2026-07-08T20:16:00Z"
     },
     "ontology/repos/isnad-ingest-platform.yaml": {
       "last_resolved": "b8ca5cc2f951054d287dd600c4eab104311e56dd4987bece91bb7e697855e27c",
@@ -1032,10 +1032,10 @@
       "resolved_at": "2026-06-21T21:02:19.551435+00:00"
     },
     ".claude/memory/MEMORY.md": {
-      "last_tracked": "21c453c7c8fc67b95f1d6c0cdbb486c8223a7c8d92eb84ca6dce63e249a3e301",
-      "last_resolved": "21c453c7c8fc67b95f1d6c0cdbb486c8223a7c8d92eb84ca6dce63e249a3e301",
-      "tracked_at": "2026-07-08T01:40:53.617935+00:00",
-      "resolved_at": "2026-07-07T00:00:00Z"
+      "last_tracked": "56aeb80ee8a62d3bef54c2afbbaa82d7827ee8278c54df5d035da65db74e4645",
+      "last_resolved": "56aeb80ee8a62d3bef54c2afbbaa82d7827ee8278c54df5d035da65db74e4645",
+      "tracked_at": "2026-07-08T03:47:51.589773+00:00",
+      "resolved_at": "2026-07-08T20:16:00Z"
     },
     "noorinalabs-isnad-graph/.claude/lib/tests/test_pre_commit_ci_sync.py": {
       "last_tracked": "aa209279deec3844b51e384157ba3e67a6d0f325410941f63f38d57535e6498c",
@@ -1396,6 +1396,18 @@
       "last_resolved": "b3d4c1dc439ced0be5c249526beb2aecb322209728317405f1772c963c06ab2d",
       "tracked_at": "2026-07-08T01:40:39.619527+00:00",
       "resolved_at": "2026-07-07T00:00:00Z"
+    },
+    ".claude/memory/project_narrator_chokepoints_enrich.md": {
+      "last_tracked": "e077400ce866002ff58942c0561f1e2505a1088a40e1ba4c2fd998e1edd6fc63",
+      "last_resolved": "e077400ce866002ff58942c0561f1e2505a1088a40e1ba4c2fd998e1edd6fc63",
+      "tracked_at": "2026-07-08T03:47:35.515838+00:00",
+      "resolved_at": "2026-07-08T20:16:00Z"
+    },
+    "noorinalabs-deploy/.github/workflows/deploy-data-load.yml": {
+      "last_tracked": "6b4df198ba39a7fbdff6def6a1133f9c574f2adf03be831e085fa561f96a9dd4",
+      "last_resolved": "6b4df198ba39a7fbdff6def6a1133f9c574f2adf03be831e085fa561f96a9dd4",
+      "tracked_at": "2026-07-08T18:44:21.186723+00:00",
+      "resolved_at": "2026-07-08T20:16:00Z"
     }
   },
   "last_cleanup": {
