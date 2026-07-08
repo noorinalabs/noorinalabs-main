@@ -1,9 +1,13 @@
 ---
 name: project_fawaz_lk_namespace_orphan_chains
-description: ~196k six-books isnad chains keyed fawaz:<book>:<n> are orphaned from lk:<book>:<n> hadith nodes (cross-source id-namespace mismatch); surfaced by the da#325 migrate gate on stg 2026-07-07.
+description: RESOLVED 2026-07-07 — chain-id migrate + fawaz-orphan prune SHIPPED to stg AND prod (exact parity). ~196k fawaz six-books duplicate edges deleted; 2,485,909 resolving chains; empty-chain bug fixed.
 metadata:
   type: project
 ---
+
+**RESOLVED & SHIPPED 2026-07-07 (stg + prod, exact parity).** The chain-id fix + fawaz cleanup shipped together per owner directive. Vehicle = `graph-ops.yml` (deploy), all IaC (no box one-offs except read-only diagnosis). Landed PRs: da#334 (composition gate on chain edges — stops NEW orphans; mis carve-out structural), deploy#539 (migrate gate→invariant + `prune-orphans` op), deploy#541 (cypher-shell `:auto` fix — see [[reference_graph_ops_cypher_shell]]), deploy#543 (migrate verify samples a RESOLVING hadith_id, not an arbitrary edge). Final state BOTH envs: raw-form ids **0**, dangling **0**, resolving **2,485,909**, total TRANSMITTED_TO **2,485,909** (was 2,682,069; −196,160 fawaz six-books duplicates). **465,547 hadiths now have ≥2-edge real isnad chains** (was ~0 resolving pre-migrate — that WAS the "empty chain on search result" bug: all edges were raw-form/non-`hdt:` so the endpoint's `hdt:`-keyed join found nothing). lk:bukhari:10:603 → 5 chain edges; sample chains up to depth 349. API route `/api/v1/graph/hadith/{id}/chain` live (401 auth-gated; verified at data layer = the endpoint's exact query). Run order per env: **migrate FIRST (raw→0), then prune** (run-order guard refuses prune while raw>0 — critical: pre-migrate ALL edges are raw-form/dangling so a premature prune would wipe the graph). Next follow-on: da#326 enrich/centrality (choke-points) on the now-corrected graph.
+
+--- original diagnosis (retained) ---
 
 Surfaced while running the da#325 chain-id migration on **stg** (2026-07-07). The migration itself SUCCEEDED — 0 raw double-prefix ids remain, **487,466** distinct hadith ids' chains now resolve to nodes (was ~0; the "empty chains on search result" bug is FIXED for sanadset/lk/thaqalayn/etc.). But the post-op "0 dangling" gate failed on a **pre-existing, orthogonal** gap.
 
