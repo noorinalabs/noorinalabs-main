@@ -19,6 +19,8 @@ Four independent instances in a single session (2026-07-09), each of which nearl
 
 Adjacent, same day: `chain_integrity.cypher` reports `100 cycles` for a population of 23,139 because of an undocumented `LIMIT 100`. A gate that silently prints a constant is worse than no gate — it reads as reassurance. And `pq.read_table(..., columns=["id"])` **did** fail loudly (`ArrowInvalid: No match for FieldRef.Name(id)`, real column `canonical_id`) — the counter-example showing what a well-designed probe does with a bad name.
 
+**The inverse — a probe that cannot return LOW. Always run the control group.** Same day: a detector for "does this hadith's matn contain an isnad?" keyed on the Arabic tokens `عن`/`قال` reported **97.2%** of a target set positive, implying ~160k recoverable chains. But those tokens saturate ordinary Arabic prose: measured against the **control** — rows that demonstrably have their chain elsewhere, so their matn is chain-*free* by construction — the base rate is **85.6%**. Lift ≈ 1.0. The probe measured nothing; its answer was fixed before it saw the data. Re-keying on strict isnad openers (`حدثنا`/`أخبرنا`/`سمعت`) gave 7.9% control vs 79.2% test — a 10× lift, and the real number, **126,398**. A high number is exactly as suspect as a zero. **Never accept a rate without the rate on the negative class.**
+
 **Why:** every one of these returns the value you would also get from the healthy state. The signal and the null result are the same string. Unlike a crash, nothing prompts you to look. These cost more than loud failures precisely because they arrive wearing the costume of a result.
 
 **How to apply:**
