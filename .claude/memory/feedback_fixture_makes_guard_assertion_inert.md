@@ -42,6 +42,10 @@ Tested under a stem-removal mutant (`محمد` deleted from `_ACCUSATIVE_STEMS`)
 
 Corollary for reviewers: a mutation test must delete a **member** of the lexicon, not just the branch that consumes it. Deleting the branch reds any one case; deleting a member reds only a case that names that member. The two mutants prove different things and only the second measures coverage of the data.
 
+Confirmed independently the same night: a second reviewer dropped `سعد` — one of the 19 stems the six literals do *not* name — and **all 36 tests still passed** while `canonical_surface("سعدا")` silently stopped folding. **The guard pins the rule, not the lexicon.** Six literals prove the branch exists and reaches identity; they say nothing about the other nineteen entries.
+
+The cheap complement, which the loop cannot give you: **pin the collection's cardinality separately.** `assert len(_ACCUSATIVE_STEMS) == 25` reds on any removal, costs one line, and does not pretend to check behaviour. Literals assert *behaviour* for the members that matter; a cardinality assertion asserts *membership* for the rest. Together they cover what the tautological loop only appeared to.
+
 **Why:** a fixture differs from production along many dimensions (filename, header, encoding, ordering, cardinality). If it differs along **the one dimension the assertion tests**, the assertion is unreachable. Nothing warns you: the test passes, the coverage counter increments, the reviewer sees a guard and moves on. Realism is not a stylistic preference for fixtures — for a negative-guard assertion, it is the difference between a test and a decoration.
 
 Note the parser's *own* guard (`_process_chunk` raising on a missing `Book` column) only trips for fixtures that are actually **used**. It cannot see the unreferenced one. Runtime guards do not substitute for a lint gate.
