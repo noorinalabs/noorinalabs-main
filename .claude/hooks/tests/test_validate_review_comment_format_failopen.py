@@ -28,9 +28,24 @@ bodies long enough to contain a prose `---`.
       Aino Virtanen's main#930 Changes-Requested verdict, never patched.
       `Verdict:` plus four prose `---` rules.
   fixtures/real_verdict_outside_trailer_main930.txt
-      The same body with the label renamed in place to `RequestOrReplied:` —
-      i.e. exactly what a well-intentioned label-only fix would have produced.
-      It still parses as None. This fixture is why a rename was not the fix.
+      DERIVED, not observed. The main930 body with the label renamed in place
+      to `RequestOrReplied:` — exactly what a well-intentioned label-only fix
+      would have produced. Nobody posted this shape; it is the counterfactual
+      that proves a rename alone does not rescue such a comment. It still
+      parses as None, and `FixtureRealismTests` asserts precisely that.
+
+Command realism (#934 review, Wanjiku Mwangi)
+=============================================
+
+Fixture realism is not enough. The first cut of this suite passed every REST
+command as a bare unquoted literal (`/tmp/body.json`) while production posts
+carry quotes and `$CLAUDE_JOB_DIR` — so four fail-open paths sat green,
+including the charter-prescribed `--body-file` form (`agents.md:429`, 144
+call sites). That is `feedback_passing_repro_masks_bug`: a green repro that
+used a different invocation form than production.
+
+The commands below are transcribed from the 2026-07-09 transcripts verbatim,
+quotes and variables intact. `_TRANSCRIPT_*` names mark them.
 
 Run: python3 -m unittest discover -s .claude/hooks/tests \
          -p "test_validate_review_comment_format_failopen.py"
@@ -39,6 +54,7 @@ Run: python3 -m unittest discover -s .claude/hooks/tests \
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -239,6 +255,121 @@ class RestCommentCommandTests(unittest.TestCase):
         except Exception as exc:  # noqa: BLE001
             self.fail(f"hook raised on unreadable body: {exc!r}")
         self.assertIn(_decision(result), {"allow", "block"})
+
+
+class BodyFileTests(unittest.TestCase):
+    """The charter-prescribed form (`agents.md:429`) must be read, not skipped."""
+
+    def setUp(self) -> None:
+        self._td = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._td.name)
+        self.addCleanup(self._td.cleanup)
+        self.body_path = self.tmp / "aino_930_comment.md"
+        self.body_path.write_text(_fixture("real_verdict_nearmiss_deploy567.txt"))
+
+    def test_body_file_is_extracted(self) -> None:
+        cmd = f"gh pr comment 567 --body-file {self.body_path}"
+        self.assertIsNotNone(hook.extract_comment_body(cmd))
+
+    def test_body_file_near_miss_is_blocked(self) -> None:
+        cmd = (
+            f"gh pr comment 567 --repo noorinalabs/noorinalabs-deploy --body-file {self.body_path}"
+        )
+        self.assertEqual(_decision(hook.check(_bash_input(cmd))), "block")
+
+    def test_body_file_quoted_path_is_blocked(self) -> None:
+        cmd = f'gh pr comment 567 --body-file "{self.body_path}"'
+        self.assertEqual(_decision(hook.check(_bash_input(cmd))), "block")
+
+    def test_body_file_envvar_path_is_blocked(self) -> None:
+        """Transcript form: the hook process inherits the environment."""
+        with mock.patch.dict(os.environ, {"CLAUDE_JOB_DIR": str(self.tmp)}):
+            cmd = 'gh pr comment 567 --body-file "$CLAUDE_JOB_DIR/aino_930_comment.md"'
+            self.assertEqual(_decision(hook.check(_bash_input(cmd))), "block")
+
+    def test_body_file_tilde_path_is_blocked(self) -> None:
+        with mock.patch.dict(os.environ, {"HOME": str(self.tmp)}):
+            cmd = "gh pr comment 567 --body-file ~/aino_930_comment.md"
+            self.assertEqual(_decision(hook.check(_bash_input(cmd))), "block")
+
+
+class TranscriptCommandTests(unittest.TestCase):
+    """Verbatim invocations from the 2026-07-09 transcripts. Copied, not retyped."""
+
+    # Wanjiku Mwangi's main#930 verdicts — both posted exactly this way, and
+    # both parsed as zero reviews.
+    _TRANSCRIPT_WANJIKU = (
+        "gh api -X POST repos/noorinalabs/noorinalabs-main/issues/930/comments "
+        '-F body=@"$CLAUDE_JOB_DIR/tmp/wanjiku_930_comment.md"'
+    )
+    # Lucas Ferreira's deploy#567 verdict.
+    _TRANSCRIPT_LUCAS = (
+        "gh api -X POST repos/noorinalabs/noorinalabs-deploy/issues/567/comments "
+        '--input "$CLAUDE_JOB_DIR/tmp/lucas_567.json"'
+    )
+
+    def setUp(self) -> None:
+        self._td = tempfile.TemporaryDirectory()
+        self.job = Path(self._td.name)
+        self.addCleanup(self._td.cleanup)
+        (self.job / "tmp").mkdir()
+        body = _fixture("real_verdict_nearmiss_deploy567.txt")
+        (self.job / "tmp" / "wanjiku_930_comment.md").write_text(body)
+        (self.job / "tmp" / "lucas_567.json").write_text(json.dumps({"body": body}))
+
+    def test_wanjiku_transcript_command_is_blocked(self) -> None:
+        """The command that produced the incident must not survive the fix."""
+        with mock.patch.dict(os.environ, {"CLAUDE_JOB_DIR": str(self.job)}):
+            result = hook.check(_bash_input(self._TRANSCRIPT_WANJIKU))
+        self.assertEqual(_decision(result), "block")
+
+    def test_lucas_transcript_command_is_blocked(self) -> None:
+        with mock.patch.dict(os.environ, {"CLAUDE_JOB_DIR": str(self.job)}):
+            result = hook.check(_bash_input(self._TRANSCRIPT_LUCAS))
+        self.assertEqual(_decision(result), "block")
+
+    def test_quoted_at_path_is_blocked(self) -> None:
+        """`-F body=@"/abs/path"` — quotes were not stripped on this branch."""
+        path = self.job / "tmp" / "wanjiku_930_comment.md"
+        cmd = f'gh api -X POST repos/o/r/issues/930/comments -F body=@"{path}"'
+        self.assertEqual(_decision(hook.check(_bash_input(cmd))), "block")
+
+
+class UnreadableBodyBlocksTests(unittest.TestCase):
+    """Once the observable forms are read, the residual must BLOCK, not advise.
+
+    `feedback_safety_direction_over_ux_friction`: a recognized comment-create
+    command whose body cannot be read is exactly the state with no clean
+    auto-fix. `feedback_generic_prompt_hook_advisory_decay`: the stderr line
+    this replaces said nothing across five PRs and nine verdicts.
+    """
+
+    def test_stdin_input_is_blocked(self) -> None:
+        cmd = "gh api -X POST repos/o/r/issues/567/comments --input -"
+        self.assertEqual(_decision(hook.check(_bash_input(cmd))), "block")
+
+    def test_shell_variable_path_is_blocked(self) -> None:
+        """`--input "$J"` — a shell var, not an env var; unresolvable by design."""
+        cmd = 'gh api -X POST repos/o/r/issues/930/comments --input "$J"'
+        self.assertEqual(_decision(hook.check(_bash_input(cmd))), "block")
+
+    def test_missing_file_is_blocked(self) -> None:
+        cmd = "gh pr comment 930 --body-file /nonexistent/nowhere.md"
+        self.assertEqual(_decision(hook.check(_bash_input(cmd))), "block")
+
+    def test_diagnostic_names_the_remedy(self) -> None:
+        cmd = "gh api -X POST repos/o/r/issues/567/comments --input -"
+        result = hook.check(_bash_input(cmd))
+        assert result is not None
+        self.assertIn("--body-file", result["reason"])
+
+    def test_non_comment_command_still_allowed(self) -> None:
+        """The block must not leak onto commands that post no comment."""
+        self.assertEqual(_decision(hook.check(_bash_input("gh pr view 42"))), "allow")
+        self.assertEqual(
+            _decision(hook.check(_bash_input("gh api repos/o/r/issues/42/comments --jq ."))),
+            "allow",
+        )
 
 
 if __name__ == "__main__":

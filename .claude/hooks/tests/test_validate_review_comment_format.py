@@ -21,6 +21,7 @@ Run: python3 -m unittest discover -s .claude/hooks/tests \
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -149,17 +150,26 @@ class ExtractCommentBodyTests(unittest.TestCase):
         assert body is not None
         self.assertIn("Requestor: A", body)
 
-    def test_body_file_returns_none(self):
-        """#302 input shape: `--body-file /tmp/...` — hook does NOT read the file.
+    def test_body_file_is_read(self):
+        """`--body-file` IS read as of #934, reversing the #302/#377 pin.
 
-        Pin behavior: when `--body-file` is used, `extract_comment_body`
-        returns None, the hook returns None at the early-return guard, and
-        the comment passes without Requestor/Requestee validation. Charter
-        decision: file-based bodies are operator-trusted (used for HEREDOC
-        avoidance per memory `feedback_heredoc_in_git_commit`); the hook
-        does NOT shadow-validate them. Documented out-of-scope-for-v1.
+        The superseded test asserted `extract_comment_body` returns None here
+        and called file-based bodies "operator-trusted." It passed only because
+        `/tmp/comment-body.md` did not exist on the runner — a green assertion
+        resting on a missing file, which proved nothing about the code path it
+        named. Meanwhile `--body-file` is the charter-prescribed form
+        (`agents.md:429`, 144 call sites), so the pin exempted the primary path.
         """
-        cmd = "gh pr comment 42 --body-file /tmp/comment-body.md"
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "comment-body.md"
+            path.write_text("Requestor: A\nRequestee: B\nRequestOrReplied: Approved\n")
+            body = hook.extract_comment_body(f"gh pr comment 42 --body-file {path}")
+            assert body is not None
+            self.assertIn("RequestOrReplied: Approved", body)
+
+    def test_body_file_missing_path_returns_none(self):
+        """Unreadable path yields None here; `check()` turns that into a block."""
+        cmd = "gh pr comment 42 --body-file /tmp/definitely-not-here-934.md"
         self.assertIsNone(hook.extract_comment_body(cmd))
 
     def test_no_body_flag_returns_none(self):
@@ -289,16 +299,33 @@ class CheckIntegrationTests(unittest.TestCase):
         result = hook.check(_bash_input(cmd))
         self.assertIsNone(result)
 
-    def test_body_file_allows_through(self):
-        """#302 input shape: `--body-file` → no body inspection → allow.
+    def test_body_file_readable_non_review_body_allows(self):
+        """`--body-file` is now READ (#934), superseding the #302/#377 stance.
 
-        The hook cannot validate Requestor/Requestee in a file-based body
-        without reading the file. Charter call: trust the operator on
-        --body-file (used to escape inline-heredoc parsing edge cases).
+        The old test asserted `--body-file` → allow, on the rationale that the
+        hook "cannot validate ... without reading the file" and should "trust
+        the operator." Both halves fell: the hook can read the file (sibling
+        hooks already do — charter `hooks.md:200`), and trusting the operator
+        is what let nine uncountable verdicts through on 2026-07-09.
+
+        Note the old test passed only because `/tmp/comment.md` does not exist,
+        so it was in fact asserting "unreadable body → allow" — the fail-open
+        itself. That exemption was never in the charter; it lived in a docstring.
+
+        A readable body that is not a charter review comment still allows.
         """
-        cmd = "gh pr comment 42 --body-file /tmp/comment.md"
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "comment.md"
+            path.write_text("just a comment, no charter fields\n")
+            cmd = f"gh pr comment 42 --body-file {path}"
+            self.assertIsNone(hook.check(_bash_input(cmd)))
+
+    def test_body_file_unreadable_path_blocks(self):
+        """An unreadable body cannot be validated, so it must not be trusted."""
+        cmd = "gh pr comment 42 --body-file /tmp/definitely-not-here-934.md"
         result = hook.check(_bash_input(cmd))
-        self.assertIsNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
 
     def test_no_pr_number_returns_warning(self):
         """No bare number AND no /pull/N URL → allow with warning systemMessage.

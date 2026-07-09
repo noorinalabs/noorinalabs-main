@@ -62,14 +62,30 @@ fails, and reviewers fall back to
 `gh api -X POST .../issues/<N>/comments --input body.json`, which the
 old `is_comment_command` never matched (same family as
 `feedback_batch_loop_merge_evades`). Matching the command is necessary
-but not sufficient: the body must also be recoverable from `--input`,
-`-f body=`, or `-F body=@file`, or the hook fails open a second time
-having "seen" the command.
+but not sufficient: the body must also be recoverable, or the hook fails
+open a second time having "seen" the command.
 
-Residual, deliberately not blocked: `--input -` reads the body from
-stdin, which a PreToolUse hook cannot observe. Such a call is allowed
-with a stderr breadcrumb rather than blocked, because the hook cannot
-distinguish a review comment from any other REST POST without a body.
+Body extraction (hardened #934)
+===============================
+
+`extract_comment_body` reads `--body-file` (the charter-prescribed form,
+`agents.md:429`), heredocs, and quoted `--body`. `extract_rest_comment_body`
+reads `--input <path>`, `-f body=`, and `-F body=@<path>`.
+
+Every path goes through `_resolve_body_path`, which strips surrounding
+quotes and expands `~` and `$VAR`. The first cut of #932 stripped quotes on
+one branch and not the other, expanded nothing, and never read `--body-file`
+at all — so the exact commands used to post the incident's verdicts
+(`-F body=@"$CLAUDE_JOB_DIR/tmp/x.md"`) still sailed through the gate built
+to catch them. The tests missed it by passing bare unquoted literals: fixture
+realism without *command* realism (`feedback_passing_repro_masks_bug`).
+
+If the body still cannot be read — stdin (`--input -`), a shell variable
+that never entered the environment, or a missing file — the hook now BLOCKS
+rather than warning. That branch was an advisory, and advisories decay
+(`feedback_generic_prompt_hook_advisory_decay`); this one said nothing across
+five PRs and nine uncountable verdicts. The diagnostic names the remedy:
+write the body to a file and pass a literal `--body-file` path.
 
 Semantic realignment (closes #386)
 ==================================
@@ -172,6 +188,23 @@ def extract_pr_number(command: str) -> str | None:
     return None
 
 
+def _resolve_body_path(path: str) -> str:
+    """Normalize a path as written on the command line.
+
+    Production invocations quote their paths and interpolate the environment:
+    `-F body=@"$CLAUDE_JOB_DIR/tmp/x.md"`. Stripping quotes on one branch and
+    not the other left three fail-open holes (#934 review). One resolver, used
+    everywhere a path is read.
+
+    Environment variables resolve because the hook process inherits the
+    environment of the shell that is about to run the command. A *shell*
+    variable (`--input "$J"`) does not, by construction — it never entered the
+    environment. Such a path stays unresolved, the read fails, and `check()`
+    blocks rather than allowing an unvalidated verdict through.
+    """
+    return os.path.expandvars(os.path.expanduser(path.strip("'\"")))
+
+
 def _read_body_file(path: str) -> str | None:
     """Read a comment body from disk.
 
@@ -179,8 +212,8 @@ def _read_body_file(path: str) -> str | None:
     `-F body=@x.md` carries the raw markdown. Distinguish by leading brace.
     """
     try:
-        raw = Path(path).read_text()
-    except (OSError, UnicodeDecodeError):
+        raw = Path(_resolve_body_path(path)).read_text()
+    except (OSError, UnicodeDecodeError, ValueError):
         return None
     if raw.lstrip().startswith("{"):
         try:
@@ -203,8 +236,8 @@ def extract_rest_comment_body(command: str) -> str | None:
     input_match = re.search(r"--input\s+(\S+)", command)
     if input_match:
         path = input_match.group(1)
-        if path != "-":
-            return _read_body_file(path.strip("'\""))
+        if path.strip("'\"") != "-":
+            return _read_body_file(path)
 
     field_match = re.search(
         r"(?:--raw-field|--field|-f|-F)\s+body=(?:'((?:[^'\\]|\\.)*)'"
@@ -227,6 +260,14 @@ def extract_comment_body(command: str) -> str | None:
     Handles heredoc format: --body "$(cat <<'EOF' ... EOF)"
     and simple quoted strings: --body '...' or --body "..."
     """
+    # `--body-file <path>` is the charter-prescribed form (`agents.md:429`) and
+    # by far the most common: 144 call sites under `.claude/`. It was unread
+    # until #934, so every charter-conforming verdict fell through to the
+    # unreadable-body branch and was allowed unvalidated.
+    body_file_match = re.search(r"--body-file[=\s]+(\S+)", command)
+    if body_file_match:
+        return _read_body_file(body_file_match.group(1))
+
     # Heredoc: capture everything between <<'EOF' (or <<EOF) and the closing EOF
     heredoc_match = re.search(
         r"<<'?EOF'?\s*\n(.*?)\nEOF",
@@ -356,17 +397,34 @@ def check(input_data: dict) -> dict | None:
 
     body = extract_comment_body(command) or extract_rest_comment_body(command)
     if not body:
-        # `--input -` puts the body on stdin, out of a PreToolUse hook's reach.
-        # Leave a breadcrumb: this is the one remaining path by which a verdict
-        # can reach GitHub unvalidated (#932).
-        if is_comment_command(command):
-            print(
-                "validate_review_comment_format: comment command recognized but body "
-                "not recoverable (stdin or unreadable file). Charter format NOT "
-                "validated. Prefer `--input <file>` over `--input -`.",
-                file=sys.stderr,
-            )
-        return None
+        # #934: this branch used to warn and allow. It was built for `--input -`
+        # (body on stdin, genuinely unobservable) but in practice it swallowed
+        # `--body-file`, quoted `@paths`, and every `$VAR` — all observable, and
+        # simply unimplemented. The escape hatch for the one unreadable case had
+        # become the exit door for the three most common readable ones.
+        #
+        # Now that those are read, a recognized comment-create command whose body
+        # cannot be recovered is exactly the state with no clean auto-fix, so it
+        # blocks (`feedback_safety_direction_over_ux_friction`). A stderr line
+        # here would decay like any advisory: the one this replaces said nothing
+        # across five PRs and nine uncountable verdicts.
+        result = {
+            "decision": "block",
+            "reason": (
+                "BLOCKED: this command posts a PR comment, but its body cannot be "
+                "read, so the charter review format cannot be validated. An "
+                "unvalidatable verdict may count as zero reviews without anyone "
+                "noticing.\n\n"
+                "Causes: the body arrives on stdin (`--input -`); the path is a "
+                "SHELL variable the hook cannot expand (only exported environment "
+                "variables resolve); or the file does not exist.\n\n"
+                "Fix: write the body to a file and pass a literal path:\n"
+                "    gh pr comment <PR#> --repo <owner/repo> --body-file <path>\n\n"
+                f"Charter: {CHARTER_REF}"
+            ),
+        }
+        log_pretooluse_block("validate_review_comment_format", command, result["reason"])
+        return result
 
     # Scan a code-stripped copy so a comment that *documents* the charter
     # template inside a fenced block is not mistaken for a malformed verdict.
