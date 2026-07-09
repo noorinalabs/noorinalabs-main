@@ -101,6 +101,7 @@
 - [Commit-author gate exclude merges](feedback_commit_author_gate_exclude_merges.md) — author/identity gate over a PR range MUST use git log --no-merges (merge commits = bare principal).
 - [Cross-persona task-claim hazard](feedback_cross_persona_task_claim_hazard.md) — TaskUpdate has no ownership-guard; a mistyped taskId silently completes another persona's work.
 - [Cross-spawn cwd collision](feedback_cwd_collision_cross_spawn.md) — two agents sharing one cwd on different branches: 2nd checkout moves the 1st → commits on wrong branch.
+- [Backup/restore/logrotate gap](project_backup_restore_logrotate_gap.md) — backups NEVER ran (timer uninstalled stg+prod); user-postgres/audit_log uncovered; restore never rehearsed; docker logs unbounded. deploy#558/#559/#560/#561.
 - [Audit-log relocation → Postgres](project_audit_log_relocation.md) — moved out of Neo4j into user-service Postgres audit_log; stg+prod done 2026-06-30; 22 nodes migrated (id+created_at preserved) then graph-deleted; promote.yml VPS-trigger step BROKEN, work around via deploy-prod.yml.
 - [MVP prod-autonomy delegation](feedback_mvp_prod_autonomy_delegation.md) — Owner 2026-07-01: orchestrator MAY run OWNER-RUN prod reload + self-approve prod gates, backup waived, WHILE MVP; revert to owner-run+backup once data is satisfactory. stg-gate still binding.
 - [stg is a validated gate before prod](feedback_stg_gate_before_prod.md) — Owner 2026-07-01: prod changes ONLY as promotion of a verified-good stg change; check stg/prod parity after every prod change; stg may lead prod.
