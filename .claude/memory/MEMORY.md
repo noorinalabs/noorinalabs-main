@@ -100,6 +100,7 @@
 - [GIT_DIR leak corrupted live repo config](feedback_git_dir_leak_repo_config.md) — pre-#720 leak wrote core.bare=true + [user] t@t into parent .git/config; fix=Edit it. #720.
 - [Commit-author gate exclude merges](feedback_commit_author_gate_exclude_merges.md) — author/identity gate over a PR range MUST use git log --no-merges (merge commits = bare principal).
 - [Cross-persona task-claim hazard](feedback_cross_persona_task_claim_hazard.md) — TaskUpdate has no ownership-guard; a mistyped taskId silently completes another persona's work.
+- [Subagent worktree lands in wrong repo](feedback_subagent_worktree_wrong_repo.md) — Agent `isolation: worktree` worktrees the PARENT org repo; child-repo implementers can't Edit/Write their sources, EnterWorktree refuses the cross-repo switch. PR#357.
 - [Cross-spawn cwd collision](feedback_cwd_collision_cross_spawn.md) — two agents sharing one cwd on different branches: 2nd checkout moves the 1st → commits on wrong branch.
 - [Backup/restore/logrotate gap](project_backup_restore_logrotate_gap.md) — backups NEVER ran (timer uninstalled stg+prod); user-postgres/audit_log uncovered; restore never rehearsed; docker logs unbounded. deploy#558/#559/#560/#561.
 - [Audit-log relocation → Postgres](project_audit_log_relocation.md) — moved out of Neo4j into user-service Postgres audit_log; stg+prod done 2026-06-30; 22 nodes migrated (id+created_at preserved) then graph-deleted; promote.yml VPS-trigger step BROKEN, work around via deploy-prod.yml.
