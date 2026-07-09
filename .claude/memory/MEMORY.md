@@ -90,6 +90,7 @@
 - [Scope audit flips implementer via child-repo rule](feedback_scope_audit_child_repo_rule.md) — parent-repo tracking issue for child work goes in CHILD repo; stop, don't retarget.
 - [sync-gate build-kind false-match](feedback_sync_gate_build_kind_false_match.md) — pre_commit_ci_sync.py build pattern false-matches "Docker Buildx"/"docker build" step names.
 - [Trivy base-image CVE org-wide gate](feedback_trivy_base_image_cve_org_wide_gate.md) — ghcr Trivy fails on NEW debian base-image OS CVE, not your code; org-wide, not PR-caused.
+- [A silent zero is not a measurement](feedback_silent_zero_is_not_a_measurement.md) — 0/NULL/empty from a probe that can silently receive nothing ≡ success; verify the instrument before the reading. 4 instances 2026-07-09.
 - [Passing repro masks bug (wrong invocation)](feedback_passing_repro_masks_bug.md) — green local repro proves nothing if it used a different invocation form than prod.
 - [Parallel panels sharing a file must serialize-merge](feedback_parallel_panels_shared_file.md) — parallel PRs appending to a shared file git-conflict despite distinct ownership. #986.
 - [validate_labels hook gotchas](feedback_validate_labels_hook_gotchas.md) — body over-match + stale label cache false-block gh issue create; verify+retry, keep tokens out of bodies.
