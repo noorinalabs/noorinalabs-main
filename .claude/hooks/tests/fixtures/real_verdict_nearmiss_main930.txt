@@ -1,0 +1,64 @@
+Requestor: Aino Virtanen
+Requestee: Nadia Khoury
+Verdict: Changes Requested
+TechDebt: Memory corpus sits at the 120/120 index-entry cap and no CI gate detects a semantically falsified figure — both surfaced by this PR, neither caused by it; file a follow-up for an eviction policy and a withdrawn-figure lint.
+
+Reviewed at head sha `080343d8dbb617bfb70011dbe5409efb0897b89b`, read via the contents API. All 20 CI checks green, including the memory budget gate.
+
+One blocking finding, and it is the precise one this PR exists to prevent.
+
+---
+
+## Blocking — a withdrawn number is asserted as live, in the same commit that withdraws it
+
+`.claude/memory/feedback_sweep_expensive_stage_before_launch.md` line 25 (an added line):
+
+> A fix that *extracts* structure from free text can — and its failure mode is the very pollution the re-run exists to remove (da#366's **126,398** matn-embedded chains).
+
+main#928 withdraws that figure explicitly: *"`126,398`, `≥106,088`, and `33,160 chainless` are all **withdrawn**"*, replaced by `≈122,013` and labelled a lower bound.
+
+And the sibling file amended in this very commit, `feedback_silent_zero_is_not_a_measurement.md` line 30, uses `126,398` as its canonical example of a number that was **"wrong twice over."**
+
+So the PR teaches, in one file, that `126,398` is the product of a detector with `0 / 485,285` recall — and then cites it in the other file as a fact about da#366. The two files are wikilinked siblings; an agent will encounter both. Worse, the sweep memory is the *gate* memory — the one an orchestrator opens when deciding what blocks a 7.5-hour launch. It is the likelier read of the two, and it is the one carrying the dead number.
+
+A memory that carries a falsified figure is worse than no memory, because it will be quoted with confidence and it will be quoted from the file that governs a launch decision.
+
+The sentence does not need the figure. Its argument — extraction-based completeness can regress correctness, zero-inference completeness cannot — stands on the contrast with da#368's 6,143 already-segmented chains. Either drop the number or write `≈122,013 (a lower bound)`. Do **not** write `126,398`.
+
+For the record, the full sweep found `126,398` once as live (above) and once correctly marked withdrawn. `≥106,088` and `33,160` appear nowhere. No other memory file in the corpus carries a da#366 figure. Fixing line 25 closes the finding completely.
+
+---
+
+## Non-blocking findings
+
+**1. The always-loaded index still teaches the falsified rule.** `MEMORY.md` line 94 is untouched by this PR and its hook reads *"0/NULL/empty from a probe that can silently receive nothing ≡ success."* That is **v1** — the version the amended file now explicitly labels as falsified. `MEMORY.md` is loaded into every session; the file body is read on demand. The corrected rule is therefore visible only to an agent who already decided to open the file, while every agent sees the superseded one. The new frontmatter description is the right hook; lift it into the index line. This is the index rot you asked me to check for, and it is real.
+
+**2. Four different instance counts across three artifacts.** The index says `6 instances`. The new frontmatter says `Nine instances in one day`. The file body's own enumeration opens with *"Four independent instances in a single session."* main#928 calls the silent-fallback family *"ten instances."* The PR body says *"the eighth member."* The index also cites `gh project item-list --limit N` as an instance; that example appears nowhere in the file at head. These are overlapping-but-distinct sets and none of them says which set it is counting. A tally in a description is a liability — it rots on every amendment and it is never load-bearing for recall. Drop the count, keep the rule.
+
+**3. The worked example's arithmetic does not reproduce.** Line 30 presents `159,558 × 0.792 = 126,398`. That product is `126,369.9`; the rate implied by `126,398` is `0.79218`. This memory's own guidance is *"correct for false positives before multiplying a rate by a population"* — a reader who does exactly what the file trains them to do and checks the multiplication finds it does not close. Write `× 0.7922` or `≈126,400`.
+
+**4. The lower bound is asserted without its reason, so a fresh reader cannot defend it.** Line 32 says `≈122,013` is *"still a lower bound, and now labelled as one"* and stops. main#928 supplies the reason: D's sensitivity on sanadset's own bare-name convention is only `39.9%`, so short chains are invisible to it and the quantity is not boundable from above with any instrument available. Line 32 also collapses `D = 123,202 (77.2%)` and the FPR-corrected `≈122,013` into a single number — eliding precisely the false-positive correction step that the bullet four lines below commands. Showing `123,202 → 122,013` would make the file demonstrate its own rule instead of merely stating it. One clause fixes both. Your brief's test was whether a reader who never saw this session could apply the rule; on the bound specifically, they cannot.
+
+**5. Two different probes are quoted as if they were one measurement.** The file gives `7.9%` control vs `79.2%` test; main#928 gives `0.1%` negative vs `66.5%` positive-suspect for the head-opener detector, and notes the two opener-only probes disagreed at `79.2%` vs `66.5%` because neither could see the second convention. Both readings are in #928, so nothing here is wrong — but the memory never signals that `79.2%` and `66.5%` come from different probes over different populations, which is the entire reason they disagreed. That disagreement is the most transferable lesson in the episode and it is currently invisible.
+
+**6. Undisclosed third file.** The PR body states *"Two existing memory files amended."* Three were: `project_hadith_id_double_prefix.md` gains four lines and its `MEMORY.md` index line is rewritten. The correction itself is good and properly evidenced — `650,986 / 650,986` sanadset rows against zero elsewhere, `lk:lk:1` shown not to exist, citing `src/parse/sanadset.py:551` — and it is consistent with #928's da#355 row. But it **reverses** a memory that the always-loaded index currently asserts as fact, and it lands unannounced in a PR whose body is the reviewer's map. A memory reversal is the last change that should arrive silently. Amend the body.
+
+**7. The PR body now contradicts its own head.** Body section 2 reads *"Re-keying on strict isnad openers gave a tenfold lift and the real number: 126,398."* The file at head says that number was wrong twice over. Body section 1 cites `126,398` for da#366 as well, and the *"eighth member"* count is superseded by #928's ten. The body is a durable artifact on a wave-branch merge; it should not be the last place the dead number survives.
+
+---
+
+## What I checked and found sound
+
+The central claim holds and generalizes. A detector separating cleanly on the negative class (`7.9%` vs `79.2%`, a 10× lift) whose recall on known positives is `0 / 485,285` is unreadable, because the source strips the transmission opener from every row it successfully tags. #928 corroborates the recall figure and the mechanism. The asymmetry the file draws from it — *opener presence is strong evidence; opener absence is none at all* — is exactly right, and the escalation from "can the probe return nonzero" through "run the control group" to "run both classes and require separation" is honestly staged, with each weaker form shown falsified rather than quietly deleted. That last property is what makes this instructive rather than self-congratulatory, and it is the reason the rest of this review is about numbers rather than about substance.
+
+Budget is green and improves. Head is `24,455 / 24,576` bytes with `120/120` entries and `119/120` files. The rewritten index line is 94 bytes shorter than the one it replaces, so headroom goes from 27 bytes to 121. `main` is the PR base, so there is no rebase hazard. Folding both facts into existing files rather than minting new entries was the correct call at the entry cap.
+
+All eight wikilink targets resolve to real files. No forward references, no dangling slugs. Index parity is exactly one line per touched file.
+
+---
+
+## Why this is Changes Requested and not a nit
+
+Every automated gate passed — cspell, markdown lint, lychee, the budget gate, all twenty. None of them can detect that a number in a memory file was retracted by the issue the memory encodes. The only gate that catches this is a reader who checks the figure against #928, which is what you asked for and what the finding is.
+
+Fix line 25. Items 1 through 3 are cheap and I would like them in the same push. Items 4 through 7 are yours to weigh; I will not hold the merge on any of them.

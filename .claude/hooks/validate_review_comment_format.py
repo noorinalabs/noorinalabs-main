@@ -25,6 +25,52 @@ lets the comment through. Validating the verdict word itself is
 covered by a sibling hook (`validate_pr_review`); duplicating that
 logic here would couple two hooks that should remain independent.
 
+Uncountable-verdict gates (closes #932)
+=======================================
+
+A verdict comment that `validate_pr_review` cannot parse counts as ZERO
+reviews and is indistinguishable from no review at all. The reviewer gets
+no signal, and the shortfall surfaces hours later at merge time. Two
+shapes did exactly that on 2026-07-09, across nine `Approved` comments:
+
+1. **Wrong field name.** `Requestor` + `Requestee` present with
+   `RequestOrReplied` absent (the author wrote `Verdict:`) previously
+   returned None — allow. It now HARD BLOCKS. Per
+   `feedback_safety_direction_over_ux_friction` this cannot be an
+   advisory: the hook has no clean auto-fix, and a warning would decay
+   exactly like `feedback_generic_prompt_hook_advisory_decay`.
+
+2. **Fields outside the trailer block.** `validate_pr_review`
+   scopes field extraction to everything after the LAST sole `---`
+   line (#511), so charter fields sitting above a later prose
+   horizontal rule parse as None even though the literal
+   `RequestOrReplied:` is on the page. Renaming the label alone does
+   not fix such a comment. This now HARD BLOCKS too.
+
+The predicate for gate 2 is `validate_pr_review._extract_charter_field`
+itself rather than a reimplementation, so the two hooks cannot drift
+about what "parseable" means. This is a deliberate exception to the
+independence note above: coupling on the *verdict vocabulary* would be
+duplication, but coupling on *what the counting hook can actually see*
+is the single source of truth the gate exists to enforce.
+
+REST comment-creation (closes #932)
+===================================
+
+`gh pr comment` routes through GraphQL. When GraphQL is rate-limited it
+fails, and reviewers fall back to
+`gh api -X POST .../issues/<N>/comments --input body.json`, which the
+old `is_comment_command` never matched (same family as
+`feedback_batch_loop_merge_evades`). Matching the command is necessary
+but not sufficient: the body must also be recoverable from `--input`,
+`-f body=`, or `-F body=@file`, or the hook fails open a second time
+having "seen" the command.
+
+Residual, deliberately not blocked: `--input -` reads the body from
+stdin, which a PreToolUse hook cannot observe. Such a call is allowed
+with a stderr breadcrumb rather than blocked, because the hook cannot
+distinguish a review comment from any other REST POST without a body.
+
 Semantic realignment (closes #386)
 ==================================
 
@@ -44,7 +90,8 @@ Exit codes:
   0 — allow (not a comment command, not a review comment, fields correct,
        or RequestOrReplied is not Approved/ChangesRequested)
   2 — block (Requestor matches branch author on an Approved /
-       ChangesRequested verdict — fields are swapped)
+       ChangesRequested verdict — fields are swapped; OR the comment is a
+       charter review comment the counting hook cannot parse — #932)
 """
 
 import json
@@ -52,31 +99,125 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Coupled deliberately: the trailer-scope gate must ask the counting hook what
+# it can actually see, not reimplement its scoping rules. See module docstring.
+import validate_pr_review as _counting_hook
 from _repo_flag_parse import extract_repo
 from annunaki_log import log_pretooluse_block
 
+CHARTER_FIELD = "RequestOrReplied"
+CHARTER_REF = ".claude/team/charter/pull-requests.md:14"
 
-def is_comment_command(command: str) -> bool:
-    """Check if the command contains a gh pr comment invocation."""
+# Markers that turn a `gh api .../issues/<N>/comments` call into a *creation*.
+# A bare GET (e.g. `--jq '.[].body'`) reads comments and must not be gated.
+_REST_WRITE_MARKERS = (
+    r"-X\s+POST",
+    r"--method\s+POST",
+    r"--input\b",
+    r"--raw-field\b",
+    r"--field\b",
+    r"(?<!\w)-f\b",
+    r"(?<!\w)-F\b",
+)
+
+
+def _split_segments(command: str) -> list[str]:
+    segments = []
     for segment in re.split(r"\s*(?:&&|\|\||\||;)\s*", command):
         stripped = segment.lstrip()
         while re.match(r"[A-Za-z_][A-Za-z0-9_]*=\S*\s+", stripped):
             stripped = re.sub(r"^[A-Za-z_][A-Za-z0-9_]*=\S*\s+", "", stripped)
-        if re.match(r"gh\s+pr\s+comment\b", stripped):
+        segments.append(stripped)
+    return segments
+
+
+def _is_rest_comment_create(segment: str) -> bool:
+    """True for `gh api ... issues/<N>/comments` invocations that POST a body."""
+    if not re.match(r"gh\s+api\b", segment):
+        return False
+    if not re.search(r"issues/\d+/comments\b", segment):
+        return False
+    return any(re.search(marker, segment) for marker in _REST_WRITE_MARKERS)
+
+
+def is_comment_command(command: str) -> bool:
+    """Check if the command posts a PR comment, via `gh pr comment` or REST.
+
+    The REST arm closes the #932 evasion: `gh pr comment` goes through GraphQL,
+    so a rate-limited reviewer falls back to `gh api -X POST` and the format
+    gate never fires.
+    """
+    for segment in _split_segments(command):
+        if re.match(r"gh\s+pr\s+comment\b", segment):
+            return True
+        if _is_rest_comment_create(segment):
             return True
     return False
 
 
 def extract_pr_number(command: str) -> str | None:
-    """Extract PR number from gh pr comment command."""
+    """Extract PR number from a `gh pr comment` or REST comment-create command."""
     match = re.search(r"\bgh\s+pr\s+comment\s+(\d+)", command)
     if match:
         return match.group(1)
     match = re.search(r"/pull/(\d+)", command)
     if match:
         return match.group(1)
+    match = re.search(r"issues/(\d+)/comments\b", command)
+    if match:
+        return match.group(1)
+    return None
+
+
+def _read_body_file(path: str) -> str | None:
+    """Read a comment body from disk.
+
+    `--input x.json` carries a JSON object whose `body` key is the comment.
+    `-F body=@x.md` carries the raw markdown. Distinguish by leading brace.
+    """
+    try:
+        raw = Path(path).read_text()
+    except (OSError, UnicodeDecodeError):
+        return None
+    if raw.lstrip().startswith("{"):
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return raw
+        if isinstance(data, dict):
+            value = data.get("body")
+            return value if isinstance(value, str) else None
+    return raw
+
+
+def extract_rest_comment_body(command: str) -> str | None:
+    """Extract the comment body from a REST `gh api` comment-create command.
+
+    Covers `--input <path>`, `-f/--field body=...`, and `-F/--raw-field
+    body=@<path>`. Returns None for `--input -` (body arrives on stdin, which
+    a PreToolUse hook cannot observe).
+    """
+    input_match = re.search(r"--input\s+(\S+)", command)
+    if input_match:
+        path = input_match.group(1)
+        if path != "-":
+            return _read_body_file(path.strip("'\""))
+
+    field_match = re.search(
+        r"(?:--raw-field|--field|-f|-F)\s+body=(?:'((?:[^'\\]|\\.)*)'"
+        r"|\"((?:[^\"\\]|\\.)*)\"|(\S+))",
+        command,
+        re.DOTALL,
+    )
+    if field_match:
+        value = next(g for g in field_match.groups() if g is not None)
+        if value.startswith("@"):
+            return _read_body_file(value[1:])
+        return value
+
     return None
 
 
@@ -213,13 +354,57 @@ def check(input_data: dict) -> dict | None:
     if not is_comment_command(command):
         return None
 
-    body = extract_comment_body(command)
+    body = extract_comment_body(command) or extract_rest_comment_body(command)
     if not body:
+        # `--input -` puts the body on stdin, out of a PreToolUse hook's reach.
+        # Leave a breadcrumb: this is the one remaining path by which a verdict
+        # can reach GitHub unvalidated (#932).
+        if is_comment_command(command):
+            print(
+                "validate_review_comment_format: comment command recognized but body "
+                "not recoverable (stdin or unreadable file). Charter format NOT "
+                "validated. Prefer `--input <file>` over `--input -`.",
+                file=sys.stderr,
+            )
         return None
 
-    has_requestor = re.search(r"\*{0,2}Requestor:\*{0,2}\s*(.+)", body)
-    has_requestee = re.search(r"\*{0,2}Requestee:\*{0,2}\s*(.+)", body)
-    has_request_or_replied = re.search(r"RequestOrReplied:", body)
+    # Scan a code-stripped copy so a comment that *documents* the charter
+    # template inside a fenced block is not mistaken for a malformed verdict.
+    scan = _counting_hook._strip_code_regions(body)
+
+    has_requestor = re.search(r"\*{0,2}Requestor:\*{0,2}\s*(.+)", scan)
+    has_requestee = re.search(r"\*{0,2}Requestee:\*{0,2}\s*(.+)", scan)
+    has_request_or_replied = re.search(rf"\*{{0,2}}{CHARTER_FIELD}:\*{{0,2}}", scan)
+
+    if has_requestor and has_requestee and not has_request_or_replied:
+        # #932 gate 1: the near-miss shape. This IS a charter review comment —
+        # it names a Requestor and a Requestee — but it carries no field the
+        # counting hook can read, so it would contribute zero reviews while
+        # looking, to its author, like a posted verdict.
+        wrong_field = re.search(r"^\s*\*{0,2}(\w+):\*{0,2}\s*\S", scan, re.MULTILINE)
+        used = ""
+        verdict_label = re.search(r"^\s*\*{0,2}Verdict:\*{0,2}", scan, re.MULTILINE)
+        if verdict_label:
+            used = (
+                "\n\n`Verdict:` is NOT a charter field. No hook reads it. "
+                "A comment using it counts as zero reviews."
+            )
+        elif wrong_field:
+            used = f"\n\nFound `{wrong_field.group(1)}:` where `{CHARTER_FIELD}:` was expected."
+        result = {
+            "decision": "block",
+            "reason": (
+                f"BLOCKED: charter review comment is missing the `{CHARTER_FIELD}:` "
+                f"field. `Requestor:` and `Requestee:` are present, so this is a "
+                f"review comment — but `validate_pr_review` counts verdicts by "
+                f"`{CHARTER_FIELD}:` and would count this one as NOTHING.{used}\n\n"
+                f"Add a line reading exactly:\n"
+                f"    {CHARTER_FIELD}: Request | Reply | Approved | ChangesRequested\n\n"
+                f"Charter: {CHARTER_REF}"
+            ),
+        }
+        log_pretooluse_block("validate_review_comment_format", command, result["reason"])
+        return result
 
     if not (has_requestor and has_requestee and has_request_or_replied):
         # A charter-format review comment carries all three headers. Missing
@@ -227,6 +412,34 @@ def check(input_data: dict) -> dict | None:
         # validates — return None (allow) and let downstream/operator
         # discipline cover non-conforming bodies.
         return None
+
+    # #932 gate 2: all three fields are on the page, but the counting hook
+    # scopes extraction to the text after the LAST sole `---` line. Ask it
+    # directly rather than reimplementing the rule.
+    unreadable = [
+        field
+        for field in ("Requestor", CHARTER_FIELD)
+        if _counting_hook._extract_charter_field(field, body) is None
+    ]
+    if unreadable:
+        result = {
+            "decision": "block",
+            "reason": (
+                f"BLOCKED: charter fields are present but sit OUTSIDE the trailer "
+                f"block, so `validate_pr_review` cannot read them "
+                f"({', '.join(unreadable)} parse as None) and this verdict would "
+                f"count as zero reviews.\n\n"
+                f"Field extraction is scoped to everything AFTER the LAST line that "
+                f"is a sole `---`. Your body has a later `---` (a prose horizontal "
+                f"rule), which moved the scope past your fields.\n\n"
+                f"Fix: put the four charter fields in a trailer block at the very "
+                f"END of the comment, after a final `---` line. Renaming the field "
+                f"alone will NOT fix this.\n\n"
+                f"Charter: {CHARTER_REF}"
+            ),
+        }
+        log_pretooluse_block("validate_review_comment_format", command, result["reason"])
+        return result
 
     if not _direction_is_verdict(body):
         # Scope-narrowing per #378 / path 2: the Requestee == branch-author
