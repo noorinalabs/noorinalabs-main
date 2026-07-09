@@ -141,11 +141,26 @@ _REST_WRITE_MARKERS = (
 
 
 def _split_segments(command: str) -> list[str]:
+    """Split a command into segments that may each begin an invocation.
+
+    NEWLINE is a separator (#934). It was not, and `cd /repo\\ngh pr comment ...`
+    — the single most common shape in the harness transcripts — never reached
+    the matcher, so 43 of 191 real comment-creating invocations were invisible
+    to this hook. That hole was found by replaying the harvested corpus, not by
+    enumerating shapes: see `HarnessInvocationCorpusTests`.
+    """
     segments = []
-    for segment in re.split(r"\s*(?:&&|\|\||\||;)\s*", command):
+    for segment in re.split(r"\s*(?:&&|\|\||\||;|\n)\s*", command):
         stripped = segment.lstrip()
-        while re.match(r"[A-Za-z_][A-Za-z0-9_]*=\S*\s+", stripped):
-            stripped = re.sub(r"^[A-Za-z_][A-Za-z0-9_]*=\S*\s+", "", stripped)
+        # Command substitution EXECUTES: `URL=$(gh api -X POST ...)` posts a
+        # comment. A quoted assignment (`CMD="gh api ..."`) does not — it makes
+        # a string — so only `$(` is unwrapped, never `"`. This must run BEFORE
+        # the env-prefix loop, whose `\S*` would otherwise swallow `URL=$(gh `
+        # whole and leave a segment starting at `api`. The env-prefix pattern
+        # therefore also refuses to match an assignment opening a substitution.
+        stripped = re.sub(r"^(?:[A-Za-z_][A-Za-z0-9_]*=)?\$\(\s*", "", stripped)
+        while re.match(r"[A-Za-z_][A-Za-z0-9_]*=(?!\$\()\S*\s+", stripped):
+            stripped = re.sub(r"^[A-Za-z_][A-Za-z0-9_]*=(?!\$\()\S*\s+", "", stripped)
         segments.append(stripped)
     return segments
 

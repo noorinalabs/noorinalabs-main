@@ -59,6 +59,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
 
 _HERE = Path(__file__).resolve().parent
@@ -370,6 +371,100 @@ class UnreadableBodyBlocksTests(unittest.TestCase):
             _decision(hook.check(_bash_input("gh api repos/o/r/issues/42/comments --jq ."))),
             "allow",
         )
+
+
+class HarnessInvocationCorpusTests(unittest.TestCase):
+    """Replay REAL harness payloads. The invocation comes from the caller.
+
+    Oyunbileg Batbayar, on #934: repairing three specific holes closes one
+    night's incident, not the class. A hook whose tests pass a bare
+    `/tmp/body.json` where production passes a quoted `$CLAUDE_JOB_DIR` path
+    "has not been tested against production; it has been tested against a
+    fixture chosen to make it pass."
+
+    So this class does not contain a single hand-written command. It replays
+    `fixtures/real_comment_invocations.jsonl`, harvested by
+    `.claude/lib/extract_comment_invocations.py` from the harness's own
+    session transcripts — the exact `tool_use` payloads a PreToolUse hook
+    receives.
+
+    The invariant is recognition, not verdict: whatever a command's body turns
+    out to be, `is_comment_command` MUST return True for every invocation that
+    actually created a PR comment. A hook that does not recognize the command
+    cannot validate it, and fails open before any body is read.
+
+    Against the pre-fixup hook this corpus is RED at 72 of 121. It caught two
+    fail-opens nobody had enumerated:
+
+    * `_split_segments` split on `&&`, `||`, `|`, `;` but NOT on newlines, so
+      the overwhelmingly common `cd /repo\\ngh pr comment ...` shape never
+      reached the matcher (64 of the 72).
+    * `URL=$(gh api -X POST ...)` executes, but the env-prefix stripper's
+      `\\S*\\s+` swallowed `URL=$(gh ` whole, leaving a segment starting at
+      `api` (24 of the 72).
+
+    The second one is instructive twice over: the HARVESTER shared that exact
+    blind spot, so it silently dropped those commands and the corpus first
+    reported a clean zero. A corpus built with the parser it audits will agree
+    with it. Both segmenters were fixed; the negative cases below exist so a
+    recognizer cannot pass the invariant by matching everything.
+    """
+
+    CORPUS = _FIXTURES / "real_comment_invocations.jsonl"
+    rows: ClassVar[list[dict]] = []
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.rows = [
+            json.loads(line) for line in cls.CORPUS.read_text().splitlines() if line.strip()
+        ]
+
+    def test_corpus_is_not_empty(self) -> None:
+        """A replay suite over zero invocations passes vacuously."""
+        self.assertGreater(len(self.rows), 50, "corpus too small to be meaningful")
+
+    def test_corpus_covers_every_body_form(self) -> None:
+        """If a form is absent, this suite cannot speak to it. Verify the instrument."""
+        forms = {row["form"] for row in self.rows}
+        for required in ("body-file", "heredoc", "body-inline", "field-at-file", "input-file"):
+            self.assertIn(required, forms, f"corpus lacks the {required!r} invocation form")
+
+    def test_corpus_contains_multiline_invocations(self) -> None:
+        """The `cd /repo\\ngh pr comment` shape must be present, or the newline
+        regression this class caught could silently return."""
+        multiline = [r for r in self.rows if "\n" in r["command"]]
+        self.assertGreater(len(multiline), 10, "corpus lacks newline-separated commands")
+
+    def test_every_real_invocation_is_recognized(self) -> None:
+        """The class-closing invariant."""
+        unrecognized = [r for r in self.rows if not hook.is_comment_command(r["command"])]
+        if unrecognized:
+            forms = sorted({r["form"] for r in unrecognized})
+            sample = unrecognized[0]["command"][:160].replace("\n", "\\n")
+            self.fail(
+                f"{len(unrecognized)}/{len(self.rows)} real comment-creating "
+                f"invocations are NOT recognized by is_comment_command. "
+                f"Forms: {forms}. First: {sample!r}"
+            )
+
+    def test_recognizer_still_discriminates(self) -> None:
+        """A recognizer that returns True for everything would pass the invariant.
+
+        Both classes, per `feedback_silent_zero_is_not_a_measurement`.
+        """
+        negatives = [
+            "gh pr view 42",
+            "gh issue comment 42 --body x",
+            "gh api repos/o/r/issues/42/comments --jq '.[].body'",
+            "gh api repos/o/r/pulls/42 --jq .head.sha",
+            "cd /repo\ngit commit -m 'gh pr comment 42'",
+            "ls -la",
+        ]
+        for command in negatives:
+            self.assertFalse(
+                hook.is_comment_command(command),
+                f"recognizer over-matched a non-comment-create command: {command!r}",
+            )
 
 
 if __name__ == "__main__":
