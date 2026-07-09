@@ -40,11 +40,30 @@ Tested under a stem-removal mutant (`محمد` deleted from `_ACCUSATIVE_STEMS`)
 
 **The reflex to replace N literals with a loop over the source-of-truth collection is usually right, and is exactly wrong when the collection is the thing under test.** The literal list is not duplication; the literals *are* the independent statement of intent. A test may not derive its expectations from the datum it is testing — that is [[feedback_sweep_expensive_stage_before_launch]]'s "a gate downstream of a defect is not a gate," transposed into a test file.
 
-Corollary for reviewers: a mutation test must delete a **member** of the lexicon, not just the branch that consumes it. Deleting the branch reds any one case; deleting a member reds only a case that names that member. The two mutants prove different things and only the second measures coverage of the data.
+Corollary for reviewers: a mutation test needs **three** mutants, not two — delete the **branch**, delete a **member**, and **replace a member**. Deleting the branch reds any one case. Deleting a member reds only a case that names that member. **Replacing a member is the one that separates a cardinality guard from a membership guard**, and it is the mutant everyone forgets.
 
 Confirmed independently the same night: a second reviewer dropped `سعد` — one of the 19 stems the six literals do *not* name — and **all 36 tests still passed** while `canonical_surface("سعدا")` silently stopped folding. **The guard pins the rule, not the lexicon.** Six literals prove the branch exists and reaches identity; they say nothing about the other nineteen entries.
 
-The cheap complement, which the loop cannot give you: **pin the collection's cardinality separately.** `assert len(_ACCUSATIVE_STEMS) == 25` reds on any removal, costs one line, and does not pretend to check behaviour. Literals assert *behaviour* for the members that matter; a cardinality assertion asserts *membership* for the rest. Together they cover what the tautological loop only appeared to.
+The cheap complement, which the loop cannot give you: **pin the collection itself, by equality — not by cardinality.**
+
+An earlier draft of this memory proposed `assert len(_ACCUSATIVE_STEMS) == 25` and claimed it "asserts membership." **It does not. It asserts count**, and the two come apart on the mutant that matters (found by Wanjiku Mwangi reviewing this very amendment, 2026-07-09):
+
+```
+baseline                       green
+REMOVAL       (len 24)         RED      <- cardinality works
+SUBSTITUTION  (len 25)         green    <- cardinality BLIND; the six literals don't name it
+frozenset equality             RED      <- catches it
+```
+
+Swap `سعد` for a typo of `سعد` and the count is unchanged, the six literals stay green, and `canonical_surface("سعدا")` silently stops folding — **the exact defect the amendment was written to catch, one keystroke from the mutant it does catch.** The corollary above anticipated substitution; the remedy under-delivered on it.
+
+Same length, strictly stronger, and it is this file's own doctrine that *the literals are the independent statement of intent*:
+
+```python
+assert _ACCUSATIVE_STEMS == frozenset({...25 literals...})   # reds on removal, addition, AND substitution
+```
+
+Literals assert *behaviour* for the members that matter; a frozenset equality asserts *membership* for all of them. Together they cover what the tautological loop only appeared to. **Note that the wrong complement shipped inside the memory warning against inert assertions — and it was caught by a reviewer running the mutant, not by its author re-reading it.**
 
 **Why:** a fixture differs from production along many dimensions (filename, header, encoding, ordering, cardinality). If it differs along **the one dimension the assertion tests**, the assertion is unreachable. Nothing warns you: the test passes, the coverage counter increments, the reviewer sees a guard and moves on. Realism is not a stylistic preference for fixtures — for a negative-guard assertion, it is the difference between a test and a decoration.
 

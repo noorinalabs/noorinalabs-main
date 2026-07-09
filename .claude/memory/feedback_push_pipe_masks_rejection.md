@@ -23,12 +23,34 @@ The memory was filed naming one command, so it was read as a `git push` rule and
 
 **The rule is: `; echo rc=$?` after a pipe measures the pager, not the command.** `$?` is the pipeline's status, which is the *last* stage's. Anything upstream can fail silently, and the failure text usually still prints — so the output looks like a diagnosis while the status says success. That is what makes it survive review: **you read the words and believe them, and the number you checked was about `tail`.**
 
+This is a POSIX property of the shell, not a frequency observed in the wild. One instance licenses the rule; three merely made it embarrassing.
+
+### `set -o pipefail` WOULD have caught all three. Do not tell people otherwise. (corrected 2026-07-09)
+
+An earlier draft of this memory claimed `pipefail` "does not help." **That is false**, and it is false in the one place a reader will test it. Measured in this environment (`zsh 5.9`, one ad-hoc agent Bash call):
+
+```
+false | tail -1                      ; echo rc=$?   ->  rc=0
+( set -o pipefail; false | tail -1 ) ; echo rc=$?   ->  rc=1
+```
+
+All three rows of the table above are a command that *did* exit non-zero, so `pipefail` recovers every one. A reader who types `set -o pipefail; false | tail`, watches it print `1`, and concludes this memory is wrong will stop trusting the rest of it. **A correct rule resting on a false premise is the least durable kind.**
+
+**The honest case for "redirect, don't pipe" is stronger than the false one**, and it has two legs:
+
+1. **`pipefail` over-reports** on the two pipes an agent reaches for most — measured, same shell:
+   ```
+   ( set -o pipefail; seq 200000 | head -1 >/dev/null ) -> rc=141   # SIGPIPE. head succeeded.
+   ( set -o pipefail; echo hi | grep -q nomatch )       -> rc=1     # echo succeeded; no-match isn't failure.
+   ```
+2. **`pipefail` cannot catch a command that exits `0` while doing nothing.** `( set -o pipefail; true | tail )` is `rc=0`. That is the entire [[feedback_gh_pr_edit_silent_noop]] family — a `pipefail` pipeline over `gh pr edit` still reports success on a no-op. **This is why "read the effect back from the origin" is the load-bearing bullet, not the exit code.**
+
+And if you genuinely need a pipe with a truthful status, zsh exposes the whole vector: `false | true | false` leaves `pipestatus=(1 0 1)`.
+
 Sibling of [[feedback_silent_zero_is_not_a_measurement]]: there the probe could not return nonzero; here the *status channel* is severed from the thing you are measuring. Same root — **verify the instrument before trusting the reading.**
 
 **How to apply:**
-- **Never pipe a command whose exit status you intend to read.** Not `git push`, not `gh`, not a gate script, not a linter. Redirect instead: `cmd > /tmp/out.txt 2>&1; echo "rc=$?"`, then `cat` the file.
-- `set -o pipefail` helps in a script you control and **does not help in an ad-hoc agent Bash call**, where zsh is the shell and the option is not set. Do not rely on it.
-- For any command with a side effect — a push, a comment, a label, a merge — **read the effect back from the origin**, not the exit code. `rc=0` from `gh` proves nothing about GitHub's state. Pairs with [[feedback_refresh_before_status_claim]] and [[feedback_gh_pr_edit_silent_noop]].
-- Never pipe `git push` through a pager/filter. Run it bare so its exit code surfaces, or capture: `git push ... ; echo "rc=$?"` and assert rc==0.
-- After any force-push, read-back-verify: `git ls-remote origin <branch>` (or `gh api .../git/refs/heads/<branch>`) == local HEAD before claiming the PR reflects your latest commit. Pairs with [[feedback_refresh_before_status_claim]].
-- `set -o pipefail` does NOT fully save you here — `tail` still exits 0 after consuming git's stderr; the real fix is don't pipe the push.
+- **Never pipe a command whose exit status you intend to read.** Not `git push`, not `gh`, not a gate script, not a linter. Redirect instead: `cmd > "$CLAUDE_JOB_DIR/tmp/<cmd>_<id>.txt" 2>&1; echo "rc=$?"`, then read the file. **Use a unique path, never a shared `/tmp/out.txt`** — parallel agents clobber each other, per [[feedback_parallel_reviewer_tmp]].
+- `set -o pipefail` is **off by default under zsh** and must be set explicitly in the same call: `( set -o pipefail; cmd | tail )`. It then catches an upstream non-zero — but it **over-reports** on `| head` (SIGPIPE `141`) and `| grep -q` (no-match `1`), and it **cannot** catch a command that exits `0` while doing nothing. Prefer redirect.
+- For any command with a side effect — a push, a comment, a label, a merge — **read the effect back from the origin**, not the exit code. `rc=0` from `gh` proves nothing about GitHub's state, with or without `pipefail`. Pairs with [[feedback_refresh_before_status_claim]] and [[feedback_gh_pr_edit_silent_noop]].
+- After any force-push, read-back-verify: `git ls-remote origin <branch>` (or `gh api .../git/refs/heads/<branch>`) == local HEAD before claiming the PR reflects your latest commit.
