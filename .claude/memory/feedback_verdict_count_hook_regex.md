@@ -1,6 +1,6 @@
 ---
 name: feedback_verdict_count_hook_regex
-description: "Orchestrator pre-spawn verdict-count queries must match Hook 4's actual parser regex (accepts `**Requestor:**` bold-markdown AND bare `Requestor:`) — a brittle jq `startswith(\"Requestor:\")` misses bold-form verdicts and triggers stale-state respawns"
+description: "The verdict field Hook 4 parses is `RequestOrReplied:`, never `Verdict:`, and it must sit after the LAST sole `---` line in the body. Orchestrator verdict-count queries must match the hook's real regex (bold `**Requestor:**` and bare both parse) — and the hooks fail OPEN on every near-miss, so a wrong field name costs zero reviews silently"
 metadata: 
   node_type: memory
   type: feedback
@@ -8,6 +8,21 @@ metadata:
 ---
 
 When auditing PR verdict comments to decide whether to spawn a second reviewer, the orchestrator MUST count verdicts using the **same regex Hook 4 (`validate_pr_review.py`) actually uses**, not a brittle prefix-string match.
+
+## The field is `RequestOrReplied:`. It is never `Verdict:`. (2026-07-09, main#932)
+
+Charter `pull-requests.md:14` names the field, and `_extract_charter_field` reads exactly that name. **`Verdict:` is not a field any hook knows.** A comment reading `Verdict: Approved` contributes **zero** to the two-reviewer threshold.
+
+Two placement rules are as load-bearing as the name:
+
+- `_trailer_block_substring` returns only the text **after the LAST line that is a sole `---`**. Correctly-spelled fields sitting *above* a later separator are invisible. Put the trailer block last.
+- `_strip_code_regions` blanks fenced and inline code before matching, and `_extract_charter_field` is **last-match-wins** within the trailer. Never reproduce the `Field: Value` shape in review prose.
+
+**The regression (2026-07-09, wave 24):** orchestrator spawn briefs dictated `Verdict:`. The whole team complied. **Nine `Approved` comments across five PRs parsed as nothing.** main#930 blocked as `0/2 required peer reviews` with three approvals sitting on it. PRs merged 07-06 used the correct field, so the drift was one session old and invisible for its whole life. Repaired by REST-PATCHing a canonical trailer onto each comment (append after a `---`, remove nothing) and re-verifying with `validate_pr_review.check_comment_reviews` **imported from the hook module**, not a hand-rolled regex — the same mistake one level up would have "confirmed" the fix.
+
+**Why it was silent, which is the real defect:** `validate_review_comment_format.py` sees `Requestor:` + `Requestee:` present and `RequestOrReplied:` absent and **returns None — allow**. Its `is_comment_command` matches only `gh pr comment`, so REST-posted verdicts (the GraphQL-rate-limit fallback) never reach it at all; and `extract_comment_body` reads only `--body`/heredoc, so even a matched `gh api … --input body.json` yields an empty body and fails open a second time. Three fail-open paths, no signal to the reviewer, no signal to the orchestrator, and the shortfall surfaces hours later at merge time **attributed to the reviewers**. Fix tracked in main#932.
+
+This is the measurement family one level up: not a probe that cannot return nonzero, but **a review that cannot be counted, which is indistinguishable from no review at all.** See [[feedback_silent_zero_is_not_a_measurement]].
 
 Hook 4's `_extract_charter_field` regex (per `.claude/hooks/validate_pr_review.py:254-268`):
 
