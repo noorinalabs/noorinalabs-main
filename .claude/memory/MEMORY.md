@@ -97,7 +97,7 @@
 - [Parallel panels sharing a file must serialize-merge](feedback_parallel_panels_shared_file.md) — parallel PRs appending to a shared file git-conflict despite distinct ownership. #986.
 - [validate_labels hook gotchas](feedback_validate_labels_hook_gotchas.md) — body over-match + stale label cache false-block gh issue create; verify+retry, keep tokens out of bodies.
 - [Full local⇄CI hook parity + no-force](feedback_local_ci_parity_no_force.md) — Owner 2026-06-14: pre-commit/push MUST mirror COMPLETE CI tooling; never push a failing check. main#684.
-- [git push piped masks rejection](feedback_push_pipe_masks_rejection.md) — git push ... | tail returns tail's 0, hiding a REJECTED push; use ; echo rc=$?. ig#1044.
+- [Piped command masks failure](feedback_push_pipe_masks_rejection.md) — ANY cmd | tail returns tail's 0; `; echo rc=$?` measures the pager. Redirect, don't pipe. 3 cmds 2026-07-09.
 - [P5W5 cutover + roadmap revision](project_p5w5_prodcutover_p6_dataquality.md) — P5W5=prod cutover (#692). ROADMAP 2026-06-19: NEW P6=Claude Efficiency (memories/code-over-md/persona+ontology revisit/TD); Data-Quality/ML→P7.
 - [Generic-prompt hook never actioned](feedback_generic_prompt_hook_advisory_decay.md) — advisory systemMessage, no state → inert; FIXED via batched wave-wrapup checkpoint. main#716/PR#722.
 - [GIT_DIR leak corrupted live repo config](feedback_git_dir_leak_repo_config.md) — pre-#720 leak wrote core.bare=true + [user] t@t into parent .git/config; fix=Edit it. #720.
