@@ -1,6 +1,6 @@
 ---
 name: feedback_silent_zero_is_not_a_measurement
-description: "Verify the instrument before trusting the reading. Run the detector on BOTH classes and require it to separate them before reading the number you care about — a zero, a control group, and even a 10x lift are each individually insufficient. Nine instances in one day (2026-07-09)."
+description: "Verify the instrument before trusting the reading. Run the detector on BOTH classes and require it to separate them before reading the number you care about — a zero, a control group, and even a 10x lift are each individually insufficient."
 metadata:
   type: feedback
 ---
@@ -27,9 +27,13 @@ Two weaker versions were tried on a single problem and each was falsified within
 
 **v1 — "can the probe return nonzero?"** Catches a probe that cannot fire. Misses one that always fires. Same day: a detector for "does this hadith's matn contain an isnad?" keyed on the Arabic tokens `عن`/`قال` called **97.2%** of a target set positive, implying ~160k recoverable chains. Those tokens saturate ordinary Arabic prose — against a **control** of rows whose matn is chain-*free* by construction the base rate is **85.6%**. Lift ≈ 1.0. The probe's answer was fixed before it saw the data.
 
-**v2 — "always run the control group."** Catches a probe that cannot return **low**. Misses one that cannot return **high on a known positive**. Re-keying on strict isnad openers (`حدثنا`/`أخبرنا`/`سمعت`) gave **7.9%** control vs **79.2%** test — a 10× lift, a clean control, and a confident conclusion (`159,558 × 0.792 = 126,398` recoverable chains) that was **wrong twice over**. Checking *recall* against the **positive** class — the 485,285 rows known to carry an isnad — returned **0 / 485,285**, because the source strips the transmission opener from every row it successfully tags. The detector could never fire on a true positive. Opener *presence* is strong evidence; opener *absence* is none at all. So recall is not calibratable here, and the product silently assumed recall = 1 and FPR = 0.
+**v2 — "always run the control group."** Catches a probe that cannot return **low**. Misses one that cannot return **high on a known positive**. Re-keying on strict isnad openers (`حدثنا`/`أخبرنا`/`سمعت`) gave **7.9%** control vs **79.2%** test — a 10× lift, a clean control, and a confident conclusion (`159,558 × 0.7922 ≈ 126,400` recoverable chains) that was **wrong twice over**. Checking *recall* against the **positive** class — the 485,285 rows known to carry an isnad — returned **0 / 485,285**, because the source strips the transmission opener from every row it successfully tags. The detector could never fire on a true positive. Opener *presence* is strong evidence; opener *absence* is none at all. So recall is not calibratable here, and the product silently assumed recall = 1 and FPR = 0.
 
-The corrected estimate needed a detector spanning both of the corpus's **two isnad conventions** — receipt-verb (`حدثنا …`; 98.8% of `lk`) and bare-name-then-`عن` (98.5% of `tusi`, **0.0% receipt verbs** in sanadset's tagged rows). Two opener-only probes disagreed (79.2% vs 66.5%) because *neither could see the second convention*. `opener OR (≥2 standalone عن in the first 25 tokens)`, calibrated on the positive **and** negative class of **each** convention, yields ≈**122,013** — still a lower bound, and now labelled as one.
+The corrected estimate needed a detector spanning both of the corpus's **two isnad conventions** — receipt-verb (`حدثنا …`; 98.8% of `lk`) and bare-name-then-`عن` (98.5% of `tusi`, **0.0% receipt verbs** in sanadset's tagged rows).
+
+Here the most transferable part of the episode: **two opener-only probes returned 79.2% and 66.5% on the same question.** They were different term sets over different populations, and neither was wrong about what it measured — one omitted the abbreviated `ثنا`, and *both* were structurally blind to the second convention. Two numbers that disagree are two instruments, not one measurement with noise. Reconciling them is what exposed the convention split; averaging them, or picking the one that suited the argument, would have buried it.
+
+`D = opener OR (≥2 standalone عن in the first 25 tokens)`, calibrated on the positive **and** negative class of **each** convention, fires on `123,202` rows (77.2%); correcting for D's measured false-positive rate leaves ≈**122,013**. It remains a **lower bound** because D's sensitivity on sanadset's *own* bare-name convention is only 39.9% — short chains are invisible to it — so the quantity is **not boundable from above** by any instrument we have. Report the bound and its direction, never the point estimate alone.
 
 Two corollaries, both earned the same day:
 
