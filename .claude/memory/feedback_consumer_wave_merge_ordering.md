@@ -27,6 +27,6 @@ the producer's integration PR merges. Same helper, different base → the depend
 **producer-before-consumer**, not alphabetically. A consumer's only-failure being the
 tool-dependent check is an ordering signal, not a real defect — merge the producer,
 re-run the consumer's check, then merge the consumer. This will recur for **every** repo
-in the [[project_p6w2_carryforward_trackers]] P7W1 #820 6-repo fan-out (all six consume
+in the P7W1 #820 (ontology C×T2) 6-repo fan-out (all six consume
 the noorinalabs-main generator). Related: [[feedback_passing_repro_masks_bug]] (the
 inverse — a check that's green for the wrong reason), [[feedback_cross_repo_wave_ref_resolution]].

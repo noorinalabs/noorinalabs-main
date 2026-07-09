@@ -5,6 +5,23 @@ metadata:
   type: project
 ---
 
+> ## 2026-07-09 — OWNER DECISIONS + THE PROGRAM (tracking: main#928)
+>
+> Owner: *"fix all the defects we've discovered trying to get this to stg, and restart the pipeline from 'the point of the earliest defect'"* and *"I am unbothered by a timesink or token usage complication, the more correct and repeatable the better right now."*
+>
+> **Restart point = `parse`** (da#353 is the earliest defect; `acquire` is clean).
+>
+> **Three owner rulings, 2026-07-09:**
+> 1. **da#356 — do BOTH fixes.** (a) identity invariant: canonical id/name is a function of the **mention's** normalized form, never a bio candidate's; bio *enriches only* (dates, gender, external_id) and may not rename or re-key. (b) corroboration gate on Stage-2 fuzzy bio-match. Variant-spelling merge moves to `fuzzy_cluster` (mention-to-mention), whose `_choose_representative` ranks by `mention_count` — the dominant *attested* spelling wins. **`fuzzy_cluster` is the cure, not the disease** (my original hypothesis blamed it; backwards). Fix (a) alone would trade over-merge for fragmentation (da#347) — hence both.
+> 2. **deploy#558/#559/#560 gate the PROD wipe.** Owner authorized wiping stg **and** prod ("prod isn't stable enough to merit surgery"), but backups land first. prod `user-postgres` holds accounts/sessions/`audit_log` — **not reconstructible from the artifact**, and `isnad-backup.timer` has never run on either host. Restore rehearsal must be shown **RED against a corrupted backup** before trusted.
+> 3. **da#352 — a narrator attested only in a deduped edition IS real** ("I feel like it is"). So: do NOT filter `resolve` to the loaded population, and do NOT relax `orphan_narrators.cypher`'s `// Expected: 0`. Open question the ruling doesn't answer: *with what edges?* Hypothesis (routed to Jean-Claude, unverified): **da#352 and da#282 are one fix** — a dropped edition should contribute its isnad chain to the surviving canonical hadith, which requires modelling *multiple isnads per hadith* first-class; a naive remap flattens distinct isnads and makes da#282 worse. Load-bearing empirical question: **do dropped editions carry distinct isnads, or are they isnad-identical?**
+>
+> **Sequencing law (see [[feedback_sweep_expensive_stage_before_launch]]):** `resolve` is ~7.5h. A resolve-stage defect fixed *before* launch is free; one found *after* costs the whole stage again. **Launch gate = every known `parse` + `resolve` defect merged.** `load`/`enrich` fixes may land while resolve runs. Every defect found on this push was upstream of the load — none would have been caught by loading and looking.
+>
+> **da#356 site, exact:** `src/resolve/disambiguate.py:1199-1223` — `c = best.candidate; norm_name = c.name_ar_normalized …; canonical_id = _make_canonical_id(norm_name)`. Two lines. `_upsert_canonical` (`:882-936`) only fills *empty* fields, so it is not the site.
+>
+> **da#309 promoted to BLOCKING**, and my first two claims about it were WRONG (corrected on-issue): dedup **did** run (`parallel_links.parquet` = 6,720,435 rows), and **dedup does not deduplicate hadith nodes at all** — its only write target is `parallel_links.parquet` (`dedup.py:779,812`); node-level dedup is `canonical_matn_identity` in `load_nodes` (da#220). The real defect: on `ImportError` it writes a **schema-valid zero-row** parquet and the pipeline reports success ⇒ **zero `PARALLEL` edges** (prod carries ~4.49M) presented as a true negative. `sentence_transformers` 5.3.0 now imports on the resolve host, so leg 1 is green; leg 2 (fail-loud) is not.
+
 Owner ask "find choke points of narrators in transmission chains" — code was da#326/#327 (sampled GDS betweenness+pagerank+louvain+degree via `enrich` CLI subcommand); only the RUN remained. Run stg-first via deploy `graph-ops.yml` (env=stg operation=enrich dry_run=false; loader image `noorinalabs-data-acquisition-load:stg-latest`).
 
 **2026-07-08 — enrich RAN + VERIFIED on stg.** 150,187 narrators enriched (full coverage = canonical count). Two bugs surfaced+fixed along the way:
