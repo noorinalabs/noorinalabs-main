@@ -19,6 +19,14 @@ The same test's `assert len(collections) == 1` was worse than inert: it passed *
 
 Both assertions only became real checks once the fixture used the production filename and header. Two sibling fixtures in the same repo (`test_pathb_integration_verify.py`, `tests/conftest.py::sample_sanadset_csv`) invented the header `hadith_id,book_id,hadith,grade`, which exists in no edition of the corpus. The conftest one had **no callers**, so no CI signal could ever reach it — a loaded gun for the next author, found only by an explicit grep sweep.
 
+**Three distinct failure modes, worth separating** (da#358 records the correction; an early claim conflated them):
+- **Pinning the bug** — `test_sanadset_lightup`'s `assert len(collections) == 1` was *correct only for a corpus that had lost its breadth*. The test asserted the defect. This is the genuine wrong-reason pass.
+- **Inert guard** — the same file's `assert not id.startswith("hdt:sanadset:sanadset:")` could never fire, because the fixture was named `bukhari.csv`.
+- **Tautology** — `test_pathb_integration_verify` asserted `assert emitted` + endpoint-membership, which hold trivially under collapse. Its breadth claim lived only in a **comment**, never an assertion. It did not pass for the wrong reason; it never made the claim.
+- (And `test_real_data_flow` asserted only that outputs appeared — it claimed nothing.)
+
+When auditing "what does this test now prove," distinguish these: only the first is a test that was actively lying.
+
 **Why:** a fixture differs from production along many dimensions (filename, header, encoding, ordering, cardinality). If it differs along **the one dimension the assertion tests**, the assertion is unreachable. Nothing warns you: the test passes, the coverage counter increments, the reviewer sees a guard and moves on. Realism is not a stylistic preference for fixtures — for a negative-guard assertion, it is the difference between a test and a decoration.
 
 Note the parser's *own* guard (`_process_chunk` raising on a missing `Book` column) only trips for fixtures that are actually **used**. It cannot see the unreferenced one. Runtime guards do not substitute for a lint gate.
