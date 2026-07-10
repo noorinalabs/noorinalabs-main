@@ -164,3 +164,23 @@ Worse, its *conclusion* (`rc=1 implies an unwritten manifest`) stayed true — b
 Corollary for reviewers, and it is the cheap half: when a colleague's finding *agrees with you and improves on your framing*, that is exactly when you skip verifying it. Reading the diff took one command and overturned the claim.
 
 Sibling: [[feedback_passing_repro_masks_bug]] (a *repro* that cannot go red) and [[feedback_test_mock_masks_prod_failure]] (a *test* that cannot go red). This memory is the *measurement* case: a probe that cannot go nonzero — and, above, a *sentence* that cannot be run at all. Same root: **verify the instrument before trusting the reading.**
+
+## "Changes behaviour" is a two-place predicate written as one-place (2026-07-10, da#372)
+
+The orchestrator instructed an author: *"`isnad-ingest validate` changes behaviour and your PR body does not mention it."* Measured off her **pre-rebase** diff, where `_cmd_validate` went `4 → 5`. True there. False about `main`, where `_cmd_validate` had **already** exited `VALIDATION_FINDINGS` since da#384 Amendment G — only its message text changed.
+
+She ran the check against `main` instead of against the diff she was handed, and refused the instruction.
+
+> **A behaviour change is a delta between two trees. Name both.** A consumer reads it relative to `main`; the instruction had measured it relative to a branch head that would never exist again. Had she complied, the PR body would have sent every operator to audit a call site that behaves identically.
+
+Same family as the verdict/sha confusion below: **the identifier is the same, the referent is not.** `_cmd_validate` names one function and two behaviours, and the sentence picked the wrong one silently, because a diff always has a baseline and prose usually omits it.
+
+## A hand-merged generated file describes no tree that exists (2026-07-10, da#372)
+
+Resolving `ontology/structural/llms.txt` with `--theirs` during a rebase produced the header `files=248 nodes=3080 edges=4842` — **neither side's value**, and no tree's. `main` was `251/3126/4912`; the correct regenerate was `252/3151/4969`.
+
+Nothing would have caught it. Every check that *reads* the header passes; only regenerating disagrees. Contrast `gh pr edit --body-file`, broken on that repo by the Projects-classic deprecation, which fails **loudly** (rc=1, body never lands) — dangerous only to a caller that reads no rc. The generated-file merge is the worse defect precisely because it is silent and plausible.
+
+> **A generated artifact has no `--ours` and no `--theirs`. It has a generator.** Take either side and you have committed a description of a tree nobody built. Resolve by running the generator, then diff the header against the value you expect — and expect it from the *merged* tree, not the one you branched from. **A control against the wrong baseline is not a control:** a no-op regenerate passes it.
+
+Sibling: [[feedback_declarative_head_needs_action]]. See also main#939 (the structural-index conflict tax).
