@@ -100,7 +100,17 @@ Three of the four were caught by the person who built the instrument, before any
 - **Prove it red first.** Plant the defect, watch it fail, then remove the plant.
 - **Assert the plant applied** — hash or `grep` the file before and after. An unapplied mutation and a surviving mutant are the same green.
 - **Assert the check ran** — a non-zero collected count, and the process exit status. `pytest` returns `5` (`EXIT_NOTESTSCOLLECTED`) when a selector matches nothing, and that signal is free.
+- **Isolate the thing under test to exactly one occurrence, and prove the fixture does not already satisfy the question.** A probe for "does the scan see `EXIT_AUG += 1`?" written as
+  ```python
+  EXIT_AUG = 6      # setup
+  EXIT_AUG += 1     # the thing under test
+  ```
+  reports **SEEN** — from the setup line's plain `Assign`, not from the `+=`. **The setup line answered the question the assertion claims to answer.** Nothing in the output distinguishes them. Not an assertion that cannot fail: a fixture whose *precondition* already contains the property. (2026-07-09, da#387 — found by its author, inside a probe written to expose exactly this class.)
 - **This binds the author of a criterion hardest.** Proposing an acceptance item that cannot fail is the same defect as writing an assertion that cannot fail — and it is harder to see, because nobody runs a criterion. (2026-07-09, da#387: an "every namer imports the registry" obligation, retracted by its author on testing it — a module naming an un-imported `EXIT_*` raises `NameError`, so the assertion could never fail.)
+
+**And the sharpening that matters most** (Oyunbileg Batbayar): *an instrument built to catch this failure is the **most** likely to contain it, because building it is exactly when you stop suspecting yourself.* Five of the six instances below were found inside work whose subject was inert guards.
+
+**Beware "complete for the set I was handed."** Twice on 2026-07-09 a table of forms was reported as exhaustive when it enumerated only the forms someone else had listed: a mutation table, and an AST-form table that named two blind spots where **six** existed (tuple unpack, walrus, starred, `AugAssign`, `for` target, `with` target — all invisible to a scan that inspects `Assign.targets` / `AnnAssign.target` for an `ast.Name`). **The fix in both cases was to stop enumerating node types and ask the language**: walk for an `ast.Name` in `Store` context; enumerate members through the `enum` API. **A hand-maintained list of node types is the same defect as a hand-maintained list of reserved values** — it was the last one hiding inside the fix for hand-maintained lists.
 
 **Why:** a fixture differs from production along many dimensions (filename, header, encoding, ordering, cardinality). If it differs along **the one dimension the assertion tests**, the assertion is unreachable. Nothing warns you: the test passes, the coverage counter increments, the reviewer sees a guard and moves on. Realism is not a stylistic preference for fixtures — for a negative-guard assertion, it is the difference between a test and a decoration.
 
