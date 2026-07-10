@@ -103,8 +103,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib"))
 from _repo_flag_parse import extract_repo
 from annunaki_log import log_pretooluse_block
+from charter_trailer import (
+    extract_charter_field,
+    strip_code_regions,
+    trailer_block_substring,
+)
 
 # Charter-enforcer role prefixes for the Single-Reviewer Exception. Derived
 # from `pull-requests.md § Single-Reviewer Exception (Wave-Bootstrap Only)`
@@ -535,105 +541,13 @@ def _is_approved(value: str) -> bool:
     return normalized == "approved"
 
 
-def _strip_code_regions(body: str) -> str:
-    """Strip fenced code blocks (```…```) and inline code (`…`) from `body`.
-
-    Returns a body where every char inside a code region is replaced with a
-    space (preserving line indices for downstream regex). This prevents
-    reviewer prose like `` `Requestor: (TBD)` `` from being captured as the
-    actual Requestor value (#511 — Bereket-on-deploy#339 pattern).
-
-    The replacement char is space (not empty) so any `re.search` line/column
-    arithmetic remains accurate against the original `body`'s line offsets,
-    making `_trailer_block_substring`'s `---`-line detection unaffected.
-    """
-    out: list[str] = []
-    i = 0
-    n = len(body)
-    while i < n:
-        # Fenced code: ```...``` (triple-backtick on its own or with lang tag).
-        if body.startswith("```", i):
-            end = body.find("```", i + 3)
-            if end == -1:
-                # Unterminated fence — strip rest of body.
-                out.append(" " * (n - i))
-                break
-            out.append(" " * (end + 3 - i))
-            i = end + 3
-            continue
-        # Inline code: `...` on a single span (no newlines inside the run).
-        if body[i] == "`":
-            end = body.find("`", i + 1)
-            if end == -1 or "\n" in body[i + 1 : end]:
-                # Not a closed inline span — pass through as literal.
-                out.append(body[i])
-                i += 1
-                continue
-            out.append(" " * (end + 1 - i))
-            i = end + 1
-            continue
-        out.append(body[i])
-        i += 1
-    return "".join(out)
-
-
-def _trailer_block_substring(body: str) -> str:
-    """Return the trailer-block substring of `body` for field extraction.
-
-    Trailer-block definition (#511):
-      - If `body` contains one or more lines that are a sole `---` separator
-        (charter convention for delimiting the structured-fields block), the
-        trailer is everything AFTER the LAST such separator line.
-      - Otherwise (legacy comments without separator), fall back to the full
-        body — `_extract_charter_field` then uses last-match-wins to remain
-        forgiving while still avoiding most prose-above-trailer false-matches.
-
-    The `---` must be on a line by itself (with optional leading/trailing
-    whitespace) to count. Embedded `---` within a sentence does not count.
-    """
-    lines = body.splitlines(keepends=True)
-    last_sep_idx = -1
-    for idx, line in enumerate(lines):
-        if line.strip() == "---":
-            last_sep_idx = idx
-    if last_sep_idx == -1:
-        return body
-    return "".join(lines[last_sep_idx + 1 :])
-
-
-def _extract_charter_field(field_name: str, body: str) -> str | None:
-    """Extract a charter-format field value from a comment body.
-
-    Handles markdown bold (`**Field:**`) and plain (`Field:`) variants.
-    Returns the value with markdown markers and parenthetical role
-    descriptions stripped. Returns None if the field is not present.
-
-    Match-scope discipline (#511):
-      - First, strip fenced (``` ... ```) and inline (`...`) code regions to
-        prevent reviewer prose-quoting from being captured as a verdict field
-        (Bereket-on-deploy#339 pattern).
-      - Then narrow to the trailer-block substring per charter convention
-        (text after the last `---` separator line). If no separator is
-        present, fall back to the full body to remain backward-compatible
-        with legacy verdict comments.
-      - Within that scope, use LAST-MATCH-WINS so a prose mention of the
-        field above the trailer block (without a separator) does not
-        outscore the actual trailer line (Wanjiku-on-main#509 / Lucas-on-
-        deploy#337 pattern).
-    """
-    scope = _trailer_block_substring(_strip_code_regions(body))
-    pattern = rf"\*{{0,2}}{re.escape(field_name)}:\*{{0,2}}\s*(.+)"
-    matches = list(re.finditer(pattern, scope))
-    if not matches:
-        return None
-    match = matches[-1]
-    value = match.group(1).strip()
-    # Drop trailing content after first newline (single-line field).
-    value = value.split("\n", 1)[0].strip()
-    # Strip markdown bold and parenthetical role descriptions.
-    value = value.strip("*").strip()
-    value = re.sub(r"\s*\(.*?\)\s*$", "", value).strip()
-    return value or None
+# The charter trailer convention has ONE definition, shared with
+# `validate_review_comment_format` (#932/#934). These module-level aliases keep
+# the historical private names — and their existing test surface — while making
+# a second, drifting copy impossible. Do not reimplement them here.
+_strip_code_regions = strip_code_regions
+_trailer_block_substring = trailer_block_substring
+_extract_charter_field = extract_charter_field
 
 
 def _name_lastname(full_name: str) -> str:

@@ -1,0 +1,76 @@
+Requestor: Lucas Ferreira
+Requestee: Nurul Hakim
+Verdict: Approved
+TechDebt: `absent()` is a global operator — if a second node-exporter host is ever added, a host that has never backed up will not raise `BackupNeverSucceeded` so long as any other host emits the success gauge; per-instance absence needs a different construct (file a follow-up before any multi-host rollout).
+
+Reviewed at head `91a39bb2d20d23b38605b34b0d86dbb8e7918d62` (refetched). Read every file through the contents API at that sha; no branch switching in the shared clone.
+
+## Both new defects reproduce at `origin/main`
+
+I verified these independently rather than taking the PR body's word for them.
+
+**The failure metric was never scraped.** `compose/docker-compose.prod.yml` bind-mounts only `/var/lib/node_exporter/textfile_collector` (line 1202) and points node-exporter at exactly that directory (line 1212). `emit-backup-failure-marker.sh` line 29 assigned `TEXTFILE_DIR="/var/lib/node_exporter"` — the unmounted parent. So the marker was written faithfully every failure and read zero times. Your reading of the consequence is the important part: wiring the orphaned failure metric to a rule, as the issue literally asked, would have shipped a *second* alert that could never fire. Fixing the path first was the right call, and it is the difference between closing #565 and appearing to.
+
+I also checked whether staging diverged. It does not — there is only one compose file in `compose/`, so there is no second mount to correct.
+
+`bootstrap-vps.sh` is a nice catch inside the catch: at `main` its comment on line 403 already names `textfile_collector` while line 405 installs the parent. The comment described the intent and the code did something else. Fixed at line 408.
+
+**The umask.** `backup.sh` line 31 sets `umask 077`, and at `main` there is no `.prom` write and no `chmod` anywhere in the file. A metric written 0600 root-owned into a read-only mount consumed by an unprivileged uid is written and never scraped. `chmod 644` on the temp before the rename (line 127) is correct, and doing it on the temp rather than after the `mv` means there is no window where the collector can see a 0600 file.
+
+Both are the same bug as the alert itself, which you say in the PR body and which is worth saying again: a producer that faithfully does nothing observable.
+
+## The promtool evidence holds up
+
+I re-ran everything under `prom/prometheus:v3.4.0`, the same pin CI and compose use.
+
+At head, `check rules` reports `SUCCESS: 24 rules found`. That is the number that has been green for months while the alert could not fire, and it is worth being blunt that it proves only that the YAML parses. `test rules alerts_test.yml` also passes at head.
+
+The old rule, rebuilt standalone from `origin/main` and given a test that *asserts it fires* against the real state (exporter up, no success series ever written):
+
+```
+FAILED:
+  name: OLD RULE on the real state (never succeeded) — asserting it fires,
+  alertname: BackupFailure, time: 1d6h,
+      exp:[ 0: Labels:{alertname="BackupFailure", severity="warning"} ],
+      got:[]
+```
+
+`got:[]`, reproduced exactly as reported. Independently confirmed.
+
+## Mutation tests — I ran all three, all go red
+
+An alert test that cannot fail is the same defect as the alert that cannot fire, so this was the part I most wanted to see for myself.
+
+Restoring the old expression fails as above. Dropping `unless success > failure` from `BackupFailed` exits 1 and fails specifically on *"recovery — success newer than failure silences BackupFailed"* (`exp:[]`, `got:[BackupFailed]`). Dropping the `up{job="node-exporter"} == 1` guard from `BackupNeverSucceeded` exits 1 and fails specifically on *"exporter down — absence of the metric is not evidence of no backup"*.
+
+Each mutant fails on precisely the group whose guard it removed, and nothing else. That is what a real test suite looks like.
+
+## The partition
+
+I could not find a state that trips none of the three.
+
+Exporter down empties all three expressions by construction, and `ServiceDown` (`up == 0`, any job, `for: 1m`, critical) owns it — which is exactly what the `and on()` guard is buying, so the two do not double-page. Prometheus itself going down is covered by the `Watchdog` deadmansswitch group. Exporter down *and* backup failing pages `ServiceDown`; when the exporter returns, the marker file is still on disk and `BackupFailed` picks it up on the next scrape, so the failure is deferred, not lost.
+
+A success timestamp from a partial backup is prevented on the producer side, not the rule side, which is the right place. `emit_success_metric` sits behind the `exit 1` at line 373, and an upload failure exits at line 314 before either. I checked `DRY_RUN` too, since a dry run advancing the timestamp would silence `BackupStale` with no backup behind it — it only gates pruning, dumps and uploads still run, so emitting there is legitimate.
+
+The one thing I did find is the multi-host behaviour of `absent()`, above. I probed it: two node-exporter targets, `host-a` emitting the success gauge, `host-b` having never backed up. I asserted `BackupNeverSucceeded` stays silent, and the assertion **passed** — `host-b` is invisible to the rule. This is latent today (`prometheus.prod.yml` line 23 has a single static target) and I am not blocking on it. But the comment on lines 146-147 is worth amending: `and on()` staying valid under many-to-one is true of the *match*, and a reader will take it as a claim about the rule's *coverage*, which does not survive a second host.
+
+On severity, `BackupNeverSucceeded` and `BackupFailed` as critical are obviously right. `BackupStale` was `warning` at `main` and this PR promotes it to critical, meaning one missed nightly run pages critical at 24h10m. Given that zero backups have ever run on either environment, I would rather over-page than under-page right now and I am not asking you to change it — but once daily runs are steady it should be revisited, because a stale-but-restorable backup is a different severity from no backup at all.
+
+## Merge order against #563
+
+The hazard is real and your read of it is right. `emit_success_metric` is defined once (line 108) with exactly one call site (line 378), so the fold stays mechanical.
+
+Concretely: `main` already carries `if [[ "$PG_OK" == "false" || "$NEO4J_OK" == "false" ]]; then exit 1; fi`. This PR adds 55 lines and deletes none — it reuses that gate, adds a log line inside it, and calls `emit_success_metric` after the `fi`. #563 (`A.Idrissi/0559`, open) rewrites that same condition line to add `USER_PG_OK`. Whoever lands second gets a one-hunk textual conflict whose only correct resolution is #563's condition, plus this PR's log line, with the call still after the `fi`. Resolving it by taking either side wholesale silently produces a backup that advances the success timestamp with the user-postgres dump missing. I would put that sentence in the merge commit.
+
+## The cross-file test and the drift gate
+
+`test_backup_textfile_metrics.py` is a genuine producer/consumer cross-check, not a constant restated. It parses `TEXTFILE_DIR` out of the shipped shell scripts and `--collector.textfile.directory` out of the shipped compose file and compares the two literals. I ran it against a tree assembled from `origin/main` sources: 8 of 10 fail, and the one that matters fails with `AssertionError: '/var/lib/node_exporter' == '/var/lib/node_exporter/textfile_collector'`. Against the PR-head sources, 10 pass. It would have caught this bug. The partial-backup test earning its keep too — `rindex` finds the call site and asserts the exit precedes it, so reordering the file breaks the test.
+
+The `promtool` kind on the sync-drift gate has a working negative control. At head the gate exits 0. Stripping `promtool-check-rules` and `promtool-test-rules` out of `.pre-commit-config.yaml` and re-running it gives exit 1 with `DRIFT: CI enforces these checks but pre-commit does NOT run them locally: - promtool`. That is the blind spot from deploy#212 actually closed rather than declared closed, and it is the same shape as the `cspell` gap in noorinalabs-main#684. Both hooks hard-fail when docker is missing instead of skipping, which is the correct choice in a PR whose entire subject is checks that silently no-op.
+
+All 17 check-runs are green at head with a non-empty rollup.
+
+## Summary
+
+This is the fix the issue asked for plus the two fixes that would have made it real, with the evidence attached rather than asserted. The thing I will remember from it is that `check rules` was green the whole time. Approving.
