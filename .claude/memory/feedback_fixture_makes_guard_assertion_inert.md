@@ -65,6 +65,20 @@ assert _ACCUSATIVE_STEMS == frozenset({...25 literals...})   # reds on removal, 
 
 Literals assert *behaviour* for the members that matter; a frozenset equality asserts *membership* for all of them. Together they cover what the tautological loop only appeared to. **Note that the wrong complement shipped inside the memory warning against inert assertions — and it was caught by a reviewer running the mutant, not by its author re-reading it.**
 
+**Fifth mode — the fixture that cannot occur in production (2026-07-09, da#359).** The four modes above are all one sign of one error: *an assertion that cannot fail.* There is a mirror, and it is invisible from that side.
+
+Alejandra Reyes-Fuentes, checking a claim that was **in her favour** (always the least-checked kind), found that `pa.table({"source_id": [None]}, schema=HADITH_SCHEMA)` **accepts a null into a `not null` field**, and `table.validate(full=True)` **passes**. Enforcement lives one call deeper — `pq.write_table` raises `ArrowInvalid`, `table.cast(schema)` raises `ValueError`. Both are on the production write path.
+
+Consequence: **a fixture that builds a table in memory and hands it straight to a loader exercises a branch production can never reach.** The test is green, the branch is covered, the coverage counter increments — and the state it proves the code handles cannot arrive through any on-disk parquet. Nothing warns you. It is not a test that passes for the wrong reason; it is a test of a reality that does not exist.
+
+**The paired law** (Oyunbileg Batbayar's phrasing):
+
+> **An assertion that cannot fail proves nothing. A fixture that cannot occur proves nothing about production.** Same family, opposite sign.
+
+We had been hunting only the first sign all night. The second has a specific corollary for mutation testing: killing a mutant on an early-return path proves the **return** is reachable from the test, **not** that the *input shape* which reaches it is reachable from production. Say which one you proved.
+
+The practical check: **construct the bad value the way production constructs it** — through the writer, the parser, the wire — not through the in-memory constructor that skips the schema enforcement. If the only way to build your fixture is an API production never calls, the fixture is fiction.
+
 **Why:** a fixture differs from production along many dimensions (filename, header, encoding, ordering, cardinality). If it differs along **the one dimension the assertion tests**, the assertion is unreachable. Nothing warns you: the test passes, the coverage counter increments, the reviewer sees a guard and moves on. Realism is not a stylistic preference for fixtures — for a negative-guard assertion, it is the difference between a test and a decoration.
 
 Note the parser's *own* guard (`_process_chunk` raising on a missing `Book` column) only trips for fixtures that are actually **used**. It cannot see the unreferenced one. Runtime guards do not substitute for a lint gate.
@@ -75,6 +89,7 @@ Note the parser's *own* guard (`_process_chunk` raising on a missing `Book` colu
 - When a regression test depends on a subtle fixture property, **say so in the docstring** so nobody "simplifies" it away. (da#353's `TestBooksCsvAbsentIdentity` deliberately reuses `Num_hadith` across two books so the ids collide under the old code; with globally-unique ordinals it proves nothing.)
 - **Never iterate the collection under test to generate its own expectations.** `for x in THE_LEXICON: assert folds(x)` cannot fail when a member is removed from `THE_LEXICON`. Write the literals. Then mutate by **deleting a member**, not only by deleting the branch that reads it.
 - **Sweep for unreferenced fixtures.** A fixture with no callers is invisible to CI and will be trusted by the next person who wires it up.
+- **Build the bad value the way production builds it.** An in-memory constructor that skips the writer's schema enforcement (`pa.table(..., schema=...)` admits a null into a `not null` field; `validate(full=True)` does not catch it) yields a fixture for a state no on-disk artifact can hold. **A green test over an unreachable state is the mirror of an assertion that can never go red.** When you kill a mutant on an early-return path, say whether you proved the *return* reachable or the *input shape* reachable — they are different claims.
 - Beware the inverse of the [[feedback_silent_zero_is_not_a_measurement]] rule: there, a probe could not return nonzero; here, an assertion could not go red. Same root — **verify the instrument before trusting the reading.**
 
 `.claude/lib/check_fixture_realism.py` lints Arabic *text* realism (vocalization, the `عن` particle) and cannot see this: the Arabic inside these fixtures was fine, the **schema** was fiction. Extending it with a schema/filename lens is **main#927**. Its own docstring already opens with "the fixture-masks-bug class recurred 5+ times — most damningly inside its own fix"; today added three more.
