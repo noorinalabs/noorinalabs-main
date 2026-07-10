@@ -200,3 +200,15 @@ Operational form, and it is cheap: **a claim that would improve the story if tru
 The corollary for reviewers is the same one this file already gives from the other direction: when a colleague's finding *agrees with you and improves your framing*, that is exactly when you skip verifying it. Both halves reduce to: **the sentence that flatters the frame is the sentence to measure.**
 
 Note what actually caught all three: not care, not review, but somebody running the command. `git show ...:cli.py | grep sys.exit`. `python3 -c 'class B(enum.Enum): X=5; print(B.X == 5)'`. `grep -n pipeline Makefile`. None cost more than a few seconds, and none of the three authors ran theirs.
+
+### The mechanism: the second instrument never gets a control
+
+The engineer who wrote the false variant-B row found the cause himself, and it is the sharpest artifact in this file. His four-way probe asserted `E.X.value == 5`. That form is `True` in **all four** variants, including both broken ones — so the probe was structurally incapable of falsifying any equality claim, while the suite it was arbitrating asserts bare members (`ExitCode.X == 4`), which is `False` under a plain `Enum`. He read a generalization about the suite's assertion form out of an instrument that never touched that form.
+
+Hours earlier, the same engineer had planted a fake binding to prove his offender scan could see an offender. **He ran the control on the first instrument and not on the second** — because by the time he built the second, he was the one doing the correcting.
+
+> **A retraction ships a fresh claim under the credibility of the retraction, and nobody audits the audit** — least of all its author, who has just been visibly rigorous and is spending that.
+
+So the discipline is not "be careful when correcting." It is mechanical, and it is the same one this whole file argues for, applied one level up: **the instrument you built to adjudicate someone else's instrument is an instrument. Control it too.** The `.value` form and the bare-member form are the identical assertion to a reader and different assertions to Python — which is [[feedback_fixture_makes_guard_assertion_inert]] wearing the costume of a probe rather than a test.
+
+Sibling note on writing: he declined to carry the false claim into the issue body even as an explicit retraction, on the grounds that a negation does not survive a skim or a grep — cf. [[feedback_github_negated_close_keyword]], where a negated close-keyword still closes. Reword so the sentence cannot be *matched* as an assertion, rather than trusting "not" to be read.
