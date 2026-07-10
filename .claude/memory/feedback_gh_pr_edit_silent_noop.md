@@ -86,8 +86,11 @@ Same pattern likely affects `gh pr list`, `gh release list`, etc. — verify bef
 `gh api -X PATCH /repos/:o/:r/pulls/:N -f body=@/tmp/body.md` does NOT read the file — it literally pastes the string `@/tmp/body.md` into the body field. The `@<path>` shorthand only works in some gh contexts, and **`--input` is not one of them** — it takes a bare path (or `-` for stdin), and `--input @file` looks for a file *literally named* `@file`. Capital `-F`/`--field body=@file` DOES expand `@file` to file contents. Kofi caught it on #73 in W7.
 
 ```
+# with f.json PRESENT — the precondition is load-bearing
 gh api rate_limit --input @f.json   -> rc=1  "open @f.json: no such file or directory"   # @ taken literally
 gh api rate_limit -F body=@f.json   -> rc=1  "HTTP 404"                                   # @ resolved, request made
+# with f.json ABSENT, row 2 gives 'error parsing "body" value: open f.json: …' and never
+# reaches the 404. The conclusion holds; the printed evidence does not reproduce.
 ```
 
 (An earlier version of this line cited `--input @file` as an example of where `@` *works*. It is the one flag where it does not. Wanjiku Mwangi measured it; the distinguishing evidence is the **stderr**, not the `rc` — both fail, for opposite reasons. **Two commands that both exit non-zero are not thereby the same result.**)

@@ -343,7 +343,17 @@ disk holds a near-miss verdict (wrong field name -> gate 1 must BLOCK)
 
 **Appending an innocuous footnote converts a BLOCK into an ALLOW**, in the hook whose entire subject is closing fail-opens.
 
-The defence offered was that the 121-row harvested corpus of real invocations contains **zero** appends. The reviewer's answer is the rule:
+The only defence *available* was that the 121-row harvested corpus of real invocations contains **zero** appends. Nobody advanced it — the reviewer pre-empted it in the act of blocking. And it is true only under a scope it never states. Measured, detector validated first:
+
+```
+heredoc truncates  '> … <<'   : 28    <- detector is live, can return nonzero
+heredoc appends    '>> … <<'  : 0
+rows containing '>>' at all   : 2     <- one is a real append redirect
+```
+
+So the corpus does not merely fail to prove appends absent — **it contains an append.** Just not of the shape the hook parses. The shape was absent from one week of one team's transcripts while the append operator was in everyday use ten lines away. A reader who does the obvious thing (`grep -c '>>'`) gets `2` and concludes the memory is wrong. **Print the scope, or the zero is unauditable** — this file's own corollary, thirty lines above the sentence that violated it. (Aino Virtanen measured it.)
+
+The reviewer's rule:
 
 > **A zero in a corpus harvested from one week of one team's transcripts is not a measurement of a shape's absence** — and a regex that admits `>{1,2}` is evidence its own author expected the shape.
 
