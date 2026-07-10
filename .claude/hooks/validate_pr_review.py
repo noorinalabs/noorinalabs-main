@@ -103,13 +103,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _charter_trailer import (
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib"))
+from _repo_flag_parse import extract_repo
+from annunaki_log import log_pretooluse_block
+from charter_trailer import (
     extract_charter_field,
     strip_code_regions,
     trailer_block_substring,
 )
-from _repo_flag_parse import extract_repo
-from annunaki_log import log_pretooluse_block
 
 # Charter-enforcer role prefixes for the Single-Reviewer Exception. Derived
 # from `pull-requests.md § Single-Reviewer Exception (Wave-Bootstrap Only)`

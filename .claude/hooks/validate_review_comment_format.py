@@ -118,12 +118,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib"))
 # The charter trailer convention has ONE definition, shared with
 # `validate_pr_review` (#932/#934). Both hooks scope through these functions, so
 # a second, drifting copy of the rule is impossible rather than merely tested.
-from _charter_trailer import extract_charter_field, strip_code_regions
 from _repo_flag_parse import extract_repo
 from annunaki_log import log_pretooluse_block
+from charter_trailer import extract_charter_field, strip_code_regions
 
 CHARTER_FIELD = "RequestOrReplied"
 CHARTER_REF = ".claude/team/charter/pull-requests.md:14"

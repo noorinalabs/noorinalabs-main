@@ -65,7 +65,9 @@ from unittest import mock
 
 _HERE = Path(__file__).resolve().parent
 _HOOKS_DIR = _HERE.parent
+_LIB_DIR = _HOOKS_DIR.parent / "lib"
 sys.path.insert(0, str(_HOOKS_DIR))
+sys.path.insert(0, str(_LIB_DIR))
 
 import validate_review_comment_format as hook  # noqa: E402
 
@@ -572,7 +574,7 @@ class TrailerHelperSingularityTests(unittest.TestCase):
     """
 
     def test_both_hooks_share_one_function_object(self) -> None:
-        import _charter_trailer as ct
+        import charter_trailer as ct
         import validate_pr_review as counting
 
         self.assertIs(counting._extract_charter_field, ct.extract_charter_field)
@@ -585,16 +587,31 @@ class TrailerHelperSingularityTests(unittest.TestCase):
         """The cross-hook import was a stopgap; the shared module replaces it."""
         self.assertFalse(hasattr(hook, "_counting_hook"))
 
-    def test_no_second_definition_in_the_hooks_tree(self) -> None:
+    def test_no_second_definition_anywhere(self) -> None:
+        """Scan hooks AND lib. Scoping this to one directory would make the
+        guard silently stop guarding the moment the module moved — which it
+        just did (main#932)."""
         defs = {"strip_code_regions", "trailer_block_substring", "extract_charter_field"}
-        offenders = []
-        for path in sorted(_HOOKS_DIR.glob("*.py")):
-            src = path.read_text()
-            for name in defs:
-                if re.search(rf"^def _?{name}\(", src, re.MULTILINE):
-                    if path.name != "_charter_trailer.py":
-                        offenders.append(f"{path.name}:{name}")
+        searched = sorted(_HOOKS_DIR.glob("*.py")) + sorted(_LIB_DIR.glob("*.py"))
+        self.assertGreater(len(searched), 20, "file sweep found almost nothing — verify the glob")
+
+        canonical = _LIB_DIR / "charter_trailer.py"
+        self.assertTrue(canonical.is_file(), "the one definition must exist where we think")
+
+        offenders = [
+            f"{path.relative_to(canonical.parent.parent)}:{name}"
+            for path in searched
+            if path != canonical
+            for name in defs
+            if re.search(rf"^def _?{name}\(", path.read_text(), re.MULTILINE)
+        ]
         self.assertEqual(offenders, [], f"trailer convention redefined: {offenders}")
+
+    def test_the_sweep_can_actually_find_a_definition(self) -> None:
+        """Verify the instrument: the scan must match a known definition."""
+        canonical = (_LIB_DIR / "charter_trailer.py").read_text()
+        for name in ("strip_code_regions", "trailer_block_substring", "extract_charter_field"):
+            self.assertRegex(canonical, rf"(?m)^def {name}\(")
 
 
 if __name__ == "__main__":

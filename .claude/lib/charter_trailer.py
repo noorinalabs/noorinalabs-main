@@ -32,16 +32,14 @@ tying them together. So the definition is lifted here and **both hooks scope
 through the one function**. A second definition should be impossible, not
 kept in sync.
 
-Placement note
---------------
+Placement
+---------
 
-Sibling hooks share parsers as ``.claude/hooks/_*.py`` — ``_shell_parse`` is
-consumed by 19 hooks and is named by charter ``hooks.md`` as the pattern for
-"a hook that needs to discriminate shape: consume this helper rather than
-regex." ``.claude/lib/`` holds standalone CLI entrypoints (``memory_budget.py``
-and friends), is not a package, and is not on a hook's import path. This module
-follows the established hook-helper convention; the requirement it satisfies is
-**singularity**, not location.
+``.claude/lib/`` by orchestrator decision (main#932). Both hooks add the lib
+directory to ``sys.path`` and import from here; nothing else defines these
+functions. The requirement is **singularity** — one definition, no drifting
+copy — and the location makes it reachable from ``.claude/lib/`` tooling as
+well as from the two hooks.
 
 The three functions move together on purpose: ``strip_code_regions`` replaces
 code spans with **spaces** rather than deleting them, precisely so that
