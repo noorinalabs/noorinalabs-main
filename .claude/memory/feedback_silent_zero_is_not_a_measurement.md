@@ -212,3 +212,20 @@ Hours earlier, the same engineer had planted a fake binding to prove his offende
 So the discipline is not "be careful when correcting." It is mechanical, and it is the same one this whole file argues for, applied one level up: **the instrument you built to adjudicate someone else's instrument is an instrument. Control it too.** The `.value` form and the bare-member form are the identical assertion to a reader and different assertions to Python — which is [[feedback_fixture_makes_guard_assertion_inert]] wearing the costume of a probe rather than a test.
 
 Sibling note on writing: he declined to carry the false claim into the issue body even as an explicit retraction, on the grounds that a negation does not survive a skim or a grep — cf. [[feedback_github_negated_close_keyword]], where a negated close-keyword still closes. Reword so the sentence cannot be *matched* as an assertion, rather than trusting "not" to be read.
+
+## A guard that fails closed silently selects against the careful (2026-07-10, Hook 4 / main#940)
+
+`validate_pr_review.py` reads verdict fields only from the **trailer block** — text after the *last* sole `---` line. A reviewer put his charter fields at the top of a 107-line review and used one `---` as a horizontal rule beneath them. The hook parsed lines 8–106, found no fields, and **skipped the comment as though it were not a verdict.** A one-line `Approved` with no rule is counted. His was not.
+
+```
+raw body contains 'RequestOrReplied' : True
+_extract_charter_field(...)          : None
+```
+
+> **The hook punished the more careful comment.** A horizontal rule is what you add when a review is long enough to need structure. The failure mode selects against thoroughness, and it does so without a word to anyone.
+
+Failing closed is the right *direction*; that is `feedback_safety_direction_over_ux_friction`. Failing closed **silently** is a different thing, and it is how a green board and an unmerged PR coexist. The cheap remedy generalizes past this hook: **when a parser finds the shape it is looking for anywhere in the input but extracts nothing from its scope, say so.** `body contains "RequestOrReplied" and extractor returned None` is one line and would have named the defect instantly.
+
+It was found by simulating the hook's count with the hook's own functions before merging — not by trusting a `jq` scan that read the whole body and cheerfully reported two approvals. **My `jq` and the hook read the same comment and disagreed about whether it contained a verdict.** Two instruments, one identifier, different referents. Pick the instrument whose answer is the one that will act.
+
+Sibling: a comment id is not a position. The same hook counts approvals as a monotonic set (a withdrawn approval is never subtracted, so a *blocking* reviewer counts as an approver — that one fails **open**) and retains every superseded verdict as live. All three defects are silent, and the accounting reports a confident integer that can be wrong in either direction.
