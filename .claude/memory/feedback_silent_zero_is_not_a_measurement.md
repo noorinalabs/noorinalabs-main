@@ -29,4 +29,24 @@ Adjacent, same day: `chain_integrity.cypher` reports `100 cycles` for a populati
 - When a diagnostic caps its output (`LIMIT`, `head -N`, `--max-count`), the cap must be reported alongside the number or the number is a lie. Never `| head -N` a per-file count and then sum ([[feedback_no_head_in_surface_enumeration]]).
 - Inspect one raw line of any text stream before parsing it (quoting, BOM, CRLF, leading whitespace).
 
+## The control must come from OUTSIDE the scope you are about to trust (2026-07-09, da#383)
+
+The instrument guard this memory prescribes — *make the detector fire on a known positive before believing its zero* — has a blind spot that defeats it entirely, and it was found by the person who had been enforcing it all evening.
+
+A reviewer searched for a fixture string across 6,141,818 values in three `narrators_bio_*` and two `narrator_mentions_*` tables, found zero, and reported that the fixture was fabricated. She **carried a control**: the scan had to find `أبو عمرو الذي`, a row she knew existed, before any zero would count. **It passed.** It was worthless. That row lived in `narrators_bio_itqan` — *inside the subset she was searching*. The string she sought lived in `narrator_aliases_itqan.parquet`, a file the scan never opened. It is on disk in four places, including `narrators_canonical`.
+
+> **A control drawn from inside the search scope proves the scan can see. It cannot prove the scope is right.**
+
+So: *"a zero from a scan that cannot see is not a zero"* has a sibling nobody had stated — **a zero from a scan pointed at the wrong corpus is not a zero either, and the first guard cannot catch the second.** It sits there displaying a green control while you draw a false conclusion. The control must be a value you expect the scan to **miss** if the scope is too narrow: choose it from a file, table, or namespace you are *not* certain is in scope, and widen until it is found.
+
+Corollary for exhaustive claims: **print the scope.** Number of files, number of columns, the file list itself. A reader cannot audit a zero whose search space is implicit, and neither can its author an hour later.
+
+## Reproduce before you escalate
+
+The failure above was cheap for its author, who caught herself and retracted. It was expensive because **the orchestrator amplified it without running it**: escalated it to a merge blocker, told the reviewer to withdraw an approval, and ordered the PR's author to annotate a real, canonical, on-disk narrator name as fabricated — inside the very block whose purpose is to say which rows are real. *The instruction was the defect the block exists to prevent, issued by the person enforcing it.*
+
+> **A finding another person must act on is held to the standard of a finding you would act on yourself. Reproduce before you escalate.**
+
+The asymmetry that makes this hard: *"verify before you delegate"* fires loudly when a finding contradicts you, and silently when it agrees. Four instruments failed that night before anyone checked one that confirmed what they already believed. See [[feedback_verify_diagnosis_before_delegating]] — this is that rule's blind side.
+
 Sibling: [[feedback_passing_repro_masks_bug]] (a *repro* that cannot go red) and [[feedback_test_mock_masks_prod_failure]] (a *test* that cannot go red). This memory is the *measurement* case: a probe that cannot go nonzero. Same root: **verify the instrument before trusting the reading.**
