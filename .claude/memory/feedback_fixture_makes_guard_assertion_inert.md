@@ -79,6 +79,29 @@ We had been hunting only the first sign all night. The second has a specific cor
 
 The practical check: **construct the bad value the way production constructs it** — through the writer, the parser, the wire — not through the in-memory constructor that skips the schema enforcement. If the only way to build your fixture is an API production never calls, the fixture is fiction.
 
+## The law under all of it: a green check must first prove it can go red
+
+Four instruments passed for the wrong reason on 2026-07-09, in one evening, across five PRs:
+
+| instrument | why it was green |
+|---|---|
+| a probe patching `save_manifest` globally | it raised *before* the load, so `rc=1` looked consistent with the invariant |
+| an `rc` probe | it crashed on a bad kwarg before reaching the code under test |
+| a mutation | the pattern never matched; the file was unchanged; `19 passed` |
+| `pytest -k sole_declarer` vs `TestRegistryIsTheSoleDeclarer` | `-k` is case-sensitive; **0 tests collected**; pytest prints a pass and returns `rc=5` |
+
+**Every one of them was green. Not one announced itself.** The last nearly produced *"all ten forms caught"* from ten runs in which zero tests executed — reported to the author of the guard, about the guard protecting the reporter's own PR.
+
+> **An instrument that agrees with you on the first try has not been tested.**
+
+Three of the four were caught by the person who built the instrument, before anyone else saw the result, using one reflex: *a mutation that changes nothing is not a mutation; a filter that selects nothing is not a filter; a probe that never reaches the code is not a probe.*
+
+**Operationally, for every check you are about to believe:**
+- **Prove it red first.** Plant the defect, watch it fail, then remove the plant.
+- **Assert the plant applied** — hash or `grep` the file before and after. An unapplied mutation and a surviving mutant are the same green.
+- **Assert the check ran** — a non-zero collected count, and the process exit status. `pytest` returns `5` (`EXIT_NOTESTSCOLLECTED`) when a selector matches nothing, and that signal is free.
+- **This binds the author of a criterion hardest.** Proposing an acceptance item that cannot fail is the same defect as writing an assertion that cannot fail — and it is harder to see, because nobody runs a criterion. (2026-07-09, da#387: an "every namer imports the registry" obligation, retracted by its author on testing it — a module naming an un-imported `EXIT_*` raises `NameError`, so the assertion could never fail.)
+
 **Why:** a fixture differs from production along many dimensions (filename, header, encoding, ordering, cardinality). If it differs along **the one dimension the assertion tests**, the assertion is unreachable. Nothing warns you: the test passes, the coverage counter increments, the reviewer sees a guard and moves on. Realism is not a stylistic preference for fixtures — for a negative-guard assertion, it is the difference between a test and a decoration.
 
 Note the parser's *own* guard (`_process_chunk` raising on a missing `Book` column) only trips for fixtures that are actually **used**. It cannot see the unreferenced one. Runtime guards do not substitute for a lint gate.
