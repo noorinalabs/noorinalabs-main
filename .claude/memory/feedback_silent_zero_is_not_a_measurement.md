@@ -249,3 +249,26 @@ restored (blob 0f6689b1)       62 passed          <- control
 ```
 
 The guard objects to a **declaration outside the registry**, at any value. Renumbering clears the collision the reader inferred and not the constraint the guard enforces. Before acting on a red, run the fix you are about to make and confirm it goes green — **a diagnosis that explains the failure is not the same as one that would remove it.**
+
+### `git -C <dir> hash-object <relative-path>` hashes the wrong file, in both directions
+
+The `-C` flag makes git resolve the **relative path** against `<dir>`, not against your cwd. A plant-and-restore check written as `git -C "$WORKTREE" hash-object src/x.py`, run while inspecting a *sandbox*, silently hashes the worktree's copy:
+
+```
+$ git -C sandbox hash-object f.txt   -> d97f014c   (sandbox/f.txt: "SANDBOX CONTENT")
+$ git -C .       hash-object f.txt   -> 30cf26ad   (./f.txt:       "WORKTREE CONTENT")
+```
+
+The engineer who hit this had `plant applied: YES` (vacuously true — that file always differs from `main`) and `restore: SILENT FAILURE` (vacuously false). **Both readings were meaningless, and one of them looked like a real bug.** Use `git hash-object -- "$ABS_PATH"`.
+
+The repair is the general lesson, not the flag:
+
+> **Validate the instrument in both directions before believing either.** Mutate the file — it must report DIFFERS. Restore it — it must report SAME. *An instrument that cannot report sameness cannot report difference.*
+
+A one-sided control (plant, see red) proves the detector fires. It does not prove the detector is *pointed at your file*. This is [[feedback_verify_the_referent_not_the_value]] territory: the hash was correct, of the wrong object.
+
+### The rule is not the instance
+
+A brief said *"import the alias form, precisely as da#372 did it."* Measured on `main`: `_cmd_load`'s executable exits are all `ExitCode.X`; the alias form appears only in `_cmd_resolve`'s function-local import, and the one `EXIT_LOAD_FAILED` inside `_cmd_load` is **prose in a comment**. The brief's *rule* — "be consistent with how `cli.py` does it" — was right. The *instance* attached to it was wrong, and following the instance would have made `_cmd_load` the only function in the file mixing both forms.
+
+The implementer followed the rule and refused the instance, showing the count. **When an instruction names both a rule and an example, the example is the part that was not measured.**
