@@ -29,7 +29,7 @@
 - [Wave planning from project board](feedback_wave_planning_from_board.md) — Project 2 is authoritative backlog; labels are post-scoping tags. 37% drift 2026-04-23.
 - [Enforcement hierarchy](feedback_enforcement_hierarchy.md) — prefer hook > skill > charter; charter rules without enforcement decay.
 - [Spawn-brief Requestor field](feedback_spawn_brief_requestor.md) — reviewer-spawn briefs name reviewer as Requestor, PR author as Requestee. PR#349.
-- [Hook 4 prose false-match](feedback_hook4_regex_prose_false_match.md) — NEVER reproduce literal Field:Value shape in review prose; Hook4 first-match grabs it as the verdict.
+- [Prose false-match is the FORMAT hook](feedback_hook4_regex_prose_false_match.md) — never write literal Field:Value in prose; blocker is validate_review_comment_format, not Hook4 (#511).
 - [SSH topology](reference_ssh_topology.md) — mental model, key-to-user mapping, owner pitfalls; verify w/ whoami each session.
 - [Verify diagnosis before delegating](feedback_verify_diagnosis_before_delegating.md) — run git log -- <path> before spawning a fix agent; API state ≠ ground truth. #162.
 - [Check accepted ADRs before spawn](feedback_check_accepted_adr_before_spawn.md) — an issue may propose what an accepted ADR rejected; that's an owner call, not implementer work.
@@ -73,7 +73,7 @@
 - [Verify PostToolUse firing before trusting hook](feedback_verify_posttooluse_firing.md) — at session start, fire one disposable Bash failure to verify annunaki_monitor logs it.
 - [Pre-spawn verify file existence at HEAD](feedback_pre_spawn_verify_file_exists.md) — per-file claims in briefs need git cat-file -e origin/<branch>:<path>, not ls/working-tree.
 - [Reviewer must not branch-switch parent](feedback_reviewer_no_branch_switch.md) — reviewers read PR code via gh api contents?ref=<sha>; MUST NOT git checkout in parent.
-- [Verdict count must match Hook 4 regex](feedback_verdict_count_hook_regex.md) — pre-spawn verdict counts must accept BOTH Requestor: bare AND **Requestor:** bold forms.
+- [Verdict count must match Hook 4 regex](feedback_verdict_count_hook_regex.md) — field is RequestOrReplied:, NEVER Verdict:, after the LAST sole --- line; hooks fail open. main#932.
 - [Requestor must be space-form roster name](feedback_requestor_roster_name_form.md) — Hook4 roster-validates Requestor; dotted First.Last counts as non-roster → 0/2 block; dictate exact name in briefs, fix by REST PATCH. da PR#269.
 - [Safety direction > UX friction](feedback_safety_direction_over_ux_friction.md) — when a hook can't auto-fix cleanly, HARD BLOCK with diagnostic, never allow_with_log. PR#494.
 - [Investigate before implement on unevidenced brief](feedback_investigate_before_implement.md) — brief asserts problem w/o evidence → origin-audit BEFORE Edit/Write. ds#81.
