@@ -118,9 +118,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-# Coupled deliberately: the trailer-scope gate must ask the counting hook what
-# it can actually see, not reimplement its scoping rules. See module docstring.
-import validate_pr_review as _counting_hook
+# The charter trailer convention has ONE definition, shared with
+# `validate_pr_review` (#932/#934). Both hooks scope through these functions, so
+# a second, drifting copy of the rule is impossible rather than merely tested.
+from _charter_trailer import extract_charter_field, strip_code_regions
 from _repo_flag_parse import extract_repo
 from annunaki_log import log_pretooluse_block
 
@@ -443,7 +444,7 @@ def check(input_data: dict) -> dict | None:
 
     # Scan a code-stripped copy so a comment that *documents* the charter
     # template inside a fenced block is not mistaken for a malformed verdict.
-    scan = _counting_hook._strip_code_regions(body)
+    scan = strip_code_regions(body)
 
     has_requestor = re.search(r"\*{0,2}Requestor:\*{0,2}\s*(.+)", scan)
     has_requestee = re.search(r"\*{0,2}Requestee:\*{0,2}\s*(.+)", scan)
@@ -492,7 +493,7 @@ def check(input_data: dict) -> dict | None:
     unreadable = [
         field
         for field in ("Requestor", CHARTER_FIELD)
-        if _counting_hook._extract_charter_field(field, body) is None
+        if extract_charter_field(field, body) is None
     ]
     if unreadable:
         result = {
@@ -569,7 +570,21 @@ def check(input_data: dict) -> dict | None:
             ),
         }
 
-    requestor_lastname = _extract_lastname(has_requestor.group(1))
+    # #934: the swap heuristic must read the Requestor the COUNTING hook reads —
+    # the trailer-scoped, last-match-wins value — never the first `re.search` hit
+    # over the whole body. `has_requestor` above answers only "is this a charter
+    # review comment"; its captured group is prose-contaminated and using it made
+    # this hook fail in both directions at once:
+    #
+    #   fail-closed: prose "…Requestor: Wanjiku Mwangi, Requestee: Khoury" ends in
+    #                the PR author's surname, so a correct verdict was BLOCKED.
+    #   fail-open:   a genuinely swapped trailer PASSED whenever some earlier prose
+    #                match yielded a non-author surname first.
+    #
+    # Gate 2 above has already established that this field parses inside the
+    # trailer, so the value is non-None here.
+    requestor_value = extract_charter_field("Requestor", body)
+    requestor_lastname = _extract_lastname(requestor_value or "")
 
     if requestor_lastname.lower() == branch_author.lower():
         result = {

@@ -55,6 +55,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -465,6 +466,135 @@ class HarnessInvocationCorpusTests(unittest.TestCase):
                 hook.is_comment_command(command),
                 f"recognizer over-matched a non-comment-create command: {command!r}",
             )
+
+
+class FieldScopingBothDirectionsTests(unittest.TestCase):
+    """#934: the unscoped `Requestor` probe failed OPEN and CLOSED on one line.
+
+    `has_requestor.group(1)` was not discarded — it fed `_extract_lastname`,
+    which takes the FINAL token, which fed the Requestor/Requestee swap
+    heuristic, which ends in `decision: block`. So the same `re.search`:
+
+    * **fail-closed** — BLOCKED a correctly-formed, correctly-directed verdict
+      whenever the reviewer explained the rule in prose and that prose's last
+      token was the PR author's surname. The single most likely sentence anyone
+      writes on a PR about this hook.
+    * **fail-open** — PASSED a genuinely swapped trailer whenever an earlier
+      prose match produced a non-author surname first.
+
+    Which failure you got depended on the reviewer's sentence.
+
+    Fixture discipline, learned the hard way inside this very fix: the first
+    proposed repro ended its prose with a full stop, so `_extract_lastname`
+    returned `''`, which matches no surname and blocks nothing. **A repro whose
+    sentence ends in a period cannot go red.** The fail-closed fixture below
+    therefore ends on the author's bare surname, and `test_plants_are_applied`
+    asserts that the trigger is actually reachable — an unapplied plant and a
+    passing hook are indistinguishable from the output alone.
+    """
+
+    BRANCH = "N.Khoury/0928-dynamic-gate-memory"  # author surname: Khoury
+    TRAILER_OK = (
+        "\n---\nRequestor: Wanjiku Mwangi\nRequestee: Nadia Khoury\n"
+        "RequestOrReplied: Approved\nTechDebt: None\n"
+    )
+    TRAILER_SWAPPED = (
+        "\n---\nRequestor: Nadia Khoury\nRequestee: Wanjiku Mwangi\n"
+        "RequestOrReplied: Approved\nTechDebt: None\n"
+    )
+    # Ends on the bare surname — no trailing punctuation. See class docstring.
+    PROSE_ENDING_IN_AUTHOR_SURNAME = (
+        "the fields must read Requestor: Wanjiku Mwangi, Requestee: Khoury"
+    )
+    PROSE_BENIGN = "I reviewed this. Requestor: Wanjiku Mwangi is how it should read"
+
+    def _check(self, body: str) -> str:
+        cmd = f"gh pr comment 930 --repo noorinalabs/noorinalabs-main --body '{body}'"
+        with mock.patch.object(hook, "get_branch_name", return_value=self.BRANCH):
+            return _decision(hook.check(_bash_input(cmd)))
+
+    def test_plants_are_applied(self) -> None:
+        """Both fixtures must actually reach the trigger, or the tests are inert."""
+        author = hook.extract_branch_author_lastname(self.BRANCH)
+        self.assertEqual(author, "Khoury")
+
+        # Fail-closed plant: the UNSCOPED first match must yield the author's
+        # surname. If it does not, the old code path was never exercised.
+        scan = hook.strip_code_regions(self.PROSE_ENDING_IN_AUTHOR_SURNAME + self.TRAILER_OK)
+        first = re.search(r"\*{0,2}Requestor:\*{0,2}\s*(.+)", scan)
+        assert first is not None
+        self.assertEqual(
+            hook._extract_lastname(first.group(1)),
+            author,
+            "fail-closed plant is inert: unscoped first match does not yield the author",
+        )
+
+        # And the fixture must not be the period-ending shape that cannot go red.
+        self.assertFalse(self.PROSE_ENDING_IN_AUTHOR_SURNAME.rstrip().endswith("."))
+
+        # Fail-open plant: the trailer must really be swapped, and the unscoped
+        # first match must NOT yield the author (else the old code blocked by luck).
+        swapped = self.PROSE_BENIGN + self.TRAILER_SWAPPED
+        self.assertEqual(hook.extract_charter_field("Requestor", swapped), "Nadia Khoury")
+        scan2 = hook.strip_code_regions(swapped)
+        first2 = re.search(r"\*{0,2}Requestor:\*{0,2}\s*(.+)", scan2)
+        assert first2 is not None
+        self.assertNotEqual(hook._extract_lastname(first2.group(1)), author)
+
+    def test_fail_closed_correct_verdict_is_allowed(self) -> None:
+        body = self.PROSE_ENDING_IN_AUTHOR_SURNAME + self.TRAILER_OK
+        self.assertEqual(self._check(body), "allow")
+
+    def test_fail_open_swapped_trailer_is_blocked(self) -> None:
+        body = self.PROSE_BENIGN + self.TRAILER_SWAPPED
+        self.assertEqual(self._check(body), "block")
+
+    def test_swapped_trailer_without_prose_still_blocked(self) -> None:
+        self.assertEqual(self._check(self.TRAILER_SWAPPED.lstrip("\n")), "block")
+
+    def test_period_ending_prose_is_allowed(self) -> None:
+        """The inert shape: yields '', matches nothing. Allowed before and after."""
+        body = "never write Requestor: Value shapes in prose." + self.TRAILER_OK
+        self.assertEqual(self._check(body), "allow")
+
+    def test_backticked_prose_is_allowed(self) -> None:
+        body = f"the fields read `{self.PROSE_ENDING_IN_AUTHOR_SURNAME}`" + self.TRAILER_OK
+        self.assertEqual(self._check(body), "allow")
+
+
+class TrailerHelperSingularityTests(unittest.TestCase):
+    """One definition of the charter trailer, or the rule drifts (#934).
+
+    A second hand-maintained copy is what produced the false
+    `feedback_hook4_regex_prose_false_match` memory: the convention described
+    in one place, implemented in another, nothing tying them together. These
+    assertions make a second copy fail CI rather than rot quietly.
+    """
+
+    def test_both_hooks_share_one_function_object(self) -> None:
+        import _charter_trailer as ct
+        import validate_pr_review as counting
+
+        self.assertIs(counting._extract_charter_field, ct.extract_charter_field)
+        self.assertIs(counting._trailer_block_substring, ct.trailer_block_substring)
+        self.assertIs(counting._strip_code_regions, ct.strip_code_regions)
+        self.assertIs(hook.extract_charter_field, ct.extract_charter_field)
+        self.assertIs(hook.strip_code_regions, ct.strip_code_regions)
+
+    def test_format_hook_does_not_import_the_counting_hook(self) -> None:
+        """The cross-hook import was a stopgap; the shared module replaces it."""
+        self.assertFalse(hasattr(hook, "_counting_hook"))
+
+    def test_no_second_definition_in_the_hooks_tree(self) -> None:
+        defs = {"strip_code_regions", "trailer_block_substring", "extract_charter_field"}
+        offenders = []
+        for path in sorted(_HOOKS_DIR.glob("*.py")):
+            src = path.read_text()
+            for name in defs:
+                if re.search(rf"^def _?{name}\(", src, re.MULTILINE):
+                    if path.name != "_charter_trailer.py":
+                        offenders.append(f"{path.name}:{name}")
+        self.assertEqual(offenders, [], f"trailer convention redefined: {offenders}")
 
 
 if __name__ == "__main__":
