@@ -38,11 +38,13 @@ All three rows of the table above are a command that *did* exit non-zero, so `pi
 
 **The honest case for "redirect, don't pipe" is stronger than the false one**, and it has two legs:
 
-1. **`pipefail` over-reports** on the two pipes an agent reaches for most — measured, same shell:
+1. **`pipefail` over-reports** on the pipes an agent reaches for most — measured, same shell:
    ```
    ( set -o pipefail; seq 200000 | head -1 >/dev/null ) -> rc=141   # SIGPIPE. head succeeded.
-   ( set -o pipefail; echo hi | grep -q nomatch )       -> rc=1     # echo succeeded; no-match isn't failure.
+                      echo hi | grep -q nomatch | cat   -> rc=0     # grep's 1 is discarded
+   ( set -o pipefail; echo hi | grep -q nomatch | cat ) -> rc=1     # echo succeeded; no-match isn't failure.
    ```
+   The `| cat` is load-bearing. With `grep -q` as the **last** stage, `rc=1` in every shell mode, and `pipefail` changes nothing — an earlier draft of this file cited that form as an over-report, which a reader running it would have found false. Aino Virtanen caught it. **The section warning that false evidence destroys the file was the section carrying it.**
 2. **`pipefail` cannot catch a command that exits `0` while doing nothing.** `( set -o pipefail; true | tail )` is `rc=0`. That is the entire [[feedback_gh_pr_edit_silent_noop]] family — a `pipefail` pipeline over `gh pr edit` still reports success on a no-op. **This is why "read the effect back from the origin" is the load-bearing bullet, not the exit code.**
 
 And if you genuinely need a pipe with a truthful status, zsh exposes the whole vector: `false | true | false` leaves `pipestatus=(1 0 1)`.
