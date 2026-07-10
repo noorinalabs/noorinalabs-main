@@ -83,7 +83,17 @@ Same pattern likely affects `gh pr list`, `gh release list`, etc. — verify bef
 
 ## Surface 4 — `gh api -X PATCH -f body=@file` literal-paste
 
-`gh api -X PATCH /repos/:o/:r/pulls/:N -f body=@/tmp/body.md` does NOT read the file — it literally pastes the string `@/tmp/body.md` into the body field. The `@<path>` shorthand only works in some gh contexts (e.g., `--input @file`), not in `-f key=value` (lowercase `-f`). Capital `-F`/`--field body=@file` DOES expand `@file` to file contents. Kofi caught it on #73 in W7.
+`gh api -X PATCH /repos/:o/:r/pulls/:N -f body=@/tmp/body.md` does NOT read the file — it literally pastes the string `@/tmp/body.md` into the body field. The `@<path>` shorthand only works in some gh contexts, and **`--input` is not one of them** — it takes a bare path (or `-` for stdin), and `--input @file` looks for a file *literally named* `@file`. Capital `-F`/`--field body=@file` DOES expand `@file` to file contents. Kofi caught it on #73 in W7.
+
+```
+# with f.json PRESENT — the precondition is load-bearing
+gh api rate_limit --input @f.json   -> rc=1  "open @f.json: no such file or directory"   # @ taken literally
+gh api rate_limit -F body=@f.json   -> rc=1  "HTTP 404"                                   # @ resolved, request made
+# with f.json ABSENT, row 2 gives 'error parsing "body" value: open f.json: …' and never
+# reaches the 404. The conclusion holds; the printed evidence does not reproduce.
+```
+
+(An earlier version of this line cited `--input @file` as an example of where `@` *works*. It is the one flag where it does not. Wanjiku Mwangi measured it; the distinguishing evidence is the **stderr**, not the `rc` — both fail, for opposite reasons. **Two commands that both exit non-zero are not thereby the same result.**)
 
 **Recurrence 2026-06-15 (ingest#90 review, Bjørn):** `gh api .../issues/90/comments -f body=@/tmp/bjorn_ingest90_review.md` (comment-CREATE POST, not just PATCH) posted the literal string `@/tmp/...`. Because the `validate_pr_review` hook parses the comment body for `Requestor:`/`RequestOrReplied:`, the Approved verdict was invisible and the 2-reviewer gate stayed unsatisfied until re-posted with `-F`. Lesson: for any file-backed body — comment, review, PATCH — use `-F`/`--field` (not `-f`) and read-back the posted body before claiming the verdict landed.
 
@@ -139,6 +149,25 @@ gh api /repos/:o/:r/pulls/:N --jq '.<field>' | head -3
 ```
 
 If observed value doesn't match intended, the PATCH didn't apply — check stderr, retry, or escalate.
+
+## A bare issue/PR number is not a reference — `gh` resolves it against `cwd` (2026-07-09)
+
+In a multi-repo workspace, issue and PR numbers **collide across every repo**, and `gh` silently picks one by the current directory. It does not warn, and it does not error:
+
+```
+$ cd noorinalabs-main && gh pr view 383
+751ff976  2026-05-12  tech-debt(hook): block_stale_tmp_message_file ...
+$ gh pr view 383 -R noorinalabs/noorinalabs-data-acquisition
+c04f70d4  fix(bio_promote): refuse truncated prose names ...
+```
+
+A reviewer nearly reported *"head moved to 751ff97"* on the wrong PR.
+
+**This is the one silent-resolution the sha discipline cannot catch.** `751ff976` is a perfectly real sha with a real title and a real `updatedAt`; it answers cleanly. Asserting the sha proves *which commit*, and says nothing about **which repository**. Only `gh repo view --json nameWithOwner` (or `-R owner/repo` on every call) resolves the identity.
+
+- **Never write a bare number in a cross-repo brief.** `da#383`, `ig#1044`, `deploy#559` — or `owner/repo#N`.
+- **Pass `-R owner/repo` to every `gh` call** that names an issue or PR by number, especially from a parent org repo whose child clones are nested beneath it.
+- Sibling of the *label vs identity* rule: a number is a **label**, `owner/repo#N` is a **name**. Same defect as `f.name` collapsing nine copies of one basename into one row (see [[feedback_silent_zero_is_not_a_measurement]]), and as grepping for a retracted sentence and finding the retraction that quotes it. **An instrument that answers with a label cannot distinguish the members of the set it labelled.**
 
 Cross-references:
 - `feedback_verify_diagnosis_before_delegating.md` — API state ≠ ground truth until read-back-verified
