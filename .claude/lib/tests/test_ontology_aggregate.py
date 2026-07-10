@@ -23,6 +23,7 @@ from ontology_gen.aggregate import (  # noqa: E402
     INDEX_RELPATH,
     aggregate,
     main,
+    regenerate_indices,
     write_aggregate,
 )
 from ontology_gen.model import CodeGraph, Edge, Node, serialize_graph  # noqa: E402
@@ -134,7 +135,9 @@ class TestCli(unittest.TestCase):
             root = Path(tmp)
             _write_index(root, _graph_with("app.py"))
             out = root / "ontology" / "structural" / "cross-repo-graph.json"
-            rc = main([str(root), "--out", str(out), "--repo", "main=."])
+            # --no-regenerate: roll up the pre-written fixture index rather than
+            # rebuilding from source (the fixture tree has no real .py files).
+            rc = main([str(root), "--out", str(out), "--repo", "main=.", "--no-regenerate"])
             self.assertEqual(rc, 0)
             self.assertTrue(out.exists())
             parsed = json.loads(out.read_text(encoding="utf-8"))
@@ -163,6 +166,50 @@ class TestDefaultRepos(unittest.TestCase):
         self.assertEqual(len(DEFAULT_REPOS), 8)
         for child in ("isnad-graph", "user-service", "deploy", "design-system"):
             self.assertTrue(DEFAULT_REPOS[child].startswith("noorinalabs-"))
+
+
+class TestRegeneration(unittest.TestCase):
+    """main#939: the aggregator rebuilds each in-scope repo's index from source before
+    roll-up, so it does not depend on a committed index existing on disk."""
+
+    def test_regenerate_builds_index_from_source(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # A real source file, but NO pre-existing code-graph.json on disk.
+            (root / "mod.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+            index = root / INDEX_RELPATH
+            self.assertFalse(index.exists())
+
+            statuses = regenerate_indices(root, {"main": "."})
+
+            self.assertTrue(index.exists(), "regeneration must create the per-repo index")
+            self.assertEqual([s.name for s in statuses], ["main"])
+            self.assertTrue(statuses[0].regenerated)
+            self.assertGreaterEqual(statuses[0].files, 1)
+            parsed = json.loads(index.read_text(encoding="utf-8"))
+            paths = {n["path"] for n in parsed["nodes"]}
+            self.assertIn("mod.py", paths)
+
+    def test_regenerate_skips_absent_repo(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            statuses = regenerate_indices(root, {"main": ".", "isnad-graph": "not-cloned"})
+            by_name = {s.name: s for s in statuses}
+            self.assertTrue(by_name["main"].regenerated)
+            self.assertFalse(by_name["isnad-graph"].regenerated)
+
+    def test_main_default_regenerates_before_rollup(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # Stale/empty pre-written index that regeneration must supersede.
+            _write_index(root, CodeGraph())
+            (root / "real.py").write_text("def g():\n    return 2\n", encoding="utf-8")
+            out = root / "ontology" / "structural" / "cross-repo-graph.json"
+            rc = main([str(root), "--out", str(out), "--repo", "main=."])
+            self.assertEqual(rc, 0)
+            parsed = json.loads(out.read_text(encoding="utf-8"))
+            paths = {n["path"] for n in parsed["nodes"]}
+            self.assertIn("main/real.py", paths)
 
 
 if __name__ == "__main__":  # pragma: no cover

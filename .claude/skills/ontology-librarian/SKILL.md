@@ -54,44 +54,38 @@ Report semantic overlay staleness:
 
 **Important:** The librarian does NOT trigger the resolver. It reports staleness so the user can decide.
 
-#### 1b. Structural index staleness (committed index vs source tree)
+#### 1b. Structural index freshness (build product vs source tree)
 
-The structural index at `ontology/structural/llms.txt` is generated wholesale — its staleness is measured by comparing the git commit that last touched `llms.txt` against the source files modified since that commit.
+The structural index at `ontology/structural/llms.txt` is a **gitignored build product** (main#939 — no longer committed; it was regenerated wholesale from source and committing it made every concurrent PR conflict). So staleness is not a git-history question but a build-product one: **does the built index exist on disk, and is it newer than the source it indexes?** `/session-start` Step 3b rebuilds it at the start of every session, so it should normally be present and current. The librarian reports; it does not rebuild (read-only).
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+STRUCT_LLMS="$REPO_ROOT/ontology/structural/llms.txt"
 
-# Commit + date that last regenerated the structural index
-STRUCT_COMMIT=$(git -C "$REPO_ROOT" log --oneline -1 --format="%H %ai" -- ontology/structural/llms.txt 2>/dev/null || echo "")
-STRUCT_SHA=$(printf '%s' "$STRUCT_COMMIT" | cut -d' ' -f1)
-
-# Read the header metadata from the committed index (files/nodes/edges/langs)
-echo "Structural index header:"
-grep "^# " "$REPO_ROOT/ontology/structural/llms.txt" 2>/dev/null | head -5
-echo ""
-
-if [ -z "$STRUCT_SHA" ]; then
-  echo "STRUCTURAL INDEX: not yet generated — run the generator:"
-  echo "  PYTHONPATH=.claude/lib python3 -m ontology_gen . --out ontology/structural/"
+if [ ! -f "$STRUCT_LLMS" ]; then
+  echo "STRUCTURAL INDEX: not present on disk — gitignored build product (main#939), not yet built this session."
+  echo "  Regenerate: PYTHONPATH=.claude/lib python3 -m ontology_gen.aggregate ."
+  echo "  (/session-start 3b rebuilds it automatically at session start.)"
 else
-  # Count source files changed since the last index generation
-  CHANGED=$(git -C "$REPO_ROOT" diff --name-only "$STRUCT_SHA"..HEAD -- \
-    '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.cypher' '*.cql' 2>/dev/null | wc -l | tr -d ' ')
-  echo "Structural index last generated: $STRUCT_COMMIT"
-  echo "Source files changed since then: ${CHANGED:-0}"
+  echo "Structural index header:"
+  grep "^# " "$STRUCT_LLMS" 2>/dev/null | head -5
+  # Build-product freshness: count tracked source files newer than the built index.
+  # `-nt` is a shell test (file newer-than); restrict to this repo's tracked source so
+  # cloned child repos beneath the root don't inflate the count.
+  CHANGED=$(git -C "$REPO_ROOT" ls-files -- \
+      '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.cypher' '*.cql' 2>/dev/null \
+    | while IFS= read -r f; do [ "$REPO_ROOT/$f" -nt "$STRUCT_LLMS" ] && echo "$f"; done \
+    | wc -l | tr -d ' ')
   if [ "${CHANGED:-0}" -eq 0 ]; then
-    echo "STRUCTURAL INDEX: current."
-  elif [ "${CHANGED:-0}" -le 5 ]; then
-    echo "STRUCTURAL INDEX: ${CHANGED} source file(s) changed — slightly behind."
-    echo "  Regenerate: PYTHONPATH=.claude/lib python3 -m ontology_gen . --out ontology/structural/"
+    echo "STRUCTURAL INDEX: current (built index is newer than all tracked source)."
   else
-    echo "STRUCTURAL INDEX: ${CHANGED} source files changed — consider regenerating before detailed structural queries."
-    echo "  Regenerate: PYTHONPATH=.claude/lib python3 -m ontology_gen . --out ontology/structural/"
+    echo "STRUCTURAL INDEX: ${CHANGED} source file(s) modified since the index was built — regenerate for exact structural queries."
+    echo "  Regenerate: PYTHONPATH=.claude/lib python3 -m ontology_gen.aggregate ."
   fi
 fi
 ```
 
-Report structural staleness alongside the overlay staleness. The two are independent: the overlay can be dirty while the structural index is current, and vice versa.
+Report structural freshness alongside the overlay staleness. The two are independent: the overlay can be dirty while the structural index is current, and vice versa.
 
 ### 2. Context retrieval (if query provided)
 
@@ -156,8 +150,8 @@ If no query was provided, give a brief ontology health summary covering both lay
 
 **Structural index (ontology/structural/llms.txt):**
   Coverage: {files=N nodes=N edges=N langs=...} (from header comment)
-  Last generated: {commit sha + date}
-  Drift: {current | N source files changed since last generation}
+  Built: {present on disk | not built this session} (gitignored build product, main#939)
+  Drift: {current | N source files newer than the built index}
   Cross-repo graph: {present | absent} (ontology/structural/cross-repo-graph.json)
 
 {staleness details and remediation instructions if any}
@@ -165,12 +159,12 @@ If no query was provided, give a brief ontology health summary covering both lay
 
 ### 4. Stale reference warnings
 
-When reporting query results, check if any of the source files that contributed to those ontology entries are dirty (semantic overlay) or have been modified since the last structural regeneration. If so, append a warning:
+When reporting query results, check if any of the source files that contributed to those ontology entries are dirty (semantic overlay) or have been modified more recently than the built structural index. If so, append a warning:
 
 ```
 Warning: The following source files may have changed since the last update:
   - {file_path} (changed {tracked_at}, last resolved {resolved_at})  [semantic overlay]
-  - {file_path} (modified after structural index @ {commit_sha})  [structural index]
+  - {file_path} (modified after the structural index was last built)  [structural index]
 ```
 
 ## Remediation — what to run when each layer is stale
@@ -178,8 +172,8 @@ Warning: The following source files may have changed since the last update:
 | Layer | Stale signal | Remediation |
 |-------|-------------|-------------|
 | Semantic overlay | `N` dirty in `checksums.json` | `/ontology-rebuild` |
-| Structural index (parent) | `N` source files changed since last `llms.txt` commit | `PYTHONPATH=.claude/lib python3 -m ontology_gen . --out ontology/structural/` |
-| Cross-repo graph | Structural index regenerated or child repo indices updated | `PYTHONPATH=.claude/lib python3 -m ontology_gen.aggregate .` |
+| Structural index (parent) | built index missing, or `N` source files newer than it | `PYTHONPATH=.claude/lib python3 -m ontology_gen.aggregate .` |
+| Cross-repo graph | any in-scope repo's source changed since last build | `PYTHONPATH=.claude/lib python3 -m ontology_gen.aggregate .` |
 
 The librarian never runs these — it only reports. To act on the staleness, run the appropriate command or skill (see `/session-start` Step 3 and `/wave-wrapup` Step 12 for the lifecycle integration points).
 

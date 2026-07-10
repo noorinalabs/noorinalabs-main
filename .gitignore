@@ -54,6 +54,19 @@ temp/
 # NOT ignored — durable cross-wave genericize/skip state must be committed.
 .claude/generic_prompt_pending.json
 
+# Generated structural ontology index (main#939, #820 C×T2). The structural layer
+# is "always-current-by-regeneration" (#857) — regenerated wholesale from source by
+# the owned generator (.claude/lib/ontology_gen/) at /session-start 3b and
+# /wave-wrapup 12b. Committing it made EVERY concurrent PR that touched any source
+# file conflict on a whole-file generated artifact that carries no information (the
+# only correct resolution is "discard both, regenerate"), and GitHub's server-side
+# merge cannot run the per-clone union merge-driver that tried to paper over it. So
+# it is no longer committed: it is a build product, produced on demand and read
+# locally. The cross-repo aggregator (ontology_gen.aggregate) regenerates each
+# in-scope repo's index locally before rolling up, so nothing depends on a committed
+# copy. See ontology/README.md § Structural layer and issue #939.
+ontology/structural/
+
 # Python lockfile for the virtual parent project (no real deps; auto-regen)
 /uv.lock
 

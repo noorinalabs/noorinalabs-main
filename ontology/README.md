@@ -39,14 +39,26 @@ Location: `ontology/structural/`
 
 | File | What it contains |
 |------|-----------------|
-| `code-graph.json` | Per-repo node/edge graph — files, modules, classes, functions and the typed edges between them (`contains`, `imports`, `imports_from`, `calls`, `inherits`, `references`). One file per repo, committed alongside its source. |
+| `code-graph.json` | Per-repo node/edge graph — files, modules, classes, functions and the typed edges between them (`contains`, `imports`, `imports_from`, `calls`, `inherits`, `references`). One file per repo, rebuilt from that repo's source. |
 | `llms.txt` | Human-readable summary of the structural index; consumed by `/ontology-librarian` as a quick-reference digest. |
 | `cross-repo-graph.json` | Central aggregated graph: the union of every in-scope repo's `code-graph.json`, with all node ids namespaced by repo (e.g. `isnad-graph/src/api/app.py`, `main/.claude/lib/ontology_gen/aggregate.py::aggregate`). Lives in `noorinalabs-main`. |
 
 The structural layer is produced by the generator at `.claude/lib/ontology_gen/`
-(main#855). It is **never hand-edited** and is **not checksum-tracked** — it is
-always-current-by-regeneration. To update it, re-run the generator; do not
-resolve it with `/ontology-rebuild`.
+(main#855). It is **never hand-edited**, **not checksum-tracked**, and — since
+main#939 — **not committed**: it is a **gitignored build product**, rebuilt on
+demand rather than stored in git. Committing it made every concurrent PR conflict
+on a generated whole-file artifact (the only correct resolution being "discard both
+sides and regenerate"), and the union merge-driver that tried to absorb that could
+never run on GitHub's server-side merge. To (re)build it, run the aggregator — it
+regenerates **every in-scope repo's** per-repo index from source and writes the
+cross-repo graph, so nothing depends on a committed copy:
+
+```bash
+PYTHONPATH=.claude/lib python3 -m ontology_gen.aggregate .
+```
+
+`/session-start` Step 3b and `/wave-wrapup` Step 12b do this automatically. Do not
+resolve the structural layer with `/ontology-rebuild`.
 
 ### Layer 2: Semantic overlay (curated)
 
@@ -115,7 +127,7 @@ ontology/
     ingestion.yaml
     isnad-ingest-platform.yaml
     landing-page.yaml
-  structural/             # GENERATED — never hand-edit; not checksum-tracked
+  structural/             # GENERATED build product — gitignored (main#939), never hand-edit
     code-graph.json       # Per-repo structural index (noorinalabs-main's own)
     llms.txt              # Human-readable structural digest
     cross-repo-graph.json # Aggregated cross-repo graph (noorinalabs-main only)
@@ -137,47 +149,36 @@ Generator and skills:
 
 - Python 3.12+ with the `ontology_gen` package importable (run from `.claude/lib/`
   or with that directory on `PYTHONPATH`).
-- `git` (for the merge driver).
 
-### Register the merge driver (one-time per clone)
+### No merge-driver setup (main#939)
 
-`code-graph.json` is a committed artifact that parallel branches all regenerate.
-Without a merge driver, concurrent regenerations produce spurious conflicts on
-the sorted arrays. The union merge driver resolves this semantically:
+The structural index used to be committed and needed a per-clone union merge
+driver to absorb spurious conflicts. That is gone: the index is now a **gitignored
+build product**, so there is nothing in git to merge and **no setup step**. (The
+merge driver could never have worked on GitHub anyway — custom `merge=` drivers
+live in per-clone `git config` and GitHub's server-side merge never runs them,
+which is exactly why committing the index made every concurrent PR conflict.)
+
+### Build the structural layer (one command)
+
+The aggregator is the primary entry point: it regenerates **every in-scope repo's**
+per-repo index from source and writes the cross-repo graph. Run from `.claude/lib/`
+(or with that directory on `PYTHONPATH`):
 
 ```bash
-make setup-ontology-merge-driver
+cd /path/to/noorinalabs-main/.claude/lib
+python3 -m ontology_gen.aggregate ../..
 ```
 
-That target runs:
+The aggregator degrades gracefully — repos not cloned beneath the root are skipped
+and reported. Pass `--no-regenerate` to roll up whatever indices are already on
+disk instead of rebuilding.
 
-```bash
-git config merge.ontology-codegraph.name 'ontology code-graph union merge'
-git config merge.ontology-codegraph.driver \
-    'python3 .claude/lib/ontology_gen/merge_driver.py %O %A %B %P'
-```
-
-`.gitattributes` names `merge=ontology-codegraph` on both
-`ontology/structural/code-graph.json` and `ontology/structural/cross-repo-graph.json`,
-so the driver fires automatically on merge conflicts in those files.
-
-This is a **per-clone** setup step — git merge driver config is local-only and
-cannot be committed (main#856).
-
-### Generate the structural index for a repo
-
-Run from `.claude/lib/` (or with that directory on `PYTHONPATH`):
+### Generate a single repo's index (without aggregating)
 
 ```bash
 cd /path/to/noorinalabs-main/.claude/lib
 python3 -m ontology_gen /path/to/repo --out /path/to/repo/ontology/structural/
-```
-
-For `noorinalabs-main` itself:
-
-```bash
-cd .claude/lib
-python3 -m ontology_gen ../.. --out ontology/structural/
 ```
 
 Optional flags:
@@ -186,42 +187,25 @@ Optional flags:
   the basename of the repo root).
 - `--out <dir>` — output directory for `code-graph.json` and `llms.txt`.
 
-### Regenerate the cross-repo aggregated graph
-
-Run after regenerating one or more per-repo indices:
-
-```bash
-cd .claude/lib
-python3 -m ontology_gen.aggregate ../.. --out ontology/structural/cross-repo-graph.json
-```
-
-The aggregator degrades gracefully — repos whose index is absent are skipped and
-reported; the central graph is built from whatever is present on disk.
-
 ---
 
 ## Getting started: first-run walkthrough
 
-1. **Register the merge driver** (one-time):
-
-   ```bash
-   make setup-ontology-merge-driver
-   ```
-
-2. **Regenerate the structural index** for `noorinalabs-main`:
+1. **Build the structural layer** (no setup step needed — it is a gitignored build
+   product, main#939):
 
    ```bash
    cd .claude/lib
-   python3 -m ontology_gen ../.. --out ontology/structural/
+   python3 -m ontology_gen.aggregate ../..
    ```
 
-3. **Read the structural digest** to get a quick feel for the codebase shape:
+2. **Read the structural digest** to get a quick feel for the codebase shape:
 
    ```bash
    cat ontology/structural/llms.txt
    ```
 
-4. **Run the librarian** to check semantic overlay health and retrieve context:
+3. **Run the librarian** to check semantic overlay health and retrieve context:
 
    ```
    /ontology-librarian
@@ -233,7 +217,7 @@ reported; the central graph is built from whatever is present on disk.
    /ontology-librarian narrator isnad graph
    ```
 
-5. **Read the semantic overlay** for the area you are about to work on —
+4. **Read the semantic overlay** for the area you are about to work on —
    `domain.yaml` for domain entities, `services.yaml` for service topology,
    `conventions.md` for coding conventions, `repos/<name>.yaml` for
    repo-specific details.
@@ -275,19 +259,20 @@ layer.
 
 ### Regenerating the structural layer
 
-The structural layer (`ontology/structural/`) is not dirty-tracked and not
-resolved by `/ontology-rebuild`. To refresh it after code changes:
+The structural layer (`ontology/structural/`) is not dirty-tracked, not resolved
+by `/ontology-rebuild`, and — since main#939 — not committed (a gitignored build
+product). To rebuild it after code changes, run the aggregator; it regenerates
+every in-scope repo's per-repo index and the cross-repo graph in one pass:
 
 ```bash
 cd .claude/lib
-python3 -m ontology_gen ../.. --out ontology/structural/
-# Then re-aggregate (if working in noorinalabs-main with child repos present):
-python3 -m ontology_gen.aggregate ../.. --out ontology/structural/cross-repo-graph.json
+python3 -m ontology_gen.aggregate ../..
 ```
 
-Regenerate the structural layer whenever significant code structure changes
-(new modules, renamed classes, changed call graphs). Commit the updated
-`code-graph.json` and `llms.txt` alongside the code change.
+You never commit `code-graph.json` / `llms.txt` / `cross-repo-graph.json` — they
+are build products, rebuilt on demand and gitignored. `/session-start` Step 3b and
+`/wave-wrapup` Step 12b rebuild them automatically, so in normal flow you rarely
+run this by hand.
 
 ### Wave integration points
 

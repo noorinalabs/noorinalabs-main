@@ -5,29 +5,11 @@
 *.xlsx binary
 *.pptx binary
 
-# Structural ontology graph artifacts (main#855/#856, #820 C×T2) are generated,
-# sorted JSON that parallel branches regenerate independently — a textual 3-way
-# merge spuriously conflicts on the sorted node/edge arrays even when the two
-# sides touched different source files (the feedback_parallel_panels_shared_file
-# hazard). Route them through the union merge-driver
-# (.claude/lib/ontology_gen/merge_driver.py): it parses both sides + base, unions
-# nodes by id and edges by (src,dst,type), and re-serializes canonically — so a
-# merge result is byte-identical to a fresh regenerate.
-#
-# .gitattributes only NAMES the driver; the driver COMMAND must be registered in
-# each clone's local git config (it cannot live here). Run once per clone:
-#     make setup-ontology-merge-driver
-# or manually:
-#     git config merge.ontology-codegraph.name 'ontology code-graph union merge'
-#     git config merge.ontology-codegraph.driver \
-#       'python3 .claude/lib/ontology_gen/merge_driver.py %O %A %B %P'
-#
-# CANONICAL FORM (#871): plain-script, NOT ``python3 -m``. The script is
-# self-contained (ImportError fallback #860 bootstraps sys.path via
-# Path(__file__).resolve()), so no PYTHONPATH setup is required.
-# Child repos use the same plain-script form with an absolute path resolved
-# at registration time via ``python3 scripts/structural_ontology.py
-# register-merge-driver`` (or ``make setup-hooks``). See
-# docs/devops/ontology-structural.md (#871, #820 C×T2).
-ontology/structural/code-graph.json merge=ontology-codegraph
-ontology/structural/cross-repo-graph.json merge=ontology-codegraph
+# Structural ontology graph artifacts (ontology/structural/) were previously
+# committed and routed through a union merge-driver (main#855/#856/#871). That
+# whole apparatus was retired by main#939: the index is no longer committed (it is
+# gitignored and regenerated on demand — see .gitignore / ontology/README.md), so
+# there is nothing here to merge. The merge-driver could never have worked on
+# GitHub anyway — custom merge= drivers live in per-clone git config and GitHub's
+# server-side merge never runs them — which is precisely why committing the index
+# made every concurrent PR conflict. No merge= attribute is registered for it now.

@@ -1,9 +1,8 @@
-.PHONY: help setup-hooks setup-ontology-merge-driver lint format docs
+.PHONY: help setup-hooks lint format docs
 
 help:
 	@echo "Targets:"
 	@echo "  setup-hooks                   Install pre-commit hooks (one-time per clone)"
-	@echo "  setup-ontology-merge-driver   Register the code-graph union merge-driver (one-time per clone)"
 	@echo "  lint                          Run ruff lint on .claude/hooks/"
 	@echo "  format                        Run ruff format on .claude/hooks/"
 	@echo "  docs                          Regenerate MS Office docs from their markdown sources"
@@ -15,22 +14,12 @@ setup-hooks:
 	}
 	pre-commit install
 
-# Register the union merge-driver named in .gitattributes for the structural
-# ontology graph artifacts (ontology/structural/{code-graph,cross-repo-graph}.json).
-# .gitattributes only names `merge=ontology-codegraph`; the driver COMMAND is
-# per-clone local git config (it cannot be committed), so run this once per clone
-# (main#856, #820 C×T2). Without it git falls back to the default text merge and
-# the sorted JSON spuriously conflicts on parallel regenerations.
-#
-# CANONICAL FORM (#871): plain-script — self-contained via the ImportError
-# fallback in merge_driver.py (#860), no PYTHONPATH needed. Child repos use the
-# same form with an absolute path resolved by ``structural_ontology.py
-# register-merge-driver``. See docs/devops/ontology-structural.md.
-setup-ontology-merge-driver:
-	git config merge.ontology-codegraph.name 'ontology code-graph union merge'
-	git config merge.ontology-codegraph.driver \
-		'python3 .claude/lib/ontology_gen/merge_driver.py %O %A %B %P'
-	@echo "Registered merge driver 'ontology-codegraph' (see .gitattributes)."
+# NOTE (main#939): the `setup-ontology-merge-driver` target was removed. The
+# structural ontology index is no longer committed (see .gitignore /
+# ontology/README.md § Structural layer), so there is nothing to merge and the
+# per-clone union merge-driver it registered is retired. GitHub's server-side
+# merge never ran that driver anyway, which is why committing the index made
+# every concurrent PR conflict.
 
 lint:
 	python3 -m ruff check .claude/hooks/ .claude/lib/

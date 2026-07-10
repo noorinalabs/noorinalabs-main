@@ -14,11 +14,12 @@ from __future__ import annotations
 from .generate import build_graph, discover, generate
 from .model import CodeGraph, Edge, FileInfo, Node
 
-# NOTE: the CLI submodules ``aggregate`` and ``merge_driver`` are intentionally NOT
-# re-exported here. Both are run as ``python3 -m ontology_gen.<submodule>``; importing
-# them at package-init time would re-import the module after the package loads and emit a
-# spurious ``RuntimeWarning`` from runpy. Import them directly (``from ontology_gen.aggregate
-# import aggregate``) where needed.
+# NOTE: the CLI submodule ``aggregate`` is intentionally NOT re-exported here. It is run
+# as ``python3 -m ontology_gen.aggregate``; importing it at package-init time would
+# re-import the module after the package loads and emit a spurious ``RuntimeWarning`` from
+# runpy. Import it directly (``from ontology_gen.aggregate import aggregate``) where needed.
+# (The former ``merge_driver`` submodule was retired by main#939 — the structural index is
+# no longer committed, so there is nothing to merge.)
 
 __all__ = [
     "CodeGraph",

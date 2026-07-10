@@ -1,6 +1,23 @@
 # Structural ontology — merge-driver canonical form and fan-out checklist
 
-This document is the canonical reference for the union merge-driver that prevents
+> **SUPERSEDED IN `noorinalabs-main` (main#939), rollout in progress for child repos.**
+> The root cause the union merge-driver tried to fix — spurious conflicts on a committed,
+> regenerated `code-graph.json` — is fixed at the source in `noorinalabs-main` by **no longer
+> committing the structural index** (it is now a gitignored build product; see
+> [`ontology/README.md`](../../ontology/README.md) § Structural layer and the root `.gitignore`).
+> The merge-driver could never have worked on GitHub anyway: custom `merge=` drivers live in
+> per-clone `git config` and GitHub's server-side merge never runs them, so committing the index
+> made every concurrent PR conflict regardless. In `noorinalabs-main` the driver, its
+> `.gitattributes` registration, and `make setup-ontology-merge-driver` have been **retired**.
+> Cross-repo aggregation now regenerates every in-scope repo's index locally before rolling up
+> (`ontology_gen.aggregate`), so nothing depends on a committed copy.
+>
+> The merge-driver mechanics below are **retained transitionally** for **child repos that have
+> not yet migrated** — each still commits its own index and registers the driver until its
+> per-#939 follow-up lands (`noorinalabs-data-acquisition` is expedited). As each child migrates,
+> delete its row from the fan-out checklist. This banner is removed once every child has migrated.
+
+This document was the canonical reference for the union merge-driver that prevented
 spurious merge conflicts on `ontology/structural/code-graph.json` (#855, #856, #820
 C×T2). It was authored to standardize the invocation form across all repos after a
 divergence was identified between noorinalabs-main and the isnad-graph pilot (#871).

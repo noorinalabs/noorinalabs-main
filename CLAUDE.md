@@ -157,7 +157,7 @@ Supporting roles:
 | **Change Resolver** | Skill (`/ontology-rebuild`) | Reads dirty checksums, reconciles the **semantic overlay** + auto-updatable docs; never touches the structural layer |
 | **Librarian** | Skill (`/ontology-librarian`) | Read-only reference — staleness check for **both layers**, structural index lookup alongside semantic overlay |
 
-> **Structural layer is always-current-by-regeneration (#857, #820/C×T2).** It is NOT checksum-tracked and `/ontology-rebuild` never resolves it — regenerate it instead. This regeneration property is also why Hook 15 was softened from a hard block to advisory: structural context is current-by-construction, not stale.
+> **Structural layer is always-current-by-regeneration (#857, #820/C×T2) and NOT committed (#939).** It is a **gitignored build product** — regenerated on demand, never stored in git (committing it made every concurrent PR conflict on a generated whole-file artifact). It is NOT checksum-tracked and `/ontology-rebuild` never resolves it — rebuild it with the aggregator instead (`PYTHONPATH=.claude/lib python3 -m ontology_gen.aggregate .`, which regenerates every in-scope repo's index locally before rolling up). This regeneration property is also why Hook 15 was softened from a hard block to advisory: structural context is current-by-construction, not stale.
 
 ### Session start — MANDATORY, NON-NEGOTIABLE
 
@@ -201,7 +201,7 @@ The query should describe the area being modified (e.g., `/ontology-librarian na
 ```
 ontology/
   checksums.json          # Change tracking for the SEMANTIC OVERLAY only (version-controlled)
-  structural/             # GENERATED structural layer (owned generator #855) — NOT checksum-tracked
+  structural/             # GENERATED build product (owned generator #855) — gitignored (#939), NOT checksum-tracked
     llms.txt              #   Per-repo structural index (files/nodes/edges), section-loadable
     code-graph.json       #   Machine-readable graph for tooling
     cross-repo-graph.json #   Central repo-namespaced cross-repo aggregation (ontology_gen.aggregate)
