@@ -140,6 +140,25 @@ gh api /repos/:o/:r/pulls/:N --jq '.<field>' | head -3
 
 If observed value doesn't match intended, the PATCH didn't apply — check stderr, retry, or escalate.
 
+## A bare issue/PR number is not a reference — `gh` resolves it against `cwd` (2026-07-09)
+
+In a multi-repo workspace, issue and PR numbers **collide across every repo**, and `gh` silently picks one by the current directory. It does not warn, and it does not error:
+
+```
+$ cd noorinalabs-main && gh pr view 383
+751ff976  2026-05-12  tech-debt(hook): block_stale_tmp_message_file ...
+$ gh pr view 383 -R noorinalabs/noorinalabs-data-acquisition
+c04f70d4  fix(bio_promote): refuse truncated prose names ...
+```
+
+A reviewer nearly reported *"head moved to 751ff97"* on the wrong PR.
+
+**This is the one silent-resolution the sha discipline cannot catch.** `751ff976` is a perfectly real sha with a real title and a real `updatedAt`; it answers cleanly. Asserting the sha proves *which commit*, and says nothing about **which repository**. Only `gh repo view --json nameWithOwner` (or `-R owner/repo` on every call) resolves the identity.
+
+- **Never write a bare number in a cross-repo brief.** `da#383`, `ig#1044`, `deploy#559` — or `owner/repo#N`.
+- **Pass `-R owner/repo` to every `gh` call** that names an issue or PR by number, especially from a parent org repo whose child clones are nested beneath it.
+- Sibling of the *label vs identity* rule: a number is a **label**, `owner/repo#N` is a **name**. Same defect as `f.name` collapsing nine copies of one basename into one row (see [[feedback_silent_zero_is_not_a_measurement]]), and as grepping for a retracted sentence and finding the retraction that quotes it. **An instrument that answers with a label cannot distinguish the members of the set it labelled.**
+
 Cross-references:
 - `feedback_verify_diagnosis_before_delegating.md` — API state ≠ ground truth until read-back-verified
 - `feedback_refresh_before_status_claim.md` — every claim "PR is at state X" needs an API call first
