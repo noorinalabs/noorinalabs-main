@@ -39,7 +39,26 @@ A reviewer searched for a fixture string across 6,141,818 values in three `narra
 
 So: *"a zero from a scan that cannot see is not a zero"* has a sibling nobody had stated — **a zero from a scan pointed at the wrong corpus is not a zero either, and the first guard cannot catch the second.** It sits there displaying a green control while you draw a false conclusion. The control must be a value you expect the scan to **miss** if the scope is too narrow: choose it from a file, table, or namespace you are *not* certain is in scope, and widen until it is found.
 
-Corollary for exhaustive claims: **print the scope.** Number of files, number of columns, the file list itself. A reader cannot audit a zero whose search space is implicit, and neither can its author an hour later.
+Corollary for exhaustive claims: **print the scope.** Number of files, number of columns, the file list itself. A reader cannot audit a zero whose search space is implicit, and neither can its author an hour later. Where the zero becomes a written claim about provenance — *"this fixture is not drawn from any artifact"* — **the provenance claim must carry its own provenance.**
+
+That corollary is not optional, and the proof is that the rule alone did not stop it. **Three people ran this scope error in one evening, each with a passing control.** The first caught herself. The second (me) amplified her finding into a merge blocker without running anything. The third re-derived the same zero from the same unopened file and **committed it into the artifact** — a `NOT ON DISK` heading over a row living in a staging table beside the five he searched — inside the very block whose purpose is to say which rows are real. Nobody was careless; a correct label is not the fix. **Stating the scope is the fix**, because it is the only version a reader can falsify.
+
+Two siblings from the same night:
+
+- **The instrument that confirms a correction must not match the text of the thing being corrected.** Grepping for a retracted sentence finds the retraction quoting it. (Kwesi Boateng — he nearly re-fixed something already fixed.)
+- **A citation that names a file for some rows and leaves others unattributed lets the reader infer the named file for all of them.** Partial attribution certifies what it omits. Same shape as the partial honesty label in [[feedback_fixture_makes_guard_assertion_inert]].
+
+## The third gate: was it the right *subject*?
+
+An instrument guard proves the instrument can **see**. It does not prove you **looked in the right place**. This holds at every layer, and each layer was breached the same night:
+
+| gate | answered by | breached by |
+|---|---|---|
+| did the probe apply? | plant-applied assertion | — |
+| did it run? | collected-count pin (`rc=5` is not enough; a typo'd selector matching *one unrelated test* clears a non-emptiness check) | *a non-zero count is not a measurement either* |
+| **was it the right subject?** | **nothing** | a test proving `enum.unique` works on an enum **it built itself**, never touching the registry; a scan proving it can see a row **inside the subset it searched** |
+
+A mutation harness's `--expect-file` is satisfied perfectly by a plant applied to the wrong file. **Assert the plant is present in the subject the test imports, not in the file the harness was told about.** Nikolaos Papadopoulos's formulation, on his own tooling: *"Every instrument guard I have written proves the instrument can see. Not one proves I looked in the right place."*
 
 ## Reproduce before you escalate
 
