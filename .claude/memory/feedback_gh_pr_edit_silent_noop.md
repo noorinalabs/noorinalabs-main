@@ -83,7 +83,14 @@ Same pattern likely affects `gh pr list`, `gh release list`, etc. — verify bef
 
 ## Surface 4 — `gh api -X PATCH -f body=@file` literal-paste
 
-`gh api -X PATCH /repos/:o/:r/pulls/:N -f body=@/tmp/body.md` does NOT read the file — it literally pastes the string `@/tmp/body.md` into the body field. The `@<path>` shorthand only works in some gh contexts (e.g., `--input @file`), not in `-f key=value` (lowercase `-f`). Capital `-F`/`--field body=@file` DOES expand `@file` to file contents. Kofi caught it on #73 in W7.
+`gh api -X PATCH /repos/:o/:r/pulls/:N -f body=@/tmp/body.md` does NOT read the file — it literally pastes the string `@/tmp/body.md` into the body field. The `@<path>` shorthand only works in some gh contexts, and **`--input` is not one of them** — it takes a bare path (or `-` for stdin), and `--input @file` looks for a file *literally named* `@file`. Capital `-F`/`--field body=@file` DOES expand `@file` to file contents. Kofi caught it on #73 in W7.
+
+```
+gh api rate_limit --input @f.json   -> rc=1  "open @f.json: no such file or directory"   # @ taken literally
+gh api rate_limit -F body=@f.json   -> rc=1  "HTTP 404"                                   # @ resolved, request made
+```
+
+(An earlier version of this line cited `--input @file` as an example of where `@` *works*. It is the one flag where it does not. Wanjiku Mwangi measured it; the distinguishing evidence is the **stderr**, not the `rc` — both fail, for opposite reasons. **Two commands that both exit non-zero are not thereby the same result.**)
 
 **Recurrence 2026-06-15 (ingest#90 review, Bjørn):** `gh api .../issues/90/comments -f body=@/tmp/bjorn_ingest90_review.md` (comment-CREATE POST, not just PATCH) posted the literal string `@/tmp/...`. Because the `validate_pr_review` hook parses the comment body for `Requestor:`/`RequestOrReplied:`, the Approved verdict was invisible and the 2-reviewer gate stayed unsatisfied until re-posted with `-F`. Lesson: for any file-backed body — comment, review, PATCH — use `-F`/`--field` (not `-f`) and read-back the posted body before claiming the verdict landed.
 
