@@ -88,7 +88,7 @@ Four instruments passed for the wrong reason on 2026-07-09, in one evening, acro
 | a probe patching `save_manifest` globally | it raised *before* the load, so `rc=1` looked consistent with the invariant |
 | an `rc` probe | it crashed on a bad kwarg before reaching the code under test |
 | a mutation | the pattern never matched; the file was unchanged; `19 passed` |
-| `pytest -k sole_declarer` vs `TestRegistryIsTheSoleDeclarer` | `-k` is case-sensitive; **0 tests collected**; pytest prints a pass and returns `rc=5` |
+| `pytest -k sole_declarer` vs `TestRegistryIsTheSoleDeclarer` | the **underscore** disqualifies; `1 deselected`, `rc=5`. (`-k` is case-**in**sensitive: `soledeclarer` selects fine.) |
 
 **Every one of them was green. Not one announced itself.** The last nearly produced *"all ten forms caught"* from ten runs in which zero tests executed — reported to the author of the guard, about the guard protecting the reporter's own PR.
 
@@ -99,7 +99,7 @@ Three of the four were caught by the person who built the instrument, before any
 **Operationally, for every check you are about to believe:**
 - **Prove it red first.** Plant the defect, watch it fail, then remove the plant.
 - **Assert the plant applied** — hash or `grep` the file before and after. An unapplied mutation and a surviving mutant are the same green.
-- **Assert the check ran** — a non-zero collected count, and the process exit status. `pytest` returns `5` (`EXIT_NOTESTSCOLLECTED`) when a selector matches nothing, and that signal is free.
+- **Assert the check ran** — the count of tests that **actually executed**, and the process exit status. *Not* the collected count: `pytest -k Sole_Declarer` against `TestRegistryIsTheSoleDeclarer` reports `collected 1 item, 1 deselected` and `rc=5`. Collected is **non-zero** while nothing ran, so a guard asserting "collected > 0" passes over the very incident in the table above. `rc != 5` (`EXIT_NOTESTSCOLLECTED`) is the free, correct signal. (Aino Virtanen, main#936: the remedy this file prescribed was inert against the example this file cites — one bullet below *an instrument built to catch this failure is the most likely to contain it.*)
 - **Isolate the thing under test to exactly one occurrence, and prove the fixture does not already satisfy the question.** A probe for "does the scan see `EXIT_AUG += 1`?" written as
   ```python
   EXIT_AUG = 6      # setup
