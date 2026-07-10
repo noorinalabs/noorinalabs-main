@@ -863,6 +863,162 @@ class AppendComposesRatherThanReplacesTests(unittest.TestCase):
             self.assertEqual(_decision(hook.check(_bash_input(command))), "allow")
 
 
+class UnmodelledWritesHardBlockTests(unittest.TestCase):
+    """Only heredoc redirects are composed; every other write must hard-block.
+
+    #934 review, Santiago Ferreira. `_HEREDOC_WRITE_RE` models a redirect
+    immediately followed by a heredoc, and nothing else. Every other way of
+    writing the posted path was invisible to the composer, so `_body_for_path`
+    fell back to disk — reinstating the stale-file fail-open that heredoc
+    precedence exists to close. All six shapes below were ALLOW at `2743bbf`
+    with a **conforming** file on disk and an uncountable body actually posted.
+
+    Six of the 121 harvested rows carry such a write to their own posted path,
+    mostly `jq -Rs '{body: .}' x.md > payload.json` feeding `--input`. That count
+    is context. One stale file is sufficient, as for the ordering itself.
+
+    This also subsumes #943 (`cat <<'EOF' > f`, `tee f <<'EOF'`).
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmp, "verdict.md")
+        Path(self.path).write_text(_CONFORMING_TRAILER)
+        self.post = f"gh pr comment 934 --body-file {self.path}"
+
+    def _block_reason(self, write: str) -> str:
+        result = hook.check(_bash_input(f"{write}\n{self.post}"))
+        self.assertEqual(_decision(result), "block", f"must not fall back to disk: {write}")
+        return _reason(result)
+
+    def test_printf_append_blocks(self) -> None:
+        self.assertIn("writes the body file", self._block_reason(f"printf 'x' >> {self.path}"))
+
+    def test_echo_append_blocks(self) -> None:
+        self._block_reason(f"echo '---' >> {self.path}")
+
+    def test_cat_file_append_blocks(self) -> None:
+        note = os.path.join(self.tmp, "note.md")
+        Path(note).write_text("\n---\nPS\n")
+        self._block_reason(f"cat {note} >> {self.path}")
+
+    def test_jq_payload_redirect_blocks(self) -> None:
+        """The corpus's most common shape: `jq … > payload.json` + `--input`."""
+        payload = os.path.join(self.tmp, "payload.json")
+        Path(payload).write_text('{"body": "stale but conforming"}')
+        command = (
+            f"jq -Rs '{{body: .}}' {self.path} > {payload}\n"
+            f"gh api repos/o/r/issues/934/comments --input {payload}"
+        )
+        result = hook.check(_bash_input(command))
+        self.assertEqual(_decision(result), "block")
+        self.assertIn("writes the body file", _reason(result))
+
+    def test_heredoc_redirected_after_the_heredoc_blocks(self) -> None:
+        """`cat <<'EOF' > f` — the redirect follows the heredoc (#943)."""
+        self._block_reason(f"cat <<'EOF' > {self.path}\n{_NEARMISS_TRAILER}EOF")
+
+    def test_tee_blocks(self) -> None:
+        """`tee f <<'EOF'` writes without any redirect at all (#943)."""
+        self._block_reason(f"tee {self.path} <<'EOF'\n{_NEARMISS_TRAILER}EOF")
+
+    def test_tee_append_blocks(self) -> None:
+        self._block_reason(f"tee -a {self.path} <<'EOF'\n{_NEARMISS_TRAILER}EOF")
+
+    # --- the guard must not fire on payload text -------------------------------
+
+    def test_a_redirect_quoted_inside_the_heredoc_body_is_not_a_write(self) -> None:
+        """A verdict whose prose quotes a redirect to its own path must still post.
+
+        The naive scan — over the whole command string, as first proposed — fires
+        on this and hard-blocks a conforming verdict. The text is payload, not a
+        command. In this repo most verdicts are *about* shell commands, so this
+        is the common case, not a corner.
+        """
+        body = (
+            "I reproduced it with:\n"
+            "\n"
+            f"    printf 'x' >> {self.path}\n"
+            f"    cat {self.path} >> {self.path}\n"
+            "\n"
+            "---\n"
+            "Requestor: Wanjiku Mwangi\n"
+            "Requestee: Aino Virtanen\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none\n"
+        )
+        command = f"cat > {self.path} <<'EOF'\n{body}EOF\n{self.post}"
+        self.assertIsNone(
+            hook._unmodelled_write(command, self.path),
+            "a redirect inside the heredoc body is payload text, not a write",
+        )
+        self.assertEqual(hook.extract_comment_body(command), body)
+        self.assertEqual(_decision(hook.check(_bash_input(command))), "allow")
+
+    def test_the_modelled_heredoc_redirect_is_not_flagged_as_unmodelled(self) -> None:
+        command = f"cat > {self.path} <<'EOF'\n{_CONFORMING_TRAILER}EOF\n{self.post}"
+        self.assertIsNone(hook._unmodelled_write(command, self.path))
+        self.assertEqual(_decision(hook.check(_bash_input(command))), "allow")
+
+    def test_a_write_to_a_different_path_is_ignored(self) -> None:
+        other = os.path.join(self.tmp, "scratch.txt")
+        command = f"printf 'log' >> {other}\n{self.post}"
+        self.assertIsNone(hook._unmodelled_write(command, self.path))
+        self.assertEqual(_decision(hook.check(_bash_input(command))), "allow")
+
+    def test_plain_body_file_with_no_writes_still_reads_disk(self) -> None:
+        self.assertEqual(_decision(hook.check(_bash_input(self.post))), "allow")
+
+
+class UnmodelledWriteCorpusTests(unittest.TestCase):
+    """The shape is present in the harvested corpus — a command-string parse only."""
+
+    CORPUS = _FIXTURES / "real_comment_invocations.jsonl"
+    rows: ClassVar[list[dict]] = []
+
+    _READ = re.compile(r"--body-file[=\s]+(\S+)|body=@(\S+)|--input\s+(\S+)")
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.rows = [
+            json.loads(line) for line in cls.CORPUS.read_text().splitlines() if line.strip()
+        ]
+
+    @classmethod
+    def _rows_with_unmodelled_writes(cls) -> list[int]:
+        out = []
+        for i, row in enumerate(cls.rows):
+            command = row["command"]
+            for match in cls._READ.finditer(command):
+                for group in match.groups():
+                    if not group:
+                        continue
+                    want = hook._resolve_body_path(group.lstrip("@"))
+                    if hook._unmodelled_write(command, want) is not None:
+                        out.append(i)
+                        break
+                else:
+                    continue
+                break
+        return out
+
+    def test_the_detector_fires_on_a_planted_row(self) -> None:
+        """Verify the instrument before believing any count it produces."""
+        planted = (
+            "jq -Rs '{body: .}' x.md > /tmp/payload.json\n"
+            "gh api repos/o/r/issues/1/comments --input /tmp/payload.json"
+        )
+        self.assertIsNotNone(
+            hook._unmodelled_write(planted, hook._resolve_body_path("/tmp/payload.json"))
+        )
+
+    def test_the_corpus_carries_the_shape(self) -> None:
+        rows = self._rows_with_unmodelled_writes()
+        self.assertGreaterEqual(
+            len(rows), 5, f"expected the jq-payload shape in the corpus, found {rows}"
+        )
+
+
 class WriteThenPostCorpusTests(unittest.TestCase):
     """Replay the write-then-post rows the harvested corpus actually contains.
 

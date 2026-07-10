@@ -89,10 +89,16 @@ file is sufficient; the ordering is wrong by construction, not by frequency.**
 A census of how many harvested rows happen to have a live path today is a
 property of one machine at one minute and is not the argument.
 
-Multiple writes to the same path are COMPOSED, not overwritten: `>` truncates,
-`>>` appends. Treating `>>` as `>` let an appended footnote hide a malformed
-verdict, turning a BLOCK into an ALLOW. When an append has no derivable base
-the body is underivable and the hook blocks rather than guessing.
+Multiple HEREDOC writes to the same path are COMPOSED, not overwritten: `>`
+truncates, `>>` appends. Treating `>>` as `>` let an appended footnote hide a
+malformed verdict, turning a BLOCK into an ALLOW.
+
+Only heredoc redirects are modelled. Any other write to the posted path — a
+`printf`/`echo`/`cat file` redirect, a `tee`, `cat <<'EOF' > f`, or the common
+`jq -Rs '{body: .}' x.md > payload.json` feeding `--input payload.json` — yields
+a body the hook cannot derive. Rather than fall back to disk (which reinstates
+the stale-file fail-open) it HARD BLOCKS, naming the write. A redirect appearing
+inside a heredoc *body* is payload text, not a command, and does not trigger it.
 
 If the body still cannot be read — stdin (`--input -`), a shell variable
 that never entered the environment, or a missing file — the hook now BLOCKS
@@ -319,6 +325,14 @@ _HEREDOC_WRITE_RE = re.compile(
 )
 
 
+# Any redirect (`> p`, `>> p`) and any `tee [-a] p`. Used to find writes to the
+# posted path that `_HEREDOC_WRITE_RE` does NOT model — `printf … >> f`,
+# `echo … >> f`, `cat note.md >> f`, `jq … > payload.json`, `cat <<'EOF' > f`
+# (redirect after the heredoc), `tee f <<'EOF'`. See `_unmodelled_write`.
+_REDIRECT_WRITE_RE = re.compile(r">>?\s*('[^']*'|\"[^\"]*\"|\S+)")
+_TEE_WRITE_RE = re.compile(r"\btee\s+(?:-a\s+)?('[^']*'|\"[^\"]*\"|\S+)")
+
+
 class _Unreconstructable:
     """The command writes this path, but the resulting body cannot be derived.
 
@@ -357,11 +371,18 @@ def _heredoc_written_body(command: str, path: str) -> str | _Unreconstructable |
     sufficient for that; a census of how often it happens today is a property
     of one machine at one minute and must not be the argument.
 
-    Writes are **composed in order**, following the shell rather than a summary
-    of it (#934 review, Wanjiku Mwangi):
+    **Heredoc** writes are composed in order (#934 review, Wanjiku Mwangi):
 
       * `>`  truncates — it discards everything written before it.
       * `>>` appends — it must be concatenated onto what is already there.
+
+    Any write to the path that is NOT a heredoc redirect — `printf … >> f`,
+    `tee f <<'EOF'`, `cat <<'EOF' > f`, `jq … > payload.json` — is a body the
+    hook cannot derive, and `_unmodelled_write` makes it a hard block. An earlier
+    docstring here claimed writes were "composed in order, following the shell
+    rather than a summary of it." Only one shape was. Saying so out loud, in the
+    file whose subject is unverified claims, is how it survived a round of review
+    (#934, Santiago Ferreira).
 
     The previous implementation assigned on every match, so `>>` behaved like
     `>`. Appending an innocuous footnote to a malformed verdict made the hook
@@ -380,6 +401,10 @@ def _heredoc_written_body(command: str, path: str) -> str | _Unreconstructable |
     neither side can be expanded.
     """
     want = _resolve_body_path(path)
+
+    if _unmodelled_write(command, want) is not None:
+        return UNRECONSTRUCTABLE
+
     body: str | None = None
 
     for match in _HEREDOC_WRITE_RE.finditer(command):
@@ -403,6 +428,63 @@ def _heredoc_written_body(command: str, path: str) -> str | _Unreconstructable |
         body += chunk
 
     return body
+
+
+def _unmodelled_write(command: str, want: str) -> str | None:
+    """Return a write to `want` that the composer does not model, if any.
+
+    `_HEREDOC_WRITE_RE` models exactly one shape: a redirect immediately followed
+    by a heredoc. Every other way of writing the posted path is invisible to the
+    composer, and `_body_for_path` would then fall back to reading disk —
+    reinstating the very stale-file fail-open that heredoc precedence exists to
+    close (#934 review, Santiago Ferreira). All of these were ALLOW at `2743bbf`
+    with a conforming file on disk and an uncountable body actually posted:
+
+        printf '\\n---\\nPS\\n' >> f     echo … >> f        cat note.md >> f
+        cat <<'EOF' > f  (#943)       tee f <<'EOF'      jq … > payload.json
+
+    The body is genuinely underivable in each — the hook cannot run `jq`. So it
+    hard-blocks rather than guessing, reusing `UNRECONSTRUCTABLE`.
+
+    **Redirects inside a heredoc *body* are not writes.** A verdict comment whose
+    prose quotes `cat > verdict.md` would otherwise hard-block itself: the text
+    is a payload, not a command. The naive scan over the whole command string
+    fires on it. Skipping any match inside a heredoc body span is what makes this
+    guard safe to apply to comments about shell commands — which, in this repo,
+    is most of them.
+
+    Counted over the 121-row harvested corpus: **6 rows** carry such a write to
+    their own posted path, mostly `jq -Rs '{body: .}' x.md > payload.json` feeding
+    `--input payload.json`. A stale `payload.json` gets validated while the
+    command overwrites it. That count is context, not the argument: one stale
+    file is sufficient, exactly as for disk-first ordering.
+    """
+    heredoc_bodies = [m.span("body") for m in _HEREDOC_WRITE_RE.finditer(command)]
+    modelled = [
+        m.span()
+        for m in _HEREDOC_WRITE_RE.finditer(command)
+        if _resolve_body_path(m.group("target")) == want
+    ]
+
+    def _is_payload_text(pos: int) -> bool:
+        return any(start <= pos < end for start, end in heredoc_bodies)
+
+    for match in _REDIRECT_WRITE_RE.finditer(command):
+        if _is_payload_text(match.start()):
+            continue
+        if _resolve_body_path(match.group(1)) != want:
+            continue
+        if any(start <= match.start() < end for start, end in modelled):
+            continue  # this redirect IS the modelled heredoc write
+        return match.group(0)
+
+    for match in _TEE_WRITE_RE.finditer(command):
+        if _is_payload_text(match.start()):
+            continue
+        if _resolve_body_path(match.group(1)) == want:
+            return match.group(0)
+
+    return None
 
 
 def _append_base(resolved_path: str) -> str | None:
@@ -609,6 +691,17 @@ def _unreadable_cause(command: str) -> str:
         raw = path_match.group(1)
         resolved = _resolve_body_path(raw.lstrip("@"))
         if isinstance(_heredoc_written_body(command, raw.lstrip("@")), _Unreconstructable):
+            write = _unmodelled_write(command, resolved)
+            if write is not None:
+                return (
+                    f"Cause: this command writes the body file with `{write.strip()}`, "
+                    f"which the hook cannot reproduce (it will not run `jq`, `printf`, "
+                    f"or `tee`). Whatever is on disk now is NOT what will be posted, so "
+                    f"validating it would approve one comment while you post another.\n\n"
+                    f"Write the body with a heredoc — `cat > <path> <<'EOF' … EOF` or "
+                    f"`cat >> <path> <<'EOF' … EOF` — which the hook can read, or write "
+                    f"it in a separate Bash call before the one that posts."
+                )
             return (
                 "Cause: this command APPENDS to the body file (`>>`) but the hook "
                 "cannot establish what it appends onto — the path is unexpanded, or "
