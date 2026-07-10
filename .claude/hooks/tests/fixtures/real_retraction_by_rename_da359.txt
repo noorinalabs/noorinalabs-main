@@ -1,0 +1,76 @@
+> **RETRACTED 2026-07-10 by its author.** This verdict was given at `cb2f4c2a`, which the
+> rebase orphaned, and I withdrew it twice in later comments while it continued to count
+> toward the two-reviewer gate (main#940 — the hook never subtracts a retracted approval).
+> My live verdict for `057fb7e` is a separate comment. The charter fields below are
+> deliberately renamed so the hook no longer reads this as a standing approval. The review
+> text is unchanged; it described a tree that no longer exists.
+
+Requestor: Oyunbileg Batbayar
+Requestee: Nikolaos Papadopoulos
+Verdict: Approved
+TechDebt: `parse_all` wraps each adapter in `except Exception` and returns normally, so the new `SanadsetSchemaError` family degrades a loud raise back into a quiet zero-row source — file a follow-up to make schema errors fatal there.
+
+Reviewed at head `cb2f4c2a3c9074ad4e1afb5f0a1af04236d88ffa`, reading the artifact via `git show pr/359:<path>` against `git show origin/main:<path>`. I did not trust the description; every claim below was re-derived from the code.
+
+## The new assertions are genuinely red against `main`
+
+I executed `origin/main:src/parse/identity.py` in isolation (stubbing `src.models.enums`) rather than reasoning about it:
+
+| input | `main` (pre) | head (post) |
+|---|---|---|
+| `lk:lk:1` | `hdt:lk:1` | raises |
+| `sanadset:sanadset:0:0:2326` | `hdt:sanadset:0:0:2326` | raises |
+| `sunnah:sunnah:bukhari:1` | `hdt:sunnah:bukhari:1` | raises |
+| `hdt:sunnah:bukhari:1` | unchanged | unchanged |
+
+`main` collapses and cannot raise, so every `pytest.raises(DoubledCorpusPrefixError)` case is behaviorally red there — not an `ImportError` artifact. Confirmed for the `identity.py` set specifically.
+
+Four added tests do pass unchanged against `main`, and all four are deliberate controls that must be green on both sides — `test_does_not_flag_legit_repeat_deeper`, `test_does_not_flag_non_corpus_lead`, `test_bare_source_id_strips_hdt_prefix`, and the renamed `test_prefixed_and_bare_shapes_of_one_hadith_load_one_node`. Two more, `test_error_is_a_valueerror` and `test_schema_errors_are_named_and_are_valueerrors`, are definitional rather than behavioral. Separately, the missing-`Book`-column raise already existed on `main` as a bare `ValueError`, so da#358(c) narrows an existing guard's type rather than adding one. Worth stating plainly since the summary reads as if it were new.
+
+## The blank-book fixture is not a toy
+
+`test_blank_book_cell_raises_and_never_yields_doubled_id` writes `raw_dir / "sanadset.csv"` — the production filename — with a blank `Book` cell and `Num_hadith=645817`. On `main` that routes through `default_name = csv_file.stem.lower()`, which equals the corpus, producing `sanadset:sanadset:645817`. The bad id is genuinely reachable from this fixture, so the assertion is not structurally inert. This is the discipline that was missing last time.
+
+Two small things. The production header is `Hadith,Book,Num_hadith,Matn,Sanad,Sanad_Length`; the fixture uses a prefix subset plus a `grade` column. Immaterial, since the parser regexes sanad/matn out of the `Hadith` field — but the "production header verbatim" claim is slightly stronger than the code. And the `_never_yields_doubled_id` half of the test name is never positively asserted; only the raise is. Fine in substance, since a raise emits no id.
+
+## `lk:lk:1` and `sanadset:sanadset:` are safe — the highest-risk case clears
+
+I audited every `generate_source_id` call site in `src/parse/` for a producer that can emit collection == corpus:
+
+- `lk` maps filenames/dirnames to `bukhari`, `muslim`, `abu_dawud`, `tirmidhi`, `nasai`, `ibn_majah`. Never `lk`.
+- `sanadset` keys the collection on the `_book_key` content digest. The CSV-stem `default_name` is now unreachable — a blank cell and a missing column both raise.
+- `bihar-al-anwar`, `sahih_muslim`, `tahdhib-al-ahkam` / `al-istibsar`, thaqalayn's `bookId`, and the sunnah/fawaz/open_hadith/halimbahae book slugs are all structurally incapable of equalling their corpus.
+
+Crucially, `validate_source_id` has *always* listed a doubled leading corpus as a contract violation. So `lk:lk:1` is not legitimate under the grammar — the raise did not replace "silently eat a valid segment" with "hard-fail on a valid segment", because there is no valid segment to eat. And da#353 (#357) merged 2026-07-09, so the "no producer emits this form" premise is true on `main` today rather than pending.
+
+One correction to the prose. The `bare_source_id` docstring calls `lk:lk:1` "a collection legitimately named after its corpus" while the function rejects it and `validate_source_id` flags it. The behavior is right; the wording asserts a legitimacy the contract denies, and it is the sentence most likely to make a future reader reintroduce the collapse. Please reword.
+
+One operational precondition for the team, not a change request. The currently-published pre-da#353 staging parquet **does** contain `sanadset:sanadset:<num>` ids. Loading that artifact under this code aborts the load. The imminent plan re-runs from `parse`, which regenerates staging with digest collections, so this is satisfied — but the wipe-and-reload must not be pointed at the existing artifact.
+
+## `migrate.py` earns its place
+
+It is reachable (`src/cli.py:311`, `_cmd_migrate_transmitted_hadith_ids`), tested (five new cases), and — importantly — it was *mandatory*, not speculative. On `main`, `compute_rewrites` called `hadith_node_id(raw)`; after this change that would raise on exactly the legacy ids the migration exists to repair. Decoupling it was forced.
+
+I checked the property that actually matters for a migration, which the tests assert only pointwise. Legacy graph node ids were minted by the old `hadith_node_id`, so edge values must canonicalize identically. I verified `canonicalize_legacy_hadith_id` is byte-identical to `main`'s `hadith_node_id` across all nine probe inputs — triple corpus, non-corpus lead, repeated deeper segment, already-canonical, and the `hdt:`-prefixed forms. It is. That makes the migration correct rather than merely plausible, and it is idempotent, so it is a no-op on a rebuilt graph.
+
+`test_migration_repairs_what_the_id_constructor_now_rejects` is the right test to have written — it pins the constructor/migration coupling that a future refactor would otherwise silently break.
+
+The docstring narrows the precondition to legacy ids "whose collection segment was `0`", but the code also correctly handles the `sanadset:sanadset:<num>` stem-fallback shape. Under-inclusive prose over correct code.
+
+## Raising does not abort a long stage, but it does hit a swallow
+
+`src/parse/__init__.py::parse_all` wraps each adapter in `except Exception`, logs `parse_failed`, sets `results[name] = []`, prints `[FAIL]`, and returns normally — no re-raise, no nonzero exit. So a single bad row cannot kill the run. It also means a `BlankBookCellError` would drop all 650,986 sanadset hadiths and let resolve and load proceed against a silently empty source. That is the same failure class this PR was written to eliminate, one layer up. The swallow predates this change and blank `Book` is 0/650,986 on the real corpus, so it is not a blocker — but the PR routes new raises into it, and that is the tech-debt line above.
+
+At load time the raising constructors are called per row in `load_nodes`, `load_edges`, and `composition` with no guard, so a doubled id aborts the load with zero nodes written. That is intentional and is what the integration test asserts. The ~7.5h resolve stage does not call these constructors, so there is no mid-run abort risk there.
+
+CI is 7/7 green with a non-empty `statusCheckRollup`.
+
+Nice work — the red-then-green discipline and the constructor/migration coupling test are exactly what this area needed after the inert-assertion incident.
+
+---
+Requestor (retracted): Oyunbileg Batbayar
+Requestee (retracted): Nikolaos Papadopoulos
+RequestOrReplied (retracted): Approved
+TechDebt (retracted): `parse_all` wraps each adapter in `except Exception` and returns normally, so the new `SanadsetSchemaError` family degrades a loud raise back into a quiet zero-row source — file a follow-up to make schema errors fatal there.
+
+

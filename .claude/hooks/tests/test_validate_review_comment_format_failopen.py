@@ -957,5 +957,87 @@ class SwapGateReadsTheCountedValueTests(unittest.TestCase):
         self.assertIn("swapped", _reason(result))
 
 
+class OutOfScopeForEditsTests(unittest.TestCase):
+    """This hook gates comment CREATION, never comment EDITS — deliberately.
+
+    Retraction is currently expressible only by breaking a comment on purpose.
+    `RequestOrReplied` has no value meaning "I withdraw this", and the counting
+    hook's reviewer set is monotonic (main#940 defect 1), so a later comment
+    saying so subtracts nothing. On 2026-07-10 a reviewer holding a stale
+    `Approved` on `noorinalabs-data-acquisition` #359 retracted it by editing his
+    own comment and mangling the trailer field names — the fixture below is that
+    body, verbatim.
+
+    Gate 1 blocks exactly that shape. It does not fire today only because the
+    retraction was a `-X PATCH` edit, and edits are out of scope. A maintainer
+    who widens the URL regex to cover the edit endpoint will forbid the only
+    retraction mechanism reviewers have. These tests go red when that happens.
+    """
+
+    FIXTURE = "real_retraction_by_rename_da359.txt"
+
+    def test_the_retraction_fixture_is_uncountable(self) -> None:
+        """Guard the guard: if this parsed, the retraction never worked."""
+        import validate_pr_review as counting_hook
+
+        body = _fixture(self.FIXTURE)
+        self.assertIn("RETRACTED", body)
+        self.assertIsNone(counting_hook._extract_charter_field("RequestOrReplied", body))
+        self.assertIsNone(counting_hook._extract_charter_field("Requestor", body))
+
+    def test_the_trailer_mangle_is_what_defeats_the_counter(self) -> None:
+        """Not the `Verdict:` rename in the banner — that sits above the last `---`.
+
+        Restoring the banner's field name changes nothing; the trailer's
+        `Requestor (retracted):` is the load-bearing edit.
+        """
+        import validate_pr_review as counting_hook
+
+        body = _fixture(self.FIXTURE)
+        banner_restored = body.replace("Verdict:", "RequestOrReplied:")
+        self.assertIsNone(
+            counting_hook._extract_charter_field("RequestOrReplied", banner_restored),
+            "renaming the banner field must not resurrect the approval",
+        )
+        trailer_restored = body.replace(" (retracted):", ":")
+        self.assertEqual(
+            counting_hook._extract_charter_field("RequestOrReplied", trailer_restored),
+            "Approved",
+            "un-mangling the trailer MUST resurrect it — otherwise this test proves nothing",
+        )
+
+    def test_a_patch_edit_is_not_a_comment_command(self) -> None:
+        edit = "gh api -X PATCH repos/o/r/issues/comments/4929379765 -F body=@/tmp/retraction.md"
+        self.assertFalse(hook.is_comment_command(edit))
+
+    def test_the_url_shape_not_the_method_is_the_discriminator(self) -> None:
+        """A maintainer widening this must know which axis carries the boundary."""
+        self.assertTrue(
+            hook.is_comment_command(
+                "gh api -X PATCH repos/o/r/issues/359/comments -F body=@/tmp/x.md"
+            ),
+            "PATCH at a CREATE url still matches — the method is not the guard",
+        )
+        self.assertFalse(
+            hook.is_comment_command(
+                "gh api -X POST repos/o/r/issues/comments/999 -F body=@/tmp/x.md"
+            ),
+            "POST at an EDIT url does not match — the url shape is the guard",
+        )
+
+    def test_gate_one_would_block_the_retraction_if_it_were_posted(self) -> None:
+        """The collision is real; only the edit/post boundary keeps it latent."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "retraction.md")
+            Path(path).write_text(_fixture(self.FIXTURE))
+            command = (
+                "gh pr comment 359 --repo noorinalabs/noorinalabs-data-acquisition "
+                f"--body-file {path}"
+            )
+            result = hook.check(_bash_input(command))
+            self.assertEqual(_decision(result), "block")
+            self.assertIn("RequestOrReplied", _reason(result))
+
+
 if __name__ == "__main__":
     unittest.main()

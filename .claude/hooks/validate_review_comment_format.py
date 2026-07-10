@@ -95,6 +95,45 @@ rather than warning. That branch was an advisory, and advisories decay
 five PRs and nine uncountable verdicts. The diagnostic names the remedy:
 write the body to a file and pass a literal `--body-file` path.
 
+Scope boundary: this hook gates comment *creation*, never comment *edits*
+========================================================================
+
+`is_comment_command` matches `gh pr comment` and `gh api ... issues/<N>/comments`
+with a write marker. The load-bearing discriminator for the REST arm is the
+**URL shape** — `issues/\\d+/comments` — and NOT the HTTP method: `-X PATCH` at a
+create URL still matches, while `-X POST` at `issues/comments/<comment_id>` (the
+edit endpoint) does not. Editing an existing comment therefore never reaches
+these gates.
+
+**That is a deliberate scope choice, and it is load-bearing.** Retraction is
+currently expressible only by breaking a comment on purpose. `RequestOrReplied`
+has no value meaning "I withdraw this", and `validate_pr_review`'s reviewer set
+is monotonic — a later comment saying "I withdraw my approval" subtracts nothing
+(main#940 defect 1). So on 2026-07-10 a reviewer holding a stale `Approved` on
+`noorinalabs-data-acquisition` #359 retracted it by editing his own comment and
+mangling its trailer field names (`Requestor (retracted):`), which makes
+`_extract_charter_field` return None and drops the approval from the count.
+
+Gate 1 blocks precisely that shape: `Requestor` and `Requestee` present with no
+readable `RequestOrReplied`. It does not fire today only because the retraction
+was a PATCH edit, and edits are out of scope.
+
+**Do not widen this hook to comment edits without first giving reviewers a
+supported way to retract** — otherwise the gate forbids the only mechanism they
+have for changing their mind, in the name of parseability.
+
+    A gate that enforces a vocabulary must first contain a word for every
+    thing reviewers need to say.
+
+The right repair is `latest-verdict-wins` in the counting hook, with a
+first-class `RequestOrReplied: Retracted` value — one vocabulary entry, one
+branch in the counter, comment stays parseable, audit trail stays honest, and
+it does not depend on comment ordering (main#940 defect 3 is that the hook has
+no concept of ordering). Proposed there, not implemented here.
+
+`OutOfScopeForEditsTests` pins this boundary so a future maintainer widening the
+URL regex sees the retraction case go red rather than reading it in a docstring.
+
 Semantic realignment (closes #386)
 ==================================
 
