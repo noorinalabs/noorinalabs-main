@@ -80,6 +80,14 @@ at all — so the exact commands used to post the incident's verdicts
 to catch them. The tests missed it by passing bare unquoted literals: fixture
 realism without *command* realism (`feedback_passing_repro_masks_bug`).
 
+Each path resolves through `_body_for_path`: a heredoc in the SAME command
+that writes that path wins over whatever is on disk, because a PreToolUse
+hook runs before the command and the command is about to overwrite the file.
+Disk-first would validate a stale body and allow the heredoc body — a
+different comment — to be posted unvalidated. 16 of the 121 harvested
+invocations are that write-then-post shape and 7 resolve to paths that
+persist on a developer box, so the ordering is the common case, not a corner.
+
 If the body still cannot be read — stdin (`--input -`), a shell variable
 that never entered the environment, or a missing file — the hook now BLOCKS
 rather than warning. That branch was an advisory, and advisories decay
@@ -205,6 +213,12 @@ def extract_pr_number(command: str) -> str | None:
     return None
 
 
+# A path as written on a command line: single-quoted, double-quoted, or bare.
+# The quoted alternatives come first so a quoted path containing a space is not
+# truncated at the space by the bare `\S+` branch (#934 review, Wanjiku Mwangi).
+_PATH_TOKEN = r"'[^']*'|\"[^\"]*\"|\S+"
+
+
 def _resolve_body_path(path: str) -> str:
     """Normalize a path as written on the command line.
 
@@ -222,16 +236,12 @@ def _resolve_body_path(path: str) -> str:
     return os.path.expandvars(os.path.expanduser(path.strip("'\"")))
 
 
-def _read_body_file(path: str) -> str | None:
-    """Read a comment body from disk.
+def _decode_body(raw: str) -> str | None:
+    """Interpret a raw body payload.
 
     `--input x.json` carries a JSON object whose `body` key is the comment.
     `-F body=@x.md` carries the raw markdown. Distinguish by leading brace.
     """
-    try:
-        raw = Path(_resolve_body_path(path)).read_text()
-    except (OSError, UnicodeDecodeError, ValueError):
-        return None
     if raw.lstrip().startswith("{"):
         try:
             data = json.loads(raw)
@@ -243,6 +253,68 @@ def _read_body_file(path: str) -> str | None:
     return raw
 
 
+def _read_body_file(path: str) -> str | None:
+    """Read a comment body from disk."""
+    try:
+        raw = Path(_resolve_body_path(path)).read_text()
+    except (OSError, UnicodeDecodeError, ValueError):
+        return None
+    return _decode_body(raw)
+
+
+# A heredoc redirected into a file: `cat > path <<'EOF' … EOF`, `tee -a p <<EOF`,
+# `<<-EOF`. The delimiter is backreferenced so the body ends at its own terminator.
+_HEREDOC_WRITE_RE = re.compile(
+    r">{1,2}\s*(?P<target>'[^']*'|\"[^\"]*\"|\S+)"
+    r"\s*<<-?\s*(?P<quote>['\"]?)(?P<delim>[A-Za-z_][A-Za-z0-9_]*)(?P=quote)[ \t]*\n"
+    r"(?P<body>.*?)"
+    r"\n(?P=delim)[ \t]*(?:\n|$)",
+    re.DOTALL,
+)
+
+
+def _heredoc_written_body(command: str, path: str) -> str | None:
+    """Return the body a heredoc in THIS command writes to `path`, if any.
+
+    A PreToolUse hook runs *before* the command, so for the write-then-post
+    shape — `cat > v.md <<'EOF' … EOF; gh pr comment N --body-file v.md`, 16 of
+    the 121 harvested invocations — the file does not exist yet. The body is
+    nonetheless fully observable: it is sitting in the command string.
+
+    This takes precedence over reading `path` from disk, and that ordering is
+    load-bearing rather than an optimization. A *stale* file left at `path` by
+    an earlier run would otherwise be validated while the command overwrites it
+    and posts the heredoc body instead — the hook would approve one comment and
+    the author would post another. Seven of the sixteen corpus rows resolve to
+    paths that still exist on a developer box, so this is the common case, not
+    the corner. Reading disk first is a fail-open; it is the ordering the naive
+    fallback would have shipped.
+
+    Later writes to the same path win, matching shell semantics. Paths are
+    compared after `_resolve_body_path`, so an unexported shell variable
+    (`$T/x.md`) matches itself on both sides and resolves even though neither
+    side can be expanded.
+    """
+    want = _resolve_body_path(path)
+    found = None
+    for match in _HEREDOC_WRITE_RE.finditer(command):
+        if _resolve_body_path(match.group("target")) == want:
+            # `cat > f <<'EOF'\nA\nEOF` writes "A\n": every heredoc line is
+            # newline-terminated, the last one included. The capture stops
+            # before that newline, so restore it — otherwise the recovered body
+            # differs by one byte from the file the command is about to write.
+            found = match.group("body") + "\n"
+    return found
+
+
+def _body_for_path(command: str, path: str) -> str | None:
+    """Resolve the body a command will post from `path` — heredoc first, then disk."""
+    heredoc = _heredoc_written_body(command, path)
+    if heredoc is not None:
+        return _decode_body(heredoc)
+    return _read_body_file(path)
+
+
 def extract_rest_comment_body(command: str) -> str | None:
     """Extract the comment body from a REST `gh api` comment-create command.
 
@@ -250,11 +322,11 @@ def extract_rest_comment_body(command: str) -> str | None:
     body=@<path>`. Returns None for `--input -` (body arrives on stdin, which
     a PreToolUse hook cannot observe).
     """
-    input_match = re.search(r"--input\s+(\S+)", command)
+    input_match = re.search(r"--input\s+(" + _PATH_TOKEN + r")", command)
     if input_match:
         path = input_match.group(1)
         if path.strip("'\"") != "-":
-            return _read_body_file(path)
+            return _body_for_path(command, path)
 
     field_match = re.search(
         r"(?:--raw-field|--field|-f|-F)\s+body=(?:'((?:[^'\\]|\\.)*)'"
@@ -265,7 +337,7 @@ def extract_rest_comment_body(command: str) -> str | None:
     if field_match:
         value = next(g for g in field_match.groups() if g is not None)
         if value.startswith("@"):
-            return _read_body_file(value[1:])
+            return _body_for_path(command, value[1:])
         return value
 
     return None
@@ -281,9 +353,9 @@ def extract_comment_body(command: str) -> str | None:
     # by far the most common: 144 call sites under `.claude/`. It was unread
     # until #934, so every charter-conforming verdict fell through to the
     # unreadable-body branch and was allowed unvalidated.
-    body_file_match = re.search(r"--body-file[=\s]+(\S+)", command)
+    body_file_match = re.search(r"--body-file[=\s]+(" + _PATH_TOKEN + r")", command)
     if body_file_match:
-        return _read_body_file(body_file_match.group(1))
+        return _body_for_path(command, body_file_match.group(1))
 
     # Heredoc: capture everything between <<'EOF' (or <<EOF) and the closing EOF
     heredoc_match = re.search(
@@ -401,6 +473,46 @@ def _direction_is_verdict(body: str) -> bool:
     return False
 
 
+def _unreadable_cause(command: str) -> str:
+    """Name the specific reason a body could not be read.
+
+    The generic three-cause list told an author "the file does not exist" about a
+    command whose own first line creates it (#934 review, Wanjiku Mwangi). A gate
+    that says something false about your command is a gate you learn to route
+    around — and routing around the verdict gate is the mechanism of #932.
+    """
+    if re.search(r"--input\s+['\"]?-['\"]?(?:\s|$)", command):
+        return (
+            "Cause: the body arrives on stdin (`--input -`), which a PreToolUse "
+            "hook cannot observe. Write the body to a file and pass its path."
+        )
+
+    path_match = re.search(
+        r"(?:--body-file[=\s]+|--input\s+|body=@)(" + _PATH_TOKEN + r")", command
+    )
+    if path_match:
+        raw = path_match.group(1)
+        resolved = _resolve_body_path(raw.lstrip("@"))
+        if "$" in resolved:
+            unexpanded = re.findall(r"\$\{?(\w+)", resolved)
+            names = ", ".join(f"`${name}`" for name in unexpanded) or "the variable"
+            return (
+                f"Cause: {names} is a SHELL variable, not an exported environment "
+                f"variable, so the hook cannot expand `{raw}`. Only variables in the "
+                f"environment resolve. Export it, or pass a literal path."
+            )
+        return (
+            f"Cause: `{resolved}` does not exist and no heredoc in this command "
+            f"writes it. (If the command *does* create the file, the hook reads "
+            f"that heredoc directly — so this means the paths do not match.)"
+        )
+
+    return (
+        "Cause: no readable body path was found on this command. Pass the body "
+        "with `--body-file <path>`."
+    )
+
+
 def check(input_data: dict) -> dict | None:
     """Check review comment format. Returns result dict if blocking/warning, None if allowed."""
     tool_name = input_data.get("tool_name", "")
@@ -432,9 +544,7 @@ def check(input_data: dict) -> dict | None:
                 "read, so the charter review format cannot be validated. An "
                 "unvalidatable verdict may count as zero reviews without anyone "
                 "noticing.\n\n"
-                "Causes: the body arrives on stdin (`--input -`); the path is a "
-                "SHELL variable the hook cannot expand (only exported environment "
-                "variables resolve); or the file does not exist.\n\n"
+                f"{_unreadable_cause(command)}\n\n"
                 "Fix: write the body to a file and pass a literal path:\n"
                 "    gh pr comment <PR#> --repo <owner/repo> --body-file <path>\n\n"
                 f"Charter: {CHARTER_REF}"

@@ -93,7 +93,14 @@ def _decision(result: dict | None) -> str:
 
 
 class FixtureRealismTests(unittest.TestCase):
-    """The fixtures must carry the defect, or the tests below prove nothing."""
+    """The fixtures must carry the defect, or the tests below prove nothing.
+
+    "Realism" here does not mean every fixture was observed in the wild. Two are
+    verbatim posted comments; `real_verdict_outside_trailer_main930.txt` is a
+    DERIVED counterfactual — the label-only fix nobody shipped — and
+    `test_trailer_fixture_carries_the_field_yet_parses_as_none` is what makes it
+    load-bearing rather than decorative (#934 review, Santiago Ferreira).
+    """
 
     def test_nearmiss_fixtures_lack_the_charter_field(self) -> None:
         for name in (
@@ -612,6 +619,342 @@ class TrailerHelperSingularityTests(unittest.TestCase):
         canonical = (_LIB_DIR / "charter_trailer.py").read_text()
         for name in ("strip_code_regions", "trailer_block_substring", "extract_charter_field"):
             self.assertRegex(canonical, rf"(?m)^def {name}\(")
+
+
+def _reason(result: dict | None) -> str:
+    """Return a block's reason text, narrowing `dict | None` for the type checker."""
+    assert result is not None, "expected a block, got allow (None)"
+    return str(result.get("reason", ""))
+
+
+_CONFORMING_TRAILER = (
+    "Review prose that says something.\n"
+    "\n"
+    "---\n"
+    "Requestor: Wanjiku Mwangi\n"
+    "Requestee: Aino Virtanen\n"
+    "RequestOrReplied: Approved\n"
+    "TechDebt: none\n"
+)
+
+_NEARMISS_TRAILER = (
+    "Review prose that says something.\n"
+    "\n"
+    "---\n"
+    "Requestor: Wanjiku Mwangi\n"
+    "Requestee: Aino Virtanen\n"
+    "Verdict: Approved\n"
+)
+
+
+class WriteThenPostTests(unittest.TestCase):
+    """A heredoc writing the path that the same command then posts (#934 review).
+
+    A PreToolUse hook runs BEFORE the command, so the file does not exist yet.
+    The body is nonetheless in the command string. Reading disk and blocking on
+    the miss told the author "the file does not exist" about a command whose own
+    first line creates it — and `feedback_safety_direction_over_ux_friction`
+    licenses a hard block only when the hook *cannot* auto-fix cleanly. Here it
+    can: read the heredoc.
+    """
+
+    def test_heredoc_body_is_recovered_when_file_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "verdict.md")
+            self.assertFalse(os.path.exists(path), "precondition: PreToolUse precedes the write")
+            command = (
+                f"cat > {path} <<'EOF'\n{_CONFORMING_TRAILER}EOF\n"
+                f"gh pr comment 826 --body-file {path}"
+            )
+            self.assertEqual(hook.extract_comment_body(command), _CONFORMING_TRAILER)
+            self.assertEqual(_decision(hook.check(_bash_input(command))), "allow")
+
+    def test_heredoc_nearmiss_still_blocks(self) -> None:
+        """Recovering the body must not become a way to skip validating it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "verdict.md")
+            command = (
+                f"cat > {path} <<'EOF'\n{_NEARMISS_TRAILER}EOF\n"
+                f"gh pr comment 826 --body-file {path}"
+            )
+            result = hook.check(_bash_input(command))
+            self.assertEqual(_decision(result), "block")
+            self.assertIn("RequestOrReplied", _reason(result))
+
+    def test_heredoc_wins_over_a_stale_file_at_the_same_path(self) -> None:
+        """The ordering that a naive disk-first fallback would have gotten wrong.
+
+        A stale CONFORMING body sits at the path. The command overwrites it with
+        a NEAR-MISS and posts that. Disk-first validates the stale body, allows,
+        and the uncountable verdict is posted anyway. 7 of the 16 write-then-post
+        corpus rows resolve to paths that persist on a developer box.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "verdict.md")
+            Path(path).write_text(_CONFORMING_TRAILER)
+            command = (
+                f"cat > {path} <<'EOF'\n{_NEARMISS_TRAILER}EOF\n"
+                f"gh pr comment 826 --body-file {path}"
+            )
+            self.assertEqual(
+                hook.extract_comment_body(command),
+                _NEARMISS_TRAILER,
+                "the heredoc is what will be posted; the file on disk is stale",
+            )
+            self.assertEqual(_decision(hook.check(_bash_input(command))), "block")
+
+    def test_unexported_shell_variable_path_resolves_via_heredoc(self) -> None:
+        """`T=$(mktemp -d); cat > $T/v.md <<EOF` — neither side can expand `$T`.
+
+        Both sides resolve to the same unexpanded string, so the heredoc still
+        matches its own path and the body is recovered without touching disk.
+        """
+        command = (
+            f"cat > $T/verdict.md <<'EOF'\n{_CONFORMING_TRAILER}EOF\n"
+            "gh pr comment 826 --body-file $T/verdict.md"
+        )
+        self.assertNotIn("T", os.environ.get("T", "") or "x")
+        self.assertEqual(hook.extract_comment_body(command), _CONFORMING_TRAILER)
+
+    def test_later_heredoc_write_wins(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "v.md")
+            command = (
+                f"cat > {path} <<'EOF'\nfirst\nEOF\n"
+                f"cat > {path} <<'EOF'\n{_CONFORMING_TRAILER}EOF\n"
+                f"gh pr comment 826 --body-file {path}"
+            )
+            self.assertEqual(hook.extract_comment_body(command), _CONFORMING_TRAILER)
+
+    def test_heredoc_to_a_different_path_is_not_borrowed(self) -> None:
+        """A heredoc writing some OTHER file must not be mistaken for the body."""
+        with tempfile.TemporaryDirectory() as tmp:
+            other = os.path.join(tmp, "msg.txt")
+            target = os.path.join(tmp, "verdict.md")
+            command = (
+                f"cat > {other} <<'EOF'\n{_CONFORMING_TRAILER}EOF\n"
+                f"gh pr comment 826 --body-file {target}"
+            )
+            self.assertIsNone(hook.extract_comment_body(command))
+            self.assertEqual(_decision(hook.check(_bash_input(command))), "block")
+
+    def test_rest_body_at_path_also_recovers_the_heredoc(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "v.md")
+            command = (
+                f"cat > {path} <<'EOF'\n{_NEARMISS_TRAILER}EOF\n"
+                f'gh api repos/o/r/issues/826/comments -F body=@"{path}"'
+            )
+            self.assertEqual(hook.extract_rest_comment_body(command), _NEARMISS_TRAILER)
+            self.assertEqual(_decision(hook.check(_bash_input(command))), "block")
+
+    def test_rest_input_json_heredoc_is_decoded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "b.json")
+            payload = json.dumps({"body": _NEARMISS_TRAILER})
+            command = (
+                f"cat > {path} <<'EOF'\n{payload}\nEOF\n"
+                f"gh api repos/o/r/issues/826/comments --input {path}"
+            )
+            self.assertEqual(hook.extract_rest_comment_body(command), _NEARMISS_TRAILER)
+
+
+class WriteThenPostCorpusTests(unittest.TestCase):
+    """Replay the write-then-post rows the harvested corpus actually contains.
+
+    Purely a command-string parse — it never touches the filesystem, so ambient
+    leftover files in a developer's tmp dir cannot contaminate the reading.
+    """
+
+    CORPUS = _FIXTURES / "real_comment_invocations.jsonl"
+    rows: ClassVar[list[dict]] = []
+
+    _WRITE = re.compile(r">{1,2}\s*(?P<t>'[^']*'|\"[^\"]*\"|\S+)\s*<<")
+    _READ = re.compile(r"--body-file[=\s]+(\S+)|body=@(\S+)|--input\s+(\S+)")
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.rows = [
+            json.loads(line) for line in cls.CORPUS.read_text().splitlines() if line.strip()
+        ]
+
+    @classmethod
+    def _write_then_post_rows(cls) -> list[dict]:
+        out = []
+        for row in cls.rows:
+            command = row["command"]
+            writes = {m.group("t").strip("'\"") for m in cls._WRITE.finditer(command)}
+            reads = {
+                g.strip("'\"").lstrip("@")
+                for m in cls._READ.finditer(command)
+                for g in m.groups()
+                if g
+            }
+            if writes & reads:
+                out.append(row)
+        return out
+
+    def test_the_corpus_contains_this_shape(self) -> None:
+        """Guard the guard: if this set is empty the assertion below is inert."""
+        self.assertGreaterEqual(
+            len(self._write_then_post_rows()),
+            10,
+            "no write-then-post rows — the replay below would prove nothing",
+        )
+
+    def test_every_write_then_post_row_recovers_its_body(self) -> None:
+        unrecovered = []
+        for row in self._write_then_post_rows():
+            command = row["command"]
+            reads = [
+                g.strip("'\"").lstrip("@")
+                for m in self._READ.finditer(command)
+                for g in m.groups()
+                if g
+            ]
+            writes = {m.group("t").strip("'\"") for m in self._WRITE.finditer(command)}
+            for path in reads:
+                if path in writes and hook._heredoc_written_body(command, path) is None:
+                    unrecovered.append((row.get("form"), path))
+        self.assertEqual(unrecovered, [], f"heredoc body not recovered: {unrecovered}")
+
+
+class PathResolutionIsExercisedTests(unittest.TestCase):
+    """Positive controls for `_resolve_body_path` (#934 review, Santiago Ferreira).
+
+    Every pre-existing test named for path resolution asserted only
+    `decision == "block"`, and BOTH branches block: gate 1 when the body is read
+    and found malformed, the residual when the body is never read at all. So
+    `_resolve_body_path` could be replaced by `return path` and all 97 tests
+    still passed — the mutant survived, on the exact gate this PR exists to fix.
+
+    A conforming body at a quoted / `$VAR` / `~` path must ALLOW. That can only
+    happen if the file was actually opened, which is the assertion the block-only
+    tests could not make (`feedback_fixture_makes_guard_assertion_inert`).
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmp, "verdict.md")
+        Path(self.path).write_text(_CONFORMING_TRAILER)
+
+    def test_bare_path_allows(self) -> None:
+        command = f"gh pr comment 826 --body-file {self.path}"
+        self.assertEqual(_decision(hook.check(_bash_input(command))), "allow")
+
+    def test_quoted_path_allows(self) -> None:
+        command = f'gh pr comment 826 --body-file "{self.path}"'
+        self.assertEqual(_decision(hook.check(_bash_input(command))), "allow")
+
+    def test_envvar_path_allows(self) -> None:
+        with mock.patch.dict(os.environ, {"AINO_TMP": self.tmp}):
+            command = 'gh pr comment 826 --body-file "$AINO_TMP/verdict.md"'
+            self.assertEqual(_decision(hook.check(_bash_input(command))), "allow")
+
+    def test_rest_quoted_at_path_allows(self) -> None:
+        with mock.patch.dict(os.environ, {"AINO_TMP": self.tmp}):
+            command = 'gh api repos/o/r/issues/826/comments -F body=@"$AINO_TMP/verdict.md"'
+            self.assertEqual(_decision(hook.check(_bash_input(command))), "allow")
+
+    def test_tilde_path_allows(self) -> None:
+        with mock.patch.dict(os.environ, {"HOME": self.tmp}):
+            command = "gh pr comment 826 --body-file ~/verdict.md"
+            self.assertEqual(_decision(hook.check(_bash_input(command))), "allow")
+
+    def test_quoted_path_containing_a_space_is_not_truncated(self) -> None:
+        spaced = os.path.join(self.tmp, "my verdict.md")
+        Path(spaced).write_text(_CONFORMING_TRAILER)
+        command = f'gh pr comment 826 --body-file "{spaced}"'
+        self.assertEqual(hook.extract_comment_body(command), _CONFORMING_TRAILER)
+        self.assertEqual(_decision(hook.check(_bash_input(command))), "allow")
+
+    def test_nearmiss_at_a_quoted_envvar_path_blocks_on_gate_one(self) -> None:
+        """Blocks — and specifically NOT because the body was unreadable."""
+        Path(self.path).write_text(_NEARMISS_TRAILER)
+        with mock.patch.dict(os.environ, {"AINO_TMP": self.tmp}):
+            command = 'gh pr comment 826 --body-file "$AINO_TMP/verdict.md"'
+            result = hook.check(_bash_input(command))
+            self.assertEqual(_decision(result), "block")
+            self.assertNotIn("cannot be read", _reason(result))
+            self.assertIn("RequestOrReplied", _reason(result))
+
+
+class UnreadableCauseTests(unittest.TestCase):
+    """The diagnostic must name the real cause (#934 review, Wanjiku Mwangi)."""
+
+    def test_stdin_is_named(self) -> None:
+        command = "gh api repos/o/r/issues/826/comments --input -"
+        result = hook.check(_bash_input(command))
+        self.assertEqual(_decision(result), "block")
+        self.assertIn("stdin", _reason(result))
+
+    def test_unexported_shell_variable_is_named_as_such(self) -> None:
+        command = "gh pr comment 826 --body-file $NOT_EXPORTED_ANYWHERE/v.md"
+        result = hook.check(_bash_input(command))
+        self.assertEqual(_decision(result), "block")
+        self.assertIn("SHELL variable", _reason(result))
+        self.assertIn("NOT_EXPORTED_ANYWHERE", _reason(result))
+        self.assertNotIn("does not exist", _reason(result))
+
+    def test_absent_file_is_named_as_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "nope.md")
+            command = f"gh pr comment 826 --body-file {path}"
+            result = hook.check(_bash_input(command))
+            self.assertEqual(_decision(result), "block")
+            self.assertIn("does not exist", _reason(result))
+            self.assertNotIn("SHELL variable", _reason(result))
+
+
+class SwapGateReadsTheCountedValueTests(unittest.TestCase):
+    """The swap heuristic must read the value the counting hook will count.
+
+    `db12c5b` changed the code to `extract_charter_field("Requestor", body)` but
+    shipped no test, so nothing would notice it reverting to the whole-body
+    `re.search` first match. Both directions were reachable (Santiago Ferreira):
+    a correct verdict false-BLOCKED by a prose line above the trailer, and a
+    genuinely swapped trailer ALLOWED because an earlier prose match yielded a
+    non-author surname first.
+    """
+
+    BRANCH = "A.Virtanen/0932-review-comment-format-gate"
+
+    def _check(self, body: str) -> dict | None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "v.md")
+            Path(path).write_text(body)
+            command = f"gh pr comment 934 --repo noorinalabs/noorinalabs-main --body-file {path}"
+            with mock.patch.object(hook, "get_branch_name", return_value=self.BRANCH):
+                return hook.check(_bash_input(command))
+
+    def test_swapped_trailer_blocks(self) -> None:
+        body = (
+            "prose\n\n---\nRequestor: Aino Virtanen\n"
+            "Requestee: Wanjiku Mwangi\nRequestOrReplied: Approved\nTechDebt: none\n"
+        )
+        result = self._check(body)
+        self.assertEqual(_decision(result), "block")
+        self.assertIn("swapped", _reason(result))
+
+    def test_correct_trailer_with_prose_above_is_not_false_blocked(self) -> None:
+        """Prose naming the field and the PR author, above the trailer."""
+        body = (
+            "I read this as Requestor: Aino Virtanen would have written it.\n"
+            "\n---\nRequestor: Wanjiku Mwangi\nRequestee: Aino Virtanen\n"
+            "RequestOrReplied: Approved\nTechDebt: none\n"
+        )
+        self.assertEqual(_decision(self._check(body)), "allow")
+
+    def test_swapped_trailer_is_not_disarmed_by_prose_above(self) -> None:
+        """A prose sentence mentioning the field must not let a swap through."""
+        body = (
+            "The charter says the Requestor: is the reviewer, not the author.\n"
+            "\n---\nRequestor: Aino Virtanen\nRequestee: Wanjiku Mwangi\n"
+            "RequestOrReplied: Approved\nTechDebt: none\n"
+        )
+        result = self._check(body)
+        self.assertEqual(_decision(result), "block")
+        self.assertIn("swapped", _reason(result))
 
 
 if __name__ == "__main__":
