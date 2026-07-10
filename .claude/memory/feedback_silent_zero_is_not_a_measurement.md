@@ -275,3 +275,30 @@ A brief said *"import the alias form, precisely as da#372 did it."* Measured on 
 The implementer followed the rule and refused the instance, showing the count. **When an instruction names both a rule and an example, the example is the part that was not measured.**
 
 It cuts symmetrically, and toward the brief-writer first. The same implementer's own error message had told an operator to *"re-run `parse`"* — a rule (*regenerate the artifact*) stated with an unmeasured example of how to satisfy it (`parse` swallows the failure and exits `0`, so the artifact is never regenerated). Same failure, different author, caught by a third person. **An example is a claim about the world; a rule is a claim about what you want. Only one of them can be run, and it is the one nobody runs.**
+
+## A mutation harness that edits in place can test the file it already deleted (2026-07-10, da#359)
+
+CPython's `__pycache__` invalidation keys on **`(mtime, size)`**. A single-digit source edit changes neither. If the mutation and the restore land within the same mtime second — which they do, because a plant-run-restore cycle is fast — the interpreter reuses the `.pyc` compiled from the *previous* state.
+
+Reproduced. `m.py` on disk reads `VALUE = 9`:
+
+```
+python3 run.py               -> VALUE = 1     <- stale .pyc
+python3 -B run.py            -> VALUE = 1     <- -B only stops WRITING bytecode
+PYTHONDONTWRITEBYTECODE=1 …  -> VALUE = 1     <- same; the existing .pyc is still READ
+rm -rf __pycache__ ; …       -> VALUE = 9     <- works
+PYTHONPYCACHEPREFIX=$(mktemp -d) …  -> VALUE = 9   <- works
+```
+
+**The two obvious defences do not work.** `-B` and `PYTHONDONTWRITEBYTECODE` suppress *writing*, not *reading*. A harness that sets them and believes itself isolated is measuring an artifact of the run before.
+
+The engineer who found it (Kwesi Boateng) saw his **second plant print his first plant's error message** — the only symptom, and only visible because the two mutants had different messages. Identical mutants, or a mutant whose failure is generic, would have produced a perfectly plausible red or green with no tell at all.
+
+Remedies, in order of trust:
+1. Export a pristine tree per run (`git archive <sha>`) into a fresh directory. No cache exists to be stale.
+2. `PYTHONPYCACHEPREFIX=$(mktemp -d)` — relocates the cache per run.
+3. `rm -rf __pycache__` between plant and run. Works, and easy to forget in one arm of a loop.
+
+The family: **an unapplied mutation, a restore that never restored, a scoped run that couldn't see the test, and a stale `.pyc` are four different causes of the same green.** None is distinguishable from "the guard is sound" by looking at the result. Only by making the instrument prove it moved — and by making each mutant fail *differently*, so a repeated message is a signal rather than a coincidence.
+
+Sibling of the `git -C` trap above: there the instrument pointed at the wrong file; here it pointed at the right file's *past*.
