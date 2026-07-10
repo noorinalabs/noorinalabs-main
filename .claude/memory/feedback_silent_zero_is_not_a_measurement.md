@@ -117,4 +117,18 @@ The failure above was cheap for its author, who caught herself and retracted. It
 
 The asymmetry that makes this hard: *"verify before you delegate"* fires loudly when a finding contradicts you, and silently when it agrees. Four instruments failed that night before anyone checked one that confirmed what they already believed. See [[feedback_verify_diagnosis_before_delegating]] — this is that rule's blind side.
 
-Sibling: [[feedback_passing_repro_masks_bug]] (a *repro* that cannot go red) and [[feedback_test_mock_masks_prod_failure]] (a *test* that cannot go red). This memory is the *measurement* case: a probe that cannot go nonzero. Same root: **verify the instrument before trusting the reading.**
+## A reading and a forecast are not the same kind of thing, and only one gets labelled (2026-07-10, da#392)
+
+`src/exit_codes.py` carried: *"Once it moves to `VALIDATION_FINDINGS`, the only emitters of `1` are `_check_neo4j` … and `_cmd_load`'s genuine failure path."* Written in the **future tense**, about a tree that did not exist yet. Nobody could run it, so nothing reddened, and it was already false about `_check_neo4j` (which emits `8`).
+
+That is the shape: **prose describing a state that has not arrived.** A comment about the present can be checked by reading the file. A comment about what will be true after somebody else's PR lands has no subject to check against, so it survives indefinitely and rots silently.
+
+Worse, its *conclusion* (`rc=1 implies an unwritten manifest`) stayed true — because deleting an emitter of `1` can only narrow the antecedent. **An argument whose conclusion outlives its premises warns no one.** Nothing downstream contradicts it. That is more dangerous than a false conclusion, which someone would eventually trip over.
+
+**The trap catches the person diagnosing it.** The engineer who correctly named this class — *"the comment was written about a tree that has never existed"* — in the same message asserted that after her rebase the emitter set would be **empty**. She had AST-walked `main`. But `main` cannot contain her rebase. Reading her actual diff showed `_cmd_load` has **two** exits: the findings condition she routed, and a genuine-failure path her own PR sends to `EXIT_LOAD_FAILED`, which *is* `1`. The set is a singleton. **She verified the present and predicted the future in the same breath, and labelled only one of them.**
+
+> **Before writing prose about a tree, produce the tree and read it.** Rebase, then AST-walk the *rebased* source and print the set. A reading, not a projection. If you cannot run the command that would falsify the sentence, you are not entitled to the sentence.
+
+Corollary for reviewers, and it is the cheap half: when a colleague's finding *agrees with you and improves on your framing*, that is exactly when you skip verifying it. Reading the diff took one command and overturned the claim.
+
+Sibling: [[feedback_passing_repro_masks_bug]] (a *repro* that cannot go red) and [[feedback_test_mock_masks_prod_failure]] (a *test* that cannot go red). This memory is the *measurement* case: a probe that cannot go nonzero — and, above, a *sentence* that cannot be run at all. Same root: **verify the instrument before trusting the reading.**
