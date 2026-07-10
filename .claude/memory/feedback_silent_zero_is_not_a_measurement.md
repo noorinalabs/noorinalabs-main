@@ -322,3 +322,32 @@ The error was committed in an issue whose subject is `_trailer_block_substring` 
 > **An edit has a visible change and an effective change, and they need not be the same object.** Before attributing a behaviour to a diff, ask which part of the file the consuming code actually reads — then flip only that part, and only the other part, and see which one moves.
 
 Consequence, which is why this is not a nitpick: a `latest-verdict-wins` design anticipating only the *rename* would have left the real escape hatch — trailer field-name mangling — fully in place. **A fix aimed at the visible change protects nothing.** (Aino Virtanen, main#940; she found it because her control failed.)
+
+## A zero in a harvested corpus is not a measurement of a shape's absence (2026-07-10, main#934)
+
+A hook resolved `cat > f <<'EOF' … EOF; gh pr comment --body-file f` by reading the heredoc out of the command string. `_HEREDOC_WRITE_RE` matched `>{1,2}` — so **append was in scope by design** — but the resolver did `found = match.group("body")` on each match, replacing rather than concatenating. `>` resets. `>>` appends. The code treated them identically.
+
+Reproduced against the PR head, with a control:
+
+```
+disk holds a near-miss verdict (wrong field name -> gate 1 must BLOCK)
+
+  cat >> verdict.md <<'EOF'          hook believes body = '(a footnote)\n'      -> ALLOW
+  (a footnote)
+  EOF
+  gh pr comment 934 --body-file verdict.md
+
+  CONTROL: same file, no heredoc     hook believes body = the near-miss verdict -> BLOCK
+```
+
+**Appending an innocuous footnote converts a BLOCK into an ALLOW**, in the hook whose entire subject is closing fail-opens.
+
+The defence offered was that the 121-row harvested corpus of real invocations contains **zero** appends. The reviewer's answer is the rule:
+
+> **A zero in a corpus harvested from one week of one team's transcripts is not a measurement of a shape's absence** — and a regex that admits `>{1,2}` is evidence its own author expected the shape.
+
+The same reviewer then turned it on the argument that had beaten her own earlier proposal. Heredoc-first had been justified by *"7 of the 16 corpus rows resolve to paths that still exist on a developer box, so this is the common case."* That number is a property of one machine at one minute — job tmp dirs are swept continuously; she measured 15 rows and 4 live paths, not 16 and 7. It does not matter:
+
+> **One stale file is sufficient. Disk-first would be wrong at a count of zero, because it is wrong by construction rather than by frequency.**
+
+Frequency arguments are how a correct conclusion acquires a perishable premise. When the mechanism alone settles it, cite the mechanism — otherwise the next person re-counts, gets a different number, and reopens a closed question. Sibling: [[feedback_fixture_makes_guard_assertion_inert]] on *"does not occur"* vs *"cannot occur"*.
