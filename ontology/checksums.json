@@ -1002,10 +1002,10 @@
       "resolved_at": "2026-06-21T02:32:49Z"
     },
     ".claude/memory/project_hadith_id_double_prefix.md": {
-      "last_tracked": "e6575af50adf0f0f9d8b643292c19ce1379cd6655bc9dec4b4c090bcfc79bcd3",
-      "last_resolved": "e6575af50adf0f0f9d8b643292c19ce1379cd6655bc9dec4b4c090bcfc79bcd3",
-      "tracked_at": "2026-06-20T22:00:06.183661+00:00",
-      "resolved_at": "2026-06-21T02:32:49Z"
+      "last_tracked": "a26d752470822ec6008e3b9221b4e0a4ceaa3bb0c1d5b48751d31470f51ced12",
+      "last_resolved": "a26d752470822ec6008e3b9221b4e0a4ceaa3bb0c1d5b48751d31470f51ced12",
+      "tracked_at": "2026-07-09T20:48:51.933726+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
     },
     ".claude/memory/feedback_prefer_correct_over_expedient.md": {
       "last_tracked": "3cba65bc2c32ba0fdab3806e7538888f2e908be060e7611f594eb04ebd4178e1",
@@ -1032,10 +1032,10 @@
       "resolved_at": "2026-06-21T21:02:19.551435+00:00"
     },
     ".claude/memory/MEMORY.md": {
-      "last_tracked": "56aeb80ee8a62d3bef54c2afbbaa82d7827ee8278c54df5d035da65db74e4645",
-      "last_resolved": "56aeb80ee8a62d3bef54c2afbbaa82d7827ee8278c54df5d035da65db74e4645",
-      "tracked_at": "2026-07-08T03:47:51.589773+00:00",
-      "resolved_at": "2026-07-08T20:16:00Z"
+      "last_tracked": "435bd35e4a10424c2febc93b68d4f991889b6351f4b9cfd50b4847174d2fb37a",
+      "last_resolved": "435bd35e4a10424c2febc93b68d4f991889b6351f4b9cfd50b4847174d2fb37a",
+      "tracked_at": "2026-07-09T22:22:31.596530+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
     },
     "noorinalabs-isnad-graph/.claude/lib/tests/test_pre_commit_ci_sync.py": {
       "last_tracked": "aa209279deec3844b51e384157ba3e67a6d0f325410941f63f38d57535e6498c",
@@ -1182,10 +1182,10 @@
       "resolved_at": "2026-06-30T00:00:00Z"
     },
     "noorinalabs-data-acquisition/src/parse/name_quality.py": {
-      "last_tracked": "c8ef7a521e62a0b0f538de45c5f51875ebf4b8a140130e9c3dd8455ca7f69035",
-      "last_resolved": "c8ef7a521e62a0b0f538de45c5f51875ebf4b8a140130e9c3dd8455ca7f69035",
-      "tracked_at": "2026-06-29T19:08:13.502784+00:00",
-      "resolved_at": "2026-06-30T00:00:00Z"
+      "last_tracked": "8ba75381f8f1ad2bd0f97d6e0ab54c52b98cfb1daba0b7e511033fde3508e931",
+      "last_resolved": "8ba75381f8f1ad2bd0f97d6e0ab54c52b98cfb1daba0b7e511033fde3508e931",
+      "tracked_at": "2026-07-08T20:56:08.184743+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
     },
     "noorinalabs-data-acquisition/tests/test_parse/test_name_quality.py": {
       "last_tracked": "8cb1a5fbdf1a00fb3c4f9ae4d0b72630b8b0293361c02b387a41ff64b340e56e",
@@ -1392,22 +1392,100 @@
       "resolved_at": "2026-07-07T00:00:00Z"
     },
     ".claude/memory/reference_graph_ops_cypher_shell.md": {
-      "last_tracked": "b3d4c1dc439ced0be5c249526beb2aecb322209728317405f1772c963c06ab2d",
-      "last_resolved": "b3d4c1dc439ced0be5c249526beb2aecb322209728317405f1772c963c06ab2d",
-      "tracked_at": "2026-07-08T01:40:39.619527+00:00",
-      "resolved_at": "2026-07-07T00:00:00Z"
+      "last_tracked": "e79d79b5c8527fc907ab1a63a4216718cf068a828df07a65d212e36e05366a5b",
+      "last_resolved": "e79d79b5c8527fc907ab1a63a4216718cf068a828df07a65d212e36e05366a5b",
+      "tracked_at": "2026-07-09T18:08:28.197914+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
     },
     ".claude/memory/project_narrator_chokepoints_enrich.md": {
-      "last_tracked": "e077400ce866002ff58942c0561f1e2505a1088a40e1ba4c2fd998e1edd6fc63",
-      "last_resolved": "e077400ce866002ff58942c0561f1e2505a1088a40e1ba4c2fd998e1edd6fc63",
-      "tracked_at": "2026-07-08T03:47:35.515838+00:00",
-      "resolved_at": "2026-07-08T20:16:00Z"
+      "last_tracked": "13912aeaf74e9b51381d8a9e62fc2a00ea403e248b44bdd2dd0d947aa0b33eb6",
+      "last_resolved": "13912aeaf74e9b51381d8a9e62fc2a00ea403e248b44bdd2dd0d947aa0b33eb6",
+      "tracked_at": "2026-07-09T20:23:54.113852+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
     },
     "noorinalabs-deploy/.github/workflows/deploy-data-load.yml": {
       "last_tracked": "6b4df198ba39a7fbdff6def6a1133f9c574f2adf03be831e085fa561f96a9dd4",
       "last_resolved": "6b4df198ba39a7fbdff6def6a1133f9c574f2adf03be831e085fa561f96a9dd4",
       "tracked_at": "2026-07-08T18:44:21.186723+00:00",
       "resolved_at": "2026-07-08T20:16:00Z"
+    },
+    ".claude/memory/reference_pipeline_b2_publish_key.md": {
+      "last_tracked": "24cedaa57278c892631db6b5d702bb0f04ba7ea3c0073e5af8daa10195988e22",
+      "last_resolved": "24cedaa57278c892631db6b5d702bb0f04ba7ea3c0073e5af8daa10195988e22",
+      "tracked_at": "2026-07-09T18:50:56.225723+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
+    },
+    ".claude/memory/feedback_passing_repro_masks_bug.md": {
+      "last_tracked": "0ba09311cd43162be476a37386bfd7a5211ec2542de3c2bd0820f2cff7a38eb6",
+      "last_resolved": "0ba09311cd43162be476a37386bfd7a5211ec2542de3c2bd0820f2cff7a38eb6",
+      "tracked_at": "2026-07-09T16:40:02.181402+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
+    },
+    ".claude/memory/project_backup_restore_logrotate_gap.md": {
+      "last_tracked": "e98b32142ae89c9f687735c03480bca20a2941873f0469d51497d4200e14dd92",
+      "last_resolved": "e98b32142ae89c9f687735c03480bca20a2941873f0469d51497d4200e14dd92",
+      "tracked_at": "2026-07-09T18:51:21.719739+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
+    },
+    ".claude/memory/feedback_subagent_worktree_wrong_repo.md": {
+      "last_tracked": "6c81b84abc0a448a4a8bb0266220d19d1cab028de42a4b2c37cb9f4d0e66f9bd",
+      "last_resolved": "6c81b84abc0a448a4a8bb0266220d19d1cab028de42a4b2c37cb9f4d0e66f9bd",
+      "tracked_at": "2026-07-09T19:26:33.919958+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
+    },
+    ".claude/memory/feedback_silent_zero_is_not_a_measurement.md": {
+      "last_tracked": "0d4e6dd7cbe981e89feb876b9a47d71a42e4d1a35ab1646eeac6c788b94a7634",
+      "last_resolved": "0d4e6dd7cbe981e89feb876b9a47d71a42e4d1a35ab1646eeac6c788b94a7634",
+      "tracked_at": "2026-07-09T21:45:49.909309+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
+    },
+    ".claude/memory/feedback_fixture_makes_guard_assertion_inert.md": {
+      "last_tracked": "43f926bc5fdface571817b6fef81a02641362f3ef5a9efa20a22f1392a9b1686",
+      "last_resolved": "43f926bc5fdface571817b6fef81a02641362f3ef5a9efa20a22f1392a9b1686",
+      "tracked_at": "2026-07-09T19:58:54.800130+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
+    },
+    ".claude/memory/feedback_sweep_expensive_stage_before_launch.md": {
+      "last_tracked": "9d7c4156166e161d7f437ce2df4167c99aa9136880e6888cc5b23343dc93705d",
+      "last_resolved": "9d7c4156166e161d7f437ce2df4167c99aa9136880e6888cc5b23343dc93705d",
+      "tracked_at": "2026-07-09T21:50:59.798575+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
+    },
+    ".claude/memory/feedback_consumer_wave_merge_ordering.md": {
+      "last_tracked": "54ef92f53c32ab0a0d251be68c198b3d789664886a26a87d8b2047c101264300",
+      "last_resolved": "54ef92f53c32ab0a0d251be68c198b3d789664886a26a87d8b2047c101264300",
+      "tracked_at": "2026-07-09T20:28:32.586932+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
+    },
+    "noorinalabs-data-acquisition/.claude/memory/project_name_normalized_provenance.md": {
+      "last_tracked": "b25230cf5bdbe3201821fc7e9ea76f80f89763147d1f2938c8deac639941b583",
+      "last_resolved": "b25230cf5bdbe3201821fc7e9ea76f80f89763147d1f2938c8deac639941b583",
+      "tracked_at": "2026-07-09T21:01:36.343174+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
+    },
+    "noorinalabs-data-acquisition/.claude/memory/reference_chain_integrity_cycle_population.md": {
+      "last_tracked": "8246ae1dbc9f2b484538cf67fb7080db994ec7e6a1c48ed9efae63740a26624c",
+      "last_resolved": "8246ae1dbc9f2b484538cf67fb7080db994ec7e6a1c48ed9efae63740a26624c",
+      "tracked_at": "2026-07-09T21:17:36.730088+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
+    },
+    "noorinalabs-deploy/.claude/lib/pre_commit_ci_sync.py": {
+      "last_tracked": "9f9b54c807fd3f54bb497872bbdeec3b3accf1c8ec94b68b222654c50d66c617",
+      "last_resolved": "9f9b54c807fd3f54bb497872bbdeec3b3accf1c8ec94b68b222654c50d66c617",
+      "tracked_at": "2026-07-09T21:46:42.446815+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
+    },
+    "noorinalabs-deploy/.cspell/project-words.txt": {
+      "last_tracked": "d608e5227e38df642b25b5e1d61ee9edd269128fde634580096b4bf9225f2a2b",
+      "last_resolved": "d608e5227e38df642b25b5e1d61ee9edd269128fde634580096b4bf9225f2a2b",
+      "tracked_at": "2026-07-09T21:51:40.806162+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
+    },
+    ".claude/memory/feedback_verdict_count_hook_regex.md": {
+      "last_tracked": "7f9003da803a56ddd34d2a4bfe03437f9469047b38bbcf2e4d5e14b48ca532ac",
+      "last_resolved": "7f9003da803a56ddd34d2a4bfe03437f9469047b38bbcf2e4d5e14b48ca532ac",
+      "tracked_at": "2026-07-09T22:22:19.256557+00:00",
+      "resolved_at": "2026-07-10T21:45:55Z"
     }
   },
   "last_cleanup": {
