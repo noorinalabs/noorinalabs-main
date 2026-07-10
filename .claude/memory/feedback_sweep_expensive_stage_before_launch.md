@@ -50,3 +50,24 @@ A splitter must be validated against **every convention its corpus uses**, not t
 - Beware the corollary: **your verification gate may itself be produced by a stage you are about to change.** Our top-10-by-mention-count check was reading `name_ar` labels chosen by the very bug it was meant to detect (da#356), so it read "clean" over a graph in which ʿĀʾisha did not exist. A gate downstream of a defect is not a gate.
 
 Siblings: [[feedback_silent_zero_is_not_a_measurement]] (a probe that cannot return nonzero), [[feedback_fixture_makes_guard_assertion_inert]] (an assertion that cannot go red). This is the third member of the family — **a gate that reads its input from the thing it is checking.** All three: *verify the instrument before trusting the reading.*
+
+## The mirror: a gate UPSTREAM of the fix is not a gate either (added 2026-07-09, da#384 Amendment Q)
+
+*A gate downstream of a defect is not a gate* has an exact mirror image, and I walked into it the same evening I wrote the original.
+
+Reviewing da#384/PR#387 — the PR that replaces a hand-maintained list of reserved exit codes with an `IntEnum` — I demanded a static guard reddening on any `sys.exit(<int literal != 0>)` anywhere under `src/`. Sound rule. But I had, two amendments earlier, **explicitly forbidden that PR's author from touching `_cmd_load`**, because that line belongs to a different open PR whose reviewers' verdicts hang on it. And `_cmd_load` held the **last** bare integer in the file.
+
+So the guard could not go green on the tree it was ordered onto. The author's only remaining move was to ship it with an exemption list naming the line — **a hand-maintained list of permitted bare exits.** The same object as the hand-maintained reserved-value list the PR existed to delete, and as the hand-maintained AST node-type table a reviewer had deleted an hour before. *The guard written to close the defect class would have been the third instance of it, authored by the amendment that named the class.*
+
+**A codebase-wide prohibition has a precondition on the tree, and it is not "my change is correct" — it is "no instance remains anywhere."**
+
+> **Before demanding a prohibition, run it against `HEAD`. If it reds, you have specified a fix, not a guard — and if the offending line is not yours, you have specified it against someone else's file.**
+
+So a prohibition **must be introduced by the change that removes the last instance of it**, or it ships with a catalogue of what it tolerates. The guard is the *closing brace* of an invariant, and the brace goes where the invariant closes — retime it onto the PR that deletes the final offender, never onto the PR that merely establishes the vocabulary.
+
+Two things generalize past exit codes:
+
+- **An exemption list is the defect wearing the guard's uniform.** Any time a new guard needs an allowlist to pass on the current tree, the allowlist *is* the thing the guard was supposed to abolish. Delete the instances or delay the guard; never enumerate them.
+- **Check rulings against each other, not only against the code.** Amendment I drew an ownership boundary; Amendment J stepped over it two paragraphs later. Each was individually verified against `src/`. Neither was verified against the other. The same hour, the implementer made the mirror-image error — applying a correct rule (*"a call site emitting the wrong code is the bug"*) to a call site that was not his. **The rule was right and the ownership was not**, in both directions, from both people. Ownership boundaries are invisible to a diff review; they live in the ruling, and only a read of the ruling catches them.
+
+Sibling: [[feedback_fixture_makes_guard_assertion_inert]] — there an assertion cannot go red; here a guard *can only* go red, which is the same failure of a gate to be a gate. And the companion law from the same night, which explains why nobody caught it sooner: **an instrument built to catch a failure is the most likely to contain it, because building it is exactly when you stop suspecting yourself.**
