@@ -14,10 +14,12 @@ import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 # Package lives at .claude/lib/ontology_gen/; this test is at .claude/lib/tests/.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import ontology_gen.aggregate as aggregate_module  # noqa: E402
 from ontology_gen.aggregate import (  # noqa: E402
     DEFAULT_REPOS,
     INDEX_RELPATH,
@@ -210,6 +212,54 @@ class TestRegeneration(unittest.TestCase):
             parsed = json.loads(out.read_text(encoding="utf-8"))
             paths = {n["path"] for n in parsed["nodes"]}
             self.assertIn("main/real.py", paths)
+
+    def test_raising_repo_generator_is_skipped_not_fatal(self) -> None:
+        """A PRESENT repo whose generator RAISES is skipped + recorded, not fatal — the
+        other repos still regenerate and the roll-up continues (main#939 review)."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "ok.py").write_text("a = 1\n", encoding="utf-8")
+            child = root / "noorinalabs-isnad-graph"
+            child.mkdir()
+            (child / "app.py").write_text("b = 2\n", encoding="utf-8")
+
+            real_generate = aggregate_module.generate
+
+            def flaky(repo_root: Path, out_dir: Path, name: str) -> dict[str, int]:
+                if name == "isnad-graph":
+                    raise RuntimeError("boom in child generator")
+                return real_generate(repo_root, out_dir, name)
+
+            with mock.patch.object(aggregate_module, "generate", side_effect=flaky):
+                statuses = regenerate_indices(
+                    root, {"main": ".", "isnad-graph": "noorinalabs-isnad-graph"}
+                )
+
+            by_name = {s.name: s for s in statuses}
+            # The healthy repo still regenerated.
+            self.assertTrue(by_name["main"].regenerated)
+            # The raising repo is skipped, error recorded, no exception propagated.
+            self.assertFalse(by_name["isnad-graph"].regenerated)
+            self.assertIsNotNone(by_name["isnad-graph"].error)
+            self.assertIn("boom in child generator", by_name["isnad-graph"].error or "")
+            # A raising repo (error set) is distinct from an absent repo (error None).
+            self.assertIsNone(by_name["main"].error)
+
+    def test_main_returns_zero_when_a_repo_generator_raises(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "keep.py").write_text("c = 3\n", encoding="utf-8")
+            out = root / "ontology" / "structural" / "cross-repo-graph.json"
+
+            def always_raises(repo_root: Path, out_dir: Path, name: str) -> dict[str, int]:
+                raise OSError("disk gone")
+
+            with mock.patch.object(aggregate_module, "generate", side_effect=always_raises):
+                rc = main([str(root), "--out", str(out), "--repo", "main=."])
+            # Roll-up still completes (rc 0) and writes the central artifact, even though
+            # the only repo's generator crashed — it just rolls up an empty/absent index.
+            self.assertEqual(rc, 0)
+            self.assertTrue(out.exists())
 
 
 if __name__ == "__main__":  # pragma: no cover

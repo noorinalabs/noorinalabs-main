@@ -120,7 +120,14 @@ def _load_namespaced(name: str, path: Path) -> tuple[list[Node], list[Edge]] | N
 
 @dataclass(frozen=True)
 class RepoRegenStatus:
-    """Outcome of regenerating one repo's structural index before aggregation."""
+    """Outcome of regenerating one repo's structural index before aggregation.
+
+    ``regenerated`` is True only when the generator ran to completion. It is False both
+    when the repo directory is absent (``error is None``) and when the generator raised
+    (``error`` holds the ``Type: message`` string) — the two skip reasons are distinct in
+    reporting but degrade identically: :func:`aggregate` rolls up whatever index is (or is
+    not) on disk for that repo and continues.
+    """
 
     name: str
     repo_root: Path
@@ -128,6 +135,7 @@ class RepoRegenStatus:
     files: int
     nodes: int
     edges: int
+    error: str | None = None
 
 
 def regenerate_indices(
@@ -143,6 +151,14 @@ def regenerate_indices(
     read of committed artifacts. A repo whose directory is absent (e.g. a child not cloned
     beneath ``main_root``, or a CI checkout of ``main`` alone) is skipped and reported —
     :func:`aggregate` then degrades gracefully over the missing index exactly as before.
+
+    Fault isolation (main#939 review): this aggregator now runs on every session-start and
+    wave-wrapup across all repos, so one repo's generator crashing must NOT abort the whole
+    roll-up. Any exception from :func:`generate` is caught, recorded on that repo's status,
+    and skipped — the other repos still regenerate and the roll-up still completes, mirroring
+    the absent-directory degradation. (``generate`` already swallows a single unparseable
+    file internally; this guards the whole-repo failures it does not — OSError, an extractor
+    bug, etc.)
     """
     repo_map = repos if repos is not None else DEFAULT_REPOS
     statuses: list[RepoRegenStatus] = []
@@ -151,7 +167,15 @@ def regenerate_indices(
         if not repo_root.is_dir():
             statuses.append(RepoRegenStatus(name, repo_root, False, 0, 0, 0))
             continue
-        counts = generate(repo_root, repo_root / STRUCT_DIR_RELPATH, name)
+        try:
+            counts = generate(repo_root, repo_root / STRUCT_DIR_RELPATH, name)
+        except Exception as exc:  # noqa: BLE001 — one repo's crash must not abort the roll-up
+            statuses.append(
+                RepoRegenStatus(
+                    name, repo_root, False, 0, 0, 0, error=f"{type(exc).__name__}: {exc}"
+                )
+            )
+            continue
         statuses.append(
             RepoRegenStatus(
                 name, repo_root, True, counts["files"], counts["nodes"], counts["edges"]
@@ -278,9 +302,16 @@ def main(argv: list[str] | None = None) -> int:
                 f"nodes={regen_status.nodes} edges={regen_status.edges}\n"
             )
         for regen_status in skipped:
-            sys.stderr.write(
-                f"  - {regen_status.name}: repo dir absent ({regen_status.repo_root}) — skipped\n"
-            )
+            if regen_status.error is not None:
+                sys.stderr.write(
+                    f"  ! {regen_status.name}: generator failed ({regen_status.error}) — "
+                    f"skipped, roll-up continues\n"
+                )
+            else:
+                sys.stderr.write(
+                    f"  - {regen_status.name}: repo dir absent "
+                    f"({regen_status.repo_root}) — skipped\n"
+                )
 
     nodes, edges, statuses = write_aggregate(main_root, out_path, repos)
 
