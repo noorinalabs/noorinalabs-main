@@ -234,6 +234,7 @@ Sibling: a comment id is not a position. The same hook counts approvals as a mon
 
 - **`pytest | grep '^FAILED'` prints nothing when tests failed.** pytest emits ANSI colour codes, so `FAILED` is not at line-start. The grep returns zero matches and the reader concludes zero failures. Run `pytest --color=no` before grepping its output. (Found while pytest itself reported `2 failed` on the same run.)
 - **A `cp` restore that silently did not restore reads exactly like a passing test.** After any plant-and-restore cycle, hash the file and compare it to the reference blob. `git hash-object <file>` vs `git rev-parse origin/main:<path>`.
+- **`grep -E 'a\|b'` matches the literal string `a|b`, not `a` or `b`.** Under ERE, `|` is already alternation and the backslash *removes* that meaning — the opposite of BRE, where `\|` supplies it. A search for two alternatives returns `0` on a file containing both. Verified: `grep -cE 'alpha\|beta'` → `0`; `grep -cE 'alpha|beta'` → `2`.
 
 Both belong to the family: **a mutation that never applied, a restore that never restored, and a genuinely surviving mutant are the same green.** The only defence is to make the instrument prove it can move — plant, see red, restore, see green, and hash the file at both ends.
 
@@ -272,3 +273,5 @@ A one-sided control (plant, see red) proves the detector fires. It does not prov
 A brief said *"import the alias form, precisely as da#372 did it."* Measured on `main`: `_cmd_load`'s executable exits are all `ExitCode.X`; the alias form appears only in `_cmd_resolve`'s function-local import, and the one `EXIT_LOAD_FAILED` inside `_cmd_load` is **prose in a comment**. The brief's *rule* — "be consistent with how `cli.py` does it" — was right. The *instance* attached to it was wrong, and following the instance would have made `_cmd_load` the only function in the file mixing both forms.
 
 The implementer followed the rule and refused the instance, showing the count. **When an instruction names both a rule and an example, the example is the part that was not measured.**
+
+It cuts symmetrically, and toward the brief-writer first. The same implementer's own error message had told an operator to *"re-run `parse`"* — a rule (*regenerate the artifact*) stated with an unmeasured example of how to satisfy it (`parse` swallows the failure and exits `0`, so the artifact is never regenerated). Same failure, different author, caught by a third person. **An example is a claim about the world; a rule is a claim about what you want. Only one of them can be run, and it is the one nobody runs.**
