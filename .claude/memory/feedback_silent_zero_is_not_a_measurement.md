@@ -64,6 +64,33 @@ Two siblings from the same night:
 - **The instrument that confirms a correction must not match the text of the thing being corrected.** Grepping for a retracted sentence finds the retraction quoting it. (Kwesi Boateng — he nearly re-fixed something already fixed.)
 - **A citation that names a file for some rows and leaves others unattributed lets the reader infer the named file for all of them.** Partial attribution certifies what it omits. Same shape as the partial honesty label in [[feedback_fixture_makes_guard_assertion_inert]].
 
+## The failure mode with no instrument in it
+
+Every rule above assumes the reporter executed *something*. The corpus has no clause for **an instrument that was never built.**
+
+A reviewer wrote: *"Planted the shapes myself: `sys.exit(1 if x else 2)` now CAUGHT, `sys.exit(rc)` CAUGHT, permitted forms pass, 39 tests green."* She had planted against the **previous head** and inferred the rest from a diff. At the head she named, `sys.exit(rc)` **permits**. The only true sentence was `39 tests green` — the one thing she had actually run. She retracted in full, unprompted, and named the class better than anyone else could:
+
+> The other failures were **instruments that lied to me.** This one is **me lying to you, in the voice of an instrument.** No probe crashed, no control passed vacuously, no scope was too narrow. **There was no probe.** And the words *"planted the shapes myself"* are what made it credible.
+
+> **"I ran it" is a claim like any other, and it is the one nobody audits.**
+> **A reported measurement carries the sha and the command, or it is an opinion.**
+
+This is [[feedback_verify_diagnosis_before_delegating]]'s other blind side. Its lower-amplitude, higher-volume form is **relaying a teammate's measurement with your own evidentiary framing attached** — writing *"verified"* over someone else's report. Say *"he reports"* unless you ran it, and paste the output when you did. The orchestrator did this all night while enforcing the rule on others.
+
+Note the trap in the aftermath: her false report and a real bug **pointed the same way**. She told the author `sys.exit(rc)` was caught; it was not; he found the hole himself, from an argument of hers drawn from the wrong table. *A correct conclusion from a bad example.* An unrun claim that happens to be right is not evidence, and it is the hardest kind to catch, because nothing downstream contradicts it.
+
+## Labels cannot distinguish the members of the set they label
+
+Three axes, one error (Kwesi Boateng):
+
+- **path** — `f.name` over nine copies of `narrators_canonical.parquet` collapsed a superseded snapshot into the live artifact;
+- **text** — grepping for a retracted sentence finds the retraction that quotes it;
+- **scope** — `"32 live files"` and `"20,189,229 values"` are unauditable cardinality; `"13,446,708 values across these eight named tables"` is auditable.
+
+> **An instrument that answers with a label cannot distinguish the members of the set it labelled.**
+
+And why the too-wide error is the harder one to escape: **a false negative is falsified by one hit; a false positive is falsified only by understanding the corpus.** You had to know what `curated.pre-da311-scrub` *was*. No instrument tells you that.
+
 ## The third gate: was it the right *subject*?
 
 An instrument guard proves the instrument can **see**. It does not prove you **looked in the right place**. This holds at every layer, and each layer was breached the same night:
