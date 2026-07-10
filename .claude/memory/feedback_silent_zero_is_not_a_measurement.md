@@ -184,3 +184,19 @@ Nothing would have caught it. Every check that *reads* the header passes; only r
 > **A generated artifact has no `--ours` and no `--theirs`. It has a generator.** Take either side and you have committed a description of a tree nobody built. Resolve by running the generator, then diff the header against the value you expect — and expect it from the *merged* tree, not the one you branched from. **A control against the wrong baseline is not a control:** a no-op regenerate passes it.
 
 Sibling: [[feedback_declarative_head_needs_action]]. See also main#939 (the structural-index conflict tax).
+
+## The correction is not a safe place to stand (2026-07-10, da#387 registry)
+
+Three instances in six hours, each committed **inside a message correcting the same error**:
+
+- The orchestrator wrote *"the two standing approvals"* into a public comment whose subject was asserting states you have not read — having read the names off a neighbouring PR.
+- An engineer retracted a false mechanism (`IntEnum` is what makes `sys.exit` preserve the value; actually `__new__`'s `int.__new__` call kills the mutant at import), and in the retraction's own four-way table asserted *"value-equality passes"* for a variant where `Enum.X == 5` is `False`. Predicted observable, wrong mechanism, one line below the retraction of a predicted observable with a wrong mechanism.
+- The orchestrator then asked *"if the re-run launches as `isnad-ingest pipeline`, da#394 gates"* — a question whose premise (`_cmd_pipeline` is an invocation form) dies to one `grep` of the `Makefile`, which chains five separate `$(MAKE)` processes.
+
+> **You are most confident and least measured immediately after being right about something adjacent.** The frame feels earned, so the next sentence inside it goes unrun. Correcting an error is not evidence about the sentence you correct it with.
+
+Operational form, and it is cheap: **a claim that would improve the story if true is a claim to run.** Each of the three would have made its own narrative tidier — a merge that was ready, a guard that was blind, a defect that gated. That tidiness is the tell, not the reward.
+
+The corollary for reviewers is the same one this file already gives from the other direction: when a colleague's finding *agrees with you and improves your framing*, that is exactly when you skip verifying it. Both halves reduce to: **the sentence that flatters the frame is the sentence to measure.**
+
+Note what actually caught all three: not care, not review, but somebody running the command. `git show ...:cli.py | grep sys.exit`. `python3 -c 'class B(enum.Enum): X=5; print(B.X == 5)'`. `grep -n pipeline Makefile`. None cost more than a few seconds, and none of the three authors ran theirs.
