@@ -49,6 +49,22 @@ And if you genuinely need a pipe with a truthful status, zsh exposes the whole v
 
 Sibling of [[feedback_silent_zero_is_not_a_measurement]]: there the probe could not return nonzero; here the *status channel* is severed from the thing you are measuring. Same root — **verify the instrument before trusting the reading.**
 
+## The wider family: a tool silently transformed your input and reported success (2026-07-09)
+
+The pipe is one member. Three landed on one engineer in one evening, each reporting `rc=0`:
+
+| tool | what it silently transformed |
+|---|---|
+| `git push … \| tail` | the **exit status** — a rejected push read as `0` |
+| `re.sub(…, replacement)` | the **replacement string** — `\n` escapes eaten, producing unterminated string literals. Recovering with `git checkout HEAD -- file` then destroyed the *uncommitted* work the recovery was for |
+| `git commit -F- <<EOF` (**unquoted** heredoc) | the **message body** — zsh executed the backticks. `` `arg.id in registry.__all__` `` ran as a command, `command not found` scrolled past mid-push, and the commit landed with the subject replaced by its empty output |
+
+> **Any layer between you and the thing you meant — a pipe, a regex replacement, an unquoted heredoc, a shell expansion — may rewrite your input and still report success.** The status channel describes the *last* transformation, never the fidelity of the earlier ones.
+
+**Quote the heredoc delimiter** (`<<'EOF'`) unless you specifically want interpolation; if you do want it, keep backticks, `$(...)`, and `$` out of the body. Prefer `-F <msgfile>` written by a tool that does no expansion. For `re.sub`, use a function replacement or `re.escape`, never a raw string carrying backslashes. And **read the artifact back** — `git log -1 --format=%B`, the written file, the pushed ref — because in every one of these the *command* succeeded and the *content* did not survive.
+
+Sibling of [[feedback_gh_pr_edit_silent_noop]]: there the tool did nothing and said so cheerfully; here it did something other than what you wrote.
+
 **How to apply:**
 - **Never pipe a command whose exit status you intend to read.** Not `git push`, not `gh`, not a gate script, not a linter. Redirect instead: `cmd > "$CLAUDE_JOB_DIR/tmp/<cmd>_<id>.txt" 2>&1; echo "rc=$?"`, then read the file. **Use a unique path, never a shared `/tmp/out.txt`** — parallel agents clobber each other, per [[feedback_parallel_reviewer_tmp]].
 - `set -o pipefail` is **off by default under zsh** and must be set explicitly in the same call: `( set -o pipefail; cmd | tail )`. It then catches an upstream non-zero — but it **over-reports** on `| head` (SIGPIPE `141`) and `| grep -q` (no-match `1`), and it **cannot** catch a command that exits `0` while doing nothing. Prefer redirect.
