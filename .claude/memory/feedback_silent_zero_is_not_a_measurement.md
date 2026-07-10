@@ -302,3 +302,23 @@ Remedies, in order of trust:
 The family: **an unapplied mutation, a restore that never restored, a scoped run that couldn't see the test, and a stale `.pyc` are four different causes of the same green.** None is distinguishable from "the guard is sound" by looking at the result. Only by making the instrument prove it moved — and by making each mutant fail *differently*, so a repeated message is a signal rather than a coincidence.
 
 Sibling of the `git -C` trap above: there the instrument pointed at the wrong file; here it pointed at the right file's *past*.
+
+### The visible change is not necessarily the effective change
+
+A reviewer retracted a stale approval by editing his own comment. The banner said *"the charter fields below are deliberately renamed so the hook no longer reads this as a standing approval,"* and lines 8–10 duly showed `Verdict: Approved` where `RequestOrReplied: Approved` had been. The orchestrator quoted those three lines into a public issue as the mechanism.
+
+The comment was 76 lines. Its last sole `---` was at line **70**. The hook reads only the trailer. **Nothing above line 70 exists as far as the counter is concerned.** Measured, both directions:
+
+```
+as posted                     Requestor=None                RoR=None       counts=False
+un-rename the BANNER field    Requestor=None                RoR=None       counts=False   <- the claimed mechanism: INERT
+un-mangle the TRAILER fields  Requestor=Oyunbileg Batbayar   RoR=Approved   counts=True    <- the real mechanism
+```
+
+The trailer carried `Requestor (retracted):` — a parenthetical inserted *before* the colon, which the field regex cannot match. **That** is what un-counted the approval.
+
+The error was committed in an issue whose subject is `_trailer_block_substring` reading a different region than the reader does. The quoted lines were the part that *looked* like the mechanism, and they were in dead text.
+
+> **An edit has a visible change and an effective change, and they need not be the same object.** Before attributing a behaviour to a diff, ask which part of the file the consuming code actually reads — then flip only that part, and only the other part, and see which one moves.
+
+Consequence, which is why this is not a nitpick: a `latest-verdict-wins` design anticipating only the *rename* would have left the real escape hatch — trailer field-name mangling — fully in place. **A fix aimed at the visible change protects nothing.** (Aino Virtanen, main#940; she found it because her control failed.)
