@@ -117,6 +117,26 @@ The failure above was cheap for its author, who caught herself and retracted. It
 
 The asymmetry that makes this hard: *"verify before you delegate"* fires loudly when a finding contradicts you, and silently when it agrees. Four instruments failed that night before anyone checked one that confirmed what they already believed. See [[feedback_verify_diagnosis_before_delegating]] — this is that rule's blind side.
 
+## The identifier is the same; the referent is not (2026-07-10, da#362/da#372)
+
+Four failures in one night, one shape:
+
+| the reading | the scope you assumed | the scope you got |
+|---|---|---|
+| `statusCheckRollup` green | the head you're merging | a **dead head** |
+| the control row was found | the corpus | **the subset the scan searched** |
+| the AST walk says `VALIDATION_FINDINGS` | the registry's `5` | `src/graph/__init__.py`'s **`4`** |
+| the reviewers approved | *this* PR | a **neighbouring PR** |
+
+Every instrument was sound. Every one was pointed at something the operator had chosen, and the name it returned was correct *for the thing it looked at*. **A name resolves in a scope, and the scope is the part nobody prints.**
+
+Two concrete corollaries, both paid for:
+
+- **The blast radius of a change is the import graph, not the diff.** An AST walk of the file you are editing reads imported constants as unresolved symbols and silently grants them the meaning they have on `main`. `src/cli.py` imported `EXIT_VALIDATION_FINDINGS` from a module that defined it as `4` while the registry defined it as `5`. The walk was correct; its scope was drawn from inside the hypothesis.
+- **`git merge-tree` reporting a file conflict-free is not evidence the file is correct post-merge.** `src/cli.py` auto-merged with zero conflict markers and was the file that broke: git compares text, and the invariant lived across a module boundary git has no opinion about. **A clean auto-merge is not a correct merge.** Run the suite.
+
+And the reason this belongs in a harness rather than in anyone's head: *it happened inside the message whose subject was that exact failure*, twice, to two different people, within an hour. **You cannot hold a rule in mind while executing the thing the rule is about.** Alejandra Reyes-Fuentes's sentence, which is the load-bearing one: ***"the reader distrusted me" is not a control.*** A finding survives because it was checked, not because someone happened to be suspicious.
+
 ## A reading and a forecast are not the same kind of thing, and only one gets labelled (2026-07-10, da#392)
 
 `src/exit_codes.py` carried: *"Once it moves to `VALIDATION_FINDINGS`, the only emitters of `1` are `_check_neo4j` … and `_cmd_load`'s genuine failure path."* Written in the **future tense**, about a tree that did not exist yet. Nobody could run it, so nothing reddened, and it was already false about `_check_neo4j` (which emits `8`).
