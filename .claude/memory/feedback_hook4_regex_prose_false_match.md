@@ -29,4 +29,14 @@ Only the ACTUAL trailer at the bottom of the comment should contain the literal 
 
 **The charter-promotion candidate this file used to propose has SHIPPED.** "Require the structured-fields block as the LAST lines of the comment, or scan bottom-up" is `#511`, live in `validate_pr_review` as `_trailer_block_substring` + last-match-wins + `_strip_code_regions`. The open half is `validate_review_comment_format`'s unanchored whole-body `re.search`, tracked in main#932/#934.
 
-**Standing lesson, larger than this file:** a memory that records a defect *and proposes its fix* becomes false the day the fix lands, and it will not tell you. Nothing in a memory file observes the code it describes. **When you land a fix, grep the memory corpus for the defect and amend it in the same PR** — otherwise the memory outlives the bug and starts teaching a mechanism that no longer exists. This file taught one for roughly two months. Sibling: [[feedback_dep_resolution_invalidates]].
+**Standing lesson, larger than this file** (sharpened by Oyunbileg Batbayar, 2026-07-09): a memory that records a defect *and proposes its fix* has **pre-declared the condition under which it becomes false.** Nothing in a memory file observes the code it describes, so the day the proposal lands, the memory silently starts teaching a mechanism that no longer exists. This file taught one for roughly two months.
+
+"Grep the corpus whenever you land a fix" is the general rule and it is weak, because nobody remembers to run it. The strong, cheap special case:
+
+> **Any memory whose body proposes a remedy must name the artifact that will falsify it** — the issue, the PR, the hook — so the grep has a key, and so the person landing that artifact can find the memory from the fix rather than the other way round.
+
+Had this file's closing paragraph read *"falsified by whatever ships the bottom-up scan"*, #511 would have been searchable from here on the day it merged. Sibling: [[feedback_dep_resolution_invalidates]].
+
+**The fail-closed direction, which nobody had written down** (Oyunbileg, verified at main#934's head `1ba68da4`): `validate_review_comment_format`'s captured group is not discarded — it flows to `_extract_lastname` and into the Requestor/Requestee swap heuristic, which ends in `decision: block`. So the *same* unscoped `re.search` can **block a correctly-formed verdict** (when the prose's final token is the PR author's surname) and **pass a genuinely swapped one** (when it isn't). One line, two opposite failures, and which one fires depends on the reviewer's sentence.
+
+Note the trap inside the trap: `_extract_lastname` returns the **final token**, so prose ending in a full stop yields `''` and blocks nothing. **A repro whose sentence ends in a period cannot go red** — an inert fixture inside the demonstration of a hook bug. Tracked in main#932.
