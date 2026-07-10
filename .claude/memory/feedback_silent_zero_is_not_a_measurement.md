@@ -43,6 +43,22 @@ Corollary for exhaustive claims: **print the scope.** Number of files, number of
 
 That corollary is not optional, and the proof is that the rule alone did not stop it. **Three people ran this scope error in one evening, each with a passing control.** The first caught herself. The second (me) amplified her finding into a merge blocker without running anything. The third re-derived the same zero from the same unopened file and **committed it into the artifact** — a `NOT ON DISK` heading over a row living in a staging table beside the five he searched — inside the very block whose purpose is to say which rows are real. Nobody was careless; a correct label is not the fix. **Stating the scope is the fix**, because it is the only version a reader can falsify.
 
+**And the scope error inverts. The wide side is worse.** Three of the four scans that evening were too *narrow* — false negatives, findable by widening. The fourth was the orchestrator's, over `data/**`, 63 files, reported as *"four places."* Thirty-one of those files were **archival snapshot directories** of superseded runs (`curated.pre-da311-scrub-*`, `curated.pre-wave23-reload-*`, `curated.run5-scrubbed`, `curated.known-good-*`); `data/` held nine copies of `narrators_canonical.parquet`. The scan printed `f.name` — **the basename** — so a superseded snapshot was indistinguishable from the live artifact in its own output. Live scope: **one** hit.
+
+Worse than the count: the row's only appearances in `narrators_canonical` were in **pre-scrub** snapshots, where a matn-derived name in the canonical table *is the defect the scrub removed*. **The bug was cited as proof of the feature.**
+
+> **A scope that is too wide is not the conservative error.** Too narrow yields a false negative you find by widening. **Too wide yields a false positive carrying the authority of an exhaustive search** — and where the extra scope holds superseded artifacts, it will confidently reproduce the very defects that were fixed. A bigger scope *feels* like rigor; `63 files` reads as thoroughness.
+
+So *print the scope* is not enough — the orchestrator printed a **count**, which is a scope nobody can audit. **Print identity, not cardinality:** full paths, or at minimum the directory set. *A basename is a label; a path is a name.* Where a repo carries snapshot/backup directories, a provenance claim must scope to the live artifacts and **say which those are**.
+
+## Verify the claim as written, not as you would have written it
+
+A reviewer checked *"no table carries a colon-joined name"* by measuring **whether the cut fires** — a better instrument than the author's `grep`, pointed at an adjacent proposition. Both are true statements; only one was the sentence on the page. The false premise survived a careful review and, from the outside, the review was indistinguishable from a real verification. (Alejandra Reyes-Fuentes, who found it in her own review — in the same message where the orchestrator did it to her: "verifying" her apposition count of 284 by measuring *substring occurrences* and getting 17.)
+
+> **Verifying a claim means verifying it as written, not as you would have written it.** A better instrument aimed slightly off the proposition is how a false premise survives a careful review.
+
+Corollary for numbers in prose: **name the predicate.** `17`, `17`, and `284` were three questions, not three answers. And when a colleague's number won't reproduce, **ask which predicate before asserting them into a correction** — two people had already acted on numbers they had not reproduced that night.
+
 Two siblings from the same night:
 
 - **The instrument that confirms a correction must not match the text of the thing being corrected.** Grepping for a retracted sentence finds the retraction quoting it. (Kwesi Boateng — he nearly re-fixed something already fixed.)
