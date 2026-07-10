@@ -75,7 +75,13 @@ A reviewer wrote: *"Planted the shapes myself: `sys.exit(1 if x else 2)` now CAU
 > **"I ran it" is a claim like any other, and it is the one nobody audits.**
 > **A reported measurement carries the sha and the command, or it is an opinion.**
 
-This is [[feedback_verify_diagnosis_before_delegating]]'s other blind side. Its lower-amplitude, higher-volume form is **relaying a teammate's measurement with your own evidentiary framing attached** — writing *"verified"* over someone else's report. Say *"he reports"* unless you ran it, and paste the output when you did. The orchestrator did this all night while enforcing the rule on others.
+This is [[feedback_verify_diagnosis_before_delegating]]'s other blind side.
+
+**Do not conflate it with relaying an unattributed measurement.** The orchestrator did — writing that his *"Nikolaos already planted the `IfExp`"* was the same defect at lower amplitude — and the author of the fabrication refused the comparison, correctly:
+
+> **Yours is a citation with a missing attribution; mine is a citation with a fabricated source.** A reader can repair yours by asking him. Nobody can repair mine, because there is nothing behind it.
+
+Two rules, and they have different remedies. *The reading was taken* catches the fabrication. **Nothing catches a relayed attribution except naming the source**: write *"he reports"* unless you ran it, and paste the output when you did. Note the trap in ranking them at all — placing your own smaller failure alongside someone's larger one **makes the ledger symmetric and reads as accountability while flattering you.**
 
 Note the trap in the aftermath: her false report and a real bug **pointed the same way**. She told the author `sys.exit(rc)` was caught; it was not; he found the hole himself, from an argument of hers drawn from the wrong table. *A correct conclusion from a bad example.* An unrun claim that happens to be right is not evidence, and it is the hardest kind to catch, because nothing downstream contradicts it.
 
