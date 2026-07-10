@@ -229,3 +229,23 @@ Failing closed is the right *direction*; that is `feedback_safety_direction_over
 It was found by simulating the hook's count with the hook's own functions before merging — not by trusting a `jq` scan that read the whole body and cheerfully reported two approvals. **My `jq` and the hook read the same comment and disagreed about whether it contained a verdict.** Two instruments, one identifier, different referents. Pick the instrument whose answer is the one that will act.
 
 Sibling: a comment id is not a position. The same hook counts approvals as a monotonic set (a withdrawn approval is never subtracted, so a *blocking* reviewer counts as an approver — that one fails **open**) and retains every superseded verdict as live. All three defects are silent, and the accounting reports a confident integer that can be wrong in either direction.
+
+### Two cheap instrument failures worth memorizing
+
+- **`pytest | grep '^FAILED'` prints nothing when tests failed.** pytest emits ANSI colour codes, so `FAILED` is not at line-start. The grep returns zero matches and the reader concludes zero failures. Run `pytest --color=no` before grepping its output. (Found while pytest itself reported `2 failed` on the same run.)
+- **A `cp` restore that silently did not restore reads exactly like a passing test.** After any plant-and-restore cycle, hash the file and compare it to the reference blob. `git hash-object <file>` vs `git rev-parse origin/main:<path>`.
+
+Both belong to the family: **a mutation that never applied, a restore that never restored, and a genuinely surviving mutant are the same green.** The only defence is to make the instrument prove it can move — plant, see red, restore, see green, and hash the file at both ends.
+
+### A failure message names the symptom, not the constraint
+
+`TestRegistryIsTheSoleDeclarer` reds on `EXIT_MALFORMED_IDS = 5` colliding with `VALIDATION_FINDINGS = 5`. The obvious reading is *"pick a free number."* Measured against merged `main`, in a blob-verified sandbox:
+
+```
+unmodified                     62 passed          <- control
+EXIT_MALFORMED_IDS = 5         2 failed
+EXIT_MALFORMED_IDS = 9         2 failed           <- a FREE code. still reds.
+restored (blob 0f6689b1)       62 passed          <- control
+```
+
+The guard objects to a **declaration outside the registry**, at any value. Renumbering clears the collision the reader inferred and not the constraint the guard enforces. Before acting on a red, run the fix you are about to make and confirm it goes green — **a diagnosis that explains the failure is not the same as one that would remove it.**
