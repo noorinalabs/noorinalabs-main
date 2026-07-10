@@ -63,7 +63,15 @@ So the guard could not go green on the tree it was ordered onto. The author's on
 
 > **Before demanding a prohibition, run it against `HEAD`. If it reds, you have specified a fix, not a guard — and if the offending line is not yours, you have specified it against someone else's file.**
 
-So a prohibition **must be introduced by the change that removes the last instance of it**, or it ships with a catalogue of what it tolerates. The guard is the *closing brace* of an invariant, and the brace goes where the invariant closes — retime it onto the PR that deletes the final offender, never onto the PR that merely establishes the vocabulary.
+So a prohibition **must be introduced by the change that removes the last instance of it** — or by a guard that **cannot outlive** the instance. Otherwise it ships with a catalogue of what it tolerates.
+
+**The second branch is better than the first, and the implementer found it after I had ruled the retiming.** Rather than exempt the surviving offender, he *asserted* it: the test pins the offender set to exactly `{_cmd_load}`, attributed by enclosing **function name, not line number**, and reds in both directions — a new bare exit grows the set, and the PR that finally routes `_cmd_load` **empties it and fails the test**. The failure message instructs whoever hits it to replace the pin with `assert not offenders`.
+
+> **A guard that tolerates its exception forever is the hand-maintained list. A guard that fails when the exception is fixed is a deadline.**
+
+That is the distinction the retiming misses. Retiming says *wait until the tree is clean.* The self-expiring pin says *record the exception as a claim, and let its removal break the claim.* An exemption is invisible once merged; an assertion cannot be forgotten, because the cleanup that obsoletes it is the thing that reds. Prefer the pin; retime only when no honest pin exists.
+
+Attribute by symbol, never by line — a line-numbered pin reds on an unrelated insertion above it and teaches everyone to update the number without reading the claim.
 
 Two things generalize past exit codes:
 
