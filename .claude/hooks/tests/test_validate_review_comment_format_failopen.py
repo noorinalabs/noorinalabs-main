@@ -927,33 +927,74 @@ class UnmodelledWritesHardBlockTests(unittest.TestCase):
 
     # --- the guard must not fire on payload text -------------------------------
 
-    def test_a_redirect_quoted_inside_the_heredoc_body_is_not_a_write(self) -> None:
+    # The decoy heredoc below writes a DIFFERENT file. That is load-bearing.
+    #
+    # An earlier version of these tests wrote the quoted redirect into the same
+    # heredoc that writes the posted path. The quoted text then fell inside a
+    # `modelled` span, and the clause *after* the payload skip discarded it
+    # anyway — so the test passed with `_is_payload_text` deleted. It pinned the
+    # `modelled` check while being named for the payload check
+    # (`feedback_fixture_makes_guard_assertion_inert`, found by Santiago
+    # Ferreira). A decoy target puts the quoted text outside every `modelled`
+    # span, where only `_is_payload_text` can save it.
+    #
+    # The two tests quote DIFFERENT constructs so each skip reds on its own
+    # removal: one quotes a redirect, one quotes a `tee`.
+
+    def _decoy_command(self, quoted: str) -> str:
+        decoy = os.path.join(self.tmp, "decoy.md")
+        return (
+            f"cat > {decoy} <<'DECOY'\nI reproduced it with:\n\n    {quoted}\nDECOY\n"
+            f"cat > {self.path} <<'EOF'\n{_CONFORMING_TRAILER}EOF\n{self.post}"
+        )
+
+    def test_a_redirect_quoted_inside_a_heredoc_body_is_not_a_write(self) -> None:
         """A verdict whose prose quotes a redirect to its own path must still post.
 
-        The naive scan — over the whole command string, as first proposed — fires
-        on this and hard-blocks a conforming verdict. The text is payload, not a
-        command. In this repo most verdicts are *about* shell commands, so this
-        is the common case, not a corner.
+        Most verdicts in this repo are *about* shell commands. Reds when the
+        payload skip is removed from the redirect loop.
         """
-        body = (
-            "I reproduced it with:\n"
-            "\n"
-            f"    printf 'x' >> {self.path}\n"
-            f"    cat {self.path} >> {self.path}\n"
-            "\n"
-            "---\n"
-            "Requestor: Wanjiku Mwangi\n"
-            "Requestee: Aino Virtanen\n"
-            "RequestOrReplied: Approved\n"
-            "TechDebt: none\n"
-        )
-        command = f"cat > {self.path} <<'EOF'\n{body}EOF\n{self.post}"
+        command = self._decoy_command(f"printf 'x' >> {self.path}")
         self.assertIsNone(
             hook._unmodelled_write(command, self.path),
-            "a redirect inside the heredoc body is payload text, not a write",
+            "a redirect inside a heredoc body is payload text, not a write",
         )
-        self.assertEqual(hook.extract_comment_body(command), body)
+        self.assertEqual(hook.extract_comment_body(command), _CONFORMING_TRAILER)
         self.assertEqual(_decision(hook.check(_bash_input(command))), "allow")
+
+    def test_a_tee_quoted_inside_a_heredoc_body_is_not_a_write(self) -> None:
+        """Same, for the `tee` loop, which has no `modelled` fallback at all.
+
+        Quotes only a `tee` — no redirect to the posted path — so it reds when
+        the payload skip is removed from the `tee` loop and not otherwise.
+        """
+        command = self._decoy_command(f"tee {self.path} <<'X'")
+        self.assertIsNone(
+            hook._unmodelled_write(command, self.path),
+            "a tee inside a heredoc body is payload text, not a write",
+        )
+        self.assertEqual(hook.extract_comment_body(command), _CONFORMING_TRAILER)
+        self.assertEqual(_decision(hook.check(_bash_input(command))), "allow")
+
+    def test_the_quoted_redirect_is_not_merely_masked_by_the_modelled_span(self) -> None:
+        """Guard the guard: the decoy's quoted text must sit OUTSIDE `modelled`.
+
+        If it fell inside, the two tests above would pass with `_is_payload_text`
+        deleted — which is precisely how the previous fixture was inert.
+        """
+        command = self._decoy_command(f"printf 'x' >> {self.path}")
+        modelled = [
+            m.span()
+            for m in hook._HEREDOC_WRITE_RE.finditer(command)
+            if hook._resolve_body_path(m.group("target")) == self.path
+        ]
+        self.assertTrue(modelled, "the posted path must still be written by a heredoc")
+        quoted_at = command.index(f">> {self.path}")
+        self.assertFalse(
+            any(start <= quoted_at < end for start, end in modelled),
+            "the quoted redirect must NOT sit inside a modelled span, or the "
+            "payload skip is not what this test exercises",
+        )
 
     def test_the_modelled_heredoc_redirect_is_not_flagged_as_unmodelled(self) -> None:
         command = f"cat > {self.path} <<'EOF'\n{_CONFORMING_TRAILER}EOF\n{self.post}"
