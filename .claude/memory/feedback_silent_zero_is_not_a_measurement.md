@@ -137,6 +137,18 @@ Two concrete corollaries, both paid for:
 
 And the reason this belongs in a harness rather than in anyone's head: *it happened inside the message whose subject was that exact failure*, twice, to two different people, within an hour. **You cannot hold a rule in mind while executing the thing the rule is about.** Alejandra Reyes-Fuentes's sentence, which is the load-bearing one: ***"the reader distrusted me" is not a control.*** A finding survives because it was checked, not because someone happened to be suspicious.
 
+### The fourth costume: absence of a stop read as presence of a go
+
+The three above are readings **taken wrongly**. This one is a reading **never taken**, of a signal **never sent**, whose silence is treated as content.
+
+`da#372` stood at `0/2` — two reviewers at Changes-Requested — for four hours while three people planned the merge chain around it as though it were ready. Nobody decided it was approved. Each inferred it from *not having been blocked*.
+
+> **Nobody has to be careless for this one. It happens by default, and it compounds: every hour of unblocked work is more evidence that you were not blocked.**
+
+It is the same failure from both sides of the same field. The orchestrator wrote *"the two standing approvals"* into a public comment, having read the reviewers' names off a **neighbouring PR's** verdicts; the author read *"nobody has stopped me"* as provisional approval. One inferred a state from an adjacent object, the other from an absent one.
+
+Remedy is mechanical, not attentional: **before any claim about readiness, print the field.** `gh api .../issues/N/comments --jq '… select(test("^RequestOrReplied"))'` costs one call. Related: `feedback_refresh_before_status_claim`, and main#935 (Hook 4 counts verdicts, not shas — an approval given at an old head merges unreviewed code, silently and green).
+
 ## A reading and a forecast are not the same kind of thing, and only one gets labelled (2026-07-10, da#392)
 
 `src/exit_codes.py` carried: *"Once it moves to `VALIDATION_FINDINGS`, the only emitters of `1` are `_check_neo4j` … and `_cmd_load`'s genuine failure path."* Written in the **future tense**, about a tree that did not exist yet. Nobody could run it, so nothing reddened, and it was already false about `_check_neo4j` (which emits `8`).
