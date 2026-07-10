@@ -686,8 +686,12 @@ class WriteThenPostTests(unittest.TestCase):
 
         A stale CONFORMING body sits at the path. The command overwrites it with
         a NEAR-MISS and posts that. Disk-first validates the stale body, allows,
-        and the uncountable verdict is posted anyway. 7 of the 16 write-then-post
-        corpus rows resolve to paths that persist on a developer box.
+        and the uncountable verdict is posted anyway.
+
+        **One stale file is sufficient.** Disk-first is wrong by construction,
+        not because some count of corpus rows currently have live paths — that
+        count is a property of one machine at one minute, and citing it would
+        hand the next reader a perishable premise for a permanent conclusion.
         """
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "verdict.md")
@@ -757,6 +761,106 @@ class WriteThenPostTests(unittest.TestCase):
                 f"gh api repos/o/r/issues/826/comments --input {path}"
             )
             self.assertEqual(hook.extract_rest_comment_body(command), _NEARMISS_TRAILER)
+
+
+class AppendComposesRatherThanReplacesTests(unittest.TestCase):
+    """`>` truncates, `>>` appends (#934 review, Wanjiku Mwangi).
+
+    `_heredoc_written_body` assigned on every match, so the LAST heredoc won
+    regardless of its operator. Appending an innocuous footnote to a malformed
+    verdict made the hook read only the footnote — a BLOCK became an ALLOW, in
+    the hook whose entire subject is closing fail-opens. `>{1,2}` in the pattern
+    put append in scope by design; only the composition was missing.
+
+    The corpus cannot defend this. A zero in 121 rows harvested from one week of
+    one team's transcripts is not a measurement of a shape's absence.
+    """
+
+    def _post(self, path: str) -> str:
+        return f"gh pr comment 934 --body-file {path}"
+
+    def test_appended_footnote_does_not_hide_a_near_miss(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "verdict.md")
+            Path(path).write_text(_NEARMISS_TRAILER)
+            command = f"cat >> {path} <<'EOF'\n(a footnote)\nEOF\n{self._post(path)}"
+
+            self.assertEqual(
+                hook.extract_comment_body(command),
+                _NEARMISS_TRAILER + "(a footnote)\n",
+                "the append must be composed onto the existing file, not replace it",
+            )
+            self.assertEqual(_decision(hook.check(_bash_input(command))), "block")
+
+    def test_truncate_then_append_composes_both(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "v.md")
+            Path(path).write_text("STALE — must be discarded by the `>`\n")
+            command = (
+                f"cat > {path} <<'EOF'\n{_NEARMISS_TRAILER}EOF\n"
+                f"cat >> {path} <<'EOF'\n(a footnote)\nEOF\n{self._post(path)}"
+            )
+            self.assertEqual(
+                hook.extract_comment_body(command),
+                _NEARMISS_TRAILER + "(a footnote)\n",
+                "`>` discards the stale file; `>>` then appends to the `>` output",
+            )
+            self.assertEqual(_decision(hook.check(_bash_input(command))), "block")
+
+    def test_truncate_after_append_discards_the_append(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "v.md")
+            command = (
+                f"cat >> {path} <<'EOF'\nthrown away\nEOF\n"
+                f"cat > {path} <<'EOF'\n{_CONFORMING_TRAILER}EOF\n{self._post(path)}"
+            )
+            self.assertEqual(hook.extract_comment_body(command), _CONFORMING_TRAILER)
+            self.assertEqual(_decision(hook.check(_bash_input(command))), "allow")
+
+    def test_append_to_a_nonexistent_path_has_an_empty_base(self) -> None:
+        """`>>` creates the file. That base is empty, not unknowable."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "new.md")
+            self.assertFalse(os.path.exists(path))
+            command = f"cat >> {path} <<'EOF'\n{_CONFORMING_TRAILER}EOF\n{self._post(path)}"
+            self.assertEqual(hook.extract_comment_body(command), _CONFORMING_TRAILER)
+            self.assertEqual(_decision(hook.check(_bash_input(command))), "allow")
+
+    def test_append_onto_an_unexpanded_variable_path_hard_blocks(self) -> None:
+        """The hook cannot know what the append lands on, so it must not guess."""
+        command = (
+            "cat >> $NEVER_EXPORTED/v.md <<'EOF'\n(a footnote)\nEOF\n"
+            "gh pr comment 934 --body-file $NEVER_EXPORTED/v.md"
+        )
+        self.assertIsInstance(
+            hook._heredoc_written_body(command, "$NEVER_EXPORTED/v.md"),
+            hook._Unreconstructable,
+        )
+        result = hook.check(_bash_input(command))
+        self.assertEqual(_decision(result), "block")
+        self.assertIn("APPENDS", _reason(result))
+
+    def test_append_onto_an_unreadable_existing_file_hard_blocks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "v.md")
+            Path(path).write_bytes(b"\xff\xfe\x00 invalid utf-8")
+            command = f"cat >> {path} <<'EOF'\n(a footnote)\nEOF\n{self._post(path)}"
+            self.assertIsInstance(
+                hook._heredoc_written_body(command, path), hook._Unreconstructable
+            )
+            self.assertEqual(_decision(hook.check(_bash_input(command))), "block")
+
+    def test_a_conforming_append_still_allows(self) -> None:
+        """Composition must not become a way to block every append."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "v.md")
+            Path(path).write_text("Some review prose.\n")
+            trailer = (
+                "\n---\nRequestor: Wanjiku Mwangi\nRequestee: Aino Virtanen\n"
+                "RequestOrReplied: Approved\nTechDebt: none"
+            )
+            command = f"cat >> {path} <<'EOF'\n{trailer}\nEOF\n{self._post(path)}"
+            self.assertEqual(_decision(hook.check(_bash_input(command))), "allow")
 
 
 class WriteThenPostCorpusTests(unittest.TestCase):
@@ -937,9 +1041,18 @@ class SwapGateReadsTheCountedValueTests(unittest.TestCase):
         self.assertIn("swapped", _reason(result))
 
     def test_correct_trailer_with_prose_above_is_not_false_blocked(self) -> None:
-        """Prose naming the field and the PR author, above the trailer."""
+        """Prose above the trailer that ENDS in the PR author's surname.
+
+        The fixture must end there. `_extract_lastname` splits on `[\\s.]+` and
+        takes the final token, so `…Requestor: Aino Virtanen would have written
+        it.` yields `''`, never matches the branch author, and cannot reach the
+        false block at all. An earlier version of this test used exactly that
+        sentence: it asserted `allow`, passed under the pre-`db12c5b` gate too,
+        and covered nothing (`feedback_fixture_makes_guard_assertion_inert`,
+        found by Wanjiku Mwangi). Verified: this body reds under that gate.
+        """
         body = (
-            "I read this as Requestor: Aino Virtanen would have written it.\n"
+            "The charter says the reviewer is Requestor: Aino Virtanen\n"
             "\n---\nRequestor: Wanjiku Mwangi\nRequestee: Aino Virtanen\n"
             "RequestOrReplied: Approved\nTechDebt: none\n"
         )

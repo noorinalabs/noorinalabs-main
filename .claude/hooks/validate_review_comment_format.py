@@ -83,10 +83,16 @@ realism without *command* realism (`feedback_passing_repro_masks_bug`).
 Each path resolves through `_body_for_path`: a heredoc in the SAME command
 that writes that path wins over whatever is on disk, because a PreToolUse
 hook runs before the command and the command is about to overwrite the file.
-Disk-first would validate a stale body and allow the heredoc body — a
-different comment — to be posted unvalidated. 16 of the 121 harvested
-invocations are that write-then-post shape and 7 resolve to paths that
-persist on a developer box, so the ordering is the common case, not a corner.
+Disk-first would validate a stale body while the command posts the heredoc's
+— the hook approves one comment and the author posts another. **One stale
+file is sufficient; the ordering is wrong by construction, not by frequency.**
+A census of how many harvested rows happen to have a live path today is a
+property of one machine at one minute and is not the argument.
+
+Multiple writes to the same path are COMPOSED, not overwritten: `>` truncates,
+`>>` appends. Treating `>>` as `>` let an appended footnote hide a malformed
+verdict, turning a BLOCK into an ALLOW. When an append has no derivable base
+the body is underivable and the hook blocks rather than guessing.
 
 If the body still cannot be read — stdin (`--input -`), a shell variable
 that never entered the environment, or a missing file — the hook now BLOCKS
@@ -301,10 +307,11 @@ def _read_body_file(path: str) -> str | None:
     return _decode_body(raw)
 
 
-# A heredoc redirected into a file: `cat > path <<'EOF' … EOF`, `tee -a p <<EOF`,
+# A heredoc redirected into a file: `cat > path <<'EOF' … EOF`, `cat >> p <<EOF`,
 # `<<-EOF`. The delimiter is backreferenced so the body ends at its own terminator.
+# `op` distinguishes truncate (`>`) from append (`>>`) — see `_heredoc_written_body`.
 _HEREDOC_WRITE_RE = re.compile(
-    r">{1,2}\s*(?P<target>'[^']*'|\"[^\"]*\"|\S+)"
+    r"(?P<op>>{1,2})\s*(?P<target>'[^']*'|\"[^\"]*\"|\S+)"
     r"\s*<<-?\s*(?P<quote>['\"]?)(?P<delim>[A-Za-z_][A-Za-z0-9_]*)(?P=quote)[ \t]*\n"
     r"(?P<body>.*?)"
     r"\n(?P=delim)[ \t]*(?:\n|$)",
@@ -312,43 +319,112 @@ _HEREDOC_WRITE_RE = re.compile(
 )
 
 
-def _heredoc_written_body(command: str, path: str) -> str | None:
-    """Return the body a heredoc in THIS command writes to `path`, if any.
+class _Unreconstructable:
+    """The command writes this path, but the resulting body cannot be derived.
+
+    Distinct from `None`, which means "no heredoc writes this path" and licenses
+    falling back to disk. This value means the hook KNOWS it cannot know, and
+    `check()` must hard-block (`feedback_safety_direction_over_ux_friction`).
+    """
+
+    __slots__ = ()
+
+
+UNRECONSTRUCTABLE = _Unreconstructable()
+
+
+def _read_raw(resolved_path: str) -> str | None:
+    """Read a resolved path as text, without interpreting it as a body."""
+    try:
+        return Path(resolved_path).read_text()
+    except (OSError, UnicodeDecodeError, ValueError):
+        return None
+
+
+def _heredoc_written_body(command: str, path: str) -> str | _Unreconstructable | None:
+    """Return the body the heredocs in THIS command leave at `path`.
 
     A PreToolUse hook runs *before* the command, so for the write-then-post
-    shape — `cat > v.md <<'EOF' … EOF; gh pr comment N --body-file v.md`, 16 of
-    the 121 harvested invocations — the file does not exist yet. The body is
-    nonetheless fully observable: it is sitting in the command string.
+    shape — `cat > v.md <<'EOF' … EOF; gh pr comment N --body-file v.md` — the
+    file does not exist yet. The body is nonetheless fully observable: it is
+    sitting in the command string.
 
-    This takes precedence over reading `path` from disk, and that ordering is
-    load-bearing rather than an optimization. A *stale* file left at `path` by
-    an earlier run would otherwise be validated while the command overwrites it
-    and posts the heredoc body instead — the hook would approve one comment and
-    the author would post another. Seven of the sixteen corpus rows resolve to
-    paths that still exist on a developer box, so this is the common case, not
-    the corner. Reading disk first is a fail-open; it is the ordering the naive
-    fallback would have shipped.
+    This takes precedence over reading `path` from disk. **The ordering is
+    correct by construction, not by frequency**: if any file already sits at
+    `path`, reading it validates a body the command is about to overwrite, and
+    the comment that actually gets posted is the heredoc's. The hook would
+    approve one comment while the author posts another. One stale file is
+    sufficient for that; a census of how often it happens today is a property
+    of one machine at one minute and must not be the argument.
 
-    Later writes to the same path win, matching shell semantics. Paths are
-    compared after `_resolve_body_path`, so an unexported shell variable
-    (`$T/x.md`) matches itself on both sides and resolves even though neither
-    side can be expanded.
+    Writes are **composed in order**, following the shell rather than a summary
+    of it (#934 review, Wanjiku Mwangi):
+
+      * `>`  truncates — it discards everything written before it.
+      * `>>` appends — it must be concatenated onto what is already there.
+
+    The previous implementation assigned on every match, so `>>` behaved like
+    `>`. Appending an innocuous footnote to a malformed verdict made the hook
+    read only the footnote, converting a BLOCK into an ALLOW — a fail-open in
+    the hook whose subject is closing fail-opens.
+
+    When the first write to `path` is an append, the base is whatever is on
+    disk. If that base cannot be established — the path is unexpanded, or it
+    exists and cannot be read — the body is genuinely underivable and this
+    returns `UNRECONSTRUCTABLE` so `check()` hard-blocks. A `>>` onto a path
+    that does not exist is not ambiguous: the shell creates it, so the base is
+    empty.
+
+    Paths are compared after `_resolve_body_path`, so an unexported shell
+    variable (`$T/x.md`) matches itself on both sides and resolves even though
+    neither side can be expanded.
     """
     want = _resolve_body_path(path)
-    found = None
+    body: str | None = None
+
     for match in _HEREDOC_WRITE_RE.finditer(command):
-        if _resolve_body_path(match.group("target")) == want:
-            # `cat > f <<'EOF'\nA\nEOF` writes "A\n": every heredoc line is
-            # newline-terminated, the last one included. The capture stops
-            # before that newline, so restore it — otherwise the recovered body
-            # differs by one byte from the file the command is about to write.
-            found = match.group("body") + "\n"
-    return found
+        if _resolve_body_path(match.group("target")) != want:
+            continue
+        # `cat > f <<'EOF'\nA\nEOF` writes "A\n": every heredoc line is
+        # newline-terminated, the last one included. The capture stops before
+        # that newline, so restore it — otherwise the recovered body differs by
+        # one byte from the file the command is about to write.
+        chunk = match.group("body") + "\n"
+
+        if match.group("op") == ">":
+            body = chunk
+            continue
+
+        if body is None:
+            base = _append_base(want)
+            if base is None:
+                return UNRECONSTRUCTABLE
+            body = base
+        body += chunk
+
+    return body
+
+
+def _append_base(resolved_path: str) -> str | None:
+    """What `>>` appends onto: existing file content, or "" if it does not exist.
+
+    Returns None when the base cannot be established, which is a hard block
+    rather than a guess.
+    """
+    if "$" in resolved_path:
+        # An unexpanded shell variable: the hook cannot know which file this is,
+        # so it cannot know what the append lands on top of.
+        return None
+    if not os.path.exists(resolved_path):
+        return ""  # `>>` creates the file; the base is empty.
+    return _read_raw(resolved_path)
 
 
 def _body_for_path(command: str, path: str) -> str | None:
     """Resolve the body a command will post from `path` — heredoc first, then disk."""
     heredoc = _heredoc_written_body(command, path)
+    if isinstance(heredoc, _Unreconstructable):
+        return None  # `check()` blocks on an unreadable body.
     if heredoc is not None:
         return _decode_body(heredoc)
     return _read_body_file(path)
@@ -532,6 +608,14 @@ def _unreadable_cause(command: str) -> str:
     if path_match:
         raw = path_match.group(1)
         resolved = _resolve_body_path(raw.lstrip("@"))
+        if isinstance(_heredoc_written_body(command, raw.lstrip("@")), _Unreconstructable):
+            return (
+                "Cause: this command APPENDS to the body file (`>>`) but the hook "
+                "cannot establish what it appends onto — the path is unexpanded, or "
+                "it exists and cannot be read. The posted comment would be the "
+                "existing content plus your addition, which the hook cannot see, so "
+                "it will not guess."
+            )
         if "$" in resolved:
             unexpanded = re.findall(r"\$\{?(\w+)", resolved)
             names = ", ".join(f"`${name}`" for name in unexpanded) or "the variable"
