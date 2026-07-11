@@ -468,16 +468,24 @@ dirs="$(rclone lsf "$REMOTE" --dirs-only 2>&1)" || rc=$?
 | **commentary → data** (`2>&1` into a **parsed** variable) | *"here are your backups"* — one of which is a log line |
 | **failure → the benign branch** (an unchecked rc) | a guard that reports the healthy verdict when it never evaluated |
 
-**How to apply, and note the destination matters, not the redirect:**
+**How to apply — and the rule took TWO corrections to get right, which is itself the lesson.**
 
-| | |
-|---|---|
-| `2>/dev/null`, `\|\| true` | **discards** the diagnostic — the original bug |
-| `2>&1` into a variable that is later **PARSED** | **merges commentary into data** — the new bug |
-| `2>&1` into a variable that is only ever **PRINTED** | **fine** — e.g. `PREFLIGHT_OUT="$(preflight 2>&1)"`, echoed on failure |
-| **`2>"$err"`, read only on failure** | **captures** it ✅ |
+**First draft (too broad):** *"`2>&1` into a variable is a bug."* **False** — `PREFLIGHT_OUT="$(preflight 2>&1)"` is correct, because that variable is only ever printed.
 
-> **The rule is about the DESTINATION, not the redirect.** *(The author's own correction of an over-broad first draft — an over-broad rule is its own defect: it fires on correct code, and people learn to ignore it.)*
+**Second draft (still too broad):** *"the bug is `2>&1` into a variable that is later PARSED."* **Also false** — `restore_postgres` merges `2>&1` into `$out` and then **greps** `$out` for `errors ignored on restore: [0-9]+`. That is a parse, and it is **not a bug**; it is **required**, because `pg_restore` writes that count to **stderr**.
+
+**The actual invariant is about what the CONSUMER does with each line:**
+
+| destination | how the consumer reads it | merging is |
+|---|---|---|
+| `$dirs` from `lsf` | **every line is a RECORD** (a directory name) | ☠️ **fatal** — a NOTICE becomes a phantom backup |
+| `$out` from `pg_restore` | **searches for one KNOWN TOKEN**, ignores the rest | ✅ **safe, and necessary** |
+| `PREFLIGHT_OUT` | printed verbatim | ✅ safe |
+| **`2>"$err"`, read only on failure** | — | ✅ **capture — always correct** |
+
+> ### **Merging commentary into a channel is fatal exactly when the consumer treats every line as a RECORD. It is harmless — and sometimes required — when the consumer searches for a specific known token.**
+
+**And the meta-lesson, which is why both corrections belong here:** *"an over-broad rule is its own defect"* was the author's own point — **and it applied one turn further than she took it.** A rule that flags `restore_postgres` **will get ignored**, and a rule people ignore protects nothing. **Each restatement had to be checked against the real code before it was trusted.** *(Nino Kavtaradze, who verified the "no others parse" sweep instead of accepting it — and found one.)*
 
 **And the shape of the regression is the transferable part: the original bug fired only on FAILURE; the fix fired on SUCCESS.** A tool that writes to stderr when nothing is wrong is completely ordinary (warnings, deprecations, progress, config notices) — so `2>&1` corrupts the **normal** path, **the path nobody tests as hard.**
 
@@ -678,6 +686,34 @@ She fixed the **harness** first — and that alone reproduced the CI failure loc
 > **She had quoted the old rule in her own comments an hour before walking into it.** *"Knowing it didn't save me, because it didn't pattern-match."*
 
 That is [[feedback_enforcement_hierarchy]] from a new angle: **a rule stated in terms of its instance does not fire on a new instance.** State the rule in terms of the **shape** (`$(cmd)` that may be empty), not the **story** (that time we lost an rc).
+
+## STOP WHILE IT IS CORRECT — the fix-introduces-a-bug rate is measurable, and it is a stop condition
+
+The most disciplined ruling of the wave, and it is about **when to stop reviewing**, not what to find.
+
+A reviewer declined to bundle a known (non-live) hardening into a PR that was finally correct. His argument was **empirical, not aesthetic**:
+
+> **Each of the last two rounds of this PR introduced a NEW bug while fixing the previous one** — first a guard placed downstream of a swallow, then `2>&1` merging commentary into data. **Both introduced BY THE FIX**, by a careful engineer, under review, with tests.
+>
+> **That's a measured base rate, not a criticism** — and it says the marginal risk of another round, on a PR with **no live defect**, is **not zero.**
+>
+> ### **This PR should stop while it is correct.**
+
+**Why this is not "ship it, we're tired":** he separated the two questions that usually get conflated.
+- **Is there a live defect?** No — verified: the regex matches all three real names, the gate fires against real producer output. The hole opens only on a **producer rename**, and none is in flight.
+- **Does the follow-up have a natural home?** Yes — it is **producer-side**, and it belongs with the other producer-side items on the same gate.
+
+**The general form:** on a long-running PR, **track how many rounds introduced a regression.** If that number is nonzero, then *"one more small change"* has a **known, nonzero cost**, and it must be weighed against the benefit of the change — **not assumed free.** The instinct that another round is costless is exactly the instinct the base rate refutes. **A correct artifact is a terminal state worth defending.**
+
+**Corollary for the residual:** it does not go on the backlog. It goes on the **gate for the earliest moment it could bite** — here, *before the first backup ever writes*, because the residual is producer-side and **silently narrows** a downstream guard. **"Follow, don't ride" is only honest if the follow has a deadline.**
+
+### The fourth collapse: a guard placed DOWNSTREAM of a swallow
+
+Added to the failure/commentary/data frame by the same reviewer, from this PR's own history:
+
+> **The failure was collapsed into the benign branch BEFORE the guard could see it — so the guard was correct, tested, and never called.**
+
+That is the sharpest statement of the *"fixing a guard does not help if the call that feeds it fails open"* finding: it is not merely that the guard is bypassed, it is that **a fail-open upstream deletes the guard for exactly the failure modes the guard exists for**, while leaving it green, present, and covered by tests.
 
 ## The failure mode with no instrument in it
 
