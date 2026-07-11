@@ -149,6 +149,41 @@ The all-empty case *was* caught. The one-store-missing case was not. **There was
 - **Completeness is a property of the artifact, so the artifact must declare it** (`_resolve_run.txt` in da#428; a `COMPLETE` marker in a backup dir). A consumer that infers completeness from *presence* — "the newest directory name" — selects the broken artifact by construction, because the broken one is newest.
 - **Grade recovery paths hardest.** Every guard in a restore/rollback/undo path is used exactly once, under pressure, when the primary is already lost. It is the last place a silent success is survivable and the first place nobody tests.
 
+## A negative that passes for the WRONG REASON has silently stopped testing (2026-07-11, deploy#577)
+
+The strictest generalization anyone produced, and the author found it **in the commit where she was fixing this exact defect everywhere else.**
+
+She added a completeness gate (an absent store is now fatal). It was correct. It also made **two pre-existing negative fixtures inert**:
+
+```
+truncated_dump_matching_checksum: exited 1 — "Restore REFUSED — incomplete"
+truncated_user_pg_dump:           exited 1 — "Restore REFUSED — incomplete"
+```
+
+Both fixtures held **only** the dump they mutate — so the new gate rejected them for **MISSING STORES**, *before their truncated dump was ever read*. **They still passed.** Green, red-when-expected, exit 1 as designed. **And the truncation path they exist to exercise was no longer tested at all.**
+
+> **A non-zero exit proves the artifact was REJECTED. It does not prove it was rejected BY THE CHECK UNDER TEST.**
+
+This is the mirror of the whole file: everywhere else we worry that a guard *cannot fire*. Here the guard fires **correctly, for the wrong reason**, and the test it silently replaced is gone. **Adding a guard EARLIER in a pipeline can un-test every guard behind it**, and every signal you have stays green.
+
+**The durable fix is not better fixtures — it is a stronger `expect_fail`.** It now takes a **required** expected-reason argument and asserts the failure happened *for that reason*:
+
+```
+truncated_dump_matching_checksum -> "PostgreSQL (isnad): pg_restore FAILED"
+no_user_pg_dump_at_all           -> "Restore REFUSED — this backup is incomplete"
+bitrot_stale_checksum            -> "Checksum MISMATCH"
+```
+
+**How to apply:** a negative test must assert **which** guard rejected it, never merely that *something* did. Any `expect_fail` / `assertRaises` / `-ne 0` without a reason is one earlier-guard away from becoming a tautology. And when you add a check **upstream** of existing negatives, **re-derive why each one still fails** — a passing suite is not evidence they still test what they were written for.
+
+### And a guard is pinned by its CALL SITE, not by its existence
+
+Same engineer, same PR: one of her own new tests initially **missed** a revert of the fix. It asserted that `backup_is_complete` **appeared in the file** — which it still does when the call site is neutered to `if true`. The function existed; nothing called it meaningfully.
+
+> **A guard is not pinned by the existence of the function that implements it. It is pinned by the branch that calls it.**
+
+Sibling of [[feedback_fixture_makes_guard_assertion_inert]]. Same family as the ordinal/label confusion above: *the name was present and the behaviour was absent.*
+
 ## The failure mode with no instrument in it
 
 Every rule above assumes the reporter executed *something*. The corpus has no clause for **an instrument that was never built.**
