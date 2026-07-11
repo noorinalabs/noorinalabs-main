@@ -1242,3 +1242,24 @@ grep -m1 | tr | grep -qx            100k lines -> 141    huge first line -> 141 
 > **Replicated independently by the reviewer (Nurul Hakim), who re-measured rather than reading either her table or my claim** — the same discipline, applied one level up. He also produced the blast radius nobody had shown: end-to-end through the real scanner, on a corrupt manifest sitting **above a complete, intact, fresh run**, `7d613c9` reports `no_complete_backup` — *a confident denial of a backup that exists*, which is the exact failure this whole issue is about. `6489bcf` reports `fresh dumps=3`.
 >
 > His one-line statement of the class is the best one: **"A fix is a claim too."** The measurement said *141 comes from an early-exit consumer*; the fix quietly assumed there was **only one**. What saved it wasn't caution — it was that each person **ran the previous person's answer instead of reading it.**
+
+## THE MUTATION THAT HEALED ITSELF MID-RUN — verify the instrument is INTACT AND STABLE before reading it
+
+**2026-07-11, deploy#591. Nino Kavtaradze, self-disclosed in his own approving verdict.** Mutation testing is the strongest instrument we have: break the code on purpose, and if no test goes red, the test suite is decorative. His first two runs of it were **void**, and both would have printed the answer he was hoping for.
+
+1. **The mutation was PARTIAL.** His regex stripped **4 of 5** warning blocks. The surviving block kept the behaviour alive — so a suite that genuinely failed to catch the deletion could still have gone red off the leftover, and a suite that caught nothing would look like it caught something.
+2. **The tree HEALED the mutant mid-run.** He ran `git stash` in the same working tree **while pytest was still executing**. The files reverted underneath the test process. **The back half of that run tested the ORIGINAL, UNMUTATED code.**
+
+> ### **A mutation run that reverts mid-flight does not measure a weak suite or a strong one. It measures NOTHING — and it reports GREEN, which reads as "the mutant died."**
+
+That is the whole trap. Both failures push the result **toward the outcome you want** (mutant appears killed → suite appears sound → ship). Neither announces itself. A green mutation run and a *void* mutation run are **the same screen**.
+
+**This is the class turned on the class.** Every other entry here is about an instrument that cannot see the defect it exists to catch. This one is about the **meta-instrument** — the thing you reach for *to check the other instruments* — failing exactly the same way, in the hands of the person who had spent the day hunting this shape and who had just failed a colleague for a test that agreed with itself.
+
+**How to apply — mutation testing has a pre-flight, and it is not optional:**
+1. **Assert the mutation is COMPLETE before you run anything.** Count the sites you meant to break, then count the sites you actually broke. `grep -c` the mutated pattern. A regex that "should" hit all of them is a claim; the count is the measurement. *(4 of 5 is not a mutation, it is a rounding error with an opinion.)*
+2. **Mutate in an ISOLATED COPY.** Never in a tree anything else touches — no `git stash`, no `checkout`, no pre-commit hook, no concurrent agent, no editor autosave. **The tree must be frozen for the entire life of the run.**
+3. **Confirm the mutant is still present AFTER the run finishes**, not just before it starts. A run is only valid if the code under test was the mutated code from first assertion to last.
+4. **A green mutation run is not evidence until you have ruled out that it was void.** It is the same output as a broken instrument. Treat it exactly like the zeros elsewhere in this file: **a result in your favour earns more scrutiny, not less.**
+
+**And the reason it was caught at all: he disclosed it in his own approving verdict rather than quietly re-running and reporting the clean number.** He had a passing result in hand and no one would have known. His stated reason — *"I'd have failed her for exactly what I did"* — is the norm worth keeping: **the standard you apply to a colleague's instrument is the standard you owe your own.** Cheap to say, expensive to actually do at the moment you already have the answer you wanted.
