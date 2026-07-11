@@ -107,6 +107,31 @@ Two siblings from the same night:
 - **The instrument that confirms a correction must not match the text of the thing being corrected.** Grepping for a retracted sentence finds the retraction quoting it. (Kwesi Boateng — he nearly re-fixed something already fixed.)
 - **A citation that names a file for some rows and leaves others unattributed lets the reader infer the named file for all of them.** Partial attribution certifies what it omits. Same shape as the partial honesty label in [[feedback_fixture_makes_guard_assertion_inert]].
 
+## An INERT mutation and a CAUGHT mutation are the same red (2026-07-11, deploy#574)
+
+Mutation testing is the instrument we reach for when we distrust a test suite. **It is an instrument, and it needs a control like any other.**
+
+An engineer auditing a destructive-prune gate ran a mutation battery. **Two mutations "survived green" — and neither was a test gap.** They were **inert**: each removed *one* of **two** independent refusals, and the other refusal still fired. The prune was still blocked. The mutation changed nothing that mattered.
+
+She was about to report them as **"caught"** — a green suite under a mutation reads as *the guard held*. It doesn't. It reads as *either the guard held, or your mutation never disarmed anything.* She rebuilt both until they **genuinely unlocked the prune** (a gate that self-signs *both* artifacts; a real early-exit bypass) — and only then were they caught, 10 tests red on the first.
+
+> **A mutation battery that does not first establish its mutations are EFFECTIVE is the same defect as the guard it is auditing.**
+>
+> — Aisha Idrissi, on her own instrument, having spent the day telling everyone else to verify theirs
+
+**The four-way confusion this creates**, and why it is worse than a plain unrun test: a *surviving* mutant and an *inert* mutant produce the identical signal, and so do a *killed* mutant and a *redundantly-guarded* one. Four states, two observations.
+
+| you mutate, suite is… | could mean | could ALSO mean |
+|---|---|---|
+| **green** | the guard has a hole (**real finding**) | **your mutation disarmed nothing** |
+| **red** | the guard caught it (**real pass**) | **a *different* guard caught it — the one you meant to test is dead** |
+
+**How to apply.** Before a mutation counts as evidence, **prove the mutant is live**: show that the mutated system actually *does the forbidden thing* in the absence of the tests — i.e. that the mutation reaches the objective, not merely the source. Concretely, for a guard: run the mutated system against the input it is supposed to refuse and **confirm it now permits it**. Only then does a red suite mean the test caught it, and only then does a green suite mean a hole.
+
+And the sibling trap, which is the second row of that table: **when a mutation goes red, confirm the *intended* test is the one that failed.** A redundantly-guarded property will red on a neighbouring assertion while the assertion you were auditing is inert — the same shape as the mutation harness satisfied by a plant applied to the wrong file (§ *The third gate: was it the right subject?*).
+
+Sibling of [[feedback_fixture_makes_guard_assertion_inert]] (a fixture that cannot reach the branch) and [[feedback_passing_repro_masks_bug]] (a repro that cannot go red). Here it is the **auditing instrument itself** that cannot move — the last place anyone thinks to look, because it is the thing you brought *in order to* be rigorous.
+
 ## The failure mode with no instrument in it
 
 Every rule above assumes the reporter executed *something*. The corpus has no clause for **an instrument that was never built.**
