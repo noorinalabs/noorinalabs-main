@@ -1,5 +1,5 @@
 {
-  "description": "Tracks file checksums for ontology change detection. last_tracked = current file hash (updated by tracker hook). last_resolved = hash when ontology was last rebuilt from this file (updated by resolver). When last_tracked != last_resolved, the file is dirty. SCOPE (#857, #820/C×T2): tracking + /ontology-rebuild cover the hand-curated SEMANTIC OVERLAY only (ontology/domain.yaml, ontology/services.yaml, ontology/conventions.md, ontology/repos/*.yaml, other hand-edited *.md). The GENERATED structural layer at ontology/structural/ (owned generator #855) is NOT tracked here — it is always-current-by-regeneration, so the tracker skips it (see ontology_tracker.py SKIP_PATTERNS).",
+  "description": "Tracks file checksums for ontology change detection. last_tracked = current file hash (updated by tracker hook). last_resolved = hash when ontology was last rebuilt from this file (updated by resolver). When last_tracked != last_resolved, the file is dirty. SCOPE (#857, #820/C\u00d7T2): tracking + /ontology-rebuild cover the hand-curated SEMANTIC OVERLAY only (ontology/domain.yaml, ontology/services.yaml, ontology/conventions.md, ontology/repos/*.yaml, other hand-edited *.md). The GENERATED structural layer at ontology/structural/ (owned generator #855) is NOT tracked here \u2014 it is always-current-by-regeneration, so the tracker skips it (see ontology_tracker.py SKIP_PATTERNS).",
   "files": {
     ".claude/drafts/secrets-migration-tonight-2026-04-23.md": {
       "last_resolved": "acc0d25da0c7fcf3792ade1703f7c75f2215a29daafe0367db907f4e8d2e990f",
@@ -1014,15 +1014,15 @@
       "resolved_at": "2026-06-21T02:32:49Z"
     },
     ".claude/memory/project_p5w5_prodcutover_p6_dataquality.md": {
-      "last_tracked": "9bf0e2aa534eb0b42fdf984edf4373956b38e39550b9cf6cebe19e84bad345bb",
+      "last_tracked": "f4079b1cc55013bec1dea0e3025e59efc8eb5fdbb9f203714e74a1ee442c8a50",
       "last_resolved": "9bf0e2aa534eb0b42fdf984edf4373956b38e39550b9cf6cebe19e84bad345bb",
-      "tracked_at": "2026-06-20T22:00:57.909958+00:00",
+      "tracked_at": "2026-07-11T04:18:26.092649+00:00",
       "resolved_at": "2026-06-21T02:32:49Z"
     },
     ".claude/memory/project_prod_loaded_quality_broken.md": {
-      "last_tracked": "ce5814901395e2af5b570aea09d40dc6793f0d0e38756d63d156e3f024be74dd",
+      "last_tracked": "ae54330511af26f1401f26c2bb389ac19aee07df327bc1e92e032dae0a224f9c",
       "last_resolved": "ce5814901395e2af5b570aea09d40dc6793f0d0e38756d63d156e3f024be74dd",
-      "tracked_at": "2026-07-02T16:10:55.605754+00:00",
+      "tracked_at": "2026-07-11T04:21:24.841701+00:00",
       "resolved_at": "2026-07-02T23:26:29Z"
     },
     ".claude/memory/feedback_brand_noorina_labs.md": {
@@ -1032,9 +1032,9 @@
       "resolved_at": "2026-06-21T21:02:19.551435+00:00"
     },
     ".claude/memory/MEMORY.md": {
-      "last_tracked": "435bd35e4a10424c2febc93b68d4f991889b6351f4b9cfd50b4847174d2fb37a",
+      "last_tracked": "dd1759bd81f7d0fd8d8b3b9f0d098ce1791c7c9225b4b6cec1a2e65fb3f90c53",
       "last_resolved": "435bd35e4a10424c2febc93b68d4f991889b6351f4b9cfd50b4847174d2fb37a",
-      "tracked_at": "2026-07-09T22:22:31.596530+00:00",
+      "tracked_at": "2026-07-11T04:21:49.983795+00:00",
       "resolved_at": "2026-07-10T21:45:55Z"
     },
     "noorinalabs-isnad-graph/.claude/lib/tests/test_pre_commit_ci_sync.py": {
@@ -1374,9 +1374,9 @@
       "resolved_at": "2026-07-06T16:50:47.724297+00:00"
     },
     ".claude/memory/feedback_gh_pr_edit_silent_noop.md": {
-      "last_tracked": "0177c362361ec849a3a2fc6f991a58e781e42cdc73685e449cd9af6780c63afd",
+      "last_tracked": "b7aa3dbb0fbaf97ede6f7eb58927633cdcd44ad2e86ce1fb4eb55cbe990822d1",
       "last_resolved": "0177c362361ec849a3a2fc6f991a58e781e42cdc73685e449cd9af6780c63afd",
-      "tracked_at": "2026-07-06T03:31:42.731843+00:00",
+      "tracked_at": "2026-07-11T03:41:50.294849+00:00",
       "resolved_at": "2026-07-06T16:50:47.724297+00:00"
     },
     ".claude/memory/feedback_iac_over_oneoffs.md": {
@@ -1434,9 +1434,9 @@
       "resolved_at": "2026-07-10T21:45:55Z"
     },
     ".claude/memory/feedback_silent_zero_is_not_a_measurement.md": {
-      "last_tracked": "0d4e6dd7cbe981e89feb876b9a47d71a42e4d1a35ab1646eeac6c788b94a7634",
+      "last_tracked": "8a3527a4ea06899d9b42cb57880af20592897ff88eae385fc33ddd078032cf2c",
       "last_resolved": "0d4e6dd7cbe981e89feb876b9a47d71a42e4d1a35ab1646eeac6c788b94a7634",
-      "tracked_at": "2026-07-09T21:45:49.909309+00:00",
+      "tracked_at": "2026-07-11T04:20:09.029003+00:00",
       "resolved_at": "2026-07-10T21:45:55Z"
     },
     ".claude/memory/feedback_fixture_makes_guard_assertion_inert.md": {
@@ -1486,6 +1486,24 @@
       "last_resolved": "7f9003da803a56ddd34d2a4bfe03437f9469047b38bbcf2e4d5e14b48ca532ac",
       "tracked_at": "2026-07-09T22:22:19.256557+00:00",
       "resolved_at": "2026-07-10T21:45:55Z"
+    },
+    "noorinalabs-isnad-ingest-platform/.claude/memory/project_ecdsa_minerva_standing_item.md": {
+      "last_tracked": "f620d80ac982659b454cbf31c5d941d1adfd711a52a540814d0afef462b058e8",
+      "last_resolved": "",
+      "tracked_at": "2026-07-11T03:12:49.233607+00:00",
+      "resolved_at": ""
+    },
+    ".claude/memory/feedback_drop_gate_bidirectional_ab.md": {
+      "last_tracked": "da8fca6dd4e7aa310e4eb61735d26708870d7a1ff1064a449dffbefec5f4cee4",
+      "last_resolved": "",
+      "tracked_at": "2026-07-11T04:13:57.680040+00:00",
+      "resolved_at": ""
+    },
+    ".claude/memory/feedback_local_ci_parity_no_force.md": {
+      "last_tracked": "78a2edf051c76e61154c5c5250cd502cfdc29263eda063b1f6a176b357485f17",
+      "last_resolved": "",
+      "tracked_at": "2026-07-11T04:18:32.970529+00:00",
+      "resolved_at": ""
     }
   },
   "last_cleanup": {

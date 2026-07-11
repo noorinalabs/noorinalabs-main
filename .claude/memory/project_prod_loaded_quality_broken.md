@@ -7,6 +7,16 @@ metadata:
   originSessionId: f3dcddd8-6ad9-48bf-b25e-92d034607282
 ---
 
+> ## ⛔ RETRACTION 2026-07-11 — the "weight by mention_count" conclusion below is WRONG and was actively harmful
+>
+> This memory's central move — *triage narrator-quality by `mention_count`, because the pollution is a `mention ≤ 1` tail* — is **retracted**. It is sound for **prioritising cleanup** (a polluted node nobody cites matters less). It is **catastrophic as a measurement axis**, and it was read as both.
+>
+> **45,613 of 150,187 canonical rows carry `mention_count = 0` — 30.4% of the corpus.** Bio-promoted narrators (attested in rijal dictionaries, not in chains) have no mentions **by construction**. A mention-weighted view does not under-count them; it **erases them**. On da#423 that blind spot hid **three successive rounds** of a scrub deleting **Umm Kulthum bint Muhammad (the Prophet's daughter), the Prophet's son, and Abu Bakr al-Siddiq** — each round passing 6/6 CI with an approving reviewer, while the weighted drop-count barely moved.
+>
+> **Never use `mention_count` as the axis of a correctness measurement.** Weight for *triage*; measure **unweighted**. See [[feedback_drop_gate_bidirectional_ab]].
+>
+> The 07-02 findings below (head clean, stg↔prod parity, the pollution tail) remain accurate as a *snapshot*. #723 was CLOSED 07-05 — see [[project_p7_narrator_pollution_resolve_fixes]].
+
 ## ✅ RECONCILIATION 2026-07-02 — record-level graph check: UI head CLEAN, pollution is a mention≤1 TAIL
 
 Did a **record-level** check directly against both Neo4j graphs (`ssh noorinalabs-{stg,prod}` → `cypher-shell`), reading the actual `name_ar` strings of high-mention narrators — the sentence-level detection the 07-01 "false pass" lacked. **stg and prod are byte-identical** (same 219,849 narrators, same top-20, same residual counts) → **stg↔prod parity holds (#916)**.
