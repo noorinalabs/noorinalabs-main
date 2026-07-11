@@ -93,6 +93,20 @@ ontology/structural/
 .claude/annunaki/traces.jsonl
 .claude/annunaki/traces.jsonl.bak.*
 
+# Annunaki error stream (#948) — same machine-local, hook-appended, high-churn
+# property as traces.jsonl above and session_handoff.md below; it was the odd
+# one out. The PostToolUse monitor appends on EVERY Bash call, so a `git push`
+# dirties the tree of the very push it is observing, and the pre-push hooks
+# reject it with "files were modified by this hook" on a fully GREEN suite.
+# With concurrent agents it is strictly unwinnable: their Bash calls append
+# continuously, so the parent repo can never present a clean tree while any
+# agent is running. A gate that cries wolf on a green suite trains the reflex
+# to reach for --no-verify — the exact habit the no-force rule (#684) exists to
+# suppress. /annunaki and /annunaki-attack read the log from disk, so both keep
+# working; cross-clone history is the deliberate trade (the W23 retro already
+# proposed pruning this log at wrapup, so its full history is not load-bearing).
+.claude/annunaki/errors.jsonl
+
 # In-repo project memory (#732). The CURATED corpus (MEMORY.md + topic files) IS
 # version-controlled and loaded via the `@.claude/memory/MEMORY.md` import in
 # CLAUDE.md. Only the per-session, machine-local Stop-hook handoff is excluded —
