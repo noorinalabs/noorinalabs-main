@@ -1179,3 +1179,36 @@ The same reviewer then turned it on the argument that had beaten her own earlier
 > **One stale file is sufficient. Disk-first would be wrong at a count of zero, because it is wrong by construction rather than by frequency.**
 
 Frequency arguments are how a correct conclusion acquires a perishable premise. When the mechanism alone settles it, cite the mechanism — otherwise the next person re-counts, gets a different number, and reopens a closed question. Sibling: [[feedback_fixture_makes_guard_assertion_inert]] on *"does not occur"* vs *"cannot occur"*.
+
+## THE TELL IS NEVER THAT A CLAIM LOOKS WRONG. IT IS THAT NOBODY RAN IT.
+
+Nurul Hakim, deploy#593, on the one half of his own finding he refused to assert — that B2 emits no directory rows in an `lsf --recursive` listing:
+
+> The B2-is-flat claim was the **easy** one to wave through: **it is probably true, it is stated confidently, and nothing visibly breaks if it is wrong.** That combination is exactly what makes it dangerous — and it is the same combination that made mention-weighting look fine while it erased 30% of the corpus.
+>
+> ### **The tell is never that a claim looks wrong. It is that nobody ran it.**
+
+**This is the whole file in one sentence, and it inverts how the search is usually conducted.** Reviewers hunt for claims that look *suspicious*. But a suspicious claim gets checked — that is what suspicion is for. **The claims that survive to production are the plausible ones**, and plausibility is not evidence; it is the *absence* of the prompt to seek evidence.
+
+> **Ask of every load-bearing claim: not "is this right?" but "who ran it, and what did they run?"** If the answer is "nobody, but it's obviously true" — **that is the finding.** Obviousness is the disguise, not the defence.
+
+**And the correct response to an unverifiable claim is usually to make it unnecessary, not to verify it.** He did not go and measure B2's listing behaviour once the credential existed — he specified `--files-only`, which makes the field correct *regardless of what B2 does*:
+
+> Checking the live bucket would have told me what rclone does against **one** bucket on **one** day. The flag makes the field correct regardless.
+
+**A measurement of a system's current behaviour is not a guarantee of its behaviour. Prefer the fix that removes the dependency on the claim over the experiment that confirms it today.** (Same shape as [[feedback_drop_gate_bidirectional_ab]] §1c: when a rule keeps needing exceptions, the discriminator is the bug — stop patching it and remove the need for it.)
+
+## Incidental satisfaction is not satisfaction
+
+deploy#586 asked for three things; two landed in #591. The third — *scrub inherited `RCLONE_*`* — was **not implemented at all**, yet both threats it named were closed anyway:
+
+| threat | closed by |
+|---|---|
+| `RCLONE_DUMP=auth` leaking creds into a public log | a **deliberate** hard refusal |
+| `RCLONE_LOG_LEVEL=DEBUG` raising verbosity | **incidentally** — the CLI `--log-level NOTICE` flag happens to override the env var |
+
+> **A control that works by accident is a control nobody knows they depend on.** Nothing recorded that the CLI flag was load-bearing *as a security control*; a refactor dropping it for brevity reopens the hole **silently**, and no test would notice. **The protection was moved, not removed** — which is worse, because now it is unlabelled.
+
+**How to apply:** when auditing whether an issue is satisfied, do not stop at *"is the bad outcome currently prevented?"* Ask **by what, and does anything record that it is doing that job?** An unlabelled protection is a protection with a countdown on it.
+
+(A second finding from the same audit: the issue's ask was *incompatible with the design* — the script passes credentials via `RCLONE_CONFIG_*`, so a blanket `RCLONE_*` scrub would delete its own credentials. **An unimplemented ask is not always an oversight; check whether it is implementable before treating it as debt.**)
