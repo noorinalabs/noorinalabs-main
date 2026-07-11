@@ -671,6 +671,28 @@ This is [[feedback_silent_zero_is_not_a_measurement]]'s own rule (*a number that
 
 **Note the direction it ran: her reconstruction flattered someone else.** So the *"scrutinise the flattering conclusion"* rule arrived from the one angle nobody guards — she was being **generous**, not self-serving. **Generosity produces the same false record as vanity does**, and it is harder to resist because refusing it feels ungracious.
 
+### …and then the orchestrator committed the SAME error, hours later, ABOUT A PERSON'S CONDUCT
+
+**The worst instance, because a false fact about code gets fixed; a false fact about a colleague's judgement propagates.**
+
+A reviewer ruled *"follow, don't ride"* on a residual. The orchestrator saw the residual's fix **present in the PR**, concluded *"she overrode a considered ruling without a word,"* **and told the reviewer so.** The clock:
+
+```
+09:36:23   the fix committed
+09:36:42   the ruling posted        <- NINETEEN SECONDS LATER
+09:48:18   next commit — scope held exactly as ruled
+```
+
+**She pushed it 19 seconds before the ruling existed.** She could not have known. **And the instruction she was acting on was the orchestrator's own** — *"it is worth doing in the same push."* The moment the ruling reached her, she honoured it precisely.
+
+**The orchestrator read the STATE (the commit is in the PR) and inferred the HISTORY (therefore she ignored the ruling)** — the identical error recorded in this file that same morning **at her expense**, when *she* made it *in his favour*. **She caught his before he caught hers.**
+
+> ### **A state is not a history — and the stakes are highest when the "history" you are reconstructing is someone's CONDUCT.**
+>
+> *"She was told to stop and rode anyway"* is **durable, specific, and damaging**, and it survives long after the artifact is forgotten. **Before attributing an intent, get the timestamps.** `git log`, comment `created_at`, message ordering. **The working tree cannot tell you what someone knew when they acted.**
+
+**And note what makes this class so persistent: the wrong conclusion is always the LOW-EFFORT one.** Reading the file is one command; reconstructing the sequence is three. **The cheap instrument answers a different question than the one you asked, and it answers it confidently.**
+
 ### Refuse rather than redact, when the leak is unrecoverable
 
 Same script: printing rclone's stderr makes `instrument_error` diagnosable — but **`RCLONE_DUMP=auth` makes rclone echo `Authorization: Basic <base64(keyID:key)>`**, and **GitHub's secret masking is an exact-substring match on the raw secret, so it does not catch the base64 form.** Straight into a public CI log.
