@@ -54,6 +54,16 @@ A mention-weighted metric makes every **bio-promoted** narrator **structurally i
 
 **How to apply:** any corpus A/B over an entity table must be run **row-level (unweighted)** as well as weighted. **A zero-weight row is not a zero-importance row.** Ask of any metric: *which rows does it assign zero, and are they zero because they don't matter — or because they don't participate in the thing I'm counting?* If the latter, the metric cannot see them **at any sample size**, and no amount of care in reading it will help.
 
+> ### The correction that makes this lesson actually work (Ivana Horvat)
+>
+> **"Run it unweighted" is necessary but it is NOT the operative instruction**, and read carelessly it becomes *"add zero-mention names to your battery"* — **which would not have worked.**
+>
+> > Even unweighted, every name in my 40-name adversarial battery survives at the bad head. My battery had no `أم`-leading name whose role-noun isn't a connector, **because I didn't know that was the shape that mattered.** A synthetic battery can only hold counterexamples you already thought of, and this was a **premise error**. What catches it is the corpus Direction-A diff, **sliced at zero mentions and read row by row**: 44 rows, five minutes. **I reached for a battery instead of reading the diff.**
+>
+> **A battery tests your imagination. A diff tests the corpus.** For a premise error — where the bug is in what you *believe about the domain*, not in what you coded — a curated adversarial set is structurally incapable of finding it, because you build the set out of the same wrong premise. The operative instruction is therefore:
+>
+> **Diff against the real corpus, slice the diff by the dimension your metric is blind to, and READ THE ROWS.** Not sample them, not count them — read them. The set that mattered here was 44 rows and took five minutes.
+
 The scale here is the part to remember: **the invisible class was 30.4% of the corpus.** Everyone involved — implementer, two reviewers, and me — reasoned about it as an edge case, because a weighted view is what we all had.
 
 This is [[feedback_silent_zero_is_not_a_measurement]] in its purest form: the zero was not a finding, it was a blind spot.
