@@ -322,6 +322,32 @@ The tests were **textual**. They asserted the function is **called** — which w
 
 **Level 3 is where a hand-written regex, a parser, a comparator, or a classifier lives — and a "the branch calls it" test passes at level 2 forever while level 3 is a no-op.**
 
+### …and there is a LEVEL 4, which no predicate test can reach
+
+**All three levels assume the predicate RUNS.** They say nothing about what happens when **the input cannot be obtained.**
+
+The very commit that fixed the level-3 regex added a manifest read as `rclone cat … 2>/dev/null || true`. **A read failure — a transient 401, a throttle, a network blip — yields empty output, so the (now-correct) predicate returns "not complete."** Demonstrated against a **good, complete, fresh** backup whose manifest merely could not be read:
+
+```
+control (manifest readable):  status=fresh       reason=-
+manifest read fails (rc=1):   status=incomplete  reason=no_complete_backup
+```
+
+**The dumps are there. The backup is restorable. The scanner asserts there is no complete backup.** And in `restore.sh` it is worse than a wrong label: an operator mid-incident is told **"No COMPLETE backup found in B2 bucket"** over a bucket full of good ones. **The exact same user-visible lie the regex bug produced, reached by a different route** — so fixing the regex and leaving this is *half a fix to the identical symptom*.
+
+| level | question | what it misses |
+|---|---|---|
+| 1 | does the guard **exist**? | |
+| 2 | is it **called**? | |
+| 3 | does it **return the right answer**? | |
+| **4** | **what does it do when it CANNOT EVALUATE?** | **every predicate test — because it is not a question about the predicate at all** |
+
+> **"I could not read the input" is not a value of the predicate. It is a third outcome, and collapsing it into either branch produces a confident lie.**
+
+**How to apply:** any guard that reads an external input (a file, an object store, an API, a subprocess) has **three** outcomes, not two — *true*, *false*, and **"the instrument failed."** `|| true`, `2>/dev/null`, `|| echo ""`, a bare `$(cmd)` assignment, and an unchecked `.get()` all **silently collapse the third into one of the first two.** Capture the rc. Map it explicitly. **Make "I could not look" its own state** — and never let it masquerade as an answer about the world.
+
+*(Nino Kavtaradze. The same PR honoured this meticulously in its bucket probe — `|| rc=$?`, with a comment citing the prior incident — and discarded it in the manifest read four steps later. **The invariant was stated, understood, and violated inside the artifact built to enforce it.**)*
+
 ### And the only reason it was found
 
 > **This PR's fixture is a REAL manifest, not a paraphrase.** A fixture that restates the format in the test's own words could not have revealed it.
