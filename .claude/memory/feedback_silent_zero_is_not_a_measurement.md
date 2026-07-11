@@ -483,6 +483,17 @@ The author isolated it (removed *both* guards), confirmed the bound is **dormant
 
 **Why that matters and is not pedantry:** a reader who believes a source-grep is a behavioural proof will **relax the front guard, believing the back one has them covered** — and the back one is inert until exactly that moment. The test's *existence* is what licenses the dangerous edit.
 
+**And the completing half — a textual test fails in BOTH directions, which is why it is not merely weak but actively harmful:**
+
+| | textual test (asserts the source line) |
+|---|---|
+| **behaviour breaks, source unchanged** | **stays GREEN** — this is how the `backup_is_complete` regex shipped broken through a passing suite |
+| **behaviour is fine, source legitimately changes** | **goes RED** — `test_resolve_latest_selects_a_complete_backup` reddened the moment the call site correctly grew a *third* outcome |
+
+> **It pins the guard's SYNTAX, not its behaviour.** It obstructs the correct change and waves through the incorrect one. **A test that can only be satisfied by not editing the code is not protecting the code.**
+
+The replacement executes the real function against a real backend (rclone's `:local:`), with an *incomplete newer* directory beside a *complete older* one, and requires the older. A mutation that selects by name kills it. **Behaviour, not text.**
+
 **How to apply:** when a guard is dormant behind a stronger one, say so **in the test**, and name the load-bearing one. *"Which of these two is actually carrying the weight today?"* is the question to answer **before** anyone gets the chance to remove the wrong one. (Aisha Idrissi, deploy#584. Same precision as knowing that `_resolve_run.txt`'s *presence* requirement — not the count-refusal — is what makes a read-back structurally impossible on deploy#574.)
 
 ### And the rule binds when the flattering thing is an EXONERATION
