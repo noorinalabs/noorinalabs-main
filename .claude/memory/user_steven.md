@@ -18,3 +18,7 @@ status: active
 - Values memory reliability — was disappointed when something wasn't remembered across sessions. Save important context promptly.
 - Wants skills/hooks built to automate repetitive team processes — views this as foundational infrastructure, not nice-to-have
 - On 2026-04-07, asked to ensure charter/hooks changes are on main before branching so agents pick them up
+
+## Presentation preferences
+
+- **Every file reference must be CLICKABLE** (asked 2026-07-11). Cite files as a path the terminal can resolve — `path/to/file.py` or `path/to/file.py:42` when a line matters — **never a bare basename** (`restore.sh`, `backblaze-bootstrap.md`) and never a prose-only mention. Repo-relative for files inside a repo; absolute for anything outside it (e.g. scratchpad artifacts). This applies to summaries and status reports, not just code walkthroughs — it is where bare basenames tend to creep in.
