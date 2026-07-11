@@ -362,6 +362,28 @@ The whole rest of this file is about a guard that is **silent when it should sho
 
 *(Aisha Idrissi, who found it in her own script and fixed it before anyone complained.)*
 
+### A test that LOOKS behavioural but is TEXTUAL is a vacuous assertion in a new costume
+
+A guard's two-sided lower bound (`age -lt 0`) had a test that went red when the bound was removed — so it looked pinned. **It went red only because it greps the source.** Behaviourally, removing the bound changes nothing: a negative age carrying `fresh` is **unreachable while a stronger guard in front of it stands**.
+
+The author isolated it (removed *both* guards), confirmed the bound is **dormant defence-in-depth, correctly ordered** — and then, rather than leave a test that would be trusted for the wrong reason, made its docstring **declare itself textual** and **name which guard actually holds the weight.**
+
+> **It is not enough for a test to be correct. It must not misrepresent what KIND of evidence it is.**
+
+**Why that matters and is not pedantry:** a reader who believes a source-grep is a behavioural proof will **relax the front guard, believing the back one has them covered** — and the back one is inert until exactly that moment. The test's *existence* is what licenses the dangerous edit.
+
+**How to apply:** when a guard is dormant behind a stronger one, say so **in the test**, and name the load-bearing one. *"Which of these two is actually carrying the weight today?"* is the question to answer **before** anyone gets the chance to remove the wrong one. (Aisha Idrissi, deploy#584. Same precision as knowing that `_resolve_run.txt`'s *presence* requirement — not the count-refusal — is what makes a read-back structurally impossible on deploy#574.)
+
+### And the rule binds when the flattering thing is an EXONERATION
+
+The orchestrator told a reviewer two fixes were done. They were not; he checked and said so. The **implementer then offered a generous reconstruction** — *"you didn't invent it, you relayed what I told you; the reviewer was just a commit behind."*
+
+**The timestamps refuted her.** The commit carrying those fixes landed **77 seconds after** the reviewer's report. When the claim was made, the code did not exist. **The reviewer was not a commit behind; the orchestrator was a commit ahead of a commit that had not been written.**
+
+> **A false retraction is as corrosive as a false claim** — and *"you did not invent it"* is exactly the sentence that improves your story, which is exactly the sentence to check.
+
+This is [[feedback_silent_zero_is_not_a_measurement]]'s own rule (*a number that lands in your favour deserves more scrutiny, not less*) applied to **absolution** rather than to evidence. Accepting an undeserved exoneration puts a wrong fact in the record just as surely as the original error did — and it is *harder* to refuse, because someone kind is offering it to you.
+
 ### Refuse rather than redact, when the leak is unrecoverable
 
 Same script: printing rclone's stderr makes `instrument_error` diagnosable — but **`RCLONE_DUMP=auth` makes rclone echo `Authorization: Basic <base64(keyID:key)>`**, and **GitHub's secret masking is an exact-substring match on the raw secret, so it does not catch the base64 form.** Straight into a public CI log.
