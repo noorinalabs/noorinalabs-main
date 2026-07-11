@@ -180,6 +180,18 @@ Two concrete corollaries, both paid for:
 
 And the reason this belongs in a harness rather than in anyone's head: *it happened inside the message whose subject was that exact failure*, twice, to two different people, within an hour. **You cannot hold a rule in mind while executing the thing the rule is about.** Alejandra Reyes-Fuentes's sentence, which is the load-bearing one: ***"the reader distrusted me" is not a control.*** A finding survives because it was checked, not because someone happened to be suspicious.
 
+### An unstable identifier can fabricate a refutation as easily as a confirmation (2026-07-11, ip#130)
+
+The proof that the `no-cache-filters` fix fired was cited, by everyone including the orchestrator, as: **control `#10 CACHED` / treatment `#10 DONE 11.8s`.** BuildKit assigns vertex numbers in **solve order**; they are not stable across builds. In the control arm `#10` is `[base 5/9] COPY pyproject.toml uv.lock ./` — the apt layer is `#12`. **The table compared two different layers.**
+
+The conclusion survived re-derivation against the stable `[base 2/9] RUN apt-get … upgrade` label, and only because control's `#10` *also* happened to be CACHED. Had the numbering shuffled it onto `COPY src ./src` (DONE 15.1s), the identical table would have read *"control: DONE"* and **a sound proof would have looked falsified.** The usual worry is a fabricated confirmation; an unstable identifier fabricates either verdict with equal ease, and the false *refutation* is the one that gets you to abandon a correct diagnosis.
+
+The costly half is that the same citation went into a **committed comment**, which outlives the run: it credited *"the uv install (#18, 43.4s)"*. `#18` is `exporting to docker image format` — a vertex that exists only because the proof harness used `load: true`, and which the real `push: true` publish never emits. The uv install is `#14`, at **3.5s**. The comment's *"~80s extra per publish"* therefore bills the publish for ~59s of harness-only work — under the word **MEASURED**, in a comment whose entire purpose is to stop the next reader believing an unmeasured claim.
+
+> **Cite by stable name, not by ordinal.** Vertex numbers, line numbers, array indices, `head -N` positions, and job-step numbers are all assigned by the run, not by the thing. **A number that the tool chose is not an identifier of the object.**
+
+And the scope trap: **a measurement taken under a harness carries the harness's costs.** Before writing a number into a durable comment, ask which of its terms exist only because you were measuring. (Fatima Bensalah, re-deriving from the raw job logs rather than the run summary.)
+
 ### The fourth costume: absence of a stop read as presence of a go
 
 The three above are readings **taken wrongly**. This one is a reading **never taken**, of a signal **never sent**, whose silence is treated as content.
