@@ -1212,3 +1212,29 @@ deploy#586 asked for three things; two landed in #591. The third — *scrub inhe
 **How to apply:** when auditing whether an issue is satisfied, do not stop at *"is the bad outcome currently prevented?"* Ask **by what, and does anything record that it is doing that job?** An unlabelled protection is a protection with a countdown on it.
 
 (A second finding from the same audit: the issue's ask was *incompatible with the design* — the script passes credentials via `RCLONE_CONFIG_*`, so a blanket `RCLONE_*` scrub would delete its own credentials. **An unimplemented ask is not always an oversight; check whether it is implementable before treating it as debt.**)
+
+## A MEASUREMENT OF THE BUG IS NOT A MEASUREMENT OF THE FIX
+
+**2026-07-11, deploy#591. Mine.** Nurul measured a SIGPIPE defect precisely: `grep '^X ' | head -n1 | tr ' ' '\n' | grep -qx 'y'` under `set -euo pipefail` — `head -n1` exits early, `grep` takes SIGPIPE, and **`pipefail` promotes 141 to the pipeline rc even though the final match SUCCEEDED.** He proved it: 1 line → rc 0; 100k lines → rc 141.
+
+I read that and prescribed the fix: **`grep -m1`**. One token. I even argued for it — *"it deletes the shape rather than guarding it"*. **I never ran it.**
+
+**There are TWO early-exit consumers in that pipeline, not one.** `grep -qx` SIGPIPEs `tr` exactly as happily as `head -n1` SIGPIPEd `grep`. Aisha measured what I had not:
+
+```
+grep | head -n1 | tr | grep -qx     100k lines -> 141    huge first line -> 141
+grep -m1 | tr | grep -qx            100k lines -> 141    huge first line -> 141   <- my "fix"
+```
+
+**My fix swapped one early-exiter for another and left the shape completely intact.** It would have shipped, with a passing test, because the obvious fixture (many lines) no longer triggers via `head` — while a **huge single line** still kills it through `grep -qx`. She deleted the *pipeline* instead (`grep -m1 … <<< "$1"` — a herestring is a file descriptor, not a pipe, so early-stopping kills nothing).
+
+> ### **A repro exposes ONE trigger of a shape. Fixing the trigger you were shown is not fixing the shape.**
+>
+> The measurement told me `head -n1` causes it. It did **not** tell me `head -n1` is the **only** thing that causes it — **and I read the first as the second.** A repro is an existence proof, never a completeness proof.
+
+**How to apply — three rules, and the third is the one I broke:**
+1. **Never prescribe a fix from a measurement of the bug.** The person who measured the bug measured the *bug*. Someone must measure the **fix**.
+2. **Enumerate every element of the shape before fixing any of them.** "Which commands in this pipeline can exit early?" — not "which one did the repro show me?" The question I never asked.
+3. **The falsifying fixture must be able to fail the FIXED code, not just the broken code.** My fix passes the many-lines fixture. Only a **huge-single-line** fixture separates my fix from a real one. **If your new test cannot distinguish your fix from the naive fix, it is not testing your fix.** (Cousin of [[feedback_fixture_makes_guard_assertion_inert]]; identical to the inert acceptance criterion I wrote for da#428 and had to withdraw — *twice in one week, same error, same person.*)
+
+**And note who caught it: the implementer, by running the thing I told her to do.** Not the reviewer, not me. **An instruction from the orchestrator is a claim like any other, and it arrives with more authority and less scrutiny than a peer's** — which makes it the most dangerous kind. She was right to test it instead of typing it.
