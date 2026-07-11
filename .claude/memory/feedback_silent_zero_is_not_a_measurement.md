@@ -287,6 +287,49 @@ CI went red because the tests **execute** the scanner and the runner had no `rcl
 
 **The obvious fix — `@pytest.mark.skipif(rclone missing)` — would have been a silent skip on the one check standing between us and an empty backup bucket.** Green everywhere, testing nothing, forever. **Install the binary; never skip the test that is the guard.** (Sibling of [[feedback_actionlint_needs_shellcheck]]: a linter that silently skips its own analysis is a linter that passes.)
 
+## THREE levels, and we stopped at two. "It is called" is not "it returns the right answer." (2026-07-11, deploy#584)
+
+**The single most important entry in this file, because the rule was applied and it still was not enough.**
+
+`backup_is_complete()` shipped in deploy#577 — merged, green suite, two approving reviewers:
+
+```sh
+grep -q '^BACKUP_MANIFEST .*[[:space:]]complete=true\([[:space:]]\|$\)'
+```
+
+`complete=` is the **first** token `backup.sh` writes after `BACKUP_MANIFEST `. **The anchor's literal space consumes the only space there is**, so `.*[[:space:]]complete=true` demands a **second** space that never exists. Reproduced against a real manifest line:
+
+```
+shipped predicate: NO MATCH   <- restore.sh latest can select NOTHING
+correct predicate:  MATCH
+```
+
+**`restore.sh latest` reports "No COMPLETE backup found" over a bucket full of good backups. The recovery path was INERT on `main`.** It fails *closed*, so nothing was at risk — but the thing you invoke once, under pressure, after the primary is already lost, **could not select any artifact at all.**
+
+### Why it survived — and this is the part to internalise
+
+The tests were **textual**. They asserted the function is **called** — which was *that very review's own hard-won lesson* ([[feedback_fixture_makes_guard_assertion_inert]]: *a guard is pinned by the branch that calls it, not by the existence of the function*) — **and never once ran the predicate against a real manifest.**
+
+> **"I fixed *the function exists* → *the branch calls it*, and stopped one step short of *and it returns the right answer*."** (Aisha Idrissi, on her own test)
+
+**There are THREE levels, and the corpus had only named two:**
+
+| level | question | how it fails silently |
+|---|---|---|
+| 1 | Does the guard **exist**? | asserting a function is defined |
+| 2 | Is it **called**? | the function exists; no branch reaches it |
+| **3** | **Does it return the RIGHT ANSWER?** | **it is called, on every path, and its predicate can never match** |
+
+**Level 3 is where a hand-written regex, a parser, a comparator, or a classifier lives — and a "the branch calls it" test passes at level 2 forever while level 3 is a no-op.**
+
+### And the only reason it was found
+
+> **This PR's fixture is a REAL manifest, not a paraphrase.** A fixture that restates the format in the test's own words could not have revealed it.
+
+**A test that constructs its input by paraphrasing the producer's format is testing the paraphrase.** The producer and the test agree with each other and both disagree with production. **Feed the consumer the producer's actual bytes** — `backup.sh`'s exact `printf`, the real gate's exact stdout, the real corpus's exact row.
+
+Same shape as [[feedback_fixture_makes_guard_assertion_inert]]'s *"copy the production filename+header verbatim"* — and this is why that rule is not pedantry: **the paraphrase is where the bug hides**, because the paraphrase is written by the same mind that wrote the bug.
+
 ### A one-sided assertion on a two-sided error is HALF A CONTROL
 
 The same PR, one round later — and the reviewers found the rule's author had not applied her own rule to her own instrument.
