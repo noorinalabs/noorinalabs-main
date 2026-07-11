@@ -287,6 +287,48 @@ CI went red because the tests **execute** the scanner and the runner had no `rcl
 
 **The obvious fix — `@pytest.mark.skipif(rclone missing)` — would have been a silent skip on the one check standing between us and an empty backup bucket.** Green everywhere, testing nothing, forever. **Install the binary; never skip the test that is the guard.** (Sibling of [[feedback_actionlint_needs_shellcheck]]: a linter that silently skips its own analysis is a linter that passes.)
 
+## A checksum binds a file to ITSELF. It cannot see the file is from the wrong run. (2026-07-11, deploy#584 — TORN RESTORE)
+
+**The most severe defect of the wave, in merged code, and every guard passed it.**
+
+`restore.sh` (shipped in deploy#577) selected each dump with its own unsorted `find`:
+
+```sh
+PG_DUMP=$(find "$RESTORE_DIR"      -name 'isnad-pg-*.dump'    -type f | head -1)
+USER_PG_DUMP=$(find "$RESTORE_DIR" -name 'isnad-userpg-*.dump' -type f | head -1)
+NEO4J_DUMP=$(find "$RESTORE_DIR"   -name 'isnad-neo4j-*'       -type f | head -1)
+```
+
+**`find` emits readdir order.** And a B2 **day**-directory legitimately holds **multiple runs**: the path is `<category>/<DATE>`, dumps are `isnad-<store>-<TIMESTAMP>`, `rclone copy` **adds and never deletes**, the fixed-name manifest is **overwritten by whichever ran last** — and the producer **uploads partials by design**, so a failed 02:00 run and a good 14:00 run land side by side **routinely**.
+
+**Three independent `find`s ⇒ the three stores can each come from a DIFFERENT RUN.** Postgres from the failed 08:00 attempt, Neo4j from the attested 03:01 one. **Referential integrity between the graph and the relational DB, silently destroyed.** Measured: over 48 two-run directories it picked the *older* dump **14 times**.
+
+**And every guard passed it:**
+
+| guard | why it is blind |
+|---|---|
+| required-store gate | sees all three stores **present** |
+| manifest | says `complete=true` |
+| **`verify_checksums`** | **a checksum binds a file to ITSELF — it cannot see the file is from the wrong run** |
+
+> ### **A checksum proves a file is intact. It says NOTHING about whether it belongs.**
+
+**How to apply.** Integrity (*is this byte-string undamaged?*) and **provenance** (*is this the right byte-string?*) are **different properties needing different instruments** — and a green integrity check is routinely mistaken for both. Whenever a consumer assembles **several artifacts** that must be **mutually consistent**, something must bind them to a **common origin**: a run id, a timestamp, a batch key. **The producer names the run; the consumer verifies THAT RUN arrived.** Per-file hashes cannot do it, and neither can "all the expected names are present."
+
+Same shape as `missing == 0` on the prune (da#426): a check that binds the artifact to *itself* certifies a truncated one. Same shape as the md5-vs-tally split on da#428: **md5 is transfer integrity; the tally is completeness; neither substitutes for the other.**
+
+**And the required set must never be read from the manifest's own `stores=` field** — a partial backup would then **self-certify as complete-for-whatever-it-happens-to-hold.** The consumer keeps its own definition of what it requires. *(Same rule as the completeness binding: the artifact declares, the consumer decides.)*
+
+### The root cause of all three defects: the fixtures had no concept of a RUN
+
+The self-test wrote one file called `isnad-pg-a.dump` with `timestamp=t`. The pytest helper did the same. **Invented shorthand** — so **no fixture could express *"the user-postgres dump never uploaded"* or *"these two dumps are from different runs,"* and the guard was never asked.**
+
+> **A test that paraphrases the producer's format is testing the paraphrase.**
+
+And the nondeterminism nearly hid it even after the fixture was fixed: **with only one decoy, the test PASSED against the unfixed code — readdir order happened to favour the right file.**
+
+> **A detector that fires half the time is not a detector.** A fixture whose outcome depends on filesystem ordering must be built with enough decoys that the broken code fails **deterministically**, or its green is a coin-toss you have mistaken for a result.
+
 ## THREE levels, and we stopped at two. "It is called" is not "it returns the right answer." (2026-07-11, deploy#584)
 
 **The single most important entry in this file, because the rule was applied and it still was not enough.**
@@ -470,6 +512,26 @@ She made the script **refuse to run** under `RCLONE_DUMP` rather than attempt to
 > **When the failure is unrecoverable, refuse the input rather than sanitise it.** A redactor is a filter, and a filter you have not proven complete is a filter that will miss one encoding. **You cannot un-publish a credential.**
 
 (Then she grepped the captured output for the key *and* for base64 auth material to confirm neither appears — proving the guard, not asserting it. See [[feedback_pipeline_b2_publish_key]] for the original leak this defends against.)
+
+### A harness that runs production code under a WEAKER SHELL MODE is not running production code
+
+Same PR. She shipped a crash that **no unit test saw** and the **rehearsal** caught.
+
+Her run-binding read the manifest with a bare `VAR="$(… | grep …)"`. `restore.sh` runs `set -euo pipefail`. On an artifact with **no manifest**, `grep` matches nothing → `pipefail` fails the pipeline → the assignment is a failing simple command → **`errexit` kills `restore.sh`.** It died on **exactly the artifacts the fallback existed to serve.**
+
+**Why no unit test caught it: her harness ran the shipped block under `set -uo pipefail` — with `errexit` OMITTED.**
+
+> **A harness that runs production code under a weaker shell mode is not running production code.** It is running a *different program that happens to share the text.*
+
+She fixed the **harness** first — and that alone reproduced the CI failure locally — then the code. Generalise past shell: **any harness that relaxes the runtime's strictness (a different `set -e`, `PYTHONWARNINGS`, a disabled assertion, a mocked-out `sys.exit`, a caught-and-swallowed exception) is testing a program you do not ship.** Match the production mode exactly, and prove the harness can reproduce a known production failure before trusting its greens.
+
+**And the rule she updated in repo memory, because the old phrasing did not fire:**
+
+> The lesson was recorded as *"a guard reading an rc."* It should be: **any `VAR="$(grep/sed/find …)"` that can legitimately match nothing is a CRASH under `-e` + `pipefail`, not an empty string.**
+>
+> **She had quoted the old rule in her own comments an hour before walking into it.** *"Knowing it didn't save me, because it didn't pattern-match."*
+
+That is [[feedback_enforcement_hierarchy]] from a new angle: **a rule stated in terms of its instance does not fire on a new instance.** State the rule in terms of the **shape** (`$(cmd)` that may be empty), not the **story** (that time we lost an rc).
 
 ## The failure mode with no instrument in it
 
