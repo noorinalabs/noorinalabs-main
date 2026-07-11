@@ -215,6 +215,28 @@ Sibling of *"the sentence that flatters the frame is the sentence to measure"* (
 
 And the guard's own fifth costume, caught by the reviewer in the act of defending it: **`cache-to` is what keeps the detector alive.** GHA cache entries evict after ~a week unused. Drop *only* `cache-to` as an "optimisation" and `cache-from` quietly finds nothing — **the guard is dead without anyone touching it.** *A detector that decays into silence.*
 
+#### The log contains your prose about the bug, and your parser cannot tell them apart
+
+The closing act of the same PR, and the sharpest instance in this file because **two people hit it independently within minutes of each other, and each was one keystroke from reverting a working fix.**
+
+The fix landed; the real publish ran; both the implementer and the orchestrator went to read the log for the one question that mattered — *did `[base 2/9] RUN apt-get … upgrade` come back `CACHED`?* Both greps returned **`#11 CACHED`**. Both were about to report **the fix is inert on the real publish.**
+
+It was not. `#11`'s only *build-phase* status is **`DONE 11.1s`** — it rebuilt, apt visibly executed, and Trivy went 10 → 0.
+
+**The string `CACHED` was in the log because the fix's own commit messages are in the log.** `docker/build-push-action` runs with `--attest type=provenance,mode=max`, and the provenance attestation JSON **embeds the commit messages** — messages that read *"the buildx GHA cache serves the apt layer from cache (`#11 CACHED`)"*, because that is what the commit was **describing and fixing**. The implementer's parser kept the *last* match per vertex, so it read `CACHED` **out of his own prose about `CACHED` layers** and reported it as the build status.
+
+> **The instrument manufactured a refutation of the fix, out of the fix's own description of the bug.**
+
+This is the same blade as *"the instrument that confirms a correction must not match the text of the thing being corrected"* (§ *Verify the claim as written*) — but promoted, because here the contaminating text is **injected into the artifact by the toolchain**, not written by a person. You cannot avoid it by being careful about your own grep targets; the log *ships* with your prose in it.
+
+**What saved it, both times, was the same thing: two readings disagreed.** The implementer also saw `#11 9.900 update-alternatives: …` — apt visibly running. The orchestrator noticed the finding was consequential enough to re-derive before reporting. **Neither reading was a measurement until they were reconciled.**
+
+**How to apply.** When grepping a build/CI log for a status token:
+- **Scope to the step's own output stream** (`grep -E $'\tBuild and push\t' | grep -v '"message"'`), never the whole run log. A run log is a *concatenation of heterogeneous streams* — job output, JSON payloads, attestations, commit metadata — and a token search treats them as one document.
+- Assume the artifact **contains the words of the change being tested**: commit messages, PR titles, and comments all get embedded by provenance/attestation/metadata tooling. **The more precisely your commit message describes the bug, the more certainly it will contaminate the grep that checks the fix.**
+- **A status token and a status are different objects.** Take the status from the vertex's *own* status line, not from a substring match anywhere in the run.
+- And the general form, which is why this belongs beside the ordinal trap: **a confirmation and a refutation are equally manufacturable.** Everyone braces for the instrument that falsely confirms. This one falsely *refutes* — and a false refutation gets you to revert a correct fix, which is the more expensive direction.
+
 ### The fourth costume: absence of a stop read as presence of a go
 
 The three above are readings **taken wrongly**. This one is a reading **never taken**, of a signal **never sent**, whose silence is treated as content.
