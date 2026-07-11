@@ -24,16 +24,16 @@ The pattern is consistent: any `gh pr edit` flag that triggers the GraphQL proje
 
 P3W7 hit `gh project item-add 2 --owner noorinalabs --url <issue-url>` returning exit 0 without actually adding the issue to project 2. Cumulative ~9 silent failures across 3 PRs in W7 alone (Wanjiku #308 × 5, Sofia #45 × 2, Mateo #100 × 2).
 
-**How to apply:** after `gh project item-add`, read-back-verify by querying project items and checking the issue is present:
+**How to apply:** after `gh project item-add`, read-back-verify — but **NOT with a `--limit`ed board pull.** That query has produced a confident **false negative** at every ceiling anyone has tried (200, 400, 900, 1000, 1200 — see Surface 3, sub-failures 3b/3c/3d). Use the per-issue check, which is O(1) and **has no limit to lie about**:
 
 ```bash
-gh project item-list 2 --owner noorinalabs --format json --limit 1000 \
-  | jq --arg url "<issue-url>" '.items[] | select(.content.url == $url) | .id'
-# Empty output = silent fail; retry or use the GraphQL mutation directly.
-# Note: --limit 200 silently truncated to 200/698 items in P3W8 — see Surface 3 sub-failure 3b.
+gh issue view <N> --repo noorinalabs/<repo> --json projectItems --jq '.projectItems[].title'
+# Non-empty = on the board. Empty = genuinely absent.
 ```
 
-If item-add fails repeatedly, fall back to the GraphQL `addProjectV2ItemById` mutation via `gh api graphql`.
+If item-add genuinely failed, fall back to the GraphQL `addProjectV2ItemById` mutation via `gh api graphql`.
+
+> ⚠ **Do not "just raise the limit."** Three separate people have now chased a phantom no-op by trusting a truncated `NO`, twice on the same day. **The limit is not the fix; it is the bug.**
 
 **Sub-failure 2a (P3W11, 2026-05-21):** the whole-board read-back verify (`gh project item-list 2 … --format json | jq …`) is itself fragile — if ANY item's content (title/body) contains an unescaped control character, `jq` aborts the entire payload with `Invalid string: control characters from U+0000 through U+001F must be escaped`. Combined with a `2>/dev/null`, this surfaces as **empty output**, indistinguishable from a genuine silent-no-op — I wrongly concluded two adds (#346, #347) had failed when they'd actually succeeded. **More robust verify: query the issue's own membership** instead of parsing the board:
 ```bash
@@ -51,6 +51,14 @@ Two distinct sub-failures on this surface:
 **Sub-failure 3b (P3W8, Sofia 2026-05-09):** `gh project item-list 2 --owner noorinalabs --limit 200` returned exactly 200 items as if that were the truth. Re-running with `--limit 1000` returned 698 items (the actual count). The just-added issue (`noorinalabs-main#342`) was missing from the 200-item result and present in the 1000-item result. **The board has grown past the previous "safe ceiling" of 200.**
 
 **Sub-failure 3c (P8W24, 2026-07-11, Aisha + orchestrator, INDEPENDENTLY, same hour):** the ceiling moved again and **the verification query itself lied.** The board now holds **1,656 items**. Aisha verified an `item-add` with `--limit 900`, got NOT FOUND, and nearly reported a silent no-op — it was a **false negative**; re-querying at 3000 confirmed the item was there all along. The orchestrator hit the identical trap the same hour reading back three new issues at `--limit 500`.
+
+**Sub-failure 3d (P8W24, 2026-07-11, orchestrator — SAME DAY, SAME SESSION, WITH THIS MEMORY IN CONTEXT):** added deploy#596 to the board, verified with `--limit 400`, got a clean `NO`, and re-ran the add. Then `--limit 1200` → still `NO`. **Both were false.** The board's true size is **1,690** (`projectV2.items.totalCount` via GraphQL); the item was on it from the first add. The paginated GraphQL query — with a **positive control** (a known-present issue) — confirmed it.
+
+> **I had already written "never trust a negative result from a capped list" in this very file, hours earlier, and I used a capped list.** The reason is worth naming, because it is the thing that will get the next reader too: **the truncated query ANSWERED. It returned a well-formed, confident `NO`.** It did not error, warn, or look degraded. Nothing about the output invited a second look — and *running a verification step feels like diligence*, which is precisely what suppresses the instinct to verify the verification.
+>
+> **The tell was there and I nearly missed it: the list returned EXACTLY the limit I asked for.** `--limit 400` → 400 items. `--limit 1200` → 1200 items. **A count that exactly equals your cap is not a result, it is a truncation** — and it is the only signal this surface gives you.
+>
+> **Stop raising the limit. The limit is not the fix; it is the bug.** Every hardcoded ceiling in this file has rotted: 200 → 900 → 1000 → 1200. Use the O(1) per-issue check below, which **cannot truncate at any board size**, or paginate GraphQL **with a positive control**.
 
 **The lesson is not "raise the number."** It is that this whole surface has a **confident-false-negative** failure mode in *both* directions:
 - `item-add` returns rc=0 and may not have applied → so you must verify.
@@ -71,12 +79,14 @@ A truncated read and a genuine no-op are **indistinguishable** at the call site,
    ```
 1. If you use `--limit`, it must exceed the live board size (>1700 as of 2026-07-11, and rising) — `200` died in P3W8, `900`/`1000` died in P8W24. **Assume today's number is already stale.**
 2. Post-filter via `jq` on `.content.url`, `.content.number`, or `.content.repository.name`. Don't trust implicit ordering or partial pulls.
-3. **Read-back-verify pattern for `gh project item-add`** must use the elevated limit:
+3. **Read-back-verify pattern for `gh project item-add` — use the O(1) per-issue check, NOT a board pull.**
+   It cannot truncate at any board size, so it has no ceiling to rot:
    ```bash
-   gh project item-list 2 --owner noorinalabs --format json --limit 1000 \
-     | jq --arg url "<issue-url>" '.items[] | select(.content.url == $url) | .id'
-   # Empty = silent fail; retry or fall back to GraphQL `addProjectV2ItemById`.
+   gh issue view <N> --repo noorinalabs/<repo> --json projectItems --jq '.projectItems[].title'
+   # Non-empty = on the board. Empty = genuinely absent (this query has no --limit to lie about).
    ```
+   The `--limit`-based board pull below is kept only as a record of what NOT to do. It has produced a
+   **false negative** at 200, 900, 1000, 400 and 1200. Do not reach for it, and never trust its `NO`.
 4. The 200-cap silent-truncation behavior matches the broader silent-no-op family — the command does not warn when the cap is hit.
 
 ## Surface 5 — `gh issue list` silent default-limit=30
