@@ -208,6 +208,28 @@ Sibling of §*A reading and a forecast are not the same kind of thing* (prose ab
 
 *(Bjørn Henriksen found both instances in his own comment, while shipping the change that had killed them.)*
 
+### The instrument never survives the PR that built it
+
+Four harnesses were built across one effort — each proved something real, each was **deleted the moment it answered its question**: the filter-fires proof, the toolchain-free build proof, the cascade A/B, the `mode=min` A/B.
+
+> **The verification capability has never once survived the PR that created it.**
+
+That is a tidiness question right up until a change ships with a **revert condition**. ip#138's read: *"if `[base 2/2]` ever fails to come back CACHED on a no-filter read, `mode=min` killed the detector and this reverts."* Correct, essential — **and unrunnable.** A "no-filter read" is something **production never performs**. Evaluating it requires rebuilding a harness from a merged PR's prose. **The person who most needs that check is the least likely to know how to perform it.**
+
+> **If a change ships with a revert condition, the instrument that evaluates that condition ships with it.** An unrunnable revert condition is a comment, not a guard.
+
+Make the proof a permanent `workflow_dispatch` self-test, not a throwaway: it must (a) run the arm production never runs, (b) be dispatchable by someone who wasn't there, and (c) **prove it can go red.** (Fatima Bensalah, ip#138.)
+
+### …and the rule itself decays. The citation rule decayed into an unstable identifier.
+
+The comment that says *"cite layers by their `[base N/9]` label, never by vertex number"* — the rule written **because** ordinals shuffle between runs — **prescribes a label that no longer exists.** The `/9` was the single-stage era; a later PR split the image and the current build emits `[base 2/2]`, `[builder N/4]`, `[runtime N/6]`. The same comment self-contradicts: prescribes `N/9`, then correctly *uses* `[builder 4/4]` sixty lines on.
+
+**And it fails in precisely the way the rule exists to prevent:** someone follows it literally, greps a current log for `[base N/9]`, finds **nothing**, and concludes the evidence was fabricated — the identical harm as the reader who greps `#10`, finds a `COPY`, and thinks the proof was faked.
+
+> **A guard written against decay is not exempt from decay.** The remedy that hardens a rule (pin to a stable name) has its own shelf life, and *nothing goes red when it expires*.
+
+Corollary, cheap and load-bearing: **when you cite a log, name its era.** A comment citing both a pre-split and a post-split run without saying which leaves the reader unable to distinguish **decay from fabrication** — and they will assume the worse one.
+
 ## The failure mode with no instrument in it
 
 Every rule above assumes the reporter executed *something*. The corpus has no clause for **an instrument that was never built.**
