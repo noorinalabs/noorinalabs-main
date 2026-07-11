@@ -201,7 +201,7 @@ The decision was trivial: keep or delete two `cache-from`/`cache-to` lines. Four
 | **~80s** per publish | the reviewer | a `load: true` **proof harness** — the export/import vertices a real `push: true` publish never runs |
 | **3.5s** (the layer the cache protects) | the implementer, refuting the ~80s | the **control** arm — where the filter is absent. Once the filter is on, `base` is the whole image, nothing can cache-hit, and the 3.5s is **unreachable** |
 | **zero** ("so keeping them is free") | the orchestrator, refuting the 3.5s | **`cache-from` hits only.** It ignored `cache-to`, which *runs on every publish regardless* and — because the filter rebuilds every layer — re-exports the **full** layer set each time |
-| the real cost | **nobody** | **never measured.** The proof harness omitted `cache-to` *by design*, to guarantee zero cache writes. **The one arm that would have priced it is the one arm we never ran.** |
+| the real cost | **nobody, at first** | The harness omitted `cache-to` *by design*, to guarantee zero cache writes — **so the one arm that would have priced it is the one arm nobody ran.** Only when a reviewer went back to the treatment log did half of it become a measurement: `cache-from` = **0.1s** (`importing cache manifest from gha … DONE 0.1s`). `cache-to mode=max` — which re-exports *every* layer on *every* publish, since nothing is cached — remains **unpriced.** |
 
 The reviewer **refused the third number even though it supported the ruling he had already given.** That is the artifact:
 
