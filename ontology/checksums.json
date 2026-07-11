@@ -200,10 +200,10 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "cross-repo-status.json": {
-      "last_tracked": "f95ce3ddbf3119990d9dba244fa33e3fc7250020a01aef42259253eb1f3cbe73",
-      "last_resolved": "f95ce3ddbf3119990d9dba244fa33e3fc7250020a01aef42259253eb1f3cbe73",
-      "tracked_at": "2026-07-06T01:46:58.082819+00:00",
-      "resolved_at": "2026-07-06T16:50:47.724297+00:00"
+      "last_tracked": "862ae7c2358de82b03ac83049291e063fd431b544829cd76ffac2f9b19557564",
+      "last_resolved": "862ae7c2358de82b03ac83049291e063fd431b544829cd76ffac2f9b19557564",
+      "tracked_at": "2026-07-10T22:57:56.276674+00:00",
+      "resolved_at": "2026-07-11T02:28:00.629407+00:00"
     },
     "dependencies.yml": {
       "last_resolved": "f4b53ffd3e1f81e055130ae2f53ff08ba9b5f651782434bbf3ac8b3eab4276e8",
@@ -488,10 +488,10 @@
       "tracked_at": "2026-04-11T16:26:02.575946+00:00"
     },
     "ontology/repos/ingestion.yaml": {
-      "last_resolved": "368917f91938272e9f8002534ddf7301f02679e0987ffb06fe6022429f0ca0b6",
-      "last_tracked": "368917f91938272e9f8002534ddf7301f02679e0987ffb06fe6022429f0ca0b6",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
+      "last_tracked": "85c6de813b6b30029feb2df9cdd8da86b79686bfbe50c8e9eaa05efdefba0d67",
+      "last_resolved": "85c6de813b6b30029feb2df9cdd8da86b79686bfbe50c8e9eaa05efdefba0d67",
+      "tracked_at": "2026-07-11T02:27:54.907776+00:00",
+      "resolved_at": "2026-07-11T02:28:00.629407+00:00"
     },
     "ontology/repos/isnad-graph.yaml": {
       "last_tracked": "ba76e10a48b7548e5e1d894ad25b7d5dc66b5732d64ac7bb67f5e4bb5ce9c3cd",
@@ -938,10 +938,10 @@
       "resolved_at": "2026-06-13T02:28:20Z"
     },
     "noorinalabs-data-acquisition/src/resolve/disambiguate.py": {
-      "last_tracked": "18ec8731fcba05857876f86c5d69ed29b09c1bd2aace2c070f1a45a3c6b5ab99",
-      "last_resolved": "18ec8731fcba05857876f86c5d69ed29b09c1bd2aace2c070f1a45a3c6b5ab99",
-      "tracked_at": "2026-06-12T21:00:55.281165+00:00",
-      "resolved_at": "2026-06-13T02:28:20Z"
+      "last_tracked": "bb6f9df32d52258a7599fd7c72c846948f9401cec856c79808e850c3a1b75cdc",
+      "last_resolved": "bb6f9df32d52258a7599fd7c72c846948f9401cec856c79808e850c3a1b75cdc",
+      "tracked_at": "2026-07-11T00:21:38.441689+00:00",
+      "resolved_at": "2026-07-11T02:28:00.629407+00:00"
     },
     "noorinalabs-data-acquisition/tests/test_resolve/test_canonical_backfill_integration.py": {
       "last_tracked": "8bd5eb4fe6a627edaab396c8f8e6fefc02af071a9cff32d58be6bf97bb3c2815",
@@ -1050,10 +1050,10 @@
       "resolved_at": "2026-06-21T22:15:52Z"
     },
     ".claude/memory/session_handoff.md": {
-      "last_tracked": "ac83b903400566a7372f79848614141df19676a08bedb47d710afa635c6fe070",
-      "last_resolved": "ac83b903400566a7372f79848614141df19676a08bedb47d710afa635c6fe070",
-      "tracked_at": "2026-07-08T01:47:39.419275+00:00",
-      "resolved_at": "2026-07-07T00:00:00Z"
+      "last_tracked": "90da9211a423645c8442db2f73c4d2ce289280d3a1fe5bbb786c21c00949d817",
+      "last_resolved": "90da9211a423645c8442db2f73c4d2ce289280d3a1fe5bbb786c21c00949d817",
+      "tracked_at": "2026-07-11T01:47:59.715142+00:00",
+      "resolved_at": "2026-07-11T02:28:00.629407+00:00"
     },
     ".claude/lib/verify_deployable_merge.py": {
       "last_tracked": "7c2545f87d17c5c35967612f88381444ff510ceb81ba6553ba37497b0d5c3302",
@@ -1122,10 +1122,10 @@
       "resolved_at": "2026-07-06T00:47:21Z"
     },
     "noorinalabs-data-acquisition/src/resolve/fuzzy_cluster.py": {
-      "last_tracked": "492791e9a07dff35df114f4e7345efe7430ceb77ff4ea152482a0d9716343b8d",
-      "last_resolved": "492791e9a07dff35df114f4e7345efe7430ceb77ff4ea152482a0d9716343b8d",
-      "tracked_at": "2026-06-28T21:47:43.330468+00:00",
-      "resolved_at": "2026-06-30T00:00:00Z"
+      "last_tracked": "81c7d6b96dc81db52101d9dde7bbe2156d7bf7872db6f4e889912396b62af67c",
+      "last_resolved": "81c7d6b96dc81db52101d9dde7bbe2156d7bf7872db6f4e889912396b62af67c",
+      "tracked_at": "2026-07-11T00:21:54.924181+00:00",
+      "resolved_at": "2026-07-11T02:28:00.629407+00:00"
     },
     "noorinalabs-data-acquisition/scripts/rerun_cluster_tail.py": {
       "last_tracked": "96a0c3093c80bd7676d065aea7ccaa3c988820f6776aa995f23d296ffc0d9199",
@@ -1182,10 +1182,10 @@
       "resolved_at": "2026-06-30T00:00:00Z"
     },
     "noorinalabs-data-acquisition/src/parse/name_quality.py": {
-      "last_tracked": "8ba75381f8f1ad2bd0f97d6e0ab54c52b98cfb1daba0b7e511033fde3508e931",
-      "last_resolved": "8ba75381f8f1ad2bd0f97d6e0ab54c52b98cfb1daba0b7e511033fde3508e931",
-      "tracked_at": "2026-07-08T20:56:08.184743+00:00",
-      "resolved_at": "2026-07-10T21:45:55Z"
+      "last_tracked": "c5fc521c83071048a6b3a58f184ca9d9a7d16dcb9001724fdb0f7bd1d8c6f635",
+      "last_resolved": "c5fc521c83071048a6b3a58f184ca9d9a7d16dcb9001724fdb0f7bd1d8c6f635",
+      "tracked_at": "2026-07-11T00:21:03.734254+00:00",
+      "resolved_at": "2026-07-11T02:28:00.629407+00:00"
     },
     "noorinalabs-data-acquisition/tests/test_parse/test_name_quality.py": {
       "last_tracked": "8cb1a5fbdf1a00fb3c4f9ae4d0b72630b8b0293361c02b387a41ff64b340e56e",
@@ -1272,10 +1272,10 @@
       "resolved_at": "2026-06-30T22:40:00Z"
     },
     "noorinalabs-data-acquisition/src/resolve/bio_promote.py": {
-      "last_tracked": "7fede13b2c8f16d3ac89540654eca372535bb3ea807f8f268b1fc64729b0bb4e",
-      "last_resolved": "7fede13b2c8f16d3ac89540654eca372535bb3ea807f8f268b1fc64729b0bb4e",
-      "tracked_at": "2026-07-01T14:46:37.189306+00:00",
-      "resolved_at": "2026-07-01T21:14:36Z"
+      "last_tracked": "d6cac82e2431052b20d925cd36351df5bea47eebbbaacb6ee3e1be4d307522e1",
+      "last_resolved": "d6cac82e2431052b20d925cd36351df5bea47eebbbaacb6ee3e1be4d307522e1",
+      "tracked_at": "2026-07-11T00:22:39.609131+00:00",
+      "resolved_at": "2026-07-11T02:28:00.629407+00:00"
     },
     ".claude/memory/feedback_stg_gate_before_prod.md": {
       "last_tracked": "1a79c7f6b17fe51de6fa3d544d77728cd31b2b3a9b1f6e869a0b85d6266a6249",

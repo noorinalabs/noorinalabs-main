@@ -35,25 +35,81 @@ pipeline_stages:
       - "narrator_mentions_{corpus}.parquet"
       - "collections_{corpus}.parquet"
     pattern: "read_csv_robust with encoding fallback, Snappy compression"
+    name_quality:
+      module: src/parse/name_quality.py
+      description: >-
+        Narrator name-quality cleaning + validation (da#247). Strips the non-name
+        pollution classes that leak into the canonical narrator table — markup tags,
+        honorific/eulogy phrases, mubham (anonymous) collective descriptors, English
+        isnad prose, `<name>:<matn>` colon-joins, and over-long phrase spans —
+        recovering the real name where possible, rejecting the span otherwise.
+      applied_at: >-
+        the NER stage (src/resolve/ner.py) over EVERY source, so pollution never
+        reaches disambiguation. Also consumed by identity, sanadset, disambiguate,
+        bio_promote, fuzzy_cluster.
+      caps: { max_name_tokens: 30, min_prose_leader_tokens: 2 }
 
   resolve:
     path: src/resolve/
-    description: Entity resolution — NER consolidation, disambiguation, dedup
+    description: Entity resolution — NER, disambiguation, bio promotion, fuzzy clustering, dedup
+    # Canonical execution order (src/resolve/__init__.py RESOLVE_STEP_ORDER).
+    # `run_all(from_step=...)` skips every step BEFORE the named one.
+    step_order:
+      [ner, disambiguate, bio_promote, cluster, narrator_split, reconcile,
+       tabaqa_dates, muhaddithat_links, dedup, parallels]
+    ordering_invariants:  # da#117 — load-bearing, nothing may reorder these
+      - "disambiguate OVERWRITES narrators_canonical.parquet; bio_promote MERGEs into it — bio_promote MUST run after disambiguate or bio-only narrators get clobbered (da#99)."
+      - "fuzzy_cluster (cluster) runs after both; it re-keys nothing (merges route through make_canonical_id) and is idempotent."
+      - "dedup and parallels are two PARALLEL_OF detectors writing the SAME artifact; run_all composes their outputs (union, deduped by canonical hadith pair)."
+    resumable_steps: [disambiguate, cluster, dedup, parallels]  # keep an intra-stage checkpoint; honour --stop-after (da#272/da#276)
     sub_stages:
-      ner: { output: narrator_mentions_resolved.parquet, description: "Consolidate mentions across corpora" }
+      ner: { output: narrator_mentions_resolved.parquet, description: "Consolidate mentions across corpora; applies parse/name_quality to every source" }
       disambiguate:
-        output: [narrators_canonical.parquet, ambiguous_narrators.parquet]
+        module: src/resolve/disambiguate.py
+        output: [narrators_canonical.parquet, ambiguous_narrators.parquet, merge audit log]
+        description: "Matches MENTIONS to bios; emits canonical narrators with deterministic UUID5 ids"
         stages:
           - "Stage 1: Exact name match"
-          - "Stage 2: Fuzzy match (rapidfuzz, threshold 80%)"
-          - "Stage 3: Temporal match (death-birth within 15-80 years)"
+          - "Stage 2: Fuzzy match (rapidfuzz, ratio threshold 80, Levenshtein max dist 2)"
+          - "Stage 3: Temporal match (death-birth gap 15-80 years)"
           - "Stage 4: Geographic match"
           - "Stage 5: Cross-reference (external IDs)"
-        optimization: "Prefix-based blocking (2-char), batch 50K"
+        thresholds: { fuzzy_ratio: 80, levenshtein_max_dist: 2, confidence: 0.70, corroboration_strict_score: 0.90 }
+        optimization: "Prefix-based blocking (2-char), mention batch 50K, checkpoint every 4 batches"
+      bio_promote:
+        module: src/resolve/bio_promote.py
+        description: >-
+          Promotes narrator BIO rows DIRECTLY to canonical Narrator records (da#99).
+          The mention-driven disambiguator emits nothing for a bio with zero mentions, so a
+          profile-only rijal source (e.g. Itqan) would otherwise produce no Narrator nodes.
+        identity: "Same nar:<uuid5(normalized-name)> key as disambiguate (make_canonical_id) — the two paths converge"
+        merge_safety: "Loads an existing narrators_canonical.parquet and unions by canonical_id rather than overwriting"
+      cluster:
+        module: src/resolve/fuzzy_cluster.py
+        description: >-
+          Fuzzy CROSS-SOURCE narrator clustering (da#118) — a RECALL increment layered on top of
+          the exact-name pass, never replacing it. Merges records that are high-confidence name
+          variants of one person (kunya-only forms, nasab/nisba expansion, optional ابن/بن,
+          transliteration drift) which byte-identical normalization leaves as separate nar: nodes.
+        signals: "rapidfuzz token_set_ratio over name_ar_normalized + every alias; token blocking (non-connector tokens) keeps it near-linear"
+        thresholds: { cluster_ratio: 90.0, death_year_tolerance: 2, min_shared_tokens: 2, default_max_block_size: 250 }
+        note: "Bio/canonical-level analogue of disambiguate's rapidfuzz mention stage — here BOTH sides are canonical narrators. Multi-day block-scoring pass; checkpointed."
       dedup:
+        module: src/resolve/dedup.py
         output: parallel_links.parquet
-        method: "sentence-transformer embeddings + FAISS"
+        method: "sentence-transformer embeddings + FAISS; degrades to EMPTY without the model"
         tiers: { verbatim: ">=0.90", close_paraphrase: ">=0.80", thematic: "<0.80" }
+      parallels:
+        module: src/resolve/parallels.py
+        output: parallel_links.parquet  # SAME artifact as dedup — composed, not clobbered
+        method: "Deterministic LEXICAL detector — offline/CI-safe twin of dedup (da#100/da#114)"
+        rationale: "Keeps cross-sect PARALLEL_OF edges flowing in a no-model environment, where dedup alone would leave parallel_links empty and /compare permanently blank (da#160)"
+        thresholds: { verbatim_min: 0.90, close_paraphrase_min: 0.80, default: 0.50 }
+      supporting:
+        narrator_split: { module: src/resolve/narrator_split.py }
+        reconcile: { module: src/resolve/date_reconcile.py }
+        tabaqa_dates: { module: src/resolve/tabaqa_dates.py }
+        muhaddithat_links: { module: src/resolve/muhaddithat_links.py }
 
   load:
     path: src/graph/
@@ -93,14 +149,22 @@ local_patterns:
   arabic_normalization: "Diacritic removal, alif normalization via src/utils/arabic.py"
 
 cli_commands:
+  - { command: "isnad-ingest info", description: "Show configuration and database status" }
   - { command: "isnad-ingest acquire", description: "Phase 1a — download all sources" }
   - { command: "isnad-ingest parse", description: "Phase 1b — parse to Parquet" }
-  - { command: "isnad-ingest resolve", description: "Phase 2 — entity resolution" }
+  - { command: "isnad-ingest resolve", description: "Phase 2 — entity resolution", flags: [--from-step, --stop-after, --force-restart] }
   - { command: "isnad-ingest load", description: "Phase 3 — load into Neo4j", flags: [--skip-validation, --nodes-only, --incremental] }
   - { command: "isnad-ingest enrich", description: "Phase 4 — graph enrichment", flags: [--only, --skip, --incremental] }
   - { command: "isnad-ingest validate", description: "Post-load validation queries" }
   - { command: "isnad-ingest validate-staging", description: "Parquet schema validation", flags: [--strict, --output-json, --drift-tolerance] }
+  - { command: "isnad-ingest migrate-transmitted-hadith-ids", description: "Canonicalize existing TRANSMITTED_TO.hadith_id edge ids in place (da#325)", flags: [--batch-size] }
+  - { command: "isnad-ingest audit", description: "View recent pipeline audit entries", flags: [--last] }
   - { command: "isnad-ingest pipeline", description: "Full end-to-end run" }
+
+resume_semantics:  # da#268/da#272/da#276 — load-bearing for the #928 re-run
+  from_step: "Skips every resolve step BEFORE the named one; their outputs must already exist on disk. Recovers a mid-stage crash without redoing completed stages."
+  stop_after: "Honoured only by the RESUMABLE steps (disambiguate, cluster, dedup, parallels). Targeting a non-resumable step is a CLI error, not a silent no-op."
+  exit_codes: src/exit_codes.py
 
 build_commands:
   setup: "make setup (uv sync --group ml)"
