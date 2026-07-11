@@ -361,6 +361,22 @@ A reviewer wrote: *"Planted the shapes myself: `sys.exit(1 if x else 2)` now CAU
 
 This is [[feedback_verify_diagnosis_before_delegating]]'s other blind side.
 
+### The relay is where the fabrication enters (2026-07-11, deploy#584)
+
+The orchestrator asked an implementer for five fixes. She delivered three and **said so precisely** — her report named F1, F2, F3 and claimed nothing else. **The orchestrator then told the reviewer all five were fixed.**
+
+Two were not. **The claim was invented in the relay**, by an agent who had *requested* the work and then reported it as done without ever reading the artifact.
+
+**It was caught only because the reviewer refused to trust the status report and read the file.** His diagnosis:
+
+> **"A status report that the artifact doesn't support"** — the same failure mode one level up, in a message whose subject was verifying claims against artifacts.
+
+> **An implementer's report is evidence about what they did. A relay of that report is evidence about nothing** — and the gap between the two is exactly the size of what *you* wanted to be true.
+
+**How to apply.** Before restating anyone's work as done — especially to a reviewer, who will act on it — **read the artifact at the head you are naming.** The temptation is worst for the items *you asked for*, because you already have a vivid model of them existing. **A request is not a memory of the fix.**
+
+And note what saved it: the reviewer had been told the two items were fixed **by the person coordinating his review**, and he checked anyway. **That is the only reason it did not ship.**
+
 **Do not conflate it with relaying an unattributed measurement.** The orchestrator did — writing that his *"Nikolaos already planted the `IfExp`"* was the same defect at lower amplitude — and the author of the fabrication refused the comparison, correctly:
 
 > **Yours is a citation with a missing attribution; mine is a citation with a fabricated source.** A reader can repair yours by asking him. Nobody can repair mine, because there is nothing behind it.
