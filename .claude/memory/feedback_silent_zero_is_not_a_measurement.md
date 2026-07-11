@@ -192,6 +192,29 @@ The costly half is that the same citation went into a **committed comment**, whi
 
 And the scope trap: **a measurement taken under a harness carries the harness's costs.** Before writing a number into a durable comment, ask which of its terms exist only because you were measuring. (Fatima Bensalah, re-deriving from the raw job logs rather than the run summary.)
 
+#### Four numbers, one decision, every one measured in the wrong arm
+
+The decision was trivial: keep or delete two `cache-from`/`cache-to` lines. Four prices were put on it. **All four were wrong, and each was produced by someone who had just correctly refuted the previous one.**
+
+| price | author | measured in |
+|---|---|---|
+| **~80s** per publish | the reviewer | a `load: true` **proof harness** — the export/import vertices a real `push: true` publish never runs |
+| **3.5s** (the layer the cache protects) | the implementer, refuting the ~80s | the **control** arm — where the filter is absent. Once the filter is on, `base` is the whole image, nothing can cache-hit, and the 3.5s is **unreachable** |
+| **zero** ("so keeping them is free") | the orchestrator, refuting the 3.5s | **`cache-from` hits only.** It ignored `cache-to`, which *runs on every publish regardless* and — because the filter rebuilds every layer — re-exports the **full** layer set each time |
+| the real cost | **nobody** | **never measured.** The proof harness omitted `cache-to` *by design*, to guarantee zero cache writes. **The one arm that would have priced it is the one arm we never ran.** |
+
+The reviewer **refused the third number even though it supported the ruling he had already given.** That is the artifact:
+
+> **A number that lands in your favour deserves *more* scrutiny than one that doesn't, not less.**
+>
+> "I am not going to accept a free lunch that flatters my own conclusion on the same evidentiary standard I have refused three times today from everyone else."
+
+Sibling of *"the sentence that flatters the frame is the sentence to measure"* (§ *The correction is not a safe place to stand*) — but stronger, because here the flattering number arrived **from someone else**, as a gift, pre-argued. That is the form nobody audits.
+
+**The operative move is not a better number. It is refusing to price the decision at all.** The case for keeping the lines was **structural** — `cache-from` is the *detector*: if the filter ever silently breaks, the cache springs back, serves the frozen layer, and Trivy goes **red**; delete it and the same breakage is **green and silent**. That argument survives all four numbers because it never rested on one. **When every measurement of a quantity has been taken in the wrong world, the answer is not to take a fifth — it is to notice the decision was never quantitative.**
+
+And the guard's own fifth costume, caught by the reviewer in the act of defending it: **`cache-to` is what keeps the detector alive.** GHA cache entries evict after ~a week unused. Drop *only* `cache-to` as an "optimisation" and `cache-from` quietly finds nothing — **the guard is dead without anyone touching it.** *A detector that decays into silence.*
+
 ### The fourth costume: absence of a stop read as presence of a go
 
 The three above are readings **taken wrongly**. This one is a reading **never taken**, of a signal **never sent**, whose silence is treated as content.
