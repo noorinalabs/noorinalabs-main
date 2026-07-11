@@ -458,17 +458,32 @@ dirs="$(rclone lsf "$REMOTE" --dirs-only 2>&1)" || rc=$?
 
 **It invents two backups that do not exist, and prints a log line to the operator as a backup name.**
 
-> **The two streams exist because one is DATA and one is COMMENTARY.** `2>/dev/null` deletes the commentary; **`2>&1` promotes it to data.** Neither is capture. **Capture is `2>"$err"` — a third place, read only on failure.**
+> ### **An instrument's FAILURE, its COMMENTARY, and its DATA are three different things — and collapsing any two of them produces a confident lie.**
 
-**How to apply.** When you fix a swallowed error, check *what you did with it*:
+**That single idea contains all three bugs on this PR**, which is why it belongs here instead of three war stories:
 
-| | what it does |
+| collapse | the lie it tells |
+|---|---|
+| **failure → data** (`\|\| true`, `2>/dev/null`) | *"there is nothing there"* when the truth is *"I could not look"* |
+| **commentary → data** (`2>&1` into a **parsed** variable) | *"here are your backups"* — one of which is a log line |
+| **failure → the benign branch** (an unchecked rc) | a guard that reports the healthy verdict when it never evaluated |
+
+**How to apply, and note the destination matters, not the redirect:**
+
+| | |
 |---|---|
 | `2>/dev/null`, `\|\| true` | **discards** the diagnostic — the original bug |
-| `2>&1` into a variable | **merges** it into the result — a NEW bug, and it fires on the **healthy** path |
-| **`2>"$err"`, read on failure** | **captures** it ✅ |
+| `2>&1` into a variable that is later **PARSED** | **merges commentary into data** — the new bug |
+| `2>&1` into a variable that is only ever **PRINTED** | **fine** — e.g. `PREFLIGHT_OUT="$(preflight 2>&1)"`, echoed on failure |
+| **`2>"$err"`, read only on failure** | **captures** it ✅ |
 
-**And note the shape of the regression: the original bug fired only on failure; the fix fired on SUCCESS.** A tool that writes to stderr when nothing is wrong is common (warnings, deprecations, progress, config notices) — so `2>&1` corrupts the normal path, which is the path nobody tests as hard. *(The sibling scanner in the same PR already did it correctly with `2>"$err"`.)*
+> **The rule is about the DESTINATION, not the redirect.** *(The author's own correction of an over-broad first draft — an over-broad rule is its own defect: it fires on correct code, and people learn to ignore it.)*
+
+**And the shape of the regression is the transferable part: the original bug fired only on FAILURE; the fix fired on SUCCESS.** A tool that writes to stderr when nothing is wrong is completely ordinary (warnings, deprecations, progress, config notices) — so `2>&1` corrupts the **normal** path, **the path nobody tests as hard.**
+
+> **"My tests for the previous fix all exercised failure, so they were structurally incapable of seeing it. I tested the branch I was thinking about."**
+
+**So: force the commentary deterministically in the test** (`RCLONE_CONFIG=/nonexistent`) rather than hoping the CI box happens to emit it — *"otherwise it passes locally and ships, which is precisely how it got here."*
 
 ### DETERMINISTIC IS NOT UN-TORN
 
