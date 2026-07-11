@@ -319,6 +319,35 @@ Same shape as `missing == 0` on the prune (da#426): a check that binds the artif
 
 **And the required set must never be read from the manifest's own `stores=` field** — a partial backup would then **self-certify as complete-for-whatever-it-happens-to-hold.** The consumer keeps its own definition of what it requires. *(Same rule as the completeness binding: the artifact declares, the consumer decides.)*
 
+### An attestation's GRANULARITY must match the granularity of the thing it attests
+
+Third way for a green check to be about the wrong object, same PR.
+
+`_backup_manifest.txt` is a **fixed name** in a directory that holds **multiple runs**, and is **overwritten by whichever run uploads last.** `complete=true` is a fact about a **run**; it was stored at the granularity of a **day**.
+
+The author handled the ordering she thought of — *failed 02:00 run, then good 14:00 one* → manifest ends `complete=true`. **The reverse is just as ordinary and destroys the record: a good run followed by a failed retry, whose `complete=false` ERASES the good run's attestation.** Executed:
+
+```
+B2_BACKUP_ARTIFACT status=incomplete reason=no_complete_backup dumps=0 bucket_objects=7
+EXIT 1
+```
+
+**A red alert saying there is no complete backup, over a bucket that contains one.** And the restore path walks past that day and takes one **two days older**, while an intact complete run sits inside the day it skipped.
+
+> **A fixed-name file in a directory that holds multiple runs is not a record — it is a RACE.** And the winner is *"whoever finished last,"* which is precisely the **least** trustworthy run when something has gone wrong.
+
+**And it cannot be repaired downstream.** Once the good run's attestation is overwritten, **there is nothing left to trust** — and substituting *"all the dumps are present"* would drop the producer's word entirely and reopen the very hole just closed. **The fix must be in the producer, and it must precede the first write**, because every run of the current producer manufactures directories whose history is already destroyed.
+
+**The direction is safe** (red, or older, or refuse — never a silent green). **But it is a false alarm on the one check that must be believed** — and *alert fatigue on a backup signal is exactly how the original incident happened: a signal nobody trusted, so nobody looked.* **A guard that cries wolf and a guard that stays silent both end with a human not acting.**
+
+**Three ways for a green check to be about the wrong object, all on one PR:**
+
+| | the check binds… | but the property lives at… |
+|---|---|---|
+| **checksum** | the file, to **itself** | *(integrity ≠ provenance — it cannot see the file is from the wrong run)* |
+| **attestation** | what the producer **wrote** | *(intent ≠ outcome — it is not a claim about what arrived)* |
+| **manifest name** | the **directory** | **the RUN** *(granularity mismatch)* |
+
 ### The root cause of all three defects: the fixtures had no concept of a RUN
 
 The self-test wrote one file called `isnad-pg-a.dump` with `timestamp=t`. The pytest helper did the same. **Invented shorthand** — so **no fixture could express *"the user-postgres dump never uploaded"* or *"these two dumps are from different runs,"* and the guard was never asked.**
