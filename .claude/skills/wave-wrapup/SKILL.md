@@ -368,6 +368,8 @@ jq -e --arg m "{M}" '.["wave_" + $m + "_trust_signals"]' "$REPO_ROOT/cross-repo-
 
 ### 10.7. Child structural-index pre-regen — BEFORE the wave→main PRs (added P7W19 retro)
 
+> **TRANSITIONAL (main#939).** This step commits each **child** repo's structural index to its wave branch. main#939 stopped committing the index in **noorinalabs-main** (it is now a gitignored build product), but each child repo still commits its own index + still runs a `staleness-check` on its wave→main PR **until that child's own #939 rollout lands** (per-child follow-up issues; `noorinalabs-data-acquisition` is expedited). So this loop MUST stay for now — removing it while a child still gates on `staleness-check` would redden that child's wave→main PR. As each child's rollout gitignores its index and retires its `staleness-check`, drop that repo from this loop (each follow-up issue includes that edit). Note that main's cross-repo aggregator now regenerates every child index locally (main#939), so this commit is only for the child's own gate, not for main's roll-up.
+
 The structural-ontology `staleness-check` only gates PRs to **main**, NOT wave-branch PRs. So a per-issue PR that added a tracked source file (`.py`/`.cypher`/`.ts`/`.tsx`) without regenerating that child's structural index passes its own wave-branch CI but **reddens the wave→main PR** the moment Step 11 opens it — a fix-forward scramble mid-wrapup. Caught in P7W19: da#218 added `queries/validation/sanadset_orphan_inventory.cypher` and the wave→main PR (da#222) went red on staleness-check until the index was regenerated (`b84b478`).
 
 Close it pre-emptively: for each child repo in `wave_{M}_repos_in_scope` (i.e. excluding `noorinalabs-main`, whose index is handled by Step 12b), regenerate the child's structural index from the wave-branch HEAD and commit any diff to the wave branch BEFORE opening the integration PR, so the wave→main PR is green on staleness-check from the start.
@@ -706,50 +708,24 @@ The ontology has two independent layers to update at wave close (#820/C×T2):
 - If no dirty files, report "Semantic overlay: up to date" and skip
 - The resolver auto-updates docs where appropriate and flags recommend-only changes
 
-**12b. Structural index** — regenerate the parent repo's structural index and refresh the cross-repo aggregator. The wave may have added/changed hooks, skills, or lib modules that should be reflected in the index before the wave is closed.
+**12b. Structural index** — regenerate the structural layer so a fresh local build reflects everything the wave changed (hooks, skills, lib modules). The index is **not committed** (main#939 — gitignored build product; committing it made every concurrent PR conflict), so there is nothing to add or commit. The aggregator regenerates **every in-scope repo's** index (including main) before rolling up, so one call refreshes the whole layer:
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
-# Check how many source files changed since the index was last generated
-STRUCT_SHA=$(git -C "$REPO_ROOT" log -1 --format="%H" -- ontology/structural/llms.txt 2>/dev/null || echo "")
-if [ -z "$STRUCT_SHA" ]; then
-  CHANGED="new"
+# Rebuild the structural layer from source (gitignored build products, main#939):
+# regenerate each in-scope repo's per-repo index + write the cross-repo graph. No commit.
+if PYTHONPATH="$REPO_ROOT/.claude/lib" python3 -m ontology_gen.aggregate "$REPO_ROOT" 2>&1; then
+  echo "Structural index: regenerated (local build product — not committed, main#939)."
 else
-  CHANGED=$(git -C "$REPO_ROOT" diff --name-only "$STRUCT_SHA"..HEAD -- \
-    '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.cypher' '*.cql' 2>/dev/null | wc -l | tr -d ' ')
-fi
-
-if [ "${CHANGED:-0}" = "0" ]; then
-  echo "Structural index: current — no source files changed since last generation."
-else
-  echo "Structural index: ${CHANGED} source file(s) changed — regenerating."
-  PYTHONPATH="$REPO_ROOT/.claude/lib" python3 -m ontology_gen \
-    "$REPO_ROOT" --out "$REPO_ROOT/ontology/structural/" 2>&1
-  # Refresh the central cross-repo graph
-  PYTHONPATH="$REPO_ROOT/.claude/lib" python3 -m ontology_gen.aggregate \
-    "$REPO_ROOT" 2>&1 || true
-
-  # Commit if anything changed
-  if ! git -C "$REPO_ROOT" diff --quiet ontology/structural/; then
-    git -C "$REPO_ROOT" add ontology/structural/
-    MSGFILE="$(mktemp)"
-    printf 'ontology: regenerate structural index (wave-wrapup step 12b)\n\n%s source files changed this wave; re-ran ontology_gen + aggregate.\n' \
-      "${CHANGED}" > "$MSGFILE"
-    git -C "$REPO_ROOT" \
-      -c user.name="Aino Virtanen" \
-      -c user.email="parametrization+Aino.Virtanen@gmail.com" \
-      commit -F "$MSGFILE"
-    rm -f "$MSGFILE"
-    echo "Structural index committed."
-  fi
+  echo "WARN: structural index regeneration failed — rerun the aggregator manually."
 fi
 ```
 
 Include both results in the final wave report (Step 10):
-- `Ontology: Semantic {N files resolved / up to date}; Structural {current / regenerated + committed}`
+- `Ontology: Semantic {N files resolved / up to date}; Structural regenerated (local, not committed)`
 
-**Note:** the structural layer at `ontology/structural/` is always-current-by-regeneration — `/ontology-rebuild` does NOT resolve it (that was retired per #857/C×T2). The generator above IS the structural resolve path.
+**Note:** the structural layer at `ontology/structural/` is always-current-by-regeneration and no longer committed (main#939) — `/ontology-rebuild` does NOT resolve it (retired per #857/C×T2). The aggregator above IS the structural resolve path.
 
 ### 12.5. Generic-prompt genericize checkpoint (main#716)
 

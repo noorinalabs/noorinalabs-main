@@ -119,5 +119,21 @@ Hybrid implementation in **P6W17** under #820.
   resolver. The Hook-15 softening is safe because the structural context the block guarded is now
   current-by-regeneration, not stale.
 
+- [#939](https://github.com/noorinalabs/noorinalabs-main/issues/939) — the structural layer is
+  **no longer committed** (gitignored build product). Committing a generated, sorted, whole-file
+  artifact that every source-touching branch regenerates made **every concurrent PR conflict** on
+  it, carrying zero information (the only resolution is "discard both, regenerate"); and the union
+  merge-driver that tried to absorb this could never run on GitHub's server-side merge (custom
+  `merge=` drivers are per-clone `git config`). Resolution follows directly from the C×T2 principle
+  that this layer is "always-current-by-regeneration": if it is always regenerable, the committed
+  copy is redundant. It is now rebuilt on demand — `ontology_gen.aggregate` regenerates every
+  in-scope repo's index locally before rolling up, so nothing depends on a committed copy — and
+  **main's** merge-driver registration/use was retired (the `.gitattributes merge=` lines and
+  `make setup-ontology-merge-driver`). The `merge_driver.py` **module is retained** as a shared
+  resource: not-yet-migrated child repos register `python3 -m ontology_gen.merge_driver` against main's
+  `.claude/lib` (they do not vendor it — #854), so it stays until the terminal child-rollout step
+  deletes it (together with `/wave-wrapup` Step 10.7) once the last child's #939 lands. (Per-child
+  rollout of the same change is tracked in per-repo follow-ups.)
+
 This entry is updated in place as the remaining C×T2 streams (#3b aggregator/overlay, #3d
 isnad-graph wiring) land.

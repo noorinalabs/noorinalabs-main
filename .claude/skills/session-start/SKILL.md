@@ -198,53 +198,27 @@ The ontology has two independent layers that need separate freshness checks (#82
 - If 0 dirty files in `checksums.json`, report "Semantic overlay: current" and move on
 - If dirty files exist, process them and commit the result
 
-**3b. Structural index** — check whether the generated index at `ontology/structural/llms.txt` is stale relative to the current source tree, and regenerate if it is:
+**3b. Structural index** — regenerate the generated index from the current source tree. The structural layer is **not committed** (main#939 — it is gitignored and rebuilt on demand; committing it made every concurrent PR conflict on a generated whole-file artifact). So there is no committed copy to compare against and nothing to commit: just rebuild it locally so the on-disk index the librarian reads reflects the current tree. The aggregator regenerates **every in-scope repo's** index (including main) before rolling up, so one call refreshes the whole structural layer:
 
 ```bash
 # Re-anchor REPO_ROOT to the parent (independent shell block — see Step 0 / #533).
 REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
 [ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 
-# Commit that last produced the structural index
-STRUCT_SHA=$(git -C "$REPO_ROOT" log -1 --format="%H" -- ontology/structural/llms.txt 2>/dev/null || echo "")
-
-if [ -z "$STRUCT_SHA" ]; then
-  CHANGED="new"
+# Rebuild the structural layer from source: the aggregator regenerates each in-scope
+# repo's per-repo index (main + any cloned children) and writes the cross-repo graph.
+# These are gitignored build products (main#939) — no add, no commit.
+if PYTHONPATH="$REPO_ROOT/.claude/lib" python3 -m ontology_gen.aggregate "$REPO_ROOT" 2>&1; then
+  echo "Structural index: regenerated (local build product — not committed, main#939)."
 else
-  CHANGED=$(git -C "$REPO_ROOT" diff --name-only "$STRUCT_SHA"..HEAD -- \
-    '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.cypher' '*.cql' 2>/dev/null | wc -l | tr -d ' ')
-fi
-
-if [ "${CHANGED:-0}" = "0" ]; then
-  echo "Structural index: current (${STRUCT_SHA:0:8})."
-else
-  echo "Structural index: ${CHANGED} source file(s) changed since ${STRUCT_SHA:0:8} — regenerating."
-  PYTHONPATH="$REPO_ROOT/.claude/lib" python3 -m ontology_gen \
-    "$REPO_ROOT" --out "$REPO_ROOT/ontology/structural/" 2>&1 \
-    && PYTHONPATH="$REPO_ROOT/.claude/lib" python3 -m ontology_gen.aggregate \
-       "$REPO_ROOT" 2>&1 \
-    || echo "WARN: structural index regeneration failed — index stays at last committed state."
-fi
-
-# Commit regenerated files (if any changed)
-if ! git -C "$REPO_ROOT" diff --quiet ontology/structural/; then
-  git -C "$REPO_ROOT" add ontology/structural/
-  MSGFILE="$(mktemp)"
-  printf 'ontology: regenerate structural index (session-start 3b)\n\nSource files changed since last generation; re-ran ontology_gen + aggregate.\n' \
-    > "$MSGFILE"
-  git -C "$REPO_ROOT" \
-    -c user.name="Aino Virtanen" \
-    -c user.email="parametrization+Aino.Virtanen@gmail.com" \
-    commit -F "$MSGFILE"
-  rm -f "$MSGFILE"
-  echo "Structural index regenerated and committed."
+  echo "WARN: structural index regeneration failed — librarian lookups may be stale until re-run."
 fi
 ```
 
 Report both results in the Step output table:
-- `3. Ontology | Semantic: {N dirty resolved / current}; Structural: {current @ sha / regenerated}`
+- `3. Ontology | Semantic: {N dirty resolved / current}; Structural: regenerated (local, not committed)`
 
-**Non-fatal:** a generator failure MUST NOT block session-start. Report the failure and move on — the structural index stays at its last committed state until the next regeneration.
+**Non-fatal:** a generator failure MUST NOT block session-start. Report the failure and move on — the structural index is a build product; the next `/session-start` (or a manual aggregator run) rebuilds it.
 
 ### Step 4 — Annunaki error check
 

@@ -260,7 +260,7 @@ The ontology is two cooperating layers (the C×T2 topology, #820):
   - *YAML overlay* — a `structural_ref:` (single id) or `structural_refs:` (list of ids) key alongside the semantic description.
   - *Markdown overlay* — a `[[structural:<id>]]` reference, using the same `[[...]]` form as the overlay's other `[[wikilinks]]`.
 - **Resolution** — ids resolve against the per-repo `code-graph.json` (bare ids) or the central `cross-repo-graph.json` (namespaced ids). A reference to a repo whose index has not been generated/aggregated yet is a valid **forward pointer** — the aggregator degrades gracefully on absent indices, so the reference simply stays unresolved until that repo's index lands.
-- **Worked example (resolvable now):** the union merge-driver entry point is the structural node [[structural:main/.claude/lib/ontology_gen/merge_driver.py::union_merge]]; the cross-repo aggregator is [[structural:main/.claude/lib/ontology_gen/aggregate.py::aggregate]] (resolves once main's index is regenerated to include #856). `ontology/repos/isnad-graph.yaml` carries the applied YAML form (`structural_ref` on its backend modules).
+- **Worked example (resolvable now):** the cross-repo aggregator entry point is the structural node [[structural:main/.claude/lib/ontology_gen/aggregate.py::aggregate]], and the per-repo regeneration it runs before roll-up is [[structural:main/.claude/lib/ontology_gen/aggregate.py::regenerate_indices]] (main#939). `ontology/repos/isnad-graph.yaml` carries the applied YAML form (`structural_ref` on its backend modules).
 
 ## Shared tooling
 

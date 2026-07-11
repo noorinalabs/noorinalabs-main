@@ -232,8 +232,8 @@ def serialize_graph(graph_dict: GraphDict) -> str:
     record-granular — add/remove a node ⇒ exactly one added/removed line (issue #855:
     "deterministic output … so git diffs are minimal"). The output is still valid JSON.
 
-    Both the generator and the merge-driver serialize through here, so a merge result is
-    byte-identical to a fresh regenerate.
+    Both the per-repo generator and the cross-repo aggregator serialize through here, so a
+    rebuilt index is byte-identical regardless of which entry point produced it.
     """
 
     def _records(items: list[NodeDict] | list[EdgeDict]) -> str:
