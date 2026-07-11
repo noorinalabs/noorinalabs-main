@@ -99,6 +99,28 @@ Verdict staleness — content binding (resolves #950):
   counting everything. A verdict whose own timestamp is missing/unparseable is
   likewise treated as stale, not as fresh.
 
+  LIMITATION — necessary, NOT sufficient. Read this before trusting the gate.
+
+  Timestamp binding proves a verdict was CAST AFTER the newest authored commit.
+  It CANNOT prove the reviewer READ that commit. A reviewer who reads `A`, then
+  posts a verdict after `B` has landed — because they were slow, or were replying
+  to an earlier thread, or simply did not refetch — produces a verdict this hook
+  scores as CURRENT even though its findings pertain to code that no longer
+  exists. This was observed on da#423 itself: a `ChangesRequested` at 04:25:31
+  postdates the 04:09:36 head and therefore counts as current, but its findings
+  were against the PREVIOUS head and had already been fixed.
+
+  No timestamp can close that gap. Closing it requires binding a verdict to the
+  sha the reviewer actually read — which is exactly what GitHub's native review
+  API does and what our comment-trailer convention does not. This hook removes a
+  whole class of false-positive approvals (a verdict that PROVABLY predates the
+  code); it does not, and cannot, certify that a counted verdict was informed.
+
+  State this honestly wherever the gate is described. An overstated guard is how
+  people come to trust a gate that cannot see the thing it exists to catch —
+  which is the same defect class (`a gate derived from an artifact it does not
+  bind to`) that produced #950 in the first place.
+
 Reviewer dedup key:
   The reviewer set is keyed on the FULL reviewer name (lowercased), not on
   the lastname. Two distinct reviewers with the same lastname (e.g.,
