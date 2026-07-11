@@ -364,6 +364,47 @@ The tests were **textual**. They asserted the function is **called** — which w
 
 **Level 3 is where a hand-written regex, a parser, a comparator, or a classifier lives — and a "the branch calls it" test passes at level 2 forever while level 3 is a no-op.**
 
+### The guard is DOWNSTREAM of the swallow — fixing it does not help if the call that FEEDS it fails open
+
+The level-4 fix landed: `backup_is_complete` grew a genuine third outcome, and *"I could not read the manifest"* stopped masquerading as *"there is no complete backup."* **And the headline symptom did not change on the most likely failure.**
+
+Because the **directory listing** that feeds it still swallowed its rc:
+
+```sh
+dirs=$(rclone lsf "$REMOTE" 2>/dev/null || true)   # bad key / wrong bucket / network -> EMPTY
+for d in $dirs; do  backup_is_complete "$d"  ...   # loop body never runs
+done
+# -> "No COMPLETE backup found in B2 bucket."
+```
+
+| | |
+|---|---|
+| control, good bucket | resolves `daily/2026-07-11` |
+| **manifest** unreadable (rc=1) | *"INSTRUMENT failure, not a verdict"* ← **the new guard, working** |
+| **BUCKET** unreachable / bad key | ***"No COMPLETE backup found in B2 bucket."*** ← **UNCHANGED** |
+
+**A bad credential fails at the FIRST rclone call, before any manifest is read — so on the single most likely instrument failure, and the one most likely to bite mid-incident, the guard just built CANNOT FIRE AT ALL.**
+
+> ### **Fixing a guard does not help if the call that feeds it fails open.**
+
+**How to apply:** when you harden a check, **walk the whole call chain UPSTREAM of it** and ask *"what reaches this guard when each caller fails?"* A guard is only as good as the weakest `|| true` above it. **Every fail-open on the path to a guard silently deletes that guard for the failure modes it swallows** — and those are exactly the failure modes the guard was written for. The sibling script got this right (its bucket probe captures the rc); the one being fixed did not, forty lines away, by the same author, in the same hour.
+
+*(Nino Kavtaradze: "That's the pattern, not the incident.")*
+
+### DETERMINISTIC IS NOT UN-TORN
+
+The torn-restore fix bound each dump to a run timestamp from the manifest — **and he could not tear the bound path.** But the **fallback**, taken when the manifest carries no timestamp, was three *independent* `sort -r | head -1`:
+
+```
+pg=…-080000   userpg=…-030100   neo4j=…-030100      TORN
+```
+
+Postgres from the failed 08:00 rerun; Neo4j from the attested 03:01 one. **The same defect as the original unsorted `find | head -1`, only now it tears the same way every time.**
+
+> **Sorting made the selection reproducible. It did not make it COHERENT.** Determinism is a property of the *procedure*; consistency is a property of the *result*. **Fixing an ordering bug by imposing an order does not create the invariant you actually needed** — which was *"these artifacts came from the same run."*
+
+And every guard passes it, again: required-store sees all three present; each checksum validates the file against itself. **Fix: count distinct run timestamps among the filenames — more than one, with no manifest timestamp → REFUSE and make the operator name the run.**
+
 ### …and there is a LEVEL 4, which no predicate test can reach
 
 **All three levels assume the predicate RUNS.** They say nothing about what happens when **the input cannot be obtained.**
