@@ -50,8 +50,26 @@ Two distinct sub-failures on this surface:
 
 **Sub-failure 3b (P3W8, Sofia 2026-05-09):** `gh project item-list 2 --owner noorinalabs --limit 200` returned exactly 200 items as if that were the truth. Re-running with `--limit 1000` returned 698 items (the actual count). The just-added issue (`noorinalabs-main#342`) was missing from the 200-item result and present in the 1000-item result. **The board has grown past the previous "safe ceiling" of 200.**
 
+**Sub-failure 3c (P8W24, 2026-07-11, Aisha + orchestrator, INDEPENDENTLY, same hour):** the ceiling moved again and **the verification query itself lied.** The board now holds **1,656 items**. Aisha verified an `item-add` with `--limit 900`, got NOT FOUND, and nearly reported a silent no-op — it was a **false negative**; re-querying at 3000 confirmed the item was there all along. The orchestrator hit the identical trap the same hour reading back three new issues at `--limit 500`.
+
+**The lesson is not "raise the number."** It is that this whole surface has a **confident-false-negative** failure mode in *both* directions:
+- `item-add` returns rc=0 and may not have applied → so you must verify.
+- **The verification query silently truncates → so it reports "not there" when it is.**
+
+A truncated read and a genuine no-op are **indistinguishable** at the call site, and the truncated read is the one that looks like diligence. Chasing a phantom no-op is the *expected* outcome of following the verify advice with a stale limit. This memory's own prescribed ceiling (`1000`) was itself already wrong by 2026-07-11 — **any hardcoded limit rots**, and the ones in this file have rotted twice.
+
 **How to apply:** for project queries spanning multi-repo boards:
-1. Use `--limit 1000` (or `--paginate` if the API supports it for this command) — `200` is no longer safe as of P3W8 (board >600 items).
+0. **Never hardcode a limit and never trust a negative result from a capped list.** Prefer the per-issue membership check (Sub-failure 2a) — it is O(1), immune to board size, and cannot truncate:
+   ```bash
+   gh issue view <N> --repo <owner>/<repo> --json projectItems --jq '.projectItems[].title'
+   ```
+   If you must pull the whole board, **assert the returned count against the board's true size** and treat any equality-with-the-limit as truncation, not as truth:
+   ```bash
+   N=$(gh project item-list 2 --owner noorinalabs --format json --limit 5000 \
+       | jq '.items | length')
+   # If N == your limit, you were truncated. A count that exactly equals the cap is a red flag, not a result.
+   ```
+1. If you use `--limit`, it must exceed the live board size (>1700 as of 2026-07-11, and rising) — `200` died in P3W8, `900`/`1000` died in P8W24. **Assume today's number is already stale.**
 2. Post-filter via `jq` on `.content.url`, `.content.number`, or `.content.repository.name`. Don't trust implicit ordering or partial pulls.
 3. **Read-back-verify pattern for `gh project item-add`** must use the elevated limit:
    ```bash

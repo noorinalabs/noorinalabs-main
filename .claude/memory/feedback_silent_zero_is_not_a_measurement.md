@@ -44,6 +44,22 @@ Two corollaries, both earned the same day:
 
 **Why:** every one of these returns the value you would also get from the healthy state. The signal and the null result are the same string. Unlike a crash, nothing prompts you to look. These cost more than loud failures precisely because they arrive wearing the costume of a result.
 
+## The instrument was immaculate and it was never plugged in (ip#130, 2026-07-11)
+
+The furthest form of this: **an experiment can be perfectly designed and connected to nothing.**
+
+A publish workflow had been red for five days on 10 HIGH CVEs that all had published fixes — because the BuildKit GHA cache served the `apt-get -y upgrade` layer from cache, so the upgrade replayed as a no-op. The fix was `no-cache-filter: base` on `docker/build-push-action`. The PR was then **rewritten specifically to make its own proof falsifiable**: the base stage kept byte-identical to `main` so its cache key was unchanged (the layer *would* have hit, so a rebuild could only mean the flag fired), and `build-essential`/`curl` deliberately left installed so Trivy going green could only mean apt actually ran. Two independent, mutually-confirming signals. Genuinely first-rate experimental design.
+
+**The action has no input called `no-cache-filter`. It is `no-cache-filters` — plural.** Singular is the *docker CLI flag*; plural is the *Action input*. **GitHub Actions does not fail on an undeclared `with:` key** — it emits a warning annotation and silently drops it. `actionlint` passes, because it does not validate third-party action input schemas. So the input list was empty, the loop that emits `--no-cache-filter` ran zero times, and buildx never saw the flag.
+
+Caught only because a reviewer went and **read the pinned action's `action.yml` and `src/context.ts` at its exact SHA**, instead of reasoning about the diff.
+
+**Three things to carry:**
+
+- **A config key is an instrument.** Before trusting that a flag/env/input changed behaviour, confirm the *consumer declares that key*. Silently-ignored unknown keys are the norm, not the exception (GH Actions `with:`, most YAML configs, `docker compose`, k8s annotations). The singular/plural, `_`/`-`, and CLI-flag-vs-API-field slips all land here.
+- **Failing safe is not harmless.** The inert flag left `main` red, so nothing shouted. But merging it would have made the next reader conclude *"we applied `no-cache-filter` and the CVEs are still there, so the cache wasn't the problem"* — **an inert fix discredits the correct diagnosis.** That is worse than no fix. And this repo was the pathfinder for the identical change in three sibling repos.
+- **Verifying that a proof is *sound* is not verifying that it is *connected*.** The first reviewer correctly killed an earlier version for destroying its own proof (it bundled a change that would have made the layer rebuild on content grounds regardless, so a working flag and an inert one produced byte-identical evidence). That review was right and it was not enough. **Ask both: can this experiment distinguish the two outcomes — and is it actually wired to the thing it claims to test?**
+
 **How to apply:**
 - **Before reading any number a detector produces, score it on a known-positive class and a known-negative class and show it separates them.** Report the lift, never the bare rate. A detector whose recall on true positives is unmeasured is not measuring the thing you named it after. If the positive class is unavailable, give a **bound** and say so — never a point estimate.
 - Correct for false positives before multiplying a rate by a population. `population × observed_rate` assumes recall = 1 and FPR = 0; measure both or the product is fiction.
