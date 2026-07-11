@@ -294,9 +294,9 @@ CI went red because the tests **execute** the scanner and the runner had no `rcl
 `restore.sh` (shipped in deploy#577) selected each dump with its own unsorted `find`:
 
 ```sh
-PG_DUMP=$(find "$RESTORE_DIR"      -name 'isnad-pg-*.dump'    -type f | head -1)
+PG_DUMP=$(find "$RESTORE_DIR" -name 'isnad-pg-*.dump' -type f | head -1)
 USER_PG_DUMP=$(find "$RESTORE_DIR" -name 'isnad-userpg-*.dump' -type f | head -1)
-NEO4J_DUMP=$(find "$RESTORE_DIR"   -name 'isnad-neo4j-*'       -type f | head -1)
+NEO4J_DUMP=$(find "$RESTORE_DIR" \( -name 'isnad-neo4j-*.dump.zst' -o -name 'isnad-neo4j-*.dump' \) -type f | head -1)
 ```
 
 **`find` emits readdir order.** And a B2 **day**-directory legitimately holds **multiple runs**: the path is `<category>/<DATE>`, dumps are `isnad-<store>-<TIMESTAMP>`, `rclone copy` **adds and never deletes**, the fixed-name manifest is **overwritten by whichever ran last** — and the producer **uploads partials by design**, so a failed 02:00 run and a good 14:00 run land side by side **routinely**.
