@@ -184,6 +184,30 @@ Same engineer, same PR: one of her own new tests initially **missed** a revert o
 
 Sibling of [[feedback_fixture_makes_guard_assertion_inert]]. Same family as the ordinal/label confusion above: *the name was present and the behaviour was absent.*
 
+## A true conclusion resting on a DEAD REASON (2026-07-11, ip#138)
+
+The subtlest instance of the whole saga, and the only one where **nothing was ever false.**
+
+A committed comment justified keeping two cache lines: *"these two cannot cache-hit, because `base` is the whole image."* **True when written** — the Dockerfile was single-stage. A later PR **split it**, so `base` became a thin preamble and the stated reason evaporated. The *conclusion* stayed true (they still cannot cache-hit — but now because un-caching the parent **cascades** to its children, a completely different mechanism, established by a completely different experiment).
+
+> **The claim survived as a true CONCLUSION resting on a DEAD REASON.**
+>
+> Nothing goes red, because the conclusion is still correct. **It reads as verified, and it isn't.**
+
+**This is the one that no instrument catches**, and it is worth seeing why every technique in this file fails on it:
+- A test cannot fail — the behaviour is unchanged.
+- A **diff** cannot show it — the *text* is stable; only the *world* moved.
+- The strip-comments-and-compare trick, which caught everything else, is **structurally blind**: it compares text to text.
+- And it is immune to the [[feedback_review_against_artifact]] discipline, because reading the artifact *confirms* the sentence.
+
+**The damage is deferred and total.** The next person to reason from that comment inherits a mechanism that no longer exists. If they act on it — "so if we un-split the image, the lines become useful again" — they are reasoning from a dead premise with a green board behind them. **A correct conclusion with a rotted justification is more dangerous than a wrong one, because a wrong conclusion eventually trips something.**
+
+Sibling of §*A reading and a forecast are not the same kind of thing* (prose about a tree that does not exist yet) — this is its mirror: **prose about a tree that no longer exists.** Both survive indefinitely because nothing can run them.
+
+**How to apply.** When a change invalidates the *reason* for an existing decision, **the comment stating that reason is part of the blast radius**, even when the decision itself still stands. Ask of any change: *what did I just make false that is written down somewhere and still reads as true?* And when you preserve a decision under a changed world, **re-derive its justification from scratch** rather than checking that the conclusion survives — the conclusion surviving is exactly what hides the rot.
+
+*(Bjørn Henriksen found both instances in his own comment, while shipping the change that had killed them.)*
+
 ## The failure mode with no instrument in it
 
 Every rule above assumes the reporter executed *something*. The corpus has no clause for **an instrument that was never built.**
