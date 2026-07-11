@@ -23,6 +23,33 @@ Adjacent, same day: `chain_integrity.cypher` reports `100 cycles` for a populati
 
 > **Run the detector on BOTH classes. Require it to separate them. Only then read the number you care about.**
 
+## The one-line form. It catches half the instances in this file. (Tomás Carvalho, 2026-07-11)
+
+> ### **Every "all clear" must first prove it looked at something.**
+> **Assert the set is non-empty AND complete BEFORE reading its verdict** — a poller, a grep, a scan, a control arm, a `Total:` line, a mutation battery. **If the probe cannot distinguish *"everything passed"* from *"I saw nothing,"* it has not reported a result.**
+
+**On one day this single assertion would have caught five separate defects, in five different languages, committed by four different people:**
+
+| the "all clear" | what it actually saw |
+|---|---|
+| `until [ pending == 0 ]` on a PR's check rollup | **an empty rollup** — checks had not yet *registered*. Gated four merges. |
+| `actionlint` reported clean | **an empty file set** — run before `git add` |
+| `docker run img python - <<'PY'` exited 0 | **nothing** — no `-i`, so `python -` read EOF and executed zero lines |
+| a control arm "proved" the cache was live | **nothing was CACHED in that job at all** — no control |
+| a `gh api` fetch returned no diff | **an empty response** — the API blipped; read as "no change" |
+
+**And the correction that makes this usable, which is the real finding:**
+
+> **The class was known. The instance was not recognised as an instance.** `pending == 0` **IS a silent zero** — an empty check set satisfies *"nothing pending"* exactly as well as a complete-and-passing one does. Healthy state and null state emit the identical string. **It is not a new failure mode standing beside the others; it is the same one wearing a shell loop instead of a Dockerfile.**
+
+That is why *knowing the rule did not help*. The orchestrator had spent the day teaching this class to three engineers, the oracle (`pr_ci_state.py`) already existed, and org memory already said *"empty rollup = hard not-ready"* — **and the broken loop got written anyway, and gated real merges.** They were safe only because the checks happened to have registered before the first poll. **A fine outcome is not evidence the gate worked.**
+
+> **At the moment you type `until [pending -eq 0]`, it does not look like the rule. It looks like a loop. RECOGNITION is the scarce thing, not knowledge.**
+
+So the defence cannot be *"remember harder."* **It has to be mechanical, at the point of use** — which is [[feedback_enforcement_hierarchy]] (hook > skill > charter) arriving from a new direction: *a rule you must recognise an instance of is a rule that will be missed, however well you know it.* Tracked as main#957.
+
+**Corollary, earned the same day:** **people looking hard is not a control.** Every one of the ten instances was caught by someone looking hard — and four were committed by people who were, at that moment, warning others about that exact class. *"It is a coincidence that held ten times."* (Fatima Bensalah)
+
 Two weaker versions were tried on a single problem and each was falsified within hours.
 
 **v1 — "can the probe return nonzero?"** Catches a probe that cannot fire. Misses one that always fires. Same day: a detector for "does this hadith's matn contain an isnad?" keyed on the Arabic tokens `عن`/`قال` called **97.2%** of a target set positive, implying ~160k recoverable chains. Those tokens saturate ordinary Arabic prose — against a **control** of rows whose matn is chain-*free* by construction the base rate is **85.6%**. Lift ≈ 1.0. The probe's answer was fixed before it saw the data.
