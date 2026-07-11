@@ -257,6 +257,36 @@ The comment that says *"cite layers by their `[base N/9]` label, never by vertex
 
 Corollary, cheap and load-bearing: **when you cite a log, name its era.** A comment citing both a pre-split and a post-split run without saying which leaves the reader unable to distinguish **decay from fabrication** — and they will assume the worse one.
 
+## Class separation is necessary and NOT sufficient when the QUANTITY is what you read (2026-07-11, deploy#584)
+
+The morning's rule was *"run the detector on both classes and require it to separate them."* By evening it needed sharpening, and the sharpening is not academic — it was a **missed alarm on the one check standing under an unrecoverable delete.**
+
+**`rclone lsl` prints ModTime in LOCAL time.** Parsed with `date -u -d`, that is a **systematic error equal to the box's UTC offset**. On the dev box (UTC−4) an object uploaded *seconds* earlier reported `newest_age_hours=4`.
+
+**The direction is the entire finding:** on a runner **ahead** of UTC the age is **DEFLATED** — so **a stale backup reads FRESH.** The alarm silently does not fire, and nothing depends on it but the runner's clock.
+
+**And the class-level self-test could not see it.** A 4-hour skew does not move a fresh fixture out of the *fresh class* — the classes (fresh vs 26h-stale) are too far apart to be perturbed by it. **The detector separated the classes perfectly, and the number it reported was wrong.**
+
+> **Separating the classes is necessary and NOT sufficient when the quantity itself is the thing you are reading.** A class-separation control validates a *classifier*. If your gate consumes a **value** (an age, a count, a size, a rate), **the control must assert the VALUE**, not merely which side of the threshold it lands on.
+
+**How to apply:** if the check is `age < N hours`, calibrate with a fixture whose age you *know exactly* and assert the reported number equals it — not just that it classifies as fresh. Then mutate: reintroduce the skew and require red. (She did; it does.)
+
+### And the instrument was calibrated against a backend that is not the one in production
+
+Same PR, found first. `rclone lsf` on a **nonexistent prefix**: **rc=3 locally, but rc=0 with empty output on B2.** So on the backend actually used, **a typo'd path is indistinguishable from an empty bucket.**
+
+Her local fixtures **passed all four classes** — and were still the wrong instrument, because the behaviour she calibrated against **does not exist in production.** The liveness control had to move from the *prefix* to the **bucket** (`lsd`: rc=0 real, rc=1 missing/bad-key), which separates on both backends.
+
+> **A control run against a stand-in backend validates the stand-in.** When the probe's semantics are backend-dependent (exit codes, empty-vs-missing, listing behaviour), the calibration must run against the **real** backend, or it is measuring a system you do not ship.
+
+Sibling of §*The control must come from OUTSIDE the scope you are about to trust* — there the scope was too narrow; here the **backend** was the wrong one, and every class still separated.
+
+### The tempting fix that would have been a silent skip
+
+CI went red because the tests **execute** the scanner and the runner had no `rclone`. It passed locally only because `rclone` was installed there.
+
+**The obvious fix — `@pytest.mark.skipif(rclone missing)` — would have been a silent skip on the one check standing between us and an empty backup bucket.** Green everywhere, testing nothing, forever. **Install the binary; never skip the test that is the guard.** (Sibling of [[feedback_actionlint_needs_shellcheck]]: a linter that silently skips its own analysis is a linter that passes.)
+
 ## The failure mode with no instrument in it
 
 Every rule above assumes the reporter executed *something*. The corpus has no clause for **an instrument that was never built.**
