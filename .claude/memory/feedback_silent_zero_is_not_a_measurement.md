@@ -693,6 +693,28 @@ A reviewer ruled *"follow, don't ride"* on a residual. The orchestrator saw the 
 
 **And note what makes this class so persistent: the wrong conclusion is always the LOW-EFFORT one.** Reading the file is one command; reconstructing the sequence is three. **The cheap instrument answers a different question than the one you asked, and it answers it confidently.**
 
+#### It happened FOUR times in one review, to three different people, and two of them were the ones hunting it
+
+The count is the finding. Same class, same week, same PR:
+
+| # | who | the STATE they read | the HISTORY they inferred | what refuted it |
+|---|---|---|---|---|
+| 1 | the author | `origin/HEAD` has both fixes | *"so the fixes were there when he reviewed"* | commit landed **77s after** the review |
+| 2 | the orchestrator | the commit sits after the ruling in the log | *"so she overrode the ruling"* | she pushed **19s before** the ruling existed |
+| 3 | **the reviewer** | same log ordering | *"#589 rode in against my ruling"* — **written, publicly, about a colleague** | the same 19 seconds |
+| 4 | the orchestrator | approval predates *some* commit | *"so please re-approve"* | the verdict **already postdated the head** by 16 minutes |
+
+**#3 is the one to sit with.** He is the person who spent six rounds naming this exact class in other people's code — *"an instrument that cannot distinguish two hypotheses, and a verdict read off it anyway"* — and he wrote a false claim about a colleague's conduct **from a git log**, without reaching for a timestamp. His own account:
+
+> **I read a STATE and inferred a HISTORY. The only instrument that answers "what was true when she pushed" is a timestamp, and I reached for the diff. Same shape as every finding in this review.**
+
+**#4 is mine, and it is the cheapest of the four:** I asked for a re-approval on a head whose approval **already postdated it.** He refused to re-stamp and produced the timestamps instead — *"I'd rather say 'already verified at this head, here's the proof' than re-stamp a claim I hadn't re-derived."* **A re-approval request is itself a claim about time, and it needs the same instrument as any other.**
+
+> ### Domain expertise in a defect class does not protect you from it. **Only a mechanical habit does.**
+> **Before writing any sentence of the form "X knew Y and did Z anyway" — stop and print the three timestamps.** Not because you might be wrong: because the instrument you are about to use *cannot answer the question*, and it will hand you an answer regardless.
+
+**The thing that actually worked was neither vigilance nor expertise — it was that each person checked the OTHER's claim at the artifact instead of accepting it.** #1 was caught by the author, #2 by its victim, #3 and #4 by the reviewer verifying a retraction he had every reason to just accept. **The correction rate came from mutual verification, not from anyone being careful.**
+
 ### Refuse rather than redact, when the leak is unrecoverable
 
 Same script: printing rclone's stderr makes `instrument_error` diagnosable — but **`RCLONE_DUMP=auth` makes rclone echo `Authorization: Basic <base64(keyID:key)>`**, and **GitHub's secret masking is an exact-substring match on the raw secret, so it does not catch the base64 form.** Straight into a public CI log.
@@ -738,6 +760,31 @@ A reviewer declined to bundle a known (non-live) hardening into a PR that was fi
 **Why this is not "ship it, we're tired":** he separated the two questions that usually get conflated.
 - **Is there a live defect?** No — verified: the regex matches all three real names, the gate fires against real producer output. The hole opens only on a **producer rename**, and none is in flight.
 - **Does the follow-up have a natural home?** Yes — it is **producer-side**, and it belongs with the other producer-side items on the same gate.
+
+### …but he then applied it to a case it does not cover, and REVERSED HIMSELF — this is the carve-out
+
+He used the rule to rule that a fix should **not** ride along. The author overrode him, and **he conceded her argument was stronger than his**, on grounds that are not hindsight:
+
+> **The fix was not a new feature riding along. It was the gate built in this very PR silently disarming itself.**
+>
+> A store **rename** drops `count_runs` to **1** — and **1 is exactly the value that makes the refuse-on-ambiguity gate stand down.** The guard's own blind spot is reachable from a routine upstream change.
+
+His amendment, in his words:
+
+> ### **"Stop while it is correct" does not defer a fix to the thing you are shipping.**
+> ### **A guard with a known path that silently disarms it is not a correct guard — it is an INCOMPLETE one. Deferring that is not stopping. It is shipping the hole.**
+
+**How to tell the two cases apart** — the base-rate argument ("each round introduced a new bug; stop adding surface") is sound for *adjacent hardening*, and inert for *the shipped artifact's own failure path*:
+
+| the pending item is… | stop, defer it | fix it now |
+|---|---|---|
+| hardening of a **neighbouring** component | ✅ | |
+| a **latent** hole with no reachable trigger | ✅ | |
+| a path that **turns OFF the guard this PR exists to add** | | ✅ **always** |
+
+**The word doing the work in the rule is `correct` — and a guard that can be silently disarmed was never correct.** The stop-rule was never in tension with the fix; he had mis-scoped his own word.
+
+**And re-opening it afterwards would have been the worst option of the three** — his own base-rate argument says so: *"the binding landed, I mutation-verified it, the fix is correct. Re-opening a verified-correct PR to relocate a verified-correct fix adds risk and removes none."* **The cost of a bad split decision is not symmetric before and after the merge.**
 
 **And the author of the rule sharpened it against himself, after approving a head that contained a live crash:**
 
