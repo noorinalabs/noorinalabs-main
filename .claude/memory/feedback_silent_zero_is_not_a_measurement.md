@@ -739,6 +739,16 @@ A reviewer declined to bundle a known (non-live) hardening into a PR that was fi
 - **Is there a live defect?** No — verified: the regex matches all three real names, the gate fires against real producer output. The hole opens only on a **producer rename**, and none is in flight.
 - **Does the follow-up have a natural home?** Yes — it is **producer-side**, and it belongs with the other producer-side items on the same gate.
 
+**And the author of the rule sharpened it against himself, after approving a head that contained a live crash:**
+
+> **"Stop while it is correct" is only as strong as the verification behind the word *correct* — and THE REVIEWER WHO HAS ALREADY APPROVED IS PRECISELY THE PERSON LEAST LIKELY TO RE-DERIVE IT.**
+>
+> ### **An approval is a claim, and a stale claim is the same liability as a stale gate.**
+
+**Why he missed it:** across six rounds he built ~20 fixtures, and **every one put the artifacts in a subdirectory.** One structural shape, twenty times. **His battery could not produce the condition, so it could not see the bug** — the exact failure he had spent the entire PR naming in other people's tests. *(And the missing shape was not an edge case: with a prefix configured, **every** artifact sits at the root. It was the **documented** usage.)*
+
+> **Count the SHAPES in your fixture set, not the fixtures.** Twenty fixtures of one shape is one fixture.
+
 **The general form:** on a long-running PR, **track how many rounds introduced a regression.** If that number is nonzero, then *"one more small change"* has a **known, nonzero cost**, and it must be weighed against the benefit of the change — **not assumed free.** The instinct that another round is costless is exactly the instinct the base rate refutes. **A correct artifact is a terminal state worth defending.**
 
 **Corollary for the residual:** it does not go on the backlog. It goes on the **gate for the earliest moment it could bite** — here, *before the first backup ever writes*, because the residual is producer-side and **silently narrows** a downstream guard. **"Follow, don't ride" is only honest if the follow has a deadline.**
