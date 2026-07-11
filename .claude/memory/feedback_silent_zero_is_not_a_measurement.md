@@ -325,6 +325,29 @@ TZ=UTC+4:  [PASS] self-test PASSED — "separates all four classes"
 
 *(Nurul Hakim and Nino Kavtaradze, converging independently. Nurul's framing: "You wrote the sharpest statement of this principle anyone has made — and then the classifier consumes the quantity without checking its sign.")*
 
+### The falsifier must reproduce the FAILURE SHAPE, not a superficially similar one (2026-07-11, da#429)
+
+The orchestrator wrote an acceptance criterion whose *entire purpose* was to make a defect impossible:
+
+> **"Truncate the written parquet on disk AFTER the tally is taken, and assert the manifest still declares the ORIGINAL count. If you cannot write this test, your implementation is a read-back and the issue is not done."**
+
+**It does not falsify anything.** The implementer wrote exactly that test — and **a read-back mutant sailed straight through it.**
+
+> **A truncation applied AFTER the write does not separate the implementations.** A read-back taken *at write time* has **already read the complete file**, so it reports 100 too. **The test passes under BOTH implementations while appearing to prove the point.**
+
+**The shape that actually separates them is the PARTIAL WRITE** — the mode the design's own table lists as *"NOT caught by a read-back."* Make the writer **lossy**: it intends 100 rows and the file ends up with 20.
+
+| | in-memory tally | read-back |
+|---|---|---|
+| declares | **100** — what the writer *intended* | **20** — what landed |
+| vs the short file | **disagrees** ✅ *(this disagreement IS the completeness signal)* | **agrees perfectly** ❌ |
+
+> **Two tests that both make the file short. Only one can tell the implementations apart.**
+
+**How to apply.** A falsifier is not "a test in the vicinity of the bug." **It must reproduce the *mechanism* by which the bad implementation succeeds** — and the way to check that is not to reason about it: **write the bad implementation and require the test to kill it.** The orchestrator specified a plausible-sounding falsifier, was confident enough to make it a *gating* criterion, and it was inert. Sibling of [[feedback_passing_repro_masks_bug]] — *a green repro proves nothing if it exercises a different shape than the real failure* — and here the repro was **red-for-the-wrong-reason-shaped**, which is worse, because it was written by someone hunting exactly this class and shipped as the thing that would prevent it.
+
+**The general form, and it is the most humbling one in this file:** *"if you cannot write this test, the implementation is wrong"* is only as strong as the test. **A gating criterion is itself an instrument, and it needs a control like any other.** Mutate the guarded property and require the criterion to fire — **before** you make it a gate.
+
 ## The failure mode with no instrument in it
 
 Every rule above assumes the reporter executed *something*. The corpus has no clause for **an instrument that was never built.**
