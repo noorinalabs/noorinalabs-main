@@ -30,7 +30,26 @@ The `errexit` lesson was recorded as: *"a guard reading an rc."* True, and the e
 
 > **The rule was stated as its INSTANCE, so it did not pattern-match a new instance.**
 
-Restated as the **shape** — *"any `VAR="$(grep/sed/find …)"` that can legitimately match nothing is a **crash** under `-e`+`pipefail`, not an empty string"* — it fires on sight.
+Restated as the **shape** — *"any `VAR="$(grep …)"` that can legitimately match nothing is a **crash** under `-e`+`pipefail`, not an empty string"* — it fires on sight.
+
+> ### ⛔ CORRECTION 2026-07-11 (Nino Kavtaradze, deploy#591) — the restatement above was itself OVER-GENERALISED
+>
+> It originally read `$(grep/sed/find …)`. **That lumps three commands with three different no-match contracts**, and it is wrong for two of them. Measured, not reasoned:
+>
+> | command | exit on **no match** | under `set -e` |
+> |---|---|---|
+> | `grep` | **1** | **CRASHES** ✅ the rule holds |
+> | `sed -n '/x/p'` | **0** | survives — **the rule is FALSE** |
+> | `find` | **0** | survives — **the rule is FALSE** |
+> | `find` over an **unreadable** dir | **1** | **CRASHES — but on an ERROR, never on a no-match** |
+>
+> **The over-generalised rule fails in BOTH directions.** It produces guards against crashes that cannot happen (`sed`, `find`), *and* it points at the wrong trigger for `find` — so an engineer who removes a `find` guard on learning "find doesn't crash on empty" is then bitten by the permission case. A rule that is wrong in both directions is worse than no rule.
+>
+> **The correct instruction is not a list of commands. It is: LOOK UP THE COMMAND'S ACTUAL NO-MATCH EXIT CODE. Do not generalise across commands that merely *feel* similar.** `grep`'s "no match is exit 1" is a deliberate and unusual contract, not a Unix convention — most filters exit 0 on empty output.
+>
+> **And the way this correction was nearly missed is the lesson underneath it.** My first check ran `find /etc -name zzz` as a non-root user, which exits **1** — on permission-denied subdirectories, *not* on the empty result. **It CONFIRMED the wrong rule, for a reason that had nothing to do with the rule.** A contaminated control that happens to agree with you is the hardest kind to catch, because nothing prompts you to look again. See [[feedback_silent_zero_is_not_a_measurement]]: *a number that lands in your favour deserves MORE scrutiny than one that doesn't.*
+>
+> ⚠ The same over-generalised sentence exists in **`noorinalabs-deploy`'s repo-level memory** and in a code comment at `scripts/restore.sh:331-334`. Both need the same correction.
 
 > **Knowing a rule does not help if you cannot recognise that you are inside it. Recognition is the scarce thing, not knowledge.** (Same finding as main#957: an experienced author wrote `until [pending == 0]` on the day he was teaching that exact defect class, with the correct oracle already in the repo.)
 
