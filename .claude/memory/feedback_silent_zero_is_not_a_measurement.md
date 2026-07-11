@@ -287,6 +287,44 @@ CI went red because the tests **execute** the scanner and the runner had no `rcl
 
 **The obvious fix — `@pytest.mark.skipif(rclone missing)` — would have been a silent skip on the one check standing between us and an empty backup bucket.** Green everywhere, testing nothing, forever. **Install the binary; never skip the test that is the guard.** (Sibling of [[feedback_actionlint_needs_shellcheck]]: a linter that silently skips its own analysis is a linter that passes.)
 
+### A one-sided assertion on a two-sided error is HALF A CONTROL
+
+The same PR, one round later — and the reviewers found the rule's author had not applied her own rule to her own instrument.
+
+**The classifier consumed a quantity and never bounded it from below.** `age_h > MAX_AGE_HOURS` is one-sided, so a **future-dated** object yields a *negative* age and reads **`fresh`**:
+
+```
+$ touch -d "+30 days" isnad-pg.dump
+B2_BACKUP_ARTIFACT status=fresh newest_age_hours=-720   rc=0   (job GREEN)
+```
+
+**And it LATCHES.** `rclone` preserves the source file's mtime, so a VPS with a skewed clock uploads future-dated dumps — and from that moment **the only check that looks in the bucket reports `fresh` regardless of whether another backup ever lands again.** It does not degrade. **One bad-clock upload converts the guard into a permanent green light on the exact signal it was built to provide.** Worse, `newest` is chosen by max epoch, so **a single future-dated object masks an entire stale bucket.**
+
+> **A timestamp in the future is not a fresh backup. It is a broken clock.** A physically-impossible reading must be `instrument_error`, never the healthiest verdict the tool can give.
+
+**And the calibration gate could only see the harmless direction.** The `pytest` control was two-sided and correct (`assert 0 <= age <= 1`). But the gate that runs **in production, on the machine where the skew would actually occur**, was:
+
+```sh
+if [[ "$got_age" -gt "$want_age" ]]; then   # fires ONLY when the age is TOO LARGE
+```
+
+`-gt` catches **inflation** — a fresh backup reading stale: a *false alarm*, the annoying direction. It **cannot see deflation** — a stale backup reading fresh: **the missed alarm**, the direction the author had just written three paragraphs about. Demonstrated by unsetting the very `TZ=UTC` pin the guard exists to protect:
+
+```
+TZ=UTC-4:  [FAIL] self-test — reported age 4h — FAILED       <- caught
+TZ=UTC+4:  [PASS] self-test PASSED — "separates all four classes"
+           B2_BACKUP_ARTIFACT status=fresh newest_age_hours=-3   <- NOT caught
+```
+
+**The self-test declares the scanner calibrated, and the scanner then reports a negative age as fresh.**
+
+> ### **A one-sided assertion on a two-sided error is half a control.**
+> **A calibration gate that can only see one direction of the error it was written for is the defect class it was written against.**
+
+**How to apply:** when a gate consumes a *value*, bound it on **both** sides — and ask which direction is the **missed alarm** (silent) versus the **false alarm** (loud). **The loud direction is the one your control will accidentally cover.** Assert the silent one explicitly. And treat any *physically impossible* reading (negative age, count > population, post-count > pre-count) as **instrument failure**, never as the benign class.
+
+*(Nurul Hakim and Nino Kavtaradze, converging independently. Nurul's framing: "You wrote the sharpest statement of this principle anyone has made — and then the classifier consumes the quantity without checking its sign.")*
+
 ## The failure mode with no instrument in it
 
 Every rule above assumes the reporter executed *something*. The corpus has no clause for **an instrument that was never built.**
