@@ -1263,3 +1263,28 @@ That is the whole trap. Both failures push the result **toward the outcome you w
 4. **A green mutation run is not evidence until you have ruled out that it was void.** It is the same output as a broken instrument. Treat it exactly like the zeros elsewhere in this file: **a result in your favour earns more scrutiny, not less.**
 
 **And the reason it was caught at all: he disclosed it in his own approving verdict rather than quietly re-running and reporting the clean number.** He had a passing result in hand and no one would have known. His stated reason — *"I'd have failed her for exactly what I did"* — is the norm worth keeping: **the standard you apply to a colleague's instrument is the standard you owe your own.** Cheap to say, expensive to actually do at the moment you already have the answer you wanted.
+
+## NOTHING TESTS PROSE — a green CI on a document is not evidence, it is a category error
+
+**2026-07-11, deploy#588 / PR #594.** The B2 artifact scanner emits eleven distinct outcomes. The issue I wrote to document them shipped a **draft reason→action table**, and I handed that table to the implementer as a starting point. He was told to trace every row to the line that emits it rather than transcribe mine.
+
+**My table was wrong twice, and both errors would have shipped green:**
+
+| my draft said | the code actually does |
+|---|---|
+| `manifest_no_timestamp` — *"manifest present, malformed"* | **No such reason code exists.** The shipped one is `manifest_ts_mismatch`, and it is **broader**: it fires whenever the manifest's `timestamp=` disagrees with the run id in the filename it is filed under. A *missing* field is merely one way to disagree. |
+| *(absent entirely)* | **`incomplete reason=undersized_dumps`** — an **attested** run carrying a dump under the floor. It shares its reason *string* with the `absent/undersized_dumps` row but is a **different fault with a different fix**: `absent` = nothing restorable anywhere; `incomplete` = the run that *claims* to be good is corrupt. |
+
+So it was **eleven outcomes, not ten** — and one of the two errors would have sent the 3am on-call to triage the wrong leg on a string collision.
+
+> ### **CI is green on a docs PR no matter what the docs say. A test suite cannot fail a wrong sentence.**
+>
+> Every other guard in this corpus at least *could* have fired. A runbook has **no instrument at all** — and unlike a silent zero, it does not even present as a measurement. It presents as a **document**, which is worse, because a document is *believed*. The whole value of a runbook is that a stressed operator follows it **without re-deriving it.** That is precisely what makes a wrong one more dangerous than none: **an absent runbook makes you think; a wrong one stops you thinking.**
+
+**And note the direction of authority.** The wrong table came from **me, the orchestrator**, and arrived in a spawn brief. Same hazard as the dead `grep -m1` prescription in this same file: **an instruction from the orchestrator is a claim like any other, and it lands with more authority and less scrutiny than a peer's.** He was right to trace it instead of typing it. *He was told to, and he still had to actually do it — most people would have spot-checked three rows and copied the rest.*
+
+**How to apply:**
+1. **Every factual claim in a doc must be traced to the line that makes it true.** Not spot-checked — traced, row by row. If a row cannot be traced to an emitting line, it is fiction, and *say so* rather than quietly dropping it.
+2. **A mismatch between a doc draft and the code is a FINDING, not a formatting nit.** Report it; do not silently paper over it. Both of mine were real defects in my understanding, not typos.
+3. **When the doc and the code disagree, the code wins — and then go back and ask why you believed the doc.** The draft was not a transcription error; it was a wrong *model* of the system, and it would have propagated into whatever else that model touched.
+4. **"CI is green" is inadmissible as evidence for anything a doc asserts.** Reviewers of a docs PR must be told this explicitly, or the green check will do the reviewing for them.
