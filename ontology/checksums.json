@@ -1528,6 +1528,12 @@
       "last_resolved": "",
       "tracked_at": "2026-07-11T16:03:45.169897+00:00",
       "resolved_at": ""
+    },
+    ".claude/memory/feedback_child_checkout_goes_stale_mid_session.md": {
+      "last_tracked": "882a54a2c6035852a05b32f52aebc28d4145f1e4c2f5263aca03fe94534a3467",
+      "last_resolved": "",
+      "tracked_at": "2026-07-11T17:05:28.199881+00:00",
+      "resolved_at": ""
     }
   },
   "last_cleanup": {
