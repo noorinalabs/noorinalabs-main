@@ -1534,6 +1534,12 @@
       "last_resolved": "",
       "tracked_at": "2026-07-11T17:05:28.199881+00:00",
       "resolved_at": ""
+    },
+    ".claude/lib/memory_budget.py": {
+      "last_tracked": "804aa5bab18c772497996c461a20b879b051b74a019f4f3ef6e99c4fe491ac92",
+      "last_resolved": "",
+      "tracked_at": "2026-07-11T17:26:13.510801+00:00",
+      "resolved_at": ""
     }
   },
   "last_cleanup": {

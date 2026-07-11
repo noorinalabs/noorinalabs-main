@@ -55,6 +55,24 @@ Measured against the *post-consolidation* corpus at #733 time:
         growth pattern (adding memories); the byte cap only catches the rare
         case of fewer-but-bloated index lines.
 
+Raise 2026-07-11 (owner decision, P8W24) — 120 → 132, 24 KiB → 28 KiB
+=====================================================================
+The gate fired at index = 121 / files = 120 / MEMORY.md = 24,912 bytes and the
+owner took the option this module documents below: raise the cap deliberately
+rather than retire a memory. The corpus had grown past the #733 baseline through
+a single unusually dense week (the "an instrument that cannot see what it exists
+to catch" defect class — ~20 distinct instances, several load-bearing).
+
+    MAX_INDEX_ENTRIES = 132  → ~11 entries / ~9% headroom over 121.
+    MAX_MEMORY_FILES  = 132  → ~12 files   / ~10% headroom over 120.
+    MAX_MEMORY_BYTES  = 28672 (28 KiB)  → ~15% headroom over 24,912 bytes.
+
+The headroom is deliberately *tighter* than the original calibration: this raise
+is an acknowledgement that the corpus genuinely grew, NOT a decision to let it
+grow freely. The next overflow should be met with a consolidation pass, not
+another bump — a cap that is raised on every overflow is not a forcing function,
+it is a formality.
+
 The headroom is deliberately modest: enough that a normal wave's memory intake
 does not trip the gate, but tight enough that it forces a consolidate/retire
 decision before the corpus drifts back toward its pre-audit bloat. Raising a cap
@@ -85,9 +103,9 @@ from pathlib import Path
 from typing import NamedTuple
 
 # --- Budget: the single source of truth. Edit a number here and nowhere else. ---
-MAX_INDEX_ENTRIES = 120
-MAX_MEMORY_FILES = 120
-MAX_MEMORY_BYTES = 24_576  # 24 KiB
+MAX_INDEX_ENTRIES = 132
+MAX_MEMORY_FILES = 132
+MAX_MEMORY_BYTES = 28_672  # 28 KiB
 
 # Files under .claude/memory/ that are NOT counted as topic files: the index
 # itself, and the gitignored per-session handoff (absent in CI — see module
