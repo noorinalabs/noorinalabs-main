@@ -420,6 +420,12 @@ done
 
 *(Nino Kavtaradze: "That's the pattern, not the incident.")*
 
+**And the rule paid for itself immediately.** Told to walk **every** call rather than the two reported, she found a **third** swallow nobody had named: `list_backups` used `|| echo "  (none)"`. **With a bad key, `restore.sh --list` prints `=== Daily ===` / `(none)` — and an operator reads that as *"I have no backups."*** Same lie, third route, unreported.
+
+> **"I'd have fixed the two I was told about and left the third sitting there."**
+
+**A finding reported as an incident gets fixed at the incident. Reported as a pattern, it gets fixed at the pattern.** When you receive a defect, ask what *class* it is and then **enumerate every instance of that class in the blast radius** — the reporter found the ones they happened to look at, not the ones that exist.
+
 ### DETERMINISTIC IS NOT UN-TORN
 
 The torn-restore fix bound each dump to a run timestamp from the manifest — **and he could not tear the bound path.** But the **fallback**, taken when the manifest carries no timestamp, was three *independent* `sort -r | head -1`:
