@@ -152,12 +152,16 @@ Generator and skills:
 
 ### No merge-driver setup (main#939)
 
-The structural index used to be committed and needed a per-clone union merge
-driver to absorb spurious conflicts. That is gone: the index is now a **gitignored
-build product**, so there is nothing in git to merge and **no setup step**. (The
-merge driver could never have worked on GitHub anyway — custom `merge=` drivers
-live in per-clone `git config` and GitHub's server-side merge never runs them,
-which is exactly why committing the index made every concurrent PR conflict.)
+The structural index used to be committed in `noorinalabs-main` and needed a
+per-clone union merge driver to absorb spurious conflicts. For this repo that is
+gone: the index is now a **gitignored build product**, so there is nothing in git
+to merge and **no setup step** here. (The merge driver could never have worked on
+GitHub anyway — custom `merge=` drivers live in per-clone `git config` and GitHub's
+server-side merge never runs them, which is exactly why committing the index made
+every concurrent PR conflict.) The `merge_driver.py` module still ships in
+`.claude/lib/ontology_gen/` as a **shared resource for not-yet-migrated child repos**,
+which resolve it against this repo (#854) until their own #939 rollout lands — see
+[`docs/devops/ontology-structural.md`](../docs/devops/ontology-structural.md).
 
 ### Build the structural layer (one command)
 

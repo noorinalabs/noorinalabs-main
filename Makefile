@@ -14,12 +14,14 @@ setup-hooks:
 	}
 	pre-commit install
 
-# NOTE (main#939): the `setup-ontology-merge-driver` target was removed. The
-# structural ontology index is no longer committed (see .gitignore /
-# ontology/README.md § Structural layer), so there is nothing to merge and the
-# per-clone union merge-driver it registered is retired. GitHub's server-side
-# merge never ran that driver anyway, which is why committing the index made
-# every concurrent PR conflict.
+# NOTE (main#939): the `setup-ontology-merge-driver` target was removed. main no
+# longer commits its structural index (see .gitignore / ontology/README.md
+# § Structural layer), so there is nothing here to merge and main no longer
+# registers the driver. GitHub's server-side merge never ran that driver anyway,
+# which is why committing the index made every concurrent PR conflict. The
+# `.claude/lib/ontology_gen/merge_driver.py` MODULE stays: not-yet-migrated child
+# repos resolve it against this repo's `.claude/lib` (#854), so it is retained until the
+# terminal child-rollout step deletes it. See docs/devops/ontology-structural.md.
 
 lint:
 	python3 -m ruff check .claude/hooks/ .claude/lib/

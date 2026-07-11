@@ -6,10 +6,13 @@
 *.pptx binary
 
 # Structural ontology graph artifacts (ontology/structural/) were previously
-# committed and routed through a union merge-driver (main#855/#856/#871). That
-# whole apparatus was retired by main#939: the index is no longer committed (it is
+# committed and routed through a union merge-driver (main#855/#856/#871). main#939
+# retired main's use of that apparatus: the index is no longer committed here (it is
 # gitignored and regenerated on demand — see .gitignore / ontology/README.md), so
-# there is nothing here to merge. The merge-driver could never have worked on
-# GitHub anyway — custom merge= drivers live in per-clone git config and GitHub's
-# server-side merge never runs them — which is precisely why committing the index
-# made every concurrent PR conflict. No merge= attribute is registered for it now.
+# there is nothing in this repo to merge and NO merge= attribute is registered. The
+# merge-driver could never have worked on GitHub anyway — custom merge= drivers live
+# in per-clone git config and GitHub's server-side merge never runs them — which is
+# precisely why committing the index made every concurrent PR conflict. NOTE: the
+# .claude/lib/ontology_gen/merge_driver.py MODULE is retained as a shared resource
+# not-yet-migrated child repos still resolve (#854); it is deleted in the terminal
+# child-rollout step. See docs/devops/ontology-structural.md.

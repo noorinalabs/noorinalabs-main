@@ -7,15 +7,24 @@
 > [`ontology/README.md`](../../ontology/README.md) § Structural layer and the root `.gitignore`).
 > The merge-driver could never have worked on GitHub anyway: custom `merge=` drivers live in
 > per-clone `git config` and GitHub's server-side merge never runs them, so committing the index
-> made every concurrent PR conflict regardless. In `noorinalabs-main` the driver, its
-> `.gitattributes` registration, and `make setup-ontology-merge-driver` have been **retired**.
-> Cross-repo aggregation now regenerates every in-scope repo's index locally before rolling up
-> (`ontology_gen.aggregate`), so nothing depends on a committed copy.
+> made every concurrent PR conflict regardless. In `noorinalabs-main` the driver's **registration
+> and use are retired** — the `.gitattributes merge=` lines and `make setup-ontology-merge-driver`
+> are gone, and cross-repo aggregation now regenerates every in-scope repo's index locally before
+> rolling up (`ontology_gen.aggregate`), so nothing depends on a committed copy.
 >
-> The merge-driver mechanics below are **retained transitionally** for **child repos that have
-> not yet migrated** — each still commits its own index and registers the driver until its
-> per-#939 follow-up lands (`noorinalabs-data-acquisition` is expedited). As each child migrates,
-> delete its row from the fan-out checklist. This banner is removed once every child has migrated.
+> **The `merge_driver.py` module itself STAYS (main#939, per #854).** It is a **shared resource**:
+> not-yet-migrated child repos do not vendor the driver — their `register-merge-driver` registers
+> `python3 -m ontology_gen.merge_driver` pointing at **this repo's** `.claude/lib`, so deleting the
+> module would break every such child's local merge of its still-committed `code-graph.json`.
+> The merge-driver mechanics below are therefore **retained transitionally** for children that have
+> not yet migrated — each still commits its own index and registers the driver until its per-#939
+> follow-up lands (`noorinalabs-data-acquisition` is expedited). As each child migrates, delete its
+> row from the fan-out checklist.
+>
+> **Terminal step (org-wide teardown).** When the **last** child's #939 rollout lands, the same PR
+> that migrates it also deletes `merge_driver.py` + its tests here and removes `/wave-wrapup`
+> Step 10.7 (the transitional child pre-regeneration loop) — both are shared-until-last-child-migrates
+> mechanisms. This banner is removed at that point too.
 
 This document was the canonical reference for the union merge-driver that prevented
 spurious merge conflicts on `ontology/structural/code-graph.json` (#855, #856, #820
@@ -61,20 +70,15 @@ now has no advantage over the plain-script form and requires explicit `PYTHONPAT
 manipulation that makes the git config harder to read and verify. The canonical form
 going forward is plain-script.
 
-### noorinalabs-main (driver lives here)
+### noorinalabs-main (hosts the module; no longer registers or uses it — main#939)
 
-The driver is in this repo at `.claude/lib/ontology_gen/merge_driver.py`. Register with
-a relative path (git runs drivers from the repo root):
-
-```bash
-# Via the Makefile target (preferred):
-make setup-ontology-merge-driver
-
-# Or manually:
-git config merge.ontology-codegraph.name 'ontology code-graph union merge'
-git config merge.ontology-codegraph.driver \
-    'python3 .claude/lib/ontology_gen/merge_driver.py %O %A %B %P'
-```
+The module `merge_driver.py` still lives in this repo at `.claude/lib/ontology_gen/`, but
+**`noorinalabs-main` no longer registers or uses it**: main stopped committing its structural
+index (main#939), so there is nothing here to merge — the `.gitattributes merge=` lines and the
+`make setup-ontology-merge-driver` target were removed. The module is retained purely as the
+**shared source that not-yet-migrated child repos resolve** (see next section) via a sibling-checkout
+path. It is deleted org-wide in the terminal child-rollout step, once the last child's #939 lands
+(see the banner at the top). Do **not** re-add a main-side registration.
 
 ### Child repos (driver lives in the sibling noorinalabs-main checkout)
 
