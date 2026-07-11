@@ -132,6 +132,23 @@ And the sibling trap, which is the second row of that table: **when a mutation g
 
 Sibling of [[feedback_fixture_makes_guard_assertion_inert]] (a fixture that cannot reach the branch) and [[feedback_passing_repro_masks_bug]] (a repro that cannot go red). Here it is the **auditing instrument itself** that cannot move — the last place anyone thinks to look, because it is the thing you brought *in order to* be rigorous.
 
+## An invariant enforced at the producer is NOT enforced at the consumer. Nothing carries it across. (2026-07-11, deploy#577)
+
+The backup PR's author reasoned **exactly correctly** on the producer side: a *partial* backup must not emit the success gauge, and she put `USER_PG_OK` **inside** that condition — because otherwise *"the one store that cannot be rebuilt from the pipeline artifact could be missing from every backup we hold and the dashboards would stay green."*
+
+**The identical argument applies verbatim to the consumer, and was not carried across.** `restore.sh` sets `FAILED=1` only when a dump is **present and its restore fails**. A dump that is **absent entirely** is a warning — `skipped (no dump)` — that never touches `FAILED`. The script prints `=== Restore complete ===` and **exits 0**.
+
+The all-empty case *was* caught. The one-store-missing case was not. **There was a guard on each side of the hole and none in it.** And the script's own comment says *"a restore that did not restore must not be reported as success"* — **the comment was right and the code disagreed with it.**
+
+> **The producer refused to call a partial backup a success. The consumer called a partial restore a success. Same argument, same file pair, opposite conclusion.**
+
+**Why the consumer side is the dangerous half, and this is the part to carry:** the producer's failure is *loud* — the backup alert fires correctly and someone sees it. The consumer's failure is **silent and terminal**: you only invoke restore *after* the thing you were protecting is already gone. **A false "backup failed" costs you a night. A false "restore complete" costs you the data.** The alerting cannot help, because it is watching the backup — and the backup told the truth. **The restore is the thing that lied.**
+
+**How to apply.** When you enforce a completeness/validity invariant at one end of a pipe, **write down the sentence you used** — then go to the other end and check whether it is true there too. It usually is, and it usually isn't enforced. Especially:
+- **producer refuses to publish incomplete ⇒ consumer must refuse to consume incomplete.** Do not rely on "the producer wouldn't have written it" — a partial write, an older artifact, or a *pre-fix* artifact all reach the consumer.
+- **Completeness is a property of the artifact, so the artifact must declare it** (`_resolve_run.txt` in da#428; a `COMPLETE` marker in a backup dir). A consumer that infers completeness from *presence* — "the newest directory name" — selects the broken artifact by construction, because the broken one is newest.
+- **Grade recovery paths hardest.** Every guard in a restore/rollback/undo path is used exactly once, under pressure, when the primary is already lost. It is the last place a silent success is survivable and the first place nobody tests.
+
 ## The failure mode with no instrument in it
 
 Every rule above assumes the reporter executed *something*. The corpus has no clause for **an instrument that was never built.**
