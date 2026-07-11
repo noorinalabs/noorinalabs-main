@@ -354,6 +354,19 @@ The self-test wrote one file called `isnad-pg-a.dump` with `timestamp=t`. The py
 
 > **A test that paraphrases the producer's format is testing the paraphrase.**
 
+**And the worse case: a paraphrase in SHIPPING code.** The same PR fixed the paraphrase on the *test* side (`manifest_fixture.py` renders the manifest from the producer's own `printf`, parsing **both** the format string **and** the argument list) — and left one in the *product*: a `sed` hand-parsing the producer's **filename** format, with a store segment of `[a-z0-9]+`, **which cannot contain a hyphen.**
+
+**Rename `userpg` → `user-pg` in the producer and an entire run becomes INVISIBLE** to the consumer: the run count drops to 1, the refuse-on-ambiguity gate **stops refusing**, the torn restore comes back — **and nothing goes red.**
+
+| where the paraphrase lives | how it fails |
+|---|---|
+| in a **test** | the test goes green while the product is broken — **loud enough to find, once someone looks** |
+| **in the PRODUCT** | **the guard silently stops guarding**, and the *test* still passes because the test paraphrases too |
+
+> **A paraphrase in the product is worse than a paraphrase in a test, because a producer-side rename does not break it — it QUIETLY NARROWS it.** The parser keeps working; it just stops seeing things. **And what it stops seeing is exactly what the guard downstream needed to count.**
+
+**Fix: bind the consumer's parser to the producer's definition** — parse the format out of the producer, as the test fixture already does. **Any hand-written parser of a sibling's output format is a paraphrase, and it will drift.**
+
 And the nondeterminism nearly hid it even after the fixture was fixed: **with only one decoy, the test PASSED against the unfixed code — readdir order happened to favour the right file.**
 
 > **A detector that fires half the time is not a detector.** A fixture whose outcome depends on filesystem ordering must be built with enough decoys that the broken code fails **deterministically**, or its green is a coin-toss you have mistaken for a result.
