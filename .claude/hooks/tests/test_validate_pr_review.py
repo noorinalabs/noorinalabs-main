@@ -31,6 +31,7 @@ from __future__ import annotations
 import json
 import sys
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
@@ -117,6 +118,37 @@ class _CheckCommentReviewsHarness(unittest.TestCase):
                 _CheckCommentReviewsHarness.PR_NUMBER,
                 branch_author,
                 repo=repo,
+            )
+
+    @staticmethod
+    def _run_with_fake_api_ts(
+        comments_list: list[dict],
+        branch_author: str,
+        repo: str | None = None,
+        content_ts: "datetime | None" = None,
+    ):
+        """As `_run_with_fake_api`, but binds verdicts to a T_content (#950).
+
+        Kept as a separate entry point so the ~30 pre-#950 callers of
+        `_run_with_fake_api` keep exercising the unbound path unchanged.
+        """
+        comments_stdout = json.dumps(comments_list)
+
+        def fake_run(args, capture_output, text, timeout):
+            result = mock.MagicMock()
+            result.returncode = 0
+            if args[0] == "gh" and args[1:3] == ["repo", "view"]:
+                result.stdout = json.dumps({"owner": {"login": "noorinalabs"}, "name": "r"})
+            else:
+                result.stdout = comments_stdout
+            return result
+
+        with mock.patch.object(hook.subprocess, "run", side_effect=fake_run):
+            return hook.check_comment_reviews(
+                _CheckCommentReviewsHarness.PR_NUMBER,
+                branch_author,
+                repo=repo,
+                content_ts=content_ts,
             )
 
 
@@ -585,7 +617,29 @@ class SingleReviewerExceptionTests(unittest.TestCase):
         )
 
 
-class CheckEndToEndTests(unittest.TestCase):
+class _NoContentBindingHarness(unittest.TestCase):
+    """Pins T_content to None so pre-#950 `check()` tests stay hermetic.
+
+    As of #950 `check()` fetches the branch's latest non-merge commit BEFORE
+    counting any verdict, and hard-blocks if that fetch fails. The tests below
+    predate the binding and assert reviewer-COUNTING behavior that is orthogonal
+    to staleness; left alone they would shell out to a real `gh api` and fail (or
+    worse, flake on network). Returning None means "no content binding" — every
+    verdict counts, exactly as before #950 — which is what these tests intend.
+
+    Staleness itself is covered by `StaleVerdictBindingTests`,
+    `BranchUpdateRegressionTests`, and `CommitFetchFailClosedTests`, which patch
+    `get_latest_content_commit` with real values instead.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        patcher = mock.patch.object(hook, "get_latest_content_commit", return_value=None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+
+class CheckEndToEndTests(_NoContentBindingHarness):
     """End-to-end check() integration tests for #244 + #228 paths."""
 
     @staticmethod
@@ -947,7 +1001,7 @@ class LoadRosterNamesTests(unittest.TestCase):
         self.assertIn("lucas ferreira", names)
 
 
-class RosterValidationGateTests(unittest.TestCase):
+class RosterValidationGateTests(_NoContentBindingHarness):
     """Issue #498: 2-reviewer gate must reject non-roster Requestor strings.
 
     Drives `check()` end-to-end with stubbed pr_data and a stubbed
@@ -1290,7 +1344,7 @@ class ExtractRepoCallSiteTests(unittest.TestCase):
         )
 
 
-class ChildRosterResolutionTests(unittest.TestCase):
+class ChildRosterResolutionTests(_NoContentBindingHarness):
     """Issue #552: the roster the 2-reviewer gate validates against must be
     resolved relative to the PR's TARGET repo, not hardcoded to the parent.
 
@@ -1329,6 +1383,11 @@ class ChildRosterResolutionTests(unittest.TestCase):
 
     def setUp(self) -> None:
         import tempfile
+
+        # Chains to _NoContentBindingHarness.setUp, which pins T_content to None
+        # so these roster-resolution tests do not shell out to a real commit
+        # fetch (#950). Without the chain the patch never starts.
+        super().setUp()
 
         self._tmp = tempfile.TemporaryDirectory()
         root = Path(self._tmp.name)
@@ -1762,7 +1821,7 @@ class BatchLoopMergeDetectorTests(unittest.TestCase):
         self.assertFalse(hook.is_variable_pr_merge_in_loop(cmd))
 
 
-class BatchLoopMergeEndToEndTests(unittest.TestCase):
+class BatchLoopMergeEndToEndTests(_NoContentBindingHarness):
     """#567 end-to-end: check() HARD BLOCKS a batch-loop variable merge, and a
     literal merge still flows to the normal 2-reviewer gate unchanged."""
 
@@ -1956,6 +2015,547 @@ class IsSingleExpansionWordTests(unittest.TestCase):
 
     def test_literal_word_is_not_word(self):
         self.assertFalse(hook._is_single_expansion_word("done"))
+
+
+# ---------------------------------------------------------------------------
+# #950 — verdict staleness / content binding
+#
+# Hook 4 counted every `Approved` trailer without ever asking what commit it was
+# cast against, so an approval of commit A still counted after the author
+# force-pushed B, C, D. The tests below are built from the REAL timestamps of the
+# three instances observed on 2026-07-11 (fetched from the GitHub API, not
+# invented), plus the branch-update regression that keeps the fix from becoming a
+# repo-wide outage.
+# ---------------------------------------------------------------------------
+
+# Real commit timeline of da#423 (`gh api .../pulls/423/commits`), the scrub PR
+# whose first revision deleted Umm Kulthum bint Muhammad — the Prophet's daughter
+# — and whose second still deleted 44 Companions including Abu Bakr al-Siddiq.
+DA423_C1_SHA, DA423_C1_AT = "9afb8e09", "2026-07-11T03:16:25Z"  # deleted the Prophet's daughter
+DA423_C2_SHA, DA423_C2_AT = "22d5942b", "2026-07-11T03:56:00Z"  # still deleted 44 Companions
+DA423_C3_SHA, DA423_C3_AT = "674fa65a", "2026-07-11T04:09:36Z"  # the actual fix
+
+# Real verdict-comment timestamps on da#423.
+DA423_IVANA_AT = "2026-07-11T03:42:58Z"  # cast against 9afb8e09
+DA423_SOFIA_APPROVED_AT = "2026-07-11T04:03:38Z"  # cast against 22d5942b
+
+# Real ip#130 data: sole content commit, and the two verdicts that predate it.
+IP130_SHA, IP130_AT = "05a57ae0", "2026-07-11T03:54:53Z"
+IP130_TOMAS_AT = "2026-07-11T03:50:49Z"  # ChangesRequested — blocked a rewritten-away commit
+IP130_FATIMA_AT = "2026-07-11T03:51:25Z"  # Approved — approved a commit that no longer exists
+
+
+def _ts(value: str) -> datetime:
+    """Parse an ISO-8601 `...Z` timestamp the way the hook does."""
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _verdict_comment(requestor: str, ror: str, created_at: str, tech_debt: str = "none") -> dict:
+    """Build an issues-API comment payload carrying a charter verdict trailer.
+
+    The trailer sits after a lone `---` separator because that is what the
+    #511 trailer-block parser requires — a fixture that skipped it would parse to
+    nothing and make every assertion below vacuously pass
+    (`feedback_fixture_makes_guard_assertion_inert`).
+    """
+    return {
+        "created_at": created_at,
+        "body": (
+            f"Reviewed the diff at the current head.\n\n"
+            f"---\n"
+            f"Requestor: {requestor}\n"
+            f"Requestee: Kwesi Boateng\n"
+            f"RequestOrReplied: {ror}\n"
+            f"TechDebt: {tech_debt}\n"
+        ),
+    }
+
+
+class VerdictFixtureSanityTests(unittest.TestCase):
+    """The fixture must be able to produce a COUNTED approval, or nothing below proves anything.
+
+    Every staleness test asserts an approval was NOT counted. If the fixture's
+    comment shape simply failed to parse — wrong trailer format, missing `---` —
+    those tests would pass for the wrong reason and the suite would certify a
+    hook that counts nothing at all. This test pins the other end of the
+    instrument: with NO content binding, the same fixture yields two counted
+    reviewers (`feedback_silent_zero_is_not_a_measurement` — run the detector on
+    both classes and require it to separate them).
+    """
+
+    def test_fixture_yields_counted_approvals_when_not_stale(self):
+        comments = [
+            _verdict_comment("Ivana Horvat", "Approved", DA423_IVANA_AT),
+            _verdict_comment("Sofia Cardoso", "Approved", DA423_SOFIA_APPROVED_AT),
+        ]
+        result = _CheckCommentReviewsHarness._run_with_fake_api(comments, "boateng", repo="o/r")
+        self.assertEqual(
+            result.reviewers,
+            {"ivana horvat", "sofia cardoso"},
+            "fixture must parse into 2 counted reviewers when unbound — otherwise the "
+            "staleness assertions below are vacuous",
+        )
+        self.assertEqual(result.stale_verdicts, [])
+
+
+class StaleVerdictBindingTests(unittest.TestCase):
+    """A verdict cast before the latest non-merge commit does not count (#950)."""
+
+    @staticmethod
+    def _run(comments: list[dict], content_ts: datetime | None, branch_author: str = "boateng"):
+        return _CheckCommentReviewsHarness._run_with_fake_api_ts(
+            comments, branch_author, repo="o/r", content_ts=content_ts
+        )
+
+    def test_da423_stale_approval_of_rewritten_revision_does_not_count(self):
+        """The worst real case: at 22d5942b, Hook 4 saw TWO Approved trailers.
+
+        Ivana's was cast at 03:42:58 against 9afb8e09 — the revision that deleted
+        the Prophet's daughter — and 22d5942b landed at 03:56:00, rewriting it
+        precisely because it was catastrophically wrong. The gate counted it
+        anyway and would have called the PR merge-ready. It must now count only
+        Sofia's.
+        """
+        comments = [
+            _verdict_comment("Ivana Horvat", "Approved", DA423_IVANA_AT),
+            _verdict_comment("Sofia Cardoso", "Approved", DA423_SOFIA_APPROVED_AT),
+        ]
+        result = self._run(comments, _ts(DA423_C2_AT))
+        self.assertEqual(
+            result.reviewers,
+            {"sofia cardoso"},
+            "Ivana's approval of the rewritten-away 9afb8e09 must NOT count at 22d5942b",
+        )
+        self.assertEqual([sv.reviewer for sv in result.stale_verdicts], ["Ivana Horvat"])
+
+    def test_da423_at_final_head_even_the_later_approval_is_stale(self):
+        """Live state: at 674fa65a (04:09:36), Sofia's 04:03:38 Approved is itself stale.
+
+        Both approvals predate the branch's newest authored commit, so the PR has
+        ZERO current approvals — the correct, and initially surprising, answer.
+        """
+        comments = [
+            _verdict_comment("Ivana Horvat", "Approved", DA423_IVANA_AT),
+            _verdict_comment("Sofia Cardoso", "Approved", DA423_SOFIA_APPROVED_AT),
+        ]
+        result = self._run(comments, _ts(DA423_C3_AT))
+        self.assertEqual(result.reviewers, set())
+        self.assertEqual(
+            sorted(sv.reviewer for sv in result.stale_verdicts),
+            ["Ivana Horvat", "Sofia Cardoso"],
+        )
+
+    def test_ip130_approval_of_vanished_commit_does_not_count(self):
+        """ip#130: Fatima approved at 03:51:25 a commit replaced by 05a57ae0 at 03:54:53."""
+        comments = [_verdict_comment("Fatima Bensalah", "Approved", IP130_FATIMA_AT)]
+        result = self._run(comments, _ts(IP130_AT), branch_author="carvalho")
+        self.assertEqual(result.reviewers, set())
+        self.assertEqual([sv.reviewer for sv in result.stale_verdicts], ["Fatima Bensalah"])
+
+    def test_ip130_stale_changes_requested_is_recorded(self):
+        """ip#130: Tomás blocked a rewritten-away commit at 03:50:49.
+
+        ChangesRequested never counted toward the threshold, but a stale one must
+        still be RECORDED so the diagnostic can explain the PR's true state.
+        """
+        comments = [_verdict_comment("Tomás Carvalho", "ChangesRequested", IP130_TOMAS_AT)]
+        result = self._run(comments, _ts(IP130_AT), branch_author="bensalah")
+        self.assertEqual([sv.reviewer for sv in result.stale_verdicts], ["Tomás Carvalho"])
+
+    def test_verdict_exactly_at_t_content_is_current(self):
+        """The boundary is `<`, not `<=` — a verdict cast AT T_content counts.
+
+        A reviewer who approves the instant the commit lands reviewed that commit.
+        """
+        comments = [_verdict_comment("Sofia Cardoso", "Approved", DA423_C2_AT)]
+        result = self._run(comments, _ts(DA423_C2_AT))
+        self.assertEqual(result.reviewers, {"sofia cardoso"})
+        self.assertEqual(result.stale_verdicts, [])
+
+    def test_stale_verdict_is_exempt_from_techdebt_requirement(self):
+        """A verdict that carries no weight must not be able to block on TechDebt.
+
+        Blocking the merge because a NOT-COUNTED verdict lacks an attestation
+        line would be a false-block with a baffling message.
+        """
+        stale_no_td = {
+            "created_at": DA423_IVANA_AT,
+            "body": "---\nRequestor: Ivana Horvat\nRequestOrReplied: Approved\n",
+        }
+        result = self._run([stale_no_td], _ts(DA423_C2_AT))
+        self.assertEqual(result.reviews_missing_tech_debt, [])
+        self.assertEqual([sv.reviewer for sv in result.stale_verdicts], ["Ivana Horvat"])
+
+    def test_verdict_with_unparseable_timestamp_is_stale_not_fresh(self):
+        """Unknown freshness is not freshness — fail closed."""
+        comments = [_verdict_comment("Sofia Cardoso", "Approved", "not-a-timestamp")]
+        result = self._run(comments, _ts(DA423_C2_AT))
+        self.assertEqual(result.reviewers, set())
+        self.assertEqual([sv.reviewer for sv in result.stale_verdicts], ["Sofia Cardoso"])
+
+
+class BranchUpdateRegressionTests(unittest.TestCase):
+    """THE regression that makes #950 safe to ship: an approval SURVIVES a branch update.
+
+    Updating a branch from `main` (`gh api -X PUT .../update-branch`, the routine
+    BEHIND → CLEAN step before every merge) creates a MERGE commit that moves the
+    head WITHOUT changing what the reviewer read. Binding verdicts to the head sha
+    — the naive fix — would therefore invalidate every approval on every PR in the
+    org at the moment of merge. Binding to the latest NON-MERGE commit does not.
+
+    If these tests ever fail, the fix has become a repo-wide merge outage. Same
+    lesson as `feedback_commit_author_gate_exclude_merges`: a gate over a commit
+    range that does not exclude merge commits is corrupted by routine mechanics.
+    """
+
+    @staticmethod
+    def _commit(sha: str, date: str, parents: int = 1) -> dict:
+        return {
+            "sha": sha,
+            "parents": [{"sha": f"p{i}"} for i in range(parents)],
+            "commit": {"committer": {"date": date}, "author": {"date": date}},
+        }
+
+    @staticmethod
+    def _fake_commit_api(commits: list[dict]):
+        def fake_run(args, capture_output, text, timeout):
+            result = mock.MagicMock()
+            result.returncode = 0
+            result.stdout = json.dumps(commits)
+            return result
+
+        return fake_run
+
+    def _latest(self, commits: list[dict]):
+        with mock.patch.object(hook.subprocess, "run", side_effect=self._fake_commit_api(commits)):
+            return hook.get_latest_content_commit(423, repo="noorinalabs/x")
+
+    def test_merge_commit_from_main_does_not_advance_t_content(self):
+        """The load-bearing assertion: a `main` merge lands AFTER the approval and
+        T_content still points at the older authored commit, so the approval holds.
+        """
+        content_at = "2026-07-11T04:09:36Z"
+        approval_at = "2026-07-11T04:20:00Z"
+        branch_update_at = "2026-07-11T05:00:00Z"  # merge commit — newest object on the branch
+
+        commits = [
+            self._commit("674fa65a", content_at, parents=1),
+            self._commit("ffffffff", branch_update_at, parents=2),  # Merge branch 'main' into ...
+        ]
+        latest = self._latest(commits)
+        assert latest is not None
+        sha, ts = latest
+        self.assertEqual(sha, "674fa65a", "T_content must ignore the merge commit")
+        self.assertEqual(ts, _ts(content_at))
+
+        # And the end-to-end consequence: the approval cast before the branch
+        # update — but after the content — still counts.
+        self.assertLess(ts, _ts(approval_at), "approval must sit AFTER T_content")
+
+    def test_two_approvals_survive_a_branch_update_end_to_end(self):
+        """Full `check()` path: 2 approvals, then a `main` merge → merge still allowed.
+
+        This is the org-outage guard. It drives `check()` exactly as a real
+        `gh pr merge` would, with a merge commit as the newest object on the
+        branch, and requires the hook to ALLOW.
+        """
+        content_at = "2026-07-11T04:09:36Z"
+        approvals_at = "2026-07-11T04:20:00Z"
+        commits = [
+            self._commit("674fa65a", content_at, parents=1),
+            self._commit("ffffffff", "2026-07-11T05:00:00Z", parents=2),
+        ]
+        pr_data = {
+            "author": "parametrization",
+            "number": 423,
+            "reviews": [],
+            "headRefName": "K.Boateng/0423-scrub",
+            "labels": [],
+        }
+        comments = [
+            _verdict_comment("Aino Virtanen", "Approved", approvals_at),
+            _verdict_comment("Nadia Khoury", "Approved", approvals_at),
+        ]
+
+        def fake_run(args, capture_output, text, timeout):
+            result = mock.MagicMock()
+            result.returncode = 0
+            joined = " ".join(args)
+            if args[1:3] == ["repo", "view"]:
+                result.stdout = json.dumps({"owner": {"login": "noorinalabs"}, "name": "r"})
+            elif "commits?" in joined:
+                result.stdout = json.dumps(commits)
+            else:
+                result.stdout = json.dumps(comments)
+            return result
+
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=pr_data),
+            mock.patch.object(hook.subprocess, "run", side_effect=fake_run),
+        ):
+            result = hook.check(
+                {
+                    "tool_name": "Bash",
+                    "tool_input": {
+                        "command": "gh pr merge 423 --merge",
+                    },
+                }
+            )
+        self.assertIsNone(
+            result,
+            "a branch update from main MUST NOT invalidate approvals — if this fails, "
+            "every merge in the org is blocked",
+        )
+
+    def test_root_commit_zero_parents_is_content_not_a_merge(self):
+        """0 parents is a root commit, not a merge — non-merge is `< 2` parents."""
+        latest = self._latest([self._commit("aaaaaaaa", "2026-07-11T01:00:00Z", parents=0)])
+        assert latest is not None
+        self.assertEqual(latest[0], "aaaaaaaa")
+
+    def test_all_merge_commits_yields_no_content_binding(self):
+        """A branch with no authored commits binds nothing — nothing can be stale."""
+        self.assertIsNone(
+            self._latest([self._commit("ffffffff", "2026-07-11T05:00:00Z", parents=2)])
+        )
+
+    def test_t_content_is_the_max_not_the_last_listed(self):
+        """Rebases can list commits out of date order; T_content is the newest."""
+        commits = [
+            self._commit("bbbbbbbb", "2026-07-11T06:00:00Z", parents=1),
+            self._commit("cccccccc", "2026-07-11T02:00:00Z", parents=1),
+        ]
+        latest = self._latest(commits)
+        assert latest is not None
+        self.assertEqual(latest[0], "bbbbbbbb")
+
+    def test_commit_fetch_is_paginated(self):
+        """>100 commits must not silently truncate T_content (the #303 trap)."""
+        captured: list[list[str]] = []
+
+        def fake_run(args, capture_output, text, timeout):
+            captured.append(args)
+            result = mock.MagicMock()
+            result.returncode = 0
+            result.stdout = json.dumps([self._commit("aaaaaaaa", "2026-07-11T01:00:00Z")])
+            return result
+
+        with mock.patch.object(hook.subprocess, "run", side_effect=fake_run):
+            hook.get_latest_content_commit(423, repo="noorinalabs/x")
+        self.assertIn("--paginate", captured[0])
+        self.assertTrue(any("pulls/423/commits" in a for a in captured[0]))
+
+
+class CommitFetchFailClosedTests(unittest.TestCase):
+    """A commit-fetch failure HARD BLOCKS; it never reverts to counting everything.
+
+    `feedback_safety_direction_over_ux_friction`: when a hook cannot decide
+    cleanly, hard-block with a diagnostic, never allow-with-log. A safety gate
+    that degrades to permissive under error is not a gate — and reverting to the
+    old counting behavior here would silently restore the exact fail-open #950
+    exists to close.
+    """
+
+    @staticmethod
+    def _failing_api(returncode: int = 1, stdout: str = "", stderr: str = "HTTP 502"):
+        def fake_run(args, capture_output, text, timeout):
+            result = mock.MagicMock()
+            result.returncode = returncode
+            result.stdout = stdout
+            result.stderr = stderr
+            return result
+
+        return fake_run
+
+    def test_nonzero_gh_api_raises_commit_fetch_error(self):
+        with mock.patch.object(hook.subprocess, "run", side_effect=self._failing_api()):
+            with self.assertRaises(hook.CommitFetchError):
+                hook.get_latest_content_commit(423, repo="noorinalabs/x")
+
+    def test_unparseable_json_raises_commit_fetch_error(self):
+        with mock.patch.object(
+            hook.subprocess, "run", side_effect=self._failing_api(returncode=0, stdout="<html>")
+        ):
+            with self.assertRaises(hook.CommitFetchError):
+                hook.get_latest_content_commit(423, repo="noorinalabs/x")
+
+    def test_non_merge_commit_without_timestamp_raises(self):
+        """Silently skipping it would UNDERSTATE T_content and wave stale verdicts through."""
+        commits = [{"sha": "aaaaaaaa", "parents": [{"sha": "p"}], "commit": {"committer": {}}}]
+
+        def fake_run(args, capture_output, text, timeout):
+            result = mock.MagicMock()
+            result.returncode = 0
+            result.stdout = json.dumps(commits)
+            return result
+
+        with mock.patch.object(hook.subprocess, "run", side_effect=fake_run):
+            with self.assertRaises(hook.CommitFetchError):
+                hook.get_latest_content_commit(423, repo="noorinalabs/x")
+
+    def test_check_blocks_on_commit_fetch_error_with_two_valid_approvals(self):
+        """THE fail-open test: a PR that WOULD merge (2 approvals) must BLOCK when
+        the commit list cannot be fetched. If this returns None, the fix fails open.
+        """
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen", "nadia khoury"}
+        pr_data = {
+            "author": "parametrization",
+            "number": 423,
+            "reviews": [],
+            "headRefName": "K.Boateng/0423-scrub",
+            "labels": [],
+        }
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=pr_data),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+            mock.patch.object(
+                hook,
+                "get_latest_content_commit",
+                side_effect=hook.CommitFetchError("HTTP 502"),
+            ),
+        ):
+            result = hook.check(
+                {
+                    "tool_name": "Bash",
+                    "tool_input": {"command": "gh pr merge 423 --merge"},
+                }
+            )
+        self.assertIsNotNone(result, "commit-fetch failure MUST NOT fail open")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("could not fetch the PR's commit list", result["reason"])
+        self.assertIn("HTTP 502", result["reason"])
+
+
+class StaleVerdictDiagnosticTests(unittest.TestCase):
+    """The diagnostic is as load-bearing as the block.
+
+    An operator who sees `0/2 approvals` on a PR showing two green `Approved`
+    comments will conclude the hook is broken and reach for `--admin`. The block
+    message must name each stale verdict, its timestamp, and the commit that
+    invalidated it — and must pre-empt the natural next fear, "did my branch
+    update just nuke the approvals?"
+    """
+
+    def _block_reason(self) -> str:
+        review_result = hook.CommentReviewResult()
+        # A PARENT-roster persona: the #498 gate drops non-roster Requestors, and a
+        # child-repo name here would make this 0/2 and mask what we mean to assert.
+        review_result.reviewers = {"nadia khoury"}  # 1 current
+        review_result.stale_verdicts = [
+            hook.StaleVerdict("Ivana Horvat", "Approved", DA423_IVANA_AT),
+        ]
+        pr_data = {
+            "author": "parametrization",
+            "number": 423,
+            "reviews": [],
+            "headRefName": "K.Boateng/0423-scrub",
+            "labels": [],
+        }
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=pr_data),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+            mock.patch.object(
+                hook,
+                "get_latest_content_commit",
+                return_value=(DA423_C3_SHA, _ts(DA423_C3_AT)),
+            ),
+        ):
+            result = hook.check(
+                {
+                    "tool_name": "Bash",
+                    "tool_input": {"command": "gh pr merge 423 --merge"},
+                }
+            )
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        return str(result["reason"])
+
+    def test_diagnostic_names_the_stale_reviewer_and_timestamp(self):
+        reason = self._block_reason()
+        self.assertIn("Ivana Horvat", reason)
+        self.assertIn(DA423_IVANA_AT, reason)
+        self.assertIn("STALE", reason)
+
+    def test_diagnostic_names_the_invalidating_commit(self):
+        reason = self._block_reason()
+        self.assertIn(DA423_C3_SHA, reason)
+
+    def test_diagnostic_distinguishes_current_from_stale_count(self):
+        reason = self._block_reason()
+        self.assertIn("1/2 CURRENT approvals", reason)
+
+    def test_diagnostic_preempts_the_branch_update_fear(self):
+        """Operators WILL suspect update-branch. Say it isn't that, in the message."""
+        reason = self._block_reason()
+        self.assertIn("Branch updates from `main`", reason)
+        self.assertIn("do NOT invalidate a verdict", reason)
+
+    def test_diagnostic_states_the_remedy(self):
+        reason = self._block_reason()
+        self.assertIn("re-review at the current head", reason)
+
+
+class FormalReviewStalenessTests(unittest.TestCase):
+    """Formal GitHub reviews are bound to T_content too — else the fix has a hole.
+
+    `gh pr review` is blocked org-wide by `block_gh_pr_review.py`, so these are
+    rare; but leaving them unbound would be an open door straight through the
+    staleness gate.
+    """
+
+    def _check(self, reviews: list[dict]):
+        review_result = hook.CommentReviewResult()  # no comment verdicts
+        pr_data = {
+            "author": "parametrization",
+            "number": 423,
+            "reviews": reviews,
+            "headRefName": "K.Boateng/0423-scrub",
+            "labels": [],
+        }
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=pr_data),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+            mock.patch.object(
+                hook,
+                "get_latest_content_commit",
+                return_value=(DA423_C3_SHA, _ts(DA423_C3_AT)),
+            ),
+        ):
+            return hook.check(
+                {
+                    "tool_name": "Bash",
+                    "tool_input": {"command": "gh pr merge 423 --merge"},
+                }
+            )
+
+    def test_stale_formal_reviews_do_not_count(self):
+        reviews = [
+            {"author": {"login": "reviewer-a"}, "state": "APPROVED", "submittedAt": DA423_IVANA_AT},
+            {"author": {"login": "reviewer-b"}, "state": "APPROVED", "submittedAt": DA423_IVANA_AT},
+        ]
+        result = self._check(reviews)
+        self.assertIsNotNone(result, "two STALE formal reviews must not satisfy the gate")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("0/2 CURRENT approvals", result["reason"])
+
+    def test_current_formal_reviews_still_count(self):
+        fresh = "2026-07-11T05:00:00Z"  # after 674fa65a
+        reviews = [
+            {"author": {"login": "reviewer-a"}, "state": "APPROVED", "submittedAt": fresh},
+            {"author": {"login": "reviewer-b"}, "state": "APPROVED", "submittedAt": fresh},
+        ]
+        self.assertIsNone(self._check(reviews), "two CURRENT formal reviews must allow merge")
+
+    def test_formal_review_without_timestamp_is_stale(self):
+        reviews = [
+            {"author": {"login": "reviewer-a"}, "state": "APPROVED"},
+            {"author": {"login": "reviewer-b"}, "state": "APPROVED"},
+        ]
+        result = self._check(reviews)
+        self.assertIsNotNone(result, "unknown freshness is not freshness")
 
 
 if __name__ == "__main__":

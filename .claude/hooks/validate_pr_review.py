@@ -64,6 +64,63 @@ Reviewer counting rule (resolves #244):
   - Two-reviewer rule satisfied when there are TWO DISTINCT REVIEWER NAMES across
     Approved comments, neither of which is the PR author.
 
+Verdict staleness — content binding (resolves #950):
+  A verdict is only evidence that someone reviewed THE CODE BEING MERGED if it
+  was cast at or after that code arrived. Pre-#950 the gate never compared the
+  two: it counted every `Approved` trailer regardless of when it was posted, so
+  an approval cast against commit `A` still counted after the author force-pushed
+  `B`, `C`, `D`. Observed three times on 2026-07-11 (da#423, ip#130 x2); on
+  da#423 the gate would have called the PR merge-ready on two `Approved`
+  trailers, one of which approved the revision that deleted the Prophet's
+  daughter and had since been rewritten precisely because it was wrong.
+
+  The binding is to AUTHORED CONTENT, not to the head sha:
+
+    T_content = committer timestamp of the latest NON-MERGE commit on the branch
+    a verdict is STALE  iff  comment.created_at < T_content
+
+  Binding to the head sha instead would invalidate every approval in the org the
+  moment a branch is updated from `main` (`gh api -X PUT .../update-branch`, the
+  routine BEHIND → CLEAN step before any merge): a merge commit moves the head
+  WITHOUT changing what the reviewer read. Merge commits (>= 2 parents) are
+  therefore excluded from T_content — the same lesson as
+  `feedback_commit_author_gate_exclude_merges`: a gate over a commit range that
+  does not exclude merge commits is corrupted by routine mechanics. This is the
+  distinction GitHub's own "dismiss stale reviews when new commits are pushed"
+  makes; we reimplemented the reviewer gate and omitted the staleness half.
+
+  A stale verdict is not hidden or deleted — it is simply not counted, and the
+  block message names it, its timestamp, and the commit that invalidated it.
+  Staleness applies to comment verdicts AND formal GitHub reviews alike.
+
+  Fail-closed (`feedback_safety_direction_over_ux_friction`): if the commit list
+  cannot be fetched, T_content is unknown, so NO verdict's freshness can be
+  established — the hook HARD BLOCKS with a diagnostic rather than reverting to
+  counting everything. A verdict whose own timestamp is missing/unparseable is
+  likewise treated as stale, not as fresh.
+
+  LIMITATION — necessary, NOT sufficient. Read this before trusting the gate.
+
+  Timestamp binding proves a verdict was CAST AFTER the newest authored commit.
+  It CANNOT prove the reviewer READ that commit. A reviewer who reads `A`, then
+  posts a verdict after `B` has landed — because they were slow, or were replying
+  to an earlier thread, or simply did not refetch — produces a verdict this hook
+  scores as CURRENT even though its findings pertain to code that no longer
+  exists. This was observed on da#423 itself: a `ChangesRequested` at 04:25:31
+  postdates the 04:09:36 head and therefore counts as current, but its findings
+  were against the PREVIOUS head and had already been fixed.
+
+  No timestamp can close that gap. Closing it requires binding a verdict to the
+  sha the reviewer actually read — which is exactly what GitHub's native review
+  API does and what our comment-trailer convention does not. This hook removes a
+  whole class of false-positive approvals (a verdict that PROVABLY predates the
+  code); it does not, and cannot, certify that a counted verdict was informed.
+
+  State this honestly wherever the gate is described. An overstated guard is how
+  people come to trust a gate that cannot see the thing it exists to catch —
+  which is the same defect class (`a gate derived from an artifact it does not
+  bind to`) that produced #950 in the first place.
+
 Reviewer dedup key:
   The reviewer set is keyed on the FULL reviewer name (lowercased), not on
   the lastname. Two distinct reviewers with the same lastname (e.g.,
@@ -90,9 +147,11 @@ Single-Reviewer Exception (resolves #228):
   Each file's `**Name:** <Full Name>` line is parsed for the canonical name.
 
 Exit codes:
-  0 — allow (not a merge command, two reviews, or single-reviewer exception)
-  2 — block (fewer than two reviews and exception does not apply, or a
-      verdict is missing TechDebt)
+  0 — allow (not a merge command, two CURRENT reviews, or single-reviewer
+      exception)
+  2 — block (fewer than two current reviews and exception does not apply, a
+      verdict is missing TechDebt, or the PR's commit list could not be fetched
+      so verdict freshness cannot be established)
 """
 
 import json
@@ -100,6 +159,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -424,6 +484,163 @@ def get_pr_data(pr_number: str | None, repo: str | None = None) -> dict | None:
         return None
 
 
+class CommitFetchError(Exception):
+    """Raised when the PR's commit list cannot be fetched or parsed (#950).
+
+    Signals the caller to fail in the SAFE direction (HARD BLOCK with a
+    diagnostic). Without the commit list there is no `T_content`, so NO verdict's
+    freshness can be established — and an unknown-freshness verdict must not be
+    counted, or the staleness gate silently degrades back to the pre-#950
+    fail-open it exists to close (`feedback_safety_direction_over_ux_friction`:
+    when a hook cannot decide cleanly, hard-block with a diagnostic, never
+    allow-with-log).
+    """
+
+
+def _parse_iso8601(value: str | None) -> datetime | None:
+    """Parse a GitHub ISO-8601 timestamp (`2026-07-11T03:42:58Z`) to a datetime.
+
+    Returns None when `value` is absent or unparseable. Callers treat None as
+    UNKNOWN and fail closed — never as "fresh". The trailing `Z` is normalized to
+    `+00:00` so every returned datetime is timezone-aware and therefore safely
+    comparable with every other (a naive/aware mix would raise at comparison).
+    """
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _resolve_owner_repo(repo: str | None) -> tuple[str, str] | None:
+    """Resolve `OWNER`, `NAME` for API calls — from `--repo` if given, else cwd.
+
+    Returns None when the repo cannot be resolved (a failed / unparseable
+    `gh repo view`). Callers fail closed on None.
+    """
+    if repo and "/" in repo:
+        owner, _, repo_name = repo.partition("/")
+        if owner and repo_name:
+            return owner, repo_name
+        return None
+    try:
+        repo_result = subprocess.run(
+            ["gh", "repo", "view", "--json", "owner,name"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if repo_result.returncode != 0:
+            return None
+        repo_data = json.loads(repo_result.stdout)
+        owner = repo_data.get("owner", {}).get("login", "")
+        repo_name = repo_data.get("name", "")
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
+        return None
+    if not (owner and repo_name):
+        return None
+    return owner, repo_name
+
+
+def get_latest_content_commit(
+    pr_number: str | int,
+    repo: str | None = None,
+) -> tuple[str, datetime] | None:
+    """Return `(short_sha, committed_at)` of the PR's latest NON-MERGE commit (#950).
+
+    This is `T_content` — the moment the newest AUTHORED content arrived on the
+    branch, and the line a verdict must sit at or after to count.
+
+    Merge commits are excluded by parent count (a merge has >= 2 parents; a
+    normal commit has 1 and a root commit has 0, so `< 2` is the non-merge test).
+    Excluding them is what lets an approval SURVIVE a routine branch update from
+    `main` — that merge commit moves the head without changing what the reviewer
+    read. Including them would invalidate every approval in the org at the moment
+    of merge (see `feedback_commit_author_gate_exclude_merges`).
+
+    The COMMITTER date is used, not the author date: a rebase or amend preserves
+    the original author date while rewriting the commit object, so only the
+    committer date tracks when the content actually landed on the branch.
+
+    `--paginate` is mandatory: without it a PR with >100 commits silently
+    truncates and T_content is computed from a stale prefix (the same trap #303
+    fixed for the comment fetch).
+
+    Returns None when the PR has NO non-merge commits — a degenerate branch that
+    contributes no authored content, so nothing can be stale against it.
+
+    Raises:
+        CommitFetchError: the commit list could not be fetched or parsed. There
+            is no safe default here — see the class docstring.
+    """
+    owner_repo = _resolve_owner_repo(repo)
+    if owner_repo is None:
+        raise CommitFetchError(
+            f"could not resolve the target repository (--repo={repo!r}, and "
+            "`gh repo view` in the current directory did not return owner/name)"
+        )
+    owner, repo_name = owner_repo
+
+    try:
+        commits_result = subprocess.run(
+            [
+                "gh",
+                "api",
+                "--paginate",
+                f"repos/{owner}/{repo_name}/pulls/{pr_number}/commits?per_page=100",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+        raise CommitFetchError(f"`gh api .../pulls/{pr_number}/commits` failed: {exc}") from exc
+
+    if commits_result.returncode != 0:
+        stderr = (commits_result.stderr or "").strip()
+        raise CommitFetchError(
+            f"`gh api .../pulls/{pr_number}/commits` exited "
+            f"{commits_result.returncode}: {stderr or '<no stderr>'}"
+        )
+
+    try:
+        commits = json.loads(commits_result.stdout)
+    except json.JSONDecodeError as exc:
+        raise CommitFetchError(
+            f"`gh api .../pulls/{pr_number}/commits` returned unparseable JSON: {exc}"
+        ) from exc
+
+    if not isinstance(commits, list):
+        raise CommitFetchError(
+            f"`gh api .../pulls/{pr_number}/commits` returned "
+            f"{type(commits).__name__}, expected a list"
+        )
+
+    latest: tuple[str, datetime] | None = None
+    for commit in commits:
+        if not isinstance(commit, dict):
+            continue
+        if len(commit.get("parents") or []) >= 2:
+            continue  # merge commit — moves the head without changing content
+        committed_at = _parse_iso8601(
+            (commit.get("commit", {}).get("committer", {}) or {}).get("date")
+        )
+        if committed_at is None:
+            # A non-merge commit with no usable timestamp makes T_content
+            # unknowable. Fail closed rather than silently computing T_content
+            # from the commits that DID parse — that would understate it and
+            # wave stale verdicts through.
+            raise CommitFetchError(
+                f"non-merge commit {str(commit.get('sha', '?'))[:8]} has no parseable "
+                "committer date, so T_content cannot be established"
+            )
+        if latest is None or committed_at > latest[1]:
+            latest = (str(commit.get("sha", "?"))[:8], committed_at)
+
+    return latest
+
+
 def extract_branch_author_lastname(head_ref: str) -> str | None:
     """Extract the last name from branch format '{FirstInitial}.{LastName}[-/]...'.
 
@@ -489,6 +706,21 @@ def _child_roster_dir(repo: str | None) -> Path | None:
     return _PARENT_REPO_ROOT / name / ".claude" / "team" / "roster"
 
 
+class StaleVerdict:
+    """A verdict comment cast BEFORE the branch's latest authored content (#950).
+
+    Carried purely for the block diagnostic. An operator who sees `0/2 approvals`
+    on a PR with two visible `Approved` comments will conclude the hook is broken
+    unless it names which verdict went stale and why — so the block message is as
+    load-bearing as the block itself.
+    """
+
+    def __init__(self, reviewer: str, verdict: str, created_at: str) -> None:
+        self.reviewer = reviewer  # Requestor, as written (display form)
+        self.verdict = verdict  # the RequestOrReplied value, as written
+        self.created_at = created_at  # raw ISO timestamp, or "" if absent
+
+
 class CommentReviewResult:
     """Result of checking PR comments for charter-format reviews."""
 
@@ -496,6 +728,7 @@ class CommentReviewResult:
         self.reviewers: set[str] = set()
         self.reviews_missing_tech_debt: list[str] = []  # reviewer names missing TechDebt line
         self.tech_debt_issue_numbers: list[str] = []  # issue numbers from TechDebt: lines
+        self.stale_verdicts: list[StaleVerdict] = []  # verdicts predating T_content (#950)
 
 
 # Only these RequestOrReplied values represent actual review verdicts that
@@ -562,6 +795,7 @@ def check_comment_reviews(
     pr_number: str | int,
     branch_author_lastname: str,
     repo: str | None = None,
+    content_ts: datetime | None = None,
 ) -> CommentReviewResult:
     """Check PR comments for charter-format review comments from different authors.
 
@@ -574,24 +808,28 @@ def check_comment_reviews(
       - 2-reviewer threshold counts distinct Requestor values across Approved
         comments only (ChangesRequested is a verdict-with-TechDebt but does
         not count toward the threshold).
+
+    `content_ts` is `T_content` (#950) — the committer timestamp of the branch's
+    latest non-merge commit, from `get_latest_content_commit`. When supplied, a
+    verdict comment created BEFORE it is STALE: it reviewed code that has since
+    been rewritten, so it is excluded from the reviewer set and recorded in
+    `result.stale_verdicts` for the block diagnostic. A stale verdict is also
+    exempt from the TechDebt attestation requirement — a verdict that carries no
+    weight toward the threshold must not be able to block the merge on a
+    secondary attestation either. A verdict whose own `created_at` is missing or
+    unparseable is treated as STALE, not fresh (fail closed).
+
+    `content_ts=None` means "no content binding" — either the PR has no non-merge
+    commits, or the caller is a legacy/unit call — and every verdict is counted
+    as before. `check()` never passes None on a real merge: a commit-fetch
+    failure raises `CommitFetchError` and hard-blocks upstream of this call.
     """
     result = CommentReviewResult()
     try:
-        # Get repo info — prefer --repo flag from the merge command
-        if repo and "/" in repo:
-            owner, repo_name = repo.split("/", 1)
-        else:
-            repo_result = subprocess.run(
-                ["gh", "repo", "view", "--json", "owner,name"],
-                capture_output=True,
-                text=True,
-                timeout=15,
-            )
-            if repo_result.returncode != 0:
-                return result
-            repo_data = json.loads(repo_result.stdout)
-            owner = repo_data.get("owner", {}).get("login", "")
-            repo_name = repo_data.get("name", "")
+        owner_repo = _resolve_owner_repo(repo)
+        if owner_repo is None:
+            return result
+        owner, repo_name = owner_repo
 
         # Fetch ALL PR comments via the issues API. `--paginate` concatenates
         # each page's JSON array into one combined response; without it, the
@@ -626,6 +864,25 @@ def check_comment_reviews(
 
             is_verdict_comment = _is_verdict(ror_value)
             is_approved_comment = _is_approved(ror_value)
+
+            # Content binding (#950): a verdict cast before the branch's latest
+            # AUTHORED commit reviewed code that has since been rewritten. It is
+            # not evidence about the code being merged, so it neither counts
+            # toward the threshold nor carries a TechDebt obligation — but it IS
+            # recorded, so the block message can name it. An unparseable /
+            # missing comment timestamp is stale, not fresh (fail closed).
+            if is_verdict_comment and content_ts is not None:
+                created_raw = comment.get("created_at", "") or ""
+                created_at = _parse_iso8601(created_raw)
+                if created_at is None or created_at < content_ts:
+                    result.stale_verdicts.append(
+                        StaleVerdict(
+                            reviewer=requestor,
+                            verdict=ror_value.strip(),
+                            created_at=created_raw,
+                        )
+                    )
+                    continue
 
             # Only Approved comments contribute to the reviewer set toward
             # the 2-reviewer threshold (charter line 36, resolves #244).
@@ -902,25 +1159,85 @@ def check(input_data: dict) -> dict | None:
     number = pr_data["number"]
     labels = pr_data["labels"]
 
+    pr_display = f"#{pr_number}" if pr_number else "(current branch)"
+
+    # Content binding (#950). Establish T_content — the committer timestamp of the
+    # branch's latest NON-MERGE commit — BEFORE counting any verdict, because a
+    # verdict cast before it did not review the code being merged. On a fetch
+    # failure T_content is unknown, so NO verdict's freshness can be established:
+    # HARD BLOCK rather than fall back to counting everything, which is precisely
+    # the pre-#950 fail-open (`feedback_safety_direction_over_ux_friction`).
+    try:
+        latest_content = get_latest_content_commit(number, repo=repo)
+    except CommitFetchError as exc:
+        result = {
+            "decision": "block",
+            "reason": (
+                f"BLOCKED: PR {pr_display} — could not fetch the PR's commit list, so the "
+                "hook cannot tell whether the existing approvals reviewed the code you are "
+                "about to merge.\n"
+                f"Detail: {exc}\n\n"
+                "Hook 4 (#950) binds every verdict to the branch's latest NON-MERGE commit: "
+                "an approval cast before that commit reviewed code that has since been "
+                "rewritten and does not count. Without the commit list there is no such "
+                "timestamp, so every verdict's freshness is UNKNOWN.\n"
+                "This blocks rather than waving the merge through, because counting "
+                "verdicts of unknown freshness is exactly the fail-open #950 closes: on "
+                "da#423 the gate counted an approval of the revision that deleted the "
+                "Prophet's daughter, after that revision had been rewritten.\n"
+                "Fix one of:\n"
+                "  - Re-run the merge (a transient `gh api` / network failure).\n"
+                "  - Check `gh auth status` and that the `--repo OWNER/NAME` value is correct.\n"
+                "Pass `--admin` for emergency overrides only."
+            ),
+        }
+        log_pretooluse_block("validate_pr_review", command, result["reason"])
+        return result
+
+    content_ts = latest_content[1] if latest_content else None
+    content_sha = latest_content[0] if latest_content else ""
+
+    # Formal GitHub reviews are bound to T_content by the SAME rule (#950) — a
+    # stale formal review is no better evidence than a stale comment verdict, and
+    # leaving it unbound would be a hole straight through the fix. `submittedAt`
+    # missing or unparseable while T_content is known ⇒ stale, not fresh.
     formal_reviewers: set[str] = set()
+    stale_formal: list[StaleVerdict] = []
     for review in reviews:
         login = review.get("author", {}).get("login", "")
-        if login and login != author:
-            formal_reviewers.add(login.lower())
+        if not login or login == author:
+            continue
+        if content_ts is not None:
+            submitted_raw = review.get("submittedAt", "") or ""
+            submitted_at = _parse_iso8601(submitted_raw)
+            if submitted_at is None or submitted_at < content_ts:
+                stale_formal.append(
+                    StaleVerdict(
+                        reviewer=login,
+                        verdict=str(review.get("state", "REVIEW")),
+                        created_at=submitted_raw,
+                    )
+                )
+                continue
+        formal_reviewers.add(login.lower())
 
     comment_review_result = CommentReviewResult()
     branch_author_lastname = None
     if head_ref:
         branch_author_lastname = extract_branch_author_lastname(head_ref)
         if branch_author_lastname:
-            comment_review_result = check_comment_reviews(number, branch_author_lastname, repo=repo)
+            comment_review_result = check_comment_reviews(
+                number, branch_author_lastname, repo=repo, content_ts=content_ts
+            )
         elif head_ref.startswith("deployments/") and "/wave-" in head_ref:
             # Wave-merge PR (head = deployments/phase-{N}/wave-{M}); no implementer-branch
             # author. Pass empty sentinel so the reviewer-vs-author lastname comparison
             # admits any non-empty reviewer name. See main#294.
-            comment_review_result = check_comment_reviews(number, "", repo=repo)
+            comment_review_result = check_comment_reviews(
+                number, "", repo=repo, content_ts=content_ts
+            )
 
-    pr_display = f"#{pr_number}" if pr_number else "(current branch)"
+    stale_verdicts = comment_review_result.stale_verdicts + stale_formal
 
     # Filter charter-format (comment-based) reviewers against the roster before
     # counting them toward the 2-reviewer gate (#498). The 2-reviewer rule
@@ -974,6 +1291,40 @@ def check(input_data: dict) -> dict | None:
         # Exception applies — fall through to TechDebt check, then allow.
         pass
     elif total_distinct < 2:
+        # If the shortfall is wholly or partly caused by STALE verdicts, lead with
+        # a diagnostic that names each one (#950). Without this an operator seeing
+        # `0/2 approvals` on a PR with two visible `Approved` comments concludes
+        # the hook is broken — so the message must say WHICH verdict went stale,
+        # WHEN it was cast, and WHICH commit invalidated it, and must pre-empt the
+        # natural next fear ("did a branch update just invalidate my approvals?").
+        stale_diagnostic = ""
+        if stale_verdicts:
+            lines = [
+                f"BLOCKED: PR {pr_display} has {total_distinct}/2 CURRENT approvals — "
+                f"{len(stale_verdicts)} verdict(s) went STALE.\n"
+            ]
+            for sv in sorted(stale_verdicts, key=lambda v: v.created_at):
+                cast_at = sv.created_at or "<no timestamp>"
+                lines.append(
+                    f"  {sv.reviewer:<18} {sv.verdict:<17} {cast_at}  "
+                    f"x STALE — cast before {content_sha} "
+                    f"({content_ts.isoformat() if content_ts else '?'})\n"
+                )
+            lines.append(
+                "\nA verdict cast BEFORE the branch's latest non-merge commit reviewed code "
+                "that has since been rewritten, so it does not count toward the 2-reviewer "
+                "threshold. It has not been deleted or dismissed — only not counted.\n"
+                "Branch updates from `main` (merge commits) do NOT invalidate a verdict; "
+                "only NEW AUTHORED commits do. If you just ran `update-branch`, that is not "
+                "what happened here.\n"
+                "Fix: ask the reviewer to re-review at the current head and post a fresh "
+                f"`RequestOrReplied: Approved` comment (head content commit: {content_sha}).\n"
+                "Rationale (#950): on da#423 this gate counted an approval of the revision "
+                "that deleted the Prophet's daughter — after that revision had been rewritten "
+                "precisely because it was wrong.\n\n"
+            )
+            stale_diagnostic = "".join(lines)
+
         # If the shortfall is wholly or partly caused by non-roster Requestor
         # strings, prepend a dedicated diagnostic that names them (#498). The
         # general 2-reviewer guidance still follows below.
@@ -1001,7 +1352,8 @@ def check(input_data: dict) -> dict | None:
         result = {
             "decision": "block",
             "reason": (
-                roster_diagnostic
+                stale_diagnostic
+                + roster_diagnostic
                 + f"BLOCKED: PR {pr_display} has {total_distinct}/2 required peer reviews. "
                 "At least TWO Approved reviews from distinct non-authors are required before "
                 "merge.\n"
