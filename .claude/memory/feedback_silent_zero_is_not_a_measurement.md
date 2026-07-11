@@ -427,6 +427,14 @@ The orchestrator told a reviewer two fixes were done. They were not; he checked 
 
 This is [[feedback_silent_zero_is_not_a_measurement]]'s own rule (*a number that lands in your favour deserves more scrutiny, not less*) applied to **absolution** rather than to evidence. Accepting an undeserved exoneration puts a wrong fact in the record just as surely as the original error did — and it is *harder* to refuse, because someone kind is offering it to you.
 
+**And the mechanism by which she reached the wrong conclusion is its own entry — she named it herself:**
+
+> **I built my correction from the FILE STATE rather than the CLOCK — so I checked *what is true now* and inferred *what was true then*.**
+
+**A STATE IS NOT A HISTORY.** The file at `origin/HEAD` genuinely showed both fixes present, so *"the fixes were there"* was **true when she looked** and **false at the moment in dispute.** Reading the present artifact and reconstructing the past from it is a distinct failure mode, and neither party reached for a timestamp until forced to. **The only instrument that answers *"what was true then"* is a timestamp** — `git log`, commit dates, comment `created_at`. Not the working tree.
+
+**Note the direction it ran: her reconstruction flattered someone else.** So the *"scrutinise the flattering conclusion"* rule arrived from the one angle nobody guards — she was being **generous**, not self-serving. **Generosity produces the same false record as vanity does**, and it is harder to resist because refusing it feels ungracious.
+
 ### Refuse rather than redact, when the leak is unrecoverable
 
 Same script: printing rclone's stderr makes `instrument_error` diagnosable — but **`RCLONE_DUMP=auth` makes rclone echo `Authorization: Basic <base64(keyID:key)>`**, and **GitHub's secret masking is an exact-substring match on the raw secret, so it does not catch the base64 form.** Straight into a public CI log.
