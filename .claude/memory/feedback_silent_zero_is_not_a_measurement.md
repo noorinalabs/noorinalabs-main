@@ -348,6 +348,30 @@ The orchestrator wrote an acceptance criterion whose *entire purpose* was to mak
 
 **The general form, and it is the most humbling one in this file:** *"if you cannot write this test, the implementation is wrong"* is only as strong as the test. **A gating criterion is itself an instrument, and it needs a control like any other.** Mutate the guarded property and require the criterion to fire — **before** you make it a gate.
 
+### A check that cries wolf on SUCCESS is a check people learn to scroll past (2026-07-11, deploy#584)
+
+The inverse of every other entry in this file, and nobody had named it.
+
+A backup-verification script's **self-test deliberately drives the instrument-error path** — that is *correct*, it is how the fixture proves the error branch can fire. But it meant **every passing run printed an alarming `rclone could not list` block**, from a fixture behaving exactly as designed.
+
+> **A guard whose healthy output looks like a failure trains its readers to ignore it — and it only matters on the day someone actually reads it.**
+
+The whole rest of this file is about a guard that is **silent when it should shout**. This is the same wound from the other side: a guard that **shouts when nothing is wrong**, until the shout carries no information. Both end in a human not acting on a real signal. **Alert fatigue is not a UX problem; it is an instrument problem.**
+
+**How to apply:** after wiring a check, **read its output on a fully healthy run.** If a passing run emits anything that looks like an error, fix the *output*, not the reader's tolerance. Suppress expected-failure noise from fixtures; never suppress it from a real scan.
+
+*(Aisha Idrissi, who found it in her own script and fixed it before anyone complained.)*
+
+### Refuse rather than redact, when the leak is unrecoverable
+
+Same script: printing rclone's stderr makes `instrument_error` diagnosable — but **`RCLONE_DUMP=auth` makes rclone echo `Authorization: Basic <base64(keyID:key)>`**, and **GitHub's secret masking is an exact-substring match on the raw secret, so it does not catch the base64 form.** Straight into a public CI log.
+
+She made the script **refuse to run** under `RCLONE_DUMP` rather than attempt to redact it.
+
+> **When the failure is unrecoverable, refuse the input rather than sanitise it.** A redactor is a filter, and a filter you have not proven complete is a filter that will miss one encoding. **You cannot un-publish a credential.**
+
+(Then she grepped the captured output for the key *and* for base64 auth material to confirm neither appears — proving the guard, not asserting it. See [[feedback_pipeline_b2_publish_key]] for the original leak this defends against.)
+
 ## The failure mode with no instrument in it
 
 Every rule above assumes the reporter executed *something*. The corpus has no clause for **an instrument that was never built.**
