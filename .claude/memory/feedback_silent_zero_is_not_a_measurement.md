@@ -1288,3 +1288,17 @@ So it was **eleven outcomes, not ten** — and one of the two errors would have 
 2. **A mismatch between a doc draft and the code is a FINDING, not a formatting nit.** Report it; do not silently paper over it. Both of mine were real defects in my understanding, not typos.
 3. **When the doc and the code disagree, the code wins — and then go back and ask why you believed the doc.** The draft was not a transcription error; it was a wrong *model* of the system, and it would have propagated into whatever else that model touched.
 4. **"CI is green" is inadmissible as evidence for anything a doc asserts.** Reviewers of a docs PR must be told this explicitly, or the green check will do the reviewing for them.
+
+## The meta-instrument: `git diff` silently voids a mutation-effectiveness check on an untracked file (2026-07-11, deploy#580)
+
+The effectiveness check that proves "this mutation actually landed" is itself an instrument, and it can be void like any other. On deploy#580 the mutation harness decided *"did the mutant change the file?"* with `git diff --quiet <file>`. The file was **new and untracked**, so `git diff` is unconditionally empty — the harness labelled **every landed mutant "INERT"** while the target tests were visibly going red. The kill verdicts were correct; the meta-check was lying, in the safe-looking direction (it *under*-claimed effectiveness, which reads as "my mutations don't work" rather than "my check is blind" — so you go fix the wrong thing).
+
+This is the same defect as everything above, one level up: **the thing verifying the verifier could not distinguish "no change" from "I can't see changes."** `git diff` degrades silently to empty on untracked files, on a worktree with a different index, and on already-staged changes — three states you hit constantly in agent worktrees.
+
+**Fix — diff against a pristine COPY you control, never against git:**
+- snapshot the pristine file to scratch **before** mutating,
+- `cmp -s <mutant> <pristine-copy>` to prove bytes actually changed (this is the effectiveness gate — a mutant that `cmp` says is identical did NOT land, skip counting its "kill"),
+- restore from the copy,
+- assert byte-identical restore at the end (`cmp -s` again), so a botched restore can't silently poison the next mutant.
+
+Found and self-reverted by Weronika (deploy#580) — she caught her own harness calling landed mutants inert, rebuilt on `cmp`-vs-copy, and re-ran. Third void-instrument self-catch in one session; the pattern is now the thing this team is fastest at. Related deploy-repo memory (`feedback_calibrate_the_mutation_before_counting_it.md`, deploy#574) carries the mutation-battery discipline in full — this is its "the check itself can be void" corollary. See [[feedback_verify_diagnosis_before_delegating]] for the same shape in orchestrator coordination (the `|| echo "not found"` false-confirm).
