@@ -365,7 +365,21 @@ The self-test wrote one file called `isnad-pg-a.dump` with `timestamp=t`. The py
 
 > **A paraphrase in the product is worse than a paraphrase in a test, because a producer-side rename does not break it — it QUIETLY NARROWS it.** The parser keeps working; it just stops seeing things. **And what it stops seeing is exactly what the guard downstream needed to count.**
 
-**Fix: bind the consumer's parser to the producer's definition** — parse the format out of the producer, as the test fixture already does. **Any hand-written parser of a sibling's output format is a paraphrase, and it will drift.**
+**The obvious fix — *"bind the consumer's parser to the producer's definition"* — was WRONG here, and the author refused it.** The parser is shell on a production box: it cannot import anything, and re-declaring the store names inside the consumer is just **a second paraphrase in a second place.**
+
+> ### **The move that actually closes it is to STOP PARSING THE PART THAT CAN CHANGE.**
+
+She anchored on the **run id** (`[0-9]{8}-[0-9]{6}` — strict, self-delimiting, and the *only* token she actually needed) and let the store segment be `.*`. **Robust to ANY rename, not just the one we thought of.** Sidecars still fall out for free.
+
+**Generalise:** when you must parse a sibling's format, **identify the smallest token you actually need, anchor on the part with a rigid shape, and refuse to model the rest.** A parser that describes the whole format is a parser that breaks — or worse, *silently narrows* — every time any part of the format moves.
+
+### And the limit of producer-binding, found by the person who invented it here
+
+> **The test that builds fixtures from the producer's CURRENT filenames — the producer-bound one, the "right" one — PASSES against the broken parser**, because today's names contain no hyphen. **It is a good test and it is structurally blind here.** The one that catches it introduces a *hyphenated* store name.
+
+> ### **A fixture built from today's instance cannot falsify a rule about tomorrow's.**
+
+**This is a real limit on producer-binding, and it should be known before reaching for it as a universal answer.** Binding the fixture to the producer stops the test from *paraphrasing* — it does **not** make the test *adversarial*. It pins you to the producer's **present**, and the defect class here is a **future** producer-side change. **You still need a fixture that exercises the shape the format is ALLOWED to take, not merely the shape it currently takes.**
 
 And the nondeterminism nearly hid it even after the fixture was fixed: **with only one decoy, the test PASSED against the unfixed code — readdir order happened to favour the right file.**
 
