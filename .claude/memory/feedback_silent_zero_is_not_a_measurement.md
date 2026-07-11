@@ -426,6 +426,37 @@ done
 
 **A finding reported as an incident gets fixed at the incident. Reported as a pattern, it gets fixed at the pattern.** When you receive a defect, ask what *class* it is and then **enumerate every instance of that class in the blast radius** — the reporter found the ones they happened to look at, not the ones that exist.
 
+### The fix for a DISCARDED diagnostic is to capture it SEPARATELY — never to merge it into the data
+
+The over-correction, found independently by both reviewers in the next round.
+
+The defect was `2>/dev/null || true` — **the diagnostic thrown away.** The fix shipped as:
+
+```sh
+dirs="$(rclone lsf "$REMOTE" --dirs-only 2>&1)" || rc=$?
+```
+
+**`2>&1` does not capture the diagnostic. It PROMOTES it to data.** And this tool writes to stderr **on every successful call** (`NOTICE: Config file … not found - using defaults`, because it is configured by env vars and ships no config file). So on a **healthy** bucket:
+
+```
+[WARNING] Skipped 2 INCOMPLETE backup(s) when resolving 'latest':
+[WARNING]     incomplete: daily/2026/07/11 05:13:53 NOTICE: Config file … not found
+```
+
+**It invents two backups that do not exist, and prints a log line to the operator as a backup name.**
+
+> **The two streams exist because one is DATA and one is COMMENTARY.** `2>/dev/null` deletes the commentary; **`2>&1` promotes it to data.** Neither is capture. **Capture is `2>"$err"` — a third place, read only on failure.**
+
+**How to apply.** When you fix a swallowed error, check *what you did with it*:
+
+| | what it does |
+|---|---|
+| `2>/dev/null`, `\|\| true` | **discards** the diagnostic — the original bug |
+| `2>&1` into a variable | **merges** it into the result — a NEW bug, and it fires on the **healthy** path |
+| **`2>"$err"`, read on failure** | **captures** it ✅ |
+
+**And note the shape of the regression: the original bug fired only on failure; the fix fired on SUCCESS.** A tool that writes to stderr when nothing is wrong is common (warnings, deprecations, progress, config notices) — so `2>&1` corrupts the normal path, which is the path nobody tests as hard. *(The sibling scanner in the same PR already did it correctly with `2>"$err"`.)*
+
 ### DETERMINISTIC IS NOT UN-TORN
 
 The torn-restore fix bound each dump to a run timestamp from the manifest — **and he could not tear the bound path.** But the **fallback**, taken when the manifest carries no timestamp, was three *independent* `sort -r | head -1`:
