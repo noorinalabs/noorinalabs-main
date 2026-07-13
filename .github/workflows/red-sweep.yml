@@ -1,0 +1,71 @@
+# Red default-branch workflow sweep (main#962) — the scheduled replacement for
+# /session-start Step 5a's per-session 8-repo gh-api loop.
+#
+# Every 6h (and on manual dispatch) this sweeps the latest default-branch run
+# of every publish/deploy/release-class workflow across all canonical org
+# repos, classifies red runs (base-image-drift vs code/other, main#647), and
+# persists the small JSON verdict to the dedicated lightweight ref
+# `refs/meta/red-sweep` as a single-file tree on a parentless commit
+# (force-updated each run — O(1) storage, invisible to branch UX, and a
+# refs/meta/* update can never trigger workflows).
+#
+# Session-start reads the verdict with ONE contents-API call:
+#   python3 .claude/lib/red_sweep.py check
+# and WARNs (never false-greens) when the verdict is missing or >24h old.
+#
+# GITHUB_TOKEN suffices: `contents: write` covers the git-database writes on
+# this repo, and the org repos are public so cross-repo run/log reads need no
+# PAT (`actions: read` covers this repo's own runs).
+
+name: Red default-branch sweep
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  sweep:
+    name: Sweep + persist verdict
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run sweep (shared implementation, .claude/lib/red_sweep.py)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # `sweep` exits 2 only when NO repo could be checked; a partial sweep
+        # (some repos in `errors`) exits 0 and the verdict itself carries the
+        # UNKNOWN repos, which the session-start reader surfaces as a WARNING.
+        run: python3 .claude/lib/red_sweep.py sweep --out /tmp/red-sweep.json
+
+      - name: Persist verdict to refs/meta/red-sweep
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          [ -s /tmp/red-sweep.json ] || { echo "no verdict produced — nothing to persist"; exit 0; }
+          repo="${GITHUB_REPOSITORY}"
+          blob="$(gh api "repos/${repo}/git/blobs" \
+            -f content="$(base64 -w0 /tmp/red-sweep.json)" \
+            -f encoding=base64 --jq .sha)"
+          jq -n --arg sha "$blob" \
+            '{tree: [{path: "red-sweep.json", mode: "100644", type: "blob", sha: $sha}]}' \
+            > /tmp/tree.json
+          tree="$(gh api "repos/${repo}/git/trees" --input /tmp/tree.json --jq .sha)"
+          jq -n --arg tree "$tree" \
+            --arg msg "red-sweep verdict $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{message: $msg, tree: $tree}' > /tmp/commit.json
+          commit="$(gh api "repos/${repo}/git/commits" --input /tmp/commit.json --jq .sha)"
+          # Force-update the meta ref; create it on first run.
+          jq -n --arg sha "$commit" '{sha: $sha, force: true}' > /tmp/ref.json
+          if ! gh api -X PATCH "repos/${repo}/git/refs/meta/red-sweep" --input /tmp/ref.json; then
+            jq -n --arg sha "$commit" '{ref: "refs/meta/red-sweep", sha: $sha}' > /tmp/newref.json
+            gh api "repos/${repo}/git/refs" --input /tmp/newref.json
+          fi
+          echo "persisted red-sweep verdict at refs/meta/red-sweep (${commit})"

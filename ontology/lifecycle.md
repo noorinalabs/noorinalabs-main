@@ -100,7 +100,7 @@ awareness across 7 steps (worktree hygiene, team model, handoff, ontology,
 Annunaki, wave/phase orientation, charter freshness).
 
 - **(a) code/repo actions:** anchors `REPO_ROOT` to the parent org repo via `git rev-parse --git-common-dir`; runs `.claude/lib/sync_main.py` (fast-forward-only sync of a clean, strictly-behind `main`); iterates the parent + 7 child repos calling `git worktree prune` / `worktree list` / `worktree remove` with a verify-merged-then-remove guard (`git merge-base --is-ancestor … origin/main`); reads `.claude/memory/session_handoff.md`, `cross-repo-status.json`, and the tail of `.claude/team/feedback_log.md`. Sub-skills: `/ontology-rebuild` (step 3), `/annunaki` (step 4), and `/board-audit` (step 5, only if board↔label drift is observed).
-- **(b) GitHub API:** `git fetch origin main` per repo; `gh issue list` (open-issue + blocker count); `gh api repos/noorinalabs/{repo}` for default branch; `gh api …/actions/runs?branch={default}` to find the latest publish/deploy/release run per workflow on each repo's default branch (Step 5a red-run detection) plus `gh run view --log-failed` for base-image-CVE cause classification.
+- **(b) GitHub API:** `git fetch origin main` per repo; `gh issue list` (open-issue + blocker count); one `gh api` contents read of the `refs/meta/red-sweep` verdict (Step 5a — the per-repo run/log sweep itself moved to the scheduled `red-sweep.yml` workflow + `.claude/lib/red_sweep.py`, main#962).
 - **(c) MCP calls:** none.
 - **(d) other external services:** none.
 
