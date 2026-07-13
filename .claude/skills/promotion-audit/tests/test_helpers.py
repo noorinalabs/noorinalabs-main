@@ -274,6 +274,26 @@ class CountRetroCitationsTests(unittest.TestCase):
         finally:
             os.unlink(path)
 
+    def test_counts_include_per_phase_archives(self) -> None:
+        """Citations split across the live log and archive/ files are summed (#964).
+
+        Closed-phase entries move byte-for-byte to archive/feedback_log_*.md at
+        phase close; the count must scan live + archives or historical citations
+        vanish from the promotion pipeline.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            live = os.path.join(d, "feedback_log.md")
+            with open(live, "w", encoding="utf-8") as f:
+                f.write("current phase cites Some rule once\n")
+            arch = os.path.join(d, "archive")
+            os.makedirs(arch)
+            with open(os.path.join(arch, "feedback_log_phase-3.md"), "w", encoding="utf-8") as f:
+                f.write("old retro cites Some rule and Some rule again\n")
+            with open(os.path.join(arch, "trust_matrix_phase-3.md"), "w", encoding="utf-8") as f:
+                f.write("Some rule mentioned here must NOT count (wrong file family)\n")
+            # by_title = 1 (live) + 2 (feedback_log archive) = 3; trust_matrix archive ignored
+            self.assertEqual(h.count_retro_citations(self._mem(), live), 3)
+
     def test_frontmatter_floor_applies(self) -> None:
         """NEG: if the log has zero hits but frontmatter lists retros, floor kicks in."""
         log = "no mentions"

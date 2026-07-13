@@ -1,0 +1,770 @@
+# Trust Identity Matrix — Phase 3 archive
+
+> Archived byte-for-byte from `.claude/team/trust_matrix.md`
+> at phase close (#964, meta #960), preserving original file order. Do not edit —
+> append-only history; new entries go to the live file for the current phase.
+
+---
+
+## Phase 3 Wave 1 Trust Updates (2026-04-30) — Promotion Pipeline Goes Prod
+
+### Org-Level Team (noorinalabs-main)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Aino Virtanen (SQL) | 5 | 5 | Not actively spawned this wave; ontology rebuild + commit identity attribution on session-start + wave-wrapup commits. Already at max. |
+| Nadia Khoury (PD) | 4 | 4 | Not actively spawned this wave (single-team pattern; orchestrator drove dispatch directly). No change. |
+| Wanjiku Mwangi (TPM) | 5 | 5 | Not actively spawned this wave. No change. |
+| Santiago Ferreira (RC) | 5 | 5 | Not actively spawned this wave. No change. |
+
+### Child-Repo Teams — P3W1 Updates
+
+#### noorinalabs-deploy team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Aisha Idrissi (SRE) | 5 | 5 | Heavy lifter again: 4 PRs authored (#198 promote.yml stg-verify gate, #202 integration-tests remote-mode, #207 verify-stg flip, #210 alembic textfile metrics) + 3 reviewed (#197, #201, #208). Pattern B implementer-side founding data point: caught 3-x scope expansion on #161 pre-implementation (alert never landed in #153, textfile collector not configured) — saved a dead-code-at-merge round-trip. Pattern A data point: design-rationale block at #198 lines 232-258 (gate-stg-verify rationale). Judgment sharper than spec on three calls (#161 alert split into Failure + Stale, #198 freshness filter defense, #210 cloud-init wiring choice). Already at max. |
+| Lucas Ferreira (SRE) | 4 | **5** ↑ | Reviewer-class standout this wave. Three substantive interventions: (1) Caddyfile evidence-receipts at lines 88-89 / 101 catching real false-positive bug on Aisha's #206 USER_SERVICE_URL/SITE_URL fallback; (2) Drift-catch on #210 v3 manager-pass that Bereket missed (runbook L161 + compose 614-621 staleness vs cloud-init/0755 reality); (3) Reality-post-#87 mapping table on #206 PR body — issue body's "Deploy noorinalabs-isnad-graph" trigger names were stale; honest scope reframe + delivery of actual non-legacy work. Plus 3 PRs authored (#197 rollback expand with bundled per-service env-var fix, #201 db-migrate wiring with 5-path retag-gate truth table, #206 verify-deploy multi-trigger) and clean self-correction discipline on his own #210 first-comment header inversion (within 2 minutes via re-post). Promoted to named-primitive author tier. |
+| Bereket Tadesse (Infra Mgr) | 4 | 4 | Strong manager-pass review pattern (8 manager-direct + manager-pass second-reviews this wave) + Pattern A data point (5-path retag-gate truth table on #201) + scope-rationalization rigor. Pattern B-mirror data point: implementer pushback discipline guidance on Aisha's freshness-filter pushback. Authored four-pattern retro synthesis ahead of retro skill. **Negative signal**: 6 self-violations of `feedback_refresh_before_status_claim` in one wave (manager-class self-overconfidence-after-attention-fatigue), plus drift-catch failure on #210 v3 manager-pass that Lucas caught (claimed comprehensive coverage on a load-bearing review). Net: positive contribution + honest self-correction discipline (each violation self-flagged) balances the manager-class-amplifier coverage failures. Hold at 4. Worth reassessing next wave if pattern persists. |
+| Weronika Zielinska (PA) | 4 | 4 | Clean blackbox-exporter delivery (#208) — 4-artifact scope (compose service + module config + scrape config + alert rules + Grafana dashboard + runbook + amtool silence recipe). Fold-in of Bereket's (b) hairpin-NAT + (c) cert-expiry-non-HTTPS observations into PR; filed (a) double-pager guard as #209 follow-up — multi-layer-gap discipline applied correctly. Pattern A data point: load-bearing assertion comments per module file. Initial header-convention inversion on #208 first review (corrected via re-post by orchestrator in #208 merge cycle). Hold at 4. |
+| Nino Kavtaradze (Sec Eng) | 4 | 4 | Not actively spawned this wave. No change. |
+| Nurul Hakim (Observability Eng) | 3 | 3 | Pinged by Aisha for textfile-collector path/UID consultation on #161; did not respond inside the 5-minute window. Aisha defaulted to runbook-step recipe per orchestrator's fallback, then Bereket override-amended to cloud-init wiring per Bereket-axiom-zero (no snowflake infra). No change — single pinged-but-non-responsive signal; not enough to move trust either direction. Worth flagging to ensure she's reachable for future observability surface decisions. |
+
+### Done Well / Needs Improvement (Phase 3 Wave 1)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Aisha Idrissi** (deploy SRE) | 4 PRs + 3 reviews + 3-x scope catch on #161 + dual-alert design (Failure + Stale) sharper than spec + freshness-filter pushback on #198 review (push-back-when-preference, accept-when-bug discipline) | Pattern C: 2 instances — silent-idle without team-lead handoff message at #202 PR-open + post-merge state-stale push at #210 (`684f1b2` rebase landed AFTER #210 squash merged); accepted both as Pattern C self-application |
+| **Lucas Ferreira** (deploy SRE) | 3 PRs + 4 reviews + 3 substantive bug-catches + clean self-correction within 2 min on #210 first-comment header inversion + Reality-post-#87 mapping table on #206 (honest audit against stale issue body) | Pushed #206 before #205 merged against explicit "wait" instruction; technical merit sound (textually disjoint sections of verify-deploy.yml; both PRs MERGEABLE simultaneously) but instruction-non-compliance worth retro note |
+| **Bereket Tadesse** (deploy Mgr) | 8 manager-passes + Pattern A 5-path retag-gate truth table on #201 + scope rationalization on #161 (atomic three-part Option 1 call) + cloud-init Bereket-axiom-zero override + 4-pattern retro synthesis before retro skill ran | 6 Pattern C self-violations including drift-catch failure on #210 v3 (claimed comprehensive coverage; Lucas caught the runbook L161 + compose 614-621 drift); self-named on `feedback_refresh_before_status_claim` memory but most-violation-prone role this wave |
+| **Weronika Zielinska** (PA) | Clean blackbox-exporter delivery + Pattern A load-bearing-assertion module comments + multi-layer-gap discipline on (a)/(b)/(c) review observations | Initial header-convention inversion on #208 first review (corrected via re-post in merge cycle) |
+| **Orchestrator** | 8/8 PRs landed; 9 follow-ups filed during wave (#199 #200 #203 #204 #209 #211 #212 + main#232 + main#233); Pattern A/B/C synthesis converged with Bereket's; honest acknowledgment of 1 Pattern C instance on self (2/2-cleared misclaim); 9 worktree cleanup; ontology resolved | 1 Pattern C instance (premature "2/2 cleared" status claim on #208 before reviewer count was actually verified); main#233 charter-clarification framing initially wrong — corrected after Bereket's wire-artifact verification (originally proposed 2-readings ambiguity that didn't exist; only Reading 1 in actual use) |
+
+
+---
+
+## Phase 3 Wave 3 Trust Updates (2026-05-04) — Post-Emergency Stabilization + Frontend Absolute-URLs Phase 2
+
+### Org-Level Team (noorinalabs-main)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Aino Virtanen (SQL) | 5 | 5 | Actively spawned. main#242 (block stale `/tmp/*` message/body files, +384/-0) — biggest main# PR in the wave; new PreToolUse hook with table-driven config, dispatcher integration, and tests. Clean ship: 4/4 CI green, single-cycle Approved by Nadia + Wanjiku. Already at max. |
+| Nadia Khoury (PD) | 4 | 4 | Actively spawned. main#241 Pattern D adoption signal-check audit (+170/-0). Tracking deliverable, scope-appropriate. Single-cycle Approved by Aino + Wanjiku. No change. |
+| Wanjiku Mwangi (TPM) | 5 | 5 | Org-level 2nd-reviewer on both main# PRs (#241, #242). Already at max. |
+| Santiago Ferreira (RC) | 5 | 5 | Not actively spawned this wave. No change. |
+
+### Child-Repo Teams — P3W3 Updates
+
+#### noorinalabs-deploy team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Aisha Idrissi (SRE) | 5 | 5 | 4 PRs (#254 smoke fix `+36/-33`, #258 phantom `/auth/login` `+36/-29`, #260 cold-rebuild gate `+876/-0` first-deploy bug-class acceptance gate, #267 oauth runbook `+253/-0`). One ChangesRequested cycle on #267 (Bereket caught wrong workflow input `image_tag`→`source_sha` + 4 other items in 2nd-reviewer pass; Aisha shipped 5 fixes in 49 lines clean, additive commit, no force-push). 0 CI failures across all 4. Already at max. |
+| Lucas Ferreira (SRE) | 5 | 5 | 2 PRs (#257 TF CF+B2 CI matrix `+223/-47`, #266 Caddy CSP `+21/-1`). Reviewer-class signal: 2nd-review on #266 caught a SHA citation drift in Bereket's review (`3792b97a` cited vs actual unblocker head `fb9d44d3`) — meta-state-verification (verified Bereket's verification). Drove cross-repo Option A on #266 ChangesRequested by triggering user-service#92. 0 CI failures. Already at max. |
+| Bereket Tadesse (Infra Mgr) | 4 | **5** ↑ | Wave-completion reviewer standout. Caught **5 distinct must-fix items** across 4 wave-completion batch PRs: (1) #266 live-state mismatch — PR body claimed `users.*` was JSON-only, but live trace showed `/docs` + `/redoc` returning HTML; triggered cross-repo Option A → US#92. (2) #259 operational concern on `auth-login-redirect` probe handling; Weronika chose Path A bundled. (3) #261 `gate-stg-verify` job-level `permissions:` shadowing workflow-level (YAML resolution semantic bug). (4) #261 runbook `#127`→`#262` ref correction. (5) #267 wrong workflow input name `image_tag`→`source_sha` + 4 secondary items. Pattern B (verify-vs-artifact) applied textbook on every review (HEAD SHA cited, `gh api contents` reads, deltas measured). P3W1 Pattern C 6-violation pattern did NOT recur — strong reversal signal. Promoted to max. |
+| Weronika Zielinska (PA) | 4 | **5** ↑ | 2 substantive PRs (#259 prometheus blackbox `+50/-19`, #261 break-glass audit `+725/-16` first composite action in repo). 3 ChangesRequested items resolved cleanly across both PRs (Path-A bundled on #259; permissions shadowing + runbook ref on #261). Tech-debt self-correction signal: caught own PR-body claim that `TechDebt: #127` was active before Bereket's review started (verified `#127 CLOSED 2026-04-19`); updated PR body in real time. Pattern A data points: composite-action design rationale documented inline. 0 CI failures. Promoted to max. |
+| Nino Kavtaradze (Sec Eng) | 4 | 4 | Not actively spawned this wave. No change. |
+| Nurul Hakim (Observability Eng) | 3 | 3 | Not actively spawned this wave. No change. |
+
+#### noorinalabs-user-service team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Idris Yusuf (Sec Eng — user-service member) | 4 | **5** ↑ | Cross-repo unblocker pattern: user-service#92 (`+68/-1`, disable FastAPI `/docs` + `/redoc` + `/openapi.json` in production via env-gated `docs_url=None`) emerged DURING the wave to unblock deploy#266 ChangesRequested (Bereket's live-state catch on `users.*` non-JSON-only finding). Minimal-surgical fix; appropriate-scope override of "wait for next wave" tendency given cross-repo blocker context. Same engineer also shipped isnad-graph#854 (`+9/-1` Trivy nghttp2-libs CVE digest-pin + apk upgrade) — multi-repo coverage class signal (P3W1 not-spawned → P3W3 founding cross-repo coverage). Promoted to max. |
+| Anya Kowalczyk (TL) | 4 | 4 | Not actively spawned this wave (Idris-91 work was solo cross-repo; Anya-class would have been 2nd reviewer if hook had been spawned). No change. |
+| Mateo Salazar (Eng) | 4 | 4 | Not actively spawned this wave. No change. |
+
+#### noorinalabs-isnad-graph team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Idris Yusuf (Sec Eng — isnad-graph member) | 4 | **5** ↑ | Same engineer cross-mapped from user-service team — single trust track. isnad-graph#854 surfaced as a pre-wave Trivy HIGH blocker (CVE-2026-27135 nghttp2-libs); shipped digest-pin + `apk upgrade --no-cache` combination in 9 lines; image size delta tractable (+1.8% to 95.2MB). Cross-repo coverage class. Promoted to max in conjunction with US team entry. |
+| Linh Pham (Frontend) | 3 | 3 | Not actively spawned this wave. No change. |
+| Jiyoung Park (Frontend) | — | **3** (new) | isnad-graph#855 first contribution (`+51/-5` frontend absolute URLs via `VITE_USER_SERVICE_ORIGIN`). Surgical scope — wires the env-var, adds typed accessor, no behavior change at the API call sites. Clean ship: 9/9 CI green, single-cycle Approved. New entry at 3 (appropriate-scope). |
+
+#### noorinalabs-landing-page team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| K. Mensah-Williams | 3 | 3 | landing-page#75 (`+16/-0` emit OCI image index for multi-arch parity, closing deploy#242). Surgical workflow change. Clean ship: 2/2 CI green, single-cycle Approved. Holding at 3 (second appropriate-scope contribution; consistent with W10 entry profile). |
+
+### Done Well / Needs Improvement (Phase 3 Wave 3)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Bereket Tadesse** (deploy Mgr) | 5 must-fix catches across 4 wave-completion PRs; Pattern B textbook application (HEAD SHA + `gh api contents` + delta measurement on every review); P3W1 Pattern C 6-violation pattern did NOT recur — strong reversal signal | None this wave. |
+| **Weronika Zielinska** (PA) | First composite action in repo (#261); Path-A discipline on #259; tech-debt self-correction caught `TechDebt: #127` closed-state before review started; both ChangesRequested cycles resolved with additive commits (no force-push) | None this wave. |
+| **Aisha Idrissi** (deploy SRE) | 4 PRs sustained delivery; cold-rebuild gate (#260) is W2-retro action item — closed at first opportunity; ChangesRequested-on-#267 cycle resolved cleanly with 5 fixes in additive 49-line commit | None this wave. |
+| **Lucas Ferreira** (deploy SRE) | Meta-state-verification on #266 (caught Bereket's SHA citation drift); cross-repo Option A escalation worked end-to-end; #257 TF CI matrix is W2-retro action item — closed at first opportunity | None this wave. |
+| **Idris Yusuf** (cross-repo Sec) | Founding cross-repo-coverage data point (US#92 + isnad-graph#854 in same wave); minimal-surgical fix shape held under cross-repo blocker pressure | None this wave. |
+| **Aino Virtanen** (SQL) | Largest main# PR in wave (#242, 384 lines); table-driven hook with tests | None this wave. |
+| **Orchestrator** | 14/14 PRs landed clean; 0 CI failures wave-wide; 4 ChangesRequested cycles all resolved without force-push; promotion-audit ran end-to-end (deterministic 0/0/60/3/1); honest filing of 6 orchestrator-class gaps as their own issues (main#238 wave-kickoff multi-repo + 5 sibling tracking comments) | 6 orchestrator-class pre-flight gaps — caught by implementers/reviewers/hooks, not pre-flight. Recurring class: wave-branch-creation (Aisha-252 catch), deploy#242 attribution (Idris-853 catch), child-repo-implementer rule (landing-page + user-service mid-wave), 2-reviewer planning, agent-naming pattern, spawn-brief-reviewer-order-inversion. main#238 tracks the wave-kickoff fix; the rest need a pre-flight checklist. Used `--admin` override on 5 wave-merge PRs because validate_pr_review.py treats Requestee-as-reviewer mismatching the wave's Requestee=author format (main#244 tracks the hook fix). |
+
+
+
+---
+
+## Phase 3 Wave 4 Trust Updates (2026-05-05) — Tooling & Process-Discipline Cleanup
+
+### Org-Level Team (noorinalabs-main)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Aino Virtanen (SQL) | 5 | 5 | 8 main# PRs (~5400 LOC), 0 CI failures, theme-coherent hook bug-class consolidation. #248 shared `_shell_parse.py` parser refactor closing 7 issues; #250 validate_pr_review canonicalization closing 3 issues (eliminated W3's 5/5 wave-merge admin-override pattern); #254 charter+docs sweep closing 6 followups; #256 validate_edit_completion hook; #257 validate_workflow_paths_coverage hook; #261 Hook 14 NEUTRAL allowlist; #265 canonical hook-sync doc Phase 1; #266 promotion-audit STALE-OPT-OUT class. One ChangesRequested cycle on #250 resolved with additive commit (no force-push). Already at max. |
+| Wanjiku Mwangi (TPM) | 5 | 5 | 2 skill PRs closing W3 retro carry-forwards: #245 wave-kickoff multi-repo branches (closes #238), #249 wave-scope reconciliation (closes #196). Pattern B reviewer-class signal: ChangesRequested catch on #250 (caught canonicalization edge case; resolved cleanly via additive Reply). Reviewer on all 10 main# PRs. Already at max. |
+| Nadia Khoury (PD) | 4 | 4 | Reviewer-only this wave (no implement spawns). All approvals 1st-cycle Approved or single-reply chains. No level-changing positive/negative signal. No change. |
+| Santiago Ferreira (RC) | 5 | 5 | Reviewer on #266 only — wave theme was tooling, not deploy-class. Already at max. |
+
+### Child-Repo Teams — P3W4 Updates
+
+#### noorinalabs-isnad-graph team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Linh Pham (DevOps Eng) | 3 | **4** ↑ | First substantive shipper-class entry: isnad-graph#858 (`+370/-0`, validate_commit_identity cross-repo merge handling + strip ordering tests, closes #819 + #814). Test-discipline-class contribution at appropriate scope. 9/9 CI green, 4 charter-format comments, single-cycle Approved. |
+| Ingrid Lindqvist (Engineer) | — | **3** (new) | First contribution: isnad-graph#857 (`+1/-1` CLAUDE.md branching backslash → slash, closes #852). Trivial doc-sync; appropriate-scope first entry. 9/9 CI green. New entry at 3. |
+
+#### noorinalabs-user-service team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Mateo Salazar (Engineer) | 4 | 4 | user-service#94 (`+1/-1` CLAUDE.md slash sync, closes #90). Trivial doc-sync; not a level-changing signal. Hold at 4. |
+
+#### noorinalabs-design-system team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Kofi Mensah (Docs / Storybook Eng) | — | **3** (new) | First contribution: design-system#63 (`+1/-1` CLAUDE.md slash sync, closes #62). Trivial doc-sync; appropriate-scope first entry. 2/2 CI green. New entry at 3. |
+
+#### noorinalabs-data-acquisition team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Sofia Cardoso (Tech Writer) | — | **3** (new) | First contribution: data-acquisition#34 (`+1/-1` CLAUDE.md slash sync). Trivial doc-sync; appropriate-scope first entry. 4/4 CI green. New entry at 3. |
+
+### Done Well / Needs Improvement (Phase 3 Wave 4)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Aino Virtanen** (SQL) | Theme-coherent 8-PR hook bug-class sweep; #248 shared parser closing 7 issues; #250 eliminated W3's wave-merge admin-override pattern in same wave it landed; 5400 LOC at 0 CI failures | None this wave. (Wave-concentration risk noted at the team level — 80% of main# from one engineer — but assessed against the engineer as theme-fitness, not negative signal.) |
+| **Wanjiku Mwangi** (TPM) | 2 skill PRs closing W3 retro carry-forwards; ChangesRequested catch on #250; reviewer on all 10 main# | None this wave. |
+| **Nadia Khoury** (PD) | Reviewer coverage on all 10 main# PRs; clean approvals | Not actively spawned for implement work this wave; reduced visibility on coordination-class output. |
+| **Santiago Ferreira** (RC) | Reviewer on #266 | Theme-misalignment — RC role is light when wave is tooling-only; no actionable improvement. |
+| **Linh Pham** (isnad-graph DevOps) | 370-line hook-test PR closing #819+#814; test-discipline at appropriate scope | None this wave. |
+| **Ingrid Lindqvist** (isnad-graph Eng) | First contribution executed cleanly | None this wave. |
+| **Mateo Salazar** (user-service Eng) | Same-day 1-line trivial sync | None this wave. |
+| **Kofi Mensah** (design-system Docs Eng) | First contribution executed cleanly | None this wave. |
+| **Sofia Cardoso** (data-acquisition Tech Writer) | First contribution executed cleanly | None this wave. |
+| **Orchestrator** | 14/14 PRs landed; 0 CI failures wave-wide; 0 admin overrides (down from 5/5 in W3); 3-of-3 W3 retro action items discharged in W4; promotion-audit ran end-to-end (deterministic 0/0/65/3/1) | Wave-concentration: 80% of main# from one engineer is fragile; W5 carry-forwards (#263, #264) MUST distribute across implementers. ingest-platform was in declared scope but produced 0 PRs — silent scope-drop with no de-scope decision recorded. 4 child-repo trivial doc-sync PRs ran as separate review pairs instead of bundled — overhead-heavy for byte-identical change. |
+
+---
+
+## Phase 3 Wave 5 Trust Updates (2026-05-06) — Multi-Repo Fan-Out + Memory Classification + Skill Self-Improvement
+
+### Org-Level Team (noorinalabs-main)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Aino Virtanen (SQL) | 5 | 5 | 3 main# PRs, all clean. #275 (`+2/-0` ci.yml paths filter for `.claude/skills/**`, closes #267) — minimal scope, exactly the right size for a CI gate fix. #276 (`+217/-0` thread `/wave-scope` into `/wave-retro` Step 9 + `/wave-kickoff` Step 0a + `/wave-scope` Step 13 timestamp write, closes #273) — both reviewers ChangesRequested, resolved via additive Reply commits + clean Approved cycle. #277 (`+725/-0` systematic frontmatter classification of 36 feedback memories, closes #269) — load-bearing memory-system work that flips the next `/promotion-audit` from `0 AUTO / 0 DECIDE` to a real surface. Concentration dropped to **27%** (3/11) from W4's 80% — W4 retro action item #2 (distribute fan-out) achieved. Already at max. |
+| Wanjiku Mwangi (TPM) | 5 | 5 | #279 (`+4/-0` charter Single-Reviewer Exception cross-reference paragraphs, closes #271) — completed the W4-retro followup Aino flagged on PR #270. Pattern B reviewer-class catch on #276 (ChangesRequested on wave-scope edge case alongside Nadia, both resolved via additive Reply). Reviewer on all 4 main# PRs. Already at max. |
+| Nadia Khoury (PD) | 4 | 4 | Reviewer on all 4 main# PRs. Pattern B catch on #276 alongside Wanjiku (independent ChangesRequested, both with additive-resolution Approved cycle). No implement-class spawn this wave; coordination-class signal is reviewer-only. No change. |
+| Santiago Ferreira (RC) | 5 | 5 | Theme was multi-repo fan-out + memory + skills — no deploy-class work routed to RC. Already at max. |
+
+### Child-Repo Teams — P3W5 Updates
+
+#### noorinalabs-isnad-graph team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Linh Pham (DevOps Eng) | 4 | 4 | isnad-graph#861 (`+37/-1173` canonical hook-paths migration — delete copies + rewrite settings.json). 1 ChangesRequested cycle (Anya + Arjun both CR'd; resolved via Reply chain + Approved). 9/9 CI green, 9 charter-format comments. Substantive cross-repo fan-out execution at appropriate scope. Hold at 4 — clean execution, no level-changing signal. |
+
+#### noorinalabs-user-service team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Mateo Salazar (Engineer) | 4 | 4 | user-service#96 (`+152/-449` canonical hook-paths migration — rewrite settings.json + delete copy-resident hooks). 0 CR cycles. 1/1 CI green. Approved by Anya Kowalczyk + Idris Yusuf. Step up in scope from W4's 1-line trivial sync; clean execution. Hold at 4. |
+
+#### noorinalabs-design-system team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Kofi Mensah (Docs / Storybook Eng) | 3 | **4** ↑ | Second contribution at substantive scope: design-system#66 (`0/-273` chore: remove copy-resident orphan hook files, closes #65). 0 CR cycles. 2/2 CI green. Approved by Maeve Callahan + Keanu Tama. Promotion to 4 reflects clean execution at meaningful scope (273-line delete is materially larger than W4's 1-line entry). |
+
+#### noorinalabs-data-acquisition team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Tarek Mansour (Engineer) | — | **3** (new) | First wave-PR entry: data-acquisition#37 (`0/-273` drop copy-resident hook remnants — parent-canonical sweep, closes #36). 0 CR cycles. 4/4 CI green. Approved by Dilara Erdogan + Alejandra Reyes-Fuentes. Implementer-substitution from declared scope (Sofia Cardoso was the kickoff-declared implementer for T1A #263 in this repo — see § Done Well / Needs Improvement and feedback log Pain Point #2). New entry at 3 — appropriate-scope first wave PR, clean execution. |
+| Sofia Cardoso (Tech Writer) | 3 | 3 | No PR this wave; declared T1A #263 implementer position handed off to Tarek Mansour with no recorded swap rationale. Not a negative signal against Sofia (no failure to deliver — work was reassigned). Hold at 3. |
+
+#### noorinalabs-isnad-ingest-platform team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Yusuke Inoue (Engineer, Principal) | — | **4** (new) | First substantive PR entry: ingest-platform#26 (`+12/-9` drop Dockerfile workaround, install via uv export+pip from authoritative lock, closes #14). 0 CR cycles. Approved by Adaeze + Bjorn. Closes a long-deferred Dockerfile-workaround issue and resolves W4's silent-scope-drop pattern by being the active implementer for ingest-platform's first real wave-cycle deliverable. New entry at 4 — Principal-level scope on a previously-deferred load-bearing fix. |
+
+#### noorinalabs-deploy team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Lucas Ferreira (SRE) | 5 | 5 | deploy#271 (`0/-781` canonical hook-paths migration — delete copies + rewrite settings.json). Largest deletion in wave (781 lines). 0 CR cycles. Approved by Bereket Tadesse + Aisha Idrissi. Clean execution on the largest fan-out target. Already at max. |
+
+#### noorinalabs-landing-page team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Kofi Mensah-Williams (Engineer) | 3 | **4** ↑ | landing-page#79 (`0/-273` chore: delete stale copy-resident `.py` — adopt parent-canonical pattern, closes #78). 0 CR cycles. 2/2 CI green. Approved by Marcia Vasquez-Paredes + Nazia Rahman. Original P1 entry flagged "Some CI fixes needed post-PR"; this W5 PR was clean from first push. Promote to 4 — execution discipline corrected. |
+
+### Done Well / Needs Improvement (Phase 3 Wave 5)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Aino Virtanen** (SQL) | 3 main# PRs across 3 distinct surfaces (CI, skill-threading, memory-classification) at concentration that dropped from W4's 80% to **27%**; #277 sets up the next promotion-audit AUTO surface (5 candidates were 0 pre-#277); clean additive-Reply discipline on #276 ChangesRequested cycle | None this wave. |
+| **Wanjiku Mwangi** (TPM) | Pattern B reviewer-class catch on #276 (independent of Nadia); cleared W4-retro followup #271 same-wave | None this wave. |
+| **Nadia Khoury** (PD) | Reviewer on all 4 main# PRs; Pattern B catch on #276 | Still no implement-class spawn this wave; level pinned at 4 by reviewer-only profile across W3+W4+W5. |
+| **Santiago Ferreira** (RC) | Theme-misalignment — RC role is light when wave is non-deploy | No actionable improvement; theme-routed wave shape. |
+| **Linh Pham** (isnad-graph DevOps) | Substantive +37/-1173 fan-out; resolved 2 reviewer ChangesRequested cycles cleanly | None this wave. |
+| **Mateo Salazar** (user-service Eng) | Step-up scope (+152/-449) executed cleanly, 0 CR | None this wave. |
+| **Kofi Mensah** (design-system Docs Eng) | Second contribution at substantive scope (273-line delete), 0 CR | None this wave. |
+| **Tarek Mansour** (data-acquisition Eng) | First wave PR (273-line delete) clean, 4/4 CI | Implementer-substitution from declared scope (replaced Sofia Cardoso) is not recorded anywhere — process gap, not engineer-class failure (see Pain Point #2 + Proposed Process Change #1). |
+| **Yusuke Inoue** (ingest-platform Eng, Principal) | First substantive PR closes load-bearing long-deferred #14; resolves W4 silent-scope-drop pattern | None this wave. |
+| **Lucas Ferreira** (deploy SRE) | Largest deletion in wave (-781 LOC) clean, 0 CR | None this wave. |
+| **Kofi Mensah-Williams** (landing-page Eng) | Clean PR (273-line delete), 2/2 CI — corrects P1 "CI fixes needed" pattern | None this wave. |
+| **Orchestrator** | 11/11 PRs landed; 0 CI failures (where CI ran); 0 admin overrides (2nd consecutive zero-override wave); concentration dropped 80%→27% — W4 retro action item #2 fully discharged; ingest-platform produced first real wave-PR (W4 retro action item #3 discharged); /wave-scope auto-threading shipped IN-wave (#276) and the W4-retro action items closed within the same wave they landed | (a) Implementer-substitution in data-acquisition (declared Sofia Cardoso → actual Tarek Mansour) not recorded anywhere — same shape as W4 ingest-platform silent-drop, just inverted (silent-substitution vs silent-drop). (b) `wave_5_changes_requested_cycles: 6` in cross-repo-status.json vs 4 observable from PR data (#276: 2, isnad-graph#861: 2) — counter discrepancy worth reconciling. (c) 4 of 11 PRs (#277, #279, deploy#271, ingest-platform#26) had `CheckRollup: 0` — #275 paths-filter fix only covers main; per-repo CI scope-coverage gap unaddressed. |
+
+## Phase 3 Wave 6 Trust Updates (2026-05-07) — Backlog Triage + Runbook Fan-Out + Hot-Fix
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Aino Virtanen (SQL) | 5 | 5 | main#288 (`fix(/wave-scope #278)`: idempotent JSON-write helper, Tier-4 W5 carry-forward) — clean execution. R1 reviews on all 7 wave-merge PRs (charter format, refresh-discipline, diff-vs-body verification). In-flight #294 hook fix — surfaced the wave-merge head-ref parser gap during her R1 review of #293; promoted same-wave self-improvement (Pattern G repeat). Already at max. |
+| Wanjiku Mwangi (TPM) | 5 | 5 | main#291 (`fix(hook #289)`: validate_workflow_paths_coverage parser fix, post-scope hot-fix). Tier-1 noorinalabs-main backlog triage (16 issues audited, 18.75% close-rate, 31% defer-phase-15). 2 wrapup status commits (67cce96 wave_6_decisions, a3419a4 P3W6 CLOSED). Already at max. |
+| Nadia Khoury (PD) | 4 | 4 | R2 reviews on all 7 wave-merge PRs (cross-repo coordination focus, scope-drop verification, carry-forward label-stripping verified). Co-author on design-system Tier-1 backlog triage with Kofi Mensah. Pattern: still no implement-class spawn; reviewer-only profile across W3+W4+W5+W6. Hold at 4. |
+| Santiago Ferreira (RC) | 5 | 5 | No deploy-class wave routing this wave (theme: backlog hygiene + runbook fan-out, deploy work was Tier-2 routine). Already at max. |
+
+### noorinalabs-isnad-graph team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Jun-Seo Park (Engineer) | — | **3** (new) | First wave-PR entry: isnad-graph#864 (settings.json matcher parity with noorinalabs-main, Tier-4 W5 carry-forward, closes #862). 0 CR. Approved by 2 child-team reviewers. New entry at 3 — appropriate-scope first-wave delivery, clean execution. |
+| Anya Kowalczyk (Engineer) | 3 | 3 | Tier-1 noorinalabs-isnad-graph backlog triage — largest repo backlog (36 phase-3 issues older than 14 days). 100% verification rate against HEAD; 9 inline `phase-3`→`phase-15` relabels; surfaced production OAuth break (#824) and worktree-tracking bug (#807) as elevated-priority candidates. Disciplined audit; comment-only delivery per W6 design. Hold at 3 (no PR this wave). |
+
+### noorinalabs-user-service team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Mateo Salazar (Engineer) | 4 | 4 | Tier-1 noorinalabs-user-service backlog triage (15 issues audited, every issue verified against `origin/main`). No PR this wave (Tier-1-only by design — repo had no Tier-2/3/4 W6 work). Disciplined origin-over-local verification per memory. Hold at 4. |
+
+### noorinalabs-design-system team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Keanu Tama (Engineer) | — | **3** (new) | First wave-PR entry: design-system#69 (`docs(design-system #32)`: operational runbook, Tier-2 fan-out). 0 CR. New entry at 3. |
+| Maricel Reyes (Engineer) | — | **3** (new) | First wave-PR entry: design-system#70 (`fix(design-system #67)`: settings.json matcher parity, Tier-4 W5 carry-forward). 0 CR. New entry at 3. |
+| Kofi Mensah (Docs / Storybook Eng) | 4 | 4 | Tier-1 noorinalabs-design-system backlog triage (7 issues audited, 29% close-rate). Identified Chromatic-CI surface area on #53 + #54 as forward-coupler gap. Co-authored disposition table with Nadia. Hold at 4. |
+
+### noorinalabs-data-acquisition team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Tarek Mansour (Engineer) | 3 | **4** ↑ | Second consecutive substantive wave: data-acquisition#40 (`docs(data-acquisition #22)`: operational runbook, Tier-2, with R1+R2 review fixups for local-vs-B2 path shape, Kafka envs, CLI flag — clean revision discipline). 0 CR. Promote to 4 — execution discipline plus W5 substitution rationale resolved. |
+| Alejandra Reyes-Fuentes (Engineer) | — | **3** (new) | First wave-PR entry: data-acquisition#41 (`fix(data-acquisition #38)`: settings.json matcher parity, Tier-4 W5 carry-forward). 0 CR. New entry at 3. |
+| Sofia Cardoso (Tech Writer) | 3 | 3 | Tier-1 noorinalabs-data-acquisition backlog triage — smallest backlog (4 issues). Surfaced #21 enrichment-pipeline as cross-repo relocation candidate to ingest-platform per ontology repo-split. Confirmed W6 Tier-1 slot post-W5-substitution. Hold at 3. |
+
+### noorinalabs-isnad-ingest-platform team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Bjørn Henriksen (Engineer) | — | **3** (new) | First wave-PR entry: ingest-platform#28 (`docs(ingest-platform #7)`: operational runbook, Tier-2, with review fixups for offset-commit + ingest-row + 3 obs). 0 CR. New entry at 3. |
+| Adaeze Okonkwo (Engineer) | 3 | 3 | Tier-1 noorinalabs-isnad-ingest-platform backlog triage (14 issues audited). Recommended 2 close-as-stale (#3 medallion superseded, #4 PoC superseded) and 1 relabel-relocate (#2). Pipeline-durability cluster correctly preserved as own future wave per meta-issue boundary. Hold at 3. |
+
+### noorinalabs-deploy team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Lucas Ferreira (SRE) | 5 | 5 | deploy#273 (`docs(deploy #24)`: operational runbook, Tier-2 fan-out, with R1+R2 accuracy revisions). 0 CR. Already at max. |
+| Bereket Tadesse (Manager) | 4 | 4 | Tier-1 noorinalabs-deploy backlog triage — largest backlog (40 issues audited, 22.5% close-rate via 7 stale + 2 dup; 23 relabel-later-wave preserving phase-3). Disciplined disposition delivery. Hold at 4 (comment-only). |
+| Nurul Hakim (R1 reviewer) | — | **3** (new) | Caught load-bearing followup gap during PR #273 review: alertmanager `${VAR}` notifier was placeholder URL. Filed deploy#274 as runtime-vs-PR-acceptance distinction (per memory `feedback_runtime_gate_scoping`). Reviewer-class first entry at 3. |
+
+### noorinalabs-landing-page team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Kofi Mensah-Williams (Engineer) | 4 | 4 | TWO PRs this wave (top concentration at 18% — well below 40% cap): landing-page#82 (`fix(landing-page #77)`: drop redundant push-time SSH-deploy, Tier-3 hotfix) + landing-page#81 (`docs(landing-page #49)`: operational runbook, Tier-2, with post-#82 publish-only workflow refresh). Multi-tier delivery; 4 approveds on #81 (revisions + re-approvals). Theme-fit doubleup, not fragility. Hold at 4. |
+| Marcia Vasquez-Paredes (Project Lead) | 4 | 4 | Tier-1 noorinalabs-landing-page backlog triage (19 issues audited, 8 defer-future-phase relabels recommended). Surfaced #67/#69 as keep-in-P3-strategic carry-forward candidates with owner ruling rationale. Hold at 4. |
+
+### Done Well / Needs Improvement (Phase 3 Wave 6)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Aino Virtanen** (SQL) | #288 wave-scope idempotency closes W5 carry-forward; R1 reviews on all 7 wave-merge PRs with refresh-discipline + artifact verification; same-wave self-improvement (#294 hook fix surfaced from her R1 review of #293) — Pattern G repeat | None this wave. |
+| **Wanjiku Mwangi** (TPM) | #291 #289 hook paths-parser fix; thorough Tier-1 main triage (16 issues, evidence-cited dispositions); 2 wrapup status commits with truthful 0-admin-override accounting | None this wave. |
+| **Nadia Khoury** (PD) | R2 reviews on all 7 wave-merge PRs (cross-repo coordination focus); scope-drop and carry-forward label-stripping verified at PR-review time; 3 retro candidates surfaced (e235b0b orphan, label-drift prevention, repo-split coordination) deferred-to-retro per discipline | Reviewer-only profile across W3+W4+W5+W6 (4 consecutive waves) — pinned at 4 by lack of implement-class delivery. Could implement a charter-update PR herself in W7 if PD-class write is desired. |
+| **Santiago Ferreira** (RC) | Theme-routed wave (no deploy-cycle work) | No actionable improvement; theme-routed shape. |
+| **Jun-Seo Park** (isnad-graph Eng, NEW) | First wave-PR clean | None this wave. |
+| **Anya Kowalczyk** (isnad-graph Eng) | 100% verification rate on largest backlog (36 issues); 9 inline relabels with explicit rationale; surfaced production OAuth break (#824) | None this wave. |
+| **Mateo Salazar** (user-service Eng) | Tier-1-only by design; disciplined origin-over-local verification | None this wave. |
+| **Keanu Tama** (design-system Eng, NEW) | First wave-PR clean | None this wave. |
+| **Maricel Reyes** (design-system Eng, NEW) | First wave-PR clean | None this wave. |
+| **Kofi Mensah** (design-system Docs Eng) | Co-authored disposition; Chromatic-CI forward-coupler awareness | None this wave. |
+| **Tarek Mansour** (data-acquisition Eng) | Second-consecutive substantive wave; clean revision discipline | None this wave. |
+| **Alejandra Reyes-Fuentes** (data-acquisition Eng, NEW) | First wave-PR clean | None this wave. |
+| **Sofia Cardoso** (data-acquisition Tech Writer) | Cross-repo relocation insight (#21) per ontology repo-split | None this wave. |
+| **Bjørn Henriksen** (ingest-platform Eng, NEW) | First wave-PR clean (with review fixups absorbed) | None this wave. |
+| **Adaeze Okonkwo** (ingest-platform Eng) | Pipeline-durability cluster correctly preserved as own future wave; 2 close-as-stale recommendations honored at wrapup | None this wave. |
+| **Lucas Ferreira** (deploy SRE) | Tier-2 runbook with R1+R2 accuracy revisions | None this wave. |
+| **Bereket Tadesse** (deploy Manager) | Largest-backlog discipline (40 issues); 22.5% close-rate with explicit later-wave preservation | None this wave. |
+| **Nurul Hakim** (deploy R1, NEW) | Load-bearing followup gap caught at runtime-vs-PR-acceptance distinction; filed deploy#274 | None this wave. |
+| **Kofi Mensah-Williams** (landing-page Eng) | Multi-tier delivery (Tier-2 + Tier-3 hotfix); post-#82 runbook refresh discipline | None this wave. |
+| **Marcia Vasquez-Paredes** (landing-page Project Lead) | Surfaced #67/#69 as keep-in-P3-strategic with owner-ruling rationale | None this wave. |
+| **Orchestrator** | 11/11 wave-internal PRs landed; 7/7 wave-merge PRs landed with truthful 0-admin-override (FIRST wave with truthful 0 — W3-W5 silently bypassed via --admin); 0 implementer substitutions; 0 ChangesRequested cycles; counter-verification step 2.5 had 0 drift (FIRST wave with this property since W5 added the discipline); 8/8 Tier-1 backlog triage delivery; in-band hook patch + canonical fix flow for #294 — 5-line patch, search-before-filing satisfied | (a) Local-vs-origin main divergence (e235b0b orphaned local commit) — kickoff status was committed locally but never pushed. Process discipline gap, orchestrator-class. (b) /tmp file-race recurring (3 hook blocks for spawned-agent gh-comment workflows this session). Existing memory `feedback_tmp_msg_file_stale.md` exists but spawned agents still hit it; agent-spawn discipline gap. (c) Pattern G persists at 4 instances in W6 alone (#285, #287, #289, #294 all hook parser bugs) — largest single-wave parser-bug cluster, suggests parser-fixture coverage discipline as charter principle. |
+
+## Phase 3 Wave 7 Trust Updates (2026-05-08) — Hook Parser-Fixture Coverage Backport Audit
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Aino Virtanen (SQL) | 5 | 5 | TWO PRs: #305 (#287 fix — `_shell_parse.tokenize()` line-continuation normalization + 3 scope-disciplined adjacent improvements + 11 fixtures + 12 fixture tests + 3 unit tests, 75/75 green) + #312 (T4 #260 _shell_parse refactor — 2 regex matchers migrated to tokenize/walker + 12 fixture tests pinning transitive #305 fix). 3 R1 reviews (#301, #308, #310 ★). Already at max. |
+| Wanjiku Mwangi (TPM) | 5 | 5 | TWO PRs: #301 (#285 fix — SHA-shape regex validator + 4 fixtures incl. live-trigger 404 body + 8 cases) + #308 (T1 main parser audit — 31 hooks, 14 parser-class, 5 prioritized gaps filed as #302-#307). 3 reviews (R1 #305, R2 #310, R1 #312). Identified `gh project item-add` silent no-op + GraphQL `addProjectV2ItemById` workaround. Already at max. |
+| **Nadia Khoury (PD)** | **4** | **5** ↑ | **★ Implement-class delivery** — PR #310 cross-repo audit summary with two-tier thesis, 3 charter proposals (2 filed as W8 issues #311 #313 + 1 inline silent-no-op family memory extension). PLUS 4 R2 reviews across #301, #305, #308, #312 with executive-lens framing on charter compliance and cross-PR coherence. Pre-loaded the ★ thesis content during R2 reviews (3 candidate observations baked before spawn). **W6 retro flag on 4-consecutive-reviewer-only-waves NOW resolved by ★ delivery.** Promote to 5 — full PD execution profile complete. |
+| Santiago Ferreira (RC) | 5 | 5 | No deploy-cycle wave routing (theme: hook parser-fixture audit). Already at max. |
+
+### noorinalabs-isnad-graph team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Anya Kowalczyk (Tech Lead)** | **3** | **4** ↑ | First implement-class PR: isnad-graph#871 (T1 audit + **Pattern G in-band fix** syncing `auto_set_env_test.py` from parent — `gh`/`--body` short-circuit backported from parent main#114 that was missing in child). Identity reconciled at first commit (matrix called her "Anya Volkov"; canonical roster identity is Kowalczyk; documented in PR body). Idris R1 + Arjun R2 Approved with framing notes (#868 + #870 are stale-worktree-only, not live regressions); she addressed issue-body cleanups async post-merge approval. Promote to 4 — clean cross-repo work + Pattern G in-band + post-review cleanup discipline. |
+| Idris Yusuf (Engineer) | — | **3** (new) | First reviewer entry: R1 of isnad-graph#871 + user-service#100 (cross-repo R1). **Coined the wave-level thesis sentence**: "fixture-first discipline broke at the parent→child update boundary" — became Nadia's ★ thesis. Surfaced stale-worktree-vs-live distinction for #868/#870 framing cleanup. New entry at 3. |
+| Arjun Raghavan (Engineer) | — | **3** (new) | First reviewer entry: R2 of isnad-graph#871. Independently confirmed stale-worktree-vs-live distinction; spot-checked Pattern G fix byte-equivalence to parent at parent's main HEAD. Minor note: #866-#870 missing `p3-wave-7` label (only `tech-debt+phase-3`) — non-blocking, flagged for /wave-scope p3 w8 cleanup. New entry at 3. |
+
+### noorinalabs-user-service team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Mateo Salazar (Engineer) | 4 | 4 | Tier-1 audit PR user-service#100. Initial framing was pre-P3W5-stale (caught at R2 by Anya-K via committed-tree verification — **3rd-of-3 misclassifications** this wave). Addressed all 3 follow-throughs cleanly post-R2: project 2 GraphQL adds + #98/#99 re-scoped to PARENT test augmentation (parent genuinely missing `test_block_gh_pr_review.py`; alembic-shape coverage redirected to parent's existing tests). Hold at 4 — substantive correction caught at R2, addressed cleanly. |
+
+### noorinalabs-deploy team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Bereket Tadesse (Manager)** | **4** | **5** ↑ | TWO PRs: deploy#278 (T3 #274 Alertmanager wiring with PR-vs-runtime acceptance discipline + post-review CI fix on shellcheck SC2016 false-positive — clean one-line `# shellcheck disable` resolution) + deploy#279 (T1 deploy audit — 6 parser-class hooks all stale-orphan + dead-code + non-registered, two backport issues #276 #277 filed). Stale-orphan finding contributed to wave-level structural framing (one of 4 reviewers/implementers triangulating). Promote to 5 — multi-tier disciplined delivery + clean post-review CI cycle + load-bearing structural-finding contribution. |
+| Aisha Idrissi (R1 reviewer) | — | **3** (new) | First reviewer entry: R1 of deploy#278 + #279. Strong PR-vs-runtime split per `feedback_runtime_gate_scoping.md`. Caught minor RUNBOOK §Tier 0 cross-link one-hop note (judgment-call kept non-blocking). New entry at 3. |
+| Weronika Zielinska (R2 reviewer) | — | **3** (new) | First reviewer entry: R2 of deploy#278 + #279. Independently verified secrets hygiene + amtool gate completeness. **Caught untracked-vs-committed nuance** for stale-orphan finding (load-bearing for ★ summary). Minor non-blocking note: amtool tarball verified via SHA256 but not GPG-verified for SHA256SUMS — acceptable for current threat model. New entry at 3. |
+
+### noorinalabs-design-system team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Kofi Mensah (Docs / Storybook Eng) | 4 | 4 | Tier-1 audit PR design-system#73. Initial framing pre-PR#66-stale (caught at R1 by Maeve — **1st-of-3 misclassifications**). Addressed framing revision + re-scoped #72 (closed invalid) + later R2 PR-body-stale catch handled via `gh api -X PATCH --field` workaround when `--field "body=@file"` silently literal-pasted (**NEW silent-no-op family signal** — load-bearing for memory extension). Hold at 4 — substantive cycles but addressed cleanly. |
+| Maeve Callahan (R1 reviewer) | — | **3** (new) | First reviewer entry: R1 of design-system#73 with substantive Changes-Requested. **Two-tier framing originator** (hook-owning vs dispatcher-style children) — became load-bearing for Nadia's ★ thesis. Strong charter-lens R1. New entry at 3. |
+| Beren Yildiz (R2 reviewer) | — | **3** (new) | First reviewer entry: R2 of design-system#73 with PR-body-stale catch. Independent settings.json completeness verification established design-system as exemplary endpoint of dispatcher pattern (no #85-equivalent matcher gap; more complete than landing-page). New entry at 3. |
+
+### noorinalabs-data-acquisition team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Sofia Cardoso (Tech Writer) | 3 | 3 | Tier-1 audit PR data-acq#45 — first implement-class delivery (Tier-1-only in W6). Initial G2 framing was wrong (caught at R2 by Jeanclaude via tree verification — **2nd-of-3 misclassifications**). Addressed cleanly with **methodological retro point** (filesystem ≠ committed tree → mandatory `gh api .../git/trees/<sha>?recursive=1` first step → now charter proposal #313). Hold at 3 — promote-watch for W8 if methodological-finding pattern continues. |
+| Dilara Erdogan (R1 reviewer) | — | **3** (new) | First reviewer entry: R1 of data-acq#45. **Surfaced cross-repo PVTI-vs-issue-number false-match finding** (`gh project item-list --limit N` returns false matches because issue numbers collide across repos) — load-bearing for memory extension Proposal 3. New entry at 3. |
+| Jean-Claude Habimana (R2 reviewer) | — | **3** (new) | First reviewer entry: R2 of data-acq#45 with substantive Changes-Requested. **Used `gh api git/trees recursive` to verify** — the methodology that becomes charter proposal #313. New entry at 3. |
+
+### noorinalabs-landing-page team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Nazia Rahman (Senior QA / Performance Engineer)** | — | **4** (new) | First wave PR — substituted from "per-repo-roster-tbd" placeholder at fan-out (orchestrator pick based on parser-fixture-audit fit). Tier-1 audit PR landing-page#87. **Only audit that got it RIGHT first try** — origin-clean verified at head_sha, W5 PR #79 history correctly cited, 14 frontmatter + 8 MDX shape matrix per QA discipline (incl. BOM, multi-doc YAML, CRLF, Arabic Unicode, YAML anchors). 0 CR. Marcia R1 + Kofi-FE R2 both Approved cleanly. **NEW entry at 4** — clean first-wave delivery + strong domain discipline + only audit that exercised committed-tree-vs-filesystem correctly without R1/R2 catch. Merits start above default. |
+| Marcia Vasquez-Paredes (Project Lead) | 4 | 4 | R1 of landing-page#87. All 6 checks passed including origin-clean verification + #85 carry-forward verified against PR #79 history. Strong project-lead lens. Hold at 4. |
+| Kofi Mensah-Williams (Frontend Engineer) | 4 | 4 | R2 of landing-page#87. Astro-domain depth — verified Zod schema mapping for 14 frontmatter shapes + identified `cta.href` URL-form fixture-coverage gap as informational addendum. Hold at 4. |
+
+### Done Well / Needs Improvement (Phase 3 Wave 7)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Aino Virtanen** (SQL) | #305 root-cause patch at `_shell_parse.tokenize()` module level (all consumers benefit transitively) + #312 first downstream beneficiary refactor with explicit transitive-fix pinning. 3 disciplined R1 reviews. | None this wave. |
+| **Wanjiku Mwangi** (TPM) | #301 fix-with-fixtures cites e906e135 live trace (strongest acceptance available). #308 main parser audit thorough. Surfaced + worked around `gh project item-add` silent no-op via GraphQL. | None this wave. |
+| **Nadia Khoury** (PD) | ★ implement-class delivery with full two-tier thesis, 3 charter proposals filed for W8, pre-loaded thesis material during R2 reviews. **W6 reviewer-only-profile flag resolved.** | None this wave. |
+| **Santiago Ferreira** (RC) | Theme-routed wave (no deploy-cycle work). | No actionable improvement; theme-routed shape. |
+| **Anya Kowalczyk** (isnad-graph TL) | First implement-class PR clean + Pattern G in-band parent-sync fix. | None this wave. |
+| **Idris Yusuf** (isnad-graph Eng, NEW) | **Coined wave-level thesis sentence**; cross-repo R1 strength (own repo + user-service). | None this wave. |
+| **Arjun Raghavan** (isnad-graph Eng, NEW) | Independent stale-worktree-vs-live confirmation; byte-equivalence verification of Pattern G fix. | None this wave. |
+| **Mateo Salazar** (user-service Eng) | Clean post-R2 follow-through (project 2 GraphQL + #98/#99 parent-redirect). | Initial audit framing pre-P3W5-stale; should have run committed-tree check first (now codified as #313). |
+| **Bereket Tadesse** (deploy Manager) | Multi-tier delivery + post-review CI fix discipline + stale-orphan finding contribution. | None this wave. |
+| **Aisha Idrissi** (deploy R1, NEW) | Strong PR-vs-runtime split adherence per memory. | None this wave. |
+| **Weronika Zielinska** (deploy R2, NEW) | Untracked-vs-committed nuance catch (load-bearing for ★). | None this wave. |
+| **Kofi Mensah** (design-system Docs Eng) | Clean revision after R1; surfaced new `gh api -X PATCH -f body=@file` literal-paste gotcha. | Initial audit framing pre-PR#66-stale; PR body update missed at first revision (caught by R2). |
+| **Maeve Callahan** (design-system R1, NEW) | **Two-tier framing originator** + dispatcher-style charter-clarification framing. | None this wave. |
+| **Beren Yildiz** (design-system R2, NEW) | PR-body-stale catch + dispatcher-completeness verification. | None this wave. |
+| **Sofia Cardoso** (data-acquisition Tech Writer) | First implement-class delivery; clean post-R2 revision with **methodological retro point** (committed-tree-first verification). | Initial G2 framing wrong (filesystem-vs-tree); now codified as #313. |
+| **Dilara Erdogan** (data-acquisition R1, NEW) | PVTI-vs-issue-number false-match finding (load-bearing for memory extension). | None this wave. |
+| **Jean-Claude Habimana** (data-acquisition R2, NEW) | `gh api git/trees recursive` methodology — becomes #313. | None this wave. |
+| **Nazia Rahman** (landing-page QA, NEW @4) | **Only audit that got it RIGHT first try** — committed-tree-vs-filesystem distinction exercised correctly without R1/R2 catch; QA-discipline shape-matrix enumeration. | None this wave. |
+| **Marcia Vasquez-Paredes** (landing-page Project Lead) | Origin-clean independent verification + #85 carry-forward traced to PR #79. | None this wave. |
+| **Kofi Mensah-Williams** (landing-page Frontend Eng) | Astro Zod-schema verification + `cta.href` URL-form gap addendum. | None this wave. |
+| **Orchestrator** | 12/12 PRs merged, 0 admin overrides; cross-repo two-tier thesis emerged organically via 5-reviewer + 4-implementer triangulation; ★ Nadia summary brief baked all retro-material in advance (full thesis + 3-act reference-impl set); phased Phase A/B/C wrapup executed cleanly; gh api PUT contents pattern used 3× for atomic status updates (no orphans); routed CR cycles to existing idle agents (no over-spawning); spotted CI shellcheck failure on deploy#278 post-review and routed to Bereket. | (a) Filed Node 20 deprecation issues during wrapup (mid-flow scope expansion); could have deferred. (b) Wrote wave_7 counters as nested `wave_7_summary.*` instead of TOP-LEVEL canonical keys — required atomic PUT during retro; /wave-wrapup skill update needed. (c) 3-of-3 audit framing misclassifications surfaced — Tier-1 audit spawn briefs did NOT enforce committed-tree-first verification methodology; should have baked Sofia/Jeanclaude's discovery into brief template prospectively. (d) `auto_set_env_test` hook false-positive on heredoc body containing pytest-substring caught at retro file-edit time — file via Write tool worked; suggests #114 short-circuit conditions need a heredoc-content extension. |
+
+## Phase 3 Wave 8 Trust Updates (2026-05-10) — Foundation Reset (Hook/Skill/Charter Ownership Disambiguation + Artifact-CI Scope Definition)
+
+### Wave Shape
+
+| Metric | Value |
+|---|---|
+| PRs merged to wave-branches | 11 (across 5 of 7 in-scope repos) |
+| Wave-branch → main merges | 5 (main, deploy, design-system, landing-page, data-acq) |
+| Repos identical to main (no merge needed) | 2 (isnad-graph close-as-resolved bundle, user-service work shipped via parent #340) |
+| Repos descoped during wave | 1 (ingest-platform — recorded in `wave_8_repos_descoped_during_wave`) |
+| Approved review comments (charter-format) | 25 across 11 PRs (≈2.3/PR — at 2-reviewer minimum, several PRs at 3) |
+| ChangesRequested cycles | 0 |
+| Misformatted `Replied`/`Reply` corrected via addenda | 10+ (Approved-vs-Reply discipline cascade — Maeve catch) |
+| Admin-overrides | 0 |
+| Top-implementer concentration | Kofi Mensah-Williams 3/11 = **27%** (well below 60% fragility line; theme-fit since landing-page was fully W8-scoped) |
+| Carry-forward to W9 | 20 issues (17 main + 1 user-service + 2 data-acq) |
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Nadia Khoury (Program Director) | 5 | 5 | ★ Filed 3 charter proposals during wave (#337 validate_wave_label_evidence hook, #341 Pre-Spawn State Check § extension, plus W9 lifecycle ownership). Multiple R1/R2 reviews with `state,mergedAt` discriminator discipline (her own templating spawn prelude). Hold at max. |
+| Wanjiku Mwangi (TPM) | 5 | 5 | ★ Owned #309 Node 20 audit (4 of 5 child upgrades shipped). Anchored Approved-vs-Reply discipline propagation via wave-wide guidance comment (Step 4 manager pre-merge check). PUT-contents pattern for kickoff + wrapup status commits — zero local-orphans. Hold at max. |
+| Santiago Ferreira (Release Coordinator) | 4 | 4 | Theme-routed wave (no deploy-cycle work — W8 was process-discipline focused). Hold. |
+| Aino Virtanen (Standards & Quality Lead) | 5 | 5 | ★ Authored #311 + #313 hooks.md charter bundle (PR #334), responded to all R2 cycles cleanly. Stream D #43 in-progress at wave close (carry-forward, Aino-tractable). Ontology rebuild commit attribution. Hold at max. |
+
+### Implementers (W8 PR authors)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Mateo Salazar** (user-service Eng) | 3 | **4** (▲) | ★ Scope-pivot resilience: pushed back on initial #287 framing as wave-7 propagation gap (not implementer-class violation), pivoted bundle to alembic-only scope; surfaced wave-7 stranded #305 issue → became main#339 with Wanjiku TPM-class audit owner. Citation-catch on #340 caught Anya's deeper validation gap (parser_fixture_coverage.md self-contradiction) — pre-fixed before merge. Promote 3→4 for first-look-correct discipline + load-bearing wave-process catches. |
+| Aino Virtanen (also implementer this wave for #334) | (held above) | (held above) | Counted in Org-Level row. |
+| Wanjiku Mwangi (also implementer for #338) | (held above) | (held above) | Counted in Org-Level row. |
+| **Lucas Ferreira** (deploy Eng, NEW) | — | **3** (new) | First wave PR — deploy #281 hooks-lint CI workflow. Clean implementation, addressed both R1/R2 cycles cleanly. Default trust 3. |
+| **Abdelaziz Idrissi** (deploy Eng) | 3 | 3 | deploy #282 Node 20 actions upgrade. Clean implementation; all reviewer cycles addressed. Hold at 3. |
+| **Astrid Lindqvist** (design-system Eng) | 3 | 3 | design-system #75 Node 20 upgrade. Clean delivery. Hold at 3. |
+| **Kofi Mensah-Williams** (landing-page Frontend Eng) | 4 | 4 | 3 PRs landed (#89 Astro ADR defer, #90 settings.json align, #91 Node 20). Top-implementer concentration is theme-fit (landing-page wholly in W8 scope per #84-#88 cluster). Hold at 4 — clean delivery, no concentration penalty applied. |
+| **Tarek Mansour** (data-acquisition Eng) | 3 | 3 | data-acq #49 Node 20 upgrade. Clean delivery. Hold at 3. |
+| **Jean-Claude Habimana** (data-acquisition R2 promoted to implementer) | 4 | 4 | data-acq #44 ADR — 3 in-PR commits responding to citation/anchor corrections from Aino R2; merge-commit pattern (not squash) preserved per ADR convention. Hold at 4. |
+
+### Reviewers / Managers (W8)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Anya Kowalczyk** (isnad-graph TL) | 4 | **5** (▲) | ★ Caught W5 #861 dispatcher-paths deletion that invalidated 4 of 5 in-scope isnad-graph fixture issues (#866-#870) — led close-as-resolved bundle which became `feedback_dispatcher_child_no_local_fixtures.md` memory. Citation catch on #340 (parser_fixture_coverage.md is wave-7 stranded AND doesn't cover block_gh_pr_review AND self-contradicts) — load-bearing for Mateo's pre-fix. Promote 4→5 for two distinct catches that prevented wave drift. |
+| **Aisha Idrissi** (deploy R1) | 4 | **5** (▲) | ★ Independently scanned deploy#280 surface and got 37 sites where Bereket's `head`-truncated grep gave 14 — Bereket's pre-spawn brief under-count externally caught. Authored main#341 (Pre-Spawn State Check § extension) charter promotion proposal. Promote 4→5 for catch-and-promote on a manager-class discipline gap. |
+| **Maeve Callahan** (design-system R1) | 4 | **5** (▲) | ★ First reviewer to surface that `validate_pr_review` hook counts ONLY `RequestOrReplied: Approved` (not `Reply` even when body says "Approved"). Catch propagated via manager-layer relay (1 catch → 5 manager SendMessages → preempted ~17 addenda across 11 PRs). Codified as `feedback_validate_pr_review_approved_not_reply.md`. Promote 4→5 for hook-semantic catch with multi-PR blast-radius prevention. |
+| **Bereket Tadesse** (deploy Manager) | 5 | **4** (▼) | Pre-spawn brief for deploy#280 cited 14 occurrences of an actions/checkout pattern when actual was 37 — `head`-truncated `grep` output sum, not `grep -c` per file. Caught externally by Aisha's independent scan. Single-instance regression in pre-spawn discipline; charter promotion via #341 codifies the rule. Demote 5→4 — held above default until #341 lands and live trace shows the discipline restored. |
+| **Marcia Vasquez-Paredes** (landing-page Project Lead) | 4 | 4 | Coordinated Aino on #84 (resolved as wontfix-close after #311+#313 landed); 3 R1/R2 cycles on Kofi's PRs. Hold at 4. |
+| **Idris Yusuf** (isnad-graph Eng) | 4 | 4 | PR #872 was anti-pattern (path-walk to parent canonical, contradicts dispatcher-no-local-fixtures memory). Closed gracefully with charter-format comment + memory cite. Hold at 4 — corrective behavior intact even when initial framing was wrong. |
+| **Dilara Erdogan** (data-acquisition R1) | 4 | 4 | R2 of data-acq #44 ADR + R2 of #49 + manager-merge of #49 (gh pr merge --squash --delete-branch + #46 close at 02:01:09Z). Clean follow-through. Hold at 4. |
+| **Nadia Boukhari** (user-service Manager, NEW) | — | **4** (new) | First wave appearance — manager-merge of main#340 (us#98+#99 bundle) + cross-repo close-out (us#98 + us#99 closed at 02:01:48-50Z). Followed full sequence per child-repo-implementer rule extension. Default-above-3 (4) for clean first-wave manager-class delivery without R1/R2 catch. |
+
+### Orchestrator (Self-Assessment)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Orchestrator (Steven via Claude)** | 4 | **3** (▼) | Spawn-brief instruction template said "RequestOrReplied: Reply" for approval comments — wrong; hook counts only `Approved`. Cascade required ~17 addenda across 11 PRs (Maeve catch → manager-layer relay → wave-wide guidance comment + Step 4 manager pre-merge check). Demote 4→3 — first-call instruction error that scaled to wave-wide cleanup cost. Positive offsets: (a) scope-drop reconciliation handled cleanly (ingest-platform descope, isnad-graph + user-service no-merge-needed both recorded with rationale), (b) 5 wave-merge PRs landed cleanly with full charter-discipline (2-reviewer Approved + non-fast-forward merge for diverged main case + status commits via PUT-contents), (c) divergent main case (3 PRs ahead + 3 status commits behind) handled with merge-into-wave first then PR — no rebase, no force-push, no orphans. Hold at 3 until next wave shows the spawn-brief template fix is internalized. |
+
+### Done Well / Needs Improvement (Phase 3 Wave 8)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Mateo Salazar** | Scope-pivot resilience (#287→#98 only); load-bearing wave-7 propagation catch (#339); citation-pre-fix on #340 | None this wave |
+| **Anya Kowalczyk** | W5-deletion invalidation catch (4 of 5 fixture issues); citation-catch on #340; close-as-resolved bundle execution | None this wave |
+| **Aisha Idrissi** | Bereket pre-spawn under-count catch via independent scan; #341 authorship | None this wave |
+| **Maeve Callahan** | Approved-vs-Reply hook-semantic catch with manager-layer cascade prevention | None this wave |
+| **Bereket Tadesse** | None notable this wave (single-instance regression in spotlight) | `head`-truncation in pre-spawn enumeration sum (#341 codification) |
+| **Wanjiku Mwangi** | #309 audit owner; Approved-vs-Reply wave-wide guidance + Step 4 manager pre-merge check | None this wave |
+| **Aino Virtanen** | #311+#313 charter bundle authoring; Stream D in-progress at close | None this wave |
+| **Nadia Khoury** | 3 charter proposals filed (#337/#341/W9); state,mergedAt R-discriminator templating | None this wave |
+| **Lucas / Abdelaziz / Astrid / Tarek** | Routine clean implementer deliveries | None this wave |
+| **Kofi Mensah-Williams** | 3 PRs in same wave with theme-fit concentration; clean R1/R2 cycles | None this wave |
+| **Jean-Claude Habimana** | ADR with iterative anchor correction; merge-commit pattern preserved | None this wave |
+| **Idris Yusuf** | Graceful close of anti-pattern PR #872 with memory-cite | None this wave (anti-pattern itself was caught early) |
+| **Dilara / Marcia / Nadia Boukhari** | Clean manager-merge follow-throughs (squash-to-wave + cross-repo close-out) | None this wave |
+| **Orchestrator** | Scope-drop reconciliation, 5 wave-merge PRs landed cleanly, divergent-main handled with merge-not-rebase, /promotion-audit + /wave-scope auto-invoke handoffs honored | (a) Spawn-brief Reply-vs-Approved instruction error → ~17 addenda cascade. (b) Step 14 memory audit had to be filed as #346 deferred-to-W9 instead of executed in-band — annunaki + memory audit don't fit a single wave-wrapup session (proposed #344 to add to /wave-retro). (c) Implementer-substitution reconciliation skipped (skill § P3W5 retro requirement) — deferred to per-engineer assessment above; wave-wrapup skill should auto-emit substitution table. |
+
+## Phase 3 Wave 9 Trust Updates (2026-05-12) — Tech-Debt Reduction (Main-Only)
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Aino Virtanen** (SQL) | 5 | 5 | (hold at max) 4 PRs (#409, #410, #411, #415) covering charter + skills + post_dispatcher + ontology surfaces, 0 ChangesRequested cycles, parser-side test coverage on every artifact. PR #410 was a substantial 5-hook migration with 20 new tests across 5 test classes. Theme-fit concentration (67% of wave PRs by commit identity) — defensible: charter codification + skill cleanup are her territory. Continued max trust. |
+| **Nadia Khoury** (PD) | 5 | 5 | (hold at max) Authored PR #412 (retro PR body-vs-diff discipline rule, closing #126) cleanly; served as primary reviewer on 4 of the 6 W9 PRs (#411, #412, #415, #416) with consistent verdict-shape. Marker convention compliance (used Shape 1 HTML-comment per PR #409's just-landed convention). Caught the wrapup-counter-completeness gap on #416. |
+| **Wanjiku Mwangi** (TPM) | 4 | **5** (▲) | promotion — clean PR #413 (cross-repo dispatch contracts ontology) + sibling-issue filing discipline (filed #414 pre-verdict per charter rule when finding /wave-wrapup mirror gap; filed deploy#285 as audit by-product with proper A-vs-B framing). 2 thorough reviews (#410, #412). Recovers from W8 5→4 demotion (head-truncation in pre-spawn enumeration) — that lesson is now codified in charter (#341) and the discipline restored in W9 with the parser-side literal-string verification she ran on her own work. |
+| **Santiago Ferreira** (RC) | 5 | 5 | (hold at max) 4 Approveds posted across #410, #411, #413, #415, #416 with consistent procedural verdict-shape (runtime/procedural angle). Caught the CI path-filter "no checks reported" nuance on #413 (verified the filter is legitimate vs. just rejecting). Flagged `current_wave` not advancing during /wave-wrapup on #416 — useful retro-input. |
+
+### Orchestrator (Self-Assessment)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Orchestrator (Steven via Claude)** | 3 | **3** (hold) | Two new spawn-brief template defects this wave: (a) prescribed `## TechDebt` section header + prose instead of literal `TechDebt: ` line — both #409 reviewers (Nadia, Wanjiku) followed the template faithfully and both verdicts were rejected at merge time, required 2 PATCH amendments to unblock; codified as `feedback_techdebt_attestation_literal_line.md`. (b) Spawned `aino2`, `wanjiku3`, `nadia2` clone agents instead of `SendMessage`-ing the idle existing personas — user-flagged; codified as `feedback_reuse_idle_teammates_not_clones.md`. Sibling-of-W8's Approved-vs-Reply template defect — same class: spawn-brief template prescribes verdict shape via prose, hook expects literal token. Positive offsets: (c) bulk relabel of 115 issues across 7 repos with read-back verification + 11 new wave labels created mechanically; (d) wave-9 → main merge handled with merge-not-rebase + 2-reviewer gate + literal TechDebt: line discipline (no addenda cascade); (e) /promotion-audit retro-side run surfaced 3 real defects in the audit itself (#417/#418/#419 filed for W10) — caller-side error became evidence-gathering for skill cleanup. **Hold at 3** until W10 shows the spawn-brief template (literal verdict-comment shape) + reuse-idle-teammates discipline are internalized. Demote to 2 only if the same template-shape class recurs in W10. |
+
+### Done Well / Needs Improvement (Phase 3 Wave 9)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Aino Virtanen** | 4 clean PRs covering charter/skills/post_dispatcher/ontology; 20 new tests in #410 dispatcher work; PR #411 prose-vs-helper decision correctly cited § Determinism contract; PR #415 mirror with appropriate severity bump for wrapup context | None this wave (theme-fit 67% concentration noted for forward-planning, not penalized) |
+| **Nadia Khoury** | PR #412 (retro PR body-vs-diff rule) ratified discipline that immediately self-applied to this very retro PR; 4 reviewer verdicts with consistent altitude; flagged wrapup-counter-completeness on #416 | None this wave |
+| **Wanjiku Mwangi** | PR #413 cross-repo dispatch contracts with parser-side literal-string verification; #414 sibling-filing discipline; deploy#285 A-vs-B framing for owner decision; 2 thorough reviews | None this wave (W8 head-truncation lesson now codified + restored) |
+| **Santiago Ferreira** | 4 procedurally consistent Approveds; CI path-filter nuance catch on #413; current_wave-not-advancing observation on #416 | None this wave |
+| **Orchestrator** | Bulk relabel mechanical execution (115 issues + 11 new labels); wave-9 → main merge with no addenda cascade; /promotion-audit retro-side run surfaced 3 real skill defects → #417/#418/#419 (caller-side error became evidence) | (a) Spawn-brief TechDebt-line shape defect → 2 PATCH amendments. (b) Clone-spawning vs. SendMessage idle existing — user-flagged. Both codified as memories; charter promotion proposed for next wave. |
+
+## Phase 3 Wave 10 Trust Updates (2026-05-16) — Tech-Debt Reduction (Non-Deploy Remainder) + Convergent Wave-Shape Thesis
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Aino Virtanen** (SQL) | 5 | 5 | (hold at max) 4 main# PRs (#434, #437, #438, #439) all charter/skills/hooks/board surfaces — theme-fit again, sibling-discovery pattern on #439 (board-audit drift-vs-no-op split) catalysed one of two DECIDE-tier charter promotions this wave. 0 ChangesRequested cycles. Trust signal continuity: same defensible concentration shape as W9 (charter codification + skill cleanup are her territory). |
+| **Nadia Khoury** (PD) | 5 | 5 | (hold at max) Authored #440 (lifecycle.md) with over-delivery — parenthetical clarifications on every `/plan-phase` reference (flagged by Aino for trust matrix). Reviewer-class catch on `/phase-review` SKILL.md → `/roadmap` non-existent reference, folded inline per owner option C; drove crossed-message-race recovery resolved per `feedback_verdict_amendment_edit_not_append` (no edit-append). 4 reviewer verdicts. |
+| **Wanjiku Mwangi** (TPM) | 5 | 5 | (hold at max — recovers from W9 4→5 promotion) PR #428 cross-window PR over-count fix for /wave-wrapup landed in W10 and the filter was live-verified THIS retro (recompute-vs-wrapup drift = 0 for the first time across W4/W5/W9 history). **Wanjiku is the catalyst for both DECIDE-tier charter promotions this wave**: framed #1 (`Process-Doc Authorship: Derived-From-SKILL.md-At-HEAD`) from #440 review, co-named #2 (`Acceptance-Criteria-Bucketing-In-Reports`) with Santiago from #439 review. Charter-promotion catalyst behavior is a Pattern G evolution (in-wave skill self-improvement now extends to in-wave charter-class proposal). |
+| **Santiago Ferreira** (RC) | 5 | 5 | (hold at max) 4+ Approveds posted across W10 reviewer slate with consistent procedural verdict-shape (runtime/procedural angle). Co-named with Wanjiku the actionable-vs-informational bucketing pattern → DECIDE-tier #2. Filed minor cosmetic nit on /board-audit Step 5 column alignment (deferred per owner choice). |
+
+### Cross-Repo Implementer Promotions
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Lucas Ferreira** (SRE) | 4 | **5** (▲) | PR #431 (`auto-close-issues workflow`) + 4 cross-repo propagation siblings. **Operationally retires `feedback_wave_branch_issue_close.md` failure mode** — 8-9s propagation on every W10 merge, fully reliable across all 7 repos. The propagation discipline (one parent PR + 4 mechanically-derived siblings) is the cleanest cross-repo fan-out shipped this phase. |
+| **Aisha Idrissi** (Infra implementer) | 4 | **5** (▲) | 3 main# PRs (#430, #432, #435) wide cross-repo infrastructure work. #432 took 1 ChangesRequested cycle from security review and addressed it inline (commit a9504db: enforce_admins=true, 2-reviewer gate, Environment apply-gating) rather than via followup — security-guard-inline-not-followup discipline (per `feedback_security_guard_inline_not_followup.md`). Clean recovery + branch protection now active across 8 repos. |
+
+### Orchestrator (Self-Assessment)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Orchestrator (Steven via Claude)** | 3 | **4** (▲) | **Conditional promotion from W9 retro met.** W9 retro stated: "Hold at 3 until W10 shows the spawn-brief template (literal verdict-comment shape) + reuse-idle-teammates discipline are internalized. Demote to 2 only if the same template-shape class recurs in W10." Both held: (a) zero TechDebt-line addenda cascades this wave (vs W9's defect that produced 2 PATCH amendments); (b) zero clone-spawning this wave — `SendMessage` to idle existing personas throughout. Additional positives: (c) crossed-message-race on #440 resolved correctly via NEW Approved comments at new HEAD (no edit-append) per `feedback_verdict_amendment_edit_not_append`; (d) /promotion-audit live verification with byte-deterministic 0/0/146/20 (no caller-side errors this run); (e) 7 throttle-takeovers under `parametrization` identity with explicit `wave_10_decisions.orchestrator_takeover_acknowledgment` so trust-matrix attribution stays accurate. Minor pain: 22 implementer-substitutions for child-repo PRs is a noise pattern that surfaces a charter-clarification candidate (§ Proposed Process Changes #4). |
+
+### Done Well / Needs Improvement (Phase 3 Wave 10)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Aino Virtanen** | 4 main# PRs across charter/skills/hooks/board surfaces; #439 board-audit drift-vs-no-op split catalysed DECIDE-tier charter promotion #2; theme-fit concentration noted as forward-planning signal | None this wave |
+| **Nadia Khoury** | #440 lifecycle.md with over-delivery (parenthetical clarifications); reviewer-class catch on /roadmap reference; crossed-message-race recovery per protocol | None this wave |
+| **Wanjiku Mwangi** | PR #428 cross-window filter live-verified at this retro (W9-defect-fix held under W10 load); catalyst for both W10 DECIDE-tier charter promotions; sustained TPM voice across review slate | None this wave |
+| **Santiago Ferreira** | Co-named bucketing pattern with Wanjiku → DECIDE-tier #2; procedurally consistent verdict-shape; cosmetic-nit-deferral discipline | None this wave |
+| **Lucas Ferreira** | Auto-close-issues workflow operationally retires a long-standing failure mode; cross-repo propagation discipline | None this wave |
+| **Aisha Idrissi** | Security-guard-inline-not-followup on #432; clean 3-PR infrastructure execution; branch protection now active across 8 repos | None this wave |
+| **Orchestrator** | W9 process-defect fixes held under W10 load (zero recurrence); crossed-message-race recovered cleanly; /promotion-audit byte-deterministic with no caller-side errors; throttle-takeover acknowledgment in cross-repo-status | 22 implementer-substitutions for child-repo PRs surfaces a kickoff-time-declaration-vs-runtime-truth gap → charter clarification candidate #4 (advisory only, not corrective) |
+
+## Phase 3 Wave 11 Trust Updates (2026-05-24) — Tech Debt & Deployment (close-out)
+
+> Scope note: W11 ran 86 PRs across ~6 repos, mostly in prior sessions; the wrapup recorded aggregate metrics (verified at this retro: PR count 86=86 ✓, top-concentration 15%=15% ✓). The assessments below weight the **directly-observed close-out** (deploy#348 saga, the #523/#524 coordination PRs) where signal is strongest, plus wave-wide PR distribution.
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Aino Virtanen** (SQL) | 5 | 5 | (hold at max) Ontology/checksum resolutions on #523/#524; standards continuity. No negative signal. |
+| **Nadia Khoury** (PD) | 5 | 5 | (hold at max) PD ran the full close-out: main-divergence reconcile (#523), deploy#348 sequencing, post-unblock scrub (#524). Coordination clean. |
+| **Wanjiku Mwangi** (TPM) | 5 | 5 | (hold at max) 10 wave PRs; TPM reviews on #523/#524 cross-checked at origin with all counters reconciled. |
+| **Santiago Ferreira** (RC) | 5 | 5 | (hold at max) Release reviews on #523/#524; correctly affirmed gate-clearing ≠ wave-close encoding. |
+
+### Cross-Repo Implementer Updates
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Aisha Idrissi** (deploy SRE) | 5 | 5 | (hold at max — would be ▲ if not capped) **Exemplary deploy#348 close-out under a multi-cycle prod-gated failure.** Investigated at HEAD, surfaced + resolved the design fork (the *discovery-in-both-plan-and-apply-jobs* insight made the gated plan work), recovered cleanly from the apply-time expression failure (#349→#350), held honest "not claimed done" discipline, used REST-PATCH recovery on the `gh pr edit` no-op. Highest-signal implementer this session. |
+| **Lucas Ferreira** (SRE) | 5 | 5 | (hold at max) Wave-wide top implementer (13/86 PRs, deploy-themed). Theme-fit volume leadership; no negative signal. |
+| **Nino Kavtaradze** (Sec Eng) | 4 | **5** (▲) | Substantive (not rubber-stamp) security reviews on #349/#350: token-confinement analysis of the CI discovery step (token stays in `Authorization` header, only non-secret ruleset IDs reach `$GITHUB_ENV`) + open-redirect analysis (`http.request.uri` carries no host/authority → destination host pinned). 8 wave PRs. |
+| **Weronika Zielinska** (Platform/IaC) | 3 | **4** (▲) | Sharp IaC reviews on #349/#350 — verified the plan herself (`0 destroy`, v4 import-ID format, idempotency reasoning, discovery-step robustness) rather than trusting the green check. 8 wave PRs. Consistent upward trajectory from her R2 debut. |
+
+### Orchestrator (Self-Assessment)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Orchestrator (Steven via Claude)** | 4 | 4 | (hold) Strong close-out: caught a destructive `2-to-destroy` plan by reading the actual plan (not the green check); caught + recovered the apply-time expression bug; honest close-on-verified-live (reopened #348 when the premature auto-close surfaced); verify-merged-then-remove worktree cleanup (33 cleaned, 0 stranded); clean reconcile of a 2-ahead/35-behind diverged main. **Hold-not-promote** because the #349 spawn brief instructed `Closes #348` on a runtime-gated issue (the premature-close) — self-caught and corrected same-session, and codified as charter change #1, but it was an orchestrator-authored miss. |
+
+### Done Well / Needs Improvement (Phase 3 Wave 11)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Aisha Idrissi** | deploy#348 import-adopt design + the both-jobs discovery insight; clean apply-failure recovery; honest runtime-acceptance discipline | None this wave |
+| **Nino Kavtaradze** | Substantive security analyses (token confinement, open-redirect host-pinning) on the redirect PRs | None this wave |
+| **Weronika Zielinska** | Self-verified plans (0-destroy, import format, idempotency) instead of trusting green checks | None this wave |
+| **Lucas / Wanjiku / Santiago / Aino / Nadia** | Sustained delivery + review rigor; counters reconciled at retro | None this wave |
+| **Orchestrator** | Read-the-actual-plan + apply-gate discipline caught two would-be-bad deploys; verify-merged worktree cleanup; charter codification of the lessons | `Closes #N` on a runtime-gated issue (#348) — self-caught + codified, but authored the miss |
+
+## Phase 3 Wave 12 Trust Updates (2026-05-30) — Tech-debt sweep + cross-cutting security/CI
+
+> Scope note: W12 ran 15 PRs across 2 declared repos (main 4, deploy 11) plus 5 cross-cutting direct-to-main PRs in the wave window (isnad-graph #933 starlette, #930 node24, deploy #369/#370 vhost carve-out, main #538 hook fix). **Zero ChangesRequested cycles across all 15 wave PRs** — cleanest CR count in P3 history. Top-implementer concentration 4/15 = 27% (Lucas + Weronika tied) — healthy 7-implementer distribution.
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Aino Virtanen** (SQL) | 5 | 5 | (hold at max) Exemplary execution on #538 (auto_set_env_test newline-separator fix) — 69/69 tests pass, 4 new regression cases (newline, line-continuation, quoted-newline, allow-baseline), 3 docstring contract-sync touches kept policy contract in lockstep with code. Plus #531/#532 cwd-anchor work earlier in wave. Identity verified per `feedback_brief_author_verify_roster_surname` (avoided the slug-vs-roster-name pitfall). |
+| **Nadia Khoury** (PD) | 5 | 5 | (hold at max) Retro authorship + wave-merge coordination; no negative signal. |
+| **Wanjiku Mwangi** (TPM) | 5 | 5 | (hold at max) #534 (cwd-anchor pass) earlier in wave; reviewer on #538 with W11 #478 cross-reference regression spot-check. |
+| **Santiago Ferreira** (RC) | 5 | 5 | (hold at max) 5-case gate-continuity probe on #538 directly verified the #476 silent-bypass class is NOT re-introduced; identity used for deploy wave-12 ← main merge-prep commit (RC role per CLAUDE.md "manages deployment sequencing"). |
+
+### Cross-Repo Implementer Updates
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Lucas Ferreira** (deploy SRE) | 5 | 5 | (hold at max — would be ▲ if not capped) **Outstanding HEAD audit on deploy#245** caught stale-meta-issue text (frontend already done via isnad-graph 1a6f2ae) and reduced 5-PR sweep to 2-PR W12 scope before any destructive Edit/Write. Cookie-domain decision well-reasoned (host-scoped, no widening). **Clean architectural-blocker escalation on PR-B1** (single-image-promotion vs build-time-env conflict) — escalated to owner without speculative work, sibling #932 filed for W13, step-5 deferred with explicit pre-conditions. Tied top-implementer (4 wave PRs: #354, #356, #359, #365). |
+| **Weronika Zielinska** (Platform/IaC) | 4 | **5** (▲) | Tied top-implementer with Lucas (4 wave PRs: #353 tf-fail-fast-validation, #357 ADR 0005 state-locking, #360 ADR 0004 Part-2 backblaze-bootstrap, #362 env-restructure design proposal). Architect-class review on #369 surfaced cross-PR sequencing observation (CSP `connect-src` is browser-side; A+B2 must ship together — directly informed merge-order) and verified users.* CSP/CORP symmetry from her own prior #243 work. Consistent upward trajectory: R2 debut → 3 (W10) → 4 (W11) → **5 (W12)**. |
+| **Nino Kavtaradze** (Sec Eng) | 5 | 5 | (hold at max) Tier-1-security headliner #351 (per-env per-role SSH key split, supersedes ADR 0003). Substantive security review on #370 with explicit threat-model summary + caught a doc-quality nit (compose v2 DOES interpolate `.env`; the dead-line reason was actually that compose YAML used a literal not `${CORS_ORIGINS}`). Apex-domain no-consumer hardening observation surfaced. |
+| **Aisha Idrissi** (deploy SRE) | 5 | 5 | (hold at max) #355 (cloud-init parity gaps); dual reviewer on #369+#370 (both Approved). |
+
+### Isnad-Graph Wave-Window Engagement (informational)
+
+W12 included cross-cutting isnad-graph work routed direct-to-main (#933 starlette security, #930 node24 CI). Isnad-graph roster engagement noted here (no org-level trust matrix updates for child-repo participants per `feedback_child_repo_implementer_rule`; trust updates for these engineers belong in isnad-graph's own retro if/when one runs).
+
+| Member | Engagement | Direction |
+|---|---|---|
+| **Anya Kowalczyk** (isnad-graph TL) | Reviewer on #933 + #930 — independently verified starlette import audit via `gh search code`; flagged state-mismatch on #930 update-branch async-window (became new memory `feedback_update_branch_async_window.md`) | positive |
+| **Ingrid Lindqvist** (isnad-graph Eng) | Reviewer on #933 + #930 — #924-lens repeat performance: dep-resolution verified at PyPI origin, CI workflow end-to-end, all 6 SHA-pins verified at canonical upstream repos, dispatch contract byte-for-byte at both ends | positive |
+| **Idris Yusuf** (isnad-graph Sec) | #931 audit work was sound (starlette imports enumerated, ABI-stability per file, fastapi compat verified). 9-hour throttle stall mid-task required orchestrator throttle-takeover per `feedback_throttle_takeover`. No engineering-class negative — stall is process/infra signal. | neutral (audit positive; stall not held against) |
+| **Linh Pham** (isnad-graph DevOps) | #930 author — well-prepared PR (SHA-pinning policy preservation correct, gitleaks carve-out aligned with #929); sat 2 days for #931 unblock (not Linh's fault) | positive |
+| **Nurul Hakim** (deploy Observability) | #358 dedicated egress network — clean delivery, in wave-12 scope per `compose:` themed work | positive |
+
+### Orchestrator (Self-Assessment)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Orchestrator (Steven via Claude)** | 4 | 4 | (hold) Strong wave-window execution: HEAD-audit pattern caught stale meta-issue text on **both #536 and #245** (saved 5 implementer spawns on #536 + reduced #245 from 5-PR to 2-PR scope); clean throttle-takeover on Idris #931 stall (committed with implementer's identity, audit attribution preserved); architectural-blocker escalation discipline on PR-B1 (owner-decision-tier, not speculatively-resolved); wave-merge ceremony with correct identity attribution (Santiago for RC merge-prep) and reachability gate (ahead 0, behind 1 post-merge). Memory `feedback_update_branch_async_window.md` saved live during the wave. **Hold-not-promote** because: the deploy node24 PR re-target via `gh pr edit` was silent no-op'd on first try (memory hit recognized, REST PATCH recovered) — pattern was a memory-hit not a fresh catch, but it does mean the orchestrator authored the initial wrong-tool choice. Also: the wave-12 scope file W12 canonical-counter-key writes were deferred to retro (per skill design) but the orchestrator could have explicitly written them at wrapup — would have been one fewer retro task. Minor; not promotion-blocking. |
+
+### Done Well / Needs Improvement (Phase 3 Wave 12)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Aino Virtanen** | #538 hook fix execution + 4 fresh regression test cases (newline, line-continuation, quoted-newline, allow-baseline); docstring contract-sync across 3 sites | None this wave |
+| **Lucas Ferreira** | deploy#245 HEAD audit (scope-reduction catch); architectural-blocker escalation discipline on PR-B1; clean sibling-issue filing for W13 step-5 | None this wave |
+| **Weronika Zielinska** | Tied top-implementer (4 wave PRs across security/IaC/docs); architect review on #369 surfaced cross-PR sequencing | None this wave |
+| **Nino Kavtaradze** | Tier-1 #351 SSH key split (supersedes ADR 0003); doc-quality nit catch on #370 (compose v2 .env interpolation correction) | None this wave |
+| **Wanjiku / Santiago / Aino / Nadia** | Sustained review/coordination rigor; 5-case gate-continuity probe (Santiago); W11 #478 regression spot-check (Wanjiku); identity-discipline (Aino) | None this wave |
+| **Orchestrator** | HEAD-audit pattern caught 2 stale meta-issue traps (#536, #245); throttle-takeover with identity-preservation; architectural-blocker escalation accepted not papered-over; wave-merge with correct RC identity for sequencing | `gh pr edit` silent no-op on first base-retarget try (memory-hit recovery, but authored the wrong-tool choice initially) |
+
+## Phase 3 Wave 13 Trust Updates (2026-05-31) — Phase-3 End-State Close-out + Cross-Repo Schema Rationalization
+
+> Scope note: W13 was the **largest wave in P3 history** — **37 PRs across 5 declared repos** (main 10, deploy 13, user-service 3, isnad-ingest-platform 8, isnad-graph 3), **18 distinct implementers**. **One ChangesRequested cycle across all 37 PRs** (us#137, Idris→Mateo — a load-bearing security catch, not a quality miss). Top-implementer concentration **7/37 = 19%** (Aino, all governance/charter/end-state work — theme-fit, well under the 60% fragility threshold). The wave's defining arc: an honest Tier-5 audit surfaced **four unmet P3 end-state criteria** (#322/#326/#327/#328) that the owner pulled into W13 rather than false-closing; #328 delivered (Closes), the other three delivered as parent-canonical with per-repo rollout carried to W14 (`Refs`).
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Aino Virtanen** (SQL) | 5 | 5 | (hold at max) Wave headliner: 7 clean PRs, all governance/standards. Authored the canonical **`artifact-ownership.md`** (#328/#559, the one end-state criterion fully closed), three charter triggers (#548 throttle-stall thresholds, #549 meta-issue freshness re-audit, #550 6-class segment-parser test coverage), the wave-wrapup **staging-promotion gate** (#551/#325), session-start REPO_ROOT anchor + no_worktree self-delete recovery (#553/#554), the **pre-push ⇄ CI sync-drift gate** (#562/#327), and the docs-CI lint gate (#563/#326). The ethical spine of the wave — her Tier-5 audit **refused to false-close** the 4 end-state criteria, which is exactly the honest-audit discipline the charter prizes. |
+| **Nadia Khoury** (PD) | 5 | 5 | (hold at max) Wave kickoff → scope → wrapup orchestration across 5 repos; owner-decision escalation routing (deploy#329/#100, #35 per-field ruling, end-state gaps) without speculative work; meta-issue #541 lifecycle; wave-merge ceremony with reachability gate (0 stranded). |
+| **Wanjiku Mwangi** (TPM) | 5 | 5 | (hold at max) Authored **#561** — the canonical branch-protection ruleset spec + hook-validated admin-merge exception class system (the security backbone of the end-state push) — and **#549** meta-issue freshness trigger. Cross-dependency tracking across the 5-repo fan-out. |
+| **Santiago Ferreira** (RC) | 5 | 5 | (hold at max) **#563** docs/markdown + config lint gate (parent-canonical #326 pattern); RC role on the 5-repo wave→main merge sequencing. |
+
+### Cross-Repo Implementer Updates (deploy track)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Lucas Ferreira** (deploy SRE) | 5 | 5 | (hold at max — would be ▲ if not capped) Top deploy implementer with 3 clean architectural PRs: **#385** bitnami→`apache/kafka:3.9.2` KRaft broker migration (owner-decided image, full `KAFKA_CFG_*`→apache env reconciliation), **#383** the Option-B fast stg-smoke battery wired as a `verify-stg` fast-fail gate (mirrors the prod battery, <5min budget), **#389** the users.{base} Caddy carve-out completing the isnad.* dual-bind drop. HEAD-audit-before-Edit discipline sustained. |
+| **Nino Kavtaradze** (Sec Eng) | 5 | 5 | (hold at max) 4 security-heavy deploy PRs: **#381** secrets inventory + rotation policy, **#378** state-resident secret-rotation runbook (Phase 3 of #172), **#377** root-key exclusion from root→deploy merge, **#373** master-B2-key removal from CI (read-only plan key + workstation apply). Highest deploy PR count this wave. |
+| **Weronika Zielinska** (Platform/IaC) | 5 | 5 | (hold at max) 3 PRs: **#380** isnad-graph→isnad hostname cutover straggler sweep, **#376** pre-staged IAM role binding doc + OAuth-SPOF de-framing, **#374** Cloudflare token-scope preflight + .net/.org ruleset auth docs. |
+| **Aisha Idrissi** (deploy SRE) | 5 | 5 | (hold at max) **#382** RUN_MODE=remote non-health integration coverage expansion. |
+| **Bereket Tadesse** (deploy Manager) | 4 | 4 | (hold) **#372** decommission of the hand-made isnad-graph-prod VPS — clean delivery. Demotion from W11 (#280 head-truncation pre-spawn miss) stands until a fresh **brief-author** demonstration shows the enumeration discipline restored; this wave he worked implementer-class, so the restoring signal didn't arise. No negative this wave. |
+| **Nurul Hakim** (deploy Observability) | 4 | 4 | (hold) **#375** reachable + working Grafana login for metrics access — clean delivery, consistent with W12 #358 positive. |
+
+### Child-Repo Wave Engagement (informational — per `feedback_child_repo_implementer_rule`)
+
+> Trust numbers for child-repo rosters belong in those repos' own retros. Noted here for visibility; engagement was uniformly strong.
+
+| Member | Repo | Engagement | Direction |
+|---|---|---|---|
+| **Idris Yusuf** | user-service / isnad-graph (Sec) | ★ **Standout security catch** on us#137 — the single CR of the wave. Audited the Caddy `users.{base}` vhost at HEAD and proved the new `/metrics` endpoint would fall through the catch-all and be **publicly reachable**, contradicting the PR's "not public" claim. Correct security-guard-inline shape: required claim-correction + a hard deploy-side 403 dependency (#386) before prod-enable, without holding the sound user-service code hostage. Also authored us#138 (Dockerfile digest-pin + trivy allowlist). | strongly positive |
+| **Mateo Salazar** | user-service (Eng) | 2 PRs (#137 /metrics exposure, #136 mypy type-ignore cleanup). Received the wave's only CR and **responded correctly** — corrected the public-exposure claim and filed the deploy-side dependency rather than arguing. First-look-correct discipline holds. | positive |
+| **Tomás Carvalho** | isnad-ingest-platform (Eng) | 2 PRs: #56 Kafka-driven worker E2E + MinIO→dedup object-store flow (impl of main#136 pipeline scenarios), #52 testcontainers neo4j integration coverage. | positive |
+| **Imelda Santos** | isnad-ingest-platform (Eng) | 2 PRs: #54 per-appearance Hadith-field rationalization (the #35 ruling impl), #49 fail-loud on edge MERGE with missing endpoint. | positive |
+| **Yusuke Inoue** | isnad-ingest-platform (Eng) | 2 PRs: #53 narrowed `_build_reset_clients` return type, #50 worker_checkpoint TTL sweep. | positive |
+| **Léopold Mbongo** | isnad-ingest-platform (Eng) | 2 PRs: #51 phantom-#192-reference removal, #48 send-before-mark fix in WorkerRunner.handle_one. | positive |
+| **Farhan Malik** | isnad-graph (DE Lead) | Co-drafted the #35 per-field ruling (data-lead), then authored #935 promoting the 4 ratified ingest fields to Phase-4 Pydantic models. | positive |
+| **Aisling Brennan** | isnad-graph (Eng) | #936 ingest-extras schema reconcile — authored under isnad-graph roster identity (per-repo commit-identity rule; the ingest-roster author could not author isnad-graph commits). | positive |
+| **Ingrid Lindqvist** | isnad-graph (Eng) | #934 runtime-config.js for env-specific origins. Repeat dep-resolution-at-origin rigor noted in prior waves. | positive |
+
+### Orchestrator (Self-Assessment)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Orchestrator (Steven via Claude)** | 4 | 4 | (hold) Strong: drove 37 PRs through impl→2-reviewer→merge across 5 repos with 18 implementers and only 1 CR; **honest Tier-5 audit surfaced 4 unmet end-state criteria and escalated rather than false-closing** (the wave's best decision); clean owner-decision routing on every fork (deploy#329 Option-B, #100 apache/kafka, #35 per-field ruling, end-state pull-in) without speculative pre-work; correct per-repo commit-identity handling on the isnad-graph #936 cross-roster case. **Hold-not-promote** because of three self-authored process slips: (1) **Closes-vs-Refs flip-flop on #561** — gave conflicting "Closes stands" then "change to Refs" signals that cost Wanjiku multiple round-trips; (2) **stale-local-checkout during high-volume remote merges** — merged 37 PRs via gh while local parent was 22 commits behind, so the ontology counter-commit landed on a stale tree and needed a `reset --hard` recovery (which discarded session annunaki entries); (3) the **batch-loop merge** on the ingest cluster fail-opened Hook 4 (known memory, recurred). Each is a recognized-pattern slip, not a fresh-catch — exactly the self-authored-error class that blocks promotion. |
+
+### Done Well / Needs Improvement (Phase 3 Wave 13)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Aino Virtanen** | 7 clean governance PRs; authored artifact-ownership.md + pre-push sync-gate + 3 charter triggers; Tier-5 honest-audit refusal to false-close 4 end-state criteria | None this wave |
+| **Wanjiku Mwangi** | #561 branch-protection canonical spec + admin-merge exception classes (security backbone); #549 meta-issue freshness trigger | None this wave (the #561 Closes/Refs churn was orchestrator-authored, not hers) |
+| **Lucas Ferreira** | apache/kafka migration + stg-smoke battery + Caddy carve-out, all clean; sustained HEAD-audit discipline | None this wave |
+| **Nino Kavtaradze** | 4-PR security sweep (secrets inventory/rotation/key-removal) — highest deploy throughput | None this wave |
+| **Idris Yusuf** | ★ /metrics public-exposure catch (the wave's load-bearing security review); correct security-guard-inline shape | None this wave |
+| **Mateo Salazar** | Responded to the wave's only CR correctly — claim-correction + dependency-filing, no argument | None this wave |
+| **ingest-platform + isnad-graph rosters** | 13 clean child-repo PRs (E2E/testcontainers/#35-ruling/Phase-4 models), zero CRs | None this wave |
+| **Orchestrator** | Honest Tier-5 audit + escalation discipline; 37-PR/5-repo drive at 1 CR; cross-roster identity correctness on #936 | #561 Closes/Refs flip-flop (conflicting signals → round-trips); stale-local-checkout during high-volume merge; batch-loop Hook-4 fail-open recurrence |
+
+## Phase 3 Wave 14 Trust Updates (2026-06-01) — Phase-3 End-State Rollout + Hook Hardening + Verify-and-Close
+
+Final wave of Phase 3. 15 PRs / 8 repos / 0 changes-requested cycles. Directional summary: clean delivery across the board; the standout is Ingrid's investigate-first GHCR fix. Org-level + deploy-track hold at their established levels; no decreases warranted among implementers.
+
+### Done Well / Needs Improvement (Phase 3 Wave 14)
+
+| Engineer | Done Well | Needs Improvement |
+|---|---|---|
+| **Aino Virtanen** | 5 clean PRs — 4 Tier-3 hook fixes + the sync-gate build-kind/multi-line fix (+10 regression tests); also reviewed #579 | None this wave |
+| **Ingrid Lindqvist** | ★ #941 GHCR registry migration — model investigate-first (confirmed package published + proved cross-repo auth via already-green ci.yml before coding), BuildKit-secret token handling never in a layer | None this wave |
+| **Anya Kowalczyk** | user-service rollout #141/#142 + canonical alignment; thorough security-lens reviews on #938 + #941 (runtime-image-excludes-token verification) | None this wave |
+| **Linh Pham** | isnad-graph rollout #938 (byte-aligned the build-pattern fix); rigorous #941 workflow/security review as ghcr-publish owner | None this wave |
+| **Santiago Ferreira** | #579 actionlint pin with independent upstream sha256 verification; reviewed #580 | None this wave |
+| **Aisha Idrissi** | deploy rollout #391 + authored the canonical build-kind tightening later lifted into #576/#580 | None this wave |
+| **Astrid Lindqvist / Kwame Mensah-Williams / Tarek Mansour / Farhan Bensalah** | one clean end-state rollout PR each (design-system #90 / landing #104 / data-acq #60 / ingest #58), 0 CRs | None this wave |
+| **Orchestrator** | Verify-and-close discipline (avoided rebuilding already-live #323/#324/#329); investigate-first root-caused staging red to #940; honest staging-gate override with deploy#393 filed; surfaced the #322 delivered-vs-applied gap rather than false-closing | commit 5804476 GHCR red went 12 days undetected (no red-default-branch alerting); `current_wave` pointer left stale at kickoff (retro blocked); ADMIN_MERGE_EXCEPTION literal-format friction cost retries |
+
+## Phase 3 Wave 15 Trust Updates (2026-06-02) — Phase-3 Exit Close-out
+
+The closing wave of Phase 3. 26 PRs / all 8 repos / 1 changes-requested cycle / **0 failing CI checks across all PR heads** (cleanest P3 wave) + 8 wave→main bundles + the post-wrapup ig#950 hotfix. Directional summary: org-level + deploy-track hold at their established levels; **Nurul Hakim promotes 4→5** on a third consecutive clean wave; Ingrid's second consecutive standout wave is noted in the child-repo engagement table (per `feedback_child_repo_implementer_rule`, her number belongs to the isnad-graph roster).
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Aino Virtanen** (SQL) | 5 | 5 | (hold at max) 4 clean PRs (#589/#591/#592/#593) + the in-wave #586 hook fix; 15% theme-fit concentration; skills-CI gate (#593) closes a real enforcement gap. |
+| **Nadia Khoury** (PD) | 5 | 5 | (hold at max) Wave kickoff → 3-gate sequencing → wrapup → phase-exit coordination across all 8 repos; owner-decision routing on every gate (#322 authorize-now, #330 trailing-window, staging re-bootstrap). |
+| **Wanjiku Mwangi** (TPM) | 5 | 5 | (hold at max — would be ▲ if not capped) ★ The #322 exit gate end-to-end: spec correction (us#145), parent rollout (main#588), and the **8/8 org-wide ruleset application with per-repo read-back verification**. Top reviewer of the wave (6 Approved verdicts). |
+| **Santiago Ferreira** (RC) | 5 | 5 | (hold at max) #330 tech-debt measurement (15.3% ≤ 20%, trailing-window method); 2 clean PRs; 5 reviews; RC sequencing on the 8-bundle wave→main ceremony. |
+
+### Cross-Repo Implementer Updates (deploy track)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Lucas Ferreira** (deploy SRE) | 5 | 5 | (hold at max — would be ▲ if not capped) ★ deploy#394 kafka runbook + **live re-bootstrap execution on the stg VPS** (owner-authorized). Root-caused the real failure (Bitnami-era root-owned volume dirs vs apache/kafka UID-1000 appuser) — a diagnosis refinement over the runbook's own hypothesis, fed back into the runbook. |
+| **Nino Kavtaradze** (deploy Sec) | 5 | 5 | (hold at max) ★ The wave's load-bearing reviewer: the single CR (deploy#396) caught both the hard-gate-on-cross-repo-artifact design flaw and the dotted-only-regex evasion. Both became org memories. |
+| **Aisha Idrissi** (deploy SRE) | 5 | 5 | (hold at max) #396 (received the CR, resolved cleanly, then redesigned the gate to exit-0+`::warning::` when Hook 14 blocked the continue-on-error rendering) + #397. |
+| **Nurul Hakim** (deploy Obs) | 4 | **5** (▲) | Third consecutive clean wave: W12 #358 (egress network), W13 #375 (Grafana login), W15 #400 (ruff+mypy gate for deploy scripts) + 3 substantive reviews this wave. Consistent, reliable, no negative signal across three waves — promotion earned. |
+| **Bereket Tadesse** (deploy Mgr) | 4 | 4 | (hold) Not engaged this wave (no PRs, no reviews) — no signal either direction. The W11 demotion stands pending a brief-author restoration demonstration. |
+
+### Child-Repo Wave Engagement (informational — per `feedback_child_repo_implementer_rule`)
+
+> Trust numbers for child-repo rosters belong in those repos' own retros. Noted here for visibility.
+
+| Member | Repo | Engagement | Direction |
+|---|---|---|---|
+| **Ingrid Lindqvist** | isnad-graph | ★ Second consecutive standout wave: ig#946 + the **post-wrapup ig#950 hotfix** (runtime-config.js → /tmp for read-only rootfs, plus a new `frontend-readonly-container` CI job replicating deploy's exact constraints so the class can't regress). W14 #941 GHCR + W15 #950 = the engineer who keeps unbreaking staging. | strongly positive |
+| **Kavitha Sundaramurthy** | data-acquisition | 3 clean PRs (#62/#63/#64) — highest child-repo throughput this wave. | positive |
+| **Kofi Mensah-Williams** | landing-page | 3 clean PRs (#106/#107/#108). | positive |
+| **Astrid Lindqvist** | design-system | 2 clean PRs (#93 prettier corpus reformat + gate, #95). | positive |
+| **Linh Pham** | isnad-graph | ig#944 (retired the 3 pre-existing actionlint -ignores — closes the W14 accepted-debt item). | positive |
+| **Jelani Mwangi** | isnad-graph | ig#945 (gitleaks-action v3.0.0 node24). | positive |
+| **Mateo Salazar** | user-service | us#144 — re-assigned cleanly after his original scope row (ig#943) was discovered to be a phantom dup (orchestrator-authored error, not his). | positive |
+| **Fatima Bensalah** | isnad-ingest-platform | ingest#60. | positive |
+| **Anya Kowalczyk / Idris Yusuf** | isnad-graph / user-service | 5 + 4 reviews respectively — the child-repo review backbone this wave. | positive |
+
+### Orchestrator (Self-Assessment)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| **Orchestrator (Steven via Claude)** | 4 | 4 | (hold) Strong: drove 26 PRs + 8 bundles + 1 hotfix through the full lifecycle with 1 CR and 0 CI failures; honest staging-gate handling (override-with-rationale at wrapup, then **re-verified and re-recorded as genuinely green post-hotfix** instead of letting the override stand); all 3 phase-exit gates closed on API-verifiable state; correct hook-respect behavior (fixed Hook 14's blocking-design trigger instead of admin-overriding). **Hold-not-promote** because of one self-authored error: **ig#943 phantom dup** — filed an isnad-graph issue from deploy#245's stale body snapshot without re-verifying at origin HEAD; cost a scope row, Mateo's reassignment, and a board repair. Exactly the recognized-pattern slip class (the rule existed; the orchestrator didn't apply it to the issue-filing surface). |
+
+### Done Well / Needs Improvement (Phase 3 Wave 15)
+
+| Member | Done Well | Needs Improvement |
+|--------|-----------|-------------------|
+| **Wanjiku Mwangi** | 8/8 ruleset application with read-back verification (the #322 exit gate); top reviewer (6 verdicts) | None this wave |
+| **Lucas Ferreira** | Live kafka re-bootstrap on stg VPS; root-cause refinement fed back into the runbook | None this wave |
+| **Nino Kavtaradze** | The load-bearing CR (two distinct design flaws caught in one review) | None this wave |
+| **Nurul Hakim** | Third consecutive clean wave → promoted to 5 | None this wave |
+| **Aisha Idrissi** | CR resolution + Hook-14-respecting gate redesign (exit-0 + `::warning::`) | None this wave |
+| **Ingrid Lindqvist** (ig roster) | ig#950 hotfix + regression-proof CI job; second consecutive standout | None this wave |
+| **Aino / Santiago / Nadia** | Sustained delivery, measurement, and coordination rigor | None this wave |
+| **Orchestrator** | Phase-exit on verifiable state; staging onion fully peeled; hook-respect under pressure | ig#943 phantom dup (stale-snapshot issue filing — proposed process change #1) |
+

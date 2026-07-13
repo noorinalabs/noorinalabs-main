@@ -100,6 +100,8 @@ awk '/^## Retrospective: Phase {P} Wave '$((M-1))'/,/^## /' "$REPO_ROOT/.claude/
     | sed -n '/[Cc]arry.forward\|[Dd]efer/,/^### \|^## /p'
 ```
 
+**Archive fallback (#964):** the feedback log is archived per-phase at phase close (`charter.md` § Feedback System → Per-Phase Archival). If the `## Retrospective: Phase {P} Wave {M-1}` section is not in the live log — the first `/wave-scope` of a new phase, where wave `M-1` belongs to the just-closed phase `P-1` — run the same `awk` extraction against `$REPO_ROOT/.claude/team/archive/feedback_log_phase-{P-1}.md`.
+
 Collect into a `CARRY_FORWARDS=[]` working list. Each entry: `{id, source: "retro", type, note}`.
 
 ### 2. Read memory must-includes

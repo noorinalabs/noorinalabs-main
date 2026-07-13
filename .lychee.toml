@@ -36,6 +36,10 @@ exclude_path = [
   # and bare refs, not lychee-checkable relative links; excluded like the other
   # append-only records.
   ".claude/memory",
+  # Frozen per-phase archives of feedback_log.md / trust_matrix.md (#964) —
+  # byte-for-byte relocations of append-only records; relative links inside
+  # them resolved from the ORIGINAL location and are not defects here.
+  ".claude/team/archive",
   "node_modules",
 ]
 
