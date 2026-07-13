@@ -64,7 +64,7 @@ from prose that merely *names* the marker (a commit, doc, or this very module th
 discusses ``Docs-N/A`` would otherwise self-trigger the opt-out). Matching the
 colon form also keeps it distinct from the charter's ``TechDebt:`` / review
 ``Requestor:`` line shapes so it can never be mistaken for a review verdict by
-Hook 4 (cf. feedback_hook4_regex_prose_false_match).
+Hook 4 (cf. feedback_pr_review_verdict_format).
 
 Exit code: always 0 (advisory). CLI usage errors print to stderr but still 0,
 because this gate must never be the reason a push or build stops.

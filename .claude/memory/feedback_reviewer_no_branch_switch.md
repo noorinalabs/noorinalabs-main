@@ -31,7 +31,7 @@ Reviewer agents (spawn class: reviewer) MUST read PR code via `gh api repos/.../
 **How to apply:**
 
 1. In every reviewer-spawn brief, add explicit instruction: "READ code via `gh api repos/.../contents/<path>?ref=<sha>` or `gh pr diff <N>`. Do NOT `git checkout` PR branches in the parent main checkout. If you need a local file, write a temp copy to `/tmp/` via the Write tool after fetching with gh api."
-2. If a reviewer genuinely needs a tree-level checkout (e.g., to run the test suite locally against the PR head), spawn them in a **dedicated review worktree** created by the orchestrator pre-spawn: `git worktree add /tmp/review-pr-<N> <pr-head-sha>`. Brief specifies the worktree path imperatively (per [[feedback_spawn_brief_field_advisory_pattern]]).
+2. If a reviewer genuinely needs a tree-level checkout (e.g., to run the test suite locally against the PR head), spawn them in a **dedicated review worktree** created by the orchestrator pre-spawn: `git worktree add /tmp/review-pr-<N> <pr-head-sha>`. Brief specifies the worktree path imperatively (per [[feedback_spawn_brief_protocol]]).
 3. Post-review cleanup belongs to the orchestrator, not the reviewer — reviewers post verdict and stop; orchestrator removes review worktrees + temp branches.
 
 Sibling rule to [[feedback_review_against_artifact]] (which establishes gh-api-at-HEAD as the canonical read mechanism — this one extends it with a NEGATIVE-space rule about local-checkout side effects).

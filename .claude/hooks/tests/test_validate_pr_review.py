@@ -723,7 +723,7 @@ class CheckEndToEndTests(_NoContentBindingHarness):
         self.assertIn("gh api repos/<owner>/<repo>/issues/<PR>/comments", reason)
         self.assertIn('contains("RequestOrReplied: Approved")', reason)
         # Memory pointer: canonical reference for full context.
-        self.assertIn("feedback_validate_pr_review_approved_not_reply.md", reason)
+        self.assertIn("feedback_pr_review_verdict_format.md", reason)
 
     def test_block_message_explains_requestor_requestee_swap(self):
         """BLOCKED message MUST surface the Requestor/Requestee swap failure

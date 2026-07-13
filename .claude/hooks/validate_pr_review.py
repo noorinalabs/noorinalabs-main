@@ -1414,7 +1414,7 @@ def check(input_data: dict) -> dict | None:
                 "Only)): label PR `wave-bootstrap` AND have a charter-enforcer review (Standards "
                 "Lead, Manager, Tech Lead, Project Lead, or Program Director).\n"
                 "Pass `--admin` for emergency overrides only.\n"
-                "See memory feedback_validate_pr_review_approved_not_reply.md for full context."
+                "See memory feedback_pr_review_verdict_format.md for full context."
             ),
         }
         log_pretooluse_block("validate_pr_review", command, result["reason"])

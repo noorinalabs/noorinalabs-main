@@ -192,7 +192,7 @@ class DirectionVerdictHelperTests(unittest.TestCase):
     def test_changes_requested_two_word_verdict(self):
         """`Changes Requested` (space-separated) — the form validate_pr_review counts.
 
-        Per feedback_validate_pr_review_approved_not_reply.md, the literal
+        Per feedback_pr_review_verdict_format.md, the literal
         two-word form is the one the sibling hook counts. Both forms must
         be recognized here.
         """

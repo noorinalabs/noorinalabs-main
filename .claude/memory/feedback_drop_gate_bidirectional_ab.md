@@ -99,6 +99,7 @@ All four of the author's oath fixtures **led** with the oath, so they only ever 
 Verbatim corpus fixtures are necessary but **not sufficient** — they must also *span the positional/structural variants* the production data actually contains. Ask of any fixture set: *which branch does none of these reach?*
 
 ## Cross-references
+- **Retraction this memory canonicalizes:** the 2026-07-02 prod-quality snapshot memory (`project_prod_loaded_quality_broken`, retired to git history; #723 CLOSED 07-05) advised *"weight by mention_count"* as a measurement axis. That advice is **RETRACTED** — it is precisely what hid these deletions. Weighting is sound for *triage priority* only; **measure unweighted**.
 - [[feedback_silent_zero_is_not_a_measurement]] — verify the instrument separates the classes before reading the number; here the *metric itself* was the wrong axis.
 - [[feedback_fixture_makes_guard_assertion_inert]] — a fixture set that cannot reach the branch proves nothing about it.
 - [[feedback_review_against_artifact]] — Sofia rebuilt the A/B rather than reading the PR body's table. That is why she found it.

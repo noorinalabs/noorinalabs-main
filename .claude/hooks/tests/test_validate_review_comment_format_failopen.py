@@ -575,7 +575,7 @@ class TrailerHelperSingularityTests(unittest.TestCase):
     """One definition of the charter trailer, or the rule drifts (#934).
 
     A second hand-maintained copy is what produced the false
-    `feedback_hook4_regex_prose_false_match` memory: the convention described
+    `feedback_pr_review_verdict_format` memory: the convention described
     in one place, implemented in another, nothing tying them together. These
     assertions make a second copy fail CI rather than rot quietly.
     """

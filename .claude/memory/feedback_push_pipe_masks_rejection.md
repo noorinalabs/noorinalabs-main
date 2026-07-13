@@ -9,7 +9,7 @@ metadata:
 
 `git push ... --force-with-lease | tail` (or `| head`, `| grep`) **hides a rejected push**: the shell pipeline's exit status is the LAST command's (tail = 0), so a non-fast-forward / stale-lease rejection from git reads as success. The agent then believes the branch is updated when the remote still has the old head — and a downstream "PR is green" claim is made against an unpushed tree.
 
-**Why:** P5W4 ig#1044 (Ingrid Lindqvist) — `git push --force-with-lease | tail` returned 0 while the push was actually rejected; only caught because the head didn't move on re-check. Same family as [[feedback_gh_pr_edit_silent_noop]] (silent no-op tooling).
+**Why:** P5W4 ig#1044 (Ingrid Lindqvist) — `git push --force-with-lease | tail` returned 0 while the push was actually rejected; only caught because the head didn't move on re-check. Same family as [[feedback_gh_cli_gotchas]] (silent no-op tooling).
 
 ## This is not about `git push`. It is about the pipe. (generalized 2026-07-09)
 
@@ -45,7 +45,7 @@ All three rows of the table above are a command that *did* exit non-zero, so `pi
    ( set -o pipefail; echo hi | grep -q nomatch | cat ) -> rc=1     # echo succeeded; no-match isn't failure.
    ```
    The `| cat` is load-bearing. With `grep -q` as the **last** stage, `rc=1` in every shell mode, and `pipefail` changes nothing — an earlier draft of this file cited that form as an over-report, which a reader running it would have found false. Aino Virtanen caught it. **The section warning that false evidence destroys the file was the section carrying it.**
-2. **`pipefail` cannot catch a command that exits `0` while doing nothing.** `( set -o pipefail; true | tail )` is `rc=0`. That is the entire [[feedback_gh_pr_edit_silent_noop]] family — a `pipefail` pipeline over `gh pr edit` still reports success on a no-op. **This is why "read the effect back from the origin" is the load-bearing bullet, not the exit code.**
+2. **`pipefail` cannot catch a command that exits `0` while doing nothing.** `( set -o pipefail; true | tail )` is `rc=0`. That is the entire [[feedback_gh_cli_gotchas]] family — a `pipefail` pipeline over `gh pr edit` still reports success on a no-op. **This is why "read the effect back from the origin" is the load-bearing bullet, not the exit code.**
 
 And if you genuinely need a pipe with a truthful status, zsh exposes the whole vector: `false | true | false` leaves `pipestatus=(1 0 1)`.
 
@@ -65,10 +65,10 @@ The pipe is one member. Three landed on one engineer in one evening, each report
 
 **Quote the heredoc delimiter** (`<<'EOF'`) unless you specifically want interpolation; if you do want it, keep backticks, `$(...)`, and `$` out of the body. Prefer `-F <msgfile>` written by a tool that does no expansion. For `re.sub`, use a function replacement or `re.escape`, never a raw string carrying backslashes. And **read the artifact back** — `git log -1 --format=%B`, the written file, the pushed ref — because in every one of these the *command* succeeded and the *content* did not survive.
 
-Sibling of [[feedback_gh_pr_edit_silent_noop]]: there the tool did nothing and said so cheerfully; here it did something other than what you wrote.
+Sibling of [[feedback_gh_cli_gotchas]]: there the tool did nothing and said so cheerfully; here it did something other than what you wrote.
 
 **How to apply:**
 - **Never pipe a command whose exit status you intend to read.** Not `git push`, not `gh`, not a gate script, not a linter. Redirect instead: `cmd > "$CLAUDE_JOB_DIR/tmp/<cmd>_<id>.txt" 2>&1; echo "rc=$?"`, then read the file. **Use a unique path, never a shared `/tmp/out.txt`** — parallel agents clobber each other, per [[feedback_parallel_reviewer_tmp]].
 - `set -o pipefail` is **off by default under zsh** and must be set explicitly in the same call: `( set -o pipefail; cmd | tail )`. It then catches an upstream non-zero — but it **over-reports** on `| head` (SIGPIPE `141`) and `| grep -q` (no-match `1`), and it **cannot** catch a command that exits `0` while doing nothing. Prefer redirect.
-- For any command with a side effect — a push, a comment, a label, a merge — **read the effect back from the origin**, not the exit code. `rc=0` from `gh` proves nothing about GitHub's state, with or without `pipefail`. Pairs with [[feedback_refresh_before_status_claim]] and [[feedback_gh_pr_edit_silent_noop]].
+- For any command with a side effect — a push, a comment, a label, a merge — **read the effect back from the origin**, not the exit code. `rc=0` from `gh` proves nothing about GitHub's state, with or without `pipefail`. Pairs with [[feedback_refresh_before_status_claim]] and [[feedback_gh_cli_gotchas]].
 - After any force-push, read-back-verify: `git ls-remote origin <branch>` (or `gh api .../git/refs/heads/<branch>`) == local HEAD before claiming the PR reflects your latest commit.

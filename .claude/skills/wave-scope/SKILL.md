@@ -259,7 +259,7 @@ P6W16 shipped two issues to execution on **rotted premises**: #705 targeted
 `wave_key_reset.py`, a file #804 had already deleted, and #816's named root cause
 was inverted. `/wave-scope` reconciled labels-vs-meta but never asserted that a
 scoped issue's named *file / path / symbol* still exists at origin HEAD. This
-gate closes that — it is the scope-time twin of [[feedback_pre_spawn_verify_file_exists]]
+gate closes that — it is the scope-time twin of [[feedback_spawn_brief_protocol]]
 (spawn-time) and [[feedback_verify_diagnosis_before_delegating]].
 
 The deterministic check is `.claude/lib/premise_check.py`. It auto-extracts
@@ -476,7 +476,7 @@ Append a `## Deferred to W{M+1}` section listing the deferred items + a one-line
 
 ```bash
 # Build new body via heredoc, then PATCH via gh api (gh issue edit --body has the same
-# silent-no-op risk as gh pr edit per memory feedback_gh_pr_edit_silent_noop.md — use
+# silent-no-op risk as gh pr edit per memory feedback_gh_cli_gotchas.md — use
 # gh api PATCH and read-back-verify)
 NEW_BODY=$(cat <<'EOF'
 {post-disposition body}

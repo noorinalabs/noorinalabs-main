@@ -291,7 +291,7 @@ def _default_graphql_runner(query: str, variables: dict) -> str:
 
     String values pass via `-f key=value`; integer values pass via
     `-F key=value` (gh's typed-int form). Per memory
-    `feedback_gh_pr_edit_silent_noop` — use `-F`/`-f` explicitly rather
+    `feedback_gh_cli_gotchas` — use `-F`/`-f` explicitly rather
     than `--input -` for these mutations.
     """
     argv = ["gh", "api", "graphql"]
