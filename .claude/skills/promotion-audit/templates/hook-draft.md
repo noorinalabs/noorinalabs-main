@@ -56,7 +56,7 @@ The existing skill's body is reproduced below as a starting point for the hook's
 
 - One PR adding `.claude/hooks/{{SKILL_NAME}}.py` and registering in `.claude/settings.json` (or the appropriate dispatcher if >3 hooks per matcher — see charter § Dispatcher Consolidation Policy).
 - Negative-match test coverage in `.claude/hooks/tests/`.
-- Charter entry in `.claude/team/charter/hooks.md` including a `**Promotion provenance:**` block referencing `/{{SKILL_NAME}}` and this issue number — required so `/promotion-audit` recognizes the promotion on future runs.
+- Charter entry in the hooks catalog (`.claude/team/charter/hooks/catalog-*.md` — the file covering the new hook's number range, plus an index line in `charter/hooks.md`) including a `**Promotion provenance:**` block referencing `/{{SKILL_NAME}}` and this issue number — required so `/promotion-audit` recognizes the promotion on future runs.
 - Feedback-log entry documenting the signal evidence that triggered promotion.
 
 ## Acceptance criteria
@@ -68,6 +68,6 @@ The existing skill's body is reproduced below as a starting point for the hook's
 ## References
 
 - Charter § Enforcement Hierarchy
-- Charter § Hook Authorship Requirements (charter/hooks.md)
+- Charter § Hook Authorship Requirements (charter/hooks/authorship-and-audit.md)
 - `/promotion-audit` skill (the tool that filed this issue)
 - Hook 15 (`enforce_librarian_consulted`, PR #153) — the worked-example reference for the full pipeline

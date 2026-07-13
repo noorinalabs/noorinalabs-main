@@ -203,7 +203,7 @@ Flag any changes to:
 
 ### 9.5. Retro PR body-vs-diff sanity check (added P3W9 #414 — 2026-05-13)
 
-Per `charter/pull-requests.md § Retro PR Body-vs-Diff Discipline` (Skill enforcement clause): if a retro PR for this wave is already open, every charter/skill/trust-matrix file claimed in its PR body MUST appear in the PR's diff. Direct-to-main commits for ratified retro outputs are forbidden — they bypass the two-reviewer gate and `validate_pr_ci_status`, and break the audit trail.
+Per `charter/pull-requests/wave-merge.md § Retro PR Body-vs-Diff Discipline` (Skill enforcement clause): if a retro PR for this wave is already open, every charter/skill/trust-matrix file claimed in its PR body MUST appear in the PR's diff. Direct-to-main commits for ratified retro outputs are forbidden — they bypass the two-reviewer gate and `validate_pr_ci_status`, and break the audit trail.
 
 Run this check before emitting the Step 10 wrapup table so any mismatch surfaces in the table itself:
 
@@ -233,7 +233,7 @@ fi
 
 Worked example of the failure mode this catches: PR [#124](https://github.com/noorinalabs/noorinalabs-main/pull/124) (W8 retro) body claimed 7 files, diff contained 2 (`feedback_log.md` + `ontology/checksums.json`); the other 5 (`trust_matrix.md`, `charter/pull-requests.md`, `charter/hooks.md`, `skills/wave-retro/SKILL.md`, `skills/wave-kickoff/SKILL.md`) were committed direct-to-main as `2b92605` + `ecd1c76`, bypassing review and CI. The check above would have flagged all 5 missing paths and blocked Step 10 emission until the retro PR was fixed. Filed as [#126](https://github.com/noorinalabs/noorinalabs-main/issues/126); skill-side mirror filed as [#414](https://github.com/noorinalabs/noorinalabs-main/issues/414).
 
-This step mirrors `/wave-retro` Step 6.5 by design — the same check fires from both skills so a body-vs-diff mismatch is caught whether the operator runs `/wave-retro` first (post-author check before requesting reviewers) or `/wave-wrapup` after the retro PR is open (pre-wrapup-table check). The two skills converge on the authoritative shape in `charter/pull-requests.md § Retro PR Body-vs-Diff Discipline`.
+This step mirrors `/wave-retro` Step 6.5 by design — the same check fires from both skills so a body-vs-diff mismatch is caught whether the operator runs `/wave-retro` first (post-author check before requesting reviewers) or `/wave-wrapup` after the retro PR is open (pre-wrapup-table check). The two skills converge on the authoritative shape in `charter/pull-requests/wave-merge.md § Retro PR Body-vs-Diff Discipline`.
 
 ### 10. Final wave report
 

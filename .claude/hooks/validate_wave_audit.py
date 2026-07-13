@@ -637,8 +637,8 @@ def check(input_data: dict) -> dict | None:
             f"based on `{wave_branch or '<wave-branch>'}`. The items above are NOT "
             "exempt — their wave-branch PR is missing, conflicting, red, or still in "
             f"review. Get those PRs merge-ready and re-run /{skill_name}.\n\n"
-            "There is no in-band bypass flag — see charter/hooks.md § Hook 17 for "
-            "emergency procedure."
+            "There is no in-band bypass flag — see charter/hooks/catalog-13-17.md "
+            "§ Hook 17 for emergency procedure."
         ),
     }
     log_pretooluse_block(

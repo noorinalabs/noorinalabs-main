@@ -166,7 +166,7 @@ Append a retro entry to `.claude/team/feedback_log.md`:
 
 ### 6.5. Retro PR body-vs-diff sanity check (added P3W9 #126 — 2026-05-12)
 
-Per `charter/pull-requests.md § Retro PR Body-vs-Diff Discipline`: any charter/skill/trust-matrix file claimed in the retro PR body MUST be in the retro PR diff. Direct-to-main commits for ratified retro outputs are forbidden.
+Per `charter/pull-requests/wave-merge.md § Retro PR Body-vs-Diff Discipline`: any charter/skill/trust-matrix file claimed in the retro PR body MUST be in the retro PR diff. Direct-to-main commits for ratified retro outputs are forbidden.
 
 Once the retro PR is open, before requesting reviewers:
 

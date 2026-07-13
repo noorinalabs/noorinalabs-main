@@ -149,7 +149,8 @@ class NearMissBlocksTests(unittest.TestCase):
         assert result is not None
         reason = result["reason"]
         self.assertIn("RequestOrReplied:", reason)
-        self.assertIn("pull-requests.md", reason)
+        # CHARTER_REF moved to the re-shelved section file (#963).
+        self.assertIn("pull-requests/reviews.md", reason)
 
     def test_diagnostic_names_verdict_when_verdict_was_used(self) -> None:
         body = _fixture("real_verdict_nearmiss_main930.txt")

@@ -20,7 +20,7 @@ The project's enforcement hierarchy is **hook > skill > charter > memory** (see 
 
 Skill-to-hook **ALWAYS** produces a DECIDE-tier draft issue — never auto-applies (D6, hooks are security-sensitive).
 
-**Marker convention:** The audit pipeline recognizes exactly two provenance marker shapes — `<!-- Promoted from memory: <filename> (<context>) -->` (Shape 1, charter-tier; parser regex `_HTML_COMMENT_PROMOTED_RE`) and `**Promotion provenance:** <body>` (Shape 2, hook-tier and multi-source; parser regex `_PROVENANCE_RE`). The authoritative source for the SHAPE selection rule is [`charter/skills.md` § Promotion Pipeline Marker Convention](../../team/charter/skills.md#promotion-pipeline-marker-convention). For per-hook authoring discipline (forward-reference filter, paragraph separation), see [`charter/hooks.md` § 6. Promotion Provenance Phrasing](../../team/charter/hooks.md#6-promotion-provenance-phrasing). Any future change to the recognized shapes MUST update the charter section first, then the parser, then this skill — in that order, in a single PR.
+**Marker convention:** The audit pipeline recognizes exactly two provenance marker shapes — `<!-- Promoted from memory: <filename> (<context>) -->` (Shape 1, charter-tier; parser regex `_HTML_COMMENT_PROMOTED_RE`) and `**Promotion provenance:** <body>` (Shape 2, hook-tier and multi-source; parser regex `_PROVENANCE_RE`). The authoritative source for the SHAPE selection rule is [`charter/skills.md` § Promotion Pipeline Marker Convention](../../team/charter/skills.md#promotion-pipeline-marker-convention). For per-hook authoring discipline (forward-reference filter, paragraph separation), see [`charter/hooks/authorship-and-audit.md` § 6. Promotion Provenance Phrasing](../../team/charter/hooks/authorship-and-audit.md#6-promotion-provenance-phrasing). Any future change to the recognized shapes MUST update the charter section first, then the parser, then this skill — in that order, in a single PR.
 
 ## Instructions
 
@@ -67,7 +67,9 @@ to_tier, signal, reason, artifact_ref, extra`. Drive step 4 off the
 The driver reads inputs via `read_all_memories` / `read_all_charter_sections`
 / `read_all_skills` / `find_already_promoted_in_charter` (the latter
 aggregates `Promotion provenance:` blocks AND `<!-- Promoted from memory: X -->`
-markers across all charter sub-docs, #283), then routes each candidate to
+markers across all charter sub-docs, #283 — including the per-concern section
+files under `charter/{agents,pull-requests,hooks}/`, scanned recursively
+since #963), then routes each candidate to
 its tier-specific classifier. There is no single `classify()` entry point —
 each transition has a distinct signature because the signal sources differ:
 
@@ -104,7 +106,7 @@ Resolve the **current wave label** once at the top of this step from `cross-repo
 #### AUTO artifacts
 
 For each `AUTO` decision in the driver's `--json` output (step 1):
-- **memory → charter:** apply `templates/charter-section.md` to the memory, append to the appropriate charter file, mark memory `superseded_by: charter:{file} § {section}`. Stage the diff.
+- **memory → charter:** apply `templates/charter-section.md` to the memory, append to the appropriate charter file — for the re-shelved agents / pull-requests / hooks docs (#963) that means the matching per-concern section file under `charter/{agents,pull-requests,hooks}/` (NEVER the thin index at the old path), then add the new heading + one-liner + link to that index. Mark memory `superseded_by: charter:{file} § {section}`. Stage the diff.
 - **charter → skill:** apply `templates/skill-scaffold.md` to the section, write `.claude/skills/{slug}/SKILL.md`, add a back-reference comment `<!-- promoted-to: skills/{slug} -->` after the section's `promotion-target` marker. Stage.
 
 **Commit (Aino identity per `charter/commits.md` § Identity Table):**
@@ -124,7 +126,7 @@ git checkout -b A.Virtanen/promotion-audit-{wave}-{timestamp}
 git push -u origin A.Virtanen/promotion-audit-{wave}-{timestamp}
 ```
 
-**Open the PR** following `charter/pull-requests.md § PR Template` body shape (Summary / Related Issues / Review Checklist + two `Co-Authored-By` trailers). Always include the literal three labels:
+**Open the PR** following `charter/pull-requests/authoring.md § PR Template` body shape (Summary / Related Issues / Review Checklist + two `Co-Authored-By` trailers). Always include the literal three labels:
 
 ```bash
 gh pr create \
@@ -161,7 +163,7 @@ gh project item-list 2 --owner noorinalabs --format json --limit 200 \
 
 A non-empty ID confirms the add succeeded. Empty output = the add silently no-op'd — retry once, then escalate to team-lead if still empty.
 
-**Assign two reviewers** per `charter/agents.md` § Orchestrator checklist when spawning a reviewer. Use SendMessage to spawn each reviewer (do NOT use `gh pr review` — `block_gh_pr_review` enforces; memory `feedback_validate_pr_review_approved_not_reply.md`). The reviewer spawn brief MUST embed the verbatim verdict template with the literal `TechDebt: ` line shape (memory `feedback_techdebt_attestation_literal_line.md`) — `## TechDebt` headers are NOT recognized by `validate_pr_review.py`. Reviewer slate per scope:
+**Assign two reviewers** per `charter/agents/orchestration-model.md` § Orchestrator checklist when spawning a reviewer. Use SendMessage to spawn each reviewer (do NOT use `gh pr review` — `block_gh_pr_review` enforces; memory `feedback_validate_pr_review_approved_not_reply.md`). The reviewer spawn brief MUST embed the verbatim verdict template with the literal `TechDebt: ` line shape (memory `feedback_techdebt_attestation_literal_line.md`) — `## TechDebt` headers are NOT recognized by `validate_pr_review.py`. Reviewer slate per scope:
 - memory → charter promotions: Wanjiku (TPM) + Nadia (PD)
 - charter → skill promotions: Wanjiku (TPM) + Aino (yourself ineligible — pick Santiago or Nadia)
 

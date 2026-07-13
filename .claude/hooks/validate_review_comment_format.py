@@ -186,7 +186,7 @@ from annunaki_log import log_pretooluse_block
 from charter_trailer import extract_charter_field, strip_code_regions
 
 CHARTER_FIELD = "RequestOrReplied"
-CHARTER_REF = ".claude/team/charter/pull-requests.md:14"
+CHARTER_REF = ".claude/team/charter/pull-requests/reviews.md:9"
 
 # Markers that turn a `gh api .../issues/<N>/comments` call into a *creation*.
 # A bare GET (e.g. `--jq '.[].body'`) reads comments and must not be gated.
