@@ -110,7 +110,7 @@ Project memory is **version-controlled at `.claude/memory/`**, NOT the user-spac
 Structured knowledge base in `ontology/` — domain entities, service topology, conventions across all repos. **Canonical entry point (setup, purpose, the full two-layer model, day-to-day usage): [`ontology/README.md`](ontology/README.md).** Operational essentials:
 
 - **Semantic overlay** (`ontology/{domain,services}.yaml`, `conventions.md`, `repos/*.yaml`; tracked by `checksums.json`) is hand-curated. A PostToolUse change-tracker hook updates `checksums.json` on every Edit/Write to it; **`/ontology-rebuild`** reconciles the dirty entries.
-- **Structural index** (`ontology/structural/`) is a **generated, gitignored build product** — never hand-edit, never commit, not checksum-tracked; `/ontology-rebuild` never touches it. Regenerate: `PYTHONPATH=.claude/lib python3 -m ontology_gen.aggregate .` (single repo: `python3 -m ontology_gen . --out ontology/structural/`).
+- **Structural index** (`ontology/structural/`) is a **generated, gitignored build product** — never hand-edit, never commit, not checksum-tracked; `/ontology-rebuild` never touches it. Regenerate: `PYTHONPATH=.claude/lib python3 -m ontology_gen.aggregate .` (single repo: `PYTHONPATH=.claude/lib python3 -m ontology_gen . --out ontology/structural/`).
 - **`/ontology-librarian`** is the read-only reference — staleness check for both layers + context lookup.
 - Lifecycle integration (session-start Step 3, wave-wrapup Step 12, wave-retro step 1) is owned by those skills.
 
