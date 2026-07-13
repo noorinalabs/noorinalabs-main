@@ -186,7 +186,7 @@ from annunaki_log import log_pretooluse_block
 from charter_trailer import extract_charter_field, strip_code_regions
 
 CHARTER_FIELD = "RequestOrReplied"
-CHARTER_REF = ".claude/team/charter/pull-requests.md:14"
+CHARTER_REF = ".claude/team/charter/pull-requests/reviews.md:9"
 
 # Markers that turn a `gh api .../issues/<N>/comments` call into a *creation*.
 # A bare GET (e.g. `--jq '.[].body'`) reads comments and must not be gated.
@@ -617,7 +617,7 @@ def extract_branch_author_lastname(head_ref: str) -> str | None:
 # sound (Requestee = PR-author).
 #
 # Tolerated form variants: validate_pr_review counts the literal
-# "Changes Requested" (with space) per `feedback_validate_pr_review_approved_not_reply`,
+# "Changes Requested" (with space) per `feedback_pr_review_verdict_format`,
 # while some templates and older fixtures use the camelCase "ChangesRequested".
 # Both are accepted here. Comparison is case-insensitive on the canonical token
 # match. The bare "Changes" prefix is NOT a verdict on its own — we require

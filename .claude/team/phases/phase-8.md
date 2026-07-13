@@ -11,7 +11,7 @@ last_updated: 2026-07-05
 
 ## Theme
 
-Phase 7 made the loaded corpus **queryable** but exited with the data-quality nucleus (`noorinalabs-main#723`) **still open**: the P7W22 prod validation found ≥7,580 matn-as-narrator nodes live, because the reload used curated narrators generated *before* the `da#247` NER re-extraction (`.claude/memory/project_prod_loaded_quality_broken.md`). Phase 8 opens by **finishing that closeout** as a W1 lead-in — the same shape as P7, which opened with the P6 framework carry-forward — and then delivers the two analytical-depth threads the roadmap parked for this phase:
+Phase 7 made the loaded corpus **queryable** but exited with the data-quality nucleus (`noorinalabs-main#723`) **still open**: the P7W22 prod validation found ≥7,580 matn-as-narrator nodes live, because the reload used curated narrators generated *before* the `da#247` NER re-extraction (retired memory `project_prod_loaded_quality_broken.md`, git history; #723 closed 2026-07-05). Phase 8 opens by **finishing that closeout** as a W1 lead-in — the same shape as P7, which opened with the P6 framework carry-forward — and then delivers the two analytical-depth threads the roadmap parked for this phase:
 
 - **ML modeling** — the modeling *nucleus* the roadmap deferred out of P7 (`project_p5w5_prodcutover_p6_dataquality`: "Data-Quality/ML→P7 … ML modeling → Phase 8"). P7 delivered only the *clean data* it depends on; P8 delivers the first model on top of it.
 - **Streaming pipeline** — Kafka E2E repeatable one-command bring-up (`main#667`), the former P7 end-state criterion #7, **descoped from P7 → deferred to P8** by owner 2026-06-30.
@@ -61,8 +61,8 @@ Per-wave **+20%** of the wave's feature/bug/security content (rounded up), enfor
 
 ## References
 
-- Data-quality closeout state + root-cause trace: `.claude/memory/project_prod_loaded_quality_broken.md`, `.claude/memory/project_p7_narrator_pollution_resolve_fixes.md`
+- Data-quality closeout state + root-cause trace: retired memories `project_prod_loaded_quality_broken.md` + `project_p7_narrator_pollution_resolve_fixes.md` (git history; #723 CLOSED 2026-07-05, all 4 criteria prod-verified at stg parity)
 - stg-gated data-quality close + parity rule: charter `issues.md § End-State Criterion → Data-quality criteria`; parity tracker `main#916`; `feedback_stg_gate_before_prod`
-- Roadmap (P6=Claude Efficiency, P7=Data-Quality, ML→P8): `project_p5w5_prodcutover_p6_dataquality`
+- Roadmap (P6=Claude Efficiency, P7=Data-Quality, ML→P8): retired memory `project_p5w5_prodcutover_p6_dataquality` (git history)
 - P7 exit carrying `#723` + streaming `#667` → P8: `.claude/team/phases/phase-7.md` (criterion #7 deferred, exit gate)
 - Sequencing: kicks off after P7W22 (`#904`) wrapped + retro'd (2026-07-01); wave-23 = global 23 = Phase 8 Wave 1.

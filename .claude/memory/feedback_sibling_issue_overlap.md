@@ -20,7 +20,7 @@ Before composing an implementer brief for an issue #N, do a 2-minute scope-overl
 3. If yes, look at git log for that file to find the PR that introduced the keyword. Check if that PR's body or title cites #N or a closely-related sibling.
 4. If the surface already exists and seems to address #N's acceptance criteria, **STOP the spawn** — instead, file a "verify and close #N" task with the per-criterion mapping, and route that to a reviewer-class agent (not implementer). They confirm and close.
 
-**Sibling pattern:** [[feedback_wave_branch_issue_close]] is about default-branch-only `Closes #N` keyword behavior (wave-branch merges don't fire it). This memory is about **sibling-scope-overlap** — even when `Closes #A` fires for the named issue, sibling issue #B silently stays open.
+**Sibling pattern:** [[feedback_gh_cli_gotchas]] is about default-branch-only `Closes #N` keyword behavior (wave-branch merges don't fire it). This memory is about **sibling-scope-overlap** — even when `Closes #A` fires for the named issue, sibling issue #B silently stays open.
 
 **Detection at retro time:**
 - Run `gh issue list --label p3-wave-N --state open --json number,title,createdAt` against each child repo + main

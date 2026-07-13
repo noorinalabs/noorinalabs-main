@@ -149,7 +149,8 @@ class NearMissBlocksTests(unittest.TestCase):
         assert result is not None
         reason = result["reason"]
         self.assertIn("RequestOrReplied:", reason)
-        self.assertIn("pull-requests.md", reason)
+        # CHARTER_REF moved to the re-shelved section file (#963).
+        self.assertIn("pull-requests/reviews.md", reason)
 
     def test_diagnostic_names_verdict_when_verdict_was_used(self) -> None:
         body = _fixture("real_verdict_nearmiss_main930.txt")
@@ -575,7 +576,7 @@ class TrailerHelperSingularityTests(unittest.TestCase):
     """One definition of the charter trailer, or the rule drifts (#934).
 
     A second hand-maintained copy is what produced the false
-    `feedback_hook4_regex_prose_false_match` memory: the convention described
+    `feedback_pr_review_verdict_format` memory: the convention described
     in one place, implemented in another, nothing tying them together. These
     assertions make a second copy fail CI rather than rot quietly.
     """

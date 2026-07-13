@@ -11,7 +11,7 @@ superseded_by: charter:state-claims.md § Refresh State Before Claim
 ---
 Before stating PR status, merge state, approval counts, or CI state in a teammate message or end-of-turn summary, refresh via `gh pr view <N>` or `gh api .../pulls/<N>` for any PR mentioned. Agent-local state is a snapshot from the last turn the PR was touched; by the time the next message fires, reviewers have posted, PRs have merged, and comments have flipped headers. Stating a stale snapshot as current truth burns coordinator cycles on "actually merged 10 minutes ago" re-sync messages.
 
-**Why:** Bereket.Tadesse flagged this twice in one session (2026-04-23): once on deploy#154 approval count (claimed "1/2 awaiting Aisha" when it had merged), once on deploy#153 reviewer-slate edit (claimed done three times when `gh pr edit` had silently no-op'd). Same class as `feedback_stale_inbox_manager.md` but applied at the implementer layer, and paired with `feedback_gh_pr_edit_silent_noop.md` on PR-body edits specifically.
+**Why:** Bereket.Tadesse flagged this twice in one session (2026-04-23): once on deploy#154 approval count (claimed "1/2 awaiting Aisha" when it had merged), once on deploy#153 reviewer-slate edit (claimed done three times when `gh pr edit` had silently no-op'd). Same class as `feedback_stale_inbox_manager.md` but applied at the implementer layer, and paired with `feedback_gh_cli_gotchas.md` on PR-body edits specifically.
 
 **How to apply:**
 - Before any teammate message summarizing PR state: `gh pr view <N> --json state,isDraft,statusCheckRollup,mergedAt,updatedAt` for each PR referenced.

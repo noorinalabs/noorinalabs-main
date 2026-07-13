@@ -97,7 +97,7 @@ Merge-ready-PR exemption (issue #664, owner-adopted P4W7 retro):
     *default* branch. Wave-branch PRs base on `deployments/phase-<P>/wave-<M>`,
     so the structured `closingIssuesReferences` API field is ALWAYS empty for
     exactly the PRs this exemption targets (same root cause as `Closes #N` not
-    auto-closing on wave-branch merges — memory feedback_wave_branch_issue_close).
+    auto-closing on wave-branch merges — memory feedback_gh_cli_gotchas).
     So we parse the PR's body/title for GitHub's own closing-keyword grammar
     (the same grammar GitHub parses); restricting to closing keywords keeps a
     passing `#N` mention from false-exempting an unrelated issue.
@@ -411,7 +411,7 @@ def _closing_refs_in_text(text: str) -> set[int]:
     `deployments/phase-<P>/wave-<M>`, so `closingIssuesReferences` is ALWAYS
     empty for exactly the PRs this exemption targets (the same reason
     `Closes #N` doesn't auto-close on wave-branch merges — see memory
-    `feedback_wave_branch_issue_close`). The PR body's closing keyword is the
+    `feedback_gh_cli_gotchas`). The PR body's closing keyword is the
     actual linkage signal for wave PRs, and we parse the *same* keyword grammar
     GitHub itself parses — restricting to closing keywords (not a bare `#N`
     mention) keeps a passing reference from false-exempting an unrelated issue
@@ -637,8 +637,8 @@ def check(input_data: dict) -> dict | None:
             f"based on `{wave_branch or '<wave-branch>'}`. The items above are NOT "
             "exempt — their wave-branch PR is missing, conflicting, red, or still in "
             f"review. Get those PRs merge-ready and re-run /{skill_name}.\n\n"
-            "There is no in-band bypass flag — see charter/hooks.md § Hook 17 for "
-            "emergency procedure."
+            "There is no in-band bypass flag — see charter/hooks/catalog-13-17.md "
+            "§ Hook 17 for emergency procedure."
         ),
     }
     log_pretooluse_block(

@@ -124,7 +124,7 @@ If `base != main` AND no wave-N → main merge PR exists (`gh pr list --base mai
 
 This catches the **stranded-on-wave-branch** trap: a PR honors fixture-with-fix discipline but its `base.ref` is a wave branch that never merged forward. Steps `state_reason=completed` and "linked-PR diff has regression test" without sha-reachable-from-main is the trap surfaced by main#339: PR#305 honored fixture-with-fix discipline, but base=`deployments/phase-3/wave-7` and the wave-7→main merge never happened, so the fix is stranded. wave-7 vs main = ahead_by=10, behind_by=15, diverged. Bug is still LIVE on main and wave-8.
 
-The reachability discipline distinguishes "discipline violation" from "wave-orchestration propagation gap" — different issue class, different owner. Wave-branch-merge-propagation is governed separately by `feedback_wave_branch_issue_close.md` (open-state-after-wave-merge); this rule is about the inverse: closed-state that doesn't reflect main reachability.
+The reachability discipline distinguishes "discipline violation" from "wave-orchestration propagation gap" — different issue class, different owner. Wave-branch-merge-propagation is governed separately by `feedback_gh_cli_gotchas.md` (open-state-after-wave-merge); this rule is about the inverse: closed-state that doesn't reflect main reachability.
 
 <!-- Promoted from memory: feedback_refresh_before_acting.md (P3W9 #346 memory audit, 2026-05-10) -->
 

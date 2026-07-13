@@ -298,8 +298,27 @@ def read_charter_sections(charter_path: str) -> list[CharterSection]:
     return results
 
 
+def _charter_md_files(subdir: str) -> list[str]:
+    """All `*.md` files under the charter dir, RECURSIVE and sorted.
+
+    Recursion added by #963: the charter mega-files (agents / pull-requests /
+    hooks) were re-shelved into per-concern section files under
+    `charter/{agents,pull-requests,hooks}/`, with the old paths kept as thin
+    forwarding indexes. A non-recursive `os.listdir` scan would silently see
+    only the (marker-free) indexes and drop every re-shelved section — the
+    same silent-empty failure class as #418.
+    """
+    found: list[str] = []
+    for root, dirs, files in os.walk(subdir):
+        dirs.sort()
+        for name in sorted(files):
+            if name.endswith(".md"):
+                found.append(os.path.join(root, name))
+    return found
+
+
 def read_all_charter_sections(charter_parent: str) -> list[CharterSection]:
-    """Scan charter.md + charter/*.md for marked sections.
+    """Scan charter.md + charter/**/*.md (recursive, #963) for marked sections.
 
     `charter_parent` is the directory **containing** the `charter/` subdir
     (typically `.claude/team`), NOT the `charter/` directory itself. Sibling
@@ -329,9 +348,7 @@ def read_all_charter_sections(charter_parent: str) -> list[CharterSection]:
 
     subdir = os.path.join(charter_parent, "charter")
     if os.path.isdir(subdir):
-        for name in sorted(os.listdir(subdir)):
-            if name.endswith(".md"):
-                candidates.append(os.path.join(subdir, name))
+        candidates.extend(_charter_md_files(subdir))
 
     results: list[CharterSection] = []
     for p in candidates:
@@ -387,10 +404,34 @@ def read_all_skills(skills_dir: str) -> list[Skill]:
 # ---------------------------------------------------------------------------
 
 
+def _feedback_log_corpus(feedback_log_path: str) -> str:
+    """Return the live feedback log plus any per-phase archives, concatenated.
+
+    Closed-phase retro entries move byte-for-byte to
+    `.claude/team/archive/feedback_log_*.md` at phase close (#964 / meta #960),
+    so citation counts must scan live + archive together or historical
+    citations silently vanish from the promotion pipeline. Archives are read
+    in sorted-name order for determinism; a missing archive dir is fine
+    (pre-archival layout).
+    """
+    parts: list[str] = []
+    if os.path.isfile(feedback_log_path):
+        with open(feedback_log_path, encoding="utf-8") as f:
+            parts.append(f.read())
+    archive_dir = os.path.join(os.path.dirname(feedback_log_path), "archive")
+    if os.path.isdir(archive_dir):
+        for name in sorted(os.listdir(archive_dir)):
+            if name.startswith("feedback_log_") and name.endswith(".md"):
+                with open(os.path.join(archive_dir, name), encoding="utf-8") as f:
+                    parts.append(f.read())
+    return "\n".join(parts)
+
+
 def count_retro_citations(memory: Memory, feedback_log_path: str) -> int:
     """Count occurrences of the memory name or filename in the feedback log.
 
-    Counts the larger of:
+    Scans the live log AND the per-phase archives beside it (see
+    `_feedback_log_corpus`). Counts the larger of:
       - occurrences of `memory.name` (title string)
       - occurrences of `memory.filename` (e.g., feedback_enforcement_hierarchy.md)
 
@@ -398,10 +439,9 @@ def count_retro_citations(memory: Memory, feedback_log_path: str) -> int:
     manually record retro citations in frontmatter for cases where the log
     doesn't spell out the filename.
     """
-    if not os.path.isfile(feedback_log_path):
+    text = _feedback_log_corpus(feedback_log_path)
+    if not text:
         return len(memory.referenced_in_retros)
-    with open(feedback_log_path, encoding="utf-8") as f:
-        text = f.read()
     by_title = text.count(memory.name) if memory.name else 0
     by_file = text.count(memory.filename)
     return max(by_title, by_file, len(memory.referenced_in_retros))
@@ -656,7 +696,7 @@ def find_already_promoted_in_charter(charter_parent: str) -> set[str]:
     `charter_parent` is the directory **containing** the `charter/` subdir
     (typically `.claude/team`), NOT the `charter/` directory itself.
 
-    Scans `<charter_parent>/charter/*.md` (and the optional
+    Scans `<charter_parent>/charter/**/*.md` (recursive, #963) (and the optional
     `<charter_parent>/charter.md` top-level file, if present) using the same
     recognition rules as `find_already_promoted()`. Returns the union of
     all per-file results.
@@ -690,9 +730,7 @@ def find_already_promoted_in_charter(charter_parent: str) -> set[str]:
 
     subdir = os.path.join(charter_parent, "charter")
     if os.path.isdir(subdir):
-        for name in sorted(os.listdir(subdir)):
-            if name.endswith(".md"):
-                candidates.append(os.path.join(subdir, name))
+        candidates.extend(_charter_md_files(subdir))
 
     for path in candidates:
         refs.update(find_already_promoted(path))

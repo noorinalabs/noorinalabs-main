@@ -274,6 +274,26 @@ class CountRetroCitationsTests(unittest.TestCase):
         finally:
             os.unlink(path)
 
+    def test_counts_include_per_phase_archives(self) -> None:
+        """Citations split across the live log and archive/ files are summed (#964).
+
+        Closed-phase entries move byte-for-byte to archive/feedback_log_*.md at
+        phase close; the count must scan live + archives or historical citations
+        vanish from the promotion pipeline.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            live = os.path.join(d, "feedback_log.md")
+            with open(live, "w", encoding="utf-8") as f:
+                f.write("current phase cites Some rule once\n")
+            arch = os.path.join(d, "archive")
+            os.makedirs(arch)
+            with open(os.path.join(arch, "feedback_log_phase-3.md"), "w", encoding="utf-8") as f:
+                f.write("old retro cites Some rule and Some rule again\n")
+            with open(os.path.join(arch, "trust_matrix_phase-3.md"), "w", encoding="utf-8") as f:
+                f.write("Some rule mentioned here must NOT count (wrong file family)\n")
+            # by_title = 1 (live) + 2 (feedback_log archive) = 3; trust_matrix archive ignored
+            self.assertEqual(h.count_retro_citations(self._mem(), live), 3)
+
     def test_frontmatter_floor_applies(self) -> None:
         """NEG: if the log has zero hits but frontmatter lists retros, floor kicks in."""
         log = "no mentions"
@@ -537,6 +557,48 @@ class FindAlreadyPromotedTests(unittest.TestCase):
             # Trailing slash form must still raise — normpath strips it.
             with self.assertRaises(ValueError):
                 h.find_already_promoted_in_charter(charter_subdir + "/")
+
+    def test_aggregator_recurses_into_charter_subdirs(self) -> None:
+        """POS (#963): the charter mega-files were re-shelved into per-concern
+        section files under `charter/{agents,pull-requests,hooks}/`. The
+        aggregator must pick up markers in those SUBDIRECTORY files — a
+        non-recursive listdir scan would silently drop them (the #418
+        silent-empty failure class, one level down).
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            nested = os.path.join(tmpdir, "charter", "pull-requests")
+            os.makedirs(nested)
+            with open(os.path.join(nested, "authoring.md"), "w") as f:
+                f.write(
+                    "## A re-shelved section\n\n"
+                    "<!-- Promoted from memory: feedback_nested_style.md (P8W24) -->\n\n"
+                    "Body.\n"
+                )
+            refs = h.find_already_promoted_in_charter(tmpdir)
+            self.assertIn("feedback_nested_style.md", refs)
+
+    def test_read_all_charter_sections_recurses_into_subdirs(self) -> None:
+        """POS (#963): marked sections re-shelved into `charter/<concern>/`
+        subdirectory files must appear in `read_all_charter_sections`
+        output exactly like top-level `charter/*.md` sections."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            top = os.path.join(tmpdir, "charter")
+            nested = os.path.join(top, "agents")
+            os.makedirs(nested)
+            with open(os.path.join(top, "issues.md"), "w") as f:
+                f.write("## Top-level section <!-- promotion-target: none -->\n\nA.\n")
+            with open(os.path.join(nested, "lifecycle.md"), "w") as f:
+                f.write(
+                    "## Nested section <!-- promotion-target: skill -->\n\nB.\n"
+                    "<!-- promoted-to: skills/some-slug -->\n"
+                )
+            sections = h.read_all_charter_sections(tmpdir)
+            headings = {s.heading for s in sections}
+            self.assertEqual(headings, {"Top-level section", "Nested section"})
+            nested_sec = next(s for s in sections if s.heading == "Nested section")
+            self.assertEqual(nested_sec.promotion_target, "skill")
+            self.assertEqual(nested_sec.promoted_to, "skills/some-slug")
+            self.assertEqual(nested_sec.path, os.path.join(nested, "lifecycle.md"))
 
     def test_read_all_charter_sections_raises_on_charter_dir_itself(self) -> None:
         """NEG (#418, sibling): `read_all_charter_sections` has identical

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Lint Arabic-text fixtures for production-realism (vocalization + عن particle).
 
-Deterministic conversion of `.claude/team/charter/pull-requests.md § Text-
-Processing / NER / Graph Fixtures Must Use Production-Realistic Input`
+Deterministic conversion of `.claude/team/charter/pull-requests/evidence-standards.md
+§ Text-Processing / NER / Graph Fixtures Must Use Production-Realistic Input`
 (noorinalabs-main#735, charter-prose-inventory worklist item #1 / epic #726).
 This is the "lint / review-lens" the section's *Enforcement opportunity*
 sub-section names as the optional half of #671: a cheap static signal that an

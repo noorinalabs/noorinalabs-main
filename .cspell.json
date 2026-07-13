@@ -15,7 +15,8 @@
     "/https?:\\/\\/[^\\s)]+/",
     "/`[^`]+`/",
     "/<!--[\\s\\S]*?-->/",
-    "/\\b[A-Z_]{3,}\\b/"
+    "/\\b[A-Z_]{3,}\\b/",
+    "/\\]\\([^)\\s]+\\)/"
   ],
   "files": [
     ".claude/team/charter/**/*.md",
@@ -37,6 +38,7 @@
     "noorinalabs-landing-page/**",
     ".claude/worktrees/**",
     ".claude/memory/**",
+    ".claude/team/archive/**",
     "node_modules/**"
   ]
 }
