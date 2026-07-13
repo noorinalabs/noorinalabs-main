@@ -387,10 +387,34 @@ def read_all_skills(skills_dir: str) -> list[Skill]:
 # ---------------------------------------------------------------------------
 
 
+def _feedback_log_corpus(feedback_log_path: str) -> str:
+    """Return the live feedback log plus any per-phase archives, concatenated.
+
+    Closed-phase retro entries move byte-for-byte to
+    `.claude/team/archive/feedback_log_*.md` at phase close (#964 / meta #960),
+    so citation counts must scan live + archive together or historical
+    citations silently vanish from the promotion pipeline. Archives are read
+    in sorted-name order for determinism; a missing archive dir is fine
+    (pre-archival layout).
+    """
+    parts: list[str] = []
+    if os.path.isfile(feedback_log_path):
+        with open(feedback_log_path, encoding="utf-8") as f:
+            parts.append(f.read())
+    archive_dir = os.path.join(os.path.dirname(feedback_log_path), "archive")
+    if os.path.isdir(archive_dir):
+        for name in sorted(os.listdir(archive_dir)):
+            if name.startswith("feedback_log_") and name.endswith(".md"):
+                with open(os.path.join(archive_dir, name), encoding="utf-8") as f:
+                    parts.append(f.read())
+    return "\n".join(parts)
+
+
 def count_retro_citations(memory: Memory, feedback_log_path: str) -> int:
     """Count occurrences of the memory name or filename in the feedback log.
 
-    Counts the larger of:
+    Scans the live log AND the per-phase archives beside it (see
+    `_feedback_log_corpus`). Counts the larger of:
       - occurrences of `memory.name` (title string)
       - occurrences of `memory.filename` (e.g., feedback_enforcement_hierarchy.md)
 
@@ -398,10 +422,9 @@ def count_retro_citations(memory: Memory, feedback_log_path: str) -> int:
     manually record retro citations in frontmatter for cases where the log
     doesn't spell out the filename.
     """
-    if not os.path.isfile(feedback_log_path):
+    text = _feedback_log_corpus(feedback_log_path)
+    if not text:
         return len(memory.referenced_in_retros)
-    with open(feedback_log_path, encoding="utf-8") as f:
-        text = f.read()
     by_title = text.count(memory.name) if memory.name else 0
     by_file = text.count(memory.filename)
     return max(by_title, by_file, len(memory.referenced_in_retros))

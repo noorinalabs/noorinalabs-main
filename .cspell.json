@@ -37,6 +37,7 @@
     "noorinalabs-landing-page/**",
     ".claude/worktrees/**",
     ".claude/memory/**",
+    ".claude/team/archive/**",
     "node_modules/**"
   ]
 }
