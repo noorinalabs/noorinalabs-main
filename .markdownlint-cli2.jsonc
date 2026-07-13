@@ -68,6 +68,10 @@
     // not published docs — linting it to a style guide adds noise without catching
     // real rendering breakage. Curation discipline lives in the memory budget hook.
     ".claude/memory/**",
+    // .claude/team/archive/** — frozen per-phase archives of feedback_log.md /
+    // trust_matrix.md (#964): byte-for-byte moves of append-only records, same
+    // rationale as the memory exclusion above. Never edited, so never re-linted.
+    ".claude/team/archive/**",
     "node_modules/**"
   ]
 }

@@ -82,6 +82,10 @@ Each child repository has its own team with its own manager. The Program Directo
 
 Each team member maintains a directional trust score (1-5) for every other team member they interact with. Default is 3 (neutral). Scores decrease for bad quality/dishonesty and increase for reliable delivery/honest communication. The full matrix lives in `.claude/team/trust_matrix.md` on `main`. All trust updates are committed directly to `main` — no separate branches.
 
+### Per-Phase Archival
+
+`feedback_log.md` and `trust_matrix.md` grow without bound (owner directive 2026-07-13, meta #960 / #964), so they are archived **per phase**: at phase close, move the finished phase's retro entries (feedback log) and per-wave trust-update sections (trust matrix) byte-for-byte — a move, not an edit, preserving entry order — into `.claude/team/archive/feedback_log_phase-{N}.md` and `.claude/team/archive/trust_matrix_phase-{N}.md`, and add the phase to each live file's "Archive (per-phase)" index. The live files always keep the current phase (and its waves) in full, plus the durable header/contract sections: the feedback-log format template, and the trust matrix's Scale, Rules, Mechanical Scoring, Matrix table, Change Log, and Archived Personas sections. Sequencing: archive only **after** the new phase's first `/wave-scope` has consumed the prior wave's retro carry-forwards, or rely on the archive fallback in `/wave-scope` Step 1. Readers that count across history (e.g. `promotion-audit`'s `count_retro_citations`) scan live + `archive/feedback_log_*.md` together.
+
 ## Steady-State Goal <!-- promotion-target: none -->
 The team should evolve through feedback cycles toward a steady state of little to no negative feedback. Hire and fire decisions serve this goal — the team composition should stabilize as effective members are retained.
 

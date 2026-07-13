@@ -77,7 +77,7 @@ A sweep PR uses the same charter-format comments and TechDebt line as standard P
 
 ## `gh pr edit` projects-classic deprecation — use REST API for body/title updates (Mandatory) <!-- promotion-target: none -->
 
-`gh pr edit <num> --body <text>` (and `--body-file <path>`, and `--title`) on gh-cli versions older than the one that migrated off the deprecated projects-classic GraphQL scope **silently fails** the body/title mutation. The command exits non-zero with a `GraphQL: Projects (classic) is being deprecated` error, but the error reads like a benign warning and the PR body appears unchanged on subsequent inspection — exactly the "silent-no-op" shape captured in memory `feedback_gh_pr_edit_silent_noop`.
+`gh pr edit <num> --body <text>` (and `--body-file <path>`, and `--title`) on gh-cli versions older than the one that migrated off the deprecated projects-classic GraphQL scope **silently fails** the body/title mutation. The command exits non-zero with a `GraphQL: Projects (classic) is being deprecated` error, but the error reads like a benign warning and the PR body appears unchanged on subsequent inspection — exactly the "silent-no-op" shape captured in memory `feedback_gh_cli_gotchas`.
 
 Root cause: `gh pr edit` fetches `repository.pullRequest.projectCards` as a side-effect of the mutation; the classic-projects deprecation fails that sub-query, poisoning the whole call. Resolves main#185 (Linh.Pham hit 2026-04-22 — PR#844 body silently retained option-A through the entire v5 phase; reviewers never saw v5 content for ~30 minutes).
 
@@ -100,7 +100,7 @@ gh api "repos/<owner>/<repo>/pulls/<num>" -X PATCH \
   -f title="new title"
 ```
 
-`-f` is `--field` and treats the value as a string. For multi-line bodies, prefer `--input` with a `jq`-built JSON body to avoid `-f`'s newline-stripping behavior (see memory `feedback_gh_pr_edit_silent_noop` for the related `gh api -f body=@file` no-op trap — use `--input` or pipe through `jq --rawfile`).
+`-f` is `--field` and treats the value as a string. For multi-line bodies, prefer `--input` with a `jq`-built JSON body to avoid `-f`'s newline-stripping behavior (see memory `feedback_gh_cli_gotchas` for the related `gh api -f body=@file` no-op trap — use `--input` or pipe through `jq --rawfile`).
 
 ### Eligibility
 
@@ -132,5 +132,5 @@ A 0-length body or a stale prefix is the signal the mutation didn't land.
 
 ### Cross-references
 
-- Memory `feedback_gh_pr_edit_silent_noop` — the broader silent-no-op family (`gh project item-add`, `gh project item-list --limit`, `gh api -X PATCH -f body=@file`) sharing this shape.
+- Memory `feedback_gh_cli_gotchas` — the broader silent-no-op family (`gh project item-add`, `gh project item-list --limit`, `gh api -X PATCH -f body=@file`) sharing this shape.
 - Resolves main#185.

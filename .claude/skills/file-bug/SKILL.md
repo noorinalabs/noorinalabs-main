@@ -182,7 +182,7 @@ Issue body skeleton:
 <what this issue does NOT cover, with cross-refs to where it does>
 ```
 
-Per `feedback_tmp_msg_file_stale.md`: write the body to `/tmp/issue-body-<descriptive-slug>.txt` (NOT `/tmp/msg.txt` — the issue#-keyed slug avoids the stale-tmp-file race), then `gh issue create --body-file`. Read-back-verify within 30s of creation per `feedback_gh_pr_edit_silent_noop.md`:
+Per `feedback_tmp_msg_file_stale.md`: write the body to `/tmp/issue-body-<descriptive-slug>.txt` (NOT `/tmp/msg.txt` — the issue#-keyed slug avoids the stale-tmp-file race), then `gh issue create --body-file`. Read-back-verify within 30s of creation per `feedback_gh_cli_gotchas.md`:
 
 ```bash
 NEW_ISSUE_NUM=<from gh issue create output>

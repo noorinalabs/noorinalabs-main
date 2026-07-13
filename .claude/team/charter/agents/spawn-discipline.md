@@ -74,7 +74,7 @@ Track instance count at each retro. If the count grows materially (e.g., crossed
 
 P3W1 saw ~4 Lucas-side message-ordering races plus ≥1 analogous Aisha-side instance, all professionally handled but each costing ~30s of attention overhead. None caused duplicate work or wrong-direction shipping. The narrow trigger captures the high-consequence variant (spawn duplication) without sacrificing the wave-throughput-positive implementer-anticipates-context discipline.
 
-<!-- Promoted from memories: feedback_no_head_in_surface_enumeration.md + feedback_pre_spawn_verify_at_origin.md + feedback_pre_spawn_brief_verified_at_head.md (P3W8 retro-pickup #341, 2026-05-10) -->
+<!-- Promoted from memories: feedback_no_head_in_surface_enumeration.md + feedback_spawn_brief_protocol.md (x2 consolidated sources, #944) (P3W8 retro-pickup #341, 2026-05-10) -->
 
 ### Surface enumeration
 
@@ -130,7 +130,7 @@ For every named caveat in the parent audit / charter / kickoff (e.g., `upload-ar
 
 - Companion to `pull-requests.md § Origin > Local Clone for "Still-Has-X" File-Content Claims` — reviewer-class artifact-truth principle; this section is the manager-class pre-spawn analogue.
 - Companion to `pull-requests.md § Trust the Artifact, Not the Framing` — same primitive at the PR review layer ("read the diff at HEAD, not the PR-body framing"); this section is the spawn-brief layer ("enumerate the surface at HEAD, not the issue-body framing").
-- Source memories: `feedback_no_head_in_surface_enumeration.md` (how to count), `feedback_pre_spawn_verify_at_origin.md` (where to verify), `feedback_pre_spawn_brief_verified_at_head.md` (per-caveat applicability).
+- Source memories: `feedback_no_head_in_surface_enumeration.md` (how to count), `feedback_spawn_brief_protocol.md` (where to verify), `feedback_spawn_brief_protocol.md` (per-caveat applicability).
 
 ## Orchestrator State-Correction Discipline — One Aligned Instruction, Never a Serial Toggle <!-- promotion-target: none -->
 

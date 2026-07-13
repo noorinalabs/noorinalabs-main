@@ -8,7 +8,7 @@ inverted. ``/wave-scope`` reconciled labels-vs-meta-issue but never checked that
 a scoped issue's named *file / path / symbol* still exists at the repo's origin
 HEAD. This module is the deterministic check that closes that gap: it extends
 ``feedback_verify_diagnosis_before_delegating`` +
-``feedback_pre_spawn_verify_file_exists`` from *spawn* time back to *scope* time.
+``feedback_spawn_brief_protocol`` from *spawn* time back to *scope* time.
 
 Two-layer design (the pure core is the testable part; git I/O is injectable):
 

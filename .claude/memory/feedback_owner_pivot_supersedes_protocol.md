@@ -43,4 +43,4 @@ When the team-lead, PD, or owner issues a "supersedes prior routing" SendMessage
 
 **Promotion path**: /promotion-audit at end-of-wave picks this up via memory→charter pipeline (PR #422 precedent). Split into 3 sub-rules at promotion-time (Sender / Receiver / Authority hierarchy) for citation clarity per team-lead's recommendation 2026-05-13.
 
-Related memories: [[feedback_bundle_fixup_instructions]] (serial-send drop risk), [[feedback_refresh_before_status_claim]] (state-refresh discipline), [[feedback_stale_inbox_manager]] (artifact-vs-inbox truth-source), [[feedback_gh_pr_edit_silent_noop]] (read-back-verify post-write).
+Related memories: [[feedback_bundle_fixup_instructions]] (serial-send drop risk), [[feedback_refresh_before_status_claim]] (state-refresh discipline), [[feedback_stale_inbox_manager]] (artifact-vs-inbox truth-source), [[feedback_gh_cli_gotchas]] (read-back-verify post-write).

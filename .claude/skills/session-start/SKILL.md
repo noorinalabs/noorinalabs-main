@@ -9,7 +9,7 @@ description: "MANDATORY first action in every session — runs full startup prot
 
 > See [`.claude/team/lifecycle.md`](../../team/lifecycle.md) § Session Lifecycle for the canonical skill order and preconditions.
 
-> Note: all repo paths in bash blocks below are rooted at `$REPO_ROOT` to avoid cwd drift when the skill is invoked from a worktree or child-repo subdirectory (#149). `$REPO_ROOT` is anchored to the **parent org repo** deterministically via the parent of `git rev-parse --git-common-dir` (not `--show-toplevel`, which resolves to a worktree if run from one) and verified against the parent marker `cross-repo-status.json` + `CLAUDE.md` (#533). Each bash block re-derives it, since Skill blocks run as independent shells.
+> Note: all repo paths in bash blocks below are rooted at `$REPO_ROOT` to avoid cwd drift when invoked from a worktree or child-repo subdirectory (#149). `$REPO_ROOT` is anchored to the **parent org repo** via the parent of `git rev-parse --git-common-dir` (not `--show-toplevel`, which resolves to a worktree) and verified against the parent markers `cross-repo-status.json` + `CLAUDE.md` (#533). Each bash block re-derives it, since Skill blocks run as independent shells. The blocks deliberately avoid process substitution and here-strings — those trip the permission engine's "cannot be statically analyzed" path (2026-06-23); preserve that property when editing them.
 
 ## Instructions
 
@@ -17,18 +17,7 @@ Execute all 7 steps below. Steps that are independent of each other SHOULD run i
 
 ### Step 0 — Worktree cleanup (parent + child repos)
 
-Worktrees accumulate in BOTH the parent repo and every child repo (under
-`<child>/.claude/worktrees/`, `<child>/.worktrees/`, and sometimes `/tmp/`).
-Prior to #526, Step 0 only cleaned the parent — on 2026-05-24 ~33 stale
-child-repo worktrees were found uncaught. The block below iterates the parent
-and all 7 child repos, applying a **verify-merged-then-remove guard**:
-
-- **Auto-remove** a worktree only when its HEAD is an ancestor of that repo's
-  `origin/main` (i.e. the branch is fully merged). Safe to drop.
-- **FLAG (list, do not remove)** any worktree that is NOT verified-merged
-  (work in flight, superseded, or closed-issue cases) and any **locked**
-  worktree (e.g. the `/tmp/hotfix-user-service` lock case). Surface these for
-  a manual decision — never auto-remove unmerged work.
+Worktrees accumulate in the parent AND every child repo (#526 — ~33 stale child worktrees found uncaught on 2026-05-24). The block iterates all 8 repos with a **verify-merged-then-remove guard**: auto-remove only a worktree whose HEAD is an ancestor of that repo's `origin/main`; FLAG (never auto-remove) anything locked or unmerged.
 
 ```bash
 # Anchor REPO_ROOT to the PARENT org repo deterministically (#533). Using a
@@ -150,55 +139,29 @@ if [ "${#FLAGGED[@]}" -gt 0 ]; then
 fi
 ```
 
-Report how many merged worktrees were auto-removed and surface the FLAGGED
-list (locked + unmerged) to the user for a manual call. Do not force-remove a
-FLAGGED worktree without explicit confirmation.
-
-Also report the **child-repo checkout** result from `check_child_checkouts.py`
-(#832): how many child clones were fast-forwarded to `origin/main`, and surface
-its FLAGGED block (children that are dirty, diverged, or parked on an old feature
-branch — these are left untouched and need a manual call). A child sitting many
-commits behind `origin/main` is the root cause of stale on-disk child configs
-(#816) and of any agent that reads the clone directly drawing wrong conclusions.
+Report merged-worktree removals and surface the FLAGGED list (locked + unmerged) for a manual call — never force-remove a FLAGGED worktree without explicit confirmation. Also report the `check_child_checkouts.py` result (#832): children fast-forwarded vs FLAGGED (dirty/diverged/feature-branch — left untouched; a child many commits behind `origin/main` is the #816 stale-config root cause).
 
 ### Step 1 — Team orientation
 
-> **Harness note (2026-06-16):** the current Claude Code harness has **no `TeamCreate`/`TeamDelete` tools**. The session runs on a **single implicit team** — there is nothing to tear down or create, and nothing to go stale. (Earlier harness versions exposed explicit team tools and this step ran `TeamDelete` then `TeamCreate`; that is now a no-op and has been removed.)
-
-There is no action to take here beyond confirming the model:
-
-- Spawning is done with the **`Agent` tool**, passing `team_name: "noorinalabs"` for cross-repo wave work. The orchestrator is the sole `Agent`-tool caller.
-- Spawned agents join the single implicit `noorinalabs` team automatically; they cannot themselves spawn.
-
-Report "Single implicit team (no create/delete tools in this harness)" and move on.
-
-> **Single-leader constraint:** All managers and implementers spawned during the session — regardless of which repo they work on — belong to the single `noorinalabs` team. See charter `agents.md` § Single-Leader Constraint for the delegation pattern (orchestrator is the sole `Agent`-tool caller; managers `SendMessage` the orchestrator to request implementer spawns).
+The current harness has **no `TeamCreate`/`TeamDelete` tools** (2026-06-16) — the session runs on a **single implicit team**; nothing to create, tear down, or go stale. Spawning is via the **`Agent` tool** with `team_name: "noorinalabs"`; the orchestrator is the sole spawner (spawned agents cannot spawn — charter `agents.md` § Single-Leader Constraint). Report "Single implicit team (no create/delete tools in this harness)" and move on.
 
 ### Step 2 — Handoff check
 
-Read the session handoff file from in-repo project memory (relocated #732 — memory is now version-controlled at `.claude/memory/`, not the user-space `~/.claude/projects/<cwd>/memory/` path):
+Read the session handoff from in-repo project memory (#732 — version-controlled `.claude/memory/`, not the user-space auto-memory path). This is the ONLY read of its contents — the SessionStart hook prints just an exists-pointer (#962):
 
 ```
 Read: .claude/memory/session_handoff.md
 ```
 
-If it exists, extract:
-- What was done last session
-- What's next
-- Current branch, open PRs, open issues
-- Any user notes
-
-Summarize in 2-3 sentences. If the file doesn't exist, note "No handoff from previous session."
+If it exists, summarize in 2-3 sentences: what was done last session, what's next, current branch / open PRs / issues, any user notes. If not, note "No handoff from previous session."
 
 ### Step 3 — Ontology freshness (semantic overlay + structural index)
 
-The ontology has two independent layers that need separate freshness checks (#820/C×T2, #862):
+Two independent layers, two checks (#820/C×T2, #862):
 
-**3a. Semantic overlay** — run `/ontology-rebuild` to resolve dirty checksums from the previous session:
-- If 0 dirty files in `checksums.json`, report "Semantic overlay: current" and move on
-- If dirty files exist, process them and commit the result
+**3a. Semantic overlay** — run `/ontology-rebuild` to resolve dirty checksums. If 0 dirty files in `checksums.json`, report "Semantic overlay: current"; otherwise process them and commit the result.
 
-**3b. Structural index** — regenerate the generated index from the current source tree. The structural layer is **not committed** (main#939 — it is gitignored and rebuilt on demand; committing it made every concurrent PR conflict on a generated whole-file artifact). So there is no committed copy to compare against and nothing to commit: just rebuild it locally so the on-disk index the librarian reads reflects the current tree. The aggregator regenerates **every in-scope repo's** index (including main) before rolling up, so one call refreshes the whole structural layer:
+**3b. Structural index** — regenerate the generated index from the current source tree. It is a gitignored build product (main#939 — never committed; nothing to compare or commit), so just rebuild it locally; the aggregator refreshes every in-scope repo's index before rolling up:
 
 ```bash
 # Re-anchor REPO_ROOT to the parent (independent shell block — see Step 0 / #533).
@@ -215,18 +178,19 @@ else
 fi
 ```
 
-Report both results in the Step output table:
-- `3. Ontology | Semantic: {N dirty resolved / current}; Structural: regenerated (local, not committed)`
+**Non-fatal:** a generator failure MUST NOT block session-start — report it and move on; the next run rebuilds it.
 
-**Non-fatal:** a generator failure MUST NOT block session-start. Report the failure and move on — the structural index is a build product; the next `/session-start` (or a manual aggregator run) rebuilds it.
+### Step 4 — Annunaki error check (count-only, #962)
 
-### Step 4 — Annunaki error check
+Report the genuine-error count in ONE line, via the shared trace-filtering reader (#625 — raw line counts overcount on historical mixed logs). A missing log prints `0` (monitoring is passive):
 
-Run `/annunaki` to check the error monitor.
+```bash
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
+[ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+python3 "$REPO_ROOT/.claude/lib/annunaki_parse.py" "$REPO_ROOT/.claude/annunaki/errors.jsonl" --count
+```
 
-- Report: hook active/inactive, error count, any new errors since last session
-- If 5+ unprocessed errors, flag for `/annunaki-attack`
-- If 0 errors or all are resolved PreToolUse blocks, report "No action needed"
+Report `Annunaki: N genuine error(s) logged (count-only)`. Do NOT auto-flag or run `/annunaki-attack` from this step — error logs are machine-local, and triage is batched: the attack runs **on demand and at `/wave-wrapup`** (#925/#962).
 
 ### Step 5 — Wave/phase orientation
 
@@ -242,105 +206,28 @@ cat "$REPO_ROOT/cross-repo-status.json"
 gh issue list --repo noorinalabs/noorinalabs-main --state open --limit 10 --json number,title,labels
 ```
 
-Report:
-- Active wave and phase
-- Whether `cross-repo-status.json` is stale (check `last_updated` fields)
-- Open issue count and any blockers
-- Open PRs across repos
+Report: active wave/phase, staleness of `cross-repo-status.json`, open issue count and blockers, open PRs across repos. On unexpected board-vs-issue gaps (wave-labeled issues missing from project 2, or Wave-field out of sync with the canonical `wave-{X}` / grandfathered `p{N}-wave-{M}` labels, #810), invoke `/board-audit` (labels are canonical, the Wave field is a derived projection — main#199).
 
-If the report surfaces unexpected gaps between board view and open-issue counts (e.g., wave-labeled issues missing from project 2, or Wave-field values out of sync with the wave labels (`wave-{X}` or grandfathered `p{N}-wave-{M}`, #810)), invoke `/board-audit` to detect and (with confirmation) repair the drift. Per main#199, labels are canonical and the project's Wave field is a derived projection synced by `/board-audit`.
+### Step 5a — Red default-branch workflow verdict (scheduled sweep, #962)
 
-### Step 5a — Red default-branch workflow detection (P3W14 retro Proposed Change #2)
-
-Surface any **publish/deploy/release workflow whose latest run on the repo's default branch FAILED**, across all org repos. *Rationale:* the GHCR frontend publish (isnad-graph commit 5804476) sat RED on `main` for ~12 days undetected — silently breaking every staging deploy at the frontend-pull step — because nothing surfaced a red default-branch publish at session start.
-
-For each org repo, list the latest default-branch run of each workflow and flag any whose conclusion is `failure`/`timed_out`/`cancelled`, filtered to publish/deploy/release-class workflows (these are the ones whose redness silently rots — a red lint run is loud at PR time; a red publish on `main` is not). For each red run, attempt a **best-effort cause-classification** (P4W4 retro #3 / main#647): inspect the failed job log for base-image-CVE signals — `trivy`/`grype`/`apk`-CVE/`openssl`-class advisory failures — and tag those as a distinct **"base-image drift — fix-forward the base image, not a code regression"** class. This is non-fatal: a `gh api`/log-fetch failure degrades to the unclassified `code/other` tag, never to a false all-green.
+The 8-repo sweep + failed-log classification (P3W14 retro #2 — a red GHCR publish sat undetected ~12 days; base-image classifier main#647) no longer runs per-session. It runs in the scheduled **`red-sweep.yml`** workflow (every 6h + manual dispatch), which persists a JSON verdict to the lightweight ref `refs/meta/red-sweep`. Step 5a is ONE cheap read + staleness guard:
 
 ```bash
 REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
 [ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
-# Primary: resolve the repo set from the canonical `current_wave` lifecycle
-# pointer (e.g. "wave-5" -> `wave_5_repos_in_scope`), NOT `max_by` over the
-# wave NUMBER. Completed *prior-phase* waves (e.g. `wave_7_repos_in_scope` from
-# the P4 close-out) are legitimately retained, so "highest number" structurally
-# picks a stale 2-repo scope over the live one — main#712 (same defect class as
-# the current_wave reader fix #708/#709). `ltrimstr` is null-safe: a missing/
-# malformed `current_wave` yields an absent key -> empty -> the hardcoded list.
-REPOS=$(jq -r '
-  (.current_wave // "" | ltrimstr("wave-")) as $n
-  | .["wave_\($n)_repos_in_scope"][]? // empty
-' "$REPO_ROOT/cross-repo-status.json" 2>/dev/null)
-# Newline-separated fallback (one repo per line) so the `while read` loop below
-# is correct under zsh — a space-separated string would be read as ONE line
-# (zsh does not word-split an unquoted scalar; #759 / main#688). jq above already
-# emits newlines, so both sources share the same shape.
-[ -n "$REPOS" ] || REPOS=$(printf '%s\n' \
-  noorinalabs-main noorinalabs-isnad-graph noorinalabs-user-service \
-  noorinalabs-deploy noorinalabs-design-system noorinalabs-data-acquisition \
-  noorinalabs-isnad-ingest-platform noorinalabs-landing-page)
-
-# Best-effort cause classification for a red run (main#647). Echoes "base-image-drift"
-# when the failed job log carries a base-image-CVE signal, else "code/other". Never fatal:
-# a missing/undownloadable log degrades to "code/other", never a false all-green.
-classify_red() {  # $1=repo  $2=run_id
-  local log
-  log=$(gh run view "$2" --repo "noorinalabs/$1" --log-failed 2>/dev/null) || { echo "code/other"; return 0; }
-  if printf '%s' "$log" | grep -Eiq 'trivy|grype|\bCVE-[0-9]{4}-[0-9]+|apk[ -].*(upgrade|CVE)|openssl.*(vuln|CVE|advisor)|base[ -]image'; then
-    echo "base-image-drift"
-  else
-    echo "code/other"
-  fi
-}
-
-RED=()
-# `while read` over the newline-list, NOT `for repo in $REPOS` — zsh does not
-# word-split an unquoted scalar (#759 / main#688). Both loops below are fed from
-# temp FILES rather than a `<<<` here-string / `< <(...)` process substitution:
-# those constructs trip the Claude Code permission engine's "shell syntax that
-# cannot be statically analyzed" path and force a prompt regardless of the
-# allowlist (main, 2026-06-23). A file redirect is analyzable AND — like the
-# here-string it replaces — keeps the loop in the current shell, so the RED
-# array survives past `done` (a `| while` pipe would drop it to a subshell).
-_repofile="$(mktemp)"
-printf '%s\n' "$REPOS" > "$_repofile"
-while IFS= read -r repo; do
-  [ -n "$repo" ] || continue
-  branch=$(gh api "repos/noorinalabs/$repo" --jq '.default_branch' 2>/dev/null || echo main)
-  # Latest run per workflow on the default branch; keep only publish/deploy/release-class names with a non-success conclusion.
-  _runsfile="$(mktemp)"
-  gh api "repos/noorinalabs/$repo/actions/runs?branch=$branch&per_page=50" \
-    --jq '[.workflow_runs[] | select((.name // .display_title) | test("publish|deploy|release|promote|ghcr|image";"i"))]
-          | group_by(.workflow_id) | map(max_by(.run_started_at))
-          | .[] | [(.name // .display_title), .conclusion, .html_url, .id] | @tsv' 2>/dev/null > "$_runsfile"
-  while IFS=$'\t' read -r name conclusion url run_id; do
-    case "$conclusion" in
-      failure|timed_out|cancelled|startup_failure)
-        cls=$(classify_red "$repo" "$run_id")
-        RED+=("$repo :: $name :: $conclusion :: $cls :: $url") ;;
-    esac
-  done < "$_runsfile"
-  rm -f "$_runsfile"
-done < "$_repofile"
-rm -f "$_repofile"
-if [ ${#RED[@]} -gt 0 ]; then
-  printf 'RED default-branch publish/deploy run(s) — investigate before relying on staging:\n'
-  printf '  %s\n' "${RED[@]}"
-  if printf '%s\n' "${RED[@]}" | grep -q 'base-image-drift'; then
-    printf '\n  NOTE: run(s) tagged "base-image-drift" failed on a base-image-CVE signal (trivy/grype/apk/openssl-class advisory),\n'
-    printf '  NOT a code regression — fix-forward the base image (rebuild/bump the upstream image), do not chase the wave diff.\n'
-  fi
-else
-  echo "All publish/deploy/release workflows green on default branches."
-fi
+# One contents-API call + 24h staleness guard. Always exits 0 (informational).
+python3 "$REPO_ROOT/.claude/lib/red_sweep.py" check
 ```
 
-Report any red runs prominently — a red publish/deploy on a default branch is a stop-and-investigate signal, not background noise: it usually means the artifact consumers (staging, downstream pulls) are silently running stale or broken bits. A run tagged `base-image-drift` is a different remediation path than generic redness: the wave's code did not break it — an upstream base image grew a new advisory (e.g. the W4 openssl CVE-2026-45447) — so fix it forward by rebuilding/bumping the base image, not by reverting wave work. If `gh api` calls fail (auth/rate-limit), say so rather than reporting a false all-green; the classifier itself is best-effort and degrades to the unclassified `code/other` tag on any log-fetch failure.
+The helper prints exactly one of:
 
-### Step 5b — Wave-merged-but-unwrapped nudge (P5W5 retro Proposed Change #1 / #730)
+- **All-green line** (with the verdict's `checked_at`) — no action.
+- **RED run lines** (`repo :: workflow :: conclusion :: class :: url`) — stop-and-investigate: a red publish/deploy on a default branch means artifact consumers (staging, downstream pulls) are silently running stale or broken bits. A run tagged `base-image-drift` failed on a base-image-CVE signal (trivy/grype/apk/openssl-class) — fix-forward the base image, do not chase the wave diff (main#647).
+- **WARNING** when the verdict is missing or older than 24h — report it verbatim; the sweep is stale, red runs are UNKNOWN. Refresh with `gh workflow run red-sweep.yml --repo noorinalabs/noorinalabs-main`. NEVER treat a missing/stale verdict as green — the same degradation stance the in-session classifier had. Repos listed in the verdict's `errors` are likewise UNKNOWN, not green.
 
-Surface a wave whose PRs **merged to main but which was never formally wrapped**. *Rationale:* P5W5 merged all 45 of its PRs days before `/wave-wrapup` ran — `wave_5_wrapped_up_at` stayed null, `wave_5_active` stayed true, and the post-wave audits (annunaki-attack, memory) never ran — because nothing at session-start surfaced the gap, so wrap/retro deferred indefinitely.
+### Step 5b — Wave-merged-but-unwrapped nudge (P5W5 retro #1 / #730)
 
-The signal is the conjunction `wave_{M}_active == true` AND no wrapup marker present (`wave_{M}_wrapped_up_at` / `wave_{M}_wrapup_completed_at` / `wave_{M}_wrapped_at`) AND **0 open wave PRs** across the wave's in-scope repos — scoped to the **current** wave (`current_wave`) only. Scoping to `current_wave` is load-bearing: wave keys are NOT phase-namespaced (memory `project_wave_key_cross_phase_collision` / #683), so the status file legitimately retains stale `wave_4_active: true` rows from a prior phase's W4 — an "any active+unwrapped wave" scan would false-fire on those ghosts. The detection is **non-fatal** and degrades gracefully: a missing `current_wave`, missing scope keys, or a failed `gh` probe yields a benign verdict (never a hard block, never a false nudge mid-wave).
+Detects a wave whose PRs merged to main but was never formally wrapped (P5W5: all 45 PRs merged days before `/wave-wrapup`; the wrap markers stayed null and post-wave audits never ran). Signal: `wave_{M}_active` AND no wrapup marker AND 0 open wave PRs — scoped to `current_wave` only (wave keys are NOT phase-namespaced, #683; an any-wave scan false-fires on prior-phase ghosts). Non-fatal, degrades to a benign verdict on missing keys / failed `gh`.
 
 ```bash
 REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
@@ -354,13 +241,11 @@ if [ -f "$REPO_ROOT/.claude/lib/wave_unwrapped.py" ]; then
 fi
 ```
 
-If the verdict is `unwrapped` (0 open wave PRs) — or the softer `unwrapped_unverified` (open-PR count undetermined because `gh` failed or the wave's scope keys are missing) — surface it prominently as **"wave merged but unwrapped — run `/wave-wrapup`"**. An `in_flight` verdict (open wave PRs remain) is a normal active wave: no nudge. This is informational only — it never blocks the session.
+Surface an `unwrapped` verdict (or the softer `unwrapped_unverified`) prominently as **"wave merged but unwrapped — run `/wave-wrapup`"**. `in_flight` is a normal active wave: no nudge.
 
 ### Step 5c — Wave-branch reachability / merge-model check (main#801)
 
-Surface **mid-wave** any wave-branch commit that is not reachable from `origin/main`, classified against the wave's declared merge model — so model-mixing or stranding surfaces within hours instead of only at the `/wave-wrapup` Step 11.5 gate. *Origin:* P6W1 mixed merge models (some PRs to the wave branch, the doc batch direct to main, no wave→main PR opened) → 5 deliverables stranded off main, caught only at wrapup (charter `pull-requests.md § One Merge Model Per Wave`).
-
-This is a deterministic helper (`.claude/lib/wave_merge_model.py reachability`), model-aware: a `direct-to-main` wave with commits on its wave branch is a hard **VIOLATION** (the P6W1 mixing); a `wave-branch` wave ahead of main with an open wave→main PR is **OK**, and ahead with no PR is an **ADVISORY** stranding-risk reminder. A wave with no declared model (legacy / pre-#801) degrades to advisory-only with a nudge — never a false violation. Non-fatal: a gh/scope error must not block session-start.
+Surfaces mid-wave any wave-branch commit not reachable from `origin/main`, classified against the wave's declared merge model — so model-mixing or stranding surfaces within hours instead of only at the `/wave-wrapup` Step 11.5 gate (origin: P6W1 mixed models stranded 5 deliverables off main; charter `pull-requests.md` § One Merge Model Per Wave). Model-aware: `direct-to-main` with wave-branch commits = **VIOLATION**; `wave-branch` ahead with an open wave→main PR = OK, ahead with no PR = **ADVISORY**; no declared model degrades to advisory-only. Non-fatal.
 
 ```bash
 REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
@@ -378,11 +263,9 @@ else
 fi
 ```
 
-Report any **VIOLATION** prominently (stop-and-investigate: a wave branch is accumulating work the declared model forbids — the P6W1 mixing). **ADVISORY** lines are reminders that wave-branch work will strand unless `/wave-wrapup` opens the wave→main PR — surface them but they do not block. **OK** across the board needs no action.
+Report a **VIOLATION** prominently (stop-and-investigate); **ADVISORY** lines are stranding-risk reminders (surface, don't block); **OK** needs no action.
 
 ### Step 6 — Charter freshness check
-
-Read the tail of the feedback log:
 
 ```bash
 # Re-anchor REPO_ROOT to the parent (independent shell block — see Step 0 / #533).
@@ -391,12 +274,7 @@ REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null &
 tail -40 "$REPO_ROOT/.claude/team/feedback_log.md"
 ```
 
-Check for:
-- Unapplied retro proposals (action items without corresponding changes)
-- New hooks or skills introduced since the last charter update
-- Any pending fire/hire actions
-
-Report findings or "Charter is current."
+Check for unapplied retro proposals, new hooks/skills not yet documented in the charter, and pending fire/hire actions. Report findings or "Charter is current."
 
 ## Output format
 
@@ -409,12 +287,12 @@ After all steps complete, present a single status block:
 |------|--------|
 | 0. Worktree | {clean / N stale removed} |
 | 0b. Child checkouts | {N fast-forwarded / M flagged (dirty/diverged/feature-branch) / all current} |
-| 1. Team | {created fresh / error} |
+| 1. Team | {single implicit team} |
 | 2. Handoff | {summary} |
-| 3. Ontology | Semantic: {N dirty resolved / current}; Structural: {current @ sha / regenerated / regen-failed} |
-| 4. Annunaki | {N errors, action needed? / clear} |
+| 3. Ontology | Semantic: {N dirty resolved / current}; Structural: {regenerated / regen-failed} |
+| 4. Annunaki | {N genuine errors (count-only)} |
 | 5. Wave | {active wave, stale?, issues} |
-| 5a. Red default-branch runs | {N red publish/deploy runs (M base-image-drift) / all green} |
+| 5a. Red default-branch verdict | {all green as of T / N red (M base-image-drift) / WARNING stale-missing} |
 | 5b. Wave wrap state | {wave merged but unwrapped — run /wave-wrapup / in flight / wrapped} |
 | 5c. Wave reachability | {OK / N advisory (stranding risk) / VIOLATION (merge-model mixing) / skipped} |
 | 6. Charter | {current / proposals pending} |

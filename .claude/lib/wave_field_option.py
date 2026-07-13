@@ -12,7 +12,7 @@ Design
 - Full-list-preserve: ``updateProjectV2Field`` REPLACES the whole options list,
   so existing options are read first and re-sent in full plus the new entry.
   Omitting any existing option would wipe it (memory
-  ``feedback_projectv2_field_option``).
+  ``feedback_gh_cli_gotchas``).
 - Read-back-verified: after the mutation the field is re-introspected to
   confirm the option appears.
 - Auth-preflight: checks ``gh auth status`` for ``project`` scope before any

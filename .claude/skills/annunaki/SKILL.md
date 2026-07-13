@@ -113,9 +113,9 @@ If there are more than 10 errors, show a breakdown:
 - Most error-prone command prefix: {prefix} ({count} occurrences)
 ```
 
-### 5. Suggest /annunaki-attack if warranted
+### 5. When /annunaki-attack runs
 
-If there are 5+ unprocessed errors, suggest running `/annunaki-attack` to analyze and fix them.
+The attack runs **on demand and at `/wave-wrapup`** (#925/#962) — there is no count threshold that auto-flags it (session start reports a count-only line and never triggers triage; error logs are machine-local). If the user is explicitly asking for triage, or a wave-wrapup audit is in progress, point at `/annunaki-attack`; otherwise just report the counts.
 
 ## What this skill does NOT do
 

@@ -138,7 +138,7 @@ gh pr create \
   --label {wave-label}
 ```
 
-The label set is **non-negotiable**: `tech-debt` (this is process/quality work), `enhancement` (functional addition to charter/skills), AND the current wave label `{wave-label}` (the phase-agnostic `wave-{X}` form, #810). Validate the labels actually stuck — `gh pr edit` silently no-ops on bad label names (memory `feedback_gh_pr_edit_silent_noop.md`):
+The label set is **non-negotiable**: `tech-debt` (this is process/quality work), `enhancement` (functional addition to charter/skills), AND the current wave label `{wave-label}` (the phase-agnostic `wave-{X}` form, #810). Validate the labels actually stuck — `gh pr edit` silently no-ops on bad label names (memory `feedback_gh_cli_gotchas.md`):
 
 ```bash
 gh pr view <PR#> --json labels --jq '.labels[].name'
@@ -154,7 +154,7 @@ PR_URL=$(gh pr view <PR#> --json url --jq .url)
 gh project item-add 2 --owner noorinalabs --url "$PR_URL"
 ```
 
-`gh project item-add` is in the silent-no-op family (memory `feedback_gh_pr_edit_silent_noop.md`) — its "no output = success" output is misleading when the item-add fails. **Read-back-verify** the add stuck:
+`gh project item-add` is in the silent-no-op family (memory `feedback_gh_cli_gotchas.md`) — its "no output = success" output is misleading when the item-add fails. **Read-back-verify** the add stuck:
 
 ```bash
 gh project item-list 2 --owner noorinalabs --format json --limit 200 \
@@ -163,7 +163,7 @@ gh project item-list 2 --owner noorinalabs --format json --limit 200 \
 
 A non-empty ID confirms the add succeeded. Empty output = the add silently no-op'd — retry once, then escalate to team-lead if still empty.
 
-**Assign two reviewers** per `charter/agents/orchestration-model.md` § Orchestrator checklist when spawning a reviewer. Use SendMessage to spawn each reviewer (do NOT use `gh pr review` — `block_gh_pr_review` enforces; memory `feedback_validate_pr_review_approved_not_reply.md`). The reviewer spawn brief MUST embed the verbatim verdict template with the literal `TechDebt: ` line shape (memory `feedback_techdebt_attestation_literal_line.md`) — `## TechDebt` headers are NOT recognized by `validate_pr_review.py`. Reviewer slate per scope:
+**Assign two reviewers** per `charter/agents/orchestration-model.md` § Orchestrator checklist when spawning a reviewer. Use SendMessage to spawn each reviewer (do NOT use `gh pr review` — `block_gh_pr_review` enforces; memory `feedback_pr_review_verdict_format.md`). The reviewer spawn brief MUST embed the verbatim verdict template with the literal `TechDebt: ` line shape (memory `feedback_pr_review_verdict_format.md`) — `## TechDebt` headers are NOT recognized by `validate_pr_review.py`. Reviewer slate per scope:
 - memory → charter promotions: Wanjiku (TPM) + Nadia (PD)
 - charter → skill promotions: Wanjiku (TPM) + Aino (yourself ineligible — pick Santiago or Nadia)
 

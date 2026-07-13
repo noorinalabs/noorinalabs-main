@@ -26,8 +26,9 @@ failures**, and which one fired depended on the reviewer's sentence:
 
 The obvious repair — give the format hook its own trailer scan — would leave
 the charter's trailer convention defined in two hand-maintained copies. That
-is precisely the rot that produced the false ``feedback_hook4_regex_prose_false_match``
-memory: the rule described in one place, implemented in another, with nothing
+is precisely the rot that produced the false "Hook 4 first-matches your prose"
+memory (retired; now ``feedback_pr_review_verdict_format`` §6): the rule
+described in one place, implemented in another, with nothing
 tying them together. So the definition is lifted here and **both hooks scope
 through the one function**. A second definition should be impossible, not
 kept in sync.
