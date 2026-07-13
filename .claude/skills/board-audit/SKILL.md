@@ -100,7 +100,7 @@ echo "Open issues across org: $(wc -l < /tmp/all-issue-urls.txt | tr -d ' ')"
 echo "Issues carrying a wave label: $(wc -l < /tmp/issue-labels.tsv | tr -d ' ')"
 ```
 
-`--limit 500` is intentional — the default 30 truncates silently per memory `feedback_gh_pr_edit_silent_noop` family. Adjust upward if any single repo crosses 500 open issues (unlikely but capture as an annunaki event if hit).
+`--limit 500` is intentional — the default 30 truncates silently per memory `feedback_gh_cli_gotchas` family. Adjust upward if any single repo crosses 500 open issues (unlikely but capture as an annunaki event if hit).
 
 ### 2. Fetch all items on project 2 (paginated — connections cap at 100)
 
@@ -302,7 +302,7 @@ while IFS= read -r url; do
 done <<< "$ORPHANS"
 ```
 
-Per memory `feedback_gh_pr_edit_silent_noop` family, `gh project item-add` can silently no-op — `gh` is being deprecated for project-classic operations (see `pull-requests.md § gh pr edit projects-classic deprecation`). If the bulk-add appears to succeed but the orphan count doesn't drop on the next audit run, fall back to the GraphQL `addProjectV2ItemById` mutation:
+Per memory `feedback_gh_cli_gotchas` family, `gh project item-add` can silently no-op — `gh` is being deprecated for project-classic operations (see `pull-requests.md § gh pr edit projects-classic deprecation`). If the bulk-add appears to succeed but the orphan count doesn't drop on the next audit run, fall back to the GraphQL `addProjectV2ItemById` mutation:
 
 ```bash
 gh api graphql -f query='

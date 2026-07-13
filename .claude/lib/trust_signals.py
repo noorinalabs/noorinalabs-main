@@ -81,7 +81,7 @@ RETIRE_AFTER_WAVES = 3
 BOTTOM_TIER = 2
 
 # A verdict comment field, e.g. ``Requestor: Aino Virtanen`` or the bold form
-# ``**Requestor:** Aino Virtanen`` (feedback_verdict_count_hook_regex). Optional
+# ``**Requestor:** Aino Virtanen`` (feedback_pr_review_verdict_format). Optional
 # surrounding ``**`` on the label AND the value; value trimmed of trailing bold.
 _FIELD_RE = {
     "requestor": re.compile(r"^\**Requestor\**:\**\s*(.+?)\**\s*$", re.MULTILINE),
@@ -249,7 +249,7 @@ def extract_signals(phase: str, wave: str, status_path: Path) -> dict[str, Signa
     :func:`wave_status.merged_prs` — the same identity the top-concentration
     metric uses). Reviewer identity is the ``Requestor:`` field of the verdict
     comment, because the gh principal that posts comments is the orchestrator,
-    not the reviewer (memory feedback_gh_review_self_approve_422).
+    not the reviewer (memory feedback_gh_cli_gotchas).
     """
     prs = wave_status.merged_prs(phase, wave, status_path)
     signals: dict[str, Signals] = {}

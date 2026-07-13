@@ -327,7 +327,7 @@ STATUS="$REPO_ROOT/cross-repo-status.json"
 python3 "$REPO_ROOT/.claude/lib/wave_status.py" counters {P} {M} \
     --expect {count_of_merged_PRs} --write
 
-# Read-back verify (memory `feedback_gh_pr_edit_silent_noop` family — any
+# Read-back verify (memory `feedback_gh_cli_gotchas` family — any
 # upsert pipeline that silently fails produces zero diff but exit 0).
 jq -r --arg m "{M}" '
   "wave_" + $m + "_final_pr_count = " + (.["wave_" + $m + "_final_pr_count"] | tostring),
@@ -628,7 +628,7 @@ python3 "$UPSERT" "$STATUS" \
 [ "$STG_RESULT" = "overridden" ] && python3 "$UPSERT" "$STATUS" \
     "wave_{M}_stg_promotion_override_rationale=\"${STG_PROMOTION_OVERRIDE_RATIONALE}\""
 
-# Read-back verify (feedback_gh_pr_edit_silent_noop family).
+# Read-back verify (feedback_gh_cli_gotchas family).
 jq -r --arg m "{M}" '"wave_" + $m + "_stg_promotion = " + (.["wave_" + $m + "_stg_promotion"] | tostring)' "$STATUS"
 ```
 

@@ -16,4 +16,4 @@ Owner prioritized a **fundraising/donor demo** (2026-07-05) and picked **Theme A
 4. **da#318** — hadith matn served with raw `<NAR>/<SANAD>/<MATN>` markup (parser leak); surfaces when drilling into a hadith from a narrator.
 5. **Visual-credibility pass** — design-system / landing polish so the whole walkthrough looks donor-ready (owner chose the "full polish" timeline bucket).
 
-All five are currently `wave-23`-labeled carry-forward (open). At that wave's `/wave-scope`, relabel to the donor wave + apply +20% TD intake. Related: [[project_p7_narrator_pollution_resolve_fixes]] (da#317 origin), [[feedback_honest_audit_over_conclusion_claim]] (the ~26% tail is the honest un-weighted remainder behind #723's weighted closure).
+All five are currently `wave-23`-labeled carry-forward (open). At that wave's `/wave-scope`, relabel to the donor wave + apply +20% TD intake. Related: the retired P7 #723 pollution-fixes memory (da#317 origin; git history), [[feedback_honest_audit_over_conclusion_claim]] (the ~26% tail is the honest un-weighted remainder behind #723's weighted closure).

@@ -33,4 +33,4 @@ When an artifact has landed at HEAD that should change session behavior:
 
 **Charter-promotion candidate (W11 retro):** This is the 4th instance in 3 days (2026-05-13 → 2026-05-16). The promotion shape would be a new `agents.md` section "Pre-Existing Session Limitations on HEAD-Landed Artifacts" with a check-before-acting table similar to the one above. Surface in W11 retro after end-of-wave evidence pool is complete.
 
-Sibling memories: [[feedback_spawn_brief_field_advisory_pattern]] (parent generalization), [[feedback_cwd_collision_cross_spawn]] (instances 1-3 detail).
+Sibling memories: [[feedback_spawn_brief_protocol]] (parent generalization), [[feedback_cwd_collision_cross_spawn]] (instances 1-3 detail).

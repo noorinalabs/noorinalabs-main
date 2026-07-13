@@ -95,7 +95,7 @@ The first time a shell or `gh` syntax fragility breaks a **load-bearing** automa
 ### Trigger family (codify, don't work around)
 
 - **zsh no-word-split on a parameter expansion** — zsh does NOT split an unquoted `$VAR`, so `for X in $VAR` collapses an entire list into ONE iteration. Use `while IFS= read -r X` (here-string or process-substitution form) or a Python emitter. Worked instance: § Zsh-safe repo iteration in wave skills, immediately below.
-- **`gh api -f body=@file`** posts the literal `@path` string, not the file contents — use `-F`/`--field` (memory `feedback_gh_pr_edit_silent_noop`).
+- **`gh api -f body=@file`** posts the literal `@path` string, not the file contents — use `-F`/`--field` (memory `feedback_gh_cli_gotchas`).
 - **`gh pr merge` in a loop** can fail-open the 2-reviewer gate when the loop variable word-splits or empties — drive merges from explicit, read-back-verified PR numbers, never an unquoted loop variable.
 - **`gh project item-add` / `gh pr edit` silent no-ops** — read back and verify the mutation landed, or route it through a deterministic helper.
 
@@ -103,7 +103,7 @@ The first time a shell or `gh` syntax fragility breaks a **load-bearing** automa
 
 `feedback_zsh_shell_environment` already existed when zsh `for X in $VAR` word-splitting silently broke `/wave-wrapup` repo-iteration **three times in one wave** (merge loop + counter loop ×2) → `gh` "could not resolve repository" → zero/garbage counters and division-by-zero. The memory did not stop recurrence; the deterministic helper removes the failure mode entirely. Each concrete trigger above is itself promotable to a lint-style gate on **first recurrence** (per the promote-on-first-violation trigger) — e.g. the deferred `validate_skill_bash_no_param_for_loop`.
 
-**Promotion provenance:** Owner-approved 2026-06-16 as a general charter principle, promoting memory `feedback_codify_determinism_on_shell_fragility` (owner directive 2026-06-15) from memory to charter and generalizing the narrow worked instance § Zsh-safe repo iteration in wave skills (main#689). Companion to memory `feedback_enforcement_hierarchy` (hook > skill > charter > memory). Evidence — the pattern bit 3× in P5W4: main#688 (`.claude/lib/wave_status.py`, shipped — deterministic repo/counter helper) and main#690 (`/promotion-audit` hand-rolled CLI driver mis-fired section/skill tiers — same pattern, second instance in one wave). Related memories: `feedback_gh_pr_edit_silent_noop`, `feedback_heredoc_in_git_commit`, `feedback_zsh_shell_environment`.
+**Promotion provenance:** Owner-approved 2026-06-16 as a general charter principle, promoting memory `feedback_codify_determinism_on_shell_fragility` (owner directive 2026-06-15) from memory to charter and generalizing the narrow worked instance § Zsh-safe repo iteration in wave skills (main#689). Companion to memory `feedback_enforcement_hierarchy` (hook > skill > charter > memory). Evidence — the pattern bit 3× in P5W4: main#688 (`.claude/lib/wave_status.py`, shipped — deterministic repo/counter helper) and main#690 (`/promotion-audit` hand-rolled CLI driver mis-fired section/skill tiers — same pattern, second instance in one wave). Related memories: `feedback_gh_cli_gotchas`, `feedback_heredoc_in_git_commit`, `feedback_zsh_shell_environment`.
 
 ## Zsh-safe repo iteration in wave skills <!-- promotion-target: hook -->
 

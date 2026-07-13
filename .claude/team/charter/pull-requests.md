@@ -414,7 +414,7 @@ The ruleset each repo adopts is a **repository ruleset** targeting `~DEFAULT_BRA
 - `deletion` + `non_fast_forward` protection, and
 - a single `bypass_actors` entry: the built-in **Repository admin** role (`actor_id: 5`, `bypass_mode: always`).
 
-The load-bearing design decision is **0 required approvals, not 1.** GitHub's "require approvals" counts **formal GitHub PR reviews** — which our team cannot produce: the `gh` auth principal IS the PR author (`parametrization`), so a formal self-approval 422s (`feedback_gh_review_self_approve_422`), and our review discipline runs on **issue-comment verdicts** validated by Hook 4 (`validate_pr_review`), not formal reviews. A naive "require 1 approval" rule would therefore **deadlock every merge**. So the ruleset enforces only what it can enforce without breaking us — *a PR must exist* + *CI must be green* — and leaves reviewer-count enforcement to Hook 4, where the issue's own scope note ("Required-reviewer count beyond charter — already covered by `validate_pr_review`") puts it.
+The load-bearing design decision is **0 required approvals, not 1.** GitHub's "require approvals" counts **formal GitHub PR reviews** — which our team cannot produce: the `gh` auth principal IS the PR author (`parametrization`), so a formal self-approval 422s (`feedback_gh_cli_gotchas`), and our review discipline runs on **issue-comment verdicts** validated by Hook 4 (`validate_pr_review`), not formal reviews. A naive "require 1 approval" rule would therefore **deadlock every merge**. So the ruleset enforces only what it can enforce without breaking us — *a PR must exist* + *CI must be green* — and leaves reviewer-count enforcement to Hook 4, where the issue's own scope note ("Required-reviewer count beyond charter — already covered by `validate_pr_review`") puts it.
 
 The **Repository-admin `always` bypass** is what keeps the established flow working: the orchestrator's `--admin` wave→main wrapup merges, the wave-bootstrap and doc-sweep single-reviewer exceptions, and Emergency-Mode restore merges all run as admin. The bypass is the GitHub-side counterpart to the hook-side exception list below — protection for everyone, an audited escape valve for the established exceptions.
 
@@ -880,7 +880,7 @@ Promotion target on this section is `skill` — the retro skill is the natural h
 
 ## `gh pr edit` projects-classic deprecation — use REST API for body/title updates (Mandatory) <!-- promotion-target: none -->
 
-`gh pr edit <num> --body <text>` (and `--body-file <path>`, and `--title`) on gh-cli versions older than the one that migrated off the deprecated projects-classic GraphQL scope **silently fails** the body/title mutation. The command exits non-zero with a `GraphQL: Projects (classic) is being deprecated` error, but the error reads like a benign warning and the PR body appears unchanged on subsequent inspection — exactly the "silent-no-op" shape captured in memory `feedback_gh_pr_edit_silent_noop`.
+`gh pr edit <num> --body <text>` (and `--body-file <path>`, and `--title`) on gh-cli versions older than the one that migrated off the deprecated projects-classic GraphQL scope **silently fails** the body/title mutation. The command exits non-zero with a `GraphQL: Projects (classic) is being deprecated` error, but the error reads like a benign warning and the PR body appears unchanged on subsequent inspection — exactly the "silent-no-op" shape captured in memory `feedback_gh_cli_gotchas`.
 
 Root cause: `gh pr edit` fetches `repository.pullRequest.projectCards` as a side-effect of the mutation; the classic-projects deprecation fails that sub-query, poisoning the whole call. Resolves main#185 (Linh.Pham hit 2026-04-22 — PR#844 body silently retained option-A through the entire v5 phase; reviewers never saw v5 content for ~30 minutes).
 
@@ -903,7 +903,7 @@ gh api "repos/<owner>/<repo>/pulls/<num>" -X PATCH \
   -f title="new title"
 ```
 
-`-f` is `--field` and treats the value as a string. For multi-line bodies, prefer `--input` with a `jq`-built JSON body to avoid `-f`'s newline-stripping behavior (see memory `feedback_gh_pr_edit_silent_noop` for the related `gh api -f body=@file` no-op trap — use `--input` or pipe through `jq --rawfile`).
+`-f` is `--field` and treats the value as a string. For multi-line bodies, prefer `--input` with a `jq`-built JSON body to avoid `-f`'s newline-stripping behavior (see memory `feedback_gh_cli_gotchas` for the related `gh api -f body=@file` no-op trap — use `--input` or pipe through `jq --rawfile`).
 
 ### Eligibility
 
@@ -935,5 +935,5 @@ A 0-length body or a stale prefix is the signal the mutation didn't land.
 
 ### Cross-references
 
-- Memory `feedback_gh_pr_edit_silent_noop` — the broader silent-no-op family (`gh project item-add`, `gh project item-list --limit`, `gh api -X PATCH -f body=@file`) sharing this shape.
+- Memory `feedback_gh_cli_gotchas` — the broader silent-no-op family (`gh project item-add`, `gh project item-list --limit`, `gh api -X PATCH -f body=@file`) sharing this shape.
 - Resolves main#185.
