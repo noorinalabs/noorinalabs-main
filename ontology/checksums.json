@@ -464,9 +464,9 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "ontology/conventions.md": {
-      "last_tracked": "43e11d079f2224f2d9ba73069667bb40915d7a7aa93653a8819aec3efa9b94d9",
+      "last_tracked": "24a0bc9c8e7dc2122dcdb3b38b629efeb313b199cc9250e1ede14d667c5a0cea",
       "last_resolved": "43e11d079f2224f2d9ba73069667bb40915d7a7aa93653a8819aec3efa9b94d9",
-      "tracked_at": "2026-06-01T21:16:30.059117+00:00",
+      "tracked_at": "2026-07-13T15:42:07.560829+00:00",
       "resolved_at": "2026-06-01T21:17:00Z"
     },
     "ontology/domain.yaml": {
@@ -1539,6 +1539,12 @@
       "last_tracked": "804aa5bab18c772497996c461a20b879b051b74a019f4f3ef6e99c4fe491ac92",
       "last_resolved": "",
       "tracked_at": "2026-07-11T17:26:13.510801+00:00",
+      "resolved_at": ""
+    },
+    "ontology/lifecycle.md": {
+      "last_tracked": "f9ff452434b8d33e600381f7e80a9beaeea71f53efb2d360765bddc1a977246a",
+      "last_resolved": "",
+      "tracked_at": "2026-07-13T15:42:07.560829+00:00",
       "resolved_at": ""
     }
   },

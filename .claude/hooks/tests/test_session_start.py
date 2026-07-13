@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Tests for the `session_start` SessionStart hook's wave/phase reader (#708).
+"""Tests for the `session_start` SessionStart hook.
 
-Regression coverage: `_wave_status()` used to read the flat keys `phase`
-(which lags a phase behind — #683 cross-phase collision), `wave` (which does
-not exist), and `last_updated`. The fix reads the canonical lifecycle keys
-`current_phase` / `current_wave` / `wave_<N>_started_at`.
+Regression coverage:
+* #708 — `_wave_status()` used to read the flat keys `phase` (which lags a
+  phase behind — #683 cross-phase collision), `wave` (which does not exist),
+  and `last_updated`. The fix reads the canonical lifecycle keys
+  `current_phase` / `current_wave` / `wave_<N>_started_at`.
+* #962 — the hook stdout is a slim pointer (~10 lines): it mandates
+  /session-start, prints one-line counts, and NEVER dumps the handoff file
+  contents or an auto `/annunaki-attack` directive (attack is on-demand /
+  wave-wrapup, re #925). The skill owns the step detail.
 
 Run from the repo root:
     ENVIRONMENT=test python3 -m pytest \\
@@ -117,6 +122,62 @@ class HandoffPathLocationTests(unittest.TestCase):
     def test_handoff_not_in_user_space(self) -> None:
         self.assertNotIn("/.claude/projects/", hook._HANDOFF.as_posix())
         self.assertFalse(hook._HANDOFF.is_relative_to(Path.home() / ".claude" / "projects"))
+
+
+class SlimStdoutTests(unittest.TestCase):
+    """#962: the hook prints a ~10-line pointer, not the full protocol."""
+
+    def _capture(self) -> str:
+        import contextlib
+        import io
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            hook.main()
+        return buf.getvalue()
+
+    def test_output_is_slim_and_mandates_the_skill(self) -> None:
+        out = self._capture()
+        self.assertLessEqual(len(out.strip().splitlines()), 12)
+        self.assertIn("/session-start", out)
+        self.assertIn("MANDATORY FIRST ACTION", out)
+        # The step detail lives in the skill, not here.
+        self.assertNotIn("STEP 5", out)
+        self.assertNotIn("ACTIONS REQUIRED", out)
+
+    def test_handoff_contents_never_dumped_only_pointed_at(self) -> None:
+        import tempfile
+
+        sentinel = "HANDOFF-BODY-SENTINEL-962"
+        with tempfile.TemporaryDirectory() as d:
+            handoff = Path(d) / "session_handoff.md"
+            handoff.write_text(f"---\nname: x\n---\n{sentinel}\n", encoding="utf-8")
+            original = hook._HANDOFF
+            try:
+                hook._HANDOFF = handoff
+                out = self._capture()
+            finally:
+                hook._HANDOFF = original
+        self.assertNotIn(sentinel, out)
+        self.assertIn("session_handoff.md", out)
+        self.assertIn("exists", out)
+
+    def test_annunaki_line_is_count_only_no_auto_attack(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            log = Path(d) / "errors.jsonl"
+            log.write_text("{}\n" * 10, encoding="utf-8")
+            original = hook._ERRORS_LOG
+            try:
+                hook._ERRORS_LOG = log
+                out = self._capture()
+            finally:
+                hook._ERRORS_LOG = original
+        self.assertIn("10 error(s) logged", out)
+        # No imperative attack directive even at 10 errors (>= old threshold 5).
+        self.assertNotIn("ACTION: Run /annunaki-attack", out)
+        self.assertIn("on demand", out)
 
 
 if __name__ == "__main__":
