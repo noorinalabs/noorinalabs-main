@@ -202,7 +202,7 @@ The `/promotion-audit` skill's `templates/charter-section.md` emits Shape 1 (HTM
 ### Cross-references
 
 - `/promotion-audit` SKILL.md § Context cites this convention as the authoritative source for marker shape selection.
-- `charter/hooks.md` § 6. Promotion Provenance Phrasing catalogues the parse keys and the per-hook forward-reference-filter discipline. That section documents the parser KEYS; this section codifies the authoring CHOICE between them.
+- `charter/hooks/authorship-and-audit.md` § 6. Promotion Provenance Phrasing catalogues the parse keys and the per-hook forward-reference-filter discipline. That section documents the parser KEYS; this section codifies the authoring CHOICE between them.
 
 ### Provenance
 

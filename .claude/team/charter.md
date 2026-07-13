@@ -156,9 +156,10 @@ Detailed rules are organized into focused sub-documents. Agents load only the se
 | [Branching Rules](charter/branching.md) | Deployments branches, feature branches, worktree cleanup |
 | [Commit Identity](charter/commits.md) | Per-commit identity flags, co-author trailers, identity table |
 | [Issues & Delegation](charter/issues.md) | Work delegation, issue review, work gate, assignment, comment format, reply protocol |
-| [Pull Requests](charter/pull-requests.md) | PR workflow, post-merge verification, wave merge, pre-push checklist, CI enforcement |
-| [Agents & Orchestration](charter/agents.md) | Agent naming, lifecycle, teardown, hub-and-spoke model, team names |
-| [Hooks](charter/hooks.md) | All 5 automated enforcement hooks |
+| [Pull Requests](charter/pull-requests.md) | Section index (#963) → per-concern files under `charter/pull-requests/`: reviews, authoring, CI gates, evidence standards, acceptance scope, wave merge |
+| [Agents & Orchestration](charter/agents.md) | Section index (#963) → per-concern files under `charter/agents/`: naming & teams, headcount, lifecycle, orchestration model, spawn discipline |
+| [Hooks](charter/hooks.md) | Section index (#963) → per-concern files under `charter/hooks/`: hook catalogs 1–22, dispatcher & shared helpers, authorship & audit |
+| [Role Briefing Packs](charter/packs/) | Per-role reading lists (implementer / reviewer / coordinator) over the section files — what spawn briefs point at |
 | [Tech Decisions](charter/tech-decisions.md) | Tech preferences, debate, tie-breaking (LCA) |
 | [Communication Protocol](charter/communication.md) | Cross-repo messaging, shared state, dependency contracts, event-driven spawns |
 | [Emergency Mode](charter/emergency-mode.md) | DR / restore / security-incident escape valve; `[EMERGENCY]` PR prefix; owner-manual-action protocol; post-emergency catchup |

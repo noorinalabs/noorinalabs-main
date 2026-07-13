@@ -143,7 +143,7 @@ def over_budget_message(metric: Metric, roster_dir: Path) -> str:
         "(keep the name in roster.json so the commit-identity gate still resolves "
         "it). See the persona-model spike "
         "(.claude/team/spikes/p6w2-persona-model-evaluation.md) and "
-        "charter/agents.md § Governed headcount.\n"
+        "charter/agents/headcount.md § Governed Headcount.\n"
         "If the roster has genuinely outgrown the budget, raise the cap "
         "deliberately in .claude/lib/headcount_budget.py (one reviewed line) — "
         "that is the surfaced decision this gate exists to force."

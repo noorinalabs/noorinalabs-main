@@ -228,3 +228,23 @@ graphify
 
 # --- Ontology README (#863) + merge-driver canonical form (#871): codegraph driver key ---
 codegraph
+
+# --- Charter section-pack re-shelve (#963): the cross-line backtick ignore-regex
+#     makes ignore-spans order-sensitive, so moving sections between files exposed
+#     domain words that previously fell inside a `…` span. All were already present
+#     (and correct) in the charter prose; none are new vocabulary. ---
+Boukhari
+Bukhari
+Habimana
+Kafi
+Mateo
+creds
+cutover
+dispositioned
+exfil
+misconfig
+retag
+supersets
+unreviewed
+voweled
+wirefilter

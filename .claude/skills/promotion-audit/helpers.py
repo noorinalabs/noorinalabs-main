@@ -298,8 +298,27 @@ def read_charter_sections(charter_path: str) -> list[CharterSection]:
     return results
 
 
+def _charter_md_files(subdir: str) -> list[str]:
+    """All `*.md` files under the charter dir, RECURSIVE and sorted.
+
+    Recursion added by #963: the charter mega-files (agents / pull-requests /
+    hooks) were re-shelved into per-concern section files under
+    `charter/{agents,pull-requests,hooks}/`, with the old paths kept as thin
+    forwarding indexes. A non-recursive `os.listdir` scan would silently see
+    only the (marker-free) indexes and drop every re-shelved section — the
+    same silent-empty failure class as #418.
+    """
+    found: list[str] = []
+    for root, dirs, files in os.walk(subdir):
+        dirs.sort()
+        for name in sorted(files):
+            if name.endswith(".md"):
+                found.append(os.path.join(root, name))
+    return found
+
+
 def read_all_charter_sections(charter_parent: str) -> list[CharterSection]:
-    """Scan charter.md + charter/*.md for marked sections.
+    """Scan charter.md + charter/**/*.md (recursive, #963) for marked sections.
 
     `charter_parent` is the directory **containing** the `charter/` subdir
     (typically `.claude/team`), NOT the `charter/` directory itself. Sibling
@@ -329,9 +348,7 @@ def read_all_charter_sections(charter_parent: str) -> list[CharterSection]:
 
     subdir = os.path.join(charter_parent, "charter")
     if os.path.isdir(subdir):
-        for name in sorted(os.listdir(subdir)):
-            if name.endswith(".md"):
-                candidates.append(os.path.join(subdir, name))
+        candidates.extend(_charter_md_files(subdir))
 
     results: list[CharterSection] = []
     for p in candidates:
@@ -679,7 +696,7 @@ def find_already_promoted_in_charter(charter_parent: str) -> set[str]:
     `charter_parent` is the directory **containing** the `charter/` subdir
     (typically `.claude/team`), NOT the `charter/` directory itself.
 
-    Scans `<charter_parent>/charter/*.md` (and the optional
+    Scans `<charter_parent>/charter/**/*.md` (recursive, #963) (and the optional
     `<charter_parent>/charter.md` top-level file, if present) using the same
     recognition rules as `find_already_promoted()`. Returns the union of
     all per-file results.
@@ -713,9 +730,7 @@ def find_already_promoted_in_charter(charter_parent: str) -> set[str]:
 
     subdir = os.path.join(charter_parent, "charter")
     if os.path.isdir(subdir):
-        for name in sorted(os.listdir(subdir)):
-            if name.endswith(".md"):
-                candidates.append(os.path.join(subdir, name))
+        candidates.extend(_charter_md_files(subdir))
 
     for path in candidates:
         refs.update(find_already_promoted(path))

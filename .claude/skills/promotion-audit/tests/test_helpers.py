@@ -558,6 +558,48 @@ class FindAlreadyPromotedTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 h.find_already_promoted_in_charter(charter_subdir + "/")
 
+    def test_aggregator_recurses_into_charter_subdirs(self) -> None:
+        """POS (#963): the charter mega-files were re-shelved into per-concern
+        section files under `charter/{agents,pull-requests,hooks}/`. The
+        aggregator must pick up markers in those SUBDIRECTORY files — a
+        non-recursive listdir scan would silently drop them (the #418
+        silent-empty failure class, one level down).
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            nested = os.path.join(tmpdir, "charter", "pull-requests")
+            os.makedirs(nested)
+            with open(os.path.join(nested, "authoring.md"), "w") as f:
+                f.write(
+                    "## A re-shelved section\n\n"
+                    "<!-- Promoted from memory: feedback_nested_style.md (P8W24) -->\n\n"
+                    "Body.\n"
+                )
+            refs = h.find_already_promoted_in_charter(tmpdir)
+            self.assertIn("feedback_nested_style.md", refs)
+
+    def test_read_all_charter_sections_recurses_into_subdirs(self) -> None:
+        """POS (#963): marked sections re-shelved into `charter/<concern>/`
+        subdirectory files must appear in `read_all_charter_sections`
+        output exactly like top-level `charter/*.md` sections."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            top = os.path.join(tmpdir, "charter")
+            nested = os.path.join(top, "agents")
+            os.makedirs(nested)
+            with open(os.path.join(top, "issues.md"), "w") as f:
+                f.write("## Top-level section <!-- promotion-target: none -->\n\nA.\n")
+            with open(os.path.join(nested, "lifecycle.md"), "w") as f:
+                f.write(
+                    "## Nested section <!-- promotion-target: skill -->\n\nB.\n"
+                    "<!-- promoted-to: skills/some-slug -->\n"
+                )
+            sections = h.read_all_charter_sections(tmpdir)
+            headings = {s.heading for s in sections}
+            self.assertEqual(headings, {"Top-level section", "Nested section"})
+            nested_sec = next(s for s in sections if s.heading == "Nested section")
+            self.assertEqual(nested_sec.promotion_target, "skill")
+            self.assertEqual(nested_sec.promoted_to, "skills/some-slug")
+            self.assertEqual(nested_sec.path, os.path.join(nested, "lifecycle.md"))
+
     def test_read_all_charter_sections_raises_on_charter_dir_itself(self) -> None:
         """NEG (#418, sibling): `read_all_charter_sections` has identical
         parent-of-charter semantics and the same silent-empty failure mode.
