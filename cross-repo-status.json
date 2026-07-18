@@ -1,4 +1,10 @@
 {
+  "wave_25_meta_issue": "noorinalabs-main#980",
+  "wave_25_phase": 9,
+  "wave_25_phase_ordinal": 1,
+  "wave_25_scope_reconciled_at": "2026-07-18T21:07:25Z",
+  "wave_25_repos_in_scope": ["noorinalabs-data-acquisition"],
+  "wave_25_scope": {"theme": "Narrator disambiguation & split correctness", "phase": 9, "shape": "upstream data-correctness fixes (P9.1a) \u2014 all in noorinalabs-data-acquisition; gates the Phase 9 resolve re-run + prod re-cutover (#978)", "meta_issue": "main#980", "gates_rerun": true, "tier_1_data_correctness": [{"id": "noorinalabs-data-acquisition#248", "ref": "data-acquisition#248", "implementer": "Alejandra Reyes-Fuentes", "reviewer": "Kavitha Sundaramurthy", "reviewer_2": "Oyunbileg Batbayar", "priority": "bug"}, {"id": "noorinalabs-data-acquisition#346", "ref": "data-acquisition#346", "implementer": "Kavitha Sundaramurthy", "reviewer": "Ivana Horvat", "reviewer_2": "Oyunbileg Batbayar", "priority": "bug"}, {"id": "noorinalabs-data-acquisition#347", "ref": "data-acquisition#347", "implementer": "Ivana Horvat", "reviewer": "Kavitha Sundaramurthy", "reviewer_2": "Alejandra Reyes-Fuentes", "priority": "bug"}, {"id": "noorinalabs-data-acquisition#352", "ref": "data-acquisition#352", "implementer": "Alejandra Reyes-Fuentes", "reviewer": "Oyunbileg Batbayar", "reviewer_2": "Nikolaos Papadopoulos", "priority": "bug"}, {"id": "noorinalabs-data-acquisition#431", "ref": "data-acquisition#431", "implementer": "Ivana Horvat", "reviewer": "Alejandra Reyes-Fuentes", "reviewer_2": "Jean-Claude Habimana", "priority": "tech-debt"}, {"id": "noorinalabs-data-acquisition#439", "ref": "data-acquisition#439", "implementer": "Nikolaos Papadopoulos", "reviewer": "Kavitha Sundaramurthy", "reviewer_2": "Ivana Horvat", "priority": "bug"}, {"id": "noorinalabs-data-acquisition#444", "ref": "data-acquisition#444", "implementer": "Kavitha Sundaramurthy", "reviewer": "Nikolaos Papadopoulos", "reviewer_2": "Oyunbileg Batbayar", "priority": "tech-debt"}], "td_intake": "0/0 \u2014 Phase 9 plan (#977) scopes these waves data-correctness ONLY; general TD explicitly out of scope", "gate_A_phase_review": "satisfied by owner-approved Phase 9 plan main#977 (2026-07-17)", "premise_rot": "low risk \u2014 issues authored 2026-07-17 against current da code", "declared_refs": ["data-acquisition#248", "data-acquisition#346", "data-acquisition#347", "data-acquisition#352", "data-acquisition#431", "data-acquisition#439", "data-acquisition#444"], "carry_forwards": [], "must_includes": [], "deliberately_not_in_wave": ["Wave 26 da issues", "Wave 27 ig#1185/da#443"], "concentration": "max 2/7 = 29%"},
   "wave_24_meta_issue": "noorinalabs-main#928",
   "wave_24_theme": "#928 defect sweep + re-run pipeline from `parse`: fix every parse/resolve/load/deploy defect found en route to stg (56 issues filed 2026-07-09/10 across main+da+deploy, + da#282), gated by #928's dynamic launch gate, then wipe-and-reload the graph from `parse`. Owner directive 2026-07-09; retheme from streaming decided 2026-07-10.",
   "wave_24_phase": 8,
@@ -76,6 +82,7 @@
   "wave_24_wrapup_issue_reconciliation": "8 resolved+closed, 39 deferred-TD carry-forward (wave-24 label removed; see wave_24_carry_forward), 0 open wave-24 issues remain",
   "wave_24_annunaki_attack_ran_at": "2026-07-18T21:00:00Z",
   "wave_24_memory_audit_ran_at": "2026-07-18T21:00:00Z",
+  "wave_24_retro_completed_at": "2026-07-18T21:07:00Z",
   "wave_23_phase": 8,
   "wave_23_phase_ordinal": 1,
   "wave_23_scope_reconciled_at": "2026-07-02T04:47:05Z",
@@ -2752,7 +2759,7 @@
     "pilot_completed_at": "2026-06-24"
   },
   "wave_17_task3_checkpoint_resolved_at": "2026-06-24T18:12:00Z",
-  "global_wave_seq": 24,
+  "global_wave_seq": 25,
   "phase_6_criteria_trackers": {
     "1": "noorinalabs-main#725",
     "2": "noorinalabs-main#726",
