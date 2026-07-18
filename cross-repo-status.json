@@ -3,9 +3,103 @@
   "wave_25_phase": 9,
   "wave_25_phase_ordinal": 1,
   "wave_25_scope_reconciled_at": "2026-07-18T21:07:25Z",
-  "wave_25_repos_in_scope": ["noorinalabs-data-acquisition"],
-  "wave_25_scope": {"theme": "Narrator disambiguation & split correctness", "phase": 9, "shape": "upstream data-correctness fixes (P9.1a) \u2014 all in noorinalabs-data-acquisition; gates the Phase 9 resolve re-run + prod re-cutover (#978)", "meta_issue": "main#980", "gates_rerun": true, "tier_1_data_correctness": [{"id": "noorinalabs-data-acquisition#248", "ref": "data-acquisition#248", "implementer": "Alejandra Reyes-Fuentes", "reviewer": "Kavitha Sundaramurthy", "reviewer_2": "Oyunbileg Batbayar", "priority": "bug"}, {"id": "noorinalabs-data-acquisition#346", "ref": "data-acquisition#346", "implementer": "Kavitha Sundaramurthy", "reviewer": "Ivana Horvat", "reviewer_2": "Oyunbileg Batbayar", "priority": "bug"}, {"id": "noorinalabs-data-acquisition#347", "ref": "data-acquisition#347", "implementer": "Ivana Horvat", "reviewer": "Kavitha Sundaramurthy", "reviewer_2": "Alejandra Reyes-Fuentes", "priority": "bug"}, {"id": "noorinalabs-data-acquisition#352", "ref": "data-acquisition#352", "implementer": "Alejandra Reyes-Fuentes", "reviewer": "Oyunbileg Batbayar", "reviewer_2": "Nikolaos Papadopoulos", "priority": "bug"}, {"id": "noorinalabs-data-acquisition#431", "ref": "data-acquisition#431", "implementer": "Ivana Horvat", "reviewer": "Alejandra Reyes-Fuentes", "reviewer_2": "Jean-Claude Habimana", "priority": "tech-debt"}, {"id": "noorinalabs-data-acquisition#439", "ref": "data-acquisition#439", "implementer": "Nikolaos Papadopoulos", "reviewer": "Kavitha Sundaramurthy", "reviewer_2": "Ivana Horvat", "priority": "bug"}, {"id": "noorinalabs-data-acquisition#444", "ref": "data-acquisition#444", "implementer": "Kavitha Sundaramurthy", "reviewer": "Nikolaos Papadopoulos", "reviewer_2": "Oyunbileg Batbayar", "priority": "tech-debt"}], "td_intake": "0/0 \u2014 Phase 9 plan (#977) scopes these waves data-correctness ONLY; general TD explicitly out of scope", "gate_A_phase_review": "satisfied by owner-approved Phase 9 plan main#977 (2026-07-17)", "premise_rot": "low risk \u2014 issues authored 2026-07-17 against current da code", "declared_refs": ["data-acquisition#248", "data-acquisition#346", "data-acquisition#347", "data-acquisition#352", "data-acquisition#431", "data-acquisition#439", "data-acquisition#444"], "carry_forwards": [], "must_includes": [], "deliberately_not_in_wave": ["Wave 26 da issues", "Wave 27 ig#1185/da#443"], "concentration": "max 2/7 = 29%"},
-  "wave_25_branches": {"branch":"deployments/phase-9/wave-25","repos":{"noorinalabs-data-acquisition":{"sha":"1cd414ec8f89d0052083087324d37b28c89f4c24","status":"created"}}},
+  "wave_25_repos_in_scope": [
+    "noorinalabs-data-acquisition"
+  ],
+  "wave_25_scope": {
+    "theme": "Narrator disambiguation & split correctness",
+    "phase": 9,
+    "shape": "upstream data-correctness fixes (P9.1a) — all in noorinalabs-data-acquisition; gates the Phase 9 resolve re-run + prod re-cutover (#978)",
+    "meta_issue": "main#980",
+    "gates_rerun": true,
+    "tier_1_data_correctness": [
+      {
+        "id": "noorinalabs-data-acquisition#248",
+        "ref": "data-acquisition#248",
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Kavitha Sundaramurthy",
+        "reviewer_2": "Oyunbileg Batbayar",
+        "priority": "bug"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#346",
+        "ref": "data-acquisition#346",
+        "implementer": "Kavitha Sundaramurthy",
+        "reviewer": "Ivana Horvat",
+        "reviewer_2": "Oyunbileg Batbayar",
+        "priority": "bug",
+        "scope_note": "RE-SCOPED (owner 2026-07-18): contextual isnad-neighbor split where confident + flag residual via over_merged; NO date-band peel (spike NO/NO); full node-identity split deferred to da#443 (W27)"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#347",
+        "ref": "data-acquisition#347",
+        "implementer": "Ivana Horvat",
+        "reviewer": "Kavitha Sundaramurthy",
+        "reviewer_2": "Alejandra Reyes-Fuentes",
+        "priority": "bug"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#352",
+        "ref": "data-acquisition#352",
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Oyunbileg Batbayar",
+        "reviewer_2": "Nikolaos Papadopoulos",
+        "priority": "bug"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#431",
+        "ref": "data-acquisition#431",
+        "implementer": "Ivana Horvat",
+        "reviewer": "Alejandra Reyes-Fuentes",
+        "reviewer_2": "Jean-Claude Habimana",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#439",
+        "ref": "data-acquisition#439",
+        "implementer": "Nikolaos Papadopoulos",
+        "reviewer": "Kavitha Sundaramurthy",
+        "reviewer_2": "Ivana Horvat",
+        "priority": "bug"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#444",
+        "ref": "data-acquisition#444",
+        "implementer": "Kavitha Sundaramurthy",
+        "reviewer": "Nikolaos Papadopoulos",
+        "reviewer_2": "Oyunbileg Batbayar",
+        "priority": "tech-debt"
+      }
+    ],
+    "td_intake": "0/0 — Phase 9 plan (#977) scopes these waves data-correctness ONLY; general TD explicitly out of scope",
+    "gate_A_phase_review": "satisfied by owner-approved Phase 9 plan main#977 (2026-07-17)",
+    "premise_rot": "low risk — issues authored 2026-07-17 against current da code",
+    "declared_refs": [
+      "data-acquisition#248",
+      "data-acquisition#346",
+      "data-acquisition#347",
+      "data-acquisition#352",
+      "data-acquisition#431",
+      "data-acquisition#439",
+      "data-acquisition#444"
+    ],
+    "carry_forwards": [],
+    "must_includes": [],
+    "deliberately_not_in_wave": [
+      "Wave 26 da issues",
+      "Wave 27 ig#1185/da#443"
+    ],
+    "concentration": "max 2/7 = 29%"
+  },
+  "wave_25_branches": {
+    "branch": "deployments/phase-9/wave-25",
+    "repos": {
+      "noorinalabs-data-acquisition": {
+        "sha": "1cd414ec8f89d0052083087324d37b28c89f4c24",
+        "status": "created"
+      }
+    }
+  },
   "wave_25_merge_model": "wave-branch",
   "wave_25_active": true,
   "wave_25_kicked_off_at": "2026-07-18T21:11:08Z",
@@ -13,73 +107,144 @@
   "wave_24_theme": "#928 defect sweep + re-run pipeline from `parse`: fix every parse/resolve/load/deploy defect found en route to stg (56 issues filed 2026-07-09/10 across main+da+deploy, + da#282), gated by #928's dynamic launch gate, then wipe-and-reload the graph from `parse`. Owner directive 2026-07-09; retheme from streaming decided 2026-07-10.",
   "wave_24_phase": 8,
   "wave_24_phase_ordinal": 2,
-  "wave_24_repos_in_scope": ["noorinalabs-main","noorinalabs-data-acquisition","noorinalabs-deploy"],
-  "wave_24_scope": {"theme":"#928 defect sweep + re-run from parse","shape":"fix-then-rerun: land every launch-gate (parse/resolve) defect merged, then re-run the pipeline from parse and verify at stg before prod","meta_issue":"main#928","launch_gate":"lives in main#928 body (dynamic); OPEN parse rows da#368,da#369->da#365,da#371,da#386; OPEN resolve rows da#389,da#391,da#313,da#360+da#378,da#361,da#282; downstream(lands while resolve runs) da#352,da#373,da#370,da#364,da#382","streaming_deferred":"wave-24's ORIGINAL streaming theme (main#922 meta / main#667) deferred to a later wave per owner 2026-07-10; this retheme repurposes the wave-24 identity that the 56 sweep issues were already labeled with","deliberately_not_in_wave":["da#366 (splitter-dependent, waits for validated splitter)","halimbahae (same, splitter-dependent)"]},
-  "wave_24_streaming_deferred": {"original_meta":"main#922","p5_end_state":"main#667","deferred_at":"2026-07-10","note":"streaming pipeline verify+close moves to a future wave; no open child issues existed under it"},
+  "wave_24_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-data-acquisition",
+    "noorinalabs-deploy"
+  ],
+  "wave_24_scope": {
+    "theme": "#928 defect sweep + re-run from parse",
+    "shape": "fix-then-rerun: land every launch-gate (parse/resolve) defect merged, then re-run the pipeline from parse and verify at stg before prod",
+    "meta_issue": "main#928",
+    "launch_gate": "lives in main#928 body (dynamic); OPEN parse rows da#368,da#369->da#365,da#371,da#386; OPEN resolve rows da#389,da#391,da#313,da#360+da#378,da#361,da#282; downstream(lands while resolve runs) da#352,da#373,da#370,da#364,da#382",
+    "streaming_deferred": "wave-24's ORIGINAL streaming theme (main#922 meta / main#667) deferred to a later wave per owner 2026-07-10; this retheme repurposes the wave-24 identity that the 56 sweep issues were already labeled with",
+    "deliberately_not_in_wave": [
+      "da#366 (splitter-dependent, waits for validated splitter)",
+      "halimbahae (same, splitter-dependent)"
+    ]
+  },
+  "wave_24_streaming_deferred": {
+    "original_meta": "main#922",
+    "p5_end_state": "main#667",
+    "deferred_at": "2026-07-10",
+    "note": "streaming pipeline verify+close moves to a future wave; no open child issues existed under it"
+  },
   "wave_24_active": false,
   "wave_24_merge_model": "wave-branch",
   "wave_24_kicked_off_at": "2026-07-05T00:00:00Z",
-  "wave_24_carry_forward": {"classified_at":"2026-07-18","disposition":"deferred tech-debt backlog — NOT relocated into scoped Phase 9 waves 25/26/27 (which were planned without these per main#977); future waves draw ~20%/wave per TD-intake policy","audit":"wave-24 wrapup issue reconciliation (8 resolved+closed, 39 deferred)","count":39,"items":{"noorinalabs-main":[968,957,956,954,953,952,949,947,943,942,941,940,937,927],"noorinalabs-data-acquisition":[422,421,396,395,394,393,392,390,388,381,377],"noorinalabs-deploy":[664,663,598,593,592,586,578,576,575,566,561,555,550,530]}},
+  "wave_24_carry_forward": {
+    "classified_at": "2026-07-18",
+    "disposition": "deferred tech-debt backlog — NOT relocated into scoped Phase 9 waves 25/26/27 (which were planned without these per main#977); future waves draw ~20%/wave per TD-intake policy",
+    "audit": "wave-24 wrapup issue reconciliation (8 resolved+closed, 39 deferred)",
+    "count": 39,
+    "items": {
+      "noorinalabs-main": [
+        968,
+        957,
+        956,
+        954,
+        953,
+        952,
+        949,
+        947,
+        943,
+        942,
+        941,
+        940,
+        937,
+        927
+      ],
+      "noorinalabs-data-acquisition": [
+        422,
+        421,
+        396,
+        395,
+        394,
+        393,
+        392,
+        390,
+        388,
+        381,
+        377
+      ],
+      "noorinalabs-deploy": [
+        664,
+        663,
+        598,
+        593,
+        592,
+        586,
+        578,
+        576,
+        575,
+        566,
+        561,
+        555,
+        550,
+        530
+      ]
+    }
+  },
   "wave_24_final_pr_count": 6,
   "wave_24_changes_requested_cycles": 1,
   "wave_24_top_concentration_pct": 33,
   "wave_24_trust_signals": {
-  "Aino Virtanen": {
-    "authored_prs": [
-      969,
-      924
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 2,
-    "review_false_positives": 0,
-    "rework_cycles": 0
+    "Aino Virtanen": {
+      "authored_prs": [
+        969,
+        924
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 2,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Lucas Ferreira": {
+      "authored_prs": [
+        965
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Nurul Hakim": {
+      "authored_prs": [
+        966
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Santiago Ferreira": {
+      "authored_prs": [],
+      "ci_red_merges": 0,
+      "must_fix_caught": 1,
+      "must_fix_received": 0,
+      "prs_merged": 0,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Weronika Zielinska": {
+      "authored_prs": [
+        972,
+        967
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 1,
+      "prs_merged": 2,
+      "review_false_positives": 0,
+      "rework_cycles": 1
+    }
   },
-  "Lucas Ferreira": {
-    "authored_prs": [
-      965
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Nurul Hakim": {
-    "authored_prs": [
-      966
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Santiago Ferreira": {
-    "authored_prs": [],
-    "ci_red_merges": 0,
-    "must_fix_caught": 1,
-    "must_fix_received": 0,
-    "prs_merged": 0,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Weronika Zielinska": {
-    "authored_prs": [
-      972,
-      967
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 1,
-    "prs_merged": 2,
-    "review_false_positives": 0,
-    "rework_cycles": 1
-  }
-},
   "wave_24_completed_at": "2026-07-18T00:00:00Z",
   "wave_24_stg_promotion": "success",
   "wave_24_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/29309875152",
@@ -90,134 +255,244 @@
   "wave_23_phase": 8,
   "wave_23_phase_ordinal": 1,
   "wave_23_scope_reconciled_at": "2026-07-02T04:47:05Z",
-  "wave_23_repos_in_scope": ["noorinalabs-main","noorinalabs-data-acquisition","noorinalabs-isnad-graph","noorinalabs-deploy"],
+  "wave_23_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-data-acquisition",
+    "noorinalabs-isnad-graph",
+    "noorinalabs-deploy"
+  ],
   "wave_23_meta_issue": 919,
-  "wave_23_scope": {"theme":"Data-quality closeout (#723) + promotion-path fix","phase":8,"tier_1_precursor":[{"id":"noorinalabs-deploy#521","ref":"deploy#521","implementer":"Lucas Ferreira","reviewer":"Weronika Zielinska","reviewer_2":"Nino Kavtaradze","priority":"bug","note":"promote.yml 403 enabler — merge first"}],"tier_2_core":[{"id":"noorinalabs-data-acquisition#258","ref":"da#258","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt","note":"integrated NER re-run; regenerate clean curated narrators"},{"id":"noorinalabs-data-acquisition#248","ref":"da#248","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug","note":"TRANSMITTED_TO transmission cycles"},{"id":"noorinalabs-data-acquisition#259","ref":"da#259","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt","note":"loader chain_integrity hang"},{"id":"noorinalabs-isnad-graph#1148","ref":"ig#1148","implementer":"Nneka Obi","reviewer":"Mei-Lin Chang","reviewer_2":"Jun-Seo Park","priority":"bug","note":"semantic search on prod (pgvector)"}],"closeout_targets":["noorinalabs-main#723","noorinalabs-main#916"],"td_intake":"target 1 (20% of 2 base); met by 3 in-core TD — no additional pull","declared_refs":["deploy#521","da#258","da#248","da#259","ig#1148"],"carry_forwards":[],"must_includes":[]},
+  "wave_23_scope": {
+    "theme": "Data-quality closeout (#723) + promotion-path fix",
+    "phase": 8,
+    "tier_1_precursor": [
+      {
+        "id": "noorinalabs-deploy#521",
+        "ref": "deploy#521",
+        "implementer": "Lucas Ferreira",
+        "reviewer": "Weronika Zielinska",
+        "reviewer_2": "Nino Kavtaradze",
+        "priority": "bug",
+        "note": "promote.yml 403 enabler — merge first"
+      }
+    ],
+    "tier_2_core": [
+      {
+        "id": "noorinalabs-data-acquisition#258",
+        "ref": "da#258",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt",
+        "note": "integrated NER re-run; regenerate clean curated narrators"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#248",
+        "ref": "da#248",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "bug",
+        "note": "TRANSMITTED_TO transmission cycles"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#259",
+        "ref": "da#259",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt",
+        "note": "loader chain_integrity hang"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1148",
+        "ref": "ig#1148",
+        "implementer": "Nneka Obi",
+        "reviewer": "Mei-Lin Chang",
+        "reviewer_2": "Jun-Seo Park",
+        "priority": "bug",
+        "note": "semantic search on prod (pgvector)"
+      }
+    ],
+    "closeout_targets": [
+      "noorinalabs-main#723",
+      "noorinalabs-main#916"
+    ],
+    "td_intake": "target 1 (20% of 2 base); met by 3 in-core TD — no additional pull",
+    "declared_refs": [
+      "deploy#521",
+      "da#258",
+      "da#248",
+      "da#259",
+      "ig#1148"
+    ],
+    "carry_forwards": [],
+    "must_includes": []
+  },
   "wave_23_merge_model": "wave-branch",
   "wave_23_active": false,
   "wave_23_kicked_off_at": "2026-07-02T04:50:36Z",
   "wave_23_branches": {
-  "branch": "deployments/phase-8/wave-23",
-  "created_at": "2026-07-02T04:50:36Z",
-  "repos": {
-    "noorinalabs-main": {
-      "sha": "b8e4e2883c6b8ba6d417c472768ec9078a866d54",
-      "status": "created"
-    },
-    "noorinalabs-data-acquisition": {
-      "sha": "f7598ef0c24a52fad1f037a6b458f3cbb825848b",
-      "status": "created"
-    },
-    "noorinalabs-isnad-graph": {
-      "sha": "5e76ebfd73b434dcc7f46f635e1db7342f1dcfd7",
-      "status": "created"
-    },
-    "noorinalabs-deploy": {
-      "sha": "e6bd90a01bf394a1be1ee4d85ab9aab436611621",
-      "status": "created"
+    "branch": "deployments/phase-8/wave-23",
+    "created_at": "2026-07-02T04:50:36Z",
+    "repos": {
+      "noorinalabs-main": {
+        "sha": "b8e4e2883c6b8ba6d417c472768ec9078a866d54",
+        "status": "created"
+      },
+      "noorinalabs-data-acquisition": {
+        "sha": "f7598ef0c24a52fad1f037a6b458f3cbb825848b",
+        "status": "created"
+      },
+      "noorinalabs-isnad-graph": {
+        "sha": "5e76ebfd73b434dcc7f46f635e1db7342f1dcfd7",
+        "status": "created"
+      },
+      "noorinalabs-deploy": {
+        "sha": "e6bd90a01bf394a1be1ee4d85ab9aab436611621",
+        "status": "created"
+      }
     }
-  }
-},
-  "wave_23_scope_reconciliation": {"deploy#521":"landed+closed (PR#522, actions:write)","da#258":"landed on wave-branch (PR#260); closes via PR#320","da#248":"landed (PR#264); closes via PR#320","da#259":"landed (PR#263); closes via PR#320","ig#1148":"landed (PR#1164); closes via PR#1167","closeout_main#723":"CLOSED prod-verified at stg parity","closeout_main#916":"parity logged","outcome":"scrubbed 150,187-narrator artifact loaded+verified stg AND prod; 0 declared refs dropped"},
-  "wave_23_carry_forward": ["da#319 (validation-harness multi-stmt cypher — filed this wave)", "da#318 (matn markup leak)", "da#317 (zero-degree tail matn pollution ~26% — non-blocking mc<=1 tail)", "da#313 (merge_log orphaned ids)", "da#309 (dedup missing-dep fail-loud)", "da#301/#300/#299/#296 (name-quality follow-ups)", "da#281/#280 (source-corpora research/backlog)", "ig#1166 (graph explorer deep-link)", "deploy#523 (semantic embedder parity — blocks ig#1148 full prod validation)"],
-  "wave_23_wave_branch_main_prs": {"noorinalabs-data-acquisition":320,"noorinalabs-isnad-graph":1167,"noorinalabs-deploy":524,"noorinalabs-main":"none (behind-by-8, memory commits direct to main)"},
+  },
+  "wave_23_scope_reconciliation": {
+    "deploy#521": "landed+closed (PR#522, actions:write)",
+    "da#258": "landed on wave-branch (PR#260); closes via PR#320",
+    "da#248": "landed (PR#264); closes via PR#320",
+    "da#259": "landed (PR#263); closes via PR#320",
+    "ig#1148": "landed (PR#1164); closes via PR#1167",
+    "closeout_main#723": "CLOSED prod-verified at stg parity",
+    "closeout_main#916": "parity logged",
+    "outcome": "scrubbed 150,187-narrator artifact loaded+verified stg AND prod; 0 declared refs dropped"
+  },
+  "wave_23_carry_forward": [
+    "da#319 (validation-harness multi-stmt cypher — filed this wave)",
+    "da#318 (matn markup leak)",
+    "da#317 (zero-degree tail matn pollution ~26% — non-blocking mc<=1 tail)",
+    "da#313 (merge_log orphaned ids)",
+    "da#309 (dedup missing-dep fail-loud)",
+    "da#301/#300/#299/#296 (name-quality follow-ups)",
+    "da#281/#280 (source-corpora research/backlog)",
+    "ig#1166 (graph explorer deep-link)",
+    "deploy#523 (semantic embedder parity — blocks ig#1148 full prod validation)"
+  ],
+  "wave_23_wave_branch_main_prs": {
+    "noorinalabs-data-acquisition": 320,
+    "noorinalabs-isnad-graph": 1167,
+    "noorinalabs-deploy": 524,
+    "noorinalabs-main": "none (behind-by-8, memory commits direct to main)"
+  },
   "wave_23_final_pr_count": 20,
   "wave_23_changes_requested_cycles": 2,
   "wave_23_top_concentration_pct": 30,
   "wave_23_trust_signals": {
-  "Alejandra Reyes-Fuentes": {
-    "authored_prs": [
-      307,
-      305,
-      302,
-      285,
-      275,
-      263
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 6,
-    "review_false_positives": 0,
-    "rework_cycles": 0
+    "Alejandra Reyes-Fuentes": {
+      "authored_prs": [
+        307,
+        305,
+        302,
+        285,
+        275,
+        263
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 6,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Ivana Horvat": {
+      "authored_prs": [
+        322,
+        312,
+        310,
+        277,
+        269
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 2,
+      "prs_merged": 5,
+      "review_false_positives": 0,
+      "rework_cycles": 2
+    },
+    "Kavitha Sundaramurthy": {
+      "authored_prs": [
+        260
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 1,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Lucas Ferreira": {
+      "authored_prs": [
+        522
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Nikolaos Papadopoulos": {
+      "authored_prs": [
+        286,
+        284,
+        274,
+        267,
+        264
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 1,
+      "must_fix_received": 0,
+      "prs_merged": 5,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Nneka Obi": {
+      "authored_prs": [
+        1164
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Oyunbileg Batbayar": {
+      "authored_prs": [
+        294
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    }
   },
-  "Ivana Horvat": {
-    "authored_prs": [
-      322,
-      312,
-      310,
-      277,
-      269
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 2,
-    "prs_merged": 5,
-    "review_false_positives": 0,
-    "rework_cycles": 2
-  },
-  "Kavitha Sundaramurthy": {
-    "authored_prs": [
-      260
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 1,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Lucas Ferreira": {
-    "authored_prs": [
-      522
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Nikolaos Papadopoulos": {
-    "authored_prs": [
-      286,
-      284,
-      274,
-      267,
-      264
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 1,
-    "must_fix_received": 0,
-    "prs_merged": 5,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Nneka Obi": {
-    "authored_prs": [
-      1164
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Oyunbileg Batbayar": {
-    "authored_prs": [
-      294
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  }
-},
   "wave_23_notes": "da#321 RESOLVED 2026-07-06 (PR#322, root cause = dedup cross_sect derived from corpus-name allowlist vs parallels.py authoritative sect column; run_all compose let the semantic row clobber the deterministic True; model loads locally, absent in CI = the split). Fix aligns dedup on the sect column; also fixes latent prod mislabel (fawaz cross-edition + 4 non-allowlisted corpora). da#317 memory commit rebased+pushed clean (8236087), pre-push suite green. Wave 23 fully closed.",
-  "wave_23_counter_corrections": [{"counter": "final_pr_count", "claimed": 19, "actual": 20, "reason": "PR#322 (da#321 fix) merged post-wrapup 2026-07-06, wave-23 labeled, resolves wave-23 tech-debt", "corrected_at": "2026-07-06"}, {"counter": "top_concentration_pct", "claimed": 32, "actual": 30, "reason": "Alejandra 6/20 after PR#322 added (was 6/19=32%)", "corrected_at": "2026-07-06"}],
+  "wave_23_counter_corrections": [
+    {
+      "counter": "final_pr_count",
+      "claimed": 19,
+      "actual": 20,
+      "reason": "PR#322 (da#321 fix) merged post-wrapup 2026-07-06, wave-23 labeled, resolves wave-23 tech-debt",
+      "corrected_at": "2026-07-06"
+    },
+    {
+      "counter": "top_concentration_pct",
+      "claimed": 32,
+      "actual": 30,
+      "reason": "Alejandra 6/20 after PR#322 added (was 6/19=32%)",
+      "corrected_at": "2026-07-06"
+    }
+  ],
   "wave_23_annunaki_attack_ran_at": "2026-07-06T01:30:00Z",
   "wave_23_memory_audit_ran_at": "2026-07-06T01:30:00Z",
   "wave_23_wrapped_up_at": "2026-07-05T00:00:00Z",
@@ -225,198 +500,446 @@
   "wave_22_phase": 7,
   "wave_22_phase_ordinal": 5,
   "wave_22_scope_reconciled_at": "2026-06-30T23:45:00Z",
-  "wave_22_repos_in_scope": ["noorinalabs-main","noorinalabs-isnad-graph","noorinalabs-deploy","noorinalabs-data-acquisition"],
-  "wave_22_scope": {"theme":"Timeline/dating APIs + #723 closeout + auth + heavy TD floor","phase":7,"phase_ordinal":5,"is_final_wave_of_phase":true,"tier_1_date_apis":[{"id":"noorinalabs-isnad-graph#1041","ref":"isnad-graph#1041","implementer":"Jun-Seo Park","reviewer":"Anya Kowalczyk","reviewer_2":"Mateo Salazar","priority":"feature"},{"id":"noorinalabs-isnad-graph#1042","ref":"isnad-graph#1042","implementer":"Mateo Salazar","reviewer":"Anya Kowalczyk","reviewer_2":"Nneka Obi","priority":"feature"},{"id":"noorinalabs-isnad-graph#1043","ref":"isnad-graph#1043","implementer":"Nneka Obi","reviewer":"Ravi Wickramasinghe","reviewer_2":"Anya Kowalczyk","priority":"feature"}],"tier_2_auth":[{"id":"noorinalabs-isnad-graph#1111","ref":"isnad-graph#1111","implementer":"Ingrid Lindqvist","reviewer":"Idris Yusuf","reviewer_2":"Jun-Seo Park","priority":"bug"}],"tier_3_closeout":[{"id":"noorinalabs-main#723","ref":"main#723","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"closeout"},{"id":"noorinalabs-main#673","ref":"main#673","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"meta"}],"tier_4_tech_debt":[{"id":"noorinalabs-main#897","ref":"main#897","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-main#901","ref":"main#901","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-main#902","ref":"main#902","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-deploy#498","ref":"deploy#498","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-deploy#500","ref":"deploy#500","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-deploy#506","ref":"deploy#506","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-deploy#507","ref":"deploy#507","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-deploy#513","ref":"deploy#513","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-isnad-graph#1104","ref":"isnad-graph#1104","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-isnad-graph#1139","ref":"isnad-graph#1139","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-isnad-graph#1146","ref":"isnad-graph#1146","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#239","ref":"data-acquisition#239","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#246","ref":"data-acquisition#246","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"tech-debt"}],"deliberately_not_in_w22":["data-acquisition#136","isnad-ingest-platform#119","main#775","data-acquisition#178","data-acquisition#139"],"base_feature_bug":4,"td_floor_20pct":1,"td_intake":"13/1 (final-wave floor-not-cap)","td_pool":15,"serves_criteria":["#4","#5","#6","verify #1-#3"],"criterion_7_streaming":"deferred -> Phase 8","tier_3b_prod_revalidation_findings":[{"id":"noorinalabs-isnad-graph#1147","ref":"isnad-graph#1147","implementer":"Mateo Salazar","reviewer":"Anya Kowalczyk","reviewer_2":"Marisol Vega-Cruz","priority":"bug","note":"search results hard-capped at 50 (stg+prod) — criterion #3"},{"id":"noorinalabs-isnad-graph#1148","ref":"isnad-graph#1148","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"bug","note":"semantic search fails on prod despite ig#1110 closure — criterion #3"},{"id":"noorinalabs-data-acquisition#253","ref":"data-acquisition#253","implementer":"Kavitha Sundaramurthy","reviewer":"Ivana Horvat","reviewer_2":"Alejandra Reyes-Fuentes","priority":"bug","note":"matn-as-narrator pollution persists on prod post-reload — criterion #1; BLOCKS #723 close-as-validated"},{"id":"noorinalabs-deploy#470","ref":"deploy#470","implementer":"Lucas Ferreira","reviewer":"Weronika Zielinska","reviewer_2":"Nino Kavtaradze","priority":"bug","note":"prod embed-service cutover + corpus re-embed — the true blocker for ig#1148 semantic search on prod (criterion #3); owner-gated prod deploy"}],"prod_revalidation_status":"FAILED — prod != stg; #723 cannot close as validated until ig#1147 (search cap), ig#1148/deploy#470 (semantic embeddings on prod), and da#253 (matn-as-narrator code gap) resolve (owner-reported+investigated 2026-06-30)"},
+  "wave_22_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-isnad-graph",
+    "noorinalabs-deploy",
+    "noorinalabs-data-acquisition"
+  ],
+  "wave_22_scope": {
+    "theme": "Timeline/dating APIs + #723 closeout + auth + heavy TD floor",
+    "phase": 7,
+    "phase_ordinal": 5,
+    "is_final_wave_of_phase": true,
+    "tier_1_date_apis": [
+      {
+        "id": "noorinalabs-isnad-graph#1041",
+        "ref": "isnad-graph#1041",
+        "implementer": "Jun-Seo Park",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Mateo Salazar",
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1042",
+        "ref": "isnad-graph#1042",
+        "implementer": "Mateo Salazar",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Nneka Obi",
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1043",
+        "ref": "isnad-graph#1043",
+        "implementer": "Nneka Obi",
+        "reviewer": "Ravi Wickramasinghe",
+        "reviewer_2": "Anya Kowalczyk",
+        "priority": "feature"
+      }
+    ],
+    "tier_2_auth": [
+      {
+        "id": "noorinalabs-isnad-graph#1111",
+        "ref": "isnad-graph#1111",
+        "implementer": "Ingrid Lindqvist",
+        "reviewer": "Idris Yusuf",
+        "reviewer_2": "Jun-Seo Park",
+        "priority": "bug"
+      }
+    ],
+    "tier_3_closeout": [
+      {
+        "id": "noorinalabs-main#723",
+        "ref": "main#723",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "closeout"
+      },
+      {
+        "id": "noorinalabs-main#673",
+        "ref": "main#673",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "meta"
+      }
+    ],
+    "tier_4_tech_debt": [
+      {
+        "id": "noorinalabs-main#897",
+        "ref": "main#897",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#901",
+        "ref": "main#901",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#902",
+        "ref": "main#902",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#498",
+        "ref": "deploy#498",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#500",
+        "ref": "deploy#500",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#506",
+        "ref": "deploy#506",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#507",
+        "ref": "deploy#507",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-deploy#513",
+        "ref": "deploy#513",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1104",
+        "ref": "isnad-graph#1104",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1139",
+        "ref": "isnad-graph#1139",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1146",
+        "ref": "isnad-graph#1146",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#239",
+        "ref": "data-acquisition#239",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#246",
+        "ref": "data-acquisition#246",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "tech-debt"
+      }
+    ],
+    "deliberately_not_in_w22": [
+      "data-acquisition#136",
+      "isnad-ingest-platform#119",
+      "main#775",
+      "data-acquisition#178",
+      "data-acquisition#139"
+    ],
+    "base_feature_bug": 4,
+    "td_floor_20pct": 1,
+    "td_intake": "13/1 (final-wave floor-not-cap)",
+    "td_pool": 15,
+    "serves_criteria": [
+      "#4",
+      "#5",
+      "#6",
+      "verify #1-#3"
+    ],
+    "criterion_7_streaming": "deferred -> Phase 8",
+    "tier_3b_prod_revalidation_findings": [
+      {
+        "id": "noorinalabs-isnad-graph#1147",
+        "ref": "isnad-graph#1147",
+        "implementer": "Mateo Salazar",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Marisol Vega-Cruz",
+        "priority": "bug",
+        "note": "search results hard-capped at 50 (stg+prod) — criterion #3"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1148",
+        "ref": "isnad-graph#1148",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "bug",
+        "note": "semantic search fails on prod despite ig#1110 closure — criterion #3"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#253",
+        "ref": "data-acquisition#253",
+        "implementer": "Kavitha Sundaramurthy",
+        "reviewer": "Ivana Horvat",
+        "reviewer_2": "Alejandra Reyes-Fuentes",
+        "priority": "bug",
+        "note": "matn-as-narrator pollution persists on prod post-reload — criterion #1; BLOCKS #723 close-as-validated"
+      },
+      {
+        "id": "noorinalabs-deploy#470",
+        "ref": "deploy#470",
+        "implementer": "Lucas Ferreira",
+        "reviewer": "Weronika Zielinska",
+        "reviewer_2": "Nino Kavtaradze",
+        "priority": "bug",
+        "note": "prod embed-service cutover + corpus re-embed — the true blocker for ig#1148 semantic search on prod (criterion #3); owner-gated prod deploy"
+      }
+    ],
+    "prod_revalidation_status": "FAILED — prod != stg; #723 cannot close as validated until ig#1147 (search cap), ig#1148/deploy#470 (semantic embeddings on prod), and da#253 (matn-as-narrator code gap) resolve (owner-reported+investigated 2026-06-30)"
+  },
   "wave_22_scope_reconciliation_note": "clean-slate wave (nothing pre-labeled wave-22; no must-includes; phase_7_carry_forwards all closed P7W1 framework). FINAL P7 wave: heavy TD floor=13 (floor-not-cap); da#136+ip#119 P8-coupled, left for /plan-phase 8. Theme re-confirmed post-reboot via /phase-review 7.",
   "wave_22_active": false,
   "wave_22_started_at": "2026-07-01T01:38:27Z",
   "wave_22_merge_model": "wave-branch",
-  "wave_22_branches": {"branch":"deployments/phase-7/wave-22","created_at":"2026-07-01T01:40:19Z","repos":{"noorinalabs-main":{"sha":"2df4fcdb7","status":"created"},"noorinalabs-isnad-graph":{"sha":"20e403488","status":"created"},"noorinalabs-deploy":{"sha":"9337ebcd5","status":"created"},"noorinalabs-data-acquisition":{"sha":"a217d06b7","status":"created"}}},
+  "wave_22_branches": {
+    "branch": "deployments/phase-7/wave-22",
+    "created_at": "2026-07-01T01:40:19Z",
+    "repos": {
+      "noorinalabs-main": {
+        "sha": "2df4fcdb7",
+        "status": "created"
+      },
+      "noorinalabs-isnad-graph": {
+        "sha": "20e403488",
+        "status": "created"
+      },
+      "noorinalabs-deploy": {
+        "sha": "9337ebcd5",
+        "status": "created"
+      },
+      "noorinalabs-data-acquisition": {
+        "sha": "a217d06b7",
+        "status": "created"
+      }
+    }
+  },
   "wave_22_kicked_off_at": "2026-07-01T01:40:19Z",
   "wave_22_final_pr_count": 22,
   "wave_22_changes_requested_cycles": 1,
   "wave_22_top_concentration_pct": 14,
   "wave_22_trust_signals": {
-  "Aino Virtanen": {
-    "authored_prs": [
-      910
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
+    "Aino Virtanen": {
+      "authored_prs": [
+        910
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Aisha Idrissi": {
+      "authored_prs": [
+        517,
+        515
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 2,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Alejandra Reyes-Fuentes": {
+      "authored_prs": [],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 0,
+      "review_false_positives": 1,
+      "rework_cycles": 0
+    },
+    "Bereket Tadesse": {
+      "authored_prs": [],
+      "ci_red_merges": 0,
+      "must_fix_caught": 1,
+      "must_fix_received": 0,
+      "prs_merged": 0,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Farhan Malik": {
+      "authored_prs": [
+        1162
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Ingrid Lindqvist": {
+      "authored_prs": [
+        1160,
+        1152
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 1,
+      "prs_merged": 2,
+      "review_false_positives": 0,
+      "rework_cycles": 1
+    },
+    "Jun-Seo Park": {
+      "authored_prs": [
+        1161,
+        1156
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 2,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Kavitha Sundaramurthy": {
+      "authored_prs": [
+        255,
+        254
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 2,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Lucas Ferreira": {
+      "authored_prs": [
+        519,
+        516,
+        514
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 1,
+      "prs_merged": 3,
+      "review_false_positives": 0,
+      "rework_cycles": 1
+    },
+    "Marisol Vega-Cruz": {
+      "authored_prs": [],
+      "ci_red_merges": 0,
+      "must_fix_caught": 1,
+      "must_fix_received": 0,
+      "prs_merged": 0,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Mateo Salazar": {
+      "authored_prs": [
+        1159,
+        1154,
+        1149
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 1,
+      "prs_merged": 3,
+      "review_false_positives": 0,
+      "rework_cycles": 1
+    },
+    "Nikolaos Papadopoulos": {
+      "authored_prs": [
+        256
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Nino Kavtaradze": {
+      "authored_prs": [
+        518
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Nneka Obi": {
+      "authored_prs": [
+        1158,
+        1153
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 1,
+      "must_fix_received": 0,
+      "prs_merged": 2,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Santiago Ferreira": {
+      "authored_prs": [
+        913
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Wanjiku Mwangi": {
+      "authored_prs": [
+        912
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    }
   },
-  "Aisha Idrissi": {
-    "authored_prs": [
-      517,
-      515
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 2,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Alejandra Reyes-Fuentes": {
-    "authored_prs": [],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 0,
-    "review_false_positives": 1,
-    "rework_cycles": 0
-  },
-  "Bereket Tadesse": {
-    "authored_prs": [],
-    "ci_red_merges": 0,
-    "must_fix_caught": 1,
-    "must_fix_received": 0,
-    "prs_merged": 0,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Farhan Malik": {
-    "authored_prs": [
-      1162
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Ingrid Lindqvist": {
-    "authored_prs": [
-      1160,
-      1152
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 1,
-    "prs_merged": 2,
-    "review_false_positives": 0,
-    "rework_cycles": 1
-  },
-  "Jun-Seo Park": {
-    "authored_prs": [
-      1161,
-      1156
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 2,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Kavitha Sundaramurthy": {
-    "authored_prs": [
-      255,
-      254
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 2,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Lucas Ferreira": {
-    "authored_prs": [
-      519,
-      516,
-      514
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 1,
-    "prs_merged": 3,
-    "review_false_positives": 0,
-    "rework_cycles": 1
-  },
-  "Marisol Vega-Cruz": {
-    "authored_prs": [],
-    "ci_red_merges": 0,
-    "must_fix_caught": 1,
-    "must_fix_received": 0,
-    "prs_merged": 0,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Mateo Salazar": {
-    "authored_prs": [
-      1159,
-      1154,
-      1149
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 1,
-    "prs_merged": 3,
-    "review_false_positives": 0,
-    "rework_cycles": 1
-  },
-  "Nikolaos Papadopoulos": {
-    "authored_prs": [
-      256
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Nino Kavtaradze": {
-    "authored_prs": [
-      518
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Nneka Obi": {
-    "authored_prs": [
-      1158,
-      1153
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 1,
-    "must_fix_received": 0,
-    "prs_merged": 2,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Santiago Ferreira": {
-    "authored_prs": [
-      913
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Wanjiku Mwangi": {
-    "authored_prs": [
-      912
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  }
-},
   "wave_22_completed_at": "2026-07-01T21:11:48Z",
   "wave_22_annunaki_attack_ran_at": "2026-07-02T01:39:53Z",
   "wave_22_memory_audit_ran_at": "2026-07-02T01:39:53Z",
@@ -424,23 +947,240 @@
   "wave_21_phase": 7,
   "wave_21_phase_ordinal": 4,
   "wave_21_scope_reconciled_at": "2026-06-26T17:09:35Z",
-  "wave_21_repos_in_scope": ["noorinalabs-main","noorinalabs-data-acquisition","noorinalabs-isnad-graph"],
-  "wave_21_scope": {"theme":"Narrator dating + prod re-validation","phase":7,"phase_ordinal":4,"tracking_meta":["noorinalabs-main#673","noorinalabs-main#723"],"sizing_decision":"foundation-split (owner 2026-06-26): da date-foundation + ig#1039 loader this wave; ig#1041/1042/1043 APIs deferred to W22 (depend on ig#1039 loaded dates)","tier_1_narrator_foundation":[{"id":"noorinalabs-data-acquisition#161","ref":"da#161","implementer":"Alejandra Reyes-Fuentes","reviewer":"Kavitha Sundaramurthy","reviewer_2":"Nikolaos Papadopoulos","priority":"feature"},{"id":"noorinalabs-data-acquisition#162","ref":"da#162","implementer":"Kavitha Sundaramurthy","reviewer":"Ivana Horvat","reviewer_2":"Alejandra Reyes-Fuentes","priority":"feature"},{"id":"noorinalabs-data-acquisition#163","ref":"da#163","implementer":"Nikolaos Papadopoulos","reviewer":"Oyunbileg Batbayar","reviewer_2":"Kwesi Boateng","priority":"feature"},{"id":"noorinalabs-data-acquisition#164","ref":"da#164","implementer":"Ivana Horvat","reviewer":"Alejandra Reyes-Fuentes","reviewer_2":"Nikolaos Papadopoulos","priority":"feature"},{"id":"noorinalabs-data-acquisition#165","ref":"da#165","implementer":"Alejandra Reyes-Fuentes","reviewer":"Kavitha Sundaramurthy","reviewer_2":"Jean-Claude Habimana","priority":"feature"},{"id":"noorinalabs-data-acquisition#166","ref":"da#166","implementer":"Nikolaos Papadopoulos","reviewer":"Ivana Horvat","reviewer_2":"Oyunbileg Batbayar","priority":"feature"},{"id":"noorinalabs-data-acquisition#228","ref":"da#228","implementer":"Kavitha Sundaramurthy","reviewer":"Nikolaos Papadopoulos","reviewer_2":"Kwesi Boateng","priority":"feature"},{"id":"noorinalabs-isnad-graph#1039","ref":"ig#1039","implementer":"Jun-Seo Park","reviewer":"Mateo Salazar","reviewer_2":"Aisling Brennan","priority":"feature"}],"tier_2_prod_revalidation":[{"id":"noorinalabs-main#723","ref":"main#723","implementer":null,"reviewer":null,"reviewer_2":null,"priority":"ops","note":"owner-run prod re-validation: run sanadset/dedup/chain pipeline on prod, verify criteria #1-#4, close on confirmation"}],"tier_3_tech_debt":[{"id":"noorinalabs-data-acquisition#139","ref":"da#139","implementer":"Ivana Horvat","reviewer":"Alejandra Reyes-Fuentes","reviewer_2":"Oyunbileg Batbayar","priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#229","ref":"da#229","implementer":"Kavitha Sundaramurthy","reviewer":"Nikolaos Papadopoulos","reviewer_2":"Jean-Claude Habimana","priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#230","ref":"da#230","implementer":"Alejandra Reyes-Fuentes","reviewer":"Kavitha Sundaramurthy","reviewer_2":"Kwesi Boateng","priority":"tech-debt"}],"deliberately_not_in_w21":["ig#1041 (GET /timeline/narrators) -> W22: needs ig#1039 loaded dates","ig#1042 (GET /hadith/{id}/dating) -> W22: needs ig#1039 loaded dates","ig#1043 (tabaqa graph layering) -> W22: needs ig#1039 loaded dates","ip#119 (grade parity) -> later: separate from narrator theme"],"td_intake":"3/2 (target ceil(0.20*8)=2; owner pulled 3 theme-coherent da data-quality items)","td_pool":20,"concentration":"top implementer 3/11 = 27% (Alejandra / Kavitha tied) — below 60%; da-heavy (10/11) is narrator-theme-fit"},
+  "wave_21_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-data-acquisition",
+    "noorinalabs-isnad-graph"
+  ],
+  "wave_21_scope": {
+    "theme": "Narrator dating + prod re-validation",
+    "phase": 7,
+    "phase_ordinal": 4,
+    "tracking_meta": [
+      "noorinalabs-main#673",
+      "noorinalabs-main#723"
+    ],
+    "sizing_decision": "foundation-split (owner 2026-06-26): da date-foundation + ig#1039 loader this wave; ig#1041/1042/1043 APIs deferred to W22 (depend on ig#1039 loaded dates)",
+    "tier_1_narrator_foundation": [
+      {
+        "id": "noorinalabs-data-acquisition#161",
+        "ref": "da#161",
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Kavitha Sundaramurthy",
+        "reviewer_2": "Nikolaos Papadopoulos",
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#162",
+        "ref": "da#162",
+        "implementer": "Kavitha Sundaramurthy",
+        "reviewer": "Ivana Horvat",
+        "reviewer_2": "Alejandra Reyes-Fuentes",
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#163",
+        "ref": "da#163",
+        "implementer": "Nikolaos Papadopoulos",
+        "reviewer": "Oyunbileg Batbayar",
+        "reviewer_2": "Kwesi Boateng",
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#164",
+        "ref": "da#164",
+        "implementer": "Ivana Horvat",
+        "reviewer": "Alejandra Reyes-Fuentes",
+        "reviewer_2": "Nikolaos Papadopoulos",
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#165",
+        "ref": "da#165",
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Kavitha Sundaramurthy",
+        "reviewer_2": "Jean-Claude Habimana",
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#166",
+        "ref": "da#166",
+        "implementer": "Nikolaos Papadopoulos",
+        "reviewer": "Ivana Horvat",
+        "reviewer_2": "Oyunbileg Batbayar",
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#228",
+        "ref": "da#228",
+        "implementer": "Kavitha Sundaramurthy",
+        "reviewer": "Nikolaos Papadopoulos",
+        "reviewer_2": "Kwesi Boateng",
+        "priority": "feature"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1039",
+        "ref": "ig#1039",
+        "implementer": "Jun-Seo Park",
+        "reviewer": "Mateo Salazar",
+        "reviewer_2": "Aisling Brennan",
+        "priority": "feature"
+      }
+    ],
+    "tier_2_prod_revalidation": [
+      {
+        "id": "noorinalabs-main#723",
+        "ref": "main#723",
+        "implementer": null,
+        "reviewer": null,
+        "reviewer_2": null,
+        "priority": "ops",
+        "note": "owner-run prod re-validation: run sanadset/dedup/chain pipeline on prod, verify criteria #1-#4, close on confirmation"
+      }
+    ],
+    "tier_3_tech_debt": [
+      {
+        "id": "noorinalabs-data-acquisition#139",
+        "ref": "da#139",
+        "implementer": "Ivana Horvat",
+        "reviewer": "Alejandra Reyes-Fuentes",
+        "reviewer_2": "Oyunbileg Batbayar",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#229",
+        "ref": "da#229",
+        "implementer": "Kavitha Sundaramurthy",
+        "reviewer": "Nikolaos Papadopoulos",
+        "reviewer_2": "Jean-Claude Habimana",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#230",
+        "ref": "da#230",
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Kavitha Sundaramurthy",
+        "reviewer_2": "Kwesi Boateng",
+        "priority": "tech-debt"
+      }
+    ],
+    "deliberately_not_in_w21": [
+      "ig#1041 (GET /timeline/narrators) -> W22: needs ig#1039 loaded dates",
+      "ig#1042 (GET /hadith/{id}/dating) -> W22: needs ig#1039 loaded dates",
+      "ig#1043 (tabaqa graph layering) -> W22: needs ig#1039 loaded dates",
+      "ip#119 (grade parity) -> later: separate from narrator theme"
+    ],
+    "td_intake": "3/2 (target ceil(0.20*8)=2; owner pulled 3 theme-coherent da data-quality items)",
+    "td_pool": 20,
+    "concentration": "top implementer 3/11 = 27% (Alejandra / Kavitha tied) — below 60%; da-heavy (10/11) is narrator-theme-fit"
+  },
   "wave_21_scope_reconciliation_note": "clean-slate wave (no drift, no must-includes); foundation-split sizing (owner 2026-06-26); TD intake 3 theme-coherent da items; ig#1041/1042/1043 deferred to W22",
   "wave_21_active": false,
   "wave_21_started_at": "2026-06-26T19:46:21Z",
   "wave_21_kicked_off_at": "2026-06-26T19:51:31Z",
   "wave_21_merge_model": "wave-branch",
-  "wave_21_branches": {"branch":"deployments/phase-7/wave-21","created_at":"2026-06-26T19:51:31Z","repos":{"noorinalabs-main":{"sha":"a8310766b3f89c54596b8303aa916c5012f4114c","status":"created"},"noorinalabs-data-acquisition":{"sha":"3390b746ec99a5b49ee035cce6d26f47f76fe424","status":"created"},"noorinalabs-isnad-graph":{"sha":"7a3c4cf1fc4eef8b6d2d1768e532fef917fce8a3","status":"created"}}},
+  "wave_21_branches": {
+    "branch": "deployments/phase-7/wave-21",
+    "created_at": "2026-06-26T19:51:31Z",
+    "repos": {
+      "noorinalabs-main": {
+        "sha": "a8310766b3f89c54596b8303aa916c5012f4114c",
+        "status": "created"
+      },
+      "noorinalabs-data-acquisition": {
+        "sha": "3390b746ec99a5b49ee035cce6d26f47f76fe424",
+        "status": "created"
+      },
+      "noorinalabs-isnad-graph": {
+        "sha": "7a3c4cf1fc4eef8b6d2d1768e532fef917fce8a3",
+        "status": "created"
+      }
+    }
+  },
   "wave_21_final_pr_count": 11,
   "wave_21_changes_requested_cycles": 4,
   "wave_21_top_concentration_pct": 27,
-  "wave_21_counter_corrections": [{"key":"changes_requested_cycles","claimed":4,"recomputed":0,"corrected_at":"2026-06-26T22:25:03Z","reason":"all 4 CR verdicts (da#161,da#228,ig#1039,da#165) edited-in-place to Approved per verdict-amendment rule; recomputation reads current Approved state. Wrapup-time historic=4 stands."}],
+  "wave_21_counter_corrections": [
+    {
+      "key": "changes_requested_cycles",
+      "claimed": 4,
+      "recomputed": 0,
+      "corrected_at": "2026-06-26T22:25:03Z",
+      "reason": "all 4 CR verdicts (da#161,da#228,ig#1039,da#165) edited-in-place to Approved per verdict-amendment rule; recomputation reads current Approved state. Wrapup-time historic=4 stands."
+    }
+  ],
   "wave_21_wrap_completed_at": "2026-06-26T22:25:03Z",
-  "wave_21_repos_descoped_during_wave": {"noorinalabs-main":"ops/meta only — main#723 is owner-run prod re-validation (no code PR); 0 PRs to wave branch by design"},
+  "wave_21_repos_descoped_during_wave": {
+    "noorinalabs-main": "ops/meta only — main#723 is owner-run prod re-validation (no code PR); 0 PRs to wave branch by design"
+  },
   "wave_21_implementer_substitutions": [],
-  "wave_21_merged_to_main": {"noorinalabs-data-acquisition":"9cc3969dc3","noorinalabs-isnad-graph":"e4c0c542d5"},
-  "wave_21_trust_signals": {"Alejandra Reyes-Fuentes":{"authored_prs":[241,236,233],"ci_red_merges":0,"must_fix_caught":0,"must_fix_received":0,"prs_merged":3,"review_false_positives":0,"rework_cycles":0},"Ivana Horvat":{"authored_prs":[240,238],"ci_red_merges":0,"must_fix_caught":0,"must_fix_received":0,"prs_merged":2,"review_false_positives":0,"rework_cycles":0},"Jun-Seo Park":{"authored_prs":[1137],"ci_red_merges":0,"must_fix_caught":0,"must_fix_received":0,"prs_merged":1,"review_false_positives":0,"rework_cycles":0},"Kavitha Sundaramurthy":{"authored_prs":[237,235,234],"ci_red_merges":0,"must_fix_caught":0,"must_fix_received":0,"prs_merged":3,"review_false_positives":0,"rework_cycles":0},"Nikolaos Papadopoulos":{"authored_prs":[242,232],"ci_red_merges":0,"must_fix_caught":0,"must_fix_received":0,"prs_merged":2,"review_false_positives":0,"rework_cycles":0}},
+  "wave_21_merged_to_main": {
+    "noorinalabs-data-acquisition": "9cc3969dc3",
+    "noorinalabs-isnad-graph": "e4c0c542d5"
+  },
+  "wave_21_trust_signals": {
+    "Alejandra Reyes-Fuentes": {
+      "authored_prs": [
+        241,
+        236,
+        233
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 3,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Ivana Horvat": {
+      "authored_prs": [
+        240,
+        238
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 2,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Jun-Seo Park": {
+      "authored_prs": [
+        1137
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Kavitha Sundaramurthy": {
+      "authored_prs": [
+        237,
+        235,
+        234
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 3,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Nikolaos Papadopoulos": {
+      "authored_prs": [
+        242,
+        232
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 2,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    }
+  },
   "wave_21_annunaki_attack_ran_at": "2026-06-27T00:47:13Z",
   "wave_21_memory_audit_ran_at": "2026-06-27T00:47:13Z",
   "wave_21_retro_completed_at": "2026-06-27T00:47:13Z",
@@ -448,75 +1188,178 @@
   "wave_20_phase": 7,
   "wave_20_phase_ordinal": 3,
   "wave_20_scope_reconciled_at": "2026-06-26T02:10:00Z",
-  "wave_20_repos_in_scope": ["noorinalabs-main", "noorinalabs-data-acquisition", "noorinalabs-isnad-graph"],
-  "wave_20_scope": {"theme":"Graph integrity + dedup + chains","phase":7,"phase_ordinal":3,"serves_criteria":[1,2,4],"tier_1_sanadset_pathb":[{"id":"noorinalabs-data-acquisition#219","ref":"da#219","implementer":"Alejandra Reyes-Fuentes","reviewer":"Kavitha Sundaramurthy","reviewer_2":"Nikolaos Papadopoulos","priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#220","ref":"da#220","implementer":"Kavitha Sundaramurthy","reviewer":"Alejandra Reyes-Fuentes","reviewer_2":"Ivana Horvat","priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#221","ref":"da#221","implementer":"Ivana Horvat","reviewer":"Nikolaos Papadopoulos","reviewer_2":"Oyunbileg Batbayar","priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#202","ref":"da#202","implementer":"Alejandra Reyes-Fuentes","reviewer":"Kavitha Sundaramurthy","reviewer_2":"Jean-Claude Habimana","priority":"bug","role":"parent-integration-verify","sequence":"after B1/B2/B3 + load re-run"}],"tier_2_integrity_chains":[{"id":"noorinalabs-data-acquisition#153","ref":"da#153","implementer":"Nikolaos Papadopoulos","reviewer":"Kwesi Boateng","reviewer_2":"Oyunbileg Batbayar","priority":"bug"},{"id":"noorinalabs-isnad-graph#1040","ref":"ig#1040","implementer":"Jun-Seo Park","reviewer":"Mateo Salazar","reviewer_2":"Aisling Brennan","priority":"feature"}],"deliberately_not_in_w20":["narrator dating (da#161-166, ig#1039-1043, main#673) -> W4","auth deep-link ig#1111, streaming main#667, local ML env main#775 -> W5","Bihar corpus da#136/178/139 (gated) -> W5"],"sequencing_note":"Path B order: da#219(B1 collections) -> da#220(B2 dedup) -> da#221(B3 re-seg, parallel); da#202 parent integration-verify LAST. da#153 + ig#1040 parallel. main#723 = meta tracking (dedup work is da#220).","concentration_note":"5/7 issues in data-acquisition (sanadset Path B is inherently there) - theme-fit, not fragility.","tracking_meta":[{"id":"noorinalabs-main#723","ref":"main#723","role":"meta-tracking","note":"prod data-quality umbrella; no own noorinalabs-main code; dedup finding #4 == da#220; labeled wave-20 for board visibility only, no per-issue kickoff comment"}]},
+  "wave_20_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-data-acquisition",
+    "noorinalabs-isnad-graph"
+  ],
+  "wave_20_scope": {
+    "theme": "Graph integrity + dedup + chains",
+    "phase": 7,
+    "phase_ordinal": 3,
+    "serves_criteria": [
+      1,
+      2,
+      4
+    ],
+    "tier_1_sanadset_pathb": [
+      {
+        "id": "noorinalabs-data-acquisition#219",
+        "ref": "da#219",
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Kavitha Sundaramurthy",
+        "reviewer_2": "Nikolaos Papadopoulos",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#220",
+        "ref": "da#220",
+        "implementer": "Kavitha Sundaramurthy",
+        "reviewer": "Alejandra Reyes-Fuentes",
+        "reviewer_2": "Ivana Horvat",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#221",
+        "ref": "da#221",
+        "implementer": "Ivana Horvat",
+        "reviewer": "Nikolaos Papadopoulos",
+        "reviewer_2": "Oyunbileg Batbayar",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#202",
+        "ref": "da#202",
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Kavitha Sundaramurthy",
+        "reviewer_2": "Jean-Claude Habimana",
+        "priority": "bug",
+        "role": "parent-integration-verify",
+        "sequence": "after B1/B2/B3 + load re-run"
+      }
+    ],
+    "tier_2_integrity_chains": [
+      {
+        "id": "noorinalabs-data-acquisition#153",
+        "ref": "da#153",
+        "implementer": "Nikolaos Papadopoulos",
+        "reviewer": "Kwesi Boateng",
+        "reviewer_2": "Oyunbileg Batbayar",
+        "priority": "bug"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1040",
+        "ref": "ig#1040",
+        "implementer": "Jun-Seo Park",
+        "reviewer": "Mateo Salazar",
+        "reviewer_2": "Aisling Brennan",
+        "priority": "feature"
+      }
+    ],
+    "deliberately_not_in_w20": [
+      "narrator dating (da#161-166, ig#1039-1043, main#673) -> W4",
+      "auth deep-link ig#1111, streaming main#667, local ML env main#775 -> W5",
+      "Bihar corpus da#136/178/139 (gated) -> W5"
+    ],
+    "sequencing_note": "Path B order: da#219(B1 collections) -> da#220(B2 dedup) -> da#221(B3 re-seg, parallel); da#202 parent integration-verify LAST. da#153 + ig#1040 parallel. main#723 = meta tracking (dedup work is da#220).",
+    "concentration_note": "5/7 issues in data-acquisition (sanadset Path B is inherently there) - theme-fit, not fragility.",
+    "tracking_meta": [
+      {
+        "id": "noorinalabs-main#723",
+        "ref": "main#723",
+        "role": "meta-tracking",
+        "note": "prod data-quality umbrella; no own noorinalabs-main code; dedup finding #4 == da#220; labeled wave-20 for board visibility only, no per-issue kickoff comment"
+      }
+    ]
+  },
   "wave_20_scope_reconciliation_note": "7 issues; carry-forwards all W18-framework (closed, stale); no memory must-includes; labels+slate deferred to /wave-kickoff to avoid premature unassigned kickoff comments.",
   "wave_20_active": false,
   "wave_20_kicked_off_at": "2026-06-26T03:13:14Z",
   "wave_20_merge_model": "wave-branch",
-  "wave_20_branches": {"branch":"deployments/phase-7/wave-20","created_at":"2026-06-26T03:12:00Z","repos":{"noorinalabs-main":{"sha":"c645e00ce09865973649142f29b339bd1982db4f","status":"created"},"noorinalabs-data-acquisition":{"sha":"ac4f313fb45ef52ca0d8a466ba26ec75847734b2","status":"created"},"noorinalabs-isnad-graph":{"sha":"5118a845ff028471587a85b608ad88a15eb0aa37","status":"created"}}},
+  "wave_20_branches": {
+    "branch": "deployments/phase-7/wave-20",
+    "created_at": "2026-06-26T03:12:00Z",
+    "repos": {
+      "noorinalabs-main": {
+        "sha": "c645e00ce09865973649142f29b339bd1982db4f",
+        "status": "created"
+      },
+      "noorinalabs-data-acquisition": {
+        "sha": "ac4f313fb45ef52ca0d8a466ba26ec75847734b2",
+        "status": "created"
+      },
+      "noorinalabs-isnad-graph": {
+        "sha": "5118a845ff028471587a85b608ad88a15eb0aa37",
+        "status": "created"
+      }
+    }
+  },
   "wave_20_final_pr_count": 6,
   "wave_20_changes_requested_cycles": 0,
   "wave_20_top_concentration_pct": 33,
   "wave_20_trust_signals": {
-  "Alejandra Reyes-Fuentes": {
-    "authored_prs": [
-      227,
-      224
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 2,
-    "review_false_positives": 0,
-    "rework_cycles": 0
+    "Alejandra Reyes-Fuentes": {
+      "authored_prs": [
+        227,
+        224
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 2,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Ivana Horvat": {
+      "authored_prs": [
+        226
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Jun-Seo Park": {
+      "authored_prs": [
+        1135
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Kavitha Sundaramurthy": {
+      "authored_prs": [
+        225
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Nikolaos Papadopoulos": {
+      "authored_prs": [
+        223
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    }
   },
-  "Ivana Horvat": {
-    "authored_prs": [
-      226
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
+  "wave_20_scope_drop_reconciliation": {
+    "noorinalabs-main": "meta-only (benign): wave meta-issue #899 + prod-data-quality tracking #723 live here; no code surface this wave (Path B in data-acquisition, /validate/chains in isnad-graph). wave→main merge is a no-op.",
+    "data-acquisition": "5 PRs (#223,#224,#225,#226,#227)",
+    "isnad-graph": "1 PR (#1135)"
   },
-  "Jun-Seo Park": {
-    "authored_prs": [
-      1135
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Kavitha Sundaramurthy": {
-    "authored_prs": [
-      225
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Nikolaos Papadopoulos": {
-    "authored_prs": [
-      223
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  }
-},
-  "wave_20_scope_drop_reconciliation": {"noorinalabs-main":"meta-only (benign): wave meta-issue #899 + prod-data-quality tracking #723 live here; no code surface this wave (Path B in data-acquisition, /validate/chains in isnad-graph). wave→main merge is a no-op.","data-acquisition":"5 PRs (#223,#224,#225,#226,#227)","isnad-graph":"1 PR (#1135)"},
   "wave_20_implementer_substitutions": [],
   "wave_20_stg_promotion": "success",
   "wave_20_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/28249097497",
@@ -534,7 +1377,96 @@
     "noorinalabs-data-acquisition",
     "noorinalabs-isnad-graph"
   ],
-  "wave_19_scope": {"theme":"Prod data-quality root cause — sanadset orphan resolution, search repair, composition semantics","phase":7,"serves_criteria":[1,2,3],"sanadset_ab_decision":"in-wave owner pick (Path A purge vs Path B parse) after da#202 investigation; purge owner-run only","tier_1_core":[{"id":"noorinalabs-data-acquisition#202","ref":"da#202","implementer":"Alejandra Reyes-Fuentes","reviewer":"Oyunbileg Batbayar","reviewer_2":"Nikolaos Papadopoulos","priority":"bug","note":"sanadset investigate→A/B→execute"},{"id":"noorinalabs-isnad-graph#1110","ref":"ig#1110","implementer":"Nneka Obi","reviewer":"Anya Kowalczyk","reviewer_2":"Jun-Seo Park","priority":"bug","note":"search broken (full-text + semantic 500s)"}],"tier_2_coupled":[{"id":"noorinalabs-data-acquisition#196","ref":"da#196","implementer":"Kavitha Sundaramurthy","reviewer":"Nikolaos Papadopoulos","reviewer_2":"Oyunbileg Batbayar","priority":"tech-debt","note":"composition.py None-value; couples to fix; TD floor"}],"tier_3_tech_debt":[{"id":"noorinalabs-main#885","ref":"main#885","implementer":"Aino Virtanen","reviewer":"Weronika Zielinska","reviewer_2":"Lucas Ferreira","priority":"tech-debt","note":"wave_seq double-alloc"},{"id":"noorinalabs-main#886","ref":"main#886","implementer":"Lucas Ferreira","reviewer":"Aino Virtanen","reviewer_2":"Nino Kavtaradze","priority":"tech-debt","note":"validate_pr_review over-broad"},{"id":"noorinalabs-main#887","ref":"main#887","implementer":"Weronika Zielinska","reviewer":"Aino Virtanen","reviewer_2":"Nurul Hakim","priority":"tech-debt","note":"generics-splitter / tree-sitter"},{"id":"noorinalabs-main#888","ref":"main#888","implementer":"Nurul Hakim","reviewer":"Weronika Zielinska","reviewer_2":"Lucas Ferreira","priority":"tech-debt","note":"board-audit pagination/scalability fix (first:500 cap + per-item drift scan + loop hang)"}],"td_intake":"5 of floor-1 (owner pulled 4 framework TD above the +20% floor)","deliberately_not_in_w19":["da#153 graph-integrity sweep (W3)","dedup/parallels pipeline (W3)","chain segmentation STUDIED_UNDER (W3)","narrator dating da#161-166 / ig#1039-1043 / main#673 (W4)","ig#1111 auth deep-link (W5)","main#667 Kafka streaming (W5)","main#775 local ML env (W5)"],"reconciled_at":"2026-06-25T18:57:43Z"},
+  "wave_19_scope": {
+    "theme": "Prod data-quality root cause — sanadset orphan resolution, search repair, composition semantics",
+    "phase": 7,
+    "serves_criteria": [
+      1,
+      2,
+      3
+    ],
+    "sanadset_ab_decision": "in-wave owner pick (Path A purge vs Path B parse) after da#202 investigation; purge owner-run only",
+    "tier_1_core": [
+      {
+        "id": "noorinalabs-data-acquisition#202",
+        "ref": "da#202",
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Oyunbileg Batbayar",
+        "reviewer_2": "Nikolaos Papadopoulos",
+        "priority": "bug",
+        "note": "sanadset investigate→A/B→execute"
+      },
+      {
+        "id": "noorinalabs-isnad-graph#1110",
+        "ref": "ig#1110",
+        "implementer": "Nneka Obi",
+        "reviewer": "Anya Kowalczyk",
+        "reviewer_2": "Jun-Seo Park",
+        "priority": "bug",
+        "note": "search broken (full-text + semantic 500s)"
+      }
+    ],
+    "tier_2_coupled": [
+      {
+        "id": "noorinalabs-data-acquisition#196",
+        "ref": "da#196",
+        "implementer": "Kavitha Sundaramurthy",
+        "reviewer": "Nikolaos Papadopoulos",
+        "reviewer_2": "Oyunbileg Batbayar",
+        "priority": "tech-debt",
+        "note": "composition.py None-value; couples to fix; TD floor"
+      }
+    ],
+    "tier_3_tech_debt": [
+      {
+        "id": "noorinalabs-main#885",
+        "ref": "main#885",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Weronika Zielinska",
+        "reviewer_2": "Lucas Ferreira",
+        "priority": "tech-debt",
+        "note": "wave_seq double-alloc"
+      },
+      {
+        "id": "noorinalabs-main#886",
+        "ref": "main#886",
+        "implementer": "Lucas Ferreira",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Nino Kavtaradze",
+        "priority": "tech-debt",
+        "note": "validate_pr_review over-broad"
+      },
+      {
+        "id": "noorinalabs-main#887",
+        "ref": "main#887",
+        "implementer": "Weronika Zielinska",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Nurul Hakim",
+        "priority": "tech-debt",
+        "note": "generics-splitter / tree-sitter"
+      },
+      {
+        "id": "noorinalabs-main#888",
+        "ref": "main#888",
+        "implementer": "Nurul Hakim",
+        "reviewer": "Weronika Zielinska",
+        "reviewer_2": "Lucas Ferreira",
+        "priority": "tech-debt",
+        "note": "board-audit pagination/scalability fix (first:500 cap + per-item drift scan + loop hang)"
+      }
+    ],
+    "td_intake": "5 of floor-1 (owner pulled 4 framework TD above the +20% floor)",
+    "deliberately_not_in_w19": [
+      "da#153 graph-integrity sweep (W3)",
+      "dedup/parallels pipeline (W3)",
+      "chain segmentation STUDIED_UNDER (W3)",
+      "narrator dating da#161-166 / ig#1039-1043 / main#673 (W4)",
+      "ig#1111 auth deep-link (W5)",
+      "main#667 Kafka streaming (W5)",
+      "main#775 local ML env (W5)"
+    ],
+    "reconciled_at": "2026-06-25T18:57:43Z"
+  },
   "wave_18_phase": 7,
   "wave_18_phase_ordinal": 1,
   "wave_18_scope_reconciled_at": "2026-06-25T03:19:45Z",
@@ -4851,93 +5783,110 @@
   "wave_19_active": false,
   "wave_19_started_at": "2026-06-25T19:11:55Z",
   "wave_19_ordinal": 2,
-  "wave_19_branches": {"branch":"deployments/phase-7/wave-19","created_at":"2026-06-25T21:26:04Z","repos":{"noorinalabs-main":{"sha":"7c5d0378046b996fc770f9931475272f38e15fe4","status":"created"},"noorinalabs-data-acquisition":{"sha":"210bc2ff3e0006fc5bf48e3aaebb6ca83a82e009","status":"created"},"noorinalabs-isnad-graph":{"sha":"e264e6176dfa3618ab140a9bcfa7a0899f9d6391","status":"created"}}},
+  "wave_19_branches": {
+    "branch": "deployments/phase-7/wave-19",
+    "created_at": "2026-06-25T21:26:04Z",
+    "repos": {
+      "noorinalabs-main": {
+        "sha": "7c5d0378046b996fc770f9931475272f38e15fe4",
+        "status": "created"
+      },
+      "noorinalabs-data-acquisition": {
+        "sha": "210bc2ff3e0006fc5bf48e3aaebb6ca83a82e009",
+        "status": "created"
+      },
+      "noorinalabs-isnad-graph": {
+        "sha": "e264e6176dfa3618ab140a9bcfa7a0899f9d6391",
+        "status": "created"
+      }
+    }
+  },
   "wave_19_merge_model": "wave-branch",
   "wave_19_kicked_off_at": "2026-06-25T21:26:04Z",
   "wave_19_final_pr_count": 9,
   "wave_19_changes_requested_cycles": 0,
   "wave_19_top_concentration_pct": 33,
   "wave_19_trust_signals": {
-  "Aino Virtanen": {
-    "authored_prs": [
-      896,
-      895,
-      890
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 3,
-    "review_false_positives": 0,
-    "rework_cycles": 0
+    "Aino Virtanen": {
+      "authored_prs": [
+        896,
+        895,
+        890
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 3,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Alejandra Reyes-Fuentes": {
+      "authored_prs": [
+        218
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Kavitha Sundaramurthy": {
+      "authored_prs": [
+        217
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Lucas Ferreira": {
+      "authored_prs": [
+        891
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Nneka Obi": {
+      "authored_prs": [
+        1133
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Nurul Hakim": {
+      "authored_prs": [
+        892
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Weronika Zielinska": {
+      "authored_prs": [
+        889
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    }
   },
-  "Alejandra Reyes-Fuentes": {
-    "authored_prs": [
-      218
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Kavitha Sundaramurthy": {
-    "authored_prs": [
-      217
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Lucas Ferreira": {
-    "authored_prs": [
-      891
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Nneka Obi": {
-    "authored_prs": [
-      1133
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Nurul Hakim": {
-    "authored_prs": [
-      892
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Weronika Zielinska": {
-    "authored_prs": [
-      889
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  }
-},
   "wave_19_stg_promotion": "success",
   "wave_19_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/28207680166",
   "wave_19_wrapup_completed_at": "2026-06-25T00:00:00Z",
