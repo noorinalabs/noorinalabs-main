@@ -1,10 +1,20 @@
 ---
 name: project_narrator_chokepoints_enrich
-description: main#928 from-parse artifact (2026-07-12-bd133e6, 107,951 canonical) LOADED+PRUNED+ENRICHED on stg AND **PROD** at parity; **deploy#610 CLOSED 2026-07-17 (4 owner-gated prod writes all green)**. Remaining: deploy#611 prod over_merged flag op (needs code change to lift the main#928 env=prod hold, then 2 gated dispatches). Two [!-~] locale bugs fixed to unblock the prune (deploy#600/#602).
+description: main#928 from-parse artifact (2026-07-12-bd133e6, 107,951 canonical) LOADED+PRUNED+ENRICHED on stg AND **PROD** at parity; **PROD CUTOVER FULLY COMPLETE 2026-07-17: deploy#610 (4 owner-gated graph writes) + deploy#611 (prod over_merged flag on the 8 hubs) both CLOSED — all owner-approved at the production GH-env gate, no self-approval.** Two [!-~] locale bugs fixed to unblock the prune (deploy#600/#602).
 metadata:
   type: project
 ---
 
+> ## 2026-07-17 — ✅✅ PROD CUTOVER FULLY COMPLETE — deploy#611 flag op DONE (both prod dispatches owner-approved). The whole main#928 program is closed out on prod.
+>
+> **deploy#611 — prod `over_merged` flag op COMPLETE.** PR **#695** (merged `main@fd376d3`; 2 approvals Nino Kavtaradze/security + Weronika Zielinska/platform, 16/16 CI green) lifted the wave-level `env=prod` hard-refuse in `graph-flag-over-merged.yml` (comments + one guard block; no job logic / builder / Cypher SET changed). Both owner-gated prod dispatches approved by the owner at the `production` GH-env gate (I did NOT self-approve):
+> - **Dry-run** run 29620306538: `FLAG_RESULT outcome=dry-run configured=8 matched=8 flagged=0`, present-in-graph 8, no write.
+> - **Real** run 29622401758: `FLAG_RESULT outcome=flagged configured=8 matched=8 flagged=8`.
+> - **Bidirectional verify:** FORWARD (in-workflow post-verify) 8/8 configured ids carry `over_merged=true`; REVERSE (independent read-only prod query, ssh deploy@noorinalabs-prod → cypher-shell) global `count(over_merged=true)`=**8**, the 8 ids **set-equal** to `scripts/over_merged_narrator_ids.txt` (no extras/misses); PARITY total `count(Narrator)`=**107,951** unchanged (boolean prop only, nothing added/removed). Evidence on deploy#611 comment 5009257373.
+> - Gate integrity: `production` manual approval (owner clicked both), 8/8-ids-present real-run refuse, `dry_run` default true — all held; no `--no-verify`. The 8 flagged nodes are the curated over-merged chimeras (first two = top-2 betweenness hubs from #610 enrich — the over-merge is *what* inflates their centrality; self-consistency).
+>
+> **The main#928 choke-point program is now fully live on prod:** honest leaderboard, 8 over-merged hubs annotated, betweenness disclosed-in-place. Remaining non-blockers (NOT cutover-gating): ig#1185 (per-hadith chain endpoint over_merged coverage), the parked ~7.5h resolve re-run (makes per-node `over_merge_note` durable via reload), da#446 (attested-death pollution), da#443 (external-evidence split).
+>
 > ## 2026-07-17 — ✅ PROD GRAPH CUTOVER COMPLETE (deploy#610 CLOSED). All 4 production GH-env gates owner-approved in sequence; prod graph now = 107,951 canonical narrators, enriched, at stg parity.
 >
 > - **Gate #1 promote** — run 29556420420 approved; minted `prod-latest` loader tag digest-identical to stg-latest `1cd414e` (retag rolls nothing).
