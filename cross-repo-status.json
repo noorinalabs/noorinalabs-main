@@ -74,6 +74,8 @@
   "wave_24_stg_promotion": "success",
   "wave_24_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/29309875152",
   "wave_24_wrapup_issue_reconciliation": "8 resolved+closed, 39 deferred-TD carry-forward (wave-24 label removed; see wave_24_carry_forward), 0 open wave-24 issues remain",
+  "wave_24_annunaki_attack_ran_at": "2026-07-18T21:00:00Z",
+  "wave_24_memory_audit_ran_at": "2026-07-18T21:00:00Z",
   "wave_23_phase": 8,
   "wave_23_phase_ordinal": 1,
   "wave_23_scope_reconciled_at": "2026-07-02T04:47:05Z",
