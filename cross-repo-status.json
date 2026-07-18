@@ -6,9 +6,74 @@
   "wave_24_repos_in_scope": ["noorinalabs-main","noorinalabs-data-acquisition","noorinalabs-deploy"],
   "wave_24_scope": {"theme":"#928 defect sweep + re-run from parse","shape":"fix-then-rerun: land every launch-gate (parse/resolve) defect merged, then re-run the pipeline from parse and verify at stg before prod","meta_issue":"main#928","launch_gate":"lives in main#928 body (dynamic); OPEN parse rows da#368,da#369->da#365,da#371,da#386; OPEN resolve rows da#389,da#391,da#313,da#360+da#378,da#361,da#282; downstream(lands while resolve runs) da#352,da#373,da#370,da#364,da#382","streaming_deferred":"wave-24's ORIGINAL streaming theme (main#922 meta / main#667) deferred to a later wave per owner 2026-07-10; this retheme repurposes the wave-24 identity that the 56 sweep issues were already labeled with","deliberately_not_in_wave":["da#366 (splitter-dependent, waits for validated splitter)","halimbahae (same, splitter-dependent)"]},
   "wave_24_streaming_deferred": {"original_meta":"main#922","p5_end_state":"main#667","deferred_at":"2026-07-10","note":"streaming pipeline verify+close moves to a future wave; no open child issues existed under it"},
-  "wave_24_active": true,
+  "wave_24_active": false,
   "wave_24_merge_model": "wave-branch",
   "wave_24_kicked_off_at": "2026-07-05T00:00:00Z",
+  "wave_24_carry_forward": {"classified_at":"2026-07-18","disposition":"deferred tech-debt backlog — NOT relocated into scoped Phase 9 waves 25/26/27 (which were planned without these per main#977); future waves draw ~20%/wave per TD-intake policy","audit":"wave-24 wrapup issue reconciliation (8 resolved+closed, 39 deferred)","count":39,"items":{"noorinalabs-main":[968,957,956,954,953,952,949,947,943,942,941,940,937,927],"noorinalabs-data-acquisition":[422,421,396,395,394,393,392,390,388,381,377],"noorinalabs-deploy":[664,663,598,593,592,586,578,576,575,566,561,555,550,530]}},
+  "wave_24_final_pr_count": 6,
+  "wave_24_changes_requested_cycles": 1,
+  "wave_24_top_concentration_pct": 33,
+  "wave_24_trust_signals": {
+  "Aino Virtanen": {
+    "authored_prs": [
+      969,
+      924
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 2,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Lucas Ferreira": {
+    "authored_prs": [
+      965
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Nurul Hakim": {
+    "authored_prs": [
+      966
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Santiago Ferreira": {
+    "authored_prs": [],
+    "ci_red_merges": 0,
+    "must_fix_caught": 1,
+    "must_fix_received": 0,
+    "prs_merged": 0,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Weronika Zielinska": {
+    "authored_prs": [
+      972,
+      967
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 1,
+    "prs_merged": 2,
+    "review_false_positives": 0,
+    "rework_cycles": 1
+  }
+},
+  "wave_24_completed_at": "2026-07-18T00:00:00Z",
+  "wave_24_stg_promotion": "success",
+  "wave_24_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/29309875152",
+  "wave_24_wrapup_issue_reconciliation": "8 resolved+closed, 39 deferred-TD carry-forward (wave-24 label removed; see wave_24_carry_forward), 0 open wave-24 issues remain",
   "wave_23_phase": 8,
   "wave_23_phase_ordinal": 1,
   "wave_23_scope_reconciled_at": "2026-07-02T04:47:05Z",
