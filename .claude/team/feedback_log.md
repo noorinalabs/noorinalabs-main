@@ -68,3 +68,47 @@ current phase (and its waves) only — newest entries are appended at the end.
 - **Annunaki-attack:** 109 genuine records; last-25 sampled = all session-local exploration command-failures (`cd`-prefix compounds from the prod window, `gh` probes, and correctly-logged hook *blocks* from the da#321 debugging). No wave-code defect or systemic pattern; no hook/skill/charter change warranted. Marker written. (See proposed change #2 re: pruning.)
 - **Memory-to-automation audit:** the session added `feedback_dual_detector_cross_sect_authority` (da) — a genuine debugging heuristic, but too fresh/niche to cross a promotion threshold this wave; kept as memory. No memory→hook/skill/charter candidate. Marker written.
 - **Promotion audit:** no memory/charter/skill crossed an auto/decide-tier threshold this wave.
+
+---
+
+## Retrospective: Phase 8 Wave 24 — 2026-07-18
+
+**Theme:** #928 defect sweep + graph re-run from `parse` + prod cutover. A long-running fix-then-rerun wave (kicked off 2026-07-05): fix every parse/resolve/load/deploy defect found en route to staging, then wipe-and-reload the graph from `parse` and promote to prod. Formally closed today after the cutover completed.
+
+### Team Performance (wave-shape table)
+
+| Metric | Value |
+|--------|-------|
+| PRs merged to wave-24 branch | **6** (main-repo housekeeping: #924/#965/#966/#967/#969/#972) |
+| Repos in scope | 3 (noorinalabs-main, data-acquisition, deploy) |
+| Substantive work | prod cutover (deploy#610/#611: promote→reload→prune→enrich + over_merged flag op, 8 hubs) + 56-issue defect sweep — **merged direct-to-main across da/deploy, outside the wave-branch window** |
+| Issues reconciled at wrapup | 47 open wave-24 → **8 resolved+closed**, **39 deferred-TD** carry-forward backlog |
+| CI health | 0 CI-red merges, 0 review false-positives on the wave-branch set |
+| Changes-requested cycles | 1 |
+| Top-implementer concentration | 2 PRs / 6 = **33%** (Aino), housekeeping window only |
+| Annunaki | 46 genuine (session-local) → 268 archived to `archive/wave-24.jsonl`, live log reset |
+| Promotion audit | 0 AUTO · 0 DECIDE · 206 KEPT · 24 SUPERSEDED |
+
+### Per-Engineer Assessments (mechanical — `trust_signals.py score 8 24`)
+
+Measurement window = the 6 main-wave-branch housekeeping PRs only (see trust_matrix caveat). Aino **+1** (2 clean process/charter PRs, absorbed at ceiling 5); Lucas/Nurul/Santiago/Weronika delta 0. The cutover/sweep contributors (da + deploy SREs) merged direct-to-main and are not in the measurable window — not re-scored, flagged rather than invented.
+
+### Top 3 Going Well
+1. **The multi-wave data-quality program reached prod.** The #928 re-run + cutover landed all four owner-gated prod graph writes green and the over_merged flag op (8 bare-name hubs, bidirectional-verified). The choke-point program (main#928) is fully live on prod.
+2. **Honest issue reconciliation at wrapup.** The 39-item deferred-TD tail was documented as a carry-forward backlog (`wave_24_carry_forward`) and NOT force-relabeled into the already-scoped Phase 9 waves — preserving the owner-approved Phase 9 plan (main#977) rather than corrupting it to make the board look clean.
+3. **Zero CI-red merges / zero review false-positives** on the wave-branch set; the local⇄CI parity gate held.
+
+### Top 3 Pain Points
+1. **The wave's real trust signal is unmeasurable from the wave branch.** Because the substantive engineering merged direct-to-main across da/deploy (neither had a wave-24 branch), `trust_signals score 8 24` sees only housekeeping PRs. A long fix-then-rerun wave with a wave-branch model declared but not used for the bulk of the work defeats the mechanical per-engineer scoring.
+2. **A 39-issue deferred-TD tail accumulated under one wave label** and was never triaged until this formal wrapup (the wave had merged its deliverables but was never closed — session-start Step 5b nudge). The tail sat on the active board for ~2 weeks.
+3. **`post_label_change_wave_field_sync` cannot parse multi-issue `gh issue edit` shapes** (loops / space-separated lists) — every bulk delabel this wrapup logged a benign `skip_parser_returned_empty` event. Labels were removed correctly, but the Wave-field auto-sync silently didn't fire for bulk ops.
+
+### Proposed Process Changes
+1. **Declare `direct-to-main` merge model for waves whose child-repo work will not use a wave branch** — Rationale: pain #1. Wave 24 declared `wave-branch` but da/deploy shipped direct-to-main with no wave branch; the mismatch is why the mechanical trust scoring is blind to the wave's real work. If the model matches reality, the reachability check and trust signals both measure the right set. (Aligns with the existing memory `feedback_stg_gate_before_prod` / one-merge-model-per-wave discipline.)
+2. **Wrapup a wave as soon as its deliverables merge, don't let the label linger** — Rationale: pain #2. The session-start Step 5b "merged-but-unwrapped" nudge fired but was only actioned two weeks later. Consider treating a persistent unwrapped-nudge as a soft gate at the next kickoff (already partially enforced by the kickoff Step 0a scope precondition, which is what caught this).
+
+### Sub-audits
+- **Board freshness:** wave-24 now has 0 open labeled issues after reconciliation; the 39 deferred are delabeled and recorded in `wave_24_carry_forward`.
+- **Annunaki-attack:** 46 genuine records, all benign session-local — correct hook blocks (`validate_review_comment_format`, `validate_commit_identity` catching this session's own `-F`/bare-principal attempts), a throwaway `python3 -c` module-path failure, and `post_label_change_wave_field_sync` parser-skip events from this session's bulk label ops. No wave-code defect; no automation warranted. Archived (268 records) + live log reset. Marker written.
+- **Memory-to-automation audit:** the corpus was just pruned this wave (#967/#944 consolidated the gotcha families; index at 95/132). No memory crossed a promotion threshold; the 8 rescued deploy backup/DR memories (committed d45e3ce this session) are fresh and repo-local. No memory→hook/skill/charter candidate. Marker written.
+- **Promotion audit:** 0 AUTO · 0 DECIDE · 206 KEPT · 24 SUPERSEDED. Nothing crossed a threshold. Log: `.claude/team/promotion_audit_log/wave-24.md`.

@@ -167,6 +167,41 @@ the headcount budget) — the same surfaced-decision posture the `headcount_budg
 
 ---
 
+## Phase 8 Wave 24 Trust Updates (2026-07-18) — #928 defect-sweep + graph re-run from `parse` + prod cutover (formal closeout)
+
+Mechanical scoring (`trust_signals.py score 8 24`): **6 PRs** merged to the `deployments/phase-8/wave-24` branch, all `noorinalabs-main` charter/memory/session-start housekeeping (#924/#965/#966/#967/#969/#972), top-concentration **33%**, **0 CI-red merges**, **0** `review_false_positives`, 1 changes-requested cycle. Helper-proposed deltas: Aino **+1**; all others delta 0.
+
+**Measurement-window caveat (honest limitation).** Wave 24's *substantive* engineering — the 56-issue defect sweep and the four owner-gated prod graph writes (promote→reload→prune→enrich) + the over_merged flag op — merged **direct-to-main across data-acquisition and deploy** (neither had a wave-24 branch) and in earlier cycles, so it is **outside this mechanical wave-branch window**. The deltas below therefore reflect only the housekeeping cohort that landed on the main wave branch; the cutover/sweep contributors (da + deploy SREs) are not re-scored here because their work is not in the measurable window. This is a known artifact of a long-running fix-then-rerun wave, not a judgment that their work was absent.
+
+### Org-Level Team
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Aino Virtanen | 5 | 5 | prs_merged=2 (#969 charter section-pack re-shelve, #924 dominant-class carry-forward + annunaki archive-reset process), 0 CI-red, 0 must-fix received, 0 false-positives. Helper +1 absorbed at ceiling. |
+| Santiago Ferreira | hold | hold | prs_merged=0, must_fix_caught=1 (a review catch on the wave-branch set). Single catch < +1 threshold (needs ≥2); held. |
+
+### Child-Repo Teams (deploy)
+
+| Rated | Old | New | Reason |
+|-------|-----|-----|--------|
+| Lucas Ferreira (deploy) | hold | hold | prs_merged=1 (#965 per-phase feedback/trust archival), 0 CI-red, 0 must-fix. Baseline — held. |
+| Nurul Hakim (deploy) | hold | hold | prs_merged=1 (#966 session-start slimming / red-sweep schedule / count-only annunaki), 0 CI-red, 0 must-fix. Baseline — held. |
+| Weronika Zielinska (deploy) | hold | hold | prs_merged=2, must_fix_received=1 on the wave-branch set — single minor author-side signal, delta 0. |
+
+### Done Well / Needs Improvement (Phase 8 Wave 24) — evidence-anchored, bare "None" banned
+
+| Member | Done Well (with evidence) | Gap (metric, or explicit "clean: numbers") |
+|--------|---------------------------|--------------------------------------------|
+| **Aino Virtanen** | 2 clean process/charter PRs (section-pack re-shelve #969; dominant-class carry-forward + annunaki archive-reset #924) that tightened the wave lifecycle | clean: prs_merged=2, must_fix_received=0, ci_red_merges=0, false_positives=0 |
+| **Lucas Ferreira / Nurul Hakim** | 1 clean housekeeping PR each (#965 per-phase archival / #966 session-start slimming) reducing static-context cost | clean: 0 CI-red, 0 must-fix each |
+| **Weronika Zielinska** | contributed to the context-efficiency track | 1 must-fix received on the wave-branch set — minor, single author-side signal |
+| **Santiago Ferreira** | a review catch (must_fix_caught=1) on the wave-branch housekeeping set | clean: prs_merged=0, ci_red_merges=0, false_positives=0, must_fix_caught=1 |
+| **Orchestrator (Nadia)** | closed out a long-running fix-then-rerun wave: verified the prod cutover complete (deploy#610/#611), reconciled 47 open wave-24 issues (8 resolved+closed, 39 deferred-TD documented as backlog rather than force-relabeled into the scoped Phase 9 waves), archived 268 benign annunaki records | the wave's *substantive* trust signal is unmeasurable from the wave branch (cutover/sweep merged direct-to-main) — flagged as a caveat above rather than papered over with invented deltas |
+
+**Fire/hire:** none. Retirement trigger (`trust_signals.retirement_trigger`) fired for no engineer.
+
+**Concentration note:** 33% top by implementer (Aino 2/6) on the housekeeping window — well below the 60% fragility line, and not representative of the full wave (which was distributed across da/deploy direct-to-main). No redistribution action.
+
 ## Phase 8 Wave 23 Trust Updates (2026-07-06) — #723 data-quality closeout landed on prod + promotion-path fix
 
 Mechanical scoring (`trust_signals.py score 8 23`): **20 PRs** (19 at wrapup + PR#322 da#321 fix merged post-wrapup; counter-corrected 19→20), 4 repos in scope, top-concentration **30%** (Alejandra Reyes-Fuentes 6/20 — well below the 60% fragility line), **0 CI-red merges**, **0** `review_false_positives`, 2 changes-requested cycles. Helper-proposed deltas: Alejandra **+1**, Nikolaos **+1**; all others delta 0. Distribution discipline: the single ceiling move goes to **Alejandra** — she was the wave's clear top relative performer (6 clean data-quality PRs) and recovers the −1 she took in W22 for a review false-positive. Nikolaos's +1 is absorbed at ceiling.
