@@ -43,6 +43,12 @@ If the genuine-error count is 0 (file empty/missing, or it contains only benign 
 cp "$REPO_ROOT/.claude/annunaki/errors.jsonl" \
    "$REPO_ROOT/.claude/annunaki/errors.jsonl.bak.$(date +%Y%m%d%H%M%S)"
 
+# Retention cap (audit #1021): keep only the most recent 5 rotation backups on disk.
+# The .bak.* files are gitignored, so this is local-disk hygiene only — without a cap
+# they accumulate forever (the annunaki dir had grown to ~6 MB). Prune the oldest.
+ls -1t "$REPO_ROOT"/.claude/annunaki/errors.jsonl.bak.* 2>/dev/null \
+  | tail -n +6 | while IFS= read -r old; do rm -f "$old"; done
+
 # Write deduplicated version (done in the analysis step below)
 ```
 
