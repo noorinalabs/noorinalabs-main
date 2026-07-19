@@ -29,6 +29,9 @@ if str(_HOOKS_DIR) not in sys.path:
 _BASH_HOOKS = [
     "validate_commit_identity",
     "block_no_verify",
+    # Route a symbol-shaped rg/grep to the structural ontology BEFORE the
+    # block_bare_grep backstop, so a symbol search is answered inline (#1017).
+    "smart_grep_ontology",
     "block_bare_grep",
     "block_git_config",
     "block_gh_pr_review",
