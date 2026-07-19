@@ -86,6 +86,9 @@ ontology/structural/
 # Annunaki rotation backups — created by /annunaki-attack Step 1 before clearing
 # errors.jsonl. Historical-only; safe to age out locally, not for tracking.
 .claude/annunaki/errors.jsonl.bak.*
+# Per-wave cold archive — grep-able on disk but not git-tracked (audit #1021)
+.claude/annunaki/archive/
+
 
 # Annunaki benign-trace stream (#625) — high-churn, machine-generated forensic
 # dispatch/diagnostic traces split out of errors.jsonl so /annunaki stops
