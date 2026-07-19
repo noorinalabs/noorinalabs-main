@@ -74,17 +74,30 @@ def _find_org_dir() -> Path:
 
 
 def _load_roster_names(roster_dir: Path) -> set[str]:
-    """Parse `**Name:** Foo Bar` lines from every .md file in roster_dir."""
+    """Parse member names from every .md card in roster_dir.
+
+    Handles BOTH roster card templates (union of matches, so a mixed-format
+    roster dir mid-transition resolves every card, #1010):
+
+      OLD (verbose): ``- **Name:** Foo Bar``
+      NEW (slim):    ``# Foo Bar — Role`` (H1, em/en/hyphen separator)
+
+    The H1 separator regex requires whitespace on BOTH sides of the dash
+    (``\\s+[—–-]\\s+``) so a genuinely hyphenated name (``Jun-Seo Park``,
+    ``Vega-Cruz``) is never split at its internal hyphen — same guard the
+    sibling parsers use (roster_consistency_check.py, validate_pr_review.py).
+    """
     names: set[str] = set()
     if not roster_dir.is_dir():
         return names
     name_re = re.compile(r"\*\*Name:\*\*\s+(.+?)\s*$", re.MULTILINE)
+    h1_re = re.compile(r"^#\s+(.+?)\s+[—–-]\s+.+$", re.MULTILINE)
     for md_file in roster_dir.glob("*.md"):
         try:
             text = md_file.read_text()
         except OSError:
             continue
-        for match in name_re.finditer(text):
+        for match in list(name_re.finditer(text)) + list(h1_re.finditer(text)):
             name = match.group(1).strip()
             # Trim role/status parentheticals (`Foo Bar (Tech Lead)`).
             name = re.sub(r"\s*\(.*?\)\s*$", "", name)

@@ -52,6 +52,64 @@ def _build_fake_org_dir(tmp: Path) -> Path:
     return tmp
 
 
+def _write_slim_roster_card(roster_dir: Path, role_slug: str, name: str) -> None:
+    """Mimic the NEW slim card shape (#1010): H1 `# <Name> — <Role>`, no
+    `**Name:**` field. Verbatim to the shipped template so the fixture can't
+    pass while the real cards fail (feedback_fixture_makes_guard_assertion_inert).
+    """
+    roster_dir.mkdir(parents=True, exist_ok=True)
+    (roster_dir / f"{role_slug}.md").write_text(
+        f"# {name} — Engineer\n\n"
+        "- **Level:** Senior · **Status:** Active\n"
+        f"- **Git:** {name} <parametrization+{name.replace(' ', '.')}@gmail.com>\n\n"
+        "**Style:** Terse.\n"
+    )
+
+
+class SlimCardFormatTests(unittest.TestCase):
+    """#1010: slim H1 cards (no `**Name:**` field) must still resolve.
+
+    Regression guard — the pre-#1010 parser only matched `**Name:**` and
+    silently extracted ZERO names from a slimmed roster dir, fail-closing
+    every name in that repo's matrix slot.
+    """
+
+    def test_slim_parent_and_child_names_resolve(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = Path(tmpdir)
+            _write_slim_roster_card(
+                org / ".claude" / "team" / "roster", "sql_aino", "Aino Virtanen"
+            )
+            # Hyphenated child name — the `\\s+[—–-]\\s+` separator must NOT
+            # split "Jun-Seo Park" at its internal hyphen.
+            _write_slim_roster_card(
+                org / "noorinalabs-isnad-graph" / ".claude" / "team" / "roster",
+                "tl_junseo",
+                "Jun-Seo Park",
+            )
+            matrix = {
+                "noorinalabs-isnad-graph": {
+                    "implementer": "Jun-Seo Park",
+                    "reviewer": "Aino Virtanen",  # parent-org-level, slim card
+                }
+            }
+            report = validate(matrix, org)
+            for f in report["noorinalabs-isnad-graph"]:
+                self.assertTrue(f["resolved"], f"{f['declared']} should resolve")
+
+    def test_mixed_format_roster_dir_resolves_both(self):
+        """A roster dir mid-transition (one slim card + one old card) resolves both."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = Path(tmpdir)
+            roster = org / ".claude" / "team" / "roster"
+            _write_slim_roster_card(roster, "sql_aino", "Aino Virtanen")
+            _write_roster_card(roster, "pd_nadia", "Nadia Khoury")  # old format
+            matrix = {"noorinalabs-main": {"a": "Aino Virtanen", "b": "Nadia Khoury"}}
+            report = validate(matrix, org)
+            for f in report["noorinalabs-main"]:
+                self.assertTrue(f["resolved"], f"{f['declared']} should resolve")
+
+
 class HappyPathTests(unittest.TestCase):
     """All declared names resolve to canonical roster entries."""
 
