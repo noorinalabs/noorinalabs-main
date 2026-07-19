@@ -250,3 +250,7 @@ voweled
 wirefilter
 langserver
 typecheck
+
+# --- wave-lifecycle skill (#1019): sibling dogfood repo + state-machine term ---
+botfarm
+keyspace
