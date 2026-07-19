@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/dispatcher.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/dispatcher.py",
             "timeout": 30
           }
         ]
@@ -16,12 +16,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/validate_wave_context.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/validate_wave_context.py",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/enforce_ontology_context.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/enforce_ontology_context.py",
             "timeout": 10
           }
         ]
@@ -31,12 +31,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/block_shutdown_without_retro.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/block_shutdown_without_retro.py",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/validate_edit_completion.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/validate_edit_completion.py",
             "timeout": 10
           }
         ]
@@ -46,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/validate_wave_audit.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/validate_wave_audit.py",
             "timeout": 30
           }
         ]
@@ -56,12 +56,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/enforce_librarian_consulted.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/enforce_librarian_consulted.py",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/validate_edit_completion.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/validate_edit_completion.py",
             "timeout": 10
           }
         ]
@@ -71,12 +71,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/enforce_librarian_consulted.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/enforce_librarian_consulted.py",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/validate_edit_completion.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/validate_edit_completion.py",
             "timeout": 10
           }
         ]
@@ -86,12 +86,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/enforce_librarian_consulted.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/enforce_librarian_consulted.py",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/validate_edit_completion.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/validate_edit_completion.py",
             "timeout": 10
           }
         ]
@@ -103,7 +103,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/post_dispatcher.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post_dispatcher.py",
             "timeout": 90
           }
         ]
@@ -113,7 +113,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/post_dispatcher.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post_dispatcher.py",
             "timeout": 30
           }
         ]
@@ -123,7 +123,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/post_dispatcher.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post_dispatcher.py",
             "timeout": 30
           }
         ]
@@ -133,7 +133,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/post_dispatcher.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post_dispatcher.py",
             "timeout": 30
           }
         ]
@@ -145,7 +145,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/session_start.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session_start.py",
             "timeout": 10
           }
         ]
@@ -155,7 +155,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/session_start.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session_start.py",
             "timeout": 10
           }
         ]
@@ -167,7 +167,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/parameterization/code/noorinalabs-main/.claude/hooks/session_handoff.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session_handoff.py",
             "timeout": 30
           }
         ]

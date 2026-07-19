@@ -27,7 +27,9 @@ mirroring `dispatcher.py`).
 Input Language:
   Fires on:      PostToolUse Bash | Edit | Write | NotebookEdit
   Matches:       any tool invocation whose `tool_name` is a key in
-                 `_REGISTRY` (Bash, Edit, Write, NotebookEdit)
+                 `_MATCHER_CFG_KEY` (Bash, Edit, Write, NotebookEdit); the
+                 ordered module list per matcher comes from the framework
+                 config (hooks.post_bash / post_file / post_notebook)
   Does NOT match: tool invocations whose matcher has no registered modules
   Flag pass-through: stdin JSON is read once and passed verbatim to each
                      registered module's `check()` function
@@ -50,6 +52,7 @@ _HOOKS_DIR = Path(__file__).resolve().parent
 if str(_HOOKS_DIR) not in sys.path:
     sys.path.insert(0, str(_HOOKS_DIR))
 
+from _framework_config import config  # noqa: E402
 from annunaki_log import log_posttooluse_dispatch  # noqa: E402
 
 # Per-check dispatch tracing (#425). When `POST_DISPATCHER_TRACE_ALL=1` is
@@ -62,33 +65,32 @@ from annunaki_log import log_posttooluse_dispatch  # noqa: E402
 # log doesn't drown in no-op entries.
 _TRACE_EVERY = os.environ.get("POST_DISPATCHER_TRACE_ALL", "").lower() in ("1", "true", "yes")
 
-# Edit and Write share the same module set today (every module that runs on
-# Edit also runs on Write). Defining it once keeps the two matcher entries
-# in lock-step.
-_EDIT_WRITE_MODULES = [
-    "ontology_tracker",
-    "suggest_generic_prompt",
-    "validate_edit_completion",
-]
-
-# Matcher → ordered list of hook-module import names.
-# Order matters: cheap/local checks first, network-calling checks last
+# Matcher → the framework-config ``hooks.<event>`` key whose ordered module list
+# runs for that tool. The lists themselves live in ``.claude/framework.config.json``
+# (shadowed by ``_framework_config._DEFAULTS`` for a config-less checkout), so
+# enabling/reordering a hook is a config edit rather than a code change. Order
+# within each list is preserved: cheap/local checks first, network-calling last
 # (mirroring `dispatcher.py`'s ordering convention).
-_REGISTRY: dict[str, list[str]] = {
-    "Bash": [
-        "annunaki_monitor",  # local: regex over stdout/stderr, JSONL append
-        "warn_pipe_mask_rc",  # local: flag rc-masking `git push|tail`/`gh pr merge|head` (#838)
-        "auto_sync_main",  # local: ff local main after a push/merge to origin/main (#713)
-        "auto_add_issue_to_board",  # network: runs `gh project item-add`
-        "post_wave_kickoff_comment",  # network: gh fetch + post comment
-        "post_label_change_wave_field_sync",  # network: GraphQL updateProjectV2ItemFieldValue
-    ],
-    "Edit": _EDIT_WRITE_MODULES,
-    "Write": _EDIT_WRITE_MODULES,
-    "NotebookEdit": [
-        "validate_edit_completion",  # PostToolUse sentinel write only
-    ],
+#
+# Edit and Write share ``hooks.post_file`` (every module that runs on Edit also
+# runs on Write). NotebookEdit keeps its own ``hooks.post_notebook`` list — it
+# runs ONLY the PostToolUse sentinel write (validate_edit_completion), NOT the
+# ontology/suggest modules — so it must not collapse into post_file.
+_MATCHER_CFG_KEY: dict[str, str] = {
+    "Bash": "hooks.post_bash",
+    "Edit": "hooks.post_file",
+    "Write": "hooks.post_file",
+    "NotebookEdit": "hooks.post_notebook",
 }
+
+
+def _modules_for(tool_name: str, input_data: dict | None = None) -> list[str]:
+    """Resolve the ordered hook-module list for ``tool_name`` from the framework
+    config. Returns ``[]`` for a tool with no registered matcher."""
+    cfg_key = _MATCHER_CFG_KEY.get(tool_name)
+    if cfg_key is None:
+        return []
+    return list(config(input_data).get(cfg_key, []))
 
 
 def main() -> None:
@@ -98,7 +100,7 @@ def main() -> None:
         sys.exit(0)
 
     tool_name = input_data.get("tool_name", "")
-    modules = _REGISTRY.get(tool_name)
+    modules = _modules_for(tool_name, input_data)
     if not modules:
         sys.exit(0)
 

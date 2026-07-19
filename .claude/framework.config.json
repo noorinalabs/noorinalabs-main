@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "scm": {
+    "provider": "github",
+    "default_branch": "main",
+    "allow_force": false
+  },
+  "branch": {
+    "feature": "{FirstInitial}.{LastName}/{issue}-{slug}",
+    "integration": "deployments/phase-{phase}/wave-{wave}"
+  },
+  "identity": {
+    "enforce": true,
+    "email_pattern": "parametrization+{First}.{Last}@gmail.com",
+    "roster_source": ".claude/team/roster.json",
+    "allow_emails": [
+      "parametrization@gmail.com"
+    ]
+  },
+  "shell": "zsh",
+  "hooks": {
+    "pre_bash": [
+      "validate_commit_identity",
+      "block_no_verify",
+      "smart_grep_ontology",
+      "block_bare_grep",
+      "block_git_config",
+      "block_gh_pr_review",
+      "block_stale_tmp_message_file",
+      "no_worktree_self_delete",
+      "validate_edit_completion",
+      "auto_set_env_test",
+      "validate_lockfile_paths",
+      "validate_labels",
+      "validate_wave_label_evidence",
+      "validate_review_comment_format",
+      "validate_pr_review",
+      "validate_pr_ci_status",
+      "validate_branch_freshness",
+      "validate_workflow_paths_coverage",
+      "validate_vps_host",
+      "warn_ghcr_image",
+      "warn_zsh_wordsplit",
+      "block_squash_wave_merge"
+    ],
+    "post_bash": [
+      "annunaki_monitor",
+      "warn_pipe_mask_rc",
+      "auto_sync_main",
+      "auto_add_issue_to_board",
+      "post_wave_kickoff_comment",
+      "post_label_change_wave_field_sync"
+    ],
+    "post_file": [
+      "ontology_tracker",
+      "suggest_generic_prompt",
+      "validate_edit_completion"
+    ],
+    "post_notebook": [
+      "validate_edit_completion"
+    ]
+  }
+}
