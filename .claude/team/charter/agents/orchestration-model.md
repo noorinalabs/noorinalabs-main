@@ -174,6 +174,47 @@ The harness provides a **single implicit team per orchestrator session** — the
 >
 > **Origin:** P5W1 retro Proposed Change #3, owner-adopted 2026-06-14 ("Both → file as P5 issues"). Reviewer-surfaced by Alejandra Reyes-Fuentes on da#148 (PR #150 added `grade_normalized` on the batch path only; the streaming mirror is tracked in da#153 #4). Promoted via #672.
 
+### Model-tier selection when spawning <!-- promotion-target: none -->
+
+Spawns are not free, and they are not all equally hard. Default every `Agent`
+spawn's `model` param **by task class** — reserve the Opus tier for the
+orchestrator's own role and the judgment calls that gate irreversible outcomes;
+push mechanical and read-only fan-out down to Haiku. Task-complexity routing is a
+reported 30–50% cost reduction at equal-or-better quality (token-efficiency
+audit #986, Part 6); running every subagent at the orchestrator's tier leaves
+that on the table.
+
+| Spawn class | Default tier |
+|---|---|
+| Orchestrator / Program-Director role itself + final merge-gate & cross-repo architecture judgment | **Opus** — never spawn a cheaper "orchestrator"; this is the tier that gates prod and irreversible calls |
+| Implementer — substantive code (feature/bugfix, non-trivial logic, tests that assert behavior) | **Sonnet** (the default implementer tier) |
+| Implementer — mechanical / bulk (lint-fix, label backfill, formatting, classification, grep-and-report, docs-touch) | **Haiku** |
+| Reviewer — charter-format correctness review | **Sonnet minimum — NOT Haiku.** P9W25 lesson: genuine engine-running reviews caught real defects a string-only pass would miss; a reviewer is a correctness judgment, not a lookup |
+| Explore / search fan-out (locate code, read-only sweeps) | **Haiku** or **Sonnet** |
+| Coordinator-class spawns (per-repo Manager, TPM, Release Coordinator, Standards Lead — non-PD planning/coordination) | **Sonnet** (step up to **Opus** for cross-repo or prod-gating planning — the orchestrator/PD row above) |
+| Deep-research / design panel / adversarial-verify | **Sonnet** (step up to **Opus** for the single hardest judgment stage) |
+
+**Asymmetric-risk rule — when uncertain, round UP a tier.** A hard task misrouted
+to Haiku fails *silently* (plausible-but-wrong output, not an error), whereas an
+easy task on Sonnet only wastes a little. The downside is one-sided, so bias
+upward on any spawn whose output gates a merge, a data write, or a prod change.
+
+**Set `model:` explicitly on every implementer/reviewer spawn** — do not rely on
+inherit (which silently carries the orchestrator's Opus tier onto mechanical
+work). *Why charter-tier and not a hook:* a `PreToolUse` hook already intercepts
+the orchestrator's own `Agent` spawn calls (`validate_wave_context.py` +
+`enforce_ontology_context.py`, matcher `Agent` in `.claude/settings.json`), so a
+spawn-time gate is technically available — this is **not** ruled out for lack of
+an actor to hook. The reason it stays charter-tier is that the *right* tier
+depends on the task, which a hook cannot reliably judge from the free-text prompt
+in real time: a hard-blocking classifier would false-positive into friction, and
+a stateless advisory would decay into un-actioned noise (the main#716/PR#722
+lesson). So the decision lives where it can be made with full context — the
+orchestrator applies this section at spawn time — backed by a **batched, stateful
+backstop**: if tier-drift appears, add a per-spawn tier line to the `/wave-retro`
+audit (the same stateless-advisory → batched-checkpoint shape as main#716), not a
+real-time hook (memory `feedback_generic_prompt_hook_advisory_decay`).
+
 ### Orchestrator checklist when spawning an implementer
 
 Every implementer spawn prompt MUST include, **in order**:
@@ -188,6 +229,7 @@ Every implementer spawn prompt MUST include, **in order**:
 8. **Reporting pattern** — who they report to (usually their manager) and when (draft open, CI green, blocker, merge).
 9. **/tmp file-race discipline:** When using `--body-file` with `gh issue/pr comment` or `git commit -F`, write the file to an issue#-keyed path (e.g., `/tmp/{issue#}-{purpose}.md`) IMMEDIATELY before the gh/git call — no other tool calls between the Write and the consuming Bash. Hook `block_stale_tmp_message_file` blocks files older than 30s. P3W6 surfaced 3 such blocks in spawned-agent gh-comment flows; this discipline prevents them.
 10. **Green-before-push CI parity** — the brief MUST instruct the agent to run the repo's **actual CI check-set over the full tree inside its worktree before opening the PR**, NOT to rely on commit/push hooks firing. A fresh `git worktree` has **no** pre-commit hooks installed, so "it committed clean" proves nothing about CI. Require: `pre-commit install && pre-commit install --hook-type pre-push && pre-commit run --all-files`, PLUS the bare CI commands the repo's `.github/workflows/` runs over the whole tree (e.g. `uv run ruff check .`, `uv run mypy <pkg>`, the cspell invocation, `pytest` / `npm test`). A PR may not open with a red check; a pre-existing red gate is surfaced to the orchestrator/owner, never merged through (per `pull-requests.md` § Full Local⇄CI Tooling Parity + No Force-Merging Failing Checks). Owner directive 2026-06-14 (`noorinalabs-main#684`).
+11. **Model tier** — set the spawn's `model:` param per § Model-tier selection when spawning: **Sonnet** for substantive code, **Haiku** for mechanical/bulk work; never leave it to inherit the orchestrator's Opus tier. When uncertain, round up.
 
 ### Orchestrator checklist when spawning a reviewer
 
@@ -252,6 +294,7 @@ Every reviewer-class spawn prompt MUST include, **in order**:
 8. **Pre-enumeration discipline** — `grep -c` per file then sum, never `| head -N` (per memory `feedback_no_head_in_surface_enumeration`).
 9. **Verdict literal-string requirements** — `RequestOrReplied: Approved` (or `ChangesRequested`), NOT `Reply`. `validate_pr_review` counts Approved-verdict comments only; Reply doesn't gate-count (per memory `feedback_pr_review_verdict_format`).
 10. **Reporting pattern** — who to report verdict + literal-strings-confirmation to (typically team-lead or the manager who requested the review).
+11. **Model tier** — set the reviewer spawn's `model:` param to **Sonnet minimum** per § Model-tier selection when spawning; a charter-format review is a correctness judgment, not a lookup, so it does NOT drop to Haiku.
 
 ### Origin
 
