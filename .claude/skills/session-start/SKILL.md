@@ -202,11 +202,23 @@ Read the current project state:
 # parent of --git-common-dir resolves the org root even from a worktree.
 REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
 [ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
-cat "$REPO_ROOT/cross-repo-status.json"
+# Read a COMPACT current-wave/phase projection, NOT the whole file. The status
+# file is a flat dict of ~500 keys accreted over every wave (>200KB / ~53K
+# tokens); `cat`-ing it whole was the single biggest guaranteed per-session token
+# cost (#987 — bigger than CLAUDE.md + MEMORY.md + this skill combined). The
+# digest keeps the lifecycle pointers + current/next-wave + current-phase keys +
+# open blockers (a few KB — ~96% smaller), dropping 24 waves of history. Falls back to `cat` only if
+# the helper is missing, matching the non-fatal stance of the other Step blocks.
+if [ -f "$REPO_ROOT/.claude/lib/wave_status.py" ]; then
+  python3 "$REPO_ROOT/.claude/lib/wave_status.py" digest --status "$REPO_ROOT/cross-repo-status.json" \
+    || cat "$REPO_ROOT/cross-repo-status.json"
+else
+  cat "$REPO_ROOT/cross-repo-status.json"
+fi
 gh issue list --repo noorinalabs/noorinalabs-main --state open --limit 10 --json number,title,labels
 ```
 
-Report: active wave/phase, staleness of `cross-repo-status.json`, open issue count and blockers, open PRs across repos. On unexpected board-vs-issue gaps (wave-labeled issues missing from project 2, or Wave-field out of sync with the canonical `wave-{X}` / grandfathered `p{N}-wave-{M}` labels, #810), invoke `/board-audit` (labels are canonical, the Wave field is a derived projection — main#199).
+Report: active wave/phase, staleness of `cross-repo-status.json` (from `last_updated`), open issue count and blockers, open PRs across repos. The Step-5 read is now the compact `wave_status.py digest` projection (#987), not the full file — if you need a historical wave's keys, read `cross-repo-status.json` directly. On unexpected board-vs-issue gaps (wave-labeled issues missing from project 2, or Wave-field out of sync with the canonical `wave-{X}` / grandfathered `p{N}-wave-{M}` labels, #810), invoke `/board-audit` (labels are canonical, the Wave field is a derived projection — main#199).
 
 ### Step 5a — Red default-branch workflow verdict (scheduled sweep, #962)
 

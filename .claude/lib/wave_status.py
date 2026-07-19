@@ -29,6 +29,7 @@ Design contract:
                      count mismatch.
 
 CLI:
+  wave_status.py digest              [--status PATH]  # current-wave/phase slice (#987)
   wave_status.py repos       <P> <M> [--status PATH]
   wave_status.py merged-prs  <P> <M> [--status PATH]
   wave_status.py counters    <P> <M> [--write] [--expect N] [--status PATH]
@@ -232,6 +233,99 @@ def _write_counters(wave: str, counters: dict[str, int], status_path: Path) -> i
     )
 
 
+# Lifecycle pointer keys always surfaced in the session-start digest — the small
+# fixed set /session-start Step 5 reports (active phase/wave, staleness, in-flight
+# counts). Everything else in the digest is derived by wave/phase scoping below.
+_DIGEST_POINTER_KEYS = (
+    "current_phase",
+    "current_wave",
+    "next_wave",
+    "last_completed_wave",
+    "global_wave_seq",
+    "wave_active",
+    "last_updated",
+    "open_prs_total",
+)
+
+
+def _wave_ordinal(value: object) -> str | None:
+    """Extract the numeric wave ordinal from a ``wave-<N>`` pointer.
+
+    Returns the ordinal as a string (used to build the ``wave_<N>_`` key prefix)
+    or None when the pointer is absent/malformed — the digest degrades to
+    pointers+phase+blockers rather than raising, matching the non-fatal stance of
+    the session-start Step blocks that call it.
+    """
+    if not isinstance(value, str):
+        return None
+    tail = value.rsplit("-", 1)[-1]
+    return tail if tail.isdigit() else None
+
+
+def build_digest(status_path: Path) -> dict:
+    """Project cross-repo-status.json down to the current-wave/phase slice.
+
+    The full file is a flat dict of ~500 keys accreted across every wave (>200KB,
+    ~53K tokens); ``cat``-ing it whole into context each session was the single
+    biggest guaranteed per-session token cost (#987). Step 5 only needs the
+    lifecycle pointers plus the keys scoped to the *current* wave, the *next*
+    wave, and the *current* phase, plus any open owner-decision blockers. This
+    returns exactly that as an ordered, valid-JSON-serialisable dict — no
+    historical wave/phase keys. Nothing is written; it is a pure read.
+    """
+    data = _load_status(status_path)
+
+    digest: dict = {}
+    for key in _DIGEST_POINTER_KEYS:
+        if key in data:
+            digest[key] = data[key]
+
+    # Wave-scoped keys for the current + next wave. The trailing underscore in the
+    # prefix is load-bearing: ``wave_2_`` must not match ``wave_25_`` keys.
+    wave_prefixes = [
+        f"wave_{ordinal}_"
+        for ordinal in (
+            _wave_ordinal(data.get("current_wave")),
+            _wave_ordinal(data.get("next_wave")),
+        )
+        if ordinal is not None
+    ]
+
+    # Phase-scoped keys for the current phase (``phase_9_`` won't match
+    # ``phase_2_wave_9_work`` — again the trailing underscore disambiguates).
+    phase = data.get("current_phase")
+    phase_prefix = f"phase_{phase}_" if phase is not None else None
+
+    scoped: dict = {}
+    blockers: dict = {}
+    for key, value in data.items():
+        if key in _DIGEST_POINTER_KEYS:
+            continue
+        if key.startswith("owner_decision_gated"):
+            # Only surface unresolved blockers (a non-empty list / truthy value);
+            # the ``owner_decision_gated_resolved_*`` audit keys are history, not
+            # live state, so they stay out of the digest even when non-empty.
+            if value and "resolved" not in key:
+                blockers[key] = value
+            continue
+        if any(key.startswith(p) for p in wave_prefixes):
+            scoped[key] = value
+            continue
+        if phase_prefix is not None and key.startswith(phase_prefix):
+            scoped[key] = value
+
+    for key in sorted(scoped):
+        digest[key] = scoped[key]
+    for key in sorted(blockers):
+        digest[key] = blockers[key]
+    return digest
+
+
+def _cmd_digest(args: argparse.Namespace) -> int:
+    print(json.dumps(build_digest(args.status), indent=2))
+    return 0
+
+
 def _cmd_repos(args: argparse.Namespace) -> int:
     for repo in read_repos(args.wave, args.status):
         print(repo)
@@ -274,6 +368,18 @@ def _build_parser() -> argparse.ArgumentParser:
             default=_DEFAULT_STATUS,
             help="path to cross-repo-status.json (default: repo-root copy)",
         )
+
+    p_digest = sub.add_parser(
+        "digest",
+        help="emit a compact current-wave/phase projection of the status file (session-start)",
+    )
+    p_digest.add_argument(
+        "--status",
+        type=Path,
+        default=_DEFAULT_STATUS,
+        help="path to cross-repo-status.json (default: repo-root copy)",
+    )
+    p_digest.set_defaults(func=_cmd_digest)
 
     p_repos = sub.add_parser("repos", help="emit wave_{M}_repos_in_scope one per line")
     _add_pm(p_repos)

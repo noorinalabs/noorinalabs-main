@@ -270,5 +270,102 @@ class Write(unittest.TestCase):
             self.assertEqual(data["wave_4_repos_in_scope"], _REPOS)
 
 
+class Digest(unittest.TestCase):
+    """`digest` projects the status file to the current-wave/phase slice (#987)."""
+
+    def _status(self, **overrides: object) -> dict:
+        data: dict = {
+            # lifecycle pointers
+            "current_phase": 9,
+            "current_wave": "wave-25",
+            "next_wave": "wave-26",
+            "last_completed_wave": "wave-24",
+            "global_wave_seq": 25,
+            "wave_active": False,
+            "last_updated": "2026-07-19T00:00:00Z",
+            "open_prs_total": 0,
+            # current + next wave keys (kept)
+            "wave_25_scope": {"theme": "current"},
+            "wave_25_meta_issue": "noorinalabs-main#980",
+            "wave_26_meta_issue": "noorinalabs-main#983",
+            # current phase key (kept)
+            "phase_9_status": "ACTIVE",
+            # HISTORICAL — must be dropped
+            "wave_24_scope": {"theme": "old"},
+            "wave_2_active": False,
+            "phase_3_status": "COMPLETE",
+            # blockers: live one kept, resolved audit key dropped
+            "owner_decision_gated": ["deploy#999 — needs an owner call"],
+            "owner_decision_gated_resolved_2026_04_29": ["main#211 — RESOLVED"],
+        }
+        data.update(overrides)
+        return data
+
+    def _digest(self, data: dict) -> dict:
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            status.write_text(json.dumps(data))
+            return wave_status.build_digest(status)
+
+    def test_keeps_pointers_current_and_next_wave_and_phase(self) -> None:
+        d = self._digest(self._status())
+        for key in wave_status._DIGEST_POINTER_KEYS:
+            self.assertIn(key, d)
+        self.assertIn("wave_25_scope", d)
+        self.assertIn("wave_25_meta_issue", d)
+        self.assertIn("wave_26_meta_issue", d)
+        self.assertIn("phase_9_status", d)
+
+    def test_drops_historical_wave_and_phase_keys(self) -> None:
+        d = self._digest(self._status())
+        self.assertNotIn("wave_24_scope", d)
+        # wave_2_active must NOT be swept in by the wave_25 prefix — the trailing
+        # underscore in `wave_2_` vs `wave_25_` is the guard.
+        self.assertNotIn("wave_2_active", d)
+        self.assertNotIn("phase_3_status", d)
+
+    def test_live_blocker_kept_resolved_audit_key_dropped(self) -> None:
+        d = self._digest(self._status())
+        self.assertIn("owner_decision_gated", d)
+        self.assertNotIn("owner_decision_gated_resolved_2026_04_29", d)
+
+    def test_empty_live_blocker_is_omitted(self) -> None:
+        d = self._digest(self._status(owner_decision_gated=[]))
+        self.assertNotIn("owner_decision_gated", d)
+
+    def test_is_a_large_reduction(self) -> None:
+        data = self._status()
+        # pad with a lot of historical noise the digest must shed
+        for w in range(1, 24):
+            data[f"wave_{w}_scope"] = {"junk": "x" * 500}
+        d = self._digest(data)
+        full = len(json.dumps(data))
+        proj = len(json.dumps(d))
+        self.assertLess(proj, full // 4)
+
+    def test_malformed_current_wave_degrades_gracefully(self) -> None:
+        # No wave pointers at all → still emit pointers-that-exist + phase + blocker
+        # without raising; wave-scoped keys simply drop out.
+        d = self._digest(self._status(current_wave=None, next_wave=None))
+        self.assertIn("current_phase", d)
+        self.assertIn("phase_9_status", d)
+        self.assertIn("owner_decision_gated", d)
+        self.assertNotIn("wave_25_scope", d)
+
+    def test_cli_prints_valid_json(self) -> None:
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            status.write_text(json.dumps(self._status()))
+            import io
+            from contextlib import redirect_stdout
+
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                rc = wave_status.main(["digest", "--status", str(status)])
+            self.assertEqual(rc, 0)
+            parsed = json.loads(buf.getvalue())
+            self.assertEqual(parsed["current_wave"], "wave-25")
+
+
 if __name__ == "__main__":
     unittest.main()
