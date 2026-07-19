@@ -98,7 +98,9 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import NamedTuple
 
@@ -106,6 +108,26 @@ from typing import NamedTuple
 MAX_INDEX_ENTRIES = 132
 MAX_MEMORY_FILES = 132
 MAX_MEMORY_BYTES = 28_672  # 28 KiB
+
+# --- Advisory staleness/size signal (#995, P9W25) — NOT a gate ---------------
+# The three budgets above are a HARD gate on the corpus *in aggregate* (index
+# count, file count, MEMORY.md bytes). They say nothing about an individual
+# topic file being oversized or long-untouched — the 52KB narrator file is the
+# poster child: uncapped and unflagged. The `--staleness` mode below is the
+# advisory that surfaces those per-file signals for the /wave-retro decay sweep
+# (Step 7.8). It ALWAYS exits 0 — a large or old memory is a candidate for a
+# human consolidate/archive decision, never an auto-block and never an
+# auto-delete (a rare-but-critical memory must survive age alone; mirrors
+# /promotion-audit in reverse).
+#
+# SOFT_FILE_BYTES is anchored to the aggregate byte cap: no single topic file
+# should exceed *half* the entire always-loaded index's own budget. A file that
+# large is worth a "still all pulling its weight?" look.
+SOFT_FILE_BYTES = MAX_MEMORY_BYTES // 2  # 14,336 bytes (14 KiB)
+# STALE_DAYS: a topic file whose last *commit* is older than this is a decay
+# candidate. Edit-recency is a pragmatic proxy — a memory can stay recall-
+# relevant without being edited — which is exactly why this is advisory-only.
+STALE_DAYS = 90
 
 # Files under .claude/memory/ that are NOT counted as topic files: the index
 # itself, and the gitignored per-session handoff (absent in CI — see module
@@ -209,6 +231,116 @@ def evaluate(memory_dir: Path) -> int:
     return 0
 
 
+# --- Advisory staleness/size report (#995) -----------------------------------
+
+
+class FileSignal(NamedTuple):
+    """Per-file size + recency reading for the advisory sweep."""
+
+    name: str
+    size_bytes: int
+    last_commit: datetime | None  # None when git recency is unavailable
+    days_stale: int | None  # None when last_commit is None
+
+    @property
+    def oversized(self) -> bool:
+        return self.size_bytes > SOFT_FILE_BYTES
+
+    @property
+    def stale(self) -> bool:
+        return self.days_stale is not None and self.days_stale > STALE_DAYS
+
+    @property
+    def flagged(self) -> bool:
+        return self.oversized or self.stale
+
+
+def _git_last_commit(path: Path, repo_root: Path) -> datetime | None:
+    """Last-commit datetime (UTC) for `path` via git, or None on any failure.
+
+    Kept behind a tiny helper so the report degrades gracefully outside a git
+    checkout (fresh clone with no history for the file, git absent, non-repo)
+    and so tests can monkeypatch it without invoking git.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(repo_root), "log", "-1", "--format=%cI", "--", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    stamp = out.stdout.strip()
+    if out.returncode != 0 or not stamp:
+        return None
+    try:
+        return datetime.fromisoformat(stamp).astimezone(timezone.utc)
+    except ValueError:
+        return None
+
+
+def gather_file_signals(memory_dir: Path, now: datetime | None = None) -> list[FileSignal]:
+    """Size + recency for every topic file, sorted largest-first.
+
+    `now` is injectable for deterministic tests; defaults to the current UTC time.
+    Recency is resolved relative to the repo root (parent of `.claude/memory`).
+    """
+    now = now or datetime.now(timezone.utc)
+    # repo_root = <...>/.claude/memory → up two levels. Falls back to memory_dir
+    # itself if the layout is unexpected; git will simply return None there.
+    repo_root = memory_dir.parent.parent if memory_dir.parent.name == ".claude" else memory_dir
+    signals: list[FileSignal] = []
+    for p in sorted(memory_dir.glob("*.md")):
+        if p.name in _NON_TOPIC_FILES:
+            continue
+        last = _git_last_commit(p, repo_root)
+        days = (now - last).days if last is not None else None
+        signals.append(FileSignal(p.name, p.stat().st_size, last, days))
+    signals.sort(key=lambda s: s.size_bytes, reverse=True)
+    return signals
+
+
+def format_staleness_report(signals: list[FileSignal]) -> str:
+    """Render the advisory table: flagged files first, with size + age columns."""
+    flagged = [s for s in signals if s.flagged]
+    lines = [
+        "MEMORY STALENESS/SIZE ADVISORY (non-blocking — /wave-retro decay sweep, #995)",
+        f"  soft per-file ceiling: {SOFT_FILE_BYTES} bytes   stale after: {STALE_DAYS} days",
+        f"  topic files: {len(signals)}   flagged: {len(flagged)} "
+        f"(size and/or age — candidates for a human consolidate/archive decision)",
+        "",
+    ]
+    if not flagged:
+        lines.append("  No files over the size ceiling or staleness threshold. Nothing to sweep.")
+        return "\n".join(lines)
+    for s in flagged:
+        marks = []
+        if s.oversized:
+            marks.append("SIZE")
+        if s.stale:
+            marks.append("STALE")
+        age = f"{s.days_stale}d" if s.days_stale is not None else "age?"
+        lines.append(f"  [{'+'.join(marks):<10}] {s.size_bytes:>6}B  last-touch {age:>6}  {s.name}")
+    lines.append("")
+    lines.append(
+        "  These are ADVISORY: a large or long-untouched memory is a candidate for "
+        "consolidation or a move to .claude/memory/archive/ (a cold tier outside "
+        "the always-loaded index), NEVER an auto-delete. Age is edit-recency, not "
+        "reference-recency — decide per file."
+    )
+    return "\n".join(lines)
+
+
+def evaluate_staleness(memory_dir: Path) -> int:
+    """Print the advisory report. Always returns 0 (non-blocking)."""
+    if not memory_dir.is_dir():
+        raise FileNotFoundError(f"memory directory not found: {memory_dir}")
+    print(format_staleness_report(gather_file_signals(memory_dir)))
+    return 0
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -221,6 +353,12 @@ def main(argv: list[str]) -> int:
         "--memory-dir",
         help="Path to the memory dir directly (overrides <repo_root>/.claude/memory).",
     )
+    parser.add_argument(
+        "--staleness",
+        action="store_true",
+        help="Advisory only: print the per-file size/staleness sweep (always exits 0) "
+        "instead of the hard budget gate. Used by the /wave-retro decay sweep (#995).",
+    )
     args = parser.parse_args(argv[1:])
 
     memory_dir = (
@@ -230,6 +368,8 @@ def main(argv: list[str]) -> int:
     )
 
     try:
+        if args.staleness:
+            return evaluate_staleness(memory_dir)
         return evaluate(memory_dir)
     except FileNotFoundError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

@@ -104,6 +104,8 @@ Project memory is **version-controlled at `.claude/memory/`**, NOT the user-spac
 **Recording a memory (overrides the default auto-memory tool):** create/edit `.claude/memory/<kebab-slug>.md` with the standard frontmatter (`name`, `description`, `metadata.type` = `user` | `feedback` | `project` | `reference`), add a one-line `MEMORY.md` pointer (`- [Title](file.md) — hook`), and **commit it**. Link related memories with `[[other-slug]]`. Never write to the user-space auto-memory path. Update an existing file covering the same fact instead of duplicating; delete memories that prove wrong.
 
 > `.claude/memory/**` is excluded from the markdown/cspell/lychee linters (dense note prose with names, SHAs, `[[wikilinks]]`, Arabic). `session_handoff.md` is gitignored (per-session, machine-local). Each child repo commits its own `.claude/memory/` + `@import` in its own CLAUDE.md — repos do not import across directories.
+>
+> **Cold-archive tier (`.claude/memory/archive/`):** a genuinely-historical memory can be moved here — it stays git-tracked and grep-able but is **not** always-loaded (no `MEMORY.md` pointer) and is **not** counted by the budget gate (which globs the top-level `*.md` only). The `/wave-retro` decay sweep (`memory_budget.py --staleness`, Step 7.8) surfaces size/age candidates; archiving is a human decision, never automatic.
 
 ## Ontology
 
