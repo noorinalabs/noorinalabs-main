@@ -43,3 +43,6 @@ Periodic liveness checks so zero-output stalls surface before the wave ends. →
 
 ## Throttle-Stall Recovery — Trigger Thresholds
 Trigger thresholds for the orchestrator takeover of a throttle-stalled implementer. → [agents/lifecycle.md](agents/lifecycle.md#throttle-stall-recovery--trigger-thresholds)
+
+## Session-Hygiene Playbook & Lean Briefs
+`/clear` at wave boundaries, proactive `/compact`, cache-prefix discipline, tool-result clearing, and lean section-extract briefs (`warn_oversized_brief.py`, `make skeleton`). → [agents/session-hygiene.md](agents/session-hygiene.md#session-hygiene-playbook--lean-briefs-1020)

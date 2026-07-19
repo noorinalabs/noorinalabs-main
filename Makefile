@@ -1,4 +1,4 @@
-.PHONY: help setup-hooks lint format docs
+.PHONY: help setup-hooks lint format docs skeleton
 
 help:
 	@echo "Targets:"
@@ -6,6 +6,8 @@ help:
 	@echo "  lint                          Run ruff lint on .claude/hooks/"
 	@echo "  format                        Run ruff format on .claude/hooks/"
 	@echo "  docs                          Regenerate MS Office docs from their markdown sources"
+	@echo "  skeleton                      Signatures-only skeleton of a subtree for a token-lean spawn brief"
+	@echo "                                (DIR=dir INCLUDE=glob OUT=path)"
 
 setup-hooks:
 	@command -v pre-commit >/dev/null 2>&1 || { \
@@ -34,3 +36,26 @@ format:
 # docs/office/README.md.
 docs:
 	scripts/gen-office.sh
+
+# ---- Lean-brief tooling (#1020) --------------------------------------------
+#
+# Pack a Tree-sitter-compressed *skeleton* of a code subtree (signatures kept,
+# bodies stripped — roughly halving to two-thirds off raw token count) for a
+# token-lean spawn brief. Paste the OUT file's contents into the brief instead
+# of whole source files. The ontology already SELECTS which subtree matters
+# (see /ontology-librarian); this COMPRESSES it — the two compose. See
+# .claude/team/charter/agents/session-hygiene.md § Lean Section-Extract Briefs.
+#
+# Dependency: repomix, fetched on demand via `npx --yes repomix` (needs Node's
+# npx on PATH; nothing is added to the repo). `--include` narrows to specific
+# files/globs within DIR when the whole subtree is too broad.
+DIR     ?= .
+INCLUDE ?=
+OUT     ?= /tmp/repomix-skeleton.xml
+
+skeleton:
+	@command -v npx >/dev/null 2>&1 || { echo "ERROR: npx not found (Node required for repomix)"; exit 1; }
+	npx --yes repomix --compress --style xml --no-file-summary --no-directory-structure \
+		$(if $(INCLUDE),--include "$(INCLUDE)") -o "$(OUT)" "$(DIR)"
+	@echo ""
+	@echo "Skeleton written to $(OUT) — paste its contents into the spawn brief instead of whole files."

@@ -101,6 +101,7 @@ jsonc
 frontmatter
 repo
 repos
+repomix
 canonicalized
 disambiguation
 disambiguate
