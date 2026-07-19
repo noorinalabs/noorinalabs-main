@@ -14,32 +14,50 @@ corpus is over budget, mirrored into ``.pre-commit-config.yaml`` and wired as a
 CI job (``Memory budget gate``) so local and CI agree (the full local⇄CI parity
 rule, ``feedback_local_ci_parity_no_force.md`` / #684).
 
-Three dimensions, one threshold each (single source of truth)
-=============================================================
-The budget is the three module constants below — the ONLY place a limit is
+Two-tier memory index (#1016)
+=============================
+``MEMORY.md`` is no longer the flat, always-loaded list of every note. It is a
+compact **table of contents** (TIER 1, the only always-injected file via
+CLAUDE.md's ``@.claude/memory/MEMORY.md`` import): a small table whose rows point
+at ``section_<slug>.md`` **section files** (TIER 2). Each section file carries the
+per-note ``- [Title](slug.md) — …`` one-liners and is read ON DEMAND, never
+auto-injected. The note *detail* files (``feedback_*.md`` etc.) are unchanged.
+
+The section files are **index infrastructure, not notes**: they are excluded
+from the note-file count and from the always-loaded byte cap, and the ToC's own
+size is capped by a new section-row dimension.
+
+Four dimensions, one threshold each (single source of truth)
+============================================================
+The budget is the four module constants below — the ONLY place a limit is
 defined. Each is enforced independently; the corpus is over budget if ANY one is
 exceeded.
 
-- ``MAX_INDEX_ENTRIES`` — index lines in ``MEMORY.md`` (``^- \\[`` rows, one per
-  recallable memory). This is the primary, most meaningful dimension: it counts
-  the things a session has to scan at startup.
+- ``MAX_INDEX_ENTRIES`` — total recallable-note pointer rows (``^- \\[`` lines)
+  summed across the TIER-2 ``section_*.md`` files (plus any stray note row the
+  auto-writer left in ``MEMORY.md`` outside the ToC — the ``session_handoff.md``
+  pointer, which is always-loaded infra not a note, is NOT counted). This is the
+  primary dimension: it counts the recallable memories, wherever they were filed.
 - ``MAX_MEMORY_FILES`` — topic ``*.md`` files in ``.claude/memory/`` excluding
-  ``MEMORY.md`` itself and the gitignored, machine-local ``session_handoff.md``
-  (see below). Roughly tracks the index-entry count and catches an orphaned
-  file that was added without an index row.
-- ``MAX_MEMORY_BYTES`` — byte size of ``MEMORY.md``. A backstop against the
-  pathological "few but enormous" index lines that the entry count alone would
-  not catch.
+  ``MEMORY.md``, the gitignored machine-local ``session_handoff.md``, and the
+  ``section_*.md`` ToC infrastructure (see below). Roughly tracks the note count
+  and catches an orphaned note file added without an index row.
+- ``MAX_MEMORY_BYTES`` — byte size of ``MEMORY.md``, i.e. the always-loaded ToC.
+  Now that the ToC is the *only* auto-injected memory file, this cap directly
+  guards the per-turn always-loaded cost the #1016 split exists to shrink; it is
+  tightened accordingly (a flat index would blow past it, forcing the split).
+- ``MAX_TOC_SECTIONS`` — ToC section rows (lines linking a ``section_*.md``) in
+  ``MEMORY.md``. A backstop against the ToC itself re-bloating by sprouting
+  ever-more sections instead of the corpus being consolidated.
 
-Why the index count (102) and the file count (101) differ by one
-================================================================
+session_handoff.md, sections, and the counts
+=============================================
 ``MEMORY.md`` carries a committed pointer line for ``session_handoff.md``, but
 that file is gitignored (per-session machine-local churn — see ``.gitignore``)
-and is absent in a CI checkout. To keep the *file* count identical on a
-developer machine (where the handoff exists) and in CI (where it does not), the
-handoff is excluded from the file count. The index therefore legitimately counts
-one more (the committed handoff pointer line) than the file count. Both budgets
-have independent headroom, so the off-by-one is harmless.
+and is absent in a CI checkout. It is excluded from BOTH the note-file count and
+the index-entry count so the readings are identical on a developer machine
+(where the handoff exists) and in CI (where it does not). The ``section_*.md``
+files are likewise excluded from the note-file count (they are index infra).
 
 Threshold calibration (headroom rationale — owner directive 2026-06-19 "tighten")
 =================================================================================
@@ -73,6 +91,21 @@ grow freely. The next overflow should be met with a consolidation pass, not
 another bump — a cap that is raised on every overflow is not a forcing function,
 it is a formality.
 
+Two-tier recalibration 2026-07-19 (#1016) — MEMORY.md byte cap + ToC-section cap
+================================================================================
+The flat index was split into a ToC (``MEMORY.md``) + ``section_*.md`` files.
+The dimensions were re-anchored to the new shape (measured at split time:
+index entries = 98,  topic files = 98,  ToC MEMORY.md = 2,502 bytes,  sections = 8):
+
+    MAX_INDEX_ENTRIES = 132  → unchanged; still the recallable-note count, now
+        summed across the section files rather than read from the flat index.
+    MAX_MEMORY_FILES  = 132  → unchanged; the section files are excluded so the
+        note-file count is unaffected by the split.
+    MAX_MEMORY_BYTES  = 6144 (6 KiB)  → TIGHTENED from 28 KiB. It now measures the
+        always-loaded ToC, not the whole index; ~2.5x headroom over 2,502 bytes.
+        This is the cap that actively keeps the per-turn always-loaded cost small.
+    MAX_TOC_SECTIONS  = 12  → NEW; ~4 rows / 50% headroom over the 8 sections.
+
 The headroom is deliberately modest: enough that a normal wave's memory intake
 does not trip the gate, but tight enough that it forces a consolidate/retire
 decision before the corpus drifts back toward its pre-audit bloat. Raising a cap
@@ -89,7 +122,7 @@ advisory that scrolls past. Exit 1 on overflow; the pre-commit/CI gate then stop
 the push.
 
 Exit codes (CLI):
-    0 — corpus is within budget on all three dimensions.
+    0 — corpus is within budget on all four dimensions.
     1 — over budget on at least one dimension (HARD BLOCK).
     2 — usage / corpus directory or MEMORY.md not found (cannot evaluate).
 """
@@ -107,7 +140,8 @@ from typing import NamedTuple
 # --- Budget: the single source of truth. Edit a number here and nowhere else. ---
 MAX_INDEX_ENTRIES = 132
 MAX_MEMORY_FILES = 132
-MAX_MEMORY_BYTES = 28_672  # 28 KiB
+MAX_MEMORY_BYTES = 6_144  # 6 KiB — the always-loaded ToC only (#1016)
+MAX_TOC_SECTIONS = 12  # ToC section rows in MEMORY.md (#1016)
 
 # --- Advisory staleness/size signal (#995, P9W25) — NOT a gate ---------------
 # The three budgets above are a HARD gate on the corpus *in aggregate* (index
@@ -120,22 +154,39 @@ MAX_MEMORY_BYTES = 28_672  # 28 KiB
 # auto-delete (a rare-but-critical memory must survive age alone; mirrors
 # /promotion-audit in reverse).
 #
-# SOFT_FILE_BYTES is anchored to the aggregate byte cap: no single topic file
-# should exceed *half* the entire always-loaded index's own budget. A file that
-# large is worth a "still all pulling its weight?" look.
-SOFT_FILE_BYTES = MAX_MEMORY_BYTES // 2  # 14,336 bytes (14 KiB)
+# SOFT_FILE_BYTES caps an individual TIER-2 note detail file. It used to be
+# derived as half of MAX_MEMORY_BYTES, back when that cap measured the whole flat
+# index (~28 KiB). Post-#1016 the byte cap measures only the tiny always-loaded
+# ToC (6 KiB), which is the wrong anchor for a per-note-file ceiling — half of it
+# (3 KiB) would flag almost every legitimate note. So this is now an independent
+# constant, kept at its long-standing effective value: a note file over 14 KiB is
+# worth a "still all pulling its weight?" look.
+SOFT_FILE_BYTES = 14_336  # 14 KiB (independent of the ToC byte cap since #1016)
 # STALE_DAYS: a topic file whose last *commit* is older than this is a decay
 # candidate. Edit-recency is a pragmatic proxy — a memory can stay recall-
 # relevant without being edited — which is exactly why this is advisory-only.
 STALE_DAYS = 90
 
-# Files under .claude/memory/ that are NOT counted as topic files: the index
+# Files under .claude/memory/ that are NOT counted as topic (note) files: the ToC
 # itself, and the gitignored per-session handoff (absent in CI — see module
-# docstring). Compared case-sensitively against the file name.
+# docstring). Compared case-sensitively against the file name. The TIER-2
+# section_*.md files are also excluded, via _is_section_file below.
 _NON_TOPIC_FILES = frozenset({"MEMORY.md", "session_handoff.md"})
 
 # An index entry is a top-level list row linking a memory: `- [Title](file.md) …`.
 _INDEX_ENTRY_RE = re.compile(r"^- \[")
+
+# A ToC section row links a TIER-2 section file: `… [section_x.md](section_x.md) …`.
+_TOC_SECTION_RE = re.compile(r"\]\(section[_-][^)]*\.md\)")
+
+# A `- [ …](session_handoff.md) …` pointer in the ToC — always-loaded infra, not a
+# recallable note, so it is not counted among the index entries.
+_HANDOFF_LINK_RE = re.compile(r"\]\(session_handoff\.md\)")
+
+
+def _is_section_file(name: str) -> bool:
+    """True for a TIER-2 ToC section file (index infra, not a note)."""
+    return name.startswith("section_") or name.startswith("section-")
 
 
 class Metric(NamedTuple):
@@ -155,19 +206,57 @@ class Metric(NamedTuple):
         return max(0, self.current - self.limit)
 
 
-def count_index_entries(memory_md: Path) -> int:
-    """Count `- [...]` index rows in MEMORY.md."""
-    text = memory_md.read_text(encoding="utf-8")
-    return sum(1 for line in text.splitlines() if _INDEX_ENTRY_RE.match(line))
+def _entry_rows(text: str, *, skip_handoff: bool = False) -> int:
+    """Count `- [...]` recallable-note rows in a block of text.
+
+    With ``skip_handoff`` the always-loaded ``session_handoff.md`` pointer (infra,
+    not a note) is not counted — used for stray rows left in the ToC.
+    """
+    n = 0
+    for line in text.splitlines():
+        if not _INDEX_ENTRY_RE.match(line):
+            continue
+        if skip_handoff and _HANDOFF_LINK_RE.search(line):
+            continue
+        n += 1
+    return n
+
+
+def count_index_entries(memory_dir: Path) -> int:
+    """Total recallable-note pointer rows across the two-tier index (#1016).
+
+    The one-liners live in the TIER-2 ``section_*.md`` files; sum those. Also fold
+    in any stray note row the auto-writer left in the ToC (``MEMORY.md``) outside
+    the section table — the re-tier maintenance surfaces those — excluding the
+    always-loaded ``session_handoff.md`` pointer, which is infra, not a note.
+    """
+    total = 0
+    for p in sorted(memory_dir.glob("*.md")):
+        if _is_section_file(p.name):
+            total += _entry_rows(p.read_text(encoding="utf-8"))
+    memory_md = memory_dir / "MEMORY.md"
+    if memory_md.is_file():
+        total += _entry_rows(memory_md.read_text(encoding="utf-8"), skip_handoff=True)
+    return total
 
 
 def count_memory_files(memory_dir: Path) -> int:
-    """Count topic `*.md` files in the memory dir, excluding non-topic files."""
-    return sum(1 for p in memory_dir.glob("*.md") if p.name not in _NON_TOPIC_FILES)
+    """Count topic (note) `*.md` files, excluding the ToC, handoff, and section files."""
+    return sum(
+        1
+        for p in memory_dir.glob("*.md")
+        if p.name not in _NON_TOPIC_FILES and not _is_section_file(p.name)
+    )
+
+
+def count_toc_sections(memory_md: Path) -> int:
+    """Count ToC rows that link a TIER-2 section file (#1016)."""
+    text = memory_md.read_text(encoding="utf-8")
+    return sum(1 for line in text.splitlines() if _TOC_SECTION_RE.search(line))
 
 
 def memory_md_bytes(memory_md: Path) -> int:
-    """Byte size of MEMORY.md on disk."""
+    """Byte size of MEMORY.md (the always-loaded ToC) on disk."""
     return memory_md.stat().st_size
 
 
@@ -183,8 +272,9 @@ def gather_metrics(memory_dir: Path) -> list[Metric]:
     if not memory_md.is_file():
         raise FileNotFoundError(f"MEMORY.md not found: {memory_md}")
     return [
-        Metric("index entries", count_index_entries(memory_md), MAX_INDEX_ENTRIES, ""),
+        Metric("index entries", count_index_entries(memory_dir), MAX_INDEX_ENTRIES, ""),
         Metric("memory files", count_memory_files(memory_dir), MAX_MEMORY_FILES, ""),
+        Metric("ToC sections", count_toc_sections(memory_md), MAX_TOC_SECTIONS, ""),
         Metric("MEMORY.md size", memory_md_bytes(memory_md), MAX_MEMORY_BYTES, "bytes"),
     ]
 
@@ -293,7 +383,7 @@ def gather_file_signals(memory_dir: Path, now: datetime | None = None) -> list[F
     repo_root = memory_dir.parent.parent if memory_dir.parent.name == ".claude" else memory_dir
     signals: list[FileSignal] = []
     for p in sorted(memory_dir.glob("*.md")):
-        if p.name in _NON_TOPIC_FILES:
+        if p.name in _NON_TOPIC_FILES or _is_section_file(p.name):
             continue
         last = _git_last_commit(p, repo_root)
         days = (now - last).days if last is not None else None

@@ -155,6 +155,14 @@ Read: .claude/memory/session_handoff.md
 
 If it exists, summarize in 2-3 sentences: what was done last session, what's next, current branch / open PRs / issues, any user notes. If not, note "No handoff from previous session."
 
+### Step 2.5 — Memory index is two-tier — load sections on demand (#1016)
+
+The in-repo memory index `.claude/memory/MEMORY.md` is a **two-tier** index (#1016). The always-injected file (imported by CLAUDE.md via `@.claude/memory/MEMORY.md`) is a tiny **table of contents** — section names + note counts + a pointer to each section's detail file (~400 tokens, replacing the old ~5.7K-token flat list). The per-note one-liners live in `.claude/memory/section_<slug>.md` files that are **NOT** auto-injected (the flat index injected all ~99 note lines every turn, which the split exists to avoid).
+
+- **Default: load only the ToC.** Do NOT read every `section_*.md` at session start — that re-injects exactly the full index the two-tier split removed. The ToC alone is enough to orient; it is already in context via the CLAUDE.md import.
+- **Load one section on demand.** When the task at hand maps to a section (a PR review → *Review / PR / merge mechanics*; spawning an implementer → *Spawn / delegation / agent coordination*; a deploy/data question → *Project state*), `Read .claude/memory/section_<slug>.md` for its one-liners, then the specific note file it points to.
+- **Re-tier maintenance (keep the split from decaying).** The memory-recording flow still appends new one-liners; if any land in `MEMORY.md` **outside** the ToC table (flat `- [ ]` rows), fold each into the matching `section_<slug>.md`, bump that section's ToC count, and leave `MEMORY.md` as ToC-only. **Never delete a note — only relocate it.** `memory_budget.py` counts note rows across the section files, so a stray row still counts against budget until folded.
+
 ### Step 3 — Ontology freshness (semantic overlay + structural index)
 
 Two independent layers, two checks (#820/C×T2, #862):

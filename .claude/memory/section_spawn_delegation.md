@@ -1,0 +1,25 @@
+# Memory — Spawn / delegation / agent coordination
+
+<!-- Tier 2 (loads on demand — see session-start Step 2.5). One line per
+     memory; full detail in each linked note file in THIS directory.
+     Do NOT auto-inject this file at session start (that re-adds the whole
+     always-loaded index the #1016 two-tier split removed). -->
+
+- [Self-loop task replay glitch](feedback_self_loop_task_replay_glitch.md) — team task system may replay own completed tasks as fresh; verify via TaskGet + ignore self-loops.
+- [Check accepted ADRs before spawn](feedback_check_accepted_adr_before_spawn.md) — an issue may propose what an accepted ADR rejected; that's an owner call, not implementer work.
+- [Child-repo implementer rule](feedback_child_repo_implementer_rule.md) — implementers for child-repo PRs come from that child's own roster, not the parent org team.
+- [Role-class-specific boundaries](feedback_role_class_specific_boundaries.md) — same person, different role classes (reviewer/escalation/advisor/implementer) → different rules.
+- [Throttle takeover by orchestrator](feedback_throttle_takeover.md) — when a spawned implementer throttle-stalls w/ sound partial work, finish directly w/ their identity.
+- [Agent color drift is UI quirk](feedback_agent_color_render_quirk.md) — same agent w/ different color tags ≠ duality; trust SendMessage routing.targetColor. PR#266.
+- [Spawn-brief protocol (consolidated)](feedback_spawn_brief_protocol.md) — briefs composed from HEAD-current artifacts, never cached state. Surfaces: §1 verify issue premises at origin head_sha, scope-block if they fail; §2 enumerate surface from wave-branch HEAD + rule every named caveat; §3 file existence via `git cat-file -e origin/<br>:<path>` never ls; §4 declarative fields (isolation/implementer/cwd) are ADVISORY — orchestrator acts imperatively; §5 numbered imperative steps ARE the action, execute don't bounce; §6 surnames from roster-card body, never slug/memory; §7 grep .claude/hooks for parser precedent before hook-tier briefs.
+- [No head in surface enumeration](feedback_no_head_in_surface_enumeration.md) — pre-spawn briefs MUST count via grep -c per file then sum; never | head -N the per-file grep. deploy#280.
+- [Bundle fixup instructions in one message](feedback_bundle_fixup_instructions.md) — orchestrator sends mid-PR fixup items as ONE bundle, not serial messages (drop-race risk).
+- [Owner-pivot supersedes protocol](feedback_owner_pivot_supersedes_protocol.md) — pivots reversing prior routing on in-flight tasks need supersedes-as-of header; refresh at origin.
+- [Declarative-at-HEAD pattern](feedback_declarative_head_needs_action.md) — landed-at-HEAD artifacts need explicit orchestrator action OR session restart to take effect.
+- [Hook cwd-anchor subagent worktree](feedback_hook_cwd_anchor_subagent_worktree.md) — hooks reading stdin cwd resolve to orchestrator dir, not subagent worktree → child gh ops misrouted.
+- [Sibling-issue overlap missed cross-close](feedback_sibling_issue_overlap.md) — PR for #A satisfying #B does NOT auto-close #B; pre-spawn overlap check. deploy#200.
+- [Scope audit flips implementer via child-repo rule](feedback_scope_audit_child_repo_rule.md) — parent-repo tracking issue for child work goes in CHILD repo; stop, don't retarget.
+- [Parallel panels sharing a file must serialize-merge](feedback_parallel_panels_shared_file.md) — parallel PRs appending to a shared file git-conflict despite distinct ownership. #986.
+- [Cross-persona task-claim hazard](feedback_cross_persona_task_claim_hazard.md) — TaskUpdate has no ownership-guard; a mistyped taskId silently completes another persona's work.
+- [Subagent worktree lands in wrong repo](feedback_subagent_worktree_wrong_repo.md) — Agent `isolation: worktree` worktrees the PARENT org repo; child-repo implementers can't Edit/Write their sources, EnterWorktree refuses the cross-repo switch. PR#357.
+- [Cross-spawn cwd collision](feedback_cwd_collision_cross_spawn.md) — two agents sharing one cwd on different branches: 2nd checkout moves the 1st → commits on wrong branch.
