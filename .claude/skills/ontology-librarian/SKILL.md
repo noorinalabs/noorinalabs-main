@@ -68,7 +68,7 @@ if [ ! -f "$STRUCT_LLMS" ]; then
   echo "  (/session-start 3b rebuilds it automatically at session start.)"
 else
   echo "Structural index header:"
-  grep "^# " "$STRUCT_LLMS" 2>/dev/null | head -5
+  rg --no-ignore "^# " "$STRUCT_LLMS" 2>/dev/null | head -5
   # Build-product freshness: count tracked source files newer than the built index.
   # `-nt` is a shell test (file newer-than); restrict to this repo's tracked source so
   # cloned child repos beneath the root don't inflate the count.
@@ -105,7 +105,7 @@ Search `ontology/structural/llms.txt` for modules, functions, classes, and edges
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # Find sections matching the query topic (path fragment, function name, class name)
-grep -n "^## .*{query_keyword}\|- .*{query_keyword}\|- class .*{query_keyword}\|- func .*{query_keyword}" \
+rg -n --no-ignore "^## .*{query_keyword}|- .*{query_keyword}|- class .*{query_keyword}|- func .*{query_keyword}" \
   "$REPO_ROOT/ontology/structural/llms.txt" | head -30
 ```
 

@@ -86,24 +86,24 @@ Run `gh api repos/<owner>/<repo>/git/trees/<head_sha>?recursive=1` (or `gh api .
 
 If premises hold at head_sha: proceed with spawn. If premises fail (target file/path/state doesn't exist as the issue body assumes): scope-block with a comment on the issue (sha + verification command + observed result), tag TPM/scope owner, escalate via `SendMessage`. If premises *over-deliver* (issue body assumes a block that's already cleared, e.g., parent audit table already populated): proceed AND note the unblock in the spawn-request message body so the implementer doesn't redo the look-up.
 
-#### How to count — `grep -c` per file + sum; never `| head -N` the per-file output
+#### How to count — `rg -c` per file + sum; never `| head -N` the per-file output
 
 ```bash
 total=0
 for f in <file-set>; do
-  count=$(grep -cE "<pattern>" "$f")
+  count=$(rg -c "<pattern>" "$f" || echo 0)  # rg -c prints nothing on no-match — keep the 0 fallback
   [ "$count" -gt 0 ] && echo "  $f: $count" && total=$((total + count))
 done
 echo "TOTAL: $total"
 ```
 
-Then a sanity-check pass that reads the un-truncated grep:
+Then a sanity-check pass that reads the un-truncated rg output:
 
 ```bash
-grep -nE "<pattern>" <files>  # full output, scan for missed sites
+rg -n "<pattern>" <files>  # full output, scan for missed sites
 ```
 
-**Do NOT pipe per-file grep output through `head -N` before tallying.** Truncation silently drops sites and produces an under-counted brief that looks complete because the visible output is plausible. The under-count would ship as a scope leak into a follow-up PR if the implementer used the brief as a checklist.
+**Do NOT pipe per-file rg output through `head -N` before tallying.** Truncation silently drops sites and produces an under-counted brief that looks complete because the visible output is plausible. The under-count would ship as a scope leak into a follow-up PR if the implementer used the brief as a checklist.
 
 When a consolidated cross-repo audit deliverable exists (TPM-style per-repo target-version table at a parent meta-issue), **cite the audit URL in the spawn brief and treat the audit as authoritative; the manager brief is advisory**. Implementers consult the audit + run their own worktree-side scan via the Hook 15 librarian invocation. The manager-brief enumeration figure is explicitly NOT a checklist cap; if both manager-brief and audit surface counts disagree, the implementer's own worktree scan resolves the conflict and the manager re-runs the enumeration before the next spawn.
 

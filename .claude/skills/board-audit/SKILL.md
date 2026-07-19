@@ -173,7 +173,7 @@ ISSUE_URLS=$(sort -u /tmp/all-issue-urls.txt)
 # Orphans = issues NOT on the board
 ORPHANS=$(comm -23 <(echo "$ISSUE_URLS") <(echo "$BOARD_URLS"))
 
-ORPHAN_COUNT=$(echo "$ORPHANS" | grep -c . || true)
+ORPHAN_COUNT=$(echo "$ORPHANS" | rg -c . || echo 0)  # rg -c prints nothing on no-match (unlike grep's "0") — keep the 0 fallback
 echo "Orphan issues (in repo, missing from board): $ORPHAN_COUNT"
 echo "$ORPHANS" | head -20
 ```

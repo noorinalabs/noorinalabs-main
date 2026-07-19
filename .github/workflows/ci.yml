@@ -79,7 +79,9 @@ jobs:
           status=0
           for d in .claude/skills/*/; do
             # Only type-check skills that actually contain .py files.
-            if find "$d" -name '*.py' -print -quit | grep -q .; then
+            # Dependency-free emptiness test (not a text search) — avoids needing
+            # grep/rg on the runner just to check whether `find` produced output.
+            if [ -n "$(find "$d" -name '*.py' -print -quit)" ]; then
               echo "::group::mypy $d"
               mypy "$d" --ignore-missing-imports --no-error-summary || status=1
               echo "::endgroup::"

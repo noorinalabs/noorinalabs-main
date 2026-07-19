@@ -26,19 +26,19 @@ Pre-#625 both kinds shared `errors.jsonl` and dispatch traces (76% of the P4W1 l
 
 ### 1. Verify the hook is active
 
-Confirm that `annunaki_monitor` runs on `PostToolUse` Bash. **Post-#625 it is NOT wired directly in `settings.json`** — it is a module dispatched by `post_dispatcher.py` (the single PostToolUse entry point), registered in that file's `_REGISTRY["Bash"]`. `settings.json` only references `post_dispatcher.py`. So a bare `grep annunaki_monitor settings.json` returns `0` and **falsely** reports the monitor inactive. Check both legs of the indirection instead:
+Confirm that `annunaki_monitor` runs on `PostToolUse` Bash. **Post-#625 it is NOT wired directly in `settings.json`** — it is a module dispatched by `post_dispatcher.py` (the single PostToolUse entry point), registered in that file's `_REGISTRY["Bash"]`. `settings.json` only references `post_dispatcher.py`. So a bare `rg annunaki_monitor settings.json` returns nothing and **falsely** reports the monitor inactive. Check both legs of the indirection instead:
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-if grep -q post_dispatcher "$REPO_ROOT/.claude/settings.json" \
-   && grep -q '"annunaki_monitor"' "$REPO_ROOT/.claude/hooks/post_dispatcher.py"; then
+if rg -q post_dispatcher "$REPO_ROOT/.claude/settings.json" \
+   && rg -q '"annunaki_monitor"' "$REPO_ROOT/.claude/hooks/post_dispatcher.py"; then
   echo "active"
 else
   echo "NOT ACTIVE"
 fi
 ```
 
-`active` requires BOTH legs: the dispatcher must be wired on `PostToolUse` Bash in `settings.json` AND `annunaki_monitor` must be present in its `_REGISTRY`. If it prints `NOT ACTIVE`, warn the user that monitoring is not active and offer to wire it up. (Do not collapse this back to a single `grep` of `settings.json` — that is the #788 false-negative.)
+`active` requires BOTH legs: the dispatcher must be wired on `PostToolUse` Bash in `settings.json` AND `annunaki_monitor` must be present in its `_REGISTRY`. If it prints `NOT ACTIVE`, warn the user that monitoring is not active and offer to wire it up. (Do not collapse this back to a single `rg` of `settings.json` — that is the #788 false-negative.)
 
 ### 2. Read the error log
 

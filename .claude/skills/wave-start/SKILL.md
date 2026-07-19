@@ -41,7 +41,7 @@ REGENERABLE='^(\.claude/annunaki/errors\.jsonl|cross-repo-status\.json|ontology/
 
 # Guard A — non-regenerable uncommitted changes → STOP (do NOT auto-discard).
 # `cut -c4-` takes the path field of `git status --porcelain` (handles spaces/renames).
-NON_REGEN_DIRTY=$(git status --porcelain | cut -c4- | grep -vE "$REGENERABLE" || true)
+NON_REGEN_DIRTY=$(git status --porcelain | cut -c4- | rg -v "$REGENERABLE" || true)
 if [ -n "$NON_REGEN_DIRTY" ]; then
   echo "STOP: working tree has non-regenerable uncommitted changes:"
   echo "$NON_REGEN_DIRTY" | sed 's/^/  /'
@@ -66,7 +66,7 @@ git pull --ff-only origin main
 
 # Assert: on a clean main before proceeding.
 test "$(git rev-parse --abbrev-ref HEAD)" = "main" || { echo "STOP: not on main after checkout"; exit 1; }
-test -z "$(git status --porcelain | cut -c4- | grep -vE "$REGENERABLE" || true)" \
+test -z "$(git status --porcelain | cut -c4- | rg -v "$REGENERABLE" || true)" \
   || { echo "STOP: main checkout is not clean after pull"; exit 1; }
 echo "Parked on clean main @ $(git rev-parse --short HEAD)"
 ```
@@ -115,7 +115,7 @@ Also ensure standard category labels exist:
 
 ```bash
 for label in "tech-debt" "feature" "bug" "security" "infra" "process"; do
-    gh label list --search "$label" --json name | grep -q "$label" || \
+    gh label list --search "$label" --json name | rg -q "$label" || \
         gh label create "$label" --description "$label" --color "auto"
 done
 ```

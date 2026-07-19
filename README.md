@@ -35,12 +35,20 @@ by `uv` / `npm` / `pre-commit`):
 | Tool | Why you need it first | Install |
 |------|-----------------------|---------|
 | `git` + `gh` | clone, branch, and drive issues/PRs/the project board | system pkg · `brew install gh` / `apt install gh` |
+| `rg` (ripgrep) + `jq` | text search (**mandated over `grep`** — see below) and JSON parsing that the `.claude/` scripts + hooks depend on | `brew install ripgrep jq` · `apt install ripgrep jq` |
 | `python3` (3.12+) | runs the `.claude/` hooks, lib, and skills | system · `uv python install` |
 | `uv` | Python package manager for every Python repo | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 | `node` (LTS) + `npm` | the JS/TS repos (design-system, isnad-graph frontend, landing-page) | <https://nodejs.org/> · `nvm install --lts` |
 | `pre-commit` | local hook framework that mirrors CI | `uv tool install pre-commit` · `pipx install pre-commit` |
 | `shellcheck` | **must be on `PATH`** or `actionlint` silently skips shell-lint | `brew install shellcheck` · `apt install shellcheck` |
 | `docker` + compose | build/run the containerized services | <https://docs.docker.com/get-docker/> |
+
+> **We use `rg` (ripgrep), never plain `grep`, for text search.** It's faster,
+> `.gitignore`-aware, and standard across our scripts, hooks, and CI; a bare
+> `grep` from the agent shell is hard-blocked. See
+> [`docs/TOOLCHAIN.md` § Text search: `rg`, not `grep`](docs/TOOLCHAIN.md) for
+> the rule, the `--no-ignore` gotcha, and grep→rg flag translation. For
+> structural (AST) search, reach for `ast-grep` instead.
 
 Pinned versions matter: ruff `0.15.11`, actionlint `1.7.12`, cspell `8.4.0` (and,
 across the org's service repos, gitleaks `8.24.3`). Matching them keeps local

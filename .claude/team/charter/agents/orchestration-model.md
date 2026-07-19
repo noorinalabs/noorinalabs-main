@@ -291,7 +291,7 @@ Every reviewer-class spawn prompt MUST include, **in order**:
 
 6. **`gh pr review` vs `gh pr comment` discipline** — explicit reminder NOT to use `gh pr review` (`block_gh_pr_review` enforces; spawn-brief mention prevents the trip).
 7. **Read-the-diff-at-HEAD discipline** — `gh api repos/.../contents/<path>?ref=<head_sha>` not local clone (per `pull-requests.md` § Origin > Local Clone for "Still-Has-X" File-Content Claims).
-8. **Pre-enumeration discipline** — `grep -c` per file then sum, never `| head -N` (per memory `feedback_no_head_in_surface_enumeration`).
+8. **Pre-enumeration discipline** — `rg -c` per file then sum, never `| head -N` (per memory `feedback_no_head_in_surface_enumeration`).
 9. **Verdict literal-string requirements** — `RequestOrReplied: Approved` (or `ChangesRequested`), NOT `Reply`. `validate_pr_review` counts Approved-verdict comments only; Reply doesn't gate-count (per memory `feedback_pr_review_verdict_format`).
 10. **Reporting pattern** — who to report verdict + literal-strings-confirmation to (typically team-lead or the manager who requested the review).
 11. **Model tier** — set the reviewer spawn's `model:` param to **Sonnet minimum** per § Model-tier selection when spawning; a charter-format review is a correctness judgment, not a lookup, so it does NOT drop to Haiku.

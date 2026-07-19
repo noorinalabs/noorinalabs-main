@@ -680,14 +680,14 @@ while IFS= read -r repo; do
       # Best-effort base-image-CVE classification; degrades to code/other on any log-fetch failure.
       cls=code/other
       log=$(gh run view "$run_id" --repo "noorinalabs/$repo" --log-failed 2>/dev/null || true)
-      printf '%s' "$log" | grep -Eiq 'trivy|grype|\bCVE-[0-9]{4}-[0-9]+|apk[ -].*(upgrade|CVE)|openssl.*(vuln|CVE|advisor)|base[ -]image' && cls=base-image-drift
+      printf '%s' "$log" | rg -iq 'trivy|grype|\bCVE-[0-9]{4}-[0-9]+|apk[ -].*(upgrade|CVE)|openssl.*(vuln|CVE|advisor)|base[ -]image' && cls=base-image-drift
       PUB_RED+=("$repo :: ghcr-publish.yml :: $conclusion :: $cls :: $url") ;;
   esac
 done <<< "$FANIN"
 if [ ${#PUB_RED[@]} -gt 0 ]; then
   printf 'RED fan-in publish run(s) — a wave is NOT closeable while a fan-in publish is red:\n'
   printf '  %s\n' "${PUB_RED[@]}"
-  printf '%s\n' "${PUB_RED[@]}" | grep -q base-image-drift && \
+  printf '%s\n' "${PUB_RED[@]}" | rg -q base-image-drift && \
     printf '  NOTE: "base-image-drift" = upstream base-image CVE — fix-forward the base image (rebuild/bump), not the wave diff.\n'
 else
   echo "Fan-in publishes (ghcr-publish.yml) green on default branches."
