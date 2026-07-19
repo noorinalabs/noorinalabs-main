@@ -72,7 +72,30 @@ def _render_file(file_info: FileInfo) -> list[str]:
     return lines
 
 
-def render_llms(files: list[FileInfo], repo_name: str, node_count: int, edge_count: int) -> str:
+def _render_hub_files(hub_files: list[tuple[str, float]]) -> list[str]:
+    """A ranked 'Hub files' orientation block (PageRank importance, #1002).
+
+    Rendered as ``#``-prefixed metadata right after the header so an agent sees
+    the repo's depended-upon core BEFORE scanning per-file sections — the cheap
+    'what matters most here' signal that keeps the first grep well-aimed. Terse
+    by design (rank, path, score) so it costs ~1 line per file.
+    """
+    lines = [
+        "# Hub files (most depended-upon — PageRank over the cross-file "
+        "import/re-export graph; highest first):"
+    ]
+    for rank, (path, score) in enumerate(hub_files, start=1):
+        lines.append(f"#  {rank:>2}. {path}  ({score:.4f})")
+    return lines
+
+
+def render_llms(
+    files: list[FileInfo],
+    repo_name: str,
+    node_count: int,
+    edge_count: int,
+    hub_files: list[tuple[str, float]] | None = None,
+) -> str:
     ordered = sorted(files, key=lambda f: f.path)
     lang_counts: dict[str, int] = {}
     for f in ordered:
@@ -88,6 +111,8 @@ def render_llms(files: list[FileInfo], repo_name: str, node_count: int, edge_cou
             langs=langs or "none",
         )
     ]
+    if hub_files:
+        out.extend(_render_hub_files(hub_files))
     for file_info in ordered:
         out.append("")
         out.extend(_render_file(file_info))
