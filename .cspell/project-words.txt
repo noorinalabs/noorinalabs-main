@@ -248,3 +248,5 @@ supersets
 unreviewed
 voweled
 wirefilter
+langserver
+typecheck

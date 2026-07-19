@@ -1,0 +1,14 @@
+{
+  "name": "team-lsp",
+  "owner": {
+    "name": "Noorina Labs"
+  },
+  "plugins": [
+    {
+      "name": "code-intelligence",
+      "source": "./code-intelligence",
+      "description": "Python + TypeScript LSP servers for exact-symbol navigation and post-edit diagnostics",
+      "version": "1.0.0"
+    }
+  ]
+}

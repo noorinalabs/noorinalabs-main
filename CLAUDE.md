@@ -53,7 +53,7 @@ The harness provides a **single implicit team per orchestrator session** (no `Te
 
 ### Shell environment: zsh
 
-The dev shell — interactive **and** the agent Bash tool — is **`zsh`**, not bash. Bash-only idioms (`declare -A`, `${!arr[@]}`, unquoted URLs/globs) silently break; default to POSIX-portable constructs, `bash -c '…'` when bash is genuinely required. Do/don't list: [`docs/TOOLCHAIN.md`](docs/TOOLCHAIN.md) § Shell environment, codified in [`ontology/conventions.md`](ontology/conventions.md). Prefer `ast-grep` (invoke as `ast-grep`, never `sg`) over `grep`/`sed` for structural search/replace — TOOLCHAIN.md § Structural & AST tooling.
+The dev shell — interactive **and** the agent Bash tool — is **`zsh`**, not bash. Bash-only idioms (`declare -A`, `${!arr[@]}`, unquoted URLs/globs) silently break; default to POSIX-portable constructs, `bash -c '…'` when bash is genuinely required. Do/don't list: [`docs/TOOLCHAIN.md`](docs/TOOLCHAIN.md) § Shell environment, codified in [`ontology/conventions.md`](ontology/conventions.md). Prefer `ast-grep` (invoke as `ast-grep`, never `sg`) over `grep`/`sed` for structural search/replace — TOOLCHAIN.md § Structural & AST tooling. Optional native **LSP** (exact-symbol nav + post-edit diagnostics, ~0 context cost) is available via the committed `code-intelligence` plugin — one-time enable in TOOLCHAIN.md § Native LSP.
 
 ### Local Hooks (pre-commit + pre-push)
 
