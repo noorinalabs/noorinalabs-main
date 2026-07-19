@@ -190,6 +190,33 @@ convenience vs. a wired proof-of-pattern gate) is tracked in #748 / #760.
 | `shfmt` | shell formatter (completes `shellcheck`) | `brew install shfmt` |
 | `bashlex` | Python lib — proper Bash AST for the identity/shell hooks (wired in #757) | `pip install bashlex` |
 
+### Native LSP — exact-symbol navigation + post-edit diagnostics (optional, #1000)
+
+Claude Code ships a built-in **`LSP` tool** (goToDefinition / findReferences / hover / workspace symbol search, plus automatic type diagnostics after each Edit/Write) that runs the language server **out-of-process — ~0 model-context cost**. It is layered on top of `ast-grep` + the structural ontology, not a replacement; enable it if you want precise, type-aware nav on the Python/TS code.
+
+Enabling has **two parts** — a committed plugin config (in-repo, shared) and a per-machine setup (binaries + one registration command; **not** a git artifact, **not** a CI/pre-commit dependency):
+
+1. **Install the language-server binaries** (once per machine):
+
+   ```bash
+   pip install pyright                                   # pyright-langserver (Python)
+   npm install -g typescript-language-server typescript  # TS/JS
+   ```
+
+2. **Register + enable the committed plugin** (once per machine; the marketplace registration persists per-user in `~/.claude/`):
+
+   ```bash
+   # From the repo root:
+   claude plugin marketplace add ./.claude/plugins/team-lsp
+   claude plugin install code-intelligence@team-lsp
+   ```
+
+The plugin (`.claude/plugins/team-lsp/`) maps `.py/.pyi` → `pyright-langserver` and `.ts/.tsx/.js/.jsx` → `typescript-language-server`; verify with `claude plugin details code-intelligence@team-lsp` (should report `LSP servers (2) python, typescript`). The `LSP` tool then appears in-session.
+
+> **Committed config alone does NOT auto-enable on clone.** A project `.claude/settings.json` `extraKnownMarketplaces`/`enabledPlugins` entry was tested and silently no-ops for a local relative-path marketplace on Claude Code 2.1.x (undocumented), so it is deliberately NOT committed — the one-time `marketplace add` above is the verified path. If the binaries are absent, the `LSP` tool simply doesn't start (no error); nothing else is affected.
+>
+> **Scope (monorepo-of-repos):** the committed plugin lives in the **parent** `.claude/` and activates for **parent-rooted** sessions (the dominant orchestrator mode; also covers the parent's own `.claude/lib` + `.claude/hooks` Python). Child-rooted sessions resolve their own repo root, so the Python/TS child repos (isnad-graph, user-service, ingest-platform) each need the same plugin in their `.claude/` — tracked as per-child follow-ups.
+
 ---
 
 ## Document generation (markdown → MS Office)

@@ -1,0 +1,5 @@
+{
+  "name": "code-intelligence",
+  "description": "Python and TypeScript LSP servers for team code intelligence (pyright + typescript-language-server). Requires the server binaries on PATH — see docs/TOOLCHAIN.md.",
+  "version": "1.0.0"
+}
