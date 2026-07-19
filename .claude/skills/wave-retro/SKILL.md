@@ -307,7 +307,9 @@ The judge **never deletes, edits, or commits** anything in the memory store — 
 
 ### 9. Reconcile next-wave scope (`/wave-scope`) — added P3W5 #273
 
-Carry-forward and memory-must-include state is freshest immediately after retro, so this is the highest-value moment to run `/wave-scope`. Auto-invoke if the next-wave meta-issue exists; **otherwise auto-draft a stub meta-issue** (the scaffold is mechanical — only the theme is an owner decision) and surface "set the theme," rather than re-emitting a manual "go draft an issue" blocker every retro (owner directive, P4W1 retro 2026-06-10 — the blocker recurred every wave).
+Carry-forward and memory-must-include state is freshest immediately after retro, so this is the highest-value moment to run `/wave-scope`. **Recommend** running it if the next-wave meta-issue exists (no longer auto-invoked — #1022); **if no meta-issue exists yet, auto-draft a stub meta-issue** (the scaffold is mechanical — only the theme is an owner decision) and surface "set the theme," rather than re-emitting a manual "go draft an issue" blocker every retro (owner directive, P4W1 retro 2026-06-10 — the blocker recurred every wave).
+
+> **Auto-invoke dropped (#1022, process-trim).** Step 9 used to *automatically invoke* `/wave-scope {N} $NEXT_WAVE` at the tail of every retro. That chained a second heavyweight skill (cross-repo issue queries, label churn, meta-issue rewrite, owner-judgment gates) onto the end of a retro the owner may not want to run yet. The stub-draft + surfaced pointer below stay; only the automatic invocation is now a **recommended manual next step**. `/wave-scope` still runs with all its own gates whenever the orchestrator chooses to invoke it.
 
 > **Dominant-class characterization of a weighted remainder** (P8W23 retro, owner-approved 2026-07-05 — main#923; mirrors charter [`issues.md` § Data-quality criteria item 3](../../team/charter/issues.md)). This governs any carry-forward item that is the un-weighted remainder of a weighted closure. When a criterion is closed on a **weighted** basis (a metric that discounts part of the population — e.g. weighting narrator-name pollution by `mention_count`), the closure note MUST also state what the **un-weighted remainder** actually *is*, characterized by its **dominant class** — the largest real category of what remains — never by its most-favorable class. Give the remainder's size and its predominant makeup. For instance, the #723 orphan-tail of 44,073 narrators was first framed as "accepted bio narrators" (the favorable class), when the honest dominant class was da#317 matn-sentence pollution (~26% of the tail); the weighting kept the closure honest but the characterization did not. Relates to `feedback_honest_audit_over_conclusion_claim`.
 
@@ -385,20 +387,22 @@ elif [ "$HIT_COUNT" -gt 1 ]; then
   echo "$META_HITS" | jq -r '.[] | "    - #\(.number): \(.title)"'
   echo "  Resolve before running /wave-scope."
 else
-  echo "Auto-invoking /wave-scope {N} $NEXT_WAVE (next-wave meta-issue: noorinalabs-main#$NEXT_META_ISSUE)"
-  # Invoke the skill — it will write wave_${NEXT_WAVE}_scope_reconciled_at to cross-repo-status.json on success.
+  echo "RECOMMENDED next step: /wave-scope {N} $NEXT_WAVE (next-wave meta-issue: noorinalabs-main#$NEXT_META_ISSUE)"
+  echo "  Carry-forward + must-include state is freshest now — running /wave-scope next is the"
+  echo "  high-value moment, but it is NOT auto-invoked (#1022). Invoke it manually when ready;"
+  echo "  it writes wave_${NEXT_WAVE}_scope_reconciled_at, which /wave-kickoff Step 0a requires."
 fi
 ```
 
-**When a meta-issue with a set (non-TBD) theme exists** (the `HIT_COUNT == 1` branch), invoke the `/wave-scope` skill with the next phase + wave numbers. The skill is responsible for:
+**When a meta-issue with a set (non-TBD) theme exists** (the `HIT_COUNT == 1` branch), **recommend** invoking the `/wave-scope` skill with the next phase + wave numbers — do not auto-invoke it (#1022). When the orchestrator runs it, the skill is responsible for:
 - Reading carry-forward (just-written by step 6) and memory must-includes
 - Reconciling declared (meta-issue) vs labeled scope across all repos
 - Refreshing the next-wave meta-issue body
 - Writing `wave_$NEXT_WAVE_scope_reconciled_at` so `/wave-kickoff` Step 0a passes
 
-**When the stub was just auto-drafted** (the `HIT_COUNT == 0` branch above), do **NOT** invoke `/wave-scope` yet — its Gate B requires an owner-set theme, and the stub's theme is `TBD`. Surface the auto-drafted issue URL and stop; the owner sets the theme, then `/wave-scope {N} $NEXT_WAVE` runs on the next turn (or the next retro/session picks it up via the now-existing meta-issue).
+**When the stub was just auto-drafted** (the `HIT_COUNT == 0` branch above), do **NOT** invoke `/wave-scope` yet — its Gate B requires an owner-set theme, and the stub's theme is `TBD`. Surface the auto-drafted issue URL and stop; the owner sets the theme, then `/wave-scope {N} $NEXT_WAVE` runs when the orchestrator invokes it (or the next retro/session picks it up via the now-existing meta-issue).
 
-This step closes the retro→kickoff handoff loop: every retro produces *either* a reconciled next-wave scope *or* a ready-to-theme stub meta-issue — never a bare "go create an issue" blocker. The only manual action left to the owner is the theme decision itself.
+This step closes the retro→kickoff handoff loop: every retro produces *either* a ready-to-scope next-wave meta-issue (with a recommended `/wave-scope` pointer) *or* a ready-to-theme stub meta-issue — never a bare "go create an issue" blocker. The manual actions left to the owner are the theme decision and, when ready, the `/wave-scope` run itself.
 
 ## What remains manual
 
