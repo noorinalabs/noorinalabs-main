@@ -52,8 +52,17 @@ the `_shell_parse.py` bug trail).
   (run-with-group-id), and a script shelling `sg …` silently runs that instead.
 - **`yq`** (mikefarah) for structural YAML query/edit (workflows, compose,
   pre-commit) instead of `re.match`/substring over lines.
-- **`rg`/`sed`/`sd`** stay the right tools for *literal* / line-oriented work;
-  `sd` is the literal-by-default replace companion (no `sed` regex foot-guns).
+- **`rg`** (ripgrep) is the mandated tool for *literal* / line-oriented text
+  search — **never plain `grep`**. `rg` is faster, multiline-capable, and
+  `.gitignore`-aware; a bare `grep` invocation is **hard-blocked** by a
+  PreToolUse hook ([#1008](https://github.com/noorinalabs/noorinalabs-main/issues/1008)).
+  Two gotchas the rule carries: (a) `rg` skips `.gitignore`d paths by default —
+  add `--no-ignore`/`-uu` when searching a generated/ignored target (e.g. the
+  `ontology/structural/` index) or you get a silent zero
+  (`feedback_silent_zero_is_not_a_measurement`); (b) on the dev box `grep` is
+  actually `ugrep`, not GNU grep — one more reason to standardize on `rg`.
+- **`sed`/`sd`** stay the right tools for line-oriented replace; `sd` is the
+  literal-by-default companion (no `sed` regex foot-guns).
 
 Install commands + worked examples: `docs/TOOLCHAIN.md` § Structural & AST
 tooling. Adoption depth (documented convenience vs. wired gate) is tracked in

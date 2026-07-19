@@ -182,10 +182,10 @@
       "tracked_at": "2026-04-22T02:53:25.065010+00:00"
     },
     "CLAUDE.md": {
-      "last_tracked": "bfc77a5f81fad7cb2c3d427f85b6b5c6a0ac9d44f8da4da31a1c529630c9bea8",
-      "last_resolved": "bfc77a5f81fad7cb2c3d427f85b6b5c6a0ac9d44f8da4da31a1c529630c9bea8",
-      "tracked_at": "2026-04-30T22:05:07.402036+00:00",
-      "resolved_at": "2026-04-30T23:20:21.264004+00:00"
+      "last_tracked": "b70f0a34b9afa6103d75ab3362805fed966226e864877783f3ee27b466b85695",
+      "last_resolved": "b70f0a34b9afa6103d75ab3362805fed966226e864877783f3ee27b466b85695",
+      "tracked_at": "2026-07-19T16:26:29.992684+00:00",
+      "resolved_at": "2026-07-19T14:20:00Z"
     },
     "Makefile": {
       "last_resolved": "ab83cf7d5b737362e62fe74382f1a56fb36d7610ca6e69369f51b454b980fafe",
@@ -464,10 +464,10 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "ontology/conventions.md": {
-      "last_tracked": "24a0bc9c8e7dc2122dcdb3b38b629efeb313b199cc9250e1ede14d667c5a0cea",
-      "last_resolved": "24a0bc9c8e7dc2122dcdb3b38b629efeb313b199cc9250e1ede14d667c5a0cea",
-      "tracked_at": "2026-07-13T15:42:07.560829+00:00",
-      "resolved_at": "2026-07-17T03:45:37Z"
+      "last_tracked": "6ceffaadd34d290e65c5759696ca51b8140e9575643ff4ea1f3c46e04f4045cf",
+      "last_resolved": "6ceffaadd34d290e65c5759696ca51b8140e9575643ff4ea1f3c46e04f4045cf",
+      "tracked_at": "2026-07-19T16:25:15.613293+00:00",
+      "resolved_at": "2026-07-19T14:20:00Z"
     },
     "ontology/domain.yaml": {
       "last_resolved": "6fedad509f80b9570d0385fb5759e861d8b6f7b219ecc425b8dd472173ca536c",
@@ -1612,6 +1612,18 @@
       "last_resolved": "3474ea595072dcb8495cea7b6d170e0a5b583e32a28123ab51fb18d72d918999",
       "tracked_at": "2026-07-19T04:26:16.582824+00:00",
       "resolved_at": "2026-07-19T13:55:00Z"
+    },
+    "docs/TOOLCHAIN.md": {
+      "last_tracked": "87324fbdf19a1933260b122e87026d6a5fc8bfed0c092c1ea13361e909785087",
+      "last_resolved": "87324fbdf19a1933260b122e87026d6a5fc8bfed0c092c1ea13361e909785087",
+      "tracked_at": "2026-07-19T16:25:51.567921+00:00",
+      "resolved_at": "2026-07-19T14:20:00Z"
+    },
+    "README.md": {
+      "last_tracked": "859fe8e93166d50237914b3330f5a8a5c7097748693860430299d74168edbd30",
+      "last_resolved": "859fe8e93166d50237914b3330f5a8a5c7097748693860430299d74168edbd30",
+      "tracked_at": "2026-07-19T16:26:12.917702+00:00",
+      "resolved_at": "2026-07-19T14:20:00Z"
     }
   },
   "last_cleanup": {
