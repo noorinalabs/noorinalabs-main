@@ -112,3 +112,6 @@ ontology/structural/
 # CLAUDE.md. Only the per-session, machine-local Stop-hook handoff is excluded —
 # it churns every ~5min and is session/machine-specific, not shared knowledge.
 .claude/memory/session_handoff.md
+
+# Obsidian editor workspace state (local, not shared)
+ontology/.obsidian/

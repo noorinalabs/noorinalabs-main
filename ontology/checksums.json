@@ -1014,10 +1014,10 @@
       "resolved_at": "2026-06-21T21:02:19.551435+00:00"
     },
     ".claude/memory/MEMORY.md": {
-      "last_tracked": "de8348e18b54300c95ac4032bd666af99991a1d7d16a661de6061568d5dd2583",
-      "last_resolved": "de8348e18b54300c95ac4032bd666af99991a1d7d16a661de6061568d5dd2583",
-      "tracked_at": "2026-07-18T20:13:30.304297+00:00",
-      "resolved_at": "2026-07-18T20:17:55Z"
+      "last_tracked": "ec8d27e8e65e27d854ab8dace6bcb37023a2c0d653b93897b6400c0eb0ebec37",
+      "last_resolved": "ec8d27e8e65e27d854ab8dace6bcb37023a2c0d653b93897b6400c0eb0ebec37",
+      "tracked_at": "2026-07-19T01:03:12.061639+00:00",
+      "resolved_at": "2026-07-19T01:29:16Z"
     },
     "noorinalabs-isnad-graph/.claude/lib/tests/test_pre_commit_ci_sync.py": {
       "last_tracked": "aa209279deec3844b51e384157ba3e67a6d0f325410941f63f38d57535e6498c",
@@ -1032,10 +1032,10 @@
       "resolved_at": "2026-06-21T22:15:52Z"
     },
     ".claude/memory/session_handoff.md": {
-      "last_tracked": "2042066892536b88e74a05d67bc5b1d5c2fdf264a405aca35d54a2e16054bc38",
-      "last_resolved": "2042066892536b88e74a05d67bc5b1d5c2fdf264a405aca35d54a2e16054bc38",
-      "tracked_at": "2026-07-18T20:13:46.012716+00:00",
-      "resolved_at": "2026-07-18T20:17:55Z"
+      "last_tracked": "526436a0825ef081a55983de2ceacfdb31bca91fcbdc9c8ec073f298b7bae4df",
+      "last_resolved": "526436a0825ef081a55983de2ceacfdb31bca91fcbdc9c8ec073f298b7bae4df",
+      "tracked_at": "2026-07-18T21:38:30.299736+00:00",
+      "resolved_at": "2026-07-18T21:39:38Z"
     },
     ".claude/lib/verify_deployable_merge.py": {
       "last_tracked": "7c2545f87d17c5c35967612f88381444ff510ceb81ba6553ba37497b0d5c3302",
@@ -1594,6 +1594,18 @@
       "last_resolved": "c1363c73e7c02c02da281ac1a4ebd26c592d2b9d6e204bf05bc8fe5ffde28071",
       "tracked_at": "2026-07-18T17:11:21.174343+00:00",
       "resolved_at": "2026-07-18T20:17:55Z"
+    },
+    ".claude/memory/feedback_pr_review_verdict_format.md": {
+      "last_tracked": "0d61969ec9ef93881b08c3435fcad9325ea362ac7a3d9fd935a22a4d586f3347",
+      "last_resolved": "0d61969ec9ef93881b08c3435fcad9325ea362ac7a3d9fd935a22a4d586f3347",
+      "tracked_at": "2026-07-19T00:51:03.914869+00:00",
+      "resolved_at": "2026-07-19T01:29:16Z"
+    },
+    ".claude/memory/feedback_stacked_pr_base_delete_orphan.md": {
+      "last_tracked": "7ab7644af477e38f73f6e5675a4f1caa335465561176ae22fe6d86bac5c1b666",
+      "last_resolved": "7ab7644af477e38f73f6e5675a4f1caa335465561176ae22fe6d86bac5c1b666",
+      "tracked_at": "2026-07-19T01:03:03.162896+00:00",
+      "resolved_at": "2026-07-19T01:29:16Z"
     }
   },
   "last_cleanup": {
