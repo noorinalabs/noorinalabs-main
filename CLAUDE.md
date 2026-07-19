@@ -106,6 +106,8 @@ Project memory is **version-controlled at `.claude/memory/`**, NOT the user-spac
 > `.claude/memory/**` is excluded from the markdown/cspell/lychee linters (dense note prose with names, SHAs, `[[wikilinks]]`, Arabic). `session_handoff.md` is gitignored (per-session, machine-local). Each child repo commits its own `.claude/memory/` + `@import` in its own CLAUDE.md — repos do not import across directories.
 >
 > **Cold-archive tier (`.claude/memory/archive/`):** a genuinely-historical memory can be moved here — it stays git-tracked and grep-able but is **not** always-loaded (no `MEMORY.md` pointer) and is **not** counted by the budget gate (which globs the top-level `*.md` only). The `/wave-retro` decay sweep (`memory_budget.py --staleness`, Step 7.8) surfaces size/age candidates; archiving is a human decision, never automatic.
+>
+> **Stable cached prefix (keep volatile state out):** `CLAUDE.md` + the `@import`-ed `MEMORY.md` form the always-loaded, prompt-cached context prefix. Volatile per-session state must NOT live inside it (a rewrite invalidates the cache — write ≈ 12.5× read cost — and goes stale). The handoff pointer line is therefore **static**; the volatile handoff summary lives only in the gitignored `session_handoff.md`, and volatile wave/status state is read on demand via the status digest (`wave_status.py digest`, #987), never embedded in the index (#998).
 
 ## Ontology
 

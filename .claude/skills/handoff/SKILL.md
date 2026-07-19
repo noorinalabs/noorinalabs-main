@@ -94,14 +94,14 @@ type: project
 
 Also print the full handoff summary to the conversation so the user can copy/paste it into a different session or machine if needed.
 
-### 4. Update memory index
+### 4. Ensure the (static) memory-index pointer exists
 
-Add or update the handoff entry in `MEMORY.md`:
+`MEMORY.md` carries exactly one pointer line for the handoff. It is **static** — a fixed one-liner that does NOT carry a per-session summary:
 ```
-- [Session handoff](session_handoff.md) — Pickup from {date}: {one-line summary}
+- [Session handoff](session_handoff.md) — read this first to resume; auto-generated each session, gitignored/machine-local.
 ```
 
-If a previous handoff entry exists, **replace it** (there should only ever be one).
+**Do NOT rewrite this line with the session's summary.** The volatile per-session content belongs only in `session_handoff.md` (Location 1) and the console output (Location 2) — never in `MEMORY.md`. Rationale: `MEMORY.md` is `@import`-ed into `CLAUDE.md` and forms the always-loaded, prompt-cached context prefix; rewriting a line inside it every session invalidates that cache (write ≈ 12.5× read cost), duplicates `session_handoff.md`, and — because it is a hand-maintained mirror of a file that moves every session — reliably goes stale (#998, token-efficiency Move #6). If the static line is missing, add it once; if a previous handoff entry still carries a summary, replace it with the static form. There should only ever be one.
 
 ### 5. Confirm
 
