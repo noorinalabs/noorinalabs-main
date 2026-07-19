@@ -134,6 +134,14 @@ flowchart LR
 
 A `Stop` hook auto-writes a handoff to project memory after every response (throttled to 5 min). The next `/session-start` Step 2 reads whichever handoff is freshest. Manual `/handoff` adds conversational context (decisions, discussion) that the automatic hook cannot infer.
 
+### Session hygiene — `/clear` at wave boundaries, `/compact` mid-task
+
+Long multi-wave sessions degrade quality, not just cost: research finds marathon sessions (many unrelated tasks queued in one continuous session) underperform single-task-scoped sessions by **16–29 percentage points**, and Anthropic's own guidance is that *over-compacting within one session* is a more common failure than *under-clearing between* unrelated tasks (token-efficiency audit #986, Part 7). Two built-in CLI commands, two distinct jobs — they are **not** lifecycle skills, so they have no table row above; the discipline is:
+
+- **`/compact`** (summarize-and-continue) — use *inside* one still-relevant task, at natural checkpoints. Rule of thumb: proactively compact around ~70% context capacity, before a step that will consume a lot of tokens. Critical facts belong in files (`.claude/memory/`, `cross-repo-status.json`), never only in the conversation, so a compaction can never drop them.
+- **`/clear`** (full wipe) — use when switching to *unrelated* work. **A wave boundary is an unrelated-task boundary:** once `/wave-retro` closes a wave (and `session_handoff.md` is written), prefer `/clear` before taking on the next wave's execution rather than compacting the closed wave's context forward. The handoff mechanism (`/handoff` + the automatic `Stop`-hook `session_handoff.md`) exists precisely to carry state across the clear — the next `/session-start` Step 2 reloads it.
+- **Scope a session to one wave / one coherent task.** Design for die-and-resume from the `session_handoff.md` checkpoint, not from a replayed transcript; run `/handoff` before the clear so conversational context (decisions, in-flight caveats) survives the boundary. This is discipline over the mechanisms already in place — no new tooling.
+
 ---
 
 ## Cross-references
