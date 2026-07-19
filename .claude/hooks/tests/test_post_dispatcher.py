@@ -47,12 +47,12 @@ def _run_dispatcher(input_data: dict) -> tuple[int, str]:
 
 
 class RegistryCompletenessTests(unittest.TestCase):
-    """Every PostToolUse entry in settings.json must be in _REGISTRY."""
+    """Every PostToolUse entry in settings.json must resolve to modules via config."""
 
     def test_settings_post_tool_use_entries_all_registered(self):
-        """If settings.json registered foo.py for matcher M, _REGISTRY[M] must
-        list 'foo' (or the entry must already be `post_dispatcher.py`, the
-        consolidation entry).
+        """If settings.json registered foo.py for matcher M, the config module
+        list for M must include 'foo' (or the entry must already be
+        `post_dispatcher.py`, the consolidation entry).
         """
         settings_path = _REPO_ROOT / ".claude" / "settings.json"
         with open(settings_path, encoding="utf-8") as f:
@@ -75,9 +75,9 @@ class RegistryCompletenessTests(unittest.TestCase):
             if all(m == "post_dispatcher" for m in registered):
                 self.assertIn(
                     matcher,
-                    pd._REGISTRY,
+                    pd._MATCHER_CFG_KEY,
                     f"settings.json registers post_dispatcher for matcher "
-                    f"{matcher!r} but _REGISTRY has no entry for it",
+                    f"{matcher!r} but _MATCHER_CFG_KEY has no entry for it",
                 )
                 continue
             for module in registered:
@@ -85,30 +85,32 @@ class RegistryCompletenessTests(unittest.TestCase):
                     continue
                 self.assertIn(
                     module,
-                    pd._REGISTRY.get(matcher, []),
+                    pd._modules_for(matcher),
                     f"settings.json registers {module!r} for matcher "
-                    f"{matcher!r} but _REGISTRY[{matcher!r}] does not include it",
+                    f"{matcher!r} but the config module list for it "
+                    "does not include it",
                 )
 
     def test_registry_modules_all_importable(self):
-        """Every module in _REGISTRY must be importable from .claude/hooks/."""
+        """Every config-dispatched module must be importable from .claude/hooks/."""
         import importlib
 
-        for matcher, modules in pd._REGISTRY.items():
-            for module_name in modules:
+        for matcher in pd._MATCHER_CFG_KEY:
+            for module_name in pd._modules_for(matcher):
                 try:
                     importlib.import_module(module_name)
                 except ImportError as e:
                     self.fail(
-                        f"_REGISTRY[{matcher!r}] lists {module_name!r} but it failed to import: {e}"
+                        f"config lists {module_name!r} for matcher {matcher!r} "
+                        f"but it failed to import: {e}"
                     )
 
     def test_registry_modules_expose_check(self):
-        """Every module in _REGISTRY must expose a `check(input_data)` function."""
+        """Every config-dispatched module must expose a `check(input_data)` function."""
         import importlib
 
-        for matcher, modules in pd._REGISTRY.items():
-            for module_name in modules:
+        for matcher in pd._MATCHER_CFG_KEY:
+            for module_name in pd._modules_for(matcher):
                 mod = importlib.import_module(module_name)
                 self.assertTrue(
                     callable(getattr(mod, "check", None)),
@@ -117,7 +119,7 @@ class RegistryCompletenessTests(unittest.TestCase):
 
     def test_edit_write_share_module_list(self):
         """Edit and Write should reference the same module sequence today."""
-        self.assertEqual(pd._REGISTRY["Edit"], pd._REGISTRY["Write"])
+        self.assertEqual(pd._modules_for("Edit"), pd._modules_for("Write"))
 
 
 class DispatchPerMatcherTests(unittest.TestCase):
@@ -134,7 +136,7 @@ class DispatchPerMatcherTests(unittest.TestCase):
             input_data.update(extra_input)
 
         mocks: list[mock.MagicMock] = []
-        modules = pd._REGISTRY[matcher]
+        modules = pd._modules_for(matcher)
 
         # Patch each module's `check` so we can assert call counts without
         # exercising real side effects.
@@ -566,10 +568,10 @@ class DispatchTraceTests(unittest.TestCase):
             "tool_input": {"command": "echo trace-all"},
             "tool_response": {"stdout": "", "stderr": "", "exitCode": 0},
         }
-        # Derive the expected module set from the registry itself so this test
-        # does not rot when the registry grows (it gained
+        # Derive the expected module set from the config itself so this test
+        # does not rot when the list grows (it gained
         # post_label_change_wave_field_sync via #445 after wave-10 authored it).
-        bash_modules = list(post_dispatcher._REGISTRY["Bash"])
+        bash_modules = post_dispatcher._modules_for("Bash")
         with mock.patch.dict("os.environ", {"POST_DISPATCHER_TRACE_ALL": "1"}):
             importlib.reload(post_dispatcher)
             try:

@@ -9,6 +9,15 @@ Each hook module exposes:
     check(input_data: dict) -> dict | None
         Returns None to allow, or a dict with "decision" and "reason"/"systemMessage".
 
+The active module list + order is read from the framework config
+(``hooks.pre_bash`` in ``.claude/framework.config.json``), so enabling,
+disabling, or reordering a check is a config edit rather than a code change.
+The loader fails open to the full default list, so a missing/corrupt config
+still dispatches every gate. Order matters: cheap/local checks first (e.g.
+smart_grep_ontology routes a symbol search before the block_bare_grep backstop,
+#1017), network-calling checks last (block_squash_wave_merge resolves a PR base
+via `gh pr view`).
+
 Exit codes:
   0 — allow (all hooks passed, or aggregated warnings)
   2 — block (first blocking hook wins)
@@ -24,36 +33,7 @@ _HOOKS_DIR = Path(__file__).resolve().parent
 if str(_HOOKS_DIR) not in sys.path:
     sys.path.insert(0, str(_HOOKS_DIR))
 
-# Ordered list of hook modules to run for Bash PreToolUse.
-# Order matters: cheap/fast checks first, network-calling checks last.
-_BASH_HOOKS = [
-    "validate_commit_identity",
-    "block_no_verify",
-    # Route a symbol-shaped rg/grep to the structural ontology BEFORE the
-    # block_bare_grep backstop, so a symbol search is answered inline (#1017).
-    "smart_grep_ontology",
-    "block_bare_grep",
-    "block_git_config",
-    "block_gh_pr_review",
-    "block_stale_tmp_message_file",
-    "no_worktree_self_delete",
-    "validate_edit_completion",
-    "auto_set_env_test",
-    "validate_lockfile_paths",
-    "validate_labels",
-    "validate_wave_label_evidence",
-    "validate_review_comment_format",
-    "validate_pr_review",
-    "validate_pr_ci_status",
-    "validate_branch_freshness",
-    "validate_workflow_paths_coverage",
-    "validate_vps_host",
-    "warn_ghcr_image",
-    "warn_zsh_wordsplit",
-    # Network-calling checks LAST: resolves a PR's base ref via `gh pr view`.
-    # Cheap-prefiltered on `--squash` and fails open on any gh error. P7W19.
-    "block_squash_wave_merge",
-]
+from _framework_config import config  # noqa: E402
 
 
 def main() -> None:
@@ -68,7 +48,7 @@ def main() -> None:
 
     warnings: list[str] = []
 
-    for module_name in _BASH_HOOKS:
+    for module_name in config(input_data).get("hooks.pre_bash", []):
         try:
             mod = importlib.import_module(module_name)
         except ImportError:
