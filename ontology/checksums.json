@@ -32,10 +32,10 @@
       "tracked_at": "2026-04-24T21:39:57.857444+00:00"
     },
     ".claude/hooks/dispatcher.py": {
-      "last_resolved": "6b77b8cac02b462859bc71618e0d7263b7643d54ff5c1f0ca078f366e9df75aa",
-      "last_tracked": "6b77b8cac02b462859bc71618e0d7263b7643d54ff5c1f0ca078f366e9df75aa",
-      "resolved_at": "2026-05-11T01:41:41.840576+00:00",
-      "tracked_at": "2026-05-11T01:41:41.840576+00:00"
+      "last_tracked": "9117ba9910e6a8dcd4b51eb933b9b3ae34a3c255a05fd6f224e96d4119fff0cd",
+      "last_resolved": "9117ba9910e6a8dcd4b51eb933b9b3ae34a3c255a05fd6f224e96d4119fff0cd",
+      "tracked_at": "2026-07-19T16:30:38.074650+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
     },
     ".claude/hooks/enforce_ontology_context.py": {
       "last_resolved": "699674ce3bc845ed5b791655cfe0182d27137993c09564c022f84ea1effdf65d",
@@ -86,10 +86,10 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     ".claude/skills/annunaki/SKILL.md": {
-      "last_resolved": "ecbbaf535d18f49bec8be1d8c4cce9e69d8735969fa74c35e1862e9fb918af2f",
-      "last_tracked": "ecbbaf535d18f49bec8be1d8c4cce9e69d8735969fa74c35e1862e9fb918af2f",
-      "resolved_at": "2026-04-24T21:40:57.525747+00:00",
-      "tracked_at": "2026-04-24T21:40:10.484031+00:00"
+      "last_tracked": "6f2493c51ddca4a918cd27c1cbf74ea5a8c9224700979123f738a288ddf30952",
+      "last_resolved": "6f2493c51ddca4a918cd27c1cbf74ea5a8c9224700979123f738a288ddf30952",
+      "tracked_at": "2026-07-19T16:38:46.090880+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
     },
     ".claude/skills/handoff/SKILL.md": {
       "last_resolved": "d68c996a20db5fbc4c5e54f5ab1a75e8c5bad2c03faee13d264b4ffd37f03f6c",
@@ -110,22 +110,22 @@
       "tracked_at": "2026-04-23T03:07:58.485892+00:00"
     },
     ".claude/skills/wave-kickoff/SKILL.md": {
-      "last_tracked": "44db2a186c822e37fdfccfae84e566be046697a854a456c856c2b383737fd247",
-      "last_resolved": "44db2a186c822e37fdfccfae84e566be046697a854a456c856c2b383737fd247",
-      "tracked_at": "2026-06-12T01:12:43.149338+00:00",
-      "resolved_at": "2026-06-12T17:36:37Z"
+      "last_tracked": "489eb8ede130722d634bed75b747c8946daa83466d70b35df6e00fd13e14985c",
+      "last_resolved": "489eb8ede130722d634bed75b747c8946daa83466d70b35df6e00fd13e14985c",
+      "tracked_at": "2026-07-19T16:37:29.818437+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
     },
     ".claude/skills/wave-retro/SKILL.md": {
-      "last_tracked": "00b40976619ae7eade8ac1ca5ef1aae992a771e6c7695ae39121c3fc2ec07e46",
-      "last_resolved": "00b40976619ae7eade8ac1ca5ef1aae992a771e6c7695ae39121c3fc2ec07e46",
-      "tracked_at": "2026-06-02T13:30:31.838248+00:00",
-      "resolved_at": "2026-06-04T20:50:14.260341+00:00"
+      "last_tracked": "38aa35d06caa2084270db6e119a9c2de20c7425638add4682b417a450982f587",
+      "last_resolved": "38aa35d06caa2084270db6e119a9c2de20c7425638add4682b417a450982f587",
+      "tracked_at": "2026-07-19T16:37:31.658316+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
     },
     ".claude/skills/wave-wrapup/SKILL.md": {
-      "last_tracked": "ca9fa31381e522e3c595ecbf3ae2e09e990b1dbd38a5f952472389c6f910bfee",
-      "last_resolved": "ca9fa31381e522e3c595ecbf3ae2e09e990b1dbd38a5f952472389c6f910bfee",
-      "tracked_at": "2026-06-25T01:55:45.020052+00:00",
-      "resolved_at": "2026-06-25T02:07:09Z"
+      "last_tracked": "86f0c49044076b226cec0a869294aa347241e6ac3c1e7720be268778f933be86",
+      "last_resolved": "86f0c49044076b226cec0a869294aa347241e6ac3c1e7720be268778f933be86",
+      "tracked_at": "2026-07-19T16:38:21.702329+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
     },
     ".claude/team/charter.md": {
       "last_tracked": "a572ba52385b8ed797904abd53b9b35a5f0ffb80f7288193270db7408e53f848",
@@ -662,10 +662,10 @@
       "resolved_at": "2026-05-06T00:59:20.040752+00:00"
     },
     ".claude/team/charter/state-claims.md": {
-      "last_tracked": "53554684caefa256a77fd03b7a58ee8744b4d8812836ac6986f1e449b11407cb",
-      "last_resolved": "53554684caefa256a77fd03b7a58ee8744b4d8812836ac6986f1e449b11407cb",
-      "tracked_at": "2026-06-19T23:42:29.991302+00:00",
-      "resolved_at": "2026-06-19T23:44:09Z"
+      "last_tracked": "5d9b31d604210217c68f6b9e792f09c25ad1a0c18686111aecebf20c660a2dcf",
+      "last_resolved": "5d9b31d604210217c68f6b9e792f09c25ad1a0c18686111aecebf20c660a2dcf",
+      "tracked_at": "2026-07-19T16:40:03.360957+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
     },
     ".claude/team/phases/phase-3.md": {
       "last_tracked": "6ededd8608f01314fbeb5ebaa87a316e1f126ed6696218ba3ac44a2dcf86840c",
@@ -674,16 +674,16 @@
       "resolved_at": "2026-06-04T20:50:14.260341+00:00"
     },
     ".claude/skills/phase-review/SKILL.md": {
-      "last_tracked": "861091d903f2ece1c784c53846881bc9ea802542b39acbb8033c1f670aa1f6a1",
-      "last_resolved": "861091d903f2ece1c784c53846881bc9ea802542b39acbb8033c1f670aa1f6a1",
-      "tracked_at": "2026-05-08T21:34:04.322302+00:00",
-      "resolved_at": "2026-05-08T23:19:16.069020+00:00"
+      "last_tracked": "3ef4d75266e94574ef714f26a269b9d4e9dc36e7a9ac4ad43b7dcb3598f101f3",
+      "last_resolved": "3ef4d75266e94574ef714f26a269b9d4e9dc36e7a9ac4ad43b7dcb3598f101f3",
+      "tracked_at": "2026-07-19T16:37:26.036525+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
     },
     ".claude/skills/wave-scope/SKILL.md": {
-      "last_tracked": "dea260c5d4173d456f295157b474094814b9f1134e0f613eb92783a68c49c06b",
-      "last_resolved": "dea260c5d4173d456f295157b474094814b9f1134e0f613eb92783a68c49c06b",
-      "tracked_at": "2026-06-16T18:30:11.564057+00:00",
-      "resolved_at": "2026-06-16T22:10:10.346202+00:00"
+      "last_tracked": "32b0f5cfbbf37ec741761429fccd7d8985a32860d1f929bbe3abdf5b3f1fc890",
+      "last_resolved": "32b0f5cfbbf37ec741761429fccd7d8985a32860d1f929bbe3abdf5b3f1fc890",
+      "tracked_at": "2026-07-19T16:38:10.268805+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
     },
     "noorinalabs-isnad-graph/.claude/hooks/tests/test_block_git_config.py": {
       "last_tracked": "6b66a519249f2d3604d2d18b5b625e0cc75e257b8b5208e2b6fe98a796427aaf",
@@ -1624,6 +1624,66 @@
       "last_resolved": "859fe8e93166d50237914b3330f5a8a5c7097748693860430299d74168edbd30",
       "tracked_at": "2026-07-19T16:26:12.917702+00:00",
       "resolved_at": "2026-07-19T14:20:00Z"
+    },
+    ".claude/hooks/block_bare_grep.py": {
+      "last_tracked": "a1399e28ea299f2c9dd767b4a46665ab9e8acfdd4dfbf5dc0e567d89b4e8e5e4",
+      "last_resolved": "a1399e28ea299f2c9dd767b4a46665ab9e8acfdd4dfbf5dc0e567d89b4e8e5e4",
+      "tracked_at": "2026-07-19T16:30:21.413988+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
+    },
+    ".claude/hooks/tests/test_block_bare_grep.py": {
+      "last_tracked": "a4441f587cc4def3d05c7ad1518c0253e85a005693ce0c51b50e43979ab14ce4",
+      "last_resolved": "a4441f587cc4def3d05c7ad1518c0253e85a005693ce0c51b50e43979ab14ce4",
+      "tracked_at": "2026-07-19T16:31:52.462734+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
+    },
+    ".claude/hooks/validate_edit_completion.py": {
+      "last_tracked": "96ffc7d789d869817477a3826158bef741a3a54088244691cfb71daa48141d03",
+      "last_resolved": "96ffc7d789d869817477a3826158bef741a3a54088244691cfb71daa48141d03",
+      "tracked_at": "2026-07-19T16:40:23.139301+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
+    },
+    ".github/workflows/ci.yml": {
+      "last_tracked": "78dfdd91a600a0010a8a5222f746ed7e679f0981f41070b71efad1a248190a8a",
+      "last_resolved": "78dfdd91a600a0010a8a5222f746ed7e679f0981f41070b71efad1a248190a8a",
+      "tracked_at": "2026-07-19T16:37:07.898616+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
+    },
+    ".claude/skills/board-audit/SKILL.md": {
+      "last_tracked": "1e76603ae115d727a8ba5285287ebc796778e12829135ebeab780068d34df28f",
+      "last_resolved": "1e76603ae115d727a8ba5285287ebc796778e12829135ebeab780068d34df28f",
+      "tracked_at": "2026-07-19T16:37:13.636763+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
+    },
+    ".claude/skills/ontology-librarian/SKILL.md": {
+      "last_tracked": "3faa54fe73147cd042eff77bfd2cb49635dda20274a71fb19dbb681228df89e2",
+      "last_resolved": "3faa54fe73147cd042eff77bfd2cb49635dda20274a71fb19dbb681228df89e2",
+      "tracked_at": "2026-07-19T16:37:18.336382+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
+    },
+    ".claude/skills/wave-start/SKILL.md": {
+      "last_tracked": "947ac63dcde75865c1e8e95f0599cb3f16cfc71dd88dc4208de852f7207c34bc",
+      "last_resolved": "947ac63dcde75865c1e8e95f0599cb3f16cfc71dd88dc4208de852f7207c34bc",
+      "tracked_at": "2026-07-19T16:38:16.011067+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
+    },
+    ".claude/team/charter/agents/spawn-discipline.md": {
+      "last_tracked": "ab1339b7b7a389e3dcd307c8d1404b9f85ff2eab0802f198df40b4ecc435bab3",
+      "last_resolved": "ab1339b7b7a389e3dcd307c8d1404b9f85ff2eab0802f198df40b4ecc435bab3",
+      "tracked_at": "2026-07-19T16:39:59.593901+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
+    },
+    ".claude/team/charter/agents/orchestration-model.md": {
+      "last_tracked": "2df9f78587810f0d37c176bd3efc1a58397666b2fd186345871c021545a95a0c",
+      "last_resolved": "2df9f78587810f0d37c176bd3efc1a58397666b2fd186345871c021545a95a0c",
+      "tracked_at": "2026-07-19T16:40:01.725152+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
+    },
+    ".claude/team/charter/hooks/catalog-18-22.md": {
+      "last_tracked": "bb60477afe484c7a6893bf8c4e231127248401f4ad6c429443d22b0a83177ee5",
+      "last_resolved": "bb60477afe484c7a6893bf8c4e231127248401f4ad6c429443d22b0a83177ee5",
+      "tracked_at": "2026-07-19T16:40:05.304492+00:00",
+      "resolved_at": "2026-07-19T14:45:00Z"
     }
   },
   "last_cleanup": {

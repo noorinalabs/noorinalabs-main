@@ -169,7 +169,7 @@ while IFS= read -r R; do
     BRANCH_SHA[$R]="$MAIN_SHA"
     BRANCH_STATUS[$R]="created"
   } || {
-    if echo "$CREATE_OUT" | grep -q "Reference already exists"; then
+    if echo "$CREATE_OUT" | rg -q "Reference already exists"; then
       BRANCH_SHA[$R]="$MAIN_SHA"; BRANCH_STATUS[$R]="exists-clean"  # raced; treat as no-op
     else
       BRANCH_STATUS[$R]="error:$(echo "$CREATE_OUT" | head -1 | tr -d '"' | cut -c1-80)"
@@ -317,7 +317,7 @@ existing options and re-sends them plus the new one so no option is wiped.
 Verify the gh token has the scopes needed for this wave's operations. GitHub periodically hardens scope enforcement (e.g., Projects v2 requires the explicit `project` write scope; classic-Projects API deprecation). A missing scope mid-wave consumes orchestrator + user time chasing OAuth flows.
 
 ```bash
-gh api -i user 2>&1 | grep -i "x-oauth-scopes"
+gh api -i user 2>&1 | rg -i "x-oauth-scopes"
 ```
 
 Required scopes (baseline for all waves):

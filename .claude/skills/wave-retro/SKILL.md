@@ -353,7 +353,7 @@ MD
   NEW_URL=$(gh issue create --repo noorinalabs/noorinalabs-main \
     --title "Phase {N} Wave $NEXT_WAVE — (theme TBD — owner to set)" \
     --body "$STUB_BODY")
-  NEW_NUM=$(echo "$NEW_URL" | grep -oE '[0-9]+$')
+  NEW_NUM=$(echo "$NEW_URL" | rg -o '[0-9]+$')
   gh project item-add 2 --owner noorinalabs --url "$NEW_URL" 2>/dev/null || true
   # NOTE (main#885): this reserves the id via the meta_issue key only and does
   # NOT bump global_wave_seq (the counter advances at /wave-scope `allocate

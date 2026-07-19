@@ -112,9 +112,9 @@ Project memory may carry must-include directives keyed to the next wave (e.g. `W
 # Memory is version-controlled in-repo since the #732 relocation (was the
 # user-space ~/.claude/projects/<cwd>/memory/ path).
 MEMORY_DIR="$(git rev-parse --show-toplevel)/.claude/memory"
-# `|| true` because grep -l exits 1 when there are no matches, which is the
+# `|| true` because rg -l exits 1 when there are no matches, which is the
 # normal case for waves with no filed must-includes — not an error.
-MUST_INCLUDE_FILES=$(grep -l -i "W{M} must include\|wave-{M} must\|w{M}.must.include" "$MEMORY_DIR"/*.md 2>/dev/null || true)
+MUST_INCLUDE_FILES=$(rg -l -i "W{M} must include|wave-{M} must|w{M}.must.include" "$MEMORY_DIR"/*.md 2>/dev/null || true)
 [ -z "$MUST_INCLUDE_FILES" ] && echo "  (no must-includes filed for W{M})"
 ```
 
@@ -163,7 +163,7 @@ EOF
         --body-file /tmp/wavescope-{M}-meta-stub.md \
         --label "meta-issue" --label "process" --label "phase-{P}" \
         --assignee "@me")
-    META_ISSUE=$(echo "$META_URL" | grep -oE '[0-9]+$')
+    META_ISSUE=$(echo "$META_URL" | rg -o '[0-9]+$')
     echo "  authored W{M} meta-issue: noorinalabs-main#${META_ISSUE}"
 fi
 
@@ -179,7 +179,7 @@ gh issue view "$META_ISSUE" --repo noorinalabs/noorinalabs-main --json body,comm
 Extract every `repo#N` reference from the body and comments. Use a permissive regex to catch the common shapes:
 
 ```bash
-grep -oE '\b(noorinalabs-[a-z-]+|main|deploy|isnad-graph|user-service|design-system|landing-page|data-acquisition|isnad-ingest-platform)#[0-9]+' \
+rg -o '\b(noorinalabs-[a-z-]+|main|deploy|isnad-graph|user-service|design-system|landing-page|data-acquisition|isnad-ingest-platform)#[0-9]+' \
     /tmp/wavescope-{M}-declared.txt | sort -u > /tmp/wavescope-{M}-declared-issues.txt
 ```
 
@@ -424,7 +424,7 @@ CURRENT_COLOR=$(gh label list --repo noorinalabs/noorinalabs-main --search "$WAV
 # same word-split trap as the other wave skills. The `"${arr[@]}"` form matches
 # the `REPOS` iteration earlier in this skill.
 for repo in "${REPOS_WITH_DEFER[@]}"; do
-    gh label list --repo "noorinalabs/$repo" --search "$NEXT_LABEL" --json name --jq '.[].name' | grep -q "$NEXT_LABEL" || \
+    gh label list --repo "noorinalabs/$repo" --search "$NEXT_LABEL" --json name --jq '.[].name' | rg -q "$NEXT_LABEL" || \
         gh label create "$NEXT_LABEL" --repo "noorinalabs/$repo" \
             --description "Phase {P} Wave ${NEXT_WAVE_ID} (global id)" --color "$CURRENT_COLOR"
 done
@@ -488,7 +488,7 @@ gh api -X PATCH "repos/noorinalabs/noorinalabs-main/issues/$META_ISSUE" \
 
 # Read-back verify
 READBACK=$(gh api "repos/noorinalabs/noorinalabs-main/issues/$META_ISSUE" --jq '.body | .[0:120]')
-echo "$READBACK" | grep -q "Phase {P} Wave {M}" || echo "WARN: meta-issue body update may not have landed"
+echo "$READBACK" | rg -q "Phase {P} Wave {M}" || echo "WARN: meta-issue body update may not have landed"
 ```
 
 Do NOT delete the original body — copy it (or post the pre-update version as a comment) so the audit trail survives.
@@ -621,10 +621,10 @@ META_BODY=$(gh issue view "$META_ISSUE" --repo noorinalabs/noorinalabs-main --js
 # strips the suffix. Leading `(^|[^a-z])` prevents partial-word matches
 # (e.g., `non-noorinalabs-X` won't match). main#333 fix.
 ACTUAL_CHILDREN=$(echo "$META_BODY" \
-  | grep -oE '(^|[^a-z])noorinalabs-[a-z][a-z0-9-]*(#[0-9]+|:)' \
+  | rg -o '(^|[^a-z])noorinalabs-[a-z][a-z0-9-]*(#[0-9]+|:)' \
   | sed -E 's/^[^a-z]*//; s/(#[0-9]+|:)$//' \
   | sort -u \
-  | grep -v '^noorinalabs-main$' || true)
+  | rg -v '^noorinalabs-main$' || true)
 # Canonical = repos_in_scope minus main (the meta-issue lives in main and
 # self-refs use `main#N` or bare `#N`; main is always implicitly in scope)
 CANONICAL_CHILDREN=$(echo "$REPOS_IN_SCOPE_JSON" \
@@ -632,10 +632,10 @@ CANONICAL_CHILDREN=$(echo "$REPOS_IN_SCOPE_JSON" \
 
 EXTRA_IN_BODY=$(comm -23 \
   <(printf '%s\n' "$ACTUAL_CHILDREN") \
-  <(printf '%s\n' "$CANONICAL_CHILDREN") | grep -v '^$' || true)
+  <(printf '%s\n' "$CANONICAL_CHILDREN") | rg -v '^$' || true)
 MISSING_FROM_BODY=$(comm -13 \
   <(printf '%s\n' "$ACTUAL_CHILDREN") \
-  <(printf '%s\n' "$CANONICAL_CHILDREN") | grep -v '^$' || true)
+  <(printf '%s\n' "$CANONICAL_CHILDREN") | rg -v '^$' || true)
 
 if [ -n "$EXTRA_IN_BODY" ]; then
   echo "ERROR: meta-issue $META_ISSUE body references repo(s) NOT in canonical/override:"

@@ -200,7 +200,7 @@ For any "sync from parent sha X" or "use the canonical version from commit X" ta
 
 1. **Confirm the sha exists locally:**
    ```bash
-   git log --oneline --all | grep <sha>
+   git log --oneline --all | rg <sha>
    ```
 2. **Check whether local `main` actually contains it:**
    ```bash
