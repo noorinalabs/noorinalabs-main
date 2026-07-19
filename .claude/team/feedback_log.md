@@ -112,3 +112,47 @@ Measurement window = the 6 main-wave-branch housekeeping PRs only (see trust_mat
 - **Annunaki-attack:** 46 genuine records, all benign session-local — correct hook blocks (`validate_review_comment_format`, `validate_commit_identity` catching this session's own `-F`/bare-principal attempts), a throwaway `python3 -c` module-path failure, and `post_label_change_wave_field_sync` parser-skip events from this session's bulk label ops. No wave-code defect; no automation warranted. Archived (268 records) + live log reset. Marker written.
 - **Memory-to-automation audit:** the corpus was just pruned this wave (#967/#944 consolidated the gotcha families; index at 95/132). No memory crossed a promotion threshold; the 8 rescued deploy backup/DR memories (committed d45e3ce this session) are fresh and repo-local. No memory→hook/skill/charter candidate. Marker written.
 - **Promotion audit:** 0 AUTO · 0 DECIDE · 206 KEPT · 24 SUPERSEDED. Nothing crossed a threshold. Log: `.claude/team/promotion_audit_log/wave-24.md`.
+
+
+---
+
+## Retrospective: Phase 9 Wave 25 — 2026-07-19
+
+**Theme:** Narrator disambiguation & split correctness (data-acquisition). 7 issues fixing over-merge/under-merge and split-gate correctness in the resolve/parse pipeline, upstream of the owner-gated #978 re-run.
+
+### Team Performance
+- **PRs merged:** 7 (da#444/#439/#346/#431/#366/#452/#347), all to `deployments/phase-9/wave-25`; wave→main via PR#460 (`122c7b9`, branch retained).
+- **Issues closed:** 7 (da#443 deferred to wave-27). **CI health:** 0 red merges; every per-issue PR + the integration PR green.
+- **Counters:** final_pr_count=7, changes_requested_cycles=0, top_concentration_pct=43 (Kavitha 3/7). Counters verified against PR-level recompute — no drift.
+- **Deployable-merge:** verified green (da has no post-merge deploy/publish surface). **Staging gate:** success (standing run; da not a fan-in repo).
+
+### Per-Engineer Assessments
+- **Kavitha Sundaramurthy** — 3 PRs (da#444/#346/#452), delta +1 absorbed at ceiling 5. Clean: prs_merged=3, 0 CI-red, 0 must-fix received. Wave workhorse on the split-gate spine.
+- **Ivana Horvat** — 2 PRs (da#431/#347), delta +1 absorbed at ceiling 5. Clean composition on the merged adjacency helper; surfaced the stacked-PR-orphan lesson.
+- **Alejandra Reyes-Fuentes** — 1 PR (da#366) + reviewer, delta 0 (held at 5). **Caught the orchestrator verdict-format error via the enforcer** — the reason the gate-bypass surfaced.
+- **Nikolaos Papadopoulos** — 1 PR (da#439) + reviewer, delta 0 (held at 5). Thorough #458 A/B verification.
+- **Jean-Claude Habimana** — reviewer-only (not score-tracked): 2 thorough verdicts (#455/#459).
+
+### Top 3 Going Well
+1. **Reviews were genuine and engine-verified** — reviewers ran the real resolve engine and bidirectional A/B fixtures (Nikolaos on #458, Alejandra/Jean-Claude on #455/#459), not string-only checks. da#423 drop-gate discipline held.
+2. **Enforcer-first discipline caught an orchestrator error** — Alejandra ran `pr_review_state.py` rather than trusting my (wrong) brief, surfacing the format/gate breach. Trusting the tool over the brief is exactly the memory §8 lesson, applied.
+3. **Clean composition of stacked resolve stages** — narrator_unify (#455) + Anas under-merge (#459) composed on the shared `resolved_chain_neighbours` helper with no divergent adjacency logic; RESOLVE_STEP_ORDER coherent throughout.
+
+### Top 3 Pain Points
+1. **Orchestrator gate-bypass (the wave's defining failure).** A paraphrased verdict-trailer brief (`Request` + invented `**Review:**`) AND `gh pr merge -R $VAR` (fail-opens Hook 4) co-occurred → 4 PRs merged with 0 counted approvals and no block. Remediated (records fixed 2/2 each, #981 filed, memory §7/§8 updated). Two catchable errors that only bit together.
+2. **Hook fail-open on unresolvable repo (#981).** `_resolve_owner_repo` returns None for `-R $VAR` and Hook 4 fails OPEN. This is a security-relevant hook-hardening item (fail CLOSED) — DECIDE-tier, filed.
+3. **cwd-anchor kickoff-comment hook misresolution (recurring).** The kickoff-comment + label-sync hooks resolved da issues as `noorinalabs-main#N` (stdin cwd anchor), emitting "No assignment row / not on project 2" for all 8 kickoff labels; recovered manually. Documented in `feedback_hook_cwd_anchor_subagent_worktree` — worth a hook fix (resolve repo from the command's `-R` flag).
+
+### Proposed Process Changes
+1. **Fix #981 fail-closed next wave** — Hook 4 must BLOCK (not allow) when `-R`/`--repo` cannot resolve to `owner/repo`. Rationale: a gate that fails open is worse than no gate; it reads as enforced. — Section: `charter/pull-requests/ci-gates.md` + `validate_pr_review.py`.
+2. **Spawn-brief verdict-block must be copied verbatim, never paraphrased** — already added to memory §8; propose promoting to a reviewer-brief template/checklist the orchestrator fills from the canonical block, so paraphrase is structurally impossible. — Section: `charter/agents/orchestration-model.md` § reviewer spawn.
+3. **Kickoff-comment/label-sync hooks resolve repo from `-R`, not stdin cwd** — file against the hook; recurring benign noise that masks real board-add failures. — Section: `charter/hooks`.
+
+### Annunaki-attack
+32 records archived (`archive/wave-25.jsonl`), live log reset. All 24 genuine errors benign: correctly-firing guard blocks (2-reviewer gate on #458/#451, squash-block on #455, branch-freshness ×2, stale-tmp, unexported-`$S`), one session-local parquet-schema probe failure (Kavitha), and the cwd-anchor kickoff-comment misresolution (pain-point #3). No wave-code defect; no new automation (the one hook item, #981, already filed). Marker written.
+
+### Memory-to-automation audit
+Concrete output: added the zsh `path`-tied-to-`$PATH` clobber gotcha to `feedback_zsh_shell_environment.md` (a real trap hit this wave; not covered by `warn_zsh_wordsplit`). New `feedback_stacked_pr_base_delete_orphan.md` retained as memory (a `--delete-branch`-blocking hook is possible but low-frequency). No memory crossed a promotion threshold. Marker written.
+
+### Promotion audit
+0 AUTO · 0 DECIDE · 207 KEPT · 24 SUPERSEDED. Nothing crossed a threshold. Log: `.claude/team/promotion_audit_log/wave-25.md`. (The #981 fail-closed hook hardening is a filed bug, not a promotion crossing.)

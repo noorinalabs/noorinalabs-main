@@ -237,3 +237,33 @@ No org-level (`noorinalabs-main`) scored *implementer* changes this wave — the
 **Fire/hire:** none. Retirement trigger (`trust_signals.retirement_trigger`) fired for no engineer.
 
 **Concentration note:** 30% top by implementer (Alejandra 6/20) — theme-fit, not fragility: W23 was a single-theme data-quality closeout that her scrub-pipeline ownership naturally concentrated. Below the 60% line; no redistribution action required, but the da#317 matn-sentence carry-forward sits in the same surface, so W24 planning should confirm coverage isn't single-owner.
+
+
+## Phase 9 Wave 25 Trust Updates (2026-07-19) — Narrator disambiguation & split correctness
+
+Mechanical scoring (`trust_signals.py score 9 25`): **7 PRs**, 1 repo (data-acquisition), top-concentration **43%** (Kavitha Sundaramurthy 3/7 — below the 60% fragility line), **0 CI-red merges**, **0** `review_false_positives`, **0** changes-requested cycles (all verdicts landed as Approved — but see pain-point #1: these clean numbers do NOT capture the verdict-format/gate-bypass breach). Helper-proposed deltas: Ivana **+1**, Kavitha **+1**; Alejandra/Nikolaos delta 0. All four sit at ceiling 5 → both +1s absorbed at ceiling; no row moves.
+
+### Child-Repo Team (data-acquisition)
+
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Kavitha Sundaramurthy | 5 | 5 | prs_merged=3 (da#444/#346/#452 — narrator_split gate-correctness spine), 0 CI-red, 0 must-fix received, 0 false-positives. Wave top by volume; helper +1 absorbed at ceiling. |
+| Ivana Horvat | 5 | 5 | prs_merged=2 (da#431 narrator_unify + da#347 Anas under-merge), 0 CI-red, clean composition on the shared adjacency helper. Helper +1 absorbed at ceiling. |
+| Alejandra Reyes-Fuentes | 5 | 5 | prs_merged=1 (da#366 matn-embedded splitter) + reviewer on #455/#459. Delta 0; held at ceiling. Caught the orchestrator verdict-format error via the enforcer (see Done-Well). |
+| Nikolaos Papadopoulos | 5 | 5 | prs_merged=1 (da#439 loader-adjacency reconcile) + reviewer on #458. Delta 0; held at ceiling. |
+
+### Done Well / Needs Improvement (Phase 9 Wave 25) — evidence-anchored, bare "None" banned
+
+| Member | Done Well (with evidence) | Gap (metric, or explicit "clean: numbers") |
+|---|---|---|
+| Kavitha Sundaramurthy | 3 clean PRs on the split-gate spine; da#452 UNKNOWN-gen abstain gate proven bidirectionally on the real engine | clean: prs_merged=3, must_fix_received=0, ci_red_merges=0, false_positives=0 |
+| Ivana Horvat | da#431 + da#347 composed cleanly on the merged adjacency helper; flagged the stacked-PR-orphan lesson | clean: prs_merged=2, must_fix_received=0, ci_red_merges=0; 1 branch-freshness + 1 stacked-PR rebase (env/process, not code) |
+| Alejandra Reyes-Fuentes | **Caught the orchestrator's verdict-format brief error by running the actual enforcer (`pr_review_state.py`) instead of trusting the brief** — the single reason the gate-bypass surfaced; da#366 shipped clean | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0 |
+| Nikolaos Papadopoulos | da#439 loader-adjacency reconcile clean; thorough #458 review (verified gate load-bearing via A/B, not vacuous) | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0 |
+| Jean-Claude Habimana (reviewer-only, not score-tracked) | 2 thorough verdicts (#455, #459) with real engine-verification; re-posted correctly-formatted verdicts promptly when the format was corrected | reviewer-only; used the non-counting brief format on first pass (orchestrator-caused), corrected same session |
+
+**Fire/hire:** none. Retirement trigger (`trust_signals.retirement_trigger`) fired for no engineer.
+
+**Concentration note:** 43% top (Kavitha 3/7) — theme-fit (she owns the narrator_split gate-correctness surface), below the 60% line. No redistribution needed.
+
+**Orchestrator self-assessment (negative — the wave's defining signal):** two independent orchestrator-class mechanics errors co-occurred and let 4 feature→wave PRs merge with 0 counted approvals AND no gate block: (1) briefed reviewers with a paraphrased verdict trailer (`RequestOrReplied: Request` + invented `**Review: Approved**`) that Hook 4 counts as zero; (2) merged with `-R $DA` (unexpanded var), which fail-opens Hook 4 (`_resolve_owner_repo`→None→allow). Remediated per owner "Accept + fix records": all 10 genuine approvals PATCHed to the counting form (hook re-count 2/2 each), #981 filed for the fail-open, memory §7/§8 updated. The reviews themselves were genuine; the failure was orchestrator mechanics, not review quality.
