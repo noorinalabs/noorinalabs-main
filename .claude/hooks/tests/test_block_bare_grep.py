@@ -77,6 +77,32 @@ class PositiveMatchTests(unittest.TestCase):
     def test_wrapper_command(self):
         self.assertTrue(_blocks("command grep foo file"))
 
+    def test_wrapper_sudo_login_flag(self):
+        # #1008 review (Weronika): `-i` is BOOLEAN on sudo (login shell), not a
+        # value flag — it must not eat the following `grep` token. Regression.
+        self.assertTrue(_blocks("sudo -i grep foo file"))
+
+    def test_wrapper_sudo_shell_flag(self):
+        self.assertTrue(_blocks("sudo -s grep foo file"))
+
+    def test_wrapper_sudo_mixed_value_and_boolean_flags(self):
+        # `-u root` consumes `root`; `-i` is boolean — grep still resolves.
+        self.assertTrue(_blocks("sudo -u root -i grep foo file"))
+
+    def test_wrapper_sudo_value_flag_still_consumes(self):
+        # `-u root` (value flag) consumes `root`, leaving grep as the command.
+        self.assertTrue(_blocks("sudo -u root grep foo file"))
+
+    def test_wrapper_stdbuf_value_flag_preserved(self):
+        # `-i` IS a value flag on stdbuf (buffer mode) — the per-wrapper dict
+        # must keep that behavior while fixing sudo. `stdbuf -i L grep` still
+        # resolves grep as the command (L is -i's value).
+        self.assertTrue(_blocks("stdbuf -i L grep foo file"))
+
+    def test_wrapper_xargs_s_value_flag_preserved(self):
+        # `-s` is a value flag on xargs (max size) — must still consume its value.
+        self.assertTrue(_blocks("echo f | xargs -s 1000 grep foo"))
+
     def test_second_segment_of_and_list(self):
         self.assertTrue(_blocks("rg foo file && grep bar file2"))
 

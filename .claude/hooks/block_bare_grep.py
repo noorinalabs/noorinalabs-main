@@ -88,26 +88,58 @@ _WRAPPERS = {
     "watch",
 }
 
-# Value-taking flags across the wrappers above (consume the following token):
-# xargs -I/-n/-P/-s/-L/-d/-a/-E, env -u, nice -n, ionice -c/-n, stdbuf -i/-o/-e.
-# Skipping the value avoids mistaking `{}` in `xargs -I {} grep` for the command.
-_WRAPPER_VALUE_FLAGS = {
-    "-I",
-    "-n",
-    "-P",
-    "-s",
-    "-L",
-    "-d",
-    "-a",
-    "-E",
-    "-u",
-    "-c",
-    "-i",
-    "-o",
-    "-e",
-    "--replace",
-    "--max-procs",
-    "--max-lines",
+# Value-taking flags, keyed PER WRAPPER (consume the following token as the
+# flag's value). This MUST be per-wrapper, not a flat set: a flag that takes a
+# value on one wrapper is a boolean on another. The canonical trap is `sudo -i`
+# / `sudo -s` — boolean login/shell flags on `sudo`, but value-taking on
+# `stdbuf -i` / `xargs -s`. A flat set made `sudo -i grep` eat the `grep` token
+# as `-i`'s value, silently allowing the invocation (#1008 review, Weronika).
+# Skipping a genuine value avoids mistaking e.g. `{}` in `xargs -I {} grep` for
+# the command.
+_WRAPPER_VALUE_FLAGS: dict[str, set[str]] = {
+    "xargs": {
+        "-I",
+        "-n",
+        "-P",
+        "-s",
+        "-L",
+        "-d",
+        "-a",
+        "-E",
+        "--replace",
+        "--max-procs",
+        "--max-lines",
+        "--max-args",
+        "--delimiter",
+        "--arg-file",
+    },
+    "env": {"-u", "--unset"},
+    "nice": {"-n", "--adjustment"},
+    "ionice": {"-c", "-n", "--class", "--classdata"},
+    "stdbuf": {"-i", "-o", "-e", "--input", "--output", "--error"},
+    # sudo: -i/-s/-b/-E/-H/-k/-K/-n/-P/-S/-v/-A/-l are BOOLEAN (no value).
+    "sudo": {
+        "-u",
+        "-g",
+        "-C",
+        "-p",
+        "-r",
+        "-t",
+        "-U",
+        "-h",
+        "--user",
+        "--group",
+        "--close-from",
+        "--prompt",
+        "--role",
+        "--type",
+        "--other-user",
+        "--host",
+    },
+    "time": {"-o", "-f", "--output", "--format"},
+    "watch": {"-n", "--interval"},
+    "command": set(),
+    "nohup": set(),
 }
 
 _ENV_ASSIGN_RE = re.compile(r"^[A-Za-z_]\w*=")
@@ -146,13 +178,16 @@ def _effective_command(segment: list[str]) -> str | None:
             continue
         base = os.path.basename(tok)
         if base in _WRAPPERS:
+            value_flags = _WRAPPER_VALUE_FLAGS.get(base, set())
             i += 1
             # Skip this wrapper's flags (and any value they consume).
             while i < n:
                 nxt = segment[i]
                 if nxt.startswith("-"):
                     # `--flag=value` is one token; `-I {}` / `--replace {}` is two.
-                    consume_value = nxt in _WRAPPER_VALUE_FLAGS and "=" not in nxt
+                    # value_flags is THIS wrapper's set, so `sudo -i` (boolean)
+                    # does not eat the following `grep`, while `stdbuf -i L` does.
+                    consume_value = nxt in value_flags and "=" not in nxt
                     i += 1
                     if consume_value and i < n:
                         i += 1
