@@ -60,6 +60,10 @@ need to install a binary yourself versus when a repo bootstraps it for you.
 |------|---------|--------------------|
 | `git` | branch/remote/commit checks (hooks, CI) | system / OS package manager |
 | `gh` | GitHub API via CLI (issues, PRs, project board) | `brew install gh` · `apt install gh` |
+| `rg` (ripgrep) | **mandated** literal/line text search — used by `.claude/` scripts + the agent; **never plain `grep`** (§ Text search: `rg`, not `grep`) | `brew install ripgrep` · `apt install ripgrep` |
+| `jq` | JSON query in hooks/skills/CI (`gh … --json … \| jq`) | `brew install jq` · `apt install jq` |
+| `fd` (`fdfind`) | fast file find (companion to `rg`); Debian/Ubuntu ships it as `fdfind` | `brew install fd` · `apt install fd-find` |
+| `ast-grep` | structural (AST) search/replace — preferred over regex for code (§ Structural & AST tooling). ⚠ **not installed by default on the dev box**; install before relying on it | `brew install ast-grep` · `cargo install ast-grep` |
 | `python3` | run `.claude/` hooks + lib + skills (3.12+) | system / `uv python install` |
 | `uv` | Python package manager | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 | `pre-commit` | local hook framework (mirrors CI) | `uv tool install pre-commit` · `pipx install pre-commit` |
@@ -109,6 +113,35 @@ Repo keys: `ig` = isnad-graph, `us` = user-service, `da` = data-acquisition,
 `deploy` = deploy.
 
 ---
+
+## Text search: `rg`, not `grep`
+
+For literal / line-oriented text search we standardize on **`rg` (ripgrep)** and
+**never plain `grep`**. A bare `grep` invocation from the agent Bash tool is
+**hard-blocked** by a PreToolUse hook
+([#1008](https://github.com/noorinalabs/noorinalabs-main/issues/1008)); committed
+scripts, hooks, and skill bash-blocks use `rg` too, and CI provisions it.
+
+Why: `rg` is faster, multiline-capable, and skips VCS-ignored noise by default;
+and on the dev box `grep` is actually **`ugrep`**, not GNU grep, so relying on
+GNU-grep behavior is already unsafe.
+
+Two gotchas the rule carries:
+
+- **`.gitignore`-awareness is a foot-gun for generated targets.** `rg` skips
+  `.gitignore`d paths *by default*, so searching a generated/ignored target —
+  e.g. the `ontology/structural/` index, `dist/`, coverage output — silently
+  returns nothing. Add **`--no-ignore`** (or `-uu`) whenever the thing you're
+  searching can be git-ignored (`feedback_silent_zero_is_not_a_measurement`).
+- **Flag translation.** `grep -r pat path` → `rg pat path` (recursive by
+  default); `grep -rn` → `rg -n`; `grep -E` → `rg` (regex by default); `grep -F`
+  → `rg -F`; `grep -o` → `rg -o`; `grep -c/-l/-v/-i/-w/-q` map 1:1. Piped
+  `… | grep pat` → `… | rg pat`.
+- **Override for genuine grep-only needs:** prefix the command with
+  `NOORINA_ALLOW_GREP=1` (documented escape hatch for the rare case `rg` can't
+  express) — the block hook honours it.
+
+Structural (AST-dependent) search is a different tool again — see below.
 
 ## Structural & AST tooling
 

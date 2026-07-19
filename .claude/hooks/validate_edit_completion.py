@@ -28,7 +28,7 @@ Reads the sentinel file, checks each unhandled-error entry for an
 acknowledgment-since-the-error in the session transcript:
 
   (a) A `Read` tool_use on the errored file path
-  (b) A `Bash` tool_use that `cat`/`head`/`tail`/`grep`/`less`/`ls`-es the
+  (b) A `Bash` tool_use that `cat`/`head`/`tail`/`grep`/`rg`/`less`/`ls`-es the
       errored file path
   (c) A SendMessage whose body contains the literal phrase
       "edit-error acknowledged" plus the file path
@@ -60,7 +60,7 @@ Does NOT match:
 
 Acknowledgment forms (any ONE of these, in the transcript AFTER the error):
     - Read on the errored file_path
-    - Bash containing one of: cat / head / tail / less / grep / ls -la / wc
+    - Bash containing one of: cat / head / tail / less / grep / rg / ls -la / wc
       where the errored file path is an argument
     - SendMessage body containing both the file path AND the literal string
       "edit-error acknowledged"
@@ -131,7 +131,7 @@ _BASH_GH_COMMENT_RE = re.compile(
 # Each command, when followed by the errored path, satisfies the verification
 # requirement. We require the path to appear as a token in the command, not
 # just as substring of an unrelated arg.
-_ACK_BASH_VERBS = ("cat", "head", "tail", "less", "grep", "ls", "wc")
+_ACK_BASH_VERBS = ("cat", "head", "tail", "less", "grep", "rg", "ls", "wc")
 
 # Literal acknowledgment marker in a SendMessage body or comment text.
 _ACK_MARKER = "edit-error acknowledged"
@@ -461,7 +461,7 @@ def _pre_tool_use_blocks(input_data: dict) -> dict | None:
         f"verified.\n"
         f"Verify-landed state before continuing. Any ONE of these acknowledges:\n"
         f"  1. `Read` the file at the errored path\n"
-        f"  2. Bash `cat`/`head`/`tail`/`grep`/`less`/`ls`/`wc` of the errored path\n"
+        f"  2. Bash `cat`/`head`/`tail`/`grep`/`rg`/`less`/`ls`/`wc` of the errored path\n"
         f"  3. SendMessage / comment containing the path AND literal "
         f'"edit-error acknowledged"\n'
         f"\nThis hook prevents tool-error-soft-accept (W10 retro-mandated). "

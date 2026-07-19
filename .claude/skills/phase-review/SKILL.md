@@ -50,7 +50,7 @@ If the phase plan doc is missing, STOP and direct the owner to `/plan-phase` (wh
 Extract tracking issue numbers from the phase plan and pull live state for each:
 
 ```bash
-TRACKING_ISSUES=$(grep -oE 'noorinalabs-main#[0-9]+' "$PHASE_DOC" | sort -u)
+TRACKING_ISSUES=$(rg -o 'noorinalabs-main#[0-9]+' "$PHASE_DOC" | sort -u)
 
 # `while read`, NOT `for issue in $TRACKING_ISSUES` — zsh does not word-split an
 # unquoted scalar, so the multi-line list would collapse into one bogus iteration
@@ -74,7 +74,7 @@ Categorize each criterion:
 ### 3. Tech-debt ratio (P3 exit gate)
 
 ```bash
-PHASE_START=$(grep '^created:' "$PHASE_DOC" | head -1 | awk '{print $2}')
+PHASE_START=$(rg '^created:' "$PHASE_DOC" | head -1 | awk '{print $2}')
 
 # New issues filed during phase, all states
 TOTAL_NEW=$(gh issue list --repo noorinalabs/noorinalabs-main \

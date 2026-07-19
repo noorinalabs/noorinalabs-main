@@ -29,6 +29,7 @@ if str(_HOOKS_DIR) not in sys.path:
 _BASH_HOOKS = [
     "validate_commit_identity",
     "block_no_verify",
+    "block_bare_grep",
     "block_git_config",
     "block_gh_pr_review",
     "block_stale_tmp_message_file",
