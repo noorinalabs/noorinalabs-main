@@ -19,4 +19,8 @@ zsh applies **history/parameter modifiers** after `$VAR:` — **inside double qu
 
 `$status` is zsh's alias for `$?`; assigning to it errors `read-only variable: status`. Never use `status` as a loop/temp variable — use `st`, `rc`.
 
+## `path` is TIED to `$PATH` — assigning to it clobbers your PATH (2026-07-19)
+
+zsh ties the lowercase array `path` ↔ the scalar `PATH` (like `fpath`, `cdpath`, `manpath`). A plain `path="$dir/$sub"` in a loop **overwrites `$PATH`** with that one string → every subsequent bare command in the shell dies with `command not found: git` (etc.), while the *same* command run standalone (fresh shell) still works. The failure looks like a flaky/sandbox PATH glitch, not a variable-name collision. Cost this session: a `/wave-wrapup` worktree-cleanup loop using `path="$base/$wt"` made `git worktree remove` fail 8× with "command not found" before the tie was spotted; renaming to `wtp` fixed it instantly. Never use `path` (or `cdpath`/`fpath`/`manpath`) as an ordinary variable — use `wtp`, `p`, `dir`. Sibling of `$status` above; both are zsh special-parameter collisions the `warn_zsh_wordsplit` hook does not catch.
+
 Sibling of [[feedback_push_pipe_masks_rejection]] § *a tool silently transformed your input and reported success* — the pipe (exit status), `re.sub` (replacement string), an unquoted heredoc (message body), and `$VAR:` modifiers (the argument itself). **A shell that rewrites your argument does not tell you.**

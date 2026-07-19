@@ -163,6 +163,8 @@
   "wave_25_wrapup_issue_reconciliation": "7 resolved+closed (da#444/#439/#346/#431/#366/#452/#347); da#443 deferred to wave-27; wave-branch merged to da main via PR#460 (merge 122c7b9, branch retained); reachability+deployable-merge+staging gates green; effect on corpus deferred to #978 owner-gated re-run",
   "wave_25_deployable_verify": "success",
   "wave_25_wave_to_main_pr": 460,
+  "wave_25_annunaki_attack_ran_at": "2026-07-19T01:32:00Z",
+  "wave_25_memory_audit_ran_at": "2026-07-19T01:32:00Z",
   "wave_24_meta_issue": "noorinalabs-main#928",
   "wave_24_theme": "#928 defect sweep + re-run pipeline from `parse`: fix every parse/resolve/load/deploy defect found en route to stg (56 issues filed 2026-07-09/10 across main+da+deploy, + da#282), gated by #928's dynamic launch gate, then wipe-and-reload the graph from `parse`. Owner directive 2026-07-09; retheme from streaming decided 2026-07-10.",
   "wave_24_phase": 8,
