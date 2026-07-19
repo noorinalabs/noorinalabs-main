@@ -1,0 +1,23 @@
+# Memory — Verification discipline
+
+<!-- Tier 2 (loads on demand — see session-start Step 2.5). One line per
+     memory; full detail in each linked note file in THIS directory.
+     Do NOT auto-inject this file at session start (that re-adds the whole
+     always-loaded index the #1016 two-tier split removed). -->
+
+- [Verify diagnosis before delegating](feedback_verify_diagnosis_before_delegating.md) — run git log -- <path> before spawning a fix agent; API state ≠ ground truth. #162.
+- [Honest audit before "concluded"](feedback_honest_audit_over_conclusion_claim.md) — cross-repo open-item count required before claiming wave done; explicit carry-forward if non-zero.
+- [Stale-inbox manager failure mode](feedback_stale_inbox_manager.md) — before correcting a teammate's state, re-verify via artifact (gh api, Read, grep); inbox lags reality.
+- [Refresh PR state before status claims](feedback_refresh_before_status_claim.md) — gh pr view <N> before any "still at X / blocked / already done" assertion.
+- [Verify third-party integrity claims against source](feedback_verify_3p_integrity.md) — don't claim a downloader verifies SHA/GPG without grepping its source.
+- [Full-read over tail for memory files](feedback_full_read_over_tail.md) — memory-file state-claims need full Read or grep -n, not tail; memory dir is outside repo.
+- [Test-mock injection masks production failure](feedback_test_mock_masks_prod_failure.md) — unit-test injection mocks bypass server-side validation; pair w/ static-analysis/real-call gate.
+- [Verify PostToolUse firing before trusting hook](feedback_verify_posttooluse_firing.md) — at session start, fire one disposable Bash failure to verify annunaki_monitor logs it.
+- [Investigate before implement on unevidenced brief](feedback_investigate_before_implement.md) — brief asserts problem w/o evidence → origin-audit BEFORE Edit/Write. ds#81.
+- [Unrealistic fixture makes a guard assertion inert](feedback_fixture_makes_guard_assertion_inert.md) — `assert not id.startswith(BAD)` proves nothing if no fixture can produce BAD; copy the production filename+header verbatim. main#927.
+- [Verify the instrument before the reading](feedback_silent_zero_is_not_a_measurement.md) — run the detector on BOTH classes and require it to separate them before reading the number you care about; a zero, a control group, even a 10x lift are each insufficient. A high number is as suspect as a zero.
+- [Drop-gate A/B: bidirectional + UNWEIGHTED + Arabic lens](feedback_drop_gate_bidirectional_ab.md) — **a metric derived from a signal a class structurally lacks doesn't under-count it, it ERASES it.** Mention-weighting hid 30.4% of the corpus (45,613 mc=0 rows) and 3 rounds of defects that deleted the Prophet's daughter, his son, and Abu Bakr — each time with an approving reviewer + green CI. da#423.
+- [Sweep the expensive stage before launching it](feedback_sweep_expensive_stage_before_launch.md) — launch gate = EVERY defect at-or-before the costly stage merged, not just the blocking one; triage by stage position × re-run cost, not severity; 2nd axis = quality risk. Gate is DYNAMIC, lives in the issue BODY. main#928.
+- [Passing repro masks bug (wrong invocation)](feedback_passing_repro_masks_bug.md) — green local repro proves nothing if it used a different invocation form than prod.
+- [Query-builder test needs the real engine](feedback_query_builder_test_needs_real_engine.md) — builder unit tests prove the STRING, not that the engine accepts it; execute the built query against a real DB (deploy#606 invalid-Cypher precheck passed 32 tests + 2 reviewers + green CI; only the dry-run caught it). #607.
+- [Child checkout goes stale mid-session](feedback_child_checkout_goes_stale_mid_session.md) — /session-start fast-forwards ONCE; merging 9 PRs leaves the child clone 35 commits behind. terraform plan from a stale tree = stale INSTRUCTION against live state (0-to-add today, 1-to-destroy tomorrow). Re-verify HEAD..origin/main==0 before acting on a child tree.
