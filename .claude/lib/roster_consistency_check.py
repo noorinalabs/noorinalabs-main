@@ -68,12 +68,23 @@ def load_roster_json(repo_root: Path) -> dict[str, str] | None:
 def parse_roster_md(path: Path) -> dict[str, str | None]:
     """Extract identity fields from a roster/*.md card.
 
-    Parses the roster card template (## Identity / ## Git Identity sections)
-    and returns a dict with three keys:
+    Parses BOTH roster card templates and returns a dict with three keys:
 
-      identity_name  -- "Name:" line under "## Identity"
-      git_user_name  -- "user.name:" line under "## Git Identity"
-      git_user_email -- "user.email:" line under "## Git Identity"
+      identity_name  -- member name
+      git_user_name  -- git user.name
+      git_user_email -- git user.email
+
+    Supported formats (tried new-first, old as fallback so a mixed-format
+    transition stays consistent, #1010):
+
+      NEW (slim card):
+        # <Name> — <Role>
+        - **Git:** <name> <<email>>
+
+      OLD (verbose card):
+        ## Identity        → - **Name:** <name>
+        ## Git Identity     → - **user.name:** <name>
+                              - **user.email:** <email>
 
     Values are None when the corresponding field is absent from the card.
     """
@@ -84,19 +95,30 @@ def parse_roster_md(path: Path) -> dict[str, str | None]:
         "git_user_email": None,
     }
 
-    # Roster cards follow the template: "- **Name:** <value>" or
-    # "- **user.name:** <value>" -- both bullet and bold-key forms.
-    name_m = re.search(r"^[-*]\s+\*\*Name:\*\*\s+(.+)$", text, re.MULTILINE)
-    if name_m:
-        result["identity_name"] = name_m.group(1).strip()
+    # --- NEW slim format -------------------------------------------------
+    # H1 "# <Name> — <Role>" (em-dash separator). Name is the text before it.
+    h1_m = re.search(r"^#\s+(.+?)\s+[—–-]\s+.+$", text, re.MULTILINE)
+    if h1_m:
+        result["identity_name"] = h1_m.group(1).strip()
+    # "- **Git:** <name> <<email>>"
+    git_m = re.search(r"^[-*]\s+\*\*Git:\*\*\s+(.+?)\s+<([^>]+)>\s*$", text, re.MULTILINE)
+    if git_m:
+        result["git_user_name"] = git_m.group(1).strip()
+        result["git_user_email"] = git_m.group(2).strip()
 
-    git_name_m = re.search(r"^[-*]\s+\*\*user\.name:\*\*\s+(.+)$", text, re.MULTILINE)
-    if git_name_m:
-        result["git_user_name"] = git_name_m.group(1).strip()
-
-    git_email_m = re.search(r"^[-*]\s+\*\*user\.email:\*\*\s+(.+)$", text, re.MULTILINE)
-    if git_email_m:
-        result["git_user_email"] = git_email_m.group(1).strip()
+    # --- OLD verbose format (fallback for any field not found above) ------
+    if result["identity_name"] is None:
+        name_m = re.search(r"^[-*]\s+\*\*Name:\*\*\s+(.+)$", text, re.MULTILINE)
+        if name_m:
+            result["identity_name"] = name_m.group(1).strip()
+    if result["git_user_name"] is None:
+        git_name_m = re.search(r"^[-*]\s+\*\*user\.name:\*\*\s+(.+)$", text, re.MULTILINE)
+        if git_name_m:
+            result["git_user_name"] = git_name_m.group(1).strip()
+    if result["git_user_email"] is None:
+        git_email_m = re.search(r"^[-*]\s+\*\*user\.email:\*\*\s+(.+)$", text, re.MULTILINE)
+        if git_email_m:
+            result["git_user_email"] = git_email_m.group(1).strip()
 
     return result
 

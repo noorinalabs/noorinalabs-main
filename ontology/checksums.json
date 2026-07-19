@@ -1613,6 +1613,12 @@
       "tracked_at": "2026-07-19T04:26:16.582824+00:00",
       "resolved_at": "2026-07-19T13:55:00Z"
     },
+    ".claude/hooks/validate_pr_review.py": {
+      "last_tracked": "652fe3696f4f426a7fd1c3f148aa55bb6628017cd61e266b317b54b93e535792",
+      "last_resolved": "652fe3696f4f426a7fd1c3f148aa55bb6628017cd61e266b317b54b93e535792",
+      "tracked_at": "2026-07-19T17:16:51.678668+00:00",
+      "resolved_at": "2026-07-19T17:15:00Z"
+    },
     "docs/TOOLCHAIN.md": {
       "last_tracked": "87324fbdf19a1933260b122e87026d6a5fc8bfed0c092c1ea13361e909785087",
       "last_resolved": "87324fbdf19a1933260b122e87026d6a5fc8bfed0c092c1ea13361e909785087",
