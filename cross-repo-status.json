@@ -101,10 +101,68 @@
     }
   },
   "wave_25_merge_model": "wave-branch",
-  "wave_25_active": true,
+  "wave_25_active": false,
   "wave_25_kicked_off_at": "2026-07-18T21:11:08Z",
   "wave_25_premise_rot": {"found_by":"Alejandra (investigate-first) 2026-07-18","cause":"wave-25 branch cut from da main AFTER sibling fixes landed; wave-scope Step 6.5 premise-check was deferred","pre_resolved":{"data-acquisition#248":"CLOSED — resolved by da#250 (chain_integrity gate/metric split, 97f0bcd on-branch); analysis says do-not-fix-as-filed","data-acquisition#352":"acceptance met by merged siblings — query excludes biographical_only (1edccfe/da#370), pipeline causes da#365/#368/#282 closed; residual da#366 is Wave-26; being closed with synthesis comment"},"active_scope_now":["da#347","da#431","da#439","da#346","da#444"],"active_count":5},
   "wave_25_pulled_forward": {"data-acquisition#366":{"from":"wave-26","implementer":"Alejandra Reyes-Fuentes","reviewers":["Ivana Horvat","Jean-Claude Habimana"],"prior_assignee":"Jean-Claude Habimana","rationale":"owner-directed 2026-07-18; residual of da#352 which Alejandra just mapped; both W25+W26 precede cutover so ordering intact"}},
+  "wave_25_final_pr_count": 7,
+  "wave_25_changes_requested_cycles": 0,
+  "wave_25_top_concentration_pct": 43,
+  "wave_25_trust_signals": {
+  "Alejandra Reyes-Fuentes": {
+    "authored_prs": [
+      456
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Ivana Horvat": {
+    "authored_prs": [
+      459,
+      455
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 2,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Kavitha Sundaramurthy": {
+    "authored_prs": [
+      458,
+      451,
+      449
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 3,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Nikolaos Papadopoulos": {
+    "authored_prs": [
+      450
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  }
+},
+  "wave_25_stg_promotion": "success",
+  "wave_25_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/29309875152",
+  "wave_25_completed_at": "2026-07-19T01:29:00Z",
+  "wave_25_wrapup_issue_reconciliation": "7 resolved+closed (da#444/#439/#346/#431/#366/#452/#347); da#443 deferred to wave-27; wave-branch merged to da main via PR#460 (merge 122c7b9, branch retained); reachability+deployable-merge+staging gates green; effect on corpus deferred to #978 owner-gated re-run",
+  "wave_25_deployable_verify": "success",
+  "wave_25_wave_to_main_pr": 460,
   "wave_24_meta_issue": "noorinalabs-main#928",
   "wave_24_theme": "#928 defect sweep + re-run pipeline from `parse`: fix every parse/resolve/load/deploy defect found en route to stg (56 issues filed 2026-07-09/10 across main+da+deploy, + da#282), gated by #928's dynamic launch gate, then wipe-and-reload the graph from `parse`. Owner directive 2026-07-09; retheme from streaming decided 2026-07-10.",
   "wave_24_phase": 8,
