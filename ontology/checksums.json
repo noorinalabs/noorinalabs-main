@@ -1612,6 +1612,12 @@
       "last_resolved": "3474ea595072dcb8495cea7b6d170e0a5b583e32a28123ab51fb18d72d918999",
       "tracked_at": "2026-07-19T04:26:16.582824+00:00",
       "resolved_at": "2026-07-19T13:55:00Z"
+    },
+    ".claude/hooks/validate_pr_review.py": {
+      "last_tracked": "652fe3696f4f426a7fd1c3f148aa55bb6628017cd61e266b317b54b93e535792",
+      "last_resolved": "652fe3696f4f426a7fd1c3f148aa55bb6628017cd61e266b317b54b93e535792",
+      "tracked_at": "2026-07-19T17:16:51.678668+00:00",
+      "resolved_at": "2026-07-19T17:15:00Z"
     }
   },
   "last_cleanup": {
