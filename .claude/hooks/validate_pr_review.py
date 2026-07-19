@@ -945,9 +945,17 @@ def _iter_roster_entries(
                 content = entry.read_text(encoding="utf-8")
             except OSError:
                 continue
+            # Old verbose card: "- **Name:** <Full Name>". New slim card (#1010):
+            # H1 "# <Full Name> — <Role>". Try the explicit field first, then
+            # fall back to the H1 name so both formats resolve during the
+            # org-wide card-slim transition.
             match = re.search(r"\*\*Name:\*\*\s*([^\n]+)", content)
             if match:
                 names.add(match.group(1).strip().lower())
+            else:
+                h1 = re.search(r"^#\s+(.+?)\s+[—–-]\s+.+$", content, re.MULTILINE)
+                if h1:
+                    names.add(h1.group(1).strip().lower())
     except OSError:
         return set()
     return names
