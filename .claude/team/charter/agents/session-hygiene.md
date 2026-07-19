@@ -29,7 +29,7 @@ not per-wave:
   `tools:` list restricts a role to the tools it uses (an allowlist), so a text-only role
   loads no unused tool schemas — the brief need not re-list them.
 
-**Advisory backstop.** [`warn_oversized_brief.py`](../../hooks/warn_oversized_brief.py) is
+**Advisory backstop.** [`warn_oversized_brief.py`](../../../hooks/warn_oversized_brief.py) is
 a non-blocking PreToolUse advisory on `Agent` spawns (registered in the `Agent` matcher of
 `.claude/settings.json`): it warns when a single brief embeds a very large block of
 verbatim `CLAUDE.md` / `charter.md` / `charter/**/*.md` prose, nudging toward a
