@@ -126,6 +126,36 @@ class CheckConsistencyTests(unittest.TestCase):
             )
             self.assertEqual(check_consistency(repo), [])
 
+    def test_new_slim_format_card_returns_no_drift(self) -> None:
+        # #1010: slim card format — H1 "# Name — Role" + "- **Git:** Name <email>".
+        new_card = (
+            "# Aino Virtanen — Standards & Quality Lead\n\n"
+            "- **Level:** Staff · **Status:** Active\n"
+            "- **Git:** Aino Virtanen <parametrization+Aino.Virtanen@gmail.com>\n\n"
+            "**Style:** Precise and economical.\n"
+        )
+        with TemporaryDirectory() as tmp:
+            repo = _setup_repo(
+                Path(tmp),
+                {"Aino Virtanen": "parametrization+Aino.Virtanen@gmail.com"},
+                {"standards_lead_aino.md": new_card},
+            )
+            self.assertEqual(check_consistency(repo), [])
+
+    def test_new_slim_format_email_mismatch_reported(self) -> None:
+        # A wrong email in the slim `- **Git:**` line must still be caught.
+        new_card = (
+            "# Aino Virtanen — Standards & Quality Lead\n\n"
+            "- **Git:** Aino Virtanen <parametrization+Wrong.Email@gmail.com>\n"
+        )
+        with TemporaryDirectory() as tmp:
+            repo = _setup_repo(
+                Path(tmp),
+                {"Aino Virtanen": "parametrization+Aino.Virtanen@gmail.com"},
+                {"standards_lead_aino.md": new_card},
+            )
+            self.assertTrue(check_consistency(repo), "expected email-mismatch drift")
+
     def test_intra_name_mismatch_reported(self) -> None:
         with TemporaryDirectory() as tmp:
             # roster.json matches the git-identity name (with hyphen)
