@@ -1032,10 +1032,10 @@
       "resolved_at": "2026-06-21T22:15:52Z"
     },
     ".claude/memory/session_handoff.md": {
-      "last_tracked": "526436a0825ef081a55983de2ceacfdb31bca91fcbdc9c8ec073f298b7bae4df",
-      "last_resolved": "526436a0825ef081a55983de2ceacfdb31bca91fcbdc9c8ec073f298b7bae4df",
-      "tracked_at": "2026-07-18T21:38:30.299736+00:00",
-      "resolved_at": "2026-07-18T21:39:38Z"
+      "last_tracked": "e6f4878d8898d3e525f6f8bd2e86cc67a87f3d90246916fb30ac41dde9b4bd74",
+      "last_resolved": "e6f4878d8898d3e525f6f8bd2e86cc67a87f3d90246916fb30ac41dde9b4bd74",
+      "tracked_at": "2026-07-19T15:44:41.601642+00:00",
+      "resolved_at": "2026-07-19T13:55:00Z"
     },
     ".claude/lib/verify_deployable_merge.py": {
       "last_tracked": "7c2545f87d17c5c35967612f88381444ff510ceb81ba6553ba37497b0d5c3302",
@@ -1482,10 +1482,10 @@
       "resolved_at": "2026-07-17T03:45:37Z"
     },
     ".claude/lib/memory_budget.py": {
-      "last_tracked": "804aa5bab18c772497996c461a20b879b051b74a019f4f3ef6e99c4fe491ac92",
-      "last_resolved": "804aa5bab18c772497996c461a20b879b051b74a019f4f3ef6e99c4fe491ac92",
-      "tracked_at": "2026-07-11T17:26:13.510801+00:00",
-      "resolved_at": "2026-07-17T03:45:37Z"
+      "last_tracked": "384b69e534482a8678ccc3ec9fb5167379eb9f3d29079c90f26b8dac856036c8",
+      "last_resolved": "384b69e534482a8678ccc3ec9fb5167379eb9f3d29079c90f26b8dac856036c8",
+      "tracked_at": "2026-07-19T04:25:05.792644+00:00",
+      "resolved_at": "2026-07-19T13:55:00Z"
     },
     "ontology/lifecycle.md": {
       "last_tracked": "f9ff452434b8d33e600381f7e80a9beaeea71f53efb2d360765bddc1a977246a",
@@ -1606,6 +1606,12 @@
       "last_resolved": "7ab7644af477e38f73f6e5675a4f1caa335465561176ae22fe6d86bac5c1b666",
       "tracked_at": "2026-07-19T01:03:03.162896+00:00",
       "resolved_at": "2026-07-19T01:29:16Z"
+    },
+    ".claude/lib/tests/test_memory_budget.py": {
+      "last_tracked": "3474ea595072dcb8495cea7b6d170e0a5b583e32a28123ab51fb18d72d918999",
+      "last_resolved": "3474ea595072dcb8495cea7b6d170e0a5b583e32a28123ab51fb18d72d918999",
+      "tracked_at": "2026-07-19T04:26:16.582824+00:00",
+      "resolved_at": "2026-07-19T13:55:00Z"
     }
   },
   "last_cleanup": {
