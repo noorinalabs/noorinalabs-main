@@ -257,6 +257,27 @@ fi
 
 P3W8 surfaced the gap (2026-05-10): user explicitly noted "these should be a part of the wave-retro for next time." This step is that next time.
 
+### 7.8. Memory decay & size sweep (added P9W25 #995)
+
+The memory-budget gate (`.claude/lib/memory_budget.py`) hard-blocks on the corpus **in aggregate** (index-entry count, file count, `MEMORY.md` bytes) but is blind to an individual topic file being oversized or long-untouched. This step runs the **advisory** per-file sweep — the reverse of `/promotion-audit` (which surfaces memories ready to graduate *up*; this surfaces memories ready to consolidate or move *down* to a cold tier):
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# Pass $REPO_ROOT as the positional arg (not the argparse cwd default) so the
+# sweep reads <REPO_ROOT>/.claude/memory even under cwd-drift (worktree / child
+# dir) — matching the hard-gate call sites in .pre-commit-config.yaml and CI,
+# which pass an explicit path. #997.
+python3 "$REPO_ROOT/.claude/lib/memory_budget.py" "$REPO_ROOT" --staleness || true
+```
+
+The report flags files over the soft per-file ceiling (half the `MEMORY.md` byte cap) and files whose last commit is older than `STALE_DAYS`. It is **non-blocking** (always exits 0) and **never auto-deletes** — a flagged file is a candidate for a human decision:
+
+- **Consolidate** — fold a bloated changelog-style file's still-live facts into a tighter form (the `/wave-retro` memory-curation judgment), trimming completed blow-by-blow detail.
+- **Archive** — move a genuinely-historical memory to `.claude/memory/archive/` (a cold tier: outside the top-level `*.md` glob the budget counts, and with **no `MEMORY.md` pointer**, so it is git-tracked and grep-able but *not* always-loaded). Recall it on demand; promote back if it turns live again.
+- **Keep** — age is *edit*-recency, not *reference*-recency; a rarely-edited but frequently-recalled memory (e.g. a stable convention) is correctly kept. Decide per file.
+
+Surface the flagged list in the retro summary (Step 8) alongside the promotion-audit results; act on clear-cut cases in the same pass, carry ambiguous ones forward.
+
 ### 8. Present full retro summary to the user
 
 **Output the complete retro summary directly in the conversation.** Do not just write to files — the user must see the retro without having to open `feedback_log.md`. Include:

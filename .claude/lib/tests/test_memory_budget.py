@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -25,9 +26,13 @@ from memory_budget import (  # noqa: E402
     MAX_INDEX_ENTRIES,
     MAX_MEMORY_BYTES,
     MAX_MEMORY_FILES,
+    SOFT_FILE_BYTES,
+    STALE_DAYS,
     count_index_entries,
     count_memory_files,
     evaluate,
+    format_staleness_report,
+    gather_file_signals,
     gather_metrics,
     main,
 )
@@ -176,6 +181,107 @@ class RealCorpusWithinBudgetTests(unittest.TestCase):
         if not (memory_dir / "MEMORY.md").is_file():
             self.skipTest("parent memory corpus not present in this checkout")
         self.assertEqual(evaluate(memory_dir), 0)
+
+
+class StalenessAdvisoryTests(unittest.TestCase):
+    """The advisory --staleness sweep (#995): per-file size + recency signal.
+
+    It is NON-BLOCKING (always exits 0) and must NEVER change the hard gate. The
+    git recency helper is monkeypatched so tests don't depend on a git checkout.
+    """
+
+    NOW = datetime(2026, 7, 19, tzinfo=timezone.utc)
+
+    def _make_memory_dir(self, root: Path) -> Path:
+        memory_dir = root / ".claude" / "memory"
+        memory_dir.mkdir(parents=True)
+        (memory_dir / "MEMORY.md").write_text("- [A](a.md) — x\n", encoding="utf-8")
+        return memory_dir
+
+    def _patch_recency(self, mapping: dict[str, datetime | None]) -> None:
+        """Force _git_last_commit to return a per-file datetime from `mapping`."""
+
+        def fake(path: Path, repo_root: Path) -> datetime | None:
+            return mapping.get(path.name)
+
+        self._orig = memory_budget._git_last_commit
+        memory_budget._git_last_commit = fake  # type: ignore[assignment]
+        self.addCleanup(lambda: setattr(memory_budget, "_git_last_commit", self._orig))
+
+    def test_oversized_file_flagged_size_stale_not(self) -> None:
+        with TemporaryDirectory() as d:
+            memory_dir = self._make_memory_dir(Path(d))
+            (memory_dir / "big.md").write_text("x" * (SOFT_FILE_BYTES + 1), encoding="utf-8")
+            (memory_dir / "small.md").write_text("x" * 100, encoding="utf-8")
+            self._patch_recency({"big.md": self.NOW, "small.md": self.NOW})
+            signals = {s.name: s for s in gather_file_signals(memory_dir, now=self.NOW)}
+            self.assertTrue(signals["big.md"].oversized)
+            self.assertFalse(signals["big.md"].stale)
+            self.assertTrue(signals["big.md"].flagged)
+            self.assertFalse(signals["small.md"].flagged)
+
+    def test_stale_file_flagged_by_age(self) -> None:
+        with TemporaryDirectory() as d:
+            memory_dir = self._make_memory_dir(Path(d))
+            (memory_dir / "old.md").write_text("x" * 50, encoding="utf-8")
+            old = self.NOW - timedelta(days=STALE_DAYS + 5)
+            self._patch_recency({"old.md": old})
+            signal = gather_file_signals(memory_dir, now=self.NOW)[0]
+            self.assertEqual(signal.name, "old.md")
+            self.assertFalse(signal.oversized)
+            self.assertTrue(signal.stale)
+            self.assertEqual(signal.days_stale, STALE_DAYS + 5)
+
+    def test_recency_unavailable_is_not_stale(self) -> None:
+        # git returns None (fresh clone / no history) -> days_stale None, never
+        # flagged as stale on a missing signal.
+        with TemporaryDirectory() as d:
+            memory_dir = self._make_memory_dir(Path(d))
+            (memory_dir / "x.md").write_text("x" * 50, encoding="utf-8")
+            self._patch_recency({"x.md": None})
+            signal = gather_file_signals(memory_dir, now=self.NOW)[0]
+            self.assertIsNone(signal.days_stale)
+            self.assertFalse(signal.stale)
+
+    def test_signals_sorted_largest_first(self) -> None:
+        with TemporaryDirectory() as d:
+            memory_dir = self._make_memory_dir(Path(d))
+            (memory_dir / "mid.md").write_text("x" * 300, encoding="utf-8")
+            (memory_dir / "big.md").write_text("x" * 900, encoding="utf-8")
+            (memory_dir / "tiny.md").write_text("x" * 10, encoding="utf-8")
+            self._patch_recency({"mid.md": self.NOW, "big.md": self.NOW, "tiny.md": self.NOW})
+            names = [s.name for s in gather_file_signals(memory_dir, now=self.NOW)]
+            self.assertEqual(names, ["big.md", "mid.md", "tiny.md"])
+
+    def test_non_topic_files_excluded_from_signals(self) -> None:
+        with TemporaryDirectory() as d:
+            memory_dir = self._make_memory_dir(Path(d))
+            (memory_dir / "session_handoff.md").write_text("h\n", encoding="utf-8")
+            (memory_dir / "topic.md").write_text("t\n", encoding="utf-8")
+            self._patch_recency({"topic.md": self.NOW})
+            names = {s.name for s in gather_file_signals(memory_dir, now=self.NOW)}
+            self.assertEqual(names, {"topic.md"})  # MEMORY.md + handoff excluded
+
+    def test_cli_staleness_is_non_blocking_even_when_flagged(self) -> None:
+        # A flagged (oversized) file must NOT make the advisory exit non-zero —
+        # the hard gate blocks, the advisory only surfaces.
+        with TemporaryDirectory() as d:
+            memory_dir = self._make_memory_dir(Path(d))
+            (memory_dir / "big.md").write_text("x" * (SOFT_FILE_BYTES + 1), encoding="utf-8")
+            self.assertEqual(main(["memory_budget.py", d, "--staleness"]), 0)
+
+    def test_report_reports_nothing_to_sweep_when_clean(self) -> None:
+        with TemporaryDirectory() as d:
+            memory_dir = self._make_memory_dir(Path(d))
+            (memory_dir / "ok.md").write_text("x" * 50, encoding="utf-8")
+            self._patch_recency({"ok.md": self.NOW})
+            report = format_staleness_report(gather_file_signals(memory_dir, now=self.NOW))
+            self.assertIn("Nothing to sweep", report)
+
+    def test_soft_ceiling_is_half_the_byte_cap(self) -> None:
+        # The single source of truth: the per-file soft ceiling is derived from
+        # the aggregate byte cap, not an independent magic number.
+        self.assertEqual(SOFT_FILE_BYTES, MAX_MEMORY_BYTES // 2)
 
 
 if __name__ == "__main__":
