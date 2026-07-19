@@ -19,6 +19,7 @@ from pathlib import Path
 
 from .assemble import assemble
 from .cypher_ext import extract_cypher
+from .importance import rank_files
 from .llms import render_llms
 from .model import CodeGraph, FileInfo, serialize_graph
 from .python_ext import extract_python
@@ -128,7 +129,10 @@ def generate(repo_root: Path, out_dir: Path, repo_name: str) -> dict[str, int]:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "code-graph.json").write_text(serialize_graph(graph_dict), encoding="utf-8")
 
-    llms_text = render_llms(files, repo_name, node_count, edge_count)
+    # PageRank importance layer (#1002): rank the depended-upon hub files so
+    # llms.txt leads with "what matters most here" before the per-file sections.
+    hub_files = rank_files(graph_dict)
+    llms_text = render_llms(files, repo_name, node_count, edge_count, hub_files=hub_files)
     (out_dir / "llms.txt").write_text(llms_text, encoding="utf-8")
 
     return {"files": len(files), "nodes": node_count, "edges": edge_count}
