@@ -64,6 +64,7 @@
 - [Hook cwd-anchor subagent worktree](feedback_hook_cwd_anchor_subagent_worktree.md) — hooks reading stdin cwd resolve to orchestrator dir, not subagent worktree → child gh ops misrouted.
 - [Sibling-issue overlap missed cross-close](feedback_sibling_issue_overlap.md) — PR for #A satisfying #B does NOT auto-close #B; pre-spawn overlap check. deploy#200.
 - [Batch-loop merge evades PR-review hook](feedback_batch_loop_merge_evades.md) — gh pr merge $pr in a shell loop fails open; standalone literal PR# is caught.
+- [Stacked PR orphaned by base-branch delete](feedback_stacked_pr_base_delete_orphan.md) — PR-B stacked on PR-A's feature branch is auto-CLOSED (no reopen/retarget) when A merges w/ --delete-branch; retarget B to the wave branch first, or open a fresh superseding PR. P9W25 #457→#459.
 - [Scope audit flips implementer via child-repo rule](feedback_scope_audit_child_repo_rule.md) — parent-repo tracking issue for child work goes in CHILD repo; stop, don't retarget.
 - [sync-gate build-kind false-match](feedback_sync_gate_build_kind_false_match.md) — pre_commit_ci_sync.py build pattern false-matches "Docker Buildx"/"docker build" step names.
 - [Trivy base-image CVE org-wide gate](feedback_trivy_base_image_cve_org_wide_gate.md) — ghcr Trivy fails on NEW debian base-image OS CVE, not your code; org-wide, not PR-caused.
