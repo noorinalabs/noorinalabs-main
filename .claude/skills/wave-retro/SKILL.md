@@ -278,6 +278,18 @@ The report flags files over the soft per-file ceiling (half the `MEMORY.md` byte
 
 Surface the flagged list in the retro summary (Step 8) alongside the promotion-audit results; act on clear-cut cases in the same pass, carry ambiguous ones forward.
 
+### 7.9. Memory content-staleness judge (`/memory-judge`) — added #1023
+
+Step 7.8 catches the **size/age** axis (an oversized topic file, or one whose last commit is old). It is blind to the orthogonal failure: a note whose *content* has gone stale — it cites a file, function, or flag that has since been renamed, moved, or deleted, actively misdirecting recall. This step runs the complementary **content**-staleness pass: **budget = size, judge = stale content.**
+
+Spawn the read-only `memory-judge` agent (Haiku, `.claude/agents/memory-judge.md`) — or invoke the `/memory-judge` skill directly. It selects notes with no `last_verified` frontmatter or a `last_verified` older than 60 days, extracts every backtick-quoted path/symbol/flag they cite, `git grep`s this repo to check each still resolves, and classifies each due note:
+
+- **Still-current** — all references resolve; a `last_verified` bump candidate (a human applies the frontmatter edit).
+- **Partially-stale** — some references no longer resolve; the note wants an edit or a `superseded_by` pointer.
+- **Fully-stale** — the central claim resolves nowhere and no newer note supersedes it; a deletion candidate.
+
+The judge **never deletes, edits, or commits** anything in the memory store — flagging is the whole job. Deletes are PR-gated: they require an explicit human-approved diff, the same discipline as `/close-stale-issues`. Surface the classified list in the retro summary (Step 8) next to the Step 7.8 size/age flags; act on clear-cut Still-current bumps and obvious deletes in the same pass (via a reviewed commit), carry ambiguous notes forward.
+
 ### 8. Present full retro summary to the user
 
 **Output the complete retro summary directly in the conversation.** Do not just write to files — the user must see the retro without having to open `feedback_log.md`. Include:
