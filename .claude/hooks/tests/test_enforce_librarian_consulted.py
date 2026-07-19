@@ -20,6 +20,7 @@ import sys
 import tempfile
 import time
 import unittest
+import uuid
 from pathlib import Path
 
 # Put the hooks dir on sys.path so we can import the hook module.
@@ -727,6 +728,81 @@ class TolerantSentinelReadTests(unittest.TestCase):
             }
         )
         _assert_advisory(self, result)
+
+
+class SessionThrottleTests(unittest.TestCase):
+    """#1022 — the advisory fires at most ONCE per session.
+
+    The first un-consulted edit advises; subsequent un-consulted edits in the
+    same session stay silent (the nudge stops re-injecting on every Edit/Write).
+    Throttle is keyed on `session_id`; each test uses a unique id and removes
+    its own marker so state cannot leak across tests or sessions.
+    """
+
+    def setUp(self) -> None:
+        self._session_id = f"test-throttle-{uuid.uuid4()}"
+        self._marker = hook._advisory_throttle_path(self._session_id)
+        self._extra_markers: list[Path] = []
+
+    def tearDown(self) -> None:
+        for m in [self._marker, *self._extra_markers]:
+            if m is not None:
+                try:
+                    m.unlink()
+                except OSError:
+                    pass
+
+    def _edit_input(self, session_id: str | None = "__self__") -> dict:
+        """An un-consulted, non-allowlisted code edit (advisory-eligible)."""
+        sid = self._session_id if session_id == "__self__" else session_id
+        payload = {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "/repo/src/foo.py"},
+            "transcript_path": _write_transcript([]),  # no librarian evidence
+        }
+        if sid is not None:
+            payload["session_id"] = sid
+        return payload
+
+    def test_first_edit_advises_then_throttled(self) -> None:
+        """POS: first un-consulted edit advises; later ones in-session are silent."""
+        first = hook.check(self._edit_input())
+        _assert_advisory(self, first)
+        assert self._marker is not None  # mypy narrowing
+        self.assertTrue(self._marker.exists(), "first advisory must write the throttle marker")
+
+        self.assertIsNone(hook.check(self._edit_input()), "second edit same session must be silent")
+        self.assertIsNone(hook.check(self._edit_input()), "third edit same session must be silent")
+
+    def test_throttle_is_per_session(self) -> None:
+        """NEG: a DIFFERENT session id still advises — throttle is session-scoped."""
+        _assert_advisory(self, hook.check(self._edit_input()))
+
+        other_id = f"test-throttle-{uuid.uuid4()}"
+        self._extra_markers.append(hook._advisory_throttle_path(other_id))  # type: ignore[arg-type]
+        _assert_advisory(self, hook.check(self._edit_input(session_id=other_id)))
+
+    def test_no_session_id_not_throttled(self) -> None:
+        """NEG: without a session_id the hook is unthrottleable — every edit advises."""
+        _assert_advisory(self, hook.check(self._edit_input(session_id=None)))
+        _assert_advisory(self, hook.check(self._edit_input(session_id=None)))
+
+    def test_throttle_not_consumed_when_librarian_consulted(self) -> None:
+        """POS: a librarian-consulted edit stays silent and writes NO throttle marker.
+
+        The marker must only be spent on an actually-emitted advisory, so a
+        later un-consulted edit in the same session still gets its one nudge.
+        """
+        consulted = self._edit_input()
+        consulted["transcript_path"] = _write_transcript([_librarian_skill_call()])
+        self.assertIsNone(hook.check(consulted), "librarian consulted -> silent")
+        assert self._marker is not None  # mypy narrowing
+        self.assertFalse(
+            self._marker.exists(), "silent (consulted) path must not write a throttle marker"
+        )
+
+        # The session's single nudge is still available for an un-consulted edit.
+        _assert_advisory(self, hook.check(self._edit_input()))
 
 
 class MainExitCodeTests(unittest.TestCase):

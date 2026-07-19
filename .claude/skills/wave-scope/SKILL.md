@@ -61,19 +61,21 @@ python3 "$REPO_ROOT/.claude/lib/wave_seq.py" allocate "$STATUS_FILE" --phase {P}
 
 The `--write` path goes through `upsert_status_keys.py`, so the compact-inline file shape is preserved and the rewrite is JSON-validated before AND after. The counter self-seeds above all historical per-phase wave numbers if `global_wave_seq` is absent. When operating on the `main` copy, run against the fetched content and fold the result into the PUT-contents write `/wave-kickoff` Step 1a uses.
 
-### 0.5. Phase-review prerequisite + owner-set theme (MANDATORY)
+### 0.5. Phase-review (recommended) + owner-set theme (MANDATORY)
 
-**Two non-negotiable gates before proceeding past Step 0.5.**
+**One non-negotiable gate before proceeding past Step 0.5** — the owner-set theme (Gate B). Running `/phase-review` first is strongly recommended but no longer blocks (#1022).
 
-**Gate A — `/phase-review` must have run in this session.** Without phase context, theme picking is reactive. Check the conversation transcript for a `/phase-review` invocation against phase `{P}`. If absent:
+**Recommended — `/phase-review` this session.** Without phase context, theme picking is reactive, so running `/phase-review {P}` before `/wave-scope` remains the recommended cadence. Check the conversation transcript for a `/phase-review` invocation against phase `{P}`; if absent:
 
 ```
-STOP. /phase-review must run before /wave-scope. Run:
-   /phase-review {P}
-Then re-run /wave-scope.
+RECOMMENDED: run /phase-review {P} before /wave-scope for current phase
+context (remaining end-state criteria, tech-debt ratio). This is no longer a
+hard gate — proceed if you already have current phase context by other means.
 ```
 
-**Gate B — wave theme set by owner via dialogue.** The theme is NEVER inferred from carry-forwards, backlog tier ordering, or retro proposals alone. The orchestrator MUST:
+This was softened from a hard STOP gate to a recommendation (#1022, process-trim). The safety it nominally protected — a deliberate, phase-aware wave theme — is actually held by **Gate B below** (the owner sets the theme via dialogue and `/wave-scope` STOPs without it). Forcing a `/phase-review` transcript entry was ceremony on top of that real gate; the recommendation preserves the quality nudge without re-blocking every scope run.
+
+**Gate B — wave theme set by owner via dialogue (MANDATORY).** The theme is NEVER inferred from carry-forwards, backlog tier ordering, or retro proposals alone. The orchestrator MUST:
 
 1. Surface 2-3 candidate themes to the owner (informed by `/phase-review` output and the phase plan's remaining end-state criteria).
 2. Wait for the owner to pick or hybridize.

@@ -108,6 +108,27 @@ Scope of scan:
     invocation cannot carry over. Sentinel TTL of 1 hour bounds
     cross-session carryover on the sentinel path.
 
+Once-per-session advisory throttle (#1022)
+==========================================
+
+The advisory is a recurring *nudge*, not a per-edit gate: re-injecting the
+same `systemMessage` into every Edit/Write of a session is low value per token
+once the agent has seen it. So the hook fires the advisory **at most once per
+session** — the first un-consulted edit warns; subsequent un-consulted edits in
+the same session stay silent.
+
+Mechanism: a session-keyed throttle marker at
+    <tmpdir>/{THROTTLE_DIR}/<sha1(session_id)[:16]>.marker
+(`session_id` from the Claude Code hook input). When the hook is about to emit
+the advisory it first checks the marker; if present the session already saw the
+nudge, so it suppresses (returns None). Otherwise it writes the marker and
+emits. The marker lives in the OS temp dir (ephemeral per-session state that
+must not pollute the repo or need a writable cwd). Keyed on the unique
+`session_id`, so a stale marker from a prior session can never suppress a new
+one. When `session_id` is absent (unthrottleable) the hook keeps its original
+always-advise behavior. All throttle filesystem ops fail OPEN toward the nudge
+(an unreadable/unwritable marker → still advise), never crashing the hook.
+
 Exit codes (per Claude Code hook convention):
     0 — ALWAYS. This is an advisory hook; it never blocks an edit. When the
         librarian has not been consulted it prints a `systemMessage` warning
@@ -120,9 +141,12 @@ Sentinel fallback for:    noorinalabs/noorinalabs-main#169
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
+import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -142,6 +166,12 @@ from _consultation_sentinel import (  # noqa: E402
 _SKILL_KEY = "ontology-librarian"
 SENTINEL_DIR_NAME = f"{SENTINEL_PARENT_DIR}/{_SKILL_KEY}"
 SENTINEL_TTL_SECONDS = DEFAULT_TTL_SECONDS  # 1 hour, inherits from helper
+
+# Once-per-session advisory throttle (#1022). The marker is session-keyed and
+# lives in the OS temp dir — see the module docstring § "Once-per-session
+# advisory throttle". Distinct from the cwd-keyed librarian-consulted sentinel
+# above (which is a librarian-was-consulted signal, not a we-already-nagged one).
+THROTTLE_DIR_NAME = "noorina_librarian_advisory"
 
 # Tool matchers this hook advises on.
 _MATCHED_TOOLS = {"Edit", "Write", "NotebookEdit"}
@@ -315,6 +345,51 @@ def _sentinel_attests_librarian(cwd: str) -> bool:
         return True
 
 
+def _advisory_throttle_path(session_id: str) -> Path | None:
+    """Return the once-per-session throttle marker path, or None when unkeyed.
+
+    Keyed on `sha1(session_id)[:16]` (hashing keeps arbitrary session-id
+    characters out of the path) under the OS temp dir. Returns None when
+    `session_id` is empty — with no stable key we cannot throttle, so the
+    caller keeps the original always-advise behavior.
+    """
+    if not session_id:
+        return None
+    try:
+        digest = hashlib.sha1(session_id.encode("utf-8")).hexdigest()[:16]
+    except (TypeError, ValueError):
+        return None
+    return Path(tempfile.gettempdir()) / THROTTLE_DIR_NAME / f"{digest}.marker"
+
+
+def _advisory_already_emitted(throttle: Path) -> bool:
+    """True if this session already saw the advisory (marker present).
+
+    Fails OPEN toward advising: an unreadable marker path is treated as
+    not-yet-emitted so a filesystem hiccup re-shows the nudge rather than
+    silently swallowing it.
+    """
+    try:
+        return throttle.exists()
+    except OSError:
+        return False
+
+
+def _mark_advisory_emitted(throttle: Path, session_id: str) -> None:
+    """Record that the advisory fired this session. Best-effort (fail-open).
+
+    On OSError the advisory still fires (the caller emits regardless); we just
+    may not throttle the next edit. Failing toward the nudge is the safe default
+    for an advisory hook.
+    """
+    try:
+        throttle.parent.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        throttle.write_text(f"{timestamp} {session_id}\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
 _ADVISORY_MESSAGE = (
     "ADVISORY: /ontology-librarian was not consulted earlier in this session "
     "before this code edit.\n"
@@ -354,6 +429,17 @@ def check(input_data: dict) -> dict | None:
     cwd = input_data.get("cwd", "")
     if _sentinel_attests_librarian(cwd):
         return None
+
+    # Reaching here means we WILL advise. Session-scoped throttle (#1022): fire
+    # the advisory at most once per session — if this session already saw it,
+    # stay silent instead of re-injecting the nudge on every Edit/Write. See the
+    # module docstring § "Once-per-session advisory throttle".
+    session_id = input_data.get("session_id", "")
+    throttle = _advisory_throttle_path(session_id)
+    if throttle is not None:
+        if _advisory_already_emitted(throttle):
+            return None
+        _mark_advisory_emitted(throttle, session_id)
 
     return {"systemMessage": _ADVISORY_MESSAGE}
 
