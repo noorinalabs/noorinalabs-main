@@ -73,4 +73,29 @@ The label-existence PreToolUse hook on `gh issue create/edit` has two false-bloc
 ## 11. ProjectV2 field options
 Adding an option to a Projects-v2 single-select field (e.g. a Wave option on project 2) is orchestrator-doable via GraphQL `updateProjectV2Field` — never file it as owner-only. **Gotcha:** the mutation REPLACES the full option list; read current options first (`gh project field-list 2 --owner noorinalabs`) and re-send all of them plus the addition, or the rest are wiped. Read back that the option stuck.
 
+## 12. GraphQL quota exhausts independently of REST — and fails as a silent zero
+
+`gh` splits across two quotas (`gh api rate_limit`): **core** (REST, 5000/h) and **graphql** (5000/h). They drain independently, so REST can read 4988/5000 while GraphQL is flat 0 (observed live 2026-07-20, wave-26 scope run).
+
+**What burns GraphQL fastest:** `gh project item-list <n> --limit 2000` paginates ~100 items/page, so ONE run is ~20 GraphQL calls. A handful of board queries while chasing a membership question exhausted 5000. Prefer `/board-audit` over hand-rolled board sweeps.
+
+**The failure is a silent zero, not an error you'll notice.** The response body is the bare string `GraphQL: API rate limit exceeded for user ID <n>`; piped into `jq` it is a parse error, and with the customary `2>/dev/null` on the `gh` call the whole thing reads as *an empty result set*. This session nearly reported "all 12 wave-26 issues missing from project board 2" as fact when board state was simply **unknown**. Same class as [[feedback_silent_zero_is_not_a_measurement]] — never let a quota failure masquerade as a negative finding. Drop the `2>/dev/null` when a query returns surprisingly empty.
+
+**Note the convergence with #888.** That bug — `first: > 100` in a `gh api graphql` block, now linted by `lint_skill_graphql_pagination.py` — produced the *identical* symptom: `/board-audit` reading every issue as an orphan. Over-cap paging and quota exhaustion are different causes with the same false-negative shape, so treat "everything is missing from the board" as a **tooling** hypothesis first and a finding second.
+
+**Which subcommands need GraphQL (fail under exhaustion):** `gh pr comment`, `gh pr view --json`, `gh project item-list`, `gh project item-add` (the last fails with a *misleading* `unknown owner type` rather than a quota message).
+
+**REST fallbacks that keep working:**
+- post a PR/issue comment → `gh api repos/{owner}/{repo}/issues/{N}/comments -f body='...'` (verified live by Lucas Ferreira on PR#1049 — charter verdict trailer parsed identically)
+- `gh issue create` / `gh issue edit` — already REST
+- read comments → `gh api repos/{owner}/{repo}/issues/{N}/comments`
+
+A reviewer blocked mid-verdict should switch to the REST comment endpoint, not wait out the hour.
+
+## 13. CI green: `check-runs` is authoritative, `status` is not
+
+`gh api repos/{o}/{r}/commits/{sha}/status` reports the **legacy Statuses API** only. On a repo whose CI is all GitHub Actions that collection is empty, so the combined state renders `pending` **even when every check has passed** — a false amber that reads as "still running."
+
+Use `gh api repos/{o}/{r}/commits/{sha}/check-runs` (Checks API) for the real verdict; key on `.check_runs[].conclusion`. Verified on PR#1049 head `8729bca`: `status` said pending, `check-runs` showed 14/14 success. Query by **SHA, not PR number** — a PR-number query re-resolves the head and can answer about a different commit than the one you mean to certify (head-SHA anchoring, [[feedback_verdict_head_sha_anchoring]]).
+
 Cross-references: [[feedback_refresh_before_status_claim]] (fresh API call before any state claim), [[feedback_verify_diagnosis_before_delegating]] (API state ≠ ground truth until read back), [[feedback_silent_zero_is_not_a_measurement]] (a confident NO from a truncated query is the silent-zero class).
