@@ -17,6 +17,15 @@ Input Language:
   Flag pass-through:
     --repo   → forwarded to `gh pr view` and comment fetch so the hook checks
                the PR in the repo the user named, not the cwd-resolved repo.
+               A `--repo`/`-R` value the gate CANNOT resolve to an OWNER/NAME —
+               an unexpanded shell variable (`-R $DA`, which the hook sees
+               pre-expansion) or a value with no `/` — HARD BLOCKS (#981): a
+               merge whose target repo is unknown cannot be verified, so it
+               fails CLOSED with a diagnostic that distinguishes the
+               unexpanded-variable case (fix: pass a literal `--repo
+               owner/name`) from a generic fetch failure (fix: retry / check
+               auth). Pre-#981 this branch returned allow-with-warning and let
+               four P9W25 da merges bypass the 2-reviewer gate.
     --admin  → short-circuits (emergency override — allows merge).
 
   Batch-loop guard (#567, narrowed #886, broadened #894/#897): a `gh pr merge`
@@ -543,6 +552,75 @@ def _resolve_owner_repo(repo: str | None) -> tuple[str, str] | None:
     return owner, repo_name
 
 
+#: Defect kinds returned by `repo_argument_defect` (#981).
+REPO_DEFECT_UNEXPANDED = "unexpanded"
+REPO_DEFECT_MALFORMED = "malformed"
+
+
+def repo_argument_defect(repo: str | None) -> str | None:
+    """Classify a `--repo`/`-R` VALUE that can NEVER resolve to `OWNER/NAME` (#981).
+
+    Returns `REPO_DEFECT_UNEXPANDED`, `REPO_DEFECT_MALFORMED`, or None when the
+    value is absent (no flag given — cwd resolution legitimately applies) or is a
+    well-formed literal.
+
+    Why this exists. The hook parses the command string PRE-expansion, so a
+    `gh pr merge 451 -R $DA` hands the gate the literal four characters `$DA`.
+    That is not a repo, and no amount of retrying will make it one — every
+    downstream fetch against it fails, and before #981 that failure landed on the
+    `pr_data is None` branch, which ALLOWED the merge with a warning. Four
+    da PRs (#449/#450/#451/#456) merged through that hole in P9W25 with the
+    2-reviewer gate effectively off.
+
+    The unexpanded case must be distinguished from a generic fetch failure
+    because the two need OPPOSITE operator responses: an unexpanded variable is
+    deterministic and is fixed by passing a literal `--repo owner/name`, whereas
+    an auth/network failure is transient and is fixed by retrying. Telling an
+    operator to "retry" a `$DA` would loop forever; telling them to "pass a
+    literal repo" after a network blip would send them editing a correct command.
+
+    Detection reuses `_is_single_expansion_word` — the SAME predicate the
+    batch-loop guard (#894) uses to recognize an unexpanded argument — rather
+    than a second hand-rolled regex. A duplicated matcher that drifts from its
+    twin is exactly the defect class #1046 was, and `conventions.md` records the
+    recurring regex-blindness lesson: one matcher, reused.
+
+    `extract_repo` yields a single shell word, so `_is_single_expansion_word`
+    reduces to "carries a `$`" here and covers every form: `$DA`, `${DA}`,
+    `$(get_repo)`, and the partially-expanded `noorinalabs/$REPO` (which is
+    especially dangerous — it HAS a slash, so `_resolve_owner_repo` would happily
+    return `("noorinalabs", "$REPO")` and report a resolved repo that does not
+    exist). A pathological whitespace-bearing value fails the predicate but then
+    fails the slash test, so it is still classified as a defect — no hole.
+    """
+    if repo is None:
+        return None
+    if _is_single_expansion_word(repo) or "$" in repo:
+        return REPO_DEFECT_UNEXPANDED
+    owner, sep, name = repo.partition("/")
+    if not (sep and owner and name):
+        return REPO_DEFECT_MALFORMED
+    return None
+
+
+def describe_repo_defect(repo: str | None, defect: str) -> str:
+    """One-line human description of a `repo_argument_defect` classification.
+
+    Shared by Hook 4's block message and `pr_review_state`'s `ReviewStateError`
+    so the two surfaces cannot drift in what they tell an operator (#1046).
+    """
+    if defect == REPO_DEFECT_UNEXPANDED:
+        return (
+            f"the `--repo`/`-R` value {repo!r} contains an UNEXPANDED shell "
+            "variable. The hook sees the command before the shell expands it, so "
+            "this is the literal text — not a repository."
+        )
+    return (
+        f"the `--repo`/`-R` value {repo!r} is not of the form OWNER/NAME "
+        "(no `/` separating a non-empty owner from a non-empty repo name)."
+    )
+
+
 def get_latest_content_commit(
     pr_number: str | int,
     repo: str | None = None,
@@ -722,13 +800,30 @@ class StaleVerdict:
 
 
 class CommentReviewResult:
-    """Result of checking PR comments for charter-format reviews."""
+    """Result of checking PR comments for charter-format reviews.
+
+    `undetermined` carries the reason the comment scan could not be COMPLETED
+    (#981 defense-in-depth). It is the difference between "this PR has no
+    charter-format approvals" and "the hook never got to look", which an empty
+    `reviewers` set alone cannot express — every early `return result` in
+    `check_comment_reviews` used to be indistinguishable from a genuine
+    zero-approval PR. Callers must fail CLOSED when it is non-empty
+    (`feedback_safety_direction_over_ux_friction`).
+
+    Deliberately an ADDITIVE field with a falsy default rather than a raised
+    exception: `pr_review_state.compute_review_state` and a large body of unit
+    tests construct and consume this object directly, and a new exception type
+    escaping `check_comment_reviews` would turn that driver's clean exit-2 path
+    into an uncaught traceback. A default-empty attribute leaves every existing
+    construction and read working untouched.
+    """
 
     def __init__(self) -> None:
         self.reviewers: set[str] = set()
         self.reviews_missing_tech_debt: list[str] = []  # reviewer names missing TechDebt line
         self.tech_debt_issue_numbers: list[str] = []  # issue numbers from TechDebt: lines
         self.stale_verdicts: list[StaleVerdict] = []  # verdicts predating T_content (#950)
+        self.undetermined: str = ""  # non-empty ⇒ scan incomplete, caller must fail closed
 
 
 # Only these RequestOrReplied values represent actual review verdicts that
@@ -828,6 +923,10 @@ def check_comment_reviews(
     try:
         owner_repo = _resolve_owner_repo(repo)
         if owner_repo is None:
+            result.undetermined = (
+                f"could not resolve the target repository (--repo={repo!r}, and "
+                "`gh repo view` in the current directory did not return owner/name)"
+            )
             return result
         owner, repo_name = owner_repo
 
@@ -849,6 +948,10 @@ def check_comment_reviews(
             timeout=30,
         )
         if comments_result.returncode != 0:
+            stderr = (comments_result.stderr or "").strip().splitlines()
+            result.undetermined = "the PR comments API call failed" + (
+                f": {stderr[-1]}" if stderr else " (no stderr)"
+            )
             return result
 
         comments = json.loads(comments_result.stdout)
@@ -907,7 +1010,13 @@ def check_comment_reviews(
 
         return result
 
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError) as exc:
+        # A timeout on a heavily-paginated PR, unparseable JSON, or a missing
+        # `gh` binary all leave the comment scan INCOMPLETE. Reporting that as an
+        # empty reviewer set would read as "no approvals" — wrong in a way that
+        # also silently skips the TechDebt attestation check. Record it and let
+        # the caller hard-block (#981).
+        result.undetermined = f"the PR comments could not be read ({type(exc).__name__}: {exc})"
         return result
 
 
@@ -1201,24 +1310,86 @@ def check(input_data: dict) -> dict | None:
 
     pr_number = extract_pr_number(command)
     repo = extract_repo(command)
-    pr_data = get_pr_data(pr_number, repo=repo)
+    pr_display = f"#{pr_number}" if pr_number else "(current branch)"
 
-    if pr_data is None:
-        return {
-            "decision": "allow",
-            "systemMessage": (
-                "WARNING: Could not verify PR review status. "
-                "Ensure the PR has at least one peer review before merging."
+    # Unresolvable `--repo` (#981). A `-R` value the gate cannot resolve to an
+    # OWNER/NAME — an unexpanded `$DA`, or a value with no `/` — is checked
+    # BEFORE any fetch, because no fetch can succeed against it and the failure
+    # is deterministic rather than transient. Blocking here (a) gives the
+    # operator the ONE fix that actually works instead of a misleading "retry",
+    # and (b) keeps the guard independent of the network, so it holds when the
+    # API is reachable and when it is not.
+    #
+    # This is the #981 fail-open. Pre-fix, `gh pr merge 451 -R $DA --merge` ran
+    # `gh pr view 451 --repo '$DA'`, which exited non-zero, so `get_pr_data`
+    # returned None and the branch below ALLOWED the merge with a warning. That
+    # short-circuited ahead of every real check — `get_latest_content_commit`'s
+    # `CommitFetchError` hard-block never ran and `check_comment_reviews` was
+    # never reached — so the 2-reviewer gate was silently off for four P9W25 da
+    # merges. Note the issue body pins this on `_resolve_owner_repo` inside
+    # `check_comment_reviews`; that path is NOT reachable on the merge path.
+    defect = repo_argument_defect(repo)
+    if defect is not None:
+        result = {
+            "decision": "block",
+            "reason": (
+                f"BLOCKED: PR {pr_display} — the hook cannot determine WHICH REPOSITORY "
+                "you are merging in, so it cannot check that this PR has two approving "
+                "reviewers.\n"
+                f"Detail: {describe_repo_defect(repo, defect)}\n\n"
+                "This blocks rather than waving the merge through: a merge whose target "
+                "repo the gate cannot identify is precisely a merge the gate cannot "
+                "verify, and allowing it silently disables the 2-reviewer rule. Four "
+                "PRs merged through this hole in P9W25 (#981).\n"
+                "Fix:\n"
+                "  - Pass a LITERAL repo, not a shell variable:\n"
+                "      gh pr merge 451 --repo noorinalabs/noorinalabs-data-acquisition --merge\n"
+                "  - Or drop `--repo` entirely and run the merge from a checkout of the "
+                "target repo, letting the hook resolve it from the working directory.\n"
+                "Pass `--admin` for emergency overrides only."
             ),
         }
+        log_pretooluse_block("validate_pr_review", command, result["reason"])
+        return result
+
+    pr_data = get_pr_data(pr_number, repo=repo)
+
+    # Generic fetch failure (#981). The repo argument is well-formed (or absent),
+    # so this is an auth / network / wrong-PR-number problem — a DIFFERENT
+    # condition from the unresolvable-repo block above, and one a retry may well
+    # fix. It still fails CLOSED: an unverifiable merge is blocked, never
+    # allowed-with-a-warning (`feedback_safety_direction_over_ux_friction` — when
+    # a hook cannot verify, HARD BLOCK with a diagnostic).
+    if pr_data is None:
+        result = {
+            "decision": "block",
+            "reason": (
+                f"BLOCKED: PR {pr_display} — could not fetch the PR, so the hook cannot "
+                "check that it has two approving reviewers.\n"
+                f"Detail: `gh pr view` failed for PR {pr_display}"
+                + (f" in {repo}" if repo else " (repo resolved from the current directory)")
+                + ". The repo argument itself is well-formed, so this is an "
+                "authentication, network, or wrong-PR-number failure rather than a "
+                "malformed command.\n\n"
+                "This blocks rather than allowing with a warning: pre-#981 this branch "
+                "returned `allow`, which is how four P9W25 merges bypassed the "
+                "2-reviewer gate entirely.\n"
+                "Fix one of:\n"
+                "  - Re-run the merge (a transient `gh` / network failure).\n"
+                "  - Check `gh auth status` — and that the token can read this repo.\n"
+                "  - Check the PR number exists in the target repo "
+                "(`gh pr view <N> --repo OWNER/NAME`).\n"
+                "Pass `--admin` for emergency overrides only."
+            ),
+        }
+        log_pretooluse_block("validate_pr_review", command, result["reason"])
+        return result
 
     author = pr_data["author"]
     reviews = pr_data["reviews"]
     head_ref = pr_data["headRefName"]
     number = pr_data["number"]
     labels = pr_data["labels"]
-
-    pr_display = f"#{pr_number}" if pr_number else "(current branch)"
 
     # Content binding (#950). Establish T_content — the committer timestamp of the
     # branch's latest NON-MERGE commit — BEFORE counting any verdict, because a
@@ -1277,6 +1448,34 @@ def check(input_data: dict) -> dict | None:
             comment_review_result = check_comment_reviews(
                 number, "", repo=repo, content_ts=content_ts
             )
+
+    # Incomplete comment scan (#981 defense-in-depth). An empty reviewer set that
+    # came from a FAILED scan is not evidence of anything — it is the absence of
+    # evidence, and counting it as "0 approvals found" is the same category of
+    # error as counting an unverifiable merge as approved. Hard-block with the
+    # underlying reason.
+    if comment_review_result.undetermined:
+        result = {
+            "decision": "block",
+            "reason": (
+                f"BLOCKED: PR {pr_display} — the charter-format review comments could not "
+                "be read, so the hook cannot tell whether this PR has two approving "
+                "reviewers.\n"
+                f"Detail: {comment_review_result.undetermined}\n\n"
+                "This blocks rather than treating an unreadable comment thread as an "
+                "empty one: a failed scan and a genuinely unreviewed PR are "
+                "indistinguishable from the reviewer set alone, and silently reporting "
+                "the former as the latter also skips the TechDebt attestation check "
+                "(#981).\n"
+                "Fix one of:\n"
+                "  - Re-run the merge (a transient `gh api` / network failure, or a "
+                "pagination timeout on a very long comment thread).\n"
+                "  - Check `gh auth status` and that the token can read this repo's issues.\n"
+                "Pass `--admin` for emergency overrides only."
+            ),
+        }
+        log_pretooluse_block("validate_pr_review", command, result["reason"])
+        return result
 
     stale_verdicts = comment_review_result.stale_verdicts + stale_formal
 
