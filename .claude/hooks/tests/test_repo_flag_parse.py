@@ -56,6 +56,46 @@ class FourFormsTests(unittest.TestCase):
         self.assertEqual(parser.extract_repo(cmd), self.EXPECTED)
 
 
+class AttachedShortFlagTests(unittest.TestCase):
+    """`-Rvalue` attached short-flag form (POSIX getopt / cobra shorthand,
+    main#1057). `-Rvalue` == `-R value`. Before this, `extract_repo` recognized
+    only `-R X` / `-R=X`; an attached `-R$DA` (the shape a shell hands the hook
+    PRE-expansion) fell through to None, so Hook 4's merge gate never saw the
+    repo argument and the 2-reviewer gate was bypassable via the attached
+    spelling — the #981 fail-open through an alternate flag form."""
+
+    def test_attached_unexpanded_variable_returned_verbatim(self):
+        """THE #1057 fix. `-R$DA` must yield the LITERAL `$DA` (unchanged for
+        pass-through) so #1056's `repo_argument_defect` classifier can flag it
+        as an unexpanded shell variable and HARD BLOCK the merge. Pre-fix this
+        returned None → the classifier never ran → cwd fallthrough → bypass."""
+        self.assertEqual(parser.extract_repo("gh pr merge 451 -R$DA --merge"), "$DA")
+
+    def test_attached_literal_repo_resolves(self):
+        """A LEGITIMATE attached form must resolve to the full repo string, not
+        merely fail closed."""
+        self.assertEqual(
+            parser.extract_repo("gh pr merge 451 -Rnoorinalabs/noorinalabs-data-acquisition"),
+            "noorinalabs/noorinalabs-data-acquisition",
+        )
+
+    def test_attached_short_equals_still_strips_separator(self):
+        """`-R=X` remains the equals form (value `X`, not `=X`) — the equals
+        branch is checked before the attached-short branch."""
+        self.assertEqual(parser.extract_repo("gh pr merge 451 -R=owner/repo"), "owner/repo")
+
+    def test_long_flag_is_never_split_on_bare_prefix(self):
+        """Attached values are SHORT-flag only. `--repofoo` / `--reponsense`
+        must NOT parse as `--repo` + suffix — a long flag requires `=` or a
+        space. This pins the `len(flag) == 2` scope guard."""
+        self.assertIsNone(parser.extract_repo("gh issue create --repofoo bar"))
+        self.assertIsNone(parser.extract_repo("gh issue create --reponsense --title t"))
+
+    def test_bare_trailing_short_flag_returns_none(self):
+        """A trailing `-R` with no attached value → None (no value to capture)."""
+        self.assertIsNone(parser.extract_repo("gh pr merge 451 -R"))
+
+
 class MixedWithOtherFlagsTests(unittest.TestCase):
     """`--repo` co-existing with other flags must not false-match."""
 
@@ -127,6 +167,17 @@ class RegexFallbackTests(unittest.TestCase):
     def test_fallback_short_equals(self):
         cmd = self._malformed("-R=owner/repo")
         self.assertEqual(parser.extract_repo(cmd), "owner/repo")
+
+    def test_fallback_attached_short(self):
+        """Attached-short `-Rvalue` must resolve on the regex-fallback path too,
+        so the tokenizer and fallback paths stay in parity on all five forms
+        (main#1057)."""
+        cmd = self._malformed("-Rowner/repo")
+        self.assertEqual(parser.extract_repo(cmd), "owner/repo")
+
+    def test_fallback_attached_short_unexpanded(self):
+        cmd = self._malformed("-R$DA")
+        self.assertEqual(parser.extract_repo(cmd), "$DA")
 
     def test_fallback_absent_returns_none(self):
         cmd = self._malformed("--label bug")

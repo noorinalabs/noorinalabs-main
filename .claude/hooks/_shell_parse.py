@@ -84,11 +84,13 @@ Public API
 
     walk_flag_values(tokens, wanted) -> list[str]
         Walks `tokens` and returns the value of every flag in `wanted`,
-        in source order. Handles both the two-token form (`--flag value`)
-        and the equals form (`--flag=value`). Values inside another flag's
-        value (e.g. inside `--body "...--flag X..."`) are correctly
-        ignored because they arrive as a SINGLE shlex token, never
-        preceded by a flag from `wanted`.
+        in source order. Handles the two-token form (`--flag value`), the
+        equals form (`--flag=value`), and the attached-short form
+        (`-Rvalue`, single-char short flags only — `--repofoo` is never
+        split). Values inside another flag's value (e.g. inside
+        `--body "...--flag X..."`) are correctly ignored because they
+        arrive as a SINGLE shlex token, never preceded by a flag from
+        `wanted`.
 
     first_flag_value(command, wanted, *, regex_fallback=True) -> str | None
         Convenience wrapper: tokenizes `command` via `tokenize()` and
@@ -540,10 +542,24 @@ def walk_flag_values(tokens: list[str], wanted: set[str]) -> list[str]:
     """Return values for `wanted` flag names, only when they appear as flags.
 
     A token is treated as a wanted-flag value only if the immediately
-    preceding token is exactly one of `wanted` (e.g. `--label`). The
-    `--flag=value` equals form is also handled. Values inside other flags
-    (e.g. inside the value of `--body`) are ignored because they are a
-    SINGLE shlex token, never preceded by a flag from `wanted`.
+    preceding token is exactly one of `wanted` (e.g. `--label`). Three
+    surface forms are recognized:
+
+      - two-token form   `--flag value` / `-R value`
+      - equals form      `--flag=value` / `-R=value`
+      - attached-short   `-Rvalue`  (POSIX getopt / cobra shorthand:
+                          `-Rvalue` == `-R value`)
+
+    The attached form applies to SINGLE-CHARACTER SHORT flags ONLY (`-R`,
+    `-l`, `-e`, ...). A long flag must use `=` or a space, so `--repofoo`
+    must NEVER be split into `--repo` + `foo` — the `len(flag) == 2` guard
+    below enforces that. This closes the `-R$DA` fail-open where an attached
+    short-flag repo value was dropped to None, letting a `gh pr merge` skip
+    the repo-confusion / 2-reviewer gate (main#1057, sibling of #981).
+
+    Values inside other flags (e.g. inside the value of `--body`) are
+    ignored because they are a SINGLE shlex token, never preceded by a flag
+    from `wanted`.
 
     Order is preserved: values appear in the order they were encountered
     in the token stream.
@@ -562,8 +578,25 @@ def walk_flag_values(tokens: list[str], wanted: set[str]) -> list[str]:
             continue
         matched = False
         for flag in wanted:
+            # Equals form (long OR short). Checked BEFORE the attached-short
+            # branch so `-R=value` yields `value`, not `=value`.
             if tok.startswith(flag + "="):
                 values.append(tok[len(flag) + 1 :])
+                matched = True
+                break
+            # Attached-short form `-Rvalue`. Scoped to single-character short
+            # flags (`len(flag) == 2`, `-X`) so no long flag is ever split on a
+            # bare prefix (`--repofoo` != `--repo` + `foo`). `len(tok) > 2`
+            # excludes the bare `-R` (which the exact-match branch above already
+            # handled) so a value-less short flag still yields nothing.
+            if (
+                len(flag) == 2
+                and flag[0] == "-"
+                and flag[1] != "-"
+                and len(tok) > 2
+                and tok.startswith(flag)
+            ):
+                values.append(tok[2:])
                 matched = True
                 break
         if matched:
