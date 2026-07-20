@@ -180,6 +180,77 @@ class TestRetro(_StatusFileTest):
         self.assertEqual(self._reload()["wave_25_retro_completed_at"], "2026-07-19T14:00:00Z")
 
 
+class TestLastUpdated(_StatusFileTest):
+    """``last_updated`` is stamped on every lifecycle write (main#1033).
+
+    Before this the key had no writer anywhere, while ``/session-start`` Step 5
+    reported file staleness from it — so it aged indefinitely as the file was
+    written around it. The invariant that carries the fix is the wall-clock one:
+    ``--at`` back-dates the EVENT, never the FILE.
+    """
+
+    #: A timestamp far enough in the past that no wall-clock run can equal it.
+    _ANCIENT = "2020-01-01T00:00:00Z"
+
+    def test_every_transition_stamps_last_updated(self) -> None:
+        for name, call in (
+            ("start", lambda: lifecycle.start(self.path, "27")),
+            ("scope", lambda: lifecycle.scope(self.path, "27", ["repo-a"])),
+            ("kickoff", lambda: lifecycle.kickoff(self.path, "27")),
+            ("wrapup", lambda: lifecycle.wrapup(self.path, "27")),
+            ("retro", lambda: lifecycle.retro(self.path, "27")),
+        ):
+            with self.subTest(transition=name):
+                self.path.write_text(json.dumps(_seed_status(), indent=2) + "\n")
+                self.assertNotIn("last_updated", self._reload())
+                self.assertEqual(call(), 0)
+                self.assertIn("last_updated", self._reload())
+
+    def test_at_backdates_the_event_but_not_the_file(self) -> None:
+        """The regression that motivated #1033's follow-up.
+
+        Replaying a historical transition must not drag ``last_updated``
+        backwards — otherwise a file written *today* reports as months stale,
+        which is the exact false signal the writer exists to remove.
+        """
+        rc = lifecycle.wrapup(self.path, "25", at=self._ANCIENT)
+        self.assertEqual(rc, 0)
+        data = self._reload()
+        # The event IS back-dated...
+        self.assertEqual(data["wave_25_completed_at"], self._ANCIENT)
+        # ...while the file's staleness marker is not.
+        self.assertNotEqual(data["last_updated"], self._ANCIENT)
+        self.assertGreater(data["last_updated"], "2026-01-01T00:00:00Z")
+
+    def test_shape_matches_the_other_timestamp_keys(self) -> None:
+        lifecycle.retro(self.path, "25", at="2026-07-19T14:00:00Z")
+        stamped = self._reload()["last_updated"]
+        # Same ...Z form every other key in the real file uses — the digest and
+        # the handoff reader compare these lexically.
+        self.assertRegex(stamped, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
+    def test_explicit_last_updated_in_pairs_wins(self) -> None:
+        rc = lifecycle._persist(self.path, {"last_updated": "2026-01-02T03:04:05Z"})
+        self.assertEqual(rc, 0)
+        self.assertEqual(self._reload()["last_updated"], "2026-01-02T03:04:05Z")
+
+    def test_now_override_is_honoured(self) -> None:
+        rc = lifecycle._persist(self.path, {"wave_27_active": True}, now="2026-02-03T04:05:06Z")
+        self.assertEqual(rc, 0)
+        self.assertEqual(self._reload()["last_updated"], "2026-02-03T04:05:06Z")
+
+    def test_empty_pairs_writes_nothing(self) -> None:
+        """A no-op stays a no-op — it must not become a last_updated-only write."""
+        before = self.path.read_text()
+        self.assertEqual(lifecycle._persist(self.path, {}), 0)
+        self.assertEqual(self.path.read_text(), before)
+
+    def test_stamp_is_refreshed_on_a_later_write(self) -> None:
+        lifecycle._persist(self.path, {"wave_27_active": True}, now="2026-02-03T04:05:06Z")
+        lifecycle._persist(self.path, {"wave_27_active": False}, now="2026-02-04T04:05:06Z")
+        self.assertEqual(self._reload()["last_updated"], "2026-02-04T04:05:06Z")
+
+
 class TestPeekAndAllocateDelegation(_StatusFileTest):
     def test_peek_honours_reservation(self) -> None:
         # committed counter 24 + reserved wave_26_meta_issue → peek claims 26.
@@ -219,11 +290,32 @@ class TestFileShapePreserved(_StatusFileTest):
             self.assertEqual(len(matches), 1, f"{key} should be exactly one line")
 
     def test_idempotent_re_write(self) -> None:
-        # Re-running a transition with the same timestamp is a no-op on content.
+        """Re-running a transition with the same ``at`` is a no-op on content.
+
+        ``last_updated`` is excluded deliberately (main#1033): it is wall-clock
+        and *must* advance on every write, so it is the one key a re-write is
+        expected to change. Comparing the raw text would make this test pass or
+        fail on whether the two calls happened to straddle a second boundary —
+        green almost always, red at random. Compare the parsed dicts minus that
+        key instead, and assert its behaviour explicitly.
+        """
         lifecycle.start(self.path, "27", at="2026-07-19T10:00:00Z")
-        once = self.path.read_text()
+        once = self._reload()
         lifecycle.start(self.path, "27", at="2026-07-19T10:00:00Z")
-        self.assertEqual(self.path.read_text(), once)
+        twice = self._reload()
+
+        self.assertEqual(
+            {k: v for k, v in once.items() if k != "last_updated"},
+            {k: v for k, v in twice.items() if k != "last_updated"},
+        )
+        # The staleness marker is present on both writes and never regresses.
+        self.assertGreaterEqual(twice["last_updated"], once["last_updated"])
+
+    def test_last_updated_is_compact_inline_too(self) -> None:
+        lifecycle.start(self.path, "27", at="2026-07-19T10:00:00Z")
+        text = self.path.read_text()
+        matches = [ln for ln in text.splitlines() if '"last_updated":' in ln]
+        self.assertEqual(len(matches), 1, "last_updated should be exactly one line")
 
 
 class TestCliSmoke(_StatusFileTest):

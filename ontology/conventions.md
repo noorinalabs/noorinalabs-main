@@ -202,6 +202,8 @@ Existing 3-digit ADRs are not merge-blockers; renames are mechanical and reversi
 - Kickoff MUST advance the `current_wave` pointer in `cross-repo-status.json` to `wave-{M}` — `validate_wave_audit` depends on it; a stale pointer blocks the retro (W14 retro proposal #1, adopted PR #583)
 - Wrapup includes: PR merge sequencing, ontology rebuild, Annunaki attack, memory audit
 - Retro includes: ontology staleness check, per-engineer assessments, trust matrix updates
+- **Lifecycle pointer writes go through `.claude/lib/lifecycle.py` (main#1019), never a hand-edit or a `jq` round-trip** — it delegates to `upsert_status_keys` so the file's compact-inline shape survives and the JSON is validated either side of the rewrite. A wave wrapped by the *prose* skills alone leaves the top-level pointers (`last_completed_wave`, `wave_{W}_retro_completed_at`) unwritten, which silently mis-gates the next `/wave-kickoff` Step 0a (main#1033 — wave-25 was the seam wave between the prose and deterministic paths).
+- **`last_updated` is stamped by `lifecycle._persist` on every lifecycle write, wall-clock and deliberately NOT the transition's `--at` (main#1033)** — `--at` back-dates the *event*, while `last_updated` reports how stale the *file* is. Threading `--at` into it would let a historical replay drag the key backwards and make a freshly-written file look months old. Do not "fix" it to honour `--at`.
 - **Open-item audit before "concluded" claims** (charter `skills.md`): every wave-wrapup / handoff / retro that claims a wave or workstream is complete MUST first run the cross-repo open-item count; zero open or an explicit carry-forward list is required. Promotion-target: hook.
 
 ### Session continuity

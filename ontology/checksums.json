@@ -464,10 +464,10 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "ontology/conventions.md": {
-      "last_tracked": "6ceffaadd34d290e65c5759696ca51b8140e9575643ff4ea1f3c46e04f4045cf",
-      "last_resolved": "6ceffaadd34d290e65c5759696ca51b8140e9575643ff4ea1f3c46e04f4045cf",
-      "tracked_at": "2026-07-19T16:25:15.613293+00:00",
-      "resolved_at": "2026-07-19T14:20:00Z"
+      "last_tracked": "fd9e9d6fcc6e7ffb895a50d9fe0ecea4e90c9987dd609aa04574577ab39e7c6e",
+      "last_resolved": "fd9e9d6fcc6e7ffb895a50d9fe0ecea4e90c9987dd609aa04574577ab39e7c6e",
+      "tracked_at": "2026-07-20T00:23:09.582636+00:00",
+      "resolved_at": "2026-07-20T00:23:09.582636+00:00"
     },
     "ontology/domain.yaml": {
       "last_resolved": "6fedad509f80b9570d0385fb5759e861d8b6f7b219ecc425b8dd472173ca536c",
@@ -1690,6 +1690,18 @@
       "last_resolved": "bb60477afe484c7a6893bf8c4e231127248401f4ad6c429443d22b0a83177ee5",
       "tracked_at": "2026-07-19T16:40:05.304492+00:00",
       "resolved_at": "2026-07-19T14:45:00Z"
+    },
+    ".claude/lib/lifecycle.py": {
+      "last_tracked": "0174d76e580fa6ba1f1695a8153ab89c52f418738872cb25f648a736df29e37e",
+      "last_resolved": "0174d76e580fa6ba1f1695a8153ab89c52f418738872cb25f648a736df29e37e",
+      "tracked_at": "2026-07-20T00:23:09.582636+00:00",
+      "resolved_at": "2026-07-20T00:23:09.582636+00:00"
+    },
+    ".claude/lib/tests/test_lifecycle.py": {
+      "last_tracked": "bf2f52bebd3fada7a8bfc5b5f2a974b7147a1e077bf2fd00f2c205ded795ecbd",
+      "last_resolved": "bf2f52bebd3fada7a8bfc5b5f2a974b7147a1e077bf2fd00f2c205ded795ecbd",
+      "tracked_at": "2026-07-20T00:23:09.582636+00:00",
+      "resolved_at": "2026-07-20T00:23:09.582636+00:00"
     }
   },
   "last_cleanup": {
