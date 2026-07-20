@@ -911,6 +911,57 @@ def check_comment_reviews(
         return result
 
 
+def partition_formal_reviewers(
+    reviews: list[dict],
+    author: str,
+    content_ts: datetime | None = None,
+) -> tuple[set[str], list[StaleVerdict]]:
+    """Split formal GitHub reviews into CURRENT reviewers and STALE verdicts (#950).
+
+    Formal GitHub reviews are bound to `T_content` by the SAME rule as comment
+    verdicts: a review submitted before the branch's latest authored commit
+    reviewed code that has since been rewritten. Leaving formal reviews unbound
+    would be a hole straight through the #950 fix.
+
+    Returns `(formal_reviewers, stale_formal)` where `formal_reviewers` holds
+    lowercased logins of non-author reviewers whose review is CURRENT, and
+    `stale_formal` holds a `StaleVerdict` per excluded review (for the
+    diagnostic). Self-reviews (login == `author`) and reviews with no login are
+    dropped entirely — they are not evidence and not staleness.
+
+    `submittedAt` missing or unparseable while `content_ts` is known ⇒ STALE,
+    not fresh (fail closed). `content_ts=None` means "no content binding" and
+    every non-author review counts, as before the content binding existed.
+
+    This function is the SHARED implementation for `check()` (Hook 4) and
+    `.claude/lib/pr_review_state.py` (the #707 ahead-of-time driver). Both must
+    partition formal reviews identically; a second hand-rolled copy in the
+    driver is exactly the drift that let #1046 ship, where the driver reported
+    PASS on verdicts the gate would have rejected as stale. Do not inline it
+    back into either caller.
+    """
+    formal_reviewers: set[str] = set()
+    stale_formal: list[StaleVerdict] = []
+    for review in reviews:
+        login = review.get("author", {}).get("login", "")
+        if not login or login == author:
+            continue
+        if content_ts is not None:
+            submitted_raw = review.get("submittedAt", "") or ""
+            submitted_at = _parse_iso8601(submitted_raw)
+            if submitted_at is None or submitted_at < content_ts:
+                stale_formal.append(
+                    StaleVerdict(
+                        reviewer=login,
+                        verdict=str(review.get("state", "REVIEW")),
+                        created_at=submitted_raw,
+                    )
+                )
+                continue
+        formal_reviewers.add(login.lower())
+    return formal_reviewers, stale_formal
+
+
 def _iter_roster_entries(
     role_prefix_filter: tuple[str, ...] | None = None,
     roster_dir: Path | None = None,
@@ -1207,27 +1258,9 @@ def check(input_data: dict) -> dict | None:
 
     # Formal GitHub reviews are bound to T_content by the SAME rule (#950) — a
     # stale formal review is no better evidence than a stale comment verdict, and
-    # leaving it unbound would be a hole straight through the fix. `submittedAt`
-    # missing or unparseable while T_content is known ⇒ stale, not fresh.
-    formal_reviewers: set[str] = set()
-    stale_formal: list[StaleVerdict] = []
-    for review in reviews:
-        login = review.get("author", {}).get("login", "")
-        if not login or login == author:
-            continue
-        if content_ts is not None:
-            submitted_raw = review.get("submittedAt", "") or ""
-            submitted_at = _parse_iso8601(submitted_raw)
-            if submitted_at is None or submitted_at < content_ts:
-                stale_formal.append(
-                    StaleVerdict(
-                        reviewer=login,
-                        verdict=str(review.get("state", "REVIEW")),
-                        created_at=submitted_raw,
-                    )
-                )
-                continue
-        formal_reviewers.add(login.lower())
+    # leaving it unbound would be a hole straight through the fix. Shared with the
+    # #707 driver via `partition_formal_reviewers` so the two cannot drift (#1046).
+    formal_reviewers, stale_formal = partition_formal_reviewers(reviews, author, content_ts)
 
     comment_review_result = CommentReviewResult()
     branch_author_lastname = None

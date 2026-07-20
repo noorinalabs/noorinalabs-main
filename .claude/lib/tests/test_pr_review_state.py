@@ -12,12 +12,19 @@ gate functions (never the network). Coverage:
      lastname Requestor).
   7. non-roster Approved Requestor is filtered out of the reviewer count.
   8. a PR-fetch failure -> ReviewStateError -> CLI exit 2.
+  9. content-staleness binding (#1046, ContentStalenessTests): T_content is
+     computed and FORWARDED as `content_ts` to every check_comment_reviews call
+     site; stale comment + formal verdicts are excluded from the count, drive
+     PASS -> BLOCK, and are surfaced in both renders. A commit-fetch failure is
+     a determinate error (exit 2), never a silent content_ts=None fail-open.
 """
 
 from __future__ import annotations
 
+import json
 import sys
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -27,19 +34,30 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pr_review_state as prs  # noqa: E402
 
+# T_content fixtures (#1046). NOW is the branch's latest non-merge commit time;
+# a verdict cast at BEFORE predates it and is stale, one at AFTER is current.
+_NOW = datetime(2026, 7, 20, 12, 0, 0, tzinfo=timezone.utc)
+_BEFORE = _NOW - timedelta(hours=6)
+_AFTER = _NOW + timedelta(hours=1)
+_CONTENT_COMMIT = ("ac8bcfa", _NOW)
+
 
 def _comment_result(
-    reviewers=(), missing_tech_debt=(), tech_debt_issues=()
+    reviewers=(), missing_tech_debt=(), tech_debt_issues=(), stale=()
 ) -> "prs.gate.CommentReviewResult":
     """Build a CommentReviewResult like check_comment_reviews would return.
 
     `reviewers` are full names (any case); they are stored lowercased, matching
-    the gate's dedup key.
+    the gate's dedup key. `stale` is a sequence of (reviewer, verdict,
+    created_at) tuples recorded as excluded-stale verdicts (#950).
     """
     result = prs.gate.CommentReviewResult()
     result.reviewers = {r.lower() for r in reviewers}
     result.reviews_missing_tech_debt = list(missing_tech_debt)
     result.tech_debt_issue_numbers = list(tech_debt_issues)
+    result.stale_verdicts = [
+        prs.gate.StaleVerdict(reviewer=r, verdict=v, created_at=c) for r, v, c in stale
+    ]
     return result
 
 
@@ -63,9 +81,11 @@ class ComputeReviewStateTests(unittest.TestCase):
         comment_result,
         roster_names,
         single_reviewer_exception=False,
+        latest_content=_CONTENT_COMMIT,
     ) -> prs.ReviewState:
         with (
             mock.patch.object(prs.gate, "get_pr_data", return_value=pr_data),
+            mock.patch.object(prs.gate, "get_latest_content_commit", return_value=latest_content),
             mock.patch.object(prs.gate, "check_comment_reviews", return_value=comment_result),
             mock.patch.object(prs.gate, "_load_roster_names", return_value=roster_names),
             mock.patch.object(
@@ -134,7 +154,7 @@ class ComputeReviewStateTests(unittest.TestCase):
         exclusion, so it must be the value handed to check_comment_reviews."""
         captured = {}
 
-        def fake_check(number, lastname, repo=None):
+        def fake_check(number, lastname, repo=None, content_ts=None):
             captured["number"] = number
             captured["lastname"] = lastname
             return _comment_result(reviewers=())
@@ -145,6 +165,7 @@ class ComputeReviewStateTests(unittest.TestCase):
                 "get_pr_data",
                 return_value=_pr_data(head_ref="S.Ferreira/0707-pr-review-state"),
             ),
+            mock.patch.object(prs.gate, "get_latest_content_commit", return_value=_CONTENT_COMMIT),
             mock.patch.object(prs.gate, "check_comment_reviews", side_effect=fake_check),
             mock.patch.object(prs.gate, "_load_roster_names", return_value=set()),
             mock.patch.object(prs.gate, "is_single_reviewer_exception", return_value=False),
@@ -173,6 +194,267 @@ class ComputeReviewStateTests(unittest.TestCase):
         with mock.patch.object(prs.gate, "get_pr_data", return_value=None):
             with self.assertRaises(prs.ReviewStateError):
                 prs.compute_review_state("707", repo="noorinalabs/noorinalabs-main")
+
+
+# ---------------------------------------------------------------------------
+# #1046 — content-staleness binding
+#
+# The driver called `gate.check_comment_reviews` WITHOUT `content_ts`, so
+# T_content was never computed, `stale_verdicts` stayed empty, and the tool
+# reported PASS on approvals the merge gate rejects as stale (observed live on
+# main#1040: two Approved verdicts cast at 7428f25, additive commit ac8bcfa
+# pushed, driver still said PASS).
+#
+# MUTATION-SENSITIVITY IS THE POINT of this class. Deleting `content_ts=...`
+# from either call site in `compute_review_state` MUST turn these red. The
+# end-to-end test therefore runs the REAL `check_comment_reviews` over a faked
+# `gh api` payload rather than a canned return value — a mock that ignores its
+# arguments cannot detect an argument going missing, which is precisely how the
+# original defect passed a green suite.
+# ---------------------------------------------------------------------------
+
+
+def _charter_comment(requestor: str, verdict: str, created_at: datetime) -> dict:
+    """A charter-format review comment as the `gh api` comments endpoint returns it."""
+    return {
+        "body": (
+            f"Requestor: {requestor}\nRequestee: Someone Else\n"
+            f"RequestOrReplied: {verdict}\nTechDebt: none"
+        ),
+        "created_at": created_at.isoformat().replace("+00:00", "Z"),
+    }
+
+
+class ContentStalenessTests(unittest.TestCase):
+    REPO = "noorinalabs/noorinalabs-main"
+
+    def _compute_with_real_comment_check(self, comments, *, roster, latest_content, reviews=()):
+        """Drive compute_review_state through the REAL check_comment_reviews.
+
+        Only the network boundary (`gh api`) is faked, so `content_ts` actually
+        governs the filtering. If the driver stops forwarding it, the stale
+        comments below start counting and the assertions fail — which is the
+        regression guard this whole class exists to provide.
+        """
+
+        def fake_run(cmd, **kwargs):
+            return mock.Mock(returncode=0, stdout=json.dumps(comments), stderr="")
+
+        with (
+            mock.patch.object(
+                prs.gate,
+                "get_pr_data",
+                # Branch author is Mwangi, NOT one of the reviewers below — a
+                # same-lastname reviewer is dropped as a self-review by the gate,
+                # which would make the staleness assertions pass for the wrong
+                # reason (caught by the anti-vacuity guard while writing these).
+                return_value=_pr_data(head_ref="W.Mwangi/1040-example", reviews=reviews),
+            ),
+            mock.patch.object(prs.gate, "get_latest_content_commit", return_value=latest_content),
+            mock.patch.object(prs.gate.subprocess, "run", side_effect=fake_run),
+            mock.patch.object(prs.gate, "_load_roster_names", return_value=roster),
+            mock.patch.object(prs.gate, "is_single_reviewer_exception", return_value=False),
+        ):
+            return prs.compute_review_state("1040", repo=self.REPO)
+
+    def test_fixture_yields_a_pass_when_verdicts_are_fresh(self):
+        """Anti-vacuity guard (mirrors the gate suite's own fixture check).
+
+        Every assertion below claims a verdict was NOT counted. If this fixture
+        failed to produce counted approvals in the FRESH case, those assertions
+        would pass for the wrong reason and certify nothing.
+        """
+        state = self._compute_with_real_comment_check(
+            [
+                _charter_comment("Lucas Ferreira", "Approved", _AFTER),
+                _charter_comment("Nino Kavtaradze", "Approved", _AFTER),
+            ],
+            roster={"lucas ferreira", "nino kavtaradze"},
+            latest_content=_CONTENT_COMMIT,
+        )
+        self.assertEqual(state.distinct_reviewer_count, 2)
+        self.assertEqual(state.stale_verdicts, [])
+        self.assertTrue(state.passes(), "fixture must PASS when fresh, or the tests are vacuous")
+
+    def test_main1040_stale_approvals_do_not_pass(self):
+        """The live #1040 reproduction: both approvals predate the head content commit.
+
+        Pre-fix this reported `passes: true` with 2/2 reviewers. It must BLOCK.
+        """
+        state = self._compute_with_real_comment_check(
+            [
+                _charter_comment("Lucas Ferreira", "Approved", _BEFORE),
+                _charter_comment("Nino Kavtaradze", "Approved", _BEFORE),
+            ],
+            roster={"lucas ferreira", "nino kavtaradze"},
+            latest_content=_CONTENT_COMMIT,
+        )
+        self.assertEqual(state.distinct_reviewer_count, 0)
+        self.assertEqual(state.comment_reviewers, [])
+        self.assertFalse(state.passes())
+        self.assertEqual(
+            sorted(sv["reviewer"] for sv in state.stale_verdicts),
+            ["Lucas Ferreira", "Nino Kavtaradze"],
+        )
+
+    def test_mixed_freshness_counts_only_the_current_verdict(self):
+        state = self._compute_with_real_comment_check(
+            [
+                _charter_comment("Lucas Ferreira", "Approved", _BEFORE),
+                _charter_comment("Nino Kavtaradze", "Approved", _AFTER),
+            ],
+            roster={"lucas ferreira", "nino kavtaradze"},
+            latest_content=_CONTENT_COMMIT,
+        )
+        self.assertEqual(state.comment_reviewers, ["nino kavtaradze"])
+        self.assertEqual(state.distinct_reviewer_count, 1)
+        self.assertFalse(state.passes())
+        self.assertEqual([sv["reviewer"] for sv in state.stale_verdicts], ["Lucas Ferreira"])
+
+    def test_content_ts_forwarded_on_feature_branch_call_site(self):
+        """Direct kill-shot for the #1046 mutation on the `:135` call site."""
+        captured = {}
+
+        def fake_check(number, lastname, repo=None, content_ts=None):
+            captured["content_ts"] = content_ts
+            return _comment_result(reviewers=())
+
+        with (
+            mock.patch.object(
+                prs.gate, "get_pr_data", return_value=_pr_data(head_ref="L.Ferreira/1040-x")
+            ),
+            mock.patch.object(prs.gate, "get_latest_content_commit", return_value=_CONTENT_COMMIT),
+            mock.patch.object(prs.gate, "check_comment_reviews", side_effect=fake_check),
+            mock.patch.object(prs.gate, "_load_roster_names", return_value=set()),
+            mock.patch.object(prs.gate, "is_single_reviewer_exception", return_value=False),
+        ):
+            prs.compute_review_state("1040", repo=self.REPO)
+
+        self.assertEqual(
+            captured["content_ts"],
+            _NOW,
+            "compute_review_state must forward T_content to check_comment_reviews (#1046)",
+        )
+
+    def test_content_ts_forwarded_on_wave_merge_call_site(self):
+        """The `:137` wave-merge call site is a SECOND omission surface (#1046)."""
+        captured = {}
+
+        def fake_check(number, lastname, repo=None, content_ts=None):
+            captured["content_ts"] = content_ts
+            captured["lastname"] = lastname
+            return _comment_result(reviewers=())
+
+        with (
+            mock.patch.object(
+                prs.gate,
+                "get_pr_data",
+                return_value=_pr_data(head_ref="deployments/phase-9/wave-26"),
+            ),
+            mock.patch.object(prs.gate, "get_latest_content_commit", return_value=_CONTENT_COMMIT),
+            mock.patch.object(prs.gate, "check_comment_reviews", side_effect=fake_check),
+            mock.patch.object(prs.gate, "_load_roster_names", return_value=set()),
+            mock.patch.object(prs.gate, "is_single_reviewer_exception", return_value=False),
+        ):
+            prs.compute_review_state("1040", repo=self.REPO)
+
+        self.assertEqual(captured["lastname"], "")
+        self.assertEqual(captured["content_ts"], _NOW)
+
+    def test_stale_formal_review_is_excluded_and_recorded(self):
+        """Formal GitHub reviews are bound to T_content by the same rule (#950).
+
+        The driver shares `gate.partition_formal_reviewers` with Hook 4 rather
+        than re-deriving the rule, so this cannot drift the way #1046 did.
+        """
+        state = self._compute_with_real_comment_check(
+            [],
+            roster=set(),
+            latest_content=_CONTENT_COMMIT,
+            reviews=[
+                {
+                    "author": {"login": "stale-reviewer"},
+                    "state": "APPROVED",
+                    "submittedAt": _BEFORE.isoformat().replace("+00:00", "Z"),
+                },
+                {
+                    "author": {"login": "fresh-reviewer"},
+                    "state": "APPROVED",
+                    "submittedAt": _AFTER.isoformat().replace("+00:00", "Z"),
+                },
+            ],
+        )
+        self.assertEqual(state.formal_reviewers, ["fresh-reviewer"])
+        self.assertEqual(
+            [(sv["reviewer"], sv["source"]) for sv in state.stale_verdicts],
+            [("stale-reviewer", "formal")],
+        )
+        self.assertFalse(state.passes())
+
+    def test_no_non_merge_commits_means_nothing_is_stale(self):
+        """`get_latest_content_commit` returning None = no content binding."""
+        state = self._compute_with_real_comment_check(
+            [
+                _charter_comment("Lucas Ferreira", "Approved", _BEFORE),
+                _charter_comment("Nino Kavtaradze", "Approved", _BEFORE),
+            ],
+            roster={"lucas ferreira", "nino kavtaradze"},
+            latest_content=None,
+        )
+        self.assertEqual(state.distinct_reviewer_count, 2)
+        self.assertEqual(state.stale_verdicts, [])
+        self.assertTrue(state.passes())
+
+    def test_commit_fetch_failure_is_an_error_not_a_fail_open(self):
+        """A commit-fetch failure must raise (exit 2), never degrade to content_ts=None.
+
+        Swallowing `CommitFetchError` and passing None would count every verdict
+        regardless of age — reinstating the exact #1046 fail-open. Hook 4
+        hard-blocks here; the driver must be equally determinate.
+
+        Every downstream collaborator is mocked to a SUCCESS value, and the
+        message is asserted, so the only thing that can raise is the commit-fetch
+        path. A bare `assertRaises(ReviewStateError)` here is NOT enough: with
+        the swallow mutation applied, execution fell through to the roster
+        resolver, which raised `ReviewStateError` for an unrelated reason and the
+        test passed green against the very defect it was written to catch.
+        """
+        with (
+            mock.patch.object(prs.gate, "get_pr_data", return_value=_pr_data()),
+            mock.patch.object(
+                prs.gate,
+                "get_latest_content_commit",
+                side_effect=prs.gate.CommitFetchError("boom"),
+            ),
+            mock.patch.object(prs.gate, "check_comment_reviews", return_value=_comment_result()),
+            mock.patch.object(prs.gate, "_load_roster_names", return_value=set()),
+            mock.patch.object(prs.gate, "is_single_reviewer_exception", return_value=False),
+        ):
+            with self.assertRaises(prs.ReviewStateError) as ctx:
+                prs.compute_review_state("1040", repo=self.REPO)
+
+        message = str(ctx.exception)
+        self.assertIn("commit list", message)
+        self.assertIn("boom", message)
+
+    def test_stale_verdicts_are_visible_in_both_renders(self):
+        """A stale verdict must be SURFACED, not silently subtracted (#1046 point 2)."""
+        state = self._compute_with_real_comment_check(
+            [_charter_comment("Lucas Ferreira", "Approved", _BEFORE)],
+            roster={"lucas ferreira"},
+            latest_content=_CONTENT_COMMIT,
+        )
+
+        text = prs._render_text(state)
+        self.assertIn("STALE", text)
+        self.assertIn("Lucas Ferreira", text)
+        self.assertIn("ac8bcfa", text)
+
+        payload = json.loads(prs._render_json(state))
+        self.assertEqual(payload["stale_verdict_count"], 1)
+        self.assertEqual(payload["stale_verdicts"][0]["reviewer"], "Lucas Ferreira")
+        self.assertEqual(payload["content_sha"], "ac8bcfa")
+        self.assertFalse(payload["passes"])
 
 
 class CliExitCodeTests(unittest.TestCase):
