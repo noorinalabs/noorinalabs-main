@@ -11,6 +11,7 @@ Or:  python3 .claude/hooks/tests/test_ontology_tracker.py
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
@@ -230,6 +231,136 @@ class ShouldSkipExistingFiltersTests(unittest.TestCase):
 
     def test_annunaki_log_is_skipped(self):
         self.assertTrue(hook._should_skip(".claude/annunaki/errors.jsonl"))
+
+
+class ShouldSkipSessionHandoffTests(_FakeRepoRootMixin, unittest.TestCase):
+    """#1038: the gitignored, machine-local session handoff must NOT be tracked.
+
+    ``.claude/memory/session_handoff.md`` is gitignored and untracked in git,
+    yet the ``Stop`` hook rewrites it after ~every response. Tracking it dirtied
+    the COMMITTED ``ontology/checksums.json`` every session, so ``/session-start``
+    Step 3a reported phantom drift and ``/ontology-rebuild`` had a phantom entry
+    to resolve, forever — eroding a gate whose only value is that "0 dirty"
+    means something. Same class as ``.claude/annunaki/errors.jsonl``.
+    """
+
+    def test_relative_handoff_path_is_skipped(self):
+        self.assertTrue(hook._should_skip(".claude/memory/session_handoff.md"))
+
+    def test_absolute_handoff_path_is_skipped(self):
+        path = str(self._fake_root / ".claude" / "memory" / "session_handoff.md")
+        self.assertTrue(hook._should_skip(path))
+
+    def test_check_writes_no_entry_for_handoff(self):
+        """End-to-end: a Write to the handoff produces no checksums entry.
+
+        ``_should_skip`` is the mechanism, but the defect users saw was a
+        checksums *write*. Drive the dispatcher entry point against a real file
+        and assert the tracker reports "not applicable" and leaves the
+        checksums file untouched.
+        """
+        handoff = self._fake_root / ".claude" / "memory" / "session_handoff.md"
+        handoff.parent.mkdir(parents=True, exist_ok=True)
+        handoff.write_text("# handoff\n", encoding="utf-8")
+
+        checksums = self._fake_root / "ontology" / "checksums.json"
+        checksums.parent.mkdir(parents=True, exist_ok=True)
+        checksums.write_text('{"version": 1, "files": {}}\n', encoding="utf-8")
+        orig_checksums_file = hook.CHECKSUMS_FILE
+        hook.CHECKSUMS_FILE = checksums
+        try:
+            before = checksums.read_bytes()
+            result = hook.check({"tool_name": "Write", "tool_input": {"file_path": str(handoff)}})
+            self.assertIsNone(result)
+            self.assertEqual(checksums.read_bytes(), before)
+        finally:
+            hook.CHECKSUMS_FILE = orig_checksums_file
+
+    def test_other_memory_notes_are_still_tracked(self):
+        """The skip is scoped to the handoff — real project memory still tracks.
+
+        ``.claude/memory/`` is committed, semantic, hand-curated content; only
+        the single gitignored handoff file is exempt. A broader
+        ``.claude/memory/`` skip would silently drop the whole memory store
+        from drift detection.
+        """
+        path = str(self._fake_root / ".claude" / "memory" / "section_ci_tooling.md")
+        self.assertFalse(hook._should_skip(path))
+
+
+class ChecksumsSerializationTests(_FakeRepoRootMixin, unittest.TestCase):
+    """#1038: the tracker must not re-escape literal UTF-8 on every write.
+
+    ``checksums.json``'s top-level ``description`` contains literal ``—``/``×``.
+    Writing with the ``ensure_ascii=True`` default re-escaped them, so the file
+    flip-flopped between escaped and literal depending on which writer touched
+    it last — pure recurring diff noise on a committed file.
+    """
+
+    def test_non_ascii_description_survives_a_write_unescaped(self):
+        checksums = self._fake_root / "ontology" / "checksums.json"
+        checksums.parent.mkdir(parents=True, exist_ok=True)
+        description = "SCOPE (#857, #820/C×T2): semantic overlay — not structural"
+        checksums.write_text(
+            json.dumps({"version": 1, "description": description, "files": {}}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        tracked = self._fake_root / "ontology" / "domain.yaml"
+        tracked.write_text("entities: []\n", encoding="utf-8")
+
+        orig_checksums_file = hook.CHECKSUMS_FILE
+        hook.CHECKSUMS_FILE = checksums
+        try:
+            hook.check({"tool_name": "Write", "tool_input": {"file_path": str(tracked)}})
+        finally:
+            hook.CHECKSUMS_FILE = orig_checksums_file
+
+        raw = checksums.read_text(encoding="utf-8")
+        self.assertIn(description, raw)
+        self.assertNotIn("\\u", raw)
+        self.assertEqual(json.loads(raw)["description"], description)
+
+    def test_write_is_byte_stable_across_repeated_tracking(self):
+        """Tracking the same unchanged file twice must not change the bytes.
+
+        This is the property the defect violated: a no-op touch produced a diff.
+        """
+        checksums = self._fake_root / "ontology" / "checksums.json"
+        checksums.parent.mkdir(parents=True, exist_ok=True)
+        checksums.write_text(
+            json.dumps(
+                {"version": 1, "description": "overlay — × scope", "files": {}},
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        tracked = self._fake_root / "ontology" / "conventions.md"
+        tracked.write_text("# conventions\n", encoding="utf-8")
+
+        orig_checksums_file = hook.CHECKSUMS_FILE
+        hook.CHECKSUMS_FILE = checksums
+        try:
+            payload = {"tool_name": "Edit", "tool_input": {"file_path": str(tracked)}}
+            hook.check(payload)
+            first = checksums.read_bytes()
+            hook.check(payload)
+            second = checksums.read_bytes()
+        finally:
+            hook.CHECKSUMS_FILE = orig_checksums_file
+
+        # ``tracked_at`` is a timestamp and legitimately moves; everything else
+        # (notably the description encoding and the hashes) must be identical.
+        first_data = json.loads(first)
+        second_data = json.loads(second)
+        for data in (first_data, second_data):
+            for entry in data["files"].values():
+                entry.pop("tracked_at", None)
+        self.assertEqual(first_data, second_data)
+        self.assertNotIn("\\u", second.decode("utf-8"))
 
 
 if __name__ == "__main__":

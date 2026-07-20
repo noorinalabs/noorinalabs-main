@@ -82,6 +82,8 @@ For each processed file, set `last_resolved = last_tracked` and `resolved_at = n
 
 Also update checksums for any ontology files that were modified during this pass.
 
+**Serialization (#1038):** when rewriting `checksums.json` programmatically, use `json.dump(data, f, indent=2, ensure_ascii=False)` and a trailing newline — matching the tracker hook (`.claude/hooks/ontology_tracker.py`). The top-level `description` contains literal UTF-8 (`—`, `×`); a writer that defaults to `ensure_ascii=True` re-escapes it and the file flip-flops between escaped and literal on every touch, producing recurring phantom diffs.
+
 ### 5. Report
 
 ```
