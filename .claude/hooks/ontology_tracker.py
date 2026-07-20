@@ -71,6 +71,11 @@ SKIP_PATTERNS = [
     "ontology/checksums.json",  # Don't track ourselves
     "ontology/structural/",  # GENERATED structural layer — see note below (#857)
     ".claude/annunaki/errors.jsonl",
+    # Gitignored, machine-local, rewritten by the Stop hook after ~every
+    # response — same class as annunaki/errors.jsonl. Tracking it dirtied the
+    # COMMITTED checksums.json every session, so /session-start reported
+    # phantom drift forever (#1038).
+    ".claude/memory/session_handoff.md",
     "__pycache__/",
     ".pyc",
     "node_modules/",
@@ -223,7 +228,10 @@ def check(input_data: dict) -> dict | None:
         CHECKSUMS_FILE.parent.mkdir(parents=True, exist_ok=True)
         tmp = CHECKSUMS_FILE.with_suffix(".tmp")
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+            # ensure_ascii=False: the on-disk file holds literal UTF-8 in its
+            # top-level ``description``. Re-escaping it here made every touch
+            # emit a spurious one-line diff (#1038).
+            json.dump(data, f, indent=2, ensure_ascii=False)
             f.write("\n")
         tmp.replace(CHECKSUMS_FILE)
     except OSError:
