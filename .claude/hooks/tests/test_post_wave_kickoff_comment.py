@@ -146,7 +146,7 @@ class ParseLabelApplyCommandTests(unittest.TestCase):
             hook.parse_label_apply_command(
                 'gh issue edit 123 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-9"'
             ),
-            ("noorinalabs-main", "123", "p3-wave-9"),
+            ("noorinalabs-main", "123", "p3-wave-9", True),
         )
 
     def test_flag_order_swapped(self):
@@ -154,7 +154,7 @@ class ParseLabelApplyCommandTests(unittest.TestCase):
             hook.parse_label_apply_command(
                 'gh issue edit 456 --add-label "p3-wave-9" --repo noorinalabs/noorinalabs-deploy'
             ),
-            ("noorinalabs-deploy", "456", "p3-wave-9"),
+            ("noorinalabs-deploy", "456", "p3-wave-9", True),
         )
 
     def test_equals_form(self):
@@ -162,7 +162,7 @@ class ParseLabelApplyCommandTests(unittest.TestCase):
             hook.parse_label_apply_command(
                 "gh issue edit 789 --repo=noorinalabs/noorinalabs-isnad-graph --add-label=p3-wave-8"
             ),
-            ("noorinalabs-isnad-graph", "789", "p3-wave-8"),
+            ("noorinalabs-isnad-graph", "789", "p3-wave-8", True),
         )
 
     def test_multiple_add_label_picks_wave_label(self):
@@ -173,7 +173,7 @@ class ParseLabelApplyCommandTests(unittest.TestCase):
                 "gh issue edit 100 --repo noorinalabs/noorinalabs-main "
                 '--add-label "Aino_Virtanen" --add-label "p3-wave-9"'
             ),
-            ("noorinalabs-main", "100", "p3-wave-9"),
+            ("noorinalabs-main", "100", "p3-wave-9", True),
         )
 
     def test_non_wave_label_returns_none(self):
@@ -203,7 +203,7 @@ class ParseLabelApplyCommandTests(unittest.TestCase):
                 "true && gh issue edit 999 --repo noorinalabs/noorinalabs-main "
                 '--add-label "p3-wave-9"'
             ),
-            ("noorinalabs-main", "999", "p3-wave-9"),
+            ("noorinalabs-main", "999", "p3-wave-9", True),
         )
 
     # --- #467 between-wave relabel filter ---
@@ -249,7 +249,7 @@ class ParseLabelApplyCommandTests(unittest.TestCase):
                 "gh issue edit 100 --repo noorinalabs/noorinalabs-main "
                 '--add-label "p3-wave-11" --remove-label "tech-debt"'
             ),
-            ("noorinalabs-main", "100", "p3-wave-11"),
+            ("noorinalabs-main", "100", "p3-wave-11", True),
         )
 
     def test_initial_add_without_remove_still_matches(self):
@@ -261,15 +261,56 @@ class ParseLabelApplyCommandTests(unittest.TestCase):
             hook.parse_label_apply_command(
                 'gh issue edit 200 --repo noorinalabs/noorinalabs-main --add-label "p3-wave-11"'
             ),
-            ("noorinalabs-main", "200", "p3-wave-11"),
+            ("noorinalabs-main", "200", "p3-wave-11", True),
         )
 
     def test_no_repo_returns_none_repo_field(self):
         """#650: a label-apply run from inside the repo omits --repo; the pure
-        parser returns repo=None (the caller resolves it from cwd)."""
+        parser returns repo=None with repo_flag_present=False (the caller
+        resolves it from cwd)."""
         self.assertEqual(
             hook.parse_label_apply_command('gh issue edit 601 --add-label "p4-wave-7"'),
-            (None, "601", "p4-wave-7"),
+            (None, "601", "p4-wave-7", False),
+        )
+
+    # --- #985: -R/--repo flag is authoritative over cwd ---
+
+    def test_short_flag_R_resolves_repo(self):
+        """#985: the `-R owner/name` short flag (not just `--repo`) is parsed and
+        authoritative. Before the fix the parser was blind to `-R`, so a
+        child-repo `-R` op fell through to a cwd-based misroute."""
+        self.assertEqual(
+            hook.parse_label_apply_command(
+                'gh issue edit 42 -R noorinalabs/noorinalabs-deploy --add-label "wave-26"'
+            ),
+            ("noorinalabs-deploy", "42", "wave-26", True),
+        )
+
+    def test_short_flag_R_attached_resolves_repo(self):
+        """#985/#1057: the POSIX attached-short `-Rowner/name` form resolves too."""
+        self.assertEqual(
+            hook.parse_label_apply_command(
+                'gh issue edit 42 -Rnoorinalabs/noorinalabs-deploy --add-label "wave-26"'
+            ),
+            ("noorinalabs-deploy", "42", "wave-26", True),
+        )
+
+    def test_short_flag_R_equals_resolves_repo(self):
+        """#985: the `-R=owner/name` equals form resolves too."""
+        self.assertEqual(
+            hook.parse_label_apply_command(
+                'gh issue edit 42 -R=noorinalabs/noorinalabs-deploy --add-label "wave-26"'
+            ),
+            ("noorinalabs-deploy", "42", "wave-26", True),
+        )
+
+    def test_unexpanded_var_repo_flag_present_but_unresolved(self):
+        """#985/#981: `-R $VAR` (shlex leaves `$VAR` literal) is present-but-
+        unresolvable → repo=None AND repo_flag_present=True. The True bit is
+        what tells `check()` to fail closed instead of misrouting to cwd."""
+        self.assertEqual(
+            hook.parse_label_apply_command('gh issue edit 42 -R "$DA" --add-label "wave-26"'),
+            (None, "42", "wave-26", True),
         )
 
 
@@ -608,6 +649,106 @@ class AmbientRepoResolutionTests(unittest.TestCase):
             )
         self.assertEqual(result["action"], "post")
         self.assertEqual(calls[0], 0, "explicit --repo must not trigger ambient resolution")
+
+
+class RepoFlagAuthoritativeTests(unittest.TestCase):
+    """#985: the -R/--repo flag is AUTHORITATIVE over the invocation cwd.
+
+    A subagent running in a child-repo worktree issues `gh issue edit -R
+    noorinalabs/<child> ...` whose cwd `origin` may still resolve to the PARENT
+    org repo. The kickoff comment must route to the flag's repo, not cwd — the
+    recurring misroute the W25 retro flagged. And an unexpanded `-R $VAR` must
+    fail closed (#981), never silently misroute to cwd.
+    """
+
+    # cwd resolves to the PARENT repo — the misroute source when a child-repo
+    # op runs from a worktree the hook reads as the parent.
+    _PARENT_ORIGIN = "git@github.com:noorinalabs/noorinalabs-main.git\n"
+
+    def _status(self):
+        return {
+            "current_phase": 9,
+            "wave_26_scope": {
+                "tier_1": [
+                    {
+                        "id": "noorinalabs-deploy#42",
+                        "implementer": "Lucas Ferreira",
+                        "reviewer": "Aino Virtanen",
+                        "reviewer_2": "Nino Kavtaradze",
+                    }
+                ]
+            },
+        }
+
+    def _writer(self, td):
+        def fake_writer(body, repo, num):
+            path = Path(td) / f"body-{repo}-{num}.md"
+            path.write_text(body, encoding="utf-8")
+            return path
+
+        return fake_writer
+
+    def test_R_flag_routes_to_flag_repo_not_cwd(self):
+        """The bite: the deploy row is the ONLY row in scope. If the hook used
+        cwd (main) instead of the `-R noorinalabs/noorinalabs-deploy` flag it
+        would search for a `noorinalabs-main#42` row, find none, and return
+        skip_no_row. Routing to the flag's repo is what makes it post."""
+        captured = {}
+
+        def fake_post(repo, num, body_path):
+            captured["repo"] = repo
+            return True
+
+        with tempfile.TemporaryDirectory() as td:
+            result = hook.check(
+                _bash('gh issue edit 42 -R noorinalabs/noorinalabs-deploy --add-label "wave-26"'),
+                status_loader=self._status,
+                comment_fetcher=lambda repo, num: [],
+                comment_poster=fake_post,
+                body_writer=self._writer(td),
+                git_runner=lambda _cwd: self._PARENT_ORIGIN,
+            )
+        self.assertEqual(result["action"], "post")
+        self.assertEqual(result["repo"], "noorinalabs-deploy")
+        self.assertEqual(captured["repo"], "noorinalabs-deploy")
+
+    def test_R_flag_does_not_invoke_git_runner(self):
+        calls = [0]
+
+        def runner(_cwd):
+            calls[0] += 1
+            return self._PARENT_ORIGIN
+
+        with tempfile.TemporaryDirectory() as td:
+            hook.check(
+                _bash('gh issue edit 42 -R noorinalabs/noorinalabs-deploy --add-label "wave-26"'),
+                status_loader=self._status,
+                comment_fetcher=lambda repo, num: [],
+                comment_poster=lambda r, n, p: True,
+                body_writer=self._writer(td),
+                git_runner=runner,
+            )
+        self.assertEqual(calls[0], 0, "-R flag must not trigger ambient cwd resolution")
+
+    def test_unexpanded_var_repo_fails_closed_no_cwd_fallback(self):
+        """#985/#981: `-R $VAR` (shlex leaves `$DA` literal) → skip_unresolvable_repo.
+        The hook must NOT fall back to cwd (which would misroute to the parent);
+        git_runner is wired to a healthy parent origin to prove it is never
+        consulted for a present-but-unresolvable repo flag."""
+        calls = [0]
+
+        def runner(_cwd):
+            calls[0] += 1
+            return self._PARENT_ORIGIN
+
+        result = hook.check(
+            _bash('gh issue edit 42 -R "$DA" --add-label "wave-26"'),
+            status_loader=self._status,
+            git_runner=runner,
+        )
+        self.assertEqual(result["action"], "skip_unresolvable_repo")
+        self.assertEqual(result["issue"], "42")
+        self.assertEqual(calls[0], 0, "unresolvable -R must NOT fall back to cwd")
 
 
 class PhaseAgnosticLabelForm(unittest.TestCase):

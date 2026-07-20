@@ -233,6 +233,56 @@ class CdPrefixedCommand(unittest.TestCase):
         self.assertEqual(changes[0].add_label, "wave-20")
 
 
+class RepoFlagResolution(unittest.TestCase):
+    """#985: the `-R`/`--repo` flag is authoritative and all five surface forms
+    resolve; the `repo_flag_present` bit disambiguates the two repo=None cases
+    (flag omitted #650 vs present-but-unresolvable #981)."""
+
+    def _change(self, cmd: str):
+        change = p.parse_wave_label_change(cmd)
+        assert change is not None
+        return change
+
+    def test_long_repo_flag(self) -> None:
+        c = self._change(
+            'gh issue edit 42 --repo noorinalabs/noorinalabs-deploy --add-label "wave-26"'
+        )
+        self.assertEqual(c.repo, "noorinalabs-deploy")
+        self.assertTrue(c.repo_flag_present)
+
+    def test_short_R_flag_spaced(self) -> None:
+        c = self._change('gh issue edit 42 -R noorinalabs/noorinalabs-deploy --add-label "wave-26"')
+        self.assertEqual(c.repo, "noorinalabs-deploy")
+        self.assertTrue(c.repo_flag_present)
+
+    def test_short_R_flag_attached(self) -> None:
+        c = self._change('gh issue edit 42 -Rnoorinalabs/noorinalabs-deploy --add-label "wave-26"')
+        self.assertEqual(c.repo, "noorinalabs-deploy")
+        self.assertTrue(c.repo_flag_present)
+
+    def test_short_R_flag_equals(self) -> None:
+        c = self._change('gh issue edit 42 -R=noorinalabs/noorinalabs-deploy --add-label "wave-26"')
+        self.assertEqual(c.repo, "noorinalabs-deploy")
+        self.assertTrue(c.repo_flag_present)
+
+    def test_no_repo_flag_absent(self) -> None:
+        c = self._change('gh issue edit 42 --add-label "wave-26"')
+        self.assertIsNone(c.repo)
+        self.assertFalse(c.repo_flag_present)
+
+    def test_unexpanded_var_present_but_unresolvable(self) -> None:
+        """`-R $VAR` → repo=None (shlex left `$DA` literal) AND
+        repo_flag_present=True. The True bit is the #981 fail-closed signal."""
+        c = self._change('gh issue edit 42 -R "$DA" --add-label "wave-26"')
+        self.assertIsNone(c.repo)
+        self.assertTrue(c.repo_flag_present)
+
+    def test_unexpanded_var_long_form_unresolvable(self) -> None:
+        c = self._change('gh issue edit 42 --repo "noorinalabs/$REPO" --add-label "wave-26"')
+        self.assertIsNone(c.repo)
+        self.assertTrue(c.repo_flag_present)
+
+
 class NormalizeCommandSeparators(unittest.TestCase):
     """Direct tests for the shared `_shell_parse.normalize_command_separators`.
 

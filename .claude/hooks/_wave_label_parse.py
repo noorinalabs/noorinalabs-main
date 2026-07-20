@@ -55,11 +55,19 @@ Public API
         treats multi-cmd as out-of-pattern (kickoff is single-cmd only).
 
         Result fields (shared with the plural form):
-          repo          — `noorinalabs-<name>` short form (last path segment
-                          of `--repo owner/name` or `--repo=owner/name`), or
-                          None when `--repo` is OMITTED (in-repo invocation,
-                          ambient gh resolution — #650). The consuming hook
-                          resolves the None case from the invocation cwd.
+          repo          — `noorinalabs-<name>` short form from the AUTHORITATIVE
+                          `-R`/`--repo owner/name` flag (all five surface forms,
+                          #985/#1057), or None. `repo_flag_present` disambiguates
+                          the two None cases (flag omitted vs present-but-
+                          unresolvable — see below).
+          repo_flag_present — True iff a `-R`/`--repo` flag was present in the
+                          command (regardless of whether its value resolved).
+                          When `repo` is None: `repo_flag_present=False` means
+                          the flag was OMITTED (in-repo ambient gh resolution,
+                          #650 — consumer resolves from cwd); `repo_flag_present
+                          =True` means the flag was present but unresolvable (an
+                          unexpanded `$VAR`, #981 — consumer fails closed, never
+                          falls back to cwd).
           issue_number  — the bare positional issue number after `edit`.
           add_label     — the FIRST `--add-label "p{N}-wave-{M}"` value, or
                           None if no add operation present.
@@ -122,8 +130,10 @@ from _shell_parse import (  # noqa: E402
     find_gh_subcommand,
     iter_command_segments,
     normalize_command_separators,
+    repo_short_name_from_flag_value,
     strip_heredocs,
     tokenize,
+    walk_flag_values,
 )
 
 # Legacy phase-prefixed form: `p6-wave-16` (grandfathered, still accepted).
@@ -165,17 +175,27 @@ class WaveLabelChange:
 
     At least one of `add_label` / `remove_label` is non-None.
 
-    `repo` is the short repo name from `--repo owner/name` (e.g.
-    `noorinalabs-main`), or None when the command OMITS `--repo` and relies
-    on gh's ambient-git-context resolution. Consumers that need a concrete
-    repo (for a GraphQL/REST call) resolve the None case from the invocation
-    cwd via `_shell_parse.resolve_repo_short_name` (#650).
+    `repo` is the short repo name from the AUTHORITATIVE `-R`/`--repo owner/name`
+    flag (e.g. `noorinalabs-main`), extracted via the #1057-hardened
+    `walk_flag_values` so all five surface forms resolve (`--repo X`, `--repo=X`,
+    `-R X`, `-R=X`, `-RX`). It is None in TWO distinct cases, disambiguated by
+    `repo_flag_present` (#985):
+
+      - `repo_flag_present=False` → the command OMITS the repo flag entirely and
+        relies on gh's ambient-git-context resolution. Consumers resolve the None
+        case from the invocation cwd via `_shell_parse.resolve_repo_short_name`
+        (#650).
+      - `repo_flag_present=True` → the flag WAS present but its value was
+        unresolvable (an unexpanded `$VAR` / command substitution, per #981).
+        Consumers MUST fail closed (skip/block) — NEVER fall back to cwd, which
+        would misroute a child-repo op to the parent.
     """
 
     repo: str | None
     issue_number: str
     add_label: str | None
     remove_label: str | None
+    repo_flag_present: bool = False
 
 
 @dataclass(frozen=True)
@@ -274,19 +294,37 @@ def _parse_edit_segment(rest: list[str]) -> WaveLabelChange | None:
     least one canonical wave-label `--add-label`/`--remove-label`. Otherwise
     returns None.
 
-    `--repo` is OPTIONAL (#650): a `gh issue edit <num> --remove-label
-    "p4-wave-5"` run from inside the target repo carries no `--repo` and
-    relies on gh's ambient-git-context resolution. Requiring `--repo` here
-    silently dropped every such in-repo label edit (the change never reached
-    the field-sync hook → board Wave field went unsynced). When `--repo` is
-    absent the returned `repo` is None; the consuming hook resolves the
-    ambient repo from the invocation cwd.
+    The repo is resolved from the AUTHORITATIVE `-R`/`--repo owner/name` flag
+    (#985), extracted up front via the #1057-hardened `walk_flag_values` so all
+    five surface forms resolve: `--repo X`, `--repo=X`, `-R X`, `-R=X`, `-RX`.
+    The flag is GROUND TRUTH for "which repo"; the consuming hook's cwd fallback
+    applies ONLY when no repo flag is present. Three states are surfaced:
+
+      - flag present + resolvable  → `repo=<name>`, `repo_flag_present=True`.
+      - flag absent (#650)         → `repo=None`,   `repo_flag_present=False`
+        (in-repo invocation; consumer resolves the ambient repo from cwd).
+      - flag present + unresolvable → `repo=None`, `repo_flag_present=True`
+        (an unexpanded `$VAR` / command substitution; per #981 the consumer
+        MUST fail closed and NOT fall back to cwd, which would misroute).
+
+    Requiring `--repo` here would silently drop every in-repo label edit (#650);
+    blindly `.split("/")`-ing an unexpanded `$VAR` would misroute it (#981). The
+    tri-state threads both needles.
     """
     if len(rest) < 3 or rest[0] != "issue" or rest[1] != "edit":
         return None
 
+    # Repo from the flag, not cwd (#985). `walk_flag_values` recognizes both the
+    # `--repo` long form and the `-R` short form (all attached/equals/spaced
+    # surfaces, #1057). A present-but-unresolvable value (`$VAR`) yields repo=None
+    # with repo_flag_present=True so the consumer fails closed (#981).
+    repo_values = walk_flag_values(rest, {"--repo", "-R"})
+    repo_flag_present = len(repo_values) > 0
+    repo: str | None = (
+        repo_short_name_from_flag_value(repo_values[0]) if repo_flag_present else None
+    )
+
     issue_number: str | None = None
-    repo: str | None = None
     add_label: str | None = None
     remove_label: str | None = None
 
@@ -296,14 +334,6 @@ def _parse_edit_segment(rest: list[str]) -> WaveLabelChange | None:
         tok = rest[i]
         if issue_number is None and re.fullmatch(r"\d+", tok):
             issue_number = tok
-            i += 1
-            continue
-        if tok == "--repo" and i + 1 < n:
-            repo = rest[i + 1].split("/")[-1]
-            i += 2
-            continue
-        if tok.startswith("--repo="):
-            repo = tok[len("--repo=") :].split("/")[-1]
             i += 1
             continue
         if tok == "--add-label" and i + 1 < n:
@@ -338,6 +368,7 @@ def _parse_edit_segment(rest: list[str]) -> WaveLabelChange | None:
             issue_number=issue_number,
             add_label=add_label,
             remove_label=remove_label,
+            repo_flag_present=repo_flag_present,
         )
     return None
 

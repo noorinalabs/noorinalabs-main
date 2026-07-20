@@ -545,5 +545,58 @@ class ResolveRepoShortNameTests(unittest.TestCase):
         self.assertEqual(seen["cwd"], real_dir)
 
 
+class RepoShortNameFromFlagValueTests(unittest.TestCase):
+    """#985: extract the repo SHORT NAME from a `-R`/`--repo` flag value, and
+    fail closed (None) on an unexpanded `$VAR` / command substitution (#981)."""
+
+    def test_owner_name_returns_name(self):
+        self.assertEqual(
+            sp.repo_short_name_from_flag_value("noorinalabs/noorinalabs-main"),
+            "noorinalabs-main",
+        )
+
+    def test_owner_name_dotgit_stripped(self):
+        self.assertEqual(
+            sp.repo_short_name_from_flag_value("noorinalabs/noorinalabs-deploy.git"),
+            "noorinalabs-deploy",
+        )
+
+    def test_https_url_returns_name(self):
+        self.assertEqual(
+            sp.repo_short_name_from_flag_value(
+                "https://github.com/noorinalabs/noorinalabs-design-system"
+            ),
+            "noorinalabs-design-system",
+        )
+
+    def test_trailing_slash_tolerated(self):
+        self.assertEqual(
+            sp.repo_short_name_from_flag_value("noorinalabs/noorinalabs-main/"),
+            "noorinalabs-main",
+        )
+
+    def test_unexpanded_variable_returns_none(self):
+        """The #981 caveat: shlex leaves `$DA` / `${REPO}` literal. Coercing it
+        into a repo name would misroute the gh call — so return None (the caller
+        fails closed)."""
+        for v in ("$DA", "${REPO}", "noorinalabs/$REPO", "noorinalabs/${R}"):
+            with self.subTest(v=v):
+                self.assertIsNone(sp.repo_short_name_from_flag_value(v))
+
+    def test_command_substitution_returns_none(self):
+        for v in ("$(echo noorinalabs/x)", "`echo noorinalabs/x`"):
+            with self.subTest(v=v):
+                self.assertIsNone(sp.repo_short_name_from_flag_value(v))
+
+    def test_whitespace_bearing_value_returns_none(self):
+        """A value with internal whitespace is a captured non-flag fragment
+        (e.g. an attached-short false positive), never a valid repo ref."""
+        self.assertIsNone(sp.repo_short_name_from_flag_value(" foo"))
+        self.assertIsNone(sp.repo_short_name_from_flag_value("owner/na me"))
+
+    def test_empty_returns_none(self):
+        self.assertIsNone(sp.repo_short_name_from_flag_value(""))
+
+
 if __name__ == "__main__":
     unittest.main()
