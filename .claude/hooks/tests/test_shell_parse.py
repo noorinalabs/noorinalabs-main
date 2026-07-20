@@ -237,6 +237,35 @@ class WalkFlagValuesTests(unittest.TestCase):
         tokens = ["gh", "issue", "create", "--label"]
         self.assertEqual(sp.walk_flag_values(tokens, {"--label"}), [])
 
+    def test_attached_short_flag_value(self):
+        """POSIX getopt / cobra `-Rvalue` == `-R value` (main#1057).
+
+        A single-char short flag takes an attached value. Before the fix
+        `-R$DA` matched neither the exact-token nor the equals branch, so the
+        value was silently dropped to `[]` — the fail-open that let a
+        `gh pr merge -R$DA` skip the repo-confusion gate (sibling of #981).
+        """
+        self.assertEqual(sp.walk_flag_values(["gh", "-Rowner/repo"], {"-R"}), ["owner/repo"])
+        self.assertEqual(sp.walk_flag_values(["gh", "-R$DA"], {"-R"}), ["$DA"])
+
+    def test_attached_short_equals_precedes_attached_branch(self):
+        """`-R=value` stays the equals form (`value`, not `=value`): the
+        equals branch is evaluated before the attached-short branch."""
+        self.assertEqual(sp.walk_flag_values(["gh", "-R=owner/repo"], {"-R"}), ["owner/repo"])
+
+    def test_long_flag_never_split_on_bare_prefix(self):
+        """A LONG flag must never take an attached value: `--repofoo` is NOT
+        `--repo` + `foo` (attached values are single-char short flags only).
+        The `len(flag) == 2` guard pins this — the security-relevant negative."""
+        self.assertEqual(sp.walk_flag_values(["gh", "--repofoo"], {"--repo", "-R"}), [])
+        self.assertEqual(sp.walk_flag_values(["gh", "--reponsense", "v"], {"--repo", "-R"}), [])
+
+    def test_bare_short_flag_not_treated_as_attached(self):
+        """A lone `-R` (len == 2) has no attached value → nothing captured
+        via the attached branch (the exact-token branch handles two-token /
+        trailing forms)."""
+        self.assertEqual(sp.walk_flag_values(["gh", "-R"], {"-R"}), [])
+
 
 class FirstFlagValueTests(unittest.TestCase):
     """Convenience wrapper combining tokenize + walk_flag_values + regex fallback."""

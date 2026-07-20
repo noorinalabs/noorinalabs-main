@@ -32,12 +32,13 @@ Public API
 
     extract_repo(command: str) -> str | None
         Parse a bash command. Returns the `OWNER/NAME` value passed via any
-        of `--repo X`, `--repo=X`, `-R X`, `-R=X`, or None if no `--repo` /
-        `-R` flag is present.
+        of `--repo X`, `--repo=X`, `-R X`, `-R=X`, `-RX` (attached short —
+        POSIX getopt / cobra shorthand, e.g. `-Rowner/name` or the
+        unexpanded `-R$DA`), or None if no `--repo` / `-R` flag is present.
 
         Tokenizer-first via `_shell_parse.walk_flag_values`; falls back to
         a conservative regex when shlex tokenization fails (e.g. command
-        contains a malformed quote). Both paths recognize all four forms.
+        contains a malformed quote). Both paths recognize all five forms.
 
 Design notes
 ============
@@ -67,12 +68,17 @@ from _shell_parse import (  # noqa: E402
 # Flags whose VALUE is a repo specifier (OWNER/REPO).
 _REPO_FLAGS = {"--repo", "-R"}
 
-# Regex covering all 4 surface forms when tokenize() fails:
-#   --repo X    --repo=X    -R X    -R=X
-# Anchored on a token boundary at the front so `--no-repo` etc. cannot
-# false-match. `(\\S+)` is greedy-to-whitespace; matches any non-whitespace
-# value form gh accepts (gh itself validates the OWNER/NAME shape).
-_REPO_FALLBACK_RE = re.compile(r"(?:^|\s)(?:--repo|-R)(?:=|\s+)(\S+)")
+# Regex covering all 5 surface forms when tokenize() fails:
+#   --repo X    --repo=X    -R X    -R=X    -RX  (attached short)
+# The separated/equals branch `(?:--repo|-R)(?:=|\s+)` runs FIRST so `-R=X`
+# yields `X` (not `=X`) and `-R X` yields `X`; the attached branch is a
+# short-flag-only `-R(\S+)` fallback that fires when no `=`/space separator
+# follows `-R`. Anchored on a token boundary at the front so `--no-repo` etc.
+# cannot false-match, and the attached branch is `-R`-only (never `--repo`)
+# so no long flag is split on a bare prefix. `(\\S+)` is greedy-to-whitespace;
+# matches any non-whitespace value form gh accepts (gh itself validates the
+# OWNER/NAME shape).
+_REPO_FALLBACK_RE = re.compile(r"(?:^|\s)(?:(?:--repo|-R)(?:=|\s+)|-R)(\S+)")
 
 
 def extract_repo(command: str) -> str | None:

@@ -2684,6 +2684,22 @@ class UnresolvableRepoFailsClosedTests(_NoContentBindingHarness):
         assert result is not None
         self.assertEqual(result["decision"], "block")
 
+    def test_attached_short_flag_unexpanded_var_blocks(self):
+        """THE #1057 SECURITY ASSERTION — the composition with #1056's classifier.
+
+        `gh pr merge 451 -R$DA` (ATTACHED short-flag, no space) must reach
+        `decision: block` through `check()`. Pre-#1057 `extract_repo` returned
+        None for the attached spelling, so `repo_argument_defect(None)` was None,
+        the mocked-approved `get_pr_data` short-circuited to allow, and the merge
+        bypassed the 2-reviewer gate — the #981 hole via the attached form. This
+        is the sibling of `test_unexpanded_repo_var_blocks` (which pins the
+        SPACED `-R $DA` shape) for the attached `-R$DA` shape."""
+        result = self._check_with_passing_downstream("gh pr merge 451 -R$DA --merge")
+        self.assertIsNotNone(result, "attached -R$DA must not fall through to allow")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("UNEXPANDED", result["reason"])
+
     def test_block_happens_before_any_network_call(self):
         """The guard is deterministic — it must not depend on a fetch failing.
 
@@ -2723,6 +2739,30 @@ class UnresolvableRepoFailsClosedTests(_NoContentBindingHarness):
     def test_no_repo_flag_on_approved_pr_still_allows(self):
         result = self._check_with_passing_downstream("gh pr merge 451 --merge")
         self.assertIsNone(result, "absent --repo is legitimate cwd resolution")
+
+    def test_attached_short_flag_literal_repo_resolves_and_threads_through(self):
+        """A LEGITIMATE attached `-Rowner/name` must RESOLVE (not just fail
+        closed): the parsed repo string is threaded into `get_pr_data`, and a
+        2-approver PR still merges. Pre-#1057 the attached form parsed to None,
+        so `get_pr_data` was called with `repo=None` (cwd resolution) — this
+        test's `repo=` assertion bites that regression."""
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen", "nadia khoury"}
+        with (
+            mock.patch.object(
+                hook, "get_pr_data", return_value=self._approved_pr_data()
+            ) as get_mock,
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+            mock.patch.object(
+                hook, "_load_roster_names", return_value={"aino virtanen", "nadia khoury"}
+            ),
+        ):
+            result = hook.check(
+                self._input("gh pr merge 451 -Rnoorinalabs/noorinalabs-data-acquisition --merge")
+            )
+        self.assertIsNone(result, "attached literal repo + 2 approvers must still allow")
+        _, kwargs = get_mock.call_args
+        self.assertEqual(kwargs.get("repo"), "noorinalabs/noorinalabs-data-acquisition")
 
     # --- Requirement (c): the two failure kinds are diagnostically distinct ---
 
