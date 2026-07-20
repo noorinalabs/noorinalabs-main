@@ -55,6 +55,12 @@ The genuinely-new deterministic writes this facade adds (previously prose-only i
   * ``retro``   → ``wave_{W}_retro_completed_at`` (the key ``/wave-kickoff`` Step
                   0a reads to gate the next wave)
 
+Every one of those writes also stamps the top-level ``last_updated`` (main#1033)
+— see :func:`_persist`. The key previously had no writer at all while
+``/session-start`` Step 5 reported file staleness from it. It is wall-clock and
+deliberately ignores ``--at``, so back-dating an *event* never back-dates the
+*file*.
+
 Wave ids are GLOBAL monotonic ids (``wave_25``), not per-phase ordinals — phase
 is a derived display attribute (see :mod:`wave_seq`). ``--status`` defaults to the
 repo-root ``cross-repo-status.json``, resolved from this file's location exactly
@@ -130,7 +136,12 @@ def _wave_label(wave: str) -> str:
     return f"wave-{wave}"
 
 
-def _persist(status_path: Path, pairs: dict[str, object]) -> int:
+def _persist(
+    status_path: Path,
+    pairs: dict[str, object],
+    *,
+    now: str | None = None,
+) -> int:
     """Upsert ``pairs`` (key → python value) into the status file.
 
     Delegates to :func:`upsert_status_keys.main` — the SAME helper wave_seq /
@@ -138,9 +149,30 @@ def _persist(status_path: Path, pairs: dict[str, object]) -> int:
     shape is preserved and the rewrite is JSON-validated before AND after
     (main#332/#456). Each value is rendered as a self-contained JSON literal.
     A no-op returning 0 when ``pairs`` is empty.
+
+    **``last_updated`` is stamped here, on every lifecycle write** (main#1033).
+    Until then the key had no writer anywhere — no skill, hook, or lib maintained
+    it — yet ``/session-start`` Step 5 reports file staleness from it, so it read
+    as ~24 days stale while the file was being written continuously. That is the
+    same vestigial-flat-key class as the ``phase`` / ``wave`` keys #683/#708
+    taught the session-start and handoff readers to ignore; the fix here is to
+    give it a writer rather than teach one more reader to distrust it.
+
+    **It is deliberately wall-clock, NOT the transition's ``at`` override.**
+    ``at`` back-dates the *event* ("wave 25 completed at 01:29Z"); ``last_updated``
+    answers "how stale is this FILE", which is a property of the write, not of the
+    event. Threading ``at`` into it would let a historical replay drag the key
+    *backwards* — replaying an old wave would stamp a freshly-written file as
+    months old, which is precisely the false-staleness signal this is fixing.
+    ``now`` exists only so tests can pin the value; transitions never pass it.
+
+    A ``last_updated`` supplied explicitly in ``pairs`` wins, so a caller that
+    genuinely needs to set it (a backfill, a migration) still can.
     """
     if not pairs:
         return 0
+    if "last_updated" not in pairs:
+        pairs = {**pairs, "last_updated": now or _now_iso()}
     argv = ["lifecycle", str(status_path)]
     for key, value in pairs.items():
         argv.append(f"{key}={json.dumps(value)}")
