@@ -23,3 +23,4 @@
 - [Cross-persona task-claim hazard](feedback_cross_persona_task_claim_hazard.md) — TaskUpdate has no ownership-guard; a mistyped taskId silently completes another persona's work.
 - [Subagent worktree lands in wrong repo](feedback_subagent_worktree_wrong_repo.md) — Agent `isolation: worktree` worktrees the PARENT org repo; child-repo implementers can't Edit/Write their sources, EnterWorktree refuses the cross-repo switch. PR#357.
 - [Cross-spawn cwd collision](feedback_cwd_collision_cross_spawn.md) — two agents sharing one cwd on different branches: 2nd checkout moves the 1st → commits on wrong branch.
+- [Shared-worktree review revert hazard](feedback_shared_worktree_review_revert_hazard.md) — ≥2 reviewers on one implementer worktree collide: one's revert-to-test corrupts the other's view. Review from an isolated checkout at the committed head SHA. #1056/#1058.
