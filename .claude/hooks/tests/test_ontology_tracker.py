@@ -245,11 +245,55 @@ class ShouldSkipSessionHandoffTests(_FakeRepoRootMixin, unittest.TestCase):
     """
 
     def test_relative_handoff_path_is_skipped(self):
-        self.assertTrue(hook._should_skip(".claude/memory/session_handoff.md"))
+        """A repo-relative handoff path is skipped BY THE PATTERN, not by luck.
+
+        The ``os.chdir`` here is load-bearing — do not remove it (#1043).
+        ``_should_skip`` resolves a relative path against the *process cwd*, not
+        against the patched ``REPO_ROOT``. Without the chdir this path resolves
+        somewhere outside the fake root and is caught by the pre-existing
+        out-of-repo rule, so the assertion passes even when the
+        ``SKIP_PATTERNS`` entry under test is deleted — an inert test that
+        reports green while covering nothing. Anchoring cwd to the fake root
+        puts the path *inside* the repo, so the pattern is the only thing that
+        can produce the skip and the test genuinely dies if it is removed.
+
+        Relative paths are worth covering: the tracker is anchored on the
+        orchestrator cwd and records relative paths in real flows (see the
+        module docstring on worktree-relative paths).
+        """
+        cwd = os.getcwd()
+        try:
+            os.chdir(self._fake_root)
+            self.assertTrue(hook._should_skip(".claude/memory/session_handoff.md"))
+        finally:
+            os.chdir(cwd)
 
     def test_absolute_handoff_path_is_skipped(self):
         path = str(self._fake_root / ".claude" / "memory" / "session_handoff.md")
         self.assertTrue(hook._should_skip(path))
+
+    def test_skip_is_scoped_to_the_claude_memory_directory(self):
+        """The pattern must stay DIRECTORY-scoped, not a bare filename (#1043).
+
+        Narrowing the entry to ``"session_handoff.md"`` left the whole suite
+        green, so nothing pinned the scoping. A substring denylist matches
+        anywhere in the path, so a bare filename would silently stop tracking
+        any committed file that happens to share the name — e.g. a real
+        ``docs/session_handoff.md``. Only the gitignored machine-local file at
+        ``.claude/memory/`` is exempt; a same-named file elsewhere in the repo
+        is ordinary tracked content.
+        """
+        elsewhere = str(self._fake_root / "docs" / "session_handoff.md")
+        self.assertFalse(hook._should_skip(elsewhere))
+
+    def test_skip_does_not_extend_to_sibling_memory_notes_by_prefix(self):
+        """A path merely *starting* with the handoff name is not exempt (#1043).
+
+        Guards the other narrowing direction — the pattern must match the whole
+        handoff path, so a distinct committed note is unaffected.
+        """
+        sibling = str(self._fake_root / ".claude" / "memory" / "session_handoff_notes.md")
+        self.assertFalse(hook._should_skip(sibling))
 
     def test_check_writes_no_entry_for_handoff(self):
         """End-to-end: a Write to the handoff produces no checksums entry.
