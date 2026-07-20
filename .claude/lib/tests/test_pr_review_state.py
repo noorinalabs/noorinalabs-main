@@ -494,5 +494,65 @@ class CliExitCodeTests(unittest.TestCase):
         self.assertEqual(self._main(prs.ReviewStateError("boom")), 2)
 
 
+class UndeterminableRepoAndScanTests(unittest.TestCase):
+    """#981: the driver must stay determinate alongside Hook 4's fail-closed fix.
+
+    `compute_review_state` already raised on `pr_data is None`, so it was never
+    the fail-open the gate was. These pin the two things #981 adds: a SPECIFIC
+    diagnosis for an unresolvable `--repo` (deterministic, not a retry), and an
+    incomplete comment scan raising rather than reporting a zero-approval PR.
+    Drift between this driver and the gate is what #1046 was.
+    """
+
+    def test_unresolvable_repo_raises_before_any_fetch(self):
+        with mock.patch.object(prs.gate, "get_pr_data") as get_mock:
+            with self.assertRaises(prs.ReviewStateError) as ctx:
+                prs.compute_review_state("451", repo="$DA")
+        self.assertIn("UNEXPANDED", str(ctx.exception))
+        get_mock.assert_not_called()
+
+    def test_unresolvable_repo_diagnosis_matches_the_gate(self):
+        """Same input, same diagnosis on both surfaces — no drift."""
+        self.assertEqual(prs.gate.repo_argument_defect("$DA"), prs.gate.REPO_DEFECT_UNEXPANDED)
+        with self.assertRaises(prs.ReviewStateError) as ctx:
+            prs.compute_review_state("451", repo="$DA")
+        self.assertIn(
+            prs.gate.describe_repo_defect("$DA", prs.gate.REPO_DEFECT_UNEXPANDED),
+            str(ctx.exception),
+        )
+
+    def test_literal_repo_is_not_rejected_by_the_new_guard(self):
+        """False-positive guard: a literal repo must still reach the fetch."""
+        with mock.patch.object(prs.gate, "get_pr_data", return_value=None) as get_mock:
+            with self.assertRaises(prs.ReviewStateError):
+                prs.compute_review_state("451", repo="noorinalabs/noorinalabs-main")
+        get_mock.assert_called_once()
+
+    def test_incomplete_comment_scan_is_an_error_not_zero_approvals(self):
+        """An unreadable comment thread is exit 2, not a FAIL verdict (exit 1).
+
+        Every other collaborator is mocked to a SUCCESS value so the only thing
+        that can raise is the incomplete-scan path.
+        """
+        undetermined = prs.gate.CommentReviewResult()
+        undetermined.undetermined = "the PR comments API call failed: HTTP 403"
+        pr_data = {
+            "author": "parametrization",
+            "number": 451,
+            "reviews": [],
+            "headRefName": "L.Pham/0001-fix",
+            "labels": [],
+        }
+        with (
+            mock.patch.object(prs.gate, "get_pr_data", return_value=pr_data),
+            mock.patch.object(prs.gate, "get_latest_content_commit", return_value=None),
+            mock.patch.object(prs.gate, "check_comment_reviews", return_value=undetermined),
+            mock.patch.object(prs.gate, "_load_roster_names", return_value={"aino virtanen"}),
+        ):
+            with self.assertRaises(prs.ReviewStateError) as ctx:
+                prs.compute_review_state("451", repo="noorinalabs/noorinalabs-main")
+        self.assertIn("HTTP 403", str(ctx.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -135,6 +135,18 @@ def compute_review_state(pr_number: str, repo: str | None = None) -> ReviewState
     determinate-failure cases the gate hard-blocks on (exit code 2), distinct
     from a gate FAIL (exit code 1).
     """
+    # An unresolvable `--repo` is deterministic, not transient, so name it
+    # specifically instead of sending the operator to re-check `gh auth status`
+    # (#981). Uses the gate's own classifier so the two surfaces give the same
+    # diagnosis for the same input.
+    defect = gate.repo_argument_defect(repo)
+    if defect is not None:
+        raise ReviewStateError(
+            f"cannot determine the target repository for PR #{pr_number}: "
+            f"{gate.describe_repo_defect(repo, defect)}\n"
+            "Pass a literal --repo OWNER/NAME."
+        )
+
     pr_data = gate.get_pr_data(pr_number, repo=repo)
     if pr_data is None:
         raise ReviewStateError(
@@ -193,6 +205,18 @@ def compute_review_state(pr_number: str, repo: str | None = None) -> ReviewState
             comment_result = gate.check_comment_reviews(
                 number, "", repo=repo, content_ts=content_ts
             )
+
+    # An INCOMPLETE comment scan is a determinate failure, not a zero-approval
+    # result (#981). Mirrors the gate's hard-block: reporting an unreadable
+    # comment thread as an empty one would make this driver answer FAIL (exit 1,
+    # "this PR lacks approvals") when the honest answer is "could not determine"
+    # (exit 2) — and would drift from Hook 4, which is what #1046 was.
+    if comment_result.undetermined:
+        raise ReviewStateError(
+            f"comment reviews for PR #{number} could not be read: "
+            f"{comment_result.undetermined}\nWithout them the gate's verdict cannot be "
+            "replayed, so this is a determinate failure rather than a zero-approval result."
+        )
 
     # Filter comment-based Approved reviewers against the roster (gate #498):
     # only real roster personas count toward the threshold. A missing child

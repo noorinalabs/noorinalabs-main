@@ -2558,5 +2558,339 @@ class FormalReviewStalenessTests(unittest.TestCase):
         self.assertIsNotNone(result, "unknown freshness is not freshness")
 
 
+class RepoArgumentDefectTests(unittest.TestCase):
+    """Unit tests for the `repo_argument_defect` classifier (#981)."""
+
+    def test_absent_repo_is_not_a_defect(self):
+        """No `--repo` at all is legitimate — the hook resolves it from cwd."""
+        self.assertIsNone(hook.repo_argument_defect(None))
+
+    def test_literal_owner_name_is_not_a_defect(self):
+        self.assertIsNone(hook.repo_argument_defect("noorinalabs/noorinalabs-main"))
+
+    def test_host_qualified_literal_is_not_a_defect(self):
+        """`gh` accepts `[HOST/]OWNER/REPO`; do not over-block the 3-segment form."""
+        self.assertIsNone(hook.repo_argument_defect("github.com/noorinalabs/x"))
+
+    def test_bare_variable_is_unexpanded(self):
+        self.assertEqual(hook.repo_argument_defect("$DA"), hook.REPO_DEFECT_UNEXPANDED)
+
+    def test_braced_variable_is_unexpanded(self):
+        self.assertEqual(hook.repo_argument_defect("${DA}"), hook.REPO_DEFECT_UNEXPANDED)
+
+    def test_command_substitution_is_unexpanded(self):
+        self.assertEqual(hook.repo_argument_defect("$(get_repo)"), hook.REPO_DEFECT_UNEXPANDED)
+
+    def test_partially_expanded_value_is_unexpanded(self):
+        """`noorinalabs/$REPO` HAS a slash, so the shape test alone would pass it.
+
+        This is the nastiest form: `_resolve_owner_repo` returns
+        `("noorinalabs", "$REPO")` — a confidently-wrong "resolved" repo.
+        """
+        self.assertEqual(
+            hook.repo_argument_defect("noorinalabs/$REPO"), hook.REPO_DEFECT_UNEXPANDED
+        )
+
+    def test_value_without_slash_is_malformed(self):
+        self.assertEqual(hook.repo_argument_defect("justaname"), hook.REPO_DEFECT_MALFORMED)
+
+    def test_empty_owner_or_name_is_malformed(self):
+        self.assertEqual(hook.repo_argument_defect("/name"), hook.REPO_DEFECT_MALFORMED)
+        self.assertEqual(hook.repo_argument_defect("owner/"), hook.REPO_DEFECT_MALFORMED)
+
+
+class UnresolvableRepoFailsClosedTests(_NoContentBindingHarness):
+    """#981: a merge whose target repo the gate cannot resolve must BLOCK.
+
+    Pre-fix, `gh pr merge 451 -R $DA --merge` returned
+    `{"decision": "allow", "systemMessage": "WARNING: Could not verify..."}`.
+    The hook parses the command PRE-expansion, so `$DA` reached `gh pr view
+    --repo '$DA'`, which exited non-zero, so `get_pr_data` returned None and the
+    early `allow` fired — short-circuiting BEFORE `get_latest_content_commit`
+    (so the #950 `CommitFetchError` hard-block never ran) and before
+    `check_comment_reviews` was ever called. Four P9W25 da merges went through
+    it with the 2-reviewer gate silently off.
+
+    NOTE: the issue body attributes the fail-open to `_resolve_owner_repo`
+    returning None inside `check_comment_reviews`. That path is NOT reachable on
+    the merge path; the reachable one is `pr_data is None` in `check()`.
+
+    Every test here patches `get_pr_data` to a sentinel that would ALLOW if it
+    were reached, so a pass proves the new guard fired rather than some
+    downstream check happening to block.
+    """
+
+    @staticmethod
+    def _input(command: str) -> dict:
+        return {"tool_name": "Bash", "tool_input": {"command": command}}
+
+    @staticmethod
+    def _approved_pr_data() -> dict:
+        return {
+            "author": "parametrization",
+            "number": 451,
+            "reviews": [],
+            "headRefName": "L.Pham/0001-fix",
+            "labels": [],
+        }
+
+    def _check_with_passing_downstream(self, command: str):
+        """Run check() with a downstream state that would otherwise ALLOW.
+
+        `_load_roster_names` is mocked to the two approvers: naming a child repo
+        via `--repo` makes the #552 resolver look for that repo's roster on disk,
+        which is absent in a parent-repo worktree. That is orthogonal
+        pre-existing behavior, and leaving it live would make these tests block
+        for the wrong reason — green for a defect they do not test.
+        """
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen", "nadia khoury"}
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._approved_pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+            mock.patch.object(
+                hook, "_load_roster_names", return_value={"aino virtanen", "nadia khoury"}
+            ),
+        ):
+            return hook.check(self._input(command))
+
+    def test_unexpanded_repo_var_blocks(self):
+        """THE #981 REGRESSION. Pre-fix this returned decision=allow."""
+        result = self._check_with_passing_downstream(
+            "gh pr merge 451 -R $DA --merge --delete-branch"
+        )
+        self.assertIsNotNone(result, "unresolvable repo must not fall through to allow")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_unexpanded_repo_var_never_allows_with_warning(self):
+        """Pin the exact pre-fix shape so it cannot be reintroduced."""
+        result = self._check_with_passing_downstream("gh pr merge 451 -R $DA --merge")
+        assert result is not None
+        self.assertNotEqual(result.get("decision"), "allow")
+        self.assertNotIn("systemMessage", result)
+
+    def test_braced_and_substitution_forms_block(self):
+        for value in ("${DA}", "$(get_repo)", "noorinalabs/$REPO"):
+            with self.subTest(repo=value):
+                result = self._check_with_passing_downstream(
+                    f"gh pr merge 451 --repo {value} --merge"
+                )
+                assert result is not None
+                self.assertEqual(result["decision"], "block")
+
+    def test_malformed_repo_blocks(self):
+        result = self._check_with_passing_downstream("gh pr merge 451 --repo justaname --merge")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_block_happens_before_any_network_call(self):
+        """The guard is deterministic — it must not depend on a fetch failing.
+
+        Pinning this keeps the block working when the API IS reachable (where a
+        `--repo '$DA'` fetch might, in principle, not fail the same way).
+        """
+        with (
+            mock.patch.object(hook, "get_pr_data") as get_mock,
+            mock.patch.object(hook, "check_comment_reviews") as comments_mock,
+        ):
+            result = hook.check(self._input("gh pr merge 451 -R $DA --merge"))
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        get_mock.assert_not_called()
+        comments_mock.assert_not_called()
+
+    def test_admin_still_overrides(self):
+        """`--admin` remains the emergency escape, as for every other guard."""
+        with mock.patch.object(hook, "get_pr_data") as get_mock:
+            result = hook.check(self._input("gh pr merge 451 -R $DA --admin --merge"))
+        self.assertIsNone(result)
+        get_mock.assert_not_called()
+
+    # --- Requirement (b): the literal, properly-approved path is UNAFFECTED ---
+
+    def test_literal_repo_on_approved_pr_still_allows(self):
+        """A literal `--repo owner/name` on a 2-approver PR must still merge.
+
+        This is the false-positive guard: a fail-closed change that also blocks
+        legitimate merges has just moved the damage.
+        """
+        result = self._check_with_passing_downstream(
+            "gh pr merge 451 --repo noorinalabs/noorinalabs-data-acquisition --merge"
+        )
+        self.assertIsNone(result, "literal repo + 2 approvers must still allow")
+
+    def test_no_repo_flag_on_approved_pr_still_allows(self):
+        result = self._check_with_passing_downstream("gh pr merge 451 --merge")
+        self.assertIsNone(result, "absent --repo is legitimate cwd resolution")
+
+    # --- Requirement (c): the two failure kinds are diagnostically distinct ---
+
+    def test_unresolvable_diagnostic_names_the_unexpanded_variable(self):
+        result = self._check_with_passing_downstream("gh pr merge 451 -R $DA --merge")
+        assert result is not None
+        reason = result["reason"]
+        self.assertIn("UNEXPANDED", reason)
+        self.assertIn("$DA", reason)
+        # The actionable fix is a literal repo...
+        self.assertIn("--repo noorinalabs/noorinalabs-data-acquisition", reason)
+        # ...NOT "retry", which would loop forever on a deterministic defect.
+        self.assertNotIn("transient", reason)
+        self.assertNotIn("Re-run the merge", reason)
+
+    def test_malformed_diagnostic_names_the_shape_not_a_variable(self):
+        result = self._check_with_passing_downstream("gh pr merge 451 --repo justaname --merge")
+        assert result is not None
+        reason = result["reason"]
+        self.assertIn("OWNER/NAME", reason)
+        self.assertIn("justaname", reason)
+        self.assertNotIn("UNEXPANDED", reason)
+
+    def test_generic_fetch_failure_blocks_with_a_distinct_diagnostic(self):
+        """A well-formed repo + failed fetch is auth/network — a DIFFERENT fix.
+
+        Pre-fix this branch returned `allow` too; it must now block, but with
+        retry/auth guidance rather than the unexpanded-variable advice.
+        """
+        with mock.patch.object(hook, "get_pr_data", return_value=None):
+            result = hook.check(
+                self._input("gh pr merge 451 --repo noorinalabs/noorinalabs-main --merge")
+            )
+        self.assertIsNotNone(result, "unfetchable PR must not fall through to allow")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        reason = result["reason"]
+        self.assertIn("could not fetch the PR", reason)
+        self.assertIn("gh auth status", reason)
+        self.assertIn("Re-run the merge", reason)
+        # Must NOT misdiagnose a network blip as a shell-quoting mistake.
+        self.assertNotIn("UNEXPANDED", reason)
+
+    def test_the_two_failure_kinds_do_not_share_a_message(self):
+        unresolvable = self._check_with_passing_downstream("gh pr merge 451 -R $DA --merge")
+        with mock.patch.object(hook, "get_pr_data", return_value=None):
+            generic = hook.check(
+                self._input("gh pr merge 451 --repo noorinalabs/noorinalabs-main --merge")
+            )
+        assert unresolvable is not None and generic is not None
+        self.assertNotEqual(unresolvable["reason"], generic["reason"])
+
+
+class IncompleteCommentScanFailsClosedTests(_NoContentBindingHarness):
+    """#981 defense-in-depth: an unreadable comment thread != an unreviewed PR.
+
+    Each early `return result` in `check_comment_reviews` used to hand back an
+    empty `CommentReviewResult`, which is indistinguishable from "this PR has no
+    charter-format approvals". Besides mis-stating the reviewer count, that
+    silently skips the TechDebt attestation check. The scan now records WHY it
+    stopped in `undetermined`, and `check()` hard-blocks on it.
+    """
+
+    @staticmethod
+    def _input(command: str) -> dict:
+        return {"tool_name": "Bash", "tool_input": {"command": command}}
+
+    @staticmethod
+    def _fake_run(returncode: int = 0, stdout: str = "[]", stderr: str = ""):
+        def run(args, capture_output, text, timeout):
+            result = mock.MagicMock()
+            result.returncode = returncode
+            result.stdout = stdout
+            result.stderr = stderr
+            return result
+
+        return run
+
+    def test_clean_scan_leaves_undetermined_empty(self):
+        """The negative match — a successful empty scan must NOT be flagged."""
+        with mock.patch.object(hook.subprocess, "run", side_effect=self._fake_run()):
+            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x")
+        self.assertEqual(result.undetermined, "")
+        self.assertEqual(result.reviewers, set())
+
+    def test_comments_api_failure_sets_undetermined(self):
+        with mock.patch.object(
+            hook.subprocess,
+            "run",
+            side_effect=self._fake_run(returncode=1, stdout="", stderr="HTTP 403: Forbidden"),
+        ):
+            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x")
+        self.assertTrue(result.undetermined)
+        self.assertIn("403", result.undetermined)
+
+    def test_timeout_sets_undetermined(self):
+        with mock.patch.object(
+            hook.subprocess, "run", side_effect=hook.subprocess.TimeoutExpired("gh", 30)
+        ):
+            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x")
+        self.assertIn("TimeoutExpired", result.undetermined)
+
+    def test_unparseable_json_sets_undetermined(self):
+        with mock.patch.object(
+            hook.subprocess, "run", side_effect=self._fake_run(stdout="not json")
+        ):
+            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x")
+        self.assertIn("JSONDecodeError", result.undetermined)
+
+    def test_unresolvable_owner_repo_sets_undetermined(self):
+        with mock.patch.object(hook, "_resolve_owner_repo", return_value=None):
+            result = hook.check_comment_reviews(451, "pham", repo=None)
+        self.assertIn("could not resolve the target repository", result.undetermined)
+
+    def test_check_hard_blocks_on_an_incomplete_scan(self):
+        """Even with TWO formal approvers present, an incomplete scan blocks.
+
+        Formal reviews alone would satisfy the threshold, so a pass here proves
+        the block came from the incomplete scan and not from a count shortfall.
+        """
+        review_result = hook.CommentReviewResult()
+        review_result.undetermined = "the PR comments API call failed: HTTP 403"
+        pr_data = {
+            "author": "parametrization",
+            "number": 451,
+            "reviews": [
+                {"author": {"login": "reviewer-a"}, "state": "APPROVED"},
+                {"author": {"login": "reviewer-b"}, "state": "APPROVED"},
+            ],
+            "headRefName": "L.Pham/0001-fix",
+            "labels": [],
+        }
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=pr_data),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(
+                self._input("gh pr merge 451 --repo noorinalabs/noorinalabs-main --merge")
+            )
+        self.assertIsNotNone(result, "an unreadable comment thread must not read as reviewed")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("could not be read", result["reason"])
+        self.assertIn("HTTP 403", result["reason"])
+
+    def test_complete_scan_with_two_approvers_still_allows(self):
+        """False-positive guard for the defense-in-depth change."""
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen", "nadia khoury"}
+        pr_data = {
+            "author": "parametrization",
+            "number": 451,
+            "reviews": [],
+            "headRefName": "L.Pham/0001-fix",
+            "labels": [],
+        }
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=pr_data),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+            mock.patch.object(
+                hook, "_load_roster_names", return_value={"aino virtanen", "nadia khoury"}
+            ),
+        ):
+            result = hook.check(
+                self._input("gh pr merge 451 --repo noorinalabs/noorinalabs-main --merge")
+            )
+        self.assertIsNone(result)
+
+
 if __name__ == "__main__":
     unittest.main()
