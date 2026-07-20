@@ -162,17 +162,20 @@ def _phase_from_status(status: dict) -> int | None:
     return None
 
 
-def parse_label_apply_command(command: str) -> tuple[str | None, str, str] | None:
-    """Parse `gh issue edit <num> [--repo <repo>] --add-label "p{N}-wave-{M}"`.
+def parse_label_apply_command(command: str) -> tuple[str | None, str, str, bool] | None:
+    """Parse `gh issue edit <num> [-R|--repo <repo>] --add-label "p{N}-wave-{M}"`.
 
-    Returns (repo, issue_number, wave_label) if the command APPLIES a wave
-    label, else None. Tolerates additional flags and arbitrary flag
-    ordering. The kickoff hook only fires on label-APPLY, so commands
+    Returns (repo, issue_number, wave_label, repo_flag_present) if the command
+    APPLIES a wave label, else None. Tolerates additional flags and arbitrary
+    flag ordering. The kickoff hook only fires on label-APPLY, so commands
     that only `--remove-label` a wave label return None here.
 
-    `repo` is None when the command OMITS `--repo` (in-repo invocation,
-    #650); the caller (`check`) resolves the ambient repo from the
-    invocation cwd before using it.
+    `repo` is resolved from the AUTHORITATIVE `-R`/`--repo owner/name` flag
+    (#985). It is None in two cases, disambiguated by `repo_flag_present`:
+    the flag was OMITTED (`repo_flag_present=False` — in-repo invocation #650;
+    the caller resolves the ambient repo from cwd), or the flag was present but
+    its value was unresolvable (`repo_flag_present=True` — an unexpanded `$VAR`
+    per #981; the caller MUST fail closed, never fall back to cwd).
 
     Between-wave relabel filter (#467): commands that ALSO remove a
     canonical wave label in the same invocation
@@ -202,7 +205,7 @@ def parse_label_apply_command(command: str) -> tuple[str | None, str, str] | Non
     # does NOT trigger this filter.
     if change.remove_label is not None:
         return None
-    return change.repo, change.issue_number, change.add_label
+    return change.repo, change.issue_number, change.add_label, change.repo_flag_present
 
 
 def _short_ref(repo: str, issue_number: str) -> str:
@@ -438,6 +441,10 @@ def check(
       {"action": "skip_no_row", ...}           — issue not in any tier
       {"action": "skip_no_repo_context", ...}  — --repo omitted AND ambient
                                                  repo unresolvable from cwd
+      {"action": "skip_unresolvable_repo", ...} — -R/--repo present but its
+                                                 value was unresolvable (e.g.
+                                                 `-R $VAR`); fail-closed, no cwd
+                                                 fallback (#985/#981)
       {"action": "skip_post_failed", ...}      — gh post call failed
 
     Injection points let tests mock external state without mocking
@@ -458,12 +465,29 @@ def check(
     parsed = parse_label_apply_command(command)
     if parsed is None:
         return None
-    repo, issue_number, wave_label = parsed
+    repo, issue_number, wave_label, repo_flag_present = parsed
+
+    # #985/#981: an explicit `-R`/`--repo` flag whose value did NOT resolve to a
+    # repo (an unexpanded `$VAR` / command substitution) must fail CLOSED. The
+    # flag is authoritative; falling back to the invocation cwd here would
+    # misroute the kickoff comment to the wrong repo (the parent org repo when a
+    # subagent runs in a child-repo worktree). Skip with a visible, logged action
+    # rather than silently posting to the wrong issue.
+    if repo is None and repo_flag_present:
+        log_posttooluse_event(
+            "post_wave_kickoff_comment",
+            command,
+            f"skip_unresolvable_repo: label-apply for issue {issue_number} carried an "
+            "explicit -R/--repo flag whose value did not resolve to a repo (unexpanded "
+            "variable or command substitution). Refusing to fall back to the invocation "
+            "cwd to avoid misrouting the kickoff comment (#985/#981).",
+        )
+        return {"action": "skip_unresolvable_repo", "issue": issue_number}
 
     # #650: a label-apply run from inside the target repo carries no `--repo`
-    # (repo=None). Mirror gh's ambient-git-context resolution by recovering
-    # the repo from the invocation cwd; without it the downstream
-    # `--repo noorinalabs/<repo>` call would be malformed.
+    # (repo=None, repo_flag_present=False). Mirror gh's ambient-git-context
+    # resolution by recovering the repo from the invocation cwd; without it the
+    # downstream `--repo noorinalabs/<repo>` call would be malformed.
     if repo is None:
         repo = resolve_repo_short_name(input_data, git_runner=git_runner)
         if repo is None:
