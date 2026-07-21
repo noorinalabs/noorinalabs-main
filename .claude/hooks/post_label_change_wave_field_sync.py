@@ -636,8 +636,13 @@ def check(
     Single-cmd result variants:
       None                                       — hook didn't apply
       {"action": "killed", ...}                  — kill-switch env var set
-      {"action": "skip_no_repo_context", ...}    — --repo omitted AND ambient
-                                                   repo unresolvable from cwd
+      {"action": "skip_no_repo_context", ...}    — every change's repo was
+                                                   unresolvable: either --repo
+                                                   omitted AND cwd unresolvable
+                                                   (#650), or an explicit
+                                                   -R/--repo with an unresolvable
+                                                   value (`-R $VAR`, fail-closed
+                                                   per #985/#981 — never cwd)
       {"action": "skip_no_auth_scope", ...}      — gh missing project scope
       {"action": "skip_no_project_ids", ...}     — introspection failed
       {"action": "skip_no_option", ...}          — wave option missing
@@ -696,6 +701,22 @@ def check(
     resolved_changes: list[WaveLabelChange] = []
     for change in changes:
         if change.repo is None:
+            # #985/#981: an explicit `-R`/`--repo` flag whose value did NOT
+            # resolve (an unexpanded `$VAR` / command substitution) must fail
+            # CLOSED. The flag is authoritative over cwd; falling back to the
+            # invocation cwd here would misroute the Wave-field sync to the wrong
+            # repo (the parent org repo when a subagent runs in a child-repo
+            # worktree). Skip this change with a logged, visible reason.
+            if change.repo_flag_present:
+                log_posttooluse_event(
+                    "post_label_change_wave_field_sync",
+                    command,
+                    f"skip_unresolvable_repo: `gh issue edit {change.issue_number}` carried an "
+                    "explicit -R/--repo flag whose value did not resolve to a repo (unexpanded "
+                    "variable or command substitution). Refusing cwd fallback to avoid "
+                    "misrouting the Wave-field sync (#985/#981).",
+                )
+                continue
             if not ambient_resolved:
                 ambient_repo = resolve_repo_short_name(input_data, git_runner=git_runner)
                 ambient_resolved = True

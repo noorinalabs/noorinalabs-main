@@ -764,6 +764,45 @@ def _default_origin_url_runner(cwd: str) -> str | None:
     return result.stdout
 
 
+# Markers that make a `--repo`/`-R` flag value UNRESOLVABLE as a repo reference:
+# shlex leaves an unexpanded shell variable (`$VAR`, `${VAR}`) or command
+# substitution (`` `...` ``, `$(...)`) as a LITERAL token, and any whitespace in
+# the extracted value means we captured a non-flag fragment (e.g. an
+# attached-short false positive off a `--body "-R x"` token). Treating any of
+# these as a repo name would MISROUTE the downstream `gh` call to the wrong (or
+# a nonexistent) repository — the fail-open #981 closed at the merge gate,
+# applied here to the wave-label hooks' repo resolution.
+_UNRESOLVABLE_REPO_VALUE_RE = re.compile(r"[$`\s]")
+
+
+def repo_short_name_from_flag_value(value: str) -> str | None:
+    """Extract the GitHub repo SHORT NAME from a `--repo`/`-R` flag value.
+
+    The flag value is the pre-shell-expansion token gh would receive, e.g.
+    `noorinalabs/noorinalabs-main`, `noorinalabs/noorinalabs-main.git`, or a
+    full `https://github.com/owner/name` URL. Returns the last path segment
+    with any trailing `.git` stripped:
+
+        noorinalabs/noorinalabs-main                       -> noorinalabs-main
+        https://github.com/noorinalabs/noorinalabs-deploy  -> noorinalabs-deploy
+
+    Returns None when the value is UNRESOLVABLE — an unexpanded shell variable
+    or command substitution (`$DA`, `${REPO}`, `` `...` ``, `$(...)`) that shlex
+    left literal, a whitespace-bearing fragment, or empty. Per #981, an
+    unresolvable repo token must be treated as "no known repo" by the caller
+    (fail-closed: block/skip), NEVER coerced into a repo name — coercing it would
+    misroute the gh call. This is the flag-value sibling of
+    `resolve_repo_short_name` (which resolves the ambient repo from the
+    invocation cwd's `origin` remote); the flag is authoritative over cwd (#985).
+    """
+    if not value or _UNRESOLVABLE_REPO_VALUE_RE.search(value):
+        return None
+    name = value.rstrip("/").split("/")[-1]
+    if name.endswith(".git"):
+        name = name[: -len(".git")]
+    return name or None
+
+
 def resolve_repo_short_name(input_data: dict, *, git_runner=None) -> str | None:
     """Resolve the GitHub repo NAME from the invocation cwd's `origin` remote.
 

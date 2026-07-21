@@ -245,9 +245,11 @@ Every reviewer-class spawn prompt MUST include, **in order**:
 
 <!-- Promoted from memory: feedback_pr_review_verdict_format.md (P3W9 retro 2026-05-12, owner-approved 2026-05-13) -->
 
-   **Verbatim verdict-comment template (copy-paste into reviewer spawn briefs):**
+   **Verbatim verdict-comment template (COPY-PASTE into reviewer spawn briefs — do NOT paraphrase):**
 
-   > **Canonical source:** see `pull-requests.md § Review Prompt Template (Mandatory)` for the underlying spec. This block is the spawn-brief view; the `pull-requests.md` template is the verbatim source-of-truth reviewers must follow — plain form, no bold markers, no parenthetical descriptions, no extra fields.
+   > **Canonical source:** see `pull-requests.md § Review Prompt Template (Mandatory)` for the underlying spec, and memory `feedback_pr_review_verdict_format` §8 (spawn-brief obligations) + §1 (trailer placement). This block is the spawn-brief view; the `pull-requests.md` template is the verbatim source-of-truth reviewers must follow — plain form, no bold markers, no parenthetical descriptions, no extra fields.
+   >
+   > **COPY, do NOT paraphrase (P9W25, memory §8):** paste these exact tokens into every reviewer spawn brief. An invented field (`Review:`, `Verdict:`) or a paraphrased status (`RequestOrReplied: Request` in place of `Approved`) parses as ZERO approvals — Hook 4 has no parser for the invented name and `Request`/`Reply` do not gate-count. The exact tokens are load-bearing; having the rule in memory is not a substitute for pasting the block.
 
    ```bash
    # Use `gh pr comment <PR#> --body-file <path>` — NOT `gh pr review` (block_gh_pr_review enforces).
@@ -255,20 +257,27 @@ Every reviewer-class spawn prompt MUST include, **in order**:
    # (block_stale_tmp_message_file enforces 30s freshness):
 
    cat > /tmp/<PR#>-review-<reviewer-firstname>.md <<'BODYEOF'
-   Requestor: <reviewer-firstname> <reviewer-lastname>
-   Requestee: <PR-author-firstname> <PR-author-lastname>
-   RequestOrReplied: Approved
-   TechDebt: none
-
    <verdict body — prose, line comments, throughline observations…>
 
    ## Throughline observations
 
    <per § Reviewer spawn brief — throughline-watch>
+
+   ---
+   Requestor: <reviewer's exact space-form roster name> (YOU — not the author, not the paired reviewer)
+   Requestee: <PR author's exact space-form roster name>
+   RequestOrReplied: Approved
+   TechDebt: none
    BODYEOF
 
    gh pr comment <PR#> --body-file /tmp/<PR#>-review-<reviewer-firstname>.md
    ```
+
+   **Placement (critical — memory §1):** the 4-line trailer is the **LAST** lines of the comment, immediately after a **sole `---`** on its own line. Hook 4 reads verdict fields ONLY from the trailer block (text after the LAST bare-line `---`); any `Field:` line ABOVE a later `---` is invisible, so the trailer must never precede the prose (a long review that used `---` as a mid-body horizontal rule once silently skipped its verdict — main#940).
+
+   **The `(YOU — …)` parenthetical is a which-name pointer for the template ONLY — DROP it when posting.** Substitute your bare space-form roster name (e.g. `Aino Virtanen`) for the placeholder and post `Requestor: Aino Virtanen`. A parenthetical or dotted form left in the posted value fails Hook 4's roster-validation (lowercased space-form match against `.claude/team/roster/`) → the verdict counts as a NON-roster Requestor → 0 of 2 approvals (memory §3).
+
+   **Read back before reporting "posted":** after `gh pr comment`, re-fetch the comment body (`gh api repos/noorinalabs/<REPO>/issues/comments/<id>`) and confirm the trailer parses — import the hook and check (`from validate_pr_review import _extract_charter_field, _is_approved`, memory §7) rather than trusting a visual scan. Report the verdict to the requestor only after the read-back confirms a counted Approved; "Approved, posted" without a read-back is the exact claim that surfaces as a silent zero at merge time (memory §8).
 
    > Inline `gh pr comment <PR#> --body "..."` is also valid when no /tmp file is involved; `--body-file <path>` is the required form when the body is written to /tmp first (`block_stale_tmp_message_file` 30s freshness rule applies only when a /tmp file is the source). This reconciles the new block above with `pull-requests.md § Review Prompt Template (Mandatory)` lines 47–53 which use inline `--body "..."` — both are legitimate; flag form follows write-path.
 

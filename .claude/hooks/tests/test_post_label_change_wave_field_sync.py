@@ -1382,5 +1382,113 @@ class AmbientRepoResolutionTests(unittest.TestCase):
             hook.log_posttooluse_event = orig
 
 
+class RepoFlagAuthoritativeTests(unittest.TestCase):
+    """#985: the -R/--repo flag is AUTHORITATIVE over the invocation cwd for the
+    Wave-field sync.
+
+    A subagent running in a child-repo worktree issues `gh issue edit -R
+    noorinalabs/<child> ...` whose cwd `origin` may still resolve to the PARENT
+    org repo — the recurring W25-retro misroute. The sync must target the flag's
+    repo, not cwd. And an unexpanded `-R $VAR` must fail CLOSED (#981), never
+    misrouting to cwd.
+    """
+
+    _PARENT_ORIGIN = "git@github.com:noorinalabs/noorinalabs-main.git\n"
+
+    def setUp(self):
+        _wipe_cache()
+        hook.CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        hook._write_cache(_ids_blob())
+
+    def tearDown(self):
+        _wipe_cache()
+
+    def test_R_flag_routes_to_flag_repo_not_cwd(self):
+        """The bite: the item-lookup GraphQL must be issued for the `-R` repo
+        (`noorinalabs-deploy`), NOT the cwd-resolved parent (`noorinalabs-main`).
+        Pre-fix the parser was blind to `-R`, so repo fell to None and the hook
+        misrouted the sync to the parent via the cwd fallback."""
+        seen = {}
+
+        def capture_item_lookup(repo, num):
+            seen["repo"] = repo
+            return _item_lookup_response(repo, num)
+
+        router = FakeGraphQLRouter(
+            item_lookup=capture_item_lookup,
+            mutation=_mutation_success_response,
+        )
+        result = hook.check(
+            _bash('gh issue edit 123 -R noorinalabs/noorinalabs-deploy --add-label "p3-wave-11"'),
+            auth_status_runner=_scopes_with_project,
+            graphql_runner=router,
+            git_runner=lambda _cwd: self._PARENT_ORIGIN,
+        )
+        self.assertEqual(result["action"], "set")
+        self.assertEqual(result["repo"], "noorinalabs-deploy")
+        self.assertEqual(
+            seen["repo"],
+            "noorinalabs-deploy",
+            "Wave-field sync must query the -R flag's repo, not the cwd origin",
+        )
+
+    def test_R_flag_does_not_invoke_git_runner(self):
+        calls = [0]
+
+        def runner(_cwd):
+            calls[0] += 1
+            return self._PARENT_ORIGIN
+
+        router = FakeGraphQLRouter(
+            item_lookup=_item_lookup_response,
+            mutation=_mutation_success_response,
+        )
+        hook.check(
+            _bash('gh issue edit 123 -R noorinalabs/noorinalabs-deploy --add-label "p3-wave-11"'),
+            auth_status_runner=_scopes_with_project,
+            graphql_runner=router,
+            git_runner=runner,
+        )
+        self.assertEqual(calls[0], 0, "-R flag must not trigger ambient cwd resolution")
+
+    def test_unexpanded_var_repo_fails_closed_no_cwd_fallback(self):
+        """#985/#981: `-R $VAR` (shlex leaves `$DA` literal) must NOT fall back to
+        cwd. git_runner is wired to a healthy parent origin to prove it is never
+        consulted for a present-but-unresolvable repo flag."""
+        calls = [0]
+
+        def runner(_cwd):
+            calls[0] += 1
+            return self._PARENT_ORIGIN
+
+        result = hook.check(
+            _bash('gh issue edit 123 -R "$DA" --add-label "p3-wave-11"'),
+            auth_status_runner=_scopes_with_project,
+            graphql_runner=FakeGraphQLRouter(),
+            git_runner=runner,
+        )
+        self.assertEqual(result["action"], "skip_no_repo_context")
+        self.assertEqual(calls[0], 0, "unresolvable -R must NOT fall back to cwd")
+
+    def test_unexpanded_var_repo_logs_unresolvable(self):
+        """The per-change skip must log `skip_unresolvable_repo` so
+        /annunaki-attack can pattern-match the fail-closed."""
+        captured = []
+        orig = hook.log_posttooluse_event
+        hook.log_posttooluse_event = lambda *a, **k: captured.append(a)
+        try:
+            hook.check(
+                _bash('gh issue edit 123 -R "$DA" --add-label "p3-wave-11"'),
+                auth_status_runner=_scopes_with_project,
+                git_runner=lambda _cwd: self._PARENT_ORIGIN,
+            )
+            self.assertTrue(
+                any("skip_unresolvable_repo" in str(a) for a in captured),
+                f"unresolvable -R must log skip_unresolvable_repo; captured: {captured}",
+            )
+        finally:
+            hook.log_posttooluse_event = orig
+
+
 if __name__ == "__main__":
     unittest.main()
