@@ -1,4 +1,5 @@
 {
+  "wave_27_carry_forward": ["noorinalabs-data-acquisition#397","noorinalabs-data-acquisition#398","noorinalabs-data-acquisition#464","noorinalabs-data-acquisition#467","noorinalabs-main#1062"],
   "wave_26_meta_issue": 983,
   "wave_26_phase": 9,
   "wave_26_phase_ordinal": 2,
@@ -6187,5 +6188,115 @@
         "status": "created"
       }
     }
+  },
+  "wave_26_final_pr_count": 15,
+  "wave_26_changes_requested_cycles": 5,
+  "wave_26_top_concentration_pct": 20,
+  "wave_26_trust_signals": {
+  "Aino Virtanen": {
+    "authored_prs": [
+      1061
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Alejandra Reyes-Fuentes": {
+    "authored_prs": [
+      470,
+      468,
+      466
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 1,
+    "must_fix_received": 1,
+    "prs_merged": 3,
+    "review_false_positives": 0,
+    "rework_cycles": 1
+  },
+  "Ivana Horvat": {
+    "authored_prs": [
+      469,
+      465
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 2,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Jean-Claude Habimana": {
+    "authored_prs": [
+      462
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 2,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 1
+  },
+  "Kavitha Sundaramurthy": {
+    "authored_prs": [
+      479,
+      476,
+      474
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 1,
+    "must_fix_received": 2,
+    "prs_merged": 3,
+    "review_false_positives": 0,
+    "rework_cycles": 2
+  },
+  "Kwesi Boateng": {
+    "authored_prs": [
+      463
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Nikolaos Papadopoulos": {
+    "authored_prs": [
+      473,
+      472
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 2,
+    "must_fix_received": 0,
+    "prs_merged": 2,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Nino Kavtaradze": {
+    "authored_prs": [
+      1059
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Oyunbileg Batbayar": {
+    "authored_prs": [
+      461
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 1,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
   }
+}
 }
