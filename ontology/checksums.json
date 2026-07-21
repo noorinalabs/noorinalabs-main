@@ -1152,10 +1152,10 @@
       "resolved_at": "2026-06-30T00:00:00Z"
     },
     "noorinalabs-data-acquisition/src/parse/name_quality.py": {
-      "last_tracked": "c5fc521c83071048a6b3a58f184ca9d9a7d16dcb9001724fdb0f7bd1d8c6f635",
-      "last_resolved": "c5fc521c83071048a6b3a58f184ca9d9a7d16dcb9001724fdb0f7bd1d8c6f635",
-      "tracked_at": "2026-07-11T00:21:03.734254+00:00",
-      "resolved_at": "2026-07-11T02:28:00.629407+00:00"
+      "last_tracked": "52ec2b06970618851c249b2565af44d802427fd27152bec38f4d36af08ca2234",
+      "last_resolved": "52ec2b06970618851c249b2565af44d802427fd27152bec38f4d36af08ca2234",
+      "tracked_at": "2026-07-21T02:34:02.923535+00:00",
+      "resolved_at": "2026-07-21T23:15:27.190487+00:00"
     },
     "noorinalabs-data-acquisition/tests/test_parse/test_name_quality.py": {
       "last_tracked": "8cb1a5fbdf1a00fb3c4f9ae4d0b72630b8b0293361c02b387a41ff64b340e56e",
@@ -1714,6 +1714,12 @@
       "last_resolved": "a3c3b95f3c7fcf675e3118725e9c183bfa6e82a5f75e40470a1f913c9cd8448f",
       "tracked_at": "2026-07-20T16:28:37.246316+00:00",
       "resolved_at": "2026-07-20T16:36:08.072015+00:00"
+    },
+    "noorinalabs-data-acquisition/src/utils/arabic.py": {
+      "last_tracked": "495f021204688b0e8611929271d9a701ad4455ee9d82716f3ba96aefa330bd06",
+      "last_resolved": "495f021204688b0e8611929271d9a701ad4455ee9d82716f3ba96aefa330bd06",
+      "tracked_at": "2026-07-21T00:31:15.623147+00:00",
+      "resolved_at": "2026-07-21T23:15:27.190487+00:00"
     }
   },
   "last_cleanup": {

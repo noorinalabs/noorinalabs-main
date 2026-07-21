@@ -1,10 +1,192 @@
 {
+  "wave_27_carry_forward": ["noorinalabs-data-acquisition#397","noorinalabs-data-acquisition#398","noorinalabs-data-acquisition#464","noorinalabs-data-acquisition#467","noorinalabs-main#1062"],
   "wave_26_meta_issue": 983,
   "wave_26_phase": 9,
   "wave_26_phase_ordinal": 2,
   "wave_26_scope_reconciled_at": "2026-07-20T11:06:48Z",
-  "wave_26_repos_in_scope": ["noorinalabs-main","noorinalabs-data-acquisition"],
-  "wave_26_scope": {"theme":"Parse recovery & name quality","phase":9,"tier_1_parse_recovery":[{"id":"noorinalabs-data-acquisition#373","ref":"data-acquisition#373","implementer":"Jean-Claude Habimana","reviewer":"Kavitha Sundaramurthy","reviewer_2":"Alejandra Reyes-Fuentes","priority":"bug"},{"id":"noorinalabs-data-acquisition#397","ref":"data-acquisition#397","implementer":"Nikolaos Papadopoulos","reviewer":"Jean-Claude Habimana","reviewer_2":"Alejandra Reyes-Fuentes","priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#398","ref":"data-acquisition#398","implementer":"Nikolaos Papadopoulos","reviewer":"Jean-Claude Habimana","reviewer_2":"Kavitha Sundaramurthy","priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#424","ref":"data-acquisition#424","implementer":"Kavitha Sundaramurthy","reviewer":"Nikolaos Papadopoulos","reviewer_2":"Oyunbileg Batbayar","priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#427","ref":"data-acquisition#427","implementer":"Kavitha Sundaramurthy","reviewer":"Ivana Horvat","reviewer_2":"Alejandra Reyes-Fuentes","priority":"tech-debt"}],"tier_2_name_quality":[{"id":"noorinalabs-data-acquisition#295","ref":"data-acquisition#295","implementer":"Ivana Horvat","reviewer":"Kavitha Sundaramurthy","reviewer_2":"Nikolaos Papadopoulos","priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#298","ref":"data-acquisition#298","implementer":"Ivana Horvat","reviewer":"Alejandra Reyes-Fuentes","reviewer_2":"Kwesi Boateng","priority":"enhancement"},{"id":"noorinalabs-data-acquisition#299","ref":"data-acquisition#299","implementer":"Alejandra Reyes-Fuentes","reviewer":"Ivana Horvat","reviewer_2":"Nikolaos Papadopoulos","priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#300","ref":"data-acquisition#300","implementer":"Alejandra Reyes-Fuentes","reviewer":"Oyunbileg Batbayar","reviewer_2":"Kavitha Sundaramurthy","priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#301","ref":"data-acquisition#301","implementer":"Alejandra Reyes-Fuentes","reviewer":"Jean-Claude Habimana","reviewer_2":"Ivana Horvat","priority":"tech-debt"},{"id":"noorinalabs-data-acquisition#380","ref":"data-acquisition#380","implementer":"Kwesi Boateng","reviewer":"Jean-Claude Habimana","reviewer_2":"Oyunbileg Batbayar","priority":"tech-debt"}],"tier_3_data_quality":[{"id":"noorinalabs-data-acquisition#446","ref":"data-acquisition#446","implementer":"Oyunbileg Batbayar","reviewer":"Kavitha Sundaramurthy","reviewer_2":"Kwesi Boateng","priority":"data-quality"}],"td_intake":{"target":1,"selected":0,"pool":47,"note":"Formula target is a computed artifact, not a judgement: 9 of the wave's own 12 issues are already tech-debt labeled, so the non-TD base collapses to 3 and ceil(0.20*3)=1. The intake rule's purpose (steady debt attention) is already over-satisfied at 75% TD content. Owner decision 2026-07-20: take 0 additional TD into wave-26; the five #1038-residue follow-ups (#1039/#1042/#1044/#1045 plus the newly-filed #1047) go to wave-27, and #1046 is handled pre-kickoff as wave infrastructure rather than wave scope."},"deliberately_not_in_w26":[{"ref":"main#1046","reason":"pre-kickoff infrastructure fix — the review-state driver every wave-26 PR depends on; fixed before kickoff so the whole wave runs on a correct gate"},{"ref":"main#1039","reason":"deferred to wave-27 — ontology-tracker hygiene, off-theme for a data-acquisition wave"},{"ref":"main#1042","reason":"deferred to wave-27"},{"ref":"main#1044","reason":"deferred to wave-27 — honours Nino Kavtaradze's conditional acceptance on the #1038 ensure_ascii fix"},{"ref":"main#1045","reason":"deferred to wave-27"},{"ref":"main#1047","reason":"deferred to wave-27 — premise_check false-STOP; filed during this scope run"},{"ref":"data-acquisition#443","reason":"deferred to wave-27 at the wave-25 retro"}],"concentration":{"implementer_load":{"Alejandra Reyes-Fuentes":3,"Nikolaos Papadopoulos":2,"Kavitha Sundaramurthy":2,"Ivana Horvat":2,"Jean-Claude Habimana":1,"Kwesi Boateng":1,"Oyunbileg Batbayar":1},"top_concentration_pct":25,"note":"Top load 3/12 = 25%, down from wave-25's 43%. Ceiling is 5."},"premise_check":{"verdict":"cleared manually","stopped":12,"genuine_rot":0,"note":"premise_check.py STOPped 12/12 on prose fragments containing '/'. All 12 verified false positives by hand; every token that was genuinely a path resolved OK. Root cause filed as main#1047."}},
+  "wave_26_repos_in_scope": [
+    "noorinalabs-main",
+    "noorinalabs-data-acquisition"
+  ],
+  "wave_26_scope": {
+    "theme": "Parse recovery & name quality",
+    "phase": 9,
+    "tier_1_parse_recovery": [
+      {
+        "id": "noorinalabs-data-acquisition#373",
+        "ref": "data-acquisition#373",
+        "implementer": "Jean-Claude Habimana",
+        "reviewer": "Kavitha Sundaramurthy",
+        "reviewer_2": "Alejandra Reyes-Fuentes",
+        "priority": "bug"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#397",
+        "ref": "data-acquisition#397",
+        "implementer": "Nikolaos Papadopoulos",
+        "reviewer": "Jean-Claude Habimana",
+        "reviewer_2": "Alejandra Reyes-Fuentes",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#398",
+        "ref": "data-acquisition#398",
+        "implementer": "Nikolaos Papadopoulos",
+        "reviewer": "Jean-Claude Habimana",
+        "reviewer_2": "Kavitha Sundaramurthy",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#424",
+        "ref": "data-acquisition#424",
+        "implementer": "Kavitha Sundaramurthy",
+        "reviewer": "Nikolaos Papadopoulos",
+        "reviewer_2": "Oyunbileg Batbayar",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#427",
+        "ref": "data-acquisition#427",
+        "implementer": "Kavitha Sundaramurthy",
+        "reviewer": "Ivana Horvat",
+        "reviewer_2": "Alejandra Reyes-Fuentes",
+        "priority": "tech-debt"
+      }
+    ],
+    "tier_2_name_quality": [
+      {
+        "id": "noorinalabs-data-acquisition#295",
+        "ref": "data-acquisition#295",
+        "implementer": "Ivana Horvat",
+        "reviewer": "Kavitha Sundaramurthy",
+        "reviewer_2": "Nikolaos Papadopoulos",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#298",
+        "ref": "data-acquisition#298",
+        "implementer": "Ivana Horvat",
+        "reviewer": "Alejandra Reyes-Fuentes",
+        "reviewer_2": "Kwesi Boateng",
+        "priority": "enhancement"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#299",
+        "ref": "data-acquisition#299",
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Ivana Horvat",
+        "reviewer_2": "Nikolaos Papadopoulos",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#300",
+        "ref": "data-acquisition#300",
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Oyunbileg Batbayar",
+        "reviewer_2": "Kavitha Sundaramurthy",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#301",
+        "ref": "data-acquisition#301",
+        "implementer": "Alejandra Reyes-Fuentes",
+        "reviewer": "Jean-Claude Habimana",
+        "reviewer_2": "Ivana Horvat",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-data-acquisition#380",
+        "ref": "data-acquisition#380",
+        "implementer": "Kwesi Boateng",
+        "reviewer": "Jean-Claude Habimana",
+        "reviewer_2": "Oyunbileg Batbayar",
+        "priority": "tech-debt"
+      }
+    ],
+    "tier_3_data_quality": [
+      {
+        "id": "noorinalabs-data-acquisition#446",
+        "ref": "data-acquisition#446",
+        "implementer": "Oyunbileg Batbayar",
+        "reviewer": "Kavitha Sundaramurthy",
+        "reviewer_2": "Kwesi Boateng",
+        "priority": "data-quality"
+      }
+    ],
+    "td_intake": {
+      "target": 1,
+      "selected": 0,
+      "pool": 47,
+      "note": "Formula target is a computed artifact, not a judgement: 9 of the wave's own 12 issues are already tech-debt labeled, so the non-TD base collapses to 3 and ceil(0.20*3)=1. The intake rule's purpose (steady debt attention) is already over-satisfied at 75% TD content. Owner decision 2026-07-20: take 0 additional TD into wave-26; the five #1038-residue follow-ups (#1039/#1042/#1044/#1045 plus the newly-filed #1047) go to wave-27, and #1046 is handled pre-kickoff as wave infrastructure rather than wave scope."
+    },
+    "deliberately_not_in_w26": [
+      {
+        "ref": "main#1046",
+        "reason": "pre-kickoff infrastructure fix — the review-state driver every wave-26 PR depends on; fixed before kickoff so the whole wave runs on a correct gate"
+      },
+      {
+        "ref": "main#1039",
+        "reason": "deferred to wave-27 — ontology-tracker hygiene, off-theme for a data-acquisition wave"
+      },
+      {
+        "ref": "main#1042",
+        "reason": "deferred to wave-27"
+      },
+      {
+        "ref": "main#1044",
+        "reason": "deferred to wave-27 — honours Nino Kavtaradze's conditional acceptance on the #1038 ensure_ascii fix"
+      },
+      {
+        "ref": "main#1045",
+        "reason": "deferred to wave-27"
+      },
+      {
+        "ref": "main#1047",
+        "reason": "deferred to wave-27 — premise_check false-STOP; filed during this scope run"
+      },
+      {
+        "ref": "data-acquisition#443",
+        "reason": "deferred to wave-27 at the wave-25 retro"
+      }
+    ],
+    "concentration": {
+      "implementer_load": {
+        "Alejandra Reyes-Fuentes": 3,
+        "Nikolaos Papadopoulos": 2,
+        "Kavitha Sundaramurthy": 2,
+        "Ivana Horvat": 2,
+        "Jean-Claude Habimana": 1,
+        "Kwesi Boateng": 1,
+        "Oyunbileg Batbayar": 1
+      },
+      "top_concentration_pct": 25,
+      "note": "Top load 3/12 = 25%, down from wave-25's 43%. Ceiling is 5."
+    },
+    "premise_check": {
+      "verdict": "cleared manually",
+      "stopped": 12,
+      "genuine_rot": 0,
+      "note": "premise_check.py STOPped 12/12 on prose fragments containing '/'. All 12 verified false positives by hand; every token that was genuinely a path resolved OK. Root cause filed as main#1047."
+    },
+    "tier_4_main_retro": [
+      {
+        "id": "noorinalabs-main#984",
+        "ref": "main#984",
+        "implementer": "Aino Virtanen",
+        "reviewer": "Nadia Khoury",
+        "reviewer_2": "Nino Kavtaradze",
+        "priority": "tech-debt"
+      },
+      {
+        "id": "noorinalabs-main#985",
+        "ref": "main#985",
+        "implementer": "Nino Kavtaradze",
+        "reviewer": "Aino Virtanen",
+        "reviewer_2": "Lucas Ferreira",
+        "priority": "bug"
+      }
+    ]
+  },
   "wave_26_scope_reconciliation_note": "Drift 0 — 12 labeled issues matched the meta-issue candidate scope exactly. No dispositions required. Premise-rot gate STOPped 12/12 on prose false-positives (root cause filed main#1047); all cleared by hand, 0 genuine rot. TD intake 0/1 by owner decision (wave is already 75% tech-debt content). Scope run 2026-07-20.",
   "wave_25_meta_issue": "noorinalabs-main#980",
   "wave_25_phase": 9,
@@ -110,60 +292,86 @@
   "wave_25_merge_model": "wave-branch",
   "wave_25_active": false,
   "wave_25_kicked_off_at": "2026-07-18T21:11:08Z",
-  "wave_25_premise_rot": {"found_by":"Alejandra (investigate-first) 2026-07-18","cause":"wave-25 branch cut from da main AFTER sibling fixes landed; wave-scope Step 6.5 premise-check was deferred","pre_resolved":{"data-acquisition#248":"CLOSED — resolved by da#250 (chain_integrity gate/metric split, 97f0bcd on-branch); analysis says do-not-fix-as-filed","data-acquisition#352":"acceptance met by merged siblings — query excludes biographical_only (1edccfe/da#370), pipeline causes da#365/#368/#282 closed; residual da#366 is Wave-26; being closed with synthesis comment"},"active_scope_now":["da#347","da#431","da#439","da#346","da#444"],"active_count":5},
-  "wave_25_pulled_forward": {"data-acquisition#366":{"from":"wave-26","implementer":"Alejandra Reyes-Fuentes","reviewers":["Ivana Horvat","Jean-Claude Habimana"],"prior_assignee":"Jean-Claude Habimana","rationale":"owner-directed 2026-07-18; residual of da#352 which Alejandra just mapped; both W25+W26 precede cutover so ordering intact"}},
+  "wave_25_premise_rot": {
+    "found_by": "Alejandra (investigate-first) 2026-07-18",
+    "cause": "wave-25 branch cut from da main AFTER sibling fixes landed; wave-scope Step 6.5 premise-check was deferred",
+    "pre_resolved": {
+      "data-acquisition#248": "CLOSED — resolved by da#250 (chain_integrity gate/metric split, 97f0bcd on-branch); analysis says do-not-fix-as-filed",
+      "data-acquisition#352": "acceptance met by merged siblings — query excludes biographical_only (1edccfe/da#370), pipeline causes da#365/#368/#282 closed; residual da#366 is Wave-26; being closed with synthesis comment"
+    },
+    "active_scope_now": [
+      "da#347",
+      "da#431",
+      "da#439",
+      "da#346",
+      "da#444"
+    ],
+    "active_count": 5
+  },
+  "wave_25_pulled_forward": {
+    "data-acquisition#366": {
+      "from": "wave-26",
+      "implementer": "Alejandra Reyes-Fuentes",
+      "reviewers": [
+        "Ivana Horvat",
+        "Jean-Claude Habimana"
+      ],
+      "prior_assignee": "Jean-Claude Habimana",
+      "rationale": "owner-directed 2026-07-18; residual of da#352 which Alejandra just mapped; both W25+W26 precede cutover so ordering intact"
+    }
+  },
   "wave_25_final_pr_count": 7,
   "wave_25_changes_requested_cycles": 0,
   "wave_25_top_concentration_pct": 43,
   "wave_25_trust_signals": {
-  "Alejandra Reyes-Fuentes": {
-    "authored_prs": [
-      456
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
+    "Alejandra Reyes-Fuentes": {
+      "authored_prs": [
+        456
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Ivana Horvat": {
+      "authored_prs": [
+        459,
+        455
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 2,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Kavitha Sundaramurthy": {
+      "authored_prs": [
+        458,
+        451,
+        449
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 3,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    },
+    "Nikolaos Papadopoulos": {
+      "authored_prs": [
+        450
+      ],
+      "ci_red_merges": 0,
+      "must_fix_caught": 0,
+      "must_fix_received": 0,
+      "prs_merged": 1,
+      "review_false_positives": 0,
+      "rework_cycles": 0
+    }
   },
-  "Ivana Horvat": {
-    "authored_prs": [
-      459,
-      455
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 2,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Kavitha Sundaramurthy": {
-    "authored_prs": [
-      458,
-      451,
-      449
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 3,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  },
-  "Nikolaos Papadopoulos": {
-    "authored_prs": [
-      450
-    ],
-    "ci_red_merges": 0,
-    "must_fix_caught": 0,
-    "must_fix_received": 0,
-    "prs_merged": 1,
-    "review_false_positives": 0,
-    "rework_cycles": 0
-  }
-},
   "wave_25_stg_promotion": "success",
   "wave_25_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/29309875152",
   "wave_25_completed_at": "2026-07-19T01:29:00Z",
@@ -4880,8 +5088,8 @@
     },
     "mirror_of": ".claude/team/phases/phase-3.md § Sweep-wave reservation (W12, possibly W13)"
   },
-  "wave_active": false,
-  "current_wave": "wave-25",
+  "wave_active": true,
+  "current_wave": "wave-26",
   "wave_5_active": false,
   "wave_5_kicked_off_at": "2026-06-16T23:12:45Z",
   "wave_5_final_pr_count": 45,
@@ -4892,7 +5100,7 @@
   "wave_5_wrapped_up_at": "2026-06-20T00:21:27Z",
   "wave_5_annunaki_attack_ran_at": "2026-06-20T00:26:39Z",
   "wave_5_memory_audit_ran_at": "2026-06-20T00:26:39Z",
-  "next_wave": "wave-26",
+  "next_wave": "wave-27",
   "wave_started": "2026-06-23T00:21:35Z",
   "last_completed_wave": "wave-25",
   "last_completed_at": "2026-06-23T18:30:06Z",
@@ -5963,5 +6171,132 @@
   "wave_19_deployable_verified": true,
   "wave_19_reachability": "all-reachable",
   "wave_19_annunaki_attack_ran_at": "2026-06-25T21:45:00Z",
-  "wave_19_memory_audit_ran_at": "2026-06-25T21:45:00Z"
+  "wave_19_memory_audit_ran_at": "2026-06-25T21:45:00Z",
+  "wave_26_active": true,
+  "wave_26_kicked_off_at": "2026-07-20T16:57:17Z",
+  "wave_26_merge_model": "wave-branch",
+  "wave_26_branches": {
+    "branch": "deployments/phase-9/wave-26",
+    "created_at": "2026-07-20T16:57:17Z",
+    "repos": {
+      "noorinalabs-main": {
+        "sha": "3d8140ef34be9b290523d882000ff75179e147b0",
+        "status": "created"
+      },
+      "noorinalabs-data-acquisition": {
+        "sha": "122c7b91c57f4bace952efe054f44245bc9ff2ad",
+        "status": "created"
+      }
+    }
+  },
+  "wave_26_final_pr_count": 15,
+  "wave_26_changes_requested_cycles": 5,
+  "wave_26_top_concentration_pct": 20,
+  "wave_26_trust_signals": {
+  "Aino Virtanen": {
+    "authored_prs": [
+      1061
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Alejandra Reyes-Fuentes": {
+    "authored_prs": [
+      470,
+      468,
+      466
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 1,
+    "must_fix_received": 1,
+    "prs_merged": 3,
+    "review_false_positives": 0,
+    "rework_cycles": 1
+  },
+  "Ivana Horvat": {
+    "authored_prs": [
+      469,
+      465
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 2,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Jean-Claude Habimana": {
+    "authored_prs": [
+      462
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 2,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 1
+  },
+  "Kavitha Sundaramurthy": {
+    "authored_prs": [
+      479,
+      476,
+      474
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 1,
+    "must_fix_received": 2,
+    "prs_merged": 3,
+    "review_false_positives": 0,
+    "rework_cycles": 2
+  },
+  "Kwesi Boateng": {
+    "authored_prs": [
+      463
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Nikolaos Papadopoulos": {
+    "authored_prs": [
+      473,
+      472
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 2,
+    "must_fix_received": 0,
+    "prs_merged": 2,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Nino Kavtaradze": {
+    "authored_prs": [
+      1059
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Oyunbileg Batbayar": {
+    "authored_prs": [
+      461
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 1,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  }
+}
 }
