@@ -118,6 +118,10 @@ class _CheckCommentReviewsHarness(unittest.TestCase):
                 _CheckCommentReviewsHarness.PR_NUMBER,
                 branch_author,
                 repo=repo,
+                # content_ts is a REQUIRED keyword-only arg (#1050); None is the
+                # explicit "no content binding" value these ~30 pre-#950 callers
+                # exercise (every verdict counted unconditionally).
+                content_ts=None,
             )
 
     @staticmethod
@@ -485,6 +489,55 @@ class LatestVerdictSupersedesTests(_CheckCommentReviewsHarness):
         )
         self.assertIn("nino kavtaradze", result.reviewers)
         self.assertEqual(len(result.stale_verdicts), 1)
+
+
+class ContentTsRequiredTests(unittest.TestCase):
+    """Issue #1050: `content_ts` must be a REQUIRED argument on both shared
+    gate helpers, not a defaulted one.
+
+    #1046 happened because a defaulted `content_ts` let a caller omit it and
+    silently get staleness-filtering OFF rather than an error. This class
+    proves the fix at the signature level: calling either function WITHOUT
+    `content_ts` must now raise `TypeError` at call time — the omission
+    becomes loud instead of a silent fail-open. These tests would RED against
+    the pre-#1050 signatures (which default `content_ts` to `None`).
+    """
+
+    def test_check_comment_reviews_without_content_ts_raises_type_error(self):
+        with self.assertRaises(TypeError):
+            hook.check_comment_reviews(451, "pham", repo="noorinalabs/x")  # missing content_ts
+
+    def test_partition_formal_reviewers_without_content_ts_raises_type_error(self):
+        with self.assertRaises(TypeError):
+            hook.partition_formal_reviewers([], "someone")  # missing content_ts
+
+    def test_check_comment_reviews_still_accepts_explicit_none(self):
+        """`content_ts=None` remains a legitimate VALUE — only omission is barred."""
+        with mock.patch.object(
+            hook.subprocess,
+            "run",
+            side_effect=lambda args, capture_output, text, timeout: mock.MagicMock(
+                returncode=0, stdout="[]"
+            ),
+        ):
+            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x", content_ts=None)
+        self.assertEqual(result.undetermined, "")
+
+    def test_partition_formal_reviewers_still_accepts_explicit_none(self):
+        formal, stale = hook.partition_formal_reviewers(
+            [{"author": {"login": "reviewer-a"}, "state": "APPROVED"}],
+            "author-login",
+            None,
+        )
+        self.assertEqual(formal, {"reviewer-a"})
+        self.assertEqual(stale, [])
+
+    def test_check_comment_reviews_repo_is_keyword_only(self):
+        """`repo` moved keyword-only alongside `content_ts` (#1050) — a
+        positional third argument must now raise TypeError rather than
+        silently binding to `repo`."""
+        with self.assertRaises(TypeError):
+            hook.check_comment_reviews(451, "pham", "noorinalabs/x")  # repo positional
 
 
 class ExtractBranchAuthorLastnameTests(unittest.TestCase):
@@ -1014,7 +1067,9 @@ class CommentPaginationTests(_CheckCommentReviewsHarness):
             return result
 
         with mock.patch.object(hook.subprocess, "run", side_effect=fake_run):
-            hook.check_comment_reviews(self.PR_NUMBER, self.BRANCH_AUTHOR, repo=self.REPO)
+            hook.check_comment_reviews(
+                self.PR_NUMBER, self.BRANCH_AUTHOR, repo=self.REPO, content_ts=None
+            )
 
         gh_api_calls = [a for a in captured_args if a[0] == "gh" and a[1] == "api"]
         self.assertEqual(len(gh_api_calls), 1, "exactly one gh api call expected")
@@ -3109,7 +3164,7 @@ class IncompleteCommentScanFailsClosedTests(_NoContentBindingHarness):
     def test_clean_scan_leaves_undetermined_empty(self):
         """The negative match — a successful empty scan must NOT be flagged."""
         with mock.patch.object(hook.subprocess, "run", side_effect=self._fake_run()):
-            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x")
+            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x", content_ts=None)
         self.assertEqual(result.undetermined, "")
         self.assertEqual(result.reviewers, set())
 
@@ -3119,7 +3174,7 @@ class IncompleteCommentScanFailsClosedTests(_NoContentBindingHarness):
             "run",
             side_effect=self._fake_run(returncode=1, stdout="", stderr="HTTP 403: Forbidden"),
         ):
-            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x")
+            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x", content_ts=None)
         self.assertTrue(result.undetermined)
         self.assertIn("403", result.undetermined)
 
@@ -3127,19 +3182,19 @@ class IncompleteCommentScanFailsClosedTests(_NoContentBindingHarness):
         with mock.patch.object(
             hook.subprocess, "run", side_effect=hook.subprocess.TimeoutExpired("gh", 30)
         ):
-            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x")
+            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x", content_ts=None)
         self.assertIn("TimeoutExpired", result.undetermined)
 
     def test_unparseable_json_sets_undetermined(self):
         with mock.patch.object(
             hook.subprocess, "run", side_effect=self._fake_run(stdout="not json")
         ):
-            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x")
+            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x", content_ts=None)
         self.assertIn("JSONDecodeError", result.undetermined)
 
     def test_unresolvable_owner_repo_sets_undetermined(self):
         with mock.patch.object(hook, "_resolve_owner_repo", return_value=None):
-            result = hook.check_comment_reviews(451, "pham", repo=None)
+            result = hook.check_comment_reviews(451, "pham", repo=None, content_ts=None)
         self.assertIn("could not resolve the target repository", result.undetermined)
 
     def test_check_hard_blocks_on_an_incomplete_scan(self):

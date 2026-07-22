@@ -890,8 +890,9 @@ def _name_lastname(full_name: str) -> str:
 def check_comment_reviews(
     pr_number: str | int,
     branch_author_lastname: str,
+    *,
     repo: str | None = None,
-    content_ts: datetime | None = None,
+    content_ts: datetime | None,
 ) -> CommentReviewResult:
     """Check PR comments for charter-format review comments from different authors.
 
@@ -920,10 +921,15 @@ def check_comment_reviews(
     secondary attestation either. A verdict whose own `created_at` is missing or
     unparseable is treated as STALE, not fresh (fail closed).
 
-    `content_ts=None` means "no content binding" — either the PR has no non-merge
-    commits, or the caller is a legacy/unit call — and every verdict is counted
-    as before. `check()` never passes None on a real merge: a commit-fetch
-    failure raises `CommitFetchError` and hard-blocks upstream of this call.
+    `content_ts` is a REQUIRED keyword-only argument (#1050) — it must be
+    passed explicitly on every call, though `None` remains a legitimate
+    VALUE meaning "no content binding" (either the PR has no non-merge
+    commits, or a caller intentionally wants every verdict counted
+    unconditionally). Making it required converts an omitted argument from a
+    silent fail-open (the #1046 shape: staleness-filtering silently OFF) into
+    a loud `TypeError` at call time. `check()` never passes `None` on a real
+    merge: a commit-fetch failure raises `CommitFetchError` and hard-blocks
+    upstream of this call.
     """
     result = CommentReviewResult()
     # Reviewer -> most recent (chronologically-last) CURRENT RequestOrReplied
@@ -1046,7 +1052,7 @@ def check_comment_reviews(
 def partition_formal_reviewers(
     reviews: list[dict],
     author: str,
-    content_ts: datetime | None = None,
+    content_ts: datetime | None,
 ) -> tuple[set[str], list[StaleVerdict]]:
     """Split formal GitHub reviews into CURRENT reviewers and STALE verdicts (#950).
 
@@ -1062,8 +1068,12 @@ def partition_formal_reviewers(
     dropped entirely — they are not evidence and not staleness.
 
     `submittedAt` missing or unparseable while `content_ts` is known ⇒ STALE,
-    not fresh (fail closed). `content_ts=None` means "no content binding" and
-    every non-author review counts, as before the content binding existed.
+    not fresh (fail closed). `content_ts` is a REQUIRED positional argument
+    (#1050) — every caller must pass it explicitly, though `None` remains a
+    legitimate VALUE meaning "no content binding" (every non-author review
+    counts, as before the content binding existed). Requiring it converts an
+    omitted argument from a silent fail-open (the #1046 shape) into a loud
+    `TypeError` at call time.
 
     This function is the SHARED implementation for `check()` (Hook 4) and
     `.claude/lib/pr_review_state.py` (the #707 ahead-of-time driver). Both must
