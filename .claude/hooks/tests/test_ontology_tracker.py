@@ -331,6 +331,22 @@ class ShouldSkipSessionHandoffTests(_FakeRepoRootMixin, unittest.TestCase):
         path = str(self._fake_root / ".claude" / "memory" / "section_ci_tooling.md")
         self.assertFalse(hook._should_skip(path))
 
+    def test_skip_does_not_widen_to_bare_memory_prefix(self):
+        """#1045: pin the last unkilled widening direction on the handoff pattern.
+
+        Mutation testing at ``ac8bcfa`` (PR #1040 merge-gate re-confirm) found
+        four of five string-truncation directions on the
+        ``".claude/memory/session_handoff.md"`` entry already killed by the
+        tests above, but widening it on the LEFT — dropping the ``.claude/``
+        anchor down to ``"memory/session_handoff.md"`` — survived all 31
+        tests. A path like ``docs/memory/session_handoff.md`` has no
+        ``.claude/`` component, so it must NOT be skipped; if the pattern is
+        ever mutated to drop that anchor, this is the only assertion that
+        dies.
+        """
+        anchored = str(self._fake_root / "docs" / "memory" / "session_handoff.md")
+        self.assertFalse(hook._should_skip(anchored))
+
 
 class ChecksumsSerializationTests(_FakeRepoRootMixin, unittest.TestCase):
     """#1038: the tracker must not re-escape literal UTF-8 on every write.
