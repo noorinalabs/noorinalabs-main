@@ -195,6 +195,62 @@ class ComputeReviewStateTests(unittest.TestCase):
             with self.assertRaises(prs.ReviewStateError):
                 prs.compute_review_state("707", repo="noorinalabs/noorinalabs-main")
 
+    def test_delegates_to_the_shared_resolve_review_verdicts_entry_point(self):
+        """#1048: `compute_review_state` must call `gate.resolve_review_verdicts`
+        and use its output DIRECTLY rather than reassembling the
+        content-binding / comment-scan / roster-filter / union pipeline
+        inline — the concrete guard for #1048's acceptance criterion
+        ('neither check() nor compute_review_state re-derives the verdict
+        set'). A fake `ReviewVerdicts` drives the whole result.
+        """
+        fake_verdicts = prs.gate.ReviewVerdicts(
+            number="707",
+            head_ref="S.Ferreira/0707-pr-review-state",
+            labels=[],
+            branch_author_lastname="Ferreira",
+            content_sha="ac8bcfa",
+            content_ts=_NOW,
+            formal_reviewers=set(),
+            comment_reviewers={"aino virtanen", "nadia khoury"},
+            non_roster_requestors=set(),
+            roster_comment_reviewers={"aino virtanen", "nadia khoury"},
+            roster_names={"aino virtanen", "nadia khoury"},
+            distinct_reviewers={"aino virtanen", "nadia khoury"},
+            stale_verdicts_comment=[],
+            stale_verdicts_formal=[],
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=["808"],
+            wave_bootstrap_exception=False,
+        )
+        with (
+            mock.patch.object(prs.gate, "get_pr_data", return_value=_pr_data()),
+            mock.patch.object(
+                prs.gate, "resolve_review_verdicts", return_value=fake_verdicts
+            ) as mock_resolve,
+        ):
+            state = prs.compute_review_state("707", repo="noorinalabs/noorinalabs-main")
+
+        mock_resolve.assert_called_once()
+        self.assertEqual(state.distinct_reviewer_count, 2)
+        self.assertEqual(state.tech_debt_issue_numbers, ["808"])
+        self.assertTrue(state.passes())
+
+    def test_comment_scan_undetermined_raises_review_state_error(self):
+        """`CommentScanUndeterminedError` from the shared boundary must reach
+        this driver's own `ReviewStateError` (exit 2) — proving the
+        exception, not a re-derived `undetermined` flag, is what drives it."""
+        with (
+            mock.patch.object(prs.gate, "get_pr_data", return_value=_pr_data()),
+            mock.patch.object(
+                prs.gate,
+                "resolve_review_verdicts",
+                side_effect=prs.gate.CommentScanUndeterminedError("HTTP 403: Forbidden"),
+            ),
+        ):
+            with self.assertRaises(prs.ReviewStateError) as ctx:
+                prs.compute_review_state("707", repo="noorinalabs/noorinalabs-main")
+        self.assertIn("HTTP 403: Forbidden", str(ctx.exception))
+
 
 # ---------------------------------------------------------------------------
 # #1046 — content-staleness binding
