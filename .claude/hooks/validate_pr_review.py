@@ -823,6 +823,12 @@ class CommentReviewResult:
         self.reviewers: set[str] = set()
         self.reviews_missing_tech_debt: list[str] = []  # reviewer names missing TechDebt line
         self.tech_debt_issue_numbers: list[str] = []  # issue numbers from TechDebt: lines
+        # (requestor, raw td_value) pairs where TechDebt: was present, non-"none",
+        # and yielded ZERO parsed issue numbers (main#1055) — e.g. free text like
+        # "filed later" or "TBD". Distinct from `reviews_missing_tech_debt` (the
+        # line was present) — this is "present but uncaptured," which used to be
+        # silently indistinguishable from "no tech debt" (`TechDebt: none`).
+        self.tech_debt_unparseable: list[tuple[str, str]] = []
         self.stale_verdicts: list[StaleVerdict] = []  # verdicts predating T_content (#950)
         self.undetermined: str = ""  # non-empty ⇒ scan incomplete, caller must fail closed
 
@@ -1026,9 +1032,19 @@ def check_comment_reviews(
                 else:
                     td_value = has_tech_debt.group(1).strip().strip("*").strip()
                     if td_value.lower() != "none":
-                        # Extract issue numbers (#15, #16, etc.)
-                        issue_nums = re.findall(r"#(\d+)", td_value)
-                        result.tech_debt_issue_numbers.extend(issue_nums)
+                        # Extract issue numbers. `#?` accepts BOTH the canonical
+                        # `#15, #16` form and a bare `15, 16` (main#1055: a bare
+                        # number previously matched nothing here — present but
+                        # zero captured refs, silently). A value that is neither
+                        # "none" nor yields any number (free text like "filed
+                        # later") is recorded in `tech_debt_unparseable` instead
+                        # of vanishing — the residual case must be observable,
+                        # not just less likely.
+                        issue_nums = re.findall(r"#?(\d+)", td_value)
+                        if issue_nums:
+                            result.tech_debt_issue_numbers.extend(issue_nums)
+                        else:
+                            result.tech_debt_unparseable.append((requestor, td_value))
 
         # A reviewer counts toward the threshold only if their LATEST verdict
         # is Approved (#940) — a reviewer whose latest verdict is
@@ -1342,6 +1358,13 @@ class ReviewVerdicts:
     stale_verdicts_formal: list[StaleVerdict]
     reviews_missing_tech_debt: list[str]
     tech_debt_issue_numbers: list[str]
+    # (requestor, raw td_value) pairs where TechDebt: was present, non-"none",
+    # but parsed to ZERO issue numbers (main#1055) — carried on the shared
+    # pipeline output so BOTH callers (check()'s advisory systemMessage and the
+    # driver's report) see the same "present but uncaptured" set instead of it
+    # vanishing between "missing" and "filed". Non-blocking: never an input to
+    # a merge decision, only surfaced.
+    tech_debt_unparseable: list[tuple[str, str]]
     wave_bootstrap_exception: bool
 
     @property
@@ -1438,6 +1461,7 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
         stale_verdicts_formal=list(stale_formal),
         reviews_missing_tech_debt=list(comment_result.reviews_missing_tech_debt),
         tech_debt_issue_numbers=list(comment_result.tech_debt_issue_numbers),
+        tech_debt_unparseable=list(comment_result.tech_debt_unparseable),
         wave_bootstrap_exception=wave_bootstrap_exception,
     )
 
@@ -1857,6 +1881,24 @@ def check(input_data: dict) -> dict | None:
                 pass
         if board_repo_name:
             ensure_issues_on_board(board_repo_name, td_issues)
+
+    # Non-blocking observability (main#1055): a TechDebt line that is present,
+    # not "none", but parsed to ZERO issue numbers used to vanish silently —
+    # neither flagged as missing nor recorded as filed. Surface it as an
+    # advisory `systemMessage` so the gap is visible without blocking merge.
+    unparseable = verdicts.tech_debt_unparseable
+    if unparseable:
+        detail = "; ".join(f"{name}: {value!r}" for name, value in unparseable)
+        return {
+            "decision": "allow",
+            "systemMessage": (
+                f"NOTE: PR {pr_display} has {len(unparseable)} verdict(s) with a "
+                "TechDebt line present but not parseable as issue reference(s) — "
+                f"recorded as ZERO tech-debt refs, not blocked: {detail}. Charter "
+                "format: `TechDebt: none` or `TechDebt: #15, #16` (a bare `15, 16` "
+                "is also accepted); free text is not."
+            ),
+        }
 
     return None
 

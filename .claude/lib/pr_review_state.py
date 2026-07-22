@@ -100,6 +100,10 @@ class ReviewState:
     wave_bootstrap_exception: bool
     reviews_missing_tech_debt: list[str]
     tech_debt_issue_numbers: list[str]
+    # (requestor, raw td_value) pairs where TechDebt: was present, non-"none",
+    # but parsed to ZERO issue numbers (main#1055) — recorded so this driver
+    # cannot silently drop what the gate itself now surfaces as an advisory.
+    tech_debt_unparseable: list[tuple[str, str]] = dataclasses.field(default_factory=list)
     # Content binding (#950/#1046). `content_sha` / `content_ts` describe
     # T_content — the branch's latest NON-MERGE commit, the line a verdict must
     # sit at or after to count. Empty/None means the PR has no non-merge commits,
@@ -242,6 +246,7 @@ def compute_review_state(pr_number: str, repo: str | None = None) -> ReviewState
         wave_bootstrap_exception=verdicts.wave_bootstrap_exception,
         reviews_missing_tech_debt=list(verdicts.reviews_missing_tech_debt),
         tech_debt_issue_numbers=list(verdicts.tech_debt_issue_numbers),
+        tech_debt_unparseable=list(verdicts.tech_debt_unparseable),
         content_sha=verdicts.content_sha,
         content_ts=verdicts.content_ts.isoformat() if verdicts.content_ts else None,
         stale_verdicts=stale_verdicts,
@@ -319,6 +324,14 @@ def _render_text(state: ReviewState) -> str:
         )
     else:
         lines.append("  TechDebt issue numbers: none")
+
+    if state.tech_debt_unparseable:
+        lines.append(
+            "  TechDebt present but UNPARSEABLE (zero refs captured — main#1055): "
+            + "; ".join(f"{name}: {value!r}" for name, value in state.tech_debt_unparseable)
+        )
+    else:
+        lines.append("  TechDebt unparseable values: none")
 
     return "\n".join(lines)
 

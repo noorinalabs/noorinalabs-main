@@ -29,6 +29,7 @@ Or:  ENVIRONMENT=test python3 .claude/hooks/tests/test_validate_pr_review.py
 from __future__ import annotations
 
 import json
+import re
 import sys
 import unittest
 from datetime import datetime
@@ -230,6 +231,81 @@ class TechDebtFilterTests(_CheckCommentReviewsHarness):
         result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
         self.assertEqual(result.reviews_missing_tech_debt, [])
         self.assertEqual(sorted(result.tech_debt_issue_numbers), ["15", "16"])
+
+    def test_approved_with_bare_techdebt_number_captures(self):
+        """main#1055: a bare issue number (no `#`) must still be captured.
+
+        Reproduction — Nino's verdict on PR #1052 wrote `TechDebt: 1054`; the
+        pre-fix regex `#(\\d+)` matched nothing against a value with no `#`.
+        """
+        comments = [
+            self._comment(
+                "Requestor: Nino Kavtaradze\nRequestee: Nadia Khoury\n"
+                "RequestOrReplied: Approved\nTechDebt: 1054"
+            ),
+        ]
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.reviews_missing_tech_debt, [])
+        self.assertEqual(result.tech_debt_issue_numbers, ["1054"])
+        self.assertEqual(result.tech_debt_unparseable, [])
+
+    def test_approved_with_bare_techdebt_number_list_captures(self):
+        comments = [
+            self._comment(
+                "Requestor: Mateo Santos\nRequestee: Linh Pham\n"
+                "RequestOrReplied: Approved\nTechDebt: 1054, 1055"
+            ),
+        ]
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(sorted(result.tech_debt_issue_numbers), ["1054", "1055"])
+        self.assertEqual(result.tech_debt_unparseable, [])
+
+    def test_approved_with_mixed_hash_and_bare_numbers_captures_both(self):
+        comments = [
+            self._comment(
+                "Requestor: Mateo Santos\nRequestee: Linh Pham\n"
+                "RequestOrReplied: Approved\nTechDebt: 1054 and #1055"
+            ),
+        ]
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(sorted(result.tech_debt_issue_numbers), ["1054", "1055"])
+
+    def test_approved_with_junk_techdebt_value_is_reported_not_swallowed(self):
+        """main#1055: free text (neither `none` nor a number) must be RECORDED,
+        not silently dropped — the residual case is the actual bug, not just
+        the strictness of the regex.
+        """
+        comments = [
+            self._comment(
+                "Requestor: Mateo Santos\nRequestee: Linh Pham\n"
+                "RequestOrReplied: Approved\nTechDebt: filed later"
+            ),
+        ]
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.reviews_missing_tech_debt, [])
+        self.assertEqual(result.tech_debt_issue_numbers, [])
+        self.assertEqual(result.tech_debt_unparseable, [("Mateo Santos", "filed later")])
+
+    def test_techdebt_none_is_not_flagged_as_unparseable(self):
+        comments = [
+            self._comment(
+                "Requestor: Mateo Santos\nRequestee: Linh Pham\n"
+                "RequestOrReplied: Approved\nTechDebt: none"
+            ),
+        ]
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.tech_debt_unparseable, [])
+
+    def test_mutation_verify_old_regex_would_drop_bare_number(self):
+        """Pin the exact defect (main#1055): the pre-fix `#(\\d+)` regex
+        captures nothing from a bare number. Proves the new `#?(\\d+)` regex
+        is the actual fix, not incidental — if someone reverts the `#?` to
+        `#`, this assertion demonstrates why that regresses.
+        """
+        old_regex = r"#(\d+)"
+        new_regex = r"#?(\d+)"
+        self.assertEqual(re.findall(old_regex, "1054"), [])
+        self.assertEqual(re.findall(new_regex, "1054"), ["1054"])
 
     def test_pr_821_scenario(self):
         """Exact scenario from issue #147 repro, in canonical #244 format.
@@ -2362,6 +2438,7 @@ class ResolveReviewVerdictsSharedBoundaryTests(unittest.TestCase):
             stale_verdicts_formal=[],
             reviews_missing_tech_debt=[],
             tech_debt_issue_numbers=[],
+            tech_debt_unparseable=[],
             wave_bootstrap_exception=False,
         )
         with (
@@ -2384,6 +2461,60 @@ class ResolveReviewVerdictsSharedBoundaryTests(unittest.TestCase):
 
         mock_resolve.assert_called_once()
         self.assertIsNone(result, "2 distinct current reviewers must ALLOW the merge")
+
+    def test_check_surfaces_unparseable_tech_debt_as_nonblocking_advisory(self):
+        """main#1055 on the #1048 shape: `tech_debt_unparseable` carried on the
+        shared `ReviewVerdicts` must reach `check()`'s advisory path — a merge
+        with 2 distinct reviewers, no missing TechDebt, but an unparseable
+        TechDebt value ALLOWS (never blocks) while surfacing a `systemMessage`.
+        Proves the observability signal rides the new shared structure and does
+        NOT flip the merge decision (it is emitted only after every blocking
+        check has passed).
+        """
+        input_data = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "gh pr merge 1040 --repo noorinalabs/noorinalabs-main"},
+        }
+        fake_verdicts = hook.ReviewVerdicts(
+            number=1040,
+            head_ref="L.Ferreira/1040-x",
+            labels=[],
+            branch_author_lastname="Ferreira",
+            content_sha="ac8bcfa",
+            content_ts=None,
+            formal_reviewers=set(),
+            comment_reviewers={"nino kavtaradze", "weronika zielinska"},
+            non_roster_requestors=set(),
+            roster_comment_reviewers={"nino kavtaradze", "weronika zielinska"},
+            roster_names={"nino kavtaradze", "weronika zielinska"},
+            distinct_reviewers={"nino kavtaradze", "weronika zielinska"},
+            stale_verdicts_comment=[],
+            stale_verdicts_formal=[],
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=[],
+            tech_debt_unparseable=[("Nino Kavtaradze", "filed later")],
+            wave_bootstrap_exception=False,
+        )
+        with (
+            mock.patch.object(
+                hook,
+                "get_pr_data",
+                return_value={
+                    "author": "someone",
+                    "number": 1040,
+                    "reviews": [],
+                    "headRefName": "L.Ferreira/1040-x",
+                    "labels": [],
+                },
+            ),
+            mock.patch.object(hook, "resolve_review_verdicts", return_value=fake_verdicts),
+        ):
+            result = hook.check(input_data)
+
+        self.assertIsNotNone(result, "an unparseable TechDebt value must surface a message")
+        assert result is not None  # narrow type for the asserts below
+        self.assertEqual(result["decision"], "allow", "the advisory must NOT block the merge")
+        self.assertIn("filed later", result["systemMessage"])
 
     def test_check_translates_stale_verdict_error_into_a_block(self):
         """`CommentScanUndeterminedError` from the shared boundary must reach
