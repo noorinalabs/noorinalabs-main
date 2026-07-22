@@ -78,11 +78,17 @@ After processing all dirty files:
 
 ### 4. Update checksums
 
-For each processed file, set `last_resolved = last_tracked` and `resolved_at = now` in `checksums.json`.
+For each processed file, set `last_resolved = last_tracked` and `resolved_at = now` in `checksums.json` — plus any ontology files that were themselves modified during this pass.
 
-Also update checksums for any ontology files that were modified during this pass.
+**Do not hand-roll a `json.dump` call for this (#1042).** Call the shared `mark-resolved` CLI in `.claude/lib/checksums_io.py` instead — it is the SAME read/write path `.claude/hooks/ontology_tracker.py` uses, so the byte-stability contract (`ensure_ascii=False` + trailing newline + atomic tmp-file replace — #1038: the top-level `description` holds literal UTF-8 like `—`/`×`, and a writer that defaults to `ensure_ascii=True` re-escapes it, flip-flopping the file on every touch) is enforced by code on both writers instead of being a convention this skill's prose has to be remembered and followed correctly by whichever agent executes it:
 
-**Serialization (#1038):** when rewriting `checksums.json` programmatically, use `json.dump(data, f, indent=2, ensure_ascii=False)` and a trailing newline — matching the tracker hook (`.claude/hooks/ontology_tracker.py`). The top-level `description` contains literal UTF-8 (`—`, `×`); a writer that defaults to `ensure_ascii=True` re-escapes it and the file flip-flops between escaped and literal on every touch, producing recurring phantom diffs.
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+PYTHONPATH="$REPO_ROOT/.claude/lib" python3 "$REPO_ROOT/.claude/lib/checksums_io.py" \
+  mark-resolved ontology/domain.yaml ontology/services.yaml ontology/conventions.md
+```
+
+Pass every dirty path resolved in this run as a separate argument (a path not present in `checksums.json` is silently skipped, not an error — see `checksums_io.mark_resolved`'s docstring). Use `--checksums <path>` before the path list only if resolving a non-default `checksums.json` location.
 
 ### 5. Report
 
