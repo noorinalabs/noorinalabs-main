@@ -82,10 +82,18 @@ _REPO_FALLBACK_RE = re.compile(r"(?:^|\s)(?:(?:--repo|-R)(?:=|\s+)|-R)(\S+)")
 
 
 def extract_repo(command: str) -> str | None:
-    """Extract the `--repo` / `-R` `OWNER/NAME` value, or None if absent."""
+    """Extract the `--repo` / `-R` `OWNER/NAME` value, or None if absent.
+
+    Last-occurrence wins (main#1060): real `gh`'s `--repo`/`-R` is a
+    single-value pflag `StringVarP`, so a REPEATED flag resolves to its
+    LAST occurrence, not its first — `gh issue edit 1 -R a/b -R c/d` acts on
+    `c/d`. `walk_flag_values` itself stays first-to-last source order (it
+    has other callers that legitimately accumulate a repeatable flag, e.g.
+    `--add-label`); this is the caller-side choice for a single-value flag.
+    """
     tokens = tokenize(command)
     if tokens is None:
-        match = _REPO_FALLBACK_RE.search(command)
-        return match.group(1) if match else None
+        matches = list(_REPO_FALLBACK_RE.finditer(command))
+        return matches[-1].group(1) if matches else None
     values = walk_flag_values(tokens, _REPO_FLAGS)
-    return values[0] if values else None
+    return values[-1] if values else None

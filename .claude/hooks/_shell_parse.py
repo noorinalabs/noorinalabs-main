@@ -92,6 +92,24 @@ Public API
         arrive as a SINGLE shlex token, never preceded by a flag from
         `wanted`.
 
+        gh/cobra semantics hardening (main#1060):
+          - A value-less flag immediately followed by a flag-shaped token
+            (starts with `-`) does NOT consume that token as its value —
+            real gh/cobra errors ("flag needs an argument") rather than
+            silently swallowing the next flag. The flag-shaped token is
+            left for the scan to process in its own right.
+          - A literal `--` token (POSIX end-of-options) stops the scan
+            entirely — everything after it is positional, never a flag,
+            matching real `gh`/cobra behavior.
+          - Repeated occurrences of the same flag are returned in source
+            order (first-to-last); this helper does NOT pick a winner.
+            Callers that need real gh's last-flag-wins semantics for a
+            single-value `StringVarP` flag (e.g. `--repo`/`-R`) must take
+            `values[-1]`; callers accumulating a repeatable flag (e.g.
+            `--add-label`) iterate all of `values` — see
+            `_repo_flag_parse.extract_repo` for the former and
+            `validate_labels.extract_labels` for the latter.
+
     first_flag_value(command, wanted, *, regex_fallback=True) -> str | None
         Convenience wrapper: tokenizes `command` via `tokenize()` and
         returns the first value from `walk_flag_values()`. If tokenize
@@ -538,6 +556,17 @@ def is_gh_subcommand(tokens: list[str], *verbs: str) -> bool:
     return False
 
 
+def _looks_like_flag(tok: str) -> bool:
+    """Return True if `tok` has the surface shape of a flag (`-x` / `--xxx`).
+
+    A bare `-` (the conventional "read from stdin" positional sentinel used
+    by many CLIs, including some `gh`/`git` subcommands) is deliberately
+    NOT treated as a flag — only genuine `-`-prefixed multi-character
+    tokens are (main#1060).
+    """
+    return len(tok) > 1 and tok[0] == "-"
+
+
 def walk_flag_values(tokens: list[str], wanted: set[str]) -> list[str]:
     """Return values for `wanted` flag names, only when they appear as flags.
 
@@ -563,15 +592,37 @@ def walk_flag_values(tokens: list[str], wanted: set[str]) -> list[str]:
 
     Order is preserved: values appear in the order they were encountered
     in the token stream.
+
+    gh/cobra semantics hardening (main#1060):
+
+      - **Value-less flag never eats the next flag.** `-R --add-label X`
+        would have real `gh` error ("flag needs an argument: 'R'"); this
+        helper can't raise, but it must not silently treat `--add-label` as
+        `-R`'s value either (that previously made `repo_short_name_from_...`
+        route on a bogus `repo='--add-label'`, main#1059's motivating case).
+        A token immediately after a `wanted` flag is only consumed as its
+        value when it does NOT itself look like a flag (`-`-prefixed,
+        length > 1 — a bare `-` is the common stdin/positional sentinel,
+        never a flag). When the next token looks like a flag, the current
+        flag yields no value (same as the trailing-flag-with-no-successor
+        case) and the flag-shaped token is left for the next loop
+        iteration to scan on its own.
+      - **`--` (POSIX end-of-options) stops the scan.** Everything after a
+        literal `--` token is positional in real `gh`/cobra, never a flag —
+        continuing to scan past it let `-- --repo X` resolve `--repo` as if
+        it were still in flag position.
     """
     values: list[str] = []
     i = 0
     n = len(tokens)
     while i < n:
         tok = tokens[i]
+        if tok == "--":
+            break
         if tok in wanted:
-            if i + 1 < n:
-                values.append(tokens[i + 1])
+            nxt = tokens[i + 1] if i + 1 < n else None
+            if nxt is not None and not _looks_like_flag(nxt):
+                values.append(nxt)
                 i += 2
                 continue
             i += 1
@@ -607,7 +658,7 @@ def walk_flag_values(tokens: list[str], wanted: set[str]) -> list[str]:
 
 
 def first_flag_value(command: str, wanted: set[str], *, regex_fallback: bool = True) -> str | None:
-    """Tokenize `command` and return the first value for any flag in `wanted`.
+    """Tokenize `command` and return the FIRST value for any flag in `wanted`.
 
     Returns None if no wanted flag is present. If shlex tokenization fails
     (malformed quotes) and `regex_fallback=True` (default), falls back to a
@@ -615,6 +666,18 @@ def first_flag_value(command: str, wanted: set[str], *, regex_fallback: bool = T
     `--repo` is preferred over a hypothetical shorter prefix collision.
     With `regex_fallback=False`, returns None on tokenize failure (the
     fail-closed shape used by security-critical matchers).
+
+    First-wins is this function's deliberate, pinned contract (see
+    `test_returns_first_value`) — its only current callers
+    (`validate_branch_freshness.extract_base`/`extract_head`) are an
+    advisory freshness gate, not a fail-closed/fail-open routing decision,
+    so a repeated `--base`/`--head` picking the first occurrence is not the
+    main#1060 hazard class. main#1060 instead scoped the last-flag-wins fix
+    to the DIRECT `walk_flag_values` callers that resolve `--repo`/`-R` for
+    authoritative routing (`_repo_flag_parse.extract_repo`,
+    `_wave_label_parse._parse_edit_segment`,
+    `block_squash_wave_merge._iter_squash_merges`) — this function was left
+    alone rather than repurposed for a use case it doesn't have today.
     """
     tokens = tokenize(command)
     if tokens is None:

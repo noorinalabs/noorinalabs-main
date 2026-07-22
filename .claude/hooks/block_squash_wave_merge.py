@@ -83,8 +83,11 @@ def _iter_squash_merges(command):
         pr = next((t for t in rest[2:] if t.isdigit()), None)
         if pr is None:
             continue
+        # Last occurrence wins (main#1060): real gh's `--repo`/`-R` is a
+        # single-value pflag `StringVarP`, so a repeated flag resolves to
+        # its LAST value, not its first.
         repo_vals = walk_flag_values(rest, {"--repo", "-R"})
-        yield pr, (repo_vals[0] if repo_vals else None)
+        yield pr, (repo_vals[-1] if repo_vals else None)
 
 
 def _resolve_base_ref(pr, repo, *, runner=None):
