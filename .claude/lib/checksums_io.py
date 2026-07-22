@@ -34,6 +34,7 @@ file.
 
 from __future__ import annotations
 
+import copy
 import json
 import sys
 from datetime import datetime, timezone
@@ -43,7 +44,10 @@ from typing import Any
 # The empty-file default shape both callers fall back to when the checksums
 # file is missing or unparseable — never raise from a read (the tracker hook
 # must never fail the calling tool call; the resolver CLI degrades the same
-# way for consistency).
+# way for consistency). This is a TEMPLATE, not a shared return value: every
+# fail-open branch returns a `copy.deepcopy(_EMPTY)` so callers that mutate the
+# nested `"files"` dict (e.g. `ontology_tracker.check()` on a missing file)
+# never pollute this module-global.
 _EMPTY: dict[str, Any] = {"version": 1, "files": {}}
 
 
@@ -58,9 +62,9 @@ def read_checksums(path: Path) -> dict[str, Any]:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError):
-        return dict(_EMPTY)
+        return copy.deepcopy(_EMPTY)
     if not isinstance(data, dict):
-        return dict(_EMPTY)
+        return copy.deepcopy(_EMPTY)
     return data
 
 

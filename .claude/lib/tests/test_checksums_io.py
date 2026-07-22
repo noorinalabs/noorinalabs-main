@@ -59,6 +59,30 @@ class ReadChecksumsTests(unittest.TestCase):
             data = checksums_io.read_checksums(path)
         self.assertEqual(data, {"version": 1, "files": {}})
 
+    def test_missing_file_default_does_not_alias_module_global(self) -> None:
+        """The fail-open default must be a FRESH structure each call.
+
+        Regression for the shallow-copy defect: returning ``dict(_EMPTY)`` left
+        the nested ``"files"`` dict aliasing the module-global. A caller that
+        mutates the returned mapping's ``"files"`` (exactly what
+        ``ontology_tracker.check()`` does on a missing checksums file) then
+        polluted the module-global process-wide, so a later ``read_checksums``
+        no longer returned an empty default.
+        """
+        missing = Path("/nonexistent/path/checksums.json")
+        first = checksums_io.read_checksums(missing)
+        first["files"]["polluted.yaml"] = {"last_tracked": "x"}
+        second = checksums_io.read_checksums(missing)
+        self.assertEqual(second, {"version": 1, "files": {}})
+
+    def test_invalid_file_default_does_not_alias_module_global(self) -> None:
+        """Same fresh-structure guarantee on the invalid/parse-failure path."""
+        with _tmp_file("{not valid json") as path:
+            first = checksums_io.read_checksums(path)
+            first["files"]["polluted.yaml"] = {"last_tracked": "x"}
+            second = checksums_io.read_checksums(path)
+        self.assertEqual(second, {"version": 1, "files": {}})
+
 
 class WriteChecksumsTests(unittest.TestCase):
     def test_write_then_read_round_trips(self) -> None:
