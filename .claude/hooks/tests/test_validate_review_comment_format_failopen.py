@@ -644,6 +644,7 @@ class ReviewerVerdictTemplateRationaleTests(unittest.TestCase):
             "TechDebt: none\n"
         )
         requestor = ct.extract_charter_field("Requestor", body)
+        assert requestor is not None, "extract_charter_field returned None — Requestor not found"
         self.assertEqual(requestor, "Aino Virtanen")
         # The space-form roster membership test the gate actually runs.
         roster_names = {"aino virtanen", "nadia khoury"}
@@ -660,6 +661,7 @@ class ReviewerVerdictTemplateRationaleTests(unittest.TestCase):
             "TechDebt: none\n"
         )
         requestor = ct.extract_charter_field("Requestor", body)
+        assert requestor is not None, "extract_charter_field returned None — Requestor not found"
         self.assertEqual(requestor, "Aino.Virtanen")
         roster_names = {"aino virtanen", "nadia khoury"}
         # This is the genuine failure mode: lowercased exact space-form match
