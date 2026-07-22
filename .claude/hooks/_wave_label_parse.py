@@ -318,10 +318,14 @@ def _parse_edit_segment(rest: list[str]) -> WaveLabelChange | None:
     # `--repo` long form and the `-R` short form (all attached/equals/spaced
     # surfaces, #1057). A present-but-unresolvable value (`$VAR`) yields repo=None
     # with repo_flag_present=True so the consumer fails closed (#981).
+    #
+    # Last occurrence wins (main#1060): `--repo`/`-R` is a single-value pflag
+    # `StringVarP` in real gh, so a repeated flag resolves to its LAST value,
+    # not its first.
     repo_values = walk_flag_values(rest, {"--repo", "-R"})
     repo_flag_present = len(repo_values) > 0
     repo: str | None = (
-        repo_short_name_from_flag_value(repo_values[0]) if repo_flag_present else None
+        repo_short_name_from_flag_value(repo_values[-1]) if repo_flag_present else None
     )
 
     issue_number: str | None = None

@@ -32,6 +32,13 @@ Verdict policy (deterministic):
     deliberately NOT a STOP: a missing local checkout is an environment gap, not
     evidence the premise rotted — a false STOP there would block scope on
     tooling state, the opposite of the gate's purpose.
+  * a ``.claude/``-rooted path that MISSES in a child repo but resolves in the
+    parent (``noorinalabs-main``) -> ``CROSS_REPO`` -> verdict ``WARN`` (main#1047
+    da#427): very often a legitimate reference to org-wide config, worth a
+    manual look rather than a hard block.
+  * a bare (slash-free) filename that misses at repo root but resolves
+    uniquely elsewhere in the tree -> ``EXISTS`` via a basename fallback
+    (main#1047 da#373).
   * everything present, or no concrete refs to check -> ``OK``.
 
 An issue may also declare explicit ``paths`` / ``symbols`` arrays (deliberate
@@ -77,6 +84,12 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 EXISTS = "exists"
 MISSING = "missing"
 UNVERIFIABLE = "unverifiable"
+# A `.claude/`-rooted path that misses in a CHILD repo but resolves in the
+# parent (`noorinalabs-main`) — very often a legitimate reference to org-wide
+# config from a child-repo issue (main#1047 da#427). Treated as WARN, not
+# STOP: the reference is real, but reading it against the wrong repo is worth
+# a manual look, not a hard block.
+CROSS_REPO = "cross_repo"
 
 # Per-issue verdicts.
 OK = "ok"
@@ -132,14 +145,73 @@ _PATH_TOKEN_RE = re.compile(r"[\w./\-]+")
 # Backtick code span: ``foo`` -> foo. Non-greedy, single line.
 _BACKTICK_RE = re.compile(r"`([^`\n]+)`")
 
+# Leading path components that are a positive signal a slash-containing token
+# is a real repo path even without a recognized extension (main#1047: a slash
+# alone is NOT evidence — "A/B", "recall/precision", "origin/main", "986/650"
+# all contain "/" and are not paths). Covers this org's top-level source roots
+# plus every child repo name (a cross-repo mention like
+# `noorinalabs-deploy/terraform/...` is a real path even mid-prose).
+_KNOWN_ROOT_COMPONENTS = frozenset(
+    {
+        "src",
+        "docs",
+        "doc",
+        "tests",
+        "test",
+        ".claude",
+        ".github",
+        "data",
+        "ontology",
+        "scripts",
+        "terraform",
+        "alembic",
+        "docker",
+        "integration-tests",
+        "noorinalabs-main",
+        "noorinalabs-isnad-graph",
+        "noorinalabs-user-service",
+        "noorinalabs-deploy",
+        "noorinalabs-design-system",
+        "noorinalabs-data-acquisition",
+        "noorinalabs-isnad-ingest-platform",
+        "noorinalabs-landing-page",
+    }
+)
+
+# Known git refs / ref prefixes: `origin/main`, `refs/heads/x`, `HEAD` are
+# never file paths even though `origin/main` contains a slash (main#1047).
+_GIT_REF_LITERALS = frozenset({"HEAD"})
+_GIT_REF_PREFIXES = ("origin/", "refs/")
+
+
+def _all_components_numeric(tok: str) -> bool:
+    """True when every ``/``-separated component of ``tok`` is digits/commas.
+
+    Catches counts written as a fraction, e.g. ``986/650`` (main#1047 wave-26:
+    "650,986/650,986 rows") — never a path, whatever the extension heuristic
+    below would otherwise decide (there is no extension to check anyway).
+    """
+    parts = tok.split("/")
+    return all(part and re.fullmatch(r"[\d,]+", part) for part in parts)
+
 
 def looks_like_path(token: str) -> bool:
     """True when ``token`` is plausibly a repo-relative file/dir path.
 
     Precision over recall: a false negative just means one fewer thing checked;
-    a false positive turns prose into a spurious STOP. Accepts a token only when
-    it is whitespace-free, path-character-only, and EITHER contains a ``/``
-    (directory structure) OR ends in a known code extension.
+    a false positive turns prose into a spurious STOP. A slash is NOT itself
+    evidence (main#1047: the wave-26 scope run flagged 12/12 issues as
+    premise-rot purely because prose like ``A/B``, ``recall/precision``, or the
+    git ref ``origin/main`` contains a ``/``). A token is accepted only when it
+    is whitespace-free, path-character-only, not a bare git ref, not an
+    all-numeric fraction, and EITHER:
+
+      * it ends in a known code/doc extension (``foo.py``, ``bar/baz.md``), OR
+      * it contains a ``/`` AND its leading component is a known repo-root
+        directory (``src/``, ``docs/``, ``.claude/``, a child-repo name, …).
+
+    A slash-containing token with neither signal (e.g. ``ism/kunya``,
+    ``boundary/particle``) is prose, not a path.
     """
     tok = token.strip()
     if not tok or " " in tok or "\t" in tok:
@@ -151,10 +223,18 @@ def looks_like_path(token: str) -> bool:
     # A bare issue/anchor ref or a number is never a path.
     if tok.lstrip("#").isdigit():
         return False
-    if "/" in tok:
-        return True
+    if tok == "/":
+        return False
+    if tok in _GIT_REF_LITERALS or tok.startswith(_GIT_REF_PREFIXES):
+        return False
     ext = tok.rsplit(".", 1)[-1].lower() if "." in tok else ""
-    return ext in _CODE_EXTENSIONS
+    if ext in _CODE_EXTENSIONS:
+        return True
+    if "/" in tok and not _all_components_numeric(tok):
+        first = tok.split("/", 1)[0]
+        if first in _KNOWN_ROOT_COMPONENTS:
+            return True
+    return False
 
 
 def normalize_path(token: str) -> str:
@@ -226,17 +306,39 @@ def git_ref_exists(repo_dir: str, ref: str) -> bool:
     return proc.returncode == 0
 
 
+def _basename_resolves(repo_dir: str, ref: str, basename: str) -> bool:
+    """True when some tracked path at ``ref`` ends in ``/<basename>`` (or is it).
+
+    Basename fallback (main#1047 da#373): an issue naming a bare filename like
+    ``composition.py`` may not mean the repo root — the file can live at
+    ``src/parse/composition.py``. Only applies to slash-free candidates; a real
+    subpath that misses at its literal location is still MISSING, never
+    re-resolved by searching the whole tree.
+    """
+    proc = _run_git(repo_dir, ["ls-tree", "-r", "--name-only", ref])
+    if proc.returncode != 0:
+        return False
+    suffix = "/" + basename
+    return any(line == basename or line.endswith(suffix) for line in proc.stdout.splitlines())
+
+
 def git_path_status(repo_dir: str, ref: str, path: str) -> str:
     """Existence of ``path`` at ``ref`` via ``git cat-file -e``.
 
     Returns :data:`UNVERIFIABLE` when the repo dir or ref cannot be read (an
     environment gap, never treated as premise rot), otherwise :data:`EXISTS` /
-    :data:`MISSING`.
+    :data:`MISSING`. A slash-free ``path`` that misses at its literal location
+    gets one more chance via :func:`_basename_resolves` before being declared
+    MISSING (main#1047 basename fallback).
     """
     if not git_ref_exists(repo_dir, ref):
         return UNVERIFIABLE
     proc = _run_git(repo_dir, ["cat-file", "-e", f"{ref}:{path}"])
-    return EXISTS if proc.returncode == 0 else MISSING
+    if proc.returncode == 0:
+        return EXISTS
+    if "/" not in path and _basename_resolves(repo_dir, ref, path):
+        return EXISTS
+    return MISSING
 
 
 def git_symbol_status(repo_dir: str, ref: str, symbol: str, pathspec: str | None = None) -> str:
@@ -270,8 +372,9 @@ SymbolChecker = Callable[[str, str, str, "str | None"], str]
 class CandidateResult:
     kind: str  # "path" | "symbol"
     value: str
-    status: str  # EXISTS | MISSING | UNVERIFIABLE
+    status: str  # EXISTS | MISSING | UNVERIFIABLE | CROSS_REPO
     pathspec: str | None = None
+    note: str | None = None
 
 
 @dataclass
@@ -291,11 +394,15 @@ class IssueResult:
     def unverifiable(self) -> list[CandidateResult]:
         return [c for c in self.candidates if c.status == UNVERIFIABLE]
 
+    @property
+    def cross_repo(self) -> list[CandidateResult]:
+        return [c for c in self.candidates if c.status == CROSS_REPO]
+
 
 def _verdict_for(candidates: list[CandidateResult]) -> str:
     if any(c.status == MISSING for c in candidates):
         return STOP
-    if any(c.status == UNVERIFIABLE for c in candidates):
+    if any(c.status in (UNVERIFIABLE, CROSS_REPO) for c in candidates):
         return WARN
     return OK
 
@@ -349,19 +456,42 @@ def check_issue(
     path_checker: PathChecker = git_path_status,
     symbol_checker: SymbolChecker = git_symbol_status,
 ) -> IssueResult:
-    """Verify every named premise of one scoped issue against its repo HEAD."""
+    """Verify every named premise of one scoped issue against its repo HEAD.
+
+    A `.claude/`-rooted path that MISSES in a child repo gets one more check
+    against the parent (`noorinalabs-main`) before being declared MISSING
+    (main#1047 da#427): a child-repo issue very often names a legitimate
+    org-wide config path. A parent-side hit downgrades that candidate to
+    :data:`CROSS_REPO` (-> WARN), not a bare pass — the reference is real, but
+    checking it against the wrong repo is still worth a manual look.
+    """
     repo_dir = resolve_repo_dir(issue, repos_root)
     git_ref = issue.get("git_ref") or default_ref
+    repo_name = str(issue.get("repo") or "noorinalabs-main")
     candidates: list[CandidateResult] = []
     for kind, value, pathspec in collect_candidates(issue):
         if kind == "path":
             status = path_checker(repo_dir, git_ref, value)
+            note: str | None = None
+            if (
+                status == MISSING
+                and repo_name != "noorinalabs-main"
+                and value.startswith(".claude/")
+            ):
+                parent_status = path_checker(str(repos_root), git_ref, value)
+                if parent_status == EXISTS:
+                    status = CROSS_REPO
+                    note = (
+                        f"resolves in parent repo noorinalabs-main, not child repo "
+                        f"{repo_name} — verify this is a deliberate cross-repo reference"
+                    )
+            candidates.append(CandidateResult(kind, value, status, pathspec, note))
         else:
             status = symbol_checker(repo_dir, git_ref, value, pathspec)
-        candidates.append(CandidateResult(kind, value, status, pathspec))
+            candidates.append(CandidateResult(kind, value, status, pathspec))
     return IssueResult(
         ref=str(issue.get("ref", "?")),
-        repo=str(issue.get("repo", "noorinalabs-main")),
+        repo=repo_name,
         repo_dir=repo_dir,
         git_ref=git_ref,
         verdict=_verdict_for(candidates),
@@ -381,7 +511,12 @@ def check_issues(
 
 # --- reporting + CLI --------------------------------------------------------
 
-_STATUS_GLYPH = {EXISTS: "ok", MISSING: "MISSING", UNVERIFIABLE: "unverifiable"}
+_STATUS_GLYPH = {
+    EXISTS: "ok",
+    MISSING: "MISSING",
+    UNVERIFIABLE: "unverifiable",
+    CROSS_REPO: "cross-repo (found in parent)",
+}
 
 
 def render_report(results: list[IssueResult]) -> str:
@@ -397,7 +532,8 @@ def render_report(results: list[IssueResult]) -> str:
         lines.append(f"[{tag}] {r.ref}  ({r.repo} @ {r.git_ref})")
         for c in r.candidates:
             scope = f" in {c.pathspec}" if c.pathspec else ""
-            lines.append(f"    - {c.kind} `{c.value}`{scope}: {_STATUS_GLYPH[c.status]}")
+            note = f" — {c.note}" if c.note else ""
+            lines.append(f"    - {c.kind} `{c.value}`{scope}: {_STATUS_GLYPH[c.status]}{note}")
 
     lines.append("")
     if stops:
@@ -410,11 +546,12 @@ def render_report(results: list[IssueResult]) -> str:
             lines.append(f"  - {r.ref}: {refs}")
     if warns:
         lines.append(
-            f"WARN: {len(warns)} issue(s) could not be verified "
-            "(repo not cloned / ref not fetched / unreadable). Verify manually:"
+            f"WARN: {len(warns)} issue(s) could not be fully verified "
+            "(repo not cloned / ref not fetched / unreadable, or a cross-repo "
+            "reference). Verify manually:"
         )
         for r in warns:
-            refs = ", ".join(f"{c.kind} {c.value}" for c in r.unverifiable)
+            refs = ", ".join(f"{c.kind} {c.value}" for c in r.unverifiable + r.cross_repo)
             lines.append(f"  - {r.ref} ({r.repo_dir} @ {r.git_ref}): {refs}")
     if not stops and not warns:
         lines.append("All named files/symbols verified present at origin HEAD.")
@@ -429,7 +566,13 @@ def _result_to_dict(r: IssueResult) -> dict:
         "git_ref": r.git_ref,
         "verdict": r.verdict,
         "candidates": [
-            {"kind": c.kind, "value": c.value, "status": c.status, "pathspec": c.pathspec}
+            {
+                "kind": c.kind,
+                "value": c.value,
+                "status": c.status,
+                "pathspec": c.pathspec,
+                "note": c.note,
+            }
             for c in r.candidates
         ],
     }

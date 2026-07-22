@@ -163,6 +163,7 @@ Exit codes:
       so verdict freshness cannot be established)
 """
 
+import dataclasses
 import json
 import os
 import re
@@ -822,6 +823,12 @@ class CommentReviewResult:
         self.reviewers: set[str] = set()
         self.reviews_missing_tech_debt: list[str] = []  # reviewer names missing TechDebt line
         self.tech_debt_issue_numbers: list[str] = []  # issue numbers from TechDebt: lines
+        # (requestor, raw td_value) pairs where TechDebt: was present, non-"none",
+        # and yielded ZERO parsed issue numbers (main#1055) — e.g. free text like
+        # "filed later" or "TBD". Distinct from `reviews_missing_tech_debt` (the
+        # line was present) — this is "present but uncaptured," which used to be
+        # silently indistinguishable from "no tech debt" (`TechDebt: none`).
+        self.tech_debt_unparseable: list[tuple[str, str]] = []
         self.stale_verdicts: list[StaleVerdict] = []  # verdicts predating T_content (#950)
         self.undetermined: str = ""  # non-empty ⇒ scan incomplete, caller must fail closed
 
@@ -889,8 +896,9 @@ def _name_lastname(full_name: str) -> str:
 def check_comment_reviews(
     pr_number: str | int,
     branch_author_lastname: str,
+    *,
     repo: str | None = None,
-    content_ts: datetime | None = None,
+    content_ts: datetime | None,
 ) -> CommentReviewResult:
     """Check PR comments for charter-format review comments from different authors.
 
@@ -900,9 +908,14 @@ def check_comment_reviews(
     Reviewer identification per charter (resolves #244):
       - Approved / ChangesRequested → reviewer is the Requestor (comment author)
       - Request / Reply → not a review; does not contribute to reviewer set
-      - 2-reviewer threshold counts distinct Requestor values across Approved
-        comments only (ChangesRequested is a verdict-with-TechDebt but does
-        not count toward the threshold).
+      - 2-reviewer threshold counts distinct Requestor values whose LATEST
+        verdict comment is Approved (#940). An approval is a statement about
+        a moment, not a permanent grant: a reviewer's later ChangesRequested
+        withdraws an earlier Approved and drops them from the reviewer set,
+        and a reviewer's later Approved supersedes an earlier ChangesRequested
+        and adds them. Only the reviewer's most recent CURRENT (non-stale, see
+        below) verdict is consulted — earlier verdicts from the same reviewer
+        do not additionally count or block.
 
     `content_ts` is `T_content` (#950) — the committer timestamp of the branch's
     latest non-merge commit, from `get_latest_content_commit`. When supplied, a
@@ -914,12 +927,25 @@ def check_comment_reviews(
     secondary attestation either. A verdict whose own `created_at` is missing or
     unparseable is treated as STALE, not fresh (fail closed).
 
-    `content_ts=None` means "no content binding" — either the PR has no non-merge
-    commits, or the caller is a legacy/unit call — and every verdict is counted
-    as before. `check()` never passes None on a real merge: a commit-fetch
-    failure raises `CommitFetchError` and hard-blocks upstream of this call.
+    `content_ts` is a REQUIRED keyword-only argument (#1050) — it must be
+    passed explicitly on every call, though `None` remains a legitimate
+    VALUE meaning "no content binding" (either the PR has no non-merge
+    commits, or a caller intentionally wants every verdict counted
+    unconditionally). Making it required converts an omitted argument from a
+    silent fail-open (the #1046 shape: staleness-filtering silently OFF) into
+    a loud `TypeError` at call time. `check()` never passes `None` on a real
+    merge: a commit-fetch failure raises `CommitFetchError` and hard-blocks
+    upstream of this call.
     """
     result = CommentReviewResult()
+    # Reviewer -> most recent (chronologically-last) CURRENT RequestOrReplied
+    # value, keyed on lowercased full name (#940). An Approved comment is a
+    # statement about a MOMENT, not a permanent grant: a reviewer who approves
+    # and later requests changes must have that later verdict supersede the
+    # earlier one, and a reviewer who requests changes and later approves must
+    # likewise have the approval win. `comments` is already chronological, so
+    # the last write for a given key IS that reviewer's latest verdict.
+    latest_verdict: dict[str, str] = {}
     try:
         owner_repo = _resolve_owner_repo(repo)
         if owner_repo is None:
@@ -966,7 +992,6 @@ def check_comment_reviews(
                 continue
 
             is_verdict_comment = _is_verdict(ror_value)
-            is_approved_comment = _is_approved(ror_value)
 
             # Content binding (#950): a verdict cast before the branch's latest
             # AUTHORED commit reviewed code that has since been rewritten. It is
@@ -987,12 +1012,15 @@ def check_comment_reviews(
                     )
                     continue
 
-            # Only Approved comments contribute to the reviewer set toward
-            # the 2-reviewer threshold (charter line 36, resolves #244).
-            if is_approved_comment:
+            # Record this reviewer's latest CURRENT verdict (#940). The
+            # reviewer set toward the 2-reviewer threshold (charter line 36,
+            # resolves #244) is derived from `latest_verdict` AFTER the loop —
+            # not accumulated here — so a later ChangesRequested can withdraw
+            # an earlier Approved (and vice versa) instead of only ever adding.
+            if is_verdict_comment:
                 reviewer_lastname = _name_lastname(requestor)
                 if reviewer_lastname.lower() != branch_author_lastname.lower():
-                    result.reviewers.add(requestor.lower())
+                    latest_verdict[requestor.lower()] = ror_value
 
             # TechDebt attestation is required on every verdict
             # (Approved + ChangesRequested) — issue #147 fix.
@@ -1004,10 +1032,27 @@ def check_comment_reviews(
                 else:
                     td_value = has_tech_debt.group(1).strip().strip("*").strip()
                     if td_value.lower() != "none":
-                        # Extract issue numbers (#15, #16, etc.)
-                        issue_nums = re.findall(r"#(\d+)", td_value)
-                        result.tech_debt_issue_numbers.extend(issue_nums)
+                        # Extract issue numbers. `#?` accepts BOTH the canonical
+                        # `#15, #16` form and a bare `15, 16` (main#1055: a bare
+                        # number previously matched nothing here — present but
+                        # zero captured refs, silently). A value that is neither
+                        # "none" nor yields any number (free text like "filed
+                        # later") is recorded in `tech_debt_unparseable` instead
+                        # of vanishing — the residual case must be observable,
+                        # not just less likely.
+                        issue_nums = re.findall(r"#?(\d+)", td_value)
+                        if issue_nums:
+                            result.tech_debt_issue_numbers.extend(issue_nums)
+                        else:
+                            result.tech_debt_unparseable.append((requestor, td_value))
 
+        # A reviewer counts toward the threshold only if their LATEST verdict
+        # is Approved (#940) — a reviewer whose latest verdict is
+        # ChangesRequested is currently blocking and must not count, even
+        # though they approved at some earlier point in the thread.
+        result.reviewers = {
+            reviewer for reviewer, verdict in latest_verdict.items() if _is_approved(verdict)
+        }
         return result
 
     except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError) as exc:
@@ -1023,7 +1068,7 @@ def check_comment_reviews(
 def partition_formal_reviewers(
     reviews: list[dict],
     author: str,
-    content_ts: datetime | None = None,
+    content_ts: datetime | None,
 ) -> tuple[set[str], list[StaleVerdict]]:
     """Split formal GitHub reviews into CURRENT reviewers and STALE verdicts (#950).
 
@@ -1039,8 +1084,12 @@ def partition_formal_reviewers(
     dropped entirely — they are not evidence and not staleness.
 
     `submittedAt` missing or unparseable while `content_ts` is known ⇒ STALE,
-    not fresh (fail closed). `content_ts=None` means "no content binding" and
-    every non-author review counts, as before the content binding existed.
+    not fresh (fail closed). `content_ts` is a REQUIRED positional argument
+    (#1050) — every caller must pass it explicitly, though `None` remains a
+    legitimate VALUE meaning "no content binding" (every non-author review
+    counts, as before the content binding existed). Requiring it converts an
+    omitted argument from a silent fail-open (the #1046 shape) into a loud
+    `TypeError` at call time.
 
     This function is the SHARED implementation for `check()` (Hook 4) and
     `.claude/lib/pr_review_state.py` (the #707 ahead-of-time driver). Both must
@@ -1247,6 +1296,176 @@ def ensure_issues_on_board(repo: str, issue_numbers: list[str]) -> None:
             pass  # Best-effort — don't block merge on board failures
 
 
+class CommentScanUndeterminedError(Exception):
+    """Raised by `resolve_review_verdicts` when the comment scan could not
+    complete (#981 defense-in-depth).
+
+    An empty reviewer set that came from a FAILED scan is not evidence of
+    anything — it is the absence of evidence, and treating it as "no
+    approvals found" is the same category of error as counting an
+    unverifiable merge as approved. Carries `.reason` (the underlying
+    `CommentReviewResult.undetermined` string) so callers can render their
+    OWN block/error message without re-deriving why the scan failed.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+@dataclasses.dataclass
+class ReviewVerdicts:
+    """The full review-verdict set for a PR (#1048) — content binding,
+    formal + comment reviewer partitioning, roster filtering, and the
+    union/threshold inputs.
+
+    This is the SINGLE shared entry point `check()` and
+    `pr_review_state.compute_review_state` both consume via
+    `resolve_review_verdicts`; neither re-derives this pipeline with its own
+    argument list. That re-derivation was exactly the #1046 defect class —
+    the driver called `check_comment_reviews` without `content_ts` and
+    silently drifted from the gate. A single shared computation cannot drift
+    from itself.
+
+    Deliberately carries every intermediate value BOTH callers need for
+    their OWN rendering (`check()`'s block message; the driver's text/JSON
+    report) — this dataclass is the shared PIPELINE OUTPUT, not a merge
+    decision. `check()` still owns its message construction; the driver
+    still owns `ReviewState.passes()` and its report rendering.
+    """
+
+    number: str | int
+    head_ref: str
+    labels: list[str]
+    branch_author_lastname: str | None
+    content_sha: str
+    content_ts: datetime | None
+    formal_reviewers: set[str]
+    # ALL Approved comment Requestors (full names, lowercased) BEFORE roster
+    # filtering — needed for the roster-mismatch diagnostic (#498).
+    comment_reviewers: set[str]
+    non_roster_requestors: set[str]
+    roster_comment_reviewers: set[str]
+    roster_names: set[str]
+    distinct_reviewers: set[str]  # formal_reviewers | roster_comment_reviewers
+    # Kept as TWO separate lists rather than pre-concatenated, so a caller that
+    # needs to tag each verdict's SOURCE for its own report (the driver's
+    # `stale_verdicts[].source` field) doesn't have to reconstruct which
+    # sub-list a given entry came from. `stale_verdicts` combines them, in
+    # that order, for a caller (check()'s block message) that just needs one
+    # unified list.
+    stale_verdicts_comment: list[StaleVerdict]
+    stale_verdicts_formal: list[StaleVerdict]
+    reviews_missing_tech_debt: list[str]
+    tech_debt_issue_numbers: list[str]
+    # (requestor, raw td_value) pairs where TechDebt: was present, non-"none",
+    # but parsed to ZERO issue numbers (main#1055) — carried on the shared
+    # pipeline output so BOTH callers (check()'s advisory systemMessage and the
+    # driver's report) see the same "present but uncaptured" set instead of it
+    # vanishing between "missing" and "filed". Non-blocking: never an input to
+    # a merge decision, only surfaced.
+    tech_debt_unparseable: list[tuple[str, str]]
+    wave_bootstrap_exception: bool
+
+    @property
+    def stale_verdicts(self) -> list[StaleVerdict]:
+        """Combined stale verdicts, comment-based then formal."""
+        return self.stale_verdicts_comment + self.stale_verdicts_formal
+
+    @property
+    def total_distinct(self) -> int:
+        """Count toward the 2-reviewer threshold (charter line 36)."""
+        return len(self.distinct_reviewers)
+
+
+def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVerdicts:
+    """Compute a PR's full review-verdict set (#1048) — the shared pipeline
+    previously re-assembled independently by `check()` and
+    `pr_review_state.compute_review_state`:
+
+      1. `get_latest_content_commit` → T_content (`content_ts`/`content_sha`, #950).
+      2. `partition_formal_reviewers` + `check_comment_reviews`, both bound to
+         T_content, on the feature-branch or wave-merge head-ref path.
+      3. `_load_roster_names` and non-roster Requestor filtering (#498).
+      4. Union formal + roster-filtered comment reviewers into the distinct
+         reviewer set, plus the wave-bootstrap single-reviewer exception (#228).
+
+    `pr_data` is the dict `get_pr_data` returns (author, reviews, headRefName,
+    number, labels) — fetching and validating the PR itself stays the
+    caller's responsibility, matching how both callers already fetch it
+    before doing anything else.
+
+    Raises:
+        CommitFetchError: T_content could not be established (#950) —
+            propagated verbatim from `get_latest_content_commit`.
+        CommentScanUndeterminedError: the comment thread could not be
+            completely scanned (#981) — carries `.reason`.
+        RosterResolutionError: a named child repo's roster could not be
+            resolved (#552) — propagated verbatim from `_load_roster_names`.
+
+    Callers translate each exception into their OWN block/error
+    presentation; this function never renders a message, only computes.
+    """
+    author = pr_data["author"]
+    reviews = pr_data["reviews"]
+    head_ref = pr_data["headRefName"]
+    number = pr_data["number"]
+    labels = pr_data["labels"]
+
+    latest_content = get_latest_content_commit(number, repo=repo)
+    content_ts = latest_content[1] if latest_content else None
+    content_sha = latest_content[0] if latest_content else ""
+
+    formal_reviewers, stale_formal = partition_formal_reviewers(reviews, author, content_ts)
+
+    comment_result = CommentReviewResult()
+    branch_author_lastname = None
+    if head_ref:
+        branch_author_lastname = extract_branch_author_lastname(head_ref)
+        if branch_author_lastname:
+            comment_result = check_comment_reviews(
+                number, branch_author_lastname, repo=repo, content_ts=content_ts
+            )
+        elif head_ref.startswith("deployments/") and "/wave-" in head_ref:
+            # Wave-merge PR (head = deployments/phase-{N}/wave-{M}); no
+            # implementer-branch author. Empty sentinel admits any non-empty
+            # reviewer. See main#294.
+            comment_result = check_comment_reviews(number, "", repo=repo, content_ts=content_ts)
+
+    if comment_result.undetermined:
+        raise CommentScanUndeterminedError(comment_result.undetermined)
+
+    roster_names = _load_roster_names(repo=repo)
+
+    non_roster_requestors = {r for r in comment_result.reviewers if r not in roster_names}
+    roster_comment_reviewers = comment_result.reviewers - non_roster_requestors
+
+    distinct_reviewers = formal_reviewers | roster_comment_reviewers
+
+    wave_bootstrap_exception = is_single_reviewer_exception(labels, distinct_reviewers, repo=repo)
+
+    return ReviewVerdicts(
+        number=number,
+        head_ref=head_ref,
+        labels=labels,
+        branch_author_lastname=branch_author_lastname,
+        content_sha=content_sha,
+        content_ts=content_ts,
+        formal_reviewers=formal_reviewers,
+        comment_reviewers=set(comment_result.reviewers),
+        non_roster_requestors=non_roster_requestors,
+        roster_comment_reviewers=roster_comment_reviewers,
+        roster_names=roster_names,
+        distinct_reviewers=distinct_reviewers,
+        stale_verdicts_comment=list(comment_result.stale_verdicts),
+        stale_verdicts_formal=list(stale_formal),
+        reviews_missing_tech_debt=list(comment_result.reviews_missing_tech_debt),
+        tech_debt_issue_numbers=list(comment_result.tech_debt_issue_numbers),
+        tech_debt_unparseable=list(comment_result.tech_debt_unparseable),
+        wave_bootstrap_exception=wave_bootstrap_exception,
+    )
+
+
 def check(input_data: dict) -> dict | None:
     """Check PR review requirements. Returns result dict if blocking/warning, None if allowed."""
     tool_name = input_data.get("tool_name", "")
@@ -1385,21 +1604,20 @@ def check(input_data: dict) -> dict | None:
         log_pretooluse_block("validate_pr_review", command, result["reason"])
         return result
 
-    author = pr_data["author"]
-    reviews = pr_data["reviews"]
-    head_ref = pr_data["headRefName"]
-    number = pr_data["number"]
-    labels = pr_data["labels"]
-
-    # Content binding (#950). Establish T_content — the committer timestamp of the
-    # branch's latest NON-MERGE commit — BEFORE counting any verdict, because a
-    # verdict cast before it did not review the code being merged. On a fetch
-    # failure T_content is unknown, so NO verdict's freshness can be established:
-    # HARD BLOCK rather than fall back to counting everything, which is precisely
-    # the pre-#950 fail-open (`feedback_safety_direction_over_ux_friction`).
+    # Resolve the full review-verdict set through the ONE shared pipeline
+    # (#1048) — content binding, formal + comment reviewer partitioning,
+    # roster filtering, and the union/threshold inputs. `check()` and
+    # `pr_review_state.compute_review_state` both call `resolve_review_verdicts`
+    # rather than each re-assembling this pipeline with their own argument
+    # list; that re-derivation was the #1046 defect class.
     try:
-        latest_content = get_latest_content_commit(number, repo=repo)
+        verdicts = resolve_review_verdicts(pr_data, repo=repo)
     except CommitFetchError as exc:
+        # Content binding (#950): T_content — the committer timestamp of the
+        # branch's latest NON-MERGE commit — could not be established. Without
+        # it NO verdict's freshness is knowable: HARD BLOCK rather than fall
+        # back to counting everything, which is precisely the pre-#950
+        # fail-open (`feedback_safety_direction_over_ux_friction`).
         result = {
             "decision": "block",
             "reason": (
@@ -1423,45 +1641,19 @@ def check(input_data: dict) -> dict | None:
         }
         log_pretooluse_block("validate_pr_review", command, result["reason"])
         return result
-
-    content_ts = latest_content[1] if latest_content else None
-    content_sha = latest_content[0] if latest_content else ""
-
-    # Formal GitHub reviews are bound to T_content by the SAME rule (#950) — a
-    # stale formal review is no better evidence than a stale comment verdict, and
-    # leaving it unbound would be a hole straight through the fix. Shared with the
-    # #707 driver via `partition_formal_reviewers` so the two cannot drift (#1046).
-    formal_reviewers, stale_formal = partition_formal_reviewers(reviews, author, content_ts)
-
-    comment_review_result = CommentReviewResult()
-    branch_author_lastname = None
-    if head_ref:
-        branch_author_lastname = extract_branch_author_lastname(head_ref)
-        if branch_author_lastname:
-            comment_review_result = check_comment_reviews(
-                number, branch_author_lastname, repo=repo, content_ts=content_ts
-            )
-        elif head_ref.startswith("deployments/") and "/wave-" in head_ref:
-            # Wave-merge PR (head = deployments/phase-{N}/wave-{M}); no implementer-branch
-            # author. Pass empty sentinel so the reviewer-vs-author lastname comparison
-            # admits any non-empty reviewer name. See main#294.
-            comment_review_result = check_comment_reviews(
-                number, "", repo=repo, content_ts=content_ts
-            )
-
-    # Incomplete comment scan (#981 defense-in-depth). An empty reviewer set that
-    # came from a FAILED scan is not evidence of anything — it is the absence of
-    # evidence, and counting it as "0 approvals found" is the same category of
-    # error as counting an unverifiable merge as approved. Hard-block with the
-    # underlying reason.
-    if comment_review_result.undetermined:
+    except CommentScanUndeterminedError as exc:
+        # Incomplete comment scan (#981 defense-in-depth). An empty reviewer
+        # set that came from a FAILED scan is not evidence of anything — it is
+        # the absence of evidence, and counting it as "0 approvals found" is
+        # the same category of error as counting an unverifiable merge as
+        # approved. Hard-block with the underlying reason.
         result = {
             "decision": "block",
             "reason": (
                 f"BLOCKED: PR {pr_display} — the charter-format review comments could not "
                 "be read, so the hook cannot tell whether this PR has two approving "
                 "reviewers.\n"
-                f"Detail: {comment_review_result.undetermined}\n\n"
+                f"Detail: {exc.reason}\n\n"
                 "This blocks rather than treating an unreadable comment thread as an "
                 "empty one: a failed scan and a genuinely unreviewed PR are "
                 "indistinguishable from the reviewer set alone, and silently reporting "
@@ -1476,27 +1668,13 @@ def check(input_data: dict) -> dict | None:
         }
         log_pretooluse_block("validate_pr_review", command, result["reason"])
         return result
-
-    stale_verdicts = comment_review_result.stale_verdicts + stale_formal
-
-    # Filter charter-format (comment-based) reviewers against the roster before
-    # counting them toward the 2-reviewer gate (#498). The 2-reviewer rule
-    # exists to ensure two distinct ROSTER MEMBERS reviewed; without this
-    # filter, fictional / non-roster Requestor strings (e.g., the P3W11 #487
-    # "Camila Restrepo" / "Imelda Santos" incident) slip through unchallenged.
-    # Formal GitHub reviews (`formal_reviewers`) are NOT filtered — those are
-    # real GitHub identities authenticated by the platform, not persona names
-    # that need cross-checking against `.claude/team/roster/`.
-    #
-    # The roster is resolved relative to the PR's TARGET repo (#552): the parent
-    # roster is unioned with the named child repo's `.claude/team/roster/`, so a
-    # reviewer valid in EITHER the org-level team or the target child repo
-    # passes. If a child repo is named but its roster dir is unreadable, fail in
-    # the SAFE direction (HARD BLOCK with diagnostic — never silent parent-only
-    # fallback, which would re-block legitimate child reviewers as #552 did).
-    try:
-        roster_names = _load_roster_names(repo=repo)
     except RosterResolutionError as exc:
+        # Roster resolved relative to the PR's TARGET repo (#552): the parent
+        # roster is unioned with the named child repo's `.claude/team/roster/`.
+        # If a child repo is named but its roster dir is unreadable, fail in
+        # the SAFE direction (HARD BLOCK with diagnostic — never silent
+        # parent-only fallback, which would re-block legitimate child
+        # reviewers as #552 did).
         result = {
             "decision": "block",
             "reason": (
@@ -1518,16 +1696,18 @@ def check(input_data: dict) -> dict | None:
         log_pretooluse_block("validate_pr_review", command, result["reason"])
         return result
 
-    non_roster_requestors = {r for r in comment_review_result.reviewers if r not in roster_names}
-    roster_comment_reviewers = comment_review_result.reviewers - non_roster_requestors
-
-    distinct_reviewers = formal_reviewers | roster_comment_reviewers
-    total_distinct = len(distinct_reviewers)
+    content_ts = verdicts.content_ts
+    content_sha = verdicts.content_sha
+    stale_verdicts = verdicts.stale_verdicts
+    roster_names = verdicts.roster_names
+    non_roster_requestors = verdicts.non_roster_requestors
+    roster_comment_reviewers = verdicts.roster_comment_reviewers
+    total_distinct = verdicts.total_distinct
 
     # Single-Reviewer Exception (resolves #228) — wave-bootstrap PRs reviewed
     # by a charter enforcer may merge with one Approved comment instead of
     # two. Charter-enforcer role check uses the target-repo-resolved roster.
-    if total_distinct == 1 and is_single_reviewer_exception(labels, distinct_reviewers, repo=repo):
+    if total_distinct == 1 and verdicts.wave_bootstrap_exception:
         # Exception applies — fall through to TechDebt check, then allow.
         pass
     elif total_distinct < 2:
@@ -1576,7 +1756,7 @@ def check(input_data: dict) -> dict | None:
                 if roster_names
                 else "Valid roster: <empty — local roster dir could not be read>"
             )
-            raw_total = len(comment_review_result.reviewers)
+            raw_total = len(verdicts.comment_reviewers)
             roster_count = len(roster_comment_reviewers)
             roster_diagnostic = (
                 f"BLOCKED: PR {pr_display} has {raw_total} distinct Requestor string(s) "
@@ -1660,7 +1840,7 @@ def check(input_data: dict) -> dict | None:
         log_pretooluse_block("validate_pr_review", command, result["reason"])
         return result
 
-    missing = comment_review_result.reviews_missing_tech_debt
+    missing = verdicts.reviews_missing_tech_debt
     if missing:
         names = ", ".join(missing)
         result = {
@@ -1682,7 +1862,7 @@ def check(input_data: dict) -> dict | None:
         return result
 
     # All checks passed — ensure any referenced tech-debt issues are on the board
-    td_issues = comment_review_result.tech_debt_issue_numbers
+    td_issues = verdicts.tech_debt_issue_numbers
     if td_issues:
         board_repo_name = ""
         if repo and "/" in repo:
@@ -1701,6 +1881,24 @@ def check(input_data: dict) -> dict | None:
                 pass
         if board_repo_name:
             ensure_issues_on_board(board_repo_name, td_issues)
+
+    # Non-blocking observability (main#1055): a TechDebt line that is present,
+    # not "none", but parsed to ZERO issue numbers used to vanish silently —
+    # neither flagged as missing nor recorded as filed. Surface it as an
+    # advisory `systemMessage` so the gap is visible without blocking merge.
+    unparseable = verdicts.tech_debt_unparseable
+    if unparseable:
+        detail = "; ".join(f"{name}: {value!r}" for name, value in unparseable)
+        return {
+            "decision": "allow",
+            "systemMessage": (
+                f"NOTE: PR {pr_display} has {len(unparseable)} verdict(s) with a "
+                "TechDebt line present but not parseable as issue reference(s) — "
+                f"recorded as ZERO tech-debt refs, not blocked: {detail}. Charter "
+                "format: `TechDebt: none` or `TechDebt: #15, #16` (a bare `15, 16` "
+                "is also accepted); free text is not."
+            ),
+        }
 
     return None
 

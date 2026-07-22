@@ -43,18 +43,26 @@ _CONTENT_COMMIT = ("ac8bcfa", _NOW)
 
 
 def _comment_result(
-    reviewers=(), missing_tech_debt=(), tech_debt_issues=(), stale=()
+    reviewers=(),
+    missing_tech_debt=(),
+    tech_debt_issues=(),
+    tech_debt_unparseable=(),
+    stale=(),
 ) -> "prs.gate.CommentReviewResult":
     """Build a CommentReviewResult like check_comment_reviews would return.
 
     `reviewers` are full names (any case); they are stored lowercased, matching
     the gate's dedup key. `stale` is a sequence of (reviewer, verdict,
     created_at) tuples recorded as excluded-stale verdicts (#950).
+    `tech_debt_unparseable` is a sequence of (requestor, raw_value) pairs
+    (main#1055) recorded when TechDebt: was present, non-"none", but parsed
+    to zero issue numbers.
     """
     result = prs.gate.CommentReviewResult()
     result.reviewers = {r.lower() for r in reviewers}
     result.reviews_missing_tech_debt = list(missing_tech_debt)
     result.tech_debt_issue_numbers = list(tech_debt_issues)
+    result.tech_debt_unparseable = list(tech_debt_unparseable)
     result.stale_verdicts = [
         prs.gate.StaleVerdict(reviewer=r, verdict=v, created_at=c) for r, v, c in stale
     ]
@@ -125,6 +133,37 @@ class ComputeReviewStateTests(unittest.TestCase):
         self.assertEqual(state.tech_debt_issue_numbers, ["808"])
         self.assertTrue(state.passes())
 
+    def test_bare_tech_debt_number_carried_through(self):
+        # main#1055: pr_review_state must not silently drop what the gate
+        # itself now surfaces — the field is a straight pass-through of the
+        # gate's CommentReviewResult.tech_debt_issue_numbers, which already
+        # accepts bare numbers per the gate-level fix.
+        state = self._run(
+            pr_data=_pr_data(),
+            comment_result=_comment_result(
+                reviewers=("Aino Virtanen", "Nadia Khoury"),
+                tech_debt_issues=("1054",),
+            ),
+            roster_names={"aino virtanen", "nadia khoury"},
+        )
+        self.assertEqual(state.tech_debt_issue_numbers, ["1054"])
+
+    def test_unparseable_tech_debt_surfaced_and_does_not_block(self):
+        # main#1055: an unparseable TechDebt value is recorded for visibility
+        # but must NOT affect passes() — it is an audit-fidelity gap, not a
+        # merge-blocking condition (the presence gate already passed).
+        state = self._run(
+            pr_data=_pr_data(),
+            comment_result=_comment_result(
+                reviewers=("Aino Virtanen", "Nadia Khoury"),
+                tech_debt_unparseable=(("Aino Virtanen", "filed later"),),
+            ),
+            roster_names={"aino virtanen", "nadia khoury"},
+        )
+        self.assertEqual(state.tech_debt_unparseable, [("Aino Virtanen", "filed later")])
+        self.assertTrue(state.passes())
+        self.assertIn("UNPARSEABLE", prs._render_text(state))
+
     def test_two_approved_but_missing_tech_debt_blocks(self):
         state = self._run(
             pr_data=_pr_data(),
@@ -194,6 +233,63 @@ class ComputeReviewStateTests(unittest.TestCase):
         with mock.patch.object(prs.gate, "get_pr_data", return_value=None):
             with self.assertRaises(prs.ReviewStateError):
                 prs.compute_review_state("707", repo="noorinalabs/noorinalabs-main")
+
+    def test_delegates_to_the_shared_resolve_review_verdicts_entry_point(self):
+        """#1048: `compute_review_state` must call `gate.resolve_review_verdicts`
+        and use its output DIRECTLY rather than reassembling the
+        content-binding / comment-scan / roster-filter / union pipeline
+        inline — the concrete guard for #1048's acceptance criterion
+        ('neither check() nor compute_review_state re-derives the verdict
+        set'). A fake `ReviewVerdicts` drives the whole result.
+        """
+        fake_verdicts = prs.gate.ReviewVerdicts(
+            number="707",
+            head_ref="S.Ferreira/0707-pr-review-state",
+            labels=[],
+            branch_author_lastname="Ferreira",
+            content_sha="ac8bcfa",
+            content_ts=_NOW,
+            formal_reviewers=set(),
+            comment_reviewers={"aino virtanen", "nadia khoury"},
+            non_roster_requestors=set(),
+            roster_comment_reviewers={"aino virtanen", "nadia khoury"},
+            roster_names={"aino virtanen", "nadia khoury"},
+            distinct_reviewers={"aino virtanen", "nadia khoury"},
+            stale_verdicts_comment=[],
+            stale_verdicts_formal=[],
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=["808"],
+            tech_debt_unparseable=[],
+            wave_bootstrap_exception=False,
+        )
+        with (
+            mock.patch.object(prs.gate, "get_pr_data", return_value=_pr_data()),
+            mock.patch.object(
+                prs.gate, "resolve_review_verdicts", return_value=fake_verdicts
+            ) as mock_resolve,
+        ):
+            state = prs.compute_review_state("707", repo="noorinalabs/noorinalabs-main")
+
+        mock_resolve.assert_called_once()
+        self.assertEqual(state.distinct_reviewer_count, 2)
+        self.assertEqual(state.tech_debt_issue_numbers, ["808"])
+        self.assertTrue(state.passes())
+
+    def test_comment_scan_undetermined_raises_review_state_error(self):
+        """`CommentScanUndeterminedError` from the shared boundary must reach
+        this driver's own `ReviewStateError` (exit 2) — proving the
+        exception, not a re-derived `undetermined` flag, is what drives it."""
+        with (
+            mock.patch.object(prs.gate, "get_pr_data", return_value=_pr_data()),
+            mock.patch.object(
+                prs.gate,
+                "resolve_review_verdicts",
+                side_effect=prs.gate.CommentScanUndeterminedError("HTTP 403: Forbidden"),
+            ),
+        ):
+            with self.assertRaises(prs.ReviewStateError) as ctx:
+                prs.compute_review_state("707", repo="noorinalabs/noorinalabs-main")
+        self.assertIn("HTTP 403: Forbidden", str(ctx.exception))
 
 
 # ---------------------------------------------------------------------------

@@ -546,6 +546,67 @@ repos:
         self.assertNotIn("skill-graphql-pagination", harmful)
 
 
+class ChecksumsAsciiKind(unittest.TestCase):
+    """#1044: the ontology/checksums.json no-`\\u`-escape gate must be a
+    classified kind so the sync-drift gate DEMANDS a pre-commit mirror of the
+    CI step (an un-mirrored gate lets the #1038 escaped/literal UTF-8
+    flip-flop reintroduce itself with only a CI-time signal, same contract as
+    the other local-script gates above)."""
+
+    def test_ci_checksums_ascii_run_step_classified(self) -> None:
+        wf = """
+jobs:
+  config-lint:
+    steps:
+      - run: python3 .claude/lib/check_checksums_ascii.py
+"""
+        self.assertIn("checksums-ascii", kinds_from_ci(wf))
+
+    def test_precommit_checksums_ascii_hook_classified(self) -> None:
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: checksums-ascii
+        name: checksums-ascii
+        entry: python3 .claude/lib/check_checksums_ascii.py
+"""
+        self.assertIn("checksums-ascii", kinds_from_precommit(cfg))
+
+    def test_ci_checksums_ascii_without_precommit_is_harmful_drift(self) -> None:
+        wf = """
+jobs:
+  config-lint:
+    steps:
+      - run: python3 .claude/lib/check_checksums_ascii.py
+"""
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+"""
+        harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
+        self.assertIn("checksums-ascii", harmful)
+
+    def test_ci_checksums_ascii_with_precommit_mirror_no_drift(self) -> None:
+        wf = """
+jobs:
+  config-lint:
+    steps:
+      - run: python3 .claude/lib/check_checksums_ascii.py
+"""
+        cfg = """
+repos:
+  - repo: local
+    hooks:
+      - id: checksums-ascii
+        entry: python3 .claude/lib/check_checksums_ascii.py
+"""
+        harmful, _ = compute_drift(kinds_from_precommit(cfg), kinds_from_ci(wf))
+        self.assertNotIn("checksums-ascii", harmful)
+
+
 class BuildKindTightening(unittest.TestCase):
     """#576: runtime `docker build` / `docker buildx` steps are image-MOVING,
     not a build-QUALITY gate a local pre-commit hook can mirror — they must
@@ -798,6 +859,7 @@ _OLD_KIND_PATTERNS = {
         "lint_skill_graphql_pagination",
         "skill-graphql-pagination",
     ),
+    "checksums-ascii": ("check_checksums_ascii", "checksums-ascii"),
 }
 _OLD_RUN_BLOCK_OPEN_RE = re.compile(r"^(?P<indent>\s*)-?\s*run:\s*[|>][+\-0-9]*\s*$")
 
@@ -880,6 +942,7 @@ _EXPECTED_KINDS = {
     ".": {
         "precommit": {
             "actionlint",
+            "checksums-ascii",
             "cspell",
             "dockerfile-base-pin",
             "doc-freshness",
@@ -896,6 +959,7 @@ _EXPECTED_KINDS = {
         },
         "ci": {
             "actionlint",
+            "checksums-ascii",
             "cspell",
             "dockerfile-base-pin",
             "doc-freshness",

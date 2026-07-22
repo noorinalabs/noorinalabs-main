@@ -60,6 +60,40 @@ import re
 import sys
 from pathlib import Path
 
+# `wave_{M}_meta_issue` write-side pin (main#1053). `/wave-scope` SKILL.md § 13
+# documents this key's type as `integer`; `/wave-retro`'s next-wave reservation
+# step instead wrote a qualified string (`"noorinalabs-main#821"`). Both write
+# paths funnel through this module's `main()`, so coercing here — the single
+# choke point — closes the drift at its source rather than requiring every
+# caller to self-police. Without this, `post_wave_kickoff_comment.py`'s
+# meta-issue skip silently never fired for any wave written in the string
+# shape (`str("noorinalabs-main#821") == "821"` is False).
+_META_ISSUE_KEY_RE = re.compile(r"^wave_\d+_meta_issue$")
+
+
+def _coerce_meta_issue_value(key: str, decoded: object) -> int:
+    """Normalize a `wave_{M}_meta_issue` value to the canonical bare integer.
+
+    Accepts either shape observed in the wild — a bare int (`347`) or a
+    qualified string (`"noorinalabs-main#821"`) — and returns the plain
+    integer either way, so every future write lands in the one documented
+    type regardless of which call site produced it.
+
+    Raises ValueError if `decoded` is a bool (JSON `true`/`false` is never a
+    valid issue number, and Python's `bool` is a subtype of `int` so it would
+    otherwise pass an `isinstance(int)` check) or has no trailing digit run to
+    extract — a value this malformed should hard-fail the upsert rather than
+    silently write garbage into cross-repo-status.json.
+    """
+    if isinstance(decoded, bool):
+        raise ValueError(f"{key}: bool is not a valid meta-issue value: {decoded!r}")
+    if isinstance(decoded, int):
+        return decoded
+    match = re.search(r"(\d+)$", str(decoded))
+    if match is None:
+        raise ValueError(f"{key}: no trailing issue number found in {decoded!r}")
+    return int(match.group(1))
+
 
 def _is_top_level_position(text: str, position: int) -> bool:
     """Return True iff `position` in `text` is at JSON top-level depth.
@@ -391,6 +425,13 @@ def main(argv: list[str]) -> int:
         except json.JSONDecodeError as exc:
             print(f"ERROR: value for {k} is not valid JSON: {exc}", file=sys.stderr)
             return 2
+        if _META_ISSUE_KEY_RE.match(k):
+            try:
+                decoded = _coerce_meta_issue_value(k, decoded)
+            except ValueError as exc:
+                print(f"ERROR: {exc}", file=sys.stderr)
+                return 2
+            raw = json.dumps(decoded)
         pairs.append((k, raw, decoded))
 
     text = path.read_text()

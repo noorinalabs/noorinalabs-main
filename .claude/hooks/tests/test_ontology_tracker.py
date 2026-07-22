@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -331,6 +333,22 @@ class ShouldSkipSessionHandoffTests(_FakeRepoRootMixin, unittest.TestCase):
         path = str(self._fake_root / ".claude" / "memory" / "section_ci_tooling.md")
         self.assertFalse(hook._should_skip(path))
 
+    def test_skip_does_not_widen_to_bare_memory_prefix(self):
+        """#1045: pin the last unkilled widening direction on the handoff pattern.
+
+        Mutation testing at ``ac8bcfa`` (PR #1040 merge-gate re-confirm) found
+        four of five string-truncation directions on the
+        ``".claude/memory/session_handoff.md"`` entry already killed by the
+        tests above, but widening it on the LEFT — dropping the ``.claude/``
+        anchor down to ``"memory/session_handoff.md"`` — survived all 31
+        tests. A path like ``docs/memory/session_handoff.md`` has no
+        ``.claude/`` component, so it must NOT be skipped; if the pattern is
+        ever mutated to drop that anchor, this is the only assertion that
+        dies.
+        """
+        anchored = str(self._fake_root / "docs" / "memory" / "session_handoff.md")
+        self.assertFalse(hook._should_skip(anchored))
+
 
 class ChecksumsSerializationTests(_FakeRepoRootMixin, unittest.TestCase):
     """#1038: the tracker must not re-escape literal UTF-8 on every write.
@@ -405,6 +423,179 @@ class ChecksumsSerializationTests(_FakeRepoRootMixin, unittest.TestCase):
                 entry.pop("tracked_at", None)
         self.assertEqual(first_data, second_data)
         self.assertNotIn("\\u", second.decode("utf-8"))
+
+
+class GitCheckIgnoreGeneralizationTests(_FakeRepoRootMixin, unittest.TestCase):
+    """#1039: generalize SKIP_PATTERNS via an owning-repo ``git check-ignore``.
+
+    The naive fix (#1038's rejected proposal) runs ``check-ignore`` from
+    ``REPO_ROOT``: since the parent repo ``.gitignore``s every child repo
+    wholesale, that would report EVERY child-repo file as ignored — a 52%
+    regression that blinds the tracker while looking green. The correct fix
+    resolves each file's nearest ``.git`` ancestor and asks THAT repo. These
+    tests use real ``git init`` repos (not mocks) so the regression guard is
+    load-bearing against the actual git plumbing command, not an assumption
+    about its behavior.
+    """
+
+    def setUp(self):
+        super().setUp()
+        hook._GIT_CHECK_IGNORE_CACHE.clear()
+        # `env=hook._hermetic_git_env()` is load-bearing (main#719): the
+        # pre-push pytest hook is itself invoked by `git push`, which exports
+        # GIT_DIR/GIT_WORK_TREE for the real repo into every subprocess this
+        # test spawns. Without stripping it, `git init` here silently
+        # inits/no-ops against the REAL repo instead of the fake root, so the
+        # fake root never gets a `.git` and every check-ignore call below
+        # then legitimately (and misleadingly) reports "not a git repo".
+        subprocess.run(
+            ["git", "init", "-q", str(self._fake_root)],
+            check=True,
+            capture_output=True,
+            env=hook._hermetic_git_env(),
+        )
+
+    def tearDown(self):
+        hook._GIT_CHECK_IGNORE_CACHE.clear()
+        super().tearDown()
+
+    def test_child_repo_file_ignored_by_parent_is_still_tracked(self):
+        """The 52% regression guard: a child repo's own tracked file.
+
+        The parent ``.gitignore`` ignores the whole ``child-repo/`` directory
+        (mirroring noorinalabs-main's real wholesale child-repo gitignore),
+        but the file lives inside its OWN nested git repo, which does not
+        ignore it. Resolving check-ignore against the owning repo (not
+        REPO_ROOT) must still track this file.
+        """
+        (self._fake_root / ".gitignore").write_text("child-repo/\n", encoding="utf-8")
+
+        child_repo = self._fake_root / "child-repo"
+        child_repo.mkdir()
+        subprocess.run(
+            ["git", "init", "-q", str(child_repo)],
+            check=True,
+            capture_output=True,
+            env=hook._hermetic_git_env(),
+        )
+
+        f = child_repo / "ontology" / "services.yaml"
+        f.parent.mkdir(parents=True)
+        f.write_text("services: []\n", encoding="utf-8")
+
+        self.assertFalse(hook._should_skip(str(f)))
+
+    def test_parent_gitignored_file_is_skipped(self):
+        """A file genuinely gitignored by its own (owning) repo IS skipped."""
+        (self._fake_root / ".gitignore").write_text("scratch/\n", encoding="utf-8")
+
+        f = self._fake_root / "scratch" / "notes.md"
+        f.parent.mkdir(parents=True)
+        f.write_text("notes\n", encoding="utf-8")
+
+        self.assertTrue(hook._should_skip(str(f)))
+
+    def test_non_ignored_file_in_owning_repo_is_tracked(self):
+        """A file not covered by any .gitignore rule is tracked as normal."""
+        f = self._fake_root / "ontology" / "domain.yaml"
+        f.parent.mkdir(parents=True)
+        f.write_text("entities: []\n", encoding="utf-8")
+
+        self.assertFalse(hook._should_skip(str(f)))
+
+    def test_find_git_root_returns_none_without_git_ancestor(self):
+        """No ``.git`` ancestor at all -> cannot determine -> caller fails open."""
+        base = Path.home() / ".cache" / "noorinalabs-test-ontology-tracker"
+        base.mkdir(parents=True, exist_ok=True)
+        lonely = Path(tempfile.mkdtemp(prefix="no_git_", dir=str(base)))
+        try:
+            f = lonely / "file.md"
+            f.write_text("x\n", encoding="utf-8")
+            self.assertIsNone(hook._find_git_root(f))
+            self.assertFalse(hook._is_git_ignored(f))
+        finally:
+            shutil.rmtree(lonely, ignore_errors=True)
+
+    def test_check_ignore_subprocess_failure_fails_open(self):
+        """A ``git`` subprocess error must not skip the file (fail open)."""
+        f = self._fake_root / "ontology" / "services.yaml"
+        f.parent.mkdir(parents=True)
+        f.write_text("services: []\n", encoding="utf-8")
+
+        orig_run = subprocess.run
+
+        def _boom(*args, **kwargs):
+            raise OSError("git not found")
+
+        subprocess.run = _boom
+        try:
+            self.assertFalse(hook._is_git_ignored(f.resolve()))
+        finally:
+            subprocess.run = orig_run
+
+    def test_check_ignore_timeout_fails_open(self):
+        """A ``git`` subprocess timeout must not skip the file (fail open)."""
+        f = self._fake_root / "ontology" / "services.yaml"
+        f.parent.mkdir(parents=True)
+        f.write_text("services: []\n", encoding="utf-8")
+
+        orig_run = subprocess.run
+
+        def _timeout(*args, **kwargs):
+            raise subprocess.TimeoutExpired(cmd="git", timeout=5)
+
+        subprocess.run = _timeout
+        try:
+            self.assertFalse(hook._is_git_ignored(f.resolve()))
+        finally:
+            subprocess.run = orig_run
+
+    def test_result_is_cached_per_process(self):
+        """A second call for the same path must not re-invoke ``git``."""
+        (self._fake_root / ".gitignore").write_text("scratch/\n", encoding="utf-8")
+        f = self._fake_root / "scratch" / "notes.md"
+        f.parent.mkdir(parents=True)
+        f.write_text("notes\n", encoding="utf-8")
+        resolved = f.resolve()
+
+        call_count = 0
+        orig_run = subprocess.run
+
+        def _counting_run(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return orig_run(*args, **kwargs)
+
+        subprocess.run = _counting_run
+        try:
+            first = hook._is_git_ignored(resolved)
+            second = hook._is_git_ignored(resolved)
+        finally:
+            subprocess.run = orig_run
+
+        self.assertTrue(first)
+        self.assertTrue(second)
+        self.assertEqual(call_count, 1)
+
+    def test_end_to_end_check_writes_no_entry_for_gitignored_file(self):
+        """Full ``check()`` dispatcher path: a gitignored file writes nothing."""
+        (self._fake_root / ".gitignore").write_text("scratch/\n", encoding="utf-8")
+        f = self._fake_root / "scratch" / "notes.md"
+        f.parent.mkdir(parents=True)
+        f.write_text("notes\n", encoding="utf-8")
+
+        checksums = self._fake_root / "ontology" / "checksums.json"
+        checksums.parent.mkdir(parents=True, exist_ok=True)
+        checksums.write_text('{"version": 1, "files": {}}\n', encoding="utf-8")
+        orig_checksums_file = hook.CHECKSUMS_FILE
+        hook.CHECKSUMS_FILE = checksums
+        try:
+            before = checksums.read_bytes()
+            result = hook.check({"tool_name": "Write", "tool_input": {"file_path": str(f)}})
+            self.assertIsNone(result)
+            self.assertEqual(checksums.read_bytes(), before)
+        finally:
+            hook.CHECKSUMS_FILE = orig_checksums_file
 
 
 if __name__ == "__main__":

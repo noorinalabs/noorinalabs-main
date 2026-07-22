@@ -266,6 +266,71 @@ class WalkFlagValuesTests(unittest.TestCase):
         trailing forms)."""
         self.assertEqual(sp.walk_flag_values(["gh", "-R"], {"-R"}), [])
 
+    # -- main#1060: gh/cobra semantics hardening -----------------------------
+
+    def test_value_less_flag_does_not_eat_next_long_flag(self):
+        """A value-less `-R` immediately followed by `--add-label` must NOT
+        yield `repo='--add-label'` (main#1060's motivating reproducer, filed
+        during #1059 review). Real gh would error ("flag needs an argument:
+        'R'"); this helper can't raise, but must not silently misroute
+        either — `-R` yields nothing, and `--add-label` is still scanned as
+        its own flag."""
+        tokens = [
+            "gh",
+            "issue",
+            "edit",
+            "42",
+            "-R",
+            "--add-label",
+            "wave-26",
+            "--add-label",
+            "p3-wave-9",
+        ]
+        self.assertEqual(sp.walk_flag_values(tokens, {"-R", "--repo"}), [])
+        self.assertEqual(
+            sp.walk_flag_values(tokens, {"--add-label"}),
+            ["wave-26", "p3-wave-9"],
+        )
+
+    def test_value_less_flag_does_not_eat_next_short_flag(self):
+        """Same hazard, short-flag-shaped successor."""
+        self.assertEqual(sp.walk_flag_values(["gh", "-R", "-l", "bug"], {"-R"}), [])
+        self.assertEqual(sp.walk_flag_values(["gh", "-R", "-l", "bug"], {"-l"}), ["bug"])
+
+    def test_value_looking_like_negative_number_still_rejected(self):
+        """A flag-shaped successor is rejected even when it isn't itself in
+        `wanted` — the guard is "does this token look like a flag", not "is
+        this token itself a wanted flag"."""
+        self.assertEqual(sp.walk_flag_values(["gh", "-R", "--unknown-flag"], {"-R"}), [])
+
+    def test_bare_dash_after_flag_is_still_a_valid_value(self):
+        """A LONE `-` (the conventional stdin/positional sentinel) is NOT
+        flag-shaped, so it is still accepted as a value — only genuine
+        multi-character `-`-prefixed tokens are rejected."""
+        self.assertEqual(sp.walk_flag_values(["gh", "-F", "-"], {"-F"}), ["-"])
+
+    def test_double_dash_terminator_stops_scan(self):
+        """A literal `--` (POSIX end-of-options) stops the scan entirely —
+        a `--repo`/`-R` appearing after it is positional in real gh/cobra,
+        never a flag (main#1060 reproducer #2)."""
+        tokens = ["gh", "issue", "edit", "42", "--add-label", "wave-26", "--", "--repo", "x/y"]
+        self.assertEqual(sp.walk_flag_values(tokens, {"--repo", "-R"}), [])
+        # Flags BEFORE the terminator are unaffected.
+        self.assertEqual(sp.walk_flag_values(tokens, {"--add-label"}), ["wave-26"])
+
+    def test_double_dash_terminator_with_no_flags_after_is_a_noop(self):
+        tokens = ["gh", "issue", "edit", "42", "--repo", "x/y", "--"]
+        self.assertEqual(sp.walk_flag_values(tokens, {"--repo"}), ["x/y"])
+
+    def test_repeated_flag_returns_both_in_source_order(self):
+        """`walk_flag_values` itself does not pick a winner for a repeated
+        flag — it returns every value in source order (main#1060 finding
+        #3). Callers needing gh's real last-flag-wins semantics for a
+        single-value flag take `values[-1]` themselves (see
+        `_repo_flag_parse.extract_repo`)."""
+        tokens = ["gh", "issue", "edit", "42", "-R", "a/b", "-R", "c/d"]
+        self.assertEqual(sp.walk_flag_values(tokens, {"-R", "--repo"}), ["a/b", "c/d"])
+
 
 class FirstFlagValueTests(unittest.TestCase):
     """Convenience wrapper combining tokenize + walk_flag_values + regex fallback."""

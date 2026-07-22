@@ -96,6 +96,24 @@ class BlocksSquashIntoWaveBranch(unittest.TestCase):
         self.assertEqual(result["decision"], "block")
 
 
+class RepeatedRepoFlagLastWins(unittest.TestCase):
+    """main#1060 finding #3: real gh's `--repo`/`-R` is a single-value pflag,
+    so a repeated flag resolves to its LAST occurrence — the resolved repo
+    fed to `_resolve_base_ref` (and echoed in the block reason) must be the
+    last one, not the first."""
+
+    def test_repeated_repo_flag_echoes_last_value(self):
+        result = hook.check(
+            _input("gh pr merge 218 --squash --repo noorinalabs/repo-a --repo noorinalabs/repo-b"),
+            base_runner=_runner({"218": WAVE}),
+        )
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("--repo noorinalabs/repo-b", result["reason"])
+        self.assertNotIn("repo-a", result["reason"])
+
+
 class AllowsLegitimateMerges(unittest.TestCase):
     def test_squash_into_main_allows(self):
         # The standard GitHub-flow squash for feature work targets main — untouched.

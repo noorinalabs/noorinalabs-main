@@ -29,6 +29,7 @@ Or:  ENVIRONMENT=test python3 .claude/hooks/tests/test_validate_pr_review.py
 from __future__ import annotations
 
 import json
+import re
 import sys
 import unittest
 from datetime import datetime
@@ -118,6 +119,10 @@ class _CheckCommentReviewsHarness(unittest.TestCase):
                 _CheckCommentReviewsHarness.PR_NUMBER,
                 branch_author,
                 repo=repo,
+                # content_ts is a REQUIRED keyword-only arg (#1050); None is the
+                # explicit "no content binding" value these ~30 pre-#950 callers
+                # exercise (every verdict counted unconditionally).
+                content_ts=None,
             )
 
     @staticmethod
@@ -226,6 +231,81 @@ class TechDebtFilterTests(_CheckCommentReviewsHarness):
         result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
         self.assertEqual(result.reviews_missing_tech_debt, [])
         self.assertEqual(sorted(result.tech_debt_issue_numbers), ["15", "16"])
+
+    def test_approved_with_bare_techdebt_number_captures(self):
+        """main#1055: a bare issue number (no `#`) must still be captured.
+
+        Reproduction — Nino's verdict on PR #1052 wrote `TechDebt: 1054`; the
+        pre-fix regex `#(\\d+)` matched nothing against a value with no `#`.
+        """
+        comments = [
+            self._comment(
+                "Requestor: Nino Kavtaradze\nRequestee: Nadia Khoury\n"
+                "RequestOrReplied: Approved\nTechDebt: 1054"
+            ),
+        ]
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.reviews_missing_tech_debt, [])
+        self.assertEqual(result.tech_debt_issue_numbers, ["1054"])
+        self.assertEqual(result.tech_debt_unparseable, [])
+
+    def test_approved_with_bare_techdebt_number_list_captures(self):
+        comments = [
+            self._comment(
+                "Requestor: Mateo Santos\nRequestee: Linh Pham\n"
+                "RequestOrReplied: Approved\nTechDebt: 1054, 1055"
+            ),
+        ]
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(sorted(result.tech_debt_issue_numbers), ["1054", "1055"])
+        self.assertEqual(result.tech_debt_unparseable, [])
+
+    def test_approved_with_mixed_hash_and_bare_numbers_captures_both(self):
+        comments = [
+            self._comment(
+                "Requestor: Mateo Santos\nRequestee: Linh Pham\n"
+                "RequestOrReplied: Approved\nTechDebt: 1054 and #1055"
+            ),
+        ]
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(sorted(result.tech_debt_issue_numbers), ["1054", "1055"])
+
+    def test_approved_with_junk_techdebt_value_is_reported_not_swallowed(self):
+        """main#1055: free text (neither `none` nor a number) must be RECORDED,
+        not silently dropped — the residual case is the actual bug, not just
+        the strictness of the regex.
+        """
+        comments = [
+            self._comment(
+                "Requestor: Mateo Santos\nRequestee: Linh Pham\n"
+                "RequestOrReplied: Approved\nTechDebt: filed later"
+            ),
+        ]
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.reviews_missing_tech_debt, [])
+        self.assertEqual(result.tech_debt_issue_numbers, [])
+        self.assertEqual(result.tech_debt_unparseable, [("Mateo Santos", "filed later")])
+
+    def test_techdebt_none_is_not_flagged_as_unparseable(self):
+        comments = [
+            self._comment(
+                "Requestor: Mateo Santos\nRequestee: Linh Pham\n"
+                "RequestOrReplied: Approved\nTechDebt: none"
+            ),
+        ]
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(result.tech_debt_unparseable, [])
+
+    def test_mutation_verify_old_regex_would_drop_bare_number(self):
+        """Pin the exact defect (main#1055): the pre-fix `#(\\d+)` regex
+        captures nothing from a bare number. Proves the new `#?(\\d+)` regex
+        is the actual fix, not incidental — if someone reverts the `#?` to
+        `#`, this assertion demonstrates why that regresses.
+        """
+        old_regex = r"#(\d+)"
+        new_regex = r"#?(\d+)"
+        self.assertEqual(re.findall(old_regex, "1054"), [])
+        self.assertEqual(re.findall(new_regex, "1054"), ["1054"])
 
     def test_pr_821_scenario(self):
         """Exact scenario from issue #147 repro, in canonical #244 format.
@@ -375,6 +455,165 @@ class ReviewerDedupTests(_CheckCommentReviewsHarness):
         ]
         result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
         self.assertEqual(result.reviewers, set(), "branch author must not self-review")
+
+
+class LatestVerdictSupersedesTests(_CheckCommentReviewsHarness):
+    """Issue #940: the reviewer set is monotonic — an approval cannot be
+    withdrawn, and a reviewer standing at Changes Requested still counts as
+    an approver if they ever approved earlier in the thread.
+
+    The fix keys each reviewer's verdict by their LATEST charter-format
+    comment (chronological = fixture list order, since these tests pass no
+    `content_ts` and so exercise the unbound #950 path). Only a reviewer
+    whose latest verdict is Approved contributes to the reviewer set.
+    """
+
+    @staticmethod
+    def _verdict(requestor: str, ror: str, requestee: str = "Linh Pham") -> dict:
+        return {
+            "body": (
+                f"Requestor: {requestor}\nRequestee: {requestee}\n"
+                f"RequestOrReplied: {ror}\nTechDebt: none"
+            ),
+            "user": {"login": "anyone"},
+        }
+
+    def test_approved_then_changes_requested_is_excluded(self):
+        """Guard for #940: this must RED under the pre-fix monotonic union.
+
+        An Approved followed by a Changes Requested from the SAME reviewer —
+        the fixture shape the issue calls out as the one that proves the
+        defect (a fixture with only the reverse order "passes under both
+        implementations and proves nothing").
+        """
+        comments = [
+            self._verdict("Oyunbileg Batbayar", "Approved"),
+            self._verdict("Oyunbileg Batbayar", "Changes Requested"),
+        ]
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertNotIn(
+            "oyunbileg batbayar",
+            result.reviewers,
+            "a later Changes Requested must withdraw the earlier Approved",
+        )
+        self.assertEqual(result.reviewers, set())
+
+    def test_changes_requested_then_approved_is_included(self):
+        """The symmetric case: a later Approved supersedes an earlier block."""
+        comments = [
+            self._verdict("Kwesi Boateng", "Changes Requested"),
+            self._verdict("Kwesi Boateng", "Approved"),
+        ]
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertIn("kwesi boateng", result.reviewers)
+
+    def test_da359_shaped_timeline_reproduces_the_correct_verdicts(self):
+        """Reproduces the exact da#359 timeline from #940's report.
+
+        Chronological verdicts:
+          Oyunbileg Batbayar: Approved -> Changes Requested -> Changes Requested
+          Alejandra Reyes-Fuentes: Approved
+          Kwesi Boateng: Changes Requested -> Approved
+
+        Standing verdict is Oyunbileg BLOCKING, Alejandra and Kwesi APPROVED —
+        exactly 2 current approvers, not the pre-fix count of 3.
+        """
+        comments = [
+            self._verdict("Oyunbileg Batbayar", "Approved"),
+            self._verdict("Alejandra Reyes-Fuentes", "Approved"),
+            self._verdict("Oyunbileg Batbayar", "Changes Requested"),
+            self._verdict("Oyunbileg Batbayar", "Changes Requested"),
+            self._verdict("Kwesi Boateng", "Changes Requested"),
+            self._verdict("Kwesi Boateng", "Approved"),
+        ]
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(
+            result.reviewers,
+            {"alejandra reyes-fuentes", "kwesi boateng"},
+        )
+        self.assertNotIn("oyunbileg batbayar", result.reviewers)
+        self.assertEqual(len(result.reviewers), 2)
+
+    def test_stale_verdict_does_not_override_a_later_current_one(self):
+        """A verdict predating T_content is excluded from `latest_verdict`
+        entirely (#950) — it must not be able to overwrite the reviewer's
+        genuinely-latest CURRENT verdict just because it appears later in
+        `stale_verdicts` bookkeeping. Here the reviewer's only CURRENT verdict
+        is Approved; an earlier STALE Changes Requested must not block them.
+        """
+        content_ts = hook._parse_iso8601("2026-01-02T00:00:00Z")
+        stale_ts = "2026-01-01T00:00:00Z"
+        fresh_ts = "2026-01-03T00:00:00Z"
+        comments = [
+            {
+                "body": (
+                    "Requestor: Nino Kavtaradze\nRequestee: Linh Pham\n"
+                    "RequestOrReplied: Changes Requested\nTechDebt: none"
+                ),
+                "created_at": stale_ts,
+            },
+            {
+                "body": (
+                    "Requestor: Nino Kavtaradze\nRequestee: Linh Pham\n"
+                    "RequestOrReplied: Approved\nTechDebt: none"
+                ),
+                "created_at": fresh_ts,
+            },
+        ]
+        result = self._run_with_fake_api_ts(
+            comments, self.BRANCH_AUTHOR, repo=self.REPO, content_ts=content_ts
+        )
+        self.assertIn("nino kavtaradze", result.reviewers)
+        self.assertEqual(len(result.stale_verdicts), 1)
+
+
+class ContentTsRequiredTests(unittest.TestCase):
+    """Issue #1050: `content_ts` must be a REQUIRED argument on both shared
+    gate helpers, not a defaulted one.
+
+    #1046 happened because a defaulted `content_ts` let a caller omit it and
+    silently get staleness-filtering OFF rather than an error. This class
+    proves the fix at the signature level: calling either function WITHOUT
+    `content_ts` must now raise `TypeError` at call time — the omission
+    becomes loud instead of a silent fail-open. These tests would RED against
+    the pre-#1050 signatures (which default `content_ts` to `None`).
+    """
+
+    def test_check_comment_reviews_without_content_ts_raises_type_error(self):
+        with self.assertRaises(TypeError):
+            hook.check_comment_reviews(451, "pham", repo="noorinalabs/x")  # missing content_ts
+
+    def test_partition_formal_reviewers_without_content_ts_raises_type_error(self):
+        with self.assertRaises(TypeError):
+            hook.partition_formal_reviewers([], "someone")  # missing content_ts
+
+    def test_check_comment_reviews_still_accepts_explicit_none(self):
+        """`content_ts=None` remains a legitimate VALUE — only omission is barred."""
+        with mock.patch.object(
+            hook.subprocess,
+            "run",
+            side_effect=lambda args, capture_output, text, timeout: mock.MagicMock(
+                returncode=0, stdout="[]"
+            ),
+        ):
+            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x", content_ts=None)
+        self.assertEqual(result.undetermined, "")
+
+    def test_partition_formal_reviewers_still_accepts_explicit_none(self):
+        formal, stale = hook.partition_formal_reviewers(
+            [{"author": {"login": "reviewer-a"}, "state": "APPROVED"}],
+            "author-login",
+            None,
+        )
+        self.assertEqual(formal, {"reviewer-a"})
+        self.assertEqual(stale, [])
+
+    def test_check_comment_reviews_repo_is_keyword_only(self):
+        """`repo` moved keyword-only alongside `content_ts` (#1050) — a
+        positional third argument must now raise TypeError rather than
+        silently binding to `repo`."""
+        with self.assertRaises(TypeError):
+            hook.check_comment_reviews(451, "pham", "noorinalabs/x")  # repo positional
 
 
 class ExtractBranchAuthorLastnameTests(unittest.TestCase):
@@ -904,7 +1143,9 @@ class CommentPaginationTests(_CheckCommentReviewsHarness):
             return result
 
         with mock.patch.object(hook.subprocess, "run", side_effect=fake_run):
-            hook.check_comment_reviews(self.PR_NUMBER, self.BRANCH_AUTHOR, repo=self.REPO)
+            hook.check_comment_reviews(
+                self.PR_NUMBER, self.BRANCH_AUTHOR, repo=self.REPO, content_ts=None
+            )
 
         gh_api_calls = [a for a in captured_args if a[0] == "gh" and a[1] == "api"]
         self.assertEqual(len(gh_api_calls), 1, "exactly one gh api call expected")
@@ -2098,6 +2339,216 @@ class VerdictFixtureSanityTests(unittest.TestCase):
         self.assertEqual(result.stale_verdicts, [])
 
 
+class ResolveReviewVerdictsSharedBoundaryTests(unittest.TestCase):
+    """#1048: `resolve_review_verdicts` is the ONE shared entry point `check()`
+    and `pr_review_state.compute_review_state` both call — neither re-derives
+    the content-binding / comment-scan / roster-filter / union pipeline with
+    its own argument list, which is the #1046 defect class.
+
+    Mutation-sensitivity was manually confirmed while writing this refactor:
+    temporarily stripping `content_ts=content_ts` from the feature-branch
+    `check_comment_reviews` call inside `resolve_review_verdicts` turned 4
+    tests in `.claude/lib/tests/test_pr_review_state.py::ContentStalenessTests`
+    red immediately, because that class drives `compute_review_state` through
+    the REAL `resolve_review_verdicts` over a faked `gh api` boundary. The
+    test below is the equivalent DIRECT guard at the shared function itself.
+    """
+
+    REPO = "noorinalabs/noorinalabs-main"
+
+    @staticmethod
+    def _pr_data(head_ref="L.Ferreira/1040-x", author="parametrization", reviews=(), labels=()):
+        return {
+            "author": author,
+            "number": 1040,
+            "reviews": list(reviews),
+            "headRefName": head_ref,
+            "labels": list(labels),
+        }
+
+    def test_stale_comment_verdict_is_excluded_from_the_reviewer_set(self):
+        """Direct kill-shot on the shared boundary (#950 x #1048): a stale
+        Approved must not count toward `distinct_reviewers`, and must be
+        recorded on `stale_verdicts_comment` so a caller (either check()'s
+        block message or the driver's report) can name it. This would RED if
+        `resolve_review_verdicts` ever stopped forwarding `content_ts` to
+        `check_comment_reviews`.
+        """
+        stale_comment = {
+            "body": (
+                "Requestor: Lucas Ferreira\nRequestee: Someone Else\n"
+                "RequestOrReplied: Approved\nTechDebt: none"
+            ),
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+
+        def fake_run(args, capture_output, text, timeout):
+            result = mock.MagicMock()
+            result.returncode = 0
+            if args[0] == "gh" and args[1:3] == ["repo", "view"]:
+                result.stdout = json.dumps({"owner": {"login": "noorinalabs"}, "name": "r"})
+            else:
+                result.stdout = json.dumps([stale_comment])
+            return result
+
+        with (
+            mock.patch.object(hook.subprocess, "run", side_effect=fake_run),
+            mock.patch.object(
+                hook,
+                "get_latest_content_commit",
+                return_value=("ac8bcfa", hook._parse_iso8601("2026-01-02T00:00:00Z")),
+            ),
+            mock.patch.object(hook, "_load_roster_names", return_value={"lucas ferreira"}),
+        ):
+            verdicts = hook.resolve_review_verdicts(self._pr_data(), repo=self.REPO)
+
+        self.assertEqual(verdicts.distinct_reviewers, set())
+        self.assertEqual(len(verdicts.stale_verdicts_comment), 1)
+        self.assertEqual(verdicts.stale_verdicts_comment[0].reviewer, "Lucas Ferreira")
+        self.assertEqual(verdicts.stale_verdicts_formal, [])
+        self.assertEqual(verdicts.stale_verdicts, verdicts.stale_verdicts_comment)
+
+    def test_check_delegates_to_resolve_review_verdicts_and_trusts_it(self):
+        """`check()` must call the shared entry point and use its output
+        DIRECTLY, rather than reassembling the pipeline inline — the concrete
+        guard for #1048's acceptance criterion ('neither check() nor
+        compute_review_state re-derives the verdict set'). A fake
+        `ReviewVerdicts` with 2 distinct current reviewers and no missing
+        TechDebt must ALLOW the merge without `check()` ever recomputing
+        `distinct_reviewers` itself.
+        """
+        input_data = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "gh pr merge 1040 --repo noorinalabs/noorinalabs-main"},
+        }
+        fake_verdicts = hook.ReviewVerdicts(
+            number=1040,
+            head_ref="L.Ferreira/1040-x",
+            labels=[],
+            branch_author_lastname="Ferreira",
+            content_sha="ac8bcfa",
+            content_ts=None,
+            formal_reviewers=set(),
+            comment_reviewers={"nino kavtaradze", "weronika zielinska"},
+            non_roster_requestors=set(),
+            roster_comment_reviewers={"nino kavtaradze", "weronika zielinska"},
+            roster_names={"nino kavtaradze", "weronika zielinska"},
+            distinct_reviewers={"nino kavtaradze", "weronika zielinska"},
+            stale_verdicts_comment=[],
+            stale_verdicts_formal=[],
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=[],
+            tech_debt_unparseable=[],
+            wave_bootstrap_exception=False,
+        )
+        with (
+            mock.patch.object(
+                hook,
+                "get_pr_data",
+                return_value={
+                    "author": "someone",
+                    "number": 1040,
+                    "reviews": [],
+                    "headRefName": "L.Ferreira/1040-x",
+                    "labels": [],
+                },
+            ),
+            mock.patch.object(
+                hook, "resolve_review_verdicts", return_value=fake_verdicts
+            ) as mock_resolve,
+        ):
+            result = hook.check(input_data)
+
+        mock_resolve.assert_called_once()
+        self.assertIsNone(result, "2 distinct current reviewers must ALLOW the merge")
+
+    def test_check_surfaces_unparseable_tech_debt_as_nonblocking_advisory(self):
+        """main#1055 on the #1048 shape: `tech_debt_unparseable` carried on the
+        shared `ReviewVerdicts` must reach `check()`'s advisory path — a merge
+        with 2 distinct reviewers, no missing TechDebt, but an unparseable
+        TechDebt value ALLOWS (never blocks) while surfacing a `systemMessage`.
+        Proves the observability signal rides the new shared structure and does
+        NOT flip the merge decision (it is emitted only after every blocking
+        check has passed).
+        """
+        input_data = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "gh pr merge 1040 --repo noorinalabs/noorinalabs-main"},
+        }
+        fake_verdicts = hook.ReviewVerdicts(
+            number=1040,
+            head_ref="L.Ferreira/1040-x",
+            labels=[],
+            branch_author_lastname="Ferreira",
+            content_sha="ac8bcfa",
+            content_ts=None,
+            formal_reviewers=set(),
+            comment_reviewers={"nino kavtaradze", "weronika zielinska"},
+            non_roster_requestors=set(),
+            roster_comment_reviewers={"nino kavtaradze", "weronika zielinska"},
+            roster_names={"nino kavtaradze", "weronika zielinska"},
+            distinct_reviewers={"nino kavtaradze", "weronika zielinska"},
+            stale_verdicts_comment=[],
+            stale_verdicts_formal=[],
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=[],
+            tech_debt_unparseable=[("Nino Kavtaradze", "filed later")],
+            wave_bootstrap_exception=False,
+        )
+        with (
+            mock.patch.object(
+                hook,
+                "get_pr_data",
+                return_value={
+                    "author": "someone",
+                    "number": 1040,
+                    "reviews": [],
+                    "headRefName": "L.Ferreira/1040-x",
+                    "labels": [],
+                },
+            ),
+            mock.patch.object(hook, "resolve_review_verdicts", return_value=fake_verdicts),
+        ):
+            result = hook.check(input_data)
+
+        self.assertIsNotNone(result, "an unparseable TechDebt value must surface a message")
+        assert result is not None  # narrow type for the asserts below
+        self.assertEqual(result["decision"], "allow", "the advisory must NOT block the merge")
+        self.assertIn("filed later", result["systemMessage"])
+
+    def test_check_translates_stale_verdict_error_into_a_block(self):
+        """`CommentScanUndeterminedError` from the shared boundary must reach
+        `check()`'s own #981 block message — proving the exception, not a
+        re-derived `undetermined` flag, is what drives the block."""
+        input_data = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "gh pr merge 1040 --repo noorinalabs/noorinalabs-main"},
+        }
+        with (
+            mock.patch.object(
+                hook,
+                "get_pr_data",
+                return_value={
+                    "author": "someone",
+                    "number": 1040,
+                    "reviews": [],
+                    "headRefName": "L.Ferreira/1040-x",
+                    "labels": [],
+                },
+            ),
+            mock.patch.object(
+                hook,
+                "resolve_review_verdicts",
+                side_effect=hook.CommentScanUndeterminedError("HTTP 403: Forbidden"),
+            ),
+        ):
+            result = hook.check(input_data)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("HTTP 403: Forbidden", result["reason"])
+
+
 class StaleVerdictBindingTests(unittest.TestCase):
     """A verdict cast before the latest non-merge commit does not count (#950)."""
 
@@ -2844,7 +3295,7 @@ class IncompleteCommentScanFailsClosedTests(_NoContentBindingHarness):
     def test_clean_scan_leaves_undetermined_empty(self):
         """The negative match — a successful empty scan must NOT be flagged."""
         with mock.patch.object(hook.subprocess, "run", side_effect=self._fake_run()):
-            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x")
+            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x", content_ts=None)
         self.assertEqual(result.undetermined, "")
         self.assertEqual(result.reviewers, set())
 
@@ -2854,7 +3305,7 @@ class IncompleteCommentScanFailsClosedTests(_NoContentBindingHarness):
             "run",
             side_effect=self._fake_run(returncode=1, stdout="", stderr="HTTP 403: Forbidden"),
         ):
-            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x")
+            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x", content_ts=None)
         self.assertTrue(result.undetermined)
         self.assertIn("403", result.undetermined)
 
@@ -2862,19 +3313,19 @@ class IncompleteCommentScanFailsClosedTests(_NoContentBindingHarness):
         with mock.patch.object(
             hook.subprocess, "run", side_effect=hook.subprocess.TimeoutExpired("gh", 30)
         ):
-            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x")
+            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x", content_ts=None)
         self.assertIn("TimeoutExpired", result.undetermined)
 
     def test_unparseable_json_sets_undetermined(self):
         with mock.patch.object(
             hook.subprocess, "run", side_effect=self._fake_run(stdout="not json")
         ):
-            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x")
+            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x", content_ts=None)
         self.assertIn("JSONDecodeError", result.undetermined)
 
     def test_unresolvable_owner_repo_sets_undetermined(self):
         with mock.patch.object(hook, "_resolve_owner_repo", return_value=None):
-            result = hook.check_comment_reviews(451, "pham", repo=None)
+            result = hook.check_comment_reviews(451, "pham", repo=None, content_ts=None)
         self.assertIn("could not resolve the target repository", result.undetermined)
 
     def test_check_hard_blocks_on_an_incomplete_scan(self):

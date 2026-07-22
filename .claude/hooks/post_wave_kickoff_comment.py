@@ -536,8 +536,25 @@ def check(
 
     # Meta-issue skip: this hook is for per-issue kickoff; the meta-issue
     # gets a different all-hands comment owned by /wave-kickoff Step 8b.
+    #
+    # `wave_{M}_meta_issue` is written in two incompatible shapes across waves
+    # (main#1053): a bare integer (`/wave-scope` § 13, e.g. `347`) and a
+    # qualified string (`/wave-retro`'s reservation step, e.g.
+    # `"noorinalabs-main#821"`). `issue_number` (from `_wave_label_parse.py`,
+    # `re.fullmatch(r"\d+", tok)`) is always a bare digit string, so a naive
+    # `str(meta) == issue_number` only ever matches the integer shape —
+    # `str("noorinalabs-main#821") == "821"` is False, so the skip silently
+    # never fired for any wave using the qualified form. Extract the trailing
+    # digit run from `meta` (present in BOTH shapes) and compare on that
+    # instead, so read-side tolerance covers the historical rows without a
+    # data migration.
     meta = status.get(f"wave_{wave_num}_meta_issue")
-    if meta is not None and str(meta) == issue_number and repo == "noorinalabs-main":
+    meta_digits = re.search(r"(\d+)$", str(meta)) if meta is not None else None
+    if (
+        meta_digits is not None
+        and meta_digits.group(1) == issue_number
+        and repo == "noorinalabs-main"
+    ):
         return {"action": "skip_meta_issue", "repo": repo, "issue": issue_number}
 
     scope = status.get(f"wave_{wave_num}_scope")
