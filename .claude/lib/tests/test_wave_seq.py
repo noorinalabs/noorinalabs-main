@@ -53,6 +53,29 @@ class TestExistingWaveNumbers(unittest.TestCase):
         # wave_4_ must not match wave_42_.
         self.assertEqual(wave_seq.existing_wave_numbers({"wave_42_active": True}), {42})
 
+    def test_carry_forward_key_excluded_from_seed(self) -> None:
+        # #1064: carry_forward stages an id for the UPCOMING wave and must not
+        # count as an allocated id. A committed-allocation key for the same wave
+        # still counts (so a genuinely-allocated wave is never dropped).
+        self.assertEqual(wave_seq.existing_wave_numbers({"wave_27_carry_forward": []}), set())
+        self.assertEqual(
+            wave_seq.existing_wave_numbers({"wave_27_carry_forward": [], "wave_26_active": True}),
+            {26},
+        )
+
+    def test_carry_forward_does_not_skip_next_wave(self) -> None:
+        # #1064 end-to-end: global_wave_seq at N-1 with only a wave_N carry_forward
+        # staged must peek/allocate to N, not N+1. This is the exact P9W26 state
+        # (committed 26, wave_27_carry_forward written by /wave-wrapup).
+        status = {
+            "global_wave_seq": 26,
+            "current_wave": "wave-26",
+            "wave_26_active": True,
+            "wave_27_carry_forward": ["noorinalabs-main#1062"],
+        }
+        self.assertEqual(wave_seq.next_global_wave(status), 27)
+        self.assertEqual(wave_seq.allocation_target(status), 27)
+
 
 class TestSeedAndCounter(unittest.TestCase):
     def test_seed_respects_historical_floor(self) -> None:
