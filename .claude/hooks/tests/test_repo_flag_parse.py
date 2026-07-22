@@ -141,6 +141,49 @@ class AbsentAndMalformedTests(unittest.TestCase):
         self.assertIsNone(parser.extract_repo(cmd))
 
 
+class RepeatedRepoFlagTests(unittest.TestCase):
+    """main#1060 finding #3: real gh's `--repo`/`-R` is a single-value pflag
+    `StringVarP`, so a repeated flag resolves to its LAST occurrence — not
+    its first, which `walk_flag_values` alone would return (it preserves
+    encounter order without picking a winner)."""
+
+    def test_repeated_long_form_last_wins(self):
+        cmd = "gh issue edit 42 --repo owner/a --repo owner/b"
+        self.assertEqual(parser.extract_repo(cmd), "owner/b")
+
+    def test_repeated_short_form_last_wins(self):
+        cmd = "gh issue edit 42 -R owner/a -R owner/b"
+        self.assertEqual(parser.extract_repo(cmd), "owner/b")
+
+    def test_mixed_short_then_long_last_wins(self):
+        cmd = "gh issue edit 42 -R owner/a --repo owner/b"
+        self.assertEqual(parser.extract_repo(cmd), "owner/b")
+
+    def test_regex_fallback_repeated_flag_last_wins(self):
+        """Last-wins holds on the regex-fallback path too (malformed shell
+        forces tokenize() to fail), so both paths stay in parity."""
+        cmd = "echo 'unterminated && gh issue edit 42 --repo owner/a --repo owner/b --body x"
+        self.assertEqual(parser.extract_repo(cmd), "owner/b")
+
+
+class DoubleDashTerminatorTests(unittest.TestCase):
+    """main#1060 finding #2: `--repo`/`-R` appearing after a literal `--`
+    (POSIX end-of-options) is positional in real gh, never a flag."""
+
+    def test_repo_after_double_dash_not_resolved(self):
+        cmd = 'gh issue edit 42 --add-label "wave-26" -- --repo owner/repo-c'
+        self.assertIsNone(parser.extract_repo(cmd))
+
+
+class ValueLessFlagTests(unittest.TestCase):
+    """main#1060 finding #1: a value-less `-R`/`--repo` glued to the next
+    recognized flag must not resolve to that flag's own text as the repo."""
+
+    def test_value_less_short_flag_before_add_label_returns_none(self):
+        cmd = 'gh issue edit 42 -R --add-label "wave-26" --add-label "p3-wave-9"'
+        self.assertIsNone(parser.extract_repo(cmd))
+
+
 class RegexFallbackTests(unittest.TestCase):
     """When `_shell_parse.tokenize` returns None (malformed shell), the
     helper falls back to the conservative regex. Both paths must agree

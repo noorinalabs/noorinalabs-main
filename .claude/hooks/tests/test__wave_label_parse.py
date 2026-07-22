@@ -282,6 +282,35 @@ class RepoFlagResolution(unittest.TestCase):
         self.assertIsNone(c.repo)
         self.assertTrue(c.repo_flag_present)
 
+    def test_repeated_repo_flag_last_wins(self) -> None:
+        """main#1060 finding #3: gh's `--repo`/`-R` is a single-value pflag,
+        so a repeated flag resolves to its LAST occurrence."""
+        c = self._change(
+            'gh issue edit 42 -R noorinalabs/repo-a --repo noorinalabs/repo-b --add-label "wave-26"'
+        )
+        self.assertEqual(c.repo, "repo-b")
+        self.assertTrue(c.repo_flag_present)
+
+    def test_value_less_short_flag_does_not_misroute_to_add_label(self) -> None:
+        """main#1060 finding #1 — the #1059 motivating reproducer: a
+        value-less `-R` immediately followed by `--add-label` must not
+        resolve `repo='--add-label'`. Real gh would error here; this parser
+        must yield `repo=None, repo_flag_present=False` (no capturable
+        value), not misroute onto the neighboring flag's own text."""
+        c = self._change('gh issue edit 42 -R --add-label "wave-26"')
+        self.assertIsNone(c.repo)
+        self.assertFalse(c.repo_flag_present)
+        # The neighboring flag is still parsed correctly as its own flag,
+        # not swallowed as `-R`'s bogus value.
+        self.assertEqual(c.add_label, "wave-26")
+
+    def test_repo_after_double_dash_terminator_not_resolved(self) -> None:
+        """main#1060 finding #2: `--repo` appearing after a literal `--`
+        (POSIX end-of-options) is positional in real gh, never a flag."""
+        c = self._change('gh issue edit 42 --add-label "wave-26" -- --repo noorinalabs/repo-c')
+        self.assertIsNone(c.repo)
+        self.assertFalse(c.repo_flag_present)
+
 
 class NormalizeCommandSeparators(unittest.TestCase):
     """Direct tests for the shared `_shell_parse.normalize_command_separators`.
