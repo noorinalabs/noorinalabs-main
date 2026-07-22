@@ -85,13 +85,37 @@ HISTORICAL_FLOOR = 15
 # makes `wave_4_` match `wave_4_active` but never `wave_42_active`.
 _WAVE_KEY_RE = re.compile(r"^wave_(\d+)_")
 
+# Forward-reservation key kinds name a wave id that is STAGED for an upcoming
+# wave but is NOT yet allocated (``global_wave_seq`` has not advanced to it).
+# They must NOT seed the counter, or ``peek``/``allocate`` would skip the very
+# wave they stage (#1064). ``carry_forward`` is written by ``/wave-wrapup`` for
+# the UPCOMING wave, so a live ``wave_{N}_carry_forward`` alongside
+# ``global_wave_seq == N-1`` must still leave ``next == N``.
+#
+# ``meta_issue`` is the OTHER reservation kind but is deliberately NOT listed
+# here: without a committed counter (the migration path) ``reserved_wave``
+# returns None, so the seed is the only thing that keeps a hand-set
+# ``wave_{N}_meta_issue`` from being re-allocated; with a committed counter the
+# ``reserved_wave`` check at ``committed + 1`` masks any meta_issue seed
+# inflation before it matters. ``carry_forward`` has no such rescue, which is
+# exactly why it needs excluding at the source.
+_FORWARD_RESERVATION_SUFFIXES = ("carry_forward",)
+
 
 def existing_wave_numbers(status: dict) -> set[int]:
-    """Every wave id that appears in a top-level ``wave_{X}_*`` key name."""
+    """Every wave id that appears in a top-level ``wave_{X}_*`` key name.
+
+    Forward-reservation keys (``_FORWARD_RESERVATION_SUFFIXES``) are excluded:
+    they stage an id for a wave not yet allocated and would otherwise inflate
+    the seed past it (#1064).
+    """
     out: set[int] = set()
     for key in status:
         m = _WAVE_KEY_RE.match(key)
         if m:
+            remainder = key[m.end() :]  # the part after "wave_{N}_"
+            if remainder in _FORWARD_RESERVATION_SUFFIXES:
+                continue
             out.add(int(m.group(1)))
     return out
 
