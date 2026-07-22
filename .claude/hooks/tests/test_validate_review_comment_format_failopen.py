@@ -622,6 +622,51 @@ class TrailerHelperSingularityTests(unittest.TestCase):
             self.assertRegex(canonical, rf"(?m)^def {name}\(")
 
 
+class ReviewerVerdictTemplateRationaleTests(unittest.TestCase):
+    """main#1062: pin the two claims the orchestration-model.md rationale makes
+    about the `(YOU — …)` parenthetical vs a dotted-form Requestor name, so a
+    future extractor change cannot silently re-teach the wrong mechanism.
+
+    A merge-gate review of PR #1061 (fixes #984) found the doc's "→ non-roster
+    → 0 approvals" consequence was correctly attributed to the DOTTED form but
+    incorrectly ALSO attributed to a parenthetical left in — `extract_charter_field`
+    already strips a trailing parenthetical, so that case in fact still counts.
+    """
+
+    def test_trailing_parenthetical_is_stripped_and_still_counts(self) -> None:
+        import charter_trailer as ct
+
+        body = (
+            "---\n"
+            "Requestor: Aino Virtanen (YOU — not the author, not the paired reviewer)\n"
+            "Requestee: Nadia Khoury\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none\n"
+        )
+        requestor = ct.extract_charter_field("Requestor", body)
+        self.assertEqual(requestor, "Aino Virtanen")
+        # The space-form roster membership test the gate actually runs.
+        roster_names = {"aino virtanen", "nadia khoury"}
+        self.assertIn(requestor.lower(), roster_names)
+
+    def test_dotted_form_is_not_a_roster_match(self) -> None:
+        import charter_trailer as ct
+
+        body = (
+            "---\n"
+            "Requestor: Aino.Virtanen\n"
+            "Requestee: Nadia Khoury\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none\n"
+        )
+        requestor = ct.extract_charter_field("Requestor", body)
+        self.assertEqual(requestor, "Aino.Virtanen")
+        roster_names = {"aino virtanen", "nadia khoury"}
+        # This is the genuine failure mode: lowercased exact space-form match
+        # fails for the dotted form -> non-roster Requestor -> 0 approvals.
+        self.assertNotIn(requestor.lower(), roster_names)
+
+
 def _reason(result: dict | None) -> str:
     """Return a block's reason text, narrowing `dict | None` for the type checker."""
     assert result is not None, "expected a block, got allow (None)"
