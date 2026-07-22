@@ -900,9 +900,14 @@ def check_comment_reviews(
     Reviewer identification per charter (resolves #244):
       - Approved / ChangesRequested → reviewer is the Requestor (comment author)
       - Request / Reply → not a review; does not contribute to reviewer set
-      - 2-reviewer threshold counts distinct Requestor values across Approved
-        comments only (ChangesRequested is a verdict-with-TechDebt but does
-        not count toward the threshold).
+      - 2-reviewer threshold counts distinct Requestor values whose LATEST
+        verdict comment is Approved (#940). An approval is a statement about
+        a moment, not a permanent grant: a reviewer's later ChangesRequested
+        withdraws an earlier Approved and drops them from the reviewer set,
+        and a reviewer's later Approved supersedes an earlier ChangesRequested
+        and adds them. Only the reviewer's most recent CURRENT (non-stale, see
+        below) verdict is consulted — earlier verdicts from the same reviewer
+        do not additionally count or block.
 
     `content_ts` is `T_content` (#950) — the committer timestamp of the branch's
     latest non-merge commit, from `get_latest_content_commit`. When supplied, a
@@ -920,6 +925,14 @@ def check_comment_reviews(
     failure raises `CommitFetchError` and hard-blocks upstream of this call.
     """
     result = CommentReviewResult()
+    # Reviewer -> most recent (chronologically-last) CURRENT RequestOrReplied
+    # value, keyed on lowercased full name (#940). An Approved comment is a
+    # statement about a MOMENT, not a permanent grant: a reviewer who approves
+    # and later requests changes must have that later verdict supersede the
+    # earlier one, and a reviewer who requests changes and later approves must
+    # likewise have the approval win. `comments` is already chronological, so
+    # the last write for a given key IS that reviewer's latest verdict.
+    latest_verdict: dict[str, str] = {}
     try:
         owner_repo = _resolve_owner_repo(repo)
         if owner_repo is None:
@@ -966,7 +979,6 @@ def check_comment_reviews(
                 continue
 
             is_verdict_comment = _is_verdict(ror_value)
-            is_approved_comment = _is_approved(ror_value)
 
             # Content binding (#950): a verdict cast before the branch's latest
             # AUTHORED commit reviewed code that has since been rewritten. It is
@@ -987,12 +999,15 @@ def check_comment_reviews(
                     )
                     continue
 
-            # Only Approved comments contribute to the reviewer set toward
-            # the 2-reviewer threshold (charter line 36, resolves #244).
-            if is_approved_comment:
+            # Record this reviewer's latest CURRENT verdict (#940). The
+            # reviewer set toward the 2-reviewer threshold (charter line 36,
+            # resolves #244) is derived from `latest_verdict` AFTER the loop —
+            # not accumulated here — so a later ChangesRequested can withdraw
+            # an earlier Approved (and vice versa) instead of only ever adding.
+            if is_verdict_comment:
                 reviewer_lastname = _name_lastname(requestor)
                 if reviewer_lastname.lower() != branch_author_lastname.lower():
-                    result.reviewers.add(requestor.lower())
+                    latest_verdict[requestor.lower()] = ror_value
 
             # TechDebt attestation is required on every verdict
             # (Approved + ChangesRequested) — issue #147 fix.
@@ -1008,6 +1023,13 @@ def check_comment_reviews(
                         issue_nums = re.findall(r"#(\d+)", td_value)
                         result.tech_debt_issue_numbers.extend(issue_nums)
 
+        # A reviewer counts toward the threshold only if their LATEST verdict
+        # is Approved (#940) — a reviewer whose latest verdict is
+        # ChangesRequested is currently blocking and must not count, even
+        # though they approved at some earlier point in the thread.
+        result.reviewers = {
+            reviewer for reviewer, verdict in latest_verdict.items() if _is_approved(verdict)
+        }
         return result
 
     except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError) as exc:
