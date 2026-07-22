@@ -68,6 +68,15 @@ Any URL printed by the final `comm` is an open issue missing from the board — 
 
 **Skill:** `/board-audit` (main#199) automates both the orphan-detection check above AND the wave-label → project Wave-field sync (`wave-{X}`→`W{X}`, grandfathered `p{N}-wave-{M}`→`P{N}W{M}`, main#810). Labels are canonical for phase/wave assignment; the project's `Wave` single-select field is a **derived projection** of labels, maintained by `/board-audit`. The skill is wired into `/wave-kickoff`, `/wave-retro`, and `/session-start` step 5 so the board stays current at every wave boundary. Manual invocation is also valid whenever drift is suspected.
 
+### Fixture-First for Discrimination-Gate Tiers <!-- promotion-target: none -->
+
+When a wave scopes a **tier of discrimination-gate issues** — multiple issues whose acceptance turns on the *same* subtle "keep-vs-drop" / "A-vs-B" distinction (e.g. recover a real narrator from a matn tail **vs.** a gloss tail; name-cut **vs.** benediction; corruption **vs.** legitimate deletion) — the scoping pass MUST seed a **shared A/B fixture set** the whole tier verifies against, defined **once up front**, before the tier's issues are spawned.
+
+- The fixture set is a wave-scope artifact (a committed fixtures file or a fixture section in the meta-issue), not a per-PR invention. Each issue in the tier references it; reviewers verify each PR against the **same** authoritative A/B pairs rather than re-deriving the boundary per PR.
+- Applies only to a **tier** (≥2 issues sharing one discrimination boundary), not to a lone gate issue — a single gate is covered by the normal pre-spawn verify.
+
+**Why:** P9W26 (Parse recovery & name quality) landed 0 CI-red but concentrated **all 5 of its must-fix-received cycles + 4 rework cycles on the one name_quality/bio_promote discrimination surface** — authors and reviewers independently re-derived the same gloss-tail-vs-name-cut A/B distinctions on each of da#462/#472/#473/#474/#476. The work was correct; the *cost* was the boundary being re-negotiated per PR. A shared fixture set defined at scope time makes the distinction authoritative once and turns per-PR re-derivation into per-PR verification. Relates to `feedback_query_builder_test_needs_real_engine` (verify gates against the real engine, not a string check) and the drop-gate A/B discipline (da#424).
+
 ## Multi-Step Meta-Issue Freshness Re-Audit <!-- promotion-target: skill -->
 
 A meta-issue's enumerated scope is a snapshot of HEAD at filing time, not a standing claim. Parallel work lands in the same repos between filing and next-pass implementation, so the longer the gap, the more the body drifts from ground truth.
