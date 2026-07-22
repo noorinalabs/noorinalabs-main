@@ -9,23 +9,31 @@ PreToolUse block. There was no way to ASK the same question ahead of time:
   - before spawning reviewers — is this PR already reviewed, and by whom?
   - before `gh pr merge`   — will the gate pass, or who is missing TechDebt?
 
-This CLI answers that question by REUSING the hook's functions verbatim —
-`get_pr_data`, `extract_branch_author_lastname`, `get_latest_content_commit`,
-`partition_formal_reviewers`, `check_comment_reviews`, `_load_roster_names`,
-and `is_single_reviewer_exception`. It deliberately does NOT reimplement the
-charter-comment parsing: a fork would silently drift from the gate, and that
-drift is the exact failure #707 exists to prevent. The PASS/FAIL verdict
-computed here mirrors `validate_pr_review.check()` step for step (T_content
-verdict staleness, formal + roster-filtered comment reviewers, the wave-merge
-head-ref sentinel, the single-reviewer exception, and the missing-TechDebt
-block).
+This CLI answers that question by REUSING the hook's own pipeline verbatim —
+`get_pr_data` plus the SINGLE shared `resolve_review_verdicts` entry point
+(#1048), which itself wraps `extract_branch_author_lastname`,
+`get_latest_content_commit`, `partition_formal_reviewers`,
+`check_comment_reviews`, `_load_roster_names`, and
+`is_single_reviewer_exception`. It deliberately does NOT reimplement the
+charter-comment parsing, nor re-assemble that pipeline with its own argument
+list: a fork would silently drift from the gate, and that drift is the exact
+failure #707 exists to prevent. The PASS/FAIL verdict computed here mirrors
+`validate_pr_review.check()` step for step (T_content verdict staleness,
+formal + roster-filtered comment reviewers, the wave-merge head-ref sentinel,
+the single-reviewer exception, and the missing-TechDebt block) because both
+now compute it via the same `resolve_review_verdicts` call.
 
 Reusing the gate's functions is necessary but NOT sufficient for parity — the
 ARGUMENTS matter as much as the callee. #1046: this driver called
 `check_comment_reviews` without the `content_ts` keyword, so `T_content` was
 never computed, `stale_verdicts` stayed empty, and the tool reported PASS on
-approvals the gate would reject as stale (observed live on main#1040). When
-adding a parameter to a shared gate function, audit THIS file's call sites —
+approvals the gate would reject as stale (observed live on main#1040). #1048
+closes the defect CLASS rather than just the one instance: `check()` and
+`compute_review_state` no longer each re-assemble the content-binding /
+comment-scan / roster-filter / union pipeline with their own argument list —
+they both call `gate.resolve_review_verdicts(pr_data, repo=repo)`, so a
+future parameter added to that pipeline is threaded through ONE call site,
+not two that can silently drift apart.
 `.claude/lib/tests/test_pr_review_state.py::ContentStalenessTests` is the
 regression guard and is mutation-verified against exactly that omission.
 
@@ -123,17 +131,19 @@ class ReviewStateError(Exception):
 def compute_review_state(pr_number: str, repo: str | None = None) -> ReviewState:
     """Compute a PR's review state by replaying the merge gate's own logic.
 
-    Reuses `gate.get_pr_data`, `gate.extract_branch_author_lastname`,
-    `gate.get_latest_content_commit`, `gate.partition_formal_reviewers`,
-    `gate.check_comment_reviews`, `gate._load_roster_names`, and
-    `gate.is_single_reviewer_exception`, forwarding `content_ts` to every
-    staleness-aware call so this driver and Hook 4 cannot drift (#1046).
+    Fetches the PR via `gate.get_pr_data`, then hands the pipeline entirely
+    to `gate.resolve_review_verdicts` (#1048) — the SAME shared entry point
+    `validate_pr_review.check()` calls. Neither this driver nor `check()`
+    re-derives the content-binding / comment-scan / roster-filter / union
+    pipeline with its own argument list; #1046 happened precisely because
+    this driver's OWN copy of that pipeline omitted `content_ts` on one call.
+    A single shared computation cannot drift from itself.
 
     Raises `ReviewStateError` when the PR cannot be fetched, the PR's commit
     list cannot be fetched (T_content unknown ⇒ no verdict's freshness is
-    knowable), or a named child repo's roster cannot be resolved — the
-    determinate-failure cases the gate hard-blocks on (exit code 2), distinct
-    from a gate FAIL (exit code 1).
+    knowable), the comment scan could not complete, or a named child repo's
+    roster cannot be resolved — the determinate-failure cases the gate
+    hard-blocks on (exit code 2), distinct from a gate FAIL (exit code 1).
     """
     # An unresolvable `--repo` is deterministic, not transient, so name it
     # specifically instead of sending the operator to re-check `gh auth status`
@@ -155,22 +165,17 @@ def compute_review_state(pr_number: str, repo: str | None = None) -> ReviewState
             + " — check the PR number, --repo value, and `gh auth status`."
         )
 
-    author = pr_data["author"]
-    reviews = pr_data["reviews"]
-    head_ref = pr_data["headRefName"]
     number = pr_data["number"]
-    labels = pr_data["labels"]
 
-    # Content binding (#950), mirroring check(): establish T_content — the
-    # committer timestamp of the branch's latest NON-MERGE commit — BEFORE
-    # counting any verdict. A commit-fetch failure means NO verdict's freshness
-    # can be established, so it is a determinate failure (exit 2), NOT a
-    # fallback to `content_ts=None`. Defaulting to None here would count every
-    # verdict regardless of age — reinstating precisely the #1046 fail-open this
-    # function is being fixed for.
     try:
-        latest_content = gate.get_latest_content_commit(number, repo=repo)
+        verdicts = gate.resolve_review_verdicts(pr_data, repo=repo)
     except gate.CommitFetchError as exc:
+        # Content binding (#950): T_content — the committer timestamp of the
+        # branch's latest NON-MERGE commit — could not be established. A
+        # fetch failure means NO verdict's freshness can be established, so
+        # it is a determinate failure (exit 2), not a fallback to
+        # `content_ts=None` (which would count every verdict regardless of
+        # age — precisely the #1046 fail-open).
         raise ReviewStateError(
             f"could not fetch the commit list for PR #{number}"
             + (f" in {repo}" if repo else "")
@@ -178,65 +183,32 @@ def compute_review_state(pr_number: str, repo: str | None = None) -> ReviewState
             "knowable and the gate's own verdict cannot be replayed. Hook 4 hard-blocks "
             "here rather than counting verdicts of unknown freshness (#950)."
         ) from exc
-
-    content_ts = latest_content[1] if latest_content else None
-    content_sha = latest_content[0] if latest_content else ""
-
-    # Formal GitHub reviews from non-authors (not roster-filtered — these are
-    # platform-authenticated identities, exactly as the gate treats them), bound
-    # to T_content by the gate's own shared helper rather than a local copy.
-    formal_reviewers, stale_formal = gate.partition_formal_reviewers(reviews, author, content_ts)
-
-    # Resolve head ref -> branch-author lastname, then fetch comment reviews.
-    # Mirrors check(): a normal feature branch yields a lastname; a wave-merge
-    # head (deployments/phase-N/wave-M) has no implementer author, so the gate
-    # passes an empty sentinel that admits any non-empty reviewer. `content_ts`
-    # MUST be forwarded on both call sites — omitting it silently disables
-    # staleness filtering and reports PASS on stale approvals (#1046).
-    comment_result = gate.CommentReviewResult()
-    branch_author_lastname = None
-    if head_ref:
-        branch_author_lastname = gate.extract_branch_author_lastname(head_ref)
-        if branch_author_lastname:
-            comment_result = gate.check_comment_reviews(
-                number, branch_author_lastname, repo=repo, content_ts=content_ts
-            )
-        elif head_ref.startswith("deployments/") and "/wave-" in head_ref:
-            comment_result = gate.check_comment_reviews(
-                number, "", repo=repo, content_ts=content_ts
-            )
-
-    # An INCOMPLETE comment scan is a determinate failure, not a zero-approval
-    # result (#981). Mirrors the gate's hard-block: reporting an unreadable
-    # comment thread as an empty one would make this driver answer FAIL (exit 1,
-    # "this PR lacks approvals") when the honest answer is "could not determine"
-    # (exit 2) — and would drift from Hook 4, which is what #1046 was.
-    if comment_result.undetermined:
+    except gate.CommentScanUndeterminedError as exc:
+        # An INCOMPLETE comment scan is a determinate failure, not a
+        # zero-approval result (#981). Reporting an unreadable comment thread
+        # as an empty one would make this driver answer FAIL (exit 1, "this
+        # PR lacks approvals") when the honest answer is "could not
+        # determine" (exit 2) — and would drift from Hook 4, which is what
+        # #1046 was.
         raise ReviewStateError(
             f"comment reviews for PR #{number} could not be read: "
-            f"{comment_result.undetermined}\nWithout them the gate's verdict cannot be "
+            f"{exc.reason}\nWithout them the gate's verdict cannot be "
             "replayed, so this is a determinate failure rather than a zero-approval result."
-        )
-
-    # Filter comment-based Approved reviewers against the roster (gate #498):
-    # only real roster personas count toward the threshold. A missing child
-    # roster is a hard-block in the gate, surfaced here as ReviewStateError.
-    try:
-        roster_names = gate._load_roster_names(repo=repo)
+        ) from exc
     except gate.RosterResolutionError as exc:
+        # Filter comment-based Approved reviewers against the roster (#498):
+        # only real roster personas count toward the threshold. A missing
+        # child roster is a hard-block in the gate, surfaced here as
+        # ReviewStateError.
         raise ReviewStateError(
             f"child-repo roster could not be resolved for --repo '{repo}': {exc}"
         ) from exc
 
-    non_roster = {r for r in comment_result.reviewers if r not in roster_names}
-    roster_comment_reviewers = comment_result.reviewers - non_roster
-
-    distinct = formal_reviewers | roster_comment_reviewers
-
-    wave_bootstrap = gate.is_single_reviewer_exception(labels, distinct, repo=repo)
-
-    # Stale verdicts from BOTH sources, in the gate's own order (comment, then
-    # formal), flattened to dicts so the dataclass stays JSON-serializable.
+    # Stale verdicts from BOTH sources, tagged by source and flattened to
+    # dicts so the dataclass stays JSON-serializable. `resolve_review_verdicts`
+    # keeps the two sources as separate lists precisely so a caller that wants
+    # to tag provenance (this driver's `stale_verdicts[].source` field) can,
+    # without reconstructing which sub-list a given entry came from.
     stale_verdicts = [
         {
             "reviewer": sv.reviewer,
@@ -244,27 +216,27 @@ def compute_review_state(pr_number: str, repo: str | None = None) -> ReviewState
             "created_at": sv.created_at,
             "source": source,
         }
-        for source, verdicts in (
-            ("comment", comment_result.stale_verdicts),
-            ("formal", stale_formal),
+        for source, svs in (
+            ("comment", verdicts.stale_verdicts_comment),
+            ("formal", verdicts.stale_verdicts_formal),
         )
-        for sv in verdicts
+        for sv in svs
     ]
 
     return ReviewState(
         pr_number=str(number),
         repo=repo,
-        head_ref=head_ref,
-        branch_author_lastname=branch_author_lastname,
-        formal_reviewers=sorted(formal_reviewers),
-        comment_reviewers=sorted(roster_comment_reviewers),
-        non_roster_requestors=sorted(non_roster),
-        distinct_reviewer_count=len(distinct),
-        wave_bootstrap_exception=wave_bootstrap,
-        reviews_missing_tech_debt=list(comment_result.reviews_missing_tech_debt),
-        tech_debt_issue_numbers=list(comment_result.tech_debt_issue_numbers),
-        content_sha=content_sha,
-        content_ts=content_ts.isoformat() if content_ts else None,
+        head_ref=verdicts.head_ref,
+        branch_author_lastname=verdicts.branch_author_lastname,
+        formal_reviewers=sorted(verdicts.formal_reviewers),
+        comment_reviewers=sorted(verdicts.roster_comment_reviewers),
+        non_roster_requestors=sorted(verdicts.non_roster_requestors),
+        distinct_reviewer_count=verdicts.total_distinct,
+        wave_bootstrap_exception=verdicts.wave_bootstrap_exception,
+        reviews_missing_tech_debt=list(verdicts.reviews_missing_tech_debt),
+        tech_debt_issue_numbers=list(verdicts.tech_debt_issue_numbers),
+        content_sha=verdicts.content_sha,
+        content_ts=verdicts.content_ts.isoformat() if verdicts.content_ts else None,
         stale_verdicts=stale_verdicts,
     )
 

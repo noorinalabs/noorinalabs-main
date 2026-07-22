@@ -2098,6 +2098,161 @@ class VerdictFixtureSanityTests(unittest.TestCase):
         self.assertEqual(result.stale_verdicts, [])
 
 
+class ResolveReviewVerdictsSharedBoundaryTests(unittest.TestCase):
+    """#1048: `resolve_review_verdicts` is the ONE shared entry point `check()`
+    and `pr_review_state.compute_review_state` both call — neither re-derives
+    the content-binding / comment-scan / roster-filter / union pipeline with
+    its own argument list, which is the #1046 defect class.
+
+    Mutation-sensitivity was manually confirmed while writing this refactor:
+    temporarily stripping `content_ts=content_ts` from the feature-branch
+    `check_comment_reviews` call inside `resolve_review_verdicts` turned 4
+    tests in `.claude/lib/tests/test_pr_review_state.py::ContentStalenessTests`
+    red immediately, because that class drives `compute_review_state` through
+    the REAL `resolve_review_verdicts` over a faked `gh api` boundary. The
+    test below is the equivalent DIRECT guard at the shared function itself.
+    """
+
+    REPO = "noorinalabs/noorinalabs-main"
+
+    @staticmethod
+    def _pr_data(head_ref="L.Ferreira/1040-x", author="parametrization", reviews=(), labels=()):
+        return {
+            "author": author,
+            "number": 1040,
+            "reviews": list(reviews),
+            "headRefName": head_ref,
+            "labels": list(labels),
+        }
+
+    def test_stale_comment_verdict_is_excluded_from_the_reviewer_set(self):
+        """Direct kill-shot on the shared boundary (#950 x #1048): a stale
+        Approved must not count toward `distinct_reviewers`, and must be
+        recorded on `stale_verdicts_comment` so a caller (either check()'s
+        block message or the driver's report) can name it. This would RED if
+        `resolve_review_verdicts` ever stopped forwarding `content_ts` to
+        `check_comment_reviews`.
+        """
+        stale_comment = {
+            "body": (
+                "Requestor: Lucas Ferreira\nRequestee: Someone Else\n"
+                "RequestOrReplied: Approved\nTechDebt: none"
+            ),
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+
+        def fake_run(args, capture_output, text, timeout):
+            result = mock.MagicMock()
+            result.returncode = 0
+            if args[0] == "gh" and args[1:3] == ["repo", "view"]:
+                result.stdout = json.dumps({"owner": {"login": "noorinalabs"}, "name": "r"})
+            else:
+                result.stdout = json.dumps([stale_comment])
+            return result
+
+        with (
+            mock.patch.object(hook.subprocess, "run", side_effect=fake_run),
+            mock.patch.object(
+                hook,
+                "get_latest_content_commit",
+                return_value=("ac8bcfa", hook._parse_iso8601("2026-01-02T00:00:00Z")),
+            ),
+            mock.patch.object(hook, "_load_roster_names", return_value={"lucas ferreira"}),
+        ):
+            verdicts = hook.resolve_review_verdicts(self._pr_data(), repo=self.REPO)
+
+        self.assertEqual(verdicts.distinct_reviewers, set())
+        self.assertEqual(len(verdicts.stale_verdicts_comment), 1)
+        self.assertEqual(verdicts.stale_verdicts_comment[0].reviewer, "Lucas Ferreira")
+        self.assertEqual(verdicts.stale_verdicts_formal, [])
+        self.assertEqual(verdicts.stale_verdicts, verdicts.stale_verdicts_comment)
+
+    def test_check_delegates_to_resolve_review_verdicts_and_trusts_it(self):
+        """`check()` must call the shared entry point and use its output
+        DIRECTLY, rather than reassembling the pipeline inline — the concrete
+        guard for #1048's acceptance criterion ('neither check() nor
+        compute_review_state re-derives the verdict set'). A fake
+        `ReviewVerdicts` with 2 distinct current reviewers and no missing
+        TechDebt must ALLOW the merge without `check()` ever recomputing
+        `distinct_reviewers` itself.
+        """
+        input_data = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "gh pr merge 1040 --repo noorinalabs/noorinalabs-main"},
+        }
+        fake_verdicts = hook.ReviewVerdicts(
+            number=1040,
+            head_ref="L.Ferreira/1040-x",
+            labels=[],
+            branch_author_lastname="Ferreira",
+            content_sha="ac8bcfa",
+            content_ts=None,
+            formal_reviewers=set(),
+            comment_reviewers={"nino kavtaradze", "weronika zielinska"},
+            non_roster_requestors=set(),
+            roster_comment_reviewers={"nino kavtaradze", "weronika zielinska"},
+            roster_names={"nino kavtaradze", "weronika zielinska"},
+            distinct_reviewers={"nino kavtaradze", "weronika zielinska"},
+            stale_verdicts_comment=[],
+            stale_verdicts_formal=[],
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=[],
+            wave_bootstrap_exception=False,
+        )
+        with (
+            mock.patch.object(
+                hook,
+                "get_pr_data",
+                return_value={
+                    "author": "someone",
+                    "number": 1040,
+                    "reviews": [],
+                    "headRefName": "L.Ferreira/1040-x",
+                    "labels": [],
+                },
+            ),
+            mock.patch.object(
+                hook, "resolve_review_verdicts", return_value=fake_verdicts
+            ) as mock_resolve,
+        ):
+            result = hook.check(input_data)
+
+        mock_resolve.assert_called_once()
+        self.assertIsNone(result, "2 distinct current reviewers must ALLOW the merge")
+
+    def test_check_translates_stale_verdict_error_into_a_block(self):
+        """`CommentScanUndeterminedError` from the shared boundary must reach
+        `check()`'s own #981 block message — proving the exception, not a
+        re-derived `undetermined` flag, is what drives the block."""
+        input_data = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "gh pr merge 1040 --repo noorinalabs/noorinalabs-main"},
+        }
+        with (
+            mock.patch.object(
+                hook,
+                "get_pr_data",
+                return_value={
+                    "author": "someone",
+                    "number": 1040,
+                    "reviews": [],
+                    "headRefName": "L.Ferreira/1040-x",
+                    "labels": [],
+                },
+            ),
+            mock.patch.object(
+                hook,
+                "resolve_review_verdicts",
+                side_effect=hook.CommentScanUndeterminedError("HTTP 403: Forbidden"),
+            ),
+        ):
+            result = hook.check(input_data)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("HTTP 403: Forbidden", result["reason"])
+
+
 class StaleVerdictBindingTests(unittest.TestCase):
     """A verdict cast before the latest non-merge commit does not count (#950)."""
 
