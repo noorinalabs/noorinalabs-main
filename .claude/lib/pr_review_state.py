@@ -37,6 +37,13 @@ not two that can silently drift apart.
 `.claude/lib/tests/test_pr_review_state.py::ContentStalenessTests` is the
 regression guard and is mutation-verified against exactly that omission.
 
+#1050 closes the residual hazard #1046 left: `content_ts` on
+`check_comment_reviews` and `partition_formal_reviewers` is now a REQUIRED
+argument (`datetime | None`, so `None` is still a legitimate VALUE meaning
+"no content binding" — only OMITTING the argument is barred). A future third
+caller that forgets `content_ts` now gets a loud `TypeError` at call time
+instead of the #1046 shape shipping silently again.
+
 Usage:
     python3 .claude/lib/pr_review_state.py <pr_number> --repo <owner/repo>
     python3 .claude/lib/pr_review_state.py <pr_number> --repo <owner/repo> --json
