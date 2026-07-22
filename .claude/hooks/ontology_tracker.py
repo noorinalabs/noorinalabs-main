@@ -123,6 +123,15 @@ CHECKSUMS_FILE = REPO_ROOT / "ontology" / "checksums.json"
 # process. See "Owning-repo check-ignore (#1039)" in the module docstring.
 _GIT_CHECK_IGNORE_CACHE: dict[tuple[str, str], bool] = {}
 
+# Shared read/write helpers (#1042): both this hook and the /ontology-rebuild
+# resolver's `mark-resolved` CLI go through checksums_io so neither has to
+# remember the ensure_ascii=False + atomic-replace serialization convention —
+# see .claude/lib/checksums_io.py's module docstring for the full rationale.
+_LIB = Path(__file__).resolve().parent.parent / "lib"
+if str(_LIB) not in sys.path:
+    sys.path.insert(0, str(_LIB))
+import checksums_io  # noqa: E402
+
 # Substring patterns: skip if any appears anywhere in the file path.
 SKIP_PATTERNS = [
     "ontology/checksums.json",  # Don't track ourselves
@@ -351,12 +360,7 @@ def check(input_data: dict) -> dict | None:
     rel_path = _relative_path(file_path)
     now = datetime.now(timezone.utc).isoformat()
 
-    try:
-        with open(CHECKSUMS_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        data = {"version": 1, "files": {}}
-
+    data = checksums_io.read_checksums(CHECKSUMS_FILE)
     files = data.setdefault("files", {})
 
     existing = files.get(rel_path, {})
@@ -368,15 +372,7 @@ def check(input_data: dict) -> dict | None:
     }
 
     try:
-        CHECKSUMS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        tmp = CHECKSUMS_FILE.with_suffix(".tmp")
-        with open(tmp, "w", encoding="utf-8") as f:
-            # ensure_ascii=False: the on-disk file holds literal UTF-8 in its
-            # top-level ``description``. Re-escaping it here made every touch
-            # emit a spurious one-line diff (#1038).
-            json.dump(data, f, indent=2, ensure_ascii=False)
-            f.write("\n")
-        tmp.replace(CHECKSUMS_FILE)
+        checksums_io.write_checksums(CHECKSUMS_FILE, data)
     except OSError:
         pass  # Never fail the hook
 
