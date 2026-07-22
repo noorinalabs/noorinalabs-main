@@ -133,6 +133,23 @@ repos:
         files: ^\.claude/skills/.*\.md$
         exclude: ^\.claude/worktrees/
         pass_filenames: true
+      # checksums-ascii mirrors the `Assert ontology/checksums.json holds no
+      # \u escapes` step of the `Config — YAML/JSON syntax` CI job in
+      # .github/workflows/docs.yml (#1044, follow-up to #1038/#1042 — the
+      # sync-drift gate classifies the `checksums-ascii` kind, so a CI-enforced
+      # check not mirrored here turns the gate red, same contract as the other
+      # local hooks above). A committed `\u` escape sequence in
+      # ontology/checksums.json is unambiguous evidence some writer used the
+      # ensure_ascii=True default instead of ensure_ascii=False, re-escaping
+      # literal UTF-8 (the `description` field's `—`/`×`). Commit-stage: cheap
+      # substring scan of one small committed file, no `files:` filtering
+      # needed since the check always targets the fixed default path.
+      - id: checksums-ascii
+        name: checksums-ascii
+        entry: python3 .claude/lib/check_checksums_ascii.py
+        language: system
+        pass_filenames: false
+        always_run: true
 
   # Heavier checks run at pre-push (mirror CI's mypy + pytest jobs). Running as
   # `local`/`system` hooks so we use the system tools and don't drift from
