@@ -267,3 +267,46 @@ Mechanical scoring (`trust_signals.py score 9 25`): **7 PRs**, 1 repo (data-acqu
 **Concentration note:** 43% top (Kavitha 3/7) — theme-fit (she owns the narrator_split gate-correctness surface), below the 60% line. No redistribution needed.
 
 **Orchestrator self-assessment (negative — the wave's defining signal):** two independent orchestrator-class mechanics errors co-occurred and let 4 feature→wave PRs merge with 0 counted approvals AND no gate block: (1) briefed reviewers with a paraphrased verdict trailer (`RequestOrReplied: Request` + invented `**Review: Approved**`) that Hook 4 counts as zero; (2) merged with `-R $DA` (unexpanded var), which fail-opens Hook 4 (`_resolve_owner_repo`→None→allow). Remediated per owner "Accept + fix records": all 10 genuine approvals PATCHed to the counting form (hook re-count 2/2 each), #981 filed for the fail-open, memory §7/§8 updated. The reviews themselves were genuine; the failure was orchestrator mechanics, not review quality.
+
+## Phase 9 Wave 26 Trust Updates (2026-07-22) — Parse recovery & name quality
+
+Mechanical scoring (`trust_signals.py score 9 26`): **15 PRs**, 2 repos (data-acquisition 13, main 2), top-concentration **20%** (Alejandra Reyes-Fuentes / Kavitha Sundaramurthy tied at 3/15 — well below the 60% fragility line, down from wave-25's 43%), **0 CI-red merges**, **0** `review_false_positives`, **5** changes-requested cycles (must-fix-received: Kavitha 2 + Jean-Claude 2 + Alejandra 1). Helper-proposed deltas: Nikolaos **+2** (must_fix_caught=2, 2 clean PRs — wave top signal), Ivana **+1** (2 clean PRs); all others delta 0. Incumbents sit at ceiling 5, so both +deltas are absorbed at ceiling; no incumbent row moves. Three engineers cross from reviewer-only/untracked into score-tracking this wave (first numeric row) and are seeded at the default neutral **3** — a single clean PR is baseline delivery, not a bump.
+
+### Child-Repo Team (data-acquisition)
+
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Nikolaos Papadopoulos | 5 | 5 | prs_merged=2 (da#472 bio_promote gloss-tail/name-cut discrimination + da#473 cleaner-removed-content contract), **must_fix_caught=2** (real catches, no false-positives) — the wave's top composite signal. Helper +2 absorbed at ceiling. |
+| Kavitha Sundaramurthy | 5 | 5 | prs_merged=3 (da#474 truncate-and-re-gate recovery, da#476 alif-maqṣūra fold, da#479 drop-gate A/B memory), 0 CI-red. must_fix_received=2, rework_cycles=2 on the hardest surface (name_quality recovery). Delta 0; held at ceiling. |
+| Alejandra Reyes-Fuentes | 5 | 5 | prs_merged=3 (da#466 Urdu/Arabic-span extraction, da#468 per-source NER metric, da#470 benediction strip). must_fix_received=1, rework_cycles=1. Delta 0; held at ceiling. |
+| Ivana Horvat | 5 | 5 | prs_merged=2 (da#465 informed blocking-token retention, da#469 cross-script Latin fallback), 0 CI-red, 0 must-fix received. Helper +1 absorbed at ceiling. |
+| Oyunbileg Batbayar | 5 | 5 | prs_merged=1 (da#461 implausible-death-year scrub) + must_fix_caught=1 (reviewer catch). Delta 0; held at ceiling. |
+| Jean-Claude Habimana | (reviewer-only) | 3 | First score-tracked wave as implementer: prs_merged=1 (da#462 dead canonical_matn_identity gate repair + edge-loader wiring), must_fix_received=2, rework_cycles=1. Delta 0 → seeded at neutral 3 (single PR = baseline; the 2 must-fixes are his gap this wave). |
+| Kwesi Boateng | (untracked) | 3 | First numeric row: prs_merged=1 (da#463 death-year veto weighting by provenance), 0 CI-red, clean. Delta 0 → seeded at neutral 3 (single clean PR is baseline, not a bump). |
+
+### Org-Level Team (main)
+
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Aino Virtanen | 5 | 5 | prs_merged=1 (main#1061 verdict-block spawn-brief template), 0 CI-red, clean. Delta 0; held at ceiling. |
+| Nino Kavtaradze | (untracked) | 3 | First numeric row: prs_merged=1 (main#1059 make -R/--repo authoritative over cwd in wave-label hooks — the #985 fix), 0 CI-red, clean. Delta 0 → seeded at neutral 3. |
+
+### Done Well / Needs Improvement (Phase 9 Wave 26) — evidence-anchored, bare "None" banned
+
+| Member | Done Well (with evidence) | Gap (metric, or explicit "clean: numbers") |
+|---|---|---|
+| Nikolaos Papadopoulos | da#472/#473 shipped clean AND caught 2 real must-fix items as reviewer — the wave's top composite signal | clean: prs_merged=2, must_fix_received=0, ci_red_merges=0, false_positives=0, must_fix_caught=2 |
+| Kavitha Sundaramurthy | 3 PRs on the hardest surface (name_quality truncate-and-re-gate recovery + arabic normalization sync) all landed clean, 0 CI-red | 2 must-fix received, 2 rework cycles — the tier-1 recovery discrimination drew the most iteration this wave |
+| Alejandra Reyes-Fuentes | 3 PRs across NER metrics + benediction/script extraction; da#466 Urdu-letterform fold shipped clean | 1 must-fix received, 1 rework cycle |
+| Ivana Horvat | da#465 + da#469 clean; informed blocking-token retention under the IDF cap composed cleanly | clean: prs_merged=2, must_fix_received=0, ci_red_merges=0, false_positives=0 |
+| Oyunbileg Batbayar | da#461 death-year scrub clean + 1 genuine reviewer must-fix catch | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0, must_fix_caught=1 |
+| Jean-Claude Habimana | da#462 repaired a dead canonical_matn_identity gate and wired the edge loader to see it — a load-bearing correctness fix | 2 must-fix received on his single PR (the highest per-PR must-fix rate this wave); reworked once, landed clean |
+| Kwesi Boateng | da#463 weighted the fuzzy_cluster death-year veto by death_year_provenance — shipped clean first pass | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0 |
+| Aino Virtanen | main#1061 promoted the verbatim verdict-block into the reviewer spawn-brief template (structural fix for the W25 paraphrase-bypass class) | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0 |
+| Nino Kavtaradze | main#1059 made -R/--repo authoritative over cwd in the wave-label hooks (the #985 fix) — closed the cwd-anchor misresolution class | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0 |
+
+**Fire/hire:** none. Retirement trigger (`trust_signals.retirement_trigger`) fired for no engineer.
+
+**Concentration note:** 20% top (Alejandra / Kavitha tied at 3/15) — well below the 60% line and down from wave-25's 43%. Load distributed across 9 implementers; no fragility, no redistribution needed.
+
+**Orchestrator self-assessment:** clean wave. Both wave→main merges landed green (main#1063 28/28, da#480 22/22), reachability clean (ahead_by=0 both), staging green, 0 CI-red merges across all 15 PRs. The W25 gate-bypass class was structurally closed this wave (main#1059/#1061 + the #981/#1056/#1057 fail-closed hook-hardening chain). No verdict-format or fail-open recurrence.
