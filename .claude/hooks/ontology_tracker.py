@@ -14,7 +14,12 @@ Path filtering (issue #143):
   recording them inflates the dirty-file count without representing real
   drift. The hook therefore skips:
 
-    * Substring SKIP_PATTERNS (e.g. ``__pycache__/``, ``.git/``).
+    * Substring SKIP_PATTERNS (e.g. ``__pycache__/``, ``.git/``) — the fast
+      path for the handful of well-known noise classes.
+    * A file gitignored BY ITS OWN REPO (#1039) — the generalized backstop
+      behind SKIP_PATTERNS. See "Owning-repo check-ignore (#1039)" below for
+      why this must resolve each file's nearest ``.git`` ancestor rather than
+      running ``git check-ignore`` from ``REPO_ROOT``.
     * Paths beginning with ``/tmp/`` — ephemeral scratch (e.g. issue-body
       staging files).
     * Paths under any ``.worktrees`` directory — ephemeral worktree copies.
@@ -43,6 +48,52 @@ Path filtering (issue #143):
       the SKIP_PREFIXES check uses the resolved path so the filter still
       catches it.)
 
+Owning-repo check-ignore (#1039):
+  ``SKIP_PATTERNS`` is a hand-maintained substring denylist. It has leaked
+  twice for the same class of file — gitignored, machine-local,
+  frequently-rewritten artifacts (``.claude/annunaki/errors.jsonl``, then
+  ``.claude/memory/session_handoff.md``, #1038) — each leak manufacturing
+  permanent phantom drift in ``checksums.json`` until someone notices and
+  hand-extends the list.
+
+  The naive generalization — run ``git check-ignore`` from ``REPO_ROOT`` —
+  is WRONG: this parent repo ``.gitignore``s every child repo wholesale, so
+  that would report every child-repo file as ignored (147 of 284 tracked
+  entries, 52%, including real committed source like
+  ``noorinalabs-deploy/.github/workflows/deploy-prod.yml`` and every child
+  ontology file). That would silently blind the tracker to over half the
+  semantic overlay while ``/session-start`` kept reporting "0 dirty" —
+  strictly worse than the nuisance it fixes, because the gate would look
+  healthier while going blind.
+
+  The correct generalization resolves each file's OWNING repo — walk up to
+  the nearest ``.git`` ancestor of the file, not ``REPO_ROOT`` — and runs
+  ``git check-ignore`` there, on the path relative to THAT repo. A
+  child-repo file's gitignored-ness is a question for its own repo, never
+  the parent's ``.gitignore``.
+
+  This check-ignore call is a BACKSTOP behind ``SKIP_PATTERNS``, not a
+  replacement: the substring list stays as the fast, no-subprocess path for
+  the handful of well-known noise classes (``checksums.json`` self-skip,
+  the generated structural layer, worktree paths — these are POLICY
+  decisions, not gitignore facts, so check-ignore would not catch them even
+  if it ran). ``_is_git_ignored`` only runs for paths ``SKIP_PATTERNS``
+  didn't already catch.
+
+  Fails OPEN on any error — no ``.git`` ancestor found, the file resolves
+  outside its own repo, or the ``git check-ignore`` subprocess itself fails
+  or times out: the file is tracked (NOT skipped). Under-tracking is a
+  *silent* loss of drift detection (the gate looks green while blind);
+  over-tracking is merely noise. The asymmetry is one-sided and is encoded
+  deliberately here rather than left to whatever ``subprocess`` happens to
+  raise.
+
+  ``_GIT_CHECK_IGNORE_CACHE`` memoizes the per-(repo, relative-path) answer
+  for the process's lifetime — a PostToolUse hook is a short-lived
+  subprocess invoked once per Edit/Write, so this mainly benefits repeated
+  calls within a single test run or a future batch invocation, not
+  cross-invocation caching (there is no daemon to cache across).
+
 Input Language:
   Fires on:      PostToolUse Edit, Write
   Matches:       Edit/Write whose `file_path` is non-empty AND resides inside
@@ -59,12 +110,18 @@ Exit codes:
 
 import hashlib
 import json
+import os
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CHECKSUMS_FILE = REPO_ROOT / "ontology" / "checksums.json"
+
+# Memoizes (git_root, repo_relative_path) -> ignored? for the life of this
+# process. See "Owning-repo check-ignore (#1039)" in the module docstring.
+_GIT_CHECK_IGNORE_CACHE: dict[tuple[str, str], bool] = {}
 
 # Substring patterns: skip if any appears anywhere in the file path.
 SKIP_PATTERNS = [
@@ -128,11 +185,94 @@ def _is_worktree_path(file_path: str) -> bool:
     return False
 
 
+def _find_git_root(path: Path) -> Path | None:
+    """Walk up from ``path`` to find the nearest ancestor with a ``.git`` entry.
+
+    ``path`` is treated as a file whose *parent* directory is the starting
+    point for the walk (a file is never itself a git root). Returns ``None``
+    when no ``.git`` ancestor exists — e.g. the path is not inside any git
+    working tree — which callers must treat as "cannot determine" and fail
+    open (see ``_is_git_ignored``).
+    """
+    start = path.parent if not path.is_dir() else path
+    for candidate in (start, *start.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return None
+
+
+def _hermetic_git_env() -> dict[str, str]:
+    """A copy of the process environment with any ``GIT_*`` vars stripped.
+
+    git exports ``GIT_DIR``/``GIT_WORK_TREE``/``GIT_INDEX_FILE`` (and
+    friends) into the subprocesses it spawns — including the pre-push
+    ``pytest`` hook that runs this very module's test suite (main#719, see
+    ``.claude/lib/tests/conftest.py``). A ``git check-ignore`` invoked with
+    an inherited ``GIT_DIR`` targets THAT repo instead of the ``cwd`` we
+    pass, silently ignoring the owning-repo resolution this function exists
+    to do. Stripping ``GIT_*`` here makes every ``check-ignore`` call
+    hermetic regardless of what process tree the hook itself was invoked
+    from — a real correctness concern for the hook, not merely a test
+    artifact, since a PostToolUse hook has no control over its parent's
+    environment.
+    """
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
+def _is_git_ignored(resolved_path: Path) -> bool:
+    """True if ``resolved_path`` is gitignored BY ITS OWN REPO.
+
+    See "Owning-repo check-ignore (#1039)" in the module docstring for the
+    full rationale. Summary: resolve the nearest ``.git`` ancestor of the
+    file (its OWNING repo, which may be a child repo nested under
+    ``REPO_ROOT``, not ``REPO_ROOT`` itself), then run ``git check-ignore``
+    there against the path relative to that repo.
+
+    Fails OPEN (returns False -> file gets tracked) on every error case: no
+    ``.git`` ancestor, a path that doesn't resolve relative to its own
+    repo root, or a ``git`` subprocess failure/timeout. Under-tracking is a
+    silent loss of drift detection; over-tracking is merely noise — this
+    function never risks the former.
+    """
+    git_root = _find_git_root(resolved_path)
+    if git_root is None:
+        return False  # No owning repo found — can't determine; track it.
+
+    try:
+        rel = resolved_path.relative_to(git_root)
+    except ValueError:
+        return False  # Shouldn't happen (git_root is an ancestor), fail open anyway.
+
+    cache_key = (str(git_root), str(rel))
+    cached = _GIT_CHECK_IGNORE_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        result = subprocess.run(
+            ["git", "check-ignore", "-q", "--", str(rel)],
+            cwd=str(git_root),
+            capture_output=True,
+            timeout=5,
+            env=_hermetic_git_env(),
+        )
+        # `git check-ignore -q` exit codes: 0 = ignored, 1 = not ignored,
+        # 128 = fatal error (e.g. not a git repo after all). Only 0 counts
+        # as ignored; anything else — including the fatal case — fails open.
+        ignored = result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        ignored = False  # Subprocess failed — fail open.
+
+    _GIT_CHECK_IGNORE_CACHE[cache_key] = ignored
+    return ignored
+
+
 def _should_skip(file_path: str) -> bool:
     """Return True if this file should not be tracked.
 
-    Filters in order: substring patterns, worktree path components, /tmp/
-    prefix, then out-of-repo paths. See module docstring for the rationale
+    Filters in order: substring patterns (fast path), worktree path
+    components, /tmp/ prefix, out-of-repo paths, then the owning-repo
+    check-ignore backstop (#1039). See module docstring for the rationale
     behind each rule.
     """
     for pattern in SKIP_PATTERNS:
@@ -156,6 +296,9 @@ def _should_skip(file_path: str) -> bool:
     try:
         resolved.relative_to(REPO_ROOT)
     except ValueError:
+        return True
+
+    if _is_git_ignored(resolved):
         return True
 
     return False
