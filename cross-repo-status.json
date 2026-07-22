@@ -10,6 +10,132 @@
   "wave_27_merge_model": "wave-branch",
   "wave_27_active": true,
   "wave_27_kicked_off_at": "2026-07-22T03:55:18Z",
+  "wave_27_stg_promotion": "success",
+  "wave_27_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/29309875152",
+  "wave_27_final_pr_count": 17,
+  "wave_27_changes_requested_cycles": 2,
+  "wave_27_top_concentration_pct": 18,
+  "wave_27_trust_signals": {
+  "Aino Virtanen": {
+    "authored_prs": [
+      1081,
+      1075,
+      1071
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 3,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Alejandra Reyes-Fuentes": {
+    "authored_prs": [
+      484
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 1,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 1
+  },
+  "Ivana Horvat": {
+    "authored_prs": [
+      481
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Jean-Claude Habimana": {
+    "authored_prs": [],
+    "ci_red_merges": 0,
+    "must_fix_caught": 1,
+    "must_fix_received": 0,
+    "prs_merged": 0,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Kavitha Sundaramurthy": {
+    "authored_prs": [
+      482
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Lucas Ferreira": {
+    "authored_prs": [
+      1077,
+      1070
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 2,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Nino Kavtaradze": {
+    "authored_prs": [
+      1078,
+      1076,
+      1072
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 3,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Nurul Hakim": {
+    "authored_prs": [
+      1073,
+      1069
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 1,
+    "must_fix_received": 0,
+    "prs_merged": 2,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Oyunbileg Batbayar": {
+    "authored_prs": [
+      483
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 0,
+    "prs_merged": 1,
+    "review_false_positives": 0,
+    "rework_cycles": 0
+  },
+  "Weronika Zielinska": {
+    "authored_prs": [
+      1080,
+      1079,
+      1074
+    ],
+    "ci_red_merges": 0,
+    "must_fix_caught": 0,
+    "must_fix_received": 1,
+    "prs_merged": 3,
+    "review_false_positives": 0,
+    "rework_cycles": 1
+  }
+},
+  "wave_27_wrapped_at": "2026-07-22T23:28:55Z",
+  "wave_27_reachability": "ok",
+  "wave_27_deployable_verify": "verified",
   "wave_26_meta_issue": 983,
   "wave_26_phase": 9,
   "wave_26_phase_ordinal": 2,
