@@ -110,6 +110,7 @@ Exit codes:
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -200,6 +201,24 @@ def _find_git_root(path: Path) -> Path | None:
     return None
 
 
+def _hermetic_git_env() -> dict[str, str]:
+    """A copy of the process environment with any ``GIT_*`` vars stripped.
+
+    git exports ``GIT_DIR``/``GIT_WORK_TREE``/``GIT_INDEX_FILE`` (and
+    friends) into the subprocesses it spawns — including the pre-push
+    ``pytest`` hook that runs this very module's test suite (main#719, see
+    ``.claude/lib/tests/conftest.py``). A ``git check-ignore`` invoked with
+    an inherited ``GIT_DIR`` targets THAT repo instead of the ``cwd`` we
+    pass, silently ignoring the owning-repo resolution this function exists
+    to do. Stripping ``GIT_*`` here makes every ``check-ignore`` call
+    hermetic regardless of what process tree the hook itself was invoked
+    from — a real correctness concern for the hook, not merely a test
+    artifact, since a PostToolUse hook has no control over its parent's
+    environment.
+    """
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
 def _is_git_ignored(resolved_path: Path) -> bool:
     """True if ``resolved_path`` is gitignored BY ITS OWN REPO.
 
@@ -235,6 +254,7 @@ def _is_git_ignored(resolved_path: Path) -> bool:
             cwd=str(git_root),
             capture_output=True,
             timeout=5,
+            env=_hermetic_git_env(),
         )
         # `git check-ignore -q` exit codes: 0 = ignored, 1 = not ignored,
         # 128 = fatal error (e.g. not a git repo after all). Only 0 counts
