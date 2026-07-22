@@ -562,5 +562,105 @@ class RemoveTopLevelKeyTests(unittest.TestCase):
         self.assertEqual(json.loads(out), {})
 
 
+class MetaIssueCoercionTests(unittest.TestCase):
+    """main#1053 — pin the `wave_{M}_meta_issue` write side.
+
+    `/wave-scope` SKILL.md § 13 documents this key's type as `integer`;
+    `/wave-retro`'s next-wave reservation step instead wrote a qualified
+    string (`"noorinalabs-main#821"`), and the two incompatible shapes broke
+    `post_wave_kickoff_comment.py`'s meta-issue skip for every wave written
+    in the string form. `_coerce_meta_issue_value` is the single choke point
+    (called from `main()`, which both `/wave-scope` and `/wave-retro` invoke)
+    that normalizes either shape to the canonical bare integer before it ever
+    reaches disk.
+
+    Mutation check: reverting `_coerce_meta_issue_value` to a no-op (or
+    removing the `_META_ISSUE_KEY_RE.match(k)` call site in `main()`) must
+    fail `test_main_coerces_qualified_string_form_to_bare_int` below — that
+    test asserts the on-disk JSON value is the Python `int` 821, which a
+    no-op coercion would leave as the string `"noorinalabs-main#821"`.
+    """
+
+    def test_bare_int_passthrough(self):
+        from upsert_status_keys import _coerce_meta_issue_value
+
+        self.assertEqual(_coerce_meta_issue_value("wave_9_meta_issue", 347), 347)
+
+    def test_qualified_string_coerced_to_bare_int(self):
+        from upsert_status_keys import _coerce_meta_issue_value
+
+        self.assertEqual(
+            _coerce_meta_issue_value("wave_16_meta_issue", "noorinalabs-main#821"),
+            821,
+        )
+
+    def test_bare_digit_string_coerced_to_int(self):
+        from upsert_status_keys import _coerce_meta_issue_value
+
+        self.assertEqual(_coerce_meta_issue_value("wave_2_meta_issue", "803"), 803)
+
+    def test_bool_rejected(self):
+        """bool is a subtype of int in Python — must not silently pass through."""
+        from upsert_status_keys import _coerce_meta_issue_value
+
+        with self.assertRaises(ValueError):
+            _coerce_meta_issue_value("wave_9_meta_issue", True)
+
+    def test_no_trailing_digits_rejected(self):
+        from upsert_status_keys import _coerce_meta_issue_value
+
+        with self.assertRaises(ValueError):
+            _coerce_meta_issue_value("wave_9_meta_issue", "noorinalabs-main-tbd")
+
+    def test_main_coerces_qualified_string_form_to_bare_int(self):
+        """End-to-end: `main()` writes the qualified-string CLI arg (the
+        exact shape `/wave-retro`'s reservation step emits) as a bare int on
+        disk — the on-disk value must be Python `int` 821, not the string."""
+        import tempfile
+        from pathlib import Path
+
+        from upsert_status_keys import main
+
+        with tempfile.TemporaryDirectory() as td:
+            status_path = Path(td) / "cross-repo-status.json"
+            status_path.write_text('{\n  "current_wave": "wave-16"\n}\n')
+
+            rc = main(
+                [
+                    "upsert_status_keys",
+                    str(status_path),
+                    'wave_16_meta_issue="noorinalabs-main#821"',
+                ]
+            )
+
+            self.assertEqual(rc, 0)
+            parsed = json.loads(status_path.read_text())
+            self.assertEqual(parsed["wave_16_meta_issue"], 821)
+            self.assertIsInstance(parsed["wave_16_meta_issue"], int)
+
+    def test_main_rejects_meta_issue_value_with_no_digits(self):
+        import tempfile
+        from pathlib import Path
+
+        from upsert_status_keys import main
+
+        with tempfile.TemporaryDirectory() as td:
+            status_path = Path(td) / "cross-repo-status.json"
+            status_path.write_text('{\n  "current_wave": "wave-16"\n}\n')
+
+            rc = main(
+                [
+                    "upsert_status_keys",
+                    str(status_path),
+                    'wave_16_meta_issue="noorinalabs-main-tbd"',
+                ]
+            )
+
+            self.assertEqual(rc, 2)
+            # Malformed input must not have been written.
+            parsed = json.loads(status_path.read_text())
+            self.assertNotIn("wave_16_meta_issue", parsed)
+
+
 if __name__ == "__main__":
     unittest.main()

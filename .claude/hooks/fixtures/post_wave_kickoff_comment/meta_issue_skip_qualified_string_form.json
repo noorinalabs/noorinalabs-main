@@ -1,0 +1,15 @@
+{
+  "description": "Meta-issue skip, qualified-string form (main#1053): wave_{M}_meta_issue is \"noorinalabs-main#821\" instead of the bare-int 821. The naive str(meta) == issue_number comparison would never match this shape (str(\"noorinalabs-main#821\") == \"821\" is False); the fix extracts the trailing digit run from meta before comparing, so the skip still fires.",
+  "command": "gh issue edit 821 --repo noorinalabs/noorinalabs-main --add-label \"p3-wave-16\"",
+  "status": {
+    "wave_16_meta_issue": "noorinalabs-main#821",
+    "wave_16_scope": {
+      "tier_1_test": [
+        {"id": "noorinalabs-main#821", "implementer": "Nadia Khoury", "reviewer": "Aino Virtanen", "reviewer_2": "Santiago Ferreira"}
+      ]
+    }
+  },
+  "existing_comments": [],
+  "post_succeeds": true,
+  "expect_action": "skip_meta_issue"
+}
