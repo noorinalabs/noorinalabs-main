@@ -310,3 +310,50 @@ Mechanical scoring (`trust_signals.py score 9 26`): **15 PRs**, 2 repos (data-ac
 **Concentration note:** 20% top (Alejandra / Kavitha tied at 3/15) — well below the 60% line and down from wave-25's 43%. Load distributed across 9 implementers; no fragility, no redistribution needed.
 
 **Orchestrator self-assessment:** clean wave. Both wave→main merges landed green (main#1063 28/28, da#480 22/22), reachability clean (ahead_by=0 both), staging green, 0 CI-red merges across all 15 PRs. The W25 gate-bypass class was structurally closed this wave (main#1059/#1061 + the #981/#1056/#1057 fail-closed hook-hardening chain). No verdict-format or fail-open recurrence.
+
+## Phase 9 Wave 27 Trust Updates (2026-07-22) — Pre-cutover data-quality closeout + Phase-9 tooling cleanup (last wave of Phase 9)
+
+Mechanical scoring (`trust_signals.py score 9 27`): **17 PRs**, 2 repos (main 13, data-acquisition 4), top-concentration **18%** (Aino Virtanen / Nino Kavtaradze / Weronika Zielinska tied at 3/17 — well below the 60% fragility line), **0 CI-red merges**, **0** `review_false_positives`, **2** changes-requested cycles (must-fix-received: Alejandra 1 on da#484, Weronika 1 on #1079 — both merge-gate catches, fixed + re-CI'd + re-approved fresh). **CR-cycle counter note:** recomputation from current review state finds 0 `CHANGES_REQUESTED` because both verdicts were edited-in-place to Approved after fixes (charter § verdict-amendment); the claimed **2** stands as authoritative-historic (P3W15 CR-cycle semantics), recorded in `wave_27_counter_corrections`. Helper-proposed deltas: Aino **+1**, Nino **+1**, Lucas **+1**, Nurul **+1**; all others delta 0.
+
+### Org-Level / Tooling Team (main)
+
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Aino Virtanen | 5 | 5 | delta +1 (prs_merged=3 clean: #1081 share one verdict-set entry point across Hook 4/Hook, #1075 make content_ts required on shared gate helpers, #1071 reviewer-set follows each reviewer's latest verdict), 0 CI-red, 0 must-fix. Helper +1 absorbed at ceiling. |
+| Nino Kavtaradze | 3 | 4 | delta +1 (prs_merged=3 clean: #1078 reviewer-rationale doc, #1076 TechDebt trailer accepts bare issue numbers + surfaces unparseable, #1072 premise_check bare-slash false-STOP fix), 0 CI-red. Earns the first bump off last wave's neutral seed. |
+| Lucas Ferreira | (deploy: hold) | 4 | First main-repo implementer scoring: delta +1 (prs_merged=2 clean: #1077 harden walk_flag_values to real gh/cobra flag semantics, #1070 normalize wave_{M}_meta_issue read+write), 0 CI-red. Seeded neutral 3 + earned bump (same establishment convention as Nino W26). |
+| Nurul Hakim | (deploy: hold) | 4 | First main-repo implementer scoring: delta +1 (prs_merged=2: #1073 rg --hidden gotcha doc, #1069 pin last-unkilled mutation on handoff-skip; **must_fix_caught=1** — held the merge gate on #1079's fail-open `read_checksums` deepcopy bug), 0 CI-red. Seeded neutral 3 + earned bump. |
+| Weronika Zielinska | (deploy: hold) | 3 | First main-repo implementer scoring: delta 0 (prs_merged=3: #1080 checksums ASCII CI-gate, #1079 shared checksums_io helper, #1074 generalize ontology_tracker SKIP_PATTERNS; **must_fix_received=1** on #1079 blocks the multi-PR bump, rework_cycles=1), 0 CI-red. Seeded at neutral 3. |
+
+### Child-Repo Team (data-acquisition)
+
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Alejandra Reyes-Fuentes | 5 | 5 | delta 0 (prs_merged=1 da#484 bound attested death_year_ah to isnad-plausibility envelope — the sole Tier-1 cutover gater; **must_fix_received=1** — Jean-Claude's gate catch on the date_reconcile scrub-swallow reachable on both resume + from-scratch paths, rework_cycles=1). Held at ceiling. |
+| Ivana Horvat | 5 | 5 | delta 0 (prs_merged=1 da#481 share resolve-stage gross death-year spread band, clean). Held at ceiling. |
+| Kavitha Sundaramurthy | 5 | 5 | delta 0 (prs_merged=1 da#482 record the ى→ي fold full-corpus A/B artifact, clean). Held at ceiling. |
+| Oyunbileg Batbayar | 5 | 5 | delta 0 (prs_merged=1 da#483 extend da#439 adjacency invariant across multi-isnad graph, clean). Held at ceiling. |
+| Jean-Claude Habimana | 3 | 3 | delta 0 (0 PRs, **must_fix_caught=1** — the load-bearing da#454/#484 date_reconcile catch; a single catch is below the +1 threshold of ≥2). Held at neutral. |
+
+Distribution discipline: no proposed 5 lands on a non-top performer — the two ceiling-ward +1 deltas are Aino (already 5, absorbed) and none other reaches 5; top relative composite is Aino & Nino (3 clean PRs each). No cap applied.
+
+### Done Well / Needs Improvement (Phase 9 Wave 27) — evidence-anchored, bare "None" banned
+
+| Member | Done Well (with evidence) | Gap (metric, or explicit "clean: numbers") |
+|---|---|---|
+| Aino Virtanen | 3 clean tooling-hardening PRs (#1081 shared verdict-set entry point, #1075 required content_ts, #1071 latest-verdict reviewer set) that tightened the review-gate primitives | clean: prs_merged=3, must_fix_received=0, ci_red_merges=0, false_positives=0, must_fix_caught=0 |
+| Nino Kavtaradze | 3 clean PRs incl. #1072 fixing the premise_check bare-slash 12/12 false-STOP class flagged at W26 retro | clean: prs_merged=3, must_fix_received=0, ci_red_merges=0, false_positives=0 |
+| Lucas Ferreira | 2 clean PRs (#1077 real gh/cobra flag semantics, #1070 meta_issue read/write normalize) | clean: prs_merged=2, must_fix_received=0, ci_red_merges=0, false_positives=0 |
+| Nurul Hakim | 2 clean PRs AND held the merge gate on #1079's fail-open deepcopy bug (must_fix_caught=1) | clean: prs_merged=2, must_fix_received=0, ci_red_merges=0, false_positives=0, must_fix_caught=1 |
+| Weronika Zielinska | 3 tooling PRs incl. #1079 shared checksums_io helper + #1074 SKIP_PATTERNS generalize | 1 must-fix received on #1079 (fail-open `read_checksums` returned a shallow dict aliasing the module-global) — caught at the gate, fixed with a regression test |
+| Alejandra Reyes-Fuentes | da#484 landed the sole Tier-1 cutover gater (death_year isnad-plausibility bound), satisfying the #978 cutover precondition | 1 must-fix received (date_reconcile scrub-swallow, reachable on both cutover paths) — caught at the gate, fixed with `scrub_cleared` sentinel + regression test |
+| Ivana Horvat | da#481 shared the resolve-stage death-year band cleanly | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0 |
+| Kavitha Sundaramurthy | da#482 documented the ى→ي fold full-corpus A/B artifact | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0 |
+| Oyunbileg Batbayar | da#483 extended the adjacency invariant across the multi-isnad graph | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0 |
+| Jean-Claude Habimana | held the Tier-1 gate — caught the da#454 date_reconcile scrub-swallow that a naive review would have passed (a cutover data-integrity catch) | clean: prs_merged=0, ci_red_merges=0, false_positives=0, must_fix_caught=1 |
+
+**Fire/hire:** none. Retirement trigger (`trust_signals.retirement_trigger`) fired for no engineer — all ≥3, 0 CI-red across the wave.
+
+**Concentration note:** 18% top (Aino / Nino / Weronika tied at 3/17) — well below the 60% fragility line, distributed across 10 implementers. Theme-fit (last-wave-of-phase cleanup pulled the full tooling-debt backlog); no redistribution needed.
+
+**Orchestrator self-assessment:** clean Phase-9-closing wave. 0 CI-red across all 17 PRs; both genuine must-fixes (da#454 cutover scrub-swallow + #1079 fail-open shared-state primitive) caught at the Opus merge gate, fixed with regression tests, re-approved fresh. Both wave→main merges owner-approved and green; reachability ahead_by=0; staging green. Two process debts surfaced for follow-up: the change-tracker hook polluting the parent `ontology/checksums.json` with 131 gitignored child-repo paths, and 3 dirty semantic checksums surviving into retro (wrapup ontology step gap).

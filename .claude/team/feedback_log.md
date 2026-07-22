@@ -219,3 +219,77 @@ Full negative-signal pass (bare "None" banned) recorded in `trust_matrix.md` § 
 
 ### Fire/hire
 None. Retirement trigger fired for no engineer. Three engineers (Jean-Claude, Kwesi, Nino) newly enter score-tracking at neutral 3.
+
+---
+
+## Retrospective: Phase 9 Wave 27 — 2026-07-22
+
+**Theme:** Pre-cutover data-quality closeout + Phase-9 tooling-debt cleanup (last wave of Phase 9). Merge model: wave-branch (`deployments/phase-9/wave-27` → main via #1083 main + #487 da).
+
+### Team Performance
+- **17 PRs merged** (main 13, data-acquisition 4), 2 repos in scope. **0 CI-red merges**, **0 review false-positives**.
+- **2 changes-requested cycles** (both merge-gate catches, both fixed + re-CI'd + re-approved fresh). CR-cycle recomputation from current review state finds 0 (both verdicts edited-in-place to Approved after fixes per charter § verdict-amendment); claimed 2 stands as authoritative-historic (P3W15 semantics), recorded in `wave_27_counter_corrections`.
+- **Counter verification:** final_pr_count 17=17 ✓, top_concentration 18%≈18% ✓, CR-cycles conflict resolved above.
+- All 17 work issues closed; meta #1067 closes at this retro. Both wave→main integration PRs owner-approved and merged; staging promotion green.
+
+### Wave-shape table
+| Metric | Value |
+|---|---|
+| PRs merged | 17 (main 13, da 4) |
+| CI-red merges | 0 |
+| Review false-positives | 0 |
+| Changes-requested cycles | 2 (authoritative-historic) |
+| Top-implementer concentration | 3 PRs / 17 = 18% (Aino / Nino / Weronika tied) |
+
+### Per-Engineer Assessments (mechanical — `trust_signals.py score 9 27`)
+Helper-proposed deltas: Aino +1, Nino +1, Lucas +1, Nurul +1; all others 0. (Full evidence-anchored table in `trust_matrix.md` § Phase 9 Wave 27 Trust Updates.)
+- **Aino Virtanen** — #1081/#1075/#1071, prs_merged=3 clean. Delta +1. clean. none.
+- **Nino Kavtaradze** — #1078/#1076/#1072, prs_merged=3 clean. Delta +1. clean. none.
+- **Lucas Ferreira** — #1077/#1070, prs_merged=2 clean. Delta +1. clean. none. (first main-repo score, neutral+bump)
+- **Nurul Hakim** — #1073/#1069 + must_fix_caught=1 (held #1079's fail-open gate). Delta +1. clean. none. (first main-repo score, neutral+bump)
+- **Weronika Zielinska** — #1080/#1079/#1074, prs_merged=3, must_fix_received=1 (#1079). Delta 0. Gap: 1 must-fix received. minor. (first main-repo score, neutral)
+- **Alejandra Reyes-Fuentes** — da#484 (Tier-1 cutover gater), must_fix_received=1 (date_reconcile scrub-swallow), rework=1. Delta 0. Gap: 1 must-fix received. minor.
+- **Ivana Horvat** — da#481 clean. Delta 0. clean. none.
+- **Kavitha Sundaramurthy** — da#482 clean. Delta 0. clean. none.
+- **Oyunbileg Batbayar** — da#483 clean. Delta 0. clean. none.
+- **Jean-Claude Habimana** — 0 PRs, must_fix_caught=1 (load-bearing da#454 catch). Delta 0. clean. none.
+
+Forced negative-signal pass: clean (two specific must-fix-received gaps; rest explicit "metrics clean").
+
+### Top 3 Going Well
+1. **Clean Phase-9 close: 0 CI-red across 17 PRs; both genuine must-fixes caught at the Opus merge gate** — da#454 `date_reconcile` scrub-swallow (reachable on both idempotent-resume AND from-scratch cutover paths) and #1079 `read_checksums` fail-open aliasing the module-global. Both fixed with regression tests and re-approved fresh. The gate did its job on the two highest-stakes surfaces (a cutover data gater + a shared-state primitive).
+2. **Deliberate +20%-floor tooling-debt drawdown worked** — the full main-repo tooling-debt backlog (10) + 4 resolve-stage closeout candidates all landed clean; Phase 9 exits with the tooling debt drained rather than carried to P10.
+3. **Content-staleness discipline held through 3 rebase+re-review cascades** (Cluster A/B) — every head move re-staled prior verdicts and drew fresh dual re-review; `content_ts` prevented any stale-verdict merge.
+
+### Top 3 Pain Points
+1. **Change-tracker hook pollutes parent `ontology/checksums.json` with gitignored child-repo paths — 131 entries** (da 29, deploy 57, ingest-platform 18, others 20). Child repos are independently git-tracked + parent-gitignored and must never enter the parent manifest. Recurring, now quantified (handoff estimated "some"; actual 131). **Hook/charter fix candidate — file as P10 tech-debt.**
+2. **3 dirty semantic checksums survived into retro** (`charter/issues.md` 20d, `MEMORY.md` 2d, `project_phase9_close_plan.md` never-resolved). Wrapup's ontology step should have reconciled them — process gap. Needs `/ontology-rebuild` (coordinated with the 131-entry child-path cleanup so the rebuild doesn't re-absorb child paths).
+3. **Project-2 Wave field missing the `W24` option** blocks board-field sync for 4 wave-24-labeled issues (ingest-platform#131/#134/#135, isnad-graph#1188 — wave-24 direct-to-main work). One-time owner action (Settings → Fields → Wave → add `W24`), then re-run `/board-audit`. Same missing-option class produced the W27-kickoff annunaki noise before the W27 option was added.
+
+### Annunaki-attack (Step 7.6)
+**45 genuine errors triaged; all benign.** 18 `block_bare_grep` (hard-block correctly firing), 7 `smart_grep_ontology` (search correctly routed to structural ontology), 5 `validate_review_comment_format` (batched `gh pr comment` with unreadable body — guard correct), 4 `post_label_change_wave_field_sync` ("no option W27" pre-option-add — see pain point 3), 4 `block_stale_tmp_message_file` (retried), 2 `validate_commit_identity` (retried), 2 `post_wave_kickoff_comment` (scope-not-yet-written timing), + 50 low-confidence `annunaki_monitor` pipe-mask-suspect heuristic fires (session-local `| tee` probes, exit 0). No wave-code defect, no production impact, no new automation crosses a threshold. Log archived to `.claude/annunaki/errors.jsonl.bak.20260722-234547`, live log reset, marker written.
+
+### Memory-to-automation audit (Step 7.7)
+**No conversions.** No memory files added/modified during wave-27. Marker written.
+
+### Memory decay & size sweep (Step 7.8)
+3 files flagged (advisory) — same as W26, all recently touched → **keep**: `project_narrator_chokepoints_enrich.md` (52 KB, 4d — standing consolidation candidate at 3.6× ceiling, carry forward when it goes quiet), `feedback_fixture_makes_guard_assertion_inert.md` (21 KB, 12d), `feedback_sweep_expensive_stage_before_launch.md` (15 KB, 12d).
+
+### Memory content-staleness judge (Step 7.9)
+Store healthy: 88 due notes → **73 still-current** (`last_verified` bump candidates), **15 partially-stale** (all false positives — illustrative prose, keep), **0 fully-stale**. No misdirection risk. The 73 `last_verified: 2026-07-22` bumps are clear-cut but advisory; deferred out of this retro PR to keep the diff focused — carry-forward item.
+
+### Promotion audit (Step 7.5)
+**0 AUTO · 0 DECIDE · 221 KEPT · 24 SUPERSEDED.** Nothing crossed a threshold (byte-deterministic). Log: `.claude/team/promotion_audit_log/wave-27.md`.
+
+### Proposed Process / Charter Changes (NOT applied — owner decides)
+1. **Fix the change-tracker hook to exclude gitignored child-repo paths from parent checksum tracking.** — Rationale: 131 stray child-repo entries in the parent `ontology/checksums.json` this wave; the hook should skip any path under a known child-repo root (or any parent-gitignored path). — Target: change-tracker hook + `charter/hooks/`. File as P10 tech-debt.
+2. **`/wave-wrapup` should verify `/ontology-rebuild` ran (0 dirty checksums) before wrap.** — Rationale: 3 dirty semantic checksums survived into retro; add a wrap-gate assertion (or explicit deferral). — Target: `wave-wrapup` skill + `charter/pull-requests/ci-gates.md`.
+3. **No annunaki-driven or promotion-driven charter change** — all 45 errors benign, 0 AUTO/0 DECIDE; guards working as designed.
+
+### Fire/hire
+None. Retirement trigger fired for no engineer — all ≥3, 0 CI-red across the wave.
+
+### Owner action items (surfaced, not auto-done)
+- Add `W24` option to project-2 Wave field, then re-run `/board-audit` (unblocks 4 wave-24 issues).
+- Run `/ontology-rebuild` to reconcile the 3 dirty semantic checksums (coordinated with the 131-entry child-path cleanup).
+- Phase 9 closes after this retro; next is the #978 cutover (separate owner-gated session, now unblocked — Tier-1 gate da#454 merged), then P10 opens.
