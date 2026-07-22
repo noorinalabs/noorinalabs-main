@@ -133,6 +133,25 @@ Two gotchas the rule carries:
   e.g. the `ontology/structural/` index, `dist/`, coverage output — silently
   returns nothing. Add **`--no-ignore`** (or `-uu`) whenever the thing you're
   searching can be git-ignored (`feedback_silent_zero_is_not_a_measurement`).
+- **Hidden-directory-awareness is a second, separate foot-gun — `--no-ignore`
+  does not cover it.** `rg` also skips **hidden** files and directories by
+  default, independently of `.gitignore`. This org keeps its entire
+  configuration/enforcement tree — hooks, lib, skills, roster, agents, memory —
+  under `.claude/`, a hidden directory, so a recursive `rg` from the repo root
+  silently returns **zero matches** under `.claude/` even with `--no-ignore`
+  added:
+  ```bash
+  rg -n --no-ignore "check_comment_reviews\(" . -g '*.py'          # 0 matches — silent zero
+  rg -n --no-ignore --hidden "check_comment_reviews\(" . -g '*.py' # real matches under .claude/
+  ```
+  Add **`--hidden`** whenever the search may cover `.claude/` or any other
+  dotted path, or use **`-uu`**, which implies *both* `--hidden` and
+  `--no-ignore` in one flag — the safest default when you're not sure which
+  gotcha applies. Same failure class as the `.gitignore` foot-gun above
+  (`feedback_silent_zero_is_not_a_measurement`): a false zero over `.claude/`
+  lands precisely on the safety-critical gate/hook tree, so an "all clear"
+  audit result over hidden paths should be treated with suspicion unless
+  `--hidden`/`-uu` was used.
 - **Flag translation.** `grep -r pat path` → `rg pat path` (recursive by
   default); `grep -rn` → `rg -n`; `grep -E` → `rg` (regex by default); `grep -F`
   → `rg -F`; `grep -o` → `rg -o`; `grep -c/-l/-v/-i/-w/-q` map 1:1. Piped

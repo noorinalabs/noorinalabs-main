@@ -56,11 +56,18 @@ the `_shell_parse.py` bug trail).
   search — **never plain `grep`**. `rg` is faster, multiline-capable, and
   `.gitignore`-aware; a bare `grep` invocation is **hard-blocked** by a
   PreToolUse hook ([#1008](https://github.com/noorinalabs/noorinalabs-main/issues/1008)).
-  Two gotchas the rule carries: (a) `rg` skips `.gitignore`d paths by default —
+  Three gotchas the rule carries: (a) `rg` skips `.gitignore`d paths by default —
   add `--no-ignore`/`-uu` when searching a generated/ignored target (e.g. the
   `ontology/structural/` index) or you get a silent zero
-  (`feedback_silent_zero_is_not_a_measurement`); (b) on the dev box `grep` is
-  actually `ugrep`, not GNU grep — one more reason to standardize on `rg`.
+  (`feedback_silent_zero_is_not_a_measurement`); (b) `rg` *also* skips **hidden**
+  files/dirs by default — a separate foot-gun `--no-ignore` does not cover, and
+  the one that bites hardest here since the entire `.claude/` config/enforcement
+  tree is hidden, so a recursive `rg` from the repo root silently returns zero
+  matches under `.claude/` even with `--no-ignore` added; add **`--hidden`**
+  (or **`-uu`**, which implies both `--hidden` and `--no-ignore`) whenever the
+  search may cover `.claude/` or any other dotted path; (c) on the dev box
+  `grep` is actually `ugrep`, not GNU grep — one more reason to standardize on
+  `rg`.
 - **`sed`/`sd`** stay the right tools for line-oriented replace; `sd` is the
   literal-by-default companion (no `sed` regex foot-guns).
 
