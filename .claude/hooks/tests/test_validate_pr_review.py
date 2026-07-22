@@ -377,6 +377,116 @@ class ReviewerDedupTests(_CheckCommentReviewsHarness):
         self.assertEqual(result.reviewers, set(), "branch author must not self-review")
 
 
+class LatestVerdictSupersedesTests(_CheckCommentReviewsHarness):
+    """Issue #940: the reviewer set is monotonic — an approval cannot be
+    withdrawn, and a reviewer standing at Changes Requested still counts as
+    an approver if they ever approved earlier in the thread.
+
+    The fix keys each reviewer's verdict by their LATEST charter-format
+    comment (chronological = fixture list order, since these tests pass no
+    `content_ts` and so exercise the unbound #950 path). Only a reviewer
+    whose latest verdict is Approved contributes to the reviewer set.
+    """
+
+    @staticmethod
+    def _verdict(requestor: str, ror: str, requestee: str = "Linh Pham") -> dict:
+        return {
+            "body": (
+                f"Requestor: {requestor}\nRequestee: {requestee}\n"
+                f"RequestOrReplied: {ror}\nTechDebt: none"
+            ),
+            "user": {"login": "anyone"},
+        }
+
+    def test_approved_then_changes_requested_is_excluded(self):
+        """Guard for #940: this must RED under the pre-fix monotonic union.
+
+        An Approved followed by a Changes Requested from the SAME reviewer —
+        the fixture shape the issue calls out as the one that proves the
+        defect (a fixture with only the reverse order "passes under both
+        implementations and proves nothing").
+        """
+        comments = [
+            self._verdict("Oyunbileg Batbayar", "Approved"),
+            self._verdict("Oyunbileg Batbayar", "Changes Requested"),
+        ]
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertNotIn(
+            "oyunbileg batbayar",
+            result.reviewers,
+            "a later Changes Requested must withdraw the earlier Approved",
+        )
+        self.assertEqual(result.reviewers, set())
+
+    def test_changes_requested_then_approved_is_included(self):
+        """The symmetric case: a later Approved supersedes an earlier block."""
+        comments = [
+            self._verdict("Kwesi Boateng", "Changes Requested"),
+            self._verdict("Kwesi Boateng", "Approved"),
+        ]
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertIn("kwesi boateng", result.reviewers)
+
+    def test_da359_shaped_timeline_reproduces_the_correct_verdicts(self):
+        """Reproduces the exact da#359 timeline from #940's report.
+
+        Chronological verdicts:
+          Oyunbileg Batbayar: Approved -> Changes Requested -> Changes Requested
+          Alejandra Reyes-Fuentes: Approved
+          Kwesi Boateng: Changes Requested -> Approved
+
+        Standing verdict is Oyunbileg BLOCKING, Alejandra and Kwesi APPROVED —
+        exactly 2 current approvers, not the pre-fix count of 3.
+        """
+        comments = [
+            self._verdict("Oyunbileg Batbayar", "Approved"),
+            self._verdict("Alejandra Reyes-Fuentes", "Approved"),
+            self._verdict("Oyunbileg Batbayar", "Changes Requested"),
+            self._verdict("Oyunbileg Batbayar", "Changes Requested"),
+            self._verdict("Kwesi Boateng", "Changes Requested"),
+            self._verdict("Kwesi Boateng", "Approved"),
+        ]
+        result = self._run_with_fake_api(comments, self.BRANCH_AUTHOR, repo=self.REPO)
+        self.assertEqual(
+            result.reviewers,
+            {"alejandra reyes-fuentes", "kwesi boateng"},
+        )
+        self.assertNotIn("oyunbileg batbayar", result.reviewers)
+        self.assertEqual(len(result.reviewers), 2)
+
+    def test_stale_verdict_does_not_override_a_later_current_one(self):
+        """A verdict predating T_content is excluded from `latest_verdict`
+        entirely (#950) — it must not be able to overwrite the reviewer's
+        genuinely-latest CURRENT verdict just because it appears later in
+        `stale_verdicts` bookkeeping. Here the reviewer's only CURRENT verdict
+        is Approved; an earlier STALE Changes Requested must not block them.
+        """
+        content_ts = hook._parse_iso8601("2026-01-02T00:00:00Z")
+        stale_ts = "2026-01-01T00:00:00Z"
+        fresh_ts = "2026-01-03T00:00:00Z"
+        comments = [
+            {
+                "body": (
+                    "Requestor: Nino Kavtaradze\nRequestee: Linh Pham\n"
+                    "RequestOrReplied: Changes Requested\nTechDebt: none"
+                ),
+                "created_at": stale_ts,
+            },
+            {
+                "body": (
+                    "Requestor: Nino Kavtaradze\nRequestee: Linh Pham\n"
+                    "RequestOrReplied: Approved\nTechDebt: none"
+                ),
+                "created_at": fresh_ts,
+            },
+        ]
+        result = self._run_with_fake_api_ts(
+            comments, self.BRANCH_AUTHOR, repo=self.REPO, content_ts=content_ts
+        )
+        self.assertIn("nino kavtaradze", result.reviewers)
+        self.assertEqual(len(result.stale_verdicts), 1)
+
+
 class ExtractBranchAuthorLastnameTests(unittest.TestCase):
     """Regression tests for issue #179.
 
