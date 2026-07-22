@@ -156,3 +156,66 @@ Concrete output: added the zsh `path`-tied-to-`$PATH` clobber gotcha to `feedbac
 
 ### Promotion audit
 0 AUTO · 0 DECIDE · 207 KEPT · 24 SUPERSEDED. Nothing crossed a threshold. Log: `.claude/team/promotion_audit_log/wave-25.md`. (The #981 fail-closed hook hardening is a filed bug, not a promotion crossing.)
+
+---
+
+## Retrospective: Phase 9 Wave 26 — 2026-07-22
+
+**Theme:** Parse recovery & name quality. Repos in scope: `noorinalabs-data-acquisition` (13 PRs), `noorinalabs-main` (2 PRs). Meta-issue #983.
+
+### Team Performance
+- **15 PRs merged** (da#461–479 ×13; main#1059/#1061 ×2), **0 CI-red merges**, **0 review false-positives**.
+- **5 changes-requested cycles** (must-fix-received: Kavitha 2, Jean-Claude 2, Alejandra 1) — all resolved and merged clean.
+- **Top-implementer concentration 20%** (Alejandra / Kavitha tied 3/15) — down from wave-25's 43%, well below the 60% fragility line.
+- Wave wrapped end-to-end pre-session: both wave→main merges green (main#1063 28/28, da#480 22/22, `--merge`, branches retained per owner directive); reachability clean; staging green (this wave has no fan-in/deployable surface — meta + data-pipeline only).
+
+### Counter verification (Step 2.5)
+All three `wave_26_*` counters match PR-level recomputation — **no drift**, no `counter_corrections` entry needed:
+- `final_pr_count=15` = 2 main + 13 da ✓
+- `changes_requested_cycles=5` = Σ must_fix_received (2+2+1) ✓
+- `top_concentration_pct=20` = max 3 PRs / 15 ✓ (the scope note's 25% was 3/12 over *planned issues*; the counter is over *actual PRs* — both internally consistent)
+
+### Per-Engineer Assessments (mechanical — `trust_signals.py score 9 26`)
+| Engineer | PRs | Signals (merged / mf-caught / mf-recv / ci-red / rework) | Delta | Severity |
+|---|---|---|---|---|
+| Nikolaos Papadopoulos | da#472,#473 | 2 / 2 / 0 / 0 / 0 | +2 (abs. at ceiling) | none — wave top signal |
+| Kavitha Sundaramurthy | da#474,#476,#479 | 3 / 1 / 2 / 0 / 2 | 0 | minor (rework on hardest surface) |
+| Alejandra Reyes-Fuentes | da#466,#468,#470 | 3 / 1 / 1 / 0 / 1 | 0 | minor |
+| Ivana Horvat | da#465,#469 | 2 / 0 / 0 / 0 / 0 | +1 (abs. at ceiling) | none |
+| Oyunbileg Batbayar | da#461 | 1 / 1 / 0 / 0 / 0 | 0 | none |
+| Jean-Claude Habimana | da#462 | 1 / 0 / 2 / 0 / 1 | 0 (seed 3) | minor (2 mf-recv on one PR) |
+| Kwesi Boateng | da#463 | 1 / 0 / 0 / 0 / 0 | 0 (seed 3) | none |
+| Aino Virtanen | main#1061 | 1 / 0 / 0 / 0 / 0 | 0 | none |
+| Nino Kavtaradze | main#1059 | 1 / 0 / 0 / 0 / 0 | 0 (seed 3) | none |
+
+Full negative-signal pass (bare "None" banned) recorded in `trust_matrix.md` § P9W26 — every active engineer carries either a specific gap or an explicit `clean: {numbers}` line. Three engineers (Jean-Claude, Kwesi, Nino) enter score-tracking this wave, seeded at neutral 3.
+
+### Top 3 Going Well
+1. **Clean, well-distributed wave.** 0 CI-red merges across all 15 PRs; concentration 20% (down from 43% W25) spread across 9 implementers — no fragility, no single-owner dependency. The name/parse-quality surface is now worked by the whole data-acquisition bench, not one person.
+2. **Genuine reviewing that caught real issues.** Nikolaos's `must_fix_caught=2` (on the gloss-tail/name-cut discrimination PRs) was the wave's top composite signal — real catches on subtle discrimination logic, 0 false-positives across the whole wave.
+3. **The W25 gate-bypass class was structurally closed.** main#1059 (repo-authoritative-over-cwd in wave-label hooks, #985) + main#1061 (verbatim verdict-block in the spawn-brief template, #984) + the #981/#1056/#1057 fail-closed chain landed. No verdict-format or fail-open recurrence this wave — the remediation held.
+
+### Top 3 Pain Points
+1. **Rework concentrated on the name_quality / bio_promote discrimination surface.** All 5 must-fix-received landed here (Kavitha 2 + Jean-Claude 2 + Alejandra 1) with 4 rework cycles. Not a quality failure — everything shipped clean, 0 CI-red — but the tier-1 "recover a real narrator from a matn tail vs. a gloss tail" discrimination is the wave's hardest logic and drew every iteration. Reviewers and authors were re-deriving the same A/B distinctions per-PR.
+2. **`premise_check` false-STOP on prose (main#1047).** The premise-rot gate STOPped 12/12 on scope prose fragments containing `/`; all hand-verified false positives (0 genuine rot). A gate that cries wolf 12/12 trains people to bypass it — filed, carried to wave-27.
+3. **High `block_bare_grep` volume.** 60 of the wave's ~114 annunaki events were the bare-`grep` hard-block firing (correctly). The guard works and nudges to `rg`, but the sheer recurring count shows the reflex to type bare `grep` persists across orchestrator/agent sessions — worth surfacing, no code change warranted.
+
+### Proposed Process Changes
+1. **Shared A/B fixture harness for discrimination-gate issues, up front.** — Rationale: 5/5 must-fix-received and 4 rework cycles all landed on the name_quality/bio_promote discrimination surface, with authors and reviewers re-deriving the same gloss-tail-vs-name-cut A/B distinctions per PR. When the next wave scopes discrimination-gate work, seed a shared fixture set the whole tier verifies against, so the distinction is defined once. — Section: `charter/issues.md` § Wave Planning (fixture-first for discrimination-gate tiers).
+2. **Prioritize `premise_check` `/`-token fix (#1047) in wave-27.** — Rationale: it STOPped 12/12 this scope run and will keep firing on every prose-heavy scope; a gate at a 100% false-positive rate is worse than no gate. Already filed + labeled wave-27; flagging as a priority, not merely carry-forward.
+3. **No annunaki-driven charter change.** — Rationale: all ~114 genuine errors triaged benign (see below); the bare-grep and pipe-mask classes are already hard-blocked / detected. No new automation crosses a threshold.
+
+### Annunaki-attack (Step 7.6)
+**114 genuine errors triaged; all benign.** Breakdown: 60 `block_bare_grep` (guard correctly firing), 12 `validate_branch_freshness`, 10 `post_label_change_wave_field_sync` (pre-#985-fix cwd-anchor noise — the fix landed this wave), 7 `validate_review_comment_format`, plus 1–2 each of label/board/ontology/kickoff hooks — all correctly-firing guards. 158 low-confidence `pipe-mask-suspect` heuristic fires + 11 high-confidence `masked-failure`: the latter are 5× the known `git push … | tail` pipe-masks-exit-code trap (each retried/rebased successfully after a branch-freshness rejection) and 6× session-local scripting probes (wrong-path `json.load` on `.claude/team/cross-repo-status.json` — the file is at repo root; a verification `AssertionError`; `gh api | python3` on non-JSON). **No wave-code defect, no production impact, no new automation.** Log archived to `.claude/annunaki/errors.jsonl.bak.*`, live log reset, marker written (`wave_26_annunaki_attack_ran_at`).
+
+### Memory-to-automation audit (Step 7.7)
+**No conversions.** No memory files were added or modified during wave-26 (git log over `.claude/memory/` since 2026-07-20 is empty), and the promotion audit found 0 AUTO / 0 DECIDE — the 20+ codifiable feedback memories are already promoted-via-provenance. Marker written (`wave_26_memory_audit_ran_at`).
+
+### Memory decay & size sweep (Step 7.8)
+3 files flagged (advisory, non-blocking): `project_narrator_chokepoints_enrich.md` (52 KB, touched 3d ago), `feedback_fixture_makes_guard_assertion_inert.md` (21 KB, 11d), `feedback_sweep_expensive_stage_before_launch.md` (15 KB, 11d). All recently touched (live, not stale) → **keep** for now; `project_narrator_chokepoints_enrich.md` is the standing consolidation candidate at 52 KB (3.6× the soft ceiling) — carry forward to a future retro when it goes quiet.
+
+### Promotion audit (Step 7.5)
+0 AUTO · 0 DECIDE · 220 KEPT · 24 SUPERSEDED. Nothing crossed a threshold. Log: `.claude/team/promotion_audit_log/wave-26.md`.
+
+### Fire/hire
+None. Retirement trigger fired for no engineer. Three engineers (Jean-Claude, Kwesi, Nino) newly enter score-tracking at neutral 3.

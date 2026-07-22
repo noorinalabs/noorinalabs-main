@@ -6301,5 +6301,7 @@
 },
   "wave_26_stg_promotion": "success",
   "wave_26_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/29309875152",
-  "wave_26_wrapped_up_at": "2026-07-21T23:30:08Z"
+  "wave_26_wrapped_up_at": "2026-07-21T23:30:08Z",
+  "wave_26_annunaki_attack_ran_at": "2026-07-22T01:25:57Z",
+  "wave_26_memory_audit_ran_at": "2026-07-22T01:25:57Z"
 }
