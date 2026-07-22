@@ -58,6 +58,75 @@ class LooksLikePathTest(unittest.TestCase):
     def test_rejects_whitespace(self) -> None:
         self.assertFalse(pc.looks_like_path("a b.py"))
 
+    def test_rejects_slash_prose_main_1047(self) -> None:
+        """main#1047: a slash alone is NOT a positive path signal.
+
+        Every one of these is a verbatim false-positive token from the wave-26
+        scope run (12/12 STOP, 0 genuine rot) — none has a code extension and
+        none has a known repo-root leading component, so all must be rejected.
+        """
+        for tok in (
+            "/",
+            "A/B",
+            "Latin/English",
+            "benediction/Prophet-title",
+            "ism/kunya",
+            "token-count/matn-density",
+            "recall/precision",
+            "display/graph",
+            "Identity/matching",
+            "taṣliya/eulogy",
+            "pollution/mc",
+            "resolve/load",
+            "collectors/commentators",
+            "Validate/scrub",
+            "boundary/particle",
+            "name/nisba",
+            "transliteration/cross-script",
+            "Code/git",
+        ):
+            self.assertFalse(pc.looks_like_path(tok), tok)
+
+    def test_rejects_numeric_fraction_main_1047(self) -> None:
+        # "650,986/650,986 rows" -> the bare token "986/650" is a count, not a path.
+        self.assertFalse(pc.looks_like_path("986/650"))
+        self.assertFalse(pc.looks_like_path("650,986/650,986"))
+
+    def test_rejects_git_ref_main_1047(self) -> None:
+        # A git ref contains a slash but is never a path.
+        self.assertFalse(pc.looks_like_path("origin/main"))
+        self.assertFalse(pc.looks_like_path("refs/heads/main"))
+
+    def test_accepts_known_root_component_without_extension(self) -> None:
+        # A leading known-root directory is a positive signal even with no
+        # recognized extension on the final component.
+        self.assertTrue(pc.looks_like_path("src/parse"))
+        self.assertTrue(pc.looks_like_path("noorinalabs-deploy/terraform/main"))
+
+    def test_accepts_true_positive_paths_main_1047(self) -> None:
+        # Every one of these genuinely resolved OK in the wave-26 run — the
+        # fix must not regress real paths into false negatives.
+        for tok in (
+            "src/resolve/ner.py",
+            "src/utils/arabic.py",
+            "docs/testing-on-subsets.md",
+            "data/curated/narrators_canonical.parquet",
+        ):
+            self.assertTrue(pc.looks_like_path(tok), tok)
+
+    def test_mutation_guard_slash_alone_would_readmit_prose(self) -> None:
+        """Pin the exact defect shape so a regression of the `"/" in tok`
+        short-circuit (main#1047's root cause) is caught even if someone
+        "simplifies" the extension/root-component branches back together.
+        """
+        prose_with_slash = "recall/precision"
+        self.assertFalse(pc.looks_like_path(prose_with_slash))
+        # The old (buggy) rule as a local re-implementation, for contrast only
+        # — NOT calling into pc, just documenting what must NOT be true.
+        old_buggy_rule = "/" in prose_with_slash
+        self.assertTrue(old_buggy_rule)  # sanity: the token does contain "/"
+        self.assertNotEqual(pc.looks_like_path(prose_with_slash), old_buggy_rule)
+
 
 class NormalizePathTest(unittest.TestCase):
     def test_strips_backticks_and_trailing_punct(self) -> None:
@@ -94,6 +163,86 @@ class ExtractPathCandidatesTest(unittest.TestCase):
 
     def test_empty(self) -> None:
         self.assertEqual(pc.extract_path_candidates(""), [])
+
+    def test_wave_26_regression_fixture_no_false_positives(self) -> None:
+        """main#1047: pin all 12 wave-26 scope-run issue bodies as a fixture.
+
+        Every body below produced a false STOP under the old `"/" in tok`
+        rule. None of them should extract as path candidates now; the four
+        genuine paths embedded alongside the prose must still extract.
+        """
+        bodies = [
+            "Needs bidirectional A/B fixtures to compare recall/precision.",
+            "Handle Latin/English transliteration mismatches in `src/resolve/ner.py`.",
+            "The benediction/Prophet-title (taṣliya/eulogy) detector over-fires.",
+            "Distinguish ism/kunya name-parts per `src/utils/arabic.py`.",
+            "Tune token-count/matn-density thresholds; see `docs/testing-on-subsets.md`.",
+            "Row counts read 650,986/650,986 after the backfill.",
+            "Diff against origin/main before merging.",
+            "display/graph parity check for the new collectors/commentators view.",
+            "Identity/matching regression on the boundary/particle splitter.",
+            "resolve/load ordering bug affects name/nisba resolution.",
+            "Validate/scrub step needs a transliteration/cross-script pass.",
+            "Code/git housekeeping only; touches `data/curated/narrators_canonical.parquet`.",
+        ]
+        real_paths = {
+            "src/resolve/ner.py",
+            "src/utils/arabic.py",
+            "docs/testing-on-subsets.md",
+            "data/curated/narrators_canonical.parquet",
+        }
+        false_positive_tokens = {
+            "A/B",
+            "recall/precision",
+            "Latin/English",
+            "benediction/Prophet-title",
+            "taṣliya/eulogy",
+            "ism/kunya",
+            "token-count/matn-density",
+            "986/650",
+            "650,986/650,986",
+            "origin/main",
+            "display/graph",
+            "collectors/commentators",
+            "Identity/matching",
+            "boundary/particle",
+            "resolve/load",
+            "name/nisba",
+            "Validate/scrub",
+            "transliteration/cross-script",
+            "Code/git",
+        }
+        seen_real_paths: set[str] = set()
+        for body in bodies:
+            got = set(pc.extract_path_candidates(body))
+            leaked = got & false_positive_tokens
+            self.assertEqual(leaked, set(), f"false positive(s) in body: {body!r} -> {leaked}")
+            seen_real_paths |= got & real_paths
+        self.assertEqual(seen_real_paths, real_paths)
+
+    def test_mutation_verify_old_rule_would_fail_this_fixture(self) -> None:
+        """Restoring the old `"/" in tok` short-circuit must fail the wave-26
+        fixture above — proves the regression test actually exercises the fix
+        (main#1047 mutation-verification requirement).
+        """
+
+        def _old_looks_like_path(token: str) -> bool:
+            tok = token.strip()
+            if not tok or " " in tok or "\t" in tok:
+                return False
+            if "://" in tok:
+                return False
+            if not __import__("re").fullmatch(r"[\w./\-]+", tok):
+                return False
+            if tok.lstrip("#").isdigit():
+                return False
+            if "/" in tok:
+                return True
+            ext = tok.rsplit(".", 1)[-1].lower() if "." in tok else ""
+            return ext in pc._CODE_EXTENSIONS
+
+        self.assertTrue(_old_looks_like_path("recall/precision"))
+        self.assertFalse(pc.looks_like_path("recall/precision"))
 
 
 # --- verdict layer with injected (fake) checkers ----------------------------
@@ -166,6 +315,36 @@ class CheckIssueVerdictTest(unittest.TestCase):
         }
         res = self._check(issue, {"a.py": pc.EXISTS, "b/c.py": pc.EXISTS})
         self.assertEqual({c.value for c in res.candidates}, {"a.py", "b/c.py"})
+
+    def test_cross_repo_resolution_is_warn_not_stop(self) -> None:
+        """main#1047 da#427: a `.claude/`-rooted path that MISSES in the child
+        repo but EXISTS in the parent downgrades to CROSS_REPO -> WARN.
+        """
+        target = ".claude/memory/feedback_drop_gate_bidirectional_ab.md"
+        issue = {
+            "ref": "da#427",
+            "repo": "noorinalabs-data-acquisition",
+            "body": f"see `{target}`",
+        }
+
+        def _path(repo_dir: str, _ref: str, value: str) -> str:
+            # MISSING in the child repo dir, EXISTS at the parent (repos_root).
+            return pc.EXISTS if repo_dir == "/repos" else pc.MISSING
+
+        res = pc.check_issue(issue, Path("/repos"), "origin/main", _path, _checker({})[1])
+        self.assertEqual(res.verdict, pc.WARN)
+        self.assertEqual(res.candidates[0].status, pc.CROSS_REPO)
+        self.assertIsNotNone(res.candidates[0].note)
+
+    def test_non_claude_missing_in_child_repo_is_still_stop(self) -> None:
+        # Only `.claude/`-rooted paths get the cross-repo second chance.
+        issue = {
+            "ref": "da#1",
+            "repo": "noorinalabs-data-acquisition",
+            "body": "see `src/parse/composition.py`",
+        }
+        res = self._check(issue, {"src/parse/composition.py": pc.MISSING})
+        self.assertEqual(res.verdict, pc.STOP)
 
 
 class ResolveRepoDirTest(unittest.TestCase):
@@ -266,6 +445,42 @@ class GitIntegrationTest(unittest.TestCase):
             self.assertEqual(statuses[("path", "doomed.py")], pc.MISSING)
             self.assertEqual(statuses[("symbol", "kept_symbol")], pc.EXISTS)
             self.assertEqual(statuses[("symbol", "vanished_symbol")], pc.MISSING)
+            self.assertEqual(res.verdict, pc.STOP)
+
+    def test_basename_fallback_resolves_nested_file(self) -> None:
+        """main#1047 da#373: a bare filename named `composition.py` that lives
+        at `src/parse/composition.py` must resolve OK, not MISSING.
+        """
+        with TemporaryDirectory() as d:
+            root = Path(d)
+            self._git(root, "init", "-q")
+            self._git(root, "config", "user.email", "t@t")
+            self._git(root, "config", "user.name", "t")
+            nested = root / "src" / "parse"
+            nested.mkdir(parents=True)
+            (nested / "composition.py").write_text("x = 1\n")
+            self._git(root, "add", "-A")
+            self._git(root, "commit", "-q", "-m", "base")
+
+            issue = {
+                "ref": "da#373",
+                "repo": "noorinalabs-main",
+                "body": "fix a bug in `composition.py`",
+            }
+            res = pc.check_issue(issue, root, "HEAD")
+            statuses = {c.value: c.status for c in res.candidates}
+            self.assertEqual(statuses["composition.py"], pc.EXISTS)
+            self.assertEqual(res.verdict, pc.OK)
+
+    def test_basename_fallback_does_not_resurrect_a_real_deletion(self) -> None:
+        # A genuinely deleted slash-free file must still STOP — the basename
+        # fallback only helps when the name resolves SOMEWHERE in the tree.
+        with TemporaryDirectory() as d:
+            root = Path(d)
+            self._make_repo(root)
+            issue = {"ref": "main#705", "repo": "noorinalabs-main", "body": "`doomed.py`"}
+            res = pc.check_issue(issue, root, "HEAD")
+            self.assertEqual(res.candidates[0].status, pc.MISSING)
             self.assertEqual(res.verdict, pc.STOP)
 
     def test_unknown_ref_is_unverifiable(self) -> None:

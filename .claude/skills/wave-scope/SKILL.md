@@ -265,13 +265,23 @@ gate closes that — it is the scope-time twin of [[feedback_spawn_brief_protoco
 (spawn-time) and [[feedback_verify_diagnosis_before_delegating]].
 
 The deterministic check is `.claude/lib/premise_check.py`. It auto-extracts
-path-like tokens from each in-scope issue's body (backtick spans + a strict path
-regex, so prose never produces a false STOP), then runs `git cat-file -e
-<ref>:<path>` per path (and `git grep` per explicitly-declared symbol) against
-the repo's origin HEAD. Verdicts: a path/symbol the ref can read but does not
-contain → **STOP** (premise rot); a repo/ref that cannot be read at all (child
-not cloned, origin not fetched) → **WARN** (an environment gap, deliberately not
-a STOP); everything present → **OK**.
+path-like tokens from each in-scope issue's body (backtick spans + a path-token
+regex), then classifies each token with `looks_like_path` — accepted only when
+it ends in a known code/doc extension, OR contains a `/` **and** its leading
+component is a known repo-root directory (`src/`, `.claude/`, a child-repo
+name, …). A bare `/` is NOT itself evidence of a path (main#1047 — a slash
+alone previously flagged prose like `A/B`, `recall/precision`, and the git ref
+`origin/main` as paths, a 12/12 false-STOP on the wave-26 scope run); git refs
+and all-numeric fractions (`986/650`) are explicitly excluded. It then runs
+`git cat-file -e <ref>:<path>` per path (and `git grep` per
+explicitly-declared symbol) against the repo's origin HEAD — with a basename
+fallback for a slash-free filename that misses at repo root but resolves
+uniquely elsewhere in the tree. Verdicts: a path/symbol the ref can read but
+does not contain → **STOP** (premise rot); a repo/ref that cannot be read at
+all (child not cloned, origin not fetched), or a `.claude/`-rooted path that
+misses in a child repo but resolves in the parent `noorinalabs-main` → **WARN**
+(an environment gap or a likely cross-repo reference, deliberately not a
+STOP); everything present → **OK**.
 
 Run it over the actual labeled scope (Step 4 output). Fetch each in-scope repo's
 `origin` first so the check resolves against real HEADs (an unfetched repo only
