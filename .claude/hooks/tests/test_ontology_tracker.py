@@ -425,10 +425,18 @@ class GitCheckIgnoreGeneralizationTests(_FakeRepoRootMixin, unittest.TestCase):
     def setUp(self):
         super().setUp()
         hook._GIT_CHECK_IGNORE_CACHE.clear()
+        # `env=hook._hermetic_git_env()` is load-bearing (main#719): the
+        # pre-push pytest hook is itself invoked by `git push`, which exports
+        # GIT_DIR/GIT_WORK_TREE for the real repo into every subprocess this
+        # test spawns. Without stripping it, `git init` here silently
+        # inits/no-ops against the REAL repo instead of the fake root, so the
+        # fake root never gets a `.git` and every check-ignore call below
+        # then legitimately (and misleadingly) reports "not a git repo".
         subprocess.run(
             ["git", "init", "-q", str(self._fake_root)],
             check=True,
             capture_output=True,
+            env=hook._hermetic_git_env(),
         )
 
     def tearDown(self):
@@ -448,7 +456,12 @@ class GitCheckIgnoreGeneralizationTests(_FakeRepoRootMixin, unittest.TestCase):
 
         child_repo = self._fake_root / "child-repo"
         child_repo.mkdir()
-        subprocess.run(["git", "init", "-q", str(child_repo)], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "init", "-q", str(child_repo)],
+            check=True,
+            capture_output=True,
+            env=hook._hermetic_git_env(),
+        )
 
         f = child_repo / "ontology" / "services.yaml"
         f.parent.mkdir(parents=True)
