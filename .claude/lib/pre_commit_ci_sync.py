@@ -47,7 +47,8 @@ kind tokens so they compare:
 
     ruff-lint, ruff-format, mypy, pytest, eslint, typescript, prettier,
     terraform-fmt, gitleaks, actionlint, astro-check, pip-audit, build,
-    cspell, dockerfile-base-pin, fixture-realism, skill-graphql-pagination
+    cspell, dockerfile-base-pin, fixture-realism, skill-graphql-pagination,
+    checksums-ascii
 
 Unknown tools are ignored (neither side gates on a kind we can't classify),
 which keeps the gate conservative — it never fails on something it doesn't
@@ -181,6 +182,16 @@ _KIND_PATTERNS: dict[str, tuple[str, ...]] = {
         "lint_skill_graphql_pagination",
         "skill-graphql-pagination",
     ),
+    # `checksums-ascii` is the ontology/checksums.json no-`\u`-escape gate
+    # (`.claude/lib/check_checksums_ascii.py`, #1044 — follow-up to #1038/#1042):
+    # the CI `Config — YAML/JSON syntax` job runs it as a step, asserting the
+    # committed checksums.json holds no `\u` escape sequence (evidence some
+    # writer used ensure_ascii=True instead of ensure_ascii=False). Same
+    # contract as the two charter-prose→code gates above — a CI-enforced run
+    # of this script with no pre-commit hook is harmful drift (#684), not a
+    # silently-ignored unknown. Patterns match the script basename (present on
+    # both sides' invoke line) and the hook id/job name.
+    "checksums-ascii": ("check_checksums_ascii", "checksums-ascii"),
 }
 
 

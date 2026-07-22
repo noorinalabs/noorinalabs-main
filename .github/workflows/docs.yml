@@ -185,6 +185,17 @@ jobs:
               sys.exit(1)
           print("All committed YAML/JSON parse cleanly.")
           PY
+      - name: Assert ontology/checksums.json holds no \u escapes (#1044)
+        # PR #1040 (closes #1038) fixed the escaped/literal UTF-8 flip-flop for
+        # the one CODE-enforced writer (ontology_tracker.py); the other writer,
+        # the agent-driven /ontology-rebuild resolver, only got a SKILL.md
+        # instruction (#1042 gave it a real checksums_io.py CLI to call, but
+        # a not-yet-migrated caller could still hand-roll ensure_ascii=True).
+        # This is a cheap deterministic backstop on the COMMITTED ARTIFACT
+        # itself: a `\u` escape sequence appearing anywhere in this file is
+        # unambiguous evidence some writer used the ensure_ascii=True default,
+        # regardless of which one.
+        run: python3 .claude/lib/check_checksums_ascii.py
 
   actionlint:
     name: Config — Workflow actionlint
