@@ -180,7 +180,7 @@ Byte-identical in all 8 repos (verified `diff -q` across the 7 children plus a p
 Shared skeleton (build, GHCR push, notify-deploy dispatch) across 4 repos, 919 lines total (ig 280, us 209, da 133, ip 297); per-repo deltas = image matrix + dispatch event-type. Fold in the known asymmetries deliberately (landing-page intentionally has no sender — `deploy#285`).
 *After:* ~350-line reusable + thin callers ⇒ **≈ −490 lines**; dispatch contract change becomes one edit. *Verify:* stg deploy dispatch fires per repo (ontology `cross_repo_dispatch_contracts` updated once).
 
-**C4 — `structural-ontology.yml` → reusable + devtools console-script** · Repos: 5 children · Effort: S · Depends: A2
+**C4 — `structural-ontology.yml` → reusable + devtools console-script** · Repos: 5 children · Effort: S · Depends: A2, C1 host decision
 5 × ~91–99-line near-identical workflows regenerating the gitignored structural index.
 *After:* 1 reusable + callers ⇒ **≈ −360 lines**, and the generator version is pinned via `noorina-devtools` instead of 7 drifting `structural_ontology.py` copies (161–579 lines each — deploy's has tripled in size vs data-acquisition's). *Verify:* generated index byte-comparison per repo pre/post.
 
@@ -427,12 +427,12 @@ The framework-neutral geometry export shipped (ds#103) and even names the landin
 2. **A1 (decision) + C1/C2/C4 quick wins** — the reusable-workflow host decision and devtools scaffold gate several tracks; C1 is a half-day proof of the pattern.
 3. **A2 devtools + C-series** — kills the vendored-tooling drift class org-wide.
 4. **A3–A6 schema/pipeline-core** — models reconciliation needs a domain-aware review (enum supersets, narrator fields); do it while wave load is low, **before** B3.
-5. **B2/B4/B5 immediately; B3 after `main#978` cutover completes.**
+5. **B2/B4/B5/B6 (constants extraction) immediately; B3 after `main#978` cutover completes.**
 6. **D/E/F/G run in parallel** — they are per-repo and mostly independent; F1/F2 gate on the A/B measurement harness, not on other tracks.
 7. **H anytime** (H1/H2 first — they unblock D2's final tranche).
 
 **Dependency edges (machine-readable):**
-`A2→A1 · A3→A1 · A4→{A1,BUG-03} · A5→A1 · A6→{A1,B1} · A7→(none) · B2→B1 · B3→{A3,A4,A5,A6,B1,main#978} · B4→B2 · B6→B3(partial) · C2..C4→C1(host) · C4→A2 · D2→(H1 for final 288) · D3=A7 · D6→A6(fold-in) · E4→BUG-07 decision · F1→A/B harness · G7→main#1019 (feeds, not duplicates) · H3→ds#103(done, docs only)`
+`A2→A1 · A3→A1 · A4→{A1,BUG-03} · A5→A1 · A6→{A1,B1} · A7→(none) · B2→B1 · B3→{A3,A4,A5,A6,B1,main#978} · B4→B2 · B6→(none — constants extract precedes B3; the Neo4j MERGE-unification follow-up it excludes →B3) · C2..C4→C1(host) · C4→A2 · D2→(H1 for final 288) · D3=A7 · D6→A6(fold-in) · E4→BUG-07 decision · F1→A/B harness · G7→main#1019 (feeds, not duplicates) · H3→ds#103(done, docs only)`
 
 **Risks & mitigations:**
 
@@ -475,11 +475,11 @@ Type: B=bug, D=DRY, L=LOC, P=perf/memory, C=correctness, A=architecture, T=tests
 | B3 | Replace copied pipeline packages with dependencies | ingest-platform | D/L | −12.4K src, −5.3K test | XL | A3–A6,B1,#978 |
 | B4 | Dep slimming + lazy `__init__` (drop neo4j/psycopg from workers) | ingest-platform | P | ~3,210 forced-import lines → ~0 | S–M | B2 |
 | B5 | One worker image + entrypoint factory | ingest-platform | D/L | −272 Dockerfile; main.py 272→~105 | S–M | — |
-| B6 | Share batch↔streaming rule constants | ingest-platform | D/C | 3rd taxonomy copy + drift exposure → 1 | S | B3 partial |
+| B6 | Share batch↔streaming rule constants | ingest-platform | D/C | 3rd taxonomy copy + drift exposure → 1 | S | — |
 | C1 | auto-close-issues reusable workflow | all | D | 280 lines ×8 → ~40+callers (−175) | S | host decision |
 | C2 | docs.yml reusable with inputs | all 8 | D | 1,698 → ~500 (−1.2K) | M | C1 |
 | C3 | ghcr-publish reusable | ig,us,da,ip | D | 919 → ~430 (−490) | M | C1 |
-| C4 | structural-ontology reusable + devtools script | 5 repos | D | −360 + generator pinned | S | A2 |
+| C4 | structural-ontology reusable + devtools script | 5 repos | D | −360 + generator pinned | S | A2,C1 |
 | C5 | deploy stg/prod post-rollout composite (+health-poll param) | deploy | D | −200–250; 1 edit point | M | — |
 | C6 | Merge smoke-test twins | deploy | D | 919 → ~300 (−600) | S | — |
 | C7 | envsubst-template prometheus/alertmanager | deploy | D | 394 → ~140 (−250) | S–M | — |
