@@ -22,6 +22,7 @@ import time
 import unittest
 import uuid
 from pathlib import Path
+from unittest import mock
 
 # Put the hooks dir on sys.path so we can import the hook module.
 _HERE = Path(__file__).resolve().parent
@@ -803,6 +804,28 @@ class SessionThrottleTests(unittest.TestCase):
 
         # The session's single nudge is still available for an un-consulted edit.
         _assert_advisory(self, hook.check(self._edit_input()))
+
+    def test_present_marker_skips_transcript_scan(self) -> None:
+        """PERF (#1115): a present throttle marker short-circuits BEFORE the
+        expensive transcript parse.
+
+        `_transcript_has_librarian` full-parses the monotonically growing
+        session JSONL on every Edit/Write; once the session has already been
+        nudged the outcome is silence regardless of the transcript, so the hook
+        must return None WITHOUT invoking that scan. Guards the reorder against
+        a future regression that puts the transcript parse back ahead of the
+        O(1) marker check.
+        """
+        assert self._marker is not None  # mypy narrowing
+        # Pre-seed the session throttle marker (this session already nudged).
+        hook._mark_advisory_emitted(self._marker, self._session_id)
+        self.assertTrue(self._marker.exists(), "precondition: throttle marker present")
+
+        with mock.patch.object(hook, "_transcript_has_librarian") as scan:
+            result = hook.check(self._edit_input())
+
+        self.assertIsNone(result, "present marker must suppress — session already nudged")
+        scan.assert_not_called()
 
 
 class MainExitCodeTests(unittest.TestCase):
