@@ -119,15 +119,25 @@ the same session stay silent.
 
 Mechanism: a session-keyed throttle marker at
     <tmpdir>/{THROTTLE_DIR}/<sha1(session_id)[:16]>.marker
-(`session_id` from the Claude Code hook input). When the hook is about to emit
-the advisory it first checks the marker; if present the session already saw the
-nudge, so it suppresses (returns None). Otherwise it writes the marker and
-emits. The marker lives in the OS temp dir (ephemeral per-session state that
-must not pollute the repo or need a writable cwd). Keyed on the unique
-`session_id`, so a stale marker from a prior session can never suppress a new
-one. When `session_id` is absent (unthrottleable) the hook keeps its original
-always-advise behavior. All throttle filesystem ops fail OPEN toward the nudge
-(an unreadable/unwritable marker → still advise), never crashing the hook.
+(`session_id` from the Claude Code hook input). The hook checks the marker
+FIRST — before any of the consultation signals — and if present the session
+already saw the nudge, so it suppresses (returns None). Only when the marker is
+absent does it evaluate the consultation signals; the first un-consulted edit
+that decides to advise writes the marker and emits. The marker lives in the OS
+temp dir (ephemeral per-session state that must not pollute the repo or need a
+writable cwd). Keyed on the unique `session_id`, so a stale marker from a prior
+session can never suppress a new one. When `session_id` is absent
+(unthrottleable) the hook keeps its original always-advise behavior. All
+throttle filesystem ops fail OPEN toward the nudge (an unreadable/unwritable
+marker → still advise), never crashing the hook.
+
+Marker-check ordering (#1115): the O(1) marker check is deliberately ordered
+ahead of `_transcript_has_librarian`, which full-parses the monotonically
+growing session JSONL transcript on every Edit/Write. On the common
+already-nagged path this skips that scan entirely. The reorder is
+outcome-preserving: whenever the marker is present the result is None
+regardless of the transcript/sentinel signals, so hoisting the check only
+elides work.
 
 Exit codes (per Claude Code hook convention):
     0 — ALWAYS. This is an advisory hook; it never blocks an edit. When the
@@ -419,6 +429,21 @@ def check(input_data: dict) -> dict | None:
     if _is_allowlisted(file_path):
         return None
 
+    # Session-scoped throttle short-circuit (#1022, hoisted per #1115). The
+    # advisory fires at most once per session, so once this session has already
+    # been nudged there is nothing left to decide — return silently WITHOUT the
+    # expensive transcript scan below. This O(1) marker check is deliberately
+    # ordered AHEAD of `_transcript_has_librarian`, which full-parses the
+    # session JSONL transcript (monotonically growing) on every Edit/Write —
+    # the worst-scaling per-edit cost here. Semantics are unchanged: whenever
+    # the marker is present the pre-#1115 order also returned None in every
+    # branch (transcript hit, sentinel hit, or throttle-already-emitted), so
+    # this only elides work, never changes the outcome.
+    session_id = input_data.get("session_id", "")
+    throttle = _advisory_throttle_path(session_id)
+    if throttle is not None and _advisory_already_emitted(throttle):
+        return None
+
     # Primary signal: transcript scan.
     transcript_path = input_data.get("transcript_path", "")
     if _transcript_has_librarian(transcript_path):
@@ -430,15 +455,11 @@ def check(input_data: dict) -> dict | None:
     if _sentinel_attests_librarian(cwd):
         return None
 
-    # Reaching here means we WILL advise. Session-scoped throttle (#1022): fire
-    # the advisory at most once per session — if this session already saw it,
-    # stay silent instead of re-injecting the nudge on every Edit/Write. See the
-    # module docstring § "Once-per-session advisory throttle".
-    session_id = input_data.get("session_id", "")
-    throttle = _advisory_throttle_path(session_id)
+    # Reaching here means we WILL advise for the first time this session
+    # (#1022). Record the throttle marker so subsequent un-consulted edits
+    # short-circuit at the check above. See the module docstring § "Once-per-
+    # session advisory throttle".
     if throttle is not None:
-        if _advisory_already_emitted(throttle):
-            return None
         _mark_advisory_emitted(throttle, session_id)
 
     return {"systemMessage": _ADVISORY_MESSAGE}
