@@ -415,33 +415,46 @@ def _detect_indirect_commit(command: str, *, cwd: str | None = None) -> str | No
     The script-path check is LAST because it requires disk I/O — all
     pattern-only checks run first to short-circuit common cases without
     hitting the filesystem.
+
+    Perf prefilter (#1113): shapes 1-6 carry their payload INLINE in
+    `command`, so `_payload_looks_like_commit` (which requires `\bcommit\b`
+    via `_INNER_COMMIT_RE`) can only fire when the literal token `commit`
+    is present in `command` — the extracted payload is always a substring of
+    `command`. When `commit` is absent we skip all six regex sweeps.
+
+    Shape 7 (script invocation) is DELIBERATELY NOT gated by that guard: it
+    reads its payload from a file on DISK whose name need not contain
+    `commit` (e.g. `bash deploy.sh`), so gating it on `"commit" in command`
+    would reintroduce the #482 `bash <script>` bypass. It therefore always
+    runs, exactly as before.
     """
-    for m in _PIPE_TO_SHELL_RE.finditer(command):
-        if _payload_looks_like_commit(m.group("payload")):
-            return "printf/echo piped to shell"
+    if "commit" in command:
+        for m in _PIPE_TO_SHELL_RE.finditer(command):
+            if _payload_looks_like_commit(m.group("payload")):
+                return "printf/echo piped to shell"
 
-    for m in _DASH_C_RE.finditer(command):
-        payload = _strip_outer_quotes(m.group("payload"))
-        if _payload_looks_like_commit(payload):
-            return "shell -c"
+        for m in _DASH_C_RE.finditer(command):
+            payload = _strip_outer_quotes(m.group("payload"))
+            if _payload_looks_like_commit(payload):
+                return "shell -c"
 
-    for m in _PROCESS_SUB_RE.finditer(command):
-        if _payload_looks_like_commit(m.group("payload")):
-            return "process substitution"
+        for m in _PROCESS_SUB_RE.finditer(command):
+            if _payload_looks_like_commit(m.group("payload")):
+                return "process substitution"
 
-    for m in _HEREDOC_RE.finditer(command):
-        if _payload_looks_like_commit(m.group("payload")):
-            return "heredoc"
+        for m in _HEREDOC_RE.finditer(command):
+            if _payload_looks_like_commit(m.group("payload")):
+                return "heredoc"
 
-    for m in _HERESTRING_RE.finditer(command):
-        payload = _strip_outer_quotes(m.group("payload"))
-        if _payload_looks_like_commit(payload):
-            return "here-string"
+        for m in _HERESTRING_RE.finditer(command):
+            payload = _strip_outer_quotes(m.group("payload"))
+            if _payload_looks_like_commit(payload):
+                return "here-string"
 
-    for m in _EVAL_RE.finditer(command):
-        payload = _strip_outer_quotes(m.group("payload"))
-        if _payload_looks_like_commit(payload):
-            return "eval"
+        for m in _EVAL_RE.finditer(command):
+            payload = _strip_outer_quotes(m.group("payload"))
+            if _payload_looks_like_commit(payload):
+                return "eval"
 
     for m in _SCRIPT_INVOKE_RE.finditer(command):
         content = _read_script_if_safe(m.group("path"), cwd)
