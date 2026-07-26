@@ -1,35 +1,18 @@
 name: Auto-close issues
+
+# Thin caller for the reusable auto-close-on-merge workflow (main#1108). The
+# close policy (only-on-merge guard + reference-scanning close logic) lives in
+# reusable-auto-close-issues.yml; this file only wires the trigger and grants the
+# token scope the reusable needs. Same-repo call uses a local `./` path, which
+# always resolves to this commit's copy of the reusable (no cross-repo SHA pin
+# needed). Other repos' callers cut over to this reusable as separate stories.
+
 on:
   pull_request:
     types: [closed]
 
-permissions:
-  issues: write
-
 jobs:
-  close-issues:
-    if: github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - name: Close referenced issues
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const body = context.payload.pull_request.body || '';
-            const matches = body.matchAll(/[Cc]loses?\s+#(\d+)/g);
-            for (const match of matches) {
-              const issue_number = parseInt(match[1]);
-              await github.rest.issues.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number,
-                state: 'closed',
-              });
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number,
-                body: `Closed by PR #${context.payload.pull_request.number} merged into \`${context.payload.pull_request.base.ref}\`.`,
-              });
-            }
+  auto-close:
+    uses: ./.github/workflows/reusable-auto-close-issues.yml
+    permissions:
+      issues: write

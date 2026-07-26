@@ -1,0 +1,51 @@
+name: Reusable — Auto-close issues
+
+# Reusable (workflow_call) implementation of the auto-close-on-merge behaviour
+# that was byte-identical across all 8 repos (main#1108). Hosted in
+# noorinalabs-main; thin callers in each repo invoke it via `uses:` (this repo's
+# caller is .github/workflows/auto-close-issues.yml). A later migration to a
+# dedicated noorinalabs/.github repo is tracked in main#1124.
+#
+# Close policy (only-on-merge) lives here so every caller stays thin and the
+# policy is defined once: the merged guard + the reference-scanning close logic
+# are centralised in this file, not duplicated per caller.
+#
+# The pull_request event context (github.event.pull_request.*) is inherited from
+# the caller, so the merged guard and the payload reads below work unchanged.
+#
+# External actions are tagged-SHA pinned (supply-chain mitigation, main#1108 /
+# phase-10 C1): a cross-repo reusable workflow is a higher-value tampering target
+# than an in-repo one, so both pins are frozen to a commit and carry the semver.
+
+on:
+  workflow_call:
+
+jobs:
+  close-issues:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Close referenced issues
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const body = context.payload.pull_request.body || '';
+            const matches = body.matchAll(/[Cc]loses?\s+#(\d+)/g);
+            for (const match of matches) {
+              const issue_number = parseInt(match[1]);
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+                state: 'closed',
+              });
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+                body: `Closed by PR #${context.payload.pull_request.number} merged into \`${context.payload.pull_request.base.ref}\`.`,
+              });
+            }
