@@ -5176,7 +5176,7 @@
   "phase_3_criterion9_caveat_outcome": "gate over (raw 22.2%, re-baselined 23.6%) — owner re-baseline (meta-issue scaffolding excluded) + waiver; hard re-measure at P4W1 wrapup",
   "phase_3_criterion9_caveat_resolved_at": "2026-06-02T15:41:06Z",
   "phase_4_first_review_ran_at": "2026-06-02T15:41:06Z",
-  "current_phase": 9,
+  "current_phase": 10,
   "phase_4_wave_1_meta_issue": 608,
   "phase_4_criteria_issues": [
     601,
@@ -5228,7 +5228,7 @@
     },
     "mirror_of": ".claude/team/phases/phase-3.md § Sweep-wave reservation (W12, possibly W13)"
   },
-  "wave_active": true,
+  "wave_active": false,
   "current_wave": "wave-27",
   "wave_5_active": false,
   "wave_5_kicked_off_at": "2026-06-16T23:12:45Z",
@@ -5496,7 +5496,7 @@
   "wave_3_wrapped_at": "2026-06-12T17:33:59Z",
   "wave_3_annunaki_attack_ran_at": "2026-06-14T23:45:00Z",
   "wave_3_memory_audit_ran_at": "2026-06-14T23:45:00Z",
-  "last_updated": "2026-07-25T17:30:51Z",
+  "last_updated": "2026-07-26T14:00:00Z",
   "deployments_branch": "deployments/phase-4/wave-3",
   "phase_2_status": "CLOSED 2026-04-30. wave-10 final retro PR #230 merged 20:47:41Z. 5-repo wave-merge ceremony completed (#229 main, #74 landing, #851 isnad, #196 deploy, #89 user-service). 3 carry-forwards into phase-3: deploy#86 (async routine trig_01Bif8T51pdaYFjkbM5bERyL — fires post-merge), deploy#151 (manual SRE B2 tfstate-key migration), user-service#84 (manual DEPLOY_REPO_PAT secret). All p2-wave-* labels cleared from open issues; 218 open issues re-labeled `phase-3` across 8 repos.",
   "phase_3_status": "Phase 3 COMPLETE 2026-06-02 at 9/9 criteria (criterion #9 closed-with-caveat). All end-state issues #322-#330 closed. Exit record in .claude/team/phases/phase-3.md. Next: /roadmap for Phase 4.",
