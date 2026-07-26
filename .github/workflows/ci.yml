@@ -33,7 +33,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install ruff
+      # Pin to the exact ruff the pre-commit hook uses (.pre-commit-config.yaml
+      # ruff-pre-commit rev: v0.15.11). Unpinned, CI drifts to a newer ruff whose
+      # formatter touches python code blocks embedded in markdown, red-gating
+      # `.claude/skills/**/SKILL.md` that pass locally + in pre-commit (#1129).
+      - run: pip install ruff==0.15.11
       # .claude/skills/ added per #326: skill helper/test .py (validate_matrix_names.py,
       # promotion-audit/helpers.py, the per-skill tests/, …) was previously
       # un-linted, violating criterion #5 ("anything in the tree gets the same
@@ -49,7 +53,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install ruff
+      # Pin to the exact ruff the pre-commit hook uses (.pre-commit-config.yaml
+      # ruff-pre-commit rev: v0.15.11). Unpinned, CI drifts to a newer ruff whose
+      # formatter touches python code blocks embedded in markdown, red-gating
+      # `.claude/skills/**/SKILL.md` that pass locally + in pre-commit (#1129).
+      - run: pip install ruff==0.15.11
       - run: ruff format --check .claude/hooks/ .claude/lib/ .claude/skills/
 
   typecheck:
