@@ -1728,10 +1728,10 @@
       "resolved_at": "2026-07-22T23:59:40.052407+00:00"
     },
     "CODE_AUDIT.md": {
-      "last_tracked": "2a840002105a1eea108abed4412c83e1f53e18d8fa11fe145d384ae745c28097",
-      "last_resolved": "2a840002105a1eea108abed4412c83e1f53e18d8fa11fe145d384ae745c28097",
-      "tracked_at": "2026-07-26T04:35:59.591352+00:00",
-      "resolved_at": "2026-07-26T04:37:35.532032+00:00"
+      "last_tracked": "fdd7356d7c4e17e3e9e6f5000a1148c8255fc9cfb5c3539fbb341350665fab5f",
+      "last_resolved": "fdd7356d7c4e17e3e9e6f5000a1148c8255fc9cfb5c3539fbb341350665fab5f",
+      "tracked_at": "2026-07-26T04:50:42.838985+00:00",
+      "resolved_at": "2026-07-26T04:51:00.844027+00:00"
     }
   },
   "last_cleanup": {
