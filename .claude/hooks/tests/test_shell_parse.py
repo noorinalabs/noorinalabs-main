@@ -663,5 +663,84 @@ class RepoShortNameFromFlagValueTests(unittest.TestCase):
         self.assertIsNone(sp.repo_short_name_from_flag_value(""))
 
 
+class MemoizedParseMutationSafetyTests(unittest.TestCase):
+    """#1113: the parse primitives are memoized with `functools.lru_cache`.
+
+    The critical hazard is a naive cache that hands every caller the SAME
+    mutable list object: one caller mutating it (append/pop/index-assign)
+    would silently corrupt the value every OTHER hook then reads for the same
+    command. These tests pin the copy-at-boundary contract — mutating a
+    returned value must never change what the next identical call returns —
+    and that repeated calls are still value-equal (memoization is correct).
+    """
+
+    def test_tokenize_result_is_fresh_list_each_call(self):
+        cmd = "git -c user.name=A commit -m msg"
+        a = sp.tokenize(cmd)
+        b = sp.tokenize(cmd)
+        self.assertEqual(a, b)
+        # Distinct objects — a shared cached list would be the SAME object.
+        self.assertIsNot(a, b)
+
+    def test_tokenize_mutation_does_not_leak_into_cache(self):
+        cmd = "git commit -m first"
+        first = sp.tokenize(cmd)
+        expected = ["git", "commit", "-m", "first"]
+        self.assertEqual(first, expected)
+        # Mutate the returned list every which way.
+        first.append("--injected")
+        first[0] = "CLOBBERED"
+        del first[1]
+        # A fresh call must be pristine — the cache was not corrupted.
+        self.assertEqual(sp.tokenize(cmd), expected)
+
+    def test_tokenize_none_result_still_memoized_and_safe(self):
+        # Unbalanced quote → None; cached None must stay None (no crash on copy).
+        bad = 'git commit -m "unterminated'
+        self.assertIsNone(sp.tokenize(bad))
+        self.assertIsNone(sp.tokenize(bad))
+
+    def test_strip_heredocs_memoized_value_stable(self):
+        cmd = "cat <<EOF\nbody git commit\nEOF\necho done"
+        first = sp.strip_heredocs(cmd)
+        self.assertNotIn("body git commit", first)
+        # str is immutable — repeated calls return an equal value.
+        self.assertEqual(sp.strip_heredocs(cmd), first)
+
+    def test_normalize_command_separators_memoized_value_stable(self):
+        cmd = "cd /x && gh issue edit 1 --add-label foo"
+        first = sp.normalize_command_separators(cmd)
+        self.assertEqual(sp.normalize_command_separators(cmd), first)
+        # Quoted separators stay data, even through the cache.
+        self.assertEqual(
+            sp.normalize_command_separators('gh pr create --body "a && b"'),
+            sp.normalize_command_separators('gh pr create --body "a && b"'),
+        )
+
+    @unittest.skipUnless(sp.bashlex_available(), "bashlex not installed — AST path inactive")
+    def test_iter_command_segments_ast_result_is_fresh_each_call(self):
+        cmd = "git commit -m x && echo done"
+        a = sp.iter_command_segments_ast(cmd)
+        b = sp.iter_command_segments_ast(cmd)
+        self.assertEqual(a, b)
+        self.assertIsNot(a, b)  # fresh outer list
+        if a:
+            self.assertIsNot(a[0], b[0])  # fresh inner segment lists
+
+    @unittest.skipUnless(sp.bashlex_available(), "bashlex not installed — AST path inactive")
+    def test_iter_command_segments_ast_mutation_does_not_leak_into_cache(self):
+        cmd = "git commit -m first && echo two"
+        first = sp.iter_command_segments_ast(cmd)
+        expected = sp.iter_command_segments_ast(cmd)  # pristine snapshot to compare against
+        self.assertEqual(first, expected)
+        # Mutate the outer list AND an inner segment.
+        first.append(["INJECTED"])
+        first[0].append("--clobber")
+        first[0][0] = "CLOBBERED"
+        # A fresh call must be pristine — neither the outer list nor any inner
+        # segment leaked a mutable alias into the cache.
+        self.assertEqual(sp.iter_command_segments_ast(cmd), expected)
+
+
 if __name__ == "__main__":
     unittest.main()

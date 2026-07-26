@@ -198,6 +198,7 @@ import os
 import re
 import shlex
 import subprocess
+from functools import lru_cache
 from typing import Iterator
 
 # Optional structural dependency (#748 D3b). bashlex gives a real Bash-AST
@@ -259,6 +260,22 @@ _GIT_BOOL_GLOBALS = {
 _LINE_CONTINUATION_RE = re.compile(r"\\\n[ \t]*")
 
 
+@lru_cache(maxsize=256)
+def _tokenize_cached(cmd: str) -> tuple[str, ...] | None:
+    """Memoized core of tokenize(). Returns an IMMUTABLE tuple (never a list).
+
+    A single Bash tool call re-tokenizes the same command string many times
+    (12 shlex.split passes across 11 PreToolUse hooks — #1113). shlex.split is
+    pure in `cmd`, so the result is cached. The cache stores a tuple, never a
+    list, so the shared cached object can never be mutated by a caller — the
+    public tokenize() wrapper copies it into a fresh list at the boundary.
+    """
+    try:
+        return tuple(shlex.split(_LINE_CONTINUATION_RE.sub(" ", cmd), posix=True))
+    except ValueError:
+        return None
+
+
 def tokenize(cmd: str) -> list[str] | None:
     """shlex.split the command. Return None on parse error (unbalanced quote).
 
@@ -266,13 +283,18 @@ def tokenize(cmd: str) -> list[str] | None:
     single space before tokenizing. Without this, shlex.split(posix=True)
     emits the trailing newline as a stray token that breaks command-position
     detection (issue #287).
+
+    Memoized (#1113): the shlex work is cached via `_tokenize_cached`, but a
+    FRESH list copy is returned on every call. Callers therefore keep the
+    historical mutable-list contract (they may append/pop/slice-assign the
+    result) with ZERO risk of corrupting the shared cache entry for the next
+    caller. Never return the cached tuple directly.
     """
-    try:
-        return shlex.split(_LINE_CONTINUATION_RE.sub(" ", cmd), posix=True)
-    except ValueError:
-        return None
+    cached = _tokenize_cached(cmd)
+    return None if cached is None else list(cached)
 
 
+@lru_cache(maxsize=256)
 def normalize_command_separators(cmd: str) -> str:
     """Quote/escape-aware normalization of shell command separators.
 
@@ -309,6 +331,9 @@ def normalize_command_separators(cmd: str) -> str:
     fed back through `tokenize` (which re-applies line-continuation
     normalization harmlessly), so injecting extra spaces around genuine
     operators cannot change the parsed argument values.
+
+    Memoized (#1113): pure in `cmd` and returns an immutable `str`, so the
+    cached value is returned directly — no copy needed, no mutation hazard.
     """
     cmd = _LINE_CONTINUATION_RE.sub(" ", cmd)
     out: list[str] = []
@@ -357,8 +382,14 @@ def normalize_command_separators(cmd: str) -> str:
     return "".join(out)
 
 
+@lru_cache(maxsize=256)
 def strip_heredocs(cmd: str) -> str:
-    """Remove all heredoc bodies. Iterates until no more matches (handles nested)."""
+    """Remove all heredoc bodies. Iterates until no more matches (handles nested).
+
+    Memoized (#1113): the fix-point loop (up to 8 passes per Bash call across
+    the hooks) is pure in `cmd` and returns an immutable `str`, so the cached
+    value is returned directly — no copy needed, no mutation hazard.
+    """
     prev = None
     cur = cmd
     while prev != cur:
@@ -432,9 +463,32 @@ def iter_command_segments_ast(command: str) -> list[list[str]] | None:
                         failed to parse. The caller MUST fall back to the
                         shlex/regex path; per the tokenize() security contract
                         a None here is NEVER treated as "allow".
+
+    Memoized (#1113): the bashlex parse is cached (`_iter_command_segments_ast_cached`)
+    but a FRESH list-of-lists copy is returned each call, so callers keep the
+    mutable-result contract without corrupting the shared cache. The
+    `_BASHLEX_AVAILABLE` degraded-mode gate is intentionally OUTSIDE the cache.
     """
     if not _BASHLEX_AVAILABLE:
         return None
+    cached = _iter_command_segments_ast_cached(command)
+    # Deep-copy the immutable cached snapshot into fresh mutable lists so a
+    # caller that mutates a segment (or the outer list) cannot corrupt the
+    # shared cache entry — the naive-lru_cache aliasing hazard (#1113).
+    return None if cached is None else [list(seg) for seg in cached]
+
+
+@lru_cache(maxsize=256)
+def _iter_command_segments_ast_cached(command: str) -> tuple[tuple[str, ...], ...] | None:
+    """Memoized core of iter_command_segments_ast(). Returns IMMUTABLE tuples.
+
+    Assumes bashlex availability is already checked by the caller — the
+    `_BASHLEX_AVAILABLE` gate lives in the public wrapper (uncached) so that a
+    test monkeypatching that flag to simulate degraded mode is NEVER served a
+    stale cached AST result. The single bashlex parse per Bash call is pure in
+    `command`, so its segments are cached as a tuple-of-tuples (no mutable list
+    ever escapes into the cache).
+    """
     try:
         trees = bashlex.parse(command)
     except Exception:
@@ -444,11 +498,11 @@ def iter_command_segments_ast(command: str) -> list[list[str]] | None:
         # None on a parse error (never crash the hook).
         return None
 
-    segments: list[list[str]] = []
+    segments: list[tuple[str, ...]] = []
 
     class _SegmentCollector(bashlex_ast.nodevisitor):
         def visitcommand(self, n, parts):
-            tokens = [p.word for p in parts if p.kind == "word"]
+            tokens = tuple(p.word for p in parts if p.kind == "word")
             if tokens:
                 segments.append(tokens)
             return True  # keep descending into command substitutions, compounds, ...
@@ -456,7 +510,7 @@ def iter_command_segments_ast(command: str) -> list[list[str]] | None:
     collector = _SegmentCollector()
     for tree in trees:
         collector.visit(tree)
-    return segments
+    return tuple(segments)
 
 
 def _is_equals_form_global(tok: str) -> bool:
