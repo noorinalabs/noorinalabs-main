@@ -28,7 +28,7 @@ tech_stack:
 
 message_contract:
   shape: pointer-based — the payload carries `b2_path` to the Parquet batch, never records
-  model: workers/lib/message.py :: PipelineMessage (extra="forbid")
+  model: 'workers/lib/message.py :: PipelineMessage (extra="forbid")'
   producer_contract_owner: |
     noorinalabs-data-acquisition's kafka_producer.py must emit the same shape;
     a drift is quarantined to the DLQ rather than crashing the consumer (#492/#141).
@@ -113,7 +113,7 @@ runner:
       rule: "checkpoint.seen(batch_id) short-circuits a replayed batch."
 
 checkpointing:
-  factory: workers/lib/checkpoint_factory.py :: build_checkpoint(stage)
+  factory: "workers/lib/checkpoint_factory.py :: build_checkpoint(stage)"
   env_var: INGEST_CHECKPOINT_BACKEND
   backends:
     in-memory: "default; local dev / unit tests — loses state on restart"
@@ -121,7 +121,7 @@ checkpointing:
     b2: "RESERVED — raises NotImplementedError rather than silently degrading"
 
 node_label_vocabulary:
-  constant: workers/lib/topics.py :: ALLOWED_NODE_LABELS
+  constant: "workers/lib/topics.py :: ALLOWED_NODE_LABELS"
   rationale: "explicit allowlist prevents Cypher-label injection at the ingest MERGE"
   labels: [Narrator, Hadith, Collection, Chain, Grading, HistoricalEvent, Location]
 

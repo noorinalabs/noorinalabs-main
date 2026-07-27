@@ -500,10 +500,10 @@
       "resolved_at": "2026-07-08T20:16:00Z"
     },
     "ontology/repos/isnad-ingest-platform.yaml": {
-      "last_tracked": "31d685b97a2ad0a7b1931365c76acf61bfad86c193236a7c83f8b6201b0902e1",
-      "last_resolved": "31d685b97a2ad0a7b1931365c76acf61bfad86c193236a7c83f8b6201b0902e1",
-      "tracked_at": "2026-07-27T03:59:11.492723+00:00",
-      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
+      "last_tracked": "9e1a20d172b800bf9f66f398b4b4d5c38ca091680ab7b0dc99e5b511a25ba1de",
+      "last_resolved": "9e1a20d172b800bf9f66f398b4b4d5c38ca091680ab7b0dc99e5b511a25ba1de",
+      "tracked_at": "2026-07-27T04:35:11.755653+00:00",
+      "resolved_at": "2026-07-27T04:36:03.082867+00:00"
     },
     "ontology/repos/landing-page.yaml": {
       "last_resolved": "d1f9ff47da7a4781b9e356330690c0736c6800dace7b3d63bddbbf6cd5feeb8e",
