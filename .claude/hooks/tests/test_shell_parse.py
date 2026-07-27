@@ -6,8 +6,8 @@ find_git_subcommand, find_gh_subcommand, extract_dash_c_pairs,
 resolve_tool_cwd, is_shutdown_request_message) and the negative-match
 fixtures from the sibling-bug cluster (#226 #227 #223 #216 #188 #189 #144).
 
-Shell-truth tests, and their one known limit (main#1141 review)
-==============================================================
+Shell-truth tests (main#1141 review; oracle widened to both shells in #1151)
+===========================================================================
 
 `CdRoutingAgainstShellTruth` does not compare the resolver to an expected
 literal — it runs each shape in a REAL shell and takes the resulting cwd as
@@ -18,16 +18,19 @@ someone's belief about it). Two families of main#1151 survived this suite for
 exactly that reason, and the method caught a round-3 test of mine that pinned a
 misroute as correct.
 
-**Limit — the oracle is `bash`, the harness shell is `zsh`.** Constructs are
-driven through `bash -c` for determinism and because CI runs bash. For every
-shape asserted here the two shells agree, and the load-bearing fact (an
-exec-wrapper cannot carry the `cd` BUILTIN, so `env FOO=1 cd /x` leaves the
-shell where it was) was checked in BOTH before the resolver was written to
-depend on it. One construct is known to differ and is therefore deliberately
-NOT relied on anywhere: `command cd /x` moves the shell in bash but not in
-zsh. If a future shape's behaviour is shell-dependent, verify it in both and
-either assert the common subset or leave it out — do not let a bash-only truth
-become a resolver invariant.
+**The oracle is BOTH `bash` and `zsh` (`SHELLS`).** main#1141 ran bash only —
+CI's shell — and documented the gap in prose. main#1151 closes it: every shape
+is executed under both, and the safety property is
+
+    resolved is None  OR  resolved == truth(bash) == truth(zsh)
+
+so a shape whose behaviour is shell-DEPENDENT can no longer be adopted as a
+resolver invariant by passing under bash alone. `command cd /x` is the known
+divergence (bash moves the shell, zsh does not); the resolver claims nothing
+for it, pinned by `test_shell_dependent_shape_is_not_relied_on`. The other
+load-bearing facts — an exec-wrapper cannot carry the `cd` BUILTIN, and a
+one-shot `FOO=1` prefix does NOT stop `cd` from moving the shell — are
+asserted in both shells rather than trusted.
 
 Run: ENVIRONMENT=test python3 -m pytest .claude/hooks/tests/test_shell_parse.py -v
 """
@@ -1002,47 +1005,79 @@ class CdRoutingAgainstShellTruth(unittest.TestCase):
 
     MARKER = "gh issue edit 5 --add-label wave-29"
 
+    # Both shells are exercised for every shape (main#1151). `bash` is what CI
+    # runs; `zsh` is the actual harness shell the hooks see commands from. A
+    # shape whose truth DIFFERS between them has no single answer and the
+    # resolver must claim nothing for it — see
+    # `test_shell_dependent_shape_is_not_relied_on`.
+    #
+    # `zsh` is INSTALLED by the CI pytest job so both halves really run there;
+    # the `which` filter exists only so a bare checkout without zsh degrades to
+    # the bash-only oracle instead of erroring. It must never be the reason CI
+    # is green — if the CI install step is dropped, this silently narrows.
+    SHELLS = tuple(s for s in ("bash", "zsh") if shutil.which(s))
+
     _start: str
     _dest: str
+    _nested: str
 
     @classmethod
     def setUpClass(cls) -> None:
         cls._start = tempfile.mkdtemp(prefix="cdroute-start-")
         cls._dest = tempfile.mkdtemp(prefix="cdroute-dest-")
+        # A real subdirectory of _start, standing in for the org's nested
+        # child repos (`noorinalabs-main/noorinalabs-deploy/`): `cd START &&
+        # cd NESTED` lands in a DIFFERENT repository than START.
+        cls._nested = os.path.join(cls._start, "child-repo")
+        os.makedirs(cls._nested, exist_ok=True)
 
     @classmethod
     def tearDownClass(cls) -> None:
         for d in (cls._start, cls._dest):
             shutil.rmtree(d, ignore_errors=True)
 
-    def _shell_truth(self, template: str) -> str | None:
+    def _expand(self, template: str, marker: str) -> str:
+        return (
+            template.replace("DEST", self._dest)
+            .replace("START", self._start)
+            .replace("NESTED", "child-repo")
+            .replace("MARKER", marker)
+        )
+
+    def _shell_truth(self, template: str, shell: str = "bash") -> str | None:
         """Directory the shell is actually in where the gh node sits.
 
         None means the gh node never executes at all in that shape.
         """
-        cmd = template.replace("DEST", self._dest).replace("MARKER", "pwd")
+        cmd = self._expand(template, "pwd")
         out = subprocess.run(
-            ["bash", "-c", cmd], cwd=self._start, capture_output=True, text=True, timeout=30
+            [shell, "-c", cmd], cwd=self._start, capture_output=True, text=True, timeout=30
         )
         printed = out.stdout.strip().splitlines()
         return printed[-1] if printed else None
 
     def _resolved(self, template: str) -> str | None:
-        return sp.extract_leading_cd_target(
-            template.replace("DEST", self._dest).replace("MARKER", self.MARKER)
-        )
+        return sp.extract_leading_cd_target(self._expand(template, self.MARKER))
 
     def _assert_never_misroutes(self, template: str) -> None:
-        truth = self._shell_truth(template)
+        """THE safety property, checked against BOTH shells.
+
+            resolved is None  OR  resolved == shell_truth(bash) == shell_truth(zsh)
+
+        Under-recovery is accepted; naming a directory the command never
+        entered — in EITHER shell — is the bug.
+        """
         resolved = self._resolved(template)
         if resolved is None:
             return  # under-recovery: caller falls back to the invocation cwd
-        self.assertEqual(
-            resolved,
-            truth,
-            f"resolver claims {resolved!r} but the shell runs the gh node in "
-            f"{truth!r} for: {template}",
-        )
+        for shell in self.SHELLS:
+            truth = self._shell_truth(template, shell)
+            self.assertEqual(
+                resolved,
+                truth,
+                f"resolver claims {resolved!r} but {shell} runs the gh node in "
+                f"{truth!r} for: {template}",
+            )
 
     # --- all seven leader shapes from the review, plus the brace group ---
 
@@ -1098,13 +1133,21 @@ class CdRoutingAgainstShellTruth(unittest.TestCase):
     def test_shell_dependent_shape_is_not_relied_on(self) -> None:
         """`command cd /x` moves the shell in bash but NOT in zsh.
 
-        The harness shell is zsh and the oracle here is bash, so this shape has
-        no single truth. The resolver must therefore claim nothing for it —
-        which it does for free, since it strips no prefixes at all. Pinned so a
-        future widening cannot quietly adopt a bash-only behaviour as an
-        invariant (module docstring § Shell-truth tests).
+        The harness shell is zsh, so this shape has no single truth. The
+        resolver must therefore claim nothing for it — which it does for free,
+        since it strips no prefixes at all. Pinned so a future widening cannot
+        quietly adopt a bash-only behaviour as an invariant (module docstring
+        § Shell-truth tests).
+
+        main#1151 asserts the DIVERGENCE itself rather than only asserting the
+        resolver's silence: if the two shells ever converge, the reason this
+        shape is excluded has changed and someone should re-decide it here.
         """
-        self.assertIsNone(self._resolved("command cd DEST ; MARKER"))
+        template = "command cd DEST ; MARKER"
+        self.assertIsNone(self._resolved(template))
+        if "zsh" in self.SHELLS:
+            self.assertEqual(self._shell_truth(template, "bash"), self._dest)
+            self.assertEqual(self._shell_truth(template, "zsh"), self._start)
 
     # --- the shapes that MUST still resolve ---
 
@@ -1143,42 +1186,155 @@ class CdRoutingAgainstShellTruth(unittest.TestCase):
         self.assertEqual(sp.strip_command_prefixes(seg), ["cd", "/tmp"])
         self.assertEqual(sp.strip_command_prefixes(seg, compound_leaders=False), seg)
 
-    # --- known, tracked, NOT closed here ---
+    # --- main#1151: the two families, now CLOSED by the bashlex-AST scan ---
+    #
+    # These were `KNOWN_GAP_SHAPES` / `test_known_gap_main_1151_still_misroutes`,
+    # a characterization test that PINNED the misroute so the gap stayed visible
+    # in the suite. Its own instruction on closure was "delete this test and fold
+    # the shape into test_leader_shapes_never_misroute" — done, with the
+    # explicit-None assertions below kept so a regression names the family it
+    # reopened rather than surfacing as a generic misroute.
 
-    KNOWN_GAP_SHAPES = [
-        "true || cd DEST ; MARKER",  # family A: no leader token to withhold
-        "MARKER ; cd DEST",  # family B: cd AFTER the gh node
+    FAMILY_A_SHAPES = [
+        # A `cd` guarded by a short-circuit operator. `iter_command_segments`
+        # splits on `||`, so the `cd` is at token 0 of its own segment and NO
+        # leader-stripping rule could ever reach it — the reason this needed the
+        # AST rather than another entry in `_COMPOUND_LEADERS`.
+        "true || cd DEST ; MARKER",
+        "true || cd DEST && MARKER",
+        # The braced variant never misrouted (the `{` made it a 3-token
+        # segment). Kept adjacent so the two are not confused again: repairing
+        # the braced shape proves nothing about family A.
+        "true || { cd DEST ; } ; MARKER",
+        # `&&` after a FAILING command is the same class in the other polarity.
+        "false && cd DEST ; MARKER",
     ]
 
-    def test_known_gap_main_1151_still_misroutes(self) -> None:
-        """Characterization of the residual class — NOT a blessing of it.
+    FAMILY_B_SHAPES = [
+        # A `cd` positioned AFTER the gh node. Despite the resolver's name the
+        # old scan took the LAST match with no positional relation to the work.
+        "MARKER ; cd DEST",
+        "MARKER && cd DEST",
+        "cd START ; MARKER ; cd DEST",
+        # A `cd` inside a brace GROUP after the run — not a subshell, so it
+        # genuinely applies to the gh node beside it.
+        "cd DEST && { cd START ; MARKER ; }",
+    ]
 
-        Both shapes misroute on `95f375a` and on every head since; they
-        predate main#1141 and are untouched by it. Neither is fixable at this
-        layer: family A has no leader to withhold, and family B needs to know
-        whether the `cd` precedes the `gh` NODE, which `iter_command_segments`
-        has already discarded. main#1151 tracks the bashlex-AST fix.
-
-        Family A is narrower than it looks, and the difference is easy to
-        mistake for a fix: the BRACED variant `true || { cd DEST ; … }` does
-        NOT misroute, because the `{` makes that segment three tokens and the
-        `cd` is no longer at token 0 (it is covered by
-        `test_leader_shapes_never_misroute`). Only the BARE `true || cd DEST`
-        form gets through. So repairing the braced shape proves nothing about
-        family A — do not read it as evidence that #1151 is closed.
-
-        This test exists so the gap is visible in the suite rather than only
-        in prose, and so closing #1151 forces someone to come back here.
-        """
-        for template in self.KNOWN_GAP_SHAPES:
+    def test_family_a_short_circuit_cd_never_misroutes(self) -> None:
+        for template in self.FAMILY_A_SHAPES:
             with self.subTest(shape=template):
-                self.assertEqual(self._shell_truth(template), self._start)
-                self.assertEqual(
+                self._assert_never_misroutes(template)
+                self.assertIsNone(
                     self._resolved(template),
-                    self._dest,
-                    "if this now returns None, #1151 has been fixed — delete this "
-                    "test and fold the shape into test_leader_shapes_never_misroute",
+                    "main#1151 family A: a short-circuit-guarded `cd` must never route",
                 )
+
+    def test_family_b_trailing_cd_never_misroutes(self) -> None:
+        for template in self.FAMILY_B_SHAPES:
+            with self.subTest(shape=template):
+                self._assert_never_misroutes(template)
+                self.assertIsNone(
+                    self._resolved(template),
+                    "main#1151 family B: a `cd` at/after the routed command must never route",
+                )
+
+    def test_family_a_and_b_shell_truth_is_the_start_dir(self) -> None:
+        """The fact the fix rests on, asserted against BOTH shells directly.
+
+        For every family-A shape the guarded `cd` does not run; for every
+        family-B shape the `cd` runs only after the gh node. Either way the gh
+        node executes in the ORIGINAL directory — so the old resolver's answer
+        (`DEST`) named a directory the command had not entered.
+        """
+        for template in self.FAMILY_A_SHAPES + self.FAMILY_B_SHAPES:
+            if template.startswith("cd START") or template.startswith("cd DEST"):
+                continue  # these two legitimately move first; covered above
+            for shell in self.SHELLS:
+                with self.subTest(shape=template, shell=shell):
+                    self.assertEqual(self._shell_truth(template, shell), self._start)
+
+    # --- main#1151 family C: a RELATIVE `cd` into a nested child repo ---
+
+    def test_relative_cd_into_nested_repo_never_misroutes(self) -> None:
+        """`cd /parent && cd child-repo` lands in a DIFFERENT repository.
+
+        The old scan skipped the relative leg and kept `/parent`, which in this
+        org's tree (child repos cloned beneath `noorinalabs-main/`) resolves
+        `origin` to the PARENT repo — a cross-repo misroute on a shape that
+        looks entirely innocent. The resolver now refuses the whole run rather
+        than keeping a stale absolute prefix.
+        """
+        template = "cd START && cd NESTED && MARKER"
+        for shell in self.SHELLS:
+            with self.subTest(shell=shell):
+                self.assertEqual(self._shell_truth(template, shell), self._nested)
+        self._assert_never_misroutes(template)
+        self.assertIsNone(self._resolved(template))
+
+    # --- backgrounded / pipelined `cd` cannot move the calling shell ---
+
+    SUBSHELL_SHAPES = [
+        "cd DEST & MARKER",
+        "cd DEST | cat ; MARKER",
+    ]
+
+    def test_backgrounded_or_pipelined_cd_never_misroutes(self) -> None:
+        for template in self.SUBSHELL_SHAPES:
+            with self.subTest(shape=template):
+                self._assert_never_misroutes(template)
+                self.assertIsNone(self._resolved(template))
+
+    # --- shapes that MUST keep resolving, verified against both shells ---
+
+    STILL_RESOLVING_SHAPES = [
+        "cd DEST && MARKER",
+        "cd DEST ; MARKER",
+        "cd /var && cd DEST && MARKER",
+        "cd DEST ; MARKER ; true",  # trailing work with no `cd` is harmless
+        "cd DEST > /dev/null && MARKER",  # a redirect is not a wrapper
+        "FOO=1 cd DEST && MARKER",  # one-shot assignment; `cd` is still a builtin
+        "cd DEST && MARKER | cat",  # a pipeline cannot move the calling shell
+    ]
+
+    def test_unconditional_leading_cd_still_resolves_to_shell_truth(self) -> None:
+        for template in self.STILL_RESOLVING_SHAPES:
+            with self.subTest(shape=template):
+                resolved = self._resolved(template)
+                self.assertEqual(resolved, self._dest, f"lost the #521 recovery for: {template}")
+                for shell in self.SHELLS:
+                    self.assertEqual(resolved, self._shell_truth(template, shell))
+
+    # --- degraded mode: no bashlex, so fail closed on control flow ---
+
+    def _resolved_degraded(self, template: str) -> str | None:
+        original = sp._BASHLEX_AVAILABLE
+        sp._BASHLEX_AVAILABLE = False
+        try:
+            return sp.extract_leading_cd_target(self._expand(template, self.MARKER))
+        finally:
+            sp._BASHLEX_AVAILABLE = original
+
+    def test_degraded_mode_fails_closed_on_both_families(self) -> None:
+        """Without bashlex the fallback refuses anything carrying control flow.
+
+        The availability gate sits OUTSIDE the memo, so monkeypatching it here
+        cannot be served a cached AST answer.
+        """
+        for template in self.FAMILY_A_SHAPES + self.FAMILY_B_SHAPES + self.SUBSHELL_SHAPES:
+            with self.subTest(shape=template):
+                self.assertIsNone(self._resolved_degraded(template))
+
+    def test_degraded_mode_keeps_the_521_recovery(self) -> None:
+        """`&&`/`;` are the separators of the leading run itself, not control flow.
+
+        Fail-closed must not mean "refuse every command with an `&&`" — that
+        would delete `cd /worktree && gh pr create`, the shape this resolver
+        exists for.
+        """
+        for template in ("cd DEST && MARKER", "cd DEST ; MARKER", "cd /var && cd DEST && MARKER"):
+            with self.subTest(shape=template):
+                self.assertEqual(self._resolved_degraded(template), self._dest)
 
 
 if __name__ == "__main__":
