@@ -406,10 +406,33 @@ Hook behavior:
 - Idempotent: re-applying the wave label after disposition correction does NOT double-post (the hook detects the charter heading `**Wave {M} Kickoff — Phase {N}**` in existing comments and skips).
 - Meta-issue skip: when the labeled issue is `wave_{M}_meta_issue`, the per-issue kickoff is skipped (the meta-issue gets its own all-hands kickoff comment — see § 8 below).
 - Failure-tolerant: if `wave_{M}_scope` is missing or the issue isn't in any tier, the hook logs to `.claude/annunaki/errors.jsonl` and lets the label-apply succeed. A missing scope row is a `/wave-scope` bug, not a label-apply bug.
+- Merge-model-aware branch base (main#1141): the comment instructs branching from `main` on a `direct-to-main` wave and from `deployments/phase-{P}/wave-{M}` on a `wave-branch` wave, read from `wave_{M}_merge_model` / `wave_{M}_scope.merge_model`. Declare the model (Step 1) BEFORE labeling, or the comment falls back to `main` with a "not declared" note.
 
 ### 7a. Per-wave orchestration scripts (optional automation)
 
 For waves with many issues across many repos, the labeling + project-board adds in step 7 may be automated by a per-wave orchestration script. Write these scripts to `.claude/skills/wave-kickoff/_orchestration/` using the naming convention `w{N}-{purpose}.py` (e.g., `w5-kickoff.py`, `w5-project-add.py`). The directory is tracked for audit-trail visibility (see #247). Do NOT use `.claude/scratch/` — that location is gitignored and reserved for true ephemeral artifacts (commit messages, mid-task notes).
+
+### 7b. Reconciliation sweep — MANDATORY after Step 7 (main#1141)
+
+**Do not treat Step 7 as complete until this sweep exits 0** — that means zero `would_post` AND zero `skip_fetch_unknown`. Exit 0 is the criterion, not the `would_post` line alone: a sweep whose comment fetches all failed cannot tell you whether anything is outstanding, and must not be read as "nothing to do" (main#1145). The hook in § 7 reacts to the label-apply *command*, so it can only act on what it can parse out of a shell string. A `for n in 1114 1116; do gh issue edit "$n" …; done` loop carries no issue number in the command at all — nothing can react to it. That is not hypothetical: during `/wave-scope 10 29` on 2026-07-27, 14 issues were labeled and **zero** kickoff comments posted, undetected until an unrelated audit.
+
+The sweep keys on the labels that actually LANDED rather than on the command string, and screens every candidate through `kickoff_comment_state` — the *tri-state* probe (`present` / `absent` / `unknown`). It is idempotent **whenever that probe can read the issue's comments**, so it is safe to run repeatedly. Note this is deliberately **stricter than the § 7 hook**, which shares the probe but fails open on `unknown` and posts anyway (reporting `post_unverified`): one comment per explicit label-apply is bounded, whereas a bulk sweep re-running under a broken fetch is not. Do not assume the two behave identically.
+
+```bash
+# Dry run first — prints exactly what it would post.
+python3 .claude/lib/kickoff_sweep.py {PHASE} {WAVE}
+
+# Then post the missing comments.
+python3 .claude/lib/kickoff_sweep.py {PHASE} {WAVE} --apply
+```
+
+Read the dry-run output before applying:
+- `would_post` — the hook missed this issue; the sweep will backfill it.
+- `skip_idempotent` — the hook already posted. Expected for most issues.
+- `skip_no_row` — the issue carries the wave label but is in NO `wave_{M}_scope` tier. This is `/wave-scope` drift, not a kickoff bug — fix the scope, then re-run. The sweep never guesses an assignment.
+- `skip_fetch_unknown` — the comment fetch failed, so whether a kickoff comment already exists is **unknown**. Nothing was posted for that issue and the sweep exits non-zero. Do not re-run `--apply` in a loop hoping it clears: fix the `gh` failure (usually a GitHub incident or auth), then re-run once. Re-running against a broken fetch is safe now — it posts nothing — but it also makes no progress.
+
+Repos default to `wave_{M}_repos_in_scope`; override with repeatable `--repo`. `--json` emits machine-readable results.
 
 ### 8. Post the meta-issue all-hands kickoff comment
 

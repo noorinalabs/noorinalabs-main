@@ -64,16 +64,61 @@ Public API
         (where the dependency is declared); a bare checkout without it still
         works via the shlex/regex fallback (zero-setup-on-pull is preserved).
 
+    strip_command_prefixes(segment, *, compound_leaders=True) -> list[str]
+        Drops the leading run of transparent command-prefix wrappers
+        (`timeout 45`, `env`, `nohup`, `sudo`, ...) and — when
+        `compound_leaders=True` — compound-statement keywords (`do`, `then`,
+        `if`, ...), returning the tokens of the command that runs (main#1141).
+
+        **Lockstep invariant:** every function in this module that keys on a
+        command-position token must apply this strip — `find_git_subcommand`,
+        `find_gh_subcommand`, `extract_dash_c_pairs`,
+        `extract_leading_cd_target`. A new segment-consuming helper that
+        skips it re-opens the main#1141-review regression: two functions
+        reading ONE segment with different views of where the command starts.
+        That produced a FALSE POSITIVE (a compliant
+        `timeout 60 git -c user.name=… commit` blocked for a missing flag it
+        had passed), which is strictly worse than the evasion the strip was
+        added to close.
+
+        **…but the invariant binds MATCHERS, not every consumer.** Round 3 of
+        the same review: applying it uniformly shipped a live misroute. Which
+        rule a caller follows is decided by what it DOES with the answer:
+
+          - **Gate matcher** (validates/blocks a command) — strip everything.
+            Over-matching a guarded body is conservative: worst case you
+            inspect a command that would not have run. `find_git_subcommand`,
+            `find_gh_subcommand`, `extract_dash_c_pairs`.
+          - **Routing resolver** (decides which repo/target an action hits) —
+            strip NOTHING. Over-matching is destructive: it sends output where
+            the command never went, and three hooks downstream WRITE.
+            `extract_leading_cd_target` is the only one in this module, and it
+            opts out entirely (a leader may not run; and an exec-wrapper
+            cannot carry `cd` at all, since `cd` is a shell builtin).
+
+        `compound_leaders=False` exists for a caller that wants wrappers but
+        not leaders. Nothing needs it today — the one routing caller wants
+        neither — but the flag keeps the two prefix families separable rather
+        than welded together for whoever needs the middle position next.
+
+        `test_strip_lockstep_across_segment_consumers` pins the invariant;
+        `CdRoutingAgainstShellTruth` pins the carve-out against a real shell.
+
     find_git_subcommand(segment) -> tuple[list[str], list[str]] | None
         Given a single segment's tokens, returns (global_opts, [subcommand,
         ...rest]) if it's a `git ...` invocation, else None. Skips git
         global options (`-c k=v`, `-C dir`, `--git-dir=...`,
         `--work-tree=...`, etc.) so the returned subcommand is the actual
-        git verb (`commit`, `config`, `worktree`, ...).
+        git verb (`commit`, `config`, `worktree`, ...). Leading wrappers /
+        compound keywords are stripped first (main#1141), so
+        `timeout 60 git commit ...` and `do git commit ...` resolve.
 
     find_gh_subcommand(segment) -> tuple[list[str], list[str]] | None
         Same shape for `gh ...`. Returns (gh_global_opts, [topic, action,
-        ...rest]) — e.g. ([], ["pr", "create", "--repo", ...]).
+        ...rest]) — e.g. ([], ["pr", "create", "--repo", ...]). Same
+        leading-wrapper / compound-keyword tolerance (main#1141), so
+        `timeout 45 gh issue edit ...` and the `do`-prefixed body of a
+        `for … ; do gh issue edit … ; done` loop both resolve.
 
     is_gh_subcommand(tokens, *verbs) -> bool
         Yes/no convenience for "does this token list contain a `gh <verb1>
@@ -530,6 +575,167 @@ def _is_equals_form_global(tok: str) -> bool:
     )
 
 
+# ---------------------------------------------------------------------------
+# Command-prefix wrappers + compound-statement leaders (main#1141)
+# ---------------------------------------------------------------------------
+#
+# `find_git_subcommand` / `find_gh_subcommand` keyed on `segment[0]` being
+# literally `git` / `gh`. Two ordinary shapes put something else there and made
+# every consuming hook silently no-op:
+#
+#   timeout 45 gh issue edit 1114 --add-label "wave-29"    -> segment[0] == "timeout"
+#   for n in …; do gh issue edit 1114 --add-label "wave-29"; done
+#                                                          -> segment[0] == "do"
+#
+# For the kickoff hook that meant 14 issues labeled and ZERO kickoff comments
+# posted (main#1141); for the BLOCKING hooks on the same primitive
+# (`block_gh_pr_review`, `block_squash_wave_merge`, `validate_wave_label_evidence`,
+# `validate_commit_identity` via the git twin) it is a gate-evasion class — a
+# `timeout`/`nice`/loop prefix walked straight past the gate.
+#
+# The fix is an ALLOWLIST, never a "scan the segment for a `gh` token anywhere":
+# loose scanning would re-introduce the data-position false-positive class this
+# whole module exists to prevent (`echo gh issue edit 5 …` must NOT match). Only
+# wrappers that transparently exec the following command, with their own option
+# grammar spelled out, are skipped.
+#
+# Each entry maps a wrapper name to (flags that consume a following VALUE,
+# number of bare POSITIONAL args consumed before the wrapped command). Boolean
+# flags, `--flag=value` and attached-short forms need no table entry — any
+# remaining `-`-prefixed token is skipped generically.
+_COMMAND_PREFIX_WRAPPERS: dict[str, tuple[frozenset[str], int]] = {
+    # `timeout DURATION cmd …` — the one positional is the duration.
+    "timeout": (frozenset({"-k", "--kill-after", "-s", "--signal"}), 1),
+    "nice": (frozenset({"-n", "--adjustment"}), 0),
+    "ionice": (frozenset({"-c", "-n", "-p", "--class", "--classdata", "--pid"}), 0),
+    "stdbuf": (frozenset({"-i", "-o", "-e", "--input", "--output", "--error"}), 0),
+    # `env [-u NAME] [KEY=value …] cmd …` — the KEY=value run is skipped by the
+    # generic env-assignment branch in `_consume_wrapper_options`.
+    "env": (frozenset({"-u", "--unset", "-C", "--chdir", "-S", "--split-string"}), 0),
+    "nohup": (frozenset(), 0),
+    "setsid": (frozenset(), 0),
+    "command": (frozenset(), 0),
+    "builtin": (frozenset(), 0),
+    "exec": (frozenset(), 0),
+    "time": (frozenset({"-f", "--format", "-o", "--output"}), 0),
+    "sudo": (
+        frozenset(
+            {"-u", "--user", "-g", "--group", "-p", "--prompt", "-U", "-C", "-h", "-T", "-R"}
+        ),
+        0,
+    ),
+    "doas": (frozenset({"-u", "-C", "-L"}), 0),
+}
+
+# Shell keywords that can occupy position 0 of a segment while the COMMAND
+# follows them in the same segment. `for` / `case` / `select` are deliberately
+# absent: what follows them is a variable name or a word list, not a command
+# (`for n in 1114 …` must not resolve `n` as a command).
+_COMPOUND_LEADERS = frozenset({"do", "then", "else", "if", "elif", "while", "until", "!", "{", "("})
+
+# Bound on the wrapper/keyword unwrap loop. `do timeout 45 nohup gh …` is 3
+# rounds; anything past this is pathological input, not a real command.
+_MAX_PREFIX_STRIP_ROUNDS = 8
+
+
+def _consume_wrapper_options(rest: list[str], value_flags: frozenset[str], positionals: int) -> int:
+    """Return the index in `rest` where a wrapper's own arguments end.
+
+    Walks the wrapper's option run: value-taking flags consume their value,
+    any other flag-shaped token consumes itself, `KEY=value` env assignments
+    are skipped (`env FOO=1 gh …`), and up to `positionals` bare words are
+    consumed (the `timeout DURATION` slot). A literal `--` ends the option run
+    immediately. The first token that is none of those is the wrapped command.
+    """
+    i = 0
+    n = len(rest)
+    while i < n:
+        tok = rest[i]
+        if tok == "--":
+            return i + 1
+        if tok in value_flags:
+            # Mirror `walk_flag_values`: a value-less flag never eats the next
+            # flag-shaped token.
+            i += 2 if (i + 1 < n and not _looks_like_flag(rest[i + 1])) else 1
+            continue
+        if _looks_like_flag(tok):
+            i += 1
+            continue
+        if _ENV_ASSIGN_RE.match(tok):
+            i += 1
+            continue
+        if positionals > 0:
+            positionals -= 1
+            i += 1
+            continue
+        break
+    return i
+
+
+def strip_command_prefixes(segment: list[str], *, compound_leaders: bool = True) -> list[str]:
+    """Strip leading command-prefix wrappers, and optionally compound keywords.
+
+        ["timeout", "45", "gh", "issue", "edit", …] -> ["gh", "issue", "edit", …]
+        ["do", "gh", "issue", "edit", …]            -> ["gh", "issue", "edit", …]
+        ["echo", "gh", "issue", "edit", …]          -> unchanged (echo is not a
+                                                       transparent wrapper — its
+                                                       args are DATA, not a command)
+
+    Only names in `_COMMAND_PREFIX_WRAPPERS` / `_COMPOUND_LEADERS` are stripped,
+    so a segment whose head is any other command is returned untouched. The
+    returned list is a fresh object or the original list — callers must not rely
+    on identity (main#1141).
+
+    `compound_leaders` — the distinction that decides which callers may say
+    True (main#1141 review round 3)
+    ======================================================================
+
+    The two prefix kinds are NOT equivalent, and conflating them shipped a
+    live misroute:
+
+      - A **wrapper** (`timeout`, `env`, `nice`, `nohup`, `sudo`) ALWAYS execs
+        what follows. Stripping it is unconditionally sound: the wrapped
+        command runs.
+      - A **compound leader** (`then`, `do`, `else`, `{`, `(`) guards a body
+        that MAY NOT RUN. `if [ -f /nonexistent ]; then cd /other-repo; fi`
+        contains a `cd` the shell never executes.
+
+    Whether that matters depends on what the caller does with the answer:
+
+      - A **gate matcher** (`find_git_subcommand`, `find_gh_subcommand`, and
+        `extract_dash_c_pairs` reading a matched segment's flags) errs
+        CONSERVATIVELY by over-matching: at worst it validates a command that
+        would not have run. Harmless. These pass `compound_leaders=True`.
+      - A **routing resolver** (`extract_leading_cd_target`, which decides
+        WHICH REPO an action targets) errs DESTRUCTIVELY by over-matching: it
+        sends output where the command never went. Under
+        `compound_leaders=True` the example above resolved the repo to
+        `noorinalabs-deploy` and would have posted a kickoff comment to
+        `deploy#5` instead of `main#5` — on the #981/#985 misrouting path.
+        Routing callers MUST pass `compound_leaders=False`.
+
+    Non-goal, deliberately: `for r in …; do cd /wt; gh …; done` — a cd inside
+    a loop body that DOES run — is not recovered under
+    `compound_leaders=False`. Distinguishing it from the never-taken `then`
+    body needs block-closure tracking, and the shape is speculative (no
+    observed bug) while the misroute was live. Not worth the machinery.
+    """
+    tokens = segment
+    for _ in range(_MAX_PREFIX_STRIP_ROUNDS):
+        if not tokens:
+            return tokens
+        head = tokens[0]
+        if compound_leaders and head in _COMPOUND_LEADERS:
+            tokens = tokens[1:]
+            continue
+        spec = _COMMAND_PREFIX_WRAPPERS.get(head)
+        if spec is None:
+            return tokens
+        value_flags, positionals = spec
+        tokens = tokens[1 + _consume_wrapper_options(tokens[1:], value_flags, positionals) :]
+    return tokens
+
+
 def find_git_subcommand(segment: list[str]) -> tuple[list[str], list[str]] | None:
     """If `segment` is a `git ...` invocation, return (global_opts, [subcmd, ...]).
 
@@ -540,9 +746,15 @@ def find_git_subcommand(segment: list[str]) -> tuple[list[str], list[str]] | Non
       --work-tree=path / --work-tree path
       --no-pager / -p / --paginate / --no-replace-objects   (no value)
 
-    Returns None if `segment` is empty, doesn't start with `git`, or doesn't
-    have a subcommand after the global-option run.
+    Leading compound-statement keywords and transparent command-prefix wrappers
+    are stripped first (main#1141), so `timeout 60 git commit …` and the
+    `do`-prefixed body of a loop resolve to the `commit` verb instead of
+    silently bypassing every consuming gate.
+
+    Returns None if `segment` is empty, doesn't start with `git` (after that
+    strip), or doesn't have a subcommand after the global-option run.
     """
+    segment = strip_command_prefixes(segment)
     if not segment or segment[0] != "git":
         return None
 
@@ -577,7 +789,15 @@ def find_gh_subcommand(segment: list[str]) -> tuple[list[str], list[str]] | None
 
     `gh` has no pre-subcommand global options worth skipping for the matchers
     in this codebase, so this is a thin shape-mirror of `find_git_subcommand`.
+
+    Leading compound-statement keywords and transparent command-prefix wrappers
+    are stripped first (main#1141): `timeout 45 gh issue edit …` and the
+    `do`-prefixed body of `for n in …; do gh issue edit …; done` both resolve.
+    Before that fix each returned None, and every consuming hook — the kickoff
+    comment poster AND the blocking `gh pr review` / squash-merge gates —
+    silently did nothing.
     """
+    segment = strip_command_prefixes(segment)
     if not segment or segment[0] != "gh":
         return None
     if len(segment) < 2:
@@ -754,8 +974,22 @@ def extract_dash_c_pairs(segment: list[str]) -> list[tuple[str, str]]:
     already unquoted the value half, so `-c user.name="A B"` arrives here as
     `["-c", "user.name=A B"]` (two tokens; the inner `=` is the key/value
     separator handled by `split("=", 1)`).
+
+    MUST strip command prefixes, in lockstep with `find_git_subcommand`
+    (main#1141 review). `validate_commit_identity` calls BOTH on the SAME
+    segment: `find_git_subcommand` to recognize the `commit` verb, then this
+    to read the identity flags. When only the first stripped,
+    `timeout 60 git -c user.name=… commit` was recognized as a commit but its
+    `-c` pairs came back EMPTY, so the gate blocked a fully compliant commit
+    with "missing `-c user.name=` flag" — naming the exact flag the operator
+    had passed. Two functions holding different views of one segment is the
+    hazard; keeping the strip symmetric is the invariant that prevents it.
+    A false positive is strictly worse than the evasion it came from: an
+    evasion costs one missed gate, a false positive blocks correct work for
+    everyone with a message that reads as a lie.
     """
     pairs: list[tuple[str, str]] = []
+    segment = strip_command_prefixes(segment)
     if not segment or segment[0] != "git":
         return pairs
 
@@ -827,6 +1061,47 @@ def extract_leading_cd_target(command: str) -> str | None:
     bug (#521): `cd /worktree && gh pr create` carries the real cwd in the
     command itself even though the harness `cwd` field points at the
     orchestrator's spawn-time directory.
+
+    Strips NOTHING — `cd` must be token 0 of its segment (main#1141 review
+    round 3). This function ROUTES: it decides which repo an action targets,
+    and three hooks on its chain WRITE (`post_wave_kickoff_comment`,
+    `auto_add_issue_to_board`, `post_label_change_wave_field_sync`), so a
+    wrong answer is an unrecoverable write into the wrong repository. Both
+    prefix families are unsafe here, for two different reasons:
+
+    1. **Compound leaders** (`then`, `do`, `else`, `{`, `(`) guard a body that
+       may not run. `if [ -f /nonexistent ]; then cd /repo-b; fi; gh issue
+       edit 5` never executes that `cd`; stripping `then` resolved it to
+       repo-b and would have posted to `repo-b#5` instead of `repo-a#5`.
+    2. **Command-prefix wrappers** (`timeout`, `env`, `nice`, `nohup`) cannot
+       carry a `cd` AT ALL — `cd` is a shell builtin, so an exec-wrapper runs
+       a subprocess (or nothing) and the calling shell's directory is
+       unchanged. Verified in both bash and zsh: `env FOO=1 cd /dest; pwd`
+       prints the ORIGINAL directory. Stripping the wrapper here would have
+       claimed a `cd` that provably never happened. (`command cd` is worse
+       than useless as a signal: bash honours it, zsh does not.)
+
+    That is the asymmetry with the matchers, stated exactly: over-matching is
+    conservative for a GATE (worst case, inspect a command that would not have
+    run) and destructive for a RESOLVER (send output where the command never
+    went). So `find_git_subcommand` / `find_gh_subcommand` /
+    `extract_dash_c_pairs` strip everything and this function strips nothing.
+
+    Accepted cost — UNDER-recovery. A `cd` in a body that DOES run (a taken
+    `else`, a real loop iteration) is not recovered, so the caller falls back
+    to the invocation cwd. That is the pre-#1141 behaviour and it is the safe
+    direction: claiming no knowledge is recoverable, claiming the wrong
+    directory is not.
+
+    Known residual, tracked by main#1151 — NOT closed here, and not closable
+    at this layer: (a) a short-circuit `true || cd /elsewhere` puts `cd` at
+    token 0 of its own segment with no leader to withhold, and (b) this
+    function returns the LAST `cd` anywhere in the command with no positional
+    relation to the `gh` node, so `gh issue edit 5 …; cd /elsewhere`
+    misroutes. Both predate main#1141 and both need the bashlex AST
+    (`iter_command_segments_ast`) to answer "is this `cd` unconditional, and
+    does it precede the gh node?" — `iter_command_segments` has already
+    discarded the control flow by the time this loop runs.
     """
     tokens = tokenize(command)
     if tokens is None:

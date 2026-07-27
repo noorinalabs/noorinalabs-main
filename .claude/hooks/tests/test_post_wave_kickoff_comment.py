@@ -449,7 +449,12 @@ class RenderKickoffCommentTests(unittest.TestCase):
             "reviewer_2": "Santiago Ferreira",
             "priority": "tech-debt",
         }
-        body = hook.render_kickoff_comment(row, wave_num=9, phase_num=3, repo="noorinalabs-main")
+        # Explicit merge model: the wave-branch base is no longer the
+        # unconditional default (#1141), so the canonical render pins it by
+        # declaring the model the base belongs to.
+        body = hook.render_kickoff_comment(
+            row, wave_num=9, phase_num=3, repo="noorinalabs-main", merge_model="wave-branch"
+        )
         self.assertIn("Requestor: Fatima Okonkwo", body)
         self.assertIn("Requestee: Aino Virtanen", body)
         self.assertIn("RequestOrReplied: Request", body)
@@ -823,6 +828,399 @@ class PhaseAgnosticLabelForm(unittest.TestCase):
             status_loader=_status_no_phase,
         )
         self.assertEqual(result["action"], "skip_no_phase")
+
+
+_EDIT_REPO = "--repo noorinalabs/noorinalabs-main"
+
+
+class MergeModelAwareBranchBase(unittest.TestCase):
+    """main#1141 problem 1 — the branch base must follow the wave merge model.
+
+    `render_kickoff_comment` hardcoded `deployments/phase-{P}/wave-{M}`. Since
+    the 2026-06-09 every-wave-merges-to-main directive, `direct-to-main` is the
+    COMMON case, so every kickoff comment on waves 28 and 29 pointed the
+    implementer at a ref that will never exist.
+    """
+
+    ROW = {"implementer": "Nino Kavtaradze", "reviewer": "Aino Virtanen"}
+
+    def test_direct_to_main_renders_main_base(self) -> None:
+        body = hook.render_kickoff_comment(
+            self.ROW,
+            wave_num=29,
+            phase_num=10,
+            repo="noorinalabs-main",
+            merge_model="direct-to-main",
+        )
+        self.assertIn("- Branch from: `main`", body)
+        self.assertIn("- PR base: `main` (wave merge model: `direct-to-main`)", body)
+        self.assertNotIn("deployments/phase-10/wave-29", body)
+
+    def test_wave_branch_renders_wave_branch_base(self) -> None:
+        body = hook.render_kickoff_comment(
+            self.ROW,
+            wave_num=29,
+            phase_num=10,
+            repo="noorinalabs-main",
+            merge_model="wave-branch",
+        )
+        self.assertIn("- Branch from: `deployments/phase-10/wave-29`", body)
+        self.assertIn("wave merge model: `wave-branch`", body)
+
+    def test_absent_model_defaults_to_main(self) -> None:
+        """The recoverable failure is preferred to the hard block.
+
+        A nonexistent wave branch stops the implementer dead; branching from
+        `main` on a wave-branch wave is a PR-base retarget.
+        """
+        body = hook.render_kickoff_comment(
+            self.ROW, wave_num=29, phase_num=10, repo="noorinalabs-main", merge_model=None
+        )
+        self.assertIn("- Branch from: `main`", body)
+        self.assertIn("NOT declared", body)
+        self.assertNotIn("deployments/phase-10/wave-29", body)
+
+    def test_unknown_model_defaults_to_main(self) -> None:
+        body = hook.render_kickoff_comment(
+            self.ROW, wave_num=29, phase_num=10, repo="noorinalabs-main", merge_model="typo-model"
+        )
+        self.assertIn("- Branch from: `main`", body)
+
+    def test_default_argument_is_the_safe_base(self) -> None:
+        """A caller that never heard of merge models cannot emit a dead ref."""
+        body = hook.render_kickoff_comment(self.ROW, 29, 10, "noorinalabs-main")
+        self.assertIn("- Branch from: `main`", body)
+
+    def test_merge_model_constants_match_wave_merge_model(self) -> None:
+        """The duplicated enum must not drift from `.claude/lib/wave_merge_model.py`."""
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lib"))
+        import wave_merge_model  # noqa: PLC0415
+
+        self.assertEqual(hook.DIRECT_TO_MAIN, wave_merge_model.DIRECT_TO_MAIN)
+        self.assertEqual(hook.WAVE_BRANCH, wave_merge_model.WAVE_BRANCH)
+        self.assertEqual(
+            {hook.DIRECT_TO_MAIN, hook.WAVE_BRANCH}, set(wave_merge_model.MERGE_MODELS)
+        )
+
+
+class ReadMergeModel(unittest.TestCase):
+    """Both recorded locations, and a fail-safe on anything unrecognized."""
+
+    def test_top_level_key(self) -> None:
+        self.assertEqual(
+            hook.read_merge_model({"wave_29_merge_model": "direct-to-main"}, 29),
+            "direct-to-main",
+        )
+
+    def test_scope_key(self) -> None:
+        self.assertEqual(
+            hook.read_merge_model({"wave_29_scope": {"merge_model": "wave-branch"}}, 29),
+            "wave-branch",
+        )
+
+    def test_top_level_wins_over_scope(self) -> None:
+        status = {
+            "wave_29_merge_model": "direct-to-main",
+            "wave_29_scope": {"merge_model": "wave-branch"},
+        }
+        self.assertEqual(hook.read_merge_model(status, 29), "direct-to-main")
+
+    def test_scope_used_when_top_level_absent(self) -> None:
+        status = {"wave_29_scope": {"merge_model": "direct-to-main"}}
+        self.assertEqual(hook.read_merge_model(status, 29), "direct-to-main")
+
+    def test_absent_is_none(self) -> None:
+        self.assertIsNone(hook.read_merge_model({}, 29))
+
+    def test_invalid_value_is_none_not_passthrough(self) -> None:
+        self.assertIsNone(hook.read_merge_model({"wave_29_merge_model": "direct_to_main"}, 29))
+
+    def test_non_string_value_is_none(self) -> None:
+        self.assertIsNone(hook.read_merge_model({"wave_29_merge_model": 7}, 29))
+
+    def test_non_dict_scope_is_tolerated(self) -> None:
+        self.assertIsNone(hook.read_merge_model({"wave_29_scope": ["main#1"]}, 29))
+
+
+class CheckAppliesMergeModelEndToEnd(unittest.TestCase):
+    """The rendered body that actually gets POSTED must carry the right base."""
+
+    def _run(self, status: dict) -> str:
+        captured: dict = {}
+
+        def body_writer(body, repo, num):
+            captured["body"] = body
+            return Path("/dev/null")
+
+        result = hook.check(
+            {
+                "tool_name": "Bash",
+                "tool_input": {"command": f'gh issue edit 1114 {_EDIT_REPO} --add-label "wave-29"'},
+            },
+            status_loader=lambda: status,
+            comment_fetcher=lambda r, n: [],
+            comment_poster=lambda r, n, p: True,
+            body_writer=body_writer,
+        )
+        assert result is not None
+        self.assertEqual(result["action"], "post")
+        return captured["body"]
+
+    def _status(self, **extra) -> dict:
+        status = {
+            "current_phase": 10,
+            "wave_29_scope": {
+                "tier_1": [{"id": "noorinalabs-main#1114", "implementer": "Nino Kavtaradze"}]
+            },
+        }
+        status.update(extra)
+        return status
+
+    def test_direct_to_main_wave(self) -> None:
+        body = self._run(self._status(wave_29_merge_model="direct-to-main"))
+        self.assertIn("- Branch from: `main`", body)
+
+    def test_wave_branch_wave(self) -> None:
+        body = self._run(self._status(wave_29_merge_model="wave-branch"))
+        self.assertIn("- Branch from: `deployments/phase-10/wave-29`", body)
+
+    def test_undeclared_wave(self) -> None:
+        body = self._run(self._status())
+        self.assertIn("- Branch from: `main`", body)
+
+
+class WrappedLabelApplyReachesTheHook(unittest.TestCase):
+    """main#1141 problem 2 — the full repro table, at the hook's own entry point."""
+
+    def test_repro_table(self) -> None:
+        rows = [
+            ("plain", f'gh issue edit 1114 {_EDIT_REPO} --add-label "wave-29"', True),
+            (
+                "redirect",
+                f'gh issue edit 1114 {_EDIT_REPO} --add-label "wave-29" >/dev/null 2>&1',
+                True,
+            ),
+            (
+                "and-chain",
+                f'gh issue edit 1114 {_EDIT_REPO} --add-label "wave-29" && echo ok',
+                True,
+            ),
+            (
+                "timeout-prefix",
+                f'timeout 45 gh issue edit 1114 {_EDIT_REPO} --add-label "wave-29"',
+                True,
+            ),
+            (
+                "loop-literal-number",
+                f'for x in a; do gh issue edit 1114 {_EDIT_REPO} --add-label "wave-29"; done',
+                True,
+            ),
+            (
+                # Unfixable at the command layer: the number is not in the
+                # string. Covered by the state-based sweep instead.
+                "loop-variable",
+                f'for n in 1114 1116; do gh issue edit "$n" {_EDIT_REPO} '
+                '--add-label "wave-29"; done',
+                False,
+            ),
+        ]
+        for name, command, should_parse in rows:
+            with self.subTest(row=name):
+                parsed = hook.parse_label_apply_command(command)
+                if should_parse:
+                    self.assertIsNotNone(parsed, f"{name} must parse after #1141")
+                    assert parsed is not None
+                    self.assertEqual(parsed[1], "1114")
+                    self.assertEqual(parsed[2], "wave-29")
+                else:
+                    self.assertIsNone(parsed)
+
+
+class SilentDeclineIsSurfaced(unittest.TestCase):
+    """A label lands, the hook cannot act — it must SAY SO (main#1141).
+
+    The primary bug class is the silent no-op, not the parse gap: 14 issues
+    labeled, 0 comments posted, caught days later by an unrelated audit.
+    """
+
+    def _check(self, command: str, logs: list):
+        original = hook.log_posttooluse_event
+        hook.log_posttooluse_event = lambda *a: logs.append(a)
+        try:
+            return hook.check({"tool_name": "Bash", "tool_input": {"command": command}})
+        finally:
+            hook.log_posttooluse_event = original
+
+    def test_loop_variable_apply_is_logged_and_reported(self) -> None:
+        logs: list = []
+        result = self._check(
+            f'for n in 1114 1116; do gh issue edit "$n" {_EDIT_REPO} --add-label "wave-29"; done',
+            logs,
+        )
+        self.assertEqual(result["action"], "skip_unresolved_issue_number")
+        self.assertEqual(result["labels"], "wave-29")
+        # Counts SHAPES, not issues: one loop == one unresolved edit, even
+        # though it will touch two issues (main#1141 review nit — the key is
+        # named for what it counts so the number cannot be misread).
+        self.assertEqual(result["unresolved_edits"], 1)
+        self.assertEqual(len(logs), 1)
+        self.assertIn("kickoff_sweep", logs[0][2])
+
+    def test_dispatcher_surfaces_the_decline(self) -> None:
+        """`EMIT_DISPATCH_SUMMARY` turns the action dict into an operator message."""
+        self.assertTrue(hook.EMIT_DISPATCH_SUMMARY)
+
+    def test_unrelated_command_stays_silent(self) -> None:
+        logs: list = []
+        self.assertIsNone(self._check("git status", logs))
+        self.assertEqual(logs, [])
+
+    def test_non_wave_label_stays_silent(self) -> None:
+        logs: list = []
+        self.assertIsNone(
+            self._check(
+                f'for n in 1; do gh issue edit "$n" {_EDIT_REPO} --add-label "bug"; done', logs
+            )
+        )
+        self.assertEqual(logs, [])
+
+    def test_relabel_shape_stays_silent(self) -> None:
+        """#467 carry-forward relabels are not kickoffs — logging them was a
+        36-event annunaki noise burst in P3W11."""
+        logs: list = []
+        self.assertIsNone(
+            self._check(
+                f'for n in 1; do gh issue edit "$n" {_EDIT_REPO} --add-label "wave-29" '
+                '--remove-label "wave-28"; done',
+                logs,
+            )
+        )
+        self.assertEqual(logs, [])
+
+
+class KickoffCommentStateTriState(unittest.TestCase):
+    """main#1145 — `unknown` must be its own state, not folded into `absent`."""
+
+    HEADING = [{"body": "**Wave 29 Kickoff — Phase 10**\n\nbody"}]
+
+    def test_present(self) -> None:
+        self.assertEqual(
+            hook.kickoff_comment_state("r", "1", 29, fetch_comments=lambda r, n: self.HEADING),
+            hook.KICKOFF_PRESENT,
+        )
+
+    def test_absent(self) -> None:
+        self.assertEqual(
+            hook.kickoff_comment_state("r", "1", 29, fetch_comments=lambda r, n: []),
+            hook.KICKOFF_ABSENT,
+        )
+
+    def test_unknown_on_fetch_failure(self) -> None:
+        self.assertEqual(
+            hook.kickoff_comment_state("r", "1", 29, fetch_comments=lambda r, n: None),
+            hook.KICKOFF_UNKNOWN,
+        )
+
+    def test_three_states_are_distinct(self) -> None:
+        self.assertEqual(len({hook.KICKOFF_PRESENT, hook.KICKOFF_ABSENT, hook.KICKOFF_UNKNOWN}), 3)
+
+    def test_wave_specific_carry_forward_is_absent_not_present(self) -> None:
+        """#547 semantics survive the tri-state refactor."""
+        prior = [{"body": "**Wave 28 Kickoff — Phase 10**"}]
+        self.assertEqual(
+            hook.kickoff_comment_state("r", "1", 29, fetch_comments=lambda r, n: prior),
+            hook.KICKOFF_ABSENT,
+        )
+
+
+class KickoffAlreadyPostedContractPreserved(unittest.TestCase):
+    """The bool wrapper keeps its historical fail-open contract (main#1145).
+
+    Failing open is correct for the HOOK — it posts at most one comment per
+    label-apply, and the failure it guards against (#286) is a kickoff that
+    never gets posted at all. It is wrong for the SWEEP, which is why the
+    sweep uses the tri-state instead. Both behaviors are pinned so neither
+    drifts into the other.
+    """
+
+    def test_false_on_fetch_failure(self) -> None:
+        self.assertFalse(
+            hook.kickoff_already_posted("r", "1", 29, fetch_comments=lambda r, n: None)
+        )
+
+    def test_false_when_absent(self) -> None:
+        self.assertFalse(hook.kickoff_already_posted("r", "1", 29, fetch_comments=lambda r, n: []))
+
+    def test_true_when_present(self) -> None:
+        body = [{"body": "**Wave 29 Kickoff — Phase 10**"}]
+        self.assertTrue(hook.kickoff_already_posted("r", "1", 29, fetch_comments=lambda r, n: body))
+
+    def test_hook_still_posts_when_the_fetch_fails(self) -> None:
+        """End-to-end: the PostToolUse path keeps posting on a broken fetch.
+
+        But it reports `post_unverified`, not `post` — review round 3. The
+        fail-open decision stands; collapsing it into a verified post was the
+        last silent state-collapse in a PR about silent state-collapses.
+        """
+        status = {
+            "current_phase": 10,
+            "wave_29_merge_model": "direct-to-main",
+            "wave_29_scope": {"tier_1": [{"id": "noorinalabs-main#1114", "implementer": "N"}]},
+        }
+        result = hook.check(
+            _bash(f'gh issue edit 1114 {_EDIT_REPO} --add-label "wave-29"'),
+            status_loader=lambda: status,
+            comment_fetcher=lambda r, n: None,
+            comment_poster=lambda r, n, p: True,
+            body_writer=lambda b, r, n: Path("/dev/null"),
+        )
+        assert result is not None
+        self.assertEqual(result["action"], "post_unverified")
+
+    def test_unverified_post_is_logged(self) -> None:
+        logs: list = []
+        original = hook.log_posttooluse_event
+        hook.log_posttooluse_event = lambda *a: logs.append(a)
+        try:
+            hook.check(
+                _bash(f'gh issue edit 1114 {_EDIT_REPO} --add-label "wave-29"'),
+                status_loader=lambda: {
+                    "current_phase": 10,
+                    "wave_29_scope": {
+                        "tier_1": [{"id": "noorinalabs-main#1114", "implementer": "N"}]
+                    },
+                },
+                comment_fetcher=lambda r, n: None,
+                comment_poster=lambda r, n, p: True,
+                body_writer=lambda b, r, n: Path("/dev/null"),
+            )
+        finally:
+            hook.log_posttooluse_event = original
+        self.assertEqual(len(logs), 1)
+        self.assertIn("post_unverified", logs[0][2])
+
+    def test_verified_post_is_not_logged_as_unverified(self) -> None:
+        logs: list = []
+        original = hook.log_posttooluse_event
+        hook.log_posttooluse_event = lambda *a: logs.append(a)
+        try:
+            result = hook.check(
+                _bash(f'gh issue edit 1114 {_EDIT_REPO} --add-label "wave-29"'),
+                status_loader=lambda: {
+                    "current_phase": 10,
+                    "wave_29_scope": {
+                        "tier_1": [{"id": "noorinalabs-main#1114", "implementer": "N"}]
+                    },
+                },
+                comment_fetcher=lambda r, n: [],
+                comment_poster=lambda r, n, p: True,
+                body_writer=lambda b, r, n: Path("/dev/null"),
+            )
+        finally:
+            hook.log_posttooluse_event = original
+        assert result is not None
+        self.assertEqual(result["action"], "post")
+        self.assertEqual(logs, [])
 
 
 if __name__ == "__main__":

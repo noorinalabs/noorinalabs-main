@@ -1,0 +1,24 @@
+{
+  "description": "main#1141 regression: on a `direct-to-main` wave there is no wave branch, so the kickoff comment must instruct branching from `main`. Before the fix this rendered `deployments/phase-10/wave-29` — a ref that will never exist — for every issue in waves 28 and 29.",
+  "command": "timeout 45 gh issue edit 1114 --repo noorinalabs/noorinalabs-main --add-label \"wave-29\"",
+  "status": {
+    "current_phase": 10,
+    "wave_29_meta_issue": 1133,
+    "wave_29_merge_model": "direct-to-main",
+    "wave_29_scope": {
+      "merge_model": "direct-to-main",
+      "tier_1_track_g": [
+        {"id": "noorinalabs-main#1114", "ref": "main#1114", "implementer": "Nino Kavtaradze", "reviewer": "Aino Virtanen", "reviewer_2": null, "priority": "tech-debt"}
+      ]
+    }
+  },
+  "existing_comments": [],
+  "post_succeeds": true,
+  "expect_action": "post",
+  "expect_body_contains": [
+    "Requestee: Nino Kavtaradze",
+    "**Wave 29 Kickoff — Phase 10**",
+    "- Branch from: `main`",
+    "- PR base: `main` (wave merge model: `direct-to-main`)"
+  ]
+}

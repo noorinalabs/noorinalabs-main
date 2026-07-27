@@ -1312,5 +1312,63 @@ class CwdFallbackTests(unittest.TestCase):
             self.assertIsNone(result, f"expected allow, got block: {result}")
 
 
+class WrappedCommitIdentityRegression(unittest.TestCase):
+    """main#1141 review MUST-FIX — a wrapped COMPLIANT commit must be allowed.
+
+    main#1141 taught `_shell_parse` to see `git`/`gh` behind a command-prefix
+    wrapper, closing an evasion (`timeout 60 git commit` had bypassed this gate
+    entirely). But `extract_dash_c_pairs` was left un-stripped while
+    `find_git_subcommand` stripped, and this hook calls BOTH on the same
+    segment — so the wrapped commit became visible as a commit while its `-c`
+    identity flags read as absent, and the gate blocked it with
+    "missing `-c user.name=` flag", naming the exact flag that had been passed.
+
+    Trading an evasion for a false positive is a net loss: the evasion costs
+    one missed gate, the false positive blocks correct work for everyone with a
+    message that reads as a lie. Both directions are pinned below.
+    """
+
+    @staticmethod
+    def _input(command: str) -> dict:
+        return {"tool_name": "Bash", "tool_input": {"command": command}}
+
+    def _commit(self, prefix: str, *, identity: bool) -> str:
+        ident = (
+            '-c user.name="Nadia Khoury" -c user.email="parametrization+Nadia.Khoury@gmail.com" '
+            if identity
+            else ""
+        )
+        return f'{prefix}git {ident}commit -m "x"'
+
+    def test_wrapped_compliant_commit_is_allowed(self) -> None:
+        for prefix in (
+            "",
+            "timeout 60 ",
+            "timeout -k 5 60 ",
+            "env FOO=1 ",
+            "nice -n 5 ",
+            "nohup ",
+            "command ",
+        ):
+            with self.subTest(prefix=prefix or "(bare)"):
+                result = hook.check(self._input(self._commit(prefix, identity=True)))
+                self.assertIsNone(
+                    result,
+                    f"compliant commit behind {prefix!r} must be ALLOWED, got block: {result}",
+                )
+
+    def test_wrapped_identityless_commit_is_still_blocked(self) -> None:
+        """The evasion stays closed — the fix must not re-open it."""
+        for prefix in ("timeout 60 ", "env FOO=1 ", "nice -n 5 "):
+            with self.subTest(prefix=prefix):
+                result = hook.check(self._input(self._commit(prefix, identity=False)))
+                self.assertIsNotNone(
+                    result, f"identity-less commit behind {prefix!r} must be BLOCKED"
+                )
+
+    def test_bare_identityless_commit_is_still_blocked(self) -> None:
+        self.assertIsNotNone(hook.check(self._input(self._commit("", identity=False))))
+
+
 if __name__ == "__main__":
     unittest.main()

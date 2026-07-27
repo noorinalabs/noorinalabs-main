@@ -6,13 +6,39 @@ find_git_subcommand, find_gh_subcommand, extract_dash_c_pairs,
 resolve_tool_cwd, is_shutdown_request_message) and the negative-match
 fixtures from the sibling-bug cluster (#226 #227 #223 #216 #188 #189 #144).
 
+Shell-truth tests, and their one known limit (main#1141 review)
+==============================================================
+
+`CdRoutingAgainstShellTruth` does not compare the resolver to an expected
+literal — it runs each shape in a REAL shell and takes the resulting cwd as
+ground truth. Everything else in this module asserts against expected output,
+which is fine for pure token functions but cannot catch a resolver whose model
+of the shell is simply wrong (it can only catch one that disagrees with
+someone's belief about it). Two families of main#1151 survived this suite for
+exactly that reason, and the method caught a round-3 test of mine that pinned a
+misroute as correct.
+
+**Limit — the oracle is `bash`, the harness shell is `zsh`.** Constructs are
+driven through `bash -c` for determinism and because CI runs bash. For every
+shape asserted here the two shells agree, and the load-bearing fact (an
+exec-wrapper cannot carry the `cd` BUILTIN, so `env FOO=1 cd /x` leaves the
+shell where it was) was checked in BOTH before the resolver was written to
+depend on it. One construct is known to differ and is therefore deliberately
+NOT relied on anywhere: `command cd /x` moves the shell in bash but not in
+zsh. If a future shape's behaviour is shell-dependent, verify it in both and
+either assert the common subset or leave it out — do not let a bash-only truth
+become a resolver invariant.
+
 Run: ENVIRONMENT=test python3 -m pytest .claude/hooks/tests/test_shell_parse.py -v
 """
 
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -740,6 +766,419 @@ class MemoizedParseMutationSafetyTests(unittest.TestCase):
         # A fresh call must be pristine — neither the outer list nor any inner
         # segment leaked a mutable alias into the cache.
         self.assertEqual(sp.iter_command_segments_ast(cmd), expected)
+
+
+class StripCommandPrefixes(unittest.TestCase):
+    """main#1141 — leading wrappers / compound keywords must not hide a command.
+
+    `find_git_subcommand` / `find_gh_subcommand` keyed on token 0 being
+    literally `git` / `gh`, so `timeout 45 gh …` and the `do`-prefixed body of
+    a `for … ; do … ; done` loop resolved to None and every consuming hook —
+    the kickoff-comment poster AND the blocking gates on the same primitive —
+    silently did nothing.
+    """
+
+    def test_bare_command_unchanged(self) -> None:
+        self.assertEqual(
+            sp.strip_command_prefixes(["gh", "issue", "edit"]), ["gh", "issue", "edit"]
+        )
+
+    def test_empty_segment(self) -> None:
+        self.assertEqual(sp.strip_command_prefixes([]), [])
+
+    def test_timeout_duration_positional(self) -> None:
+        self.assertEqual(
+            sp.strip_command_prefixes(["timeout", "45", "gh", "pr", "list"]), ["gh", "pr", "list"]
+        )
+
+    def test_timeout_with_flags(self) -> None:
+        self.assertEqual(
+            sp.strip_command_prefixes(["timeout", "-k", "5", "--foreground", "2m", "gh", "pr"]),
+            ["gh", "pr"],
+        )
+
+    def test_timeout_equals_form_flag(self) -> None:
+        self.assertEqual(
+            sp.strip_command_prefixes(["timeout", "--kill-after=5", "45", "gh", "pr"]),
+            ["gh", "pr"],
+        )
+
+    def test_compound_leaders(self) -> None:
+        for leader in ("do", "then", "else", "if", "elif", "while", "until", "!", "{", "("):
+            with self.subTest(leader=leader):
+                self.assertEqual(sp.strip_command_prefixes([leader, "gh", "pr"]), ["gh", "pr"])
+
+    def test_nested_wrappers(self) -> None:
+        self.assertEqual(
+            sp.strip_command_prefixes(["do", "timeout", "45", "nohup", "gh", "pr"]),
+            ["gh", "pr"],
+        )
+
+    def test_env_assignments_and_flags(self) -> None:
+        self.assertEqual(
+            sp.strip_command_prefixes(["env", "-u", "PAGER", "GH_PAGER=cat", "gh", "pr"]),
+            ["gh", "pr"],
+        )
+
+    def test_sudo_user_flag(self) -> None:
+        self.assertEqual(
+            sp.strip_command_prefixes(["sudo", "-u", "ci", "git", "commit"]), ["git", "commit"]
+        )
+
+    def test_double_dash_ends_wrapper_options(self) -> None:
+        self.assertEqual(sp.strip_command_prefixes(["env", "--", "gh", "pr"]), ["gh", "pr"])
+
+    def test_non_wrapper_head_is_not_stripped(self) -> None:
+        """The allowlist is the whole safety property.
+
+        A loose "find `gh` anywhere in the segment" scan would re-introduce the
+        data-position false-positive class this module exists to prevent — the
+        #118/#134/#144/#188/#189/#216/#223/#226/#227 bug trail. `echo`, `printf`
+        and friends take DATA, not a command, so they are never stripped.
+        """
+        for head in ("echo", "printf", "cat", "grep", "python3"):
+            with self.subTest(head=head):
+                seg = [head, "gh", "issue", "edit", "5"]
+                self.assertEqual(sp.strip_command_prefixes(seg), seg)
+
+    def test_for_keyword_is_not_a_leader(self) -> None:
+        """`for` is followed by a VARIABLE NAME, not a command."""
+        seg = ["for", "n", "in", "1114", "1116"]
+        self.assertEqual(sp.strip_command_prefixes(seg), seg)
+
+    def test_does_not_mutate_input(self) -> None:
+        seg = ["timeout", "45", "gh", "pr"]
+        sp.strip_command_prefixes(seg)
+        self.assertEqual(seg, ["timeout", "45", "gh", "pr"])
+
+
+class FindSubcommandThroughPrefixes(unittest.TestCase):
+    """The wrapper tolerance must reach the two public finders (main#1141)."""
+
+    def test_gh_behind_timeout(self) -> None:
+        found = sp.find_gh_subcommand(["timeout", "45", "gh", "issue", "edit", "1114"])
+        self.assertEqual(found, ([], ["issue", "edit", "1114"]))
+
+    def test_gh_in_loop_body(self) -> None:
+        found = sp.find_gh_subcommand(["do", "gh", "issue", "edit", "1114"])
+        self.assertEqual(found, ([], ["issue", "edit", "1114"]))
+
+    def test_git_behind_timeout_reaches_the_identity_gate(self) -> None:
+        """`timeout 60 git commit` previously walked past commit-identity validation."""
+        found = sp.find_git_subcommand(["timeout", "60", "git", "-c", "user.name=A", "commit"])
+        self.assertEqual(found, (["-c", "user.name=A"], ["commit"]))
+
+    def test_gh_as_data_still_not_found(self) -> None:
+        self.assertIsNone(sp.find_gh_subcommand(["echo", "gh", "issue", "edit", "1114"]))
+
+
+class StripLockstepAcrossSegmentConsumers(unittest.TestCase):
+    """main#1141 review MUST-FIX — every command-position keyer must strip.
+
+    `find_git_subcommand` stripped and `extract_dash_c_pairs` did not, while
+    `validate_commit_identity` calls BOTH on the SAME segment: the commit was
+    recognized but its `-c` pairs came back empty, so a fully compliant
+    `timeout 60 git -c user.name=… -c user.email=… commit` was BLOCKED for a
+    missing flag the operator had passed. The suite was green with and
+    without the fix, which is why 21/21 CI and a 25-shape adversarial pass
+    both missed it — hence these tests.
+    """
+
+    IDENTITY = ["-c", "user.name=Nino Kavtaradze", "-c", "user.email=n@example.com"]
+    EXPECTED = [("user.name", "Nino Kavtaradze"), ("user.email", "n@example.com")]
+
+    def test_dash_c_pairs_bare(self) -> None:
+        seg = ["git", *self.IDENTITY, "commit", "-m", "msg"]
+        self.assertEqual(sp.extract_dash_c_pairs(seg), self.EXPECTED)
+
+    def test_dash_c_pairs_behind_wrappers(self) -> None:
+        """Whole `_COMMAND_PREFIX_WRAPPERS` table, not just `timeout`."""
+        for prefix in (
+            ["timeout", "60"],
+            ["timeout", "-k", "5", "60"],
+            ["env", "FOO=1"],
+            ["nice", "-n", "5"],
+            ["nohup"],
+            ["command"],
+            ["sudo", "-u", "ci"],
+            ["do"],
+            ["do", "timeout", "60"],
+        ):
+            with self.subTest(prefix=" ".join(prefix)):
+                seg = [*prefix, "git", *self.IDENTITY, "commit", "-m", "msg"]
+                self.assertEqual(sp.extract_dash_c_pairs(seg), self.EXPECTED)
+
+    def test_dash_c_pairs_and_find_git_subcommand_agree(self) -> None:
+        """The invariant itself: both helpers see the same command, or neither.
+
+        A future segment-consuming helper that forgets the strip fails here.
+        """
+        for prefix in ([], ["timeout", "60"], ["env", "FOO=1"], ["do"], ["nice", "-n", "5"]):
+            with self.subTest(prefix=" ".join(prefix) or "(bare)"):
+                seg = [*prefix, "git", *self.IDENTITY, "commit", "-m", "msg"]
+                found = sp.find_git_subcommand(seg)
+                self.assertIsNotNone(found)
+                assert found is not None
+                self.assertEqual(found[1][0], "commit")
+                # Recognized as a commit => its identity flags MUST be readable.
+                self.assertEqual(sp.extract_dash_c_pairs(seg), self.EXPECTED)
+
+    def test_wrapped_commit_without_identity_still_yields_nothing(self) -> None:
+        """The strip must not invent pairs — an identity-less commit stays empty."""
+        for prefix in (["timeout", "60"], ["env", "FOO=1"], ["do"]):
+            with self.subTest(prefix=" ".join(prefix)):
+                self.assertEqual(
+                    sp.extract_dash_c_pairs([*prefix, "git", "commit", "-m", "msg"]), []
+                )
+
+    def test_non_wrapper_head_yields_no_pairs(self) -> None:
+        """`echo git -c user.name=X commit` is data, not a commit."""
+        self.assertEqual(sp.extract_dash_c_pairs(["echo", "git", *self.IDENTITY, "commit"]), [])
+
+    def test_cd_target_behind_compound_leader_is_NOT_recovered(self) -> None:
+        """RETRACTED in review round 3 — this test asserted the wrong thing.
+
+        Round 2 argued that since `find_gh_subcommand` can see the `gh` inside
+        a loop, the `cd` beside it should be recovered too. That reasoning was
+        wrong: it treats a gate matcher and a routing resolver as the same
+        kind of consumer. Recovering a `cd` from ANY compound body also
+        recovers it from a never-taken `then` body, which misroutes — a live
+        bug, on the #981/#985 path, versus a speculative loop-cd shape with no
+        observed failure.
+
+        `extract_leading_cd_target` therefore strips NOTHING — `cd` must be
+        token 0 of its segment. Both prefix families are disqualified, for two
+        different reasons: a compound LEADER guards a body that may not run,
+        and a command-prefix WRAPPER cannot carry `cd` at all, because `cd` is
+        a shell builtin (`env FOO=1 cd /x` leaves the shell where it was, in
+        bash and zsh alike). The loop case staying unrecovered is the accepted
+        cost — separating a loop body that runs from a `then` body that does
+        not needs block-closure tracking, which is not worth it.
+
+        Kept as an explicit non-goal rather than deleted, so the round-2
+        argument is not re-derived by the next reader. See `GuardedCdMustNotRoute`.
+        """
+        self.assertIsNone(
+            sp.extract_leading_cd_target(
+                "for r in a ; do cd /tmp ; gh issue edit 1 --add-label x ; done"
+            )
+        )
+
+    def test_cd_target_bare_still_works(self) -> None:
+        self.assertEqual(sp.extract_leading_cd_target("cd /tmp && gh pr create"), "/tmp")
+
+    def test_cd_target_relative_still_ignored(self) -> None:
+        """Relative targets are ambiguous (they'd resolve against the wrong cwd)."""
+        self.assertIsNone(sp.extract_leading_cd_target("cd relative && gh pr create"))
+
+
+class CdRoutingAgainstShellTruth(unittest.TestCase):
+    """`extract_leading_cd_target` vs what a REAL SHELL actually does.
+
+    Method requirement from the main#1141 review, and it earned its keep
+    immediately. These tests do not compare the resolver against its own
+    expected output — each shape is run in a real `bash` with the `gh` node
+    replaced by `pwd`, and the printed directory is ground truth. Testing a
+    resolver against itself cannot find a resolver that is wrong, which is
+    how two families of this bug survived the previous suite.
+
+    It caught one of my own round-3 tests asserting a MISROUTE: I had pinned
+    `env FOO=1 cd /tmp && gh pr create` -> `/tmp`. The shell disagrees. `cd`
+    is a shell BUILTIN, so an exec-wrapper (`env`, `timeout`, `nice`,
+    `nohup`) runs a subprocess and the calling shell never moves — asserted
+    below. The resolver would have claimed a directory the command provably
+    never entered.
+
+    THE SAFETY PROPERTY, and why it is not plain equality:
+
+        resolved is None  OR  resolved == shell_truth
+
+    Under-recovery (None when the shell did move) is ACCEPTED — the caller
+    falls back to the invocation cwd, which is the pre-main#1141 behaviour.
+    Over-recovery, naming a directory the command never entered, is the bug:
+    three hooks on this chain WRITE, so a misroute is an unrecoverable write
+    into the wrong repository.
+    """
+
+    MARKER = "gh issue edit 5 --add-label wave-29"
+
+    _start: str
+    _dest: str
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._start = tempfile.mkdtemp(prefix="cdroute-start-")
+        cls._dest = tempfile.mkdtemp(prefix="cdroute-dest-")
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        for d in (cls._start, cls._dest):
+            shutil.rmtree(d, ignore_errors=True)
+
+    def _shell_truth(self, template: str) -> str | None:
+        """Directory the shell is actually in where the gh node sits.
+
+        None means the gh node never executes at all in that shape.
+        """
+        cmd = template.replace("DEST", self._dest).replace("MARKER", "pwd")
+        out = subprocess.run(
+            ["bash", "-c", cmd], cwd=self._start, capture_output=True, text=True, timeout=30
+        )
+        printed = out.stdout.strip().splitlines()
+        return printed[-1] if printed else None
+
+    def _resolved(self, template: str) -> str | None:
+        return sp.extract_leading_cd_target(
+            template.replace("DEST", self._dest).replace("MARKER", self.MARKER)
+        )
+
+    def _assert_never_misroutes(self, template: str) -> None:
+        truth = self._shell_truth(template)
+        resolved = self._resolved(template)
+        if resolved is None:
+            return  # under-recovery: caller falls back to the invocation cwd
+        self.assertEqual(
+            resolved,
+            truth,
+            f"resolver claims {resolved!r} but the shell runs the gh node in "
+            f"{truth!r} for: {template}",
+        )
+
+    # --- all seven leader shapes from the review, plus the brace group ---
+
+    LEADER_SHAPES = [
+        "if [ -f /nonexistent ] ; then cd DEST ; fi ; MARKER",
+        "if false ; then cd DEST ; fi ; MARKER",
+        "if false ; then true ; else cd DEST ; fi ; MARKER",
+        "for r in a ; do cd DEST ; done ; MARKER",
+        "for r in ; do cd DEST ; done ; MARKER",
+        "while false ; do cd DEST ; done ; MARKER",
+        "( cd DEST ) ; MARKER",
+        "true || { cd DEST ; } ; MARKER",
+        "false || { cd DEST ; } ; MARKER",
+    ]
+
+    def test_leader_shapes_never_misroute(self) -> None:
+        for template in self.LEADER_SHAPES:
+            with self.subTest(shape=template):
+                self._assert_never_misroutes(template)
+
+    def test_subshell_cd_does_not_escape(self) -> None:
+        """`( cd DEST )` DOES run the cd — it just dies with the subshell."""
+        template = "( cd DEST ) ; MARKER"
+        self.assertEqual(self._shell_truth(template), self._start)
+        self.assertIsNone(self._resolved(template))
+
+    # --- wrappers: `cd` is a BUILTIN, so these never move the shell ---
+
+    WRAPPER_SHAPES = [
+        "env FOO=1 cd DEST ; MARKER",
+        "timeout 5 cd DEST ; MARKER",
+        "nice -n 5 cd DEST ; MARKER",
+        "nohup cd DEST ; MARKER",
+    ]
+
+    def test_wrapped_cd_never_misroutes(self) -> None:
+        for template in self.WRAPPER_SHAPES:
+            with self.subTest(shape=template):
+                self._assert_never_misroutes(template)
+
+    def test_exec_wrapper_provably_cannot_carry_cd(self) -> None:
+        """The fact the resolver must respect, asserted against the shell itself."""
+        for template in self.WRAPPER_SHAPES:
+            with self.subTest(shape=template):
+                self.assertEqual(
+                    self._shell_truth(template),
+                    self._start,
+                    "an exec-wrapper cannot carry the `cd` builtin — if this ever "
+                    "changes, the resolver's no-strip rule needs revisiting",
+                )
+                self.assertIsNone(self._resolved(template))
+
+    def test_shell_dependent_shape_is_not_relied_on(self) -> None:
+        """`command cd /x` moves the shell in bash but NOT in zsh.
+
+        The harness shell is zsh and the oracle here is bash, so this shape has
+        no single truth. The resolver must therefore claim nothing for it —
+        which it does for free, since it strips no prefixes at all. Pinned so a
+        future widening cannot quietly adopt a bash-only behaviour as an
+        invariant (module docstring § Shell-truth tests).
+        """
+        self.assertIsNone(self._resolved("command cd DEST ; MARKER"))
+
+    # --- the shapes that MUST still resolve ---
+
+    UNGUARDED_SHAPES = [
+        "cd DEST && MARKER",
+        "cd DEST ; MARKER",
+        "cd /var && cd DEST && MARKER",
+    ]
+
+    def test_unguarded_cd_resolves_exactly(self) -> None:
+        for template in self.UNGUARDED_SHAPES:
+            with self.subTest(shape=template):
+                self.assertEqual(self._resolved(template), self._shell_truth(template))
+                self.assertEqual(self._resolved(template), self._dest)
+
+    def test_relative_target_ignored(self) -> None:
+        """Relative targets would resolve against the (wrong) stdin cwd."""
+        self.assertIsNone(sp.extract_leading_cd_target("cd relative && gh pr create"))
+
+    # --- gates keep their conservative reach; only routing opts out ---
+
+    def test_gates_still_see_guarded_bodies(self) -> None:
+        found = sp.find_gh_subcommand(["then", "gh", "pr", "review", "5"])
+        self.assertEqual(found, ([], ["pr", "review", "5"]))
+        self.assertEqual(
+            sp.extract_dash_c_pairs(["do", "git", "-c", "user.name=A", "commit"]),
+            [("user.name", "A")],
+        )
+        self.assertEqual(
+            sp.extract_dash_c_pairs(["timeout", "60", "git", "-c", "user.name=A", "commit"]),
+            [("user.name", "A")],
+        )
+
+    def test_compound_leaders_flag_is_honored(self) -> None:
+        seg = ["then", "cd", "/tmp"]
+        self.assertEqual(sp.strip_command_prefixes(seg), ["cd", "/tmp"])
+        self.assertEqual(sp.strip_command_prefixes(seg, compound_leaders=False), seg)
+
+    # --- known, tracked, NOT closed here ---
+
+    KNOWN_GAP_SHAPES = [
+        "true || cd DEST ; MARKER",  # family A: no leader token to withhold
+        "MARKER ; cd DEST",  # family B: cd AFTER the gh node
+    ]
+
+    def test_known_gap_main_1151_still_misroutes(self) -> None:
+        """Characterization of the residual class — NOT a blessing of it.
+
+        Both shapes misroute on `95f375a` and on every head since; they
+        predate main#1141 and are untouched by it. Neither is fixable at this
+        layer: family A has no leader to withhold, and family B needs to know
+        whether the `cd` precedes the `gh` NODE, which `iter_command_segments`
+        has already discarded. main#1151 tracks the bashlex-AST fix.
+
+        Family A is narrower than it looks, and the difference is easy to
+        mistake for a fix: the BRACED variant `true || { cd DEST ; … }` does
+        NOT misroute, because the `{` makes that segment three tokens and the
+        `cd` is no longer at token 0 (it is covered by
+        `test_leader_shapes_never_misroute`). Only the BARE `true || cd DEST`
+        form gets through. So repairing the braced shape proves nothing about
+        family A — do not read it as evidence that #1151 is closed.
+
+        This test exists so the gap is visible in the suite rather than only
+        in prose, and so closing #1151 forces someone to come back here.
+        """
+        for template in self.KNOWN_GAP_SHAPES:
+            with self.subTest(shape=template):
+                self.assertEqual(self._shell_truth(template), self._start)
+                self.assertEqual(
+                    self._resolved(template),
+                    self._dest,
+                    "if this now returns None, #1151 has been fixed — delete this "
+                    "test and fold the shape into test_leader_shapes_never_misroute",
+                )
 
 
 if __name__ == "__main__":
