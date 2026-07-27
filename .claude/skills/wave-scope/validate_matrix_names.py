@@ -7,10 +7,74 @@ and only surfaced at first-spawn time. P3W7 logged both substitutions in
 `wave_7_decisions.implementer_substitutions`. This script runs at scope
 time and surfaces unknown names BEFORE `/wave-kickoff` fan-out.
 
-Usage:
-    validate_matrix_names.py <scope-json-path>
+Two orthogonal checks (#319 + #1134)
+====================================
+1. **Name resolution (#319)** — does the declared name exist at all? Resolved
+   against the parent roster UNION the target repo's roster, because org-level
+   coordinators legitimately fill child-repo *review* slots.
+2. **Repo membership (#1134)** — for the `implementer` slot on a CHILD repo,
+   is the name on *that repo's own* roster? A name can resolve (check 1) and
+   still fail this, which is exactly the recurring bug: a parent-org persona
+   scoped as the implementer of a child-repo story.
 
-Where `<scope-json-path>` is a JSON file with the shape:
+Why check 2 is implementer-only. The implementer is the only role that must
+produce a **commit in the target repo**, where `validate_commit_identity`
+(Hook 5) resolves the author against that repo's roster. Reviewers never
+commit there, and the charter explicitly permits cross-team reviewers
+(`charter/agents/spawn-discipline.md` § Child-Repo Implementer Rule, step 5:
+"Reviewer assignment is a separate decision"). Applying membership to review
+slots would break that rule and produce noise.
+
+Live instance this closes (#1134): Nurul Hakim (parent roster, NOT on the
+user-service roster) was scoped as implementer of `user-service#204` in W27
+and again in W28. Check 1 passed — Nurul is a real persona — so scope shipped
+green, and at wrap time PR us#212's merge commit was mechanically re-attributed
+to Nadia Boukhari while the implementor label still said Nurul
+(`wave_28_decisions.implementer_substitutions`). Running check 2 retroactively
+over `wave_28_scope` finds a SECOND, never-recorded instance: Weronika
+Zielinska on `isnad-graph#1191`.
+
+This gate is the only enforcement point, not merely an earlier one
+==================================================================
+The issue framed the runtime identity gate as a correct backstop that "fires
+too late". Measured 2026-07-27, it does not fire at all for this class:
+`validate_commit_identity._load_merged_roster(<child>)` merges the PARENT
+`roster.json` — the 78-name org union manifest — over the child's, so from a
+child repo root every parent persona resolves; and neither
+`noorinalabs-user-service` nor `noorinalabs-isnad-graph` ships its own identity
+hook or a CI identity job. That is consistent with the observed W28 split:
+Weronika's isnad-graph commits went through unblocked. Closing that runtime gap
+is tracked separately; until it lands, scope time is where this rule lives,
+which is why the failure below is a hard exit-1 rather than a warning.
+
+Hard fail, with an explicit RECORDED override
+=============================================
+A cross-repo implementer assignment fails (exit 1) unless the scope row carries
+a `roster_union_override` object with a non-empty `rationale`. It is deliberately
+NOT a warning and deliberately NOT an unconditional block:
+
+- A bare warning is what already existed — the pre-#1134 validator printed
+  "all N names resolved" for the Nurul/user-service pairing. Three waves of
+  recurrence (W27 → W28 → W29) is the evidence that advisory output does not
+  hold this line.
+- An unconditional block with no escape hatch would be worked around, because
+  a genuinely-intended cross-repo assignment does occur (parent-flavored work
+  landing inside a child repo). A gate operators route around decays, and the
+  W28 mechanical-merge re-attribution is precisely that kind of workaround.
+
+The override therefore lives in the scope DATA (`cross-repo-status.json`), so it
+is a committed, reviewable diff rather than a verbal decision — which is what
+makes "no wave reaches wrap-time with a *silent* substitution" true.
+
+Usage
+=====
+    # Matrix mode (back-compatible, repo → role-slots)
+    validate_matrix_names.py <matrix-json-path>
+
+    # Scope mode (#1134) — reads wave_{M}_scope.tier_*[] rows directly
+    validate_matrix_names.py --scope <cross-repo-status.json> --wave 29
+
+Matrix-mode input shape:
 
     {
         "noorinalabs-isnad-graph": {
@@ -25,31 +89,63 @@ Where `<scope-json-path>` is a JSON file with the shape:
         }
     }
 
+Scope-mode reads the canonical wave-scope rows instead of a hand-transcribed
+matrix — the repo is derived from each row's `id` (`noorinalabs-user-service#204`
+→ `noorinalabs-user-service`), so the check cannot be defeated by forgetting to
+copy a row into the matrix.
+
 Exit codes:
-    0 — all names resolve to a canonical roster entry
-    1 — one or more names don't resolve; suggested matches printed to stderr
+    0 — all names resolve, and every child-repo implementer is a repo member
+        (or carries a recorded override)
+    1 — one or more names don't resolve, OR a child-repo implementer is not on
+        that repo's roster and has no recorded override
     2 — invalid input
 
 Resolution:
     - For each per-repo entry, read `<parent>/<repo>/.claude/team/roster/*.md`
-      and extract the `**Name:**` field.
+      and extract the member name (both card formats — see _load_roster_names).
     - For parent-repo entries (repo == "noorinalabs-main" or no repo), fall
       back to the parent's own `.claude/team/roster/`.
     - Case-insensitive exact match wins.
     - On miss: fuzzy-match (difflib SequenceMatcher) and print the top-3
       closest matches as suggestions.
 
-The script is read-only — it never modifies the matrix or rosters. The
-operator makes the substitution decision and re-runs.
+Unverifiable repos fail OPEN. If the target child repo is not cloned beside the
+parent (the CI case, and the normal case for a repo an operator has not pulled),
+its roster dir is absent and membership CANNOT be decided. Such a row is
+reported `membership: "unverified"` and does NOT fail the run — the same posture
+`roster_union_sync.fetch_child_roster` and `premise_check`'s WARN verdict take
+for cross-repo reads. `--fetch-missing` opts into resolving those repos over the
+network by reusing `roster_union_sync.fetch_child_roster`, rather than growing a
+second GitHub-fetch implementation here.
+
+Relationship to `.claude/lib/roster_union_sync.py`: that gate answers a
+DIFFERENT question — "does the committed parent union manifest cover every child
+persona?" (manifest coverage, network-backed, advisory/continue-on-error). This
+one answers "is this specific implementer a member of the repo they were scoped
+into?" Neither subsumes the other; do not merge them.
+
+The script is read-only — it never modifies the matrix, the scope file, or
+rosters. The operator makes the substitution decision and re-runs.
 """
 
 from __future__ import annotations
 
+import argparse
 import difflib
 import json
 import re
 import sys
 from pathlib import Path
+
+# Role slots that must be able to COMMIT in the target repo. Only these are
+# subject to the #1134 repo-membership check; every other slot is review-class
+# and keeps the parent-union resolution (#319 semantics).
+COMMIT_CAPABLE_ROLES: frozenset[str] = frozenset({"implementer"})
+
+# Repo keys that mean "the parent repo itself" — membership is vacuous there
+# (the parent roster IS the repo roster), so #1134 never fires on them.
+PARENT_REPO_KEYS: frozenset[str] = frozenset({"", "noorinalabs-main", "main"})
 
 
 def _find_org_dir() -> Path:
@@ -125,94 +221,386 @@ def _suggest(name: str, candidates: set[str], top: int = 3) -> list[str]:
     return difflib.get_close_matches(name, sorted(candidates), n=top, cutoff=0.5)
 
 
+def _fetch_repo_roster_names(repo: str, owner: str = "noorinalabs") -> set[str] | None:
+    """Fetch a child repo's roster names over the network, or None if unavailable.
+
+    Delegates to `.claude/lib/roster_union_sync.fetch_child_roster` rather than
+    growing a second `gh api` implementation in this skill (#1134 review point —
+    the org is actively paying down hand-rolled narrower duplicates). Returns
+    None on any failure, which the caller treats as `unverified` (fail-open).
+    """
+    lib_dir = Path(__file__).resolve().parents[2] / "lib"
+    if str(lib_dir) not in sys.path:
+        sys.path.insert(0, str(lib_dir))
+    try:
+        from roster_union_sync import fetch_child_roster  # noqa: PLC0415
+    except ImportError:
+        return None
+    roster = fetch_child_roster(owner, repo)
+    return set(roster) if roster else None
+
+
+def _override_rationale(override: object) -> str | None:
+    """Extract a non-empty rationale from a `roster_union_override` value.
+
+    Accepted shapes — a dict carrying a rationale, or a bare non-empty string
+    used AS the rationale:
+
+        "roster_union_override": {"rationale": "…", "approved_by": "owner"}
+        "roster_union_override": "…"
+
+    A bare `true` / `1` is deliberately REJECTED (returns None). An override
+    with no stated reason is indistinguishable from the silent workaround this
+    gate exists to prevent — the recorded rationale is the whole point.
+    """
+    if isinstance(override, str):
+        return override.strip() or None
+    if isinstance(override, dict):
+        rationale = override.get("rationale")
+        if isinstance(rationale, str) and rationale.strip():
+            return rationale.strip()
+    return None
+
+
 def validate(
-    matrix: dict[str, dict[str, str]],
+    matrix: dict[str, dict[str, object]],
     org_dir: Path,
+    *,
+    fetch_missing: bool = False,
+    owner: str = "noorinalabs",
 ) -> dict[str, list[dict[str, object]]]:
     """Return a per-repo report of name → resolution status.
 
-    Result shape:
+    Result shape (the `membership` / `override_rationale` keys are #1134
+    additions; `role` / `declared` / `resolved` / `suggestions` are unchanged
+    from #319 so existing callers keep working):
+
         {
             "noorinalabs-isnad-graph": [
                 {"role": "implementer", "declared": "Anya Volkov",
-                 "resolved": False, "suggestions": ["Anya Kowalczyk"]},
+                 "resolved": False, "membership": "n/a",
+                 "suggestions": ["Anya Kowalczyk"]},
                 ...
             ],
             ...
         }
+
+    `membership` is one of:
+      - ``"member"``     — commit-capable slot; name is on the target repo roster
+      - ``"cross-repo"`` — commit-capable slot; name resolves only via the parent
+                           union. FAILS unless the row records an override.
+      - ``"overridden"`` — ``"cross-repo"`` plus a recorded override rationale
+      - ``"unverified"`` — target repo roster unreadable (not cloned / no dir);
+                           cannot decide, so does not fail
+      - ``"n/a"``        — review-class slot, parent-repo row, or unresolved name
+
+    A per-repo `roster_union_override` may be supplied as a slot key alongside
+    the role names; scope mode maps each row's own override onto its repo.
     """
     report: dict[str, list[dict[str, object]]] = {}
+    # Parent rosters are always loaded — org-level coordinators (Nadia,
+    # Wanjiku, Aino, Santiago) can appear in per-repo matrix slots when
+    # reviewing parent-flavored work.
+    parent_roster = _load_repo_roster(org_dir, "noorinalabs-main")
     for repo, slots in matrix.items():
-        # Parent rosters are always loaded — org-level coordinators
-        # (Nadia, Wanjiku, Aino, Santiago) can appear in per-repo matrix
-        # slots when reviewing parent-flavored work.
-        parent_roster = _load_repo_roster(org_dir, "noorinalabs-main")
         repo_roster = _load_repo_roster(org_dir, repo)
+        is_parent_repo = repo in PARENT_REPO_KEYS
+        # Membership is only decidable when we could actually read the target
+        # repo's roster. An empty set from a child repo means "not cloned /
+        # no roster dir", NOT "nobody is a member" — fail open (see docstring).
+        if not repo_roster and not is_parent_repo and fetch_missing:
+            fetched = _fetch_repo_roster_names(repo, owner)
+            if fetched:
+                repo_roster = fetched
+        membership_decidable = is_parent_repo or bool(repo_roster)
         combined = parent_roster | repo_roster
+        override = _override_rationale(slots.get("roster_union_override"))
         repo_findings: list[dict[str, object]] = []
-        for role, declared in slots.items():
-            if not declared:
+        for role, raw in slots.items():
+            if role == "roster_union_override":
                 continue
+            if not raw or not isinstance(raw, str):
+                continue
+            declared = raw
             declared_clean = re.sub(r"\s*\(.*?\)\s*$", "", declared).strip()
             resolved = any(declared_clean.lower() == known.lower() for known in combined)
             entry: dict[str, object] = {
                 "role": role,
                 "declared": declared,
                 "resolved": resolved,
+                "membership": "n/a",
             }
             if not resolved:
                 entry["suggestions"] = _suggest(declared_clean, combined)
+                repo_findings.append(entry)
+                continue
+            # #1134: commit-capable slots on a child repo must be repo members.
+            if role in COMMIT_CAPABLE_ROLES and not is_parent_repo:
+                if not membership_decidable:
+                    entry["membership"] = "unverified"
+                elif any(declared_clean.lower() == known.lower() for known in repo_roster):
+                    entry["membership"] = "member"
+                elif override:
+                    entry["membership"] = "overridden"
+                    entry["override_rationale"] = override
+                else:
+                    entry["membership"] = "cross-repo"
+                    entry["repo_roster"] = sorted(repo_roster)
             repo_findings.append(entry)
         report[repo] = repo_findings
     return report
 
 
+def repo_of_row(row: dict[str, object]) -> str:
+    """Derive the target repo from a wave-scope assignment row (#1134).
+
+    Rows carry `id` (`noorinalabs-user-service#204`) and usually a short `ref`
+    (`user-service#204`). `id` is authoritative; the short form is expanded with
+    the `noorinalabs-` prefix (and bare `main` → `noorinalabs-main`) so both
+    shapes resolve to the same roster. Returns "" when neither parses, which the
+    caller treats as a parent-repo row.
+    """
+    for key in ("id", "ref"):
+        raw = row.get(key)
+        if not isinstance(raw, str) or "#" not in raw:
+            continue
+        repo = raw.split("#", 1)[0].strip()
+        if not repo:
+            continue
+        if repo == "main":
+            return "noorinalabs-main"
+        return repo if repo.startswith("noorinalabs-") else f"noorinalabs-{repo}"
+    return ""
+
+
+def _iter_tier_rows(scope: dict[str, object]) -> list[dict[str, object]]:
+    """Yield every assignment-row dict across the scope object's `tier_*` arrays."""
+    rows: list[dict[str, object]] = []
+    for key, value in scope.items():
+        if not key.startswith("tier_") or not isinstance(value, list):
+            continue
+        rows.extend(row for row in value if isinstance(row, dict))
+    return rows
+
+
+def validate_scope(
+    scope: dict[str, object],
+    org_dir: Path,
+    *,
+    fetch_missing: bool = False,
+    owner: str = "noorinalabs",
+) -> dict[str, list[dict[str, object]]]:
+    """Validate a `wave_{M}_scope` object row-by-row (#1134).
+
+    Each row becomes its own report key (`"<repo> (<ref>)"`) so a repo with
+    several stories reports — and overrides — each story independently. Rows
+    with no parsable repo are treated as parent-repo rows, matching the
+    `/wave-scope` convention that a bare `main#N` lives in `noorinalabs-main`.
+    """
+    report: dict[str, list[dict[str, object]]] = {}
+    for row in _iter_tier_rows(scope):
+        repo = repo_of_row(row) or "noorinalabs-main"
+        slots: dict[str, object] = {}
+        for role in ("implementer", "reviewer", "reviewer_2", "merge_gate_reviewer"):
+            value = row.get(role)
+            if isinstance(value, str) and value:
+                slots[role] = value
+        if "roster_union_override" in row:
+            slots["roster_union_override"] = row["roster_union_override"]
+        if not slots:
+            continue
+        ref = row.get("ref") or row.get("id") or "?"
+        row_report = validate({repo: slots}, org_dir, fetch_missing=fetch_missing, owner=owner)
+        report[f"{repo} ({ref})"] = row_report[repo]
+    return report
+
+
 def _print_report_to_stderr(report: dict[str, list[dict[str, object]]]) -> int:
-    """Pretty-print the report to stderr; return exit code."""
+    """Pretty-print the report to stderr; return exit code.
+
+    Two independent failure classes (#319 name resolution, #1134 repo
+    membership). Either one alone returns 1.
+    """
     total = 0
     unresolved = 0
-    for repo, findings in report.items():
+    cross_repo = 0
+    overridden = 0
+    unverified = 0
+    for findings in report.values():
         for f in findings:
             total += 1
             if not f["resolved"]:
                 unresolved += 1
-    if unresolved == 0:
+            membership = f.get("membership")
+            if membership == "cross-repo":
+                cross_repo += 1
+            elif membership == "overridden":
+                overridden += 1
+            elif membership == "unverified":
+                unverified += 1
+
+    if unresolved:
         print(
-            f"validate_matrix_names: all {total} names resolved across {len(report)} repos.",
+            f"validate_matrix_names: {unresolved}/{total} names UNRESOLVED "
+            f"across {len(report)} entries.",
             file=sys.stderr,
         )
-        return 0
+        for repo, findings in report.items():
+            bad = [f for f in findings if not f["resolved"]]
+            if not bad:
+                continue
+            print(f"\n  {repo}:", file=sys.stderr)
+            for f in bad:
+                raw_suggestions = f.get("suggestions")
+                suggestions = raw_suggestions if isinstance(raw_suggestions, list) else []
+                sug_str = ", ".join(suggestions) if suggestions else "(no close matches)"
+                print(
+                    f"    - {f['role']}: {f['declared']!r}  →  suggestions: {sug_str}",
+                    file=sys.stderr,
+                )
+        print(
+            "\n  Resolve each unknown name before /wave-kickoff fan-out.\n"
+            "  Approved substitutions: record under wave_{M}_decisions.implementer_substitutions"
+            " in cross-repo-status.json with rationale.",
+            file=sys.stderr,
+        )
+
+    if cross_repo:
+        print(
+            f"\nvalidate_matrix_names: {cross_repo}/{total} CROSS-REPO IMPLEMENTER "
+            "assignment(s) with no recorded override (#1134).",
+            file=sys.stderr,
+        )
+        for repo, findings in report.items():
+            bad = [f for f in findings if f.get("membership") == "cross-repo"]
+            if not bad:
+                continue
+            print(f"\n  {repo}:", file=sys.stderr)
+            for f in bad:
+                raw_roster = f.get("repo_roster")
+                roster = raw_roster if isinstance(raw_roster, list) else []
+                roster_str = ", ".join(roster) if roster else "(empty)"
+                print(
+                    f"    - {f['role']}: {f['declared']!r} is NOT on this repo's roster.\n"
+                    f"      repo roster: {roster_str}",
+                    file=sys.stderr,
+                )
+        print(
+            "\n  The implementer is the only role that must COMMIT in the target repo,\n"
+            "  where validate_commit_identity (Hook 5) resolves the author against that\n"
+            "  repo's roster. Shipping this assignment means the commit is blocked at\n"
+            "  wrap time and gets mechanically re-attributed — the #1134 failure.\n"
+            "\n  Pick one:\n"
+            "    (a) reassign to a member of the target repo's roster (preferred), or\n"
+            "    (b) onboard the persona into <repo>/.claude/team/roster/ + roster.json, or\n"
+            "    (c) record an explicit override on the scope row and re-run:\n"
+            '          "roster_union_override": {"rationale": "<why this cross-repo\n'
+            '            assignment is intended and how the commit will be authored>"}\n'
+            "\n  A bare `true` is not accepted — the rationale is the audit trail.",
+            file=sys.stderr,
+        )
+
+    if unresolved or cross_repo:
+        return 1
+
+    detail = []
+    if overridden:
+        detail.append(f"{overridden} cross-repo implementer(s) with recorded override")
+    if unverified:
+        detail.append(f"{unverified} implementer(s) unverified (repo roster unreadable)")
+    suffix = f" [{'; '.join(detail)}]" if detail else ""
     print(
-        f"validate_matrix_names: {unresolved}/{total} names UNRESOLVED across {len(report)} repos.",
+        f"validate_matrix_names: all {total} names resolved across {len(report)} entries.{suffix}",
         file=sys.stderr,
     )
     for repo, findings in report.items():
-        bad = [f for f in findings if not f["resolved"]]
-        if not bad:
-            continue
-        print(f"\n  {repo}:", file=sys.stderr)
-        for f in bad:
-            raw_suggestions = f.get("suggestions")
-            suggestions = raw_suggestions if isinstance(raw_suggestions, list) else []
-            sug_str = ", ".join(suggestions) if suggestions else "(no close matches)"
-            print(
-                f"    - {f['role']}: {f['declared']!r}  →  suggestions: {sug_str}",
-                file=sys.stderr,
-            )
-    print(
-        "\n  Resolve each unknown name before /wave-kickoff fan-out.\n"
-        "  Approved substitutions: record under wave_{M}_decisions.implementer_substitutions"
-        " in cross-repo-status.json with rationale.",
-        file=sys.stderr,
+        for f in findings:
+            if f.get("membership") == "overridden":
+                print(
+                    f"  OVERRIDE {repo} {f['role']}={f['declared']!r}: "
+                    f"{f.get('override_rationale')}",
+                    file=sys.stderr,
+                )
+            elif f.get("membership") == "unverified":
+                print(
+                    f"  UNVERIFIED {repo} {f['role']}={f['declared']!r}: "
+                    "target repo roster unreadable (not cloned?) — membership not checked. "
+                    "Re-run with --fetch-missing to resolve over the network.",
+                    file=sys.stderr,
+                )
+    return 0
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Validate wave-scope implementer/reviewer names against per-repo rosters."
     )
-    return 1
+    parser.add_argument(
+        "matrix",
+        nargs="?",
+        help="path to a matrix JSON file ({repo: {role: name}}). Omit when using --scope.",
+    )
+    parser.add_argument(
+        "--scope",
+        metavar="STATUS_JSON",
+        help="path to cross-repo-status.json; validates wave_{M}_scope.tier_*[] rows (#1134)",
+    )
+    parser.add_argument(
+        "--wave",
+        type=int,
+        help="wave id {M} to read from --scope (required with --scope)",
+    )
+    parser.add_argument(
+        "--fetch-missing",
+        action="store_true",
+        help=(
+            "resolve a not-cloned child repo's roster over the network via "
+            "roster_union_sync.fetch_child_roster instead of reporting it unverified"
+        ),
+    )
+    parser.add_argument(
+        "--owner",
+        default="noorinalabs",
+        help="GitHub org/owner used by --fetch-missing (default: noorinalabs)",
+    )
+    return parser
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
-        print(__doc__, file=sys.stderr)
+    args = _build_parser().parse_args(argv[1:])
+    if bool(args.scope) == bool(args.matrix):
+        print("ERROR: pass exactly one of <matrix-json-path> or --scope", file=sys.stderr)
         return 2
-    path = Path(argv[1])
+    org_dir = _find_org_dir()
+
+    if args.scope:
+        if args.wave is None:
+            print("ERROR: --scope requires --wave {M}", file=sys.stderr)
+            return 2
+        path = Path(args.scope)
+        try:
+            status = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"ERROR reading {path}: {exc}", file=sys.stderr)
+            return 2
+        if not isinstance(status, dict):
+            print("ERROR: --scope file must contain a JSON object", file=sys.stderr)
+            return 2
+        key = f"wave_{args.wave}_scope"
+        scope = status.get(key)
+        if not isinstance(scope, dict):
+            print(f"ERROR: {path} has no object at key {key!r}", file=sys.stderr)
+            return 2
+        report = validate_scope(scope, org_dir, fetch_missing=args.fetch_missing, owner=args.owner)
+        if not report:
+            print(
+                f"validate_matrix_names: {key} has no tier_* assignment rows to check.",
+                file=sys.stderr,
+            )
+            return 0
+        return _print_report_to_stderr(report)
+
+    path = Path(args.matrix)
     try:
         matrix = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
@@ -221,8 +609,7 @@ def main(argv: list[str]) -> int:
     if not isinstance(matrix, dict):
         print("ERROR: top-level must be an object mapping repo → role-slots", file=sys.stderr)
         return 2
-    org_dir = _find_org_dir()
-    report = validate(matrix, org_dir)
+    report = validate(matrix, org_dir, fetch_missing=args.fetch_missing, owner=args.owner)
     return _print_report_to_stderr(report)
 
 

@@ -54,6 +54,25 @@ This check is a deterministic JSON read — no GitHub API calls, no side effects
 
 **Permissive fallback (intentional).** When neither `wave_{M-1}_retro_completed_at` nor `wave_{M-1}_completed_at` exists in `cross-repo-status.json` — e.g., the first wave of a phase, or a fresh project — the staleness comparison is silently skipped and only the absent-scope check fires. This keeps the precondition usable for Phase-N-Wave-1 cases without requiring a synthetic zero-timestamp. The trade-off: a `wave_{M}_scope_reconciled_at` written years ago with no surrounding context will pass. If that becomes a real failure mode, tighten to fail-closed and require an explicit `WAVE_KICKOFF_ALLOW_NO_PRIOR_RETRO=1` override.
 
+### 0b. Verify child-repo implementers are repo-roster members (Mandatory precondition — main#1134)
+
+A child-repo story whose `implementer` is not on that child repo's roster cannot be implemented as scoped: the assignee cannot author the commit under their own identity, and the wrap-time repair is a mechanical merge-commit re-attribution that severs the "who implemented" audit trail. `/wave-scope` § 12.5 is where this is normally caught; this step is the **backstop** for a wave scoped before the rule existed, or scoped off-path.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+python3 "$REPO_ROOT/.claude/skills/wave-scope/validate_matrix_names.py" \
+    --scope "$REPO_ROOT/cross-repo-status.json" --wave {M}
+RC=$?
+if [ "$RC" -ne 0 ]; then
+  echo "ERROR: wave_{M}_scope has unresolved names or cross-repo implementer(s)."
+  echo "  Fix the scope rows (reassign, onboard, or record a roster_union_override"
+  echo "  with a rationale) and re-run. See /wave-scope SKILL.md § 12.5."
+  exit 1
+fi
+```
+
+Deterministic and hermetic by default — reads only local rosters and `cross-repo-status.json`, no GitHub API calls. A child repo not cloned locally is reported `unverified` and does not block; add `--fetch-missing` to resolve those over the network. Charter rule: `charter/skills.md` § Wave Scoping — Child-Repo Implementer Must Be a Repo-Roster Member.
+
 ### 0. Derive wave repos in scope (Mandatory first step)
 
 The canonical source for the wave's repo list is `cross-repo-status.json` key `wave_{M}_repos_in_scope` (array of `noorinalabs-*` strings). All subsequent steps iterate this list.
