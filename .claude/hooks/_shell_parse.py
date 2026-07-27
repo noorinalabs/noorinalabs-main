@@ -193,8 +193,10 @@ Public API
         unconditional, (2) executed by the current shell, and (3) positioned
         before the work. Reads the bashlex AST (not the flattened segment
         list, which has already discarded the control flow that decides
-        whether a `cd` runs) and falls back to a fail-closed token scan when
-        bashlex is unavailable. main#1151.
+        whether a `cd` runs), with a fail-closed token scan as a CO-PRIMARY
+        for the commands bashlex cannot parse — notably any quoted-delimiter
+        heredoc (`<<'EOF'`), which raises rather than yielding an AST.
+        main#1151.
 
     resolve_invocation_cwd(input_data) -> str
         Like resolve_tool_cwd, but FIRST tries to recover the directory the
@@ -1073,9 +1075,30 @@ def resolve_tool_cwd(input_data: dict) -> str:
 # Segment-level analysis provably cannot answer any of these: by the time
 # `iter_command_segments` has split on `;`/`&&`/`||`/`|` the control flow that
 # decides whether a `cd` runs is already gone, and a guarded `cd` lands at token
-# 0 of its own segment with no leader left to withhold. So the check moves up to
-# the bashlex AST, where all three are directly readable, and falls back to a
-# fail-closed token scan when bashlex is absent.
+# 0 of its own segment with no leader left to withhold.
+#
+# TWO CO-PRIMARY MECHANISMS, not a primary and a safety net:
+#
+#   1. `_ast_leading_cd_target`  — the bashlex AST, where all three properties
+#                                  are directly readable.
+#   2. `_degraded_leading_cd_target` — a token scan that FAILS CLOSED on any
+#                                  control flow, used whenever (1) cannot see
+#                                  the command.
+#
+# (2) is NOT a rare degraded path. main#1152 established, against the installed
+# bashlex, that a QUOTED-delimiter heredoc does not parse AT ALL:
+#
+#     bashlex.parse("cat <<'EOF'\nx\nEOF\n")  -> ParsingError
+#
+# `<<'EOF'` / `<<"EOF"` raise; only bare `<<EOF` / `<<-EOF` parse. The quoted
+# form is the DOMINANT one in this repo (`python3 - <<'PY'`, `gh issue comment
+# --body-file - <<'EOF'`), so the commands most likely to carry a `cd` are
+# exactly the ones the AST cannot see. And the failure is SILENT: bashlex_available()
+# stays True (it reports import success, not per-command success) and
+# `iter_command_segments_ast` returns the same None it uses for "bashlex
+# absent". An AST-ONLY fix here would therefore have reported success and
+# changed nothing on precisely those commands — which is why (2) must close, on
+# its own, every family (1) closes. Pinned by `CdRoutingWhenBashlexCannotParse`.
 #
 # The asymmetry is deliberate and is the same call main#1141 made: UNDER-
 # detecting a `cd` degrades to the recoverable #650 invocation-cwd fallback;
@@ -1263,12 +1286,25 @@ def _ast_leading_cd_target_cached(command: str) -> tuple[bool, str | None]:
 
 
 def _degraded_leading_cd_target(command: str) -> str | None:
-    """Fail-closed token-scan fallback for when bashlex is unavailable.
+    """Fail-closed token scan — the issue's fix direction 2, as a CO-PRIMARY.
+
+    Runs whenever the AST cannot see the command: bashlex absent, or (far more
+    often) a command carrying a quoted-delimiter heredoc, which the installed
+    bashlex cannot parse at all. `python3 - <<'PY'` and `gh issue comment
+    --body-file - <<'EOF'` are the repo's dominant heredoc forms, so this path
+    is ordinary traffic, not an edge case, and it must close every family the
+    AST path closes rather than relaxing to the old last-`cd`-wins scan.
 
     Mirrors the AST phase model with the only tool left: reject outright any
     command whose shlex token stream shows control flow, a subshell, a pipeline
     or an opaque cwd change (`_DEGRADED_CONTROL_FLOW_TOKENS`), then accept only
     a leading run of `cd /abs` segments with no `cd` anywhere after it.
+
+    Heredoc BODIES are deliberately not stripped here (`strip_heredocs` is not
+    called): a body always follows its command, so its tokens can never occupy
+    the leading position, and any `cd` they contribute lands in the non-leading
+    phase and forces None. Unstripped bodies can therefore only cost recovery,
+    never buy a route — verified in `test_heredoc_body_cannot_inject_a_route`.
 
     Deliberately does NOT call `normalize_command_separators` — see the
     main#1151 ordering constraint recorded in `wave_29_scope`. Without it an
@@ -1328,8 +1364,13 @@ def extract_leading_cd_target(command: str) -> str | None:
     cannot answer them: `iter_command_segments` has already discarded the
     control flow, and a guarded `cd` sits at token 0 of its own segment with no
     leader left to withhold — which is why patching leader-by-leader kept
-    producing new families. When bashlex is unavailable the degraded scan fails
-    closed on any control-flow token instead.
+    producing new families.
+
+    The AST is NOT the sole mechanism. A quoted-delimiter heredoc (`<<'EOF'`,
+    the repo's dominant form) does not parse at all, so
+    `_degraded_leading_cd_target` — a token scan that fails closed on any
+    control flow — is a CO-PRIMARY that must close the same families on its
+    own. See the module-level § Unconditional-leading-`cd` routing resolution.
 
     Strips NOTHING — `cd` must be word 0 of a top-level simple command
     (main#1141 review round 3). Both prefix families are unsafe here:

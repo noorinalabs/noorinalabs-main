@@ -1337,5 +1337,159 @@ class CdRoutingAgainstShellTruth(unittest.TestCase):
                 self.assertEqual(self._resolved_degraded(template), self._dest)
 
 
+class CdRoutingWhenBashlexCannotParse(unittest.TestCase):
+    """The AST is NOT the sole mechanism — `<<'EOF'` does not parse at all.
+
+    main#1152 (Weronika Zielinska) established, against the INSTALLED bashlex,
+    that a QUOTED-delimiter heredoc raises `ParsingError`:
+
+        bashlex.parse("cat <<'EOF'\\nx\\nEOF\\n")
+        -> ParsingError: here-document ... delimited by end-of-file
+
+    `<<'EOF'` / `<<"EOF"` fail; only the bare `<<EOF` / `<<-EOF` forms parse.
+    That matters here more than anywhere else in the module, because the quoted
+    form is the DOMINANT one in this repo (`python3 - <<'PY'`, `gh issue
+    comment --body-file - <<'EOF'`) — so the commands most likely to carry a
+    `cd` are exactly the ones the AST cannot see. `bashlex_available()` stays
+    True (it only reports import success), and `iter_command_segments_ast`
+    returns the same `None` it uses for "bashlex absent", so a caller that
+    treats `None` as "fall back to the old shlex scan" degrades SILENTLY — an
+    AST-only fix would have reported success and changed nothing on precisely
+    these commands.
+
+    It does not, and this class is the evidence. The fallback is not the old
+    last-`cd`-wins scan; it is the issue's fix direction 2 (fail closed on
+    control flow), which makes the two mechanisms CO-PRIMARY rather than
+    primary-and-safety-net. Every shape below forces the ParsingError and is
+    checked against real bash and zsh.
+    """
+
+    GH = "gh issue comment 5 --body-file -"
+    SHELLS = tuple(s for s in ("bash", "zsh") if shutil.which(s))
+
+    _start: str
+    _dest: str
+    _nested: str
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._start = tempfile.mkdtemp(prefix="cdhd-start-")
+        cls._dest = tempfile.mkdtemp(prefix="cdhd-dest-")
+        cls._nested = os.path.join(cls._start, "child-repo")
+        os.makedirs(cls._nested, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        for d in (cls._start, cls._dest):
+            shutil.rmtree(d, ignore_errors=True)
+
+    def _expand(self, template: str) -> str:
+        return (
+            template.replace("DEST", self._dest)
+            .replace("START", self._start)
+            .replace("NESTED", "child-repo")
+            .replace("GH", self.GH)
+        )
+
+    def _assert_does_not_parse(self, template: str) -> None:
+        """Every shape here must really exercise the fallback, not the AST."""
+        parsed, _ = sp._ast_leading_cd_target(self._expand(template))
+        self.assertFalse(
+            parsed,
+            f"shape no longer forces the bashlex ParsingError, so it stops "
+            f"testing the fallback path: {template}",
+        )
+
+    def _resolved(self, template: str) -> str | None:
+        return sp.extract_leading_cd_target(self._expand(template))
+
+    def _shell_truth(self, template: str, shell: str) -> str | None:
+        """cwd where the gh node sits. `pwd` goes to stderr so the heredoc
+        body (which `cat` sends to stdout) cannot be mistaken for it."""
+        cmd = self._expand(template).replace(self.GH, "pwd >&2 ; cat")
+        out = subprocess.run(
+            [shell, "-c", cmd], cwd=self._start, capture_output=True, text=True, timeout=30
+        )
+        printed = out.stderr.strip().splitlines()
+        return printed[-1] if printed else None
+
+    def _assert_never_misroutes(self, template: str) -> None:
+        self._assert_does_not_parse(template)
+        resolved = self._resolved(template)
+        if resolved is None:
+            return
+        for shell in self.SHELLS:
+            self.assertEqual(resolved, self._shell_truth(template, shell), f"for: {template}")
+
+    def test_quoted_delimiter_heredoc_really_does_not_parse(self) -> None:
+        """The premise, asserted against the installed bashlex, not from docs."""
+        if not sp.bashlex_available():
+            self.skipTest("bashlex not installed")
+        for body in ("cat <<'EOF'\nx\nEOF\n", 'cat <<"EOF"\nx\nEOF\n'):
+            with self.subTest(form=body.splitlines()[0]):
+                with self.assertRaises(Exception):
+                    sp.bashlex.parse(body)
+        for body in ("cat <<EOF\nx\nEOF\n", "cat <<-EOF\nx\nEOF\n"):
+            with self.subTest(form=body.splitlines()[0]):
+                sp.bashlex.parse(body)  # bare forms DO parse
+
+    def test_bashlex_available_is_not_evidence_the_command_parsed(self) -> None:
+        """The trap: the flag reports IMPORT success, not per-command success."""
+        if not sp.bashlex_available():
+            self.skipTest("bashlex not installed")
+        cmd = "cat <<'EOF'\nx\nEOF\n"
+        self.assertTrue(sp.bashlex_available())
+        self.assertIsNone(sp.iter_command_segments_ast(cmd))
+        self.assertEqual(sp._ast_leading_cd_target(cmd), (False, None))
+
+    FAMILY_SHAPES = [
+        # A — short-circuit-guarded `cd`, alongside a quoted heredoc.
+        "true || cd DEST ; GH <<'EOF'\nhello\nEOF\n",
+        # B — `cd` positioned after the gh node.
+        "GH <<'EOF'\nhello\nEOF\ncd DEST\n",
+        # C — relative leg into a nested child repo.
+        "cd START && cd NESTED && GH <<'EOF'\nhi\nEOF\n",
+    ]
+
+    def test_families_stay_closed_on_the_fallback_path(self) -> None:
+        for template in self.FAMILY_SHAPES:
+            with self.subTest(shape=template):
+                self._assert_never_misroutes(template)
+                self.assertIsNone(
+                    self._resolved(template),
+                    "a family shape must not route just because bashlex could "
+                    "not parse the heredoc that came with it",
+                )
+
+    ADVERSARIAL_BODY_SHAPES = [
+        # Can an UNSTRIPPED heredoc BODY inject a `cd` the token scan mistakes
+        # for a leading, unconditional one? It cannot: a body always follows
+        # its command, so its tokens are never in the leading position.
+        "cat <<'EOF'\n; cd DEST\nEOF\nGH",
+        "cd /var && cat <<'EOF'\n; cd DEST\nEOF\nGH",
+        "GH <<'EOF'\ncd DEST\nEOF\n",
+        "GH <<'EOF'\ntrue || cd DEST\nEOF\n",
+        "cd DEST && GH <<'EOF'\n; cd /var\nEOF\n",
+    ]
+
+    def test_heredoc_body_cannot_inject_a_route(self) -> None:
+        for template in self.ADVERSARIAL_BODY_SHAPES:
+            with self.subTest(shape=template):
+                self._assert_never_misroutes(template)
+
+    def test_genuine_recovery_survives_the_fallback(self) -> None:
+        """Fail-closed must not mean "refuse every command with a heredoc".
+
+        `cd /worktree && gh issue comment … <<'EOF'` is an ordinary shape and
+        still resolves — the fallback keeps `;`/`&&` as leading-run separators.
+        """
+        template = "cd DEST && GH <<'EOF'\nhello\nEOF\n"
+        self._assert_does_not_parse(template)
+        resolved = self._resolved(template)
+        self.assertEqual(resolved, self._dest)
+        for shell in self.SHELLS:
+            self.assertEqual(resolved, self._shell_truth(template, shell))
+
+
 if __name__ == "__main__":
     unittest.main()
