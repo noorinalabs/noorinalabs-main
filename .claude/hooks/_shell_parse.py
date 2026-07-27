@@ -1113,7 +1113,8 @@ def resolve_tool_cwd(input_data: dict) -> str:
 # disqualifying, in either position.
 _UNCONDITIONAL_LEADING_OPS = frozenset({";", "&&"})
 
-# Degraded mode (no bashlex): any of these appearing as its OWN shlex token
+# Fail-closed scan (bashlex absent, OR the command did not parse — most often
+# a quoted-delimiter heredoc): any of these appearing as its OWN shlex token
 # means the command carries control flow, a subshell, a pipeline or an opaque
 # cwd change that the flat token stream cannot reason about -> return None and
 # let the caller fall back to the invocation cwd. `&&` and `;` are deliberately
