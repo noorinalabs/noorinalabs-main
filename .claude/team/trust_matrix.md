@@ -357,3 +357,62 @@ Distribution discipline: no proposed 5 lands on a non-top performer — the two 
 **Concentration note:** 18% top (Aino / Nino / Weronika tied at 3/17) — well below the 60% fragility line, distributed across 10 implementers. Theme-fit (last-wave-of-phase cleanup pulled the full tooling-debt backlog); no redistribution needed.
 
 **Orchestrator self-assessment:** clean Phase-9-closing wave. 0 CI-red across all 17 PRs; both genuine must-fixes (da#454 cutover scrub-swallow + #1079 fail-open shared-state primitive) caught at the Opus merge gate, fixed with regression tests, re-approved fresh. Both wave→main merges owner-approved and green; reachability ahead_by=0; staging green. Two process debts surfaced for follow-up: the change-tracker hook polluting the parent `ontology/checksums.json` with 131 gitignored child-repo paths, and 3 dirty semantic checksums surviving into retro (wrapup ontology step gap).
+
+## Phase 10 Wave 28 Trust Updates (2026-07-27) — Stop-the-bleeding (Track-0 High defects + fill wins) — Phase-10 opener
+
+Mechanical scoring (signals computed over the canonical direct-to-main PR set — the `trust_signals.py score 10 28` helper returns empty because `merged_prs` is hardcoded to the wave-branch base, filed as **#1131**; signals were extracted by feeding the canonical 12-PR set into the real `extract_signals` logic and persisted to `wave_28_trust_signals`): **12 PRs** across 5 repos (main 4, ingest-platform 3, data-acquisition 3, user-service 1, isnad-graph 1), top-concentration **17%** (Weronika Zielinska / Nino Kavtaradze tied at 2/12 — well below the 60% fragility line, spread across 11 people), **0 CI-red merges**, **0** `review_false_positives`, **3** changes-requested cycles (must-fix-received: Kavitha 2 on da#502, Weronika 1 on #1126 — both merge-gate catches, fixed + re-CI'd). Helper-proposed deltas: Nino **+1**, Oyunbileg **+1** (clamped at ceiling); all others delta 0.
+
+### Org-Level / Tooling Team (main + isnad-graph)
+
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Aino Virtanen | 5 | 5 | delta 0 (prs_merged=1 #1130 pin ruff==0.15.11 to match pre-commit — unblocked the whole main Ruff-format gate; the prerequisite the other 3 main PRs merged on top of, clean). Held at ceiling. |
+| Nino Kavtaradze | 4 | 5 | delta +1 (prs_merged=2 clean: #1127 extract auto-close-issues into a reusable `workflow_call`, #1128 memoize shared shell-parse primitives + commit prefilter; **must_fix_caught=1** as reviewer), 0 CI-red. Wave's top composite performer (3) — distribution discipline permits the 5. **Second consecutive +1 (3→4→5); flagged for owner veto.** |
+| Weronika Zielinska | 3 | 3 | delta 0 (prs_merged=2: #1126 hoist O(1) throttle check before transcript parse, isnad-graph#1203 aggregate hadith facets in Cypher + Redis TTL cache; **must_fix_received=1** on #1126, rework_cycles=1 — below the −1 threshold of 3). Held at 3. |
+
+### Child-Repo Team (isnad-ingest-platform)
+
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Kalinda Ranasinghe | (untracked) | 3 | First numeric row: prs_merged=1 (ip#149 clear pip-audit CVE drift — kafka-python/pyasn1/click bumps that unblocked all ingest-platform pushes ahead of #140/#141), clean. Seeded at neutral 3. |
+| Yusuke Inoue | (untracked) | 3 | First numeric row: prs_merged=1 (ip#150 commit Kafka offsets after checkpoint + earliest reset — the offset-after-checkpoint data-loss fix, BUG), clean. Seeded at neutral 3. Reassigned implementer (from Jean-Claude Habimana; ip commit-identity gate). |
+| Léopold Mbongo | (untracked) | 3 | First numeric row: prs_merged=1 (ip#151 quarantine unparseable messages to DLQ + producer↔consumer contract test; resolved a real conflict with #150 in `handle_one`), clean. Seeded at neutral 3. Reassigned implementer (from Jean-Claude Habimana; ip commit-identity gate). |
+
+### Child-Repo Team (data-acquisition)
+
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Nikolaos Papadopoulos | 5 | 5 | delta 0 (prs_merged=1 da#503 align raw.landed producer to consumer PipelineMessage shape — coupled with ip#151, clean). Held at ceiling. |
+| Alejandra Reyes-Fuentes | 5 | 5 | delta 0 (prs_merged=1 da#504 edge_load_conformance false-positive + GRADED_BY orphan gap — the Tier-3 cutover carry-forward, clean). Held at ceiling. |
+| Kavitha Sundaramurthy | 5 | 5 | delta 0 (prs_merged=1 da#502 memoize normalize_arabic with lru_cache; **must_fix_received=2** on #502, rework_cycles=1 — below the −1 threshold of 3, both caught at the gate and fixed). Held at ceiling. |
+| Oyunbileg Batbayar | 5 | 5 | delta +1 clamped at ceiling (prs_merged=0, **must_fix_caught=2** — the two real da#502 review catches, no false-positives). Held at 5. |
+
+### Child-Repo Team (user-service)
+
+| Rated | Old | New | Reason |
+|---|---|---|---|
+| Nadia Boukhari | (untracked) | 3 | First numeric row: prs_merged=1 attributed (us#212 reject SSO-cookie tokens replayed as Bearer). **Attribution caveat:** Nadia authored only the *mechanical merge commit* — the implementer of record is **Nurul Hakim** (implementor label `NURUL_HAKIM`), who is NOT on the user-service roster; the local commit-identity gate blocked him, so the merge commit was attributed to Nadia (a valid us-roster member). Seeded at neutral 3. Roster-union fix carried forward (see feedback log). |
+
+Distribution discipline (`trust_signals.apply_distribution_discipline`): Nino's proposed 5 is the wave's unique top composite (2 PRs + 1 review-catch = 3) and stands; Oyunbileg's +1 is absorbed at the ceiling. No non-top 5 landed; no cap applied.
+
+### Done Well / Needs Improvement (Phase 10 Wave 28) — evidence-anchored, bare "None" banned
+
+| Member | Done Well (with evidence) | Gap (metric, or explicit "clean: numbers") |
+|---|---|---|
+| Aino Virtanen | #1130 pinned ruff to match pre-commit — the prerequisite fix that unblocked the entire main Ruff-format gate for the wave | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0, must_fix_caught=0 |
+| Nino Kavtaradze | 2 clean PRs (#1127 reusable auto-close workflow, #1128 shell-parse memoization) AND caught a must-fix as reviewer — top composite performer of the wave | clean: prs_merged=2, must_fix_received=0, ci_red_merges=0, false_positives=0, must_fix_caught=1 |
+| Weronika Zielinska | 2 PRs incl. isnad-graph#1203 (Cypher facet aggregation + Redis cache) + #1126 throttle hoist | 1 must-fix received on #1126 — caught at the merge gate, fixed |
+| Kalinda Ranasinghe | ip#149 cleared the pip-audit CVE drift that was blocking every ingest-platform push — the load-bearing prerequisite for #140/#141 | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0, must_fix_caught=0 |
+| Yusuke Inoue | ip#150 fixed the Kafka offset-after-checkpoint data-loss class (commit after checkpoint + earliest reset) | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0, must_fix_caught=0 |
+| Léopold Mbongo | ip#151 DLQ quarantine + producer↔consumer contract test; resolved a real `handle_one` conflict with #150 keeping both control flows correct | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0, must_fix_caught=0 |
+| Nikolaos Papadopoulos | da#503 aligned the raw.landed producer to the consumer PipelineMessage shape (coupled fix with ip#151) | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0, must_fix_caught=0 |
+| Alejandra Reyes-Fuentes | da#504 closed the edge_load_conformance false-positive + GRADED_BY orphan gap (Tier-3 carry-forward) | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0, must_fix_caught=0 |
+| Kavitha Sundaramurthy | da#502 memoized normalize_arabic with lru_cache | 2 must-fix received on #502 (rework_cycles=1) — both caught at the gate and fixed; below the −1 threshold |
+| Oyunbileg Batbayar | caught both da#502 must-fixes as reviewer (must_fix_caught=2, no false-positives) — the wave's strongest review signal | clean: prs_merged=0, must_fix_received=0, ci_red_merges=0, false_positives=0, must_fix_caught=2 |
+| Nadia Boukhari | authored the us#212 merge commit that landed the SSO-Bearer-replay rejection fix | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0 (mechanical merge commit; implementation credit → Nurul Hakim) |
+
+**Fire/hire:** none. Retirement trigger (`trust_signals.retirement_trigger`) fired for no engineer — all ≥3, 0 CI-red across the wave.
+
+**Concentration note:** 17% top (Weronika / Nino tied at 2/12) — well below the 60% fragility line, spread across 11 people. Healthy distribution for a cross-repo stop-the-bleeding wave; no redistribution needed.
+
+**Orchestrator self-assessment:** clean Phase-10-opening wave — the direct-to-main "stop-the-bleeding" batch was merged the prior session; this was the closeout + retro. 0 CI-red across all 12 PRs; both genuine must-fix threads (da#502 ×2, #1126 ×1) caught at the Opus merge gate and fixed. All post-merge deployable workflows green; staging promotion green. Notable process finding this wave: the wave-counter and trust-signal helpers do not support direct-to-main waves (both returned empty), forcing manual computation — filed as #1131. Roster-drift (Nurul Hakim scoped onto a user-service story he cannot commit to) carried forward from wave-27→28, still unresolved.
