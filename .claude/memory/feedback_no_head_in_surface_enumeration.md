@@ -23,7 +23,7 @@ When enumerating a code-surface for a pre-spawn brief (e.g., "how many `actions/
    ```bash
    grep -nE "<pattern>" <files>  # full output, scan for missed sites
    ```
-3. **Cross-reference if a consolidated audit exists:** for org-wide surfaces, the dedicated audit (Wanjiku-style #309 (b) per-repo table) is authoritative; the manager brief is advisory. Cite the audit URL in the brief explicitly so reviewers compare against it (memory `feedback_review_against_artifact_not_framing.md`).
+3. **Cross-reference if a consolidated audit exists:** for org-wide surfaces, the dedicated audit (Wanjiku-style #309 (b) per-repo table) is authoritative; the manager brief is advisory. Cite the audit URL in the brief explicitly so reviewers compare against it (memory `feedback_review_against_artifact.md`).
 4. **Implementer-side override is the saving discipline:** Hook 15 + the implementer's own scan are designed precisely so a flawed manager brief does NOT cap the work-scope. Reinforce this in spawn briefs ("verify the surface yourself in the worktree, my count is advisory").
 
 Companion to `feedback_spawn_brief_protocol.md` (verify *where*, this verifies *how*) and `feedback_spawn_brief_protocol.md` (per-caveat sweep). Together: pre-spawn discipline = origin head_sha + full enumeration + per-caveat applicability rule.
