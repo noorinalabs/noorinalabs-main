@@ -61,18 +61,18 @@ This is filed as tech-debt (gap surfaced 2026-04-26 Phase B). Cleanest structura
 
 **Corrected 2026-07-27 (main#1139).** This section previously said the TF cloud-init template injects only **one** pubkey (`var.ssh_public_key_path`) and that the CI deploy key must be **manually appended after every provision** before any deploy workflow fires. **That is no longer true, and following it wastes a manual step on every rebuild.**
 
-Per [ADR 0006 — per-env per-role SSH keys](noorinalabs-deploy/docs/adr/0006-per-env-per-role-ssh-keys.md) (deploy#164, supersedes ADR 0003), cloud-init now injects **two distinct keys, per-env and per-role**:
+Per ADR 0006 — per-env per-role SSH keys (`noorinalabs-deploy` → `docs/adr/0006-per-env-per-role-ssh-keys.md`; deploy#164, supersedes ADR 0003), cloud-init now injects **two distinct keys, per-env and per-role**:
 
 | Module variable | Lands at | Key |
 |---|---|---|
-| `deploy_n_path` (default `./deploy.pub`) | `/home/deploy/.ssh/authorized_keys` | the CI DEPLOY key — private half is the env-scope `DEPLOY_SSH_PRIVATE_KEY` secret |
-| `root_n_path` (default `./root.pub`) | `/root/.ssh/authorized_keys` | a SEPARATE ROOT key — owner-workstation-only, **never** in a GH secret |
+| `deploy_ssh_public_key_path` (default `./deploy.pub`) | `/home/deploy/.ssh/authorized_keys` | the CI DEPLOY key — private half is the env-scope `DEPLOY_SSH_PRIVATE_KEY` secret |
+| `root_ssh_public_key_path` (default `./root.pub`) | `/root/.ssh/authorized_keys` | a SEPARATE ROOT key — owner-workstation-only, **never** in a GH secret |
 
-Verified in `noorinalabs-deploy/terraform/hetzner/modules/hetzner-vps/`: `main.tf` renders both via `sensitive(chomp(file(var.deploy_n_path)))` / `…(var.root_n_path)` (the `chomp()` permadrift fix, deploy#174), `cloud-init.yaml.tpl` writes each to its own path, and `variables.tf`/`README.md` document both. The `hcloud_ssh_key` resource is **gone** (removed in deploy#222) — cloud-init is the only injection path.
+Verified in `noorinalabs-deploy/terraform/hetzner/modules/hetzner-vps/`: both variables are declared at `variables.tf:33` and `variables.tf:39`, and `main.tf:8-9` renders them via `sensitive(chomp(file(var.deploy_ssh_public_key_path)))` / `sensitive(chomp(file(var.root_ssh_public_key_path)))` (the `chomp()` permadrift fix, deploy#174). `cloud-init.yaml.tpl` writes each to its own path, and `README.md` documents both. The `hcloud_ssh_key` resource is **gone** (removed in deploy#222) — cloud-init is the only injection path.
 
 Two consequences for anyone reading this note operationally:
 - **`var.ssh_public_key_path` does not exist any more.** A runbook or plan still referencing it is stale.
-- The checked-in `root.pub` is a **placeholder** whose private half does not exist. Operators must override `root_n_path` per-env with their real root pubkey, or root login on a fresh box will fail. The checked-in pubkeys exist only so module-only `terraform validate` and CI cold-rebuild provisioning work without an operator-local path.
+- The checked-in `root.pub` is a **placeholder** whose private half does not exist. Operators must override `root_ssh_public_key_path` per-env with their real root pubkey, or root login on a fresh box will fail. The checked-in pubkeys exist only so module-only `terraform validate` and CI cold-rebuild provisioning work without an operator-local path.
 
 ## Post-rebuild known_hosts hygiene
 
@@ -102,7 +102,7 @@ Tells you which user you actually landed as, which groups you're in (docker? sud
 3. **`sudo -u deploy` fails when already deploy** — paste from runbooks assuming root. The deploy user is not in sudoers for itself.
 4. **Key file permissions** — private keys need `chmod 600`, otherwise `Permissions ... are too open`.
 5. **`IdentitiesOnly yes`** — without it, ssh-agent presents every loaded key; after a few failures the VPS may rate-limit. With it (per current config), Match clauses can't add new identities to the candidate set in a way that actually gets offered.
-6. ~~**Cloud-init single-pubkey**~~ — RESOLVED by ADR 0006 (see above); no longer a pitfall. The live pitfall in its place: the checked-in `root.pub` is a placeholder, so `root_n_path` must be overridden per-env.
+6. ~~**Cloud-init single-pubkey**~~ — RESOLVED by ADR 0006 (see above); no longer a pitfall. The live pitfall in its place: the checked-in `root.pub` is a placeholder, so `root_ssh_public_key_path` must be overridden per-env.
 7. **Host fingerprint drift after VPS rebuild** — see post-rebuild hygiene above.
 
 ## Best-practice direction (owner's roadmap)

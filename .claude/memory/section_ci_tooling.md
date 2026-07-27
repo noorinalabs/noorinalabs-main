@@ -26,3 +26,4 @@
 - [Pipe masks command failure](feedback_push_pipe_masks_rejection.md) — ANY cmd | tail returns tail's 0. Redirect, don't pipe; pipefail over-reports.
 - [GIT_DIR leak corrupted live repo config](feedback_git_dir_leak_repo_config.md) — pre-#720 leak wrote core.bare=true + [user] t@t into parent .git/config; fix=Edit it. #720.
 - [Commit-author gate exclude merges](feedback_commit_author_gate_exclude_merges.md) — author/identity gate over a PR range MUST use git log --no-merges (merge commits = bare principal).
+- [`rg -rn` is --replace, not recursive](feedback_rg_dash_r_is_replace_not_recursive.md) — grep muscle memory: `-r` eats the `n` and rewrites EVERY match to "n", killing line numbers. Output stays plausible (`deploy_n_path` looks like a real var), exit 0 — so wrong identifiers get transcribed as source and stamped `last_verified`. Falsify names with a hits-expected grep. #1139/PR#1153.
