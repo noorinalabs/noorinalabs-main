@@ -598,5 +598,137 @@ class GitCheckIgnoreGeneralizationTests(_FakeRepoRootMixin, unittest.TestCase):
             hook.CHECKSUMS_FILE = orig_checksums_file
 
 
+class LinkedWorktreeTests(_FakeRepoRootMixin, unittest.TestCase):
+    """Structural worktree detection — the ``da-wt-490/*`` orphan regression.
+
+    ``_is_worktree_path`` matches on directory NAME, so a worktree parked
+    outside ``.worktrees/`` slips through: wave-28 left four entries keyed to
+    ``da-wt-490/…`` (a worktree at the repo root) that could never resolve
+    once the tree was removed. ``_is_linked_worktree`` reads git's own
+    ``.git`` pointer file instead. These tests drive real ``git worktree add``
+    plumbing rather than fabricating the pointer, so the guard is load-bearing
+    against actual git layout.
+    """
+
+    def _git(self, *args: str, cwd: Path) -> None:
+        subprocess.run(
+            ["git", *args],
+            cwd=str(cwd),
+            check=True,
+            capture_output=True,
+            env=hook._hermetic_git_env(),
+        )
+
+    def setUp(self):
+        super().setUp()
+        # `env=hook._hermetic_git_env()` is load-bearing here for the same
+        # reason as GitCheckIgnoreGeneralizationTests (main#719).
+        subprocess.run(
+            ["git", "init", "-q", str(self._fake_root)],
+            check=True,
+            capture_output=True,
+            env=hook._hermetic_git_env(),
+        )
+        seed = self._fake_root / "seed.txt"
+        seed.write_text("seed\n", encoding="utf-8")
+        self._git("add", "seed.txt", cwd=self._fake_root)
+        self._git(
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-qm",
+            "seed",
+            cwd=self._fake_root,
+        )
+
+    def test_file_in_worktree_outside_dot_worktrees_is_skipped(self):
+        """The exact ``da-wt-490/`` shape: a worktree at the repo root."""
+        wt = self._fake_root / "da-wt-490"
+        self._git("worktree", "add", "-q", "-b", "wt-branch", str(wt), cwd=self._fake_root)
+
+        f = wt / "src" / "cli.py"
+        f.parent.mkdir(parents=True)
+        f.write_text("x = 1\n", encoding="utf-8")
+
+        # The name-based filter does NOT catch it — that is the whole defect.
+        self.assertFalse(hook._is_worktree_path(str(f)))
+        self.assertTrue(hook._is_linked_worktree(f.resolve()))
+        self.assertTrue(hook._should_skip(str(f)))
+
+    def test_file_in_main_checkout_is_not_a_linked_worktree(self):
+        """A real checkout's ``.git`` is a directory — must stay tracked."""
+        f = self._fake_root / "ontology" / "domain.yaml"
+        f.parent.mkdir(parents=True)
+        f.write_text("entities: []\n", encoding="utf-8")
+
+        self.assertFalse(hook._is_linked_worktree(f.resolve()))
+        self.assertFalse(hook._should_skip(str(f)))
+
+    def test_submodule_pointer_is_not_treated_as_a_worktree(self):
+        """A submodule's ``.git`` is also a pointer file, but to ``.git/modules/``.
+
+        Submodules hold real committed source; skipping them would silently
+        blind the tracker to a whole repo. Only a ``…/worktrees/<name>``
+        gitdir counts.
+        """
+        sub = self._fake_root / "vendor" / "libfoo"
+        sub.mkdir(parents=True)
+        modules_dir = self._fake_root / ".git" / "modules" / "libfoo"
+        modules_dir.mkdir(parents=True)
+        (sub / ".git").write_text(f"gitdir: {modules_dir}\n", encoding="utf-8")
+
+        f = sub / "src.py"
+        f.write_text("x = 1\n", encoding="utf-8")
+
+        self.assertFalse(hook._is_linked_worktree(f.resolve()))
+
+    def test_unreadable_git_pointer_fails_open(self):
+        """An unrecognized ``.git`` file content must track, not skip."""
+        odd = self._fake_root / "odd"
+        odd.mkdir()
+        (odd / ".git").write_text("this is not a gitdir pointer\n", encoding="utf-8")
+
+        f = odd / "file.md"
+        f.write_text("x\n", encoding="utf-8")
+
+        self.assertFalse(hook._is_linked_worktree(f.resolve()))
+
+    def test_no_git_ancestor_fails_open(self):
+        base = Path.home() / ".cache" / "noorinalabs-test-ontology-tracker"
+        base.mkdir(parents=True, exist_ok=True)
+        lonely = Path(tempfile.mkdtemp(prefix="no_git_wt_", dir=str(base)))
+        try:
+            f = lonely / "file.md"
+            f.write_text("x\n", encoding="utf-8")
+            self.assertFalse(hook._is_linked_worktree(f.resolve()))
+        finally:
+            shutil.rmtree(lonely, ignore_errors=True)
+
+    def test_check_does_not_write_an_entry_for_a_worktree_file(self):
+        """End-to-end: the hook records nothing for a worktree-resident edit."""
+        wt = self._fake_root / "da-wt-490"
+        self._git("worktree", "add", "-q", "-b", "wt-branch2", str(wt), cwd=self._fake_root)
+
+        f = wt / "src" / "graph" / "load_edges.py"
+        f.parent.mkdir(parents=True)
+        f.write_text("x = 1\n", encoding="utf-8")
+
+        checksums = self._fake_root / "ontology" / "checksums.json"
+        checksums.parent.mkdir(parents=True, exist_ok=True)
+        checksums.write_text('{"version": 1, "files": {}}\n', encoding="utf-8")
+        orig = hook.CHECKSUMS_FILE
+        hook.CHECKSUMS_FILE = checksums
+        try:
+            before = checksums.read_bytes()
+            self.assertIsNone(
+                hook.check({"tool_name": "Write", "tool_input": {"file_path": str(f)}})
+            )
+            self.assertEqual(checksums.read_bytes(), before)
+        finally:
+            hook.CHECKSUMS_FILE = orig
+
+
 if __name__ == "__main__":
     unittest.main()

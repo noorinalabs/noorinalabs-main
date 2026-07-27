@@ -1,24 +1,6 @@
 {
   "description": "Tracks file checksums for ontology change detection. last_tracked = current file hash (updated by tracker hook). last_resolved = hash when ontology was last rebuilt from this file (updated by resolver). When last_tracked != last_resolved, the file is dirty. SCOPE (#857, #820/C×T2): tracking + /ontology-rebuild cover the hand-curated SEMANTIC OVERLAY only (ontology/domain.yaml, ontology/services.yaml, ontology/conventions.md, ontology/repos/*.yaml, other hand-edited *.md). The GENERATED structural layer at ontology/structural/ (owned generator #855) is NOT tracked here — it is always-current-by-regeneration, so the tracker skips it (see ontology_tracker.py SKIP_PATTERNS).",
   "files": {
-    ".claude/drafts/secrets-migration-tonight-2026-04-23.md": {
-      "last_resolved": "acc0d25da0c7fcf3792ade1703f7c75f2215a29daafe0367db907f4e8d2e990f",
-      "last_tracked": "acc0d25da0c7fcf3792ade1703f7c75f2215a29daafe0367db907f4e8d2e990f",
-      "resolved_at": "2026-04-24T21:26:53.116672+00:00",
-      "tracked_at": "2026-04-24T03:01:27.801658+00:00"
-    },
-    ".claude/drafts/spawn_anya_0063.md": {
-      "last_resolved": "457bde4c8a188d2ef09f2143c9aa682f0e746e44b375612ea297a2e1e49e5d66",
-      "last_tracked": "457bde4c8a188d2ef09f2143c9aa682f0e746e44b375612ea297a2e1e49e5d66",
-      "resolved_at": "2026-04-23T23:34:47.340707+00:00",
-      "tracked_at": "2026-04-23T03:05:57.431714+00:00"
-    },
-    ".claude/drafts/spawn_linh_0815.md": {
-      "last_resolved": "8370ba2e8dbce3a9894c015a434550eb51d27368db5f50d31fba1b82f3391ebb",
-      "last_tracked": "8370ba2e8dbce3a9894c015a434550eb51d27368db5f50d31fba1b82f3391ebb",
-      "resolved_at": "2026-04-23T23:34:47.340707+00:00",
-      "tracked_at": "2026-04-23T03:40:19.494327+00:00"
-    },
     ".claude/hooks/annunaki_log.py": {
       "last_tracked": "130ab4bad49bafa24296a7a90b611a500eea41335ba742704c4eba31779ed26b",
       "last_resolved": "130ab4bad49bafa24296a7a90b611a500eea41335ba742704c4eba31779ed26b",
@@ -464,10 +446,10 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "ontology/conventions.md": {
-      "last_tracked": "fd9e9d6fcc6e7ffb895a50d9fe0ecea4e90c9987dd609aa04574577ab39e7c6e",
-      "last_resolved": "fd9e9d6fcc6e7ffb895a50d9fe0ecea4e90c9987dd609aa04574577ab39e7c6e",
-      "tracked_at": "2026-07-20T00:23:09.582636+00:00",
-      "resolved_at": "2026-07-20T00:23:09.582636+00:00"
+      "last_tracked": "895d5d20a9c9d18f60f138d5ae2f8bd4a71a8b1d0fc96f618ac0d601f1478f3c",
+      "last_resolved": "895d5d20a9c9d18f60f138d5ae2f8bd4a71a8b1d0fc96f618ac0d601f1478f3c",
+      "tracked_at": "2026-07-27T04:28:48.880164+00:00",
+      "resolved_at": "2026-07-27T04:29:25.707892+00:00"
     },
     "ontology/domain.yaml": {
       "last_resolved": "6fedad509f80b9570d0385fb5759e861d8b6f7b219ecc425b8dd472173ca536c",
@@ -522,12 +504,6 @@
       "last_resolved": "b709d0aa206efbf75fbb332828881d2a3864983d574c45e3c75cb6ef53bc790b",
       "tracked_at": "2026-07-27T03:58:37.385762+00:00",
       "resolved_at": "2026-07-27T03:59:20.837701+00:00"
-    },
-    "aino-ig-0194/.claude/settings.json": {
-      "last_tracked": "d002e78433abf04bc3cc28f432bd23b9250ce3ca2a3e52290b1fb380f8868011",
-      "last_resolved": "d002e78433abf04bc3cc28f432bd23b9250ce3ca2a3e52290b1fb380f8868011",
-      "tracked_at": "2026-04-28T12:51:11.594785+00:00",
-      "resolved_at": "2026-04-29T23:42:13.267098Z"
     },
     "noorinalabs-isnad-ingest-platform/.claude/team/roster.json": {
       "last_tracked": "188f999783fcefaf7bc7042708f6db64265ebf4f6f6de8d7bee0c64c1ceeeb67",
@@ -619,12 +595,6 @@
       "tracked_at": "2026-04-28T13:15:04.247125+00:00",
       "resolved_at": "2026-04-29T23:42:13.267098Z"
     },
-    ".claude/drafts/w10-retro-readout-bereket.md": {
-      "last_tracked": "e5004b0097522789de12d087ed242b0d8161f1a993a9aae0fa4c246b8ae654a7",
-      "last_resolved": "e5004b0097522789de12d087ed242b0d8161f1a993a9aae0fa4c246b8ae654a7",
-      "tracked_at": "2026-04-28T13:32:19.516556+00:00",
-      "resolved_at": "2026-04-29T23:42:13.267098Z"
-    },
     ".claude/team/roster.json": {
       "last_tracked": "5640a48b771d4fb1fb71b81e7d4701e0513ab64baaa5d8b360604674e1ebcfe0",
       "last_resolved": "5640a48b771d4fb1fb71b81e7d4701e0513ab64baaa5d8b360604674e1ebcfe0",
@@ -643,23 +613,11 @@
       "tracked_at": "2026-05-02T17:14:03.670117+00:00",
       "resolved_at": "2026-05-03T16:59:38.573672+00:00"
     },
-    ".claude/team/promotion_audit_log/wave-4.md": {
-      "last_tracked": "1bfd9875b711b475c4b25d26eb79895346777f36024816efac64be444273c33b",
-      "last_resolved": "1bfd9875b711b475c4b25d26eb79895346777f36024816efac64be444273c33b",
-      "tracked_at": "2026-05-05T21:54:00.789969+00:00",
-      "resolved_at": "2026-05-06T00:49:39.816328+00:00"
-    },
     ".claude/team/trust_matrix.md": {
       "last_tracked": "d35ea070bb22a5f00c1d38b05be83fa2a96ea43dba30c54e0dce059b53c55f56",
       "last_resolved": "d35ea070bb22a5f00c1d38b05be83fa2a96ea43dba30c54e0dce059b53c55f56",
       "tracked_at": "2026-07-06T01:34:32.383903+00:00",
       "resolved_at": "2026-07-06T16:50:47.724297+00:00"
-    },
-    ".claude/team/promotion_audit_log/wave-5.md": {
-      "last_tracked": "85263be2a3a83a8d84e4334aac290bed766cc5a2b08e238ffbc5b26563791002",
-      "last_resolved": "85263be2a3a83a8d84e4334aac290bed766cc5a2b08e238ffbc5b26563791002",
-      "tracked_at": "2026-05-06T00:59:20.040752+00:00",
-      "resolved_at": "2026-05-06T00:59:20.040752+00:00"
     },
     ".claude/team/charter/state-claims.md": {
       "last_tracked": "5d9b31d604210217c68f6b9e792f09c25ad1a0c18686111aecebf20c660a2dcf",
@@ -685,12 +643,6 @@
       "tracked_at": "2026-07-19T16:38:10.268805+00:00",
       "resolved_at": "2026-07-19T14:45:00Z"
     },
-    "noorinalabs-isnad-graph/.claude/hooks/tests/test_block_git_config.py": {
-      "last_tracked": "6b66a519249f2d3604d2d18b5b625e0cc75e257b8b5208e2b6fe98a796427aaf",
-      "last_resolved": "6b66a519249f2d3604d2d18b5b625e0cc75e257b8b5208e2b6fe98a796427aaf",
-      "tracked_at": "2026-05-09T00:34:38.254500+00:00",
-      "resolved_at": "2026-05-10T14:39:49.331048+00:00"
-    },
     "noorinalabs-landing-page/docs/adr/0001-astro-build-output-hook-coverage.md": {
       "last_tracked": "b32e8cc5419fc31f02cf7eb284ce0941445ee68c92ee799c4648581d0f5e61ca",
       "last_resolved": "b32e8cc5419fc31f02cf7eb284ce0941445ee68c92ee799c4648581d0f5e61ca",
@@ -715,12 +667,6 @@
       "resolved_at": "2026-05-11T01:24:19.842478+00:00",
       "tracked_at": "2026-05-11T01:24:19.842478+00:00"
     },
-    ".claude/skills/wave-scope/upsert_status_keys.py": {
-      "last_resolved": "5c72e04f279df916c5257fb5c884ad50127b908cebbb8b280b0d0f990da3c7dd",
-      "last_tracked": "5c72e04f279df916c5257fb5c884ad50127b908cebbb8b280b0d0f990da3c7dd",
-      "resolved_at": "2026-05-11T01:29:58.147825+00:00",
-      "tracked_at": "2026-05-11T01:29:58.147825+00:00"
-    },
     ".claude/hooks/validate_wave_label_evidence.py": {
       "last_resolved": "4ffe18574d54b6ae624373d2203aa699a1a7a841a5abbfeae1d44605bb669a0d",
       "last_tracked": "4ffe18574d54b6ae624373d2203aa699a1a7a841a5abbfeae1d44605bb669a0d",
@@ -739,12 +685,6 @@
       "tracked_at": "2026-05-17T04:00:49.136273+00:00",
       "resolved_at": "2026-05-17T21:28:10.746396+00:00"
     },
-    "noorinalabs-user-service/scripts/pre-commit.sh": {
-      "last_tracked": "ae367e77379667067395830d7bea9fd789fef34c44024f9db27ed76651673a5f",
-      "last_resolved": "ae367e77379667067395830d7bea9fd789fef34c44024f9db27ed76651673a5f",
-      "tracked_at": "2026-05-17T04:00:56.223869+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
     ".claude/hooks/auto_add_issue_to_board.py": {
       "last_tracked": "d222fca04a9e76fc686c1bd33090e9ddf09a132c63d1411c6dd977ab19a78663",
       "last_resolved": "d222fca04a9e76fc686c1bd33090e9ddf09a132c63d1411c6dd977ab19a78663",
@@ -761,18 +701,6 @@
       "last_tracked": "770f3cee4bf925343ee62c4fe8dccda9be02b11062f22efcbf5002a3106cc1ef",
       "last_resolved": "770f3cee4bf925343ee62c4fe8dccda9be02b11062f22efcbf5002a3106cc1ef",
       "tracked_at": "2026-05-17T04:02:41.985904+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-ingest-platform-fatima-0006/.github/workflows/ci.yml": {
-      "last_tracked": "52c4b7c1047b4905549b38787fa86034dff10a4c41056205e5107fe66407afb7",
-      "last_resolved": "52c4b7c1047b4905549b38787fa86034dff10a4c41056205e5107fe66407afb7",
-      "tracked_at": "2026-05-17T04:03:00.653539+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-ingest-platform-fatima-0006/src/cli.py": {
-      "last_tracked": "33787b9bdc311e4051cbf9d253019ec157bd79bea317173f67855ba9ff93d2c7",
-      "last_resolved": "33787b9bdc311e4051cbf9d253019ec157bd79bea317173f67855ba9ff93d2c7",
-      "tracked_at": "2026-05-17T04:03:51.918635+00:00",
       "resolved_at": "2026-05-17T21:28:10.746396+00:00"
     },
     ".claude/hooks/tests/test_enforce_librarian_consulted.py": {
@@ -821,96 +749,6 @@
       "last_tracked": "2490dcbe181bd9c837c7964c3401153e6a8fc9c2bb9193fdd0749ebaaa7a0fc7",
       "last_resolved": "2490dcbe181bd9c837c7964c3401153e6a8fc9c2bb9193fdd0749ebaaa7a0fc7",
       "tracked_at": "2026-05-17T04:13:39.765107+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-ingest-platform-yusuke-0023/workers/ingest/processor.py": {
-      "last_tracked": "1cb2ec98ff350bad12ad915f2bdf801e0d1e64ea83cb44aa3905e46a61e6d409",
-      "last_resolved": "1cb2ec98ff350bad12ad915f2bdf801e0d1e64ea83cb44aa3905e46a61e6d409",
-      "tracked_at": "2026-05-17T04:19:13.544510+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-ingest-platform-yusuke-0023/workers/ingest/schema.py": {
-      "last_tracked": "0351a5e701ee22325542bf3ff591eecfb4465ab7fb0b639e1fb1c5819c2b1dbd",
-      "last_resolved": "0351a5e701ee22325542bf3ff591eecfb4465ab7fb0b639e1fb1c5819c2b1dbd",
-      "tracked_at": "2026-05-17T20:10:05.511767+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-ingest-platform-imelda-0015/src/pipeline/reset.py": {
-      "last_tracked": "77313d59cf7332de69f04b3808e5a4a6ec7b58ac2c34265294affd0144f161ec",
-      "last_resolved": "77313d59cf7332de69f04b3808e5a4a6ec7b58ac2c34265294affd0144f161ec",
-      "tracked_at": "2026-05-17T04:20:19.905937+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-ingest-platform-imelda-0015/src/cli.py": {
-      "last_tracked": "6a1a77b9d5976908527108eb6fed65ad2ed8d4a05d8412fde778db6d59c2613a",
-      "last_resolved": "6a1a77b9d5976908527108eb6fed65ad2ed8d4a05d8412fde778db6d59c2613a",
-      "tracked_at": "2026-05-17T04:20:28.907071+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-ingest-platform-imelda-0015/tests/test_pipeline/test_reset.py": {
-      "last_tracked": "1454ee3b4e182528ebd7458371f68d04d985603f50eb2c340e6a2943cee289f8",
-      "last_resolved": "1454ee3b4e182528ebd7458371f68d04d985603f50eb2c340e6a2943cee289f8",
-      "tracked_at": "2026-05-17T04:20:41.296655+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-ingest-platform-petra-0020/workers/ingest/processor.py": {
-      "last_tracked": "2fdfe5ce7e8d036699acc66f880fecb5e963347d2c8058980f07025280a0156b",
-      "last_resolved": "2fdfe5ce7e8d036699acc66f880fecb5e963347d2c8058980f07025280a0156b",
-      "tracked_at": "2026-05-17T04:32:10.847440+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-ingest-platform-petra-0020/tests/workers/test_ingest_neo4j.py": {
-      "last_tracked": "b9529a9797fc47cfbb91faef72fef6195f2fc3770ab892e483401bce6dc6b404",
-      "last_resolved": "b9529a9797fc47cfbb91faef72fef6195f2fc3770ab892e483401bce6dc6b404",
-      "tracked_at": "2026-05-17T04:32:03.828774+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-ingest-platform-bjorn-0011/workers/lib/checkpoint_pg.py": {
-      "last_tracked": "1f555b30062015d4c49002f40352f1893542440c9cf3b8c124a2763126e48156",
-      "last_resolved": "1f555b30062015d4c49002f40352f1893542440c9cf3b8c124a2763126e48156",
-      "tracked_at": "2026-05-17T20:09:33.983089+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-ingest-platform-bjorn-0011/workers/lib/checkpoint_factory.py": {
-      "last_tracked": "78b73348a888a7bdc7c189803e540bb3757e7381df6697842e2186be3b097c9d",
-      "last_resolved": "78b73348a888a7bdc7c189803e540bb3757e7381df6697842e2186be3b097c9d",
-      "tracked_at": "2026-05-17T20:09:38.651600+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-ingest-platform-bjorn-0011/workers/enrich/main.py": {
-      "last_tracked": "72cfb78339aff53d50583336c791f1c88c45fe3a4049edc0483bee8fa0f5882b",
-      "last_resolved": "72cfb78339aff53d50583336c791f1c88c45fe3a4049edc0483bee8fa0f5882b",
-      "tracked_at": "2026-05-17T20:09:49.138764+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-ingest-platform-bjorn-0011/workers/normalize/main.py": {
-      "last_tracked": "b38a8745b581e4c2a00602b1a94996a00120883c1f7b3ab4d7e8ce58f73d8461",
-      "last_resolved": "b38a8745b581e4c2a00602b1a94996a00120883c1f7b3ab4d7e8ce58f73d8461",
-      "tracked_at": "2026-05-17T20:09:52.085783+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-ingest-platform-bjorn-0011/workers/ingest/main.py": {
-      "last_tracked": "5a48eb97e724e4222ebec5f64dadc7b545e24812e03b65b9d2dd23e09c52c18a",
-      "last_resolved": "5a48eb97e724e4222ebec5f64dadc7b545e24812e03b65b9d2dd23e09c52c18a",
-      "tracked_at": "2026-05-17T20:09:54.855465+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-ingest-platform-bjorn-0011/workers/dedup/main.py": {
-      "last_tracked": "9b1b5b5f2820f198920726426e923c20dc38b79b6f82d68f3fcf8b7929a9eed4",
-      "last_resolved": "9b1b5b5f2820f198920726426e923c20dc38b79b6f82d68f3fcf8b7929a9eed4",
-      "tracked_at": "2026-05-17T20:10:03.137823+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-ingest-platform-bjorn-0011/tests/workers/test_checkpoint_pg.py": {
-      "last_tracked": "dfa288043b3ffbfda31665ce7904892e57c803267b3b3b37915228fbaa0530a9",
-      "last_resolved": "dfa288043b3ffbfda31665ce7904892e57c803267b3b3b37915228fbaa0530a9",
-      "tracked_at": "2026-05-17T20:10:40.996654+00:00",
-      "resolved_at": "2026-05-17T21:28:10.746396+00:00"
-    },
-    "noorinalabs-isnad-ingest-platform-bjorn-0011/tests/integration/test_checkpoint_pg_restart.py": {
-      "last_tracked": "effab88974d50a127ad8c00e15327c8ead6db6392227fd52b3167661482039c7",
-      "last_resolved": "effab88974d50a127ad8c00e15327c8ead6db6392227fd52b3167661482039c7",
-      "tracked_at": "2026-05-17T20:10:21.238048+00:00",
       "resolved_at": "2026-05-17T21:28:10.746396+00:00"
     },
     ".claude/team/promotion_audit_log/p3-wave-15.md": {
@@ -1793,29 +1631,35 @@
       "tracked_at": "2026-07-26T16:44:54.321581+00:00",
       "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     },
-    "da-wt-490/src/graph/load_edges.py": {
-      "last_tracked": "7f86ca3af9c8c63fc3b9e748e7961c1cb7463440ef9b0bd0eaaf9a3dcaaa26bd",
-      "last_resolved": "7f86ca3af9c8c63fc3b9e748e7961c1cb7463440ef9b0bd0eaaf9a3dcaaa26bd",
-      "tracked_at": "2026-07-26T17:10:02.416754+00:00",
-      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
+    ".claude/lib/checksums_io.py": {
+      "last_tracked": "9619b924919ccf8c515cf25cae22159a91c6eee2c1b15b900fc0792682e5a034",
+      "last_resolved": "9619b924919ccf8c515cf25cae22159a91c6eee2c1b15b900fc0792682e5a034",
+      "tracked_at": "2026-07-27T04:28:23.423520+00:00",
+      "resolved_at": "2026-07-27T04:29:25.707892+00:00"
     },
-    "da-wt-490/src/cli.py": {
-      "last_tracked": "4844269c49c3c1100e218ffcf90dd9d8aecd7e79a8a1ee339cefd790037e08e9",
-      "last_resolved": "4844269c49c3c1100e218ffcf90dd9d8aecd7e79a8a1ee339cefd790037e08e9",
-      "tracked_at": "2026-07-26T17:09:20.418854+00:00",
-      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
+    ".claude/hooks/ontology_tracker.py": {
+      "last_tracked": "941edf90f9b0a52cfcda5abea423d3af6eb4ac6793f560ccefa25bea3ef8cf65",
+      "last_resolved": "941edf90f9b0a52cfcda5abea423d3af6eb4ac6793f560ccefa25bea3ef8cf65",
+      "tracked_at": "2026-07-27T04:25:50.279540+00:00",
+      "resolved_at": "2026-07-27T04:29:25.707892+00:00"
     },
-    "da-wt-490/tests/test_graph/conftest.py": {
-      "last_tracked": "a560588046187ce85397920513949755fb77ba94676c15b716c0b8da5bb2dd28",
-      "last_resolved": "a560588046187ce85397920513949755fb77ba94676c15b716c0b8da5bb2dd28",
-      "tracked_at": "2026-07-26T17:11:44.366641+00:00",
-      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
+    ".claude/lib/tests/test_checksums_io.py": {
+      "last_tracked": "4776bfc89e77dd5cd7b308a9a8798ab9b4b8663af75ee5aa5bb369ed52642da5",
+      "last_resolved": "4776bfc89e77dd5cd7b308a9a8798ab9b4b8663af75ee5aa5bb369ed52642da5",
+      "tracked_at": "2026-07-27T04:26:15.084957+00:00",
+      "resolved_at": "2026-07-27T04:29:25.707892+00:00"
     },
-    "da-wt-490/tests/test_graph/test_load_edges.py": {
-      "last_tracked": "708674db17e93ccfb8d4a61d73ecb5df4ccb094eda718fec72f52e4a5a7520af",
-      "last_resolved": "708674db17e93ccfb8d4a61d73ecb5df4ccb094eda718fec72f52e4a5a7520af",
-      "tracked_at": "2026-07-26T17:13:49.885066+00:00",
-      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
+    ".claude/hooks/tests/test_ontology_tracker.py": {
+      "last_tracked": "ab4e9ab29b882fe35df6303b0327fb3e2f2cbbc304bde92fa49e3e5441cf9f56",
+      "last_resolved": "ab4e9ab29b882fe35df6303b0327fb3e2f2cbbc304bde92fa49e3e5441cf9f56",
+      "tracked_at": "2026-07-27T04:26:55.619831+00:00",
+      "resolved_at": "2026-07-27T04:29:25.707892+00:00"
+    },
+    ".claude/skills/ontology-rebuild/SKILL.md": {
+      "last_tracked": "567ee8309633f4b7b29e03d274fa36596a3ba98b8b8acc149273c55fbe22c156",
+      "last_resolved": "567ee8309633f4b7b29e03d274fa36596a3ba98b8b8acc149273c55fbe22c156",
+      "tracked_at": "2026-07-27T04:29:00.392417+00:00",
+      "resolved_at": "2026-07-27T04:29:25.707892+00:00"
     }
   },
   "last_cleanup": {

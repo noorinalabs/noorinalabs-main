@@ -172,6 +172,152 @@ class MarkResolvedTests(unittest.TestCase):
         self.assertEqual(data["files"]["a.yaml"]["last_resolved"], "sha_a")
 
 
+class PruneMissingTests(unittest.TestCase):
+    """The cleanup half of the orphan-entry fix (wave-28 ``da-wt-490/*``)."""
+
+    def test_removes_entry_whose_file_is_gone(self) -> None:
+        with _tmp_dir() as root:
+            data: dict[str, Any] = {
+                "version": 1,
+                "files": {"da-wt-490/src/cli.py": {"last_tracked": "sha", "last_resolved": ""}},
+            }
+            removed = checksums_io.prune_missing(data, root)
+            self.assertEqual(removed, ["da-wt-490/src/cli.py"])
+            self.assertEqual(data["files"], {})
+
+    def test_keeps_entry_whose_file_still_exists(self) -> None:
+        with _tmp_dir() as root:
+            (root / "ontology").mkdir()
+            (root / "ontology" / "domain.yaml").write_text("a: 1", encoding="utf-8")
+            data: dict[str, Any] = {
+                "version": 1,
+                "files": {"ontology/domain.yaml": {"last_tracked": "sha", "last_resolved": "sha"}},
+            }
+            removed = checksums_io.prune_missing(data, root)
+            self.assertEqual(removed, [])
+            self.assertIn("ontology/domain.yaml", data["files"])
+
+    def test_keeps_a_dirty_but_present_entry(self) -> None:
+        """Prune is about existence only — never about dirtiness or staleness."""
+        with _tmp_dir() as root:
+            (root / "stale.md").write_text("x", encoding="utf-8")
+            data: dict[str, Any] = {
+                "version": 1,
+                "files": {"stale.md": {"last_tracked": "new", "last_resolved": "old"}},
+            }
+            self.assertEqual(checksums_io.prune_missing(data, root), [])
+            self.assertIn("stale.md", data["files"])
+
+    def test_keeps_a_tracked_directory_entry(self) -> None:
+        """``exists()`` not ``is_file()`` — a tracked dir path must survive."""
+        with _tmp_dir() as root:
+            (root / "somedir").mkdir()
+            data: dict[str, Any] = {"version": 1, "files": {"somedir": {"last_tracked": "s"}}}
+            self.assertEqual(checksums_io.prune_missing(data, root), [])
+
+    def test_returns_removed_keys_sorted(self) -> None:
+        with _tmp_dir() as root:
+            data: dict[str, Any] = {
+                "version": 1,
+                "files": {"z/gone.py": {}, "a/gone.py": {}, "m/gone.py": {}},
+            }
+            self.assertEqual(
+                checksums_io.prune_missing(data, root),
+                ["a/gone.py", "m/gone.py", "z/gone.py"],
+            )
+
+    def test_empty_files_dict_is_a_noop(self) -> None:
+        with _tmp_dir() as root:
+            data: dict[str, Any] = {"version": 1, "files": {}}
+            self.assertEqual(checksums_io.prune_missing(data, root), [])
+
+    def test_missing_files_key_is_created_not_raised(self) -> None:
+        with _tmp_dir() as root:
+            data: dict[str, Any] = {"version": 1}
+            self.assertEqual(checksums_io.prune_missing(data, root), [])
+            self.assertEqual(data["files"], {})
+
+
+class PruneCliTests(unittest.TestCase):
+    @staticmethod
+    def _seed(root: Path, files: dict[str, Any]) -> Path:
+        path = root / "ontology" / "checksums.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"version": 1, "files": files}), encoding="utf-8")
+        return path
+
+    def test_prune_cli_removes_orphans_and_writes(self) -> None:
+        with _tmp_dir() as root:
+            (root / "ontology" / "domain.yaml").parent.mkdir(parents=True, exist_ok=True)
+            (root / "ontology" / "domain.yaml").write_text("a: 1", encoding="utf-8")
+            path = self._seed(
+                root,
+                {"ontology/domain.yaml": {"last_tracked": "s"}, "da-wt-490/src/cli.py": {}},
+            )
+            rc = checksums_io.main(["checksums_io.py", "prune", "--checksums", str(path)])
+            self.assertEqual(rc, 0)
+            data = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(list(data["files"]), ["ontology/domain.yaml"])
+
+    def test_repo_root_defaults_to_checksums_grandparent(self) -> None:
+        """``<root>/ontology/checksums.json`` -> ``<root>``, so no flags needed."""
+        with _tmp_dir() as root:
+            (root / "kept.md").write_text("x", encoding="utf-8")
+            path = self._seed(root, {"kept.md": {"last_tracked": "s"}, "gone.md": {}})
+            self.assertEqual(
+                checksums_io.main(["checksums_io.py", "prune", "--checksums", str(path)]), 0
+            )
+            data = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(list(data["files"]), ["kept.md"])
+
+    def test_explicit_repo_root_is_honored(self) -> None:
+        with _tmp_dir() as root:
+            elsewhere = root / "elsewhere"
+            elsewhere.mkdir()
+            (elsewhere / "kept.md").write_text("x", encoding="utf-8")
+            path = self._seed(root, {"kept.md": {"last_tracked": "s"}})
+            rc = checksums_io.main(
+                [
+                    "checksums_io.py",
+                    "prune",
+                    "--checksums",
+                    str(path),
+                    "--repo-root",
+                    str(elsewhere),
+                ]
+            )
+            self.assertEqual(rc, 0)
+            data = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(list(data["files"]), ["kept.md"])
+
+    def test_dry_run_leaves_the_file_untouched(self) -> None:
+        with _tmp_dir() as root:
+            path = self._seed(root, {"gone.md": {"last_tracked": "s"}})
+            before = path.read_bytes()
+            rc = checksums_io.main(
+                ["checksums_io.py", "prune", "--checksums", str(path), "--dry-run"]
+            )
+            self.assertEqual(rc, 0)
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_no_orphans_does_not_rewrite_the_file(self) -> None:
+        """A clean prune must be byte-inert — no churn on the committed file."""
+        with _tmp_dir() as root:
+            (root / "kept.md").write_text("x", encoding="utf-8")
+            path = self._seed(root, {"kept.md": {"last_tracked": "s"}})
+            before = path.read_bytes()
+            self.assertEqual(
+                checksums_io.main(["checksums_io.py", "prune", "--checksums", str(path)]), 0
+            )
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_unexpected_prune_argument_is_usage_error(self) -> None:
+        self.assertEqual(checksums_io.main(["checksums_io.py", "prune", "--bogus"]), 2)
+
+    def test_repo_root_flag_missing_value_is_usage_error(self) -> None:
+        self.assertEqual(checksums_io.main(["checksums_io.py", "prune", "--repo-root"]), 2)
+
+
 class MainCliTests(unittest.TestCase):
     def test_mark_resolved_cli_end_to_end(self) -> None:
         with _tmp_dir() as tmpdir:

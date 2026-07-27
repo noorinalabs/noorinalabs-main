@@ -40,6 +40,13 @@ Path filtering (issue #143):
       accumulation of stale paths in ``checksums.json`` after worktrees are
       removed, and the slight latency in the canonical entry's
       ``last_tracked`` is acceptable noise-vs-signal trade.
+    * Files inside a LINKED WORKTREE parked anywhere else — the structural
+      generalization of the rule above, added after four ``da-wt-490/*``
+      orphans survived it in wave-28 (a worktree at the repo root, so no
+      ``.worktrees`` component to match). ``_is_linked_worktree`` reads the
+      owning root's ``.git`` pointer file instead of guessing from the
+      directory name. Entries the name-based filter already leaked are
+      cleaned up by ``checksums_io.prune_missing`` / the ``prune`` CLI.
     * Paths outside the repo tree — anything not under ``REPO_ROOT`` after
       resolution (e.g. user auto-memory files at
       ``/home/.../.claude/projects/.../memory/*.md``). The ontology only
@@ -194,6 +201,49 @@ def _is_worktree_path(file_path: str) -> bool:
     return False
 
 
+def _is_linked_worktree(resolved_path: Path) -> bool:
+    """True if ``resolved_path``'s owning git root is a LINKED WORKTREE.
+
+    The structural generalization of ``_is_worktree_path`` (#523/#525), which
+    matches on directory NAME (``.worktrees/``, ``.claude/worktrees/``). A
+    worktree parked anywhere else slips straight through it — the wave-28
+    ``da-wt-490/`` tree at the repo root did exactly that, landing four
+    entries keyed to a directory that ceased to exist when the worktree was
+    removed. Those entries can never resolve (there is no file to re-hash) and
+    are not ``last_tracked == last_resolved``, so they report dirty forever.
+
+    Detection is by git's own layout, not by naming: a linked worktree's
+    ``.git`` is a FILE containing ``gitdir: <common-dir>/worktrees/<name>``.
+    Reading it is enough — no subprocess. The ``/worktrees/`` component in the
+    pointer is what discriminates a worktree from a SUBMODULE, whose ``.git``
+    file is also a pointer but targets ``<super>/.git/modules/<name>``.
+    Submodules hold real committed source and must stay tracked.
+
+    Fails OPEN (returns False -> file is tracked) on every error: no ``.git``
+    ancestor, an unreadable or unrecognized ``.git`` file. Same asymmetry as
+    ``_is_git_ignored`` — under-tracking is a silent loss of drift detection,
+    over-tracking is merely noise.
+    """
+    git_root = _find_git_root(resolved_path)
+    if git_root is None:
+        return False
+
+    dot_git = git_root / ".git"
+    if not dot_git.is_file():
+        return False  # A real checkout (.git is a directory) — track it.
+
+    try:
+        pointer = dot_git.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return False  # Unreadable — fail open.
+
+    if not pointer.startswith("gitdir:"):
+        return False  # Not a layout we recognize — fail open.
+
+    gitdir = pointer[len("gitdir:") :].strip()
+    return "/worktrees/" in f"{gitdir}/"
+
+
 def _find_git_root(path: Path) -> Path | None:
     """Walk up from ``path`` to find the nearest ancestor with a ``.git`` entry.
 
@@ -280,9 +330,9 @@ def _should_skip(file_path: str) -> bool:
     """Return True if this file should not be tracked.
 
     Filters in order: substring patterns (fast path), worktree path
-    components, /tmp/ prefix, out-of-repo paths, then the owning-repo
-    check-ignore backstop (#1039). See module docstring for the rationale
-    behind each rule.
+    components, /tmp/ prefix, out-of-repo paths, the linked-worktree
+    structural check, then the owning-repo check-ignore backstop (#1039).
+    See module docstring for the rationale behind each rule.
     """
     for pattern in SKIP_PATTERNS:
         if pattern in file_path:
@@ -305,6 +355,9 @@ def _should_skip(file_path: str) -> bool:
     try:
         resolved.relative_to(REPO_ROOT)
     except ValueError:
+        return True
+
+    if _is_linked_worktree(resolved):
         return True
 
     if _is_git_ignored(resolved):

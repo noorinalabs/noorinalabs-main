@@ -105,6 +105,44 @@ def mark_resolved(data: dict[str, Any], rel_paths: list[str], now: str) -> list[
     return resolved
 
 
+def prune_missing(data: dict[str, Any], repo_root: Path) -> list[str]:
+    """Drop entries whose tracked path no longer exists under ``repo_root``.
+
+    Mutates ``data["files"]`` in place and returns the removed keys, sorted.
+
+    Why this is needed: the tracker records a path relative to ``REPO_ROOT``,
+    so an Edit inside an ephemeral tree that ``ontology_tracker._should_skip``
+    fails to recognize lands a permanent entry keyed to a directory that later
+    ceases to exist (the wave-28 ``da-wt-490/*`` case — a linked worktree
+    parked at the repo root rather than under ``.worktrees/``, so the
+    name-based worktree filter did not catch it). Such an entry can never be
+    resolved by re-reading the file (there is no file), and it is not
+    ``last_tracked == last_resolved``, so it reports as dirty forever and each
+    ``/ontology-rebuild`` has to hand-``mark-resolved`` it back to quiet.
+
+    ``ontology_tracker._is_linked_worktree`` is the *prevention* half of the
+    fix; this is the *cleanup* half, for entries already in the file and for
+    any future skip-filter leak. Deliberately conservative: it removes only
+    entries whose path is genuinely absent from disk, never entries that are
+    merely stale, dirty, or unreferenced by the ontology.
+
+    CAVEAT — this is an on-disk existence test, not a git-history one. A file
+    that exists on a child repo's ``main`` but not on the branch that repo
+    happens to be checked out at right now reads as absent and would be
+    pruned. That is why the ``prune`` CLI is opt-in with a ``--dry-run``
+    rather than something a lifecycle skill runs unattended: confirm the
+    candidate list is genuinely-deleted (``git cat-file -e origin/main:<path>``)
+    before writing. Re-tracking is cheap if a prune does go wrong — the next
+    Edit/Write of the file re-creates the entry — but it re-enters with an
+    empty ``last_resolved`` and so reports dirty once.
+    """
+    files = data.setdefault("files", {})
+    removed = sorted(rel for rel in files if not (repo_root / rel).exists())
+    for rel in removed:
+        del files[rel]
+    return removed
+
+
 def _default_checksums_path() -> Path:
     """``ontology/checksums.json`` relative to this file's repo root.
 
@@ -126,21 +164,29 @@ def main(argv: list[str]) -> int:
     the resolver never needs to remember the ``ensure_ascii=False`` convention
     because it never writes the file itself.
 
+    The ``prune`` subcommand is the cleanup half of the orphan-entry fix (see
+    ``prune_missing``): it drops entries whose file no longer exists on disk,
+    which the resolver otherwise has to hand-``mark-resolved`` every pass.
+
     Usage:
         python3 .claude/lib/checksums_io.py mark-resolved <path> [<path> ...]
         python3 .claude/lib/checksums_io.py mark-resolved --checksums <file> <path> ...
+        python3 .claude/lib/checksums_io.py prune
+            [--checksums <file>] [--repo-root <dir>] [--dry-run]
 
     Exit codes:
-        0 — success (including "nothing to resolve", still 0)
+        0 — success (including "nothing to resolve/prune", still 0)
         2 — usage error
     """
-    if len(argv) < 2 or argv[1] != "mark-resolved":
+    if len(argv) < 2 or argv[1] not in ("mark-resolved", "prune"):
         print(
-            "usage: checksums_io.py mark-resolved [--checksums PATH] <rel-path> [<rel-path> ...]",
+            "usage: checksums_io.py mark-resolved [--checksums PATH] <rel-path> [<rel-path> ...]\n"
+            "       checksums_io.py prune [--checksums PATH] [--repo-root DIR] [--dry-run]",
             file=sys.stderr,
         )
         return 2
 
+    subcommand = argv[1]
     rest = argv[2:]
     checksums_path = _default_checksums_path()
     if rest and rest[0] == "--checksums":
@@ -149,6 +195,9 @@ def main(argv: list[str]) -> int:
             return 2
         checksums_path = Path(rest[1])
         rest = rest[2:]
+
+    if subcommand == "prune":
+        return _prune_cli(checksums_path, rest)
 
     if not rest:
         print("error: at least one <rel-path> is required", file=sys.stderr)
@@ -163,6 +212,45 @@ def main(argv: list[str]) -> int:
     print(f"Resolved {len(resolved)} file(s) in {checksums_path}.")
     if skipped:
         print(f"Skipped (not tracked): {', '.join(skipped)}")
+    return 0
+
+
+def _prune_cli(checksums_path: Path, rest: list[str]) -> int:
+    """``prune`` subcommand body. ``--checksums`` is already consumed by ``main``.
+
+    ``--repo-root`` defaults to the checksums file's grandparent
+    (``<root>/ontology/checksums.json`` -> ``<root>``), so the common case
+    needs no flags. Entry keys are relative to that root, which is exactly
+    what ``ontology_tracker._relative_path`` writes.
+    """
+    repo_root = checksums_path.resolve().parent.parent
+    dry_run = False
+    while rest:
+        if rest[0] == "--repo-root":
+            if len(rest) < 2:
+                print("error: --repo-root requires a DIR argument", file=sys.stderr)
+                return 2
+            repo_root = Path(rest[1]).resolve()
+            rest = rest[2:]
+        elif rest[0] == "--dry-run":
+            dry_run = True
+            rest = rest[1:]
+        else:
+            print(f"error: unexpected argument {rest[0]!r} for prune", file=sys.stderr)
+            return 2
+
+    data = read_checksums(checksums_path)
+    removed = prune_missing(data, repo_root)
+    if removed and not dry_run:
+        write_checksums(checksums_path, data)
+
+    verb = "Would prune" if dry_run else "Pruned"
+    print(
+        f"{verb} {len(removed)} orphan entr{'y' if len(removed) == 1 else 'ies'} "
+        f"in {checksums_path} (repo root {repo_root})."
+    )
+    for rel in removed:
+        print(f"  - {rel}")
     return 0
 
 

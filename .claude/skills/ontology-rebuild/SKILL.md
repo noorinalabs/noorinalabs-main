@@ -90,6 +90,15 @@ PYTHONPATH="$REPO_ROOT/.claude/lib" python3 "$REPO_ROOT/.claude/lib/checksums_io
 
 Pass every dirty path resolved in this run as a separate argument (a path not present in `checksums.json` is silently skipped, not an error — see `checksums_io.mark_resolved`'s docstring). Use `--checksums <path>` before the path list only if resolving a non-default `checksums.json` location.
 
+**Orphan entries (paths that no longer exist).** A dirty path whose file is gone cannot be resolved by reading it — there is nothing to read. These come from an edit inside an ephemeral tree the tracker's skip filters missed (the `da-wt-490/*` case: a worktree parked outside `.worktrees/`, so the name-based filter did not catch it — since fixed structurally by `ontology_tracker._is_linked_worktree`) or from genuinely deleted source. Do NOT `mark-resolved` an orphan — that quiets the symptom and leaves the entry to report dirty again. Prune it:
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+python3 "$REPO_ROOT/.claude/lib/checksums_io.py" prune --dry-run   # list candidates
+```
+
+`prune` is an on-disk existence test, not a git-history one, so **review the dry-run list before writing**: a file that exists on a child repo's `main` but not on the branch that child is currently checked out at reads as absent and would be wrongly removed. Confirm with `git -C <repo> cat-file -e origin/main:<path>`, then re-run without `--dry-run`. Report the pruned count in step 5.
+
 ### 5. Report
 
 ```
