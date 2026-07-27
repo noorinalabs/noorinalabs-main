@@ -212,36 +212,21 @@ def _is_linked_worktree(resolved_path: Path) -> bool:
     removed. Those entries can never resolve (there is no file to re-hash) and
     are not ``last_tracked == last_resolved``, so they report dirty forever.
 
-    Detection is by git's own layout, not by naming: a linked worktree's
-    ``.git`` is a FILE containing ``gitdir: <common-dir>/worktrees/<name>``.
-    Reading it is enough — no subprocess. The ``/worktrees/`` component in the
-    pointer is what discriminates a worktree from a SUBMODULE, whose ``.git``
-    file is also a pointer but targets ``<super>/.git/modules/<name>``.
-    Submodules hold real committed source and must stay tracked.
+    Detection is by git's own layout, not by naming — see
+    ``checksums_io.is_linked_worktree_root`` for the discrimination rule and
+    why a ``/worktrees/`` substring test on the pointer is NOT sufficient.
+    Subprocess-free.
 
     Fails OPEN (returns False -> file is tracked) on every error: no ``.git``
-    ancestor, an unreadable or unrecognized ``.git`` file. Same asymmetry as
-    ``_is_git_ignored`` — under-tracking is a silent loss of drift detection,
-    over-tracking is merely noise.
+    ancestor, an unreadable or unrecognized ``.git`` file, a pointer whose
+    target is missing its admin files. Same asymmetry as ``_is_git_ignored`` —
+    under-tracking is a silent loss of drift detection, over-tracking is
+    merely noise.
     """
     git_root = _find_git_root(resolved_path)
     if git_root is None:
         return False
-
-    dot_git = git_root / ".git"
-    if not dot_git.is_file():
-        return False  # A real checkout (.git is a directory) — track it.
-
-    try:
-        pointer = dot_git.read_text(encoding="utf-8", errors="replace").strip()
-    except OSError:
-        return False  # Unreadable — fail open.
-
-    if not pointer.startswith("gitdir:"):
-        return False  # Not a layout we recognize — fail open.
-
-    gitdir = pointer[len("gitdir:") :].strip()
-    return "/worktrees/" in f"{gitdir}/"
+    return checksums_io.is_linked_worktree_root(git_root)
 
 
 def _find_git_root(path: Path) -> Path | None:

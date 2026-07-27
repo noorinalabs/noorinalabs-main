@@ -105,6 +105,57 @@ def mark_resolved(data: dict[str, Any], rel_paths: list[str], now: str) -> list[
     return resolved
 
 
+def is_linked_worktree_root(git_root: Path) -> bool:
+    """True if ``git_root`` is a LINKED WORKTREE's root (not a plain checkout).
+
+    A linked worktree's ``.git`` is a FILE holding ``gitdir: <admin-dir>``. So
+    is a submodule's, and so is a ``clone --separate-git-dir`` checkout's — so
+    the pointer's *existence* proves nothing, and testing it for a
+    ``/worktrees/`` substring is wrong in both directions of specificity. Two
+    real layouts defeat that substring (both verified against actual git, not
+    fabricated pointers):
+
+      * a submodule at a path containing a ``worktrees`` component, e.g.
+        ``gitdir: …/.git/modules/worktrees/libbar``
+      * ``git clone --separate-git-dir`` with the git dir parked under any
+        directory named ``worktrees``
+
+    Both hold real committed source, and skipping them silently blinds the
+    tracker to a whole tree — the exact failure the caller's fail-open
+    asymmetry exists to prevent.
+
+    Discriminate on git's own invariant instead: a linked worktree's admin
+    directory always contains BOTH a ``gitdir`` backlink file and a
+    ``commondir`` file. A submodule's ``.git/modules/<name>`` never contains
+    either, and a ``--separate-git-dir`` git dir contains neither. This also
+    correctly accepts a worktree of a bare repo and a worktree *of* a
+    submodule, which a path-component check would misclassify.
+
+    Fails OPEN (returns False) on every error — an unreadable ``.git``, an
+    unrecognized pointer, or an admin dir that cannot be stat'd. Callers use
+    this to decide whether to SKIP, so False (do not skip) is the safe answer.
+    """
+    dot_git = git_root / ".git"
+    if not dot_git.is_file():
+        return False  # A plain checkout (.git is a directory) — not a worktree.
+
+    try:
+        pointer = dot_git.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return False  # Unreadable — fail open.
+
+    if not pointer.startswith("gitdir:"):
+        return False  # Not a layout we recognize — fail open.
+
+    # `Path / <absolute>` yields the absolute path, so this handles git's
+    # absolute pointers and the relative ones it writes for submodules alike.
+    admin = git_root / pointer[len("gitdir:") :].strip()
+    try:
+        return (admin / "gitdir").is_file() and (admin / "commondir").is_file()
+    except OSError:
+        return False  # Cannot stat the admin dir — fail open.
+
+
 def prune_missing(data: dict[str, Any], repo_root: Path) -> list[str]:
     """Drop entries whose tracked path no longer exists under ``repo_root``.
 
@@ -172,7 +223,14 @@ def main(argv: list[str]) -> int:
         python3 .claude/lib/checksums_io.py mark-resolved <path> [<path> ...]
         python3 .claude/lib/checksums_io.py mark-resolved --checksums <file> <path> ...
         python3 .claude/lib/checksums_io.py prune
-            [--checksums <file>] [--repo-root <dir>] [--dry-run]
+            [--checksums <file>] [--repo-root <dir>] [--dry-run] [--force]
+
+    ``--checksums`` may appear at any position. This is hand-rolled parsing
+    rather than argparse, and an earlier revision required it FIRST — so
+    ``prune --dry-run --checksums X`` died with "unexpected argument
+    '--checksums'". It failed safe, but an undocumented ordering rule in a
+    destructive CLI is a trap, so the flag is now extracted positionally-
+    agnostically instead.
 
     Exit codes:
         0 — success (including "nothing to resolve/prune", still 0)
@@ -181,7 +239,8 @@ def main(argv: list[str]) -> int:
     if len(argv) < 2 or argv[1] not in ("mark-resolved", "prune"):
         print(
             "usage: checksums_io.py mark-resolved [--checksums PATH] <rel-path> [<rel-path> ...]\n"
-            "       checksums_io.py prune [--checksums PATH] [--repo-root DIR] [--dry-run]",
+            "       checksums_io.py prune [--checksums PATH] [--repo-root DIR] "
+            "[--dry-run] [--force]",
             file=sys.stderr,
         )
         return 2
@@ -189,12 +248,13 @@ def main(argv: list[str]) -> int:
     subcommand = argv[1]
     rest = argv[2:]
     checksums_path = _default_checksums_path()
-    if rest and rest[0] == "--checksums":
-        if len(rest) < 2:
+    if "--checksums" in rest:
+        i = rest.index("--checksums")
+        if i + 1 >= len(rest):
             print("error: --checksums requires a PATH argument", file=sys.stderr)
             return 2
-        checksums_path = Path(rest[1])
-        rest = rest[2:]
+        checksums_path = Path(rest[i + 1])
+        rest = rest[:i] + rest[i + 2 :]
 
     if subcommand == "prune":
         return _prune_cli(checksums_path, rest)
@@ -215,6 +275,14 @@ def main(argv: list[str]) -> int:
     return 0
 
 
+# Refuse a prune that would remove more than this fraction of the tracked
+# entries unless --force. A legitimate steady-state prune is near zero (the
+# real checkout reports 0/277 once clean); a run against the wrong root
+# reports 50-100%. The threshold turns "wrong --repo-root" and "run from a
+# worktree" from a silent success into a non-zero exit naming the cause.
+PRUNE_SANITY_FRACTION = 0.25
+
+
 def _prune_cli(checksums_path: Path, rest: list[str]) -> int:
     """``prune`` subcommand body. ``--checksums`` is already consumed by ``main``.
 
@@ -222,9 +290,26 @@ def _prune_cli(checksums_path: Path, rest: list[str]) -> int:
     (``<root>/ontology/checksums.json`` -> ``<root>``), so the common case
     needs no flags. Entry keys are relative to that root, which is exactly
     what ``ontology_tracker._relative_path`` writes.
+
+    Three guards stand between a mistyped invocation and a mass delete of a
+    committed artifact. Each turns a silent exit-0 "success" into a refusal:
+
+    1. ``--repo-root`` must be an existing directory. A typo previously
+       resolved fine and reported every entry as an orphan.
+    2. ``repo_root`` must not itself be a linked worktree. Worktrees are this
+       org's preferred agent isolation, and the gitignored child-repo clones
+       (~50% of entries) do not exist inside one — so the documented
+       ``REPO_ROOT="$(git rev-parse --show-toplevel)"`` invocation, run in the
+       default working style, proposed wiping half the file.
+    3. The prune set must stay under ``PRUNE_SANITY_FRACTION`` of all entries.
+
+    ``--force`` overrides 2 and 3 (never 1). The guards apply to ``--dry-run``
+    too: a preview that reports a 141-entry wipe as normal output is exactly
+    how the mistake gets rubber-stamped.
     """
     repo_root = checksums_path.resolve().parent.parent
     dry_run = False
+    force = False
     while rest:
         if rest[0] == "--repo-root":
             if len(rest) < 2:
@@ -235,12 +320,50 @@ def _prune_cli(checksums_path: Path, rest: list[str]) -> int:
         elif rest[0] == "--dry-run":
             dry_run = True
             rest = rest[1:]
+        elif rest[0] == "--force":
+            force = True
+            rest = rest[1:]
         else:
             print(f"error: unexpected argument {rest[0]!r} for prune", file=sys.stderr)
             return 2
 
+    # Guard 1 — a nonexistent root makes EVERY entry look orphaned.
+    if not repo_root.is_dir():
+        print(
+            f"error: --repo-root {repo_root} is not an existing directory; refusing to "
+            "prune (every entry would read as orphaned).",
+            file=sys.stderr,
+        )
+        return 2
+
+    # Guard 2 — inside a linked worktree the gitignored child-repo clones are
+    # structurally absent, so their entries all read as orphaned.
+    if not force and is_linked_worktree_root(repo_root):
+        print(
+            f"error: --repo-root {repo_root} is a linked worktree. The gitignored "
+            "child-repo clones do not exist there, so their entries would all read as "
+            "orphaned. Re-run from the main checkout, or pass --force if you are certain.",
+            file=sys.stderr,
+        )
+        return 2
+
     data = read_checksums(checksums_path)
+    total = len(data.get("files", {}))
     removed = prune_missing(data, repo_root)
+
+    # Guard 3 — a plausible steady-state prune is a handful of entries.
+    if not force and total and len(removed) > total * PRUNE_SANITY_FRACTION:
+        pct = 100.0 * len(removed) / total
+        print(
+            f"error: prune would remove {len(removed)} of {total} entries ({pct:.0f}%), "
+            f"over the {PRUNE_SANITY_FRACTION:.0%} sanity threshold. This almost always "
+            f"means --repo-root is wrong (resolved to {repo_root}) rather than that the "
+            "file is that stale. Re-check the root, or pass --force if it is genuinely "
+            "correct.",
+            file=sys.stderr,
+        )
+        return 1
+
     if removed and not dry_run:
         write_checksums(checksums_path, data)
 

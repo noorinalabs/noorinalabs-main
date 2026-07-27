@@ -1632,34 +1632,34 @@
       "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     },
     ".claude/lib/checksums_io.py": {
-      "last_tracked": "9619b924919ccf8c515cf25cae22159a91c6eee2c1b15b900fc0792682e5a034",
-      "last_resolved": "9619b924919ccf8c515cf25cae22159a91c6eee2c1b15b900fc0792682e5a034",
-      "tracked_at": "2026-07-27T04:28:23.423520+00:00",
-      "resolved_at": "2026-07-27T04:29:25.707892+00:00"
+      "last_tracked": "d7794eae5113c1b578e3e50466722cd5a0268c93a722982aae9316ea13c6b026",
+      "last_resolved": "d7794eae5113c1b578e3e50466722cd5a0268c93a722982aae9316ea13c6b026",
+      "tracked_at": "2026-07-27T05:08:17.351731+00:00",
+      "resolved_at": "2026-07-27T05:09:45.226766+00:00"
     },
     ".claude/hooks/ontology_tracker.py": {
       "last_tracked": "941edf90f9b0a52cfcda5abea423d3af6eb4ac6793f560ccefa25bea3ef8cf65",
       "last_resolved": "941edf90f9b0a52cfcda5abea423d3af6eb4ac6793f560ccefa25bea3ef8cf65",
       "tracked_at": "2026-07-27T04:25:50.279540+00:00",
-      "resolved_at": "2026-07-27T04:29:25.707892+00:00"
+      "resolved_at": "2026-07-27T05:09:45.226766+00:00"
     },
     ".claude/lib/tests/test_checksums_io.py": {
-      "last_tracked": "4776bfc89e77dd5cd7b308a9a8798ab9b4b8663af75ee5aa5bb369ed52642da5",
-      "last_resolved": "4776bfc89e77dd5cd7b308a9a8798ab9b4b8663af75ee5aa5bb369ed52642da5",
-      "tracked_at": "2026-07-27T04:26:15.084957+00:00",
-      "resolved_at": "2026-07-27T04:29:25.707892+00:00"
+      "last_tracked": "9c165a347af4227a1433b74d89aaf03b9de917ea1c9223927e4f81ec6493ce36",
+      "last_resolved": "9c165a347af4227a1433b74d89aaf03b9de917ea1c9223927e4f81ec6493ce36",
+      "tracked_at": "2026-07-27T05:08:33.444824+00:00",
+      "resolved_at": "2026-07-27T05:09:45.226766+00:00"
     },
     ".claude/hooks/tests/test_ontology_tracker.py": {
-      "last_tracked": "ab4e9ab29b882fe35df6303b0327fb3e2f2cbbc304bde92fa49e3e5441cf9f56",
-      "last_resolved": "ab4e9ab29b882fe35df6303b0327fb3e2f2cbbc304bde92fa49e3e5441cf9f56",
-      "tracked_at": "2026-07-27T04:26:55.619831+00:00",
-      "resolved_at": "2026-07-27T04:29:25.707892+00:00"
+      "last_tracked": "1ba3c41c28e83640327983b7d055694d1dd53073b3eac655a4de8f5d62e5dd40",
+      "last_resolved": "1ba3c41c28e83640327983b7d055694d1dd53073b3eac655a4de8f5d62e5dd40",
+      "tracked_at": "2026-07-27T05:04:28.252439+00:00",
+      "resolved_at": "2026-07-27T05:09:45.226766+00:00"
     },
     ".claude/skills/ontology-rebuild/SKILL.md": {
-      "last_tracked": "567ee8309633f4b7b29e03d274fa36596a3ba98b8b8acc149273c55fbe22c156",
-      "last_resolved": "567ee8309633f4b7b29e03d274fa36596a3ba98b8b8acc149273c55fbe22c156",
-      "tracked_at": "2026-07-27T04:29:00.392417+00:00",
-      "resolved_at": "2026-07-27T04:29:25.707892+00:00"
+      "last_tracked": "412dd0efde8b9b31d43ed8649da0f745496f20e433a43cb85e20c6b33f3d7d24",
+      "last_resolved": "412dd0efde8b9b31d43ed8649da0f745496f20e433a43cb85e20c6b33f3d7d24",
+      "tracked_at": "2026-07-27T05:09:19.048088+00:00",
+      "resolved_at": "2026-07-27T05:09:45.226766+00:00"
     }
   },
   "last_cleanup": {

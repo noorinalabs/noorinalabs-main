@@ -11,6 +11,8 @@ byte-stability contract is enforced by code on BOTH writers, not just one.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -246,29 +248,50 @@ class PruneCliTests(unittest.TestCase):
         path.write_text(json.dumps({"version": 1, "files": files}), encoding="utf-8")
         return path
 
+    @staticmethod
+    def _ballast(root: Path, n: int = 12) -> dict[str, Any]:
+        """Present-on-disk filler entries.
+
+        The prune sanity guard refuses a run that would remove more than
+        ``PRUNE_SANITY_FRACTION`` of all entries. A two-entry fixture makes a
+        single legitimate orphan a 50% prune, which the guard correctly
+        refuses — so these tests need a realistic denominator rather than a
+        weakened guard.
+        """
+        out: dict[str, Any] = {}
+        for i in range(n):
+            (root / f"ballast{i}.md").write_text("x", encoding="utf-8")
+            out[f"ballast{i}.md"] = {"last_tracked": "s"}
+        return out
+
     def test_prune_cli_removes_orphans_and_writes(self) -> None:
         with _tmp_dir() as root:
-            (root / "ontology" / "domain.yaml").parent.mkdir(parents=True, exist_ok=True)
+            (root / "ontology").mkdir(parents=True, exist_ok=True)
             (root / "ontology" / "domain.yaml").write_text("a: 1", encoding="utf-8")
-            path = self._seed(
-                root,
-                {"ontology/domain.yaml": {"last_tracked": "s"}, "da-wt-490/src/cli.py": {}},
-            )
+            files = self._ballast(root)
+            files["ontology/domain.yaml"] = {"last_tracked": "s"}
+            files["da-wt-490/src/cli.py"] = {}
+            path = self._seed(root, files)
             rc = checksums_io.main(["checksums_io.py", "prune", "--checksums", str(path)])
             self.assertEqual(rc, 0)
             data = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(list(data["files"]), ["ontology/domain.yaml"])
+            self.assertNotIn("da-wt-490/src/cli.py", data["files"])
+            self.assertIn("ontology/domain.yaml", data["files"])
 
     def test_repo_root_defaults_to_checksums_grandparent(self) -> None:
         """``<root>/ontology/checksums.json`` -> ``<root>``, so no flags needed."""
         with _tmp_dir() as root:
             (root / "kept.md").write_text("x", encoding="utf-8")
-            path = self._seed(root, {"kept.md": {"last_tracked": "s"}, "gone.md": {}})
+            files = self._ballast(root)
+            files["kept.md"] = {"last_tracked": "s"}
+            files["gone.md"] = {}
+            path = self._seed(root, files)
             self.assertEqual(
                 checksums_io.main(["checksums_io.py", "prune", "--checksums", str(path)]), 0
             )
             data = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(list(data["files"]), ["kept.md"])
+            self.assertIn("kept.md", data["files"])
+            self.assertNotIn("gone.md", data["files"])
 
     def test_explicit_repo_root_is_honored(self) -> None:
         with _tmp_dir() as root:
@@ -292,7 +315,9 @@ class PruneCliTests(unittest.TestCase):
 
     def test_dry_run_leaves_the_file_untouched(self) -> None:
         with _tmp_dir() as root:
-            path = self._seed(root, {"gone.md": {"last_tracked": "s"}})
+            files = self._ballast(root)
+            files["gone.md"] = {"last_tracked": "s"}
+            path = self._seed(root, files)
             before = path.read_bytes()
             rc = checksums_io.main(
                 ["checksums_io.py", "prune", "--checksums", str(path), "--dry-run"]
@@ -314,8 +339,273 @@ class PruneCliTests(unittest.TestCase):
     def test_unexpected_prune_argument_is_usage_error(self) -> None:
         self.assertEqual(checksums_io.main(["checksums_io.py", "prune", "--bogus"]), 2)
 
+    def test_checksums_flag_works_in_any_position(self) -> None:
+        """An earlier revision required --checksums FIRST and died otherwise.
+
+        It failed safe, but an undocumented ordering rule on a destructive CLI
+        is a trap — `prune --dry-run --checksums X` is the natural spelling.
+        """
+        with _tmp_dir() as root:
+            files = self._ballast(root)
+            files["gone.md"] = {"last_tracked": "s"}
+            path = self._seed(root, files)
+            before = path.read_bytes()
+            rc = checksums_io.main(
+                ["checksums_io.py", "prune", "--dry-run", "--checksums", str(path)]
+            )
+            self.assertEqual(rc, 0)
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_checksums_flag_in_trailing_position_without_value_is_usage_error(self) -> None:
+        self.assertEqual(
+            checksums_io.main(["checksums_io.py", "prune", "--dry-run", "--checksums"]), 2
+        )
+
     def test_repo_root_flag_missing_value_is_usage_error(self) -> None:
         self.assertEqual(checksums_io.main(["checksums_io.py", "prune", "--repo-root"]), 2)
+
+    def test_prune_write_preserves_byte_stability_contract(self) -> None:
+        """The new writer must go through ``write_checksums``, not a raw dump.
+
+        This PR adds a SECOND programmatic writer to checksums.json. Asserting
+        only on key membership let an `ensure_ascii=True` raw-`json.dumps`
+        mutant pass the whole suite — re-escaping literal UTF-8 and dropping
+        the trailing newline, i.e. reintroducing #1038 through the new door.
+        Seeding a non-ASCII `description` gives the contract teeth here.
+        """
+        with _tmp_dir() as root:
+            (root / "kept.md").write_text("x", encoding="utf-8")
+            path = root / "ontology" / "checksums.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            description = "semantic overlay — × not structural"
+            files = self._ballast(root)
+            files["kept.md"] = {"last_tracked": "s"}
+            files["gone.md"] = {}
+            path.write_text(
+                json.dumps(
+                    {"version": 1, "description": description, "files": files},
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                checksums_io.main(["checksums_io.py", "prune", "--checksums", str(path)]), 0
+            )
+            raw = path.read_text(encoding="utf-8")
+            self.assertIn(description, raw)
+            self.assertNotIn("\\u", raw)
+            self.assertTrue(raw.endswith("\n"))
+            remaining = json.loads(raw)["files"]
+            self.assertIn("kept.md", remaining)
+            self.assertNotIn("gone.md", remaining)
+
+
+class PruneGuardTests(unittest.TestCase):
+    """Guards between a mistyped invocation and a mass delete (merge-gate review)."""
+
+    @staticmethod
+    def _seed(root: Path, n_present: int, n_missing: int) -> Path:
+        files: dict[str, Any] = {}
+        for i in range(n_present):
+            (root / f"p{i}.md").write_text("x", encoding="utf-8")
+            files[f"p{i}.md"] = {"last_tracked": "s"}
+        for i in range(n_missing):
+            files[f"gone{i}.md"] = {"last_tracked": "s"}
+        path = root / "ontology" / "checksums.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"version": 1, "files": files}), encoding="utf-8")
+        return path
+
+    def test_nonexistent_repo_root_is_refused(self) -> None:
+        """A typo'd root made EVERY entry read as orphaned and exited 0."""
+        with _tmp_dir() as root:
+            path = self._seed(root, n_present=4, n_missing=0)
+            before = path.read_bytes()
+            rc = checksums_io.main(
+                [
+                    "checksums_io.py",
+                    "prune",
+                    "--checksums",
+                    str(path),
+                    "--repo-root",
+                    str(root / "nonexistent" / "typo"),
+                ]
+            )
+            self.assertEqual(rc, 2)
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_nonexistent_repo_root_is_refused_even_with_force(self) -> None:
+        """Guard 1 is not overridable — there is no correct use for it."""
+        with _tmp_dir() as root:
+            path = self._seed(root, n_present=4, n_missing=0)
+            rc = checksums_io.main(
+                [
+                    "checksums_io.py",
+                    "prune",
+                    "--checksums",
+                    str(path),
+                    "--repo-root",
+                    str(root / "typo"),
+                    "--force",
+                ]
+            )
+            self.assertEqual(rc, 2)
+
+    def test_over_threshold_prune_is_refused(self) -> None:
+        """8 of 10 entries missing is a wrong root, not a stale file."""
+        with _tmp_dir() as root:
+            path = self._seed(root, n_present=2, n_missing=8)
+            before = path.read_bytes()
+            rc = checksums_io.main(["checksums_io.py", "prune", "--checksums", str(path)])
+            self.assertEqual(rc, 1)
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_over_threshold_prune_is_refused_on_dry_run_too(self) -> None:
+        """A preview that prints a mass wipe as normal output invites a rubber stamp."""
+        with _tmp_dir() as root:
+            path = self._seed(root, n_present=2, n_missing=8)
+            rc = checksums_io.main(
+                ["checksums_io.py", "prune", "--checksums", str(path), "--dry-run"]
+            )
+            self.assertEqual(rc, 1)
+
+    def test_force_overrides_the_threshold(self) -> None:
+        with _tmp_dir() as root:
+            path = self._seed(root, n_present=2, n_missing=8)
+            rc = checksums_io.main(
+                ["checksums_io.py", "prune", "--checksums", str(path), "--force"]
+            )
+            self.assertEqual(rc, 0)
+            self.assertEqual(len(json.loads(path.read_text(encoding="utf-8"))["files"]), 2)
+
+    def test_under_threshold_prune_still_proceeds(self) -> None:
+        """The guard must not block a legitimate steady-state prune."""
+        with _tmp_dir() as root:
+            path = self._seed(root, n_present=19, n_missing=1)
+            rc = checksums_io.main(["checksums_io.py", "prune", "--checksums", str(path)])
+            self.assertEqual(rc, 0)
+            self.assertEqual(len(json.loads(path.read_text(encoding="utf-8"))["files"]), 19)
+
+    def test_empty_file_does_not_divide_by_zero(self) -> None:
+        with _tmp_dir() as root:
+            path = self._seed(root, n_present=0, n_missing=0)
+            self.assertEqual(
+                checksums_io.main(["checksums_io.py", "prune", "--checksums", str(path)]), 0
+            )
+
+    def test_repo_root_that_is_a_linked_worktree_is_refused(self) -> None:
+        """Worktrees are the org's default isolation and lack the child clones."""
+        with _tmp_dir() as root:
+            repo = root / "repo"
+            repo.mkdir()
+            env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+            def git(*a: str, cwd: Path) -> None:
+                subprocess.run(["git", *a], cwd=str(cwd), check=True, capture_output=True, env=env)
+
+            git("init", "-q", str(repo), cwd=root)
+            (repo / "seed.txt").write_text("s", encoding="utf-8")
+            git("add", "seed.txt", cwd=repo)
+            git("-c", "user.name=T", "-c", "user.email=t@e.com", "commit", "-qm", "s", cwd=repo)
+            wt = root / "wt"
+            git("worktree", "add", "-q", "-b", "b1", str(wt), cwd=repo)
+
+            path = self._seed(root, n_present=0, n_missing=0)
+            rc = checksums_io.main(
+                [
+                    "checksums_io.py",
+                    "prune",
+                    "--checksums",
+                    str(path),
+                    "--repo-root",
+                    str(wt),
+                ]
+            )
+            self.assertEqual(rc, 2)
+
+            # --force is the documented escape hatch for guard 2.
+            self.assertEqual(
+                checksums_io.main(
+                    [
+                        "checksums_io.py",
+                        "prune",
+                        "--checksums",
+                        str(path),
+                        "--repo-root",
+                        str(wt),
+                        "--force",
+                    ]
+                ),
+                0,
+            )
+
+
+class IsLinkedWorktreeRootTests(unittest.TestCase):
+    """The admin-dir invariant that replaced the ``/worktrees/`` substring test."""
+
+    @staticmethod
+    def _git(*a: str, cwd: Path) -> None:
+        env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        subprocess.run(["git", *a], cwd=str(cwd), check=True, capture_output=True, env=env)
+
+    def _repo(self, root: Path) -> Path:
+        repo = root / "repo"
+        repo.mkdir()
+        self._git("init", "-q", str(repo), cwd=root)
+        (repo / "seed.txt").write_text("s", encoding="utf-8")
+        self._git("add", "seed.txt", cwd=repo)
+        self._git("-c", "user.name=T", "-c", "user.email=t@e.com", "commit", "-qm", "s", cwd=repo)
+        return repo
+
+    def test_plain_checkout_is_false(self) -> None:
+        with _tmp_dir() as root:
+            self.assertFalse(checksums_io.is_linked_worktree_root(self._repo(root)))
+
+    def test_linked_worktree_is_true(self) -> None:
+        with _tmp_dir() as root:
+            repo = self._repo(root)
+            wt = root / "wt"
+            self._git("worktree", "add", "-q", "-b", "b1", str(wt), cwd=repo)
+            self.assertTrue(checksums_io.is_linked_worktree_root(wt))
+
+    def test_submodule_pointer_under_a_worktrees_path_is_false(self) -> None:
+        """The substring predicate's false positive #1."""
+        with _tmp_dir() as root:
+            repo = self._repo(root)
+            sub = repo / "vendor" / "libbar"
+            sub.mkdir(parents=True)
+            modules = repo / ".git" / "modules" / "worktrees" / "libbar"
+            modules.mkdir(parents=True)
+            (sub / ".git").write_text(f"gitdir: {modules}\n", encoding="utf-8")
+            self.assertFalse(checksums_io.is_linked_worktree_root(sub))
+
+    def test_separate_git_dir_under_worktrees_is_false(self) -> None:
+        """The substring predicate's false positive #2 — driven through real git."""
+        with _tmp_dir() as root:
+            repo = self._repo(root)
+            sep_git = root / "worktrees" / "sep.git"
+            sep_git.parent.mkdir(parents=True, exist_ok=True)
+            sep_wt = root / "sepwt"
+            self._git(
+                "clone", "-q", "--separate-git-dir", str(sep_git), str(repo), str(sep_wt), cwd=root
+            )
+            self.assertFalse(checksums_io.is_linked_worktree_root(sep_wt))
+
+    def test_missing_dot_git_is_false(self) -> None:
+        with _tmp_dir() as root:
+            self.assertFalse(checksums_io.is_linked_worktree_root(root))
+
+    def test_unrecognized_pointer_is_false(self) -> None:
+        with _tmp_dir() as root:
+            (root / ".git").write_text("not a pointer\n", encoding="utf-8")
+            self.assertFalse(checksums_io.is_linked_worktree_root(root))
+
+    def test_pointer_to_missing_admin_dir_is_false(self) -> None:
+        """Fail open when the pointer target has no gitdir/commondir files."""
+        with _tmp_dir() as root:
+            (root / ".git").write_text(f"gitdir: {root / 'nope'}\n", encoding="utf-8")
+            self.assertFalse(checksums_io.is_linked_worktree_root(root))
 
 
 class MainCliTests(unittest.TestCase):

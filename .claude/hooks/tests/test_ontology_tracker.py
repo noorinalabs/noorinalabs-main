@@ -19,6 +19,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 _HERE = Path(__file__).resolve().parent
 _HOOKS_DIR = _HERE.parent
@@ -605,9 +606,19 @@ class LinkedWorktreeTests(_FakeRepoRootMixin, unittest.TestCase):
     outside ``.worktrees/`` slips through: wave-28 left four entries keyed to
     ``da-wt-490/…`` (a worktree at the repo root) that could never resolve
     once the tree was removed. ``_is_linked_worktree`` reads git's own
-    ``.git`` pointer file instead. These tests drive real ``git worktree add``
-    plumbing rather than fabricating the pointer, so the guard is load-bearing
-    against actual git layout.
+    ``.git`` pointer file instead, discriminating on the admin-dir invariant
+    (see ``checksums_io.is_linked_worktree_root``).
+
+    The positive worktree cases and the ``--separate-git-dir`` case drive real
+    git plumbing. The two `.git/modules/` submodule cases FABRICATE the
+    pointer — git will not create a submodule offline — so they prove the
+    predicate's shape, not git's. That distinction matters: an earlier
+    revision's single fabricated submodule fixture used a path with no
+    ``worktrees`` component, which made it inert against the substring
+    predicate it was meant to guard (the loosened mutant
+    ``"worktrees" in gitdir`` passed the entire suite).
+    ``test_submodule_whose_path_contains_worktrees_is_not_skipped`` is the
+    fixture that actually kills that mutant.
     """
 
     def _git(self, *args: str, cwd: Path) -> None:
@@ -670,8 +681,7 @@ class LinkedWorktreeTests(_FakeRepoRootMixin, unittest.TestCase):
         """A submodule's ``.git`` is also a pointer file, but to ``.git/modules/``.
 
         Submodules hold real committed source; skipping them would silently
-        blind the tracker to a whole repo. Only a ``…/worktrees/<name>``
-        gitdir counts.
+        blind the tracker to a whole repo.
         """
         sub = self._fake_root / "vendor" / "libfoo"
         sub.mkdir(parents=True)
@@ -684,8 +694,78 @@ class LinkedWorktreeTests(_FakeRepoRootMixin, unittest.TestCase):
 
         self.assertFalse(hook._is_linked_worktree(f.resolve()))
 
-    def test_unreadable_git_pointer_fails_open(self):
-        """An unrecognized ``.git`` file content must track, not skip."""
+    def test_submodule_whose_path_contains_worktrees_is_not_skipped(self):
+        """Regression: the ``/worktrees/`` substring predicate got this WRONG.
+
+        A submodule may legitimately live at a path containing a ``worktrees``
+        component, e.g. ``gitdir: …/.git/modules/worktrees/libbar``. The
+        original substring test skipped it, silently blinding the tracker to a
+        whole committed source tree — the failure the fail-open asymmetry
+        exists to prevent. The admin-dir invariant
+        (``gitdir`` + ``commondir`` files) is what discriminates correctly.
+
+        This fixture is the one that kills the loosened-predicate mutant: with
+        the old `"worktrees" in gitdir` test the whole suite still passed.
+        """
+        sub = self._fake_root / "vendor" / "libbar"
+        sub.mkdir(parents=True)
+        modules_dir = self._fake_root / ".git" / "modules" / "worktrees" / "libbar"
+        modules_dir.mkdir(parents=True)
+        (sub / ".git").write_text(f"gitdir: {modules_dir}\n", encoding="utf-8")
+
+        f = sub / "src.py"
+        f.write_text("x = 1\n", encoding="utf-8")
+
+        self.assertFalse(hook._is_linked_worktree(f.resolve()))
+        self.assertFalse(hook._should_skip(str(f)))
+
+    def test_separate_git_dir_under_a_worktrees_directory_is_not_skipped(self):
+        """Second substring false-positive: ``clone --separate-git-dir``.
+
+        Its ``.git`` is a pointer file too, and parking the git dir under any
+        directory named ``worktrees`` used to trip the substring test. Driven
+        through real ``git clone`` so the pointer is git's own, not fabricated.
+        """
+        sep_git = self._fake_root / "worktrees" / "sep.git"
+        sep_git.parent.mkdir(parents=True, exist_ok=True)
+        sep_wt = self._fake_root / "sepwt"
+        subprocess.run(
+            [
+                "git",
+                "clone",
+                "-q",
+                "--separate-git-dir",
+                str(sep_git),
+                str(self._fake_root),
+                str(sep_wt),
+            ],
+            check=True,
+            capture_output=True,
+            env=hook._hermetic_git_env(),
+        )
+
+        f = sep_wt / "seed.txt"
+        self.assertTrue(f.is_file())
+        self.assertFalse(hook._is_linked_worktree(f.resolve()))
+
+    def test_worktree_of_a_bare_repo_is_still_detected(self):
+        """The admin-dir invariant must not lose coverage a path check had."""
+        bare = self._fake_root / "bare.git"
+        subprocess.run(
+            ["git", "clone", "-q", "--bare", str(self._fake_root), str(bare)],
+            check=True,
+            capture_output=True,
+            env=hook._hermetic_git_env(),
+        )
+        wt = self._fake_root / "bare-wt"
+        self._git("worktree", "add", "-q", "-b", "bare-b", str(wt), cwd=bare)
+
+        f = wt / "seed.txt"
+        self.assertTrue(f.is_file())
+        self.assertTrue(hook._is_linked_worktree(f.resolve()))
+
+    def test_unrecognized_git_pointer_fails_open(self):
+        """A ``.git`` file whose content is not a ``gitdir:`` pointer -> track."""
         odd = self._fake_root / "odd"
         odd.mkdir()
         (odd / ".git").write_text("this is not a gitdir pointer\n", encoding="utf-8")
@@ -694,6 +774,32 @@ class LinkedWorktreeTests(_FakeRepoRootMixin, unittest.TestCase):
         f.write_text("x\n", encoding="utf-8")
 
         self.assertFalse(hook._is_linked_worktree(f.resolve()))
+
+    def test_unreadable_git_pointer_fails_open(self):
+        """A ``.git`` file that actually RAISES on read -> track (fail open).
+
+        The previously-named test for this wrote a *readable* file with
+        unrecognized content, so it exercised the `startswith` branch and left
+        the ``except OSError`` path with zero coverage — a fail-closed mutation
+        there survived the whole suite. This one makes the read genuinely
+        raise.
+        """
+        odd = self._fake_root / "unreadable"
+        odd.mkdir()
+        dot_git = odd / ".git"
+        dot_git.write_text("gitdir: /somewhere\n", encoding="utf-8")
+        f = odd / "file.md"
+        f.write_text("x\n", encoding="utf-8")
+
+        real_read_text = Path.read_text
+
+        def _raising(self, *args, **kwargs):
+            if self == dot_git:
+                raise OSError("simulated unreadable .git")
+            return real_read_text(self, *args, **kwargs)
+
+        with mock.patch.object(Path, "read_text", _raising):
+            self.assertFalse(hook._is_linked_worktree(f.resolve()))
 
     def test_no_git_ancestor_fails_open(self):
         base = Path.home() / ".cache" / "noorinalabs-test-ontology-tracker"
