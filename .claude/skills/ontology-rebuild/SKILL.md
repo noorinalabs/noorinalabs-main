@@ -90,6 +90,21 @@ PYTHONPATH="$REPO_ROOT/.claude/lib" python3 "$REPO_ROOT/.claude/lib/checksums_io
 
 Pass every dirty path resolved in this run as a separate argument (a path not present in `checksums.json` is silently skipped, not an error — see `checksums_io.mark_resolved`'s docstring). Use `--checksums <path>` before the path list only if resolving a non-default `checksums.json` location.
 
+**Orphan entries (paths that no longer exist).** A dirty path whose file is gone cannot be resolved by reading it — there is nothing to read. These come from an edit inside an ephemeral tree the tracker's skip filters missed (the `da-wt-490/*` case: a worktree parked outside `.worktrees/`, so the name-based filter did not catch it — since fixed structurally by `ontology_tracker._is_linked_worktree`) or from genuinely deleted source. Do NOT `mark-resolved` an orphan — that quiets the symptom and leaves the entry to report dirty again. Prune it:
+
+**Run it from the MAIN checkout, not a worktree.** The parent `.gitignore`s the child-repo clones, so inside a worktree ~half the tracked entries point at paths that structurally do not exist there.
+
+```bash
+# NOT `git rev-parse --show-toplevel` — that resolves to the worktree when this
+# skill runs under agent isolation, which is the org's default working style.
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir)/.." && pwd)"
+python3 "$REPO_ROOT/.claude/lib/checksums_io.py" prune --dry-run   # list candidates
+```
+
+`prune` refuses rather than proceeds when the root looks wrong — a nonexistent `--repo-root` (exit 2), a root that is itself a linked worktree (exit 2), or a prune set over 25% of all entries (exit 1). `--force` overrides the last two. Those guards exist because every one of those cases previously reported a 50–100% wipe as ordinary output and exited 0.
+
+The guards are a backstop, not a substitute for reading the list: `prune` is an on-disk existence test, not a git-history one, so a file that exists on a child repo's `main` but not on the branch that child is currently checked out at reads as absent. Confirm candidates with `git -C <repo> cat-file -e origin/main:<path>`, then re-run without `--dry-run`. Report the pruned count in step 5.
+
 ### 5. Report
 
 ```
