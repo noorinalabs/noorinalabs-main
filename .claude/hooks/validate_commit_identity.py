@@ -99,12 +99,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _shell_parse import (  # noqa: E402
+    SHELL_INTERPRETERS,
     bashlex_available,
+    classify_heredocs,
     extract_dash_c_pairs,
     find_git_subcommand,
     iter_command_segments,
     iter_command_segments_ast,
     resolve_tool_cwd,
+    strip_data_heredocs,
     strip_heredocs,
     tokenize,
 )
@@ -252,7 +255,14 @@ def _detect_target_roster(command: str, *, cwd: str | None = None) -> dict[str, 
 # `mksh` and `pdksh` are deliberately excluded as a conservative bound;
 # they're rare in modern installs and can be added later if observed in
 # any bypass surface (see #482 acceptance bullet).
-_INTERPRETERS = r"(?:bash|sh|zsh|dash|ksh)"
+#
+# Built from `_shell_parse.SHELL_INTERPRETERS` rather than spelled out twice
+# (main#1152): the same set decides which heredoc bodies `strip_data_heredocs`
+# KEEPS for scanning and which shapes the matchers below BLOCK. If the two
+# drifted, a body could be stripped as data by one definition and would then
+# never be offered to the matcher that considers it code — a silent hole. Sorted
+# longest-first so no alternative can shadow a longer one it prefixes.
+_INTERPRETERS = "(?:" + "|".join(sorted(SHELL_INTERPRETERS, key=lambda s: (-len(s), s))) + ")"
 
 # printf/echo … | <interpreter>. Captures the printf/echo argument body.
 # Anchor on `printf` or `echo` at word boundary, allow any chars up to the
@@ -427,36 +437,60 @@ def _detect_indirect_commit(command: str, *, cwd: str | None = None) -> str | No
     `commit` (e.g. `bash deploy.sh`), so gating it on `"commit" in command`
     would reintroduce the #482 `bash <script>` bypass. It therefore always
     runs, exactly as before.
+
+    Scan scope (main#1152): every shape above is matched against
+    `strip_data_heredocs(command)`, NOT the raw string. All seven matchers scan
+    the whole text and none of them asks what a heredoc is attached to, so on
+    the raw string a heredoc body was searched for bypass shapes no matter what
+    consumed it — `cat > notes.md <<'EOF' … bash -c 'git commit …' … EOF` was
+    blocked as if it WERE that invocation, while the identical bytes through the
+    `Write` tool were allowed. Stripping first removes only the bodies that a
+    shell will never execute; interpreter-fed bodies survive untouched and stay
+    fully scannable, and `strip_data_heredocs` resolves every ambiguity toward
+    "keep", so this can only narrow false positives, never open a bypass.
+
+    Shape 4 additionally consults `classify_heredocs` directly. `_HEREDOC_RE`
+    requires the interpreter to appear textually BEFORE the `<<`, which misses
+    `cat <<'EOF' | bash` — the body is piped into a shell and executed, and that
+    shape was measurably ALLOWED before this change. The classifier already
+    computes "is this body fed to an interpreter?" including through a pipe, so
+    the check is added here rather than left as a known hole.
     """
-    if "commit" in command:
-        for m in _PIPE_TO_SHELL_RE.finditer(command):
+    scanned = strip_data_heredocs(command)
+
+    if "commit" in scanned:
+        for m in _PIPE_TO_SHELL_RE.finditer(scanned):
             if _payload_looks_like_commit(m.group("payload")):
                 return "printf/echo piped to shell"
 
-        for m in _DASH_C_RE.finditer(command):
+        for m in _DASH_C_RE.finditer(scanned):
             payload = _strip_outer_quotes(m.group("payload"))
             if _payload_looks_like_commit(payload):
                 return "shell -c"
 
-        for m in _PROCESS_SUB_RE.finditer(command):
+        for m in _PROCESS_SUB_RE.finditer(scanned):
             if _payload_looks_like_commit(m.group("payload")):
                 return "process substitution"
 
-        for m in _HEREDOC_RE.finditer(command):
+        for m in _HEREDOC_RE.finditer(scanned):
             if _payload_looks_like_commit(m.group("payload")):
                 return "heredoc"
 
-        for m in _HERESTRING_RE.finditer(command):
+        for span in classify_heredocs(command):
+            if span.is_code and _payload_looks_like_commit(span.body):
+                return "heredoc"
+
+        for m in _HERESTRING_RE.finditer(scanned):
             payload = _strip_outer_quotes(m.group("payload"))
             if _payload_looks_like_commit(payload):
                 return "here-string"
 
-        for m in _EVAL_RE.finditer(command):
+        for m in _EVAL_RE.finditer(scanned):
             payload = _strip_outer_quotes(m.group("payload"))
             if _payload_looks_like_commit(payload):
                 return "eval"
 
-    for m in _SCRIPT_INVOKE_RE.finditer(command):
+    for m in _SCRIPT_INVOKE_RE.finditer(scanned):
         content = _read_script_if_safe(m.group("path"), cwd)
         if content and _payload_looks_like_commit(content):
             return f"shell script ({m.group('path')})"
