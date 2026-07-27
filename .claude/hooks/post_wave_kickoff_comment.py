@@ -128,6 +128,13 @@ WAVE_BRANCH = "wave-branch"
 # failure.
 DEFAULT_BRANCH_BASE = "main"
 
+# Tri-state results of the kickoff-comment idempotency probe (main#1145).
+# UNKNOWN is deliberately NOT foldable into ABSENT — see
+# `kickoff_comment_state`.
+KICKOFF_PRESENT = "present"
+KICKOFF_ABSENT = "absent"
+KICKOFF_UNKNOWN = "unknown"
+
 # Regex matching the kickoff comment heading the charter requires
 # (`**Wave {M} Kickoff — Phase {N}**`). Used for idempotency check. The
 # emdash is the literal character in the template; we tolerate either
@@ -430,24 +437,63 @@ def kickoff_already_posted(
     `wave_num=None` the legacy wave-agnostic match is used (any kickoff
     heading counts).
 
-    The `fetch_comments` callable defaults to a real `gh issue view` call;
-    tests inject a mock. Returns False on any error fetching comments
-    (don't suppress on broken state — let the hook attempt to post and
-    surface real errors via annunaki on the actual post call).
+    **Returns False for BOTH "no kickoff comment" and "could not fetch"**
+    (main#1145). That collapse is deliberate HERE and wrong elsewhere:
+
+      - For the HOOK, failing open is correct and bounded. The hook posts
+        at most one comment per label-apply — an explicit operator action —
+        and the failure it is guarding against is #286, a kickoff that
+        never gets posted. One possibly-duplicate comment beats a silently
+        missing assignment, and a real post failure still surfaces via
+        annunaki on the post call.
+      - For the SWEEP, failing open is unbounded. `/wave-kickoff` Step 7b
+        defines completion as "zero would_post", so under a sustained fetch
+        failure every `--apply` pass appends another duplicate and reports
+        `posted` — the operator follows the documented procedure into a
+        loop that never converges. And a fetch is likeliest to fail during
+        a GitHub incident, which is exactly when kickoff gets re-run.
+
+    So callers that must distinguish the two cases use
+    `kickoff_comment_state` (tri-state) instead; this function is retained
+    as the thin bool wrapper with its historical fail-open contract intact.
+    """
+    return (
+        kickoff_comment_state(repo, issue_number, wave_num=wave_num, fetch_comments=fetch_comments)
+        == KICKOFF_PRESENT
+    )
+
+
+def kickoff_comment_state(
+    repo: str, issue_number: str, wave_num: int | None = None, fetch_comments=None
+) -> str:
+    """Tri-state idempotency probe (main#1145).
+
+    Returns:
+      `KICKOFF_PRESENT` — a kickoff comment for `wave_num` exists.
+      `KICKOFF_ABSENT`  — the comments were read and none matched.
+      `KICKOFF_UNKNOWN` — the comments could NOT be read (gh non-zero exit,
+                          15s timeout, JSON decode error). This is NOT
+                          "absent": a caller that treats it as absent posts
+                          on no evidence.
+
+    Keeping *unknown* as its own state is the whole point. Collapsing it
+    into *absent* is the same silent-wrong-zero class this hook's own #1141
+    fixes are about — a sweep that reports zero outstanding work because
+    every probe failed looks identical to one that has nothing to do.
     """
     if fetch_comments is None:
         fetch_comments = _gh_fetch_comments
 
     comments = fetch_comments(repo, issue_number)
     if comments is None:
-        return False
+        return KICKOFF_UNKNOWN
 
     heading_re = _kickoff_heading_re(wave_num)
     for c in comments:
         body = c.get("body", "") if isinstance(c, dict) else ""
         if heading_re.search(body):
-            return True
-    return False
+            return KICKOFF_PRESENT
+    return KICKOFF_ABSENT
 
 
 def _gh_fetch_comments(repo: str, issue_number: str) -> list[dict] | None:

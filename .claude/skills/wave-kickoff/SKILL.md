@@ -414,7 +414,7 @@ For waves with many issues across many repos, the labeling + project-board adds 
 
 ### 7b. Reconciliation sweep — MANDATORY after Step 7 (main#1141)
 
-**Do not treat Step 7 as complete until this sweep reports zero `would_post`.** The hook in § 7 reacts to the label-apply *command*, so it can only act on what it can parse out of a shell string. A `for n in 1114 1116; do gh issue edit "$n" …; done` loop carries no issue number in the command at all — nothing can react to it. That is not hypothetical: during `/wave-scope 10 29` on 2026-07-27, 14 issues were labeled and **zero** kickoff comments posted, undetected until an unrelated audit.
+**Do not treat Step 7 as complete until this sweep exits 0** — that means zero `would_post` AND zero `skip_fetch_unknown`. Exit 0 is the criterion, not the `would_post` line alone: a sweep whose comment fetches all failed cannot tell you whether anything is outstanding, and must not be read as "nothing to do" (main#1145). The hook in § 7 reacts to the label-apply *command*, so it can only act on what it can parse out of a shell string. A `for n in 1114 1116; do gh issue edit "$n" …; done` loop carries no issue number in the command at all — nothing can react to it. That is not hypothetical: during `/wave-scope 10 29` on 2026-07-27, 14 issues were labeled and **zero** kickoff comments posted, undetected until an unrelated audit.
 
 The sweep keys on the labels that actually LANDED rather than on the command string, and is idempotent (it screens every candidate through the same `kickoff_already_posted` check the hook uses), so it is safe to run repeatedly:
 
@@ -430,6 +430,7 @@ Read the dry-run output before applying:
 - `would_post` — the hook missed this issue; the sweep will backfill it.
 - `skip_idempotent` — the hook already posted. Expected for most issues.
 - `skip_no_row` — the issue carries the wave label but is in NO `wave_{M}_scope` tier. This is `/wave-scope` drift, not a kickoff bug — fix the scope, then re-run. The sweep never guesses an assignment.
+- `skip_fetch_unknown` — the comment fetch failed, so whether a kickoff comment already exists is **unknown**. Nothing was posted for that issue and the sweep exits non-zero. Do not re-run `--apply` in a loop hoping it clears: fix the `gh` failure (usually a GitHub incident or auth), then re-run once. Re-running against a broken fetch is safe now — it posts nothing — but it also makes no progress.
 
 Repos default to `wave_{M}_repos_in_scope`; override with repeatable `--repo`. `--json` emits machine-readable results.
 

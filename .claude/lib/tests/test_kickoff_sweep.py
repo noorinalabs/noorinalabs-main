@@ -233,5 +233,124 @@ class FormatReport(unittest.TestCase):
         self.assertIn("no open issue carries a wave-29 label", out)
 
 
+class FetchFailureNeverPosts(unittest.TestCase):
+    """main#1145 — a failed comment fetch must never be read as "no comment".
+
+    `kickoff_already_posted` returned False for BOTH "no kickoff comment" and
+    "could not fetch". In the sweep that fails open into a post, and because
+    SKILL.md Step 7b defined completion as "zero would_post", a sustained fetch
+    failure meant every `--apply` pass appended another duplicate and reported
+    `posted` — an operator following the documented procedure into a loop that
+    never converges. The fetch is likeliest to fail during a GitHub incident,
+    which is exactly when kickoff gets re-run.
+    """
+
+    def _sweep(self, rec: _Recorder, *, apply: bool):
+        return ks.sweep(
+            10,
+            29,
+            _status(),
+            ["noorinalabs-main"],
+            apply=apply,
+            list_issues=rec.list_issues,
+            fetch_comments=lambda repo, number: None,  # gh failed / timed out
+            post_comment=rec.post,
+            body_writer=rec.write_body,
+        )
+
+    def test_apply_posts_nothing_when_fetch_fails(self) -> None:
+        rec = _Recorder(["1114", "1116"])
+        results = self._sweep(rec, apply=True)
+        self.assertEqual([r["action"] for r in results], [ks.SKIP_FETCH_UNKNOWN] * 2)
+        self.assertEqual(rec.posted, [], "a failed probe must never produce a post")
+
+    def test_dry_run_reports_unknown_not_would_post(self) -> None:
+        rec = _Recorder(["1114"])
+        results = self._sweep(rec, apply=False)
+        self.assertEqual([r["action"] for r in results], [ks.SKIP_FETCH_UNKNOWN])
+        self.assertEqual(rec.posted, [])
+
+    def test_repeated_apply_passes_never_accumulate(self) -> None:
+        """The convergence property: N passes under sustained failure, 0 posts."""
+        rec = _Recorder(["1114", "1116"])
+        for _ in range(3):
+            self._sweep(rec, apply=True)
+        self.assertEqual(rec.posted, [])
+
+    def test_unknown_is_distinct_from_absent(self) -> None:
+        """Both are "no kickoff comment found" to the old bool; they are not the same."""
+        rec = _Recorder(["1114"])
+        absent = ks.sweep(
+            10,
+            29,
+            _status(),
+            ["noorinalabs-main"],
+            apply=True,
+            list_issues=rec.list_issues,
+            fetch_comments=lambda r, n: [],
+            post_comment=rec.post,
+            body_writer=rec.write_body,
+        )
+        self.assertEqual([r["action"] for r in absent], [ks.POSTED])
+
+        rec2 = _Recorder(["1114"])
+        unknown = self._sweep(rec2, apply=True)
+        self.assertEqual([r["action"] for r in unknown], [ks.SKIP_FETCH_UNKNOWN])
+
+    def test_partial_fetch_failure_still_posts_the_readable_ones(self) -> None:
+        """One bad probe must not stall the issues that WERE readable."""
+        rec = _Recorder(["1114", "1116"])
+        results = ks.sweep(
+            10,
+            29,
+            _status(),
+            ["noorinalabs-main"],
+            apply=True,
+            list_issues=rec.list_issues,
+            fetch_comments=lambda repo, number: None if number == "1114" else [],
+            post_comment=rec.post,
+            body_writer=rec.write_body,
+        )
+        self.assertEqual([r["action"] for r in results], [ks.SKIP_FETCH_UNKNOWN, ks.POSTED])
+        self.assertEqual(rec.posted, [("noorinalabs-main", "1116")])
+
+
+class IncompleteSweepIsLoudAndNonZero(unittest.TestCase):
+    """ "Could not tell" must not look like "nothing to do" (main#1145)."""
+
+    def test_report_calls_out_unknowns(self) -> None:
+        out = ks.format_report(
+            29,
+            [{"repo": "noorinalabs-main", "issue": "1114", "action": ks.SKIP_FETCH_UNKNOWN}],
+            apply=True,
+        )
+        self.assertIn("INCOMPLETE", out)
+        self.assertIn("could not be checked", out)
+        self.assertIn("NOTHING was posted", out)
+
+    def test_report_calls_out_failed_posts(self) -> None:
+        out = ks.format_report(
+            29,
+            [{"repo": "noorinalabs-main", "issue": "1114", "action": ks.POST_FAILED}],
+            apply=True,
+        )
+        self.assertIn("INCOMPLETE", out)
+
+    def test_clean_report_has_no_incomplete_banner(self) -> None:
+        out = ks.format_report(
+            29,
+            [{"repo": "noorinalabs-main", "issue": "1114", "action": ks.SKIP_IDEMPOTENT}],
+            apply=True,
+        )
+        self.assertNotIn("INCOMPLETE", out)
+
+    def test_unknown_counts_as_an_incomplete_action(self) -> None:
+        """Step 7b keys completion on exit 0, so unknown must block it."""
+        self.assertIn(ks.SKIP_FETCH_UNKNOWN, ks._INCOMPLETE_ACTIONS)
+        self.assertIn(ks.POST_FAILED, ks._INCOMPLETE_ACTIONS)
+        self.assertNotIn(ks.SKIP_IDEMPOTENT, ks._INCOMPLETE_ACTIONS)
+        self.assertNotIn(ks.WOULD_POST, ks._INCOMPLETE_ACTIONS)
+
+
 if __name__ == "__main__":
     unittest.main()

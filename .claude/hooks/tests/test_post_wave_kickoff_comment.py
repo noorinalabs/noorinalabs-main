@@ -1098,5 +1098,80 @@ class SilentDeclineIsSurfaced(unittest.TestCase):
         self.assertEqual(logs, [])
 
 
+class KickoffCommentStateTriState(unittest.TestCase):
+    """main#1145 — `unknown` must be its own state, not folded into `absent`."""
+
+    HEADING = [{"body": "**Wave 29 Kickoff — Phase 10**\n\nbody"}]
+
+    def test_present(self) -> None:
+        self.assertEqual(
+            hook.kickoff_comment_state("r", "1", 29, fetch_comments=lambda r, n: self.HEADING),
+            hook.KICKOFF_PRESENT,
+        )
+
+    def test_absent(self) -> None:
+        self.assertEqual(
+            hook.kickoff_comment_state("r", "1", 29, fetch_comments=lambda r, n: []),
+            hook.KICKOFF_ABSENT,
+        )
+
+    def test_unknown_on_fetch_failure(self) -> None:
+        self.assertEqual(
+            hook.kickoff_comment_state("r", "1", 29, fetch_comments=lambda r, n: None),
+            hook.KICKOFF_UNKNOWN,
+        )
+
+    def test_three_states_are_distinct(self) -> None:
+        self.assertEqual(len({hook.KICKOFF_PRESENT, hook.KICKOFF_ABSENT, hook.KICKOFF_UNKNOWN}), 3)
+
+    def test_wave_specific_carry_forward_is_absent_not_present(self) -> None:
+        """#547 semantics survive the tri-state refactor."""
+        prior = [{"body": "**Wave 28 Kickoff — Phase 10**"}]
+        self.assertEqual(
+            hook.kickoff_comment_state("r", "1", 29, fetch_comments=lambda r, n: prior),
+            hook.KICKOFF_ABSENT,
+        )
+
+
+class KickoffAlreadyPostedContractPreserved(unittest.TestCase):
+    """The bool wrapper keeps its historical fail-open contract (main#1145).
+
+    Failing open is correct for the HOOK — it posts at most one comment per
+    label-apply, and the failure it guards against (#286) is a kickoff that
+    never gets posted at all. It is wrong for the SWEEP, which is why the
+    sweep uses the tri-state instead. Both behaviors are pinned so neither
+    drifts into the other.
+    """
+
+    def test_false_on_fetch_failure(self) -> None:
+        self.assertFalse(
+            hook.kickoff_already_posted("r", "1", 29, fetch_comments=lambda r, n: None)
+        )
+
+    def test_false_when_absent(self) -> None:
+        self.assertFalse(hook.kickoff_already_posted("r", "1", 29, fetch_comments=lambda r, n: []))
+
+    def test_true_when_present(self) -> None:
+        body = [{"body": "**Wave 29 Kickoff — Phase 10**"}]
+        self.assertTrue(hook.kickoff_already_posted("r", "1", 29, fetch_comments=lambda r, n: body))
+
+    def test_hook_still_posts_when_the_fetch_fails(self) -> None:
+        """End-to-end: the PostToolUse path keeps posting on a broken fetch."""
+        status = {
+            "current_phase": 10,
+            "wave_29_merge_model": "direct-to-main",
+            "wave_29_scope": {"tier_1": [{"id": "noorinalabs-main#1114", "implementer": "N"}]},
+        }
+        result = hook.check(
+            _bash(f'gh issue edit 1114 {_EDIT_REPO} --add-label "wave-29"'),
+            status_loader=lambda: status,
+            comment_fetcher=lambda r, n: None,
+            comment_poster=lambda r, n, p: True,
+            body_writer=lambda b, r, n: Path("/dev/null"),
+        )
+        assert result is not None
+        self.assertEqual(result["action"], "post")
+
+
 if __name__ == "__main__":
     unittest.main()

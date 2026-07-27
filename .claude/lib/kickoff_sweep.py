@@ -29,10 +29,20 @@ evidence than observing the resulting state") applied to the kickoff surface.
 Safety properties
 =================
 
-* **Idempotent.** Every candidate is screened through the hook's own
-  `kickoff_already_posted(repo, issue, wave_num=…)`, so re-running the sweep
-  posts nothing the second time. That check is wave-specific (#547), so a
-  carry-forward issue's PRIOR-wave kickoff does not suppress this wave's.
+* **Idempotent WHEN THE COMMENT FETCH SUCCEEDS.** Every candidate is screened
+  through the hook's own `kickoff_comment_state(repo, issue, wave_num=…)`, so
+  re-running the sweep posts nothing the second time. That check is
+  wave-specific (#547), so a carry-forward issue's PRIOR-wave kickoff does not
+  suppress this wave's.
+
+  The qualifier is load-bearing (main#1145). If the fetch itself fails, the
+  probe returns `unknown`, not `absent`, and the candidate resolves to
+  `skip_fetch_unknown` — no post, in either mode. Without that state a
+  sustained fetch failure appended a duplicate on every `--apply` pass and
+  reported `posted`, so the sweep never reached the zero-`would_post` that
+  Step 7b defines as done: an operator following the documented procedure into
+  an unbounded loop. A fetch is likeliest to fail during a GitHub incident,
+  which is exactly when kickoff gets re-run.
 * **One renderer.** The comment body comes from the hook's
   `render_kickoff_comment` with the hook's `read_merge_model` — the sweep can
   never drift from the hook's template or emit a different branch base.
@@ -48,9 +58,11 @@ CLI
   kickoff_sweep.py <phase> <wave> [--status PATH] [--repo NAME ...]
                                   [--apply] [--json]
 
-Exit codes: 0 = nothing to do / dry-run completed / all posts succeeded;
-1 = at least one post failed (a red signal for the operator, mirroring
-`wave_merge_model.py reachability`).
+Exit codes: 0 = the sweep saw every candidate and did its job; 1 = it did NOT
+(a post failed, or an issue could not be probed at all). Step 7b keys
+completion on exit 0, so an un-probeable issue blocks completion exactly like a
+failed post — the operator is never handed a quiet zero that means "I could not
+look". Mirrors `wave_merge_model.py reachability`.
 """
 
 from __future__ import annotations
@@ -73,11 +85,13 @@ _DEFAULT_STATUS = _REPO_ROOT / "cross-repo-status.json"
 # hook module).
 sys.path.insert(0, str(_HOOKS_DIR))
 from post_wave_kickoff_comment import (  # noqa: E402
+    KICKOFF_PRESENT,
+    KICKOFF_UNKNOWN,
     _gh_post_comment,
     _phase_from_status,
     _write_fresh_body_file,
     find_assignment_row,
-    kickoff_already_posted,
+    kickoff_comment_state,
     read_merge_model,
     render_kickoff_comment,
 )
@@ -91,6 +105,15 @@ SKIP_IDEMPOTENT = "skip_idempotent"
 SKIP_META_ISSUE = "skip_meta_issue"
 SKIP_NO_ROW = "skip_no_row"
 POST_FAILED = "post_failed"
+# main#1145: the comment fetch failed, so we CANNOT tell whether a kickoff
+# comment already exists. Never posts, in either mode.
+SKIP_FETCH_UNKNOWN = "skip_fetch_unknown"
+
+# Outcomes that mean the sweep did not finish its job. `/wave-kickoff` Step 7b
+# treats a non-zero exit as "Step 7 is NOT complete" — so an un-probeable issue
+# blocks completion exactly like a failed post does, rather than passing as a
+# quiet zero.
+_INCOMPLETE_ACTIONS = frozenset({POST_FAILED, SKIP_FETCH_UNKNOWN})
 
 
 def _run_gh(args: list[str]) -> str:
@@ -218,10 +241,21 @@ def sweep(
                 results.append({"repo": repo, "issue": issue_number, "action": SKIP_NO_ROW})
                 continue
 
-            if kickoff_already_posted(
+            state = kickoff_comment_state(
                 repo, issue_number, wave_num=wave_num, fetch_comments=fetch_comments
-            ):
+            )
+            if state == KICKOFF_PRESENT:
                 results.append({"repo": repo, "issue": issue_number, "action": SKIP_IDEMPOTENT})
+                continue
+            if state == KICKOFF_UNKNOWN:
+                # main#1145 fail-open guard. We could not read the comments, so
+                # "already posted?" is unanswered — and unanswered is not "no".
+                # Posting here is what made a sustained fetch failure append a
+                # duplicate on every `--apply` pass while reporting `posted`,
+                # so the sweep never converged to the zero-`would_post` that
+                # Step 7b defines as done. Report the uncertainty and post
+                # nothing; the operator re-runs once the fetch is healthy.
+                results.append({"repo": repo, "issue": issue_number, "action": SKIP_FETCH_UNKNOWN})
                 continue
 
             body = render_kickoff_comment(row, wave_num, phase_num, repo, merge_model=merge_model)
@@ -245,7 +279,12 @@ def sweep(
 
 
 def format_report(wave: str | int, results: list[dict], *, apply: bool) -> str:
-    """Human-readable sweep report — one line per candidate plus a summary."""
+    """Human-readable sweep report — one line per candidate plus a summary.
+
+    The `skip_fetch_unknown` count is called out separately rather than left to
+    be spotted in the summary line (main#1145): "nothing to do" and "could not
+    tell" must not look alike to an operator deciding whether Step 7 is done.
+    """
     counts: dict[str, int] = {}
     for r in results:
         counts[r["action"]] = counts.get(r["action"], 0) + 1
@@ -258,6 +297,18 @@ def format_report(wave: str | int, results: list[dict], *, apply: bool) -> str:
         lines.append(f"  (no open issue carries a wave-{wave} label in the swept repos)")
     summary = ", ".join(f"{k}={v}" for k, v in sorted(counts.items())) or "nothing to reconcile"
     lines.append(f"Summary: {summary}")
+
+    unknown = counts.get(SKIP_FETCH_UNKNOWN, 0)
+    if unknown:
+        lines.append(
+            f"INCOMPLETE: {unknown} issue(s) could not be checked — the comment fetch failed, "
+            "so it is unknown whether they already have a kickoff comment. NOTHING was posted "
+            "for them. Do NOT treat this sweep as complete; re-run once gh is healthy (#1145)."
+        )
+    if counts.get(POST_FAILED):
+        lines.append(
+            f"INCOMPLETE: {counts[POST_FAILED]} post(s) failed — re-run to retry (idempotent)."
+        )
     return "\n".join(lines)
 
 
@@ -277,7 +328,7 @@ def _cmd_sweep(args: argparse.Namespace) -> int:
         print(json.dumps({"wave": args.wave, "apply": args.apply, "results": results}, indent=2))
     else:
         print(format_report(args.wave, results, apply=args.apply))
-    return 1 if any(r["action"] == POST_FAILED for r in results) else 0
+    return 1 if any(r["action"] in _INCOMPLETE_ACTIONS for r in results) else 0
 
 
 def _build_parser() -> argparse.ArgumentParser:
