@@ -113,16 +113,31 @@ services:
   isnad-ingest-platform:
     repo: noorinalabs-isnad-ingest-platform
     type: data_pipeline_processing
-    status: planned (P2W8)
+    status: active (workers implemented + E2E-verified; see repos/isnad-ingest-platform.yaml)
     language: Python 3.14
     runtime: Kafka workers (KRaft mode, no ZooKeeper) in Docker containers
-    storage_root: "B2 noorinalabs-pipeline/ — prefixes raw → dedup → enriched → normalized → staged"
+    storage_root: "B2 noorinalabs-pipeline/ — prefixes raw → dedup → enriched → normalized (staged/ reserved, not yet emitted)"
     local_dev: MinIO (S3-compatible, same code path as B2)
+    topic_source_of_truth: workers/lib/topics.py
     workers:
-      dedup: { description: "Cross-source dedup → enriched/" }
-      enrich: { description: "Topic classification, historical linking" }
-      normalize: { description: "Schema normalization → normalized/" }
-      graph_load: { description: "Load into Neo4j" }
+      dedup-worker:
+        description: "Cross-source dedup → dedup/{source}/{batch_id}/"
+        consumes: pipeline.raw.landed
+        produces: pipeline.dedup.done
+      enrich-worker:
+        description: "Topic classification, historical linking → enriched/{source}/{batch_id}/"
+        consumes: pipeline.dedup.done
+        produces: pipeline.enrich.done
+      normalize-worker:
+        description: "Schema normalization + node/edge fan-out → normalized/{batch_id}/ (+ _MANIFEST.json)"
+        consumes: pipeline.enrich.done
+        produces: pipeline.normalize.done
+      ingest-worker:
+        description: "Terminal stage — MERGE into Neo4j from the normalized/ manifest"
+        consumes: pipeline.normalize.done
+        produces: null
+        sink: neo4j
+    dlq_topic: pipeline.dlq
     reset_levels: [stage, source, full]
 
   design-system:

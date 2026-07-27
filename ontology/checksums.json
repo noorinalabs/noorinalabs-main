@@ -201,9 +201,9 @@
     },
     "cross-repo-status.json": {
       "last_tracked": "38bd550a9a2a868490fdc0ed2f705d4fab93bba3c3acec82af39aba712bba281",
-      "last_resolved": "862ae7c2358de82b03ac83049291e063fd431b544829cd76ffac2f9b19557564",
+      "last_resolved": "38bd550a9a2a868490fdc0ed2f705d4fab93bba3c3acec82af39aba712bba281",
       "tracked_at": "2026-07-26T15:51:29.886631+00:00",
-      "resolved_at": "2026-07-11T02:28:00.629407+00:00"
+      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     },
     "dependencies.yml": {
       "last_resolved": "f4b53ffd3e1f81e055130ae2f53ff08ba9b5f651782434bbf3ac8b3eab4276e8",
@@ -500,10 +500,10 @@
       "resolved_at": "2026-07-08T20:16:00Z"
     },
     "ontology/repos/isnad-ingest-platform.yaml": {
-      "last_resolved": "b8ca5cc2f951054d287dd600c4eab104311e56dd4987bece91bb7e697855e27c",
-      "last_tracked": "b8ca5cc2f951054d287dd600c4eab104311e56dd4987bece91bb7e697855e27c",
-      "resolved_at": "2026-04-16T21:36:05.052302+00:00",
-      "tracked_at": "2026-04-16T21:36:05.052302+00:00"
+      "last_tracked": "31d685b97a2ad0a7b1931365c76acf61bfad86c193236a7c83f8b6201b0902e1",
+      "last_resolved": "31d685b97a2ad0a7b1931365c76acf61bfad86c193236a7c83f8b6201b0902e1",
+      "tracked_at": "2026-07-27T03:59:11.492723+00:00",
+      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     },
     "ontology/repos/landing-page.yaml": {
       "last_resolved": "d1f9ff47da7a4781b9e356330690c0736c6800dace7b3d63bddbbf6cd5feeb8e",
@@ -518,10 +518,10 @@
       "resolved_at": "2026-05-13T03:21:08.894134+00:00"
     },
     "ontology/services.yaml": {
-      "last_tracked": "1c7675a29126bd344a86cdf996d02dc6d6886c8543adee2d9126af81a3c35a14",
-      "last_resolved": "1c7675a29126bd344a86cdf996d02dc6d6886c8543adee2d9126af81a3c35a14",
-      "tracked_at": "2026-07-02T23:26:20.588363+00:00",
-      "resolved_at": "2026-07-02T23:26:29Z"
+      "last_tracked": "b709d0aa206efbf75fbb332828881d2a3864983d574c45e3c75cb6ef53bc790b",
+      "last_resolved": "b709d0aa206efbf75fbb332828881d2a3864983d574c45e3c75cb6ef53bc790b",
+      "tracked_at": "2026-07-27T03:58:37.385762+00:00",
+      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     },
     "aino-ig-0194/.claude/settings.json": {
       "last_tracked": "d002e78433abf04bc3cc28f432bd23b9250ce3ca2a3e52290b1fb380f8868011",
@@ -1741,81 +1741,81 @@
     },
     ".claude/team/phases/phase-10.md": {
       "last_tracked": "ae0a4acad442d41741c19b9a2f3fe70ec206b3d42ea648c646e106375799a57a",
-      "last_resolved": "",
+      "last_resolved": "ae0a4acad442d41741c19b9a2f3fe70ec206b3d42ea648c646e106375799a57a",
       "tracked_at": "2026-07-26T15:47:50.492891+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     },
     "noorinalabs-isnad-ingest-platform/workers/lib/runner.py": {
       "last_tracked": "24b9c5913323e30fe9fc3e85b591bbd46a47506ece5b3dc91bec0bf81d103c37",
-      "last_resolved": "",
+      "last_resolved": "24b9c5913323e30fe9fc3e85b591bbd46a47506ece5b3dc91bec0bf81d103c37",
       "tracked_at": "2026-07-26T16:41:47.204255+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     },
     "noorinalabs-isnad-ingest-platform/workers/ingest/main.py": {
       "last_tracked": "a92f7b68cffbb0d7f56317849780c48d80cd532ef1aaab85b6f6f1df9526eafd",
-      "last_resolved": "",
+      "last_resolved": "a92f7b68cffbb0d7f56317849780c48d80cd532ef1aaab85b6f6f1df9526eafd",
       "tracked_at": "2026-07-26T16:41:53.915830+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     },
     "noorinalabs-isnad-ingest-platform/workers/dedup/main.py": {
       "last_tracked": "33cca88274dd1b03d7071da1016bc2944426f5e812566fab13f4453f9caae35a",
-      "last_resolved": "",
+      "last_resolved": "33cca88274dd1b03d7071da1016bc2944426f5e812566fab13f4453f9caae35a",
       "tracked_at": "2026-07-26T16:41:58.852100+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     },
     "noorinalabs-isnad-ingest-platform/workers/enrich/main.py": {
       "last_tracked": "cbe07a4e719964258a8a4ddbc6fced4f7cdfc0a47f18aeaf2ceb74cb2121ba0f",
-      "last_resolved": "",
+      "last_resolved": "cbe07a4e719964258a8a4ddbc6fced4f7cdfc0a47f18aeaf2ceb74cb2121ba0f",
       "tracked_at": "2026-07-26T16:42:03.456018+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     },
     "noorinalabs-isnad-ingest-platform/workers/normalize/main.py": {
       "last_tracked": "b19f77691a24a25cfb5de561330aae815deb3f6dfab37cd466e7030ff153fc0b",
-      "last_resolved": "",
+      "last_resolved": "b19f77691a24a25cfb5de561330aae815deb3f6dfab37cd466e7030ff153fc0b",
       "tracked_at": "2026-07-26T16:42:08.287830+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     },
     "noorinalabs-isnad-ingest-platform/tests/workers/conftest.py": {
       "last_tracked": "d58919b8f9d2221cd2123923a44105d2d06b0183e92643dffcc8e7fcd0888fb8",
-      "last_resolved": "",
+      "last_resolved": "d58919b8f9d2221cd2123923a44105d2d06b0183e92643dffcc8e7fcd0888fb8",
       "tracked_at": "2026-07-26T16:42:15.778874+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     },
     "noorinalabs-isnad-ingest-platform/tests/workers/test_runner.py": {
       "last_tracked": "a6e7e8884ba281c49a94f1fcf8aaa4c004e3c0a15afb08c9ae0badc5a672067d",
-      "last_resolved": "",
+      "last_resolved": "a6e7e8884ba281c49a94f1fcf8aaa4c004e3c0a15afb08c9ae0badc5a672067d",
       "tracked_at": "2026-07-26T16:43:07.220180+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     },
     "noorinalabs-isnad-ingest-platform/scripts/e2e_pipeline_run.py": {
       "last_tracked": "74893f1de8f8556e7693e4f37684d4d5f3cb44cce65ea55d322c6cc392c3964e",
-      "last_resolved": "",
+      "last_resolved": "74893f1de8f8556e7693e4f37684d4d5f3cb44cce65ea55d322c6cc392c3964e",
       "tracked_at": "2026-07-26T16:44:54.321581+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     },
     "da-wt-490/src/graph/load_edges.py": {
       "last_tracked": "7f86ca3af9c8c63fc3b9e748e7961c1cb7463440ef9b0bd0eaaf9a3dcaaa26bd",
-      "last_resolved": "",
+      "last_resolved": "7f86ca3af9c8c63fc3b9e748e7961c1cb7463440ef9b0bd0eaaf9a3dcaaa26bd",
       "tracked_at": "2026-07-26T17:10:02.416754+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     },
     "da-wt-490/src/cli.py": {
       "last_tracked": "4844269c49c3c1100e218ffcf90dd9d8aecd7e79a8a1ee339cefd790037e08e9",
-      "last_resolved": "",
+      "last_resolved": "4844269c49c3c1100e218ffcf90dd9d8aecd7e79a8a1ee339cefd790037e08e9",
       "tracked_at": "2026-07-26T17:09:20.418854+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     },
     "da-wt-490/tests/test_graph/conftest.py": {
       "last_tracked": "a560588046187ce85397920513949755fb77ba94676c15b716c0b8da5bb2dd28",
-      "last_resolved": "",
+      "last_resolved": "a560588046187ce85397920513949755fb77ba94676c15b716c0b8da5bb2dd28",
       "tracked_at": "2026-07-26T17:11:44.366641+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     },
     "da-wt-490/tests/test_graph/test_load_edges.py": {
       "last_tracked": "708674db17e93ccfb8d4a61d73ecb5df4ccb094eda718fec72f52e4a5a7520af",
-      "last_resolved": "",
+      "last_resolved": "708674db17e93ccfb8d4a61d73ecb5df4ccb094eda718fec72f52e4a5a7520af",
       "tracked_at": "2026-07-26T17:13:49.885066+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
     }
   },
   "last_cleanup": {

@@ -2,56 +2,165 @@
 # Updated by /ontology-rebuild.
 
 repo: noorinalabs-isnad-ingest-platform
-status: planned
+status: active
 description: |
   Pipeline processing layer (split out from data-acquisition in P2W8).
-  Kafka workers (KRaft mode) in Docker containers process files arriving in B2,
-  moving them through stage prefixes: raw → dedup → enriched → normalized → staged.
-  Final stage loads into Neo4j.
+  Kafka workers (KRaft mode) in Docker containers process Parquet batches
+  landed in B2 by noorinalabs-data-acquisition, moving them through stage
+  prefixes: raw → dedup → enriched → normalized. The terminal ingest stage
+  MERGEs into Neo4j.
+
+  Two source trees: `src/` holds the processing libraries (resolve, enrich,
+  graph, parse, models, pipeline) plus the FastAPI metrics/admin API;
+  `workers/` holds the thin Kafka-driven streaming workers built on them.
 
 tech_stack:
-  language: Python 3.14
-  message_broker: Kafka (KRaft mode — no ZooKeeper)
-  storage: Backblaze B2 (S3-compatible) — prefix-per-stage
+  language: Python 3.14 (uv-managed)
+  message_broker: Kafka (KRaft mode — no ZooKeeper), kafka-python client
+  storage: Backblaze B2 (S3-compatible) — prefix-per-stage, boto3 client
   local_dev: MinIO (S3-compatible, same code path)
-  runtime: Docker containers, one per worker
-  databases: [Neo4j 5.x, PostgreSQL 16 (pgvector)]
+  runtime: Docker — one multi-stage image; stage selected by the compose `command:`
+  databases: [Neo4j 5.x (terminal sink), PostgreSQL (worker checkpoints)]
+  data_format: PyArrow / pandas Parquet
+  models: Pydantic v2 (frozen) + pydantic-settings
+  api: FastAPI / uvicorn — pipeline metrics + admin reset/reprocess under src/api/
+  logging: structlog (JSON)
+
+message_contract:
+  shape: pointer-based — the payload carries `b2_path` to the Parquet batch, never records
+  model: workers/lib/message.py :: PipelineMessage (extra="forbid")
+  producer_contract_owner: |
+    noorinalabs-data-acquisition's kafka_producer.py must emit the same shape;
+    a drift is quarantined to the DLQ rather than crashing the consumer (#492/#141).
+
+topics:
+  source_of_truth: workers/lib/topics.py
+  naming_convention: "pipeline.<stage>.<past-tense-event> (locked in ip#192)"
+  constants:
+    PIPELINE_RAW_LANDED: pipeline.raw.landed
+    PIPELINE_DEDUP_DONE: pipeline.dedup.done
+    PIPELINE_ENRICH_DONE: pipeline.enrich.done
+    PIPELINE_NORMALIZE_DONE: pipeline.normalize.done
+    PIPELINE_DLQ: pipeline.dlq
 
 storage_layout:
   bucket: noorinalabs-pipeline
   prefixes:
-    - "raw/{source}/{date}/        # written by data-acquisition"
-    - "dedup/{source}/{date}/      # cross-source dedup output"
-    - "enriched/{source}/{date}/   # topic + historical enrichment"
-    - "normalized/{source}/{date}/ # schema-normalized"
-    - "staged/{source}/{date}/     # ready-for-graph-load"
+    - "raw/{source}/{date}/          # written by data-acquisition"
+    - "dedup/{source}/{batch_id}/    # hadiths.parquet + parallel_links.parquet"
+    - "enriched/{source}/{batch_id}/ # hadiths.parquet + hadith_topics.parquet"
+    - "normalized/{batch_id}/        # node/edge fan-out + _MANIFEST.json (ready signal)"
+    - "staged/{batch_id}/            # RESERVED — not currently emitted"
 
 workers:
-  dedup_worker:
-    consumes_topic: pipeline.raw.ready
-    produces_topic: pipeline.dedup.ready
-    output_prefix: dedup/
-  enrich_worker:
-    consumes_topic: pipeline.dedup.ready
-    produces_topic: pipeline.enriched.ready
-    output_prefix: enriched/
-  normalize_worker:
-    consumes_topic: pipeline.enriched.ready
-    produces_topic: pipeline.normalized.ready
-    output_prefix: normalized/
-  graph_load_worker:
-    consumes_topic: pipeline.normalized.ready
-    produces_topic: pipeline.staged.ready
-    output_prefix: staged/
+  dedup-worker:
+    entrypoint: workers/dedup/main.py
+    consumer_group: dedup-worker
+    consumes_topic: pipeline.raw.landed
+    produces_topic: pipeline.dedup.done
+    output_prefix: "dedup/{source}/{batch_id}/"
+    ported_from: src/resolve/
+  enrich-worker:
+    entrypoint: workers/enrich/main.py
+    consumer_group: enrich-worker
+    consumes_topic: pipeline.dedup.done
+    produces_topic: pipeline.enrich.done
+    output_prefix: "enriched/{source}/{batch_id}/"
+    ported_from: src/enrich/
+  normalize-worker:
+    entrypoint: workers/normalize/main.py
+    consumer_group: normalize-worker
+    consumes_topic: pipeline.enrich.done
+    produces_topic: pipeline.normalize.done
+    output_prefix: "normalized/{batch_id}/"
+    note: fans out node/edge Parquet + _MANIFEST.json; validates labels against ALLOWED_NODE_LABELS
+  ingest-worker:
+    entrypoint: workers/ingest/main.py
+    consumer_group: ingest-worker
+    consumes_topic: pipeline.normalize.done
+    produces_topic: null  # terminal stage
     sink: neo4j
+    ported_from: src/graph/
+    note: |
+      Reads _MANIFEST.json from the normalized/ prefix as the ready signal, then
+      MERGEs nodes/edges. verify_connectivity() at startup fails fast rather than
+      DLQ-ing every message; SIGTERM/SIGINT close the consumer + driver gracefully.
+
+runner:
+  module: workers/lib/runner.py
+  classes: [WorkerRunner, WorkerSettings, InMemoryCheckpoint, ProcessFn]
+  reliability_invariants:
+    - id: "#43 send-before-mark"
+      rule: |
+        checkpoint.mark() runs only AFTER producer.send() of the downstream
+        message. The reverse order loses the downstream message forever if send
+        raises post-mark (the batch_id then reads as seen on restart).
+    - id: "#140 manual offset commit"
+      rule: |
+        Consumers are built with enable_auto_commit=False and
+        auto_offset_reset="earliest"; run_forever() commits only after
+        handle_one() returns without raising. At-least-once — a cold consumer
+        group resumes from the oldest retained offset instead of jumping to
+        latest and dropping the in-flight backlog.
+    - id: "#141 parse inside the DLQ guard (BUG-03b)"
+      rule: |
+        parse_message() runs inside the try/except that routes to the DLQ, so a
+        malformed or contract-breaking (extra="forbid") message is quarantined
+        with original=None + raw_payload captured verbatim, rather than crashing
+        the consumer loop and taking the worker down. The error metric is
+        attributed to the sentinel batch_id "<unparseable>".
+    - id: idempotency
+      rule: "checkpoint.seen(batch_id) short-circuits a replayed batch."
+
+checkpointing:
+  factory: workers/lib/checkpoint_factory.py :: build_checkpoint(stage)
+  env_var: INGEST_CHECKPOINT_BACKEND
+  backends:
+    in-memory: "default; local dev / unit tests — loses state on restart"
+    pg: "PgCheckpoint over psycopg; production default via the Dockerfile ENV"
+    b2: "RESERVED — raises NotImplementedError rather than silently degrading"
+
+node_label_vocabulary:
+  constant: workers/lib/topics.py :: ALLOWED_NODE_LABELS
+  rationale: "explicit allowlist prevents Cypher-label injection at the ingest MERGE"
+  labels: [Narrator, Hadith, Collection, Chain, Grading, HistoricalEvent, Location]
+
+dlq:
+  module: workers/lib/dlq.py
+  topic: pipeline.dlq (alias DLQ_TOPIC)
+  record_fields: [worker, original (nullable), raw_payload (nullable), error class, traceback, retry count]
+
+testing:
+  unit: "tests/workers/ — in-memory Kafka/S3 fakes; no Docker required (make test-workers)"
+  integration: "tests/integration/ — testcontainers (Neo4j, Postgres, Kafka, MinIO), @pytest.mark.integration, excluded from the default/CI run"
+  e2e_script: scripts/e2e_pipeline_run.py
 
 reset_levels:
   stage: "Wipe a single B2 stage prefix + downstream Kafka topics"
   source: "Wipe all stages for one source"
   full: "Wipe all B2 data + all Kafka topics + Neo4j hadith data + PG hadith metadata. Preserves user/auth/RBAC."
 
-planned_issues:
-  - 105: "infra: Set up Backblaze B2 bucket with stage-based prefix hierarchy"
-  - 106: "infra: Add Kafka (KRaft) to deployment with pipeline topics"
-  - 107: "feat: Create Kafka worker containers for pipeline stages"
-  - 108: "feat: Pipeline reset/obliterate — per-stage, per-source, and full reset"
+ci:
+  workflows:
+    ci.yml: [lint-and-typecheck (ruff over src/ workers/ tests/, mypy src/), security-audit (pip-audit --strict), test (pytest -m "not integration"), precommit-ci-sync]
+    docs.yml: [markdownlint, cspell, lychee, config syntax, actionlint]
+    ghcr-publish.yml: [multi-stage worker image → GHCR]
+  known_red_gate: |
+    security-audit (pip-audit --strict) can go red on newly-disclosed transitive
+    CVEs unrelated to a change (advisory-DB drift). Fix in a dedicated deps PR
+    (e.g. ip#149) — never fold into an unrelated PR, never --no-verify.
+
+delivered_issues:
+  - 105: "infra: Backblaze B2 bucket with stage-based prefix hierarchy"
+  - 106: "infra: Kafka (KRaft) in the deployment with pipeline topics"
+  - 107: "feat: Kafka worker containers for pipeline stages"
+  - 108: "feat: Pipeline reset/obliterate — per-stage, per-source, full"
+  - 140: "fix(workers): commit Kafka offsets after checkpoint + earliest reset"
+  - 141: "fix(workers): quarantine unparseable messages to DLQ + producer↔consumer contract test"
+  - 149: "fix(ci): dependency bumps clearing pip-audit advisory-DB drift"
+
+docs:
+  worker_topology: workers/README.md
+  operations: RUNBOOK.md
+  metrics_api: docs/pipeline-metrics-api.md
+  e2e_verification: docs/streaming_e2e_verification_p8w24.md
