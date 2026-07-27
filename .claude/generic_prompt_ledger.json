@@ -7,10 +7,10 @@
       "wave": "P7W19"
     },
     "hooks/_shell_parse.py": {
-      "decided_at": "2026-06-26T00:37:43Z",
-      "decision": "genericized",
-      "detail": "GENERIC_HOOK_SHELL_PARSE_PROMPT.md",
-      "wave": "P7W19"
+      "decided_at": "2026-07-27T00:52:27Z",
+      "decision": "skipped",
+      "detail": "perf refactor of a pre-existing project-coupled hook; no new product-neutral prompt surface",
+      "wave": "P10W28"
     },
     "hooks/_wave_label_parse.py": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -49,10 +49,10 @@
       "wave": "P7W19"
     },
     "hooks/enforce_librarian_consulted.py": {
-      "decided_at": "2026-06-26T00:37:43Z",
-      "decision": "genericized",
-      "detail": "GENERIC_HOOK_ENFORCE_LIBRARIAN_CONSULTED_PROMPT.md",
-      "wave": "P7W19"
+      "decided_at": "2026-07-27T00:52:26Z",
+      "decision": "skipped",
+      "detail": "perf refactor of a pre-existing project-coupled hook; no new product-neutral prompt surface",
+      "wave": "P10W28"
     },
     "hooks/fixtures/validate_commit_identity/ast_chain_missing_identity_blocks.json": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -253,10 +253,10 @@
       "wave": "P7W19"
     },
     "hooks/validate_commit_identity.py": {
-      "decided_at": "2026-06-26T00:37:43Z",
-      "decision": "genericized",
-      "detail": "GENERIC_HOOK_VALIDATE_COMMIT_IDENTITY_PROMPT.md",
-      "wave": "P7W19"
+      "decided_at": "2026-07-27T00:52:27Z",
+      "decision": "skipped",
+      "detail": "perf refactor of a pre-existing project-coupled hook; no new product-neutral prompt surface",
+      "wave": "P10W28"
     },
     "hooks/validate_pr_ci_status.py": {
       "decided_at": "2026-06-26T00:37:43Z",
