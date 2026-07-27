@@ -293,3 +293,83 @@ None. Retirement trigger fired for no engineer — all ≥3, 0 CI-red across the
 - Add `W24` option to project-2 Wave field, then re-run `/board-audit` (unblocks 4 wave-24 issues).
 - Run `/ontology-rebuild` to reconcile the 3 dirty semantic checksums (coordinated with the 131-entry child-path cleanup).
 - Phase 9 closes after this retro; next is the #978 cutover (separate owner-gated session, now unblocked — Tier-1 gate da#454 merged), then P10 opens.
+
+---
+
+## Retrospective: Phase 10 Wave 28 — 2026-07-27
+
+**Theme:** Stop-the-bleeding — Track-0 High defects (security/data-loss/pipeline/perf) + low-risk LOC/perf fill wins + carry-forward closeout. Phase-10 opener. **Merge model: direct-to-main** (per-story PRs merged straight to each repo's main; no wave branch). All PRs merged the prior session; this session was closeout + retro.
+
+### Team Performance
+- **12 PRs merged** across 5 repos (main 4, ingest-platform 3, data-acquisition 3, user-service 1, isnad-graph 1). **0 CI-red merges**, **0 review false-positives**.
+- **3 changes-requested cycles** (Kavitha 2 on da#502, Weronika 1 on #1126 — all merge-gate catches, fixed + re-CI'd).
+- **Counter verification:** final_pr_count 12=12 ✓, changes_requested_cycles 3=3 ✓, top_concentration 17%≈17% ✓. No drift (counters were computed at wrapup directly from PR data, not the broken helper — see pain point 1).
+- All 11 work issues closed; meta #1125 closed at wrapup. No wave→main integration PRs (direct-to-main); post-merge deployable workflows green on both fan-in repos; staging promotion green.
+
+### Wave-shape table
+| Metric | Value |
+|---|---|
+| PRs merged | 12 (main 4, ip 3, da 3, us 1, ig 1) |
+| CI-red merges | 0 |
+| Review false-positives | 0 |
+| Changes-requested cycles | 3 |
+| Top-implementer concentration | 2 PRs / 12 = 17% (Weronika / Nino tied) |
+
+### Per-Engineer Assessments (mechanical — signals from `wave_28_trust_signals`, computed over the canonical direct-to-main set)
+Helper-proposed deltas: Nino +1 (4→5), Oyunbileg +1 (clamped at ceiling 5); all others 0. (Full evidence-anchored table in `trust_matrix.md` § Phase 10 Wave 28 Trust Updates.)
+- **Aino Virtanen** — #1130 (ruff pin, unblocked the main gate), prs_merged=1 clean. Delta 0 (ceiling). clean. none.
+- **Nino Kavtaradze** — #1127/#1128, prs_merged=2 clean + must_fix_caught=1. Delta +1 → **5**. Top composite. **2nd consecutive +1; owner-veto flag.**
+- **Weronika Zielinska** — #1126 + ig#1203, prs_merged=2, must_fix_received=1 (#1126). Delta 0. Gap: 1 must-fix received. minor.
+- **Kalinda Ranasinghe** — ip#149 (pip-audit CVE drift, unblocked ip pushes), prs_merged=1 clean. Delta 0 → seed 3. clean. none. (first row)
+- **Yusuke Inoue** — ip#150 (Kafka offset-after-checkpoint data-loss fix), prs_merged=1 clean. Delta 0 → seed 3. clean. none. (first row; reassigned from J.Habimana)
+- **Léopold Mbongo** — ip#151 (DLQ quarantine + contract test), prs_merged=1 clean. Delta 0 → seed 3. clean. none. (first row; reassigned from J.Habimana)
+- **Nikolaos Papadopoulos** — da#503 (producer shape align), prs_merged=1 clean. Delta 0 (ceiling). clean. none.
+- **Alejandra Reyes-Fuentes** — da#504 (edge_load_conformance + GRADED_BY), prs_merged=1 clean. Delta 0 (ceiling). clean. none.
+- **Kavitha Sundaramurthy** — da#502 (memoize normalize_arabic), prs_merged=1, must_fix_received=2, rework=1. Delta 0 (ceiling; below −1 threshold). Gap: 2 must-fix received. minor.
+- **Oyunbileg Batbayar** — 0 PRs, must_fix_caught=2 (both da#502 catches). Delta +1 clamped at ceiling. clean. none.
+- **Nadia Boukhari** — us#212 (mechanical merge commit only; implementation credit → Nurul Hakim). Delta 0 → seed 3. clean. none. (first row; attribution caveat)
+
+Forced negative-signal pass: clean (two specific must-fix-received gaps; rest explicit "metrics clean").
+
+### Top 3 Going Well
+1. **Clean stop-the-bleeding execution: 0 CI-red across 12 PRs, 5 Track-0 High defects landed.** The wave's purpose — Kafka offset-after-checkpoint data loss (ip#150), DLQ quarantine (ip#151), producer/consumer shape mismatch (da#503), SSO-Bearer replay (us#204), Cypher facet perf (ig#1191) — all merged with ≥1 Opus merge-gate each, both genuine must-fix threads caught at the gate and fixed.
+2. **Healthy work distribution.** 12 PRs across 11 people, 17% top concentration — the opposite of the fragility pattern; no single-engineer bottleneck despite the cross-repo spread.
+3. **Coupled-fix discipline held.** da#503↔ip#151 (producer/consumer shape) landed together; the ip#150↔#151 `handle_one` conflict was resolved keeping both control flows correct (poison→DLQ→offset advances; send-failure→no commit→reprocess), confirmed by a fresh merge-gate review.
+
+### Top 3 Pain Points
+1. **Wave-counter + trust-signal helpers silently return 0/`{}` for direct-to-main waves** (`wave_status.merged_prs` hardcoded to the wave-branch base). Both wave-28 outputs had to be computed manually (counters by hand; trust signals by feeding the canonical PR set into the real `extract_signals`). Filed as **#1131**. Direct-to-main is common since the 2026-06-09 every-wave-merges-to-main directive, so this recurs every such wave.
+2. **user-service roster drift (carried wave-27→28, still unresolved).** Nurul Hakim was scoped onto us#204 but is NOT on the user-service roster (Nadia Boukhari, Anya Kowalczyk, Mateo Salazar, Idris Yusuf); the local commit-identity gate blocked him, so the merge commit was attributed to Nadia and the implementor label to Nurul. A parent persona keeps getting scoped onto a child story he cannot commit to. **Fix the wave-scoping / roster-union.**
+3. **Generic-prompt pending ledger polluted (~251 stale undecided candidates).** The per-machine volatile pending state was never reset and has accumulated mostly session `.consulted/*.marker` noise + pre-existing charter files — not genuine wave artifacts. The wave-28 checkpoint correctly scoped to the 3 actually-touched hooks (all skipped as perf refactors), but the tracker's candidate set is unusable as-is.
+
+### Annunaki-attack (Step 7.6)
+**104 genuine errors triaged; all benign.** 66 `block_bare_grep` (hard-block correctly firing — inflated by this session's own retries + child-worktree greps), 8 `validate_commit_identity` (retried), 7 `stdout:^error` (git-push output heuristic matches — PYSEC/advisory noise on pushes that succeeded), 6 `validate_review_comment_format` (guard correct), 5 `block_git_config` (guard correct), 3 `block_stale_tmp_message_file` (retried), 3 `post_label_change_wave_field_sync` (resolved — W28 option now exists), 2 `Traceback` (session-local `python3 -c "import ..."` probes in child worktrees, empty excerpts), 2 `validate_pr_review`, 1 `smart_grep_ontology`, 1 `block_no_verify` (all guards correct). No wave-code defect, no production impact, no new automation crosses a threshold. Archived 153 records to `.claude/annunaki/archive/wave-28.jsonl`, live log reset, marker written.
+
+### Memory-to-automation audit (Step 7.7)
+**No conversions.** No memory files added/modified during wave-28. Marker written.
+
+### Memory decay & size sweep (Step 7.8)
+3 files flagged (advisory) — same as W27, all recently touched → **keep**: `project_narrator_chokepoints_enrich.md` (52 KB, 8d — standing consolidation candidate at 3.6× ceiling), `feedback_fixture_makes_guard_assertion_inert.md` (21 KB, 16d), `feedback_sweep_expensive_stage_before_launch.md` (15 KB, 16d).
+
+### Memory content-staleness judge (Step 7.9)
+108 notes, 96 due → **30 still-current** (`last_verified` bump candidates), **57 partially-stale** (dead wikilinks / post-merge branch refs — mostly repairable, keep), **9 fully-stale** (deletion candidates, PR-gated + human-approved): `feedback_cross_repo_wave_ref_resolution.md`, `feedback_no_head_in_surface_enumeration.md`, `feedback_role_class_specific_boundaries.md`, `feedback_self_loop_task_replay_glitch.md`, `feedback_verify_3p_integrity.md`, `project_bootstrap_repo.md`, `reference_ssh_topology.md`, `section_ci_tooling.md`, `user_steven.md`. Deferred out of this retro PR to keep the diff focused — carry-forward for a dedicated memory-curation PR.
+
+### Board audit (Step 1.5)
+0 orphans; **24 Wave-field drift synced** (historical W21–W24 + P5W4/P5W5 issues with unpopulated Wave fields — not wave-28). W28 option present; no owner action. Board coherent for retro reporting.
+
+### Promotion audit (Step 7.5)
+**0 AUTO · 0 DECIDE · 221 KEPT · 24 SUPERSEDED.** Nothing crossed a threshold (byte-deterministic, same as W27). Log: `.claude/team/promotion_audit_log/wave-28.md`.
+
+### Proposed Process / Charter Changes (NOT applied — owner decides)
+1. **Make the wave-counter + trust-signal helpers merge-model-aware (#1131 filed).** — Rationale: both silently return empty for direct-to-main waves, forcing manual computation. Needs a `--base main` + canonical-PR-set scoping path (base+timestamp alone over-counts — us#213 was an in-window out-of-scope false positive). — Target: `wave_status.py` / `trust_signals.py` + regression fixture.
+2. **Add a `/wave-wrapup` step to reset the generic-prompt pending ledger per wave.** — Rationale: the per-machine volatile pending state accumulated ~251 stale cross-wave/session candidates, making the checkpoint's worklist unusable. — Target: `wave-wrapup` skill Step 12.5 + `generic_prompt_tracker.py`.
+3. **Resolve the user-service roster-union so parent personas aren't scoped onto child stories they can't commit to.** — Rationale: recurring wave-27→28; the identity gate correctly blocks the wrong author, but scoping keeps producing the mismatch. — Target: wave-scoping / roster docs.
+4. **No annunaki-driven or promotion-driven charter change** — all 104 errors benign, 0 AUTO/0 DECIDE; guards working as designed.
+
+### Fire/hire
+None. Retirement trigger fired for no engineer — all ≥3, 0 CI-red across the wave.
+
+### Owner action items (surfaced, not auto-done)
+- **Veto check:** Nino Kavtaradze's 4→5 (2nd consecutive +1; mechanical rule permits it as the wave's top composite performer, but it's a ceiling promotion on a 2-PR wave).
+- Decide on the 9 fully-stale memory-deletion candidates (Step 7.9) — a dedicated memory-curation PR.
+- Fix the user-service roster-union (pain point 2 / carried from W27).
+- Set the wave-29 theme on the auto-drafted meta-issue stub, then run `/wave-scope 10 29`.

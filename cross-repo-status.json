@@ -19,6 +19,8 @@
   "wave_28_stg_promotion": "success",
   "wave_28_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/30225856434",
   "wave_28_decisions": {"implementer_substitutions":[{"repo":"noorinalabs-user-service","issue":"user-service#204","pr":212,"declared":"Nurul Hakim","actual_commit_author":"Nadia Boukhari","swapped_at":"2026-07-26T23:31:07Z","rationale":"Nurul Hakim is NOT on the user-service roster (roster drift); the local commit-identity gate blocked Nurul from committing to user-service, so the mechanical merge commit was attributed to Nadia Boukhari (valid us-roster member). Nurul did the implementation — implementor label = NURUL_HAKIM. Roster-union fix carried to wave-28 retro."}]},
+  "wave_28_annunaki_attack_ran_at": "2026-07-27T01:41:24Z",
+  "wave_28_memory_audit_ran_at": "2026-07-27T01:41:56Z",
   "wave_27_carry_forward": ["noorinalabs-data-acquisition#397","noorinalabs-data-acquisition#398","noorinalabs-data-acquisition#464","noorinalabs-data-acquisition#467","noorinalabs-main#1062"],
   "wave_27_meta_issue": 1067,
   "wave_27_phase": 9,
