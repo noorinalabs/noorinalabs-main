@@ -1,5 +1,12 @@
 {
   "wave_29_meta_issue": 1133,
+  "wave_29_phase": 10,
+  "wave_29_phase_ordinal": 2,
+  "wave_29_scope_reconciled_at": "2026-07-27T18:39:34Z",
+  "wave_29_repos_in_scope": ["noorinalabs-main","noorinalabs-isnad-ingest-platform"],
+  "wave_29_merge_model": "direct-to-main",
+  "wave_29_scope": {"theme":"Continue the Phase-10 code-audit program — Track G tech-debt drawdown (parent-repo hooks/lib efficiency + DRY), plus the wave-28 retro process carry-forwards.","phase":10,"phase_ordinal":2,"merge_model":"direct-to-main","tier_1_track_g":[{"id":"noorinalabs-main#1114","ref":"main#1114","implementer":"Nino Kavtaradze","reviewer":"Aino Virtanen","reviewer_2":null,"priority":"tech-debt","merge_gate_reviewer":"Aino Virtanen"},{"id":"noorinalabs-main#1116","ref":"main#1116","implementer":"Lucas Ferreira","reviewer":"Aino Virtanen","reviewer_2":null,"priority":"tech-debt","merge_gate_reviewer":"Aino Virtanen"},{"id":"noorinalabs-main#1117","ref":"main#1117","implementer":"Nurul Hakim","reviewer":"Nino Kavtaradze","reviewer_2":null,"priority":"tech-debt","merge_gate_reviewer":"Nino Kavtaradze"},{"id":"noorinalabs-main#1118","ref":"main#1118","implementer":"Weronika Zielinska","reviewer":"Nadia Khoury","reviewer_2":null,"priority":"tech-debt","merge_gate_reviewer":"Nadia Khoury"},{"id":"noorinalabs-main#1119","ref":"main#1119","implementer":"Aino Virtanen","reviewer":"Weronika Zielinska","reviewer_2":null,"priority":"tech-debt","merge_gate_reviewer":"Weronika Zielinska"},{"id":"noorinalabs-main#1120","ref":"main#1120","implementer":"Santiago Ferreira","reviewer":"Nadia Khoury","reviewer_2":null,"priority":"tech-debt","merge_gate_reviewer":"Nadia Khoury"},{"id":"noorinalabs-main#1121","ref":"main#1121","implementer":"Bereket Tadesse","reviewer":"Nino Kavtaradze","reviewer_2":null,"priority":"tech-debt","merge_gate_reviewer":"Nino Kavtaradze"},{"id":"noorinalabs-main#1122","ref":"main#1122","implementer":"Wanjiku Mwangi","reviewer":"Weronika Zielinska","reviewer_2":null,"priority":"tech-debt","merge_gate_reviewer":"Weronika Zielinska"},{"id":"noorinalabs-main#1123","ref":"main#1123","implementer":"Nino Kavtaradze","reviewer":"Aino Virtanen","reviewer_2":null,"priority":"tech-debt","merge_gate_reviewer":"Aino Virtanen"}],"tier_2_process_carry_forward":[{"id":"noorinalabs-main#1131","ref":"main#1131","implementer":"Santiago Ferreira","reviewer":"Weronika Zielinska","reviewer_2":null,"priority":"tech-debt","merge_gate_reviewer":"Weronika Zielinska"},{"id":"noorinalabs-main#1134","ref":"main#1134","implementer":"Nadia Khoury","reviewer":"Aino Virtanen","reviewer_2":null,"priority":"tech-debt","merge_gate_reviewer":"Aino Virtanen"},{"id":"noorinalabs-main#1137","ref":"main#1137","implementer":"Aino Virtanen","reviewer":"Nino Kavtaradze","reviewer_2":null,"priority":"tech-debt","merge_gate_reviewer":"Nino Kavtaradze"}],"tier_3_doc_drift":[{"id":"noorinalabs-isnad-ingest-platform#152","ref":"isnad-ingest-platform#152","implementer":"Yusuke Inoue","reviewer":"Petra Vidović","reviewer_2":null,"priority":"documentation","merge_gate_reviewer":"Petra Vidović"}],"td_intake":{"base_non_td":0,"formula_target":0,"selected":13,"note":"Debt-reduction phase: every item in scope is tech-debt (12) or documentation (1); zero feature/bug content, so the +20% floor computes to 0 and is trivially satisfied 13x over. Not a shortfall signal — the wave IS the debt drawdown."},"deliberately_not_in_w29":{"track_c":["main#1109","main#1110","main#1111","main#1112","main#1124"],"newly_filed_unscheduled":["main#1138","main#1139","main#1140"],"frozen_tracks":{"tracks":["A","B"],"epics":["noorinalabs-main#1091","noorinalabs-main#1092"],"gate":"noorinalabs-main#1099"},"note":"Track C (CI/CD dedup) held for wave-30 — owner scoped W29 to Track G + process carry-forwards to keep the wave near wave-28's 12-PR size and avoid pulling 4-5 child repos in via cross-repo workflow hoisting. main#1138/1139/1140 filed this session and left unscheduled. Tracks A/B remain FROZEN pending main#1099."}},
+  "wave_29_scope_reconciliation_note": "Fresh wave: 0 issues carried wave-29 at scope time, so 0 label drift and no Step-7 dispositions. 0 memory must-includes. Premise gate STOPped on 5 issues (main#1110/1111/1112/1118/1119) — ALL 5 hand-verified as false positives across 3 classes (cross-repo .github/workflows paths checked against parent only; proposed-not-yet-created files named by extraction stories; bare .py/.yaml extension tokens); 0 genuine premise rot, filed as main#1138. phase_10_carry_forwards emptied: its sole entry da#490 closed during wave-28. main#1138/1139/1140 filed this session per owner, left unscheduled.",
   "wave_28_phase": 10,
   "wave_28_phase_ordinal": 1,
   "wave_28_scope_reconciled_at": "2026-07-26T14:15:00Z",
@@ -2039,7 +2046,7 @@
   },
   "wave_18_scope_reconciliation_note": "Greenfield wave (no prior wave-18 drift). 6 P6 framework carry-forwards decomposed per owner decision into 6 per-repo fan-out issues + 2 generator-refinement (ts-enum #870, merge-driver #871) + 3 framework (#862/#863/#868). isnad-graph excluded (pilot). Slates null at scope; kickoff Step 0.4 drafts per-repo 2-reviewer slate from each child roster.",
   "phase_7_carry_forwards": [],
-  "phase_10_carry_forwards": [{"id":"noorinalabs-data-acquisition#490","type":"tech-debt","note":"edge_load_conformance false-positive on idempotent APPEARS_IN + genuine GRADED_BY never-loads (0/21,185 endpoints resolve; likely grading_node_id != loaded Grading.id). Found during #978 Phase-9 cutover."}],
+  "phase_10_carry_forwards": [],
   "wave_17_phase": 6,
   "wave_17_phase_ordinal": 4,
   "wave_17_scope_reconciled_at": "2026-06-24T01:48:21Z",
@@ -4136,7 +4143,7 @@
     "pilot_completed_at": "2026-06-24"
   },
   "wave_17_task3_checkpoint_resolved_at": "2026-06-24T18:12:00Z",
-  "global_wave_seq": 28,
+  "global_wave_seq": 29,
   "phase_6_criteria_trackers": {
     "1": "noorinalabs-main#725",
     "2": "noorinalabs-main#726",
