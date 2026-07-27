@@ -12,7 +12,10 @@ Run: ENVIRONMENT=test python3 -m pytest .claude/hooks/tests/test_shell_parse.py 
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -939,57 +942,158 @@ class StripLockstepAcrossSegmentConsumers(unittest.TestCase):
         self.assertIsNone(sp.extract_leading_cd_target("cd relative && gh pr create"))
 
 
-class GuardedCdMustNotRoute(unittest.TestCase):
-    """main#1141 review round 3 — a guarded `cd` must not decide routing.
+class CdRoutingAgainstShellTruth(unittest.TestCase):
+    """`extract_leading_cd_target` vs what a REAL SHELL actually does.
 
-    The lockstep invariant is "apply the strip", NOT "apply it with the same
-    arguments". Applying it uniformly shipped a live misroute:
+    Method requirement from the main#1141 review, and it earned its keep
+    immediately. These tests do not compare the resolver against its own
+    expected output — each shape is run in a real `bash` with the `gh` node
+    replaced by `pwd`, and the printed directory is ground truth. Testing a
+    resolver against itself cannot find a resolver that is wrong, which is
+    how two families of this bug survived the previous suite.
 
-        if [ -f /nonexistent ] ; then cd /repo-b ; fi ; gh issue edit 5 …
+    It caught one of my own round-3 tests asserting a MISROUTE: I had pinned
+    `env FOO=1 cd /tmp && gh pr create` -> `/tmp`. The shell disagrees. `cd`
+    is a shell BUILTIN, so an exec-wrapper (`env`, `timeout`, `nice`,
+    `nohup`) runs a subprocess and the calling shell never moves — asserted
+    below. The resolver would have claimed a directory the command provably
+    never entered.
 
-    The shell never runs that `cd`. Stripping `then` made the resolver behave
-    as if it had, sending the kickoff comment to repo-b#5 instead of
-    repo-a#5 — the #981/#985 misrouting class.
+    THE SAFETY PROPERTY, and why it is not plain equality:
 
-    A **wrapper** always execs what follows, so stripping it is sound for any
-    caller. A **compound leader** guards a body that may not run: harmless for
-    a GATE that merely over-inspects, destructive for a RESOLVER that routes.
+        resolved is None  OR  resolved == shell_truth
+
+    Under-recovery (None when the shell did move) is ACCEPTED — the caller
+    falls back to the invocation cwd, which is the pre-main#1141 behaviour.
+    Over-recovery, naming a directory the command never entered, is the bug:
+    three hooks on this chain WRITE, so a misroute is an unrecoverable write
+    into the wrong repository.
     """
 
-    GUARDED = [
-        "if [ -f /nonexistent ] ; then cd /tmp ; fi ; gh issue edit 5 --add-label x",
-        "if false ; then cd /tmp ; fi ; gh pr create",
-        "git diff --quiet || { cd /tmp ; gh pr create ; }",
-        "for r in a ; do cd /tmp ; gh issue edit 1 --add-label x ; done",
+    MARKER = "gh issue edit 5 --add-label wave-29"
+
+    _start: str
+    _dest: str
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._start = tempfile.mkdtemp(prefix="cdroute-start-")
+        cls._dest = tempfile.mkdtemp(prefix="cdroute-dest-")
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        for d in (cls._start, cls._dest):
+            shutil.rmtree(d, ignore_errors=True)
+
+    def _shell_truth(self, template: str) -> str | None:
+        """Directory the shell is actually in where the gh node sits.
+
+        None means the gh node never executes at all in that shape.
+        """
+        cmd = template.replace("DEST", self._dest).replace("MARKER", "pwd")
+        out = subprocess.run(
+            ["bash", "-c", cmd], cwd=self._start, capture_output=True, text=True, timeout=30
+        )
+        printed = out.stdout.strip().splitlines()
+        return printed[-1] if printed else None
+
+    def _resolved(self, template: str) -> str | None:
+        return sp.extract_leading_cd_target(
+            template.replace("DEST", self._dest).replace("MARKER", self.MARKER)
+        )
+
+    def _assert_never_misroutes(self, template: str) -> None:
+        truth = self._shell_truth(template)
+        resolved = self._resolved(template)
+        if resolved is None:
+            return  # under-recovery: caller falls back to the invocation cwd
+        self.assertEqual(
+            resolved,
+            truth,
+            f"resolver claims {resolved!r} but the shell runs the gh node in "
+            f"{truth!r} for: {template}",
+        )
+
+    # --- all seven leader shapes from the review, plus the brace group ---
+
+    LEADER_SHAPES = [
+        "if [ -f /nonexistent ] ; then cd DEST ; fi ; MARKER",
+        "if false ; then cd DEST ; fi ; MARKER",
+        "if false ; then true ; else cd DEST ; fi ; MARKER",
+        "for r in a ; do cd DEST ; done ; MARKER",
+        "for r in ; do cd DEST ; done ; MARKER",
+        "while false ; do cd DEST ; done ; MARKER",
+        "( cd DEST ) ; MARKER",
+        "true || { cd DEST ; } ; MARKER",
+        "false || { cd DEST ; } ; MARKER",
     ]
 
-    def test_guarded_cd_is_not_treated_as_taken(self) -> None:
-        for cmd in self.GUARDED:
-            with self.subTest(cmd=cmd):
-                self.assertIsNone(
-                    sp.extract_leading_cd_target(cmd),
-                    "a cd inside a guarded body must not resolve the routing target",
+    def test_leader_shapes_never_misroute(self) -> None:
+        for template in self.LEADER_SHAPES:
+            with self.subTest(shape=template):
+                self._assert_never_misroutes(template)
+
+    def test_subshell_cd_does_not_escape(self) -> None:
+        """`( cd DEST )` DOES run the cd — it just dies with the subshell."""
+        template = "( cd DEST ) ; MARKER"
+        self.assertEqual(self._shell_truth(template), self._start)
+        self.assertIsNone(self._resolved(template))
+
+    # --- wrappers: `cd` is a BUILTIN, so these never move the shell ---
+
+    WRAPPER_SHAPES = [
+        "env FOO=1 cd DEST ; MARKER",
+        "timeout 5 cd DEST ; MARKER",
+        "nice -n 5 cd DEST ; MARKER",
+        "nohup cd DEST ; MARKER",
+    ]
+
+    def test_wrapped_cd_never_misroutes(self) -> None:
+        for template in self.WRAPPER_SHAPES:
+            with self.subTest(shape=template):
+                self._assert_never_misroutes(template)
+
+    def test_exec_wrapper_provably_cannot_carry_cd(self) -> None:
+        """The fact the resolver must respect, asserted against the shell itself."""
+        for template in self.WRAPPER_SHAPES:
+            with self.subTest(shape=template):
+                self.assertEqual(
+                    self._shell_truth(template),
+                    self._start,
+                    "an exec-wrapper cannot carry the `cd` builtin — if this ever "
+                    "changes, the resolver's no-strip rule needs revisiting",
                 )
+                self.assertIsNone(self._resolved(template))
 
-    def test_unguarded_cd_still_resolves(self) -> None:
-        for cmd in (
-            "cd /tmp && gh pr create",
-            "cd /tmp ; gh pr create",
-            "cd /var && cd /tmp && gh pr create",  # last one wins
-        ):
-            with self.subTest(cmd=cmd):
-                self.assertEqual(sp.extract_leading_cd_target(cmd), "/tmp")
+    # --- the shapes that MUST still resolve ---
 
-    def test_wrapped_cd_still_resolves(self) -> None:
-        """A wrapper always execs what follows, so it stays strippable here."""
-        self.assertEqual(sp.extract_leading_cd_target("env FOO=1 cd /tmp && gh pr create"), "/tmp")
+    UNGUARDED_SHAPES = [
+        "cd DEST && MARKER",
+        "cd DEST ; MARKER",
+        "cd /var && cd DEST && MARKER",
+    ]
+
+    def test_unguarded_cd_resolves_exactly(self) -> None:
+        for template in self.UNGUARDED_SHAPES:
+            with self.subTest(shape=template):
+                self.assertEqual(self._resolved(template), self._shell_truth(template))
+                self.assertEqual(self._resolved(template), self._dest)
+
+    def test_relative_target_ignored(self) -> None:
+        """Relative targets would resolve against the (wrong) stdin cwd."""
+        self.assertIsNone(sp.extract_leading_cd_target("cd relative && gh pr create"))
+
+    # --- gates keep their conservative reach; only routing opts out ---
 
     def test_gates_still_see_guarded_bodies(self) -> None:
-        """The carve-out is routing-only — gates keep their conservative reach."""
         found = sp.find_gh_subcommand(["then", "gh", "pr", "review", "5"])
         self.assertEqual(found, ([], ["pr", "review", "5"]))
         self.assertEqual(
             sp.extract_dash_c_pairs(["do", "git", "-c", "user.name=A", "commit"]),
+            [("user.name", "A")],
+        )
+        self.assertEqual(
+            sp.extract_dash_c_pairs(["timeout", "60", "git", "-c", "user.name=A", "commit"]),
             [("user.name", "A")],
         )
 
@@ -998,10 +1102,34 @@ class GuardedCdMustNotRoute(unittest.TestCase):
         self.assertEqual(sp.strip_command_prefixes(seg), ["cd", "/tmp"])
         self.assertEqual(sp.strip_command_prefixes(seg, compound_leaders=False), seg)
 
-    def test_wrappers_strip_under_both_settings(self) -> None:
-        seg = ["timeout", "5", "cd", "/tmp"]
-        self.assertEqual(sp.strip_command_prefixes(seg), ["cd", "/tmp"])
-        self.assertEqual(sp.strip_command_prefixes(seg, compound_leaders=False), ["cd", "/tmp"])
+    # --- known, tracked, NOT closed here ---
+
+    KNOWN_GAP_SHAPES = [
+        "true || cd DEST ; MARKER",  # family A: no leader token to withhold
+        "MARKER ; cd DEST",  # family B: cd AFTER the gh node
+    ]
+
+    def test_known_gap_main_1151_still_misroutes(self) -> None:
+        """Characterization of the residual class — NOT a blessing of it.
+
+        Both shapes misroute on `95f375a` and on every head since; they
+        predate main#1141 and are untouched by it. Neither is fixable at this
+        layer: family A has no leader to withhold, and family B needs to know
+        whether the `cd` precedes the `gh` NODE, which `iter_command_segments`
+        has already discarded. main#1151 tracks the bashlex-AST fix.
+
+        This test exists so the gap is visible in the suite rather than only
+        in prose, and so closing #1151 forces someone to come back here.
+        """
+        for template in self.KNOWN_GAP_SHAPES:
+            with self.subTest(shape=template):
+                self.assertEqual(self._shell_truth(template), self._start)
+                self.assertEqual(
+                    self._resolved(template),
+                    self._dest,
+                    "if this now returns None, #1151 has been fixed — delete this "
+                    "test and fold the shape into test_leader_shapes_never_misroute",
+                )
 
 
 if __name__ == "__main__":

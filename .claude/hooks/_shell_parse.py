@@ -81,21 +81,28 @@ Public API
         had passed), which is strictly worse than the evasion the strip was
         added to close.
 
-        **…but the invariant is "apply the strip", NOT "apply it with the
-        same arguments."** Round 3 of the same review: applying it uniformly
-        shipped a live misroute. Pick the value by what the caller DOES:
+        **…but the invariant binds MATCHERS, not every consumer.** Round 3 of
+        the same review: applying it uniformly shipped a live misroute. Which
+        rule a caller follows is decided by what it DOES with the answer:
 
-          - **Gate matcher** (validates/blocks a command) -> `True`.
-            Over-matching a guarded body is conservative — worst case you
-            inspect a command that would not have run.
-          - **Routing resolver** (decides which repo/target an action hits)
-            -> `False`. Over-matching is destructive — it sends output where
-            the command never went. A compound leader guards a body that may
-            not execute; a wrapper always execs. Only wrappers are safe to
-            assume for routing.
+          - **Gate matcher** (validates/blocks a command) — strip everything.
+            Over-matching a guarded body is conservative: worst case you
+            inspect a command that would not have run. `find_git_subcommand`,
+            `find_gh_subcommand`, `extract_dash_c_pairs`.
+          - **Routing resolver** (decides which repo/target an action hits) —
+            strip NOTHING. Over-matching is destructive: it sends output where
+            the command never went, and three hooks downstream WRITE.
+            `extract_leading_cd_target` is the only one in this module, and it
+            opts out entirely (a leader may not run; and an exec-wrapper
+            cannot carry `cd` at all, since `cd` is a shell builtin).
+
+        `compound_leaders=False` exists for a caller that wants wrappers but
+        not leaders. Nothing needs it today — the one routing caller wants
+        neither — but the flag keeps the two prefix families separable rather
+        than welded together for whoever needs the middle position next.
 
         `test_strip_lockstep_across_segment_consumers` pins the invariant;
-        `GuardedCdMustNotRoute` pins the carve-out.
+        `CdRoutingAgainstShellTruth` pins the carve-out against a real shell.
 
     find_git_subcommand(segment) -> tuple[list[str], list[str]] | None
         Given a single segment's tokens, returns (global_opts, [subcommand,
@@ -1055,26 +1062,52 @@ def extract_leading_cd_target(command: str) -> str | None:
     command itself even though the harness `cwd` field points at the
     orchestrator's spawn-time directory.
 
-    Strips WRAPPERS ONLY — `compound_leaders=False` (main#1141 review round 3).
-    This function ROUTES (it decides which repo an action targets), and a
-    routing resolver must never assume a guarded body ran:
+    Strips NOTHING — `cd` must be token 0 of its segment (main#1141 review
+    round 3). This function ROUTES: it decides which repo an action targets,
+    and three hooks on its chain WRITE (`post_wave_kickoff_comment`,
+    `auto_add_issue_to_board`, `post_label_change_wave_field_sync`), so a
+    wrong answer is an unrecoverable write into the wrong repository. Both
+    prefix families are unsafe here, for two different reasons:
 
-        if [ -f /nonexistent ] ; then cd /repo-b ; fi ; gh issue edit 5 …
+    1. **Compound leaders** (`then`, `do`, `else`, `{`, `(`) guard a body that
+       may not run. `if [ -f /nonexistent ]; then cd /repo-b; fi; gh issue
+       edit 5` never executes that `cd`; stripping `then` resolved it to
+       repo-b and would have posted to `repo-b#5` instead of `repo-a#5`.
+    2. **Command-prefix wrappers** (`timeout`, `env`, `nice`, `nohup`) cannot
+       carry a `cd` AT ALL — `cd` is a shell builtin, so an exec-wrapper runs
+       a subprocess (or nothing) and the calling shell's directory is
+       unchanged. Verified in both bash and zsh: `env FOO=1 cd /dest; pwd`
+       prints the ORIGINAL directory. Stripping the wrapper here would have
+       claimed a `cd` that provably never happened. (`command cd` is worse
+       than useless as a signal: bash honours it, zsh does not.)
 
-    The shell never executes that `cd`. Stripping `then` made this resolve to
-    repo-b and would have posted to `repo-b#5` instead of `repo-a#5` — the
-    #981/#985 misrouting class. Over-matching is conservative for a GATE
-    (worst case: validate a command that would not run) and destructive for a
-    RESOLVER (send output where the command never went), so the two kinds of
-    caller take different values of `compound_leaders`. `timeout 5 cd /x` and
-    friends still strip: a wrapper always execs what follows.
+    That is the asymmetry with the matchers, stated exactly: over-matching is
+    conservative for a GATE (worst case, inspect a command that would not have
+    run) and destructive for a RESOLVER (send output where the command never
+    went). So `find_git_subcommand` / `find_gh_subcommand` /
+    `extract_dash_c_pairs` strip everything and this function strips nothing.
+
+    Accepted cost — UNDER-recovery. A `cd` in a body that DOES run (a taken
+    `else`, a real loop iteration) is not recovered, so the caller falls back
+    to the invocation cwd. That is the pre-#1141 behaviour and it is the safe
+    direction: claiming no knowledge is recoverable, claiming the wrong
+    directory is not.
+
+    Known residual, tracked by main#1151 — NOT closed here, and not closable
+    at this layer: (a) a short-circuit `true || cd /elsewhere` puts `cd` at
+    token 0 of its own segment with no leader to withhold, and (b) this
+    function returns the LAST `cd` anywhere in the command with no positional
+    relation to the `gh` node, so `gh issue edit 5 …; cd /elsewhere`
+    misroutes. Both predate main#1141 and both need the bashlex AST
+    (`iter_command_segments_ast`) to answer "is this `cd` unconditional, and
+    does it precede the gh node?" — `iter_command_segments` has already
+    discarded the control flow by the time this loop runs.
     """
     tokens = tokenize(command)
     if tokens is None:
         return None
     target: str | None = None
-    for raw_segment in iter_command_segments(tokens):
-        segment = strip_command_prefixes(raw_segment, compound_leaders=False)
+    for segment in iter_command_segments(tokens):
         if len(segment) == 2 and segment[0] == "cd" and segment[1].startswith("/"):
             target = segment[1]
     return target
