@@ -1156,7 +1156,12 @@ class KickoffAlreadyPostedContractPreserved(unittest.TestCase):
         self.assertTrue(hook.kickoff_already_posted("r", "1", 29, fetch_comments=lambda r, n: body))
 
     def test_hook_still_posts_when_the_fetch_fails(self) -> None:
-        """End-to-end: the PostToolUse path keeps posting on a broken fetch."""
+        """End-to-end: the PostToolUse path keeps posting on a broken fetch.
+
+        But it reports `post_unverified`, not `post` — review round 3. The
+        fail-open decision stands; collapsing it into a verified post was the
+        last silent state-collapse in a PR about silent state-collapses.
+        """
         status = {
             "current_phase": 10,
             "wave_29_merge_model": "direct-to-main",
@@ -1170,7 +1175,52 @@ class KickoffAlreadyPostedContractPreserved(unittest.TestCase):
             body_writer=lambda b, r, n: Path("/dev/null"),
         )
         assert result is not None
+        self.assertEqual(result["action"], "post_unverified")
+
+    def test_unverified_post_is_logged(self) -> None:
+        logs: list = []
+        original = hook.log_posttooluse_event
+        hook.log_posttooluse_event = lambda *a: logs.append(a)
+        try:
+            hook.check(
+                _bash(f'gh issue edit 1114 {_EDIT_REPO} --add-label "wave-29"'),
+                status_loader=lambda: {
+                    "current_phase": 10,
+                    "wave_29_scope": {
+                        "tier_1": [{"id": "noorinalabs-main#1114", "implementer": "N"}]
+                    },
+                },
+                comment_fetcher=lambda r, n: None,
+                comment_poster=lambda r, n, p: True,
+                body_writer=lambda b, r, n: Path("/dev/null"),
+            )
+        finally:
+            hook.log_posttooluse_event = original
+        self.assertEqual(len(logs), 1)
+        self.assertIn("post_unverified", logs[0][2])
+
+    def test_verified_post_is_not_logged_as_unverified(self) -> None:
+        logs: list = []
+        original = hook.log_posttooluse_event
+        hook.log_posttooluse_event = lambda *a: logs.append(a)
+        try:
+            result = hook.check(
+                _bash(f'gh issue edit 1114 {_EDIT_REPO} --add-label "wave-29"'),
+                status_loader=lambda: {
+                    "current_phase": 10,
+                    "wave_29_scope": {
+                        "tier_1": [{"id": "noorinalabs-main#1114", "implementer": "N"}]
+                    },
+                },
+                comment_fetcher=lambda r, n: [],
+                comment_poster=lambda r, n, p: True,
+                body_writer=lambda b, r, n: Path("/dev/null"),
+            )
+        finally:
+            hook.log_posttooluse_event = original
+        assert result is not None
         self.assertEqual(result["action"], "post")
+        self.assertEqual(logs, [])
 
 
 if __name__ == "__main__":

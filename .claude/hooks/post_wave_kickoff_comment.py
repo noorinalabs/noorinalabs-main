@@ -443,9 +443,19 @@ def kickoff_already_posted(
       - For the HOOK, failing open is correct and bounded. The hook posts
         at most one comment per label-apply — an explicit operator action —
         and the failure it is guarding against is #286, a kickoff that
-        never gets posted. One possibly-duplicate comment beats a silently
-        missing assignment, and a real post failure still surfaces via
-        annunaki on the post call.
+        never gets posted.
+
+        The decisive argument is WHERE each error is visible. A duplicate
+        comment appears on the issue, in front of the implementer: it
+        self-reports. A missing comment is invisible at the artifact — the
+        only signal lives on some other surface. main#1141 is the proof
+        that a signal on another surface gets missed: 14 issues, several
+        days, found by an unrelated audit. For a mechanism whose entire
+        purpose is telling a person they own work, prefer the failure that
+        is visible where that person is already looking.
+
+        The post is still reported as `post_unverified`, not `post`, so the
+        possible duplicate has a trail (review round 3).
       - For the SWEEP, failing open is unbounded. `/wave-kickoff` Step 7b
         defines completion as "zero would_post", so under a sustained fetch
         failure every `--apply` pass appends another duplicate and reports
@@ -634,7 +644,11 @@ def check(
 
     Result shape (always returned as advisory, never blocking):
       None                                     — hook didn't apply
-      {"action": "post", "issue": "<n>", ...}  — comment posted
+      {"action": "post", "issue": "<n>", ...}  — verified absent, then posted
+      {"action": "post_unverified", ...}       — posted, but the existing
+                                                 comments could not be read
+                                                 first, so it may duplicate
+                                                 an earlier kickoff (#1145)
       {"action": "skip_meta_issue", ...}       — meta-issue skipped
       {"action": "skip_idempotent", ...}       — kickoff already posted
       {"action": "skip_no_scope", ...}         — wave_{M}_scope missing
@@ -790,9 +804,17 @@ def check(
     # Idempotency: don't double-post FOR THIS WAVE. Passing wave_num makes
     # the heading match wave-specific so a carry-forward issue's prior-wave
     # kickoff comment does not suppress the current wave's kickoff (#547).
-    if kickoff_already_posted(
+    #
+    # Tri-state (#1145 / review round 3): the hook still POSTS when the probe
+    # came back `unknown` — that fail-open decision stands, see
+    # `kickoff_already_posted` — but the result must not be reported as a
+    # verified post. An unverified post is exactly the state-collapse this PR
+    # exists to remove, so it gets its own action and its own log line, and
+    # the possible duplicate has a trail.
+    comment_state = kickoff_comment_state(
         repo, issue_number, wave_num=wave_num, fetch_comments=comment_fetcher
-    ):
+    )
+    if comment_state == KICKOFF_PRESENT:
         return {"action": "skip_idempotent", "repo": repo, "issue": issue_number}
 
     body = render_kickoff_comment(
@@ -811,8 +833,23 @@ def check(
         )
         return {"action": "skip_post_failed", "repo": repo, "issue": issue_number}
 
+    if comment_state == KICKOFF_UNKNOWN:
+        log_posttooluse_event(
+            "post_wave_kickoff_comment",
+            command,
+            f"post_unverified: posted a kickoff comment to {repo}#{issue_number} WITHOUT being "
+            "able to read the issue's existing comments (gh fetch failed), so it is unknown "
+            "whether this duplicates an earlier kickoff. Posting is the deliberate fail-open "
+            "for this surface — a duplicate is visible on the issue in front of the "
+            "implementer, whereas a missing kickoff is invisible there (#1141 is the proof: 14 "
+            "issues, several days, found by an unrelated audit). Check the issue if a duplicate "
+            "matters (#1145).",
+        )
+
     return {
-        "action": "post",
+        # `post` means "verified absent, then posted". `post_unverified` means
+        # "posted, but could not check first" — never collapsed into `post`.
+        "action": "post" if comment_state == KICKOFF_ABSENT else "post_unverified",
         "repo": repo,
         "issue": issue_number,
         "wave_label": wave_label,

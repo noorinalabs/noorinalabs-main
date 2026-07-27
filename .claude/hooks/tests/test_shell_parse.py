@@ -909,20 +909,99 @@ class StripLockstepAcrossSegmentConsumers(unittest.TestCase):
         """`echo git -c user.name=X commit` is data, not a commit."""
         self.assertEqual(sp.extract_dash_c_pairs(["echo", "git", *self.IDENTITY, "commit"]), [])
 
-    def test_cd_target_behind_compound_leader(self) -> None:
-        """`gh` inside a loop is visible now; the `cd` beside it must be too."""
-        self.assertEqual(
+    def test_cd_target_behind_compound_leader_is_NOT_recovered(self) -> None:
+        """RETRACTED in review round 3 — this test asserted the wrong thing.
+
+        Round 2 argued that since `find_gh_subcommand` can see the `gh` inside
+        a loop, the `cd` beside it should be recovered too. That reasoning was
+        wrong: it treats a gate matcher and a routing resolver as the same
+        kind of consumer. Recovering a `cd` from ANY compound body also
+        recovers it from a never-taken `then` body, which misroutes — a live
+        bug, on the #981/#985 path, versus a speculative loop-cd shape with no
+        observed failure. `extract_leading_cd_target` strips wrappers only,
+        and the loop case staying unrecovered is the accepted cost (it needs
+        block-closure tracking to separate the two, which is not worth it).
+
+        Kept as an explicit non-goal rather than deleted, so the round-2
+        argument is not re-derived by the next reader. See `GuardedCdMustNotRoute`.
+        """
+        self.assertIsNone(
             sp.extract_leading_cd_target(
                 "for r in a ; do cd /tmp ; gh issue edit 1 --add-label x ; done"
-            ),
-            "/tmp",
+            )
         )
 
     def test_cd_target_bare_still_works(self) -> None:
         self.assertEqual(sp.extract_leading_cd_target("cd /tmp && gh pr create"), "/tmp")
 
     def test_cd_target_relative_still_ignored(self) -> None:
-        self.assertIsNone(sp.extract_leading_cd_target("do cd relative && gh pr create"))
+        """Relative targets are ambiguous (they'd resolve against the wrong cwd)."""
+        self.assertIsNone(sp.extract_leading_cd_target("cd relative && gh pr create"))
+
+
+class GuardedCdMustNotRoute(unittest.TestCase):
+    """main#1141 review round 3 — a guarded `cd` must not decide routing.
+
+    The lockstep invariant is "apply the strip", NOT "apply it with the same
+    arguments". Applying it uniformly shipped a live misroute:
+
+        if [ -f /nonexistent ] ; then cd /repo-b ; fi ; gh issue edit 5 …
+
+    The shell never runs that `cd`. Stripping `then` made the resolver behave
+    as if it had, sending the kickoff comment to repo-b#5 instead of
+    repo-a#5 — the #981/#985 misrouting class.
+
+    A **wrapper** always execs what follows, so stripping it is sound for any
+    caller. A **compound leader** guards a body that may not run: harmless for
+    a GATE that merely over-inspects, destructive for a RESOLVER that routes.
+    """
+
+    GUARDED = [
+        "if [ -f /nonexistent ] ; then cd /tmp ; fi ; gh issue edit 5 --add-label x",
+        "if false ; then cd /tmp ; fi ; gh pr create",
+        "git diff --quiet || { cd /tmp ; gh pr create ; }",
+        "for r in a ; do cd /tmp ; gh issue edit 1 --add-label x ; done",
+    ]
+
+    def test_guarded_cd_is_not_treated_as_taken(self) -> None:
+        for cmd in self.GUARDED:
+            with self.subTest(cmd=cmd):
+                self.assertIsNone(
+                    sp.extract_leading_cd_target(cmd),
+                    "a cd inside a guarded body must not resolve the routing target",
+                )
+
+    def test_unguarded_cd_still_resolves(self) -> None:
+        for cmd in (
+            "cd /tmp && gh pr create",
+            "cd /tmp ; gh pr create",
+            "cd /var && cd /tmp && gh pr create",  # last one wins
+        ):
+            with self.subTest(cmd=cmd):
+                self.assertEqual(sp.extract_leading_cd_target(cmd), "/tmp")
+
+    def test_wrapped_cd_still_resolves(self) -> None:
+        """A wrapper always execs what follows, so it stays strippable here."""
+        self.assertEqual(sp.extract_leading_cd_target("env FOO=1 cd /tmp && gh pr create"), "/tmp")
+
+    def test_gates_still_see_guarded_bodies(self) -> None:
+        """The carve-out is routing-only — gates keep their conservative reach."""
+        found = sp.find_gh_subcommand(["then", "gh", "pr", "review", "5"])
+        self.assertEqual(found, ([], ["pr", "review", "5"]))
+        self.assertEqual(
+            sp.extract_dash_c_pairs(["do", "git", "-c", "user.name=A", "commit"]),
+            [("user.name", "A")],
+        )
+
+    def test_compound_leaders_flag_is_honored(self) -> None:
+        seg = ["then", "cd", "/tmp"]
+        self.assertEqual(sp.strip_command_prefixes(seg), ["cd", "/tmp"])
+        self.assertEqual(sp.strip_command_prefixes(seg, compound_leaders=False), seg)
+
+    def test_wrappers_strip_under_both_settings(self) -> None:
+        seg = ["timeout", "5", "cd", "/tmp"]
+        self.assertEqual(sp.strip_command_prefixes(seg), ["cd", "/tmp"])
+        self.assertEqual(sp.strip_command_prefixes(seg, compound_leaders=False), ["cd", "/tmp"])
 
 
 if __name__ == "__main__":

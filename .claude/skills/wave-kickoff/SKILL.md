@@ -416,7 +416,7 @@ For waves with many issues across many repos, the labeling + project-board adds 
 
 **Do not treat Step 7 as complete until this sweep exits 0** — that means zero `would_post` AND zero `skip_fetch_unknown`. Exit 0 is the criterion, not the `would_post` line alone: a sweep whose comment fetches all failed cannot tell you whether anything is outstanding, and must not be read as "nothing to do" (main#1145). The hook in § 7 reacts to the label-apply *command*, so it can only act on what it can parse out of a shell string. A `for n in 1114 1116; do gh issue edit "$n" …; done` loop carries no issue number in the command at all — nothing can react to it. That is not hypothetical: during `/wave-scope 10 29` on 2026-07-27, 14 issues were labeled and **zero** kickoff comments posted, undetected until an unrelated audit.
 
-The sweep keys on the labels that actually LANDED rather than on the command string, and is idempotent (it screens every candidate through the same `kickoff_already_posted` check the hook uses), so it is safe to run repeatedly:
+The sweep keys on the labels that actually LANDED rather than on the command string, and screens every candidate through `kickoff_comment_state` — the *tri-state* probe (`present` / `absent` / `unknown`). It is idempotent **whenever that probe can read the issue's comments**, so it is safe to run repeatedly. Note this is deliberately **stricter than the § 7 hook**, which shares the probe but fails open on `unknown` and posts anyway (reporting `post_unverified`): one comment per explicit label-apply is bounded, whereas a bulk sweep re-running under a broken fetch is not. Do not assume the two behave identically.
 
 ```bash
 # Dry run first — prints exactly what it would post.

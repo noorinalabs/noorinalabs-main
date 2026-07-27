@@ -64,13 +64,13 @@ Public API
         (where the dependency is declared); a bare checkout without it still
         works via the shlex/regex fallback (zero-setup-on-pull is preserved).
 
-    strip_command_prefixes(segment) -> list[str]
-        Drops the leading run of compound-statement keywords (`do`, `then`,
-        `if`, ...) and transparent command-prefix wrappers (`timeout 45`,
-        `env`, `nohup`, `sudo`, ...) from a segment, returning the tokens
-        of the command that actually runs (main#1141).
+    strip_command_prefixes(segment, *, compound_leaders=True) -> list[str]
+        Drops the leading run of transparent command-prefix wrappers
+        (`timeout 45`, `env`, `nohup`, `sudo`, ...) and — when
+        `compound_leaders=True` — compound-statement keywords (`do`, `then`,
+        `if`, ...), returning the tokens of the command that runs (main#1141).
 
-        **Lockstep invariant:** EVERY function in this module that keys on a
+        **Lockstep invariant:** every function in this module that keys on a
         command-position token must apply this strip — `find_git_subcommand`,
         `find_gh_subcommand`, `extract_dash_c_pairs`,
         `extract_leading_cd_target`. A new segment-consuming helper that
@@ -79,8 +79,23 @@ Public API
         That produced a FALSE POSITIVE (a compliant
         `timeout 60 git -c user.name=… commit` blocked for a missing flag it
         had passed), which is strictly worse than the evasion the strip was
-        added to close. `test_strip_lockstep_across_segment_consumers` pins
-        the invariant.
+        added to close.
+
+        **…but the invariant is "apply the strip", NOT "apply it with the
+        same arguments."** Round 3 of the same review: applying it uniformly
+        shipped a live misroute. Pick the value by what the caller DOES:
+
+          - **Gate matcher** (validates/blocks a command) -> `True`.
+            Over-matching a guarded body is conservative — worst case you
+            inspect a command that would not have run.
+          - **Routing resolver** (decides which repo/target an action hits)
+            -> `False`. Over-matching is destructive — it sends output where
+            the command never went. A compound leader guards a body that may
+            not execute; a wrapper always execs. Only wrappers are safe to
+            assume for routing.
+
+        `test_strip_lockstep_across_segment_consumers` pins the invariant;
+        `GuardedCdMustNotRoute` pins the carve-out.
 
     find_git_subcommand(segment) -> tuple[list[str], list[str]] | None
         Given a single segment's tokens, returns (global_opts, [subcommand,
@@ -650,10 +665,8 @@ def _consume_wrapper_options(rest: list[str], value_flags: frozenset[str], posit
     return i
 
 
-def strip_command_prefixes(segment: list[str]) -> list[str]:
-    """Strip leading compound-statement keywords and command-prefix wrappers.
-
-    Returns the tokens of the command that ACTUALLY runs in `segment`:
+def strip_command_prefixes(segment: list[str], *, compound_leaders: bool = True) -> list[str]:
+    """Strip leading command-prefix wrappers, and optionally compound keywords.
 
         ["timeout", "45", "gh", "issue", "edit", …] -> ["gh", "issue", "edit", …]
         ["do", "gh", "issue", "edit", …]            -> ["gh", "issue", "edit", …]
@@ -665,13 +678,47 @@ def strip_command_prefixes(segment: list[str]) -> list[str]:
     so a segment whose head is any other command is returned untouched. The
     returned list is a fresh object or the original list — callers must not rely
     on identity (main#1141).
+
+    `compound_leaders` — the distinction that decides which callers may say
+    True (main#1141 review round 3)
+    ======================================================================
+
+    The two prefix kinds are NOT equivalent, and conflating them shipped a
+    live misroute:
+
+      - A **wrapper** (`timeout`, `env`, `nice`, `nohup`, `sudo`) ALWAYS execs
+        what follows. Stripping it is unconditionally sound: the wrapped
+        command runs.
+      - A **compound leader** (`then`, `do`, `else`, `{`, `(`) guards a body
+        that MAY NOT RUN. `if [ -f /nonexistent ]; then cd /other-repo; fi`
+        contains a `cd` the shell never executes.
+
+    Whether that matters depends on what the caller does with the answer:
+
+      - A **gate matcher** (`find_git_subcommand`, `find_gh_subcommand`, and
+        `extract_dash_c_pairs` reading a matched segment's flags) errs
+        CONSERVATIVELY by over-matching: at worst it validates a command that
+        would not have run. Harmless. These pass `compound_leaders=True`.
+      - A **routing resolver** (`extract_leading_cd_target`, which decides
+        WHICH REPO an action targets) errs DESTRUCTIVELY by over-matching: it
+        sends output where the command never went. Under
+        `compound_leaders=True` the example above resolved the repo to
+        `noorinalabs-deploy` and would have posted a kickoff comment to
+        `deploy#5` instead of `main#5` — on the #981/#985 misrouting path.
+        Routing callers MUST pass `compound_leaders=False`.
+
+    Non-goal, deliberately: `for r in …; do cd /wt; gh …; done` — a cd inside
+    a loop body that DOES run — is not recovered under
+    `compound_leaders=False`. Distinguishing it from the never-taken `then`
+    body needs block-closure tracking, and the shape is speculative (no
+    observed bug) while the misroute was live. Not worth the machinery.
     """
     tokens = segment
     for _ in range(_MAX_PREFIX_STRIP_ROUNDS):
         if not tokens:
             return tokens
         head = tokens[0]
-        if head in _COMPOUND_LEADERS:
+        if compound_leaders and head in _COMPOUND_LEADERS:
             tokens = tokens[1:]
             continue
         spec = _COMMAND_PREFIX_WRAPPERS.get(head)
@@ -1008,19 +1055,26 @@ def extract_leading_cd_target(command: str) -> str | None:
     command itself even though the harness `cwd` field points at the
     orchestrator's spawn-time directory.
 
-    Strips command prefixes for the same lockstep reason as
-    `extract_dash_c_pairs` (main#1141 review). Once `find_gh_subcommand` can
-    see the `gh` inside `for r in …; do cd /worktree; gh issue edit …; done`,
-    a `cd` that is still invisible in the SAME loop leaves the repo resolved
-    from the wrong directory — one half of the command visible, the other
-    half blind. Both halves strip, or neither should.
+    Strips WRAPPERS ONLY — `compound_leaders=False` (main#1141 review round 3).
+    This function ROUTES (it decides which repo an action targets), and a
+    routing resolver must never assume a guarded body ran:
+
+        if [ -f /nonexistent ] ; then cd /repo-b ; fi ; gh issue edit 5 …
+
+    The shell never executes that `cd`. Stripping `then` made this resolve to
+    repo-b and would have posted to `repo-b#5` instead of `repo-a#5` — the
+    #981/#985 misrouting class. Over-matching is conservative for a GATE
+    (worst case: validate a command that would not run) and destructive for a
+    RESOLVER (send output where the command never went), so the two kinds of
+    caller take different values of `compound_leaders`. `timeout 5 cd /x` and
+    friends still strip: a wrapper always execs what follows.
     """
     tokens = tokenize(command)
     if tokens is None:
         return None
     target: str | None = None
     for raw_segment in iter_command_segments(tokens):
-        segment = strip_command_prefixes(raw_segment)
+        segment = strip_command_prefixes(raw_segment, compound_leaders=False)
         if len(segment) == 2 and segment[0] == "cd" and segment[1].startswith("/"):
             target = segment[1]
     return target
