@@ -6,6 +6,29 @@ find_git_subcommand, find_gh_subcommand, extract_dash_c_pairs,
 resolve_tool_cwd, is_shutdown_request_message) and the negative-match
 fixtures from the sibling-bug cluster (#226 #227 #223 #216 #188 #189 #144).
 
+Shell-truth tests, and their one known limit (main#1141 review)
+==============================================================
+
+`CdRoutingAgainstShellTruth` does not compare the resolver to an expected
+literal — it runs each shape in a REAL shell and takes the resulting cwd as
+ground truth. Everything else in this module asserts against expected output,
+which is fine for pure token functions but cannot catch a resolver whose model
+of the shell is simply wrong (it can only catch one that disagrees with
+someone's belief about it). Two families of main#1151 survived this suite for
+exactly that reason, and the method caught a round-3 test of mine that pinned a
+misroute as correct.
+
+**Limit — the oracle is `bash`, the harness shell is `zsh`.** Constructs are
+driven through `bash -c` for determinism and because CI runs bash. For every
+shape asserted here the two shells agree, and the load-bearing fact (an
+exec-wrapper cannot carry the `cd` BUILTIN, so `env FOO=1 cd /x` leaves the
+shell where it was) was checked in BOTH before the resolver was written to
+depend on it. One construct is known to differ and is therefore deliberately
+NOT relied on anywhere: `command cd /x` moves the shell in bash but not in
+zsh. If a future shape's behaviour is shell-dependent, verify it in both and
+either assert the common subset or leave it out — do not let a bash-only truth
+become a resolver invariant.
+
 Run: ENVIRONMENT=test python3 -m pytest .claude/hooks/tests/test_shell_parse.py -v
 """
 
@@ -1064,6 +1087,17 @@ class CdRoutingAgainstShellTruth(unittest.TestCase):
                     "changes, the resolver's no-strip rule needs revisiting",
                 )
                 self.assertIsNone(self._resolved(template))
+
+    def test_shell_dependent_shape_is_not_relied_on(self) -> None:
+        """`command cd /x` moves the shell in bash but NOT in zsh.
+
+        The harness shell is zsh and the oracle here is bash, so this shape has
+        no single truth. The resolver must therefore claim nothing for it —
+        which it does for free, since it strips no prefixes at all. Pinned so a
+        future widening cannot quietly adopt a bash-only behaviour as an
+        invariant (module docstring § Shell-truth tests).
+        """
+        self.assertIsNone(self._resolved("command cd DEST ; MARKER"))
 
     # --- the shapes that MUST still resolve ---
 
