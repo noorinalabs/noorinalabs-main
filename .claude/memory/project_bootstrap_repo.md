@@ -2,6 +2,7 @@
 name: project_bootstrap_repo
 description: User is creating a separate repo to bootstrap the team structure, ontology system, and way of working — dogfooding the noorinalabs-main patterns
 type: project
+last_verified: 2026-07-27
 originSessionId: b06ac381-f437-4866-bae8-edf11c9186e3
 promotion_target: none
 status: active

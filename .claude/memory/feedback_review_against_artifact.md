@@ -24,14 +24,14 @@ Distinct from Pattern B (verify-spec-against-ground-truth) at the implementer va
 
 **How to apply:**
 
-- For every PR review, fetch the file at PR head via `gh api repos/<owner>/<repo>/contents/<path>?ref=<head_sha>` (NOT local clone — `feedback_origin_over_local_for_still_has_claims`). Read the actual lines.
+- For every PR review, fetch the file at PR head via `gh api repos/<owner>/<repo>/contents/<path>?ref=<head_sha>` (NOT local clone — [[feedback_canonical_source_via_git_show]]: the worktree can be pre-merge while origin holds the canonical version). Read the actual lines.
 - For "is X still there" claims, grep the artifact, don't trust the PR body's "removed in this PR" assertion.
 - For ordering / sequencing claims (cloud-init runcmd, GH Actions step DAG, compose service depends_on), verify the actual semantics from upstream docs / standard conventions, not the author's "ordering is correct" prose.
 - For env-var / config wiring claims, trace producer → consumer through the actual file references (e.g., compose env var → workflow `envs:` allowlist → script body), not through the PR body summary.
 - The PR body is the author's **framing**, useful for orientation. The artifact is the **truth**, load-bearing for verdict.
 
 Companion to:
-- `feedback_origin_over_local_for_still_has_claims` (use gh api at HEAD, not local clone)
+- [[feedback_canonical_source_via_git_show]] (use gh api / `git show <sha>:<path>` at HEAD, not local clone)
 - `feedback_refresh_before_status_claim` (refresh PR state before any "still at X" assertion)
-- `feedback_verify_third_party_integrity_claims` (don't claim a tool verifies SHA without grepping its source)
+- [[feedback_verify_3p_integrity]] (don't claim a tool verifies SHA without grepping its source)
 - `feedback_verify_diagnosis_before_delegating` (Pattern B implementer-side equivalent)

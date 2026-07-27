@@ -2,6 +2,7 @@
 name: feedback_role_class_specific_boundaries
 description: When a person appears in multiple role contexts (PR reviewer vs escalation target vs advisor vs implementer), the boundary rule applies per-role-class, not per-person. Check which class you're operating in before correcting.
 type: feedback
+last_verified: 2026-07-27
 originSessionId: 7a9193be-f4d0-4434-a33c-2c9493287b57
 promotion_target: charter
 promotion_threshold:

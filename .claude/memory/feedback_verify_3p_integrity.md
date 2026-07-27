@@ -2,6 +2,7 @@
 name: feedback_verify_3p_integrity
 description: Don't claim a third-party tool's integrity property (verifies SHA, signs commits, etc.) without grepping the actual source — convention isn't proof
 type: feedback
+last_verified: 2026-07-27
 originSessionId: 2e011116-89b1-4ac2-b2fc-1d5649d609c7
 promotion_target: charter
 promotion_threshold:
