@@ -119,10 +119,12 @@ def list_labeled_issues(repo: str, labels: list[str], run_gh=None) -> list[str]:
 
     One `gh issue list` call per label (multiple `--label` flags on a single
     call are ANDed by gh, which is the opposite of what a form-union needs),
-    de-duplicated and returned in ascending numeric order. `--limit 500`
-    exceeds any plausible wave scope by an order of magnitude; a wave that
-    somehow exceeded it would silently under-sweep, so the limit is asserted
-    against the returned count by the caller's report (`len(candidates)`).
+    de-duplicated and returned in ascending numeric order.
+
+    `--limit 500` exceeds any plausible wave scope by an order of magnitude,
+    but there is NO assertion that the result stayed under it: a wave that
+    somehow exceeded 500 labeled issues in one repo would silently
+    under-sweep. Known gap, not a guarantee — tracked by main#1145.
     """
     run_gh = run_gh or _run_gh
     seen: set[str] = set()

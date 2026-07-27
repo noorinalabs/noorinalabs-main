@@ -68,8 +68,19 @@ Public API
         Drops the leading run of compound-statement keywords (`do`, `then`,
         `if`, ...) and transparent command-prefix wrappers (`timeout 45`,
         `env`, `nohup`, `sudo`, ...) from a segment, returning the tokens
-        of the command that actually runs. Applied automatically by
-        `find_git_subcommand` / `find_gh_subcommand` (main#1141).
+        of the command that actually runs (main#1141).
+
+        **Lockstep invariant:** EVERY function in this module that keys on a
+        command-position token must apply this strip — `find_git_subcommand`,
+        `find_gh_subcommand`, `extract_dash_c_pairs`,
+        `extract_leading_cd_target`. A new segment-consuming helper that
+        skips it re-opens the main#1141-review regression: two functions
+        reading ONE segment with different views of where the command starts.
+        That produced a FALSE POSITIVE (a compliant
+        `timeout 60 git -c user.name=… commit` blocked for a missing flag it
+        had passed), which is strictly worse than the evasion the strip was
+        added to close. `test_strip_lockstep_across_segment_consumers` pins
+        the invariant.
 
     find_git_subcommand(segment) -> tuple[list[str], list[str]] | None
         Given a single segment's tokens, returns (global_opts, [subcommand,
@@ -909,8 +920,22 @@ def extract_dash_c_pairs(segment: list[str]) -> list[tuple[str, str]]:
     already unquoted the value half, so `-c user.name="A B"` arrives here as
     `["-c", "user.name=A B"]` (two tokens; the inner `=` is the key/value
     separator handled by `split("=", 1)`).
+
+    MUST strip command prefixes, in lockstep with `find_git_subcommand`
+    (main#1141 review). `validate_commit_identity` calls BOTH on the SAME
+    segment: `find_git_subcommand` to recognize the `commit` verb, then this
+    to read the identity flags. When only the first stripped,
+    `timeout 60 git -c user.name=… commit` was recognized as a commit but its
+    `-c` pairs came back EMPTY, so the gate blocked a fully compliant commit
+    with "missing `-c user.name=` flag" — naming the exact flag the operator
+    had passed. Two functions holding different views of one segment is the
+    hazard; keeping the strip symmetric is the invariant that prevents it.
+    A false positive is strictly worse than the evasion it came from: an
+    evasion costs one missed gate, a false positive blocks correct work for
+    everyone with a message that reads as a lie.
     """
     pairs: list[tuple[str, str]] = []
+    segment = strip_command_prefixes(segment)
     if not segment or segment[0] != "git":
         return pairs
 
@@ -982,12 +1007,20 @@ def extract_leading_cd_target(command: str) -> str | None:
     bug (#521): `cd /worktree && gh pr create` carries the real cwd in the
     command itself even though the harness `cwd` field points at the
     orchestrator's spawn-time directory.
+
+    Strips command prefixes for the same lockstep reason as
+    `extract_dash_c_pairs` (main#1141 review). Once `find_gh_subcommand` can
+    see the `gh` inside `for r in …; do cd /worktree; gh issue edit …; done`,
+    a `cd` that is still invisible in the SAME loop leaves the repo resolved
+    from the wrong directory — one half of the command visible, the other
+    half blind. Both halves strip, or neither should.
     """
     tokens = tokenize(command)
     if tokens is None:
         return None
     target: str | None = None
-    for segment in iter_command_segments(tokens):
+    for raw_segment in iter_command_segments(tokens):
+        segment = strip_command_prefixes(raw_segment)
         if len(segment) == 2 and segment[0] == "cd" and segment[1].startswith("/"):
             target = segment[1]
     return target

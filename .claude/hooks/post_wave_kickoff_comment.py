@@ -563,9 +563,14 @@ def _report_unresolved_label_applies(command: str) -> dict | None:
         "for these issues. Run the /wave-kickoff reconciliation sweep "
         "(.claude/lib/kickoff_sweep.py) to backfill from the labels that landed (#1141).",
     )
+    # `unresolved_edits` counts COMMAND SHAPES, not issues — one `for n in
+    # 1114 1116; do …; done` loop is a single unresolved edit that will touch
+    # two issues, and the issue count is unknowable from the command string
+    # (that is the whole defect). Named for what it counts so an operator does
+    # not read "1" as "one issue affected" (main#1141 review nit).
     return {
         "action": "skip_unresolved_issue_number",
-        "count": len(unresolved),
+        "unresolved_edits": len(unresolved),
         "labels": ",".join(labels),
     }
 

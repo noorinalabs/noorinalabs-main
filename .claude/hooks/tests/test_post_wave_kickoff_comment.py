@@ -1059,6 +1059,10 @@ class SilentDeclineIsSurfaced(unittest.TestCase):
         )
         self.assertEqual(result["action"], "skip_unresolved_issue_number")
         self.assertEqual(result["labels"], "wave-29")
+        # Counts SHAPES, not issues: one loop == one unresolved edit, even
+        # though it will touch two issues (main#1141 review nit — the key is
+        # named for what it counts so the number cannot be misread).
+        self.assertEqual(result["unresolved_edits"], 1)
         self.assertEqual(len(logs), 1)
         self.assertIn("kickoff_sweep", logs[0][2])
 

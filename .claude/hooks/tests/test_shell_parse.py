@@ -846,5 +846,84 @@ class FindSubcommandThroughPrefixes(unittest.TestCase):
         self.assertIsNone(sp.find_gh_subcommand(["echo", "gh", "issue", "edit", "1114"]))
 
 
+class StripLockstepAcrossSegmentConsumers(unittest.TestCase):
+    """main#1141 review MUST-FIX — every command-position keyer must strip.
+
+    `find_git_subcommand` stripped and `extract_dash_c_pairs` did not, while
+    `validate_commit_identity` calls BOTH on the SAME segment: the commit was
+    recognized but its `-c` pairs came back empty, so a fully compliant
+    `timeout 60 git -c user.name=… -c user.email=… commit` was BLOCKED for a
+    missing flag the operator had passed. The suite was green with and
+    without the fix, which is why 21/21 CI and a 25-shape adversarial pass
+    both missed it — hence these tests.
+    """
+
+    IDENTITY = ["-c", "user.name=Nino Kavtaradze", "-c", "user.email=n@example.com"]
+    EXPECTED = [("user.name", "Nino Kavtaradze"), ("user.email", "n@example.com")]
+
+    def test_dash_c_pairs_bare(self) -> None:
+        seg = ["git", *self.IDENTITY, "commit", "-m", "msg"]
+        self.assertEqual(sp.extract_dash_c_pairs(seg), self.EXPECTED)
+
+    def test_dash_c_pairs_behind_wrappers(self) -> None:
+        """Whole `_COMMAND_PREFIX_WRAPPERS` table, not just `timeout`."""
+        for prefix in (
+            ["timeout", "60"],
+            ["timeout", "-k", "5", "60"],
+            ["env", "FOO=1"],
+            ["nice", "-n", "5"],
+            ["nohup"],
+            ["command"],
+            ["sudo", "-u", "ci"],
+            ["do"],
+            ["do", "timeout", "60"],
+        ):
+            with self.subTest(prefix=" ".join(prefix)):
+                seg = [*prefix, "git", *self.IDENTITY, "commit", "-m", "msg"]
+                self.assertEqual(sp.extract_dash_c_pairs(seg), self.EXPECTED)
+
+    def test_dash_c_pairs_and_find_git_subcommand_agree(self) -> None:
+        """The invariant itself: both helpers see the same command, or neither.
+
+        A future segment-consuming helper that forgets the strip fails here.
+        """
+        for prefix in ([], ["timeout", "60"], ["env", "FOO=1"], ["do"], ["nice", "-n", "5"]):
+            with self.subTest(prefix=" ".join(prefix) or "(bare)"):
+                seg = [*prefix, "git", *self.IDENTITY, "commit", "-m", "msg"]
+                found = sp.find_git_subcommand(seg)
+                self.assertIsNotNone(found)
+                assert found is not None
+                self.assertEqual(found[1][0], "commit")
+                # Recognized as a commit => its identity flags MUST be readable.
+                self.assertEqual(sp.extract_dash_c_pairs(seg), self.EXPECTED)
+
+    def test_wrapped_commit_without_identity_still_yields_nothing(self) -> None:
+        """The strip must not invent pairs — an identity-less commit stays empty."""
+        for prefix in (["timeout", "60"], ["env", "FOO=1"], ["do"]):
+            with self.subTest(prefix=" ".join(prefix)):
+                self.assertEqual(
+                    sp.extract_dash_c_pairs([*prefix, "git", "commit", "-m", "msg"]), []
+                )
+
+    def test_non_wrapper_head_yields_no_pairs(self) -> None:
+        """`echo git -c user.name=X commit` is data, not a commit."""
+        self.assertEqual(sp.extract_dash_c_pairs(["echo", "git", *self.IDENTITY, "commit"]), [])
+
+    def test_cd_target_behind_compound_leader(self) -> None:
+        """`gh` inside a loop is visible now; the `cd` beside it must be too."""
+        self.assertEqual(
+            sp.extract_leading_cd_target(
+                "for r in a ; do cd /tmp ; gh issue edit 1 --add-label x ; done"
+            ),
+            "/tmp",
+        )
+
+    def test_cd_target_bare_still_works(self) -> None:
+        self.assertEqual(sp.extract_leading_cd_target("cd /tmp && gh pr create"), "/tmp")
+
+    def test_cd_target_relative_still_ignored(self) -> None:
+        self.assertIsNone(sp.extract_leading_cd_target("do cd relative && gh pr create"))
+
+
 if __name__ == "__main__":
     unittest.main()
