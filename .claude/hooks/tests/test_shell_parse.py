@@ -944,9 +944,16 @@ class StripLockstepAcrossSegmentConsumers(unittest.TestCase):
         kind of consumer. Recovering a `cd` from ANY compound body also
         recovers it from a never-taken `then` body, which misroutes — a live
         bug, on the #981/#985 path, versus a speculative loop-cd shape with no
-        observed failure. `extract_leading_cd_target` strips wrappers only,
-        and the loop case staying unrecovered is the accepted cost (it needs
-        block-closure tracking to separate the two, which is not worth it).
+        observed failure.
+
+        `extract_leading_cd_target` therefore strips NOTHING — `cd` must be
+        token 0 of its segment. Both prefix families are disqualified, for two
+        different reasons: a compound LEADER guards a body that may not run,
+        and a command-prefix WRAPPER cannot carry `cd` at all, because `cd` is
+        a shell builtin (`env FOO=1 cd /x` leaves the shell where it was, in
+        bash and zsh alike). The loop case staying unrecovered is the accepted
+        cost — separating a loop body that runs from a `then` body that does
+        not needs block-closure tracking, which is not worth it.
 
         Kept as an explicit non-goal rather than deleted, so the round-2
         argument is not re-derived by the next reader. See `GuardedCdMustNotRoute`.
@@ -1151,6 +1158,14 @@ class CdRoutingAgainstShellTruth(unittest.TestCase):
         layer: family A has no leader to withhold, and family B needs to know
         whether the `cd` precedes the `gh` NODE, which `iter_command_segments`
         has already discarded. main#1151 tracks the bashlex-AST fix.
+
+        Family A is narrower than it looks, and the difference is easy to
+        mistake for a fix: the BRACED variant `true || { cd DEST ; … }` does
+        NOT misroute, because the `{` makes that segment three tokens and the
+        `cd` is no longer at token 0 (it is covered by
+        `test_leader_shapes_never_misroute`). Only the BARE `true || cd DEST`
+        form gets through. So repairing the braced shape proves nothing about
+        family A — do not read it as evidence that #1151 is closed.
 
         This test exists so the gap is visible in the suite rather than only
         in prose, and so closing #1151 forces someone to come back here.
