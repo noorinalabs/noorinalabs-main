@@ -64,16 +64,28 @@ Public API
         (where the dependency is declared); a bare checkout without it still
         works via the shlex/regex fallback (zero-setup-on-pull is preserved).
 
+    strip_command_prefixes(segment) -> list[str]
+        Drops the leading run of compound-statement keywords (`do`, `then`,
+        `if`, ...) and transparent command-prefix wrappers (`timeout 45`,
+        `env`, `nohup`, `sudo`, ...) from a segment, returning the tokens
+        of the command that actually runs. Applied automatically by
+        `find_git_subcommand` / `find_gh_subcommand` (main#1141).
+
     find_git_subcommand(segment) -> tuple[list[str], list[str]] | None
         Given a single segment's tokens, returns (global_opts, [subcommand,
         ...rest]) if it's a `git ...` invocation, else None. Skips git
         global options (`-c k=v`, `-C dir`, `--git-dir=...`,
         `--work-tree=...`, etc.) so the returned subcommand is the actual
-        git verb (`commit`, `config`, `worktree`, ...).
+        git verb (`commit`, `config`, `worktree`, ...). Leading wrappers /
+        compound keywords are stripped first (main#1141), so
+        `timeout 60 git commit ...` and `do git commit ...` resolve.
 
     find_gh_subcommand(segment) -> tuple[list[str], list[str]] | None
         Same shape for `gh ...`. Returns (gh_global_opts, [topic, action,
-        ...rest]) — e.g. ([], ["pr", "create", "--repo", ...]).
+        ...rest]) — e.g. ([], ["pr", "create", "--repo", ...]). Same
+        leading-wrapper / compound-keyword tolerance (main#1141), so
+        `timeout 45 gh issue edit ...` and the `do`-prefixed body of a
+        `for … ; do gh issue edit … ; done` loop both resolve.
 
     is_gh_subcommand(tokens, *verbs) -> bool
         Yes/no convenience for "does this token list contain a `gh <verb1>
@@ -530,6 +542,135 @@ def _is_equals_form_global(tok: str) -> bool:
     )
 
 
+# ---------------------------------------------------------------------------
+# Command-prefix wrappers + compound-statement leaders (main#1141)
+# ---------------------------------------------------------------------------
+#
+# `find_git_subcommand` / `find_gh_subcommand` keyed on `segment[0]` being
+# literally `git` / `gh`. Two ordinary shapes put something else there and made
+# every consuming hook silently no-op:
+#
+#   timeout 45 gh issue edit 1114 --add-label "wave-29"    -> segment[0] == "timeout"
+#   for n in …; do gh issue edit 1114 --add-label "wave-29"; done
+#                                                          -> segment[0] == "do"
+#
+# For the kickoff hook that meant 14 issues labeled and ZERO kickoff comments
+# posted (main#1141); for the BLOCKING hooks on the same primitive
+# (`block_gh_pr_review`, `block_squash_wave_merge`, `validate_wave_label_evidence`,
+# `validate_commit_identity` via the git twin) it is a gate-evasion class — a
+# `timeout`/`nice`/loop prefix walked straight past the gate.
+#
+# The fix is an ALLOWLIST, never a "scan the segment for a `gh` token anywhere":
+# loose scanning would re-introduce the data-position false-positive class this
+# whole module exists to prevent (`echo gh issue edit 5 …` must NOT match). Only
+# wrappers that transparently exec the following command, with their own option
+# grammar spelled out, are skipped.
+#
+# Each entry maps a wrapper name to (flags that consume a following VALUE,
+# number of bare POSITIONAL args consumed before the wrapped command). Boolean
+# flags, `--flag=value` and attached-short forms need no table entry — any
+# remaining `-`-prefixed token is skipped generically.
+_COMMAND_PREFIX_WRAPPERS: dict[str, tuple[frozenset[str], int]] = {
+    # `timeout DURATION cmd …` — the one positional is the duration.
+    "timeout": (frozenset({"-k", "--kill-after", "-s", "--signal"}), 1),
+    "nice": (frozenset({"-n", "--adjustment"}), 0),
+    "ionice": (frozenset({"-c", "-n", "-p", "--class", "--classdata", "--pid"}), 0),
+    "stdbuf": (frozenset({"-i", "-o", "-e", "--input", "--output", "--error"}), 0),
+    # `env [-u NAME] [KEY=value …] cmd …` — the KEY=value run is skipped by the
+    # generic env-assignment branch in `_consume_wrapper_options`.
+    "env": (frozenset({"-u", "--unset", "-C", "--chdir", "-S", "--split-string"}), 0),
+    "nohup": (frozenset(), 0),
+    "setsid": (frozenset(), 0),
+    "command": (frozenset(), 0),
+    "builtin": (frozenset(), 0),
+    "exec": (frozenset(), 0),
+    "time": (frozenset({"-f", "--format", "-o", "--output"}), 0),
+    "sudo": (
+        frozenset(
+            {"-u", "--user", "-g", "--group", "-p", "--prompt", "-U", "-C", "-h", "-T", "-R"}
+        ),
+        0,
+    ),
+    "doas": (frozenset({"-u", "-C", "-L"}), 0),
+}
+
+# Shell keywords that can occupy position 0 of a segment while the COMMAND
+# follows them in the same segment. `for` / `case` / `select` are deliberately
+# absent: what follows them is a variable name or a word list, not a command
+# (`for n in 1114 …` must not resolve `n` as a command).
+_COMPOUND_LEADERS = frozenset({"do", "then", "else", "if", "elif", "while", "until", "!", "{", "("})
+
+# Bound on the wrapper/keyword unwrap loop. `do timeout 45 nohup gh …` is 3
+# rounds; anything past this is pathological input, not a real command.
+_MAX_PREFIX_STRIP_ROUNDS = 8
+
+
+def _consume_wrapper_options(rest: list[str], value_flags: frozenset[str], positionals: int) -> int:
+    """Return the index in `rest` where a wrapper's own arguments end.
+
+    Walks the wrapper's option run: value-taking flags consume their value,
+    any other flag-shaped token consumes itself, `KEY=value` env assignments
+    are skipped (`env FOO=1 gh …`), and up to `positionals` bare words are
+    consumed (the `timeout DURATION` slot). A literal `--` ends the option run
+    immediately. The first token that is none of those is the wrapped command.
+    """
+    i = 0
+    n = len(rest)
+    while i < n:
+        tok = rest[i]
+        if tok == "--":
+            return i + 1
+        if tok in value_flags:
+            # Mirror `walk_flag_values`: a value-less flag never eats the next
+            # flag-shaped token.
+            i += 2 if (i + 1 < n and not _looks_like_flag(rest[i + 1])) else 1
+            continue
+        if _looks_like_flag(tok):
+            i += 1
+            continue
+        if _ENV_ASSIGN_RE.match(tok):
+            i += 1
+            continue
+        if positionals > 0:
+            positionals -= 1
+            i += 1
+            continue
+        break
+    return i
+
+
+def strip_command_prefixes(segment: list[str]) -> list[str]:
+    """Strip leading compound-statement keywords and command-prefix wrappers.
+
+    Returns the tokens of the command that ACTUALLY runs in `segment`:
+
+        ["timeout", "45", "gh", "issue", "edit", …] -> ["gh", "issue", "edit", …]
+        ["do", "gh", "issue", "edit", …]            -> ["gh", "issue", "edit", …]
+        ["echo", "gh", "issue", "edit", …]          -> unchanged (echo is not a
+                                                       transparent wrapper — its
+                                                       args are DATA, not a command)
+
+    Only names in `_COMMAND_PREFIX_WRAPPERS` / `_COMPOUND_LEADERS` are stripped,
+    so a segment whose head is any other command is returned untouched. The
+    returned list is a fresh object or the original list — callers must not rely
+    on identity (main#1141).
+    """
+    tokens = segment
+    for _ in range(_MAX_PREFIX_STRIP_ROUNDS):
+        if not tokens:
+            return tokens
+        head = tokens[0]
+        if head in _COMPOUND_LEADERS:
+            tokens = tokens[1:]
+            continue
+        spec = _COMMAND_PREFIX_WRAPPERS.get(head)
+        if spec is None:
+            return tokens
+        value_flags, positionals = spec
+        tokens = tokens[1 + _consume_wrapper_options(tokens[1:], value_flags, positionals) :]
+    return tokens
+
+
 def find_git_subcommand(segment: list[str]) -> tuple[list[str], list[str]] | None:
     """If `segment` is a `git ...` invocation, return (global_opts, [subcmd, ...]).
 
@@ -540,9 +681,15 @@ def find_git_subcommand(segment: list[str]) -> tuple[list[str], list[str]] | Non
       --work-tree=path / --work-tree path
       --no-pager / -p / --paginate / --no-replace-objects   (no value)
 
-    Returns None if `segment` is empty, doesn't start with `git`, or doesn't
-    have a subcommand after the global-option run.
+    Leading compound-statement keywords and transparent command-prefix wrappers
+    are stripped first (main#1141), so `timeout 60 git commit …` and the
+    `do`-prefixed body of a loop resolve to the `commit` verb instead of
+    silently bypassing every consuming gate.
+
+    Returns None if `segment` is empty, doesn't start with `git` (after that
+    strip), or doesn't have a subcommand after the global-option run.
     """
+    segment = strip_command_prefixes(segment)
     if not segment or segment[0] != "git":
         return None
 
@@ -577,7 +724,15 @@ def find_gh_subcommand(segment: list[str]) -> tuple[list[str], list[str]] | None
 
     `gh` has no pre-subcommand global options worth skipping for the matchers
     in this codebase, so this is a thin shape-mirror of `find_git_subcommand`.
+
+    Leading compound-statement keywords and transparent command-prefix wrappers
+    are stripped first (main#1141): `timeout 45 gh issue edit …` and the
+    `do`-prefixed body of `for n in …; do gh issue edit …; done` both resolve.
+    Before that fix each returned None, and every consuming hook — the kickoff
+    comment poster AND the blocking `gh pr review` / squash-merge gates —
+    silently did nothing.
     """
+    segment = strip_command_prefixes(segment)
     if not segment or segment[0] != "gh":
         return None
     if len(segment) < 2:

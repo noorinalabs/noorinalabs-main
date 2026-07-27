@@ -742,5 +742,109 @@ class MemoizedParseMutationSafetyTests(unittest.TestCase):
         self.assertEqual(sp.iter_command_segments_ast(cmd), expected)
 
 
+class StripCommandPrefixes(unittest.TestCase):
+    """main#1141 — leading wrappers / compound keywords must not hide a command.
+
+    `find_git_subcommand` / `find_gh_subcommand` keyed on token 0 being
+    literally `git` / `gh`, so `timeout 45 gh …` and the `do`-prefixed body of
+    a `for … ; do … ; done` loop resolved to None and every consuming hook —
+    the kickoff-comment poster AND the blocking gates on the same primitive —
+    silently did nothing.
+    """
+
+    def test_bare_command_unchanged(self) -> None:
+        self.assertEqual(
+            sp.strip_command_prefixes(["gh", "issue", "edit"]), ["gh", "issue", "edit"]
+        )
+
+    def test_empty_segment(self) -> None:
+        self.assertEqual(sp.strip_command_prefixes([]), [])
+
+    def test_timeout_duration_positional(self) -> None:
+        self.assertEqual(
+            sp.strip_command_prefixes(["timeout", "45", "gh", "pr", "list"]), ["gh", "pr", "list"]
+        )
+
+    def test_timeout_with_flags(self) -> None:
+        self.assertEqual(
+            sp.strip_command_prefixes(["timeout", "-k", "5", "--foreground", "2m", "gh", "pr"]),
+            ["gh", "pr"],
+        )
+
+    def test_timeout_equals_form_flag(self) -> None:
+        self.assertEqual(
+            sp.strip_command_prefixes(["timeout", "--kill-after=5", "45", "gh", "pr"]),
+            ["gh", "pr"],
+        )
+
+    def test_compound_leaders(self) -> None:
+        for leader in ("do", "then", "else", "if", "elif", "while", "until", "!", "{", "("):
+            with self.subTest(leader=leader):
+                self.assertEqual(sp.strip_command_prefixes([leader, "gh", "pr"]), ["gh", "pr"])
+
+    def test_nested_wrappers(self) -> None:
+        self.assertEqual(
+            sp.strip_command_prefixes(["do", "timeout", "45", "nohup", "gh", "pr"]),
+            ["gh", "pr"],
+        )
+
+    def test_env_assignments_and_flags(self) -> None:
+        self.assertEqual(
+            sp.strip_command_prefixes(["env", "-u", "PAGER", "GH_PAGER=cat", "gh", "pr"]),
+            ["gh", "pr"],
+        )
+
+    def test_sudo_user_flag(self) -> None:
+        self.assertEqual(
+            sp.strip_command_prefixes(["sudo", "-u", "ci", "git", "commit"]), ["git", "commit"]
+        )
+
+    def test_double_dash_ends_wrapper_options(self) -> None:
+        self.assertEqual(sp.strip_command_prefixes(["env", "--", "gh", "pr"]), ["gh", "pr"])
+
+    def test_non_wrapper_head_is_not_stripped(self) -> None:
+        """The allowlist is the whole safety property.
+
+        A loose "find `gh` anywhere in the segment" scan would re-introduce the
+        data-position false-positive class this module exists to prevent — the
+        #118/#134/#144/#188/#189/#216/#223/#226/#227 bug trail. `echo`, `printf`
+        and friends take DATA, not a command, so they are never stripped.
+        """
+        for head in ("echo", "printf", "cat", "grep", "python3"):
+            with self.subTest(head=head):
+                seg = [head, "gh", "issue", "edit", "5"]
+                self.assertEqual(sp.strip_command_prefixes(seg), seg)
+
+    def test_for_keyword_is_not_a_leader(self) -> None:
+        """`for` is followed by a VARIABLE NAME, not a command."""
+        seg = ["for", "n", "in", "1114", "1116"]
+        self.assertEqual(sp.strip_command_prefixes(seg), seg)
+
+    def test_does_not_mutate_input(self) -> None:
+        seg = ["timeout", "45", "gh", "pr"]
+        sp.strip_command_prefixes(seg)
+        self.assertEqual(seg, ["timeout", "45", "gh", "pr"])
+
+
+class FindSubcommandThroughPrefixes(unittest.TestCase):
+    """The wrapper tolerance must reach the two public finders (main#1141)."""
+
+    def test_gh_behind_timeout(self) -> None:
+        found = sp.find_gh_subcommand(["timeout", "45", "gh", "issue", "edit", "1114"])
+        self.assertEqual(found, ([], ["issue", "edit", "1114"]))
+
+    def test_gh_in_loop_body(self) -> None:
+        found = sp.find_gh_subcommand(["do", "gh", "issue", "edit", "1114"])
+        self.assertEqual(found, ([], ["issue", "edit", "1114"]))
+
+    def test_git_behind_timeout_reaches_the_identity_gate(self) -> None:
+        """`timeout 60 git commit` previously walked past commit-identity validation."""
+        found = sp.find_git_subcommand(["timeout", "60", "git", "-c", "user.name=A", "commit"])
+        self.assertEqual(found, (["-c", "user.name=A"], ["commit"]))
+
+    def test_gh_as_data_still_not_found(self) -> None:
+        self.assertIsNone(sp.find_gh_subcommand(["echo", "gh", "issue", "edit", "1114"]))
+
+
 if __name__ == "__main__":
     unittest.main()
