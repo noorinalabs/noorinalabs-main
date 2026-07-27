@@ -1,0 +1,20 @@
+{
+  "description": "main#1141 regression: the merge model is read from `wave_{M}_scope.merge_model` when the top-level `wave_{M}_merge_model` key is absent — /wave-scope writes the scope copy, `wave_merge_model.py set` writes the top-level one, and a wave may carry only one of them. `wave-branch` keeps the pre-#1141 base, unchanged.",
+  "command": "for x in a; do gh issue edit 1114 --repo noorinalabs/noorinalabs-main --add-label \"wave-29\"; done",
+  "status": {
+    "current_phase": 10,
+    "wave_29_scope": {
+      "merge_model": "wave-branch",
+      "tier_1_track_g": [
+        {"id": "noorinalabs-main#1114", "ref": "main#1114", "implementer": "Nino Kavtaradze", "reviewer": "Aino Virtanen", "priority": "tech-debt"}
+      ]
+    }
+  },
+  "existing_comments": [],
+  "post_succeeds": true,
+  "expect_action": "post",
+  "expect_body_contains": [
+    "- Branch from: `deployments/phase-10/wave-29`",
+    "- PR base: `deployments/phase-10/wave-29` (wave merge model: `wave-branch`)"
+  ]
+}

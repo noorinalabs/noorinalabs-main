@@ -406,6 +406,28 @@ Hook behavior:
 - Idempotent: re-applying the wave label after disposition correction does NOT double-post (the hook detects the charter heading `**Wave {M} Kickoff — Phase {N}**` in existing comments and skips).
 - Meta-issue skip: when the labeled issue is `wave_{M}_meta_issue`, the per-issue kickoff is skipped (the meta-issue gets its own all-hands kickoff comment — see § 8 below).
 - Failure-tolerant: if `wave_{M}_scope` is missing or the issue isn't in any tier, the hook logs to `.claude/annunaki/errors.jsonl` and lets the label-apply succeed. A missing scope row is a `/wave-scope` bug, not a label-apply bug.
+- Merge-model-aware branch base (main#1141): the comment instructs branching from `main` on a `direct-to-main` wave and from `deployments/phase-{P}/wave-{M}` on a `wave-branch` wave, read from `wave_{M}_merge_model` / `wave_{M}_scope.merge_model`. Declare the model (Step 1) BEFORE labeling, or the comment falls back to `main` with a "not declared" note.
+
+### 7b. Reconciliation sweep — MANDATORY after Step 7 (main#1141)
+
+**Do not treat Step 7 as complete until this sweep reports zero `would_post`.** The hook in § 7 reacts to the label-apply *command*, so it can only act on what it can parse out of a shell string. A `for n in 1114 1116; do gh issue edit "$n" …; done` loop carries no issue number in the command at all — nothing can react to it. That is not hypothetical: during `/wave-scope 10 29` on 2026-07-27, 14 issues were labeled and **zero** kickoff comments posted, undetected until an unrelated audit.
+
+The sweep keys on the labels that actually LANDED rather than on the command string, and is idempotent (it screens every candidate through the same `kickoff_already_posted` check the hook uses), so it is safe to run repeatedly:
+
+```bash
+# Dry run first — prints exactly what it would post.
+python3 .claude/lib/kickoff_sweep.py {PHASE} {WAVE}
+
+# Then post the missing comments.
+python3 .claude/lib/kickoff_sweep.py {PHASE} {WAVE} --apply
+```
+
+Read the dry-run output before applying:
+- `would_post` — the hook missed this issue; the sweep will backfill it.
+- `skip_idempotent` — the hook already posted. Expected for most issues.
+- `skip_no_row` — the issue carries the wave label but is in NO `wave_{M}_scope` tier. This is `/wave-scope` drift, not a kickoff bug — fix the scope, then re-run. The sweep never guesses an assignment.
+
+Repos default to `wave_{M}_repos_in_scope`; override with repeatable `--repo`. `--json` emits machine-readable results.
 
 ### 7a. Per-wave orchestration scripts (optional automation)
 

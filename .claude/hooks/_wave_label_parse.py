@@ -77,6 +77,17 @@ Public API
         At least one of `add_label` / `remove_label` is non-None when the
         function returns a result; otherwise it returns None.
 
+    parse_unresolved_wave_label_edits(command) -> list[UnresolvedWaveLabelEdit]
+        The visibility companion (main#1141): every `gh issue edit …
+        --add-label "<wave label>"` segment whose ISSUE NUMBER could not be
+        resolved — the `for n in 1114 1116; do gh issue edit "$n" …; done`
+        shape, where shlex leaves the literal `$n` and no digit run exists in
+        the command at all. Those segments are invisible to
+        `parse_wave_label_changes` by construction; this function lets a
+        consumer LOG the decline instead of silently doing nothing (the
+        main#1141 failure mode: 14 issues labeled, 0 kickoff comments, caught
+        only by an unrelated audit days later).
+
     is_wave_label(value: str) -> bool
         True if `value` matches the canonical wave-label shape
         `p{N}-wave-{M}` exactly (anchored). Used by callers that already
@@ -287,41 +298,54 @@ def wave_label_to_option_name(value: str) -> str | None:
     return f"P{spec.phase}W{spec.wave}"
 
 
-def _parse_edit_segment(rest: list[str]) -> WaveLabelChange | None:
-    """Parse the rest of a tokenized `gh issue edit <num> ...` segment.
+@dataclass(frozen=True)
+class UnresolvedWaveLabelEdit:
+    """A wave-label `gh issue edit` whose ISSUE NUMBER did not resolve (main#1141).
 
-    Returns the WaveLabelChange if the segment has an issue_number AND at
-    least one canonical wave-label `--add-label`/`--remove-label`. Otherwise
-    returns None.
+    Emitted by `parse_unresolved_wave_label_edits` for the shape
 
-    The repo is resolved from the AUTHORITATIVE `-R`/`--repo owner/name` flag
-    (#985), extracted up front via the #1057-hardened `walk_flag_values` so all
-    five surface forms resolve: `--repo X`, `--repo=X`, `-R X`, `-R=X`, `-RX`.
-    The flag is GROUND TRUTH for "which repo"; the consuming hook's cwd fallback
-    applies ONLY when no repo flag is present. Three states are surfaced:
+        for n in 1114 1116; do gh issue edit "$n" --add-label "wave-29"; done
 
-      - flag present + resolvable  → `repo=<name>`, `repo_flag_present=True`.
-      - flag absent (#650)         → `repo=None`,   `repo_flag_present=False`
-        (in-repo invocation; consumer resolves the ambient repo from cwd).
-      - flag present + unresolvable → `repo=None`, `repo_flag_present=True`
-        (an unexpanded `$VAR` / command substitution; per #981 the consumer
-        MUST fail closed and NOT fall back to cwd, which would misroute).
+    where shlex leaves `$n` literal and the command carries no digit run to
+    key on. `parse_wave_label_changes` cannot return anything useful here —
+    there is genuinely no issue number in the string — but a consumer that
+    silently returns None is the main#1141 bug (labels land, nobody is told
+    they own anything). Consumers use this to LOG the decline.
 
-    Requiring `--repo` here would silently drop every in-repo label edit (#650);
-    blindly `.split("/")`-ing an unexpanded `$VAR` would misroute it (#981). The
-    tri-state threads both needles.
+    `issue_token` is the offending token when it looks like an unexpanded
+    shell expansion (`$n`, `${n}`, `` `…` ``), else None (e.g. an issue URL
+    or a genuinely missing positional).
+    """
+
+    repo: str | None
+    issue_token: str | None
+    add_label: str | None
+    remove_label: str | None
+    repo_flag_present: bool = False
+
+
+# A positional token that shlex left as an unexpanded shell expansion. Same
+# marker set as `_shell_parse._UNRESOLVABLE_REPO_VALUE_RE` minus whitespace
+# (a whitespace-bearing token is never a positional issue ref).
+_UNEXPANDED_TOKEN_RE = re.compile(r"[$`]")
+
+
+def _scan_edit_segment(
+    rest: list[str],
+) -> tuple[str | None, bool, str | None, str | None, str | None, str | None] | None:
+    """Low-level scan of a `gh issue edit …` segment's tokens.
+
+    Returns `(repo, repo_flag_present, issue_number, issue_token, add_label,
+    remove_label)` for any `issue edit` segment, or None when `rest` is not
+    one. `issue_number` is the first bare digit-run positional; `issue_token`
+    is the first positional that looks like an unexpanded shell expansion.
+    Both may be None. Shared by `_parse_edit_segment` (which requires a
+    resolved number) and `parse_unresolved_wave_label_edits` (which reports
+    the segments that lack one) so the two agree by construction.
     """
     if len(rest) < 3 or rest[0] != "issue" or rest[1] != "edit":
         return None
 
-    # Repo from the flag, not cwd (#985). `walk_flag_values` recognizes both the
-    # `--repo` long form and the `-R` short form (all attached/equals/spaced
-    # surfaces, #1057). A present-but-unresolvable value (`$VAR`) yields repo=None
-    # with repo_flag_present=True so the consumer fails closed (#981).
-    #
-    # Last occurrence wins (main#1060): `--repo`/`-R` is a single-value pflag
-    # `StringVarP` in real gh, so a repeated flag resolves to its LAST value,
-    # not its first.
     repo_values = walk_flag_values(rest, {"--repo", "-R"})
     repo_flag_present = len(repo_values) > 0
     repo: str | None = (
@@ -329,6 +353,7 @@ def _parse_edit_segment(rest: list[str]) -> WaveLabelChange | None:
     )
 
     issue_number: str | None = None
+    issue_token: str | None = None
     add_label: str | None = None
     remove_label: str | None = None
 
@@ -338,6 +363,18 @@ def _parse_edit_segment(rest: list[str]) -> WaveLabelChange | None:
         tok = rest[i]
         if issue_number is None and re.fullmatch(r"\d+", tok):
             issue_number = tok
+            i += 1
+            continue
+        # An unexpanded positional (`gh issue edit "$n"`). Guarded on the
+        # PREVIOUS token not being flag-shaped so a `--repo "$REPO"` /
+        # `--body "$MSG"` VALUE is never mistaken for the issue ref — only a
+        # true positional slot is reported.
+        if (
+            issue_token is None
+            and _UNEXPANDED_TOKEN_RE.search(tok)
+            and not rest[i - 1].startswith("-")
+        ):
+            issue_token = tok
             i += 1
             continue
         if tok == "--add-label" and i + 1 < n:
@@ -365,6 +402,44 @@ def _parse_edit_segment(rest: list[str]) -> WaveLabelChange | None:
             i += 1
             continue
         i += 1
+
+    return repo, repo_flag_present, issue_number, issue_token, add_label, remove_label
+
+
+def _parse_edit_segment(rest: list[str]) -> WaveLabelChange | None:
+    """Parse the rest of a tokenized `gh issue edit <num> ...` segment.
+
+    Returns the WaveLabelChange if the segment has an issue_number AND at
+    least one canonical wave-label `--add-label`/`--remove-label`. Otherwise
+    returns None — see `parse_unresolved_wave_label_edits` for the
+    "wave label present but no resolvable issue number" case, which a
+    consumer should log rather than swallow (main#1141).
+
+    The repo is resolved from the AUTHORITATIVE `-R`/`--repo owner/name` flag
+    (#985), extracted up front via the #1057-hardened `walk_flag_values` so all
+    five surface forms resolve: `--repo X`, `--repo=X`, `-R X`, `-R=X`, `-RX`.
+    The flag is GROUND TRUTH for "which repo"; the consuming hook's cwd fallback
+    applies ONLY when no repo flag is present. Three states are surfaced:
+
+      - flag present + resolvable  → `repo=<name>`, `repo_flag_present=True`.
+      - flag absent (#650)         → `repo=None`,   `repo_flag_present=False`
+        (in-repo invocation; consumer resolves the ambient repo from cwd).
+      - flag present + unresolvable → `repo=None`, `repo_flag_present=True`
+        (an unexpanded `$VAR` / command substitution; per #981 the consumer
+        MUST fail closed and NOT fall back to cwd, which would misroute).
+
+    Requiring `--repo` here would silently drop every in-repo label edit (#650);
+    blindly `.split("/")`-ing an unexpanded `$VAR` would misroute it (#981). The
+    tri-state threads both needles.
+
+    The token walk itself lives in `_scan_edit_segment` (the repo tri-state
+    included); this function is the narrowing layer that requires a resolved
+    issue number.
+    """
+    scanned = _scan_edit_segment(rest)
+    if scanned is None:
+        return None
+    repo, repo_flag_present, issue_number, _issue_token, add_label, remove_label = scanned
 
     if issue_number and (add_label or remove_label):
         return WaveLabelChange(
@@ -398,16 +473,25 @@ def parse_wave_label_changes(command: str) -> list[WaveLabelChange]:
       - The command doesn't tokenize cleanly (unbalanced quotes).
       - No segment contains a `gh issue edit` with a wave-label flag.
 
-    For-loop shape note: `for N in 1 2 3; do gh issue edit $N ...; done`
-    tokenizes the LITERAL `$N` token (shlex does not expand variables),
-    so the parsed `issue_number` would be `$N` and the change would be
-    rejected by the `re.fullmatch(r"\\d+", tok)` issue-number filter.
-    For-loops are handled by the harness expanding them BEFORE the hook
-    sees the command — in practice the harness passes either the
-    expanded form or each iteration as a separate Bash call. The
-    multi-cmd fix covers `gh issue edit 1 ... ; gh issue edit 2 ...` and
-    `gh issue edit 1 ... && gh issue edit 2 ...` shapes which is the
-    dominant batch shape.
+    Wrapper / compound-statement shapes (main#1141): a `timeout 45 gh …`
+    prefix and the `do`-prefixed body of a `for … ; do gh … ; done` loop
+    BOTH used to return nothing, because `find_gh_subcommand` required `gh`
+    at token 0 of the segment. `_shell_parse.strip_command_prefixes` now
+    strips the leading wrapper/keyword run, so those forms parse. The
+    correction main#1141 records: the loop CONSTRUCT was the defeater, not
+    variable expansion — a loop carrying a literal issue number failed
+    identically, and it parses now.
+
+    For-loop VARIABLE note (the residual, and it is not fixable here):
+    `for n in 1114 1116; do gh issue edit "$n" …; done` tokenizes the
+    LITERAL `$n` (shlex does not expand variables), so no issue number
+    exists in the command string at all and the `re.fullmatch(r"\\d+", tok)`
+    filter correctly rejects it. Do NOT paper over this by accepting `$n` as
+    an issue ref — it would post to a nonexistent issue. Instead the shape is
+    reported by `parse_unresolved_wave_label_edits` so the consumer LOGS the
+    decline, and `/wave-kickoff`'s state-based reconciliation sweep
+    (`.claude/lib/kickoff_sweep.py`) closes it for real by keying on the
+    labels that actually landed rather than on the command string.
     """
     # Strip heredocs FIRST (its regex needs the raw newlines to find the body),
     # THEN normalize command separators so a leading `cd "$(...)"`-newline or a
@@ -427,6 +511,55 @@ def parse_wave_label_changes(command: str) -> list[WaveLabelChange]:
         change = _parse_edit_segment(rest)
         if change is not None:
             out.append(change)
+    return out
+
+
+def parse_unresolved_wave_label_edits(command: str) -> list[UnresolvedWaveLabelEdit]:
+    """Report wave-label edits whose issue number did NOT resolve (main#1141).
+
+    Returns one `UnresolvedWaveLabelEdit` per `gh issue edit …` segment that
+    carries a canonical wave-label `--add-label`/`--remove-label` but no bare
+    digit-run issue number. The dominant real case is the loop-variable shape
+    (`do gh issue edit "$n" --add-label "wave-29"`); an issue-URL positional or
+    an outright missing positional land here too.
+
+    This is deliberately a SEPARATE function rather than a widened
+    `WaveLabelChange`: consumers that act on a change (post a comment, mutate a
+    board field) must never be handed a row they could mistake for actionable.
+    The only correct use of this result is to LOG that the hook declined —
+    silence in the unsafe direction is the main#1141 bug itself.
+
+    Segments that ALSO remove a wave label are still reported (the caller
+    applies its own between-wave-relabel policy, per the #467 filter).
+    """
+    cleaned = normalize_command_separators(strip_heredocs(command))
+    tokens = tokenize(cleaned)
+    if tokens is None:
+        return []
+
+    out: list[UnresolvedWaveLabelEdit] = []
+    for segment in iter_command_segments(tokens):
+        gh = find_gh_subcommand(segment)
+        if gh is None:
+            continue
+        _globals, rest = gh
+        scanned = _scan_edit_segment(rest)
+        if scanned is None:
+            continue
+        repo, repo_flag_present, issue_number, issue_token, add_label, remove_label = scanned
+        if issue_number is not None:
+            continue  # resolvable — `parse_wave_label_changes` already covers it
+        if not (add_label or remove_label):
+            continue  # not a wave-label edit at all
+        out.append(
+            UnresolvedWaveLabelEdit(
+                repo=repo,
+                issue_token=issue_token,
+                add_label=add_label,
+                remove_label=remove_label,
+                repo_flag_present=repo_flag_present,
+            )
+        )
     return out
 
 

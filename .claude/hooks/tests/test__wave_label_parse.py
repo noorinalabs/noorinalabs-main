@@ -353,5 +353,146 @@ class NormalizeCommandSeparators(unittest.TestCase):
         self.assertEqual(self._segments("echo a \\\n  b"), [["echo", "a", "b"]])
 
 
+_REPO = "--repo noorinalabs/noorinalabs-main"
+
+
+class WrappedAndCompoundEditForms(unittest.TestCase):
+    """main#1141 — every row of the issue's verified repro table.
+
+    The two rows that already passed (redirect, `&&`) are pinned here too so
+    the wrapper fix cannot regress them.
+    """
+
+    def _first(self, command: str):
+        return p.parse_wave_label_change(command)
+
+    def test_plain(self) -> None:
+        c = self._first(f'gh issue edit 1114 {_REPO} --add-label "wave-29"')
+        self.assertIsNotNone(c)
+        self.assertEqual(
+            (c.repo, c.issue_number, c.add_label), ("noorinalabs-main", "1114", "wave-29")
+        )
+
+    def test_redirect_still_parses(self) -> None:
+        c = self._first(f'gh issue edit 1114 {_REPO} --add-label "wave-29" >/dev/null 2>&1')
+        self.assertIsNotNone(c)
+        self.assertEqual(c.issue_number, "1114")
+
+    def test_and_chain_still_parses(self) -> None:
+        c = self._first(f'gh issue edit 1114 {_REPO} --add-label "wave-29" && echo ok')
+        self.assertIsNotNone(c)
+        self.assertEqual(c.issue_number, "1114")
+
+    def test_timeout_prefix(self) -> None:
+        """A `timeout N gh …` prefix returned None before main#1141."""
+        c = self._first(f'timeout 45 gh issue edit 1114 {_REPO} --add-label "wave-29"')
+        self.assertIsNotNone(c)
+        self.assertEqual(
+            (c.repo, c.issue_number, c.add_label), ("noorinalabs-main", "1114", "wave-29")
+        )
+
+    def test_loop_with_literal_issue_number(self) -> None:
+        """THE row that disproves the variable-expansion theory.
+
+        An earlier revision of main#1141 blamed the unexpanded `"$n"`. A loop
+        carrying a fully LITERAL issue number failed identically, so the loop
+        CONSTRUCT was the defeater — `do` sat at token 0 of the segment. It
+        must parse now.
+        """
+        c = self._first(f'for x in a; do gh issue edit 1114 {_REPO} --add-label "wave-29"; done')
+        self.assertIsNotNone(c)
+        self.assertEqual(
+            (c.repo, c.issue_number, c.add_label), ("noorinalabs-main", "1114", "wave-29")
+        )
+
+    def test_loop_with_variable_stays_unparsed(self) -> None:
+        """The residual, and it must stay unparsed.
+
+        The issue number is genuinely absent from the command string; treating
+        `$n` as a ref would post to a nonexistent issue. It is surfaced via
+        `parse_unresolved_wave_label_edits` and fixed for real by the
+        state-based sweep, not by loosening this parser.
+        """
+        self.assertIsNone(
+            self._first(
+                f'for n in 1114 1116; do gh issue edit "$n" {_REPO} --add-label "wave-29"; done'
+            )
+        )
+
+    def test_loop_plus_timeout_both_stripped(self) -> None:
+        c = self._first(
+            f'for x in a; do timeout 45 gh issue edit 1114 {_REPO} --add-label "wave-29"; done'
+        )
+        self.assertIsNotNone(c)
+        self.assertEqual(c.issue_number, "1114")
+
+    def test_multi_iteration_loop_body_expanded(self) -> None:
+        """Two literal-number invocations in one loop body yield two changes."""
+        changes = p.parse_wave_label_changes(
+            f'for x in a; do gh issue edit 1114 {_REPO} --add-label "wave-29"; '
+            f'gh issue edit 1116 {_REPO} --add-label "wave-29"; done'
+        )
+        self.assertEqual([c.issue_number for c in changes], ["1114", "1116"])
+
+    def test_label_inside_echo_is_not_a_change(self) -> None:
+        """Data position stays data: the allowlist never strips `echo`."""
+        self.assertIsNone(self._first(f'echo gh issue edit 1114 {_REPO} --add-label "wave-29"'))
+
+
+class ParseUnresolvedWaveLabelEdits(unittest.TestCase):
+    """main#1141 — the hook must be able to say "I declined", not go silent."""
+
+    def test_loop_variable_is_reported(self) -> None:
+        found = p.parse_unresolved_wave_label_edits(
+            f'for n in 1114 1116; do gh issue edit "$n" {_REPO} --add-label "wave-29"; done'
+        )
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0].add_label, "wave-29")
+        self.assertEqual(found[0].issue_token, "$n")
+        self.assertEqual(found[0].repo, "noorinalabs-main")
+
+    def test_timeout_wrapped_loop_variable_is_reported(self) -> None:
+        found = p.parse_unresolved_wave_label_edits(
+            f'for n in 1114; do timeout 45 gh issue edit "$n" {_REPO} --add-label "wave-29"; done'
+        )
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0].issue_token, "$n")
+
+    def test_resolvable_command_is_not_reported(self) -> None:
+        self.assertEqual(
+            p.parse_unresolved_wave_label_edits(
+                f'gh issue edit 1114 {_REPO} --add-label "wave-29"'
+            ),
+            [],
+        )
+
+    def test_non_wave_label_is_not_reported(self) -> None:
+        self.assertEqual(
+            p.parse_unresolved_wave_label_edits(
+                f'for n in 1; do gh issue edit "$n" {_REPO} --add-label "bug"; done'
+            ),
+            [],
+        )
+
+    def test_unexpanded_repo_value_is_not_mistaken_for_the_issue_ref(self) -> None:
+        """`--repo "$R"` is a FLAG VALUE, never the issue positional."""
+        found = p.parse_unresolved_wave_label_edits(
+            'for n in 1; do gh issue edit --repo "$R" --add-label "wave-29"; done'
+        )
+        self.assertEqual(len(found), 1)
+        self.assertIsNone(found[0].issue_token)
+
+    def test_relabel_shape_is_reported_for_the_caller_to_filter(self) -> None:
+        found = p.parse_unresolved_wave_label_edits(
+            f'for n in 1; do gh issue edit "$n" {_REPO} --add-label "wave-29" '
+            '--remove-label "wave-28"; done'
+        )
+        self.assertEqual(len(found), 1)
+        self.assertEqual((found[0].add_label, found[0].remove_label), ("wave-29", "wave-28"))
+
+    def test_unparseable_command_yields_empty(self) -> None:
+        self.assertEqual(p.parse_unresolved_wave_label_edits('gh issue edit "unbalanced'), [])
+
+
 if __name__ == "__main__":
     unittest.main()

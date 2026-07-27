@@ -1,0 +1,20 @@
+{
+  "description": "main#1141 regression: with NO merge model recorded anywhere, the kickoff renders `main` and says the model was not declared. Asymmetric failure choice — a nonexistent wave branch hard-blocks the implementer, whereas branching from `main` on a wave-branch wave is a recoverable PR-base retarget. Prefer the recoverable failure.",
+  "command": "gh issue edit 1114 --repo noorinalabs/noorinalabs-main --add-label \"wave-29\"",
+  "status": {
+    "current_phase": 10,
+    "wave_29_scope": {
+      "tier_1_track_g": [
+        {"id": "noorinalabs-main#1114", "ref": "main#1114", "implementer": "Nino Kavtaradze", "reviewer": "Aino Virtanen", "priority": "tech-debt"}
+      ]
+    }
+  },
+  "existing_comments": [],
+  "post_succeeds": true,
+  "expect_action": "post",
+  "expect_body_contains": [
+    "- Branch from: `main`",
+    "wave merge model NOT declared in cross-repo-status.json",
+    "confirm the base with the orchestrator before opening the PR"
+  ]
+}

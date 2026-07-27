@@ -33,7 +33,12 @@ Behavior summary
        /wave-scope shape) — synthesizes a placeholder row so the kickoff
        posts with `(unassigned)` slots instead of silently skipping.
 3. If found, render a charter-format kickoff comment using the row's
-   `implementer` / `reviewer` / `reviewer_2` fields.
+   `implementer` / `reviewer` / `reviewer_2` fields. The branch base
+   follows the wave's DECLARED MERGE MODEL (#1141): `main` under
+   `direct-to-main`, `deployments/phase-{P}/wave-{M}` under
+   `wave-branch`, and `main` when the model is unreadable (a
+   nonexistent wave branch hard-blocks the implementer; a wrong-but-
+   existing `main` base is a recoverable retarget).
 4. Skip if the issue == `wave_{M}_meta_issue` (meta-issue gets its own
    all-hands kickoff comment, owned separately by /wave-kickoff Step 8b).
 5. Idempotency: skip if the issue already has a kickoff comment whose
@@ -47,6 +52,16 @@ Behavior summary
    gh CLI failure → annunaki-log-and-skip. The underlying label-apply
    already succeeded (this is PostToolUse); the hook never raises a
    failure on the user-visible tool call.
+8. Declining LOUDLY (#1141): a label apply whose issue number cannot be
+   recovered from the command string (`for n in …; do gh issue edit "$n"
+   --add-label "wave-29"; done`) is annunaki-logged and returned as
+   `skip_unresolved_issue_number`, which `EMIT_DISPATCH_SUMMARY` turns
+   into an operator-visible systemMessage. A silent no-op here is the
+   primary bug class this hook exists to prevent — labels land, the wave
+   looks kicked off, and nobody is told they own anything. The actual
+   backfill is state-based, not command-based: `/wave-kickoff` Step 7b
+   runs `.claude/lib/kickoff_sweep.py`, which keys on the labels that
+   LANDED and is idempotent against the check in (5).
 
 The hook is best-effort post-action automation. PostToolUse hooks cannot
 fail the original tool call by design (the tool has already run); a
@@ -66,7 +81,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _shell_parse import resolve_repo_short_name  # noqa: E402
-from _wave_label_parse import parse_wave_label_change, parse_wave_label_spec  # noqa: E402
+from _wave_label_parse import (  # noqa: E402
+    parse_unresolved_wave_label_edits,
+    parse_wave_label_change,
+    parse_wave_label_spec,
+)
 from annunaki_log import log_posttooluse_event  # noqa: E402
 
 # Dispatcher opt-in (#425): when post_dispatcher sees this attribute set
@@ -92,6 +111,22 @@ SCRATCH_DIR = REPO_ROOT / ".claude" / "scratch"
 # future, update this constant — there is no roster lookup for "who runs
 # wave-kickoff" because that role is implicit.
 KICKOFF_REQUESTOR = "Fatima Okonkwo"
+
+# The two merge models (`.claude/lib/wave_merge_model.py` is the source of
+# truth — these literals mirror its DIRECT_TO_MAIN / WAVE_BRANCH constants).
+# They are duplicated rather than imported so the hook keeps zero dependency on
+# `.claude/lib` at PostToolUse time; the values are a fixed two-element enum
+# pinned by `test_merge_model_constants_match_wave_merge_model`.
+DIRECT_TO_MAIN = "direct-to-main"
+WAVE_BRANCH = "wave-branch"
+
+# What to render when the wave's merge model cannot be read (#1141). `main` is
+# the SAFE default in the asymmetric sense: under a direct-to-main wave the
+# hardcoded `deployments/phase-{P}/wave-{M}` names a ref that will never exist,
+# which hard-blocks the implementer; under a wave-branch wave, branching from
+# `main` is a recoverable retarget of the PR base. Prefer the recoverable
+# failure.
+DEFAULT_BRANCH_BASE = "main"
 
 # Regex matching the kickoff comment heading the charter requires
 # (`**Wave {M} Kickoff — Phase {N}**`). Used for idempotency check. The
@@ -159,6 +194,31 @@ def _phase_from_status(status: dict) -> int | None:
     m = re.fullmatch(r"phase-(\d+)", str(status.get("phase", "")))
     if m:
         return int(m.group(1))
+    return None
+
+
+def read_merge_model(status: dict, wave_num: int) -> str | None:
+    """Return the wave's declared merge model, or None if unreadable (#1141).
+
+    Two recorded locations, checked in that order (both are written by the
+    lifecycle tooling; the top-level key is `wave_merge_model.py set`'s home
+    and the scope copy is `/wave-scope`'s):
+
+      1. top-level `wave_{M}_merge_model`
+      2. `wave_{M}_scope.merge_model`
+
+    A value that is not one of the two known models is treated as UNREADABLE
+    (None) rather than passed through — a typo'd model must fall back to the
+    safe `main` default, never render a branch instruction derived from a
+    string nobody validated.
+    """
+    candidates = [status.get(f"wave_{wave_num}_merge_model")]
+    scope = status.get(f"wave_{wave_num}_scope")
+    if isinstance(scope, dict):
+        candidates.append(scope.get("merge_model"))
+    for value in candidates:
+        if isinstance(value, str) and value in (DIRECT_TO_MAIN, WAVE_BRANCH):
+            return value
     return None
 
 
@@ -284,7 +344,40 @@ def find_assignment_row(status: dict, repo: str, issue_number: str, wave_num: in
     return None
 
 
-def render_kickoff_comment(row: dict, wave_num: int, phase_num: int, repo: str) -> str:
+def resolve_branch_base(merge_model: str | None, wave_num: int, phase_num: int) -> tuple[str, str]:
+    """Return `(branch_base, model_note)` for the wave's merge model (#1141).
+
+      - `direct-to-main` → `main`. Under this model there is no wave branch to
+        base on; every PR bases on `main`.
+      - `wave-branch`    → `deployments/phase-{P}/wave-{M}` (the pre-#1141
+        behavior, now conditional instead of unconditional).
+      - anything else / unreadable → `main`, with a note telling the
+        implementer to confirm the base before opening the PR.
+
+    Since the 2026-06-09 every-wave-merges-to-main directive `direct-to-main`
+    is the COMMON case, so the old hardcode was the default-wrong path: waves
+    28 and 29 were both direct-to-main and every kickoff comment pointed at a
+    ref that will never exist.
+    """
+    if merge_model == WAVE_BRANCH:
+        base = f"deployments/phase-{phase_num}/wave-{wave_num}"
+        return base, f"wave merge model: `{WAVE_BRANCH}`"
+    if merge_model == DIRECT_TO_MAIN:
+        return DEFAULT_BRANCH_BASE, f"wave merge model: `{DIRECT_TO_MAIN}`"
+    return (
+        DEFAULT_BRANCH_BASE,
+        "wave merge model NOT declared in cross-repo-status.json — defaulting to "
+        "`main`; confirm the base with the orchestrator before opening the PR",
+    )
+
+
+def render_kickoff_comment(
+    row: dict,
+    wave_num: int,
+    phase_num: int,
+    repo: str,
+    merge_model: str | None = None,
+) -> str:
     """Render the charter-format kickoff comment body per pull-requests.md
     § Kickoff Comment Format / wave-kickoff SKILL.md Step 8 template.
 
@@ -292,13 +385,18 @@ def render_kickoff_comment(row: dict, wave_num: int, phase_num: int, repo: str) 
     `priority`. Missing optional fields are rendered as "(unassigned)"
     placeholders rather than blanking the bullet — the orchestrator
     follow-up sweep can backfill, and an empty bullet looks like a bug.
+
+    `merge_model` selects the branch base (see `resolve_branch_base`). It
+    defaults to None — i.e. the safe `main` base — so a caller that has not
+    been taught about merge models cannot emit an instruction to branch from a
+    wave branch that may not exist (#1141).
     """
     implementer = row.get("implementer") or "(unassigned)"
     reviewer = row.get("reviewer") or "(unassigned)"
     reviewer_2 = row.get("reviewer_2") or "(unassigned)"
     priority = row.get("priority") or "feature"
 
-    branch_base = f"deployments/phase-{phase_num}/wave-{wave_num}"
+    branch_base, model_note = resolve_branch_base(merge_model, wave_num, phase_num)
 
     lines = [
         f"Requestor: {KICKOFF_REQUESTOR}",
@@ -311,6 +409,7 @@ def render_kickoff_comment(row: dict, wave_num: int, phase_num: int, repo: str) 
         f"- Peer reviewer: {reviewer}",
         f"- Secondary reviewer: {reviewer_2}",
         f"- Branch from: `{branch_base}`",
+        f"- PR base: `{branch_base}` ({model_note})",
         "- Branch naming: `{FirstInitial}.{LastName}/{IIII}-{issue-slug}`",
         f"- Priority: {priority} (per charter § Wave Planning & Priority)",
         "",
@@ -421,6 +520,56 @@ def _write_fresh_body_file(body: str, repo: str, issue_number: str) -> Path:
     return path
 
 
+def _report_unresolved_label_applies(command: str) -> dict | None:
+    """Surface a wave-label apply the parser could not act on (#1141).
+
+    Called when `parse_label_apply_command` returned None. Most such commands
+    are simply not wave-label applies at all — those still return None and the
+    hook stays quiet. But the `for n in …; do gh issue edit "$n" --add-label
+    "wave-29"; done` shape IS a real label apply that the hook is about to
+    ignore, and ignoring it silently is the whole #1141 failure: 14 issues
+    labeled, 0 kickoff comments, discovered days later by an unrelated audit.
+
+    So: annunaki-log it and return an action-shaped dict. Because this module
+    sets `EMIT_DISPATCH_SUMMARY = True`, the dispatcher turns that dict into an
+    operator-visible `systemMessage` at the moment of the apply — a loud
+    decline instead of a silent one. The label apply itself already succeeded
+    (PostToolUse); `/wave-kickoff`'s reconciliation sweep
+    (`.claude/lib/kickoff_sweep.py`) is what actually backfills the comment.
+
+    Between-wave relabels (add AND remove in the same command) are filtered
+    out here for the same reason `parse_label_apply_command` filters them —
+    they are carry-forward moves, not kickoffs, and logging them re-creates
+    the #467 annunaki noise burst.
+    """
+    unresolved = [
+        e
+        for e in parse_unresolved_wave_label_edits(command)
+        if e.add_label is not None and e.remove_label is None
+    ]
+    if not unresolved:
+        return None
+
+    tokens = sorted({e.issue_token for e in unresolved if e.issue_token})
+    labels = sorted({e.add_label for e in unresolved if e.add_label})
+    log_posttooluse_event(
+        "post_wave_kickoff_comment",
+        command,
+        f"skip_unresolved_issue_number: {len(unresolved)} wave-label apply(ies) for "
+        f"label(s) {', '.join(labels)} carried no resolvable issue number "
+        f"({'unexpanded ' + ', '.join(tokens) if tokens else 'no issue positional'}) — "
+        'typically a `for n in …; do gh issue edit "$n" …; done` loop, where the '
+        "number never appears in the command string. NO kickoff comment was posted "
+        "for these issues. Run the /wave-kickoff reconciliation sweep "
+        "(.claude/lib/kickoff_sweep.py) to backfill from the labels that landed (#1141).",
+    )
+    return {
+        "action": "skip_unresolved_issue_number",
+        "count": len(unresolved),
+        "labels": ",".join(labels),
+    }
+
+
 def check(
     input_data: dict,
     status_loader=None,
@@ -446,6 +595,12 @@ def check(
                                                  `-R $VAR`); fail-closed, no cwd
                                                  fallback (#985/#981)
       {"action": "skip_post_failed", ...}      — gh post call failed
+      {"action": "skip_unresolved_issue_number", ...} — a wave label WAS
+                                                 applied but the issue number
+                                                 is not in the command string
+                                                 (loop-variable shape); logged
+                                                 + surfaced, never silent
+                                                 (#1141)
 
     Injection points let tests mock external state without mocking
     subprocess: `status_loader()` returns the status dict, `comment_fetcher
@@ -464,7 +619,7 @@ def check(
 
     parsed = parse_label_apply_command(command)
     if parsed is None:
-        return None
+        return _report_unresolved_label_applies(command)
     repo, issue_number, wave_label, repo_flag_present = parsed
 
     # #985/#981: an explicit `-R`/`--repo` flag whose value did NOT resolve to a
@@ -589,7 +744,9 @@ def check(
     ):
         return {"action": "skip_idempotent", "repo": repo, "issue": issue_number}
 
-    body = render_kickoff_comment(row, wave_num, phase_num, repo)
+    body = render_kickoff_comment(
+        row, wave_num, phase_num, repo, merge_model=read_merge_model(status, wave_num)
+    )
     writer = body_writer or _write_fresh_body_file
     body_path = writer(body, repo, issue_number)
 
