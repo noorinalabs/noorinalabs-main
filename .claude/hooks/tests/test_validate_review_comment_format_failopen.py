@@ -1288,10 +1288,12 @@ class SwapGateReadsTheCountedValueTests(unittest.TestCase):
     def test_correct_trailer_with_prose_above_is_not_false_blocked(self) -> None:
         """Prose above the trailer that ENDS in the PR author's surname.
 
-        The fixture must end there. `_extract_lastname` splits on `[\\s.]+` and
-        takes the final token, so `…Requestor: Aino Virtanen would have written
-        it.` yields `''`, never matches the branch author, and cannot reach the
-        false block at all. An earlier version of this test used exactly that
+        The fixture must end there. Pre-#1172 `_extract_lastname` kept empty
+        tokens when splitting on `[\\s.]+`, so `…Requestor: Aino Virtanen would
+        have written it.` yielded `''`, never matched the branch author, and
+        could not reach the false block at all. (Empty tokens are dropped now,
+        but the fixture stays surname-final: it must red under the gate it was
+        written for.) An earlier version of this test used exactly that
         sentence: it asserted `allow`, passed under the pre-`db12c5b` gate too,
         and covered nothing (`feedback_fixture_makes_guard_assertion_inert`,
         found by Wanjiku Mwangi). Verified: this body reds under that gate.
