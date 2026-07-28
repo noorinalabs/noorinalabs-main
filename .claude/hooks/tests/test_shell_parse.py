@@ -1020,26 +1020,36 @@ class CdRoutingAgainstShellTruth(unittest.TestCase):
     _start: str
     _dest: str
     _nested: str
+    _other: str
+    _script: str
 
     @classmethod
     def setUpClass(cls) -> None:
         cls._start = tempfile.mkdtemp(prefix="cdroute-start-")
         cls._dest = tempfile.mkdtemp(prefix="cdroute-dest-")
+        cls._other = tempfile.mkdtemp(prefix="cdroute-other-")
         # A real subdirectory of _start, standing in for the org's nested
         # child repos (`noorinalabs-main/noorinalabs-deploy/`): `cd START &&
         # cd NESTED` lands in a DIFFERENT repository than START.
         cls._nested = os.path.join(cls._start, "child-repo")
         os.makedirs(cls._nested, exist_ok=True)
+        # A sourceable script that moves the shell without the command line
+        # ever containing the token `cd`.
+        cls._script = os.path.join(cls._start, "goto.sh")
+        with open(cls._script, "w", encoding="utf-8") as fh:
+            fh.write(f"cd {cls._other}\n")
 
     @classmethod
     def tearDownClass(cls) -> None:
-        for d in (cls._start, cls._dest):
+        for d in (cls._start, cls._dest, cls._other):
             shutil.rmtree(d, ignore_errors=True)
 
     def _expand(self, template: str, marker: str) -> str:
         return (
             template.replace("DEST", self._dest)
             .replace("START", self._start)
+            .replace("OTHER", self._other)
+            .replace("SCRIPT", self._script)
             .replace("NESTED", "child-repo")
             .replace("MARKER", marker)
         )
@@ -1208,6 +1218,14 @@ class CdRoutingAgainstShellTruth(unittest.TestCase):
         "true || { cd DEST ; } ; MARKER",
         # `&&` after a FAILING command is the same class in the other polarity.
         "false && cd DEST ; MARKER",
+        # LEADING element is itself a `cd`, so phase 1's `prev_op` guard — not
+        # phase 2 — is what closes these. Without such a shape that guard is
+        # INERT: every other family-A fixture breaks out of phase 1 at `true`
+        # before the guard is reached, so deleting it left the suite green
+        # while `cd A || cd B && gh` reopened a real misroute to B (#1156
+        # merge gate). `cd START` succeeds, so `cd DEST` never runs.
+        "cd START || cd DEST && MARKER",
+        "cd START || cd DEST ; MARKER",
     ]
 
     FAMILY_B_SHAPES = [
@@ -1246,10 +1264,12 @@ class CdRoutingAgainstShellTruth(unittest.TestCase):
         family-B shape the `cd` runs only after the gh node. Either way the gh
         node executes in the ORIGINAL directory — so the old resolver's answer
         (`DEST`) named a directory the command had not entered.
+
+        Every shape is asserted, with no skip list: the shapes whose leading
+        element really is a `cd` all `cd START`, which IS the original
+        directory, so they belong here rather than in an exemption.
         """
         for template in self.FAMILY_A_SHAPES + self.FAMILY_B_SHAPES:
-            if template.startswith("cd START") or template.startswith("cd DEST"):
-                continue  # these two legitimately move first; covered above
             for shell in self.SHELLS:
                 with self.subTest(shape=template, shell=shell):
                     self.assertEqual(self._shell_truth(template, shell), self._start)
@@ -1271,6 +1291,75 @@ class CdRoutingAgainstShellTruth(unittest.TestCase):
                 self.assertEqual(self._shell_truth(template, shell), self._nested)
         self._assert_never_misroutes(template)
         self.assertIsNone(self._resolved(template))
+
+    # --- a cwd move that is not spelled `cd`, AFTER the leading run ---
+
+    CWD_MOVING_BUILTIN_SHAPES = [
+        "cd DEST && pushd OTHER > /dev/null && MARKER",
+        "cd DEST ; pushd OTHER > /dev/null ; MARKER",
+        "cd DEST && eval 'cd OTHER' && MARKER",
+        "cd DEST && . SCRIPT && MARKER",
+        "cd DEST && source SCRIPT && MARKER",
+    ]
+
+    def test_cwd_moving_builtin_after_the_run_never_misroutes(self) -> None:
+        """`pushd`/`eval`/`source`/`.` move the shell without the token `cd`.
+
+        Found at the #1156 merge gate. A leading `cd` is only evidence of where
+        the work runs if nothing between it and the work moves the shell again;
+        keying phase 2 on `words[0] == "cd"` alone missed every one of these and
+        returned the stale leading target. `OTHER` is a real directory, so
+        `resolve_invocation_cwd`'s `isdir` guard does not catch it either.
+
+        This was not an open frontier — it was DRIFT. The degraded token scan
+        already refused all of them, so the AST path was strictly weaker than
+        its own co-primary fallback. `test_both_paths_agree_on_cwd_moving_builtins`
+        is what stops that recurring.
+        """
+        for template in self.CWD_MOVING_BUILTIN_SHAPES:
+            with self.subTest(shape=template):
+                for shell in self.SHELLS:
+                    self.assertEqual(
+                        self._shell_truth(template, shell),
+                        self._other,
+                        f"{shell} should end up in OTHER for: {template}",
+                    )
+                self._assert_never_misroutes(template)
+                self.assertIsNone(self._resolved(template))
+
+    def test_popd_after_the_run_never_misroutes(self) -> None:
+        """`popd` returns to DEST, so the truth here happens to match the stale
+        answer — which is exactly why it must not be trusted. Refused anyway."""
+        template = "cd DEST && pushd OTHER > /dev/null && popd > /dev/null && MARKER"
+        for shell in self.SHELLS:
+            self.assertEqual(self._shell_truth(template, shell), self._dest)
+        self.assertIsNone(self._resolved(template))
+
+    def test_exec_after_the_run_never_misroutes(self) -> None:
+        """`exec` cannot carry a `cd`, but it REPLACES the shell — the routed
+        command never runs at all, so claiming a directory for it is meaningless."""
+        self.assertIsNone(self._resolved("cd DEST && exec -a x true ; MARKER"))
+
+    def test_both_paths_agree_on_cwd_moving_builtins(self) -> None:
+        """The anti-drift check: AST and degraded must refuse the SAME shapes.
+
+        The #1156 defect was two mechanisms with independently maintained
+        lists. Both now derive from `_CWD_MOVING_COMMANDS`, and this asserts
+        the property rather than the shared constant, so a future split that
+        re-introduces per-path lists fails here.
+        """
+        for template in self.CWD_MOVING_BUILTIN_SHAPES:
+            with self.subTest(shape=template):
+                self.assertEqual(
+                    self._resolved(template),
+                    self._resolved_degraded(template),
+                    "the AST path must never be weaker than its own fallback",
+                )
+
+    def test_cwd_moving_commands_feeds_the_degraded_token_set(self) -> None:
+        """One source of truth, asserted structurally as well as behaviourally."""
+        self.assertTrue(sp._CWD_MOVING_COMMANDS <= sp._DEGRADED_CONTROL_FLOW_TOKENS)
+        self.assertNotIn("cd", sp._DEGRADED_CONTROL_FLOW_TOKENS)
 
     # --- backgrounded / pipelined `cd` cannot move the calling shell ---
 

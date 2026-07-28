@@ -1113,6 +1113,25 @@ def resolve_tool_cwd(input_data: dict) -> str:
 # disqualifying, in either position.
 _UNCONDITIONAL_LEADING_OPS = frozenset({";", "&&"})
 
+# Commands that move (or replace) the CURRENT shell WITHOUT being spelled `cd`.
+# A leading `cd` is only evidence of where the work runs if nothing between it
+# and the work moves the shell again — and `pushd`/`popd`/`eval`/`source`/`.`
+# all do, invisibly to a scan that keys on the literal token `cd`.
+#
+# ONE list, consumed by BOTH mechanisms. It started life inline in the degraded
+# token set only, and the AST path keyed on `words[0] == "cd"` alone — so
+# `cd /a && pushd /b && gh …` returned `/a` on the AST path while the degraded
+# path correctly returned None, making the primary strictly weaker than the
+# co-primary it is declared equal to (found at the #1156 merge gate, Aino
+# Virtanen). Two mechanisms with independently maintained lists WILL drift
+# again; deriving both from this frozenset is what makes that impossible, and
+# is a stronger fix than patching the AST branch to match.
+#
+# `exec` is included for the same parity even though it cannot carry a `cd`
+# (`exec cd /x` fails — exec needs an external command): it REPLACES the shell,
+# so the routed command never runs at all. Refusing costs only recovery.
+_CWD_MOVING_COMMANDS = frozenset({"pushd", "popd", "eval", "source", ".", "exec"})
+
 # Fail-closed scan (bashlex absent, OR the command did not parse — most often
 # a quoted-delimiter heredoc): any of these appearing as its OWN shlex token
 # means the command carries control flow, a subshell, a pipeline or an opaque
@@ -1121,38 +1140,34 @@ _UNCONDITIONAL_LEADING_OPS = frozenset({";", "&&"})
 # ABSENT: they are the separators of the leading `cd` run itself, and dropping
 # `cd /worktree && gh pr create` would destroy the #521 recovery signal this
 # resolver exists for.
-_DEGRADED_CONTROL_FLOW_TOKENS = frozenset(
-    {
-        "if",
-        "then",
-        "else",
-        "elif",
-        "fi",
-        "while",
-        "until",
-        "for",
-        "do",
-        "done",
-        "case",
-        "esac",
-        "select",
-        "function",
-        "{",
-        "}",
-        "(",
-        ")",
-        "!",
-        "|",
-        "||",
-        "&",
-        # Commands that can move the shell in ways this scan cannot follow.
-        "eval",
-        "exec",
-        "source",
-        ".",
-        "pushd",
-        "popd",
-    }
+_DEGRADED_CONTROL_FLOW_TOKENS = (
+    frozenset(
+        {
+            "if",
+            "then",
+            "else",
+            "elif",
+            "fi",
+            "while",
+            "until",
+            "for",
+            "do",
+            "done",
+            "case",
+            "esac",
+            "select",
+            "function",
+            "{",
+            "}",
+            "(",
+            ")",
+            "!",
+            "|",
+            "||",
+            "&",
+        }
+    )
+    | _CWD_MOVING_COMMANDS
 )
 
 
@@ -1192,10 +1207,16 @@ def _ast_top_level_elements(tree) -> list[tuple[object, str | None, str | None]]
     return elements
 
 
-def _ast_subtree_contains_cd(node) -> bool:
-    """True if any command-position `cd` appears anywhere under `node`.
+def _ast_subtree_moves_cwd(node) -> bool:
+    """True if anything under `node` can move the shell's cwd.
 
-    Used on everything AFTER the leading `cd` run. A `cd` there makes the
+    That means a command-position `cd` OR any of `_CWD_MOVING_COMMANDS`
+    (`pushd`, `popd`, `eval`, `source`, `.`, `exec`) — the second half is the
+    part a `words[0] == "cd"` check misses, and missing it left
+    `cd /a && pushd /b && gh …` resolving to `/a` while both shells run the gh
+    in `/b` (#1156 merge gate).
+
+    Used on everything AFTER the leading `cd` run. A cwd move there makes the
     resolver's single answer ambiguous with respect to the command a consumer
     actually cares about (`gh issue edit 5 …; cd /elsewhere` — main#1151
     family B), or is a group whose `cd` applies to a later command in the same
@@ -1206,15 +1227,15 @@ def _ast_subtree_contains_cd(node) -> bool:
     """
     found = False
 
-    class _CdFinder(bashlex_ast.nodevisitor):
+    class _CwdMoveFinder(bashlex_ast.nodevisitor):
         def visitcommand(self, n, parts):
             nonlocal found
             words = [p.word for p in parts if getattr(p, "kind", None) == "word"]
-            if words and words[0] == "cd":
+            if words and (words[0] == "cd" or words[0] in _CWD_MOVING_COMMANDS):
                 found = True
             return True
 
-    _CdFinder().visit(node)
+    _CwdMoveFinder().visit(node)
     return found
 
 
@@ -1279,9 +1300,11 @@ def _ast_leading_cd_target_cached(command: str) -> tuple[bool, str | None]:
         target = words[1]
         index += 1
 
-    # Phase 2 — nothing after the leading run may contain a `cd` at all.
+    # Phase 2 — nothing after the leading run may move the cwd again. Starts AT
+    # the breaking element, so a `pushd`/`eval`/`source` that ended phase 1 is
+    # itself inspected; phase 1 needs no matching check of its own.
     for node, _prev_op, _next_op in elements[index:]:
-        if _ast_subtree_contains_cd(node):
+        if _ast_subtree_moves_cwd(node):
             return (True, None)
     return (True, target)
 
@@ -1399,10 +1422,21 @@ def extract_leading_cd_target(command: str) -> str | None:
     `mkdir -p /a && cd /a && gh …` (the run is no longer leading), for a
     RELATIVE `cd` (`cd /parent && cd child-repo` — refused outright now,
     because keeping `/parent` was itself a cross-repo misroute in a tree of
-    nested child repos), and for a pipeline sitting after the run. Each of
-    those falls back to the invocation cwd, which is the recoverable #650
-    behaviour. Claiming no knowledge is recoverable; claiming the wrong
-    directory is not.
+    nested child repos), for a pipeline sitting after the run, and for anything
+    in `_CWD_MOVING_COMMANDS` after the run (`cd /a && pushd /b && gh …`,
+    `… && eval 'cd /b' && …`, `… && source s.sh && …`) — including `exec`,
+    which does not move the shell but replaces it, so the routed command never
+    runs at all. Each of those falls back to the invocation cwd, which is the
+    recoverable #650 behaviour. Claiming no knowledge is recoverable; claiming
+    the wrong directory is not.
+
+    That last group is NOT a frontier the design leaves open — it is a case
+    where the two mechanisms had drifted. The degraded scan already refused
+    `pushd`/`eval`/`source`, so the AST path keying on the literal token `cd`
+    was strictly weaker than its own fallback (#1156 merge gate). Both now read
+    the same `_CWD_MOVING_COMMANDS` frozenset. A shape whose cwd this function
+    cannot compute must resolve to None on BOTH paths, and any new entry
+    belongs in that one set, never in a per-path list.
     """
     parsed, target = _ast_leading_cd_target(command)
     if parsed:
