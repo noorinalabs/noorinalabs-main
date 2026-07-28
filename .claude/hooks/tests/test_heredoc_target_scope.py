@@ -506,6 +506,79 @@ class RedirectAmpersandTests(unittest.TestCase):
         self.assertEqual([s[2] for s in segments], ["", "&&"])
 
 
+class PipeAmpersandOperatorTests(unittest.TestCase):
+    """`|&` is ONE operator — bash/zsh shorthand for `2>&1 |`.
+
+    Second-slot merge-gate finding on PR #1155 (Nino Kavtaradze, security lens).
+    Falling through to the single-character cases split it into `|` then `&`,
+    which is strictly worse than either reading of the operator:
+
+        sep=''  seg="cat <<'D' "   head='cat'
+        sep='|' seg=''             head=None    <- empty segment
+        sep='&' seg=' bash'        head='bash'  <- never reached: walk broke on `&`
+
+    So `cat <<'D' |& bash` walked around the pipe-to-shell block that this PR
+    itself introduces — the gate is real and was evaded by one character. Not a
+    regression (base allowed it too), but a gap in new protection, and the same
+    class as the `2>&1` finding from round 1.
+
+    Body execution confirmed in both shells with a marker assembled AT RUNTIME,
+    so a shell that merely PRINTS the body cannot forge it:
+
+        cat <<'D' |& bash
+        printf 'WZ-%s-MARKER\\n' EXEC
+        D
+
+        $ bash -> WZ-EXEC-MARKER      $ zsh -> WZ-EXEC-MARKER
+    """
+
+    def _assert_blocked(self, cmd: str) -> None:
+        result = hook.check(_bash(cmd))
+        self.assertIsNotNone(result, f"`|&` feeds a shell — must block: {cmd!r}")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_cat_pipe_ampersand_bash(self):
+        self._assert_blocked(f"cat <<'EOF' |& bash\n{REAL_COMMIT}\nEOF")
+
+    def test_tee_pipe_ampersand_sh(self):
+        self._assert_blocked(f"tee /dev/null <<'EOF' |& sh\n{REAL_COMMIT}\nEOF")
+
+    def test_pipe_ampersand_unspaced(self):
+        self._assert_blocked(f"cat <<'EOF' |&bash\n{REAL_COMMIT}\nEOF")
+
+    def test_pipe_ampersand_then_further_pipe(self):
+        """The walk must keep going past a `|&` relay, not just handle it in
+        terminal position."""
+        self._assert_blocked(f"cat <<'EOF' |& tee /tmp/a | bash\n{REAL_COMMIT}\nEOF")
+
+    def test_pipe_ampersand_to_a_data_sink_stays_data(self):
+        """`|&` connects the pipeline; it does not by itself mean `code`. A
+        `|& tee` relay with no interpreter anywhere must stay ALLOW, or the fix
+        would have re-introduced #1152's false positive for this shape."""
+        self.assertIsNone(hook.check(_bash(f"cat <<'EOF' |& tee /tmp/a\n{DOC_LINE}\nEOF")))
+
+    def test_scanner_emits_one_pipe_separator(self):
+        """Pinned at the scanner, so a failure localises here rather than only
+        in the hook verdict. Two segments, one `|` — not three with an empty."""
+        segments = _scan_command_line("cat <<'D' |& bash").segments
+        self.assertEqual([s[2] for s in segments], ["", "|"])
+        self.assertEqual(len(segments), 2)
+
+    def test_backgrounding_ampersand_is_untouched_by_the_pipe_amp_case(self):
+        """A bare `&` still backgrounds and still breaks the pipeline."""
+        segments = _scan_command_line("sleep 1 & bash").segments
+        self.assertEqual([s[2] for s in segments], ["", "&"])
+
+    def test_or_operator_is_untouched_by_the_pipe_amp_case(self):
+        """`||` must not be mis-consumed as `|` + `|`, and is not `|&`."""
+        segments = _scan_command_line("false || bash").segments
+        self.assertEqual([s[2] for s in segments], ["", "||"])
+
+    def test_or_still_breaks_the_pipeline(self):
+        self.assertIsNone(hook.check(_bash(f"cat > /tmp/n <<'EOF'\n{DOC_LINE}\nEOF\nfalse || ls")))
+
+
 class BashlexHeredocLimitationTests(unittest.TestCase):
     """Why the classifier is a scanner and not a bashlex AST walk.
 

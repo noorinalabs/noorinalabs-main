@@ -578,6 +578,14 @@ def _scan_command_line(line: str) -> _LineScan:
     are skipped, so `echo "a | b"` is one segment and `echo "<<EOF"` holds no
     opener.
 
+    `|&` is ONE operator — bash/zsh shorthand for `2>&1 |` — and must be
+    consumed as a pipe (main#1155 review round 2). Falling through to the
+    single-character cases split it into `|` then `&`, leaving an empty segment
+    between them and breaking the downstream walk on the `&`, so
+    `cat <<'D' |& bash` walked around the pipe-to-shell block. That was strictly
+    worse than either reading of the operator: treating it as a pipe catches the
+    shape, treating it as backgrounding would at least be consistent.
+
     Two shapes must NOT be mistaken for control operators (main#1155 review, M2):
 
       - `2>&1`, `>&2`, `<&0` — the `&` is part of a redirect, not a separator.
@@ -634,6 +642,19 @@ def _scan_command_line(line: str) -> _LineScan:
         if two in ("<(", ">("):
             procsubs.append(i)
             i += 2
+            continue
+        if two == "|&":
+            # bash/zsh shorthand for `2>&1 |` — ONE pipe operator, not `|`
+            # followed by a backgrounding `&`. Splitting it in two left an empty
+            # segment between them, and the downstream walk then broke on the
+            # `&` before ever reaching the interpreter, so `cat <<'D' |& bash`
+            # walked around the pipe-to-shell block this module adds. Emitting
+            # it as a `|` is both correct and the conservative reading: it keeps
+            # the pipeline connected, so the walk keeps looking for a sink.
+            segments.append((seg_start, i, sep_before))
+            sep_before = "|"
+            i += 2
+            seg_start = i
             continue
         if two in ("&&", "||"):
             segments.append((seg_start, i, sep_before))
