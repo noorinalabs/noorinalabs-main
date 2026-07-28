@@ -657,20 +657,57 @@ class SurnameCollisionTests(unittest.TestCase):
         assert result is not None
         self.assertIn("L.Ferreira", result.get("reason", ""))
 
-    def test_rest_comment_create_arm_agrees_with_the_gh_arm(self):
+    @staticmethod
+    def _rest_command(requestor: str, requestee: str) -> str:
+        """A REST comment-create carrying a real multi-line body.
+
+        The newlines must be REAL. An earlier version of this fixture used
+        literal `\\n` two-character sequences, so the body was a single physical
+        line, `_direction_is_verdict` returned False, and `check()` returned at
+        the verdict-scope gate WITHOUT ever reaching `is_branch_author`. It
+        passed against the unfixed lastname-only predicate — inert, and claimed
+        in the PR body as the REST-arm coverage it was not
+        (`feedback_fixture_makes_guard_assertion_inert`, caught by Nino
+        Kavtaradze's mutation harness on this PR).
+        """
+        body = (
+            "Looks correct.\n\n---\n"
+            f"Requestor: {requestor}\n"
+            f"Requestee: {requestee}\n"
+            "RequestOrReplied: Approved\nTechDebt: None\n"
+        )
+        return (
+            "gh api repos/noorinalabs/noorinalabs-main/issues/1156/comments "
+            f'-X POST -f body="{body}"'
+        )
+
+    def test_rest_arm_allows_the_same_surname_reviewer(self):
         """#932's REST arm is gated by the same predicate, so it must agree.
 
         The defect blocked BOTH paths, which is why there was no workaround.
         """
-        body = (
-            "Looks correct.\\n\\n---\\nRequestor: Santiago Ferreira\\n"
-            "Requestee: Lucas Ferreira\\nRequestOrReplied: Approved\\nTechDebt: None\\n"
-        )
-        cmd = (
-            "gh api repos/noorinalabs/noorinalabs-main/issues/1156/comments "
-            f'-X POST -f body="{body}"'
-        )
-        self.assertIsNone(self._check(cmd))
+        self.assertIsNone(self._check(self._rest_command("Santiago Ferreira", "Lucas Ferreira")))
+
+    def test_rest_arm_still_blocks_the_branch_author(self):
+        """The REST arm's true positive — without this the arm could be inert."""
+        result = self._check(self._rest_command("Lucas Ferreira", "Santiago Ferreira"))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("swapped", result.get("reason", ""))
+
+    def test_rest_arm_fixture_actually_reaches_the_identity_check(self):
+        """Liveness guard: the fixture must get PAST the verdict-scope gate.
+
+        Asserted directly, because the way this fixture failed before was by
+        returning `allow` for a reason that had nothing to do with identity —
+        which is indistinguishable from a correct allow in the test result.
+        """
+        cmd = self._rest_command("Santiago Ferreira", "Lucas Ferreira")
+        body = hook.extract_rest_comment_body(cmd)
+        self.assertIsNotNone(body)
+        assert body is not None
+        self.assertTrue(hook._direction_is_verdict(body))
 
     def test_non_verdict_directions_remain_out_of_scope(self):
         """Scope is unchanged: Request/Reply invert the role bindings (#378).
