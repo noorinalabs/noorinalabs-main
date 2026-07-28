@@ -562,18 +562,40 @@ def _segment_head_command(seg_text: str) -> str | None:
     return head.rsplit("/", 1)[-1] if "/" in head else head
 
 
-def _scan_command_line(line: str) -> tuple[list[tuple[int, int, str]], list[tuple[int, bool, str]]]:
+class _LineScan(NamedTuple):
+    """Result of one quote-aware pass over a physical line."""
+
+    segments: list[tuple[int, int, str]]  # (start, end, separator_before)
+    openers: list[tuple[int, bool, str]]  # (position, is_dash_form, delimiter)
+    procsubs: list[int]  # positions of unquoted `<(` / `>(`
+
+
+def _scan_command_line(line: str) -> _LineScan:
     """Quote-aware single pass over one physical line.
 
-    Returns `(segments, openers)` where each segment is
-    `(start, end, separator_that_preceded_it)` and each opener is
-    `(position, is_dash_form, delimiter)`. Separators (`;`, `|`, `&`, `&&`,
-    `||`) and heredoc openers inside single/double quotes or behind a backslash
-    are DATA and are skipped, so `echo "a | b"` is one segment and
-    `echo "<<EOF"` holds no opener.
+    Separators (`;`, `|`, `&`, `&&`, `||`), heredoc openers and process
+    substitutions inside single/double quotes or behind a backslash are DATA and
+    are skipped, so `echo "a | b"` is one segment and `echo "<<EOF"` holds no
+    opener.
+
+    Two shapes must NOT be mistaken for control operators (main#1155 review, M2):
+
+      - `2>&1`, `>&2`, `<&0` — the `&` is part of a redirect, not a separator.
+        Splitting there resolved `cat 2>&1 > n.md <<'EOF'` to a head command of
+        `1`, so #1152's own false positive survived for every redirect-carrying
+        opener, and `cat <<'EOF' 2>&1 | bash` evaded the pipe-follow entirely.
+      - `&>file`, `&>>file` — the same `&`, on the other side.
+
+    Process-substitution positions are reported because `>(bash)` is a SECOND
+    sink hanging off the same segment: `tee >(bash) <<'EOF'` executes the body
+    even though the segment head is the inert `tee`. Recording them here (rather
+    than substring-searching the segment text later) keeps the quote-awareness —
+    a literal `>(` inside `cat > "weird>(name).md"` is not a process
+    substitution and must not be treated as one.
     """
     segments: list[tuple[int, int, str]] = []
     openers: list[tuple[int, bool, str]] = []
+    procsubs: list[int] = []
     quote: str | None = None
     seg_start = 0
     sep_before = ""
@@ -609,11 +631,19 @@ def _scan_command_line(line: str) -> tuple[list[tuple[int, int, str]], list[tupl
             i += 2
             continue
         two = line[i : i + 2]
+        if two in ("<(", ">("):
+            procsubs.append(i)
+            i += 2
+            continue
         if two in ("&&", "||"):
             segments.append((seg_start, i, sep_before))
             sep_before = two
             i += 2
             seg_start = i
+            continue
+        if c == "&" and (line[i - 1 : i] in ("<", ">") or line[i + 1 : i + 2] == ">"):
+            # `2>&1` / `>&2` / `&>log` — a redirect, not a control operator.
+            i += 1
             continue
         if c in (";", "|", "&"):
             segments.append((seg_start, i, sep_before))
@@ -623,32 +653,62 @@ def _scan_command_line(line: str) -> tuple[list[tuple[int, int, str]], list[tupl
             continue
         i += 1
     segments.append((seg_start, n, sep_before))
-    return segments, openers
+    return _LineScan(segments, openers, procsubs)
 
 
-def _opener_feeds_interpreter(line: str, pos: int, segments: list[tuple[int, int, str]]) -> bool:
+def _opener_feeds_interpreter(line: str, pos: int, scan: _LineScan) -> bool:
     """True if the heredoc opened at `pos` on `line` is consumed as shell code.
 
     A heredoc belongs to the pipeline segment it appears in. It is DATA only if
-    that segment's command is a known inert sink AND no segment downstream of it
-    *in the same pipeline* is a shell interpreter — `cat <<EOF | bash` feeds the
-    body to `bash` just as surely as `bash <<EOF` does. `&&`, `||`, `;` and `&`
-    break the pipeline: what follows them does not receive this stdin.
+    EVERY sink that can reach its bytes is inert:
+
+      1. the segment's head command is a known inert sink (`cat`, `tee`), AND
+      2. that segment carries no process substitution, AND
+      3. no segment downstream of it *in the same pipeline* is a shell
+         interpreter or itself carries a process substitution.
+
+    Condition 2 is the one that is easy to miss, and missing it is a live
+    bypass (main#1155 review, M1):
+
+        tee >(bash) <<'DELIM'
+        git -c user.name=X -c user.email=Y commit -m z
+        DELIM
+
+    The head word is the inert `tee`, but `>(bash)` is a SECOND sink hanging off
+    the same segment, and the body really is executed — confirmed under both
+    bash and zsh. Following only `|` never sees it, so the body was classified
+    as data, stripped, and the commit sailed through. A process substitution
+    anywhere in a reachable segment therefore forces CODE without trying to
+    resolve what is inside it: an unresolvable sink resolves toward CODE, which
+    is the rule the rest of this classifier already follows.
+
+    `&&`, `||`, `;` and `&` break the pipeline: what follows them does not
+    receive this stdin. A `&` that is part of a redirect (`2>&1`) is not a
+    separator at all — see `_scan_command_line`.
     """
+    segments = scan.segments
     idx = next(
         (k for k, (start, end, _sep) in enumerate(segments) if start <= pos < end),
         None,
     )
     if idx is None:
         return True
-    start, end, _sep = segments[idx]
-    if _segment_head_command(line[start:end]) not in HEREDOC_DATA_SINKS:
+
+    def _reachable_sink_is_code(k: int, *, head_must_be_inert_sink: bool) -> bool:
+        start, end, _sep = segments[k]
+        if any(start <= p < end for p in scan.procsubs):
+            return True
+        head = _segment_head_command(line[start:end])
+        if head_must_be_inert_sink:
+            return head not in HEREDOC_DATA_SINKS
+        return head in SHELL_INTERPRETERS
+
+    if _reachable_sink_is_code(idx, head_must_be_inert_sink=True):
         return True
     for k in range(idx + 1, len(segments)):
         if segments[k][2] != "|":
             break
-        nxt_start, nxt_end, _nxt_sep = segments[k]
-        if _segment_head_command(line[nxt_start:nxt_end]) in SHELL_INTERPRETERS:
+        if _reachable_sink_is_code(k, head_must_be_inert_sink=False):
             return True
     return False
 
@@ -674,9 +734,9 @@ def _classify_heredocs_cached(cmd: str) -> tuple[HeredocSpan, ...]:
     while i < len(lines):
         line = lines[i]
         i += 1
-        segments, openers = _scan_command_line(line)
-        for pos, dash_form, delim in openers:
-            is_code = _opener_feeds_interpreter(line, pos, segments)
+        scan = _scan_command_line(line)
+        for pos, dash_form, delim in scan.openers:
+            is_code = _opener_feeds_interpreter(line, pos, scan)
             body: list[str] = []
             term = None
             j = i
@@ -719,9 +779,9 @@ def strip_data_heredocs(cmd: str) -> str:
         line = lines[i]
         out.append(line)
         i += 1
-        segments, openers = _scan_command_line(line)
-        for pos, dash_form, delim in openers:
-            is_code = _opener_feeds_interpreter(line, pos, segments)
+        scan = _scan_command_line(line)
+        for pos, dash_form, delim in scan.openers:
+            is_code = _opener_feeds_interpreter(line, pos, scan)
             term = None
             j = i
             while j < len(lines):

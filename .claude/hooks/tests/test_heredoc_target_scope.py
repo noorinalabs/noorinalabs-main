@@ -42,6 +42,7 @@ import validate_commit_identity as hook  # noqa: E402
 from _shell_parse import (  # noqa: E402
     HEREDOC_DATA_SINKS,
     SHELL_INTERPRETERS,
+    _scan_command_line,
     classify_heredocs,
     strip_data_heredocs,
 )
@@ -374,6 +375,137 @@ class CatPipedToShellTests(unittest.TestCase):
         self.assertIsNone(hook.check(_bash(f"cat > /tmp/n.md <<'EOF'\n{DOC_LINE}\nEOF\nls")))
 
 
+class ProcessSubstitutionSinkTests(unittest.TestCase):
+    """A process substitution is a SECOND sink on the heredoc's own segment.
+
+    Regression for the merge-gate finding on PR #1155 (Aino Virtanen). The
+    first version of this classifier resolved the segment head to `tee`, found
+    it in `HEREDOC_DATA_SINKS`, and then followed only `|` downstream. A
+    process substitution hangs off the SAME segment, so the walk never saw it:
+
+        tee >(bash) <<'DELIM'
+        git -c user.name=X -c user.email=Y commit -m z
+        DELIM
+
+    BLOCK at `fea0dca` -> ALLOW at `e163320`. A genuine block -> allow
+    regression on an identity-carrying commit, verified to really execute under
+    both bash and zsh:
+
+        $ bash procsub.sh  ->  PROCSUB-BODY-EXECUTED
+        $ zsh  procsub.sh  ->  PROCSUB-BODY-EXECUTED
+
+    The stated guarantee ("unknown owner -> CODE") held for the HEAD WORD only.
+    A known-inert head carrying an unrecognised second sink fell through it.
+    The classifier now forces CODE on any reachable segment carrying `>(`/`<(`,
+    without trying to resolve what is inside — an unresolvable sink resolves
+    toward CODE, the rule the rest of the classifier already follows.
+    """
+
+    def _assert_blocked(self, cmd: str) -> None:
+        result = hook.check(_bash(cmd))
+        self.assertIsNotNone(result, f"process-substitution sink must block: {cmd!r}")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_tee_procsub_bash(self):
+        self._assert_blocked(f"tee >(bash) <<'EOF'\n{REAL_COMMIT}\nEOF")
+
+    def test_tee_procsub_sh(self):
+        self._assert_blocked(f"tee >(sh) <<'EOF'\n{REAL_COMMIT}\nEOF")
+
+    def test_tee_procsub_with_additional_redirect(self):
+        self._assert_blocked(f"tee >(bash) > /dev/null <<'EOF'\n{REAL_COMMIT}\nEOF")
+
+    def test_cat_redirected_into_procsub(self):
+        self._assert_blocked(f"cat > >(bash) <<'EOF'\n{REAL_COMMIT}\nEOF")
+
+    def test_input_form_procsub_also_forces_code(self):
+        """`<(...)` too. We do not try to decide whether the substitution's
+        contents are inert — an unresolvable sink is CODE."""
+        self._assert_blocked(f"tee <(cat /etc/hosts) <<'EOF'\n{REAL_COMMIT}\nEOF")
+
+    def test_procsub_downstream_of_a_pipe(self):
+        """The pipe-follow must apply the same rule to downstream segments —
+        `| tee >(bash)` reaches the body just as `tee >(bash)` does."""
+        self._assert_blocked(f"cat <<'EOF' | tee >(bash)\n{REAL_COMMIT}\nEOF")
+
+    def test_procsub_containing_a_pipeline(self):
+        """A `|` INSIDE the substitution splits the scanner's segments, but the
+        `>(` position still falls in the owning segment, so the rule fires."""
+        self._assert_blocked(f"tee >(grep x | bash) <<'EOF'\n{REAL_COMMIT}\nEOF")
+
+    def test_quoted_procsub_is_not_a_procsub(self):
+        """The detection is quote-aware: a literal `>(` inside a quoted filename
+        is not a process substitution and must not re-introduce #1152's false
+        positive by the back door."""
+        cmd = f"cat > 'weird>(name).md' <<'EOF'\n{DOC_LINE}\nEOF"
+        self.assertIsNone(hook.check(_bash(cmd)))
+
+    def test_classifier_marks_procsub_segment_as_code(self):
+        """Pinned at the primitive too, so a failure localises to the
+        classifier rather than only to the hook's verdict."""
+        (span,) = classify_heredocs("tee >(bash) <<'EOF'\nbody\nEOF")
+        self.assertTrue(span.is_code)
+
+
+class RedirectAmpersandTests(unittest.TestCase):
+    """`2>&1` is a redirect, not a control operator.
+
+    Second merge-gate finding on PR #1155. `_scan_command_line` split the
+    segment on the `&` in `2>&1`, with two measured consequences:
+
+      * `cat <<'DELIM' 2>&1 | bash` — the downstream walk broke on a non-`|`
+        separator, so the new pipe-to-shell block was evaded by three
+        characters. (ALLOW at base and at the first head; not a regression, but
+        it made the new protection trivially bypassable.)
+      * `cat 2>&1 > notes.md <<'DELIM'` — the head command resolved to `1`
+        rather than `cat`, so #1152's own false positive survived for every
+        redirect-carrying opener. The bug this PR closes was not fully closed.
+
+    `&>file` is the same `&` from the other side. A genuine backgrounding `&`
+    must still separate.
+    """
+
+    def test_stderr_redirect_does_not_evade_the_pipe_block(self):
+        result = hook.check(_bash(f"cat <<'EOF' 2>&1 | bash\n{REAL_COMMIT}\nEOF"))
+        self.assertIsNotNone(result, "`2>&1` must not break the pipe-follow")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_stdout_to_stderr_form(self):
+        result = hook.check(_bash(f"cat <<'EOF' >&2 | bash\n{REAL_COMMIT}\nEOF"))
+        self.assertIsNotNone(result)
+
+    def test_ampersand_redirect_both_form(self):
+        result = hook.check(_bash(f"cat <<'EOF' &> /tmp/l | bash\n{REAL_COMMIT}\nEOF"))
+        self.assertIsNotNone(result)
+
+    def test_false_positive_fixed_for_leading_redirect(self):
+        """The #1152 fix must reach redirect-carrying openers too."""
+        self.assertIsNone(hook.check(_bash(f"cat 2>&1 > /tmp/n.md <<'EOF'\n{DOC_LINE}\nEOF")))
+
+    def test_false_positive_fixed_for_trailing_redirect(self):
+        self.assertIsNone(hook.check(_bash(f"cat > /tmp/n.md 2>&1 <<'EOF'\n{DOC_LINE}\nEOF")))
+
+    def test_false_positive_fixed_for_stderr_to_devnull(self):
+        self.assertIsNone(hook.check(_bash(f"tee /tmp/n.md 2>/dev/null <<'EOF'\n{DOC_LINE}\nEOF")))
+
+    def test_backgrounding_ampersand_still_separates(self):
+        """Only a `&` adjacent to a redirect is exempt — a real control `&`
+        must keep its meaning."""
+        segments = _scan_command_line("sleep 1 & wait").segments
+        self.assertEqual(len(segments), 2)
+        self.assertEqual(segments[1][2], "&")
+
+    def test_redirect_ampersand_does_not_split(self):
+        segments = _scan_command_line("cat <<'EOF' 2>&1 | bash").segments
+        self.assertEqual([s[2] for s in segments], ["", "|"])
+
+    def test_and_operator_still_splits(self):
+        segments = _scan_command_line("mkdir -p /a && cat <<'EOF'").segments
+        self.assertEqual([s[2] for s in segments], ["", "&&"])
+
+
 class BashlexHeredocLimitationTests(unittest.TestCase):
     """Why the classifier is a scanner and not a bashlex AST walk.
 
@@ -387,13 +519,19 @@ class BashlexHeredocLimitationTests(unittest.TestCase):
     """
 
     def test_bashlex_cannot_parse_quoted_delimiter_heredoc(self):
+        """Pinned to `ParsingError` specifically, not bare `Exception` — a
+        broad `assertRaises` would also be satisfied by an unrelated failure
+        (an import error, a TypeError from a signature change) and would keep
+        passing while the measurement it encodes had quietly stopped being
+        true."""
         try:
             import bashlex
+            import bashlex.errors
         except ImportError:  # pragma: no cover - degraded mode
             self.skipTest("bashlex not installed")
         for cmd in ("cat <<'EOF'\nx\nEOF\n", 'cat <<"EOF"\nx\nEOF\n'):
             with self.subTest(command=cmd):
-                with self.assertRaises(Exception):
+                with self.assertRaises(bashlex.errors.ParsingError):
                     bashlex.parse(cmd)
 
     def test_bashlex_does_parse_the_bare_delimiter_form(self):
