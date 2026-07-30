@@ -1680,10 +1680,10 @@
       "resolved_at": "2026-07-30T02:51:53.713584+00:00"
     },
     ".claude/memory/feedback_spawn_worktree_follows_orchestrator_cwd.md": {
-      "last_tracked": "0aa777fe2faed9d965ec5a2d47c3788a00579b0b3b328295c81a2fd5b5483c40",
-      "last_resolved": "0aa777fe2faed9d965ec5a2d47c3788a00579b0b3b328295c81a2fd5b5483c40",
-      "tracked_at": "2026-07-30T03:14:21.335635+00:00",
-      "resolved_at": "2026-07-30T03:15:01.933657+00:00"
+      "last_tracked": "79593ba50e31ba6c795c32fb3e3fd92cb0d22ffcf23e7abb83c28b4c6306c8a8",
+      "last_resolved": "79593ba50e31ba6c795c32fb3e3fd92cb0d22ffcf23e7abb83c28b4c6306c8a8",
+      "tracked_at": "2026-07-30T03:18:54.123562+00:00",
+      "resolved_at": "2026-07-30T03:19:12.236975+00:00"
     }
   },
   "last_cleanup": {
