@@ -453,6 +453,24 @@ class InvocationParsingTests(unittest.TestCase):
         self.assertEqual(inv.words, ("-c", "-o", "pipefail", NAKED_COMMIT))
 
     def test_words_drops_only_the_double_dash_sentinel(self):
+        """Pins a DESIGN DECISION, not a correctness result — read before editing.
+
+        A bounded alternative (scan only the window between `-c` and the end of
+        the option run) is equally correct on true positives: both score zero
+        holes against the shell-truth oracle, and both produce byte-identical
+        block sets over ~75k real recorded commands. The superset was chosen on
+        DURABILITY, not on detection power (main#1193 merge-gate review):
+
+          - the bounded window needs `rest.index("-c")`, which is only correct
+            while cluster expansion is right for every shell — re-importing the
+            per-shell option knowledge this module exists to delete;
+          - its failure mode is a silent index error, i.e. fail-OPEN. The
+            superset's failure mode is an over-block, which is noisy.
+
+        So a future reader who finds `words` "too broad" is looking at a
+        deliberate trade, not an oversight. Narrowing it to non-flag tokens is
+        not a style change — it re-opens `zsh -abc '-x; git commit …'`.
+        """
         inv = parse_interpreter_invocation(["bash", "-c", "--", "-x; " + NAKED_COMMIT])
         assert inv is not None
         self.assertNotIn("--", inv.words)

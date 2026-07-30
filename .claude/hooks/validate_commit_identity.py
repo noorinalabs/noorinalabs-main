@@ -512,10 +512,14 @@ def _detect_indirect_commit(command: str, *, cwd: str | None = None) -> str | No
 
     for invocation in iter_interpreter_invocations(command):
         if invocation.has_command_string:
-            # `words`, not `operands`: a cluster that mixes a value-taking
-            # letter with `c` can shift the payload index, and differently
-            # between shells. Guessing that index wrong fails OPEN, so the gate
-            # scans every non-flag word of the invocation.
+            # `words`, not `operands`: `words` is every token of the invocation
+            # except the `--` sentinel — deliberately a SUPERSET of `operands`,
+            # because `end` is only a lower bound on where the option run stops
+            # and a cluster mixing a value-letter with `c` shifts the payload
+            # index differently per shell. Guessing that index wrong fails OPEN.
+            # Narrowing this back to non-flag tokens re-opens
+            # `zsh -abc '-x; git commit …'`; see `_shell_parse.
+            # InterpreterInvocation` for the full contract and the measurements.
             if any(_payload_looks_like_commit(word) for word in invocation.words):
                 return "shell -c"
         elif invocation.operands:
