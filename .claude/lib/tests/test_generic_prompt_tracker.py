@@ -61,6 +61,15 @@ class NormalizeRelPathTest(unittest.TestCase):
         self.assertIsNone(gpt.normalize_rel_path("/r/.claude/scratch/tmp.md"))
         self.assertIsNone(gpt.normalize_rel_path(".claude/scratch_pr_768.md"))
 
+    def test_consulted_session_marker_returns_none(self) -> None:
+        # main#1140: Hook-15 consultation sentinel markers (e.g. ontology-
+        # librarian's per-cwd .marker file) were the dominant noise class in
+        # the wave-28 ~251-candidate pileup — never a genericize candidate.
+        self.assertIsNone(
+            gpt.normalize_rel_path("/r/.claude/.consulted/ontology-librarian/abc123.marker")
+        )
+        self.assertIsNone(gpt.normalize_rel_path(".claude/.consulted/session-start/x.marker"))
+
     def test_real_artifact_edited_inside_worktree_still_tracked(self) -> None:
         # The rel-prefix skip is checked against the NORMALIZED rel, not the raw
         # path, so a real artifact edited in a worktree (collapses to its inner
@@ -265,6 +274,162 @@ class CorruptStateTest(_TmpStateMixin):
         )
         self.assertTrue(ok)
         self.assertIn("hooks/foo.py", json.loads(self.pending.read_text())["candidates"])
+
+
+class ArchiveWavePendingTest(_TmpStateMixin):
+    """Coverage for main#1140 — archive + reset the pending ledger per wave.
+
+    Maps to the issue's acceptance criteria:
+      - safe on missing/empty/malformed pending (no crash, no fabricated
+        wave boundary)
+      - noise classes (session markers) are dropped from the LIVE ledger but
+        never silently lost — they land in the archive
+      - a genuine undecided candidate is retained in the archive (recoverable)
+        even though it is cleared from the live worklist
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.archive_dir = Path(self._tmp.name) / "archive"
+
+    def _seed_raw(self, candidates: dict) -> None:
+        # Bypass record_candidate's intake filter to simulate entries recorded
+        # under an OLDER, more permissive filter (pre-main#1140 .consulted/
+        # entries, or long-undecided genuine artifacts from prior waves).
+        gpt.save_pending({"version": 1, "candidates": candidates}, self.pending)
+
+    def test_missing_pending_file_is_a_safe_noop(self) -> None:
+        result = gpt.archive_wave_pending(
+            "P10W29", pending_path=self.pending, archive_dir=self.archive_dir
+        )
+        self.assertEqual(
+            result,
+            {
+                "archived": False,
+                "wave": "P10W29",
+                "noise_dropped": 0,
+                "genuine_reset": 0,
+                "archive_path": None,
+            },
+        )
+        self.assertFalse(self.archive_dir.exists())
+
+    def test_empty_candidates_is_a_safe_noop(self) -> None:
+        self._seed_raw({})
+        result = gpt.archive_wave_pending(
+            "P10W29", pending_path=self.pending, archive_dir=self.archive_dir
+        )
+        self.assertFalse(result["archived"])
+        self.assertFalse(self.archive_dir.exists())
+
+    def test_malformed_pending_heals_and_is_a_safe_noop(self) -> None:
+        self.pending.write_text("{ not json")
+        result = gpt.archive_wave_pending(
+            "P10W29", pending_path=self.pending, archive_dir=self.archive_dir
+        )
+        self.assertFalse(result["archived"])
+        self.assertFalse(self.archive_dir.exists())
+
+    def test_noise_class_dropped_from_live_but_archived(self) -> None:
+        self._seed_raw(
+            {
+                ".consulted/ontology-librarian/abc.marker": {
+                    "category": "configuration",
+                    "first_seen": "T0",
+                    "last_seen": "T1",
+                    "count": 9,
+                },
+            }
+        )
+        result = gpt.archive_wave_pending(
+            "P10W29", pending_path=self.pending, archive_dir=self.archive_dir, now="TA"
+        )
+        self.assertTrue(result["archived"])
+        self.assertEqual(result["noise_dropped"], 1)
+        self.assertEqual(result["genuine_reset"], 0)
+
+        # Live ledger reset to empty.
+        live = json.loads(self.pending.read_text())
+        self.assertEqual(live["candidates"], {})
+
+        # Never silently lost — recoverable from the archive.
+        archive_path = self.archive_dir / "wave-P10W29.json"
+        self.assertEqual(Path(result["archive_path"]), archive_path)
+        archived = json.loads(archive_path.read_text())
+        snapshot = archived["waves"][0]
+        self.assertIn(".consulted/ontology-librarian/abc.marker", snapshot["noise_dropped"])
+        self.assertEqual(snapshot["genuine_reset"], {})
+
+    def test_genuine_candidate_retained_in_archive_not_silently_dropped(self) -> None:
+        self._seed_raw(
+            {
+                "hooks/foo.py": {
+                    "category": "hook",
+                    "first_seen": "T0",
+                    "last_seen": "T0",
+                    "count": 1,
+                },
+            }
+        )
+        result = gpt.archive_wave_pending(
+            "P10W29", pending_path=self.pending, archive_dir=self.archive_dir, now="TA"
+        )
+        self.assertTrue(result["archived"])
+        self.assertEqual(result["noise_dropped"], 0)
+        self.assertEqual(result["genuine_reset"], 1)
+
+        # Cleared from the live worklist...
+        live = json.loads(self.pending.read_text())
+        self.assertEqual(live["candidates"], {})
+
+        # ...but fully recoverable from the archive — this is the "never
+        # silently drop a genuine undecided candidate" guarantee.
+        archive_path = self.archive_dir / "wave-P10W29.json"
+        archived = json.loads(archive_path.read_text())
+        genuine = archived["waves"][0]["genuine_reset"]
+        self.assertIn("hooks/foo.py", genuine)
+        self.assertEqual(genuine["hooks/foo.py"]["category"], "hook")
+
+    def test_mixed_noise_and_genuine_partitioned_correctly(self) -> None:
+        self._seed_raw(
+            {
+                ".consulted/session-start/x.marker": {"category": "configuration", "count": 3},
+                "hooks/foo.py": {"category": "hook", "count": 1},
+                "team/charter/agents.md": {"category": "charter", "count": 2},
+            }
+        )
+        result = gpt.archive_wave_pending(
+            "P10W29", pending_path=self.pending, archive_dir=self.archive_dir
+        )
+        self.assertEqual(result["noise_dropped"], 1)
+        self.assertEqual(result["genuine_reset"], 2)
+
+    def test_missing_wave_label_does_not_fabricate_a_wave_boundary(self) -> None:
+        self._seed_raw({"hooks/foo.py": {"category": "hook", "count": 1}})
+        result = gpt.archive_wave_pending(
+            "", pending_path=self.pending, archive_dir=self.archive_dir, now="2026-07-29T00:00:00Z"
+        )
+        self.assertTrue(result["archived"])
+        # No specific wave number is invented — the filename falls back to a
+        # timestamp, clearly distinguishable from a real wave label.
+        self.assertIn("wave-unknown-", result["archive_path"])
+        self.assertNotRegex(Path(result["archive_path"]).name, r"wave-P\d+W\d+\.json")
+
+    def test_rerun_within_same_wave_accretes_not_clobbers(self) -> None:
+        self._seed_raw({"hooks/foo.py": {"category": "hook", "count": 1}})
+        gpt.archive_wave_pending(
+            "P10W29", pending_path=self.pending, archive_dir=self.archive_dir, now="T1"
+        )
+        # New pending activity recorded after the first archive-wave run.
+        self._seed_raw({"hooks/bar.py": {"category": "hook", "count": 1}})
+        gpt.archive_wave_pending(
+            "P10W29", pending_path=self.pending, archive_dir=self.archive_dir, now="T2"
+        )
+        archive_path = self.archive_dir / "wave-P10W29.json"
+        archived = json.loads(archive_path.read_text())
+        self.assertEqual(len(archived["waves"]), 2)
+        self.assertIn("hooks/foo.py", archived["waves"][0]["genuine_reset"])
+        self.assertIn("hooks/bar.py", archived["waves"][1]["genuine_reset"])
 
 
 class CliTest(_TmpStateMixin):

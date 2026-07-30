@@ -37,6 +37,41 @@ Two state files (see § Two ledgers)
   cross-wave genericize/skip decisions, keyed by artifact rel-path. This is the
   dedup memory; it MUST be committed (decisions are durable team state).
 
+Per-wave pending reset/archive (main#1140)
+-------------------------------------------
+Nothing ever removes an UNDECIDED entry from the pending ledger short of a
+:func:`record_decision` call — it accumulates across every wave and session
+forever. Left alone this becomes an unusable worklist: by the wave-28
+checkpoint it held ~251 stale candidates, dominated by session
+``.consulted/*.marker`` noise (a session-marker file gets edited via the
+generic ``Write`` tool like anything else under ``.claude/``, so the silent
+hook happily tracked it) and pre-existing artifacts nobody had ever triaged.
+An unbounded, mostly-noise worklist is worse than no worklist: the signal from
+a genuine new candidate gets buried.
+
+:func:`archive_wave_pending` is the wave-boundary counterpart to that
+accumulation, run once at ``/wave-wrapup`` Step 12.5 BEFORE the diff sweep:
+
+- ``.claude/generic_prompt_pending_archive/wave-{label}.json`` — gitignored
+  cold archive (same disk-only-not-git-tracked shape as
+  ``.claude/annunaki/archive/``, #1021). Holds the FULL pre-reset pending
+  snapshot for every wave this has run, partitioned per-wave into
+  ``noise_dropped`` (matched a known ephemeral-noise class — see
+  :data:`SKIP_REL_PREFIXES`) and ``genuine_reset`` (an actual categorized
+  artifact that was simply never decided). Nothing is silently discarded:
+  both buckets land in the archive, and the split is reported so a human can
+  tell "correctly-filtered noise" from "a real candidate that fell off the
+  end of a wave" and pull the latter back out if it is still live.
+- The live pending ledger is then reset to empty. The wrapup's own diff sweep
+  (Step 12.5a) immediately re-seeds it with whatever is still part of the
+  CURRENT wave's actual ``.claude/`` changes, so nothing genuinely active for
+  the wave in progress is ever lost.
+- Safe on a missing, empty, or malformed pending ledger (no-op, no crash). The
+  wave label is purely a caller-supplied string (the wrapup skill already
+  knows the real wave, e.g. ``"P10W29"``) — this function never guesses at a
+  wave boundary from git/branch state, so an absent label degrades to a
+  timestamped archive filename instead of fabricating a wave number.
+
 "Lacks a counterpart" semantics
 --------------------------------
 ``2real-team-framework/generic_prompts/`` files have no deterministic name
@@ -58,6 +93,11 @@ CLI (used by the /wave-wrapup step)
   ``python3 generic_prompt_tracker.py record <rel_path> <genericized|skipped>
         [--detail TEXT] [--wave W]``
       Record a durable decision (removes the path from pending).
+  ``python3 generic_prompt_tracker.py archive-wave [--wave W]``
+      Archive the full pending set to the per-wave cold archive, then reset
+      the live pending ledger to empty (main#1140). Run BEFORE the diff
+      sweep + ``list`` above so the checkpoint's worklist reflects only the
+      current wave.
 
 Exit codes: 0 on success, 2 on usage error, 1 on unexpected failure.
 """
@@ -74,6 +114,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 LEDGER_PATH = REPO_ROOT / ".claude" / "generic_prompt_ledger.json"
 PENDING_PATH = REPO_ROOT / ".claude" / "generic_prompt_pending.json"
+# Per-wave cold archive for the pending ledger reset (main#1140) — gitignored,
+# grep-able on disk, not git-tracked. Mirrors the .claude/annunaki/archive/
+# shape (#1021).
+ARCHIVE_DIR = REPO_ROOT / ".claude" / "generic_prompt_pending_archive"
 FRAMEWORK_REPO = REPO_ROOT.parent / "2real-team-framework"
 GENERIC_PROMPTS_DIR = FRAMEWORK_REPO / "generic_prompts"
 
@@ -91,13 +135,18 @@ SKIP_PATTERNS = (
 # file_path), so a real artifact merely *edited inside a worktree*
 # (.../worktrees/<wt>/.claude/hooks/foo.py, which collapses to rel "hooks/foo.py")
 # is still tracked, while a path that normalizes TO "worktrees/<wt>/..." (a
-# transient worktree file), "memory/..." (project-private memory notes), or
-# "scratch..." (transient scratch) is dropped. Closes the Step-12.5 noise inflow
-# (P7W19: 117 of 270 pending candidates were worktree/memory/scratch churn).
+# transient worktree file), "memory/..." (project-private memory notes),
+# "scratch..." (transient scratch), or ".consulted/..." (per-skill Hook-15
+# consultation sentinel markers, e.g. ontology-librarian's cwd-hash marker
+# files — session-local, never a genericize candidate) is dropped. Closes the
+# Step-12.5 noise inflow (P7W19: 117 of 270 pending candidates were
+# worktree/memory/scratch churn; main#1140: .consulted/*.marker noise was the
+# dominant class in the wave-28 ~251-candidate pileup).
 SKIP_REL_PREFIXES = (
     "worktrees/",
     "memory/",
     "scratch",
+    ".consulted/",
 )
 
 # Artifact classification — the same category taxonomy the per-edit hook used,
@@ -315,6 +364,104 @@ def record_decision(
     return record
 
 
+def _is_noise_rel(rel: str) -> bool:
+    """Whether ``rel`` matches a known ephemeral-noise class (see
+    :data:`SKIP_REL_PREFIXES`), reclassified at ARCHIVE time rather than
+    intake time.
+
+    This exists separately from the ``normalize_rel_path`` intake check so
+    that entries recorded under an OLDER, more permissive filter (e.g.
+    ``.consulted/`` markers recorded before main#1140 added that prefix) are
+    still correctly bucketed as noise when a pre-existing pending ledger is
+    archived, not just newly-recorded ones.
+    """
+    return any(rel.startswith(pfx) for pfx in SKIP_REL_PREFIXES)
+
+
+def archive_wave_pending(
+    wave: str = "",
+    *,
+    pending_path: Path = PENDING_PATH,
+    archive_dir: Path = ARCHIVE_DIR,
+    now: str | None = None,
+) -> dict:
+    """Archive the full current pending candidate set, then reset the live
+    pending ledger to empty (main#1140 — the wave-boundary reset/archive the
+    ledger never had).
+
+    Splits the pre-reset candidate set into ``noise_dropped`` (matches
+    :func:`_is_noise_rel` — session markers etc.) and ``genuine_reset`` (an
+    actual categorized artifact that was simply never decided), writes BOTH
+    buckets to a per-wave archive file so nothing is silently discarded, then
+    clears the live pending ledger. The wrapup's own diff sweep re-seeds
+    whatever is still part of the current wave's actual changes moments
+    later, so genuinely-active candidates are never lost — only the stale,
+    cross-wave carryover (noise or otherwise-undecided) is cleared from the
+    *live* worklist, with a full recoverable record left in the archive.
+
+    Safe on a missing, empty, or malformed pending ledger: returns a no-op
+    report (``archived: False``) rather than fabricating an archive for state
+    that was never there. Re-running with the same ``wave`` label within the
+    same wave accretes into the same archive file (a new entry is appended to
+    its ``waves`` list) rather than clobbering a prior run.
+
+    ``wave`` is a plain caller-supplied label (e.g. ``"P10W29"``) — never
+    inferred from git/branch state. An empty/blank label degrades to a
+    timestamped filename (``wave-unknown-<ts>.json``) instead of fabricating
+    a wave boundary.
+
+    Returns a dict: ``{"archived": bool, "wave": str, "noise_dropped": int,
+    "genuine_reset": int, "archive_path": str | None}``.
+    """
+    pending = load_pending(pending_path)
+    candidates = pending.get("candidates", {})
+    if not candidates:
+        return {
+            "archived": False,
+            "wave": wave,
+            "noise_dropped": 0,
+            "genuine_reset": 0,
+            "archive_path": None,
+        }
+
+    now = now or _now_iso()
+    noise = {rel: entry for rel, entry in candidates.items() if _is_noise_rel(rel)}
+    genuine = {rel: entry for rel, entry in candidates.items() if rel not in noise}
+
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    label = wave.strip() if wave and wave.strip() else f"unknown-{now.replace(':', '')}"
+    archive_path = archive_dir / f"wave-{label}.json"
+
+    # Merge with any prior archive at this path — a re-run within the same
+    # wave accretes (appends a new snapshot) rather than clobbering, the same
+    # append-not-overwrite spirit as the annunaki archive (adapted for a keyed
+    # JSON document since this isn't a line-oriented log).
+    existing = _load_json(archive_path, {"version": LEDGER_VERSION, "waves": []})
+    existing.setdefault("waves", [])
+    existing["waves"].append(
+        {
+            "wave": wave,
+            "archived_at": now,
+            "noise_dropped": noise,
+            "genuine_reset": genuine,
+        }
+    )
+    archive_path.write_text(json.dumps(existing, indent=2, sort_keys=True) + "\n")
+
+    # Reset: clear the live ledger of BOTH buckets. Anything still active for
+    # the wave in progress is re-seeded moments later by the wrapup's diff
+    # sweep against the wave's actual `.claude/` changes.
+    save_pending({"version": LEDGER_VERSION, "candidates": {}}, pending_path)
+
+    return {
+        "archived": True,
+        "wave": wave,
+        "noise_dropped": len(noise),
+        "genuine_reset": len(genuine),
+        "archive_path": str(archive_path),
+    }
+
+
 def _has_live_counterpart(
     rel: str,
     ledger: dict,
@@ -428,6 +575,22 @@ def _cmd_record(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_archive_wave(args: argparse.Namespace) -> int:
+    result = archive_wave_pending(args.wave)
+    if not result["archived"]:
+        print("Generic-prompt pending ledger: empty or absent — nothing to archive.")
+        return 0
+    noise_n = result["noise_dropped"]
+    genuine_n = result["genuine_reset"]
+    print(
+        f"Generic-prompt pending ledger archived for wave {result['wave'] or '(unlabeled)'}: "
+        f"{noise_n} noise entr{'y' if noise_n == 1 else 'ies'} dropped, "
+        f"{genuine_n} genuine undecided entr{'y' if genuine_n == 1 else 'ies'} reset "
+        f"(archived, not lost) -> {result['archive_path']}"
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="generic_prompt_tracker",
@@ -454,6 +617,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_rec.add_argument("--wave", default="", help="wave label this decision was made in")
     p_rec.set_defaults(func=_cmd_record)
+
+    p_arch = sub.add_parser(
+        "archive-wave",
+        help="archive the full pending set to the cold archive, then reset it to empty",
+    )
+    p_arch.add_argument(
+        "--wave", default="", help="wave label (e.g. P10W29); never fabricated if omitted"
+    )
+    p_arch.set_defaults(func=_cmd_archive_wave)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

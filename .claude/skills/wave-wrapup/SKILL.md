@@ -731,12 +731,19 @@ Include both results in the final wave report (Step 10):
 
 The `suggest_generic_prompt` PostToolUse hook no longer nudges per-edit (that nudge was never actioned — a non-binding mid-task `systemMessage` with no state, no dedup, no closing loop → enforcement-hierarchy decay; `2real-team-framework/generic_prompts/` gained **zero** files across every wave despite it firing constantly). It now **silently tracks** every touched `.claude/` artifact into a pending ledger. This step is the closing loop: once per wave, enumerate the wave's new/changed `.claude/` artifacts (hooks/skills/charter/settings) that **lack a counterpart** in the framework's `generic_prompts/` **and aren't already decided**, and make ONE deliberate genericize-or-skip pass. Decisions are recorded so the same artifact is never re-surfaced.
 
-Two state files back this (see `.claude/lib/generic_prompt_tracker.py`): `.claude/generic_prompt_pending.json` (volatile, gitignored — the candidate set) and `.claude/generic_prompt_ledger.json` (**version-controlled** — the durable genericize/skip decisions, the dedup memory).
+Two state files back this (see `.claude/lib/generic_prompt_tracker.py`): `.claude/generic_prompt_pending.json` (volatile, gitignored — the candidate set) and `.claude/generic_prompt_ledger.json` (**version-controlled** — the durable genericize/skip decisions, the dedup memory). A third, `.claude/generic_prompt_pending_archive/` (gitignored cold archive, same shape as `.claude/annunaki/archive/`, #1021), is written by Step 12.5.0 below.
+
+**12.5.0. Archive + reset the pending ledger (main#1140 — wave-28 retro proposal 2).** The pending ledger is never otherwise cleared: it accumulates across every wave and session forever, since nothing removes an *undecided* entry short of a genericize/skip decision. By the wave-28 checkpoint it held **~251 stale candidates**, dominated by session `.consulted/*.marker` noise and pre-existing artifacts nobody had triaged — an unbounded, mostly-noise worklist that buries the signal from a genuine new candidate. Run this **before** the diff sweep in (a) below so the sweep re-seeds only what this wave actually touched:
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 TRACKER="$REPO_ROOT/.claude/lib/generic_prompt_tracker.py"
+python3 "$TRACKER" archive-wave --wave "P{P}W{M}"
+```
 
+This archives the FULL pre-reset pending set to `.claude/generic_prompt_pending_archive/wave-P{P}W{M}.json` — partitioned into `noise_dropped` (session markers etc.) and `genuine_reset` (a real categorized artifact that was simply never decided) — before clearing the live ledger. Nothing is silently discarded: both buckets land in the archive and the counts are reported, so a genuinely-still-pending candidate can be recovered from the archive file even though it no longer clutters the live worklist. Safe to run even if the pending ledger is missing, empty, or malformed — it reports "nothing to archive" and no-ops rather than fabricating a wave boundary.
+
+```bash
 # (a) Belt-and-suspenders: the pending ledger is per-machine volatile state, so
 # augment it with a git-diff sweep of the meta repo's wave-window .claude/
 # changes (in case pending was wiped, or edits happened in a different session).
@@ -772,8 +779,8 @@ python3 "$TRACKER" record "skills/<name>/SKILL.md" skipped \
 ```
 
 - If `list` reports no undecided candidates, report "Generic-prompt checkpoint: nothing to genericize this wave" and continue.
-- **Commit the ledger** (`.claude/generic_prompt_ledger.json`) as part of the wrapup — it is version-controlled durable state. The pending file is gitignored; do not commit it.
-- Include a one-line genericized/skipped tally in the Step 10 final wave report.
+- **Commit the ledger** (`.claude/generic_prompt_ledger.json`) as part of the wrapup — it is version-controlled durable state. The pending file and its archive directory are both gitignored; do not commit either.
+- Include a one-line genericized/skipped tally in the Step 10 final wave report, along with the 12.5.0 archive counts (e.g. `Generic-prompt: N archived (M noise / K genuine), P genericized, Q skipped this wave`).
 - This is the deliberate batched replacement for the demoted per-edit hook; do NOT re-introduce a mid-task suggestion.
 
 ### 13. Annunaki error attack
