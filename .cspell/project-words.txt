@@ -255,3 +255,6 @@ typecheck
 # --- wave-lifecycle skill (#1019): sibling dogfood repo + state-machine term ---
 botfarm
 keyspace
+
+# --- generic-prompt pending ledger archive/reset (main#1140) ---
+genericized

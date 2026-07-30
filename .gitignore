@@ -54,6 +54,12 @@ temp/
 # NOT ignored — durable cross-wave genericize/skip state must be committed.
 .claude/generic_prompt_pending.json
 
+# Per-wave cold archive of the pending candidate set above (main#1140), written
+# by `generic_prompt_tracker.py archive-wave` at /wave-wrapup Step 12.5 before
+# the live pending ledger is reset. Grep-able on disk, not git-tracked — same
+# shape as the .claude/annunaki/archive/ cold archive (#1021).
+.claude/generic_prompt_pending_archive/
+
 # Generated structural ontology index (main#939, #820 C×T2). The structural layer
 # is "always-current-by-regeneration" (#857) — regenerated wholesale from source by
 # the owned generator (.claude/lib/ontology_gen/) at /session-start 3b and
