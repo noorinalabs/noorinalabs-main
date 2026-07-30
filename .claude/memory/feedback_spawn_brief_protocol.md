@@ -40,3 +40,22 @@ When a brief names a teammate ("You are <First> <Last>"), the surname MUST come 
 Before composing a brief that specifies hook parser/regex/dispatcher behavior: `grep -l "<trigger shape>" .claude/hooks/*.py` (and `_shell_parse` users). If an existing hook already parses the trigger-command shape, the brief MUST specify extend-it or extract-a-shared-helper — never a from-scratch duplicate. And verify every cited precedent **in the cited file**: P3W10 #445's brief cited a "GraphQL precedent" in a hook that actually uses the CLI (the real GraphQL precedent lived in a skill). Cost of the pre-flight: ~1 minute; cost of skipping: a surface-and-pause round-trip or a duplicate parser. The same grep-precedent discipline applies to any command template a brief dictates — verdict-posting commands included ([[feedback_pr_review_verdict_format]] §8).
 
 Cross-references: [[feedback_verify_diagnosis_before_delegating]] (verify via artifact before delegating at all), [[feedback_stale_inbox_manager]] (re-verify before correcting a teammate), [[feedback_refresh_before_status_claim]], [[feedback_investigate_before_implement]] (implementer-side mirror: origin-audit an unevidenced brief before Edit/Write).
+
+### §8 — a re-review request MUST cite the verdict's comment URL, never "your prior verdict"
+
+When re-anchoring a reviewer after a head move, **cite the comment ID or URL of the verdict being superseded**:
+
+```
+Re-anchor your verdict at <new-sha>.
+Your prior verdict: <comment URL>     <-- cite it
+```
+
+**Never** write *"your ChangesRequested"* / *"your Approved"* and leave the reviewer to locate it.
+
+**Why (wave-29, PR #1193).** Two agents reviewed one PR under the single roster persona `Weronika Zielinska` (an orchestrator spawn error — one persona assigned to one PR twice). A re-request said *"your ChangesRequested verdict was against the old head"* and pointed at a comment signed with that persona. **From inside a session, a persona-signed comment you did not write is indistinguishable from a summarized-away turn of your own.** The reviewer adopted it and then wrote "my one-liner" and "my previous sweep (17,252 commands)" about another agent's measurements — into a PR comment and, via the orchestrator, into a memory note that had to be corrected (`d17305b`).
+
+The orchestrator's own briefs carried the identical shape all wave (*"Your Approved on #1178 needs re-affirming"*), so this is a **template defect, not an individual lapse**. Citing the URL lets the reviewer check authorship before adopting the framing — it would have caught the collision before a word was written.
+
+Costs one line. Independent of, and available before, the underlying gate fix (#1197 — `validate_pr_review` counts distinct **personas** while the ≥1-Opus safeguard assumes distinct **agents**).
+
+Corollary: **do not assert a reviewer's own findings back to them as established fact.** State what the record shows and let them confirm — an orchestrator summarising a reviewer's prior work to that reviewer is a second path to the same mis-adoption. Raised by the reviewer who made the slip, in its own postmortem.
