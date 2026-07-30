@@ -120,7 +120,18 @@ def _kickoff_ts(wave: str, status_path: Path) -> str | None:
 
 def _commit_author_name(repo: str, sha: str) -> str:
     """The head commit's author name for *sha* — the identity the
-    top-concentration metric is computed over."""
+    top-concentration metric is computed over.
+
+    *sha* is always a PR's ``headRefOid`` (the PR branch tip, the
+    implementer's own last commit) — deliberately NEVER the merge commit
+    landed on ``main``. That distinction matters here specifically: this
+    org merges with ``--merge`` (never ``--squash``), so a merge commit's
+    author is the orchestrator/CLI identity that ran the merge
+    (``parametrization``) for every PR, which would collapse
+    per-engineer concentration to a single name regardless of who actually
+    authored the work (the #1177 persona-loss failure mode). ``headRefOid``
+    preserves the real implementer identity.
+    """
     return _run_gh(
         [
             "api",
@@ -261,6 +272,21 @@ def _merged_prs_wave_branch(phase: str, wave: str, status_path: Path) -> list[di
     return out
 
 
+# `gh pr list` defaults to `--limit 30` (main#1131 M2). The wave-branch path
+# was structurally immune to this cap -- `--base <wave-branch>` already bounds
+# the query to the wave -- but `--base main` on a direct-to-main wave queries
+# against FULL repo history, which a live check against this repo returned
+# 251 merged-to-main PRs for (`--limit 500`). An unbounded `main` query with
+# the gh default cap silently drops the OLDEST matches once the repo
+# accumulates more than 30 merges-to-main since a wave's kickoff -- exactly
+# the "exits 0, returns a plausible number" failure shape main#1131 exists to
+# kill. 1000 is not a real pagination fix (a wave whose window somehow
+# accrues >1000 merges-to-main would still truncate), but combined with the
+# `--search merged:>=` server-side bound below it comfortably covers any
+# realistic wave, and is cheap insurance regardless.
+_PR_LIST_LIMIT = 1000
+
+
 def _merged_prs_direct_to_main(wave: str, status_path: Path) -> list[dict]:
     """Build the wave's merged-PR set for a ``direct-to-main`` wave (main#1131).
 
@@ -274,6 +300,16 @@ def _merged_prs_direct_to_main(wave: str, status_path: Path) -> list[dict]:
     that repo's canonical scope-issue set (:func:`_canonical_issue_numbers_by_repo`).
     A repo with no canonical scope rows is skipped entirely rather than
     querying every merged PR in that repo.
+
+    The listing itself is bounded two ways (main#1131 M2 — `gh pr list`
+    defaults to `--limit 30`, and `--base main` removes the wave-branch's
+    natural scope, exposing that cap against full repo history): a
+    server-side ``--search merged:>=<kickoff>`` qualifier so the query never
+    reaches further back than the wave itself, and an explicit
+    :data:`_PR_LIST_LIMIT` well above any realistic wave's merge volume. The
+    ``merged_at < kickoff`` filter below is kept as defense-in-depth in case
+    the search qualifier's date granularity and the recorded kickoff instant
+    ever disagree at the second.
     """
     repos = read_repos(wave, status_path)
     kickoff = _kickoff_ts(wave, status_path)
@@ -284,22 +320,23 @@ def _merged_prs_direct_to_main(wave: str, status_path: Path) -> list[dict]:
         canonical_issues = issue_numbers_by_repo.get(repo)
         if not canonical_issues:
             continue
-        listed = json.loads(
-            _run_gh(
-                [
-                    "pr",
-                    "list",
-                    "--repo",
-                    f"noorinalabs/{repo}",
-                    "--state",
-                    "merged",
-                    "--base",
-                    "main",
-                    "--json",
-                    "number,headRefOid,mergedAt,author",
-                ]
-            )
-        )
+        args = [
+            "pr",
+            "list",
+            "--repo",
+            f"noorinalabs/{repo}",
+            "--state",
+            "merged",
+            "--base",
+            "main",
+            "--limit",
+            str(_PR_LIST_LIMIT),
+            "--json",
+            "number,headRefOid,mergedAt,author",
+        ]
+        if kickoff:
+            args += ["--search", f"merged:>={kickoff}"]
+        listed = json.loads(_run_gh(args))
         for pr in listed:
             merged_at = pr.get("mergedAt") or ""
             if kickoff and merged_at < kickoff:

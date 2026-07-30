@@ -125,6 +125,16 @@ jobs:
       ENVIRONMENT: test
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history (main#1131): test_wave_status.py's
+          # BaseVsHeadDifferential execs the pre-fix wave_status.py straight
+          # out of a historical commit via `git show <base-sha>:path` to prove
+          # the wave-branch path is byte-for-byte unchanged. The default
+          # shallow checkout (fetch-depth 1) does not have that object, so the
+          # `git show` dies with exit 128 — CI-red even though the test passes
+          # locally against a complete clone. Same reason the doc-freshness
+          # job below already sets this.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

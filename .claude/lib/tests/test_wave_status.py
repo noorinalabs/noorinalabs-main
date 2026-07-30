@@ -17,6 +17,7 @@ Verifies:
 from __future__ import annotations
 
 import json
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -414,6 +415,25 @@ class _FakeGhDirectToMain:
             # direct-to-main must query base=main -- never a wave branch.
             self_base = cmd[cmd.index("--base") + 1]
             assert self_base == "main", f"expected --base main, got {self_base!r}"
+
+            # Faithfully model the two real gh behaviors the M2 fix depends on
+            # (main#1131): (1) a `--search merged:>=DATE` qualifier is a
+            # SERVER-SIDE filter applied before any cap, and (2) `--limit`
+            # (default 30 if the flag is absent -- the actual gh default)
+            # truncates whatever remains, newest-mergedAt first (gh's real
+            # default sort). A regression that drops either flag is meant to
+            # be caught by this: dropping `--limit` silently reintroduces the
+            # 30-item gh default; dropping `--search` lets old, irrelevant
+            # history compete for the same 30/1000 slots.
+            candidates = [p for p in self.prs if p["repo"] == repo]
+            if "--search" in cmd:
+                query = cmd[cmd.index("--search") + 1]
+                m = re.match(r"merged:>=(.+)$", query)
+                assert m, f"unrecognised --search query: {query!r}"
+                floor = m.group(1)
+                candidates = [p for p in candidates if p["mergedAt"] >= floor]
+            candidates = sorted(candidates, key=lambda p: p["mergedAt"], reverse=True)
+            limit = int(cmd[cmd.index("--limit") + 1]) if "--limit" in cmd else 30
             listed = [
                 {
                     "number": p["number"],
@@ -421,8 +441,7 @@ class _FakeGhDirectToMain:
                     "mergedAt": p["mergedAt"],
                     "author": {"login": p["login"]},
                 }
-                for p in self.prs
-                if p["repo"] == repo
+                for p in candidates[:limit]
             ]
             return SimpleNamespace(stdout=json.dumps(listed), returncode=0, stderr="")
 
@@ -720,6 +739,100 @@ class MergedPrsDirectToMain(unittest.TestCase):
             counters,
             {"final_pr_count": 0, "changes_requested_cycles": 0, "top_concentration_pct": 0},
         )
+
+
+class PrListPageCap(unittest.TestCase):
+    """`gh pr list` defaults to `--limit 30` (main#1131 M2 -- caught in
+    review). The wave-branch path was structurally immune (`--base
+    <wave-branch>` already bounds the query); `--base main` removes that
+    bound and re-exposes the cap against full repo history. This is
+    mutation-provable: `_FakeGhDirectToMain` truncates to whatever `--limit`
+    (or its absence -> 30) says, newest-``mergedAt`` first, and filters by
+    `--search merged:>=` when present -- exactly mirroring the two real gh
+    behaviors the fix depends on, so regressing either flag away fails
+    these tests for real (not just a fixture too small to trip the cap)."""
+
+    def _prs_exceeding_default_cap(self) -> list[dict]:
+        """35 unrelated, MORE-RECENT filler merges (later waves' traffic to
+        `main` after this wave) crowd the top of the newest-first list, plus
+        the 5 real wave-29 PRs sitting further back (main#1131's acceptance
+        fixture). Without the fix, gh's 30-item default returns only
+        filler -- every real wave PR is silently dropped."""
+        filler = [
+            {
+                "repo": "noorinalabs-main",
+                "number": 2000 + i,
+                "sha": f"shafiller{i:02d}",
+                "mergedAt": f"2026-08-{10 + i:02d}T00:00:00Z",  # after the real PRs
+                "login": "octocat",
+                "commit_author": "Later Wave Author",
+                "closes": [8000 + i],  # never a canonical row
+            }
+            for i in range(35)
+        ]
+        real = [
+            {
+                "repo": "noorinalabs-main",
+                "number": number,
+                "sha": sha,
+                "mergedAt": merged_at,
+                "login": "octocat",
+                "commit_author": f"author-{number}",
+                "closes": [closes],
+            }
+            for number, sha, merged_at, closes in (
+                (1173, "sha056a", "2026-07-30T02:16:40Z", 1172),
+                (1153, "shab708", "2026-07-30T02:17:04Z", 1139),
+                (1154, "shafbb5", "2026-07-30T02:17:26Z", 1134),
+                (1155, "sha1207", "2026-07-30T02:17:46Z", 1152),
+                (1156, "sha999d", "2026-07-30T02:40:16Z", 1151),
+            )
+        ]
+        return filler + real
+
+    def _run(self) -> tuple[list[dict], _FakeGhDirectToMain]:
+        fake = _FakeGhDirectToMain(self._prs_exceeding_default_cap())
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            _write_direct_to_main_status(
+                status,
+                wave="29",
+                repos=["noorinalabs-main"],
+                kickoff="2026-07-27T22:56:17Z",
+                tiers={
+                    "tier_2_process_carry_forward": [1139, 1134, 1152, 1151],
+                    "tier_4_in_wave_findings": [1172],
+                },
+            )
+            with mock.patch.object(wave_status.subprocess, "run", fake):
+                got = wave_status.merged_prs("10", "29", status)
+        return got, fake
+
+    def test_all_five_wave_prs_survive_a_repo_history_of_40(self) -> None:
+        got, _ = self._run()
+        self.assertEqual(sorted(p["number"] for p in got), [1153, 1154, 1155, 1156, 1173])
+
+    def test_pr_list_call_carries_an_explicit_limit_above_the_gh_default(self) -> None:
+        _, fake = self._run()
+        pr_list_calls = [c for c in fake.calls if c[1:3] == ["pr", "list"]]
+        self.assertTrue(pr_list_calls)
+        for c in pr_list_calls:
+            self.assertIn("--limit", c, "no explicit --limit -- gh silently defaults to 30")
+            limit = int(c[c.index("--limit") + 1])
+            self.assertGreater(limit, 30, f"--limit {limit} does not clear gh's own default cap")
+
+    def test_pr_list_call_carries_a_kickoff_search_bound(self) -> None:
+        """Belt-and-suspenders: the server-side bound means the query is
+        never larger than "since this wave started", not "since the repo
+        began" -- the fix does not just raise a number that could someday
+        be exceeded again."""
+        _, fake = self._run()
+        pr_list_calls = [c for c in fake.calls if c[1:3] == ["pr", "list"]]
+        self.assertTrue(pr_list_calls)
+        for c in pr_list_calls:
+            self.assertIn("--search", c)
+            query = c[c.index("--search") + 1]
+            self.assertIn("merged:>=2026-07-27T22:56:17Z", query)
 
 
 class WaveBranchPathUnchanged(unittest.TestCase):
