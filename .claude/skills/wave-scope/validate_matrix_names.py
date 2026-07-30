@@ -11,11 +11,33 @@ Two orthogonal checks (#319 + #1134)
 ====================================
 1. **Name resolution (#319)** — does the declared name exist at all? Resolved
    against the parent roster UNION the target repo's roster, because org-level
-   coordinators legitimately fill child-repo *review* slots.
+   coordinators legitimately fill child-repo *review* slots. For **review-class**
+   slots the org-union manifest is unioned in as well (#1162 — see below).
 2. **Repo membership (#1134)** — for the `implementer` slot on a CHILD repo,
    is the name on *that repo's own* roster? A name can resolve (check 1) and
    still fail this, which is exactly the recurring bug: a parent-org persona
    scoped as the implementer of a child-repo story.
+
+Review-class slots resolve against the org-union manifest too (#1162)
+=====================================================================
+The parent side of the check-1 union is the parent's **card directory**
+(`.claude/team/roster/*.md`, 9 names), not the org-union **manifest**
+(`.claude/team/roster.json`, 78 names). A reviewer legitimately drawn from a
+THIRD child repo — permitted by `charter/agents/spawn-discipline.md`
+§ Child-Repo Implementer Rule step 5 — is on neither the parent's cards nor the
+target repo's, so it was reported UNRESOLVED with "(no close matches)". Live
+instance: `Nikolaos Papadopoulos` / `Oyunbileg Batbayar` (cards in
+`noorinalabs-data-acquisition`) reviewing `isnad-ingest-platform` stories in W28.
+Pre-existing since #319, but #1134 made § 12.5 mandatory over every canonical
+`tier_*` row and added a hard `exit 1` at `/wave-kickoff` § 0b, turning a latent
+gap into a STOP on a charter-permitted assignment.
+
+The manifest is deliberately NOT unioned into the `implementer` resolution set.
+Doing so would loosen check 2 in the `unverified` case: when the target repo's
+roster is unreadable (not cloned — the CI case), membership fails OPEN, so a
+third-child implementer that newly *resolved* would exit 0 where today it exits
+1 as an unresolved name. Keeping the commit-capable resolution set narrow means
+the only way that slot passes is a name the target repo can actually vouch for.
 
 Why check 2 is implementer-only. The implementer is the only role that must
 produce a **commit in the target repo**, where `validate_commit_identity`
@@ -106,6 +128,8 @@ Resolution:
       and extract the member name (both card formats — see _load_roster_names).
     - For parent-repo entries (repo == "noorinalabs-main" or no repo), fall
       back to the parent's own `.claude/team/roster/`.
+    - Review-class slots additionally resolve against the parent's org-union
+      manifest `.claude/team/roster.json` (#1162).
     - Case-insensitive exact match wins.
     - On miss: fuzzy-match (difflib SequenceMatcher) and print the top-3
       closest matches as suggestions.
@@ -200,6 +224,28 @@ def _load_roster_names(roster_dir: Path) -> set[str]:
             if name:
                 names.add(name)
     return names
+
+
+def _load_org_manifest_names(org_dir: Path) -> set[str]:
+    """Parse names from the parent's org-union manifest `.claude/team/roster.json`.
+
+    The manifest is a flat `{"<name>": "<email>"}` object covering every persona
+    across the org (78 at time of writing) — a strict superset of the parent's
+    own card directory, and the only place a persona from a repo that is not the
+    target repo can be recognised without cloning that repo.
+
+    Fails OPEN (empty set) when the file is missing or malformed: the manifest
+    only ever WIDENS the review-class resolution set, so an unreadable manifest
+    degrades to exactly the pre-#1162 behaviour rather than blocking a run.
+    """
+    path = org_dir / ".claude" / "team" / "roster.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return set()
+    if not isinstance(data, dict):
+        return set()
+    return {name.strip() for name in data if isinstance(name, str) and name.strip()}
 
 
 def _load_repo_roster(org_dir: Path, repo: str) -> set[str]:
@@ -302,6 +348,8 @@ def validate(
     # Wanjiku, Aino, Santiago) can appear in per-repo matrix slots when
     # reviewing parent-flavored work.
     parent_roster = _load_repo_roster(org_dir, "noorinalabs-main")
+    # #1162: the org-union manifest widens the REVIEW-class resolution set only.
+    org_manifest = _load_org_manifest_names(org_dir)
     for repo, slots in matrix.items():
         repo_roster = _load_repo_roster(org_dir, repo)
         is_parent_repo = repo in PARENT_REPO_KEYS
@@ -313,7 +361,10 @@ def validate(
             if fetched:
                 repo_roster = fetched
         membership_decidable = is_parent_repo or bool(repo_roster)
+        # Commit-capable slots keep the narrow #319 union (see module docstring
+        # § Review-class slots for why the manifest must not widen this one).
         combined = parent_roster | repo_roster
+        review_combined = combined | org_manifest
         override = _override_rationale(slots.get("roster_union_override"))
         repo_findings: list[dict[str, object]] = []
         for role, raw in slots.items():
@@ -323,7 +374,8 @@ def validate(
                 continue
             declared = raw
             declared_clean = re.sub(r"\s*\(.*?\)\s*$", "", declared).strip()
-            resolved = any(declared_clean.lower() == known.lower() for known in combined)
+            candidates = combined if role in COMMIT_CAPABLE_ROLES else review_combined
+            resolved = any(declared_clean.lower() == known.lower() for known in candidates)
             entry: dict[str, object] = {
                 "role": role,
                 "declared": declared,
@@ -331,7 +383,7 @@ def validate(
                 "membership": "n/a",
             }
             if not resolved:
-                entry["suggestions"] = _suggest(declared_clean, combined)
+                entry["suggestions"] = _suggest(declared_clean, candidates)
                 repo_findings.append(entry)
                 continue
             # #1134: commit-capable slots on a child repo must be repo members.
