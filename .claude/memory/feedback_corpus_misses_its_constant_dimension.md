@@ -28,7 +28,11 @@ A test corpus that varies N dimensions and holds one fixed will pass cleanly whi
 | 17,252 commands | 175/175 BLOCK, **0 verdict changes** | "no effect on real traffic" |
 | 74,782 commands (1,830 transcript files) | **0 weakened, 4 strengthened** | live-trace evidence the fix catches real bypasses |
 
-The four are genuine true positives — three `bash -euo pipefail -c '… git commit …'` and one `bash <script>` that commits. The small sweep was not wrong, but **"0 changes" and "4 true positives found" are very different evidentiary claims**, and only the larger corpus distinguishes "the fix is inert on real traffic" from "the fix fires on real traffic and nothing regressed." A clean small sweep is weaker evidence than it reads. Applies to every hook PR that cites an FP sweep.
+The four are genuine true positives — three `bash -euo pipefail -c '… git commit …'` and one `bash <script>` that commits. The small sweep was not wrong, but **"0 changes" and "4 true positives found" are very different evidentiary claims**, and only the larger corpus distinguishes "the fix is inert on real traffic" from "the fix fires on real traffic and nothing regressed."
+
+> **A corpus reports its own adequacy; it cannot report what it was too small to hold.** — the reviewer's formulation, and the crispest statement of the whole property. Structurally the same defect as a held-constant axis, one level up: the 17,252-command sweep read *exactly* as clean as the 74,782-command one.
+
+**These are two different sample-size questions and the org has been treating them as one:** a corpus sized to **price false positives** is roughly **10× too small to find rare true positives**. Note which way the error ran here — the clustered-value-letter path (`bash -euo pipefail -c`) had been justified from a *synthetic* oracle, and turned out to be the shape actually live in recorded traffic. State which question your sweep answers. Applies to every hook PR that cites an FP sweep as acceptance evidence.
 
 **The durable form of the control (author's framing, sharper than mine): an adversarial corpus needs a declared DIMENSION list, not a shape list.** A shape list enumerates what you tried; a dimension list enumerates the space, so what you did *not* try is readable off the same artifact. Ship the dimension list with the corpus and a reviewer can find the gap without re-deriving your reasoning.
 
