@@ -720,9 +720,14 @@ class MergedPrsDirectToMain(unittest.TestCase):
         self.assertEqual(sorted(p["number"] for p in got), [1153, 1154, 1155, 1156, 1173])
         self.assertEqual(len(got), 5)
 
-    def test_repo_with_no_canonical_rows_is_skipped(self) -> None:
-        """A repo in `repos_in_scope` with no scope rows at all is skipped
-        entirely -- not queried, not silently zeroed."""
+    def test_repo_with_no_canonical_rows_of_its_own_is_still_queried(self) -> None:
+        """main#1200 (found independently by Wanjiku Mwangi and Weronika
+        Zielinska in PR #1198 review): a repo in `repos_in_scope` with no
+        scope rows OF ITS OWN must still be queried, because a genuine
+        cross-repo closing reference can only ever be found if that repo's
+        merged PRs are listed at all. This inverts the pre-#1200 contract
+        (`test_repo_with_no_canonical_rows_is_skipped`), which asserted the
+        skip as intended -- that assertion was the bug."""
         fake = _FakeGhDirectToMain([])
         with TemporaryDirectory() as td:
             status = Path(td) / "cross-repo-status.json"
@@ -735,10 +740,73 @@ class MergedPrsDirectToMain(unittest.TestCase):
             )
             with mock.patch.object(wave_status.subprocess, "run", fake):
                 got = wave_status.merged_prs("10", "29", status)
-        self.assertEqual(got, [])
-        # No "pr list" call was ever made for the scopeless repo.
+        self.assertEqual(got, [])  # no PRs in the fixture -- nothing to find
+        # A "pr list" call WAS made for the scopeless repo (main#1200's fix).
         pr_list_repos = {c[c.index("--repo") + 1] for c in fake.calls if c[1:3] == ["pr", "list"]}
-        self.assertNotIn("noorinalabs/noorinalabs-isnad-ingest-platform", pr_list_repos)
+        self.assertIn("noorinalabs/noorinalabs-isnad-ingest-platform", pr_list_repos)
+
+    def test_wave_with_no_canonical_scope_at_all_skips_every_repo(self) -> None:
+        """The ONLY remaining skip condition after main#1200: when the wave's
+        canonical scope is empty across every repo, nothing could ever match,
+        so no repo is queried at all -- not a per-repo decision, a wave-level
+        one."""
+        fake = _FakeGhDirectToMain([])
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            _write_direct_to_main_status(
+                status,
+                wave="29",
+                repos=["noorinalabs-main", "noorinalabs-isnad-ingest-platform"],
+                kickoff="2026-07-27T22:56:17Z",
+                tiers={},  # no canonical scope rows anywhere
+            )
+            with mock.patch.object(wave_status.subprocess, "run", fake):
+                got = wave_status.merged_prs("10", "29", status)
+        self.assertEqual(got, [])
+        self.assertEqual(fake.calls, [])  # no gh call of any kind was made
+
+    def test_cross_repo_reference_from_a_repo_with_zero_own_scope_rows(self) -> None:
+        """main#1200's exact repro: a repo that owns NO canonical scope rows
+        of its own still delivers a genuine cross-repo scope row. Before the
+        fix, `noorinalabs-isnad-graph` here is never queried at all (the
+        pre-#1200 per-repo skip), so PR #77 -- which closes the wave's only
+        canonical row, recorded under `noorinalabs-main` -- is silently
+        dropped: `merged_prs()` returns `[]` instead of `[77]`."""
+        prs = [
+            {
+                "repo": "noorinalabs-isnad-graph",
+                "number": 77,
+                "sha": "sha77",
+                "mergedAt": "2026-07-30T03:00:00Z",
+                "login": "octocat",
+                "commit_author": "Zero Own Rows Author",
+                "closes": [("noorinalabs-main", 1200)],
+            }
+        ]
+        fake = _FakeGhDirectToMain(prs)
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            scope: dict = {"theme": "test fixture", "merge_model": "direct-to-main"}
+            # The wave's ONLY canonical row lives under noorinalabs-main.
+            # noorinalabs-isnad-graph is in repos_in_scope but owns zero rows
+            # of its own -- exactly the shape main#1200 requires.
+            scope["tier_1_main"] = [_scope_row(("noorinalabs-main", 1200))]
+            data = {
+                "current_wave": 29,
+                "wave_29_repos_in_scope": ["noorinalabs-main", "noorinalabs-isnad-graph"],
+                "wave_29_kicked_off_at": "2026-07-27T22:56:17Z",
+                "wave_29_merge_model": "direct-to-main",
+                "wave_29_scope": scope,
+            }
+            status.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            with mock.patch.object(wave_status.subprocess, "run", fake):
+                got = wave_status.merged_prs("10", "29", status)
+        self.assertEqual([p["number"] for p in got], [77])
+        # Both repos were queried -- isnad-graph despite owning no row of
+        # its own.
+        pr_list_repos = {c[c.index("--repo") + 1] for c in fake.calls if c[1:3] == ["pr", "list"]}
+        self.assertIn("noorinalabs/noorinalabs-isnad-graph", pr_list_repos)
+        self.assertIn("noorinalabs/noorinalabs-main", pr_list_repos)
 
     def test_counters_nonzero_and_nonempty_trust_signals_for_direct_to_main(self) -> None:
         """The whole point of main#1131: compute_counters()/trust_signals must

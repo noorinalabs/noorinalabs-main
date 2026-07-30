@@ -318,17 +318,29 @@ def _merged_prs_direct_to_main(
     (:func:`_merged_prs_wave_branch`'s filter) silently matches nothing. The
     fix is NOT simply switching the base to ``main`` — base+timestamp alone
     over-counts (wave-28 retro: ``us#213`` was in-window but out-of-scope).
-    Instead: list merged-to-main PRs per in-scope repo, apply the existing
-    ``wave_{M}_kicked_off_at`` cross-window filter as a pre-filter, then keep
-    only the PRs whose GitHub-recognised closing-issue references intersect
-    the wave's FULL canonical scope-issue set, across every repo
-    (:func:`_canonical_issue_numbers_by_repo`) — not just the queried repo's
-    own scope rows (main#1189: a closing reference is not necessarily in the
-    same repo as the PR, e.g. a child-repo PR closing a parent meta-issue, and
-    matching against only the queried repo's own numbers either drops that
-    case or, on a same-number collision across repos, attributes it to the
-    wrong issue). A repo with no canonical scope rows of its own is skipped
-    entirely rather than querying every merged PR in that repo.
+    Instead: list merged-to-main PRs for EVERY repo in ``repos_in_scope``,
+    apply the existing ``wave_{M}_kicked_off_at`` cross-window filter as a
+    pre-filter, then keep only the PRs whose GitHub-recognised closing-issue
+    references intersect the wave's FULL canonical scope-issue set, across
+    every repo (:func:`_canonical_issue_numbers_by_repo`) — not just the
+    queried repo's own scope rows (main#1189: a closing reference is not
+    necessarily in the same repo as the PR, e.g. a child-repo PR closing a
+    parent meta-issue, and matching against only the queried repo's own
+    numbers either drops that case or, on a same-number collision across
+    repos, attributes it to the wrong issue).
+
+    A repo is skipped ONLY when the wave has no canonical scope at all
+    (``canonical_pairs`` empty) — never on whether that individual repo owns
+    scope rows of its own (main#1200, found independently by Wanjiku Mwangi
+    and Weronika Zielinska in PR #1198 review: gating the skip on the
+    per-repo set relocated #1189's exact under-count from the matching step
+    to the listing step — a repo with no scope rows of its own, e.g. one
+    tracked entirely via a meta-issue filed under a different repo, never had
+    its merged PRs listed at all, so a genuine cross-repo closing reference
+    from that repo could never be found regardless of how correct the
+    intersection below is). Querying a repo that turns out to own no
+    canonical rows just means every PR found there fails the intersection
+    below — no different in cost or outcome from any other non-matching PR.
 
     The listing itself is bounded two ways (main#1131 M2 — `gh pr list`
     defaults to `--limit 30`, and `--base main` removes the wave-branch's
@@ -355,10 +367,12 @@ def _merged_prs_direct_to_main(
 
     out: list[dict] = []
     claimed: set[tuple[str, int]] = set()
+    if not canonical_pairs:
+        # Nothing anywhere in the wave's scope could ever match -- skip
+        # listing entirely rather than pay for `gh pr list` calls whose
+        # result is guaranteed to intersect empty (main#1200).
+        return out, claimed
     for repo in repos:
-        canonical_issues = issue_numbers_by_repo.get(repo)
-        if not canonical_issues:
-            continue
         args = [
             "pr",
             "list",
