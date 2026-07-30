@@ -1971,7 +1971,17 @@ class OrgManifestReviewerUnionTests(_NoContentBindingHarness):
         self.assertNotIn("steven french", hook._load_roster_names(repo=self.CHILD_REPO))
 
     def test_tool_identity_cannot_supply_an_approval(self):
-        """End-to-end: `Annunaki` + one real reviewer is 1/2, not 2/2."""
+        """End-to-end: `Annunaki` + one real reviewer is 1/2, not 2/2.
+
+        The ratio assertion MUST stay anchored to the computed sentence. Hook 4's
+        peer-review BLOCK help text embeds the literal `1/2 false-block` three
+        times unconditionally (the P3W11 batch-11 instance list, source lines
+        1955/1957/1959), so a bare `assertIn("1/2", reason)` matches boilerplate
+        rather than the count. Measured on this fixture: the real ratio is 1/2
+        with 4 occurrences of `1/2` at head and 0/2 with 3 occurrences once the
+        manifest union is reverted — and the bare form passes in BOTH. Only the
+        anchored sentence discriminates. Do not "simplify" this back.
+        """
         review_result = hook.CommentReviewResult()
         review_result.reviewers = {"annunaki", "nikolaos papadopoulos"}
         with (
@@ -1982,7 +1992,7 @@ class OrgManifestReviewerUnionTests(_NoContentBindingHarness):
         self.assertIsNotNone(result, "a tool identity must not supply an approval")
         assert result is not None
         self.assertEqual(result["decision"], "block")
-        self.assertIn("1/2", result["reason"])
+        self.assertIn("BLOCKED: PR #42 has 1/2 required peer reviews", result["reason"])
 
     def test_persona_filter_shape(self):
         """Direct coverage of the identity-shape rule, independent of the tree."""
