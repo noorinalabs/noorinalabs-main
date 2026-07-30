@@ -45,6 +45,12 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+# wave_merge_model lives alongside this file in .claude/lib/. When this module
+# is run as a script its own directory is on sys.path[0]; the tests add the
+# lib dir explicitly (mirrors the trust_signals.py -> wave_status.py import).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import wave_merge_model  # noqa: E402
+
 # upsert_status_keys.py lives alongside this file in .claude/lib/. When this
 # module is run as a script its own directory is on sys.path[0]; the tests add
 # the lib dir explicitly. Import lazily inside _write_counters so a missing
@@ -112,13 +118,107 @@ def _kickoff_ts(wave: str, status_path: Path) -> str | None:
     return str(val) if val else None
 
 
-def merged_prs(phase: str, wave: str, status_path: Path) -> list[dict]:
+def _commit_author_name(repo: str, sha: str) -> str:
+    """The head commit's author name for *sha* — the identity the
+    top-concentration metric is computed over."""
+    return _run_gh(
+        [
+            "api",
+            f"repos/noorinalabs/{repo}/commits/{sha}",
+            "--jq",
+            ".commit.author.name",
+        ]
+    ).strip()
+
+
+def _canonical_issue_numbers_by_repo(wave: str, status_path: Path) -> dict[str, set[int]]:
+    """Canonical scope-issue numbers per repo, from ``wave_{M}_scope``.
+
+    ``wave_{M}_scope`` (the record ``/wave-scope`` maintains) holds an
+    arbitrary, wave-specific set of ``tier_*`` arrays — tier names are NOT
+    fixed across waves (main#1131: wave-29 introduced ``tier_4_...`` that did
+    not exist in earlier waves), so every key is iterated generically via
+    ``key.startswith("tier_")``, exactly as
+    ``post_wave_kickoff_comment.py:find_assignment_row`` does. Each dict row's
+    ``id`` field is the fully-qualified ``noorinalabs-<repo>#<number>`` shape;
+    rows without a parseable ``id`` (legacy plain-string tier entries) are
+    skipped — they carry no repo/number to key on.
+
+    This is the base+timestamp-is-not-sufficient fix from the wave-28 retro:
+    a merged-to-main PR in the timestamp window is only in scope if it closes
+    an issue that is actually recorded as part of the wave's scope (the
+    wave-28 false positive was ``us#213`` — in-window, but never a scope row).
+    """
+    data = _load_status(status_path)
+    scope = data.get(f"wave_{wave}_scope")
+    if not isinstance(scope, dict):
+        raise KeyError(f"wave_{wave}_scope")
+
+    by_repo: dict[str, set[int]] = {}
+    for key, value in scope.items():
+        if not key.startswith("tier_") or not isinstance(value, list):
+            continue
+        for row in value:
+            if not isinstance(row, dict):
+                continue
+            row_id = row.get("id")
+            if not isinstance(row_id, str) or "#" not in row_id:
+                continue
+            repo, _, number = row_id.rpartition("#")
+            if not repo or not number.isdigit():
+                continue
+            by_repo.setdefault(repo, set()).add(int(number))
+    return by_repo
+
+
+def _pr_closing_issue_numbers(repo: str, number: int) -> set[int]:
+    """Issue numbers GitHub recognises *number* as closing, via GraphQL.
+
+    The REST-backed ``gh pr list --json`` surface (this org pins gh 2.45.0)
+    has no ``closingIssuesReferences`` field, so this goes through
+    ``gh api graphql`` instead. A row-number match is not assumed: main#1172
+    was delivered by PR #1173 (a different number), and #1167/#1168/#1170/
+    #1171 were bundled into a single PR — the closing-reference set is the
+    only reliable link between a scope row and the PR that actually delivered
+    it under a direct-to-main wave.
+    """
+    query = (
+        "query($owner:String!,$name:String!,$number:Int!){"
+        "repository(owner:$owner,name:$name){"
+        "pullRequest(number:$number){"
+        "closingIssuesReferences(first:25){nodes{number}}"
+        "}}}"
+    )
+    raw = _run_gh(
+        [
+            "api",
+            "graphql",
+            "-f",
+            f"query={query}",
+            "-f",
+            "owner=noorinalabs",
+            "-f",
+            f"name={repo}",
+            "-F",
+            f"number={number}",
+            "--jq",
+            "[.data.repository.pullRequest.closingIssuesReferences.nodes[].number]",
+        ]
+    )
+    return {int(n) for n in json.loads(raw or "[]")}
+
+
+def _merged_prs_wave_branch(phase: str, wave: str, status_path: Path) -> list[dict]:
     """Build the wave's merged-PR set across every in-scope repo.
 
     For each repo: list merged PRs based on ``deployments/phase-<P>/wave-<M>``,
     drop any merged before ``wave_{M}_kicked_off_at`` (the #423 cross-window
     filter), and attach the head commit's author name (the identity the
     top-concentration metric is computed over).
+
+    UNCHANGED behavior (main#1131) — this is the pre-existing wave-branch path,
+    only renamed so :func:`merged_prs` can dispatch on the declared merge
+    model; every line of logic below is identical to the pre-#1131 body.
     """
     repos = read_repos(wave, status_path)
     kickoff = _kickoff_ts(wave, status_path)
@@ -147,14 +247,7 @@ def merged_prs(phase: str, wave: str, status_path: Path) -> list[dict]:
             if kickoff and merged_at < kickoff:
                 continue
             sha = pr["headRefOid"]
-            commit_author = _run_gh(
-                [
-                    "api",
-                    f"repos/noorinalabs/{repo}/commits/{sha}",
-                    "--jq",
-                    ".commit.author.name",
-                ]
-            ).strip()
+            commit_author = _commit_author_name(repo, sha)
             out.append(
                 {
                     "repo": repo,
@@ -166,6 +259,82 @@ def merged_prs(phase: str, wave: str, status_path: Path) -> list[dict]:
                 }
             )
     return out
+
+
+def _merged_prs_direct_to_main(wave: str, status_path: Path) -> list[dict]:
+    """Build the wave's merged-PR set for a ``direct-to-main`` wave (main#1131).
+
+    No wave branch exists under this model, so ``--base <wave-branch>``
+    (:func:`_merged_prs_wave_branch`'s filter) silently matches nothing. The
+    fix is NOT simply switching the base to ``main`` — base+timestamp alone
+    over-counts (wave-28 retro: ``us#213`` was in-window but out-of-scope).
+    Instead: list merged-to-main PRs per in-scope repo, apply the existing
+    ``wave_{M}_kicked_off_at`` cross-window filter as a pre-filter, then keep
+    only the PRs whose GitHub-recognised closing-issue references intersect
+    that repo's canonical scope-issue set (:func:`_canonical_issue_numbers_by_repo`).
+    A repo with no canonical scope rows is skipped entirely rather than
+    querying every merged PR in that repo.
+    """
+    repos = read_repos(wave, status_path)
+    kickoff = _kickoff_ts(wave, status_path)
+    issue_numbers_by_repo = _canonical_issue_numbers_by_repo(wave, status_path)
+
+    out: list[dict] = []
+    for repo in repos:
+        canonical_issues = issue_numbers_by_repo.get(repo)
+        if not canonical_issues:
+            continue
+        listed = json.loads(
+            _run_gh(
+                [
+                    "pr",
+                    "list",
+                    "--repo",
+                    f"noorinalabs/{repo}",
+                    "--state",
+                    "merged",
+                    "--base",
+                    "main",
+                    "--json",
+                    "number,headRefOid,mergedAt,author",
+                ]
+            )
+        )
+        for pr in listed:
+            merged_at = pr.get("mergedAt") or ""
+            if kickoff and merged_at < kickoff:
+                continue
+            closes = _pr_closing_issue_numbers(repo, pr["number"])
+            if not closes & canonical_issues:
+                continue
+            sha = pr["headRefOid"]
+            commit_author = _commit_author_name(repo, sha)
+            out.append(
+                {
+                    "repo": repo,
+                    "number": pr["number"],
+                    "mergedAt": merged_at,
+                    "headRefOid": sha,
+                    "author": (pr.get("author") or {}).get("login"),
+                    "commit_author_name": commit_author,
+                }
+            )
+    return out
+
+
+def merged_prs(phase: str, wave: str, status_path: Path) -> list[dict]:
+    """Build the wave's merged-PR set across every in-scope repo.
+
+    Dispatches on the declared ``wave_{M}_merge_model`` (main#1131):
+    ``direct-to-main`` routes through the canonical-scope path
+    (:func:`_merged_prs_direct_to_main`, no wave branch exists to filter on);
+    ``wave-branch`` and an unrecorded/legacy model (``None``) both keep the
+    pre-existing behavior unchanged (:func:`_merged_prs_wave_branch`).
+    """
+    model = wave_merge_model.read_merge_model(wave, status_path)
+    if model == wave_merge_model.DIRECT_TO_MAIN:
+        return _merged_prs_direct_to_main(wave, status_path)
+    return _merged_prs_wave_branch(phase, wave, status_path)
 
 
 def _changes_requested_cycles(prs: list[dict]) -> int:
