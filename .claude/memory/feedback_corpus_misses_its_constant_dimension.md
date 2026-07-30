@@ -36,6 +36,10 @@ The four are genuine true positives — three `bash -euo pipefail -c '… git co
 
 **The durable form of the control (author's framing, sharper than mine): an adversarial corpus needs a declared DIMENSION list, not a shape list.** A shape list enumerates what you tried; a dimension list enumerates the space, so what you did *not* try is readable off the same artifact. Ship the dimension list with the corpus and a reviewer can find the gap without re-deriving your reasoning.
 
+**Countermeasure for the corpus-size case: give the sweep a positive control.** Seed N known-true-positive shapes into the real-traffic corpus and **report recall alongside the verdict-change count**. A clean run then distinguishes *"nothing there"* from *"too small to contain anything"* — which is precisely what the 17,252-command sweep could not do.
+
+> **A sweep that cannot fail is the same failure mode as a test that cannot fail.** That is the mutation discipline this org already enforces one layer down; a real-traffic sweep is currently exempt from it for no principled reason.
+
 **Pin the axis so it cannot decay.** The eventual fix added payload shape as a first-class dimension (26 forms × 8 prefixes) *plus* `test_oracle_is_sensitive_to_the_payload_dimension`, asserting the new axis actually flips an answer — otherwise a dimension can be present in the matrix and inert in effect, which reads as coverage. Also worth pinning the *insufficiency*: mutation `M11` reverts to the reviewer's one-liner and fails 18 tests, so "this narrower fix is not enough" is now a permanent assertion rather than a memory.
 
 **How to apply:**
