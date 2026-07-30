@@ -17,7 +17,27 @@ When the orchestrator spawns an agent with `isolation: "worktree"`, the worktree
 
 **This refines [[feedback_subagent_worktree_wrong_repo]]**, which states that `isolation: worktree` worktrees *the parent org repo*. That is only true when the orchestrator happens to be standing in the parent. The general rule is **"the repo of the orchestrator's cwd"**, and the child-repo case is reachable — which is the more dangerous direction, because it silently produces a worktree in the wrong repo instead of a recognizable cross-repo refusal.
 
+## Second manifestation: cwd also decides whether a MEASUREMENT sees the child repos
+
+The same root cause — cwd determines which repos are visible — corrupts *measurements*, not just spawns. `validate_matrix_names._find_org_dir()` walks up from `Path.cwd()` looking for a dir containing both `noorinalabs-deploy/` and `.claude/team/roster/`, and **falls back to cwd** when it finds neither.
+
+Measured 2026-07-30, `--wave 28`, same script and same `cross-repo-status.json` in all three:
+
+| cwd | `org_dir` resolves to | parent cards | child cards | result |
+|---|---|---|---|---|
+| a **`/tmp` worktree of `noorinalabs-main`** | the worktree itself | 9 | **0** | **`5/30 UNRESOLVED`** |
+| the org main checkout | org root | 9 | 11 | 2 implementer findings (correct) |
+| a bare `/tmp` dir | `/tmp` | 0 | 0 | **`30/30 UNRESOLVED`** |
+
+**The dangerous row is the first, and the reason is that it is PARTIAL.** A `/tmp` worktree of the parent still contains `.claude/team/roster/` and `roster.json`, so parent cards and the manifest resolve — only the child clones are missing (the parent `.gitignore`s them, so no worktree ever carries them). The output is therefore a small, specific, *plausible-looking* list of unresolved names that reads as a genuine finding. `30/30` is obviously an environment failure; **`5/30` is not**, and it briefly contradicted a correct implementation during PR #1178 review.
+
+**`.claude/worktrees/*` worktrees are FINE** — they live under `org_dir`, so the walk-up succeeds. Do not over-generalize this to "never measure from a worktree"; the precise rule is **never measure from a tree outside the org root**, and the tell is that child-repo-only names go unresolved while parent names resolve.
+
+Reviewers converged on this from opposite directions: one tested `.claude/worktrees/*` plus a fully-outside cwd, saw correct-then-total-failure, and concluded the partial signature did not exist; the other named the `/tmp`-worktree case exactly. Both had measured truthfully — neither had measured the intermediate state.
+
 **How to apply:**
+- **Run any org-wide validator with cwd = the org main checkout.** To exercise PR code, `cd` to the org root and invoke the script *by path* into the worktree: `__file__` stays in the worktree while `Path.cwd()` supplies a correct `org_dir`.
+- Treat a partial-unresolved result whose members are all child-repo-only names as an **environment artifact until proven otherwise**.
 - **Prefer `git -C <path>` and absolute paths over `cd`** for inspection. The harness guidance already says this (a `cd` in a compound command can also trigger a permission prompt); the spawn-misrouting consequence is the sharper reason.
 - If you do `cd`, **`cd` back to the org root before the next spawn**, and verify with `pwd` — do not assume.
 - **Put a self-check in the brief.** Every isolated spawn should begin with the agent verifying its own worktree:
