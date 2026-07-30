@@ -373,3 +373,68 @@ None. Retirement trigger fired for no engineer — all ≥3, 0 CI-red across the
 - Decide on the 9 fully-stale memory-deletion candidates (Step 7.9) — a dedicated memory-curation PR.
 - Fix the user-service roster-union (pain point 2 / carried from W27).
 - Set the wave-29 theme on the auto-drafted meta-issue stub, then run `/wave-scope 10 29`.
+
+### ERRATUM — 2026-07-30 (owner-directed correction; original text above left intact)
+
+Two assertions in the wave-28 retro above are **withdrawn**. Both were re-measured
+against live state on 2026-07-30. The original wording is deliberately not edited —
+the point of record is that these were reported as done.
+
+**E1. "Board audit (Step 1.5): 24 Wave-field drift synced" — DID NOT HAPPEN, and the
+figure itself understated the drift by roughly 50×.**
+
+Measured by paginating the *full* project-2 item set (2019 items; the
+`gh project item-list --limit 2000` path silently truncates at exactly this
+population, which is how the original number was produced):
+
+| | count |
+|---|---|
+| items carrying a wave-* label | 1,211 |
+| …with the `Wave` field **set** | **26** |
+| …with the `Wave` field **unset** | **1,185** |
+
+Of the 26 populated, **25 are wave-29** (written by the kickoff / label-sync hooks
+during this wave, not by any board audit) and exactly **one** is historical
+(`main#423 → P3W10`). So no historical Wave field was synced by the wave-28 retro —
+not the 24 claimed, and the true unsynced population is ~1,185, not 24.
+
+Cause remains **undetermined**: GitHub exposes no `ProjectV2ItemFieldValue` history,
+so this cannot be reconstructed. `/board-audit`'s hard Step-5 `y` gate aborts without
+mutating and is a *plausible* mechanism, not proof. The 1,185 historical items are
+deliberately **left unsynced** — they are the evidence. Only the three wave-29 items
+missing the field (#1170, #1171, #1175) were set, as current-wave hygiene.
+
+**E2. "Promotion audit: 0 AUTO · 0 DECIDE" — computed over miscategorized input, in
+this and at least the four preceding retros.**
+
+`.claude/skills/promotion-audit/helpers.py:212` reads the memory type as flat
+`fm.get("type", "project")` and never descends into the `metadata:` block. Measured
+2026-07-30 across `.claude/memory/*.md`: **73 of 104 notes (70%) declare
+`metadata.type`** — the form CLAUDE.md documents — and are therefore silently forced
+to `type=project, promotion_target=none`. `promotion_target` is read the same flat way.
+
+The zero is over invisible candidates, i.e. *"most candidates were never classified"*,
+not *"nothing qualified"*. **CLAUDE.md documents the frontmatter shape the tooling
+cannot read.** Tracked as **#1006**.
+
+Scope of the correction: the identical `0 AUTO · 0 DECIDE` line appears in the **W24,
+W25, W26, W27 and W28** retros (lines 90/114, 158, 218, 282, 360). The reader predates
+all of them, so **five consecutive promotion audits are unreliable**, not just this one.
+None should be cited as evidence that the promotion pipeline is quiet until #1006 lands
+and the audit is re-run.
+
+**E3. Consequence for "Proposed Process / Charter Changes" item 4 — WITHDRAWN.**
+
+Proposal 4 above reads "No annunaki-driven or promotion-driven charter change — all 104
+errors benign, 0 AUTO/0 DECIDE". The promotion half of that conclusion rests entirely on
+the number E2 just invalidated and is withdrawn. The annunaki half (104 benign) stands.
+
+**Status of the other three W28 proposals, reconciled 2026-07-30:**
+
+| # | Proposal | Vehicle | State |
+|---|---|---|---|
+| 1 | merge-model-aware wave counters + trust signals | **#1131** | scoped wave-29 (Santiago Ferreira), **not yet implemented** |
+| 2 | per-wave reset of the generic-prompt pending ledger | **#1140** | scoped wave-29 (Wanjiku Mwangi), **not yet implemented** |
+| 3 | roster-union so parent personas aren't scoped onto child stories | **#1134** | **PARTIALLY DELIVERED** — PR #1154 merged `fbb528e8` (implementer-side membership check). It also made the pre-existing reviewer-side resolution bug **#1162** newly blocking: `validate_matrix_names.py` resolves every slot against `parent_cards ∪ target_repo_cards`, so a charter-permitted reviewer from a *third* child repo resolves against neither and exits 1. Reproduced on merged main 2026-07-30 (wave-28: 4/30 UNRESOLVED — Nikolaos Papadopoulos, Oyunbileg Batbayar, both real data-acquisition personas present in the 78-name `roster.json`). #1162 is scoped into wave-29 and **must land before `/wave-scope 10 30`**. |
+
+So none of the three is closed; one is half-landed and opened a follow-on.
