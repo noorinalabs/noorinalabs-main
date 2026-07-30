@@ -38,6 +38,17 @@ Indirect-exec bypass detection (#475 fix 2, extended in #482):
       dash|ksh -c '...'                  (extended _INTERPRETERS alternation)
       bash <script.bash>                 (extension-agnostic; *.sh restriction removed)
 
+  #1149 widens the option grammar of the two interpreter-argument shapes
+  (`-c '<payload>'` and `<script>`) from "the flag/path must be the bare token
+  immediately after the interpreter" to the real shell grammar, walked through
+  the shared `_shell_parse` option primitive:
+      bash -lc '...'  /  bash -cl '...'  /  bash -l -c '...'
+      bash --login -c '...'  /  bash -o pipefail -c '...'  /  bash +x -c '...'
+      bash -x <script>  /  bash -- <script>
+  Eight of nine ordinary `-c` spellings previously allowed an identity-less
+  commit; `bash -- -c '...'` correctly still does not match, because `--` ends
+  the option run in the shared grammar exactly as it does in a real shell.
+
   The extension-agnostic script read is the highest-severity #482 change:
   the prior `.sh` restriction was trivially circumvented by renaming the
   bypass script. Now any token after `bash|sh|zsh|dash|ksh` that points to
@@ -106,6 +117,7 @@ from _shell_parse import (  # noqa: E402
     find_git_subcommand,
     iter_command_segments,
     iter_command_segments_ast,
+    iter_interpreter_invocations,
     resolve_tool_cwd,
     strip_data_heredocs,
     strip_heredocs,
@@ -276,6 +288,21 @@ _PIPE_TO_SHELL_RE = re.compile(
 # <interpreter> -c '<payload>' or "<payload>" — captures the -c argument
 # verbatim, including its surrounding quotes (we strip them before
 # scanning).
+#
+# DEMOTED TO A PARSE-FAILURE FALLBACK (main#1149). This regex is not the option
+# grammar any more — `_shell_parse.parse_interpreter_invocation` is, and it
+# reuses `_consume_wrapper_options` so there is one implementation instead of
+# two. The regex only ever saw a BARE `-c` immediately after the interpreter, so
+# `bash -lc`, `bash -l -c`, `bash --login -c`, `bash -o pipefail -c` and every
+# other ordinary spelling walked past the gate.
+#
+# It is KEPT, not deleted, because the tokenized walker needs shlex to succeed
+# and this gate is fail-closed by design: on a command with unbalanced quotes
+# `iter_interpreter_invocations` returns [], and `_COMMIT_FALLBACK_RE` does not
+# fire on a `git commit` buried inside a `-c` string (no start-of-line or shell
+# operator precedes it). Dropping the regex would therefore open a bypass for
+# exactly the malformed input the rest of this hook fails closed on. Everything
+# it matched before still blocks; the walker is purely additive.
 _DASH_C_RE = re.compile(
     r"\b" + _INTERPRETERS + r"\s+-c\s+(?P<payload>(?P<q>['\"]).*?(?P=q)|\S+)",
     re.DOTALL,
@@ -305,6 +332,14 @@ _PROCESS_SUB_RE = re.compile(
 # rejects `bash -c '…'` because the first token char is `-`. The `bash`
 # bare-interactive form (no following token) has no match because the
 # `\s+(?P<path>…)` requires at least one whitespace + path char.
+#
+# ALSO DEMOTED TO A PARSE-FAILURE FALLBACK (main#1149). Requiring the path to
+# sit immediately after the interpreter is the same too-narrow option grammar as
+# `_DASH_C_RE`, one matcher over: `bash -x script.sh`, `bash -l script.sh`,
+# `bash +x script.sh` and `bash -- script.sh` all execute the script under
+# bash/sh/zsh/dash and none of them matched here. The tokenized walker resolves
+# the script path from `InterpreterInvocation.operands`, which is the shell's
+# own answer; this regex stays for the unparseable-input case only.
 _SCRIPT_INVOKE_RE = re.compile(
     r"\b" + _INTERPRETERS + r"\s+(?P<path>[^\s\-<>|;&(][^\s|;&<>]*)",
 )
@@ -413,18 +448,24 @@ def _detect_indirect_commit(command: str, *, cwd: str | None = None) -> str | No
     caller's block message) when the inner payload looks like a git
     commit, or None when no wrapper-with-commit shape is matched.
 
-    Shapes checked, in order:
+    Shapes checked:
       1. printf/echo … | bash|sh|zsh|dash|ksh
-      2. bash|sh|zsh|dash|ksh -c '<payload>'
+      2. bash|sh|zsh|dash|ksh [options] -c '<payload>'  (any -c spelling, #1149)
       3. bash|sh|zsh|dash|ksh <(…)  (process substitution)
       4. bash|sh|zsh|dash|ksh <<DELIM ... DELIM  (heredoc body, #482)
       5. bash|sh|zsh|dash|ksh <<<'<payload>'  (here-string, #482)
       6. eval '<payload>'  (shell builtin, #482)
-      7. bash|sh|zsh|dash|ksh <scriptpath>  (extension-agnostic, #482)
+      7. bash|sh|zsh|dash|ksh [options] <scriptpath>  (#482, options #1149)
 
-    The script-path check is LAST because it requires disk I/O — all
-    pattern-only checks run first to short-circuit common cases without
-    hitting the filesystem.
+    Shapes 2 and 7 are resolved together by one tokenized pass, because they are
+    the same question — what does this interpreter's option run end at? — and
+    splitting them into two regexes is what let both be too narrow (#1149).
+    That pass runs FIRST: it is the accurate one, and the regex sweeps below it
+    exist only for input it cannot tokenize.
+
+    Among the regex fallbacks the script-path check is LAST because it requires
+    disk I/O — all pattern-only checks run first to short-circuit common cases
+    without hitting the filesystem.
 
     Perf prefilter (#1113): shapes 1-6 carry their payload INLINE in
     `command`, so `_payload_looks_like_commit` (which requires `\bcommit\b`
@@ -455,8 +496,36 @@ def _detect_indirect_commit(command: str, *, cwd: str | None = None) -> str | No
     shape was measurably ALLOWED before this change. The classifier already
     computes "is this body fed to an interpreter?" including through a pipe, so
     the check is added here rather than left as a known hole.
+
+    Option grammar (main#1149). Shapes 2 and 7 are decided by
+    `_shell_parse.iter_interpreter_invocations`, which tokenizes the command and
+    walks each interpreter's option run through the SHARED
+    `_consume_wrapper_options` primitive. The two regexes they used to rely on
+    each hard-coded a narrower grammar than any real shell's — `-c` had to be a
+    bare token immediately after the interpreter, and a script path likewise —
+    so `bash -lc '<commit>'` and `bash -x <script>` were both allowed. Both
+    regexes are retained BELOW the walker as fail-closed fallbacks for input
+    shlex cannot tokenize; the walker only ever adds detections, so no command
+    that blocked before this change is allowed after it.
     """
     scanned = strip_data_heredocs(command)
+
+    for invocation in iter_interpreter_invocations(command):
+        if invocation.has_command_string:
+            # `words`, not `operands`: `words` is every token of the invocation
+            # except the `--` sentinel — deliberately a SUPERSET of `operands`,
+            # because `end` is only a lower bound on where the option run stops
+            # and a cluster mixing a value-letter with `c` shifts the payload
+            # index differently per shell. Guessing that index wrong fails OPEN.
+            # Narrowing this back to non-flag tokens re-opens
+            # `zsh -abc '-x; git commit …'`; see `_shell_parse.
+            # InterpreterInvocation` for the full contract and the measurements.
+            if any(_payload_looks_like_commit(word) for word in invocation.words):
+                return "shell -c"
+        elif invocation.operands:
+            content = _read_script_if_safe(invocation.operands[0], cwd)
+            if content and _payload_looks_like_commit(content):
+                return f"shell script ({invocation.operands[0]})"
 
     if "commit" in scanned:
         for m in _PIPE_TO_SHELL_RE.finditer(scanned):

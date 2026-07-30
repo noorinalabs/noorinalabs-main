@@ -1126,6 +1126,210 @@ def strip_command_prefixes(segment: list[str], *, compound_leaders: bool = True)
     return tokens
 
 
+# ---------------------------------------------------------------------------
+# Shell-interpreter invocations (main#1149)
+# ---------------------------------------------------------------------------
+#
+# `validate_commit_identity` matched `<shell> -c <payload>` with a regex that
+# required `-c` to be a BARE token immediately after the interpreter. Real
+# shells accept the command-string flag combined into a short-flag cluster and
+# after an arbitrary option run, so 8 of 9 ordinary spellings walked straight
+# past the gate and committed with whatever ambient identity git resolved.
+#
+# The grammar below is deliberately NOT a second regex. It normalizes the
+# interpreter's own option tokens into the shape `_consume_wrapper_options`
+# already understands and then defers to it, so there is exactly one option-run
+# implementation in this module (main#1150's invariant).
+#
+# Every rule here was measured against bash / sh / zsh / dash with an execution
+# oracle (does the candidate payload actually run?), not reasoned from man
+# pages. The three findings that a from-first-principles fix would have missed:
+#
+#   `bash -cl CMD`  runs CMD — the command-string letter does NOT have to be
+#                   last in the cluster, so a `-[a-z]*c$` regex is still wrong.
+#   `bash +x -c CMD` runs CMD — `+`-form options are options, but
+#                   `_looks_like_flag` only recognises a leading `-`.
+#   `bash -oc pipefail CMD` runs CMD — a value-taking letter INSIDE a cluster
+#                   still eats the next word, shifting the payload by one.
+#   `bash -- -c CMD` does NOT run CMD — `--` ends the option run, which
+#                   `_consume_wrapper_options` already models correctly.
+
+# Interpreter options that consume a following word as their value. `-o`/`-O`
+# name a `set`/`shopt` option; bash's two startup-file options take a path.
+SHELL_VALUE_OPTIONS = frozenset({"-o", "-O", "--rcfile", "--init-file"})
+
+# Cluster letters that consume a following word (the short forms of the above).
+_SHELL_VALUE_LETTERS = frozenset("oO")
+
+# The letter that introduces a command string: `sh -c '<cmd>'`.
+_COMMAND_STRING_FLAG = "-c"
+
+
+class InterpreterInvocation(NamedTuple):
+    """A decoded `<shell> [options] [operands ...]` command.
+
+    `name` is the interpreter basename (`/usr/bin/bash` -> `bash`).
+
+    `has_command_string` is True when the option run carries `-c` in any
+    spelling — bare, clustered (`-lc`, `-cl`, `-cabm`), or after other options.
+
+    `operands` are the tokens after the option run, i.e. what the shell itself
+    treats as `<command-string> [$0 $1 ...]` or `<script> [args]`. This is the
+    shell-accurate answer and is what a consumer that must resolve a real path
+    (the script-invocation check) should use.
+
+    `words` is every token of the invocation except the `--` sentinel — the set
+    the command string is guaranteed to be a member of. It is deliberately a
+    SUPERSET of `operands`, and consumers that are gates must use it, because
+    `operands` alone fails OPEN in two measured ways:
+
+      - a cluster mixing a value-letter with `c` shifts the payload index, and
+        differently per shell: `zsh -cO '<cmd>'` runs `<cmd>`, but the shared
+        grammar pairs the clustered `-O` with it as a VALUE, so `operands` is
+        empty;
+      - `end` is only a LOWER bound on where the option run stops.
+        `_consume_wrapper_options` treats every dash-leading token as an option,
+        so a command string that itself starts with `-` is swallowed into the
+        run. Both `bash -c -- '-x; git commit …'` and `zsh -abc '-x; git
+        commit …'` really execute, and both left `operands` empty.
+
+    Rather than re-derive the exact boundary — reintroducing precisely the
+    per-shell option knowledge this module exists to avoid — `words` keeps
+    everything. The extra tokens are option spellings (`-l`, `--login`,
+    `pipefail`); none can carry a `git … commit` bridge, and the cost was priced
+    at zero verdict changes over 7.6k real recorded commands.
+    """
+
+    name: str
+    has_command_string: bool
+    operands: tuple[str, ...]
+    words: tuple[str, ...]
+
+
+def _expand_shell_option_token(tok: str) -> list[str]:
+    """Rewrite one interpreter option token into `_consume_wrapper_options` form.
+
+    Two normalizations, each closing a measured bypass:
+
+      `+x` -> `-x`, `+o` -> `-o`
+          `set`-style options may be turned off with a leading `+`, and
+          `bash +x -c '<cmd>'` really does run `<cmd>`. `_looks_like_flag` keys
+          on a leading `-` only, so without this the `+x` reads as the wrapped
+          command and the option run ends before `-c` is ever seen.
+
+      `-lc` -> `-l -c`
+          De-clustering makes the command-string flag a plain token-equality
+          test instead of a second regex over cluster spellings, and it lets
+          the shared grammar pair a clustered value-letter with its value.
+
+    Value-taking letters are emitted LAST within an expanded cluster. Within one
+    cluster the letters' order does not change WHICH following words are
+    consumed as values — only the order they are consumed in — so moving them to
+    the end is semantics-preserving for our purpose, and it puts each value flag
+    immediately before the word it consumes, which is the only arrangement
+    `_consume_wrapper_options` can pair up (it refuses to let a value flag eat a
+    flag-shaped token). Without the reorder, `bash -oc pipefail 'git commit …'`
+    resolves the payload to `pipefail` and the gate fails open.
+
+    Long options, `--`, `=`-forms and anything non-alphabetic are returned
+    unchanged: only a `[-+][A-Za-z]{2,}` run is a short-flag cluster.
+    """
+    if len(tok) < 2 or tok[0] not in "-+":
+        return [tok]
+    body = tok[1:]
+    if body.startswith("-") or not body.isalpha():
+        # `--login`, `--rcfile=F`, `--`, `-2`, `-o=x` — not a short cluster.
+        return ["-" + body] if tok[0] == "+" else [tok]
+    if len(body) == 1:
+        return ["-" + body]
+    plain = ["-" + ch for ch in body if ch not in _SHELL_VALUE_LETTERS]
+    valued = ["-" + ch for ch in body if ch in _SHELL_VALUE_LETTERS]
+    return plain + valued
+
+
+def parse_interpreter_invocation(segment: list[str]) -> InterpreterInvocation | None:
+    """Decode `segment` as a shell-interpreter invocation, or return None.
+
+    Transparent command-prefix wrappers are stripped first, so
+    `timeout 30 env FOO=1 bash -lc '<cmd>'` decodes the same as `bash -lc
+    '<cmd>'`. A leading path is reduced to its basename (`/bin/sh` -> `sh`).
+
+    Returns None when the segment is empty or its head is not one of
+    `SHELL_INTERPRETERS` — callers must treat None as "not an interpreter
+    invocation", never as "safe".
+    """
+    tokens = strip_command_prefixes(segment)
+    if not tokens:
+        return None
+    name = tokens[0].rsplit("/", 1)[-1]
+    if name not in SHELL_INTERPRETERS:
+        return None
+
+    rest: list[str] = []
+    for tok in tokens[1:]:
+        rest.extend(_expand_shell_option_token(tok))
+
+    end = _consume_wrapper_options(rest, SHELL_VALUE_OPTIONS, 0)
+    has_command_string = _COMMAND_STRING_FLAG in rest[:end]
+    operands = tuple(rest[end:])
+    words = tuple(t for t in rest if t != "--")
+    return InterpreterInvocation(name, has_command_string, operands, words)
+
+
+def iter_interpreter_invocations(command: str) -> list[InterpreterInvocation]:
+    """Decode every shell-interpreter invocation in a compound command.
+
+    Heredoc bodies are removed before tokenizing: a body is not part of the
+    invocation's own argument list, and leaving it in would let its words be
+    read as segments. Callers that care about heredoc BODIES (they are executed
+    when the heredoc is fed to a shell) must handle them separately —
+    `classify_heredocs` is the primitive for that.
+
+    Unbalanced-quote repair. A command that shlex cannot tokenize would
+    otherwise yield nothing, and for a fail-closed gate that is a bypass an
+    evader reaches by typing one extra quote character:
+
+        bash -lc "git commit -m x" && echo "unclosed
+
+    The invocation itself is well-formed; only the tail is broken. So on a parse
+    failure we retry once per quote character with that character appended.
+    Repairing the QUOTING (rather than splitting the text on separators, the
+    other obvious recovery) is what keeps this safe: quoted prose stays a single
+    token, so a malformed `gh issue comment --body '…bash -lc "git commit"…'`
+    still resolves to a segment headed by `gh` and matches nothing. The
+    head-anchored `parse_interpreter_invocation` does the rest — a repaired
+    parse can only ever add segments, never move an interpreter into command
+    position that was not already there.
+
+    Returns an empty list when even the repaired text cannot be tokenized. A
+    security gate must therefore still keep a text-level fallback rather than
+    reading an empty list as "nothing here".
+
+    Perf prefilter (#1113 discipline): an interpreter invocation cannot exist
+    unless the interpreter's name appears literally somewhere in the command, so
+    a substring test skips the tokenize for the overwhelming majority of Bash
+    calls. The helpers below are individually memoized, so a command that does
+    reach them is parsed once per process regardless of how many hooks ask.
+    """
+    if not any(name in command for name in SHELL_INTERPRETERS):
+        return []
+    text = strip_heredocs(command)
+    tokens = tokenize(normalize_command_separators(text))
+    if tokens is None:
+        for repair in ("'", '"'):
+            tokens = tokenize(normalize_command_separators(text + repair))
+            if tokens is not None:
+                break
+    if tokens is None:
+        return []
+    found: list[InterpreterInvocation] = []
+    for segment in iter_command_segments(tokens):
+        invocation = parse_interpreter_invocation(segment)
+        if invocation is not None:
+            found.append(invocation)
+    return found
+
+
 def find_git_subcommand(segment: list[str]) -> tuple[list[str], list[str]] | None:
     """If `segment` is a `git ...` invocation, return (global_opts, [subcmd, ...]).
 
