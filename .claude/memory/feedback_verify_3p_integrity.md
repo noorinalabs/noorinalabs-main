@@ -16,7 +16,7 @@ When pinning a third-party tool's installer, never claim it has integrity-checki
 **How to apply:** Before claiming an installer/downloader/action verifies anything, run:
 
 ```sh
-curl -sL <installer-url> | grep -iE 'sha256|sha512|sha1|checksum|verify|gpg|sig|integrity|hash|cosign|signed'
+curl -sL <installer-url> | rg -i 'sha256|sha512|sha1|checksum|verify|gpg|sig|integrity|hash|cosign|signed'
 ```
 
 If that returns nothing, the tool **does not verify**. Either:

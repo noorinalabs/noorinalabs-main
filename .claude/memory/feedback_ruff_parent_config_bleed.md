@@ -12,7 +12,7 @@ When validating `ruff format --check` / `ruff check` locally for a CHILD repo wh
 **Why:** Local "clean" diverged from CI (sibling of [[feedback_actionlint_needs_shellcheck]] and [[feedback_test_mock_masks_prod_failure]] — environment makes local validation lie). Cost a CI cycle on deploy PR #400 (#326 python-gate) 2026-06-01.
 
 **How to apply:**
-- Before trusting a local ruff/mypy run in a nested worktree, run `ruff ... -v 2>&1 | grep -i config` to see WHICH config it found. If it names the parent pyproject, your result is contaminated.
+- Before trusting a local ruff/mypy run in a nested worktree, run `ruff ... -v 2>&1 | rg -i config` to see WHICH config it found. If it names the parent pyproject, your result is contaminated.
 - Reproduce CI's real condition with `ruff format --check --isolated` (ignores all config) OR `--config <child>/ruff.toml`.
 - Org convention is `line-length = 100`, `select = ["E","F","W","I"]`, `extend-exclude = [".claude/worktrees"]` (parent pyproject + isnad-graph ruff.toml). A child repo adding a ruff gate needs its OWN `ruff.toml` pinning these so CI ≠ bare defaults — do NOT reformat working scripts down to 88-col.
 - mypy `--ignore-missing-imports` does NOT suppress `import-untyped` for an installed-but-unstubbed lib (e.g. `import yaml`) — install the stub package (`types-PyYAML`) in the CI job instead.
