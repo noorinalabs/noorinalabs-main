@@ -852,10 +852,10 @@
       "resolved_at": "2026-06-21T21:02:19.551435+00:00"
     },
     ".claude/memory/MEMORY.md": {
-      "last_tracked": "c0f7a64cb47123e86b236cd772209fcf3ec9ecc60ac48b80d3b98a8c67c9273f",
-      "last_resolved": "c0f7a64cb47123e86b236cd772209fcf3ec9ecc60ac48b80d3b98a8c67c9273f",
-      "tracked_at": "2026-07-22T02:53:24.878483+00:00",
-      "resolved_at": "2026-07-22T23:59:40.052407+00:00"
+      "last_tracked": "d9d48bbc44250bd7a1120c2d1da6f133fe2de0bc22aa224e5eab82e25c8e9afd",
+      "last_resolved": "d9d48bbc44250bd7a1120c2d1da6f133fe2de0bc22aa224e5eab82e25c8e9afd",
+      "tracked_at": "2026-07-30T03:14:35.437516+00:00",
+      "resolved_at": "2026-07-30T03:15:01.933657+00:00"
     },
     "noorinalabs-isnad-graph/.claude/lib/tests/test_pre_commit_ci_sync.py": {
       "last_tracked": "aa209279deec3844b51e384157ba3e67a6d0f325410941f63f38d57535e6498c",
@@ -1548,10 +1548,10 @@
       "resolved_at": "2026-07-20T16:36:08.072015+00:00"
     },
     ".claude/memory/section_spawn_delegation.md": {
-      "last_tracked": "a3c3b95f3c7fcf675e3118725e9c183bfa6e82a5f75e40470a1f913c9cd8448f",
-      "last_resolved": "a3c3b95f3c7fcf675e3118725e9c183bfa6e82a5f75e40470a1f913c9cd8448f",
-      "tracked_at": "2026-07-20T16:28:37.246316+00:00",
-      "resolved_at": "2026-07-20T16:36:08.072015+00:00"
+      "last_tracked": "33c544027b70560df8045971616ab8d23d4747ee8263fe2d19c6624815ab664b",
+      "last_resolved": "33c544027b70560df8045971616ab8d23d4747ee8263fe2d19c6624815ab664b",
+      "tracked_at": "2026-07-30T03:14:29.748041+00:00",
+      "resolved_at": "2026-07-30T03:15:01.933657+00:00"
     },
     "noorinalabs-data-acquisition/src/utils/arabic.py": {
       "last_tracked": "495f021204688b0e8611929271d9a701ad4455ee9d82716f3ba96aefa330bd06",
@@ -1678,6 +1678,12 @@
       "last_resolved": "29ccefde34473c4f751ef7f737c484f2f6089972d096543f8b7e6db557d3b3d5",
       "tracked_at": "2026-07-30T02:49:15.916041+00:00",
       "resolved_at": "2026-07-30T02:51:53.713584+00:00"
+    },
+    ".claude/memory/feedback_spawn_worktree_follows_orchestrator_cwd.md": {
+      "last_tracked": "0aa777fe2faed9d965ec5a2d47c3788a00579b0b3b328295c81a2fd5b5483c40",
+      "last_resolved": "0aa777fe2faed9d965ec5a2d47c3788a00579b0b3b328295c81a2fd5b5483c40",
+      "tracked_at": "2026-07-30T03:14:21.335635+00:00",
+      "resolved_at": "2026-07-30T03:15:01.933657+00:00"
     }
   },
   "last_cleanup": {
