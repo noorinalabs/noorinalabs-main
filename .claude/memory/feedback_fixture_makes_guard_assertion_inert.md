@@ -98,7 +98,7 @@ Three of the four were caught by the person who built the instrument, before any
 
 **Operationally, for every check you are about to believe:**
 - **Prove it red first.** Plant the defect, watch it fail, then remove the plant.
-- **Assert the plant applied** — hash or `grep` the file before and after. An unapplied mutation and a surviving mutant are the same green.
+- **Assert the plant applied** — hash or `rg` the file before and after. An unapplied mutation and a surviving mutant are the same green.
 - **Assert the check ran** — the count of tests that **actually executed**, and the process exit status. *Not* the collected count: `pytest -k Sole_Declarer` against `TestRegistryIsTheSoleDeclarer` reports `collected 1 item, 1 deselected` and `rc=5`. Collected is **non-zero** while nothing ran, so a guard asserting "collected > 0" passes over the very incident in the table above. `rc != 5` (`EXIT_NOTESTSCOLLECTED`) is the free, correct signal. (Aino Virtanen, main#936: the remedy this file prescribed was inert against the example this file cites — one bullet below *an instrument built to catch this failure is the most likely to contain it.*)
 - **Isolate the thing under test to exactly one occurrence, and prove the fixture does not already satisfy the question.** A probe for "does the scan see `EXIT_AUG += 1`?" written as
   ```python

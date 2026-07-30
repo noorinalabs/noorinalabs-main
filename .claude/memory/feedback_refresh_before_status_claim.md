@@ -15,7 +15,7 @@ Before stating PR status, merge state, approval counts, or CI state in a teammat
 
 **How to apply:**
 - Before any teammate message summarizing PR state: `gh pr view <N> --json state,isDraft,statusCheckRollup,mergedAt,updatedAt` for each PR referenced.
-- Before any "already done"/"already X" assertion: `gh api .../pulls/<N> --jq .<field> | grep <expected>` to confirm the mutation actually took.
+- Before any "already done"/"already X" assertion: `gh api .../pulls/<N> --jq .<field> | rg <expected>` to confirm the mutation actually took.
 - Before any "this PR needs X reviewer/approval/gate": re-read review comments via `gh api /repos/:o/:r/issues/<N>/comments` to count current `Approved` headers.
 - **Reviewer extension (Bereket-flagged 2026-04-28, deploy#181):** before any "first reviewer" / "no prior review to align against" / "I'm the first eyeballer" claim in your own review post, refresh `gh pr view <N> --json reviews,comments` *immediately before* the `gh pr comment` call — not at the start of the diff dive. PR-comments lag inbox flush; a fresh fetch at review-start can return empty `reviews`/`comments` arrays even when a sibling reviewer's comment landed minutes earlier. Same retro lesson (W10 stale-inbox manager mode), extended from coordinator to reviewer.
 

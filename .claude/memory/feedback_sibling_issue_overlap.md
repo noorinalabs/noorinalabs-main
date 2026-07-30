@@ -16,7 +16,7 @@ When a PR (#X) is filed against issue #A but the implementation scope generalize
 Before composing an implementer brief for an issue #N, do a 2-minute scope-overlap audit at HEAD:
 
 1. Grep the touched file surface (the one your brief assumes will be edited) for keywords from #N's acceptance criteria.
-2. Check if any of those keywords already appear at HEAD: `gh api 'repos/.../contents/<path>?ref=<wave-branch>' --jq '.content' | base64 -d | grep -i '<keyword>'`
+2. Check if any of those keywords already appear at HEAD: `gh api 'repos/.../contents/<path>?ref=<wave-branch>' --jq '.content' | base64 -d | rg -i '<keyword>'`
 3. If yes, look at git log for that file to find the PR that introduced the keyword. Check if that PR's body or title cites #N or a closely-related sibling.
 4. If the surface already exists and seems to address #N's acceptance criteria, **STOP the spawn** — instead, file a "verify and close #N" task with the per-criterion mapping, and route that to a reviewer-class agent (not implementer). They confirm and close.
 
