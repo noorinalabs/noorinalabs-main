@@ -438,3 +438,70 @@ the number E2 just invalidated and is withdrawn. The annunaki half (104 benign) 
 | 3 | roster-union so parent personas aren't scoped onto child stories | **#1134** | **PARTIALLY DELIVERED** — PR #1154 merged `fbb528e8` (implementer-side membership check). It also made the pre-existing reviewer-side resolution bug **#1162** newly blocking: `validate_matrix_names.py` resolves every slot against `parent_cards ∪ target_repo_cards`, so a charter-permitted reviewer from a *third* child repo resolves against neither and exits 1. Reproduced on merged main 2026-07-30 (wave-28: 4/30 UNRESOLVED — Nikolaos Papadopoulos, Oyunbileg Batbayar, both real data-acquisition personas present in the 78-name `roster.json`). #1162 is scoped into wave-29 and **must land before `/wave-scope 10 30`**. |
 
 So none of the three is closed; one is half-landed and opened a follow-on.
+
+---
+
+## 2026-07-30 — Nadia Khoury + Weronika Zielinska (reviewers, PR #1187) → Nurul Hakim — Severity: moderate
+
+**Mid-wave feedback event (wave-29), recorded ahead of `/wave-retro` so the per-engineer
+assessment does not have to rediscover it.**
+
+**What happened.** On PR #1187 (`tech-debt(memory)`: bare-`grep` → `rg`), the implementer
+force-pushed during an open `ChangesRequested` cycle. Timeline, re-verified against the
+GitHub API on 2026-07-30 before this entry was written:
+
+| When | Event |
+|---|---|
+| 03:37:44Z | Wanjiku Mwangi — `Approved` |
+| 03:42:16Z | Nadia Khoury — `ChangesRequested` (one unmet acceptance criterion) |
+| **03:47:03Z** | **`head_ref_force_pushed`** — 4m47s after the blocking verdict |
+| 03:55:14Z | Wanjiku Mwangi — re-affirmed `Approved` at new head, flags the process finding |
+| 03:55:36Z | Nadia Khoury — `Approved`, records the violation as non-blocking |
+
+**Why it is a violation.** `charter/pull-requests/reviews.md` § Additive Commits on
+ChangesRequested prohibits force-push during a ChangesRequested cycle because it resets
+the HEAD-SHA anchor the reviewer's `gh api contents/<path>?ref=<sha>` chain depends on.
+The rebase escape hatch requires an explicit "rebase OK" from the requesting reviewer,
+obtained on the PR thread **before** rebasing. **Severity per that clause: moderate.**
+
+**Verified aggravating facts** (both established independently by the reviewers, both
+re-confirmed here):
+- No rebase-OK was requested or granted. The thread contains exactly four comments, all
+  reviewer verdicts — the implementer posted nothing.
+- The rebase was not forced by a conflict: `git merge-tree ee99676 061db3c` resolves
+  clean with zero conflicts, so the charter-permitted `git merge origin/main` would have
+  worked and preserved the anchor.
+- `git merge-base --is-ancestor 061db3c 3e0e5e8f` returns false; the new head is a
+  single-parent replay, i.e. a rebase, not the permitted merge-commit path.
+
+**Mitigating facts.**
+- Nothing was smuggled in: 10 of the 11 PR files are byte-identical across the two heads
+  (`cmp -s`, 10/10), and the diff stayed +14/−14 over the same 11 paths.
+- The charter's slow-path remedy was satisfied — both reviewers re-reviewed at the new
+  HEAD rather than merging on stale verdicts, and both caught the ancestry break
+  themselves rather than accepting the (incorrect) "additive, no force" framing they had
+  been given in their briefs.
+- The one-line must-fix was applied verbatim and is correct.
+
+**Correction to the prior orchestrator read (recorded deliberately).** The wave-29 session
+handoff argued a bare process note would suffice, on the grounds that the implementer
+"escalated the norm question himself, corrected immediately, and committed to
+merge-not-rebase." **The PR record does not support that.** #1187 carries four comments,
+all reviewer verdicts; the implementer self-reported nothing on the thread. Any
+self-escalation happened only in his direct report to the orchestrator, which is not part
+of the durable record and could not be re-verified. The softer read rested on an
+unverified mitigation and is withdrawn in favour of the charter's stated severity. If the
+implementer did raise it privately, that is a genuine mitigation and belongs in the
+wave-29 retro — but it is not evidence available on the artifact.
+
+**Action taken.** Documented; improvement expected (charter § Severity Levels — moderate).
+No merge was blocked, nothing is reverted, and #1187 merged normally at `3a97f928`. The
+expectation going forward is the charter's: additive commits during a ChangesRequested
+cycle, or an explicit rebase-OK on the thread first.
+
+**Orchestrator process finding, same event.** The reviewer briefs asserted "additive, no
+force" as established fact when the orchestrator had not checked. Both reviewers ran the
+check anyway and got the correct answer, so the gate held — but it held because the
+reviewers distrusted their brief, which is not a control. Captured in memory as
+`feedback_patch_id_after_rebase_not_ancestry`; the standing rule is that a brief must
+never hand a reviewer an unverified state assertion.
