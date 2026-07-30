@@ -171,8 +171,25 @@ class PrecedingOptionTests(unittest.TestCase):
                 inv = parse_interpreter_invocation(["zsh", cluster, NAKED_COMMIT])
                 assert inv is not None
                 self.assertEqual(inv.operands, (), "precondition: operands must be empty")
-                self.assertEqual(inv.words, (NAKED_COMMIT,))
+                self.assertIn(NAKED_COMMIT, inv.words)
                 self.assertEqual(verdict(f"zsh {cluster} '{NAKED_COMMIT}'"), "BLOCK")
+
+    def test_plus_form_option_with_a_non_alpha_body(self):
+        """`zsh +2 -c '<commit>'` executes; bash/sh/dash reject `+2` outright.
+
+        This is the shape that justifies the `+`-with-non-alpha-body arm of
+        `_expand_shell_option_token`. Without the `+` -> `-` rewrite, `+2` is
+        not flag-shaped, the option run ends before `-c` is reached, and the
+        gate fails open. `-2` (already flag-shaped) reaches the same place
+        through the general path, so it does NOT cover the `+` arm.
+        """
+        self.assertEqual(_expand_shell_option_token("+2"), ["-2"])
+        for pre in ("+2", "+1", "+0"):
+            with self.subTest(option=pre):
+                inv = parse_interpreter_invocation(["zsh", pre, "-c", NAKED_COMMIT])
+                assert inv is not None
+                self.assertTrue(inv.has_command_string)
+                self.assertEqual(verdict(f"zsh {pre} -c '{NAKED_COMMIT}'"), "BLOCK")
 
     def test_double_dash_ends_the_option_run(self):
         """`bash -- -c '<commit>'` does NOT execute the payload under any shell.
@@ -199,6 +216,62 @@ class InterpreterIdentityTests(unittest.TestCase):
     def test_non_interpreter_head_is_not_an_invocation(self):
         """`echo bash -lc '<commit>'` prints; it does not execute."""
         self.assertIsNone(parse_interpreter_invocation(["echo", "bash", "-lc", NAKED_COMMIT]))
+
+
+class DashLeadingPayloadTests(unittest.TestCase):
+    """Vary the payload's SURFACE SHAPE; hold interpreter and flag form constant.
+
+    This dimension was missing from the first head of #1193 and it hid a live
+    fail-open. Every other class here varies the *invocation*; none of them
+    varied what the command string itself looks like, and the option-run walker
+    is exactly the component whose answer depends on that.
+
+    Two independent mechanisms swallow a `-`-leading command string:
+
+      `bash -c -- '-x; <commit>'`  — `--` puts the payload in `operands`, but a
+          whole-list flag filter dropped it again. `_DASH_C_RE` misses too: it
+          captures the `--` itself as its payload group.
+      `zsh -abc '-x; <commit>'`    — no `--` at all. `_consume_wrapper_options`
+          treats every dash-leading token as an option, so the payload is
+          swallowed INTO the option run and `operands` comes back empty.
+
+    Both really execute (bash/sh/zsh/dash for the first, zsh for the second).
+    """
+
+    # The command string's leading characters, before the commit text.
+    PREFIXES = ["-x; ", "--foo; ", "-", "--", "-x && ", "+x; ", "---; ", "-- "]
+
+    def test_dash_leading_payload_after_double_dash_blocks(self):
+        for prefix in self.PREFIXES:
+            for interp in ("bash", "sh", "zsh", "dash"):
+                with self.subTest(prefix=prefix, interpreter=interp):
+                    command = f"{interp} -c -- '{prefix}{NAKED_COMMIT}'"
+                    self.assertEqual(verdict(command), "BLOCK", command)
+
+    def test_dash_leading_payload_swallowed_by_the_option_run_blocks(self):
+        """No `--`: the payload is inside the option run, not in `operands`."""
+        for cluster in ("-abc", "-cabm", "-lc", "-cl"):
+            with self.subTest(cluster=cluster):
+                inv = parse_interpreter_invocation(["zsh", cluster, "-x; " + NAKED_COMMIT])
+                assert inv is not None
+                self.assertEqual(inv.operands, (), "precondition: operands must be empty")
+                self.assertIn("-x; " + NAKED_COMMIT, inv.words)
+                self.assertEqual(verdict(f"zsh {cluster} '-x; {NAKED_COMMIT}'"), "BLOCK")
+
+    def test_words_is_a_superset_of_operands(self):
+        """The invariant that makes the gate immune to payload-index error."""
+        cases = [
+            ["bash", "-c", NAKED_COMMIT],
+            ["bash", "-c", "--", "-x; " + NAKED_COMMIT],
+            ["bash", "-oc", "pipefail", NAKED_COMMIT],
+            ["zsh", "-cO", NAKED_COMMIT],
+            ["zsh", "-abc", "-x; " + NAKED_COMMIT],
+        ]
+        for segment in cases:
+            with self.subTest(segment=" ".join(segment)):
+                inv = parse_interpreter_invocation(segment)
+                assert inv is not None
+                self.assertTrue(set(inv.operands).issubset(set(inv.words)))
 
 
 class PayloadQuotingTests(unittest.TestCase):
@@ -375,8 +448,15 @@ class InvocationParsingTests(unittest.TestCase):
         self.assertEqual(inv.name, "bash")
         self.assertTrue(inv.has_command_string)
         self.assertEqual(inv.operands, (NAKED_COMMIT,))
-        # `words` is the superset that makes the gate immune to index error.
-        self.assertEqual(inv.words, ("pipefail", NAKED_COMMIT))
+        # `words` keeps every token but `--`, so the command string is in it no
+        # matter how the cluster shifted the payload index.
+        self.assertEqual(inv.words, ("-c", "-o", "pipefail", NAKED_COMMIT))
+
+    def test_words_drops_only_the_double_dash_sentinel(self):
+        inv = parse_interpreter_invocation(["bash", "-c", "--", "-x; " + NAKED_COMMIT])
+        assert inv is not None
+        self.assertNotIn("--", inv.words)
+        self.assertEqual(inv.words, ("-c", "-x; " + NAKED_COMMIT))
 
     def test_double_dash_moves_c_out_of_the_option_run(self):
         inv = parse_interpreter_invocation(["bash", "--", "-c", NAKED_COMMIT])
@@ -445,7 +525,23 @@ class ShellTruthTests(unittest.TestCase):
         ["--"],
         ["--", "-c"],
         ["-l"],
+        # `--` in the OPTION run (not before it) — puts the command string in
+        # the operand region, where a `-`-leading payload used to be dropped.
+        ["-c", "--"],
+        ["-lc", "--"],
+        ["-cl", "--"],
+        ["-abc", "--"],
+        ["-o", "pipefail", "-c", "--"],
+        ["+2", "-c"],
     ]
+
+    # PAYLOAD SHAPE is a first-class dimension, not a constant. Every other
+    # class in this file varies the invocation and holds the command string's
+    # surface fixed — which is exactly how the `-`-leading payload fail-open
+    # survived the first head of #1193. The option-run walker's answer depends
+    # on what the payload LOOKS like, so that has to be varied against the same
+    # shell-truth contract as everything else.
+    PAYLOAD_PREFIXES = ["", "-x; ", "--foo; ", "-", "--", "-x && ", "+x; ", "-- "]
 
     @classmethod
     def setUpClass(cls):
@@ -460,10 +556,10 @@ class ShellTruthTests(unittest.TestCase):
         if cls.work:
             shutil.rmtree(cls.work, ignore_errors=True)
 
-    def _executes(self, shell_path: str, pre: list[str]) -> bool:
+    def _executes(self, shell_path: str, pre: list[str], prefix: str = "") -> bool:
         """True iff the shell actually ran the payload as a command string."""
         marker = os.path.join(self.work, "m_" + secrets.token_hex(8))
-        payload = "printf %s x > " + marker
+        payload = prefix + "printf %s x > " + marker
         try:
             subprocess.run(
                 [shell_path, *pre, payload],
@@ -481,25 +577,37 @@ class ShellTruthTests(unittest.TestCase):
         checked = 0
         for name, path in self.shells:
             for pre in self.FORMS:
-                if not self._executes(path, pre):
-                    continue
-                checked += 1
-                command = "{} {} '{}'".format(name, " ".join(pre), NAKED_COMMIT)
-                with self.subTest(shell=name, form=" ".join(pre)):
-                    self.assertEqual(
-                        verdict(command),
-                        "BLOCK",
-                        f"{name} really executes this form but the gate allowed it: {command}",
-                    )
+                for prefix in self.PAYLOAD_PREFIXES:
+                    if not self._executes(path, pre, prefix):
+                        continue
+                    checked += 1
+                    body = prefix + NAKED_COMMIT
+                    command = "{} {} '{}'".format(name, " ".join(pre), body)
+                    with self.subTest(shell=name, form=" ".join(pre), payload=prefix + "..."):
+                        self.assertEqual(
+                            verdict(command),
+                            "BLOCK",
+                            f"{name} really executes this form but the gate allowed it: {command}",
+                        )
         # Guard against the oracle silently degrading to "nothing executes",
         # which would make every assertion above vacuous.
-        self.assertGreater(checked, 10, "shell-truth oracle found almost nothing executable")
+        self.assertGreater(checked, 40, "shell-truth oracle found almost nothing executable")
 
     def test_oracle_distinguishes_executed_from_not_executed(self):
         """The oracle must be able to answer NO, or it proves nothing."""
         _name, path = self.shells[0]
         self.assertFalse(self._executes(path, ["--"]), "`--` must not run the payload")
         self.assertTrue(self._executes(path, ["-c"]), "bare `-c` must run the payload")
+
+    def test_oracle_is_sensitive_to_the_payload_dimension(self):
+        """A dash-leading payload must change at least one form's answer.
+
+        If it never did, adding `PAYLOAD_PREFIXES` would be decoration rather
+        than a dimension, and the class would be claiming coverage it lacks.
+        """
+        _name, path = self.shells[0]
+        self.assertTrue(self._executes(path, ["-c", "--"], "-x; "))
+        self.assertFalse(self._executes(path, ["-c"], "-x; "))
 
 
 if __name__ == "__main__":

@@ -1178,12 +1178,26 @@ class InterpreterInvocation(NamedTuple):
     shell-accurate answer and is what a consumer that must resolve a real path
     (the script-invocation check) should use.
 
-    `words` is every non-flag token in the invocation, including words consumed
-    as option VALUES. It is a deliberate superset of `operands` for consumers
-    that are gates: a cluster mixing a value-letter with `c` can shift the
-    payload index by one in ways that differ between shells, and a gate that
-    guesses wrong fails OPEN. Option values are short words like `pipefail`, so
-    scanning them too costs nothing and removes the whole class of index error.
+    `words` is every token of the invocation except the `--` sentinel — the set
+    the command string is guaranteed to be a member of. It is deliberately a
+    SUPERSET of `operands`, and consumers that are gates must use it, because
+    `operands` alone fails OPEN in two measured ways:
+
+      - a cluster mixing a value-letter with `c` shifts the payload index, and
+        differently per shell: `zsh -cO '<cmd>'` runs `<cmd>`, but the shared
+        grammar pairs the clustered `-O` with it as a VALUE, so `operands` is
+        empty;
+      - `end` is only a LOWER bound on where the option run stops.
+        `_consume_wrapper_options` treats every dash-leading token as an option,
+        so a command string that itself starts with `-` is swallowed into the
+        run. Both `bash -c -- '-x; git commit …'` and `zsh -abc '-x; git
+        commit …'` really execute, and both left `operands` empty.
+
+    Rather than re-derive the exact boundary — reintroducing precisely the
+    per-shell option knowledge this module exists to avoid — `words` keeps
+    everything. The extra tokens are option spellings (`-l`, `--login`,
+    `pipefail`); none can carry a `git … commit` bridge, and the cost was priced
+    at zero verdict changes over 7.6k real recorded commands.
     """
 
     name: str
@@ -1258,7 +1272,7 @@ def parse_interpreter_invocation(segment: list[str]) -> InterpreterInvocation | 
     end = _consume_wrapper_options(rest, SHELL_VALUE_OPTIONS, 0)
     has_command_string = _COMMAND_STRING_FLAG in rest[:end]
     operands = tuple(rest[end:])
-    words = tuple(t for t in rest if t != "--" and not _looks_like_flag(t))
+    words = tuple(t for t in rest if t != "--")
     return InterpreterInvocation(name, has_command_string, operands, words)
 
 
