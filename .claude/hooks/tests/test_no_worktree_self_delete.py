@@ -233,7 +233,7 @@ class CdRecoverySafetyMatrix(unittest.TestCase):
             result = hook.check(_bash(cmd, cwd=str(f.wt_a)))
             self.assertIsNone(result)
 
-    # --- last-cd-wins ordering ---
+    # --- last-cd-wins ordering (within the UNCONDITIONAL LEADING run) ---
 
     def test_last_cd_wins_safe_then_unsafe_blocks(self) -> None:
         """POS: `cd <safe> && cd <wt_a> && remove <wt_a>` — the LAST cd lands
@@ -251,6 +251,37 @@ class CdRecoverySafetyMatrix(unittest.TestCase):
             cmd = f"cd {f.wt_a} && cd {f.parent} && git worktree remove {f.wt_a}"
             result = hook.check(_bash(cmd, cwd=str(f.wt_a)))
             self.assertIsNone(result)
+
+    # --- main#1151: a `cd` the shell does not reach before the remove ---
+
+    def test_trailing_cd_out_does_not_relax_the_guard(self) -> None:
+        """POS: `remove <wt_a> ; cd <safe>` with stdin cwd at <wt_a>.
+
+        The `cd` is positioned AFTER the remove, so the shell is still INSIDE
+        <wt_a> when `git worktree remove` runs — a real self-delete. The
+        pre-main#1151 resolver took the last `cd` anywhere in the command,
+        resolved to <safe>, and FAILED OPEN on it. This is the same defect
+        family as the gh misroutes, landing on the safety verdict instead of
+        on repo identity.
+        """
+        with _WorktreeFixture() as f:
+            cmd = f"git worktree remove {f.wt_a} ; cd {f.parent}"
+            result = hook.check(_bash(cmd, cwd=str(f.wt_a)))
+            assert result is not None, "a trailing cd must not relax the self-delete guard"
+            self.assertEqual(result["decision"], "block")
+
+    def test_short_circuit_guarded_cd_out_does_not_relax_the_guard(self) -> None:
+        """POS: `true || cd <safe> ; remove <wt_a>` with stdin cwd at <wt_a>.
+
+        `true` succeeds, so the guarded `cd` never runs and the shell is still
+        inside <wt_a>. The old scan honoured it (the `||` split put `cd` at
+        token 0 of its own segment) and allowed the self-delete.
+        """
+        with _WorktreeFixture() as f:
+            cmd = f"true || cd {f.parent} ; git worktree remove {f.wt_a}"
+            result = hook.check(_bash(cmd, cwd=str(f.wt_a)))
+            assert result is not None, "a guarded cd must not relax the self-delete guard"
+            self.assertEqual(result["decision"], "block")
 
     # --- recovery must not RELAX the guard on a path that isn't there ---
 

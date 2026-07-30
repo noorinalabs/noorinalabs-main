@@ -136,6 +136,16 @@ jobs:
       # ENFORCED structural Bash-AST parse path (the bashlex-specific cases
       # skip when it is absent; this install makes CI run them, not skip them).
       - run: pip install pytest pyyaml bashlex
+      # zsh (main#1151): `CdRoutingAgainstShellTruth` runs every `cd`-routing
+      # shape in a REAL shell and takes the resulting cwd as ground truth. The
+      # org's harness shell is zsh, not bash, and at least one construct
+      # (`command cd /x`) genuinely differs between them — so a bash-only
+      # oracle can adopt a bash-only behaviour as a resolver invariant. The
+      # runner image ships bash but not zsh; install it so the zsh half of the
+      # oracle RUNS in CI rather than skipping (the tests skip gracefully on a
+      # bare checkout without it).
+      - name: Install zsh (second shell-truth oracle)
+        run: sudo apt-get update && sudo apt-get install -y zsh
       - name: Run hook and lib tests
         run: pytest .claude/hooks/tests/ .claude/lib/tests/ -q
       # .claude/skills/*/tests/ added per #326. Run PER-SKILL (each from its own

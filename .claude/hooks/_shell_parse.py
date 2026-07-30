@@ -109,7 +109,10 @@ Public API
             the command never went, and three hooks downstream WRITE.
             `extract_leading_cd_target` is the only one in this module, and it
             opts out entirely (a leader may not run; and an exec-wrapper
-            cannot carry `cd` at all, since `cd` is a shell builtin).
+            cannot carry `cd` at all, since `cd` is a shell builtin). As of
+            main#1151 it does not consume segments at all — it reads the AST,
+            because the three properties that make a `cd` honourable are not
+            recoverable from a flattened segment list at any strip setting.
 
         `compound_leaders=False` exists for a caller that wants wrappers but
         not leaders. Nothing needs it today — the one routing caller wants
@@ -197,20 +200,31 @@ Public API
         want to operate on the *user's* cwd (not the hook's parent process
         cwd) should use this to anchor `subprocess.run(..., cwd=...)`.
 
+    extract_leading_cd_target(command) -> str | None
+        The ROUTING resolver: the directory the shell is in when the
+        command's first real work runs, or None when that cannot be
+        established with certainty. Honours only the UNCONDITIONAL LEADING
+        RUN of `cd <absolute-dir>` commands — a `cd` must be (1)
+        unconditional, (2) executed by the current shell, and (3) positioned
+        before the work. Reads the bashlex AST (not the flattened segment
+        list, which has already discarded the control flow that decides
+        whether a `cd` runs), with a fail-closed token scan as a CO-PRIMARY
+        for the commands bashlex cannot parse — notably any quoted-delimiter
+        heredoc (`<<'EOF'`), which raises rather than yielding an AST.
+        main#1151.
+
     resolve_invocation_cwd(input_data) -> str
         Like resolve_tool_cwd, but FIRST tries to recover the directory the
-        command actually runs in by extracting a leading `cd <dir>` segment
-        from the Bash command string. This closes the #521 residual: for a
-        worktree subagent the harness `cwd` field is captured at agent-spawn
-        time (the orchestrator's dir), NOT the subagent's dir after it has
-        `cd`'d into its worktree, and subsequent `cd` calls do not propagate
-        back to the hook's view of `cwd`. When the triggering command is
-        `cd /path/to/worktree && gh pr create ...`, the cd target is the
-        only in-band signal that recovers the real repo. Falls back to
-        resolve_tool_cwd (stdin cwd → os.getcwd()) when no leading `cd`
-        is present. Only absolute existing directories are honored; relative
-        cd targets are ambiguous (they'd be relative to the already-wrong
-        stdin cwd) so they are ignored.
+        command actually runs in via `extract_leading_cd_target`. This closes
+        the #521 residual: for a worktree subagent the harness `cwd` field is
+        captured at agent-spawn time (the orchestrator's dir), NOT the
+        subagent's dir after it has `cd`'d into its worktree, and subsequent
+        `cd` calls do not propagate back to the hook's view of `cwd`. When the
+        triggering command is `cd /path/to/worktree && gh pr create ...`, the
+        cd target is the only in-band signal that recovers the real repo.
+        Falls back to resolve_tool_cwd (stdin cwd → os.getcwd()) when no
+        honourable leading `cd` is present. Only absolute existing directories
+        are honored.
 
     resolve_repo_short_name(input_data, *, git_runner=None) -> str | None
         Resolve the GitHub repository NAME (e.g. `noorinalabs-main`) from the
@@ -1419,31 +1433,347 @@ def resolve_tool_cwd(input_data: dict) -> str:
     return os.getcwd()
 
 
+# ---------------------------------------------------------------------------
+# Unconditional-leading-`cd` routing resolution (main#1151)
+# ---------------------------------------------------------------------------
+#
+# `extract_leading_cd_target` ROUTES — it decides which GitHub repo eight hooks
+# read and three hooks WRITE to. Its old implementation took the LAST `cd /abs`
+# pair anywhere in the flat segment list, which checks none of the three
+# properties that actually make a `cd` honourable. A `cd` may only be honoured
+# when it is
+#
+#   (1) UNCONDITIONAL      — not guarded by `||`, not inside if/while/for/case,
+#   (2) IN THE CURRENT SHELL — not in a subshell, pipeline, `&` background job
+#                              or command substitution, and
+#   (3) BEFORE the work    — positioned ahead of the command being routed.
+#
+# Segment-level analysis provably cannot answer any of these: by the time
+# `iter_command_segments` has split on `;`/`&&`/`||`/`|` the control flow that
+# decides whether a `cd` runs is already gone, and a guarded `cd` lands at token
+# 0 of its own segment with no leader left to withhold.
+#
+# TWO CO-PRIMARY MECHANISMS, not a primary and a safety net:
+#
+#   1. `_ast_leading_cd_target`  — the bashlex AST, where all three properties
+#                                  are directly readable.
+#   2. `_degraded_leading_cd_target` — a token scan that FAILS CLOSED on any
+#                                  control flow, used whenever (1) cannot see
+#                                  the command.
+#
+# (2) is NOT a rare degraded path. main#1152 established, against the installed
+# bashlex, that a QUOTED-delimiter heredoc does not parse AT ALL:
+#
+#     bashlex.parse("cat <<'EOF'\nx\nEOF\n")  -> ParsingError
+#
+# `<<'EOF'` / `<<"EOF"` raise; only bare `<<EOF` / `<<-EOF` parse. The quoted
+# form is the DOMINANT one in this repo (`python3 - <<'PY'`, `gh issue comment
+# --body-file - <<'EOF'`), so the commands most likely to carry a `cd` are
+# exactly the ones the AST cannot see. And the failure is SILENT: bashlex_available()
+# stays True (it reports import success, not per-command success) and
+# `iter_command_segments_ast` returns the same None it uses for "bashlex
+# absent". An AST-ONLY fix here would therefore have reported success and
+# changed nothing on precisely those commands — which is why (2) must close, on
+# its own, every family (1) closes. Pinned by `CdRoutingWhenBashlexCannotParse`.
+#
+# The asymmetry is deliberate and is the same call main#1141 made: UNDER-
+# detecting a `cd` degrades to the recoverable #650 invocation-cwd fallback;
+# OVER-detecting writes into the wrong repository, which no retry undoes.
+
+# Operators that may PRECEDE a `cd` in the leading run without making it
+# conditional on something other than the run itself. `;` is plain sequencing.
+# `&&` is admitted ONLY because the scan stops at the first non-`cd` element:
+# every earlier element of the run is itself a `cd`, so if this `cd` executes at
+# all it executes from the directory already recorded. `||` (runs only when the
+# left side FAILED) and `&` (backgrounds the left side into a subshell) are both
+# disqualifying, in either position.
+_UNCONDITIONAL_LEADING_OPS = frozenset({";", "&&"})
+
+# Commands that move (or replace) the CURRENT shell WITHOUT being spelled `cd`.
+# A leading `cd` is only evidence of where the work runs if nothing between it
+# and the work moves the shell again — and `pushd`/`popd`/`eval`/`source`/`.`
+# all do, invisibly to a scan that keys on the literal token `cd`.
+#
+# ONE list, consumed by BOTH mechanisms. It started life inline in the degraded
+# token set only, and the AST path keyed on `words[0] == "cd"` alone — so
+# `cd /a && pushd /b && gh …` returned `/a` on the AST path while the degraded
+# path correctly returned None, making the primary strictly weaker than the
+# co-primary it is declared equal to (found at the #1156 merge gate, Aino
+# Virtanen). Two mechanisms with independently maintained lists WILL drift
+# again; deriving both from this frozenset is what makes that impossible, and
+# is a stronger fix than patching the AST branch to match.
+#
+# `exec` is included for the same parity even though it cannot carry a `cd`
+# (`exec cd /x` fails — exec needs an external command): it REPLACES the shell,
+# so the routed command never runs at all. Refusing costs only recovery.
+_CWD_MOVING_COMMANDS = frozenset({"pushd", "popd", "eval", "source", ".", "exec"})
+
+# Fail-closed scan (bashlex absent, OR the command did not parse — most often
+# a quoted-delimiter heredoc): any of these appearing as its OWN shlex token
+# means the command carries control flow, a subshell, a pipeline or an opaque
+# cwd change that the flat token stream cannot reason about -> return None and
+# let the caller fall back to the invocation cwd. `&&` and `;` are deliberately
+# ABSENT: they are the separators of the leading `cd` run itself, and dropping
+# `cd /worktree && gh pr create` would destroy the #521 recovery signal this
+# resolver exists for.
+_DEGRADED_CONTROL_FLOW_TOKENS = (
+    frozenset(
+        {
+            "if",
+            "then",
+            "else",
+            "elif",
+            "fi",
+            "while",
+            "until",
+            "for",
+            "do",
+            "done",
+            "case",
+            "esac",
+            "select",
+            "function",
+            "{",
+            "}",
+            "(",
+            ")",
+            "!",
+            "|",
+            "||",
+            "&",
+        }
+    )
+    | _CWD_MOVING_COMMANDS
+)
+
+
+def _ast_command_words(node) -> list[str]:
+    """Word-kind tokens of a bashlex CommandNode, in source order.
+
+    `KEY=value` prefixes arrive as AssignmentNodes and redirections as
+    RedirectNodes; neither is word-kind, so both drop out naturally. That is
+    correct for routing: `FOO=1 cd /dest` and `cd /dest > /dev/null` both move
+    the calling shell (verified in bash and zsh — `cd` is a builtin, and a
+    one-shot assignment prefix does not spawn a subprocess for a builtin).
+    """
+    return [p.word for p in node.parts if getattr(p, "kind", None) == "word"]
+
+
+def _ast_top_level_elements(tree) -> list[tuple[object, str | None, str | None]]:
+    """Flatten one parse tree's TOP-LEVEL list into (node, prev_op, next_op).
+
+    Only the outermost list is flattened — nothing nested is descended into.
+    That is the point: a node that is not a plain top-level CommandNode (an
+    `if`, a `for`, a `{ }` group, a subshell, a pipeline) is exactly the case
+    the caller must refuse to reason about.
+    """
+    if getattr(tree, "kind", None) != "list":
+        return [(tree, None, None)]
+    elements: list[tuple[object, str | None, str | None]] = []
+    pending_prev: str | None = None
+    for part in tree.parts:
+        if getattr(part, "kind", None) == "operator":
+            if elements:
+                node, prev_op, _ = elements[-1]
+                elements[-1] = (node, prev_op, part.op)
+            pending_prev = part.op
+            continue
+        elements.append((part, pending_prev, None))
+        pending_prev = None
+    return elements
+
+
+def _ast_subtree_moves_cwd(node) -> bool:
+    """True if anything under `node` can move the shell's cwd.
+
+    That means a command-position `cd` OR any of `_CWD_MOVING_COMMANDS`
+    (`pushd`, `popd`, `eval`, `source`, `.`, `exec`) — the second half is the
+    part a `words[0] == "cd"` check misses, and missing it left
+    `cd /a && pushd /b && gh …` resolving to `/a` while both shells run the gh
+    in `/b` (#1156 merge gate).
+
+    Used on everything AFTER the leading `cd` run. A cwd move there makes the
+    resolver's single answer ambiguous with respect to the command a consumer
+    actually cares about (`gh issue edit 5 …; cd /elsewhere` — main#1151
+    family B), or is a group whose `cd` applies to a later command in the same
+    group (`cd /a && { cd /b ; gh x ; }`). Either way: refuse to answer.
+
+    Only CommandNodes are inspected, so `gh pr create --body "cd /ghost"` —
+    where the text is a WordNode value, not a command — does not trip it.
+    """
+    found = False
+
+    class _CwdMoveFinder(bashlex_ast.nodevisitor):
+        def visitcommand(self, n, parts):
+            nonlocal found
+            words = [p.word for p in parts if getattr(p, "kind", None) == "word"]
+            if words and (words[0] == "cd" or words[0] in _CWD_MOVING_COMMANDS):
+                found = True
+            return True
+
+    _CwdMoveFinder().visit(node)
+    return found
+
+
+def _ast_leading_cd_target(command: str) -> tuple[bool, str | None]:
+    """AST answer to "which directory is the shell in when the work starts?".
+
+    Returns `(parsed, target)`. `parsed is False` means bashlex is unavailable
+    or the command did not parse, and the caller MUST fall back to the degraded
+    token scan — it is never "no cd". `parsed is True` with `target is None`
+    means the AST was read and the command has no honourable leading `cd`.
+
+    The `_BASHLEX_AVAILABLE` gate lives HERE, outside the cache, for the same
+    reason `iter_command_segments_ast` keeps it outside
+    `_iter_command_segments_ast_cached`: a test monkeypatching the flag to
+    simulate a bare checkout must never be served a stale cached AST answer.
+    """
+    if not _BASHLEX_AVAILABLE:
+        return (False, None)
+    return _ast_leading_cd_target_cached(command)
+
+
+@lru_cache(maxsize=256)
+def _ast_leading_cd_target_cached(command: str) -> tuple[bool, str | None]:
+    """Memoized core of `_ast_leading_cd_target`. Assumes bashlex is available.
+
+    Memoized (#1113): pure in `command`, and returns an immutable tuple of
+    immutable values, so the cached object can be handed out directly — no
+    copy needed, no mutation hazard.
+    """
+    try:
+        trees = bashlex.parse(command)
+    except Exception:
+        # Same resilience posture as `_iter_command_segments_ast_cached`: any
+        # bashlex failure signals the caller to fall back, never a crash.
+        return (False, None)
+
+    elements: list[tuple[object, str | None, str | None]] = []
+    for tree in trees:
+        elements.extend(_ast_top_level_elements(tree))
+
+    target: str | None = None
+    index = 0
+    # Phase 1 — the unconditional leading run of simple `cd` commands.
+    while index < len(elements):
+        node, prev_op, next_op = elements[index]
+        if getattr(node, "kind", None) != "command":
+            break  # compound / pipeline / control flow: phase 2 decides
+        words = _ast_command_words(node)
+        if not words or words[0] != "cd":
+            break  # first real work — the cwd is fixed from here
+        if prev_op is not None and prev_op not in _UNCONDITIONAL_LEADING_OPS:
+            return (True, None)  # `||`-guarded or `&`-preceded
+        if next_op == "&":
+            return (True, None)  # backgrounded: the calling shell never moves
+        if len(words) != 2 or not words[1].startswith("/"):
+            # Anything we cannot pin to one absolute directory — `cd` (HOME),
+            # `cd -`, `cd -P /x`, `cd sub`, `cd "$(git rev-parse …)"`. A
+            # RELATIVE target is the sharpest of these: `cd /parent && cd
+            # child-repo` really does land in a DIFFERENT repository, so
+            # silently keeping `/parent` was itself a misroute. Refuse.
+            return (True, None)
+        target = words[1]
+        index += 1
+
+    # Phase 2 — nothing after the leading run may move the cwd again. Starts AT
+    # the breaking element, so a `pushd`/`eval`/`source` that ended phase 1 is
+    # itself inspected; phase 1 needs no matching check of its own.
+    for node, _prev_op, _next_op in elements[index:]:
+        if _ast_subtree_moves_cwd(node):
+            return (True, None)
+    return (True, target)
+
+
+def _degraded_leading_cd_target(command: str) -> str | None:
+    """Fail-closed token scan — the issue's fix direction 2, as a CO-PRIMARY.
+
+    Runs whenever the AST cannot see the command: bashlex absent, or (far more
+    often) a command carrying a quoted-delimiter heredoc, which the installed
+    bashlex cannot parse at all. `python3 - <<'PY'` and `gh issue comment
+    --body-file - <<'EOF'` are the repo's dominant heredoc forms, so this path
+    is ordinary traffic, not an edge case, and it must close every family the
+    AST path closes rather than relaxing to the old last-`cd`-wins scan.
+
+    Mirrors the AST phase model with the only tool left: reject outright any
+    command whose shlex token stream shows control flow, a subshell, a pipeline
+    or an opaque cwd change (`_DEGRADED_CONTROL_FLOW_TOKENS`), then accept only
+    a leading run of `cd /abs` segments with no `cd` anywhere after it.
+
+    Heredoc BODIES are deliberately not stripped here (`strip_heredocs` is not
+    called): a body always follows its command, so its tokens can never occupy
+    the leading position, and any `cd` they contribute lands in the non-leading
+    phase and forces None. Unstripped bodies can therefore only cost recovery,
+    never buy a route — verified in `test_heredoc_body_cannot_inject_a_route`.
+
+    Deliberately does NOT call `normalize_command_separators` — see the
+    main#1151 ordering constraint recorded in `wave_29_scope`. Without it an
+    unspaced `cd /a;gh …` glues into one 3-token segment and is refused, which
+    is the safe direction; adding normalization here would widen this path
+    without the AST's control-flow knowledge behind it.
+    """
+    tokens = tokenize(command)
+    if tokens is None:
+        return None
+    if any(tok in _DEGRADED_CONTROL_FLOW_TOKENS for tok in tokens):
+        return None
+    target: str | None = None
+    leading = True
+    for segment in iter_command_segments(tokens):
+        is_cd = segment[0] == "cd"
+        if not is_cd:
+            leading = False
+            continue
+        if not leading:
+            return None  # a `cd` after real work — ambiguous, refuse
+        if len(segment) != 2 or not segment[1].startswith("/"):
+            return None
+        target = segment[1]
+    return target
+
+
 def extract_leading_cd_target(command: str) -> str | None:
-    """Return the directory of the last `cd <dir>` that precedes other work.
+    """Directory the shell is in when the command's first real work runs.
 
-    Walks the command's pipeline segments (see iter_command_segments) and
-    records the target of every `cd <dir>` segment, returning the last one.
-    Only honors a single-argument absolute `cd` target — relative targets
-    are ambiguous because they'd resolve against the (wrong) stdin cwd, and
-    multi-arg `cd` (e.g. `cd -P x`) is rare enough to skip rather than
-    mis-parse.
-
-    Returns None when the command does not tokenize, has no `cd`, or the
-    cd target is not an absolute path. The caller is responsible for
-    checking the path actually exists.
+    Returns the target of the last `cd <absolute-dir>` in the command's
+    UNCONDITIONAL LEADING RUN of `cd` commands, or None when there is no such
+    run or the answer cannot be established with certainty. The caller is
+    responsible for checking the path actually exists.
 
     This is the in-band recovery signal for the worktree-subagent cwd-anchor
     bug (#521): `cd /worktree && gh pr create` carries the real cwd in the
     command itself even though the harness `cwd` field points at the
     orchestrator's spawn-time directory.
 
-    Strips NOTHING — `cd` must be token 0 of its segment (main#1141 review
-    round 3). This function ROUTES: it decides which repo an action targets,
-    and three hooks on its chain WRITE (`post_wave_kickoff_comment`,
-    `auto_add_issue_to_board`, `post_label_change_wave_field_sync`), so a
-    wrong answer is an unrecoverable write into the wrong repository. Both
-    prefix families are unsafe here, for two different reasons:
+    Why the contract is this narrow
+    -------------------------------
+    This function ROUTES: it decides which repo an action targets, and three
+    hooks on its chain WRITE (`post_wave_kickoff_comment`,
+    `auto_add_issue_to_board`, `post_label_change_wave_field_sync`), so a wrong
+    answer is an unrecoverable write into the wrong repository. A `cd` is only
+    evidence of where the work runs when it is (1) unconditional, (2) executed
+    by the CURRENT shell, and (3) positioned before that work. main#1151 found
+    two families where the old last-`cd`-wins scan honoured a `cd` that was
+    none of those:
+
+      A. `true || cd /sibling ; gh issue edit 5 …` — the `cd` never runs.
+      B. `gh issue edit 5 … ; cd /sibling`        — the `cd` runs AFTER the gh.
+
+    Both are answered structurally by `_ast_leading_cd_target`, which reads the
+    bashlex AST rather than the flattened segment list. Segment-level analysis
+    cannot answer them: `iter_command_segments` has already discarded the
+    control flow, and a guarded `cd` sits at token 0 of its own segment with no
+    leader left to withhold — which is why patching leader-by-leader kept
+    producing new families.
+
+    The AST is NOT the sole mechanism. A quoted-delimiter heredoc (`<<'EOF'`,
+    the repo's dominant form) does not parse at all, so
+    `_degraded_leading_cd_target` — a token scan that fails closed on any
+    control flow — is a CO-PRIMARY that must close the same families on its
+    own. See the module-level § Unconditional-leading-`cd` routing resolution.
+
+    Strips NOTHING — `cd` must be word 0 of a top-level simple command
+    (main#1141 review round 3). Both prefix families are unsafe here:
 
     1. **Compound leaders** (`then`, `do`, `else`, `{`, `(`) guard a body that
        may not run. `if [ -f /nonexistent ]; then cd /repo-b; fi; gh issue
@@ -1463,30 +1793,31 @@ def extract_leading_cd_target(command: str) -> str | None:
     went). So `find_git_subcommand` / `find_gh_subcommand` /
     `extract_dash_c_pairs` strip everything and this function strips nothing.
 
-    Accepted cost — UNDER-recovery. A `cd` in a body that DOES run (a taken
-    `else`, a real loop iteration) is not recovered, so the caller falls back
-    to the invocation cwd. That is the pre-#1141 behaviour and it is the safe
-    direction: claiming no knowledge is recoverable, claiming the wrong
-    directory is not.
+    Accepted cost — UNDER-recovery, in every direction. None is returned for a
+    `cd` in a taken `else` or a real loop iteration, for a `cd` reached through
+    `mkdir -p /a && cd /a && gh …` (the run is no longer leading), for a
+    RELATIVE `cd` (`cd /parent && cd child-repo` — refused outright now,
+    because keeping `/parent` was itself a cross-repo misroute in a tree of
+    nested child repos), for a pipeline sitting after the run, and for anything
+    in `_CWD_MOVING_COMMANDS` after the run (`cd /a && pushd /b && gh …`,
+    `… && eval 'cd /b' && …`, `… && source s.sh && …`) — including `exec`,
+    which does not move the shell but replaces it, so the routed command never
+    runs at all. Each of those falls back to the invocation cwd, which is the
+    recoverable #650 behaviour. Claiming no knowledge is recoverable; claiming
+    the wrong directory is not.
 
-    Known residual, tracked by main#1151 — NOT closed here, and not closable
-    at this layer: (a) a short-circuit `true || cd /elsewhere` puts `cd` at
-    token 0 of its own segment with no leader to withhold, and (b) this
-    function returns the LAST `cd` anywhere in the command with no positional
-    relation to the `gh` node, so `gh issue edit 5 …; cd /elsewhere`
-    misroutes. Both predate main#1141 and both need the bashlex AST
-    (`iter_command_segments_ast`) to answer "is this `cd` unconditional, and
-    does it precede the gh node?" — `iter_command_segments` has already
-    discarded the control flow by the time this loop runs.
+    That last group is NOT a frontier the design leaves open — it is a case
+    where the two mechanisms had drifted. The degraded scan already refused
+    `pushd`/`eval`/`source`, so the AST path keying on the literal token `cd`
+    was strictly weaker than its own fallback (#1156 merge gate). Both now read
+    the same `_CWD_MOVING_COMMANDS` frozenset. A shape whose cwd this function
+    cannot compute must resolve to None on BOTH paths, and any new entry
+    belongs in that one set, never in a per-path list.
     """
-    tokens = tokenize(command)
-    if tokens is None:
-        return None
-    target: str | None = None
-    for segment in iter_command_segments(tokens):
-        if len(segment) == 2 and segment[0] == "cd" and segment[1].startswith("/"):
-            target = segment[1]
-    return target
+    parsed, target = _ast_leading_cd_target(command)
+    if parsed:
+        return target
+    return _degraded_leading_cd_target(command)
 
 
 def resolve_invocation_cwd(input_data: dict) -> str:

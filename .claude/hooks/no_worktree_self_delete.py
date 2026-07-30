@@ -27,13 +27,18 @@ Matches (one or more segments in the command, split on &&, ||, ;, |):
     - `<path>` is the first non-flag argument after `remove`.
     - A leading `cd <dir>` IS honored when it names an absolute directory
       that exists on disk (#535): the cwd used for the ancestry check is the
-      last such `cd` target (last-cd-wins via `resolve_invocation_cwd`),
-      because that is where the shell will be when `git worktree remove`
-      actually runs. `cd /safe && git worktree remove <wt>` therefore ALLOWS
-      (shell moves out first) while `cd <wt> && git worktree remove <wt>`
-      BLOCKS (the self-delete). A `cd <nonexistent>` is ignored — recovery
-      falls back to the stdin `cwd`, so the guard never relaxes on a path
-      that isn't there.
+      last `cd` target of the command's UNCONDITIONAL LEADING RUN of `cd`s
+      (via `resolve_invocation_cwd`), because that is where the shell will be
+      when `git worktree remove` actually runs. `cd /safe && git worktree
+      remove <wt>` therefore ALLOWS (shell moves out first) while
+      `cd <wt> && git worktree remove <wt>` BLOCKS (the self-delete). A
+      `cd <nonexistent>` is ignored — recovery falls back to the stdin `cwd`,
+      so the guard never relaxes on a path that isn't there. A `cd` that is
+      guarded, backgrounded, nested in control flow, or positioned after the
+      `git worktree remove` is NOT honored at all (main#1151) — the resolver
+      returns None and the guard falls back to the stdin `cwd`, which is the
+      conservative direction for this hook too: it can only ever fail to
+      relax the guard, never relax it on a `cd` that did not run.
 
 Does NOT match:
     git worktree list            (no `remove` subcommand)
@@ -270,9 +275,10 @@ def check(input_data: dict) -> dict | None:
             return None
 
         # Recover the cwd the shell will actually be in when `git worktree
-        # remove` runs (#535). resolve_invocation_cwd applies last-cd-wins
-        # recovery: it returns the target of the last `cd <absolute-existing
-        # -dir>` in the command, else the stdin `cwd`, else os.getcwd().
+        # remove` runs (#535). resolve_invocation_cwd returns the target of the
+        # last `cd <absolute-existing-dir>` in the command's UNCONDITIONAL
+        # LEADING run of `cd`s (main#1151 — a guarded, backgrounded, nested or
+        # trailing `cd` is refused), else the stdin `cwd`, else os.getcwd().
         #
         # Unlike the gh-pr-create hooks — which adopt recovery to fix repo
         # IDENTITY — here recovery fixes the block/allow SAFETY verdict, and it
