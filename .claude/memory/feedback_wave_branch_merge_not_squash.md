@@ -1,10 +1,19 @@
 ---
 name: feedback_wave_branch_merge_not_squash
-description: "Per-issue PRs into a wave branch must merge with --merge, not --squash (squash collapses persona authorship to bare principal → commit-author gate red on wave→main)"
+description: "NEVER --squash on any base, main included (owner 2026-07-30) — squash collapses persona authorship to the bare principal; Hook 22 only gates wave branches, so main is an enforcement gap"
 metadata:
   node_type: memory
   type: feedback
+last_verified: 2026-07-30
 ---
+
+> **SCOPE WIDENED — owner directive 2026-07-30: "no more squash merges." `--squash` is prohibited on EVERY base, including `main`.** This note originally covered only per-issue → wave-branch merges; the reasoning below applies unchanged to `main`, and the owner has now made that explicit.
+>
+> **Critical enforcement gap:** Hook 22 hard-blocks `--squash` only when the base resolves to `deployments/phase-*/wave-*`. A squash into **`main` is NOT blocked** — the hook stays silent and the merge succeeds. On `main` this rule is convention-only, so **check the method yourself before merging.** Treat the gate's silence as a gap, never as permission.
+>
+> **How it was found:** on 2026-07-30 five PRs (#1173, #1153, #1154, #1155, #1156) were squash-merged to `main` under the then-current charter wording that called squash "the standard path" for `main`. All five landed authored by `parametrization <parametrization@gmail.com>`, discarding Aino Virtanen / Nurul Hakim / Nadia Khoury / Weronika Zielinska / Lucas Ferreira attribution. No gate fired, because `direct-to-main` waves open no wave→main integration PR and therefore never run the commit-author gate that would have caught it. **The absence of a red gate is exactly why this went unnoticed for a whole wave's worth of merges.**
+>
+> Charter now says so in both places: `charter/pull-requests/reviews.md` § Pre-Approved merge (the "squash is the standard path" clause is **withdrawn**) and `charter/pull-requests/wave-merge.md` (the "squash-into-main is untouched" parenthetical is **withdrawn**).
 
 When merging a **per-issue PR into a wave branch** (`deployments/phase-{P}/wave-{M}`), use `gh pr merge <N> --merge`, **NOT `--squash`**.
 
