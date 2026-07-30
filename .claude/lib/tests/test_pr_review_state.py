@@ -189,13 +189,19 @@ class ComputeReviewStateTests(unittest.TestCase):
         self.assertTrue(state.passes())
 
     def test_branch_author_lastname_passed_to_check(self):
-        """The lastname parsed from the head ref drives the gate's self-review
-        exclusion, so it must be the value handed to check_comment_reviews."""
+        """The identity parsed from the head ref drives the gate's self-review
+        exclusion, so it must be the value handed to check_comment_reviews.
+
+        Both halves (#1172): the surname alone does not identify a person —
+        `S.Ferreira` and `L.Ferreira` are two roster members — so the first
+        initial has to arrive with it or the exclusion collapses them.
+        """
         captured = {}
 
-        def fake_check(number, lastname, repo=None, content_ts=None):
+        def fake_check(number, lastname, repo=None, content_ts=None, branch_author_initial=""):
             captured["number"] = number
             captured["lastname"] = lastname
+            captured["initial"] = branch_author_initial
             return _comment_result(reviewers=())
 
         with (
@@ -212,6 +218,7 @@ class ComputeReviewStateTests(unittest.TestCase):
             state = prs.compute_review_state("707", repo="noorinalabs/noorinalabs-main")
 
         self.assertEqual(captured["lastname"], "Ferreira")
+        self.assertEqual(captured["initial"], "s")
         self.assertEqual(state.branch_author_lastname, "Ferreira")
 
     def test_non_roster_requestor_excluded_from_count(self):
@@ -411,7 +418,7 @@ class ContentStalenessTests(unittest.TestCase):
         """Direct kill-shot for the #1046 mutation on the `:135` call site."""
         captured = {}
 
-        def fake_check(number, lastname, repo=None, content_ts=None):
+        def fake_check(number, lastname, repo=None, content_ts=None, branch_author_initial=""):
             captured["content_ts"] = content_ts
             return _comment_result(reviewers=())
 

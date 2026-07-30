@@ -3383,5 +3383,164 @@ class IncompleteCommentScanFailsClosedTests(_NoContentBindingHarness):
         self.assertIsNone(result)
 
 
+class SurnameCollisionSelfReviewTests(unittest.TestCase):
+    """#1172: the #164 collision, reappearing in the self-review exclusion.
+
+    #164 fixed the reviewer DEDUP key (full name, so Lucas and Santiago
+    Ferreira count as two). The self-review EXCLUSION a few lines later kept
+    comparing surnames, so on `L.Ferreira/1151-…` Santiago's Approved was
+    dropped as "the author reviewing himself" and main#1156 sat at 1 of 2
+    approvals — while the sibling hook, off the same wrong answer, refused to
+    let him post the verdict at all.
+
+    Both hooks now route through `charter_trailer.is_branch_author`, so who
+    counts as whom cannot be fixed in one and not the other.
+
+    Every "is admitted" assertion below is paired with the self-review that
+    must still be refused. The exclusion is what stops a PR author from
+    approving their own work; a fix that removes the false positive by
+    removing the check would pass one half of this class and fail the other.
+    """
+
+    PR_NUMBER = 1156
+    REPO = "noorinalabs/noorinalabs-main"
+    BRANCH_LASTNAME = "Ferreira"
+    BRANCH_INITIAL = "l"  # branch L.Ferreira/1151-cd-misroute-families
+
+    @staticmethod
+    def _verdict_comment(requestor: str, requestee: str, direction: str = "Approved") -> dict:
+        return {
+            "body": (
+                f"Requestor: {requestor}\nRequestee: {requestee}\n"
+                f"RequestOrReplied: {direction}\nTechDebt: None"
+            ),
+            "user": {"login": "anyone"},
+        }
+
+    def _reviewers(self, comments: list[dict], *, initial: str) -> set:
+        def fake_run(args, capture_output, text, timeout):  # noqa: ARG001
+            result = mock.MagicMock()
+            result.returncode = 0
+            result.stdout = json.dumps(comments)
+            return result
+
+        with mock.patch.object(hook.subprocess, "run", side_effect=fake_run):
+            return set(
+                hook.check_comment_reviews(
+                    self.PR_NUMBER,
+                    self.BRANCH_LASTNAME,
+                    repo=self.REPO,
+                    content_ts=None,
+                    branch_author_initial=initial,
+                ).reviewers
+            )
+
+    def test_same_surname_reviewer_is_counted(self):
+        """THE DEFECT: Santiago Ferreira's Approved on Lucas Ferreira's branch."""
+        reviewers = self._reviewers(
+            [self._verdict_comment("Santiago Ferreira", "Lucas Ferreira")],
+            initial=self.BRANCH_INITIAL,
+        )
+        self.assertIn("santiago ferreira", reviewers)
+
+    def test_branch_author_self_review_is_still_excluded(self):
+        """THE TRUE POSITIVE: Lucas Ferreira approving his own branch."""
+        reviewers = self._reviewers(
+            [self._verdict_comment("Lucas Ferreira", "Aino Virtanen")],
+            initial=self.BRANCH_INITIAL,
+        )
+        self.assertEqual(reviewers, set())
+
+    def test_both_ferreiras_reach_the_two_reviewer_threshold(self):
+        """The end the fix serves: #1156's second approval finally counts.
+
+        The self-review is present in the same comment list, so this also
+        pins that the exclusion is still doing its job while the colleague
+        is admitted.
+        """
+        reviewers = self._reviewers(
+            [
+                self._verdict_comment("Aino Virtanen", "Lucas Ferreira"),
+                self._verdict_comment("Santiago Ferreira", "Lucas Ferreira"),
+                self._verdict_comment("Lucas Ferreira", "Aino Virtanen"),
+            ],
+            initial=self.BRANCH_INITIAL,
+        )
+        self.assertEqual(reviewers, {"aino virtanen", "santiago ferreira"})
+
+    def test_changes_requested_from_same_surname_reviewer_is_tracked(self):
+        """His ChangesRequested must enter the latest-verdict ledger too.
+
+        `reviewers` holds only latest-verdict-Approved (#940), so a lone
+        ChangesRequested is invisible either way and would not discriminate.
+        Superseding it with an Approved does: pre-#1172 the colleague was
+        dropped at the exclusion and never reached the ledger at all, so the
+        set stayed empty.
+        """
+        reviewers = self._reviewers(
+            [
+                self._verdict_comment("Santiago Ferreira", "Lucas Ferreira", "Changes Requested"),
+                self._verdict_comment("Santiago Ferreira", "Lucas Ferreira", "Approved"),
+            ],
+            initial=self.BRANCH_INITIAL,
+        )
+        self.assertEqual(reviewers, {"santiago ferreira"})
+
+    def test_author_self_approval_after_changes_requested_is_still_excluded(self):
+        """The same sequence from the author himself stays out of the ledger."""
+        reviewers = self._reviewers(
+            [
+                self._verdict_comment("Lucas Ferreira", "Aino Virtanen", "Changes Requested"),
+                self._verdict_comment("Lucas Ferreira", "Aino Virtanen", "Approved"),
+            ],
+            initial=self.BRANCH_INITIAL,
+        )
+        self.assertEqual(reviewers, set())
+
+    def test_omitted_initial_degrades_to_the_stricter_surname_answer(self):
+        """The `""` default must fail CLOSED, not open.
+
+        Omitting `branch_author_initial` returns the pre-#1172 behaviour:
+        the colleague is mistaken for the author and dropped, so the count
+        goes DOWN and the merge blocks. Pinned so nobody "simplifies" the
+        default into one that admits an uncounted reviewer instead.
+        """
+        reviewers = self._reviewers(
+            [self._verdict_comment("Santiago Ferreira", "Lucas Ferreira")],
+            initial="",
+        )
+        self.assertEqual(reviewers, set())
+
+    def test_resolve_passes_the_branch_initial_through(self):
+        """Wiring: the initial must reach the exclusion from the head ref.
+
+        Without this the fix is inert in production — the unit above would
+        pass while every real merge still used the `""` default.
+        """
+        captured: dict = {}
+
+        def fake_check_comment_reviews(number, lastname, **kwargs):  # noqa: ARG001
+            captured.update(kwargs)
+            return hook.CommentReviewResult()
+
+        pr_data = {
+            "author": "parametrization",
+            "number": self.PR_NUMBER,
+            "reviews": [],
+            "headRefName": "L.Ferreira/1151-cd-misroute-families",
+            "labels": [],
+        }
+        with (
+            mock.patch.object(
+                hook, "check_comment_reviews", side_effect=fake_check_comment_reviews
+            ),
+            mock.patch.object(hook, "get_latest_content_commit", return_value=None),
+            mock.patch.object(hook, "_load_roster_names", return_value=set()),
+        ):
+            hook.resolve_review_verdicts(pr_data, repo=self.REPO)
+
+        self.assertEqual(captured.get("branch_author_initial"), "l")
+
+
 if __name__ == "__main__":
     unittest.main()

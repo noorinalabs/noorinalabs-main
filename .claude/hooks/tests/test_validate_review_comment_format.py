@@ -8,11 +8,14 @@ The hook parses:
 - Shell command segments to detect `gh pr comment` invocations (regex)
 - PR comment bodies in 3 quote forms: heredoc, single-quoted, double-quoted
 - `Requestor:`, `Requestee:`, `RequestOrReplied:` charter fields
-- Branch head ref name to extract author lastname
+- Branch head ref name to extract the author's identity
 
-The hook blocks when `Requestee` lastname matches the branch author lastname,
-indicating the operator copied the swapped form of the example (the failure
-mode #356/#372/#375 collectively addressed in surrounding hooks).
+The hook blocks when the `Requestor` IS the branch author, indicating the
+operator copied the swapped form of the example (the failure mode #356/#372/
+#375 collectively addressed in surrounding hooks). Post-#386 the compared
+field is `Requestor`, not `Requestee`; post-#1172 the comparison is on
+first-initial + lastname rather than lastname alone, because the roster holds
+distinct people who share a surname.
 
 Run: python3 -m unittest discover -s .claude/hooks/tests \
          -p "test_validate_review_comment_format.py"
@@ -571,6 +574,152 @@ class CrossRepoRegressionTests(unittest.TestCase):
         self.assertIn("validate_review_comment_format", stderr_text)
         self.assertIn("--repo", stderr_text)
         self.assertIn("#503", stderr_text)
+
+
+class SurnameCollisionTests(unittest.TestCase):
+    """Regression coverage for the #1172 unblockable false block.
+
+    Santiago Ferreira, second-slot reviewer on main#1156, wrote a complete
+    `Approved` verdict for branch `L.Ferreira/1151-cd-misroute-families`
+    (author Lucas Ferreira) and could not post it. The swap heuristic compared
+    SURNAMES, `Ferreira == Ferreira`, and the hook reported that "the branch
+    author is Ferreira — they should be the Requestee, not the Requestor."
+    Correct reviewer behaviour was indistinguishable from the swap the gate
+    exists to catch, on both the `gh pr comment` path and the REST
+    comment-create arm added for #932 — so there was no observable-body
+    workaround. The PR sat at 1 of 2 approvals.
+
+    Both directions are pinned here on purpose. Removing a false positive from
+    a gate is only a fix if the true positive survives it; the paired
+    assertions are what distinguish this change from disabling the check.
+    """
+
+    BRANCH = "L.Ferreira/1151-cd-misroute-families"  # author: Lucas Ferreira
+
+    @staticmethod
+    def _verdict(requestor: str, requestee: str, direction: str = "Approved") -> str:
+        return (
+            "gh pr comment 1156 --repo noorinalabs/noorinalabs-main "
+            "--body \"$(cat <<'EOF'\n"
+            "Looks correct.\n"
+            "\n---\n"
+            f"Requestor: {requestor}\n"
+            f"Requestee: {requestee}\n"
+            f"RequestOrReplied: {direction}\n"
+            "TechDebt: None\n"
+            'EOF\n)"'
+        )
+
+    def _check(self, command: str):
+        with mock.patch.object(hook, "get_branch_name", return_value=self.BRANCH):
+            return hook.check(_bash_input(command))
+
+    def test_same_surname_reviewer_is_allowed(self):
+        """THE DEFECT: Santiago Ferreira reviewing Lucas Ferreira's branch."""
+        result = self._check(self._verdict("Santiago Ferreira", "Lucas Ferreira"))
+        self.assertIsNone(result)
+
+    def test_same_surname_reviewer_is_allowed_on_changes_requested(self):
+        result = self._check(
+            self._verdict("Santiago Ferreira", "Lucas Ferreira", "Changes Requested")
+        )
+        self.assertIsNone(result)
+
+    def test_branch_author_naming_himself_still_blocks(self):
+        """THE TRUE POSITIVE the fix must not trade away.
+
+        A genuinely swapped verdict — the PR author as `Requestor` — is counted
+        wrong by `validate_pr_review`, which is why this gate exists. Lucas on
+        his own branch matches the initial AND the surname, so it still blocks.
+        """
+        result = self._check(self._verdict("Lucas Ferreira", "Santiago Ferreira"))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("swapped", result.get("reason", ""))
+
+    def test_branch_author_naming_himself_still_blocks_on_changes_requested(self):
+        result = self._check(
+            self._verdict("Lucas Ferreira", "Santiago Ferreira", "Changes Requested")
+        )
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+
+    def test_block_message_names_the_person_not_just_the_surname(self):
+        """The diagnostic must not say "the branch author is Ferreira".
+
+        That message is what made the defect hard to act on: it named a surname
+        two roster members share, so a correctly-behaving reviewer read it as
+        being about someone else.
+        """
+        result = self._check(self._verdict("Lucas Ferreira", "Santiago Ferreira"))
+        assert result is not None
+        self.assertIn("L.Ferreira", result.get("reason", ""))
+
+    @staticmethod
+    def _rest_command(requestor: str, requestee: str) -> str:
+        """A REST comment-create carrying a real multi-line body.
+
+        The newlines must be REAL. An earlier version of this fixture used
+        literal `\\n` two-character sequences, so the body was a single physical
+        line, `_direction_is_verdict` returned False, and `check()` returned at
+        the verdict-scope gate WITHOUT ever reaching `is_branch_author`. It
+        passed against the unfixed lastname-only predicate — inert, and claimed
+        in the PR body as the REST-arm coverage it was not
+        (`feedback_fixture_makes_guard_assertion_inert`, caught by Nino
+        Kavtaradze's mutation harness on this PR).
+        """
+        body = (
+            "Looks correct.\n\n---\n"
+            f"Requestor: {requestor}\n"
+            f"Requestee: {requestee}\n"
+            "RequestOrReplied: Approved\nTechDebt: None\n"
+        )
+        return (
+            "gh api repos/noorinalabs/noorinalabs-main/issues/1156/comments "
+            f'-X POST -f body="{body}"'
+        )
+
+    def test_rest_arm_allows_the_same_surname_reviewer(self):
+        """#932's REST arm is gated by the same predicate, so it must agree.
+
+        The defect blocked BOTH paths, which is why there was no workaround.
+        """
+        self.assertIsNone(self._check(self._rest_command("Santiago Ferreira", "Lucas Ferreira")))
+
+    def test_rest_arm_still_blocks_the_branch_author(self):
+        """The REST arm's true positive — without this the arm could be inert."""
+        result = self._check(self._rest_command("Lucas Ferreira", "Santiago Ferreira"))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("swapped", result.get("reason", ""))
+
+    def test_rest_arm_fixture_actually_reaches_the_identity_check(self):
+        """Liveness guard: the fixture must get PAST the verdict-scope gate.
+
+        Asserted directly, because the way this fixture failed before was by
+        returning `allow` for a reason that had nothing to do with identity —
+        which is indistinguishable from a correct allow in the test result.
+        """
+        cmd = self._rest_command("Santiago Ferreira", "Lucas Ferreira")
+        body = hook.extract_rest_comment_body(cmd)
+        self.assertIsNotNone(body)
+        assert body is not None
+        self.assertTrue(hook._direction_is_verdict(body))
+
+    def test_non_verdict_directions_remain_out_of_scope(self):
+        """Scope is unchanged: Request/Reply invert the role bindings (#378).
+
+        Pinned alongside the fix so a future widening of the identity
+        comparison cannot quietly widen the DIRECTIONS it applies to.
+        """
+        for direction in ("Request", "Reply", "Replied"):
+            with self.subTest(direction=direction):
+                self.assertIsNone(
+                    self._check(self._verdict("Lucas Ferreira", "Santiago Ferreira", direction))
+                )
 
 
 if __name__ == "__main__":

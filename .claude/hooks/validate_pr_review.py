@@ -135,9 +135,18 @@ Reviewer dedup key:
   the lastname. Two distinct reviewers with the same lastname (e.g.,
   "Lucas Ferreira" and "Santiago Ferreira") are counted as TWO reviewers
   toward the two-peer-review requirement (issue #164).
-  The author-equality check uses lastname because branches are named
-  `{Initial}.{Lastname}/...` and we only have the author's lastname to
-  compare against.
+
+  The author-equality check — which Requestor is the PR author and is
+  therefore NOT a peer reviewer — used to compare lastnames alone, on the
+  reasoning that the branch `{Initial}.{Lastname}/...` gave us nothing else.
+  It gave us the initial. So the #164 collision reappeared here in a second
+  form (main#1172): on `L.Ferreira/1151-…`, Santiago Ferreira's Approved was
+  discarded as a self-review and the PR sat at 1 of 2 approvals, while the
+  same collision made `validate_review_comment_format` refuse to let him post
+  the verdict at all. Both now compare first-initial + lastname through the
+  one shared `charter_trailer.is_branch_author`, so a fix to who-counts-as-
+  whom cannot land in one hook and not the other. A true self-review still
+  excludes: the author's own initial and surname both match their branch.
 
 Single-Reviewer Exception (resolves #228):
   When the PR is labeled `wave-bootstrap` AND there is exactly ONE distinct
@@ -177,7 +186,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 from _repo_flag_parse import extract_repo
 from annunaki_log import log_pretooluse_block
 from charter_trailer import (
+    branch_author_first_initial,
     extract_charter_field,
+    is_branch_author,
+    name_lastname,
     strip_code_regions,
     trailer_block_substring,
 )
@@ -885,12 +897,10 @@ _trailer_block_substring = trailer_block_substring
 _extract_charter_field = extract_charter_field
 
 
-def _name_lastname(full_name: str) -> str:
-    """Return the last name from a `Firstname Lastname` or `Firstname.Lastname` string."""
-    parts = re.split(r"[\s.]+", full_name)
-    if len(parts) >= 2:
-        return parts[-1]
-    return full_name
+# Name parsing lives in `charter_trailer` alongside the trailer convention, so
+# this hook and `validate_review_comment_format` cannot disagree about who a
+# person is (#1172). Historical private name kept for the existing test surface.
+_name_lastname = name_lastname
 
 
 def check_comment_reviews(
@@ -899,6 +909,7 @@ def check_comment_reviews(
     *,
     repo: str | None = None,
     content_ts: datetime | None,
+    branch_author_initial: str = "",
 ) -> CommentReviewResult:
     """Check PR comments for charter-format review comments from different authors.
 
@@ -926,6 +937,17 @@ def check_comment_reviews(
     weight toward the threshold must not be able to block the merge on a
     secondary attestation either. A verdict whose own `created_at` is missing or
     unparseable is treated as STALE, not fresh (fail closed).
+
+    `branch_author_initial` (#1172) is the branch prefix's first initial,
+    lowercased — the second half of the branch author's identity. Together with
+    `branch_author_lastname` it decides which Requestor is the PR author and is
+    therefore excluded from the reviewer set. It is keyword-only with a `""`
+    default because `""` is the honest value whenever the head ref carries no
+    `{Initial}.{Lastname}` prefix (wave-merge branches), and because omitting it
+    degrades to the pre-#1172 surname-only comparison — which OVER-excludes
+    (a same-surname colleague is mistaken for the author, the reviewer count
+    drops, the merge blocks). That is the fail-CLOSED direction, so unlike the
+    `content_ts` case below an omission cannot silently admit a merge.
 
     `content_ts` is a REQUIRED keyword-only argument (#1050) — it must be
     passed explicitly on every call, though `None` remains a legitimate
@@ -1018,8 +1040,15 @@ def check_comment_reviews(
             # not accumulated here — so a later ChangesRequested can withdraw
             # an earlier Approved (and vice versa) instead of only ever adding.
             if is_verdict_comment:
-                reviewer_lastname = _name_lastname(requestor)
-                if reviewer_lastname.lower() != branch_author_lastname.lower():
+                # Self-review exclusion (#1172): "is this reviewer the branch
+                # author?" is a question about a PERSON, not a surname. Keyed on
+                # surname alone, Santiago Ferreira's verdict on Lucas Ferreira's
+                # `L.Ferreira/…` branch was discarded as a self-review and the PR
+                # sat one approval short. `is_branch_author` compares
+                # first-initial + lastname — the full discriminator the branch
+                # prefix carries — and still excludes a real self-review, whose
+                # initial and surname both match.
+                if not is_branch_author(requestor, branch_author_lastname, branch_author_initial):
                     latest_verdict[requestor.lower()] = ror_value
 
             # TechDebt attestation is required on every verdict
@@ -1424,7 +1453,11 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
         branch_author_lastname = extract_branch_author_lastname(head_ref)
         if branch_author_lastname:
             comment_result = check_comment_reviews(
-                number, branch_author_lastname, repo=repo, content_ts=content_ts
+                number,
+                branch_author_lastname,
+                repo=repo,
+                content_ts=content_ts,
+                branch_author_initial=branch_author_first_initial(head_ref),
             )
         elif head_ref.startswith("deployments/") and "/wave-" in head_ref:
             # Wave-merge PR (head = deployments/phase-{N}/wave-{M}); no

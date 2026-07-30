@@ -161,10 +161,37 @@ is being named as the reviewer (the actual swap).
 The path-2 narrowing from #378 (verdict-only scope) is preserved unchanged;
 this hook only swaps which field is compared inside that scope.
 
+Identity comparison — surname is not a person (closes #1172)
+============================================================
+
+The swap condition above was implemented as a comparison of SURNAMES, and the
+roster contains distinct people who share one. On `L.Ferreira/1151-…` (author
+Lucas Ferreira) a verdict correctly authored by **Santiago Ferreira** put
+`Ferreira` on both sides of the test and was BLOCKED as a swap — on the
+`gh pr comment` path AND on the REST comment-create arm from #932, so there was
+no observable-body workaround and the verdict simply could not be posted.
+Correct reviewer behaviour was indistinguishable from the thing the gate exists
+to catch.
+
+The branch prefix `{FirstInitial}.{LastName}` already carries more signal than
+the surname, so the comparison is now first-initial + lastname, via the shared
+`charter_trailer.is_branch_author` — the same module that already owns the
+trailer convention, so this hook and `validate_pr_review` cannot drift on who a
+person is. `validate_pr_review` fixed the sibling defect for its reviewer-dedup
+key in #164 (key on the full name); this is that principle applied to the one
+comparison where the full name is not available on both sides.
+
+The check is NOT widened or disabled: a genuinely swapped verdict — the PR
+author naming themselves as `Requestor` — still blocks, because their initial
+and surname both match the branch. Gutting the heuristic would trade a false
+positive for a false negative in a gate, and `validate_pr_review` counts a
+swapped verdict wrong. When an initial is underivable on either side the
+comparison falls back to surname-only, i.e. to the stricter pre-#1172 answer.
+
 Exit codes:
   0 — allow (not a comment command, not a review comment, fields correct,
        or RequestOrReplied is not Approved/ChangesRequested)
-  2 — block (Requestor matches branch author on an Approved /
+  2 — block (Requestor IS the branch author on an Approved /
        ChangesRequested verdict — fields are swapped; OR the comment is a
        charter review comment the counting hook cannot parse — #932)
 """
@@ -183,7 +210,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 # a second, drifting copy of the rule is impossible rather than merely tested.
 from _repo_flag_parse import extract_repo
 from annunaki_log import log_pretooluse_block
-from charter_trailer import extract_charter_field, strip_code_regions
+from charter_trailer import (
+    branch_author_first_initial,
+    extract_charter_field,
+    is_branch_author,
+    name_lastname,
+    strip_code_regions,
+)
 
 CHARTER_FIELD = "RequestOrReplied"
 CHARTER_REF = ".claude/team/charter/pull-requests/reviews.md:9"
@@ -911,16 +944,26 @@ def check(input_data: dict) -> dict | None:
     # Gate 2 above has already established that this field parses inside the
     # trailer, so the value is non-None here.
     requestor_value = extract_charter_field("Requestor", body)
-    requestor_lastname = _extract_lastname(requestor_value or "")
 
-    if requestor_lastname.lower() == branch_author.lower():
+    # #1172: compare the PERSON, not the surname. The roster holds distinct
+    # people who share a lastname (Lucas Ferreira / Santiago Ferreira), and a
+    # lastname-only test made Santiago's correct verdict on `L.Ferreira/...`
+    # indistinguishable from Lucas reviewing himself — an unblockable false
+    # positive, since there is no observable-body workaround. The branch prefix
+    # already carries the first initial, so `is_branch_author` uses
+    # initial + lastname and only falls back to lastname when an initial is
+    # genuinely underivable. See `charter_trailer` § Person identity.
+    branch_initial = branch_author_first_initial(branch_name)
+
+    if is_branch_author(requestor_value or "", branch_author, branch_initial):
+        display = f"{branch_initial.upper()}.{branch_author}" if branch_initial else branch_author
         result = {
             "decision": "block",
             "reason": (
                 f"BLOCKED: Requestor/Requestee appears swapped. "
                 f"Requestor should be the reviewer (who is doing the review). "
                 f"Requestee should be the PR author (who is receiving the review). "
-                f"The branch author is {branch_author} — they should be the "
+                f"The branch author is {display} — they should be the "
                 f"Requestee, not the Requestor."
             ),
         }
@@ -930,20 +973,11 @@ def check(input_data: dict) -> dict | None:
     return None
 
 
-def _extract_lastname(field_value: str) -> str:
-    """Extract a lastname from a Requestor/Requestee field value.
-
-    Strips trailing markdown bolding, surrounding whitespace, and a trailing
-    parenthetical role annotation (e.g. `Nadia Khoury (Program Director)`).
-    Splits on whitespace or dot and returns the final token. Falls back to
-    the cleaned full name if there is no separator.
-    """
-    raw = field_value.strip().strip("*").strip()
-    cleaned = re.sub(r"\s*\(.*?\)\s*$", "", raw).strip()
-    parts = re.split(r"[\s.]+", cleaned)
-    if len(parts) >= 2:
-        return parts[-1]
-    return cleaned
+# Name parsing now lives in `charter_trailer` alongside the trailer convention,
+# so this hook and `validate_pr_review` cannot disagree about who a person is
+# (#1172). The historical private name is kept as an alias for the existing test
+# surface — do not reimplement it here.
+_extract_lastname = name_lastname
 
 
 def main() -> None:
