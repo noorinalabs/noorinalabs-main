@@ -182,8 +182,19 @@ def _canonical_issue_numbers_by_repo(wave: str, status_path: Path) -> dict[str, 
     return by_repo
 
 
-def _pr_closing_issue_numbers(repo: str, number: int) -> set[int]:
-    """Issue numbers GitHub recognises *number* as closing, via GraphQL.
+def _pr_closing_issue_numbers(repo: str, number: int) -> set[tuple[str, int]]:
+    """Repo-qualified issue numbers GitHub recognises *number* as closing.
+
+    Returns ``{(repo_name, issue_number), ...}`` — deliberately NOT bare
+    issue numbers (main#1189). A closing reference is not necessarily in
+    *repo*: child-repo PRs routinely close a parent meta-issue recorded
+    under a different repo (e.g. ``noorinalabs-main``), and two repos can
+    independently have an issue #N. Comparing bare numbers against a single
+    repo's canonical scope set either silently drops the cross-repo case
+    (under-count) or, on a same-number collision across repos, matches the
+    wrong issue (mis-attribution) — confirmed live via `gh api graphql`
+    against PR #1173. ``repository{name}`` is available on the same GraphQL
+    node at no extra cost.
 
     The REST-backed ``gh pr list --json`` surface (this org pins gh 2.45.0)
     has no ``closingIssuesReferences`` field, so this goes through
@@ -192,12 +203,21 @@ def _pr_closing_issue_numbers(repo: str, number: int) -> set[int]:
     #1171 were bundled into a single PR — the closing-reference set is the
     only reliable link between a scope row and the PR that actually delivered
     it under a direct-to-main wave.
+
+    ``first:100`` (raised from the pre-#1189 ``first:25``) — the same
+    silent-truncation family as :data:`_PR_LIST_LIMIT` below: a PR closing
+    more issues than the page size would otherwise drop the excess with no
+    signal. 100 is GitHub's GraphQL connection page-size ceiling for this
+    field, so it is the maximum obtainable in a single page; a PR closing
+    over 100 issues would need real pagination (``endCursor``/``hasNextPage``)
+    — no real wave has approached that, so it is flagged here rather than
+    silently left uncapped or unremarked.
     """
     query = (
         "query($owner:String!,$name:String!,$number:Int!){"
         "repository(owner:$owner,name:$name){"
         "pullRequest(number:$number){"
-        "closingIssuesReferences(first:25){nodes{number}}"
+        "closingIssuesReferences(first:100){nodes{number repository{name}}}"
         "}}}"
     )
     raw = _run_gh(
@@ -213,10 +233,12 @@ def _pr_closing_issue_numbers(repo: str, number: int) -> set[int]:
             "-F",
             f"number={number}",
             "--jq",
-            "[.data.repository.pullRequest.closingIssuesReferences.nodes[].number]",
+            "[.data.repository.pullRequest.closingIssuesReferences.nodes[]"
+            " | {number, repo: .repository.name}]",
         ]
     )
-    return {int(n) for n in json.loads(raw or "[]")}
+    nodes = json.loads(raw or "[]")
+    return {(str(n["repo"]), int(n["number"])) for n in nodes}
 
 
 def _merged_prs_wave_branch(phase: str, wave: str, status_path: Path) -> list[dict]:
@@ -287,7 +309,9 @@ def _merged_prs_wave_branch(phase: str, wave: str, status_path: Path) -> list[di
 _PR_LIST_LIMIT = 1000
 
 
-def _merged_prs_direct_to_main(wave: str, status_path: Path) -> list[dict]:
+def _merged_prs_direct_to_main(
+    wave: str, status_path: Path
+) -> tuple[list[dict], set[tuple[str, int]]]:
     """Build the wave's merged-PR set for a ``direct-to-main`` wave (main#1131).
 
     No wave branch exists under this model, so ``--base <wave-branch>``
@@ -297,9 +321,14 @@ def _merged_prs_direct_to_main(wave: str, status_path: Path) -> list[dict]:
     Instead: list merged-to-main PRs per in-scope repo, apply the existing
     ``wave_{M}_kicked_off_at`` cross-window filter as a pre-filter, then keep
     only the PRs whose GitHub-recognised closing-issue references intersect
-    that repo's canonical scope-issue set (:func:`_canonical_issue_numbers_by_repo`).
-    A repo with no canonical scope rows is skipped entirely rather than
-    querying every merged PR in that repo.
+    the wave's FULL canonical scope-issue set, across every repo
+    (:func:`_canonical_issue_numbers_by_repo`) — not just the queried repo's
+    own scope rows (main#1189: a closing reference is not necessarily in the
+    same repo as the PR, e.g. a child-repo PR closing a parent meta-issue, and
+    matching against only the queried repo's own numbers either drops that
+    case or, on a same-number collision across repos, attributes it to the
+    wrong issue). A repo with no canonical scope rows of its own is skipped
+    entirely rather than querying every merged PR in that repo.
 
     The listing itself is bounded two ways (main#1131 M2 — `gh pr list`
     defaults to `--limit 30`, and `--base main` removes the wave-branch's
@@ -310,12 +339,22 @@ def _merged_prs_direct_to_main(wave: str, status_path: Path) -> list[dict]:
     ``merged_at < kickoff`` filter below is kept as defense-in-depth in case
     the search qualifier's date granularity and the recorded kickoff instant
     ever disagree at the second.
+
+    Returns ``(merged_prs, claimed_pairs)`` — alongside the PR list, the set
+    of canonical ``(repo, issue_number)`` scope pairs actually claimed by some
+    merged PR's closing references. :func:`reconciliation_warning` (main#1190)
+    needs this to report scope rows no merged PR claims, without re-running
+    every ``gh api graphql`` closing-reference call a second time.
     """
     repos = read_repos(wave, status_path)
     kickoff = _kickoff_ts(wave, status_path)
     issue_numbers_by_repo = _canonical_issue_numbers_by_repo(wave, status_path)
+    canonical_pairs: set[tuple[str, int]] = {
+        (repo_name, n) for repo_name, nums in issue_numbers_by_repo.items() for n in nums
+    }
 
     out: list[dict] = []
+    claimed: set[tuple[str, int]] = set()
     for repo in repos:
         canonical_issues = issue_numbers_by_repo.get(repo)
         if not canonical_issues:
@@ -342,8 +381,10 @@ def _merged_prs_direct_to_main(wave: str, status_path: Path) -> list[dict]:
             if kickoff and merged_at < kickoff:
                 continue
             closes = _pr_closing_issue_numbers(repo, pr["number"])
-            if not closes & canonical_issues:
+            hit = closes & canonical_pairs
+            if not hit:
                 continue
+            claimed |= hit
             sha = pr["headRefOid"]
             commit_author = _commit_author_name(repo, sha)
             out.append(
@@ -356,7 +397,23 @@ def _merged_prs_direct_to_main(wave: str, status_path: Path) -> list[dict]:
                     "commit_author_name": commit_author,
                 }
             )
-    return out
+    return out, claimed
+
+
+def _merged_prs_with_claims(
+    phase: str, wave: str, status_path: Path
+) -> tuple[list[dict], set[tuple[str, int]] | None]:
+    """Dispatch on merge model, same as :func:`merged_prs`, but also surface
+    the claimed-canonical-pairs side channel :func:`_merged_prs_direct_to_main`
+    returns (``None`` under the wave-branch model, which has no
+    closing-issue-reference dependency to reconcile against). Single source
+    for both :func:`compute_counters` and the reconciliation warning so a CLI
+    invocation does not re-run every ``gh`` call a second time.
+    """
+    model = wave_merge_model.read_merge_model(wave, status_path)
+    if model == wave_merge_model.DIRECT_TO_MAIN:
+        return _merged_prs_direct_to_main(wave, status_path)
+    return _merged_prs_wave_branch(phase, wave, status_path), None
 
 
 def merged_prs(phase: str, wave: str, status_path: Path) -> list[dict]:
@@ -368,10 +425,55 @@ def merged_prs(phase: str, wave: str, status_path: Path) -> list[dict]:
     ``wave-branch`` and an unrecorded/legacy model (``None``) both keep the
     pre-existing behavior unchanged (:func:`_merged_prs_wave_branch`).
     """
-    model = wave_merge_model.read_merge_model(wave, status_path)
-    if model == wave_merge_model.DIRECT_TO_MAIN:
-        return _merged_prs_direct_to_main(wave, status_path)
-    return _merged_prs_wave_branch(phase, wave, status_path)
+    prs, _claimed = _merged_prs_with_claims(phase, wave, status_path)
+    return prs
+
+
+def _canonical_pairs(wave: str, status_path: Path) -> set[tuple[str, int]]:
+    """Flatten :func:`_canonical_issue_numbers_by_repo` into ``(repo, number)``
+    pairs across every repo — the same shape :func:`_merged_prs_direct_to_main`
+    matches closing references against."""
+    issue_numbers_by_repo = _canonical_issue_numbers_by_repo(wave, status_path)
+    return {(repo_name, n) for repo_name, nums in issue_numbers_by_repo.items() for n in nums}
+
+
+def _reconciliation_warning_from_claims(
+    wave: str, status_path: Path, claimed: set[tuple[str, int]] | None
+) -> str | None:
+    """Format the main#1190 reconciliation line from an already-computed
+    ``claimed`` set (see :func:`_merged_prs_with_claims`) — a pure function of
+    (canonical scope, claimed pairs), so it costs no extra ``gh`` calls beyond
+    whatever already produced ``claimed``.
+
+    Deliberately a WARNING, never an error: an open scope row is normal
+    mid-wave. Returns ``None`` for a wave-branch wave (``claimed is None`` —
+    that path's base+timestamp counting has no closing-reference dependency
+    to reconcile against) or when every canonical row is claimed.
+    """
+    if claimed is None:
+        return None
+    canonical = _canonical_pairs(wave, status_path)
+    if not canonical:
+        return None
+    unclaimed = sorted(canonical - claimed)
+    if not unclaimed:
+        return None
+    rows = ", ".join(f"{repo_name.removeprefix('noorinalabs-')}#{n}" for repo_name, n in unclaimed)
+    return f"scope rows with no matching merged PR: {rows} ({len(unclaimed)} of {len(canonical)})"
+
+
+def reconciliation_warning(phase: str, wave: str, status_path: Path) -> str | None:
+    """Public entry point for main#1190 — canonical scope rows no merged PR's
+    closing references claimed, under the direct-to-main path.
+
+    Runs its own single pass via :func:`_merged_prs_with_claims` (for callers,
+    e.g. tests, that want the warning in isolation); ``_cmd_counters`` and
+    ``_cmd_merged_prs`` instead reuse the pass they already ran, via
+    :func:`_reconciliation_warning_from_claims`, so a CLI invocation never
+    pays for the closing-reference lookups twice.
+    """
+    _prs, claimed = _merged_prs_with_claims(phase, wave, status_path)
+    return _reconciliation_warning_from_claims(wave, status_path, claimed)
 
 
 def _changes_requested_cycles(prs: list[dict]) -> int:
@@ -406,14 +508,18 @@ def _top_concentration_pct(prs: list[dict]) -> int:
     return math.floor(top * 100 / total + 0.5)
 
 
-def compute_counters(phase: str, wave: str, status_path: Path) -> dict[str, int]:
-    """Compute the three canonical wave counters from the merged-PR set."""
-    prs = merged_prs(phase, wave, status_path)
+def _compute_counters_from_prs(prs: list[dict]) -> dict[str, int]:
     return {
         "final_pr_count": len(prs),
         "changes_requested_cycles": _changes_requested_cycles(prs),
         "top_concentration_pct": _top_concentration_pct(prs),
     }
+
+
+def compute_counters(phase: str, wave: str, status_path: Path) -> dict[str, int]:
+    """Compute the three canonical wave counters from the merged-PR set."""
+    prs = merged_prs(phase, wave, status_path)
+    return _compute_counters_from_prs(prs)
 
 
 def _write_counters(wave: str, counters: dict[str, int], status_path: Path) -> int:
@@ -539,13 +645,26 @@ def _cmd_repos(args: argparse.Namespace) -> int:
 
 
 def _cmd_merged_prs(args: argparse.Namespace) -> int:
-    print(json.dumps(merged_prs(args.phase, args.wave, args.status), indent=2))
+    prs, claimed = _merged_prs_with_claims(args.phase, args.wave, args.status)
+    print(json.dumps(prs, indent=2))
+
+    warning = _reconciliation_warning_from_claims(args.wave, args.status, claimed)
+    if warning:
+        print(f"WARNING: {warning}", file=sys.stderr)
     return 0
 
 
 def _cmd_counters(args: argparse.Namespace) -> int:
-    counters = compute_counters(args.phase, args.wave, args.status)
+    prs, claimed = _merged_prs_with_claims(args.phase, args.wave, args.status)
+    counters = _compute_counters_from_prs(prs)
     print(json.dumps(counters, indent=2))
+
+    # main#1190: a reconciliation WARNING (never an error -- an open scope
+    # row is normal mid-wave), computed from the same pass above so this
+    # never re-runs the closing-reference `gh` calls.
+    warning = _reconciliation_warning_from_claims(args.wave, args.status, claimed)
+    if warning:
+        print(f"WARNING: {warning}", file=sys.stderr)
 
     if args.expect is not None and counters["final_pr_count"] != args.expect:
         print(

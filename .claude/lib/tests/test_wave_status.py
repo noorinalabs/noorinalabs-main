@@ -398,6 +398,14 @@ class _FakeGhDirectToMain:
     commit_author, closes (the issue numbers GitHub records this PR as
     closing — NOT assumed to equal the PR number, mirroring main#1172 being
     delivered by PR #1173).
+
+    ``closes`` entries are repo-qualifiable (main#1189): a bare int (e.g.
+    ``1172``) means "closes that number in this PR's own repo" — the shape
+    every pre-#1189 fixture uses, kept working unchanged. A ``(repo, number)``
+    tuple (e.g. ``("noorinalabs-main", 1172)``) means "closes that number in
+    a DIFFERENT repo" — the cross-repo case the fixture could not previously
+    express at all (a bare-int list has no way to name a repo other than the
+    PR's own), which is exactly the gap main#1189 fixes.
     """
 
     def __init__(self, prs: list[dict]) -> None:
@@ -452,7 +460,17 @@ class _FakeGhDirectToMain:
             closes = next(
                 p["closes"] for p in self.prs if p["repo"] == repo and p["number"] == number
             )
-            return SimpleNamespace(stdout=json.dumps(closes), returncode=0, stderr="")
+            # Mirrors the real `--jq` filter's output shape (main#1189):
+            # `[{number, repo: .repository.name}]`. A bare int closes-entry
+            # defaults to the PR's own repo; a `(repo, number)` tuple names a
+            # different repo explicitly.
+            nodes = [
+                {"number": c[1], "repo": c[0]}
+                if isinstance(c, tuple)
+                else {"number": c, "repo": repo}
+                for c in closes
+            ]
+            return SimpleNamespace(stdout=json.dumps(nodes), returncode=0, stderr="")
 
         if cmd[1] == "api":
             path = cmd[2]
@@ -469,8 +487,22 @@ class _FakeGhDirectToMain:
         raise AssertionError(f"unexpected gh call: {cmd!r}")
 
 
-def _scope_row(issue_number: int) -> dict:
-    return {"id": f"noorinalabs-main#{issue_number}", "ref": f"main#{issue_number}"}
+def _scope_row(entry: int | tuple[str, int]) -> dict:
+    """A ``wave_{M}_scope`` tier row, shaped like the real record.
+
+    A bare int defaults to ``noorinalabs-main`` (every pre-#1189 call site's
+    assumption, kept working unchanged). A ``(repo, issue_number)`` tuple
+    names a different repo explicitly -- the shape needed to express a
+    multi-repo canonical scope for the main#1189 cross-repo regression test.
+    """
+    if isinstance(entry, tuple):
+        repo, issue_number = entry
+    else:
+        repo, issue_number = "noorinalabs-main", entry
+    return {
+        "id": f"{repo}#{issue_number}",
+        "ref": f"{repo.removeprefix('noorinalabs-')}#{issue_number}",
+    }
 
 
 def _write_direct_to_main_status(
@@ -739,6 +771,188 @@ class MergedPrsDirectToMain(unittest.TestCase):
             counters,
             {"final_pr_count": 0, "changes_requested_cycles": 0, "top_concentration_pct": 0},
         )
+
+    def test_cross_repo_closing_reference_no_undercount_or_misattribution(self) -> None:
+        """main#1189: a closing reference is not necessarily in the closing
+        PR's own repo -- child-repo PRs routinely close a parent meta-issue
+        recorded under a different repo. Two failure modes proven together:
+
+        PR #77 (repo noorinalabs-isnad-graph) closes noorinalabs-main#1200 --
+        a genuine CROSS-REPO scope row, not one of isnad-graph's own rows.
+        Bare-number matching against only isnad-graph's own canonical set
+        ({50, 500}) would never see 1200 there and DROP a real match
+        (under-count).
+
+        PR #80 (also repo noorinalabs-isnad-graph) closes
+        noorinalabs-main#500 -- an issue that only numerically COLLIDES with
+        isnad-graph's own scope row #500 (a different, unrelated issue).
+        Bare-number matching against isnad-graph's own canonical set would
+        find 500 there and wrongly count PR #80 as closing isnad-graph#500
+        (mis-attribution).
+
+        Repo-qualified matching against the FULL (repo, number) canonical set
+        gets both right: PR #77 counted, PR #80 excluded.
+        """
+        prs = [
+            {
+                "repo": "noorinalabs-isnad-graph",
+                "number": 77,
+                "sha": "sha77",
+                "mergedAt": "2026-07-30T03:00:00Z",
+                "login": "octocat",
+                "commit_author": "Cross Repo Author",
+                "closes": [("noorinalabs-main", 1200)],
+            },
+            {
+                "repo": "noorinalabs-isnad-graph",
+                "number": 80,
+                "sha": "sha80",
+                "mergedAt": "2026-07-30T03:05:00Z",
+                "login": "octocat",
+                "commit_author": "Collision Author",
+                "closes": [("noorinalabs-main", 500)],  # NOT isnad-graph's own #500
+            },
+        ]
+        fake = _FakeGhDirectToMain(prs)
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            scope: dict = {"theme": "test fixture", "merge_model": "direct-to-main"}
+            scope["tier_1_main"] = [_scope_row(("noorinalabs-main", 1200))]
+            scope["tier_2_isnad_graph"] = [
+                _scope_row(("noorinalabs-isnad-graph", 50)),
+                _scope_row(("noorinalabs-isnad-graph", 500)),
+            ]
+            data = {
+                "current_wave": 29,
+                "wave_29_repos_in_scope": ["noorinalabs-main", "noorinalabs-isnad-graph"],
+                "wave_29_kicked_off_at": "2026-07-27T22:56:17Z",
+                "wave_29_merge_model": "direct-to-main",
+                "wave_29_scope": scope,
+            }
+            status.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            with mock.patch.object(wave_status.subprocess, "run", fake):
+                got = wave_status.merged_prs("10", "29", status)
+        self.assertEqual([p["number"] for p in got], [77])
+
+
+class ReconciliationWarning(unittest.TestCase):
+    """main#1190: canonical scope rows no merged PR's closing references
+    claimed are surfaced as a WARNING (never an error, never silently
+    dropped)."""
+
+    def test_warns_on_unclaimed_canonical_scope_rows(self) -> None:
+        prs = [
+            {
+                "repo": "noorinalabs-main",
+                "number": 1173,
+                "sha": "sha1173",
+                "mergedAt": "2026-07-30T02:16:40Z",
+                "login": "octocat",
+                "commit_author": "Nino Kavtaradze",
+                "closes": [1172],
+            }
+        ]
+        fake = _FakeGhDirectToMain(prs)
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            _write_direct_to_main_status(
+                status,
+                wave="29",
+                repos=["noorinalabs-main"],
+                kickoff="2026-07-27T22:56:17Z",
+                tiers={"tier_4_in_wave_findings": [1172, 1160, 1162]},
+            )
+            with mock.patch.object(wave_status.subprocess, "run", fake):
+                warning = wave_status.reconciliation_warning("10", "29", status)
+        self.assertIsNotNone(warning)
+        assert warning is not None  # narrows the type for the checks below
+        self.assertIn("scope rows with no matching merged PR", warning)
+        self.assertIn("main#1160", warning)
+        self.assertIn("main#1162", warning)
+        self.assertNotIn("main#1172", warning)  # claimed by PR #1173 -- must not appear
+        self.assertIn("2 of 3", warning)
+
+    def test_no_warning_when_every_scope_row_is_claimed(self) -> None:
+        prs = [
+            {
+                "repo": "noorinalabs-main",
+                "number": 1173,
+                "sha": "sha1173",
+                "mergedAt": "2026-07-30T02:16:40Z",
+                "login": "octocat",
+                "commit_author": "Nino Kavtaradze",
+                "closes": [1172],
+            }
+        ]
+        fake = _FakeGhDirectToMain(prs)
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            _write_direct_to_main_status(
+                status,
+                wave="29",
+                repos=["noorinalabs-main"],
+                kickoff="2026-07-27T22:56:17Z",
+                tiers={"tier_4_in_wave_findings": [1172]},
+            )
+            with mock.patch.object(wave_status.subprocess, "run", fake):
+                warning = wave_status.reconciliation_warning("10", "29", status)
+        self.assertIsNone(warning)
+
+    def test_no_warning_under_wave_branch_model(self) -> None:
+        """The wave-branch path's base+timestamp counting has no
+        closing-reference dependency -- reconciliation is a
+        direct-to-main-only concept."""
+        prs = _p5w4_prs()
+        fake = _FakeGh(prs)
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            data = {
+                "wave_4_repos_in_scope": _REPOS,
+                "wave_4_kicked_off_at": "2026-06-15T01:52:55Z",
+                "wave_4_merge_model": "wave-branch",
+            }
+            status.write_text(json.dumps(data))
+            with mock.patch.object(wave_status.subprocess, "run", fake):
+                warning = wave_status.reconciliation_warning("5", "4", status)
+        self.assertIsNone(warning)
+
+    def test_cmd_counters_emits_warning_to_stderr_not_stdout(self) -> None:
+        """The warning must not corrupt the counters JSON on stdout (a
+        `--write` caller pipes stdout) -- it goes to stderr, same channel as
+        the existing ERROR lines."""
+        import io
+        from contextlib import redirect_stderr, redirect_stdout
+
+        prs = [
+            {
+                "repo": "noorinalabs-main",
+                "number": 1173,
+                "sha": "sha1173",
+                "mergedAt": "2026-07-30T02:16:40Z",
+                "login": "octocat",
+                "commit_author": "Nino Kavtaradze",
+                "closes": [1172],
+            }
+        ]
+        fake = _FakeGhDirectToMain(prs)
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            _write_direct_to_main_status(
+                status,
+                wave="29",
+                repos=["noorinalabs-main"],
+                kickoff="2026-07-27T22:56:17Z",
+                tiers={"tier_4_in_wave_findings": [1172, 1160]},
+            )
+            out, err = io.StringIO(), io.StringIO()
+            with mock.patch.object(wave_status.subprocess, "run", fake):
+                with redirect_stdout(out), redirect_stderr(err):
+                    rc = wave_status.main(["counters", "10", "29", "--status", str(status)])
+        self.assertEqual(rc, 0)
+        stdout_val = out.getvalue()
+        stderr_val = err.getvalue()
+        json.loads(stdout_val)  # stdout is pure valid JSON -- no warning text mixed in
+        self.assertIn("main#1160", stderr_val)
 
 
 class PrListPageCap(unittest.TestCase):
