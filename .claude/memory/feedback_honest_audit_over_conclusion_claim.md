@@ -35,6 +35,6 @@ Before asserting that a wave, workstream, or milestone is "concluded", "complete
 
 **Related memories:**
 - `feedback_verify_diagnosis_before_delegating.md` — ground-truth check before action.
-- `feedback_search_before_filing.md` — survey existing state before adding.
+- `.claude/skills/file-bug/SKILL.md` § "Pass A — search-before-filing" — survey existing state before adding. (Was the `feedback_search_before_filing` memory; promoted into the skill, which lists it as one of its 3 consolidated sources.)
 
 **Origin:** Surfaced 2026-04-22 during wave-9 wrapup. Added after owner correction.

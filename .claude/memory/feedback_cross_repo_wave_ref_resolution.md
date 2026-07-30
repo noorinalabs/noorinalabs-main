@@ -2,6 +2,7 @@
 name: feedback_cross_repo_wave_ref_resolution
 description: Workflows that check out sibling repos for cross-repo tests must resolve refs to the wave branch (with main fallback) when running against wave-PR base
 type: feedback
+last_verified: 2026-07-27
 originSessionId: af6f52a7-e25c-41f4-9365-06539062b665
 promotion_target: hook
 promotion_threshold:

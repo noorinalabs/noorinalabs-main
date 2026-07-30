@@ -2,12 +2,13 @@
 name: user_steven
 description: Project owner preferences, working style, enforcement expectations, and role context
 type: user
+last_verified: 2026-07-27
 promotion_target: none
 status: active
 ---
 
 - Project owner of Noorina Labs, manages all repos
-- Git identity: Steven French / parameterization@gmail.com
+- Git identity: `Steven French <parametrization@gmail.com>` — verified 2026-07-27 against `git log` authorship in this repo. Note the spelling: **`parametrization`**, no `e` after `paramet` (the *home directory* is `/home/parameterization/`, which is spelled differently — do not copy it into an email/identity field). Team members commit as `parametrization+{First}.{Last}@gmail.com` off this same mailbox.
 - Prefers autonomous execution — don't ask permission for things the charter already defines (e.g., end-of-wave process should auto-trigger)
 - Expects charter compliance — will call out when review gates, peer reviews, retros, or process steps are skipped
 - **Enforcement priority: hooks > skills > charter rules** — Steven repeatedly asks "how do we make sure this happens every time?" Prefers hard technical enforcement over behavioral reminders. If a process step keeps getting skipped, build a hook to block the violation.

@@ -9,7 +9,7 @@ metadata:
 
 Before relying on a PostToolUse hook to do work for you (Hook 21 setting Wave field, Hook 13 adding to board, annunaki_monitor logging errors), **verify the hook is actually firing in the current session**.
 
-**Why:** P3W11 resume session 2026-05-17 — Hook 21 hotfix #449 was merged, direct `check()` calls worked, dispatcher shell-invoked worked, but Claude Code's actual PostToolUse Bash hook did not fire on real `gh issue edit` calls. Result: 5+ ops fired with no Wave field set, manual GraphQL compensation required, batch paused. Session was running under `claude --dangerously-skip-permissions` with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` on v2.1.143 — exact trigger condition still under investigation (see [[session_handoff]] for #453 link).
+**Why:** P3W11 resume session 2026-05-17 — Hook 21 hotfix #449 was merged, direct `check()` calls worked, dispatcher shell-invoked worked, but Claude Code's actual PostToolUse Bash hook did not fire on real `gh issue edit` calls. Result: 5+ ops fired with no Wave field set, manual GraphQL compensation required, batch paused. Session was running under `claude --dangerously-skip-permissions` with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` on v2.1.143 — exact trigger condition still under investigation (tracked in main#453; the original pointer was to `session_handoff.md`, which is gitignored/machine-local and so never resolves for another reader).
 
 **How to apply:**
 - At session start, after `/session-start`, fire one disposable test that SHOULD log to annunaki (e.g., `ls /nonexistent/path`) and verify a new entry appears in `.claude/annunaki/errors.jsonl`

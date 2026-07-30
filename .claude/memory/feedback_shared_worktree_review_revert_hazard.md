@@ -13,7 +13,7 @@ When multiple reviewers are assigned to one PR and the orchestrator points them 
 **Why:** a review verdict must certify the *committed* code, not a working copy some other process is mutating. A shared-worktree test run can pass or fail for reasons that have nothing to do with the PR, and the reviewer would never know which.
 
 **How to apply:**
-- **Reviewer:** never review from a worktree another agent might be mutating. `gh pr checkout <N>` into your own dir, or `git worktree add <scratch> <head_sha>` at the PR's committed head SHA, and run tests there. Anchor on the head SHA, not the PR number ([[feedback_verdict_head_sha_anchoring]]) — deterministic and immune to concurrent writes.
+- **Reviewer:** never review from a worktree another agent might be mutating. `gh pr checkout <N>` into your own dir, or `git worktree add <scratch> <head_sha>` at the PR's committed head SHA, and run tests there. Anchor on the head SHA, not the PR number ([[feedback_pr_review_verdict_format]] §7) — deterministic and immune to concurrent writes.
 - **Orchestrator (brief):** when assigning ≥2 reviewers to one PR, do NOT tell them to reuse the implementer's worktree. Tell each to work from their own isolated checkout at the committed head SHA. The revert-to-test step guarantees a collision otherwise.
 
 Related: [[feedback_cwd_collision_cross_spawn]] (two agents sharing one cwd on different branches), [[feedback_subagent_worktree_wrong_repo]] (worktree isolation targets the parent org repo).
