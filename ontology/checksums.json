@@ -446,10 +446,10 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "ontology/conventions.md": {
-      "last_tracked": "895d5d20a9c9d18f60f138d5ae2f8bd4a71a8b1d0fc96f618ac0d601f1478f3c",
-      "last_resolved": "895d5d20a9c9d18f60f138d5ae2f8bd4a71a8b1d0fc96f618ac0d601f1478f3c",
-      "tracked_at": "2026-07-27T04:28:48.880164+00:00",
-      "resolved_at": "2026-07-27T04:29:25.707892+00:00"
+      "last_tracked": "5c5675b4010b74cf70716db6bf44cd186f505869a53ea1ce344e5103905bc76b",
+      "last_resolved": "5c5675b4010b74cf70716db6bf44cd186f505869a53ea1ce344e5103905bc76b",
+      "tracked_at": "2026-07-30T02:51:44.515593+00:00",
+      "resolved_at": "2026-07-30T02:51:53.713584+00:00"
     },
     "ontology/domain.yaml": {
       "last_resolved": "6fedad509f80b9570d0385fb5759e861d8b6f7b219ecc425b8dd472173ca536c",
@@ -900,10 +900,10 @@
       "resolved_at": "2026-07-19T01:37:50Z"
     },
     ".claude/memory/feedback_wave_branch_merge_not_squash.md": {
-      "last_tracked": "770dd8aac2e3c1ce3a6540c3b306febe2af7cbc7536407cc6414989126d60b68",
-      "last_resolved": "770dd8aac2e3c1ce3a6540c3b306febe2af7cbc7536407cc6414989126d60b68",
-      "tracked_at": "2026-06-25T23:48:03.781328+00:00",
-      "resolved_at": "2026-06-25T00:00:00Z"
+      "last_tracked": "7d0c3fd81435fa25b2a1da6ea4b4b122034547864f90e1ef2f7d39f76df1f753",
+      "last_resolved": "7d0c3fd81435fa25b2a1da6ea4b4b122034547864f90e1ef2f7d39f76df1f753",
+      "tracked_at": "2026-07-30T02:49:08.160634+00:00",
+      "resolved_at": "2026-07-30T02:51:53.713584+00:00"
     },
     "noorinalabs-data-acquisition/src/parse/narrator_extraction.py": {
       "last_tracked": "3577e51c598c15422dfbeac3d41911138fb28ed328bde1824281f49d676f3464",
@@ -1660,6 +1660,24 @@
       "last_resolved": "412dd0efde8b9b31d43ed8649da0f745496f20e433a43cb85e20c6b33f3d7d24",
       "tracked_at": "2026-07-27T05:09:19.048088+00:00",
       "resolved_at": "2026-07-27T05:09:45.226766+00:00"
+    },
+    ".claude/team/charter/pull-requests/reviews.md": {
+      "last_tracked": "b5827f5b347ebdaef8f390e3f3741a5b30de51bc88c2ed7fc7cfe731fb57d43b",
+      "last_resolved": "b5827f5b347ebdaef8f390e3f3741a5b30de51bc88c2ed7fc7cfe731fb57d43b",
+      "tracked_at": "2026-07-30T02:48:11.272217+00:00",
+      "resolved_at": "2026-07-30T02:51:53.713584+00:00"
+    },
+    ".claude/team/charter/pull-requests/wave-merge.md": {
+      "last_tracked": "ef98453b760ba49f99cc659b3866631ea558ad50420c29ef8058c4943fcf3e79",
+      "last_resolved": "ef98453b760ba49f99cc659b3866631ea558ad50420c29ef8058c4943fcf3e79",
+      "tracked_at": "2026-07-30T02:48:32.088871+00:00",
+      "resolved_at": "2026-07-30T02:51:53.713584+00:00"
+    },
+    ".claude/memory/section_review_pr_merge.md": {
+      "last_tracked": "29ccefde34473c4f751ef7f737c484f2f6089972d096543f8b7e6db557d3b3d5",
+      "last_resolved": "29ccefde34473c4f751ef7f737c484f2f6089972d096543f8b7e6db557d3b3d5",
+      "tracked_at": "2026-07-30T02:49:15.916041+00:00",
+      "resolved_at": "2026-07-30T02:51:53.713584+00:00"
     }
   },
   "last_cleanup": {

@@ -200,6 +200,7 @@ Existing 3-digit ADRs are not merge-blockers; renames are mechanical and reversi
 - Charter-format review comments (Requestor/Requestee/RequestOrReplied/TechDebt)
 - Must-fix items block merge; tech-debt items get GitHub Issues
 - CI must be green before merge (enforced by hooks)
+- **Merge method is `gh pr merge <N> --merge` — NEVER `--squash`, on every base including `main`** (owner directive 2026-07-30; charter `pull-requests/reviews.md` + `pull-requests/wave-merge.md`). Squash re-authors the commit to the bare `parametrization` principal because every persona email is a Gmail `+alias` of that one account, discarding persona authorship. **Hook 22 (`block_squash_wave_merge.py`) enforces this only for `deployments/phase-*/wave-*` bases — a squash into `main` is NOT blocked** (gap tracked by #1177), so on `main` this is convention-enforced and must be checked by the operator
 - Cross-contract PRs (shared Kafka topics, Parquet schemas, wire formats): first PR opened must include a `## Contract` section; subsequent PRs link to it and document divergence (P2W9 retro, 2026-04-22)
 - **End-state/rollout criterion = mechanism APPLIED + verified at origin, not just delivered** — rollout/end-state issues distinguish "shipped" (specs/scripts merged) from "enforced" (API-verifiable at origin, e.g. rulesets endpoint returns the ruleset) before the criterion is closed as met (W14 retro proposal #3, adopted PR #583; charter `pull-requests.md`)
 
