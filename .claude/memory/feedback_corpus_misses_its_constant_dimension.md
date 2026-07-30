@@ -21,6 +21,15 @@ A test corpus that varies N dimensions and holds one fixed will pass cleanly whi
 
 **That third case is the point, and the fourth confirms it generalises.** Knowing the rule does not prevent the failure, because the held-constant dimension is *invisible from inside the corpus*: nothing in a green result names what was never varied. Awareness is not a control; enumeration is. Note the progression — author → reviewer → orchestrator → reviewer-again, four parties, each blind in the axis their own corpus fixed.
 
+**Corpus SIZE is itself a dimension, and this is the least obvious one.** Same PR, same base→head comparison, two sweep sizes:
+
+| corpus | result | reads as |
+|---|---|---|
+| 17,252 commands | 175/175 BLOCK, **0 verdict changes** | "no effect on real traffic" |
+| 74,782 commands (1,830 transcript files) | **0 weakened, 4 strengthened** | live-trace evidence the fix catches real bypasses |
+
+The four are genuine true positives — three `bash -euo pipefail -c '… git commit …'` and one `bash <script>` that commits. The small sweep was not wrong, but **"0 changes" and "4 true positives found" are very different evidentiary claims**, and only the larger corpus distinguishes "the fix is inert on real traffic" from "the fix fires on real traffic and nothing regressed." A clean small sweep is weaker evidence than it reads. Applies to every hook PR that cites an FP sweep.
+
 **The durable form of the control (author's framing, sharper than mine): an adversarial corpus needs a declared DIMENSION list, not a shape list.** A shape list enumerates what you tried; a dimension list enumerates the space, so what you did *not* try is readable off the same artifact. Ship the dimension list with the corpus and a reviewer can find the gap without re-deriving your reasoning.
 
 **Pin the axis so it cannot decay.** The eventual fix added payload shape as a first-class dimension (26 forms × 8 prefixes) *plus* `test_oracle_is_sensitive_to_the_payload_dimension`, asserting the new axis actually flips an answer — otherwise a dimension can be present in the matrix and inert in effect, which reads as coverage. Also worth pinning the *insufficiency*: mutation `M11` reverts to the reviewer's one-liner and fails 18 tests, so "this narrower fix is not enough" is now a permanent assertion rather than a memory.
