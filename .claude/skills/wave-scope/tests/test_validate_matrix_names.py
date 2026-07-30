@@ -11,6 +11,7 @@ org-dir state (which changes wave-to-wave).
 
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -19,6 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from validate_matrix_names import (  # noqa: E402
+    _load_org_manifest_names,
     _override_rationale,
     _print_report_to_stderr,
     repo_of_row,
@@ -559,6 +561,215 @@ class ScopeModeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             org = _build_fake_org_dir(Path(tmpdir))
             self.assertEqual(validate_scope({"theme": "x"}, org), {})
+
+
+class OrgUnionManifestTests(unittest.TestCase):
+    """#1162: a reviewer drawn from a THIRD child repo must resolve.
+
+    The parent side of the #319 union is the parent's CARD DIRECTORY (9 names),
+    not the org-union MANIFEST (78 names). A reviewer who is a real persona in
+    some other child repo is on neither the parent's cards nor the target
+    repo's, so it was reported UNRESOLVED "(no close matches)" — hard-blocking
+    /wave-scope § 12.5 and /wave-kickoff § 0b on an assignment the charter
+    explicitly permits (spawn-discipline.md § Child-Repo Implementer Rule
+    step 5). Live W28 instance: Nikolaos Papadopoulos / Oyunbileg Batbayar
+    (cards in noorinalabs-data-acquisition) reviewing isnad-ingest-platform.
+
+    Every test here that turns on the reviewer half FAILS against the
+    pre-#1162 validator. The implementer-half guards additionally pin that the
+    OBVIOUS over-broad fix — unioning the manifest into every slot — is not
+    what landed: they go red under that mutation.
+    """
+
+    THIRD_CHILD_REVIEWER = "Nikolaos Papadopoulos"
+
+    def _build_org(self, tmp: Path, *, manifest: object | None = None) -> Path:
+        """Fake org dir + a third child repo + the target repo + a manifest.
+
+        `manifest=None` writes the realistic manifest (parent cards + both
+        children + the third-child reviewer). Pass an explicit value to write
+        something else, or `_build_org(..., manifest=False)` for no file.
+        """
+        org = _build_fake_org_dir(tmp)
+        # Third child repo — where the reviewer's card actually lives.
+        _write_roster_card(
+            org / "noorinalabs-data-acquisition" / ".claude" / "team" / "roster",
+            "data_engineer_nikolaos",
+            self.THIRD_CHILD_REVIEWER,
+        )
+        # Target child repo — cloned, so membership is decidable.
+        _write_roster_card(
+            org / "noorinalabs-isnad-ingest-platform" / ".claude" / "team" / "roster",
+            "eng_farhan",
+            "Farhan Malik",
+        )
+        if manifest is None:
+            manifest = {
+                name: f"parametrization+{name.replace(' ', '.')}@gmail.com"
+                for name in (
+                    "Nadia Khoury",
+                    "Wanjiku Mwangi",
+                    "Aino Virtanen",
+                    "Anya Kowalczyk",
+                    "Farhan Malik",
+                    self.THIRD_CHILD_REVIEWER,
+                )
+            }
+        if manifest is not False:
+            path = org / ".claude" / "team" / "roster.json"
+            path.write_text(json.dumps(manifest, indent=2))
+        return org
+
+    def test_third_child_reviewer_resolves_and_implementer_stays_gated(self):
+        """The live reproducer, both halves — this is the #1162 acceptance test.
+
+        Half 1 (the fix): the third-child reviewer resolves and is NOT
+        membership-gated. Half 2 (the carve-out): the same name in the
+        `implementer` slot still does not resolve, because the manifest
+        deliberately does not widen the commit-capable resolution set.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            reviewed = {
+                "noorinalabs-isnad-ingest-platform": {
+                    "implementer": "Farhan Malik",  # target-repo member
+                    "reviewer": self.THIRD_CHILD_REVIEWER,
+                    "merge_gate_reviewer": self.THIRD_CHILD_REVIEWER,
+                }
+            }
+            report = validate(reviewed, org)
+            findings = report["noorinalabs-isnad-ingest-platform"]
+            for f in findings:
+                self.assertTrue(f["resolved"], f"{f['declared']} should resolve")
+            by_role = {f["role"]: f for f in findings}
+            self.assertEqual(by_role["reviewer"]["membership"], "n/a")
+            self.assertEqual(by_role["merge_gate_reviewer"]["membership"], "n/a")
+            self.assertEqual(by_role["implementer"]["membership"], "member")
+            self.assertEqual(_print_report_to_stderr(report), 0)
+
+            # Half 2 — same org, same name, commit-capable slot.
+            implemented = {
+                "noorinalabs-isnad-ingest-platform": {
+                    "implementer": self.THIRD_CHILD_REVIEWER,
+                }
+            }
+            impl_report = validate(implemented, org)
+            impl = impl_report["noorinalabs-isnad-ingest-platform"][0]
+            self.assertFalse(impl["resolved"], "manifest must not widen the implementer slot")
+            self.assertEqual(impl["membership"], "n/a")
+            self.assertEqual(_print_report_to_stderr(impl_report), 1)
+
+    def test_manifest_does_not_pass_implementer_on_uncloned_repo(self):
+        """The precise loosening the carve-out prevents.
+
+        Membership fails OPEN when the target repo's roster is unreadable (the
+        CI case). If the manifest widened the implementer resolution set too, a
+        manifest-only implementer on a not-cloned repo would resolve, be marked
+        `unverified`, and exit 0 — silently passing exactly the assignment
+        class #1134 exists to stop. It must stay an unresolved name (exit 1).
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            # noorinalabs-design-system has no roster dir in the fixture.
+            report = validate(
+                {"noorinalabs-design-system": {"implementer": self.THIRD_CHILD_REVIEWER}}, org
+            )
+            finding = report["noorinalabs-design-system"][0]
+            self.assertFalse(finding["resolved"])
+            self.assertNotEqual(finding["membership"], "unverified")
+            self.assertEqual(_print_report_to_stderr(report), 1)
+
+    def test_manifest_widening_does_not_excuse_a_parent_only_implementer(self):
+        """#1134's headline finding survives: a parent persona is still cross-repo.
+
+        Nadia Khoury is on the parent cards AND the manifest; neither makes her
+        a member of the target repo. This is the wave-28 `Nurul Hakim` /
+        `Weronika Zielinska` shape, which must keep failing after #1162.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            report = validate(
+                {"noorinalabs-isnad-ingest-platform": {"implementer": "Nadia Khoury"}}, org
+            )
+            finding = report["noorinalabs-isnad-ingest-platform"][0]
+            self.assertTrue(finding["resolved"])
+            self.assertEqual(finding["membership"], "cross-repo")
+            self.assertEqual(_print_report_to_stderr(report), 1)
+
+    def test_scope_mode_third_child_reviewer_row_passes(self):
+        """End-to-end through the path /wave-scope § 12.5 and /wave-kickoff § 0b run."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            scope = {
+                "tier_1_core": [
+                    {
+                        "id": "noorinalabs-isnad-ingest-platform#140",
+                        "ref": "isnad-ingest-platform#140",
+                        "implementer": "Farhan Malik",
+                        "reviewer": self.THIRD_CHILD_REVIEWER,
+                        "merge_gate_reviewer": self.THIRD_CHILD_REVIEWER,
+                    }
+                ]
+            }
+            report = validate_scope(scope, org)
+            findings = report["noorinalabs-isnad-ingest-platform (isnad-ingest-platform#140)"]
+            self.assertTrue(all(f["resolved"] for f in findings))
+            self.assertEqual(_print_report_to_stderr(report), 0)
+
+    def test_unresolved_reviewer_gets_manifest_sourced_suggestion(self):
+        """A typo'd reviewer name now suggests against the manifest, not "(no close matches)"."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            report = validate(
+                {"noorinalabs-isnad-ingest-platform": {"reviewer": "Nikolas Papadopolous"}}, org
+            )
+            finding = report["noorinalabs-isnad-ingest-platform"][0]
+            self.assertFalse(finding["resolved"])
+            self.assertIn(self.THIRD_CHILD_REVIEWER, finding["suggestions"])
+
+    def test_missing_manifest_degrades_to_the_card_union(self):
+        """Fail OPEN, never closed: the manifest only ever WIDENS the review set.
+
+        With no roster.json the validator must behave exactly as pre-#1162 —
+        parent-card reviewers still resolve, the third-child reviewer does not.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir), manifest=False)
+            self.assertEqual(_load_org_manifest_names(org), set())
+            report = validate(
+                {
+                    "noorinalabs-isnad-ingest-platform": {
+                        "reviewer": "Aino Virtanen",  # parent card
+                        "reviewer_2": self.THIRD_CHILD_REVIEWER,  # third child only
+                    }
+                },
+                org,
+            )
+            by_role = {f["role"]: f for f in report["noorinalabs-isnad-ingest-platform"]}
+            self.assertTrue(by_role["reviewer"]["resolved"])
+            self.assertFalse(by_role["reviewer_2"]["resolved"])
+
+    def test_malformed_manifest_is_ignored_not_fatal(self):
+        """A truncated or wrong-shaped roster.json must not crash or fail closed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = _build_fake_org_dir(Path(tmpdir))
+            manifest_path = org / ".claude" / "team" / "roster.json"
+            for bad in ('{"Nadia Khoury": ', '["Nadia Khoury"]', "null"):
+                manifest_path.write_text(bad)
+                self.assertEqual(_load_org_manifest_names(org), set(), f"for {bad!r}")
+                report = validate({"noorinalabs-isnad-graph": {"reviewer": "Aino Virtanen"}}, org)
+                self.assertTrue(report["noorinalabs-isnad-graph"][0]["resolved"])
+
+    def test_manifest_names_are_trimmed_and_non_strings_skipped(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(
+                Path(tmpdir), manifest={"  Padded Persona  ": "p@example.com", "": "x@example.com"}
+            )
+            self.assertEqual(_load_org_manifest_names(org), {"Padded Persona"})
+            report = validate(
+                {"noorinalabs-isnad-ingest-platform": {"reviewer": "padded persona"}}, org
+            )
+            self.assertTrue(report["noorinalabs-isnad-ingest-platform"][0]["resolved"])
 
 
 if __name__ == "__main__":
