@@ -63,12 +63,25 @@ class NormalizeRelPathTest(unittest.TestCase):
 
     def test_consulted_session_marker_returns_none(self) -> None:
         # main#1140: Hook-15 consultation sentinel markers (e.g. ontology-
-        # librarian's per-cwd .marker file) were the dominant noise class in
-        # the wave-28 ~251-candidate pileup — never a genericize candidate.
+        # librarian's per-cwd .marker file) are the largest ONGOING noise
+        # class (13 of a live 267-entry ledger, by first_seen recency) —
+        # never a genericize candidate.
         self.assertIsNone(
             gpt.normalize_rel_path("/r/.claude/.consulted/ontology-librarian/abc123.marker")
         )
         self.assertIsNone(gpt.normalize_rel_path(".claude/.consulted/session-start/x.marker"))
+
+    def test_user_space_jobs_and_projects_return_none(self) -> None:
+        # main#1140 PR #1186 merge-gate review: user-space ~/.claude/jobs/ and
+        # ~/.claude/projects/ paths dominated a live 267-entry ledger's raw
+        # VOLUME (178 + 6 of 267) because normalize_rel_path splits on the
+        # LAST /.claude/ with no REPO_ROOT containment check — it can't tell
+        # the user-space Claude home from the repo's (the containment fix is
+        # #1191; this prefix is the interim intake mitigation).
+        self.assertIsNone(gpt.normalize_rel_path("/home/u/.claude/jobs/a36d08f0/tmp/foo.py"))
+        self.assertIsNone(
+            gpt.normalize_rel_path("/home/u/.claude/projects/-home-u-main/memory/note.md")
+        )
 
     def test_real_artifact_edited_inside_worktree_still_tracked(self) -> None:
         # The rel-prefix skip is checked against the NORMALIZED rel, not the raw
@@ -430,6 +443,43 @@ class ArchiveWavePendingTest(_TmpStateMixin):
         self.assertEqual(len(archived["waves"]), 2)
         self.assertIn("hooks/foo.py", archived["waves"][0]["genuine_reset"])
         self.assertIn("hooks/bar.py", archived["waves"][1]["genuine_reset"])
+
+    def test_failed_archive_write_does_not_clear_live_ledger(self) -> None:
+        # Pins archive-before-clear (main#1140 PR #1186 merge-gate review):
+        # nothing asserted this ordering, so a future refactor could silently
+        # reorder to clear-then-archive and still pass every OTHER test. This
+        # occupies `archive_dir` with a plain file so `archive_dir.mkdir(...)`
+        # raises before the live ledger is ever touched.
+        seed = {"hooks/foo.py": {"category": "hook", "count": 1}}
+        gpt.save_pending({"version": 1, "candidates": dict(seed)}, self.pending)
+        blocked = Path(self._tmp.name) / "blocked"
+        blocked.write_text("not a directory")  # archive_dir occupied -> mkdir raises
+        with self.assertRaises(OSError):
+            gpt.archive_wave_pending("P10W29", pending_path=self.pending, archive_dir=blocked)
+        live = json.loads(self.pending.read_text())["candidates"]
+        self.assertEqual(live, seed)
+
+    def test_user_space_jobs_and_projects_are_noise_not_genuine(self) -> None:
+        # main#1140 PR #1186 merge-gate review: a live 267-entry ledger was
+        # dominated (178/267) by user-space ~/.claude/jobs/<id>/tmp/* harness
+        # scratch (normalize_rel_path has no REPO_ROOT containment check, so
+        # it can't distinguish the user-space Claude home from the repo's —
+        # root-caused separately at #1191) plus 6 `projects/` user-space
+        # auto-memory paths. Both must partition as noise, not genuine, or
+        # the very first archive-wave run mislabels historical/user-space
+        # scratch as "a real candidate that fell off the end of a wave".
+        self._seed_raw(
+            {
+                "jobs/a36d08f0/tmp/foo.py": {"category": "configuration", "count": 1},
+                "projects/-home-x-main/memory/note.md": {"category": "configuration", "count": 1},
+                "hooks/foo.py": {"category": "hook", "count": 1},
+            }
+        )
+        result = gpt.archive_wave_pending(
+            "P10W29", pending_path=self.pending, archive_dir=self.archive_dir
+        )
+        self.assertEqual(result["noise_dropped"], 2)
+        self.assertEqual(result["genuine_reset"], 1)
 
 
 class CliTest(_TmpStateMixin):

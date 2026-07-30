@@ -41,13 +41,20 @@ Per-wave pending reset/archive (main#1140)
 -------------------------------------------
 Nothing ever removes an UNDECIDED entry from the pending ledger short of a
 :func:`record_decision` call — it accumulates across every wave and session
-forever. Left alone this becomes an unusable worklist: by the wave-28
-checkpoint it held ~251 stale candidates, dominated by session
-``.consulted/*.marker`` noise (a session-marker file gets edited via the
-generic ``Write`` tool like anything else under ``.claude/``, so the silent
-hook happily tracked it) and pre-existing artifacts nobody had ever triaged.
-An unbounded, mostly-noise worklist is worse than no worklist: the signal from
-a genuine new candidate gets buried.
+forever. Left alone this becomes an unusable worklist: a live 267-entry
+snapshot at the wave-28 checkpoint measured as 178 ``jobs/<id>/tmp/*`` paths
+(a ONE-TIME 2026-07-06→07-10 burst of user-space ``~/.claude/jobs/`` harness
+scratch — ``normalize_rel_path`` splits on the LAST ``/.claude/`` with no
+``REPO_ROOT`` containment check, so it can't tell the user-space Claude home
+from the repo's; the containment fix is tracked separately, #1191), 13
+``.consulted/*.marker`` session markers, and 6 ``projects/`` user-space
+auto-memory paths, plus a genuine long-tail of real repo artifacts nobody had
+triaged. The historical *volume* was dominated by that one-time ``jobs/``
+burst, not by session markers — but by ``first_seen`` recency, ``.consulted/``
+and ``projects/`` are the two classes still arriving wave over wave, so they
+are what the intake filter below targets. An unbounded, mostly-noise worklist
+is worse than no worklist either way: the signal from a genuine new candidate
+gets buried.
 
 :func:`archive_wave_pending` is the wave-boundary counterpart to that
 accumulation, run once at ``/wave-wrapup`` Step 12.5 BEFORE the diff sweep:
@@ -136,17 +143,29 @@ SKIP_PATTERNS = (
 # (.../worktrees/<wt>/.claude/hooks/foo.py, which collapses to rel "hooks/foo.py")
 # is still tracked, while a path that normalizes TO "worktrees/<wt>/..." (a
 # transient worktree file), "memory/..." (project-private memory notes),
-# "scratch..." (transient scratch), or ".consulted/..." (per-skill Hook-15
+# "scratch..." (transient scratch), ".consulted/..." (per-skill Hook-15
 # consultation sentinel markers, e.g. ontology-librarian's cwd-hash marker
-# files — session-local, never a genericize candidate) is dropped. Closes the
-# Step-12.5 noise inflow (P7W19: 117 of 270 pending candidates were
-# worktree/memory/scratch churn; main#1140: .consulted/*.marker noise was the
-# dominant class in the wave-28 ~251-candidate pileup).
+# files — session-local, never a genericize candidate), "projects/..." (the
+# user-space Claude Code auto-memory tree, already .gitignore'd local-only
+# state at .gitignore:31), or "jobs/..." (user-space ~/.claude/jobs/<id>/tmp/
+# harness scratch — `normalize_rel_path` splits on the LAST `/.claude/` with
+# no REPO_ROOT containment check, so it ingests the user-space Claude home
+# indistinguishably from the repo's; the containment fix is #1191, this
+# prefix is the interim mitigation) is dropped. Closes the Step-12.5 noise
+# inflow (P7W19: 117 of 270 pending candidates were worktree/memory/scratch
+# churn; main#1140: a live 267-entry snapshot measured 178 `jobs/` (one-time
+# historical burst, #1191's root cause), 13 `.consulted/` and 6 `projects/`
+# (the two classes still arriving wave over wave) — `.consulted/` and
+# `projects/` close ~two-thirds of the ONGOING inflow; `jobs/` is added too so
+# the very next archive-wave run doesn't mislabel the historical burst as
+# genuine undecided candidates).
 SKIP_REL_PREFIXES = (
     "worktrees/",
     "memory/",
     "scratch",
     ".consulted/",
+    "projects/",
+    "jobs/",
 )
 
 # Artifact classification — the same category taxonomy the per-edit hook used,
