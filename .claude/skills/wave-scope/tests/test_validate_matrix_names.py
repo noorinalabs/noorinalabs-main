@@ -18,7 +18,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from validate_matrix_names import validate  # noqa: E402
+from validate_matrix_names import (  # noqa: E402
+    _override_rationale,
+    _print_report_to_stderr,
+    repo_of_row,
+    validate,
+    validate_scope,
+)
 
 
 def _write_roster_card(roster_dir: Path, role_slug: str, name: str) -> None:
@@ -268,6 +274,291 @@ class MissingRosterTests(unittest.TestCase):
             # Bereket only exists in deploy roster — design-system lookup
             # combines parent + design-system rosters, not deploy.
             self.assertFalse(report["noorinalabs-design-system"][0]["resolved"])
+
+
+class CrossRepoImplementerTests(unittest.TestCase):
+    """#1134: a child-repo story's implementer must be on THAT repo's roster.
+
+    Every test here FAILS against the pre-#1134 validator, which unioned the
+    parent roster into every child lookup and so reported the live W27/W28
+    Nurul-on-user-service pairing as fully resolved (exit 0).
+    """
+
+    def test_parent_persona_as_child_implementer_is_flagged(self):
+        """The live reproducer: parent-org persona scoped to implement child work."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = _build_fake_org_dir(Path(tmpdir))
+            # "Nadia Khoury" is parent-roster-only, mirroring Nurul Hakim's
+            # relationship to the user-service roster in W27/W28.
+            matrix = {"noorinalabs-isnad-graph": {"implementer": "Nadia Khoury"}}
+            report = validate(matrix, org)
+            finding = report["noorinalabs-isnad-graph"][0]
+            # Name RESOLVES (she is a real persona) — that is why the #319
+            # check alone shipped this green for three waves.
+            self.assertTrue(finding["resolved"])
+            self.assertEqual(finding["membership"], "cross-repo")
+            self.assertEqual(_print_report_to_stderr(report), 1)
+
+    def test_repo_member_implementer_passes(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = _build_fake_org_dir(Path(tmpdir))
+            matrix = {"noorinalabs-isnad-graph": {"implementer": "Anya Kowalczyk"}}
+            report = validate(matrix, org)
+            finding = report["noorinalabs-isnad-graph"][0]
+            self.assertEqual(finding["membership"], "member")
+            self.assertEqual(_print_report_to_stderr(report), 0)
+
+    def test_reviewer_slots_keep_parent_union(self):
+        """Charter § Child-Repo Implementer Rule step 5: reviewers may be cross-team.
+
+        Regression guard against over-applying the membership check — if this
+        starts failing, the gate has broken a rule the org deliberately holds.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = _build_fake_org_dir(Path(tmpdir))
+            matrix = {
+                "noorinalabs-isnad-graph": {
+                    "implementer": "Anya Kowalczyk",
+                    "reviewer": "Aino Virtanen",  # parent-only
+                    "reviewer_2": "Nadia Khoury",  # parent-only
+                    "merge_gate_reviewer": "Wanjiku Mwangi",  # parent-only
+                }
+            }
+            report = validate(matrix, org)
+            for f in report["noorinalabs-isnad-graph"]:
+                self.assertTrue(f["resolved"])
+                if f["role"] != "implementer":
+                    self.assertEqual(f["membership"], "n/a", f"{f['role']} must not be gated")
+            self.assertEqual(_print_report_to_stderr(report), 0)
+
+    def test_parent_repo_implementer_not_gated(self):
+        """A noorinalabs-main story's implementer is a parent persona by definition."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = _build_fake_org_dir(Path(tmpdir))
+            report = validate({"noorinalabs-main": {"implementer": "Nadia Khoury"}}, org)
+            self.assertEqual(report["noorinalabs-main"][0]["membership"], "n/a")
+            self.assertEqual(_print_report_to_stderr(report), 0)
+
+    def test_unresolved_name_is_not_also_reported_cross_repo(self):
+        """An unknown name is a #319 failure only — not double-counted as #1134."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = _build_fake_org_dir(Path(tmpdir))
+            report = validate({"noorinalabs-isnad-graph": {"implementer": "Ghost Person"}}, org)
+            finding = report["noorinalabs-isnad-graph"][0]
+            self.assertFalse(finding["resolved"])
+            self.assertEqual(finding["membership"], "n/a")
+
+
+class UnverifiableRepoTests(unittest.TestCase):
+    """A repo whose roster cannot be read must FAIL OPEN, never fail closed.
+
+    An absent roster dir means "not cloned" (the CI case), not "nobody is a
+    member". Failing closed here would red-flag every child-repo implementer
+    in any environment without sibling checkouts.
+    """
+
+    def test_missing_child_roster_marks_implementer_unverified(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = _build_fake_org_dir(Path(tmpdir))
+            # noorinalabs-design-system has no roster dir in the fixture.
+            report = validate({"noorinalabs-design-system": {"implementer": "Aino Virtanen"}}, org)
+            finding = report["noorinalabs-design-system"][0]
+            self.assertTrue(finding["resolved"])
+            self.assertEqual(finding["membership"], "unverified")
+            self.assertEqual(_print_report_to_stderr(report), 0)
+
+
+class OverrideTests(unittest.TestCase):
+    """The escape hatch: an explicit, RECORDED roster-union override."""
+
+    def test_override_with_rationale_passes(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = _build_fake_org_dir(Path(tmpdir))
+            matrix = {
+                "noorinalabs-isnad-graph": {
+                    "implementer": "Nadia Khoury",
+                    "roster_union_override": {
+                        "rationale": "Parent-owned drift gate wired into ig CI; "
+                        "Nadia is onboarded to the ig roster in the same PR."
+                    },
+                }
+            }
+            report = validate(matrix, org)
+            finding = report["noorinalabs-isnad-graph"][0]
+            self.assertEqual(finding["membership"], "overridden")
+            self.assertIn("drift gate", str(finding["override_rationale"]))
+            self.assertEqual(_print_report_to_stderr(report), 0)
+
+    def test_bare_true_override_is_rejected(self):
+        """`true` records no reason — indistinguishable from the silent workaround."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = _build_fake_org_dir(Path(tmpdir))
+            matrix = {
+                "noorinalabs-isnad-graph": {
+                    "implementer": "Nadia Khoury",
+                    "roster_union_override": True,
+                }
+            }
+            report = validate(matrix, org)
+            self.assertEqual(report["noorinalabs-isnad-graph"][0]["membership"], "cross-repo")
+            self.assertEqual(_print_report_to_stderr(report), 1)
+
+    def test_empty_rationale_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = _build_fake_org_dir(Path(tmpdir))
+            matrix = {
+                "noorinalabs-isnad-graph": {
+                    "implementer": "Nadia Khoury",
+                    "roster_union_override": {"rationale": "   "},
+                }
+            }
+            report = validate(matrix, org)
+            self.assertEqual(report["noorinalabs-isnad-graph"][0]["membership"], "cross-repo")
+
+    def test_override_does_not_leak_into_name_findings(self):
+        """The override key must not be validated as if it were a person's name."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = _build_fake_org_dir(Path(tmpdir))
+            matrix = {
+                "noorinalabs-isnad-graph": {
+                    "implementer": "Anya Kowalczyk",
+                    "roster_union_override": {"rationale": "n/a"},
+                }
+            }
+            report = validate(matrix, org)
+            roles = [f["role"] for f in report["noorinalabs-isnad-graph"]]
+            self.assertEqual(roles, ["implementer"])
+
+    def test_bare_string_override_accepted_as_rationale(self):
+        self.assertEqual(_override_rationale("intended cross-repo"), "intended cross-repo")
+        self.assertIsNone(_override_rationale(True))
+        self.assertIsNone(_override_rationale(None))
+        self.assertIsNone(_override_rationale({"approved_by": "owner"}))
+
+
+class RepoOfRowTests(unittest.TestCase):
+    """Scope rows carry `id` (authoritative) and a short `ref`."""
+
+    def test_full_id_wins(self):
+        self.assertEqual(
+            repo_of_row({"id": "noorinalabs-user-service#204", "ref": "user-service#204"}),
+            "noorinalabs-user-service",
+        )
+
+    def test_short_ref_is_expanded(self):
+        self.assertEqual(repo_of_row({"ref": "user-service#204"}), "noorinalabs-user-service")
+
+    def test_bare_main_maps_to_parent_repo(self):
+        self.assertEqual(repo_of_row({"ref": "main#1134"}), "noorinalabs-main")
+        self.assertEqual(repo_of_row({"id": "noorinalabs-main#1134"}), "noorinalabs-main")
+
+    def test_unparsable_row_returns_empty(self):
+        self.assertEqual(repo_of_row({"id": "not-a-ref"}), "")
+        self.assertEqual(repo_of_row({}), "")
+
+
+class ScopeModeTests(unittest.TestCase):
+    """#1134 scope mode — read wave_{M}_scope.tier_*[] rows directly.
+
+    Scope mode exists because the matrix is hand-transcribed: a row omitted
+    from the matrix is a row the gate never sees. Reading the canonical rows
+    removes that bypass.
+    """
+
+    def test_cross_repo_implementer_in_tier_row_fails(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = _build_fake_org_dir(Path(tmpdir))
+            scope = {
+                "theme": "irrelevant",
+                "tier_1_core": [
+                    {
+                        "id": "noorinalabs-isnad-graph#1191",
+                        "ref": "isnad-graph#1191",
+                        "implementer": "Nadia Khoury",  # parent-only
+                        "reviewer": "Aino Virtanen",
+                    }
+                ],
+            }
+            report = validate_scope(scope, org)
+            findings = report["noorinalabs-isnad-graph (isnad-graph#1191)"]
+            impl = next(f for f in findings if f["role"] == "implementer")
+            self.assertEqual(impl["membership"], "cross-repo")
+            self.assertEqual(_print_report_to_stderr(report), 1)
+
+    def test_per_row_override_is_scoped_to_its_own_row(self):
+        """Two rows in the SAME repo: only the row carrying the override passes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = _build_fake_org_dir(Path(tmpdir))
+            scope = {
+                "tier_1_core": [
+                    {
+                        "id": "noorinalabs-isnad-graph#1",
+                        "ref": "isnad-graph#1",
+                        "implementer": "Nadia Khoury",
+                        "roster_union_override": {"rationale": "intended, owner-approved"},
+                    },
+                    {
+                        "id": "noorinalabs-isnad-graph#2",
+                        "ref": "isnad-graph#2",
+                        "implementer": "Wanjiku Mwangi",  # no override
+                    },
+                ]
+            }
+            report = validate_scope(scope, org)
+            overridden = report["noorinalabs-isnad-graph (isnad-graph#1)"][0]
+            bare = report["noorinalabs-isnad-graph (isnad-graph#2)"][0]
+            self.assertEqual(overridden["membership"], "overridden")
+            self.assertEqual(bare["membership"], "cross-repo")
+            self.assertEqual(_print_report_to_stderr(report), 1)
+
+    def test_all_tier_arrays_are_walked(self):
+        """A story hidden in tier_3 must be checked exactly like tier_1."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = _build_fake_org_dir(Path(tmpdir))
+            scope = {
+                "tier_1_core": [
+                    {"id": "noorinalabs-main#1", "ref": "main#1", "implementer": "Nadia Khoury"}
+                ],
+                "tier_3_tech_debt": [
+                    {
+                        "id": "noorinalabs-deploy#9",
+                        "ref": "deploy#9",
+                        "implementer": "Wanjiku Mwangi",  # parent-only, deploy story
+                    }
+                ],
+            }
+            report = validate_scope(scope, org)
+            self.assertIn("noorinalabs-deploy (deploy#9)", report)
+            self.assertEqual(report["noorinalabs-deploy (deploy#9)"][0]["membership"], "cross-repo")
+            self.assertEqual(_print_report_to_stderr(report), 1)
+
+    def test_non_tier_keys_and_null_slots_ignored(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = _build_fake_org_dir(Path(tmpdir))
+            scope = {
+                "theme": "a string, not a tier",
+                "phase": 10,
+                "repos_in_scope": ["noorinalabs-main"],
+                "tier_1_core": [
+                    {
+                        "id": "noorinalabs-deploy#9",
+                        "ref": "deploy#9",
+                        "implementer": "Bereket Tadesse",  # deploy roster member
+                        "reviewer_2": None,
+                    }
+                ],
+            }
+            report = validate_scope(scope, org)
+            self.assertEqual(len(report), 1)
+            findings = report["noorinalabs-deploy (deploy#9)"]
+            self.assertEqual([f["role"] for f in findings], ["implementer"])
+            self.assertEqual(findings[0]["membership"], "member")
+            self.assertEqual(_print_report_to_stderr(report), 0)
+
+    def test_empty_scope_produces_empty_report(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = _build_fake_org_dir(Path(tmpdir))
+            self.assertEqual(validate_scope({"theme": "x"}, org), {})
 
 
 if __name__ == "__main__":

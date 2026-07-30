@@ -192,6 +192,12 @@ Before authoring an implementer spawn brief for a child-repo issue:
 
 The verbatim canonical roster lives in each child repo's `.claude/team/roster.json` — read that at spawn time, not this snapshot.
 
+### Scope-time twin (main#1134)
+
+This rule binds at **spawn** time. Its **scope**-time twin — the wave cannot be *scoped* in violation of it in the first place — is `charter/skills.md` § Wave Scoping — Child-Repo Implementer Must Be a Repo-Roster Member, enforced by `/wave-scope` § 12.5 (`validate_matrix_names.py --scope`). Read that section before assigning implementers in a wave-scope matrix.
+
+Note also, per the measurement recorded there: Hook 5 does **not** currently block a parent-org persona from committing in a child repo (`_load_merged_roster` merges the parent union manifest over the child's roster). The "Why" paragraph above describes the intended design; the scope-time gate is what actually enforces it today.
+
 ### Exceptions
 
 - **User explicitly directs otherwise** in a given session ("have Lucas do the landing-page work" overrides). Hook would still block; user would need to register the agent in the target roster first or accept the block.

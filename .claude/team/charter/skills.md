@@ -42,6 +42,49 @@ Derived from Phase 2 Wave 9 retrospective, 2026-04-22.
 
 This rule is proposed for promotion to a hook-enforced check (hook > skill > charter per the enforcement-hierarchy principle). A wave-audit hook would scan handoff/retro/wrapup skill outputs for "concluded"/"done"/"complete" phrasing and block the skill's completion unless the open-item count is zero or an explicit carry-forward list is present. Tracked as a followup issue.
 
+## Wave Scoping — Child-Repo Implementer Must Be a Repo-Roster Member <!-- promotion-target: hook -->
+
+A wave-scope row whose story lives in a **child repo** MUST name an `implementer` who is on **that child repo's** roster (`<repo>/.claude/team/roster/`). Scope-time enforcement is `/wave-scope` § 12.5 via `.claude/skills/wave-scope/validate_matrix_names.py`; a violation is a **hard STOP** before `/wave-kickoff` fan-out, not a warning.
+
+This is the scope-time twin of `charter/agents/spawn-discipline.md` § Child-Repo Implementer Rule, which governs the same constraint at spawn time. That section says which roster an implementer must come from; this one says the wave cannot be *scoped* in violation of it in the first place.
+
+### Scope
+
+- Applies to the **`implementer` slot only**. Reviewer / `reviewer_2` / `merge_gate_reviewer` slots keep the parent-union resolution — cross-team reviewers are explicitly permitted (spawn-discipline § step 5). The implementer is the only role that must produce a commit in the target repo.
+- Does not apply to `noorinalabs-main` rows (membership is vacuous — the parent roster *is* the repo roster).
+- A child repo whose roster cannot be read (not cloned locally) is reported `unverified` and does **not** fail the run. Fail-open on unverifiable, never fail-closed.
+
+### The override — explicit and recorded, never silent
+
+A genuinely-intended cross-repo assignment is permitted, but only when the scope row records it:
+
+```json
+"roster_union_override": {
+  "rationale": "<why this cross-repo assignment is intended and how the commit will be authored>",
+  "approved_by": "owner"
+}
+```
+
+A bare `true` is rejected — only a non-empty `rationale` satisfies the gate. Because the override lives in `cross-repo-status.json`, it ships as a **reviewable diff** rather than a verbal decision, which is what makes "no wave reaches wrap-time with a *silent* implementer substitution" enforceable.
+
+### Why hard-fail-with-override rather than either extreme
+
+- **A warning was already the status quo and it failed.** The pre-#1134 validator reported the offending pairing as fully resolved. The mismatch recurred across three consecutive waves (W27 → W28 → W29).
+- **An unconditional block with no escape hatch would be routed around.** The W28 repair — assign anyway, then mechanically re-attribute the merge commit — is exactly that failure mode, and a gate operators route around decays (`feedback_enforcement_hierarchy`). Giving the exception a cheap, honest, auditable path is what keeps the default path honest.
+
+### Why this gate is load-bearing rather than redundant
+
+The runtime backstop does **not** currently enforce this. `validate_commit_identity._load_merged_roster(<child>)` merges the parent `roster.json` — the org-wide union manifest kept green by `.claude/lib/roster_union_sync.py` — over the child's, so from a child repo root every parent persona already resolves; and neither `noorinalabs-user-service` nor `noorinalabs-isnad-graph` ships its own identity hook or a CI identity job. Measured 2026-07-27 (main#1134). Until that gap closes, scope time is the **only** enforcement point, which is why the STOP is hard.
+
+### Evidence
+
+- `user-service#204` — Nurul Hakim (parent roster; not on the 4-person user-service roster) scoped as implementer in W27 and again in W28. PR us#212's merge commit was re-attributed to Nadia Boukhari while the implementor label still read Nurul (`wave_28_decisions.implementer_substitutions`).
+- `isnad-graph#1191` — Weronika Zielinska (parent roster; not on the isnad-graph roster) scoped as implementer in W28. Found by running the new gate retroactively over `wave_28_scope`; it was never recorded as a substitution at all, so the W28 retro undercounted the problem.
+
+### Promotion provenance
+
+main#1134, carried W27 → W28 → W29; owner-chosen fix direction 2026-07-27 (enforce at scope/kickoff time, keep the identity gate as the runtime backstop).
+
 ## Cross-repo-status.json upsert pattern <!-- promotion-target: hook -->
 
 Any skill that writes top-level `wave_{N}_*` keys to `cross-repo-status.json` MUST use the shared upsert helper at `.claude/lib/upsert_status_keys.py`. Raw `jq ... > tmp && mv` (and equivalent full-file rewrites — `jq | sponge`, `python -c 'json.dump(...)'` round-trips, etc.) are **banned** for top-level `wave_{N}_*` key writes.

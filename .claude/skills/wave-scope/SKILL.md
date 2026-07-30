@@ -530,25 +530,44 @@ Do NOT delete the original body — copy it (or post the pre-update version as a
 
 If any step surfaced a process gap (stale memory, missing meta-issue, vague reference), include a `**Process gaps surfaced**` section so the next retro can address them.
 
-### 12.5. Validate implementer/reviewer names against per-repo rosters (#319)
+### 12.5. Validate implementer/reviewer names + child-repo membership (#319, #1134) — MANDATORY
 
-If the wave-scope output includes an implementer/reviewer matrix (a per-repo mapping of `implementer` / `reviewer` / `reviewer_2` to team-member names), validate every declared name against the relevant roster BEFORE `/wave-kickoff` fan-out. Pre-#319 a stale alias like "Anya Volkov" (canonical: "Anya Kowalczyk") would propagate through scope and only surface at first-spawn time — P3W7 retro recorded TWO such substitutions in `wave_7_decisions.implementer_substitutions`.
+Validate every declared name against the relevant roster BEFORE `/wave-kickoff` fan-out. The validator runs **two independent checks**:
+
+| # | Check | Applies to | Failure |
+|---|---|---|---|
+| #319 | **Name resolution** — does the name exist at all? | every slot | unresolved name + fuzzy suggestions |
+| #1134 | **Repo membership** — is the implementer on the TARGET repo's roster? | `implementer` on a child repo | cross-repo implementer with no recorded override |
+
+**#319 (name resolution).** Pre-#319 a stale alias like "Anya Volkov" (canonical: "Anya Kowalczyk") would propagate through scope and only surface at first-spawn time — P3W7 retro recorded TWO such substitutions in `wave_7_decisions.implementer_substitutions`.
+
+**#1134 (repo membership).** Name resolution alone is not enough: a **parent-org persona scoped as the implementer of a child-repo story** resolves fine (they are a real persona) but is not on the repo whose files they must commit to. This recurred W27 → W28 → W29 — Nurul Hakim on `user-service#204`, and (found by running this gate retroactively over `wave_28_scope`) Weronika Zielinska on `isnad-graph#1191`. The wrap-time repair is a mechanical merge-commit re-attribution that severs the "who implemented" audit trail.
 
 **Resolution rules:**
-- Per-repo entries (`noorinalabs-deploy`, `noorinalabs-isnad-graph`, …) → child-repo roster (`<repo>/.claude/team/roster/*.md`) UNION parent roster. This lets org-level coordinators (Aino, Nadia, Wanjiku, Santiago) fill child-repo slots without duplicating roster entries.
-- Parent entries (`noorinalabs-main` or empty repo key) → parent-only roster (`.claude/team/roster/*.md`).
+- Name resolution: child-repo roster (`<repo>/.claude/team/roster/*.md`) UNION parent roster. This lets org-level coordinators (Aino, Nadia, Wanjiku, Santiago) fill child-repo slots without duplicating roster entries.
+- Repo membership: the **target repo's roster only**, and **only for the `implementer` slot**. Reviewers keep the union — cross-team reviewers are explicitly permitted by `charter/agents/spawn-discipline.md` § Child-Repo Implementer Rule step 5. The implementer is the only role that must produce a commit in the target repo.
+- Parent entries (`noorinalabs-main` or empty repo key) → parent-only roster; membership is vacuous there and never fires.
 - Match is case-insensitive; trailing parenthetical role suffix (`Aino Virtanen (Standards & Quality Lead)`) is stripped before comparison.
-- On miss: fuzzy-match via difflib SequenceMatcher; surface the top-3 closest matches to the operator.
+- On a name miss: fuzzy-match via difflib SequenceMatcher; surface the top-3 closest matches to the operator.
+- **Unverifiable repos fail OPEN.** A child repo that is not cloned beside the parent has no readable roster, so membership cannot be decided — reported `unverified`, not a failure. Add `--fetch-missing` to resolve those over the network (reuses `.claude/lib/roster_union_sync.py::fetch_child_roster`).
 
-**Invocation:**
+**Invocation — prefer scope mode.** It reads the canonical `wave_{M}_scope.tier_*[]` rows straight out of `cross-repo-status.json`, so a row cannot escape the gate by being left out of a hand-transcribed matrix. Run it **after** Step 13 writes `wave_{M}_scope`:
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 VALIDATOR="$REPO_ROOT/.claude/skills/wave-scope/validate_matrix_names.py"
 
-# The matrix JSON shape is {repo: {role: name, ...}, ...}. Build it from
-# the scope file you composed (or extract from cross-repo-status.json's
-# wave_{M}_scope tier_* entries if those have been written).
+python3 "$VALIDATOR" --scope "$REPO_ROOT/cross-repo-status.json" --wave {M}
+RC=$?
+if [ $RC -ne 0 ]; then
+    echo "STOP: fix the scope rows before /wave-kickoff fan-out (see output above)."
+    exit 1
+fi
+```
+
+Matrix mode remains supported for a slate not yet written to `cross-repo-status.json`:
+
+```bash
 cat > /tmp/wave-{M}-matrix.json <<'EOF'
 {
     "noorinalabs-isnad-graph": {
@@ -563,22 +582,36 @@ cat > /tmp/wave-{M}-matrix.json <<'EOF'
     }
 }
 EOF
-
-python3 "$VALIDATOR" /tmp/wave-{M}-matrix.json
-RC=$?
-if [ $RC -ne 0 ]; then
-    echo "STOP: resolve unresolved names before /wave-kickoff fan-out."
-    echo "  If a substitution is intentional, document it in"
-    echo "  cross-repo-status.json wave_{M}_decisions.implementer_substitutions"
-    echo "  with rationale; then update the matrix and re-run /wave-scope."
-    exit 1
-fi
+python3 "$VALIDATOR" /tmp/wave-{M}-matrix.json || exit 1
 ```
 
+**Resolving a #1134 cross-repo implementer failure** — pick one, in preference order:
+
+1. **Reassign** to a member of the target repo's roster (preferred — this is the charter default).
+2. **Onboard** the persona into `<repo>/.claude/team/roster/` + `<repo>/.claude/team/roster.json`, making the assignment genuinely in-roster. Keep `.claude/lib/roster_union_sync.py` green by folding the name into the parent union manifest too.
+3. **Record an explicit override** on the scope row, when the cross-repo assignment is genuinely intended:
+
+```json
+{
+  "id": "noorinalabs-user-service#204",
+  "ref": "user-service#204",
+  "implementer": "Nurul Hakim",
+  "reviewer": "Nadia Boukhari",
+  "roster_union_override": {
+    "rationale": "Parent-owned hook wired into us CI; Nurul authors as himself and is onboarded to the us roster in the same PR.",
+    "approved_by": "owner",
+    "approved_at": "2026-07-27T00:00:00Z"
+  }
+}
+```
+
+A bare `"roster_union_override": true` is **rejected** — an override with no stated reason is indistinguishable from the silent workaround this gate exists to prevent. Only `rationale` is load-bearing; `approved_by` / `approved_at` are conventional and unvalidated.
+
 **Acceptance:**
-- Every implementer / reviewer / reviewer_2 name in the scope matrix resolves to a canonical roster entry.
+- Every implementer / reviewer / reviewer_2 / merge_gate_reviewer name resolves to a canonical roster entry.
+- Every child-repo `implementer` is on that repo's roster, or the row carries a `roster_union_override` with a non-empty rationale.
 - Unresolved names are surfaced with suggested matches.
-- Approved overrides are recorded under `wave_{M}_decisions.implementer_substitutions` in `cross-repo-status.json` with this shape:
+- A wrap-time substitution that was NOT pre-recorded here is a process failure to raise at retro, not a routine repair. Post-hoc substitutions still get logged under `wave_{M}_decisions.implementer_substitutions`:
 
 ```json
 {
@@ -591,7 +624,9 @@ fi
 }
 ```
 
-**Why this lives in `/wave-scope` not `/wave-kickoff`:** Step 0 of kickoff is a pre-flight CHECKLIST that the orchestrator confirms manually. By the time kickoff runs, scope is supposed to be settled. Validating names at scope-time means the matrix shape is already correct when kickoff reads it — the orchestrator never sees a "name not in roster" surface at fan-out time, only at scope-time review.
+**Why this lives in `/wave-scope` not `/wave-kickoff`:** Step 0 of kickoff is a pre-flight CHECKLIST that the orchestrator confirms manually. By the time kickoff runs, scope is supposed to be settled. Validating at scope-time means the matrix shape is already correct when kickoff reads it — the orchestrator never sees a "name not in roster" surface at fan-out time, only at scope-time review.
+
+**Why this is not merely an earlier warning.** The `validate_commit_identity` hook resolves a child-repo author against `_load_merged_roster(<child>)`, which merges the **parent** `roster.json` (the 78-name org union) over the child's — so from a child repo root every parent persona already resolves, and neither `noorinalabs-user-service` nor `noorinalabs-isnad-graph` ships its own identity hook or CI identity job. Measured 2026-07-27; see #1134 for the transcript. This gate is therefore the **only** place child-repo implementer membership is actually enforced, which is why it is a hard fail rather than an advisory.
 
 ### 13. Write reconciliation timestamp + structured bookkeeping keys to `cross-repo-status.json`
 
