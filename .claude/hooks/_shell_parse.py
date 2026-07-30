@@ -33,6 +33,21 @@ Public API
         word). Handles repeated/nested heredocs by iterating until the regex
         is fixed.
 
+    classify_heredocs(cmd) -> tuple[HeredocSpan, ...]
+        Every heredoc in `cmd` with the verdict on what CONSUMES it: a body fed
+        to `bash`/`sh`/`zsh`/`dash`/`ksh` (directly, or piped out of the opening
+        command) is `is_code=True`; a body fed to `cat`/`tee`, with or without a
+        file redirect, is `is_code=False` — inert text. Every ambiguity resolves
+        to `is_code=True`, so a misparse preserves a caller's blocking behaviour
+        rather than opening a hole (main#1152).
+
+    strip_data_heredocs(cmd) -> str
+        The complement of `strip_heredocs`: drops ONLY the `is_code=False`
+        bodies, keeping the ones a shell will execute. This is what a
+        bypass/gate matcher wants — scanning a `cat > notes.md <<'EOF' … EOF`
+        body for shell-injection shapes finds only documentation, while a
+        `bash <<'EOF' … EOF` body is genuinely executable and must stay visible.
+
     iter_command_segments(tokens) -> Iterator[list[str]]
         Splits a token list on the shell-control tokens `;`, `&&`, `||`, `|`
         (these survive shlex.split as their own tokens because they're not
@@ -244,7 +259,7 @@ import re
 import shlex
 import subprocess
 from functools import lru_cache
-from typing import Iterator
+from typing import Iterator, NamedTuple
 
 # Optional structural dependency (#748 D3b). bashlex gives a real Bash-AST
 # parse for the commit-identity matcher. It is imported defensively so a
@@ -441,6 +456,367 @@ def strip_heredocs(cmd: str) -> str:
         prev = cur
         cur = _HEREDOC_RE.sub("", cur)
     return cur
+
+
+# ---------------------------------------------------------------------------
+# Heredoc target classification (main#1152)
+# ---------------------------------------------------------------------------
+#
+# `strip_heredocs` answers "where are the heredoc bodies?" but not "who eats
+# them?", and every consumer that needs the second question has so far guessed.
+# `validate_commit_identity._detect_indirect_commit` ran its indirect-exec
+# matchers over the RAW command, so a heredoc body was scanned for bypass
+# shapes regardless of what the heredoc was attached to — documenting the shape
+#
+#     cat > notes.md <<'EOF'
+#     the bypass looks like: bash -c 'git commit …'
+#     EOF
+#
+# was blocked as if it WERE that invocation, while the identical bytes written
+# through the `Write` tool sailed through (main#1152).
+#
+# The distinction the matchers need is a property of the heredoc's TARGET:
+#
+#   - fed to `bash`/`sh`/`zsh`/`dash`/`ksh` (directly, or via a pipe out of the
+#     opening command) -> the body is CODE the shell will execute. A real
+#     bypass surface; must stay scannable.
+#   - fed to `cat`/`tee`, with or without a `>`/`>>` file redirect -> the body
+#     is DATA. Inert text; scanning it produces false positives only.
+#
+# Why not bashlex here, despite it being the structurally "right" tool and
+# already a dependency of this module: **bashlex cannot parse a quoted-delimiter
+# heredoc at all**. `bashlex.parse("cat <<'EOF'\nx\nEOF")` raises
+# `ParsingError: here-document ... delimited by end-of-file (wanted "'EOF'")`,
+# and the same for `<<"EOF"`. Only the bare `<<EOF` / `<<-EOF` forms parse.
+# `<<'EOF'` is the dominant form in practice (it is the form in the #1152
+# reproduction), so an AST-only classifier would not answer the question in the
+# very case that motivated it. This is a measured property of the installed
+# parser, not a style preference — see the regression test
+# `test_bashlex_cannot_parse_quoted_delimiter_heredoc`, which pins it so that a
+# future bashlex upgrade that fixes it will fail loudly and invite this comment
+# to be revisited.
+#
+# The classifier is therefore a quote-aware line scanner. Every ambiguity
+# resolves toward CODE (scan the body) so a misparse can only ever preserve
+# today's blocking behaviour, never open a hole:
+#
+#   - owner command not recognised, or unresolvable  -> CODE
+#   - heredoc never terminated                       -> CODE (and everything
+#                                                       after it is left alone)
+#   - delimiter not a bare `\w+` word                -> opener not recognised,
+#                                                       body treated as ordinary
+#                                                       command text (unstripped)
+
+# The POSIX shells whose heredoc body is executed as shell code. Single source
+# of truth: `validate_commit_identity` builds its `_INTERPRETERS` regex
+# alternation from this set, so the "which heredocs are code?" answer used by
+# the strip pass can never drift from the one used by the block pass. `mksh` /
+# `pdksh` stay out for the same conservative reason as #482.
+SHELL_INTERPRETERS = frozenset({"bash", "sh", "zsh", "dash", "ksh"})
+
+# Commands whose heredoc body is inert data: they copy stdin to stdout and/or a
+# file and never interpret it. Deliberately a tiny ALLOWLIST rather than a
+# denylist of interpreters — an unknown command keeps today's scan-the-body
+# behaviour, so growing this set is the only way to unblock anything and each
+# addition is an explicit, reviewable decision.
+HEREDOC_DATA_SINKS = frozenset({"cat", "tee"})
+
+# A heredoc opener: `<<EOF`, `<<'EOF'`, `<<"EOF"`, `<<-EOF`. Matched with
+# `.match(line, i)` from a scanner that has already excluded `<<<` (here-string)
+# and quoted regions, so no lookbehind is needed here.
+_HEREDOC_OPENER_RE = re.compile(r"<<(?P<dash>-?)[ \t]*(?P<q>['\"]?)(?P<delim>\w+)(?P=q)")
+
+
+class HeredocSpan(NamedTuple):
+    """One heredoc found in a command, with the verdict on what consumes it.
+
+    `body` excludes both the opener line and the terminator line. `is_code` is
+    True when the body is fed to a shell interpreter (directly or through a
+    pipe) — i.e. when scanning it for bypass shapes is correct. `terminated` is
+    False when no delimiter line was found before end-of-input.
+    """
+
+    delim: str
+    body: str
+    is_code: bool
+    terminated: bool
+
+
+def _segment_head_command(seg_text: str) -> str | None:
+    """Return the command name at the head of one pipeline segment, or None.
+
+    Heredoc openers are removed first (they are redirects, not words), then the
+    segment is tokenized and stripped of `KEY=value` prefixes and transparent
+    wrappers (`env`, `timeout 30`, `sudo`, …) via the shared helpers, so
+    `FOO=1 timeout 30 /bin/bash` resolves to `bash`. A leading path is reduced
+    to its basename. Returns None when the segment does not tokenize or holds no
+    word — callers must treat None as "unknown", never as "safe".
+    """
+    tokens = tokenize(_HEREDOC_OPENER_RE.sub(" ", seg_text))
+    if tokens is None:
+        return None
+    tokens = strip_command_prefixes(_strip_leading_env_assignments(tokens))
+    if not tokens:
+        return None
+    head = tokens[0]
+    return head.rsplit("/", 1)[-1] if "/" in head else head
+
+
+class _LineScan(NamedTuple):
+    """Result of one quote-aware pass over a physical line."""
+
+    segments: list[tuple[int, int, str]]  # (start, end, separator_before)
+    openers: list[tuple[int, bool, str]]  # (position, is_dash_form, delimiter)
+    procsubs: list[int]  # positions of unquoted `<(` / `>(`
+
+
+def _scan_command_line(line: str) -> _LineScan:
+    """Quote-aware single pass over one physical line.
+
+    Separators (`;`, `|`, `&`, `&&`, `||`), heredoc openers and process
+    substitutions inside single/double quotes or behind a backslash are DATA and
+    are skipped, so `echo "a | b"` is one segment and `echo "<<EOF"` holds no
+    opener.
+
+    `|&` is ONE operator — bash/zsh shorthand for `2>&1 |` — and must be
+    consumed as a pipe (main#1155 review round 2). Falling through to the
+    single-character cases split it into `|` then `&`, leaving an empty segment
+    between them and breaking the downstream walk on the `&`, so
+    `cat <<'D' |& bash` walked around the pipe-to-shell block. That was strictly
+    worse than either reading of the operator: treating it as a pipe catches the
+    shape, treating it as backgrounding would at least be consistent.
+
+    Two shapes must NOT be mistaken for control operators (main#1155 review, M2):
+
+      - `2>&1`, `>&2`, `<&0` — the `&` is part of a redirect, not a separator.
+        Splitting there resolved `cat 2>&1 > n.md <<'EOF'` to a head command of
+        `1`, so #1152's own false positive survived for every redirect-carrying
+        opener, and `cat <<'EOF' 2>&1 | bash` evaded the pipe-follow entirely.
+      - `&>file`, `&>>file` — the same `&`, on the other side.
+
+    Process-substitution positions are reported because `>(bash)` is a SECOND
+    sink hanging off the same segment: `tee >(bash) <<'EOF'` executes the body
+    even though the segment head is the inert `tee`. Recording them here (rather
+    than substring-searching the segment text later) keeps the quote-awareness —
+    a literal `>(` inside `cat > "weird>(name).md"` is not a process
+    substitution and must not be treated as one.
+    """
+    segments: list[tuple[int, int, str]] = []
+    openers: list[tuple[int, bool, str]] = []
+    procsubs: list[int] = []
+    quote: str | None = None
+    seg_start = 0
+    sep_before = ""
+    i = 0
+    n = len(line)
+    while i < n:
+        c = line[i]
+        if quote is not None:
+            if c == "\\" and quote == '"' and i + 1 < n:
+                i += 2
+                continue
+            if c == quote:
+                quote = None
+            i += 1
+            continue
+        if c in ("'", '"'):
+            quote = c
+            i += 1
+            continue
+        if c == "\\" and i + 1 < n:
+            i += 2
+            continue
+        if line.startswith("<<<", i):
+            # Here-string, not a heredoc: consumed inline, opens no body.
+            i += 3
+            continue
+        if line.startswith("<<", i):
+            m = _HEREDOC_OPENER_RE.match(line, i)
+            if m is not None:
+                openers.append((i, bool(m.group("dash")), m.group("delim")))
+                i = m.end()
+                continue
+            i += 2
+            continue
+        two = line[i : i + 2]
+        if two in ("<(", ">("):
+            procsubs.append(i)
+            i += 2
+            continue
+        if two == "|&":
+            # bash/zsh shorthand for `2>&1 |` — ONE pipe operator, not `|`
+            # followed by a backgrounding `&`. Splitting it in two left an empty
+            # segment between them, and the downstream walk then broke on the
+            # `&` before ever reaching the interpreter, so `cat <<'D' |& bash`
+            # walked around the pipe-to-shell block this module adds. Emitting
+            # it as a `|` is both correct and the conservative reading: it keeps
+            # the pipeline connected, so the walk keeps looking for a sink.
+            segments.append((seg_start, i, sep_before))
+            sep_before = "|"
+            i += 2
+            seg_start = i
+            continue
+        if two in ("&&", "||"):
+            segments.append((seg_start, i, sep_before))
+            sep_before = two
+            i += 2
+            seg_start = i
+            continue
+        if c == "&" and (line[i - 1 : i] in ("<", ">") or line[i + 1 : i + 2] == ">"):
+            # `2>&1` / `>&2` / `&>log` — a redirect, not a control operator.
+            i += 1
+            continue
+        if c in (";", "|", "&"):
+            segments.append((seg_start, i, sep_before))
+            sep_before = c
+            i += 1
+            seg_start = i
+            continue
+        i += 1
+    segments.append((seg_start, n, sep_before))
+    return _LineScan(segments, openers, procsubs)
+
+
+def _opener_feeds_interpreter(line: str, pos: int, scan: _LineScan) -> bool:
+    """True if the heredoc opened at `pos` on `line` is consumed as shell code.
+
+    A heredoc belongs to the pipeline segment it appears in. It is DATA only if
+    EVERY sink that can reach its bytes is inert:
+
+      1. the segment's head command is a known inert sink (`cat`, `tee`), AND
+      2. that segment carries no process substitution, AND
+      3. no segment downstream of it *in the same pipeline* is a shell
+         interpreter or itself carries a process substitution.
+
+    Condition 2 is the one that is easy to miss, and missing it is a live
+    bypass (main#1155 review, M1):
+
+        tee >(bash) <<'DELIM'
+        git -c user.name=X -c user.email=Y commit -m z
+        DELIM
+
+    The head word is the inert `tee`, but `>(bash)` is a SECOND sink hanging off
+    the same segment, and the body really is executed — confirmed under both
+    bash and zsh. Following only `|` never sees it, so the body was classified
+    as data, stripped, and the commit sailed through. A process substitution
+    anywhere in a reachable segment therefore forces CODE without trying to
+    resolve what is inside it: an unresolvable sink resolves toward CODE, which
+    is the rule the rest of this classifier already follows.
+
+    `&&`, `||`, `;` and `&` break the pipeline: what follows them does not
+    receive this stdin. A `&` that is part of a redirect (`2>&1`) is not a
+    separator at all — see `_scan_command_line`.
+    """
+    segments = scan.segments
+    idx = next(
+        (k for k, (start, end, _sep) in enumerate(segments) if start <= pos < end),
+        None,
+    )
+    if idx is None:
+        return True
+
+    def _reachable_sink_is_code(k: int, *, head_must_be_inert_sink: bool) -> bool:
+        start, end, _sep = segments[k]
+        if any(start <= p < end for p in scan.procsubs):
+            return True
+        head = _segment_head_command(line[start:end])
+        if head_must_be_inert_sink:
+            return head not in HEREDOC_DATA_SINKS
+        return head in SHELL_INTERPRETERS
+
+    if _reachable_sink_is_code(idx, head_must_be_inert_sink=True):
+        return True
+    for k in range(idx + 1, len(segments)):
+        if segments[k][2] != "|":
+            break
+        if _reachable_sink_is_code(k, head_must_be_inert_sink=False):
+            return True
+    return False
+
+
+def classify_heredocs(cmd: str) -> tuple[HeredocSpan, ...]:
+    """Find every heredoc in `cmd` and say whether its body is code or data.
+
+    Bodies are located line-wise (the shell's own rule: openers are collected
+    across the command line, bodies follow in opener order). Returns an empty
+    tuple when the command holds no recognised heredoc.
+
+    Memoized (#1113 discipline): pure in `cmd` and the result is a tuple of
+    immutable NamedTuples, so the cached value is returned directly.
+    """
+    return _classify_heredocs_cached(cmd)
+
+
+@lru_cache(maxsize=256)
+def _classify_heredocs_cached(cmd: str) -> tuple[HeredocSpan, ...]:
+    lines = cmd.split("\n")
+    found: list[HeredocSpan] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        i += 1
+        scan = _scan_command_line(line)
+        for pos, dash_form, delim in scan.openers:
+            is_code = _opener_feeds_interpreter(line, pos, scan)
+            body: list[str] = []
+            term = None
+            j = i
+            while j < len(lines):
+                candidate = lines[j].rstrip("\r")
+                if (candidate.lstrip("\t") if dash_form else candidate) == delim:
+                    term = j
+                    break
+                body.append(lines[j])
+                j += 1
+            if term is None:
+                found.append(HeredocSpan(delim, "\n".join(body), True, False))
+                return tuple(found)
+            found.append(HeredocSpan(delim, "\n".join(body), is_code, True))
+            i = term + 1
+    return tuple(found)
+
+
+@lru_cache(maxsize=256)
+def strip_data_heredocs(cmd: str) -> str:
+    """Remove the bodies of heredocs that are fed to a non-interpreter.
+
+    The complement of `strip_heredocs`, which removes EVERY heredoc body: this
+    keeps the bodies a shell will execute (so a bypass matcher still sees them)
+    and drops only the ones that are inert text. Opener and terminator lines are
+    left in place, so the surrounding command is unchanged and matchers anchored
+    on `<interpreter> … <<DELIM` still work.
+
+    Fails toward keeping the body: an unterminated heredoc, an unresolvable
+    owner, or an unrecognised delimiter shape all leave the text untouched.
+
+    Memoized (#1113): pure in `cmd`, returns an immutable `str`.
+    """
+    if "<<" not in cmd:
+        return cmd
+    lines = cmd.split("\n")
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        out.append(line)
+        i += 1
+        scan = _scan_command_line(line)
+        for pos, dash_form, delim in scan.openers:
+            is_code = _opener_feeds_interpreter(line, pos, scan)
+            term = None
+            j = i
+            while j < len(lines):
+                candidate = lines[j].rstrip("\r")
+                if (candidate.lstrip("\t") if dash_form else candidate) == delim:
+                    term = j
+                    break
+                j += 1
+            if term is None:
+                out.extend(lines[i:])
+                return "\n".join(out)
+            out.extend(lines[i : term + 1] if is_code else [lines[term]])
+            i = term + 1
+    return "\n".join(out)
 
 
 def iter_command_segments(tokens: list[str]) -> Iterator[list[str]]:
