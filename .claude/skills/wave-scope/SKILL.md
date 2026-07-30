@@ -536,7 +536,7 @@ Validate every declared name against the relevant roster BEFORE `/wave-kickoff` 
 
 | # | Check | Applies to | Failure |
 |---|---|---|---|
-| #319 | **Name resolution** — does the name exist at all? | every slot | unresolved name + fuzzy suggestions |
+| #319 | **Name resolution** — does the name exist at all? | every slot, but the candidate set differs by slot class (#1162 — see Resolution rules) | unresolved name + fuzzy suggestions |
 | #1134 | **Repo membership** — is the implementer on the TARGET repo's roster? | `implementer` on a child repo | cross-repo implementer with no recorded override |
 
 **#319 (name resolution).** Pre-#319 a stale alias like "Anya Volkov" (canonical: "Anya Kowalczyk") would propagate through scope and only surface at first-spawn time — P3W7 retro recorded TWO such substitutions in `wave_7_decisions.implementer_substitutions`.
@@ -544,8 +544,11 @@ Validate every declared name against the relevant roster BEFORE `/wave-kickoff` 
 **#1134 (repo membership).** Name resolution alone is not enough: a **parent-org persona scoped as the implementer of a child-repo story** resolves fine (they are a real persona) but is not on the repo whose files they must commit to. This recurred W27 → W28 → W29 — Nurul Hakim on `user-service#204`, and (found by running this gate retroactively over `wave_28_scope`) Weronika Zielinska on `isnad-graph#1191`. The wrap-time repair is a mechanical merge-commit re-attribution that severs the "who implemented" audit trail.
 
 **Resolution rules:**
-- Name resolution: child-repo roster (`<repo>/.claude/team/roster/*.md`) UNION parent roster. This lets org-level coordinators (Aino, Nadia, Wanjiku, Santiago) fill child-repo slots without duplicating roster entries.
-- Repo membership: the **target repo's roster only**, and **only for the `implementer` slot**. Reviewers keep the union — cross-team reviewers are explicitly permitted by `charter/agents/spawn-discipline.md` § Child-Repo Implementer Rule step 5. The implementer is the only role that must produce a commit in the target repo.
+- Name resolution — **the candidate set depends on the slot class (#1162):**
+  - **Review-class slots** (`reviewer`, `reviewer_2`, `merge_gate_reviewer`): child-repo roster (`<repo>/.claude/team/roster/*.md`) UNION parent roster UNION the **org-union manifest** `.claude/team/roster.json`. The manifest is what makes a reviewer drawn from a **third child repo** valid — e.g. a `noorinalabs-data-acquisition` persona reviewing an `isnad-ingest-platform` story. **A third-child reviewer is a correct assignment, not drift: do not "fix" one by reassigning it.** Before #1162 the parent side was the parent's *card directory* only (9 names, not the manifest's 78), so such a reviewer resolved against neither roster and hard-blocked this step and `/wave-kickoff` § 0b.
+  - **`implementer`**: child-repo roster UNION parent roster only — **the manifest is deliberately excluded.** Including it would loosen the #1134 membership check in the `unverified` case below: when the target roster is unreadable, membership fails open, so a manifest-only implementer would resolve, be reported `unverified`, and pass. Keeping the set narrow means that slot only passes on a name the target repo (or the parent) can vouch for.
+  - Both sets let org-level coordinators (Aino, Nadia, Wanjiku, Santiago) fill child-repo slots without duplicating roster entries.
+- Repo membership: the **target repo's roster only**, and **only for the `implementer` slot**. Reviewers keep the wider resolution set above and are never membership-gated — cross-team reviewers are explicitly permitted by `charter/agents/spawn-discipline.md` § Child-Repo Implementer Rule step 5. The implementer is the only role that must produce a commit in the target repo.
 - Parent entries (`noorinalabs-main` or empty repo key) → parent-only roster; membership is vacuous there and never fires.
 - Match is case-insensitive; trailing parenthetical role suffix (`Aino Virtanen (Standards & Quality Lead)`) is stripped before comparison.
 - On a name miss: fuzzy-match via difflib SequenceMatcher; surface the top-3 closest matches to the operator.

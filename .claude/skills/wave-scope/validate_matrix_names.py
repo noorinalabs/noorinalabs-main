@@ -32,6 +32,18 @@ Pre-existing since #319, but #1134 made § 12.5 mandatory over every canonical
 `tier_*` row and added a hard `exit 1` at `/wave-kickoff` § 0b, turning a latent
 gap into a STOP on a charter-permitted assignment.
 
+Why the manifest is acceptable HERE and not everywhere. It is the LOOSER of the
+two authorities, not the more authoritative one: a card directory is the thing a
+repo actually vouches for, while `roster.json` is a flat union manifest that can
+carry a name whose card has been removed. It is trusted for review-class slots
+because of the CONSEQUENCE asymmetry, not because it is a better source — a
+review slot never commits, and a wrong reviewer name fails LOUDLY and later
+(the merge gate blocks on a missing approval; cf. #1179, where a third-child
+reviewer's approval is not yet counted at all). A wrong IMPLEMENTER name fails
+silently and expensively — the W28 mechanical merge-commit re-attribution. Match
+the authority to the blast radius; do not read this as licence to widen the
+manifest's use to any slot whose failure mode is quiet.
+
 The manifest is deliberately NOT unioned into the `implementer` resolution set.
 Doing so would loosen check 2 in the `unverified` case: when the target repo's
 roster is unreadable (not cloned — the CI case), membership fails OPEN, so a
