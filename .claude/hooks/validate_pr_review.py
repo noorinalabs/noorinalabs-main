@@ -1248,6 +1248,78 @@ def load_charter_enforcer_names(repo: str | None = None) -> set[str]:
     return names
 
 
+# A manifest entry is a PERSONA only if its address is a charter-conformant
+# per-persona commit identity: `<principal>+<First>.<Last>@<domain>` (CLAUDE.md
+# § Key Rules / charter `pull-requests.md` § Commit Identity). The `+`-tag with
+# an internal `.` separator is what makes an entry spawnable and commit-capable,
+# so it is the org's own definition of "a person" — not a hand-maintained
+# blocklist that a new tool entry would silently slip past.
+#
+# Measured against `.claude/team/roster.json` (78 entries, 2026-07-30) this
+# excludes exactly the two entries #1181 identifies as non-persona:
+#   - `Annunaki` → `parametrization+Annunaki@gmail.com` (tool identity; no
+#     `First.Last` tag) — the error monitor, which posts real comments on real
+#     PRs, so admitting it as a Requestor is the live risk, not a hypothetical.
+#   - `Steven French` → `parametrization@gmail.com` (bare principal, no `+`tag).
+_PERSONA_ALIAS_RE = re.compile(r"^[^\s@+]+\+[^\s@+]+\.[^\s@+]+@[^\s@]+\.[^\s@]+$")
+
+
+def _load_org_manifest_names(manifest_path: Path | None = None) -> set[str]:
+    """Parse PERSONA names from the org-union manifest `.claude/team/roster.json`.
+
+    Mirrors `.claude/skills/wave-scope/validate_matrix_names._load_org_manifest_names`
+    (#1162) so scope-time and merge-time resolve the same review-class authority.
+    That module's docstring already argues WHY the manifest is acceptable for a
+    review-class set and must not widen a commit-capable one; this is the
+    merge-time half of the same decision (#1179) and inherits that reasoning
+    verbatim rather than re-deriving it.
+
+    The manifest is a flat `{"<name>": "<email>"}` object covering every persona
+    across the org — a strict superset of the parent's own card directory, and
+    the only place a persona whose card lives in a repo that is NOT the target
+    repo can be recognised without cloning that repo. That is exactly the
+    charter-permitted "third-child reviewer" (`charter/agents/spawn-discipline.md`
+    § Child-Repo Implementer Rule step 5) whose `Approved` Hook 4 counted as zero
+    before #1179.
+
+    **Persona filter (#1179 acceptance 3).** Only entries whose address matches
+    `_PERSONA_ALIAS_RE` are returned. The manifest is the LOOSER authority — it
+    can carry an entry that corresponds to no spawnable person, and #1181 shows
+    18 such manifest-only names of which `Annunaki` is definitionally not a
+    reviewer. Filtering on identity SHAPE keeps this gate correct today without
+    waiting on #1181's classification work, and stays correct if #1181 adds more
+    tool entries. #1181 may narrow the set further (manifest-orphan reconciliation);
+    it will not need to widen it.
+
+    Fails OPEN (empty set) when the file is missing or malformed — same posture
+    as the scope-time twin, and safe here for the same reason: the manifest only
+    ever WIDENS a review-class set, so an unreadable manifest degrades to exactly
+    the pre-#1179 behaviour (a loud BLOCK) rather than admitting anyone.
+
+    A non-string value is treated as non-persona. If `roster.json` ever grows a
+    richer per-entry schema (one of #1181's options), this parser narrows rather
+    than guessing — narrowing re-blocks, which is the recoverable direction.
+
+    Names are returned in lowercase to match `CommentReviewResult.reviewers`'
+    dedup key, as `_iter_roster_entries` does.
+    """
+    path = manifest_path if manifest_path is not None else _ROSTER_DIR.parent / "roster.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    if not isinstance(data, dict):
+        return set()
+    return {
+        name.strip().lower()
+        for name, address in data.items()
+        if isinstance(name, str)
+        and name.strip()
+        and isinstance(address, str)
+        and _PERSONA_ALIAS_RE.match(address.strip())
+    }
+
+
 def _load_roster_names(repo: str | None = None) -> set[str]:
     """Read the relevant roster dirs and return ALL canonical persona names.
 
@@ -1261,6 +1333,27 @@ def _load_roster_names(repo: str | None = None) -> set[str]:
     legitimate child-repo reviewers were filtered as non-roster and child PRs
     could not reach the real 2-reviewer threshold — forcing `--admin`.
 
+    The org-union manifest is unioned on top (#1179). Cards alone cover only
+    parent ∪ target-child, so a reviewer drawn from a THIRD child repo — which
+    `/wave-scope` § 12.5 and `/wave-kickoff` § 0b have accepted since #1162 —
+    was still filtered as non-roster here, counted zero, and left `--admin` as
+    the only exit (a moderate feedback event). This is review-class ONLY:
+    `load_charter_enforcer_names` stays card-only and fail-closed, because it is
+    role-filtered on card FILENAME prefixes the flat manifest cannot supply and
+    it gates the Single-Reviewer Exception. Do not union the manifest there.
+
+    Two invariants the ordering below preserves deliberately:
+
+    1. **The manifest WIDENS a card set; it never SUBSTITUTES for one.** It is
+       unioned only when the card dirs yielded at least one name, so the
+       documented "empty set ⇒ roster unreadable ⇒ caller fails closed" contract
+       still holds. A readable manifest beside an unreadable card tree must not
+       quietly re-enable the gate.
+    2. **`RosterResolutionError` still hard-blocks.** `_resolve_roster_dirs`
+       raises BEFORE the manifest is consulted, so a `--repo`-named child whose
+       roster dir is missing keeps failing closed (#552) instead of being papered
+       over by a manifest hit.
+
     Names are returned in lowercase. Empty set indicates the roster could not
     be read (missing dir or I/O failure); the caller is responsible for
     failing closed. Propagates `RosterResolutionError` when a named child
@@ -1269,7 +1362,9 @@ def _load_roster_names(repo: str | None = None) -> set[str]:
     names: set[str] = set()
     for roster_dir in _resolve_roster_dirs(repo):
         names |= _iter_roster_entries(role_prefix_filter=None, roster_dir=roster_dir)
-    return names
+    if not names:
+        return names
+    return names | _load_org_manifest_names()
 
 
 def is_single_reviewer_exception(

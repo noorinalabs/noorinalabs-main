@@ -1250,9 +1250,23 @@ class RosterValidationGateTests(_NoContentBindingHarness):
     repo's `_load_roster_names()` (via `_iter_roster_entries`).
 
     Repro target: PR #487 verdict comments posted under "Camila Restrepo" and
-    "Imelda Santos" — neither in `.claude/team/roster/`. Pre-fix Hook 4
-    counted both and merged. Post-fix both are filtered out.
+    "Imelda Santos" — at the time in no roster anywhere. Pre-fix Hook 4 counted
+    both and merged. Post-fix both are filtered out.
+
+    Those two original strings are NO LONGER usable as the fixture (#1179). The
+    org has since onboarded real personas by exactly those names —
+    `noorinalabs-isnad-ingest-platform/.claude/team/roster/data_lead_camila.md`
+    and `data_engineer_imelda.md`, both carried in `.claude/team/roster.json`.
+    Once #1179 unions the org manifest into `_load_roster_names`, they resolve,
+    and asserting otherwise would assert that two genuine org personas cannot
+    review — the #1179 bug in miniature. The SUBJECT of these tests is the
+    non-roster filter, not those particular strings, so the fixture moves to
+    strings that are definitionally not personas and the history stays here.
     """
+
+    # Deliberately un-personable: no `+First.Last` identity can ever be minted
+    # for these, so they cannot silently become real the way #487's names did.
+    FABRICATED = ("phantom persona", "fabricated reviewer")
 
     @staticmethod
     def _input(command: str) -> dict:
@@ -1273,7 +1287,7 @@ class RosterValidationGateTests(_NoContentBindingHarness):
     def test_two_non_roster_requestors_blocked(self):
         """Regression: 2 non-roster Requestors must BLOCK (P3W11 #487 repro)."""
         review_result = hook.CommentReviewResult()
-        review_result.reviewers = {"camila restrepo", "imelda santos"}
+        review_result.reviewers = set(self.FABRICATED)
         with (
             mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
             mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
@@ -1283,15 +1297,15 @@ class RosterValidationGateTests(_NoContentBindingHarness):
         assert result is not None
         self.assertEqual(result["decision"], "block")
         reason = result["reason"]
-        self.assertIn("camila restrepo", reason.lower())
-        self.assertIn("imelda santos", reason.lower())
+        for fabricated in self.FABRICATED:
+            self.assertIn(fabricated, reason.lower())
         self.assertIn("Non-roster:", reason)
         self.assertIn("roster", reason.lower())
 
     def test_mixed_roster_and_non_roster_blocked(self):
         """1 roster + 1 non-roster → 1/2 (only the roster member counts)."""
         review_result = hook.CommentReviewResult()
-        review_result.reviewers = {"aino virtanen", "imelda santos"}
+        review_result.reviewers = {"aino virtanen", self.FABRICATED[1]}
         with (
             mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
             mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
@@ -1301,7 +1315,7 @@ class RosterValidationGateTests(_NoContentBindingHarness):
         assert result is not None
         self.assertEqual(result["decision"], "block")
         reason = result["reason"]
-        self.assertIn("imelda santos", reason.lower())
+        self.assertIn(self.FABRICATED[1], reason.lower())
         self.assertNotIn("aino virtanen", reason.lower().split("non-roster:")[1].split("\n")[0])
         # Final count should reflect the filtered roster-only set.
         self.assertIn("1/2", reason)
@@ -1801,6 +1815,254 @@ class ChildRosterResolutionTests(_NoContentBindingHarness):
             result,
             "child-repo enforcer should satisfy the single-reviewer exception on a child PR",
         )
+
+
+class OrgManifestReviewerUnionTests(_NoContentBindingHarness):
+    """Issue #1179: the merge-time reviewer set unions the org-union manifest.
+
+    #1162/#1178 made `/wave-scope` § 12.5 and `/wave-kickoff` § 0b resolve
+    REVIEW-class slots against `.claude/team/roster.json` (78 names), so a
+    reviewer drawn from a THIRD child repo — charter-permitted by
+    `charter/agents/spawn-discipline.md` § Child-Repo Implementer Rule step 5 —
+    passes scope. Hook 4 did not: `_load_roster_names` unioned exactly
+    parent-cards ∪ target-child-cards (#552), so that reviewer's `Approved` was
+    filtered as non-roster (#498), the gate counted zero, and the only exit was
+    `--admin` — a moderate feedback event per `charter/pull-requests.md`
+    § Single-Reviewer Exception.
+
+    Hermetic on-disk tree: a parent repo with two card personas, a target child
+    repo with one, and a manifest carrying those plus a third-child persona, a
+    tool identity (`Annunaki`) and a bare-principal identity (`Steven French`).
+    """
+
+    PARENT_PERSONAS = {
+        "standards_lead_aino": "Aino Virtanen",
+        "program_director_nadia": "Nadia Khoury",
+    }
+    # Charter-enforcer prefix (`manager_*`) so the enforcer path is exercised too.
+    CHILD_PERSONAS = {"manager_bereket": "Bereket Tadesse"}
+    CHILD_REPO_NAME = "noorinalabs-isnad-ingest-platform"
+    CHILD_REPO = f"noorinalabs/{CHILD_REPO_NAME}"
+
+    # Third-child personas: cards live in `noorinalabs-data-acquisition`, which is
+    # neither the parent nor the merge target — so from this gate's point of view
+    # they exist ONLY in the manifest. This is the live W28 assignment.
+    THIRD_CHILD = {
+        "Nikolaos Papadopoulos": "parametrization+Nikolaos.Papadopoulos@gmail.com",
+        "Oyunbileg Batbayar": "parametrization+Oyunbileg.Batbayar@gmail.com",
+    }
+    # Non-persona manifest entries (#1181). `Annunaki` is the error monitor — it
+    # posts real comments on real PRs, so it is the concrete risk of widening.
+    NON_PERSONA = {
+        "Annunaki": "parametrization+Annunaki@gmail.com",
+        "Steven French": "parametrization@gmail.com",
+    }
+
+    @staticmethod
+    def _input(command: str) -> dict:
+        return {"tool_name": "Bash", "tool_input": {"command": command}}
+
+    @staticmethod
+    def _pr_data(**overrides) -> dict:
+        base = {
+            "author": "parametrization",
+            "number": 42,
+            "reviews": [],
+            "headRefName": "N.Kavtaradze/1179-hook4-manifest-union",
+            "labels": [],
+        }
+        base.update(overrides)
+        return base
+
+    def _write_roster(self, roster_dir: Path, personas: dict[str, str]) -> None:
+        roster_dir.mkdir(parents=True, exist_ok=True)
+        for slug, name in personas.items():
+            (roster_dir / f"{slug}.md").write_text(
+                f"# Roster Card\n\n## Identity\n- **Name:** {name}\n", encoding="utf-8"
+            )
+
+    def _write_manifest(self, payload: object) -> None:
+        text = payload if isinstance(payload, str) else json.dumps(payload)
+        self._manifest_path.write_text(text, encoding="utf-8")
+
+    def setUp(self) -> None:
+        import tempfile
+
+        super().setUp()
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        parent_repo = Path(self._tmp.name) / "noorinalabs-main"
+        self._parent_roster = parent_repo / ".claude" / "team" / "roster"
+        self._write_roster(self._parent_roster, self.PARENT_PERSONAS)
+        self._write_roster(
+            parent_repo / self.CHILD_REPO_NAME / ".claude" / "team" / "roster",
+            self.CHILD_PERSONAS,
+        )
+
+        # `_load_org_manifest_names` derives the manifest path from `_ROSTER_DIR`
+        # at CALL time, so patching `_ROSTER_DIR` keeps this hermetic — the live
+        # 78-name manifest never leaks into these assertions.
+        self._manifest_path = self._parent_roster.parent / "roster.json"
+        self._write_manifest(
+            {
+                "Aino Virtanen": "parametrization+Aino.Virtanen@gmail.com",
+                "Nadia Khoury": "parametrization+Nadia.Khoury@gmail.com",
+                "Bereket Tadesse": "parametrization+Bereket.Tadesse@gmail.com",
+                **self.THIRD_CHILD,
+                **self.NON_PERSONA,
+            }
+        )
+
+        for attr, value in (
+            ("_ROSTER_DIR", self._parent_roster),
+            ("_PARENT_REPO_ROOT", parent_repo),
+        ):
+            patcher = mock.patch.object(hook, attr, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    # --- acceptance 1: a third-child reviewer counts ----------------------
+
+    def test_third_child_reviewer_resolves_via_manifest(self):
+        names = hook._load_roster_names(repo=self.CHILD_REPO)
+        self.assertIn("nikolaos papadopoulos", names)
+        self.assertIn("oyunbileg batbayar", names)
+        # Card-derived names are still there — the manifest widens, not replaces.
+        self.assertIn("aino virtanen", names)
+        self.assertIn("bereket tadesse", names)
+
+    def test_third_child_reviewers_reach_the_two_reviewer_threshold(self):
+        """MUTATION TARGET (#1179 acceptance 4).
+
+        Both reviewers are manifest-only from this PR's point of view. Drop the
+        `| _load_org_manifest_names()` union in `_load_roster_names` and this
+        goes red: 0/2 approvals, BLOCK, `--admin` as the only exit.
+        """
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"nikolaos papadopoulos", "oyunbileg batbayar"}
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input(f"gh pr merge 42 --repo {self.CHILD_REPO} --squash"))
+        self.assertIsNone(
+            result,
+            "two charter-permitted third-child reviewers must reach the 2-reviewer "
+            "threshold at merge time, not just at scope time (#1179)",
+        )
+
+    def test_manifest_widens_parent_repo_prs_too(self):
+        """The union is repo-agnostic, matching the scope-time twin.
+
+        `validate_matrix_names.validate` computes `review_combined` for EVERY
+        repo including the parent, and the charter permits a cross-team reviewer
+        on any PR. Scoping the union to child PRs would leave the identical
+        false block reachable on a parent-repo PR.
+        """
+        self.assertIn("nikolaos papadopoulos", hook._load_roster_names(repo=None))
+
+    # --- acceptance 3: non-personas must not slip through -----------------
+
+    def test_tool_identity_does_not_count_as_a_reviewer(self):
+        self.assertNotIn("annunaki", hook._load_roster_names(repo=self.CHILD_REPO))
+
+    def test_bare_principal_identity_does_not_count_as_a_reviewer(self):
+        """`Steven French` → `parametrization@gmail.com`, no `+First.Last` tag."""
+        self.assertNotIn("steven french", hook._load_roster_names(repo=self.CHILD_REPO))
+
+    def test_tool_identity_cannot_supply_an_approval(self):
+        """End-to-end: `Annunaki` + one real reviewer is 1/2, not 2/2."""
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"annunaki", "nikolaos papadopoulos"}
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input(f"gh pr merge 42 --repo {self.CHILD_REPO} --squash"))
+        self.assertIsNotNone(result, "a tool identity must not supply an approval")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("1/2", result["reason"])
+
+    def test_persona_filter_shape(self):
+        """Direct coverage of the identity-shape rule, independent of the tree."""
+        self.assertEqual(
+            hook._load_org_manifest_names(self._manifest_path),
+            {
+                "aino virtanen",
+                "nadia khoury",
+                "bereket tadesse",
+                "nikolaos papadopoulos",
+                "oyunbileg batbayar",
+            },
+        )
+
+    # --- acceptance 2: the enforcer boundary does not move ----------------
+
+    def test_manifest_does_not_widen_charter_enforcer_names(self):
+        """`load_charter_enforcer_names` stays card-only and role-filtered.
+
+        It gates the Single-Reviewer Exception and filters on card FILENAME
+        prefixes the flat manifest cannot supply, so a manifest hit must never
+        qualify a sole reviewer for the exception.
+        """
+        enforcers = hook.load_charter_enforcer_names(repo=self.CHILD_REPO)
+        self.assertIn("bereket tadesse", enforcers)  # child `manager_*` card
+        self.assertNotIn("nikolaos papadopoulos", enforcers)
+        self.assertNotIn("annunaki", enforcers)
+        self.assertNotIn("steven french", enforcers)
+
+    def test_manifest_persona_cannot_claim_the_single_reviewer_exception(self):
+        """A manifest-only sole reviewer on a `wave-bootstrap` PR is still 1/2."""
+        self.assertFalse(
+            hook.is_single_reviewer_exception(
+                ["wave-bootstrap"], {"nikolaos papadopoulos"}, repo=self.CHILD_REPO
+            )
+        )
+
+    # --- degraded-mode invariants -----------------------------------------
+
+    def test_manifest_never_substitutes_for_an_unreadable_card_tree(self):
+        """Empty card set ⇒ empty result, so the caller still fails closed.
+
+        `_load_roster_names`' documented contract is "empty ⇒ roster unreadable".
+        A readable manifest beside an unreadable card tree must not quietly
+        re-enable the gate. (`_ROSTER_DIR` moves; the manifest beside it stays.)
+        """
+        with mock.patch.object(hook, "_ROSTER_DIR", self._parent_roster.parent / "gone"):
+            self.assertEqual(hook._load_roster_names(repo=None), set())
+
+    def test_missing_child_roster_still_hard_blocks_with_a_manifest_present(self):
+        """#552's safe direction survives: `_resolve_roster_dirs` raises first."""
+        with self.assertRaises(hook.RosterResolutionError):
+            hook._load_roster_names(repo="noorinalabs/noorinalabs-does-not-exist")
+
+    def test_absent_manifest_fails_open_to_pre_1179_behaviour(self):
+        self._manifest_path.unlink()
+        self.assertEqual(
+            hook._load_roster_names(repo=self.CHILD_REPO),
+            {"aino virtanen", "nadia khoury", "bereket tadesse"},
+        )
+
+    def test_malformed_manifest_fails_open_to_pre_1179_behaviour(self):
+        self._write_manifest("{not json")
+        self.assertEqual(hook._load_org_manifest_names(self._manifest_path), set())
+
+    def test_non_object_manifest_fails_open(self):
+        self._write_manifest(["Nikolaos Papadopoulos"])
+        self.assertEqual(hook._load_org_manifest_names(self._manifest_path), set())
+
+    def test_non_string_entry_value_narrows_rather_than_guessing(self):
+        """A future richer per-entry schema (#1181) re-blocks; it never admits."""
+        self._write_manifest(
+            {
+                "Nikolaos Papadopoulos": {
+                    "email": "parametrization+Nikolaos.Papadopoulos@gmail.com",
+                    "persona": True,
+                }
+            }
+        )
+        self.assertEqual(hook._load_org_manifest_names(self._manifest_path), set())
 
 
 class ResolveRosterDirsTests(unittest.TestCase):
