@@ -1698,10 +1698,10 @@
       "resolved_at": "2026-07-30T04:00:26.970156+00:00"
     },
     ".claude/memory/feedback_corpus_misses_its_constant_dimension.md": {
-      "last_tracked": "0358b9449160c821bbc3c9154cf8655734d5b53660ee358a3e063ee0a10767d7",
-      "last_resolved": "0358b9449160c821bbc3c9154cf8655734d5b53660ee358a3e063ee0a10767d7",
-      "tracked_at": "2026-07-30T04:19:30.470121+00:00",
-      "resolved_at": "2026-07-30T04:19:44.681644+00:00"
+      "last_tracked": "e29176485ed4f58dbeb8a007f832426a5d45a5399cb7db168d45e137d3b10e43",
+      "last_resolved": "e29176485ed4f58dbeb8a007f832426a5d45a5399cb7db168d45e137d3b10e43",
+      "tracked_at": "2026-07-30T04:47:08.860925+00:00",
+      "resolved_at": "2026-07-30T04:47:25.610701+00:00"
     }
   },
   "last_cleanup": {
