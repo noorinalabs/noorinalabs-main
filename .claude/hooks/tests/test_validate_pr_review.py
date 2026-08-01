@@ -3814,5 +3814,401 @@ class SurnameCollisionSelfReviewTests(unittest.TestCase):
         self.assertEqual(captured.get("branch_author_initial"), "l")
 
 
+class CommentScanScopeTotalityTests(unittest.TestCase):
+    """#1206: `comment_scan_scope` must return a SCANNING mode for every head ref.
+
+    The defect was a dispatch that recognised exactly two head-ref shapes and
+    fell through to no scan at all for everything else — so a `dependabot/**`
+    PR carrying two correctly-formed, roster-valid, non-stale Approved verdicts
+    reported `0/2 required — (none)`, blaming the reviewers for a scan that
+    never ran (noorinalabs-deploy#691).
+
+    Totality is the property that kills the whole defect class rather than the
+    one observed shape: it is not enough to add `dependabot/**` to the list of
+    recognised prefixes, because the next unrecognised shape fails the same way.
+    """
+
+    def test_persona_branch_selects_author_exclusion(self):
+        """Positive control for the discriminator below: the persona shapes must
+        actually resolve to the OTHER mode, or the totality assertions would be
+        satisfied by a function that returned NO_BRANCH_AUTHOR unconditionally.
+        """
+        for ref in (
+            "S.Ferreira/1189-wave-status-scoping",
+            "A.Virtanen/1206-review-scan-nonpersona-headref",
+            "A.Virtanen-0179-branch-regex-fix",  # dash separator, also charter-shaped
+        ):
+            with self.subTest(ref=ref):
+                self.assertEqual(hook.comment_scan_scope(ref), hook.COMMENT_SCAN_AUTHOR_EXCLUDED)
+
+    def test_non_persona_refs_select_the_no_branch_author_scan(self):
+        """THE DEFECT, at the dispatch level. Every one of these returned "no
+        scan" before #1206; each must now name a real scanning mode."""
+        for ref in (
+            "dependabot/docker/integration-tests/fake_oauth/python-d3400aa",
+            "deployments/phase-10/wave-29",
+            "feature/some-hand-made-branch",
+            "nohashinthisref",  # no `/` at all
+            "",  # headRefName absent from the API response
+            "renovate/pytest-8.x",
+            "1206-bare-issue-number-branch",
+        ):
+            with self.subTest(ref=ref):
+                self.assertEqual(hook.comment_scan_scope(ref), hook.COMMENT_SCAN_NO_BRANCH_AUTHOR)
+
+    def test_no_head_ref_shape_ever_yields_not_run(self):
+        """The invariant itself, stated once: NOT_RUN is not a reachable scope.
+
+        Kept separate from the case list above so the property survives someone
+        later adding a third scanning mode — a new mode would keep this green
+        and correctly fail only the specific-mode assertions it changes.
+        """
+        for ref in (
+            "",
+            "/",
+            "a",
+            "A.Virtanen/1206-x",
+            "dependabot/npm_and_yarn/x-1.2.3",
+            "deployments/phase-10/wave-29",
+            "..",
+            "x" * 300,
+        ):
+            with self.subTest(ref=ref):
+                self.assertNotEqual(hook.comment_scan_scope(ref), hook.COMMENT_SCAN_NOT_RUN)
+
+
+class _ResolveOverFakeCommentsHarness(unittest.TestCase):
+    """Drives the REAL `resolve_review_verdicts` over a faked `gh api` boundary.
+
+    Deliberately does NOT mock `check_comment_reviews`: the #1206 defect lived
+    in the resolver's DISPATCH to that function, so a test that stubs the callee
+    still exercises the dispatch, but a test that stubs the dispatch would prove
+    nothing at all.
+    """
+
+    REPO = "noorinalabs/noorinalabs-main"
+    ROSTER = {"lucas ferreira", "nino kavtaradze", "aino virtanen", "santiago ferreira"}
+
+    @staticmethod
+    def _verdict(requestor: str, requestee: str = "Someone Else", direction: str = "Approved"):
+        return {
+            "body": (
+                f"Requestor: {requestor}\nRequestee: {requestee}\n"
+                f"RequestOrReplied: {direction}\nTechDebt: none"
+            ),
+            "created_at": "2026-07-20T00:00:00Z",
+        }
+
+    @staticmethod
+    def _pr_data(head_ref: str, *, author="parametrization", reviews=(), labels=()):
+        return {
+            "author": author,
+            "number": 691,
+            "reviews": list(reviews),
+            "headRefName": head_ref,
+            "labels": list(labels),
+        }
+
+    def _resolve(self, head_ref: str, comments: list[dict], *, roster=None):
+        def fake_run(args, capture_output, text, timeout):  # noqa: ARG001
+            result = mock.MagicMock()
+            result.returncode = 0
+            if args[0] == "gh" and args[1:3] == ["repo", "view"]:
+                result.stdout = json.dumps({"owner": {"login": "noorinalabs"}, "name": "r"})
+            else:
+                result.stdout = json.dumps(comments)
+            return result
+
+        with (
+            mock.patch.object(hook.subprocess, "run", side_effect=fake_run),
+            mock.patch.object(
+                hook,
+                "get_latest_content_commit",
+                # T_content sits BEFORE the fixture comments, so nothing is stale
+                # and a shortfall can only come from the scan, not from staleness.
+                return_value=("837c272a", hook._parse_iso8601("2026-07-15T19:13:59Z")),
+            ),
+            mock.patch.object(
+                hook,
+                "_load_roster_names",
+                return_value=set(self.ROSTER if roster is None else roster),
+            ),
+        ):
+            return hook.resolve_review_verdicts(self._pr_data(head_ref), repo=self.REPO)
+
+
+class NonPersonaHeadRefScanTests(_ResolveOverFakeCommentsHarness):
+    """#1206: the comment verdict scan must run for EVERY head-ref shape.
+
+    Each assertion below is a kill-shot on the pre-fix resolver: it returned
+    `comment_reviewers == set()` and `total_distinct == 0` for all of these
+    inputs, so every `assertEqual(..., 2)` here was `0` before the fix.
+    """
+
+    DEPENDABOT_REF = "dependabot/docker/integration-tests/fake_oauth/python-d3400aa"
+
+    def test_dependabot_head_ref_with_two_approvals_reaches_two_of_two(self):
+        """THE LIVE DEFECT, reproduced offline (noorinalabs-deploy#691)."""
+        verdicts = self._resolve(
+            self.DEPENDABOT_REF,
+            [self._verdict("Lucas Ferreira"), self._verdict("Nino Kavtaradze")],
+        )
+        self.assertEqual(verdicts.distinct_reviewers, {"lucas ferreira", "nino kavtaradze"})
+        self.assertEqual(verdicts.total_distinct, 2)
+        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_NO_BRANCH_AUTHOR)
+
+    def test_head_ref_with_no_slash_neither_crashes_nor_skips(self):
+        """A ref with no separator at all used to fall through both branches."""
+        verdicts = self._resolve(
+            "nohashinthisref",
+            [self._verdict("Lucas Ferreira"), self._verdict("Nino Kavtaradze")],
+        )
+        self.assertEqual(verdicts.total_distinct, 2)
+        self.assertTrue(verdicts.comment_scan_ran)
+
+    def test_empty_head_ref_still_scans(self):
+        """`get_pr_data` defaults `headRefName` to `""`; that must scan, not skip."""
+        verdicts = self._resolve("", [self._verdict("Aino Virtanen")])
+        self.assertEqual(verdicts.distinct_reviewers, {"aino virtanen"})
+        self.assertTrue(verdicts.comment_scan_ran)
+
+    def test_none_head_ref_does_not_crash(self):
+        """A hand-built `pr_data` carrying `None` must degrade, not raise."""
+        pr_data = self._pr_data("")
+        pr_data["headRefName"] = None
+
+        def fake_run(args, capture_output, text, timeout):  # noqa: ARG001
+            result = mock.MagicMock()
+            result.returncode = 0
+            result.stdout = json.dumps([self._verdict("Aino Virtanen")])
+            return result
+
+        with (
+            mock.patch.object(hook.subprocess, "run", side_effect=fake_run),
+            mock.patch.object(hook, "get_latest_content_commit", return_value=None),
+            mock.patch.object(hook, "_load_roster_names", return_value=set(self.ROSTER)),
+        ):
+            verdicts = hook.resolve_review_verdicts(pr_data, repo=self.REPO)
+
+        self.assertEqual(verdicts.head_ref, "")
+        self.assertEqual(verdicts.distinct_reviewers, {"aino virtanen"})
+
+    def test_non_roster_requestor_on_a_bot_branch_still_does_not_count(self):
+        """The gate is not relaxed: widening the sentinel must not smuggle a
+        non-roster Requestor past the #498 filter. Paired with a roster name in
+        the SAME thread as the positive control — a fix that broke roster
+        filtering outright would satisfy neither half.
+        """
+        verdicts = self._resolve(
+            self.DEPENDABOT_REF,
+            [self._verdict("Lucas Ferreira"), self._verdict("Mallory Impostor")],
+        )
+        self.assertEqual(verdicts.roster_comment_reviewers, {"lucas ferreira"})
+        self.assertEqual(verdicts.non_roster_requestors, {"mallory impostor"})
+        self.assertEqual(verdicts.total_distinct, 1)
+
+    def test_changes_requested_on_a_bot_branch_still_does_not_count(self):
+        """Nor may it admit a non-Approved verdict (#940 stays in force)."""
+        verdicts = self._resolve(
+            self.DEPENDABOT_REF,
+            [
+                self._verdict("Lucas Ferreira"),
+                self._verdict("Nino Kavtaradze", direction="Changes Requested"),
+            ],
+        )
+        self.assertEqual(verdicts.distinct_reviewers, {"lucas ferreira"})
+        self.assertEqual(verdicts.total_distinct, 1)
+
+    def test_stale_verdict_on_a_bot_branch_is_still_excluded(self):
+        """Content binding (#950) must survive the widened dispatch."""
+        stale = self._verdict("Lucas Ferreira")
+        stale["created_at"] = "2026-01-01T00:00:00Z"  # before T_content
+        verdicts = self._resolve(self.DEPENDABOT_REF, [stale, self._verdict("Nino Kavtaradze")])
+        self.assertEqual(verdicts.distinct_reviewers, {"nino kavtaradze"})
+        self.assertEqual(len(verdicts.stale_verdicts_comment), 1)
+        self.assertEqual(verdicts.stale_verdicts_comment[0].reviewer, "Lucas Ferreira")
+
+
+class HeadRefScanRegressionTests(_ResolveOverFakeCommentsHarness):
+    """The two behaviours #1206 must leave EXACTLY as they were."""
+
+    def test_persona_branch_still_excludes_the_pr_author(self):
+        """Self-review exclusion is the reason the head ref is consulted at all.
+
+        Lucas Ferreira's own Approved on `L.Ferreira/…` must stay out, while
+        Aino Virtanen's is admitted — the admitted half is the positive control
+        proving the scan ran, so a regression that skipped the scan entirely
+        would fail this test rather than passing its absence assertion.
+        """
+        verdicts = self._resolve(
+            "L.Ferreira/1206-x",
+            [self._verdict("Lucas Ferreira"), self._verdict("Aino Virtanen")],
+        )
+        self.assertNotIn("lucas ferreira", verdicts.distinct_reviewers)
+        self.assertEqual(verdicts.distinct_reviewers, {"aino virtanen"})
+        self.assertEqual(verdicts.branch_author_lastname, "Ferreira")
+        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_AUTHOR_EXCLUDED)
+
+    def test_persona_branch_still_admits_the_same_surname_colleague(self):
+        """#1172 must not regress: Santiago is not Lucas."""
+        verdicts = self._resolve(
+            "L.Ferreira/1206-x",
+            [self._verdict("Santiago Ferreira"), self._verdict("Lucas Ferreira")],
+        )
+        self.assertEqual(verdicts.distinct_reviewers, {"santiago ferreira"})
+
+    def test_wave_merge_branch_behaviour_is_unchanged(self):
+        """`deployments/phase-N/wave-M` counted every roster reviewer before the
+        fix (main#294's empty sentinel) and must still do so — same reviewers,
+        same count, and now under the generalised no-branch-author mode."""
+        verdicts = self._resolve(
+            "deployments/phase-10/wave-29",
+            [self._verdict("Lucas Ferreira"), self._verdict("Nino Kavtaradze")],
+        )
+        self.assertEqual(verdicts.distinct_reviewers, {"lucas ferreira", "nino kavtaradze"})
+        self.assertEqual(verdicts.total_distinct, 2)
+        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_NO_BRANCH_AUTHOR)
+        self.assertIsNone(verdicts.branch_author_lastname)
+
+    def test_two_reviewer_threshold_is_not_relaxed_anywhere(self):
+        """One approval is still one approval, on a bot branch as on any other.
+
+        The whole risk of this change is that "count the verdicts that exist"
+        slides into "need fewer verdicts". Pinned on the exact shape that was
+        broken.
+        """
+        verdicts = self._resolve(
+            NonPersonaHeadRefScanTests.DEPENDABOT_REF, [self._verdict("Lucas Ferreira")]
+        )
+        self.assertEqual(verdicts.total_distinct, 1)
+        self.assertFalse(verdicts.total_distinct >= 2)
+
+
+class CommentScanNotMeasuredTests(_ResolveOverFakeCommentsHarness):
+    """#1206 half two: a non-measurement must never render as a measurement.
+
+    The original defect was invisible for months precisely because the report
+    said `0/2 required — (none)` and `stale verdicts: none` — two sentences
+    that describe findings — when nothing had been looked at. These pin that a
+    skipped scan is now loud at every layer.
+    """
+
+    def test_review_verdicts_defaults_to_not_measured(self):
+        """The DEFAULT must be the honest one. A future field-by-field
+        construction that forgets `comment_scan` has to degrade to "not
+        measured", never to a false claim that the thread was read."""
+        verdicts = hook.ReviewVerdicts(
+            number=1,
+            head_ref="x",
+            labels=[],
+            branch_author_lastname=None,
+            content_sha="",
+            content_ts=None,
+            formal_reviewers=set(),
+            comment_reviewers=set(),
+            non_roster_requestors=set(),
+            roster_comment_reviewers=set(),
+            roster_names=set(),
+            distinct_reviewers=set(),
+            stale_verdicts_comment=[],
+            stale_verdicts_formal=[],
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=[],
+            tech_debt_unparseable=[],
+            wave_bootstrap_exception=False,
+        )
+        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_NOT_RUN)
+        self.assertFalse(verdicts.comment_scan_ran)
+
+    def test_a_reintroduced_skip_path_fails_closed_with_a_named_reason(self):
+        """The regression guard, exercised rather than asserted-by-comment.
+
+        Patching `comment_scan_scope` to return NOT_RUN simulates exactly the
+        future edit this guard exists for — a head-ref shape that dispatches to
+        no scan. The resolver must raise rather than return a zero, because a
+        zero from an unscanned thread is the absence of evidence, not evidence
+        of absence (#981's stance, applied one level up).
+        """
+        with mock.patch.object(hook, "comment_scan_scope", return_value=hook.COMMENT_SCAN_NOT_RUN):
+            with self.assertRaises(hook.CommentScanUndeterminedError) as ctx:
+                self._resolve("whatever/ref", [self._verdict("Lucas Ferreira")])
+        self.assertIn("not dispatched", ctx.exception.reason)
+        self.assertIn("whatever/ref", ctx.exception.reason)
+
+    def test_positive_control_same_setup_does_not_raise_unpatched(self):
+        """Proves the experiment above ran: identical inputs WITHOUT the patch
+        must resolve cleanly. Without this, the assertRaises could be passing
+        on some unrelated failure in the harness."""
+        verdicts = self._resolve("whatever/ref", [self._verdict("Lucas Ferreira")])
+        self.assertEqual(verdicts.distinct_reviewers, {"lucas ferreira"})
+        self.assertTrue(verdicts.comment_scan_ran)
+
+    def _block_reason(self, verdicts) -> str:
+        input_data = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "gh pr merge 691 --repo noorinalabs/noorinalabs-main"},
+        }
+        with (
+            mock.patch.object(
+                hook,
+                "get_pr_data",
+                return_value=self._pr_data("dependabot/docker/x-1.2.3"),
+            ),
+            mock.patch.object(hook, "resolve_review_verdicts", return_value=verdicts),
+            mock.patch.object(hook, "log_pretooluse_block"),
+        ):
+            result = hook.check(input_data)
+        # `assert` rather than `assertIsNotNone` so mypy narrows away the
+        # `dict | None` return before the indexing below.
+        assert result is not None, "check() must BLOCK a 0/2 PR, not return None"
+        self.assertEqual(result["decision"], "block")
+        return str(result["reason"])
+
+    @staticmethod
+    def _empty_verdicts(comment_scan: str):
+        return hook.ReviewVerdicts(
+            number=691,
+            head_ref="dependabot/docker/x-1.2.3",
+            labels=[],
+            branch_author_lastname=None,
+            content_sha="837c272a",
+            content_ts=None,
+            formal_reviewers=set(),
+            comment_reviewers=set(),
+            non_roster_requestors=set(),
+            roster_comment_reviewers=set(),
+            roster_names={"lucas ferreira"},
+            distinct_reviewers=set(),
+            stale_verdicts_comment=[],
+            stale_verdicts_formal=[],
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=[],
+            tech_debt_unparseable=[],
+            wave_bootstrap_exception=False,
+            comment_scan=comment_scan,
+        )
+
+    def test_block_message_distinguishes_not_measured_from_measured_empty(self):
+        """Same 0/2 count, two different causes, two different messages.
+
+        Both branches are asserted in BOTH directions — the not-measured
+        message must say so and the measured one must NOT — so a change that
+        emitted the alarming wording unconditionally fails just as loudly as
+        one that emitted it never.
+        """
+        not_measured = self._block_reason(self._empty_verdicts(hook.COMMENT_SCAN_NOT_RUN))
+        measured = self._block_reason(self._empty_verdicts(hook.COMMENT_SCAN_NO_BRANCH_AUTHOR))
+
+        self.assertNotEqual(not_measured, measured)
+        self.assertIn("DID NOT RUN", not_measured)
+        self.assertIn("NOT a measurement", not_measured)
+        self.assertNotIn("DID NOT RUN", measured)
+        self.assertIn("The scan DID run", measured)
+        # Both still block on the same threshold — the wording differs, the
+        # gate does not.
+        self.assertIn("0/2 required peer reviews", not_measured)
+        self.assertIn("0/2 required peer reviews", measured)
+
+
 if __name__ == "__main__":
     unittest.main()

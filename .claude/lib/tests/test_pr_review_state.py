@@ -439,13 +439,23 @@ class ContentStalenessTests(unittest.TestCase):
             "compute_review_state must forward T_content to check_comment_reviews (#1046)",
         )
 
-    def test_content_ts_forwarded_on_wave_merge_call_site(self):
-        """The `:137` wave-merge call site is a SECOND omission surface (#1046)."""
+    def test_content_ts_forwarded_on_the_no_branch_author_path(self):
+        """A head ref naming NO branch author is a second omission surface (#1046).
+
+        Since #1206 this is no longer a separate `deployments/**` call site —
+        the resolver has ONE `check_comment_reviews` call for every head-ref
+        shape — but the wave-merge ref is still the shape that must arrive with
+        the `""` author sentinel, so the assertion is kept and pointed at the
+        unified call site. `branch_author_initial` must be `""` here too: a
+        non-empty initial would mean the resolver had invented an author for a
+        branch that names none.
+        """
         captured = {}
 
-        def fake_check(number, lastname, repo=None, content_ts=None):
+        def fake_check(number, lastname, repo=None, content_ts=None, branch_author_initial=""):
             captured["content_ts"] = content_ts
             captured["lastname"] = lastname
+            captured["initial"] = branch_author_initial
             return _comment_result(reviewers=())
 
         with (
@@ -462,6 +472,7 @@ class ContentStalenessTests(unittest.TestCase):
             prs.compute_review_state("1040", repo=self.REPO)
 
         self.assertEqual(captured["lastname"], "")
+        self.assertEqual(captured["initial"], "")
         self.assertEqual(captured["content_ts"], _NOW)
 
     def test_stale_formal_review_is_excluded_and_recorded(self):
@@ -655,6 +666,160 @@ class UndeterminableRepoAndScanTests(unittest.TestCase):
             with self.assertRaises(prs.ReviewStateError) as ctx:
                 prs.compute_review_state("451", repo="noorinalabs/noorinalabs-main")
         self.assertIn("HTTP 403", str(ctx.exception))
+
+
+class CommentScanReportedInTheReportTests(unittest.TestCase):
+    """#1206 half two: the report must distinguish NOT-MEASURED from MEASURED-EMPTY.
+
+    On noorinalabs-deploy#691 this tool printed, for a PR carrying two valid
+    Approveds:
+
+        distinct Approved reviewers: 0/2 required — (none)
+        stale verdicts: none
+
+    Every word of that is a claim about what a scan found. No scan had run. The
+    count was recoverable by fixing the dispatch; the misleading REPORT is a
+    separate defect, because it is what made the first one survive — a
+    non-measurement that renders as a measurement cannot be noticed.
+
+    Both directions are asserted throughout: the not-measured report must carry
+    the warning AND the measured one must not. An implementation that printed
+    the alarming wording unconditionally would fail here just as loudly as one
+    that never printed it.
+    """
+
+    @staticmethod
+    def _state(comment_scan, **overrides):
+        kwargs = dict(
+            pr_number="691",
+            repo="noorinalabs/noorinalabs-deploy",
+            head_ref="dependabot/docker/integration-tests/fake_oauth/python-d3400aa",
+            branch_author_lastname=None,
+            formal_reviewers=[],
+            comment_reviewers=[],
+            non_roster_requestors=[],
+            distinct_reviewer_count=0,
+            wave_bootstrap_exception=False,
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=[],
+            content_sha="837c272a",
+            comment_scan=comment_scan,
+        )
+        kwargs.update(overrides)
+        return prs.ReviewState(**kwargs)
+
+    def test_default_is_not_measured(self):
+        """A ReviewState built without the field must claim nothing."""
+        state = prs.ReviewState(
+            pr_number="1",
+            repo=None,
+            head_ref="x",
+            branch_author_lastname=None,
+            formal_reviewers=[],
+            comment_reviewers=[],
+            non_roster_requestors=[],
+            distinct_reviewer_count=0,
+            wave_bootstrap_exception=False,
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=[],
+        )
+        self.assertEqual(state.comment_scan, prs.gate.COMMENT_SCAN_NOT_RUN)
+        self.assertFalse(state.comment_scan_ran)
+
+    def test_not_measured_and_measured_empty_render_differently(self):
+        """The core distinction, on IDENTICAL reviewer data (0 reviewers, no
+        stale verdicts). If the two texts were equal, the report would still be
+        unable to tell an operator which situation they are in."""
+        not_measured = prs._render_text(self._state(prs.gate.COMMENT_SCAN_NOT_RUN))
+        measured = prs._render_text(self._state(prs.gate.COMMENT_SCAN_NO_BRANCH_AUTHOR))
+        self.assertNotEqual(not_measured, measured)
+
+    def test_not_measured_report_warns_and_measured_one_does_not(self):
+        not_measured = prs._render_text(self._state(prs.gate.COMMENT_SCAN_NOT_RUN))
+        measured = prs._render_text(self._state(prs.gate.COMMENT_SCAN_NO_BRANCH_AUTHOR))
+
+        self.assertIn("NOT RUN", not_measured)
+        self.assertIn("NOT a measurement", not_measured)
+        self.assertNotIn("NOT RUN", measured)
+        self.assertIn("comment verdict scan: RAN", measured)
+
+    def test_stale_verdicts_none_is_only_claimed_when_the_scan_ran(self):
+        """`stale verdicts: none` is TRUE in both cases and honest in only one.
+
+        The measured assertion is the positive control: it proves the exact
+        string is reachable, so the not-measured assertion is testing the
+        conditional rather than a string that never appears at all.
+        """
+        not_measured = prs._render_text(self._state(prs.gate.COMMENT_SCAN_NOT_RUN))
+        measured = prs._render_text(self._state(prs.gate.COMMENT_SCAN_NO_BRANCH_AUTHOR))
+
+        self.assertIn("  stale verdicts: none\n", measured + "\n")
+        self.assertNotIn("  stale verdicts: none\n", not_measured + "\n")
+        self.assertIn("NOT MEASURED", not_measured)
+
+    def test_author_excluded_mode_names_the_excluded_author(self):
+        """The third mode must be distinguishable too — a report that collapsed
+        both scanning modes into one line would hide whether self-review
+        exclusion was in force on this PR."""
+        text = prs._render_text(
+            self._state(
+                prs.gate.COMMENT_SCAN_AUTHOR_EXCLUDED,
+                head_ref="L.Ferreira/1206-x",
+                branch_author_lastname="Ferreira",
+            )
+        )
+        self.assertIn("comment verdict scan: RAN", text)
+        self.assertIn("Ferreira", text)
+        self.assertIn("self-review exclusion active", text)
+
+    def test_json_output_carries_the_scan_mode(self):
+        """A machine consumer must see it too, not just the human report."""
+        payload = json.loads(prs._render_json(self._state(prs.gate.COMMENT_SCAN_NOT_RUN)))
+        self.assertEqual(payload["comment_scan"], prs.gate.COMMENT_SCAN_NOT_RUN)
+
+    def test_compute_review_state_propagates_the_gate_scan_mode(self):
+        """Wiring: without this the field would be correct in the dataclass and
+        permanently NOT_RUN in production, so every real report would carry the
+        alarming warning and the distinction would be worthless.
+
+        Driven through the REAL `resolve_review_verdicts` over a faked comment
+        API, on the exact head-ref shape #1206 is about.
+        """
+        approved = {
+            "body": (
+                "Requestor: Lucas Ferreira\nRequestee: Dependabot\n"
+                "RequestOrReplied: Approved\nTechDebt: none"
+            ),
+            "created_at": "2026-07-20T00:00:00Z",
+        }
+        pr_data = {
+            "author": "app/dependabot",
+            "number": 691,
+            "reviews": [],
+            "headRefName": "dependabot/docker/integration-tests/fake_oauth/python-d3400aa",
+            "labels": [],
+        }
+
+        def fake_run(args, capture_output, text, timeout):  # noqa: ARG001
+            result = mock.MagicMock()
+            result.returncode = 0
+            result.stdout = json.dumps([approved])
+            return result
+
+        with (
+            mock.patch.object(prs.gate, "get_pr_data", return_value=pr_data),
+            mock.patch.object(prs.gate.subprocess, "run", side_effect=fake_run),
+            mock.patch.object(prs.gate, "get_latest_content_commit", return_value=None),
+            mock.patch.object(prs.gate, "_load_roster_names", return_value={"lucas ferreira"}),
+        ):
+            state = prs.compute_review_state("691", repo="noorinalabs/noorinalabs-deploy")
+
+        self.assertEqual(state.comment_scan, prs.gate.COMMENT_SCAN_NO_BRANCH_AUTHOR)
+        self.assertTrue(state.comment_scan_ran)
+        # And the verdict itself is now counted — the driver-level form of the
+        # #1206 defect (this was `[]` / 0 before the fix).
+        self.assertEqual(state.comment_reviewers, ["lucas ferreira"])
+        self.assertEqual(state.distinct_reviewer_count, 1)
 
 
 if __name__ == "__main__":

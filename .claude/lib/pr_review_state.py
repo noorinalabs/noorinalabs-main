@@ -19,9 +19,18 @@ charter-comment parsing, nor re-assemble that pipeline with its own argument
 list: a fork would silently drift from the gate, and that drift is the exact
 failure #707 exists to prevent. The PASS/FAIL verdict computed here mirrors
 `validate_pr_review.check()` step for step (T_content verdict staleness,
-formal + roster-filtered comment reviewers, the wave-merge head-ref sentinel,
-the single-reviewer exception, and the missing-TechDebt block) because both
-now compute it via the same `resolve_review_verdicts` call.
+formal + roster-filtered comment reviewers, the no-branch-author head-ref
+sentinel, the single-reviewer exception, and the missing-TechDebt block)
+because both now compute it via the same `resolve_review_verdicts` call.
+
+#1206 adds the `comment_scan` field to that shared output and renders it here.
+Reusing the gate's pipeline made this tool AGREE with the gate, but both agreed
+on a non-answer: for any head ref that was neither a persona branch nor
+`deployments/**` the comment scan was never dispatched, and this report printed
+`0/2 required — (none)` plus `stale verdicts: none` for a dependabot PR carrying
+two valid Approveds (noorinalabs-deploy#691). Parity with the gate is not the
+same as measuring anything, so the report now states whether the scan RAN before
+it states what the scan found.
 
 Reusing the gate's functions is necessary but NOT sufficient for parity — the
 ARGUMENTS matter as much as the callee. #1046: this driver called
@@ -116,6 +125,20 @@ class ReviewState:
     # carried so the report can NAME them. A stale verdict that is silently
     # subtracted reads to an operator as a broken tool (#950 diagnostic lesson).
     stale_verdicts: list[dict] = dataclasses.field(default_factory=list)
+    # Which comment-scan mode produced `comment_reviewers` (#1206) — one of the
+    # gate's COMMENT_SCAN_* values. Carried so the report can distinguish "the
+    # thread was read and nobody approved" from "the thread was never read",
+    # which the reviewer counts alone cannot express: pre-#1206 this tool
+    # printed `0/2 required — (none)` AND `stale verdicts: none` for a
+    # dependabot PR carrying two valid Approveds, and both lines read as
+    # findings when neither was one. Defaults to NOT_RUN so an omission renders
+    # as not-measured rather than as a false measurement.
+    comment_scan: str = gate.COMMENT_SCAN_NOT_RUN
+
+    @property
+    def comment_scan_ran(self) -> bool:
+        """True iff the PR-comment verdict scan actually read the thread."""
+        return self.comment_scan != gate.COMMENT_SCAN_NOT_RUN
 
     def passes(self) -> bool:
         """True iff `validate_pr_review` would ALLOW the merge.
@@ -250,6 +273,34 @@ def compute_review_state(pr_number: str, repo: str | None = None) -> ReviewState
         content_sha=verdicts.content_sha,
         content_ts=verdicts.content_ts.isoformat() if verdicts.content_ts else None,
         stale_verdicts=stale_verdicts,
+        comment_scan=verdicts.comment_scan,
+    )
+
+
+def _describe_comment_scan(state: ReviewState) -> str:
+    """One line saying whether the comment verdict scan RAN, and in which mode.
+
+    The report's reviewer counts describe a measurement; this line describes
+    whether a measurement happened at all. Without it, `0/2 required — (none)`
+    is ambiguous between "nobody approved" and "nobody looked" — and for every
+    non-persona head ref the answer was the second one, silently, until #1206.
+    """
+    if not state.comment_scan_ran:
+        return (
+            "NOT RUN — the PR comment thread was never read, so the reviewer count "
+            "above is NOT a measurement of this PR's approvals (#1206). Treat it as "
+            "unknown, not as zero."
+        )
+    if state.comment_scan == gate.COMMENT_SCAN_AUTHOR_EXCLUDED:
+        author = state.branch_author_lastname or "?"
+        return (
+            f"RAN — head ref names branch author {author!r}, whose own verdicts are "
+            "excluded from the reviewer set (self-review exclusion active)."
+        )
+    return (
+        "RAN — head ref names no branch author (bot / wave-merge / non-charter branch), "
+        "so no self-review exclusion was applied. Roster filtering and the 2-reviewer "
+        "threshold are unchanged."
     )
 
 
@@ -262,6 +313,10 @@ def _render_text(state: ReviewState) -> str:
     lines.append(f"  head ref: {state.head_ref or '(unknown)'}")
     lastname = state.branch_author_lastname or "(none — wave-merge / unmatched)"
     lines.append(f"  branch-author lastname: {lastname}")
+
+    # Printed BEFORE the counts, on purpose: it tells the reader whether the
+    # numbers that follow are a measurement at all (#1206).
+    lines.append(f"  comment verdict scan: {_describe_comment_scan(state)}")
 
     approved = state.comment_reviewers + state.formal_reviewers
     lines.append(
@@ -303,8 +358,20 @@ def _render_text(state: ReviewState) -> str:
             "`main` (merge commits) do NOT invalidate a verdict; only new authored "
             "commits do. Fix: ask the reviewer to re-review at the current head."
         )
-    else:
+    elif state.comment_scan_ran:
         lines.append("  stale verdicts: none")
+    else:
+        # `stale verdicts: none` would be TRUE here and still misleading: it
+        # reads as "the thread was scanned and nothing was stale" when the
+        # thread was never scanned. Both halves of the #1206 report were wrong
+        # in exactly this way on noorinalabs-deploy#691 — the count and this
+        # line — so the not-measured case gets its own wording rather than
+        # borrowing the measured-and-empty one.
+        lines.append(
+            "  stale verdicts: NOT MEASURED for comment verdicts — the comment scan did "
+            "not run (see above); only formal GitHub reviews were examined, and none of "
+            "those were stale."
+        )
 
     lines.append(
         "  wave-bootstrap single-reviewer exception: "

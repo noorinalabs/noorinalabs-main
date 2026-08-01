@@ -748,6 +748,65 @@ def extract_branch_author_lastname(head_ref: str) -> str | None:
     return None
 
 
+# How the PR-comment verdict scan was dispatched for a given PR (#1206).
+#
+# These exist because an empty `comment_reviewers` set cannot say WHY it is
+# empty, and the two reasons are not remotely equivalent: "the thread was read
+# and nobody has approved" is a measurement, "the thread was never read" is the
+# absence of one. Before #1206 the resolver silently produced the second and
+# every surface rendered it as the first — the `feedback_silent_zero_is_not_a_
+# measurement` shape, and the sibling of the `CommentReviewResult.undetermined`
+# field that exists for the same reason one level down.
+#
+# NOT_RUN is deliberately the DEFAULT on both `ReviewVerdicts` and
+# `pr_review_state.ReviewState`: a construction that forgets to set the scope
+# must degrade to the honest "not measured" rendering, never to a false claim
+# that the scan ran. `comment_scan_scope` below never returns it, and
+# `resolve_review_verdicts` hard-blocks if it ever sees it — so in production it
+# marks a regression, not a state.
+COMMENT_SCAN_NOT_RUN = "not-run"
+COMMENT_SCAN_AUTHOR_EXCLUDED = "author-excluded"
+COMMENT_SCAN_NO_BRANCH_AUTHOR = "no-branch-author"
+
+
+def comment_scan_scope(head_ref: str) -> str:
+    """Return which self-review-exclusion mode the comment verdict scan runs in.
+
+    The head ref's ONLY role in the comment scan is naming the branch author for
+    the self-review exclusion, so there are exactly two modes and **no third
+    "don't scan" mode**:
+
+      - `COMMENT_SCAN_AUTHOR_EXCLUDED` — the ref carries the charter
+        `{Initial}.{Lastname}[-/]…` prefix, so the branch author is identifiable
+        and is excluded from the reviewer set.
+      - `COMMENT_SCAN_NO_BRANCH_AUTHOR` — the ref names no persona (a
+        `deployments/phase-N/wave-M` wave-merge branch, a `dependabot/**` bot
+        branch, a hand-made `feature/x`, or an empty `headRefName`). The scan
+        still runs, under the `""` sentinel the wave-merge path has used since
+        main#294, which `charter_trailer.is_branch_author` reads as "nobody is
+        the branch author".
+
+    This function is TOTAL: it returns a scanning mode for every possible head
+    ref, including `""`. That totality IS the #1206 fix — the pre-fix resolver
+    branched on the ref shape and fell through to no scan at all for anything
+    that was neither a persona branch nor `deployments/**`, which made a
+    `dependabot/**` PR carrying two valid Approveds report `0/2 — (none)`
+    (noorinalabs-deploy#691). `.claude/hooks/tests/test_validate_pr_review.py::
+    CommentScanScopeTotalityTests` pins the totality directly.
+
+    Widening the sentinel does NOT relax the gate: the threshold is still two
+    distinct roster-valid current Approveds and roster filtering is untouched.
+    Losing author-exclusion on a bot branch is the correct outcome — a bot is
+    never a roster persona, so it could never have been in the reviewer set. On
+    a ref that DOES name a persona, exclusion is unchanged.
+    """
+    return (
+        COMMENT_SCAN_AUTHOR_EXCLUDED
+        if extract_branch_author_lastname(head_ref)
+        else COMMENT_SCAN_NO_BRANCH_AUTHOR
+    )
+
+
 PROJECT_NUMBER = 2
 ORG = "noorinalabs"
 
@@ -1490,6 +1549,18 @@ class ReviewVerdicts:
     # a merge decision, only surfaced.
     tech_debt_unparseable: list[tuple[str, str]]
     wave_bootstrap_exception: bool
+    # WHICH comment-scan mode produced `comment_reviewers` (#1206) — see the
+    # COMMENT_SCAN_* constants. Carried on the shared pipeline output so BOTH
+    # callers can distinguish "scanned, nobody approved" from "never scanned",
+    # which an empty `comment_reviewers` alone cannot express. Defaulted to
+    # NOT_RUN so a construction that omits it renders as not-measured rather
+    # than falsely claiming a measurement.
+    comment_scan: str = COMMENT_SCAN_NOT_RUN
+
+    @property
+    def comment_scan_ran(self) -> bool:
+        """True iff the PR-comment verdict scan actually read the thread."""
+        return self.comment_scan != COMMENT_SCAN_NOT_RUN
 
     @property
     def stale_verdicts(self) -> list[StaleVerdict]:
@@ -1509,7 +1580,9 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
 
       1. `get_latest_content_commit` → T_content (`content_ts`/`content_sha`, #950).
       2. `partition_formal_reviewers` + `check_comment_reviews`, both bound to
-         T_content, on the feature-branch or wave-merge head-ref path.
+         T_content. The comment scan runs for EVERY head ref (#1206); the ref
+         selects only which self-review exclusion applies (`comment_scan_scope`),
+         and the chosen mode is reported on `ReviewVerdicts.comment_scan`.
       3. `_load_roster_names` and non-roster Requestor filtering (#498).
       4. Union formal + roster-filtered comment reviewers into the distinct
          reviewer set, plus the wave-bootstrap single-reviewer exception (#228).
@@ -1523,7 +1596,8 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
         CommitFetchError: T_content could not be established (#950) —
             propagated verbatim from `get_latest_content_commit`.
         CommentScanUndeterminedError: the comment thread could not be
-            completely scanned (#981) — carries `.reason`.
+            completely scanned (#981), or the scan was never dispatched at all
+            (#1206 defense-in-depth) — carries `.reason`.
         RosterResolutionError: a named child repo's roster could not be
             resolved (#552) — propagated verbatim from `_load_roster_names`.
 
@@ -1532,7 +1606,11 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
     """
     author = pr_data["author"]
     reviews = pr_data["reviews"]
-    head_ref = pr_data["headRefName"]
+    # `or ""` because a missing/None `headRefName` must degrade to "no
+    # identifiable branch author" (a scannable state), never to a skipped scan
+    # or a `re.match(None)` crash (#1206). `get_pr_data` already defaults it to
+    # `""`; this covers hand-built `pr_data` from other callers and tests.
+    head_ref = pr_data["headRefName"] or ""
     number = pr_data["number"]
     labels = pr_data["labels"]
 
@@ -1542,23 +1620,53 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
 
     formal_reviewers, stale_formal = partition_formal_reviewers(reviews, author, content_ts)
 
-    comment_result = CommentReviewResult()
-    branch_author_lastname = None
-    if head_ref:
-        branch_author_lastname = extract_branch_author_lastname(head_ref)
-        if branch_author_lastname:
-            comment_result = check_comment_reviews(
-                number,
-                branch_author_lastname,
-                repo=repo,
-                content_ts=content_ts,
-                branch_author_initial=branch_author_first_initial(head_ref),
-            )
-        elif head_ref.startswith("deployments/") and "/wave-" in head_ref:
-            # Wave-merge PR (head = deployments/phase-{N}/wave-{M}); no
-            # implementer-branch author. Empty sentinel admits any non-empty
-            # reviewer. See main#294.
-            comment_result = check_comment_reviews(number, "", repo=repo, content_ts=content_ts)
+    # The comment verdict scan runs UNCONDITIONALLY (#1206). It used to be
+    # dispatched only for two head-ref shapes — a `{Initial}.{Lastname}[-/]…`
+    # persona branch, or a `deployments/**` wave-merge branch. EVERY other shape
+    # (`dependabot/**`, any hand-made branch off the charter naming convention,
+    # an empty `headRefName`) fell through with the empty `CommentReviewResult()`
+    # default and returned zero comment reviewers with no error and no
+    # diagnostic — indistinguishable from "scanned the thread and nobody
+    # approved". On noorinalabs-deploy#691 that reported two correctly-formed,
+    # roster-valid, non-stale Approved verdicts as `0/2 required — (none)`, and
+    # blamed the reviewers for it.
+    #
+    # `comment_scan_scope` is total over head refs, so there is no longer a
+    # shape that skips the scan; the ref only selects WHICH self-review
+    # exclusion applies. This does not relax the gate — the threshold is
+    # unchanged and roster filtering below is untouched; it only makes the
+    # verdicts that already exist countable.
+    #
+    # `branch_author_first_initial` returns `""` on exactly the refs
+    # `extract_branch_author_lastname` returns None for (the two regexes have
+    # the same shape), so the two halves of the branch author's identity cannot
+    # disagree about whether an author was found.
+    scan_scope = comment_scan_scope(head_ref)
+    if scan_scope == COMMENT_SCAN_NOT_RUN:
+        # Defense in depth (#1206): unreachable today, because
+        # `comment_scan_scope` is total. Reaching it means a future edit
+        # reintroduced a head-ref shape that skips the scan — and an unscanned
+        # thread is NOT a zero-approval thread. Fail CLOSED with a named reason
+        # (the #981 stance) rather than returning the silent zero this issue
+        # exists to kill.
+        raise CommentScanUndeterminedError(
+            f"the PR-comment verdict scan was not dispatched for head ref {head_ref!r}. "
+            "An unscanned comment thread is not evidence of zero approvals, so this is a "
+            "determinate failure rather than a 0-reviewer result (#1206)."
+        )
+
+    branch_author_lastname = extract_branch_author_lastname(head_ref)
+    comment_result = check_comment_reviews(
+        number,
+        # The `""` sentinel means "no identifiable branch author, so no reviewer
+        # is the author" (`charter_trailer.is_branch_author`, main#294). Losing
+        # author-exclusion on a bot branch is correct: a bot is never a roster
+        # persona, so it could never have been in the reviewer set anyway.
+        branch_author_lastname or "",
+        repo=repo,
+        content_ts=content_ts,
+        branch_author_initial=branch_author_first_initial(head_ref),
+    )
 
     if comment_result.undetermined:
         raise CommentScanUndeterminedError(comment_result.undetermined)
@@ -1591,6 +1699,7 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
         tech_debt_issue_numbers=list(comment_result.tech_debt_issue_numbers),
         tech_debt_unparseable=list(comment_result.tech_debt_unparseable),
         wave_bootstrap_exception=wave_bootstrap_exception,
+        comment_scan=scan_scope,
     )
 
 
@@ -1897,10 +2006,36 @@ def check(input_data: dict) -> dict | None:
                 "NOT count toward the 2-reviewer threshold. Re-post the verdict under a "
                 "roster persona, or amend the roster if this is a new member.\n\n"
             )
+        # State the comment scan's OWN status alongside the count (#1206). A
+        # shortfall reported without it is ambiguous between "the thread was
+        # read and the approvals are not there" and "the thread was never
+        # read" — and for every non-persona head ref the answer used to be the
+        # second one, silently. Naming the mode makes the count self-describing
+        # on the surface an operator actually sees at merge time.
+        scan_diagnostic = ""
+        if not verdicts.comment_scan_ran:
+            scan_diagnostic = (
+                f"BLOCKED: PR {pr_display} — the PR-comment verdict scan DID NOT RUN, so the "
+                f"{total_distinct}/2 count below is NOT a measurement of this PR's approvals.\n"
+                "Any comment-based Approved verdicts on this PR were never read (#1206). This "
+                "is a hook defect, not a review shortfall — report it rather than asking "
+                "reviewers to re-approve.\n\n"
+            )
+        elif verdicts.comment_scan == COMMENT_SCAN_NO_BRANCH_AUTHOR:
+            scan_diagnostic = (
+                f"NOTE: head ref `{verdicts.head_ref or '(unknown)'}` carries no "
+                "`{Initial}.{Lastname}` branch-author prefix (a bot branch, a wave-merge "
+                "branch, or a branch off the charter naming convention), so the comment "
+                "verdict scan ran WITHOUT self-review exclusion — every roster-valid "
+                "Approved Requestor counts. The scan DID run; the count below is a real "
+                "measurement (#1206).\n\n"
+            )
+
         result = {
             "decision": "block",
             "reason": (
-                stale_diagnostic
+                scan_diagnostic
+                + stale_diagnostic
                 + roster_diagnostic
                 + f"BLOCKED: PR {pr_display} has {total_distinct}/2 required peer reviews. "
                 "At least TWO Approved reviews from distinct non-authors are required before "
