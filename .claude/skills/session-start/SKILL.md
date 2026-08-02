@@ -17,7 +17,7 @@ Execute all 7 steps below. Steps that are independent of each other SHOULD run i
 
 ### Step 0 — Worktree cleanup (parent + child repos)
 
-Worktrees accumulate in the parent AND every child repo (#526 — ~33 stale child worktrees found uncaught on 2026-05-24). The block iterates all 8 repos with a **verify-merged-then-remove guard**: auto-remove only a worktree whose HEAD is an ancestor of that repo's `origin/main`; FLAG (never auto-remove) anything locked or unmerged.
+Worktrees accumulate in the parent AND every child repo (#526 — ~33 stale child worktrees found uncaught on 2026-05-24). The block iterates all 8 repos with a **verify-merged-then-remove guard**: auto-remove only a worktree whose HEAD is fully merged into that repo's `origin/main`; FLAG (never auto-remove) anything locked or unmerged. "Fully merged" is decided by `.claude/lib/check_worktree_merged.py` (#1212, sibling of #1177): ancestry is the fast path (the merge-commit majority), with a patch-id content-equivalence fallback searched over `origin/main`'s own history — not a snapshot compare against its current tip, which would decay as unrelated later commits keep touching the same files — so a squash-merged (single- or multi-commit), rebase-merged, or cherry-picked branch is recognized as landed instead of being flagged `UNMERGED` forever just because its tip is never an ancestor. The check is 100% local git plumbing (no `gh`/network dependency) and degrades to the pre-fix ancestry-only result on any internal git-command failure — a branch with genuinely unlanded content, including a tip carrying just one extra commit past an otherwise fully-landed history, still fails both tests and stays FLAGGED.
 
 ```bash
 # Anchor REPO_ROOT to the PARENT org repo deterministically (#533). Using a
@@ -108,11 +108,32 @@ for repo in "${REPOS[@]}"; do
         if [ "$wt" = "$main_repo" ]; then wt=""; continue; fi  # skip main checkout
         if [ "$locked" -eq 1 ]; then
           FLAGGED+=("LOCKED  $repo :: $wt")
-        elif [ -n "$head" ] && git -C "$repo" merge-base --is-ancestor "$head" origin/main 2>/dev/null; then
-          echo "removing merged worktree: $wt"
-          git -C "$repo" worktree remove "$wt" 2>/dev/null \
-            || git -C "$repo" worktree remove --force "$wt" 2>/dev/null \
-            || FLAGGED+=("REMOVE-FAILED  $repo :: $wt")
+        elif [ -n "$head" ]; then
+          # Delegate the merged-vs-unmerged call to the tested helper (#1212):
+          # ancestry is the fast path, with a patch-id content-equivalence
+          # fallback so a squash/rebase-merge/cherry-picked branch is not
+          # flagged forever just because its tip is never an ancestor. A
+          # `$(...)` command substitution assigning to a variable (not a
+          # `<(...)` process substitution) stays statically analyzable —
+          # same property the temp-file loop above preserves (#839).
+          if [ -f "$REPO_ROOT/.claude/lib/check_worktree_merged.py" ]; then
+            _mreason="$(python3 "$REPO_ROOT/.claude/lib/check_worktree_merged.py" "$repo" "$head" origin/main 2>/dev/null)"
+            _mrc=$?
+          else
+            # Helper missing (very old checkout) — degrade to the legacy
+            # ancestry-only test rather than failing closed.
+            git -C "$repo" merge-base --is-ancestor "$head" origin/main 2>/dev/null
+            _mrc=$?
+            _mreason="ancestry-only (helper not found)"
+          fi
+          if [ "$_mrc" -eq 0 ]; then
+            echo "removing merged worktree: $wt ($_mreason)"
+            git -C "$repo" worktree remove "$wt" 2>/dev/null \
+              || git -C "$repo" worktree remove --force "$wt" 2>/dev/null \
+              || FLAGGED+=("REMOVE-FAILED  $repo :: $wt")
+          else
+            FLAGGED+=("UNMERGED  $repo :: $wt (HEAD ${head:-?}) [$_mreason]")
+          fi
         else
           FLAGGED+=("UNMERGED  $repo :: $wt (HEAD ${head:-?})")
         fi
