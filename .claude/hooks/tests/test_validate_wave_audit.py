@@ -39,11 +39,24 @@ def _bash_input(command: str) -> dict:
     }
 
 
-def _patch_audit(total: int | None, per_repo: dict[str, int] | None = None):
-    """Context manager: patch hook._audit_open_count to return a fixed value."""
+def _patch_audit(
+    total: int | None,
+    per_repo: dict[str, int] | None = None,
+    unqueried: list[str] | None = None,
+):
+    """Context manager: patch hook._audit_open_count to return a fixed value.
+
+    `unqueried` defaults to `[]` — full audit coverage (#1226). Note that every
+    test using this helper is, by construction, blind to the aggregation loop
+    it replaces; the loop's own behaviour is covered by
+    `PartialAuditFailureCoverage` and `AuditOpenCountReportsCoverage`, which
+    stub the subprocess boundary instead.
+    """
     if per_repo is None:
         per_repo = {}
-    return mock.patch.object(hook, "_audit_open_count", return_value=(total, per_repo))
+    return mock.patch.object(
+        hook, "_audit_open_count", return_value=(total, per_repo, unqueried or [])
+    )
 
 
 def _patch_label(label: str | None):

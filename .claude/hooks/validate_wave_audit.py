@@ -47,18 +47,24 @@ Carry-forward bypass (warn-but-allow):
       - "## Carry-forward" / "## Carry forward" markdown heading
       - "#<N> →" / "#<N> -> " arrow patterns naming a destination
     If matched, the audit is informational only — allow with a system
-    message summarizing what's being carried.
+    message summarizing what's being carried. It does NOT clear an
+    incomplete-coverage block (#1226): the marker acknowledges items the
+    operator has SEEN, and an unqueried repo was never read.
 
 Block condition:
-    matched_skill AND open_count > 0 AND args lacks carry-forward marker
+    Either:
+      - matched_skill AND open_count > 0 AND args lacks carry-forward marker
+      - matched_skill ∈ _COVERAGE_BLOCKING_SKILLS AND the audit could not query
+        every org repo (incomplete coverage — #1226, § Failure modes below)
 
 Allow condition:
     Any of:
       - matched_skill is False (different skill, different tool entirely)
-      - open_count == 0
-      - args contains a carry-forward marker
-      - audit shell-out failed for infrastructure reasons (fail-open with
-        system warning — see § Failure modes below)
+      - open_count == 0 AND every org repo was successfully queried
+      - args contains a carry-forward marker AND coverage is complete
+      - the audit could not run at all, or ran only partially for a skill
+        outside _COVERAGE_BLOCKING_SKILLS (fail-open — but always WITH a
+        system message; no degraded path is silent, see § Failure modes)
 
 Audit shell-out:
     Iterates the 8 org-known repos (charter skills.md § Audit command),
@@ -70,7 +76,9 @@ Audit shell-out:
     `p<P>-wave-<N>` and the new phase-agnostic `wave-<N>` form and UNIONS the
     issue numbers per repo (gh ANDs multiple `--label` flags, so the forms are
     queried separately). This grandfathers in-flight legacy-labeled issues
-    while counting new-scheme issues. Total open count is the sum across repos.
+    while counting new-scheme issues. The total is the sum across the repos
+    that could actually be queried; any repo whose query fails is recorded by
+    name and makes the result non-authoritative (a lower bound — #1226).
 
 Merge-ready-PR exemption (issue #664, owner-adopted P4W7 retro):
     The `/wave-wrapup` gate had a chicken-and-egg: the wave's own open
@@ -108,15 +116,41 @@ Merge-ready-PR exemption (issue #664, owner-adopted P4W7 retro):
     be derived, or any of the PR queries fail, NO exemption is applied (fail
     toward the stricter count — never false-exempt).
 
-Failure modes (all fail-open with system warning, never block):
-    - `gh` not installed / not authenticated → cannot audit, allow.
-    - Network/API failure on a single repo → skip that repo, sum the rest.
+Failure modes (never silent — every degraded path emits operator-visible text):
+    - `gh` not installed / not authenticated, or EVERY repo query failed →
+      cannot audit at all, allow with warning.
+    - Network/API/quota failure on SOME repos (partial coverage, #1226) → the
+      failed repos are recorded by name (`_audit_open_count`'s third return
+      value) and the surviving sum is treated as a LOWER BOUND, never as an
+      authoritative zero. The verdict then splits by skill:
+        * `_COVERAGE_BLOCKING_SKILLS` (/wave-wrapup, /wave-retro) BLOCK. They
+          write the durable "wave concluded" record and mutate wave state, and
+          neither is time-critical, so waiting for the API and re-running is a
+          cheap and complete remedy. A carry-forward marker does not clear it.
+        * /handoff is ALLOWED with an explicit warning naming the unseen repos.
+          It only records session state, its degraded outcome is recoverable,
+          and stranding a session mid-outage would push operators toward the
+          settings.json emergency removal — which would disable the gate for
+          wrapup and retro too.
+      History: before #1226 this path summed the survivors and returned a bare
+      allow with NO output at all. Because `noorinalabs-main` was the only repo
+      carrying wave issues, ONE failed query flipped the gate from BLOCK to a
+      silent ALLOW — quieter, and strictly more dangerous, than total failure.
     - cross-repo-status.json missing or malformed → cannot determine wave,
       allow with warning.
     - current_wave field missing / not a "wave-<N>" string → cannot derive
       label, allow with warning.
     - Wall-clock budget: 8 gh calls × ~1.5s ≈ 12s. settings.json timeout
       should be 30s.
+
+Coverage contract (load-bearing — #1226):
+    `_open_issue_numbers_for_label` MUST return None, never `[]`, on any query
+    failure. `[]` means "queried this repo, it has no open wave issues"; None
+    means "could not see this repo". The entire gate rests on that distinction,
+    so any future change to the transport — a retry, a GraphQL→REST fallback
+    (#1224), a cache — must preserve it. A fallback that swallows an error and
+    returns an empty list would recreate this exact silent zero one layer down,
+    where the aggregator can no longer detect it.
 
 Bypass policy:
     No in-band override flag. The whole point of the hook is to break the
@@ -127,9 +161,11 @@ Bypass policy:
     This matches Hook 15's stance (no in-band override).
 
 Exit codes (per Claude Code hook convention):
-    0 — allow (not a matched skill, audit zero, args has carry-forward,
-        infra failure fail-open)
-    2 — block (matched skill, open count > 0, no carry-forward in args)
+    0 — allow (not a matched skill; audit zero WITH full coverage; args has
+        carry-forward WITH full coverage; infra failure fail-open, always
+        accompanied by a system message)
+    2 — block (matched skill AND open count > 0 without a carry-forward marker,
+        OR incomplete audit coverage for a _COVERAGE_BLOCKING_SKILLS skill)
 
 Promotion provenance:
     memory feedback_honest_audit_over_conclusion_claim (2026-04-22) →
@@ -146,6 +182,7 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -153,6 +190,26 @@ from annunaki_log import log_pretooluse_block  # noqa: E402
 
 # Skills gated by this hook. Exact match against tool_input.skill.
 _GATED_SKILLS = frozenset({"wave-wrapup", "wave-retro", "handoff"})
+
+# Subset of _GATED_SKILLS for which an INCOMPLETE audit — any org repo the
+# hook could not query — is itself a block, independent of the count it did
+# manage to compute (#1226).
+#
+# `wave-wrapup` and `wave-retro` write the durable record that a wave is
+# concluded: they merge the wave branch, close issues, advance the status file,
+# and fix the retrospective history. Neither is time-critical, so "wait for the
+# API and re-run" is a cheap and complete remedy, and an audit that could not
+# see a repo is an UNKNOWN — never green (/session-start Step 5a).
+#
+# `handoff` is deliberately EXCLUDED. It only *records* session state; its
+# degraded outcome (a thinner pickup prompt) is recoverable, and the Stop hook
+# writes a handoff automatically regardless. Hard-blocking it during exactly
+# the kind of API outage that makes recording state valuable would strand a
+# session — and the only escape is the settings.json emergency removal, which
+# would disable the gate for wrapup and retro too. So /handoff degrades to a
+# loud, explicit allow-with-warning naming the repos it could not see: not
+# green, but not a dead end either.
+_COVERAGE_BLOCKING_SKILLS = frozenset({"wave-wrapup", "wave-retro"})
 
 # Org-known repos for cross-repo audit. Sourced from charter skills.md
 # § Audit command. This list MUST stay in sync with that charter section.
@@ -281,6 +338,14 @@ def _open_issue_numbers_for_label(repo: str, label: str) -> list[int] | None:
 
     Returns the list of issue numbers on success (possibly empty), None on
     subprocess failure (gh missing, network error, auth failure).
+
+    The None-vs-`[]` distinction is load-bearing for the whole gate (#1226):
+    `[]` asserts "this repo was queried and has no open wave issues", None
+    asserts only "this repo could not be seen". Any future transport change
+    here — retry, GraphQL→REST fallback (#1224), caching — MUST keep returning
+    None on failure. Collapsing a failure to `[]` would recreate the silent
+    zero one layer below `_audit_open_count`, where it can no longer be
+    detected.
     """
     try:
         result = subprocess.run(
@@ -503,35 +568,47 @@ def _count_open_for_repo(repo: str, labels: list[str], wave_branch: str | None) 
 
 def _audit_open_count(
     labels: list[str], wave_branch: str | None
-) -> tuple[int | None, dict[str, int]]:
-    """Run the cross-repo audit. Returns (total_or_None, per_repo_counts).
+) -> tuple[int | None, dict[str, int], list[str]]:
+    """Run the cross-repo audit. Returns (total_or_None, per_repo_counts, unqueried).
 
     `total_or_None` is None only if EVERY repo's audit failed (full
-    infrastructure failure → fail-open). Otherwise it's the sum of all
-    successfully-audited repos, even if some individual repos failed
-    (partial result is more useful than None).
+    infrastructure failure → fail-open). Otherwise it's the sum over the repos
+    that were successfully queried.
+
+    `unqueried` names every repo whose query failed, in `_ORG_REPOS` order. It
+    is the audit's COVERAGE signal and the reason this function returns three
+    values instead of two (#1226): when `unqueried` is non-empty the total is a
+    **lower bound**, not a count, and callers MUST NOT read `total == 0` as
+    "the wave is clean". Before #1226 the failed repos were dropped with a bare
+    `continue`, conflating "queried, found zero" with "could not look" — and
+    because `noorinalabs-main` was the only repo carrying wave issues, ONE
+    failed query summed to a confident 0 and flipped the gate to a silent
+    allow.
 
     Each repo's count excludes wave issues exempted by a merge-ready PR on
     `wave_branch` (issue #664). `per_repo_counts` maps repo name → blocking
     count for repos with a non-zero blocking count. Repos with zero blocking
-    issues (none open, or all exempted) or with audit failures are omitted.
+    issues (none open, or all exempted) are omitted from `per_repo_counts`;
+    repos that could not be queried appear in `unqueried` instead.
     """
     per_repo: dict[str, int] = {}
+    unqueried: list[str] = []
     successes = 0
 
     for repo in _ORG_REPOS:
         count = _count_open_for_repo(repo, labels, wave_branch)
         if count is None:
+            unqueried.append(repo)
             continue
         successes += 1
         if count > 0:
             per_repo[repo] = count
 
     if successes == 0:
-        return None, per_repo
+        return None, per_repo, unqueried
 
     total = sum(per_repo.values())
-    return total, per_repo
+    return total, per_repo, unqueried
 
 
 def _has_carry_forward(args: str) -> bool:
@@ -541,14 +618,41 @@ def _has_carry_forward(args: str) -> bool:
     return any(pattern.search(args) for pattern in _CARRY_FORWARD_PATTERNS)
 
 
-def _format_per_repo(per_repo: dict[str, int]) -> str:
-    """Format the per-repo open-item summary for block/warning messages."""
-    if not per_repo:
-        return "  (no per-repo breakdown — all audited repos returned 0)"
-    lines = []
-    for repo in sorted(per_repo.keys()):
-        lines.append(f"  - noorinalabs/{repo}: {per_repo[repo]} open")
+def _format_per_repo(per_repo: dict[str, int], unqueried: Sequence[str] = ()) -> str:
+    """Format the per-repo open-item summary, including audit-coverage gaps.
+
+    `unqueried` names the repos whose query failed; each is listed explicitly as
+    NOT AUDITED so the summary can never imply the audit saw the whole org when
+    it did not (#1226). The old unconditional "(no per-repo breakdown — all
+    audited repos returned 0)" line was an actively false claim whenever a repo
+    had been skipped: it read as a clean sweep of eight repos when it could
+    describe a clean sweep of seven and a blind spot over the eighth.
+    """
+    lines = [f"  - noorinalabs/{repo}: {per_repo[repo]} open" for repo in sorted(per_repo)]
+    if not lines:
+        if unqueried:
+            lines.append("  (no open items among the repos that COULD be queried)")
+        else:
+            lines.append(f"  (no per-repo breakdown — all {len(_ORG_REPOS)} repos returned 0)")
+    for repo in sorted(unqueried):
+        lines.append(f"  - noorinalabs/{repo}: NOT AUDITED (query failed — count unknown)")
     return "\n".join(lines)
+
+
+def _block(skill_name: str, args: str, reason: str) -> dict:
+    """Build a block result and record it to the annunaki log.
+
+    Shared by the open-items block and the incomplete-coverage block (#1226) so
+    a new blocking path cannot be added without also being logged.
+    """
+    result = {"decision": "block", "reason": reason}
+    log_pretooluse_block(
+        "validate_wave_audit",
+        f"skill={skill_name} args={args[:200] if args else '<empty>'}",
+        reason,
+        tool_name="Skill",
+    )
+    return result
 
 
 def check(input_data: dict) -> dict | None:
@@ -589,7 +693,7 @@ def check(input_data: dict) -> dict | None:
     # case the audit simply applies no exemption (stricter, never false-exempt).
     wave_branch = _read_current_wave_branch()
 
-    total, per_repo = _audit_open_count(labels, wave_branch)
+    total, per_repo, unqueried = _audit_open_count(labels, wave_branch)
 
     if total is None:
         return {
@@ -602,52 +706,118 @@ def check(input_data: dict) -> dict | None:
             ),
         }
 
-    if total == 0:
-        return None
-
     args = tool_input.get("args", "")
-    if _has_carry_forward(args):
+
+    # `total` sums only the repos the audit could actually see. With any repo
+    # unqueried it is a LOWER BOUND, and the coverage gap has to travel with
+    # every message built from it (#1226).
+    unqueried_display = ", ".join(f"noorinalabs/{repo}" for repo in sorted(unqueried))
+    coverage_caveat = (
+        (
+            f"\n\nAUDIT COVERAGE: {len(unqueried)} of {len(_ORG_REPOS)} org repo(s) "
+            f"could not be queried ({unqueried_display}). The count above is a "
+            "LOWER BOUND over the repos that were reachable, not an org total."
+        )
+        if unqueried
+        else ""
+    )
+
+    if total > 0 and not _has_carry_forward(args):
+        return _block(
+            skill_name,
+            args,
+            reason=(
+                f"BLOCKED: /{skill_name} cannot claim wave conclusion. "
+                f"Charter § Wave Lifecycle — Open-Item Audit requires zero open items "
+                f"for the active wave OR an explicit carry-forward list in the skill's args.\n\n"
+                f"Active wave label(s): {label_display}\n"
+                f"Open items across the org: {total}\n"
+                f"Per-repo breakdown:\n{_format_per_repo(per_repo, unqueried)}"
+                f"{coverage_caveat}\n\n"
+                "To proceed, either:\n"
+                f"  1. Close the open items above, then re-run /{skill_name}, OR\n"
+                f"  2. Pass an explicit carry-forward list in args. Recognized markers:\n"
+                "     - 'Carry-forward: #N → next-wave, #M → backlog' inline\n"
+                "     - '## Carry-forward' markdown heading followed by item list\n"
+                "     - '#N → destination' arrow patterns naming items individually\n\n"
+                "Note (#664): an open wave issue is already auto-exempt from this count "
+                "if it has a merge-ready PR (open, not draft, mergeable, all checks green) "
+                f"based on `{wave_branch or '<wave-branch>'}`. The items above are NOT "
+                "exempt — their wave-branch PR is missing, conflicting, red, or still in "
+                f"review. Get those PRs merge-ready and re-run /{skill_name}.\n\n"
+                "There is no in-band bypass flag — see charter/hooks/catalog-13-17.md "
+                "§ Hook 17 for emergency procedure."
+            ),
+        )
+
+    # Below here the *visible* count alone would allow: it is zero, or a
+    # carry-forward marker acknowledges it. Neither statement can be trusted
+    # while a repo went unread, so an incomplete audit is decided on its own
+    # terms rather than folded into the count (#1226).
+    if unqueried:
+        if skill_name in _COVERAGE_BLOCKING_SKILLS:
+            return _block(
+                skill_name,
+                args,
+                reason=(
+                    f"BLOCKED: /{skill_name} cannot claim wave conclusion — the open-item "
+                    f"audit was INCOMPLETE.\n\n"
+                    f"Could not query {len(unqueried)} of {len(_ORG_REPOS)} org repo(s): "
+                    f"{unqueried_display}\n"
+                    f"Active wave label(s): {label_display}\n"
+                    f"Open items among the repos that WERE queried: {total} "
+                    "(a lower bound, not an org total)\n"
+                    f"Per-repo breakdown:\n{_format_per_repo(per_repo, unqueried)}\n\n"
+                    "Charter § Wave Lifecycle — Open-Item Audit requires the audit to RUN, "
+                    "not merely to return a number. A repo that could not be queried is an "
+                    "UNKNOWN, and an unknown is never green (/session-start Step 5a). One "
+                    "failed query on the single repo carrying the wave's issues is enough "
+                    "to turn a real backlog into an apparent zero (#1226).\n\n"
+                    "To proceed:\n"
+                    "  1. Diagnose the query failure — usually auth (`gh auth status`), a "
+                    "network blip, or API rate/quota exhaustion (`gh api rate_limit`). Wait "
+                    f"for the quota window to reset, then re-run /{skill_name}, OR\n"
+                    "  2. Run the canonical audit by hand for the repo(s) above and close "
+                    "or carry-forward whatever it finds, then re-run.\n\n"
+                    "A carry-forward marker does NOT clear this block: the marker "
+                    "acknowledges items the operator has SEEN, and these repos were never "
+                    "read.\n\n"
+                    "There is no in-band bypass flag — see charter/hooks/catalog-13-17.md "
+                    "§ Hook 17 for emergency procedure."
+                ),
+            )
+        # Not coverage-blocking (/handoff): allow, but never bare — see
+        # _COVERAGE_BLOCKING_SKILLS for why this skill degrades instead of stopping.
+        return {
+            "decision": "allow",
+            "systemMessage": (
+                f"WARNING: the wave open-item audit for /{skill_name} was INCOMPLETE — "
+                f"{len(unqueried)} of {len(_ORG_REPOS)} org repo(s) could not be queried "
+                f"({unqueried_display}).\n"
+                f"Active wave label(s): {label_display}\n"
+                f"Open items among the repos that WERE queried: {total} — treat this as a "
+                "LOWER BOUND, not an org total.\n"
+                f"Per-repo breakdown:\n{_format_per_repo(per_repo, unqueried)}\n"
+                f"Allowing /{skill_name} to proceed, because recording session state must "
+                "never be strandable by a transient API failure. Do NOT state or imply the "
+                "wave is clean or concluded — re-run the canonical audit first."
+            ),
+        }
+
+    if total > 0:
+        # Full coverage, open items, carry-forward marker present.
         return {
             "decision": "allow",
             "systemMessage": (
                 f"NOTE: {total} open item(s) for {label_display} across {len(per_repo)} "
                 f"repo(s); carry-forward marker detected in args, allowing /{skill_name} "
-                f"to proceed.\nPer-repo open counts:\n{_format_per_repo(per_repo)}\n"
+                f"to proceed.\nPer-repo open counts:\n{_format_per_repo(per_repo, unqueried)}\n"
                 "Verify the carry-forward list in your output names every item above."
             ),
         }
 
-    result = {
-        "decision": "block",
-        "reason": (
-            f"BLOCKED: /{skill_name} cannot claim wave conclusion. "
-            f"Charter § Wave Lifecycle — Open-Item Audit requires zero open items "
-            f"for the active wave OR an explicit carry-forward list in the skill's args.\n\n"
-            f"Active wave label(s): {label_display}\n"
-            f"Open items across the org: {total}\n"
-            f"Per-repo breakdown:\n{_format_per_repo(per_repo)}\n\n"
-            "To proceed, either:\n"
-            f"  1. Close the open items above, then re-run /{skill_name}, OR\n"
-            f"  2. Pass an explicit carry-forward list in args. Recognized markers:\n"
-            "     - 'Carry-forward: #N → next-wave, #M → backlog' inline\n"
-            "     - '## Carry-forward' markdown heading followed by item list\n"
-            "     - '#N → destination' arrow patterns naming items individually\n\n"
-            "Note (#664): an open wave issue is already auto-exempt from this count "
-            "if it has a merge-ready PR (open, not draft, mergeable, all checks green) "
-            f"based on `{wave_branch or '<wave-branch>'}`. The items above are NOT "
-            "exempt — their wave-branch PR is missing, conflicting, red, or still in "
-            f"review. Get those PRs merge-ready and re-run /{skill_name}.\n\n"
-            "There is no in-band bypass flag — see charter/hooks/catalog-13-17.md "
-            "§ Hook 17 for emergency procedure."
-        ),
-    }
-    log_pretooluse_block(
-        "validate_wave_audit",
-        f"skill={skill_name} args={args[:200] if args else '<empty>'}",
-        result["reason"],
-        tool_name="Skill",
-    )
-    return result
+    # Full coverage, genuinely zero open items — the only silent allow.
+    return None
 
 
 def main() -> None:
