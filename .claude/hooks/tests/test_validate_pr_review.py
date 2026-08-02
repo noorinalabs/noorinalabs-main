@@ -123,6 +123,11 @@ class _CheckCommentReviewsHarness(unittest.TestCase):
                 # explicit "no content binding" value these ~30 pre-#950 callers
                 # exercise (every verdict counted unconditionally).
                 content_ts=None,
+                # commit_author_identities is REQUIRED for the same fail-open
+                # reason (#1210); `()` is the explicit "the ref already named the
+                # author, no commit-derived identity applies" value these
+                # pre-#1210 callers exercise.
+                commit_author_identities=(),
             )
 
     @staticmethod
@@ -131,11 +136,15 @@ class _CheckCommentReviewsHarness(unittest.TestCase):
         branch_author: str,
         repo: str | None = None,
         content_ts: "datetime | None" = None,
+        commit_author_identities: tuple = (),
     ):
         """As `_run_with_fake_api`, but binds verdicts to a T_content (#950).
 
         Kept as a separate entry point so the ~30 pre-#950 callers of
         `_run_with_fake_api` keep exercising the unbound path unchanged.
+
+        `commit_author_identities` (#1210) defaults to `()` — the pre-#1210
+        answer — so those callers stay unchanged; the #1210 tests pass it.
         """
         comments_stdout = json.dumps(comments_list)
 
@@ -154,6 +163,7 @@ class _CheckCommentReviewsHarness(unittest.TestCase):
                 branch_author,
                 repo=repo,
                 content_ts=content_ts,
+                commit_author_identities=commit_author_identities,
             )
 
 
@@ -581,7 +591,12 @@ class ContentTsRequiredTests(unittest.TestCase):
 
     def test_check_comment_reviews_without_content_ts_raises_type_error(self):
         with self.assertRaises(TypeError):
-            hook.check_comment_reviews(451, "pham", repo="noorinalabs/x")  # missing content_ts
+            hook.check_comment_reviews(
+                451,
+                "pham",
+                repo="noorinalabs/x",
+                commit_author_identities=(),
+            )  # missing content_ts
 
     def test_partition_formal_reviewers_without_content_ts_raises_type_error(self):
         with self.assertRaises(TypeError):
@@ -596,7 +611,13 @@ class ContentTsRequiredTests(unittest.TestCase):
                 returncode=0, stdout="[]"
             ),
         ):
-            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x", content_ts=None)
+            result = hook.check_comment_reviews(
+                451,
+                "pham",
+                repo="noorinalabs/x",
+                content_ts=None,
+                commit_author_identities=(),
+            )
         self.assertEqual(result.undetermined, "")
 
     def test_partition_formal_reviewers_still_accepts_explicit_none(self):
@@ -613,7 +634,13 @@ class ContentTsRequiredTests(unittest.TestCase):
         positional third argument must now raise TypeError rather than
         silently binding to `repo`."""
         with self.assertRaises(TypeError):
-            hook.check_comment_reviews(451, "pham", "noorinalabs/x")  # repo positional
+            hook.check_comment_reviews(
+                451,
+                "pham",
+                "noorinalabs/x",  # repo positional
+                content_ts=None,
+                commit_author_identities=(),
+            )
 
 
 class ExtractBranchAuthorLastnameTests(unittest.TestCase):
@@ -868,12 +895,18 @@ class _NoContentBindingHarness(unittest.TestCase):
 
     Staleness itself is covered by `StaleVerdictBindingTests`,
     `BranchUpdateRegressionTests`, and `CommitFetchFailClosedTests`, which patch
-    `get_latest_content_commit` with real values instead.
+    `fetch_pr_commits` with real commit data instead.
+
+    Patching the FETCH rather than the analysis (#1210) means the real
+    `latest_content_commit` and `commit_author_identities` still run over the
+    stub: an empty commit list yields no content binding AND no commit-derived
+    branch author, which is exactly the pre-#950/pre-#1210 behaviour these
+    tests intend.
     """
 
     def setUp(self) -> None:
         super().setUp()
-        patcher = mock.patch.object(hook, "get_latest_content_commit", return_value=None)
+        patcher = mock.patch.object(hook, "fetch_pr_commits", return_value=[])
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -1144,7 +1177,11 @@ class CommentPaginationTests(_CheckCommentReviewsHarness):
 
         with mock.patch.object(hook.subprocess, "run", side_effect=fake_run):
             hook.check_comment_reviews(
-                self.PR_NUMBER, self.BRANCH_AUTHOR, repo=self.REPO, content_ts=None
+                self.PR_NUMBER,
+                self.BRANCH_AUTHOR,
+                repo=self.REPO,
+                content_ts=None,
+                commit_author_identities=(),
             )
 
         gh_api_calls = [a for a in captured_args if a[0] == "gh" and a[1] == "api"]
@@ -2563,6 +2600,32 @@ def _ts(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def _api_commit(
+    sha: str,
+    date: str,
+    parents: int = 1,
+    author_name: str = "",
+    author_email: str = "",
+) -> dict:
+    """Build a `pulls/{n}/commits` payload entry.
+
+    Shaped like the real API response — `parents` list, `commit.committer.date`,
+    `commit.author.{name,email}` — so a fixture cannot pass by omitting the very
+    field the code under test reads (`feedback_fixture_makes_guard_assertion_
+    inert`). `author_name`/`author_email` default to empty, which is the honest
+    "this fixture says nothing about who authored it" and yields no #1210
+    identity.
+    """
+    return {
+        "sha": sha,
+        "parents": [{"sha": f"p{i}"} for i in range(parents)],
+        "commit": {
+            "committer": {"date": date},
+            "author": {"date": date, "name": author_name, "email": author_email},
+        },
+    }
+
+
 def _verdict_comment(requestor: str, ror: str, created_at: str, tech_debt: str = "none") -> dict:
     """Build an issues-API comment payload carrying a charter verdict trailer.
 
@@ -2667,8 +2730,8 @@ class ResolveReviewVerdictsSharedBoundaryTests(unittest.TestCase):
             mock.patch.object(hook.subprocess, "run", side_effect=fake_run),
             mock.patch.object(
                 hook,
-                "get_latest_content_commit",
-                return_value=("ac8bcfa", hook._parse_iso8601("2026-01-02T00:00:00Z")),
+                "fetch_pr_commits",
+                return_value=[_api_commit("ac8bcfa", "2026-01-02T00:00:00Z")],
             ),
             mock.patch.object(hook, "_load_roster_names", return_value={"lucas ferreira"}),
         ):
@@ -2931,13 +2994,7 @@ class BranchUpdateRegressionTests(unittest.TestCase):
     range that does not exclude merge commits is corrupted by routine mechanics.
     """
 
-    @staticmethod
-    def _commit(sha: str, date: str, parents: int = 1) -> dict:
-        return {
-            "sha": sha,
-            "parents": [{"sha": f"p{i}"} for i in range(parents)],
-            "commit": {"committer": {"date": date}, "author": {"date": date}},
-        }
+    _commit = staticmethod(_api_commit)
 
     @staticmethod
     def _fake_commit_api(commits: list[dict]):
@@ -2950,8 +3007,14 @@ class BranchUpdateRegressionTests(unittest.TestCase):
         return fake_run
 
     def _latest(self, commits: list[dict]):
-        with mock.patch.object(hook.subprocess, "run", side_effect=self._fake_commit_api(commits)):
-            return hook.get_latest_content_commit(423, repo="noorinalabs/x")
+        """T_content over a commit list — the pure analysis, no fetch (#1210).
+
+        `latest_content_commit` is now a pure function, so these assertions no
+        longer need a subprocess mock at all. `test_commit_fetch_is_paginated`
+        below still drives the real `fetch_pr_commits`, so the pagination
+        guarantee stays pinned against the code that actually shells out.
+        """
+        return hook.latest_content_commit(commits)
 
     def test_merge_commit_from_main_does_not_advance_t_content(self):
         """The load-bearing assertion: a `main` merge lands AFTER the approval and
@@ -3064,7 +3127,7 @@ class BranchUpdateRegressionTests(unittest.TestCase):
             return result
 
         with mock.patch.object(hook.subprocess, "run", side_effect=fake_run):
-            hook.get_latest_content_commit(423, repo="noorinalabs/x")
+            hook.fetch_pr_commits(423, repo="noorinalabs/x")
         self.assertIn("--paginate", captured[0])
         self.assertTrue(any("pulls/423/commits" in a for a in captured[0]))
 
@@ -3093,28 +3156,20 @@ class CommitFetchFailClosedTests(unittest.TestCase):
     def test_nonzero_gh_api_raises_commit_fetch_error(self):
         with mock.patch.object(hook.subprocess, "run", side_effect=self._failing_api()):
             with self.assertRaises(hook.CommitFetchError):
-                hook.get_latest_content_commit(423, repo="noorinalabs/x")
+                hook.fetch_pr_commits(423, repo="noorinalabs/x")
 
     def test_unparseable_json_raises_commit_fetch_error(self):
         with mock.patch.object(
             hook.subprocess, "run", side_effect=self._failing_api(returncode=0, stdout="<html>")
         ):
             with self.assertRaises(hook.CommitFetchError):
-                hook.get_latest_content_commit(423, repo="noorinalabs/x")
+                hook.fetch_pr_commits(423, repo="noorinalabs/x")
 
     def test_non_merge_commit_without_timestamp_raises(self):
         """Silently skipping it would UNDERSTATE T_content and wave stale verdicts through."""
         commits = [{"sha": "aaaaaaaa", "parents": [{"sha": "p"}], "commit": {"committer": {}}}]
-
-        def fake_run(args, capture_output, text, timeout):
-            result = mock.MagicMock()
-            result.returncode = 0
-            result.stdout = json.dumps(commits)
-            return result
-
-        with mock.patch.object(hook.subprocess, "run", side_effect=fake_run):
-            with self.assertRaises(hook.CommitFetchError):
-                hook.get_latest_content_commit(423, repo="noorinalabs/x")
+        with self.assertRaises(hook.CommitFetchError):
+            hook.latest_content_commit(commits)
 
     def test_check_blocks_on_commit_fetch_error_with_two_valid_approvals(self):
         """THE fail-open test: a PR that WOULD merge (2 approvals) must BLOCK when
@@ -3134,7 +3189,7 @@ class CommitFetchFailClosedTests(unittest.TestCase):
             mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
             mock.patch.object(
                 hook,
-                "get_latest_content_commit",
+                "fetch_pr_commits",
                 side_effect=hook.CommitFetchError("HTTP 502"),
             ),
         ):
@@ -3181,8 +3236,8 @@ class StaleVerdictDiagnosticTests(unittest.TestCase):
             mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
             mock.patch.object(
                 hook,
-                "get_latest_content_commit",
-                return_value=(DA423_C3_SHA, _ts(DA423_C3_AT)),
+                "fetch_pr_commits",
+                return_value=[_api_commit(DA423_C3_SHA, DA423_C3_AT)],
             ),
         ):
             result = hook.check(
@@ -3242,8 +3297,8 @@ class FormalReviewStalenessTests(unittest.TestCase):
             mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
             mock.patch.object(
                 hook,
-                "get_latest_content_commit",
-                return_value=(DA423_C3_SHA, _ts(DA423_C3_AT)),
+                "fetch_pr_commits",
+                return_value=[_api_commit(DA423_C3_SHA, DA423_C3_AT)],
             ),
         ):
             return hook.check(
@@ -3567,7 +3622,9 @@ class IncompleteCommentScanFailsClosedTests(_NoContentBindingHarness):
     def test_clean_scan_leaves_undetermined_empty(self):
         """The negative match — a successful empty scan must NOT be flagged."""
         with mock.patch.object(hook.subprocess, "run", side_effect=self._fake_run()):
-            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x", content_ts=None)
+            result = hook.check_comment_reviews(
+                451, "pham", repo="noorinalabs/x", content_ts=None, commit_author_identities=()
+            )
         self.assertEqual(result.undetermined, "")
         self.assertEqual(result.reviewers, set())
 
@@ -3577,7 +3634,9 @@ class IncompleteCommentScanFailsClosedTests(_NoContentBindingHarness):
             "run",
             side_effect=self._fake_run(returncode=1, stdout="", stderr="HTTP 403: Forbidden"),
         ):
-            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x", content_ts=None)
+            result = hook.check_comment_reviews(
+                451, "pham", repo="noorinalabs/x", content_ts=None, commit_author_identities=()
+            )
         self.assertTrue(result.undetermined)
         self.assertIn("403", result.undetermined)
 
@@ -3585,19 +3644,25 @@ class IncompleteCommentScanFailsClosedTests(_NoContentBindingHarness):
         with mock.patch.object(
             hook.subprocess, "run", side_effect=hook.subprocess.TimeoutExpired("gh", 30)
         ):
-            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x", content_ts=None)
+            result = hook.check_comment_reviews(
+                451, "pham", repo="noorinalabs/x", content_ts=None, commit_author_identities=()
+            )
         self.assertIn("TimeoutExpired", result.undetermined)
 
     def test_unparseable_json_sets_undetermined(self):
         with mock.patch.object(
             hook.subprocess, "run", side_effect=self._fake_run(stdout="not json")
         ):
-            result = hook.check_comment_reviews(451, "pham", repo="noorinalabs/x", content_ts=None)
+            result = hook.check_comment_reviews(
+                451, "pham", repo="noorinalabs/x", content_ts=None, commit_author_identities=()
+            )
         self.assertIn("JSONDecodeError", result.undetermined)
 
     def test_unresolvable_owner_repo_sets_undetermined(self):
         with mock.patch.object(hook, "_resolve_owner_repo", return_value=None):
-            result = hook.check_comment_reviews(451, "pham", repo=None, content_ts=None)
+            result = hook.check_comment_reviews(
+                451, "pham", repo=None, content_ts=None, commit_author_identities=()
+            )
         self.assertIn("could not resolve the target repository", result.undetermined)
 
     def test_check_hard_blocks_on_an_incomplete_scan(self):
@@ -3703,6 +3768,7 @@ class SurnameCollisionSelfReviewTests(unittest.TestCase):
                     self.BRANCH_LASTNAME,
                     repo=self.REPO,
                     content_ts=None,
+                    commit_author_identities=(),
                     branch_author_initial=initial,
                 ).reviewers
             )
@@ -3806,7 +3872,7 @@ class SurnameCollisionSelfReviewTests(unittest.TestCase):
             mock.patch.object(
                 hook, "check_comment_reviews", side_effect=fake_check_comment_reviews
             ),
-            mock.patch.object(hook, "get_latest_content_commit", return_value=None),
+            mock.patch.object(hook, "fetch_pr_commits", return_value=[]),
             mock.patch.object(hook, "_load_roster_names", return_value=set()),
         ):
             hook.resolve_review_verdicts(pr_data, repo=self.REPO)
@@ -3909,7 +3975,13 @@ class _ResolveOverFakeCommentsHarness(unittest.TestCase):
             "labels": list(labels),
         }
 
-    def _resolve(self, head_ref: str, comments: list[dict], *, roster=None):
+    # Default commit fixture: one non-merge commit whose author fields are
+    # EMPTY, so it yields no #1210 identity. That keeps every pre-#1210 test in
+    # this harness exercising the "ref is the only author source" path; a test
+    # that wants commit-derived identity passes `commits=` explicitly.
+    DEFAULT_COMMITS = [_api_commit("837c272a", "2026-07-15T19:13:59Z")]
+
+    def _resolve(self, head_ref: str, comments: list[dict], *, roster=None, commits=None):
         def fake_run(args, capture_output, text, timeout):  # noqa: ARG001
             result = mock.MagicMock()
             result.returncode = 0
@@ -3923,10 +3995,10 @@ class _ResolveOverFakeCommentsHarness(unittest.TestCase):
             mock.patch.object(hook.subprocess, "run", side_effect=fake_run),
             mock.patch.object(
                 hook,
-                "get_latest_content_commit",
+                "fetch_pr_commits",
                 # T_content sits BEFORE the fixture comments, so nothing is stale
                 # and a shortfall can only come from the scan, not from staleness.
-                return_value=("837c272a", hook._parse_iso8601("2026-07-15T19:13:59Z")),
+                return_value=self.DEFAULT_COMMITS if commits is None else commits,
             ),
             mock.patch.object(
                 hook,
@@ -3985,7 +4057,7 @@ class NonPersonaHeadRefScanTests(_ResolveOverFakeCommentsHarness):
 
         with (
             mock.patch.object(hook.subprocess, "run", side_effect=fake_run),
-            mock.patch.object(hook, "get_latest_content_commit", return_value=None),
+            mock.patch.object(hook, "fetch_pr_commits", return_value=[]),
             mock.patch.object(hook, "_load_roster_names", return_value=set(self.ROSTER)),
         ):
             verdicts = hook.resolve_review_verdicts(pr_data, repo=self.REPO)
@@ -4208,6 +4280,599 @@ class CommentScanNotMeasuredTests(_ResolveOverFakeCommentsHarness):
         # gate does not.
         self.assertIn("0/2 required peer reviews", not_measured)
         self.assertIn("0/2 required peer reviews", measured)
+
+
+class PersonaAliasFromEmailTests(unittest.TestCase):
+    """#1210: which commit-author ADDRESSES name a persona, and which do not.
+
+    This is where the squash hazard (#1177) is decided, so the negative cases
+    matter more than the positive one.
+    """
+
+    def test_persona_alias_resolves(self):
+        self.assertEqual(
+            hook.persona_alias_from_email("parametrization+Aino.Virtanen@gmail.com"),
+            "Aino.Virtanen",
+        )
+
+    def test_bare_principal_resolves_to_nothing(self):
+        """THE #1177 decision, stated as a test.
+
+        A squash re-authors a persona's commit to the bare principal, so this
+        address is evidence that identity was DESTROYED. Mapping it to a name
+        would make the gate exclude a persona who may have had nothing to do
+        with the branch.
+        """
+        self.assertEqual(hook.persona_alias_from_email("parametrization@gmail.com"), "")
+
+    def test_roster_json_maps_the_bare_principal_and_this_function_refuses_to(self):
+        """The trap is REAL and this function deliberately walks past it.
+
+        `.claude/team/roster.json` genuinely maps `parametrization@gmail.com` to
+        a persona name. Anyone "improving" this function by consulting that map
+        would ship the silent-wrong-persona bug — so the map's existence is
+        asserted here, next to the refusal, rather than left as a comment.
+        """
+        roster_path = Path(__file__).resolve().parents[2] / "team" / "roster.json"
+        roster = json.loads(roster_path.read_text(encoding="utf-8"))
+        bare_mapped = [
+            name for name, email in roster.items() if email == "parametrization@gmail.com"
+        ]
+        self.assertTrue(
+            bare_mapped,
+            "fixture premise gone: roster.json no longer maps the bare principal, so this "
+            "test no longer proves the refusal is meaningful — re-check the #1177 reasoning",
+        )
+        self.assertEqual(hook.persona_alias_from_email("parametrization@gmail.com"), "")
+
+    def test_github_noreply_login_is_not_a_persona(self):
+        """`12345+octocat@…` has a `+` but the part after it is a login.
+
+        This is what keeps a GitHub-UI or bot commit from inventing an author,
+        without a bot-name blocklist that could be incomplete.
+        """
+        for email in (
+            "49699333+dependabot[bot]@users.noreply.github.com",
+            "1234567+octocat@users.noreply.github.com",
+            "noreply@github.com",
+        ):
+            with self.subTest(email=email):
+                self.assertEqual(hook.persona_alias_from_email(email), "")
+
+    def test_hyphenated_and_compound_roster_names_resolve(self):
+        """Real roster aliases, not idealised ones."""
+        for alias in ("Jun-Seo.Park", "Marisol.Vega-Cruz", "Nadia.Boukhari"):
+            with self.subTest(alias=alias):
+                self.assertEqual(
+                    hook.persona_alias_from_email(f"parametrization+{alias}@gmail.com"), alias
+                )
+
+    def test_malformed_input_yields_empty(self):
+        for value in ("", "not-an-email", "parametrization+@gmail.com", "+Aino@gmail.com"):
+            with self.subTest(value=value):
+                self.assertEqual(hook.persona_alias_from_email(value), "")
+
+
+class CommitAuthorIdentityDerivationTests(unittest.TestCase):
+    """#1210: deriving the branch author from the PR's commits."""
+
+    @staticmethod
+    def _names(identities) -> set[tuple[str, str]]:
+        """The comparison KEY of each derived identity — `(lastname, initial)`.
+
+        Asserted on the key rather than on the display string so a test cannot
+        pass because two different people happened to render the same way.
+        """
+        return {(i.lastname.lower(), i.initial) for i in identities}
+
+    def test_author_name_yields_lastname_and_initial(self):
+        identities = hook.commit_author_identities(
+            [_api_commit("a1", "2026-07-20T00:00:00Z", author_name="Aino Virtanen")]
+        )
+        self.assertEqual(self._names(identities), {("virtanen", "a")})
+
+    def test_merge_commit_authors_are_not_branch_authors(self):
+        """Running `gh pr merge` into a wave branch does not make you its author.
+
+        Excluding merge authors would false-block the wave merges the release
+        coordinator is required to review — the `feedback_commit_author_gate_
+        exclude_merges` lesson, applied to the identity half.
+        """
+        identities = hook.commit_author_identities(
+            [
+                _api_commit("m1", "2026-07-20T00:00:00Z", parents=2, author_name="Nadia Khoury"),
+                _api_commit("c1", "2026-07-20T01:00:00Z", author_name="Aino Virtanen"),
+            ]
+        )
+        self.assertEqual(self._names(identities), {("virtanen", "a")})
+
+    def test_every_non_merge_author_is_returned_not_just_the_latest(self):
+        """A branch handed between two personas has TWO authors.
+
+        Taking only the latest content commit's author would leave the earlier
+        one free to self-approve.
+        """
+        identities = hook.commit_author_identities(
+            [
+                _api_commit("c1", "2026-07-20T00:00:00Z", author_name="Lucas Ferreira"),
+                _api_commit("c2", "2026-07-20T01:00:00Z", author_name="Aino Virtanen"),
+            ]
+        )
+        self.assertEqual(self._names(identities), {("ferreira", "l"), ("virtanen", "a")})
+
+    def test_name_and_matching_alias_dedupe_to_one_person(self):
+        identities = hook.commit_author_identities(
+            [
+                _api_commit(
+                    "c1",
+                    "2026-07-20T00:00:00Z",
+                    author_name="Aino Virtanen",
+                    author_email="parametrization+Aino.Virtanen@gmail.com",
+                )
+            ]
+        )
+        self.assertEqual(len(identities), 1)
+        self.assertEqual(self._names(identities), {("virtanen", "a")})
+
+    def test_email_alias_recovers_the_person_when_the_name_is_a_handle(self):
+        """The union's reason to exist: the two sources disagree exactly when
+        one of them is not a name."""
+        identities = hook.commit_author_identities(
+            [
+                _api_commit(
+                    "c1",
+                    "2026-07-20T00:00:00Z",
+                    author_name="octocat",
+                    author_email="parametrization+Aino.Virtanen@gmail.com",
+                )
+            ]
+        )
+        self.assertIn(("virtanen", "a"), self._names(identities))
+
+    def test_bare_principal_email_contributes_nothing(self):
+        """Only the NAME survives a squash-flattened address — never the address."""
+        identities = hook.commit_author_identities(
+            [
+                _api_commit(
+                    "c1",
+                    "2026-07-20T00:00:00Z",
+                    author_name="",
+                    author_email="parametrization@gmail.com",
+                )
+            ]
+        )
+        self.assertEqual(identities, ())
+
+    def test_empty_author_fields_yield_no_identity(self):
+        self.assertEqual(
+            hook.commit_author_identities([_api_commit("c1", "2026-07-20T00:00:00Z")]), ()
+        )
+        self.assertEqual(hook.commit_author_identities([]), ())
+
+    def test_bot_commit_matches_no_roster_persona(self):
+        """Bots stay neutral BY CONSTRUCTION, not by a blocklist.
+
+        Asserted at the level that matters — no roster name is treated as a
+        self-review — rather than by asserting the derivation returned nothing,
+        which would pass for a bot name the derivation happened to mangle.
+        """
+        identities = hook.commit_author_identities(
+            [
+                _api_commit(
+                    "c1",
+                    "2026-07-20T00:00:00Z",
+                    author_name="dependabot[bot]",
+                    author_email="49699333+dependabot[bot]@users.noreply.github.com",
+                )
+            ]
+        )
+        for persona in ("Lucas Ferreira", "Nino Kavtaradze", "Aino Virtanen", "Steven French"):
+            with self.subTest(persona=persona):
+                self.assertFalse(hook.is_self_review(persona, "", "", identities))
+
+
+class IsSelfReviewTests(unittest.TestCase):
+    """#1210 reuses the ONE person-comparison (#1172), on both author sources."""
+
+    LUCAS = hook.CommitAuthorIdentity(lastname="Ferreira", initial="l", display="Lucas Ferreira")
+
+    def test_commit_author_is_a_self_review(self):
+        self.assertTrue(hook.is_self_review("Lucas Ferreira", "", "", (self.LUCAS,)))
+
+    def test_same_surname_colleague_is_not_the_commit_author(self):
+        """The Ferreira/Ferreira collision, on the NEW path.
+
+        A hand-rolled surname comparison here would re-create main#1172 in the
+        commit-identity source while `charter_trailer` stayed correct.
+        """
+        self.assertFalse(hook.is_self_review("Santiago Ferreira", "", "", (self.LUCAS,)))
+
+    def test_ref_prefix_arm_is_unchanged(self):
+        self.assertTrue(hook.is_self_review("Lucas Ferreira", "Ferreira", "l", ()))
+        self.assertFalse(hook.is_self_review("Santiago Ferreira", "Ferreira", "l", ()))
+
+    def test_no_author_from_either_source_excludes_nobody(self):
+        self.assertFalse(hook.is_self_review("Lucas Ferreira", "", "", ()))
+
+
+class RefineCommentScanScopeTests(unittest.TestCase):
+    """#1210: the ONE allowed scope transition, and the three forbidden ones."""
+
+    IDENT = (hook.CommitAuthorIdentity(lastname="Virtanen", initial="a", display="Aino Virtanen"),)
+
+    def test_no_branch_author_upgrades_when_commits_named_someone(self):
+        self.assertEqual(
+            hook.refine_comment_scan_scope(hook.COMMENT_SCAN_NO_BRANCH_AUTHOR, self.IDENT),
+            hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED,
+        )
+
+    def test_no_branch_author_stays_when_commits_named_nobody(self):
+        self.assertEqual(
+            hook.refine_comment_scan_scope(hook.COMMENT_SCAN_NO_BRANCH_AUTHOR, ()),
+            hook.COMMENT_SCAN_NO_BRANCH_AUTHOR,
+        )
+
+    def test_ref_derived_author_is_never_downgraded(self):
+        self.assertEqual(
+            hook.refine_comment_scan_scope(hook.COMMENT_SCAN_AUTHOR_EXCLUDED, self.IDENT),
+            hook.COMMENT_SCAN_AUTHOR_EXCLUDED,
+        )
+
+    def test_not_run_is_never_upgraded(self):
+        """A scan that did not happen cannot acquire a mode.
+
+        Laundering NOT_RUN into a real mode here would defeat the #1206
+        defense-in-depth hard-block one layer up.
+        """
+        self.assertEqual(
+            hook.refine_comment_scan_scope(hook.COMMENT_SCAN_NOT_RUN, self.IDENT),
+            hook.COMMENT_SCAN_NOT_RUN,
+        )
+
+
+class CommitIdentitySelfReviewExclusionTests(_ResolveOverFakeCommentsHarness):
+    """#1210 end-to-end: the residual #1207 disclosed, closed.
+
+    THE case, from the issue's own table — a human persona on a NON-CHARTER
+    branch posts their own `Approved` plus one genuine reviewer approves:
+
+        pre-#1207   0/2 blocked (wrongly — the genuine reviewer was uncounted)
+        post-#1207  2/2 PASSES  (wrongly — the self-review was counted)
+        correct     1/2 blocked
+    """
+
+    NON_CHARTER_REF = "feature/some-hand-made-branch"
+    WAVE_REF = "deployments/phase-10/wave-29"
+    DEPENDABOT_REF = "dependabot/docker/integration-tests/fake_oauth/python-d3400aa"
+
+    @staticmethod
+    def _authored_by(*names: str) -> list[dict]:
+        return [
+            _api_commit(
+                f"c{n}",
+                "2026-07-15T19:13:59Z",
+                author_name=name,
+                author_email=f"parametrization+{name.replace(' ', '.')}@gmail.com",
+            )
+            for n, name in enumerate(names)
+        ]
+
+    def test_self_approval_on_a_non_charter_ref_no_longer_reaches_two_of_two(self):
+        """THE #1210 kill-shot. RED before the fix: `total_distinct == 2`."""
+        verdicts = self._resolve(
+            self.NON_CHARTER_REF,
+            [self._verdict("Nino Kavtaradze"), self._verdict("Aino Virtanen")],
+            commits=self._authored_by("Nino Kavtaradze"),
+        )
+        self.assertEqual(verdicts.distinct_reviewers, {"aino virtanen"})
+        self.assertEqual(verdicts.total_distinct, 1)
+        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED)
+
+    def test_positive_control_two_genuine_reviewers_still_reach_two_of_two(self):
+        """Anti-vacuity (`feedback_fixture_makes_guard_assertion_inert`).
+
+        Identical shape, except the branch author is NOT one of the reviewers.
+        Without this, the assertion above would be satisfied by a change that
+        simply stopped counting comment verdicts on non-charter refs — which
+        would re-break #1206.
+        """
+        verdicts = self._resolve(
+            self.NON_CHARTER_REF,
+            [self._verdict("Nino Kavtaradze"), self._verdict("Aino Virtanen")],
+            commits=self._authored_by("Lucas Ferreira"),
+        )
+        self.assertEqual(verdicts.distinct_reviewers, {"nino kavtaradze", "aino virtanen"})
+        self.assertEqual(verdicts.total_distinct, 2)
+
+    def test_wave_merge_branch_now_excludes_its_author_too(self):
+        """The PRE-EXISTING main#294 hole, closed by the same derivation.
+
+        `deployments/**` has carried this since main#294; #1210 closes it, not
+        just the increment #1207 added.
+        """
+        verdicts = self._resolve(
+            self.WAVE_REF,
+            [self._verdict("Nadia Khoury"), self._verdict("Aino Virtanen")],
+            roster=self.ROSTER | {"nadia khoury"},
+            commits=self._authored_by("Nadia Khoury"),
+        )
+        self.assertEqual(verdicts.distinct_reviewers, {"aino virtanen"})
+        self.assertEqual(verdicts.total_distinct, 1)
+
+    def test_both_authors_of_a_handed_over_branch_are_excluded(self):
+        verdicts = self._resolve(
+            self.NON_CHARTER_REF,
+            [
+                self._verdict("Nino Kavtaradze"),
+                self._verdict("Lucas Ferreira"),
+                self._verdict("Aino Virtanen"),
+            ],
+            commits=self._authored_by("Nino Kavtaradze", "Lucas Ferreira"),
+        )
+        self.assertEqual(verdicts.distinct_reviewers, {"aino virtanen"})
+
+    def test_same_surname_colleague_still_counts_on_a_commit_derived_author(self):
+        """#1172 must hold on the new source too: Santiago is not Lucas."""
+        verdicts = self._resolve(
+            self.NON_CHARTER_REF,
+            [self._verdict("Santiago Ferreira"), self._verdict("Aino Virtanen")],
+            commits=self._authored_by("Lucas Ferreira"),
+        )
+        self.assertEqual(verdicts.distinct_reviewers, {"santiago ferreira", "aino virtanen"})
+
+    def test_bot_branch_with_two_roster_approvals_still_passes(self):
+        """deploy#691 must stay fixed, and no human author may be fabricated.
+
+        A bot commit is NOT special-cased: `dependabot[bot]` is carried as a
+        derived identity like any other author string. It is neutral because it
+        matches no roster persona, which is the property that actually matters —
+        both approvals still count. The bot's ADDRESS contributes nothing
+        (#1181's matcher), so nothing invents a person from it.
+        """
+        verdicts = self._resolve(
+            self.DEPENDABOT_REF,
+            [self._verdict("Lucas Ferreira"), self._verdict("Nino Kavtaradze")],
+            commits=[
+                _api_commit(
+                    "c0",
+                    "2026-07-15T19:13:59Z",
+                    author_name="dependabot[bot]",
+                    author_email="49699333+dependabot[bot]@users.noreply.github.com",
+                )
+            ],
+        )
+        self.assertEqual(verdicts.distinct_reviewers, {"lucas ferreira", "nino kavtaradze"})
+        self.assertEqual(verdicts.total_distinct, 2)
+        # Exactly ONE identity, from the NAME — the address named nobody, so no
+        # human persona was fabricated for a bot PR.
+        self.assertEqual(
+            [i.display for i in verdicts.commit_author_identities], ["dependabot[bot]"]
+        )
+
+    def test_squash_flattened_identity_excludes_nobody(self):
+        """The bare principal must not resolve to the persona roster.json maps it to.
+
+        A commit whose name is gone and whose address is the bare principal
+        (#1177) yields no identity, so `Steven French` — the name that address
+        maps to — is NOT excluded and still counts as a reviewer.
+        """
+        verdicts = self._resolve(
+            self.NON_CHARTER_REF,
+            [self._verdict("Steven French"), self._verdict("Aino Virtanen")],
+            roster=self.ROSTER | {"steven french"},
+            commits=[
+                _api_commit(
+                    "c0",
+                    "2026-07-15T19:13:59Z",
+                    author_name="",
+                    author_email="parametrization@gmail.com",
+                )
+            ],
+        )
+        self.assertEqual(verdicts.distinct_reviewers, {"steven french", "aino virtanen"})
+        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_NO_BRANCH_AUTHOR)
+
+    def test_persona_ref_does_not_consult_commit_identity(self):
+        """Scope guard: 86.7% of the org's PRs must be byte-for-byte unchanged.
+
+        On `L.Ferreira/…` the ref is authoritative. Nino authored the commits
+        here and his Approved must STILL count — if commit identity leaked onto
+        the persona path, anyone who pushed a fixup to someone else's branch
+        would lose their review.
+        """
+        verdicts = self._resolve(
+            "L.Ferreira/1210-x",
+            [self._verdict("Nino Kavtaradze"), self._verdict("Aino Virtanen")],
+            commits=self._authored_by("Nino Kavtaradze"),
+        )
+        self.assertEqual(verdicts.distinct_reviewers, {"nino kavtaradze", "aino virtanen"})
+        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_AUTHOR_EXCLUDED)
+        self.assertEqual(verdicts.commit_author_identities, ())
+
+    def test_merge_only_branch_derives_no_author(self):
+        """No authored commits ⇒ no identity ⇒ the pre-#1210 state, unchanged."""
+        verdicts = self._resolve(
+            self.WAVE_REF,
+            [self._verdict("Lucas Ferreira"), self._verdict("Nino Kavtaradze")],
+            commits=[
+                _api_commit("m0", "2026-07-15T19:13:59Z", parents=2, author_name="Lucas Ferreira")
+            ],
+        )
+        self.assertEqual(verdicts.total_distinct, 2)
+        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_NO_BRANCH_AUTHOR)
+
+    def test_commit_fetch_failure_still_hard_blocks_on_a_non_charter_ref(self):
+        """Degradation: no commit data ⇒ no branch author ⇒ STOP, never proceed."""
+        with (
+            mock.patch.object(
+                hook, "fetch_pr_commits", side_effect=hook.CommitFetchError("HTTP 502")
+            ),
+            mock.patch.object(hook, "_load_roster_names", return_value=set(self.ROSTER)),
+        ):
+            with self.assertRaises(hook.CommitFetchError):
+                hook.resolve_review_verdicts(self._pr_data(self.NON_CHARTER_REF), repo=self.REPO)
+
+
+class StrictlyNonRelaxingTests(_ResolveOverFakeCommentsHarness):
+    """The BAR for #1210: no input may make the gate pass what it blocked.
+
+    The property is checked directly rather than argued: for a matrix of
+    (head ref x commit authors x verdict thread), the post-fix reviewer set must
+    be a SUBSET of the pre-fix one (pre-fix == the same resolve with no
+    commit-derived identity). A subset can only lower `total_distinct`, and
+    `check()` allows only on `>= 2` or on `== 1 with the wave-bootstrap
+    exception` — neither of which a shrinking set can newly satisfy from a
+    blocking state.
+    """
+
+    CASES = (
+        ("feature/hand-made", ("Nino Kavtaradze",)),
+        ("feature/hand-made", ("Lucas Ferreira", "Nino Kavtaradze")),
+        ("feature/hand-made", ("Weronika Zielinska",)),
+        ("deployments/phase-10/wave-29", ("Nino Kavtaradze",)),
+        ("dependabot/npm_and_yarn/x-1.2.3", ("dependabot[bot]",)),
+        ("", ("Aino Virtanen",)),
+        ("nohashinthisref", ("Santiago Ferreira",)),
+        ("L.Ferreira/1210-x", ("Nino Kavtaradze",)),
+        ("L.Ferreira/1210-x", ("Lucas Ferreira",)),
+    )
+
+    THREAD = (
+        "Lucas Ferreira",
+        "Nino Kavtaradze",
+        "Aino Virtanen",
+        "Santiago Ferreira",
+    )
+
+    def _sets(self, head_ref: str, authors: tuple[str, ...]):
+        commits = [
+            _api_commit(f"c{n}", "2026-07-15T19:13:59Z", author_name=name)
+            for n, name in enumerate(authors)
+        ]
+        comments = [self._verdict(name) for name in self.THREAD]
+        after = self._resolve(head_ref, comments, commits=commits)
+        # "Before" == the same pipeline with the commit-derived author source
+        # switched off, which is exactly the pre-#1210 code path.
+        with mock.patch.object(hook, "commit_author_identities", return_value=()):
+            before = self._resolve(head_ref, comments, commits=commits)
+        return before, after
+
+    def test_reviewer_set_never_grows(self):
+        for head_ref, authors in self.CASES:
+            with self.subTest(head_ref=head_ref, authors=authors):
+                before, after = self._sets(head_ref, authors)
+                self.assertTrue(
+                    after.distinct_reviewers <= before.distinct_reviewers,
+                    f"{after.distinct_reviewers} is not a subset of {before.distinct_reviewers}",
+                )
+                self.assertLessEqual(after.total_distinct, before.total_distinct)
+
+    def test_fixture_is_not_vacuous_at_least_one_case_actually_shrinks(self):
+        """Guards the subset property against passing because nothing changed.
+
+        A no-op implementation satisfies `after <= before` for every case. At
+        least one case must strictly shrink, or the class above certifies
+        nothing (`feedback_fixture_makes_guard_assertion_inert`).
+        """
+        shrank = [
+            (head_ref, authors)
+            for head_ref, authors in self.CASES
+            if self._sets(head_ref, authors)[1].distinct_reviewers
+            < self._sets(head_ref, authors)[0].distinct_reviewers
+        ]
+        self.assertTrue(shrank, "no case exercised the exclusion — the matrix proves nothing")
+
+    def test_a_blocked_pr_never_becomes_an_allowed_one(self):
+        """The property expressed as the gate's own verdict, not as a count."""
+        for head_ref, authors in self.CASES:
+            with self.subTest(head_ref=head_ref, authors=authors):
+                before, after = self._sets(head_ref, authors)
+                before_allows = before.total_distinct >= 2
+                after_allows = after.total_distinct >= 2
+                if not before_allows:
+                    self.assertFalse(
+                        after_allows,
+                        "a PR the gate blocked before #1210 must not now pass",
+                    )
+
+
+class CommitAuthorBlockDiagnosticTests(_ResolveOverFakeCommentsHarness):
+    """A subtraction the operator cannot see is a tool that looks broken (#950)."""
+
+    def _block_reason(self, verdicts) -> str:
+        input_data = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "gh pr merge 691 --repo noorinalabs/noorinalabs-main"},
+        }
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data("feature/x")),
+            mock.patch.object(hook, "resolve_review_verdicts", return_value=verdicts),
+            mock.patch.object(hook, "log_pretooluse_block"),
+        ):
+            result = hook.check(input_data)
+        assert result is not None, "check() must BLOCK a 1/2 PR, not return None"
+        self.assertEqual(result["decision"], "block")
+        return str(result["reason"])
+
+    @staticmethod
+    def _verdicts(comment_scan: str, identities=()):
+        return hook.ReviewVerdicts(
+            number=691,
+            head_ref="feature/x",
+            labels=[],
+            branch_author_lastname=None,
+            content_sha="837c272a",
+            content_ts=None,
+            formal_reviewers=set(),
+            comment_reviewers={"aino virtanen"},
+            non_roster_requestors=set(),
+            roster_comment_reviewers={"aino virtanen"},
+            roster_names={"aino virtanen"},
+            distinct_reviewers={"aino virtanen"},
+            stale_verdicts_comment=[],
+            stale_verdicts_formal=[],
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=[],
+            tech_debt_unparseable=[],
+            wave_bootstrap_exception=False,
+            comment_scan=comment_scan,
+            commit_author_identities=identities,
+        )
+
+    def test_block_message_names_the_commit_derived_author(self):
+        reason = self._block_reason(
+            self._verdicts(
+                hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED,
+                (
+                    hook.CommitAuthorIdentity(
+                        lastname="Kavtaradze", initial="n", display="Nino Kavtaradze"
+                    ),
+                ),
+            )
+        )
+        self.assertIn("COMMIT IDENTITY", reason)
+        self.assertIn("Nino Kavtaradze", reason)
+        self.assertIn("1/2 required peer reviews", reason)
+
+    def test_the_two_no_author_modes_read_differently(self):
+        """Exclusion-applied and exclusion-unavailable must not share wording —
+        they are opposite facts about whether the count can be trusted."""
+        excluded = self._block_reason(
+            self._verdicts(
+                hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED,
+                (
+                    hook.CommitAuthorIdentity(
+                        lastname="Khoury", initial="n", display="Nadia Khoury"
+                    ),
+                ),
+            )
+        )
+        unavailable = self._block_reason(self._verdicts(hook.COMMENT_SCAN_NO_BRANCH_AUTHOR))
+        self.assertNotEqual(excluded, unavailable)
+        self.assertIn("COMMIT IDENTITY", excluded)
+        self.assertNotIn("COMMIT IDENTITY", unavailable)
+        self.assertIn("WITHOUT self-review exclusion", unavailable)
+        self.assertNotIn("WITHOUT self-review exclusion", excluded)
 
 
 if __name__ == "__main__":

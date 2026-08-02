@@ -148,6 +148,46 @@ Reviewer dedup key:
   whom cannot land in one hook and not the other. A true self-review still
   excludes: the author's own initial and surname both match their branch.
 
+Branch author from COMMIT IDENTITY (#1210):
+  All of the above presumes the head ref NAMES the branch author. On a ref
+  without the `{Initial}.{Lastname}` prefix it does not, and the exclusion had
+  no subject: `is_branch_author` returned False for everyone and the author's
+  own `Approved` comment entered the reviewer set. A human self-approving on a
+  non-charter branch plus one genuine reviewer reached 2/2 where 1/2 is correct.
+  That hole is old — `deployments/**` wave-merge branches have carried it since
+  main#294 — and #1207 widened the population of refs it applies to (measured:
+  568/655 PRs persona-prefixed and unaffected, 79 `deployments/**` pre-existing,
+  4 dependabot, 4 newly exposed).
+
+  Every persona commits with `-c user.name="{First} {Last}"` (CLAUDE.md §
+  Commit Identity), so the commits carry the answer the ref does not.
+  `commit_author_identities` derives it off the commit list ALREADY fetched for
+  T_content — no extra API round-trip — and `is_self_review` applies it through
+  the same `charter_trailer.is_branch_author` comparison as the ref prefix.
+
+  Degradation, all in the same direction (`feedback_safety_direction_over_ux_
+  friction`) — none of these can make the gate pass what it blocked before,
+  because the exclusion only ever REMOVES reviewers:
+    - commit list unfetchable  → `CommitFetchError`, HARD BLOCK (unchanged #950)
+    - bot author               → `dependabot[bot]` matches no roster persona,
+                                 so it excludes NOBODY and the counted set is
+                                 the pre-existing one; bots stay neutral by
+                                 construction, not by a blocklist. Their
+                                 ADDRESS yields no identity at all (#1181's
+                                 matcher), and no human author is fabricated
+    - bare `parametrization@`  → the address contributes NOTHING. A squash
+                                 re-authors to the bare principal (#1177), so
+                                 that address is evidence identity was
+                                 destroyed, not evidence of who wrote the code;
+                                 `roster.json` does map it to a name and this
+                                 hook deliberately does not follow that map
+    - merge-only branch        → no authored commits, no identity, unchanged
+    - ambiguous / wrong match  → OVER-excludes, dropping a reviewer and
+                                 blocking; the block message names every derived
+                                 identity so the mistake is visible, not silent
+  Scope: consulted ONLY where the ref names nobody. Where the ref names a
+  persona the behaviour is byte-for-byte unchanged.
+
 Single-Reviewer Exception (resolves #228):
   When the PR is labeled `wave-bootstrap` AND there is exactly ONE distinct
   reviewer who is a charter-enforcer role in the local roster, the hook
@@ -189,6 +229,7 @@ from charter_trailer import (
     branch_author_first_initial,
     extract_charter_field,
     is_branch_author,
+    name_first_initial,
     name_lastname,
     strip_code_regions,
     trailer_block_substring,
@@ -634,32 +675,27 @@ def describe_repo_defect(repo: str | None, defect: str) -> str:
     )
 
 
-def get_latest_content_commit(
+def fetch_pr_commits(
     pr_number: str | int,
     repo: str | None = None,
-) -> tuple[str, datetime] | None:
-    """Return `(short_sha, committed_at)` of the PR's latest NON-MERGE commit (#950).
+) -> list[dict]:
+    """Fetch the PR's commit list ONCE, for every consumer that needs it.
 
-    This is `T_content` — the moment the newest AUTHORED content arrived on the
-    branch, and the line a verdict must sit at or after to count.
-
-    Merge commits are excluded by parent count (a merge has >= 2 parents; a
-    normal commit has 1 and a root commit has 0, so `< 2` is the non-merge test).
-    Excluding them is what lets an approval SURVIVE a routine branch update from
-    `main` — that merge commit moves the head without changing what the reviewer
-    read. Including them would invalidate every approval in the org at the moment
-    of merge (see `feedback_commit_author_gate_exclude_merges`).
-
-    The COMMITTER date is used, not the author date: a rebase or amend preserves
-    the original author date while rewriting the commit object, so only the
-    committer date tracks when the content actually landed on the branch.
+    Two independent facts are read off this ONE response — `T_content` (#950,
+    `latest_content_commit`) and the branch author's identity (#1210,
+    `commit_author_identities`). They were separate concerns fetched by one call
+    even before #1210: `get_latest_content_commit` already pulled the full
+    commit objects and discarded `commit.author`. Splitting the FETCH from the
+    two ANALYSES keeps that single round-trip while letting each analysis be
+    unit-tested as a pure function over a commit list, with no subprocess mock.
 
     `--paginate` is mandatory: without it a PR with >100 commits silently
-    truncates and T_content is computed from a stale prefix (the same trap #303
-    fixed for the comment fetch).
+    truncates, T_content is computed from a stale prefix, and — post-#1210 — a
+    commit author past the 100th is invisible to the self-review exclusion (the
+    same trap #303 fixed for the comment fetch).
 
-    Returns None when the PR has NO non-merge commits — a degenerate branch that
-    contributes no authored content, so nothing can be stale against it.
+    Non-dict entries are dropped here rather than in each analysis, so both
+    consumers see the same validated shape.
 
     Raises:
         CommitFetchError: the commit list could not be fetched or parsed. There
@@ -708,11 +744,47 @@ def get_latest_content_commit(
             f"{type(commits).__name__}, expected a list"
         )
 
+    return [c for c in commits if isinstance(c, dict)]
+
+
+def _is_merge_commit(commit: dict) -> bool:
+    """True for a merge commit — >= 2 parents.
+
+    A normal commit has 1 parent and a root commit has 0, so `< 2` is the
+    non-merge test. ONE definition, shared by `latest_content_commit` and
+    `commit_author_identities`, because the two must agree on what "authored
+    content" means: a merge commit moves the head without changing content, and
+    the person who ran the merge is not thereby an author of it.
+    """
+    return len(commit.get("parents") or []) >= 2
+
+
+def latest_content_commit(commits: list[dict]) -> tuple[str, datetime] | None:
+    """Return `(short_sha, committed_at)` of the latest NON-MERGE commit (#950).
+
+    This is `T_content` — the moment the newest AUTHORED content arrived on the
+    branch, and the line a verdict must sit at or after to count.
+
+    Merge commits are excluded (`_is_merge_commit`). Excluding them is what lets
+    an approval SURVIVE a routine branch update from `main` — that merge commit
+    moves the head without changing what the reviewer read. Including them would
+    invalidate every approval in the org at the moment of merge (see
+    `feedback_commit_author_gate_exclude_merges`).
+
+    The COMMITTER date is used, not the author date: a rebase or amend preserves
+    the original author date while rewriting the commit object, so only the
+    committer date tracks when the content actually landed on the branch.
+
+    Returns None when there are NO non-merge commits — a degenerate branch that
+    contributes no authored content, so nothing can be stale against it.
+
+    Raises:
+        CommitFetchError: a non-merge commit carries no parseable committer
+            date, so T_content cannot be established.
+    """
     latest: tuple[str, datetime] | None = None
     for commit in commits:
-        if not isinstance(commit, dict):
-            continue
-        if len(commit.get("parents") or []) >= 2:
+        if _is_merge_commit(commit):
             continue  # merge commit — moves the head without changing content
         committed_at = _parse_iso8601(
             (commit.get("commit", {}).get("committer", {}) or {}).get("date")
@@ -730,6 +802,186 @@ def get_latest_content_commit(
             latest = (str(commit.get("sha", "?"))[:8], committed_at)
 
     return latest
+
+
+@dataclasses.dataclass(frozen=True)
+class CommitAuthorIdentity:
+    """A PERSON derived from a PR commit's author fields (#1210).
+
+    Carries the same two-part discriminator the charter branch prefix carries —
+    `lastname` + lowercased first `initial` — so it can be handed straight to
+    `charter_trailer.is_branch_author`, the ONE person-comparison in the org
+    (#1172). It deliberately does NOT carry an email or a roster row: a raw
+    display string plus the pair is everything the comparison needs, and adding
+    a roster lookup here would invite the address→persona mapping that
+    `persona_alias_from_email` exists to refuse.
+
+    `display` is the RAW source string, kept only so the block diagnostic can
+    name who was excluded and an operator can see whether the derivation picked
+    the right person. `initial` is `""` when none is derivable (a single-token
+    author name), which `is_branch_author` reads as "unknown" and falls back to
+    lastname-only — the OVER-excluding, fail-closed direction.
+    """
+
+    lastname: str
+    initial: str
+    display: str
+
+
+def persona_alias_from_email(email: str) -> str:
+    """Return the `First.Last` persona alias in a commit author address, or `""`.
+
+    Every persona commits as `parametrization+{First}.{Last}@gmail.com`
+    (CLAUDE.md § Commit Identity) — the personas are `+alias`es of ONE Gmail
+    principal — so the alias names the person deterministically.
+
+    Reuses `_PERSONA_ALIAS_RE`, the SAME matcher the #1181 roster-manifest
+    persona filter uses (defined below, alongside the reasoning that chose it),
+    rather than a second address regex. A duplicated matcher that drifts from
+    its twin is the defect class `repo_argument_defect` cites and #1046 was:
+    one matcher, reused. It also means this function inherits an already-argued
+    decision instead of re-deriving one — #1181 excludes exactly the two
+    non-persona entries in `roster.json`, and both exclusions are load-bearing
+    here for the same reasons.
+
+    THE BARE PRINCIPAL RESOLVES TO NOTHING, ON PURPOSE. An address with no
+    `+alias` (`parametrization@gmail.com`) returns `""` and contributes no
+    identity. This is the #1177 hazard: a squash re-authors a persona's commit
+    to the bare principal, so the bare address is evidence that identity was
+    DESTROYED, not evidence about who wrote the code. `.claude/team/roster.json`
+    does map `parametrization@gmail.com` to a name (`Steven French`) — following
+    that map here is precisely how the gate would silently exclude the wrong
+    persona from a squashed branch, so this function does not consult it. #1181
+    reached the same verdict on the same address for the same reason.
+
+    The `First.Last` shape requirement also rejects GitHub's
+    `12345+octocat@users.noreply.github.com` (the `+` part is a login, not a
+    persona) and every bot address, which is what keeps bot ADDRESSES from
+    inventing an author — by construction, not by a bot blocklist that a new
+    tool entry could slip past.
+
+    Returns the alias VERBATIM (`Aino.Virtanen`) — `charter_trailer._name_tokens`
+    splits on `.` as well as whitespace, so the dotted form is already a
+    two-token person name to every downstream comparison.
+    """
+    address = email.strip()
+    if not _PERSONA_ALIAS_RE.match(address):
+        return ""
+    local, _, _domain = address.partition("@")
+    _base, _, alias = local.partition("+")
+    return alias
+
+
+def _identity_from_name(raw: str) -> CommitAuthorIdentity | None:
+    """Build a `CommitAuthorIdentity` from a person-name string, or None.
+
+    Name parsing is `charter_trailer`'s (`name_lastname` / `name_first_initial`)
+    — the same parser the trailer fields go through — so a commit author and a
+    `Requestor:` value can never be split into tokens two different ways.
+
+    Returns None when no lastname is derivable (empty / whitespace-only), which
+    keeps a junk author out of the exclusion set rather than adding an entry
+    that `is_branch_author` would treat as the never-matching `""` sentinel.
+    """
+    lastname = name_lastname(raw)
+    if not lastname:
+        return None
+    return CommitAuthorIdentity(
+        lastname=lastname,
+        initial=name_first_initial(raw),
+        display=raw.strip(),
+    )
+
+
+def commit_author_identities(commits: list[dict]) -> tuple[CommitAuthorIdentity, ...]:
+    """Derive the branch's author identities from its commits (#1210).
+
+    WHY THIS EXISTS. `extract_branch_author_lastname` can only name the branch
+    author on a ref carrying the charter `{Initial}.{Lastname}` prefix. On every
+    other ref — `deployments/**` wave-merge branches (since main#294), and after
+    #1207 any hand-made branch — the gate had NO branch author, so
+    `is_branch_author` returned False for everyone and the author's OWN
+    `Approved` comment entered the reviewer set. A human self-approving on a
+    non-charter branch plus one genuine reviewer reached 2/2 where 1/2 is
+    correct. The commit objects carry the answer the ref does not: every persona
+    commits with `-c user.name="{First} {Last}"`.
+
+    TWO SOURCES PER COMMIT, UNIONED: `commit.author.name` (what `-c user.name`
+    writes) and the `+alias` in `commit.author.email` (`persona_alias_from_email`
+    — `""` for the bare principal and for every bot address). Unioning them can
+    only ADD exclusions, never remove one, so it moves strictly in the
+    fail-closed direction; it is worth doing because the two disagree exactly
+    when one of them is a handle rather than a name.
+
+    The AUTHOR is read, not the committer: `-c` sets both, but a rebase or an
+    amend by a third party rewrites the committer while the author is who wrote
+    the content. Reading the committer too would exclude whoever last rewrote
+    the branch — over-exclusion, so safe, but it would drop a genuine reviewer
+    who did nothing but run `update-branch`.
+
+    MERGE COMMITS ARE SKIPPED, matching `latest_content_commit`. Running
+    `gh pr merge` into a wave branch does not make the release coordinator an
+    author of that branch's content, and excluding them there would false-block
+    the wave merges they are required to review. The cost is stated in the
+    module docstring: a branch composed ENTIRELY of merge commits yields no
+    identity, and self-review exclusion stays unavailable on it — the
+    pre-existing state, not a regression.
+
+    ALL non-merge commit authors are returned, not just the latest content
+    commit's. A branch handed between two personas has two authors, and both
+    must be excluded; taking only the latest would let the earlier one
+    self-approve. Over-exclusion is the safe direction here, matching the
+    `branch_author_initial` reasoning in `check_comment_reviews`'s docstring.
+
+    NO ROSTER FILTER, deliberately. A derived identity that matches no persona
+    (a bot, `GitHub`, a stranger) simply matches no `Requestor` either, so it is
+    inert — and roster-filtering here would be a second place for the roster to
+    be wrong. Bots stay neutral because nothing named `dependabot[bot]` can
+    equal a roster name, not because they are special-cased.
+
+    Deduplicated on `(lastname, initial)` — the comparison key — with the first
+    display form seen kept for the diagnostic. Order is stable (first
+    appearance) so the block message is deterministic.
+    """
+    identities: dict[tuple[str, str], CommitAuthorIdentity] = {}
+    for commit in commits:
+        if _is_merge_commit(commit):
+            continue
+        author = (commit.get("commit", {}) or {}).get("author", {}) or {}
+        raw_name = str(author.get("name") or "")
+        raw_alias = persona_alias_from_email(str(author.get("email") or ""))
+        for raw in (raw_name, raw_alias):
+            identity = _identity_from_name(raw)
+            if identity is None:
+                continue
+            identities.setdefault((identity.lastname.lower(), identity.initial), identity)
+    return tuple(identities.values())
+
+
+def is_self_review(
+    requestor: str,
+    branch_author_lastname: str,
+    branch_author_initial: str,
+    commit_authors: tuple[CommitAuthorIdentity, ...],
+) -> bool:
+    """True when `requestor` is an author of this branch, by ref OR by commit.
+
+    ONE predicate, so the two ways of naming a branch author cannot disagree.
+    Both arms delegate to `charter_trailer.is_branch_author` — the single
+    person-comparison the org has (#1172, the Ferreira/Ferreira collision).
+    There is deliberately no surname comparison written here; adding one would
+    re-create exactly the defect that helper exists to prevent.
+
+    The ref arm is checked first and is unchanged: on a `{Initial}.{Lastname}`
+    branch the prefix is the author the human declared, and `commit_authors` is
+    empty there by construction (see `resolve_review_verdicts`).
+    """
+    if is_branch_author(requestor, branch_author_lastname, branch_author_initial):
+        return True
+    return any(
+        is_branch_author(requestor, identity.lastname, identity.initial)
+        for identity in commit_authors
+    )
 
 
 def extract_branch_author_lastname(head_ref: str) -> str | None:
@@ -767,14 +1019,21 @@ def extract_branch_author_lastname(head_ref: str) -> str | None:
 COMMENT_SCAN_NOT_RUN = "not-run"
 COMMENT_SCAN_AUTHOR_EXCLUDED = "author-excluded"
 COMMENT_SCAN_NO_BRANCH_AUTHOR = "no-branch-author"
+# The ref named no persona but the PR's COMMITS did (#1210) — self-review
+# exclusion IS active, keyed on commit identity rather than on the ref prefix.
+# A distinct value from AUTHOR_EXCLUDED because the two are derived from
+# different evidence and an operator reading a block message needs to know
+# which: the ref prefix is a human declaration, the commit author is a
+# measurement, and only the latter can be defeated by a squash (#1177).
+COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED = "commit-author-excluded"
 
 
 def comment_scan_scope(head_ref: str) -> str:
-    """Return which self-review-exclusion mode the comment verdict scan runs in.
+    """Return which self-review-exclusion mode the HEAD REF alone selects.
 
     The head ref's ONLY role in the comment scan is naming the branch author for
-    the self-review exclusion, so there are exactly two modes and **no third
-    "don't scan" mode**:
+    the self-review exclusion, so there are exactly two ref-derived modes and
+    **no third "don't scan" mode**:
 
       - `COMMENT_SCAN_AUTHOR_EXCLUDED` — the ref carries the charter
         `{Initial}.{Lastname}[-/]…` prefix, so the branch author is identifiable
@@ -785,6 +1044,11 @@ def comment_scan_scope(head_ref: str) -> str:
         still runs, under the `""` sentinel the wave-merge path has used since
         main#294, which `charter_trailer.is_branch_author` reads as "nobody is
         the branch author".
+
+    This function stays a pure function OF THE REF. `refine_comment_scan_scope`
+    applies the second, commit-derived discriminator (#1210) on top of its
+    answer — keeping them separate is what lets the ref classification remain
+    total and testable without any commit data.
 
     This function is TOTAL: it returns a scanning mode for every possible head
     ref, including `""`. That totality IS the #1206 fix — the pre-fix resolver
@@ -805,6 +1069,34 @@ def comment_scan_scope(head_ref: str) -> str:
         if extract_branch_author_lastname(head_ref)
         else COMMENT_SCAN_NO_BRANCH_AUTHOR
     )
+
+
+def refine_comment_scan_scope(
+    ref_scope: str,
+    commit_authors: tuple[CommitAuthorIdentity, ...],
+) -> str:
+    """Upgrade a ref-derived scan scope with what the PR's COMMITS said (#1210).
+
+    Exactly ONE transition: `NO_BRANCH_AUTHOR` → `COMMIT_AUTHOR_EXCLUDED`, and
+    only when at least one identity was derived. Everything else is returned
+    untouched, which is the whole safety argument for this function:
+
+      - `AUTHOR_EXCLUDED` is never downgraded — a ref that names a persona keeps
+        its exclusion no matter what the commits say.
+      - `NOT_RUN` is never upgraded — a scan that did not happen cannot acquire
+        a mode. `resolve_review_verdicts` hard-blocks on it upstream, and
+        silently relabelling it here would launder that block into a result.
+      - `NO_BRANCH_AUTHOR` with no derived identity stays as it was, so the
+        honest "exclusion was not available" reporting survives for genuine bot
+        branches and for commit data that named nobody.
+
+    The mode is a REPORT, not a decision: the exclusion itself is applied by
+    `is_self_review` from the same `commit_authors` tuple. They cannot drift
+    because both read that one value.
+    """
+    if ref_scope == COMMENT_SCAN_NO_BRANCH_AUTHOR and commit_authors:
+        return COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED
+    return ref_scope
 
 
 PROJECT_NUMBER = 2
@@ -968,6 +1260,7 @@ def check_comment_reviews(
     *,
     repo: str | None = None,
     content_ts: datetime | None,
+    commit_author_identities: tuple[CommitAuthorIdentity, ...],
     branch_author_initial: str = "",
 ) -> CommentReviewResult:
     """Check PR comments for charter-format review comments from different authors.
@@ -1007,6 +1300,22 @@ def check_comment_reviews(
     (a same-surname colleague is mistaken for the author, the reviewer count
     drops, the merge blocks). That is the fail-CLOSED direction, so unlike the
     `content_ts` case below an omission cannot silently admit a merge.
+
+    `commit_author_identities` (#1210) is the branch author derived from the
+    PR's COMMITS — the second half of the self-review exclusion, and the only
+    half available on a ref that carries no `{Initial}.{Lastname}` prefix. Any
+    Requestor matching one of them is the branch author and is excluded, exactly
+    as a ref-prefix match is (`is_self_review`).
+
+    It is a REQUIRED keyword-only argument for the same reason `content_ts` is
+    (#1050), and the reason is the FAIL DIRECTION, not taste: omitting it drops
+    exclusions, which ADDS reviewers and moves the gate toward passing — the
+    silent fail-open shape of #1046. `()` remains a legitimate VALUE meaning "no
+    commit-derived author" (a bot branch, a merge-only branch, unusable commit
+    data), and it is what `resolve_review_verdicts` passes on every ref that
+    already names a persona. Contrast `branch_author_initial` below, which keeps
+    a default precisely because omitting THAT one over-excludes and therefore
+    fails closed.
 
     `content_ts` is a REQUIRED keyword-only argument (#1050) — it must be
     passed explicitly on every call, though `None` remains a legitimate
@@ -1107,7 +1416,20 @@ def check_comment_reviews(
                 # first-initial + lastname — the full discriminator the branch
                 # prefix carries — and still excludes a real self-review, whose
                 # initial and surname both match.
-                if not is_branch_author(requestor, branch_author_lastname, branch_author_initial):
+                #
+                # #1210: the branch author is asked for from BOTH the ref prefix
+                # and the PR's commit authors, because on a ref without the
+                # prefix the first source is silent and the author's own verdict
+                # used to walk straight into `latest_verdict`. This is the ONLY
+                # place the exclusion is applied, and it can only ever REMOVE a
+                # reviewer — so no input to it can make the gate pass something
+                # it blocked before.
+                if not is_self_review(
+                    requestor,
+                    branch_author_lastname,
+                    branch_author_initial,
+                    commit_author_identities,
+                ):
                     latest_verdict[requestor.lower()] = ror_value
 
             # TechDebt attestation is required on every verdict
@@ -1320,6 +1642,11 @@ def load_charter_enforcer_names(repo: str | None = None) -> set[str]:
 #     `First.Last` tag) — the error monitor, which posts real comments on real
 #     PRs, so admitting it as a Requestor is the live risk, not a hypothetical.
 #   - `Steven French` → `parametrization@gmail.com` (bare principal, no `+`tag).
+#
+# ALSO used by `persona_alias_from_email` (#1210) to decide which COMMIT author
+# address names a persona. Both call sites need the identical answer on the
+# identical addresses — notably the bare principal, which #1177 makes a squash
+# produce — so they share this one matcher rather than each carrying a regex.
 _PERSONA_ALIAS_RE = re.compile(r"^[^\s@+]+\+[^\s@+]+\.[^\s@+]+@[^\s@]+\.[^\s@]+$")
 
 
@@ -1556,6 +1883,14 @@ class ReviewVerdicts:
     # NOT_RUN so a construction that omits it renders as not-measured rather
     # than falsely claiming a measurement.
     comment_scan: str = COMMENT_SCAN_NOT_RUN
+    # The branch author(s) derived from the PR's COMMITS (#1210), or `()` when
+    # the ref already named a persona / nothing was derivable. Carried on the
+    # shared pipeline output so BOTH callers can NAME who the self-review
+    # exclusion was keyed on — a reviewer whose verdict vanished because the
+    # gate decided they authored the branch must be able to see that decision,
+    # or the #950 "operator concludes the hook is broken" failure repeats with a
+    # new cause. Defaulted so every existing construction keeps working.
+    commit_author_identities: tuple[CommitAuthorIdentity, ...] = ()
 
     @property
     def comment_scan_ran(self) -> bool:
@@ -1578,11 +1913,14 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
     previously re-assembled independently by `check()` and
     `pr_review_state.compute_review_state`:
 
-      1. `get_latest_content_commit` → T_content (`content_ts`/`content_sha`, #950).
+      1. `fetch_pr_commits` ONCE, then `latest_content_commit` → T_content
+         (`content_ts`/`content_sha`, #950) and `commit_author_identities` →
+         the commit-derived branch author (#1210), off that same response.
       2. `partition_formal_reviewers` + `check_comment_reviews`, both bound to
          T_content. The comment scan runs for EVERY head ref (#1206); the ref
-         selects only which self-review exclusion applies (`comment_scan_scope`),
-         and the chosen mode is reported on `ReviewVerdicts.comment_scan`.
+         and the commit authors select only which self-review exclusion applies
+         (`comment_scan_scope` + `refine_comment_scan_scope`), and the chosen
+         mode is reported on `ReviewVerdicts.comment_scan`.
       3. `_load_roster_names` and non-roster Requestor filtering (#498).
       4. Union formal + roster-filtered comment reviewers into the distinct
          reviewer set, plus the wave-bootstrap single-reviewer exception (#228).
@@ -1593,8 +1931,12 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
     before doing anything else.
 
     Raises:
-        CommitFetchError: T_content could not be established (#950) —
-            propagated verbatim from `get_latest_content_commit`.
+        CommitFetchError: the commit list could not be fetched, or T_content
+            could not be established from it (#950) — propagated verbatim from
+            `fetch_pr_commits` / `latest_content_commit`. Note this is also the
+            degradation path for #1210: no commit data means no commit-derived
+            branch author, and the gate BLOCKS rather than proceeding without
+            the discriminator.
         CommentScanUndeterminedError: the comment thread could not be
             completely scanned (#981), or the scan was never dispatched at all
             (#1206 defense-in-depth) — carries `.reason`.
@@ -1614,7 +1956,13 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
     number = pr_data["number"]
     labels = pr_data["labels"]
 
-    latest_content = get_latest_content_commit(number, repo=repo)
+    # ONE commit fetch, TWO readings of it (#1210): T_content for the staleness
+    # binding, and the branch author's identity for the self-review exclusion.
+    # A commit-fetch failure raises `CommitFetchError` here and hard-blocks —
+    # which is also the answer to "what if commit identity is unavailable?": the
+    # gate never proceeds with an unknown branch author, it stops.
+    commits = fetch_pr_commits(number, repo=repo)
+    latest_content = latest_content_commit(commits)
     content_ts = latest_content[1] if latest_content else None
     content_sha = latest_content[0] if latest_content else ""
 
@@ -1656,15 +2004,35 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
         )
 
     branch_author_lastname = extract_branch_author_lastname(head_ref)
+
+    # Commit-derived authors are consulted ONLY where the ref is silent (#1210).
+    #
+    # Scope, and why it is this narrow. On a `{Initial}.{Lastname}` ref the
+    # prefix is the author the human DECLARED, exclusion already works, and
+    # 86.7% of the org's PRs (568/655 measured across 7 repos) take that path —
+    # so adding a second exclusion source there would change the majority path
+    # to fix nothing, while newly discarding the verdict of anyone who happened
+    # to push a fixup commit to someone else's branch. Where the ref names
+    # nobody, `commit_author_identities` is the ONLY discriminator available and
+    # `()` was the standing answer: for `deployments/**` since main#294, and for
+    # every other non-charter ref since #1207 widened the sentinel.
+    commit_authors: tuple[CommitAuthorIdentity, ...] = (
+        () if branch_author_lastname else commit_author_identities(commits)
+    )
+    scan_scope = refine_comment_scan_scope(scan_scope, commit_authors)
+
     comment_result = check_comment_reviews(
         number,
-        # The `""` sentinel means "no identifiable branch author, so no reviewer
-        # is the author" (`charter_trailer.is_branch_author`, main#294). Losing
-        # author-exclusion on a bot branch is correct: a bot is never a roster
-        # persona, so it could never have been in the reviewer set anyway.
+        # The `""` sentinel means "no identifiable branch author from the REF"
+        # (`charter_trailer.is_branch_author`, main#294). It no longer means no
+        # exclusion at all: `commit_author_identities` carries whatever the
+        # commits said. Where BOTH are empty the pre-#1210 behaviour stands —
+        # correctly for a bot branch, since a bot is never a roster persona and
+        # could not have been in the reviewer set anyway.
         branch_author_lastname or "",
         repo=repo,
         content_ts=content_ts,
+        commit_author_identities=commit_authors,
         branch_author_initial=branch_author_first_initial(head_ref),
     )
 
@@ -1700,6 +2068,7 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
         tech_debt_unparseable=list(comment_result.tech_debt_unparseable),
         wave_bootstrap_exception=wave_bootstrap_exception,
         comment_scan=scan_scope,
+        commit_author_identities=commit_authors,
     )
 
 
@@ -2021,14 +2390,31 @@ def check(input_data: dict) -> dict | None:
                 "is a hook defect, not a review shortfall — report it rather than asking "
                 "reviewers to re-approve.\n\n"
             )
+        elif verdicts.comment_scan == COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED:
+            # Name the derived authors. A reviewer whose verdict was dropped
+            # because the gate concluded they wrote the branch must be able to
+            # SEE that conclusion and check it — an unexplained subtraction is
+            # the #950 "operator concludes the hook is broken" failure with a
+            # new cause.
+            derived = ", ".join(i.display for i in verdicts.commit_author_identities) or "(none)"
+            scan_diagnostic = (
+                f"NOTE: head ref `{verdicts.head_ref or '(unknown)'}` carries no "
+                "`{Initial}.{Lastname}` branch-author prefix, so the branch author was "
+                f"derived from COMMIT IDENTITY instead: {derived}. Verdicts from those "
+                "personas were excluded as self-reviews; every other roster-valid Approved "
+                "Requestor counts. The scan DID run; the count below is a real measurement "
+                "(#1210).\n\n"
+            )
         elif verdicts.comment_scan == COMMENT_SCAN_NO_BRANCH_AUTHOR:
             scan_diagnostic = (
                 f"NOTE: head ref `{verdicts.head_ref or '(unknown)'}` carries no "
                 "`{Initial}.{Lastname}` branch-author prefix (a bot branch, a wave-merge "
-                "branch, or a branch off the charter naming convention), so the comment "
-                "verdict scan ran WITHOUT self-review exclusion — every roster-valid "
-                "Approved Requestor counts. The scan DID run; the count below is a real "
-                "measurement (#1206).\n\n"
+                "branch, or a branch off the charter naming convention), AND the PR's "
+                "commits named no persona either (a bot author, a merge-only branch, or a "
+                "squashed commit re-authored to the bare principal — #1177/#1210), so the "
+                "comment verdict scan ran WITHOUT self-review exclusion — every "
+                "roster-valid Approved Requestor counts. The scan DID run; the count below "
+                "is a real measurement (#1206).\n\n"
             )
 
         result = {

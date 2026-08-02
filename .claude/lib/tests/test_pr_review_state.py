@@ -39,7 +39,29 @@ import pr_review_state as prs  # noqa: E402
 _NOW = datetime(2026, 7, 20, 12, 0, 0, tzinfo=timezone.utc)
 _BEFORE = _NOW - timedelta(hours=6)
 _AFTER = _NOW + timedelta(hours=1)
-_CONTENT_COMMIT = ("ac8bcfa", _NOW)
+
+
+def _api_commit(
+    sha: str, when: datetime, parents: int = 1, name: str = "", email: str = ""
+) -> dict:
+    """Build a `pulls/{n}/commits` payload entry (#1210).
+
+    The driver's fixtures now stub the FETCH (`fetch_pr_commits`) rather than
+    the analysis, so the real `latest_content_commit` and
+    `commit_author_identities` run over this — which is what keeps these tests
+    binding to the gate's actual behaviour instead of to a stubbed answer.
+    """
+    return {
+        "sha": sha,
+        "parents": [{"sha": f"p{i}"} for i in range(parents)],
+        "commit": {
+            "committer": {"date": when.isoformat().replace("+00:00", "Z")},
+            "author": {"name": name, "email": email},
+        },
+    }
+
+
+_CONTENT_COMMITS = [_api_commit("ac8bcfa", _NOW)]
 
 
 def _comment_result(
@@ -89,11 +111,15 @@ class ComputeReviewStateTests(unittest.TestCase):
         comment_result,
         roster_names,
         single_reviewer_exception=False,
-        latest_content=_CONTENT_COMMIT,
+        commits=None,
     ) -> prs.ReviewState:
         with (
             mock.patch.object(prs.gate, "get_pr_data", return_value=pr_data),
-            mock.patch.object(prs.gate, "get_latest_content_commit", return_value=latest_content),
+            mock.patch.object(
+                prs.gate,
+                "fetch_pr_commits",
+                return_value=_CONTENT_COMMITS if commits is None else commits,
+            ),
             mock.patch.object(prs.gate, "check_comment_reviews", return_value=comment_result),
             mock.patch.object(prs.gate, "_load_roster_names", return_value=roster_names),
             mock.patch.object(
@@ -198,7 +224,14 @@ class ComputeReviewStateTests(unittest.TestCase):
         """
         captured = {}
 
-        def fake_check(number, lastname, repo=None, content_ts=None, branch_author_initial=""):
+        def fake_check(
+            number,
+            lastname,
+            repo=None,
+            content_ts=None,
+            commit_author_identities=(),
+            branch_author_initial="",
+        ):
             captured["number"] = number
             captured["lastname"] = lastname
             captured["initial"] = branch_author_initial
@@ -210,7 +243,7 @@ class ComputeReviewStateTests(unittest.TestCase):
                 "get_pr_data",
                 return_value=_pr_data(head_ref="S.Ferreira/0707-pr-review-state"),
             ),
-            mock.patch.object(prs.gate, "get_latest_content_commit", return_value=_CONTENT_COMMIT),
+            mock.patch.object(prs.gate, "fetch_pr_commits", return_value=_CONTENT_COMMITS),
             mock.patch.object(prs.gate, "check_comment_reviews", side_effect=fake_check),
             mock.patch.object(prs.gate, "_load_roster_names", return_value=set()),
             mock.patch.object(prs.gate, "is_single_reviewer_exception", return_value=False),
@@ -331,7 +364,7 @@ def _charter_comment(requestor: str, verdict: str, created_at: datetime) -> dict
 class ContentStalenessTests(unittest.TestCase):
     REPO = "noorinalabs/noorinalabs-main"
 
-    def _compute_with_real_comment_check(self, comments, *, roster, latest_content, reviews=()):
+    def _compute_with_real_comment_check(self, comments, *, roster, commits, reviews=()):
         """Drive compute_review_state through the REAL check_comment_reviews.
 
         Only the network boundary (`gh api`) is faked, so `content_ts` actually
@@ -353,7 +386,7 @@ class ContentStalenessTests(unittest.TestCase):
                 # reason (caught by the anti-vacuity guard while writing these).
                 return_value=_pr_data(head_ref="W.Mwangi/1040-example", reviews=reviews),
             ),
-            mock.patch.object(prs.gate, "get_latest_content_commit", return_value=latest_content),
+            mock.patch.object(prs.gate, "fetch_pr_commits", return_value=commits),
             mock.patch.object(prs.gate.subprocess, "run", side_effect=fake_run),
             mock.patch.object(prs.gate, "_load_roster_names", return_value=roster),
             mock.patch.object(prs.gate, "is_single_reviewer_exception", return_value=False),
@@ -373,7 +406,7 @@ class ContentStalenessTests(unittest.TestCase):
                 _charter_comment("Nino Kavtaradze", "Approved", _AFTER),
             ],
             roster={"lucas ferreira", "nino kavtaradze"},
-            latest_content=_CONTENT_COMMIT,
+            commits=_CONTENT_COMMITS,
         )
         self.assertEqual(state.distinct_reviewer_count, 2)
         self.assertEqual(state.stale_verdicts, [])
@@ -390,7 +423,7 @@ class ContentStalenessTests(unittest.TestCase):
                 _charter_comment("Nino Kavtaradze", "Approved", _BEFORE),
             ],
             roster={"lucas ferreira", "nino kavtaradze"},
-            latest_content=_CONTENT_COMMIT,
+            commits=_CONTENT_COMMITS,
         )
         self.assertEqual(state.distinct_reviewer_count, 0)
         self.assertEqual(state.comment_reviewers, [])
@@ -407,7 +440,7 @@ class ContentStalenessTests(unittest.TestCase):
                 _charter_comment("Nino Kavtaradze", "Approved", _AFTER),
             ],
             roster={"lucas ferreira", "nino kavtaradze"},
-            latest_content=_CONTENT_COMMIT,
+            commits=_CONTENT_COMMITS,
         )
         self.assertEqual(state.comment_reviewers, ["nino kavtaradze"])
         self.assertEqual(state.distinct_reviewer_count, 1)
@@ -418,7 +451,14 @@ class ContentStalenessTests(unittest.TestCase):
         """Direct kill-shot for the #1046 mutation on the `:135` call site."""
         captured = {}
 
-        def fake_check(number, lastname, repo=None, content_ts=None, branch_author_initial=""):
+        def fake_check(
+            number,
+            lastname,
+            repo=None,
+            content_ts=None,
+            commit_author_identities=(),
+            branch_author_initial="",
+        ):
             captured["content_ts"] = content_ts
             return _comment_result(reviewers=())
 
@@ -426,7 +466,7 @@ class ContentStalenessTests(unittest.TestCase):
             mock.patch.object(
                 prs.gate, "get_pr_data", return_value=_pr_data(head_ref="L.Ferreira/1040-x")
             ),
-            mock.patch.object(prs.gate, "get_latest_content_commit", return_value=_CONTENT_COMMIT),
+            mock.patch.object(prs.gate, "fetch_pr_commits", return_value=_CONTENT_COMMITS),
             mock.patch.object(prs.gate, "check_comment_reviews", side_effect=fake_check),
             mock.patch.object(prs.gate, "_load_roster_names", return_value=set()),
             mock.patch.object(prs.gate, "is_single_reviewer_exception", return_value=False),
@@ -452,7 +492,14 @@ class ContentStalenessTests(unittest.TestCase):
         """
         captured = {}
 
-        def fake_check(number, lastname, repo=None, content_ts=None, branch_author_initial=""):
+        def fake_check(
+            number,
+            lastname,
+            repo=None,
+            content_ts=None,
+            commit_author_identities=(),
+            branch_author_initial="",
+        ):
             captured["content_ts"] = content_ts
             captured["lastname"] = lastname
             captured["initial"] = branch_author_initial
@@ -464,7 +511,7 @@ class ContentStalenessTests(unittest.TestCase):
                 "get_pr_data",
                 return_value=_pr_data(head_ref="deployments/phase-9/wave-26"),
             ),
-            mock.patch.object(prs.gate, "get_latest_content_commit", return_value=_CONTENT_COMMIT),
+            mock.patch.object(prs.gate, "fetch_pr_commits", return_value=_CONTENT_COMMITS),
             mock.patch.object(prs.gate, "check_comment_reviews", side_effect=fake_check),
             mock.patch.object(prs.gate, "_load_roster_names", return_value=set()),
             mock.patch.object(prs.gate, "is_single_reviewer_exception", return_value=False),
@@ -484,7 +531,7 @@ class ContentStalenessTests(unittest.TestCase):
         state = self._compute_with_real_comment_check(
             [],
             roster=set(),
-            latest_content=_CONTENT_COMMIT,
+            commits=_CONTENT_COMMITS,
             reviews=[
                 {
                     "author": {"login": "stale-reviewer"},
@@ -506,14 +553,14 @@ class ContentStalenessTests(unittest.TestCase):
         self.assertFalse(state.passes())
 
     def test_no_non_merge_commits_means_nothing_is_stale(self):
-        """`get_latest_content_commit` returning None = no content binding."""
+        """An empty commit list = no non-merge commits = no content binding."""
         state = self._compute_with_real_comment_check(
             [
                 _charter_comment("Lucas Ferreira", "Approved", _BEFORE),
                 _charter_comment("Nino Kavtaradze", "Approved", _BEFORE),
             ],
             roster={"lucas ferreira", "nino kavtaradze"},
-            latest_content=None,
+            commits=[],
         )
         self.assertEqual(state.distinct_reviewer_count, 2)
         self.assertEqual(state.stale_verdicts, [])
@@ -537,7 +584,7 @@ class ContentStalenessTests(unittest.TestCase):
             mock.patch.object(prs.gate, "get_pr_data", return_value=_pr_data()),
             mock.patch.object(
                 prs.gate,
-                "get_latest_content_commit",
+                "fetch_pr_commits",
                 side_effect=prs.gate.CommitFetchError("boom"),
             ),
             mock.patch.object(prs.gate, "check_comment_reviews", return_value=_comment_result()),
@@ -556,7 +603,7 @@ class ContentStalenessTests(unittest.TestCase):
         state = self._compute_with_real_comment_check(
             [_charter_comment("Lucas Ferreira", "Approved", _BEFORE)],
             roster={"lucas ferreira"},
-            latest_content=_CONTENT_COMMIT,
+            commits=_CONTENT_COMMITS,
         )
 
         text = prs._render_text(state)
@@ -659,7 +706,7 @@ class UndeterminableRepoAndScanTests(unittest.TestCase):
         }
         with (
             mock.patch.object(prs.gate, "get_pr_data", return_value=pr_data),
-            mock.patch.object(prs.gate, "get_latest_content_commit", return_value=None),
+            mock.patch.object(prs.gate, "fetch_pr_commits", return_value=[]),
             mock.patch.object(prs.gate, "check_comment_reviews", return_value=undetermined),
             mock.patch.object(prs.gate, "_load_roster_names", return_value={"aino virtanen"}),
         ):
@@ -809,7 +856,7 @@ class CommentScanReportedInTheReportTests(unittest.TestCase):
         with (
             mock.patch.object(prs.gate, "get_pr_data", return_value=pr_data),
             mock.patch.object(prs.gate.subprocess, "run", side_effect=fake_run),
-            mock.patch.object(prs.gate, "get_latest_content_commit", return_value=None),
+            mock.patch.object(prs.gate, "fetch_pr_commits", return_value=[]),
             mock.patch.object(prs.gate, "_load_roster_names", return_value={"lucas ferreira"}),
         ):
             state = prs.compute_review_state("691", repo="noorinalabs/noorinalabs-deploy")
@@ -820,6 +867,115 @@ class CommentScanReportedInTheReportTests(unittest.TestCase):
         # #1206 defect (this was `[]` / 0 before the fix).
         self.assertEqual(state.comment_reviewers, ["lucas ferreira"])
         self.assertEqual(state.distinct_reviewer_count, 1)
+
+
+class CommitAuthorScanModeReportTests(unittest.TestCase):
+    """#1210 at the report layer: which author source the exclusion used.
+
+    The driver replays the gate, so if it could not render the new mode an
+    operator running `pr_review_state` ahead of a merge would see a reviewer
+    count they could not reconcile with the comment thread.
+    """
+
+    @staticmethod
+    def _state(comment_scan, **overrides):
+        kwargs = dict(
+            pr_number="1210",
+            repo="noorinalabs/noorinalabs-main",
+            head_ref="feature/hand-made",
+            branch_author_lastname=None,
+            formal_reviewers=[],
+            comment_reviewers=["aino virtanen"],
+            non_roster_requestors=[],
+            distinct_reviewer_count=1,
+            wave_bootstrap_exception=False,
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=[],
+            content_sha="837c272a",
+            comment_scan=comment_scan,
+        )
+        kwargs.update(overrides)
+        return prs.ReviewState(**kwargs)
+
+    def test_commit_author_mode_names_the_derived_author(self):
+        text = prs._render_text(
+            self._state(
+                prs.gate.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED,
+                commit_authors=["Nino Kavtaradze"],
+            )
+        )
+        self.assertIn("COMMIT IDENTITY", text)
+        self.assertIn("Nino Kavtaradze", text)
+        self.assertIn("self-review exclusion active", text)
+
+    def test_the_two_no_ref_author_modes_read_differently(self):
+        """Exclusion-applied vs exclusion-unavailable are opposite facts about
+        whether the count below them can be trusted."""
+        applied = prs._render_text(
+            self._state(
+                prs.gate.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED,
+                commit_authors=["Nino Kavtaradze"],
+            )
+        )
+        unavailable = prs._render_text(self._state(prs.gate.COMMENT_SCAN_NO_BRANCH_AUTHOR))
+        self.assertNotEqual(applied, unavailable)
+        self.assertIn("COMMIT IDENTITY", applied)
+        self.assertNotIn("COMMIT IDENTITY", unavailable)
+        self.assertIn("no self-review exclusion was applied", unavailable)
+        self.assertNotIn("no self-review exclusion was applied", applied)
+
+    def test_json_carries_the_derived_authors(self):
+        payload = json.loads(
+            prs._render_json(
+                self._state(
+                    prs.gate.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED,
+                    commit_authors=["Nino Kavtaradze"],
+                )
+            )
+        )
+        self.assertEqual(payload["comment_scan"], prs.gate.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED)
+        self.assertEqual(payload["commit_authors"], ["Nino Kavtaradze"])
+
+    def test_compute_review_state_propagates_the_commit_derived_author(self):
+        """Wiring: the field must be populated in production, not just settable.
+
+        Driven through the REAL `resolve_review_verdicts`, on a non-charter ref
+        whose commits name the very persona who posted one of the verdicts —
+        the #1210 case. The self-approval must be subtracted AND named.
+        """
+        pr_data = _pr_data(head_ref="feature/hand-made")
+        comments = [
+            _charter_comment("Nino Kavtaradze", "Approved", _AFTER),
+            _charter_comment("Lucas Ferreira", "Approved", _AFTER),
+        ]
+
+        def fake_run(args, capture_output, text, timeout):  # noqa: ARG001
+            result = mock.MagicMock()
+            result.returncode = 0
+            result.stdout = json.dumps(comments)
+            return result
+
+        with (
+            mock.patch.object(prs.gate, "get_pr_data", return_value=pr_data),
+            mock.patch.object(prs.gate.subprocess, "run", side_effect=fake_run),
+            mock.patch.object(
+                prs.gate,
+                "fetch_pr_commits",
+                return_value=[_api_commit("c0", _NOW, name="Nino Kavtaradze")],
+            ),
+            mock.patch.object(
+                prs.gate,
+                "_load_roster_names",
+                return_value={"lucas ferreira", "nino kavtaradze"},
+            ),
+        ):
+            state = prs.compute_review_state("1210", repo="noorinalabs/noorinalabs-main")
+
+        self.assertEqual(state.comment_scan, prs.gate.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED)
+        self.assertEqual(state.commit_authors, ["Nino Kavtaradze"])
+        self.assertEqual(state.comment_reviewers, ["lucas ferreira"])
+        self.assertEqual(state.distinct_reviewer_count, 1)
+        self.assertFalse(state.passes())
 
 
 if __name__ == "__main__":
