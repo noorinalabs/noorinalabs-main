@@ -1,28 +1,34 @@
 """Regression test pinning session-start Step 0's worktree-removal blast
-radius (PR #1213 review, "also add" item 7).
+radius (PR #1213 review; owner decision 2026-08-02, round 3).
 
 `/session-start` Step 0's removal path (`.claude/skills/session-start/
-SKILL.md`) is:
+SKILL.md`) used to be:
 
     git -C "$repo" worktree remove "$wt" 2>/dev/null \\
       || git -C "$repo" worktree remove --force "$wt" 2>/dev/null \\
       || FLAGGED+=("REMOVE-FAILED  $repo :: $wt")
 
-This test does NOT change that behaviour (the review explicitly asked that
-it not be changed here) — it exists only to make the cost of a `merged`
-misclassification visible in the suite, so a future change to this fallback
-is a deliberate, reviewed decision rather than a silent regression.
+Verified end to end (round 2): plain `git worktree remove` refuses on a
+worktree with uncommitted (tracked-modified or untracked) content; the
+`--force` fallback then succeeded and permanently deleted that uncommitted
+content from disk.
 
-Verified end to end: plain `git worktree remove` refuses on a worktree with
-uncommitted (tracked-modified or untracked) content; the `--force` fallback
-then succeeds and permanently deletes that uncommitted content from disk.
-Anything actually COMMITTED on the worktree's branch is unaffected — the
-branch ref is not touched by `worktree remove` at all (with or without
-`--force`), only the *worktree checkout directory* is. So a false `merged`
-verdict from `check_worktree_merged.py` costs, at most, whatever was
-uncommitted in that worktree at the time — never a committed commit, and
-never the branch itself (still recoverable via `git checkout <branch>` or
-the reflog after the fact).
+**Round 3, owner decision: the `--force` fallback is REMOVED.** A worktree
+that does not remove cleanly is now FLAGGED for a manual decision, never
+force-removed:
+
+    if git -C "$repo" worktree remove "$wt" 2>/dev/null; then
+      echo "removed merged worktree: $wt ($_mreason)"
+    else
+      FLAGGED+=("DIRTY  $repo :: $wt (merged but remove refused ...)")
+    fi
+
+This file now pins the NEW behaviour: a dirty worktree survives entirely —
+both its uncommitted content AND (as before) its committed content/branch —
+because Step 0 simply never attempts the destructive fallback. With
+`--force` gone, the only cost of a `check_worktree_merged.py`
+misclassification is a stale worktree *directory* sitting FLAGGED until a
+human looks at it; no data of any kind (committed or not) is at risk.
 """
 
 from __future__ import annotations
@@ -80,6 +86,9 @@ class WorktreeRemovalDirtyRegressionTest(unittest.TestCase):
         self._tmp.cleanup()
 
     def test_plain_remove_refuses_on_dirty_worktree(self) -> None:
+        """Premise fact Step 0's FLAGGED path depends on: a plain
+        `git worktree remove` genuinely refuses when the worktree has
+        uncommitted/untracked content in the way."""
         _git(
             ["worktree", "add", str(self.worktree_path), "-b", "feat-dirty"],
             self.repo,
@@ -97,42 +106,40 @@ class WorktreeRemovalDirtyRegressionTest(unittest.TestCase):
         self.assertTrue(self.worktree_path.exists())
         self.assertTrue((self.worktree_path / "PRECIOUS-uncommitted.txt").exists())
 
-    def test_force_fallback_destroys_uncommitted_content_but_preserves_branch(self) -> None:
-        """This is the exact two-step sequence Step 0 runs: plain remove,
-        then `--force` on refusal. Committed content (the branch, its
-        commits) survives; uncommitted content does not."""
+    def test_no_force_means_all_content_survives_a_refused_remove(self) -> None:
+        """Step 0 (post-owner-decision, round 3) no longer calls
+        `git worktree remove --force` at all -- a worktree that cannot be
+        removed cleanly is FLAGGED and left completely untouched. Pin that
+        "left untouched" really does mean everything survives: not just the
+        branch and its commits (which `worktree remove` never threatened
+        anyway), but now the uncommitted content too, since the destructive
+        fallback that used to reach it is simply never invoked."""
         _git(
             ["worktree", "add", str(self.worktree_path), "-b", "feat-dirty"],
             self.repo,
         )
-        # Committed content on the branch, to prove it survives.
+        # Committed content on the branch.
         (self.worktree_path / "landed.txt").write_text("this IS committed\n")
         _git(["add", "landed.txt"], self.worktree_path)
         _git(["commit", "-m", "a real commit on feat-dirty"], self.worktree_path)
         branch_tip = _git(["rev-parse", "HEAD"], self.worktree_path).stdout.strip()
 
-        # Uncommitted content, to prove it does NOT survive a misclassification.
+        # Uncommitted content -- what a misclassification used to cost.
         precious = self.worktree_path / "PRECIOUS-uncommitted.txt"
-        precious.write_text("never committed — this is what a false `merged` costs\n")
+        precious.write_text("never committed -- must survive a refused remove\n")
 
-        plain = _git_ok(["worktree", "remove", str(self.worktree_path)], self.repo)
-        self.assertNotEqual(plain.returncode, 0)
+        # Step 0's ENTIRE removal attempt, post-round-3: a single plain
+        # `git worktree remove`, nothing else, no --force fallback.
+        result = _git_ok(["worktree", "remove", str(self.worktree_path)], self.repo)
+        self.assertNotEqual(result.returncode, 0, "premise: plain remove refuses (dirty)")
 
-        forced = _git_ok(["worktree", "remove", "--force", str(self.worktree_path)], self.repo)
-        self.assertEqual(
-            forced.returncode,
-            0,
-            f"premise: --force must succeed where plain remove refused: {forced.stderr}",
-        )
+        # Because there is no second, forcing attempt, EVERYTHING survives:
+        # the worktree directory, the uncommitted file, and (as always) the
+        # branch and its commit.
+        self.assertTrue(self.worktree_path.exists())
+        self.assertTrue(precious.exists())
+        self.assertEqual(precious.read_text(), "never committed -- must survive a refused remove\n")
 
-        # The uncommitted file is gone — this is the actual blast radius of a
-        # false `merged` verdict feeding this removal path.
-        self.assertFalse(precious.exists())
-        self.assertFalse(self.worktree_path.exists())
-
-        # But the branch — and every commit on it, including the one made
-        # inside the now-deleted worktree — is untouched. `worktree remove`
-        # (with or without --force) never deletes the branch ref.
         branch_check = _git_ok(["rev-parse", "--verify", "feat-dirty"], self.repo)
         self.assertEqual(branch_check.returncode, 0)
         self.assertEqual(branch_check.stdout.strip(), branch_tip)
