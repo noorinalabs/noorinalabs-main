@@ -38,6 +38,25 @@ not buried in a memory file (per `feedback_enforcement_hierarchy`):
 Contributor-facing form with the same list: `docs/TOOLCHAIN.md` § Shell
 environment.
 
+### GitHub API quota: REST fallback on GraphQL exhaustion
+
+`gh` splits its hourly limit across two INDEPENDENT quotas — `core` (REST,
+5,000/hr) and `graphql` (5,000/hr). Most of `gh`'s ergonomic surfaces
+(`issue view/list/create`, `pr view/list/checks/comment`, `project
+item-add/item-list`) are GraphQL-backed and fail once that quota is
+exhausted, even while REST sits nearly untouched. The failure is a **silent
+zero** (a bare `GraphQL: API rate limit already exceeded` string, easily
+masked by a `2>/dev/null`), not a raised error — `feedback_gh_cli_gotchas`
+§12 is the canonical detail.
+
+When GraphQL quota is low: check it for free with `gh_quota.py check`
+(never consumes quota); use `gh_rest.py`'s REST equivalents instead of
+retrying the GraphQL-backed form. `gh_quota_gate.py` (PreToolUse hook)
+enforces this automatically — blocks a matched GraphQL-shaped call with the
+concrete rewrite, or advises (never blocks) when no rewrite is derivable
+(a raw `gh api graphql` call, or an unmapped mutation). Contributor-facing
+form: `docs/TOOLCHAIN.md` § GitHub API quota.
+
 ### Structural search & replace
 
 Prefer a **structural (AST) tool over regex/line-scan** for anything that
@@ -241,6 +260,7 @@ Existing 3-digit ADRs are not merge-blockers; renames are mechanical and reversi
 | `validate_wave_label_evidence.py` | PreToolUse (Bash) | Verify cited paths at origin before applying p{N}-wave-{M} labels |
 | `validate_branch_freshness.py` | PreToolUse (Bash) | Warn if branch is behind origin |
 | `validate_vps_host.py` | PreToolUse (Bash) | Block SSH to non-approved VPS hosts |
+| `gh_quota_gate.py` | PreToolUse (Bash) | Promotes `feedback_gh_cli_gotchas` §12 to enforcement (#1224). Cheap-filters to GraphQL-shaped `gh` invocations (`issue view/list/create`, `pr view/list/checks/comment`, `project item-add/item-list`, a raw `gh api graphql` call), THEN reads the TTL-cached `.claude/lib/gh_quota.py` sensor. BLOCKS with a concrete `.claude/lib/gh_rest.py` REST rewrite when GraphQL quota is below `NOORIN_GH_QUOTA_MIN` (default 25) — including `gh project item-add`, which DOES have a verified REST equivalent for org-owned boards (corrects the #1224 issue body's "GraphQL-only" assumption). ADVISES (allow + warning, never blocks) for a raw `gh api graphql` call or any recognized-but-unmapped project verb (`item-edit`, `field-list`, `field-create`) — no derivable rewrite exists, so hard-blocking would strand the agent. Degrades to ALLOW on any quota-check failure (offline, malformed response) — never blocks on an unknown reading. Kill-switch: `NOORIN_DISABLE_GH_QUOTA_GATE=1` |
 | `warn_ghcr_image.py` | PreToolUse (Bash) | Warn before pushing GHCR images |
 | `block_gh_pr_review.py` | PreToolUse (Bash) | Block `gh pr review` (use comment-based reviews) |
 | `validate_review_comment_format.py` | PreToolUse (Bash) | Enforce review comment charter format |

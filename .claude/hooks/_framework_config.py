@@ -59,9 +59,11 @@ CONFIG_FILENAME = "framework.config.json"
 #
 # ``pre_bash`` order matters: cheap/local checks first, network-calling checks
 # last. In particular smart_grep_ontology routes a symbol-shaped rg/grep to the
-# structural ontology BEFORE the block_bare_grep backstop (#1017), and
-# block_squash_wave_merge runs LAST because it resolves a PR base via
-# ``gh pr view`` (a network call, cheap-prefiltered on ``--squash``).
+# structural ontology BEFORE the block_bare_grep backstop (#1017);
+# gh_quota_gate is cheap-prefiltered on a gh-shaped command before it ever
+# reads the (TTL-cached) quota sensor (#1224); and block_squash_wave_merge
+# runs LAST because it unconditionally resolves a PR base via ``gh pr view``
+# (a network call, cheap-prefiltered on ``--squash``).
 #
 # A supplied ``hooks.*`` list REPLACES the default (see _deep_merge: lists are
 # not merged) so a repo can disable a default hook by omitting it. The cost is
@@ -105,6 +107,7 @@ _DEFAULTS: dict[str, Any] = {
             "validate_vps_host",
             "warn_ghcr_image",
             "warn_zsh_wordsplit",
+            "gh_quota_gate",
             "block_squash_wave_merge",
         ],
         "post_bash": [
