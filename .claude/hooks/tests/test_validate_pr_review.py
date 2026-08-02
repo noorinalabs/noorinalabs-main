@@ -4744,12 +4744,61 @@ class StrictlyNonRelaxingTests(_ResolveOverFakeCommentsHarness):
         "Santiago Ferreira",
     )
 
-    def _sets(self, head_ref: str, authors: tuple[str, ...]):
+    # `CASES` above all run against the 4-name `THREAD`, so `before` lands on 3
+    # or 4 distinct reviewers in EVERY one of them — comfortably over the
+    # 2-reviewer bar. That makes them useless to
+    # `test_a_blocked_pr_never_becomes_an_allowed_one`, whose whole subject is
+    # what happens to a PR the gate was BLOCKING: with no blocking start state
+    # in the matrix, its guard body never ran and the test passed under a no-op
+    # (`feedback_fixture_makes_guard_assertion_inert` / #1203, caught in review
+    # of this very PR). These cases start from a thread SHORT of the bar, so
+    # `before` blocks and the guard actually executes.
+    #
+    # Counts below are MEASURED, not reasoned — `before -> after` total_distinct.
+    #
+    # (head_ref, commit authors, verdict thread)
+    BLOCKING_CASES = (
+        # Commit-derived exclusion fires from a blocked state: 1 -> 0.
+        ("feature/hand-made", ("Nino Kavtaradze",), ("Nino Kavtaradze",)),
+        # Nadia's suggested case — the ref names nobody, the author reviews herself. 1 -> 0.
+        ("feature/hand-made", ("Aino Virtanen",), ("Aino Virtanen",)),
+        # A persona ref, blocked by the REF-prefix exclusion alone (Lucas dropped),
+        # with commit authors present in the fixture. 1 -> 1, and that is the point:
+        # `resolve_review_verdicts` passes `()` for commit identities whenever the
+        # ref already names a persona, so the commit arm is silent here BY
+        # CONSTRUCTION. This case pins that the two sources cannot stack into a
+        # double exclusion on the same PR.
+        ("L.Ferreira/1210-x", ("Nino Kavtaradze",), ("Lucas Ferreira", "Nino Kavtaradze")),
+        # Blocked and stays blocked with NO exclusion firing (1 -> 1) — the
+        # other half of the guard's domain.
+        ("dependabot/npm_and_yarn/x-1.2.3", ("dependabot[bot]",), ("Lucas Ferreira",)),
+    )
+
+    def _all_cases(self):
+        """`CASES` (allowed-before) + `BLOCKING_CASES` (blocked-before)."""
+        return [(head_ref, authors, self.THREAD) for head_ref, authors in self.CASES] + list(
+            self.BLOCKING_CASES
+        )
+
+    @staticmethod
+    def _gate_allows(verdicts) -> bool:
+        """`check()`'s OWN allow-condition, transcribed — not a proxy for it.
+
+        Mirrors the `total_distinct == 1 and wave_bootstrap_exception` /
+        `total_distinct < 2` ladder in `check()`. Spelling it out here keeps
+        "allowed" meaning what the gate means by it, so the property below is
+        about the merge decision rather than about a count that resembles one.
+        """
+        return verdicts.total_distinct >= 2 or (
+            verdicts.total_distinct == 1 and verdicts.wave_bootstrap_exception
+        )
+
+    def _sets(self, head_ref: str, authors: tuple[str, ...], thread: tuple[str, ...] | None = None):
         commits = [
             _api_commit(f"c{n}", "2026-07-15T19:13:59Z", author_name=name)
             for n, name in enumerate(authors)
         ]
-        comments = [self._verdict(name) for name in self.THREAD]
+        comments = [self._verdict(name) for name in (self.THREAD if thread is None else thread)]
         after = self._resolve(head_ref, comments, commits=commits)
         # "Before" == the same pipeline with the commit-derived author source
         # switched off, which is exactly the pre-#1210 code path.
@@ -4758,9 +4807,9 @@ class StrictlyNonRelaxingTests(_ResolveOverFakeCommentsHarness):
         return before, after
 
     def test_reviewer_set_never_grows(self):
-        for head_ref, authors in self.CASES:
-            with self.subTest(head_ref=head_ref, authors=authors):
-                before, after = self._sets(head_ref, authors)
+        for head_ref, authors, thread in self._all_cases():
+            with self.subTest(head_ref=head_ref, authors=authors, thread=thread):
+                before, after = self._sets(head_ref, authors, thread=thread)
                 self.assertTrue(
                     after.distinct_reviewers <= before.distinct_reviewers,
                     f"{after.distinct_reviewers} is not a subset of {before.distinct_reviewers}",
@@ -4783,17 +4832,153 @@ class StrictlyNonRelaxingTests(_ResolveOverFakeCommentsHarness):
         self.assertTrue(shrank, "no case exercised the exclusion — the matrix proves nothing")
 
     def test_a_blocked_pr_never_becomes_an_allowed_one(self):
-        """The property expressed as the gate's own verdict, not as a count."""
-        for head_ref, authors in self.CASES:
-            with self.subTest(head_ref=head_ref, authors=authors):
-                before, after = self._sets(head_ref, authors)
-                before_allows = before.total_distinct >= 2
-                after_allows = after.total_distinct >= 2
-                if not before_allows:
-                    self.assertFalse(
-                        after_allows,
-                        "a PR the gate blocked before #1210 must not now pass",
-                    )
+        """The property expressed as the gate's own verdict, not as a count.
+
+        Scope, stated honestly so nobody reads more into a green run than is
+        there: on the CURRENT pipeline no input can actually flip blocked ->
+        allowed, because `after` is a subset of `before` and a blocked `before`
+        is already at most 1. That was measured, not assumed — the fail-open
+        mutant that unifies the two author sources (drop the `() if
+        branch_author_lastname` guard in `resolve_review_verdicts`, then let the
+        commit arm of `is_self_review` supersede the ref arm) is caught by
+        `test_reviewer_set_never_grows`, and this test correctly stays green
+        because the mutant only loses the exclusion, it does not push a blocked
+        PR over the bar. So the sibling subset test is the load-bearing one;
+        this is the TRIPWIRE for a future change that could ADD a reviewer to a
+        blocked PR, and its value depends entirely on the guard body actually
+        executing — which the anti-vacuity assertions at the bottom enforce.
+        """
+        reached = []
+        for head_ref, authors, thread in self._all_cases():
+            with self.subTest(head_ref=head_ref, authors=authors, thread=thread):
+                before, after = self._sets(head_ref, authors, thread=thread)
+                if self._gate_allows(before):
+                    continue
+                reached.append((head_ref, authors, thread))
+                self.assertFalse(
+                    self._gate_allows(after),
+                    "a PR the gate blocked before #1210 must not now pass",
+                )
+        # Anti-vacuity, same discipline as the sibling test above: the guard is
+        # inside an `if`, so a matrix in which nothing is blocked-before makes
+        # the whole test a no-op that still reports green.
+        #
+        # BOTH assertions are load-bearing and the order matters. `assertEqual`
+        # alone is NOT enough: emptying `BLOCKING_CASES` degrades it to
+        # `assertEqual([], [])`, which passes — i.e. deleting the blocking
+        # matrix silently restores the exact #1203 inertness this test was
+        # rewritten to remove. (Measured, not assumed: emptying the tuple with
+        # only the `assertEqual` present left this test green.) `assertTrue`
+        # pins the floor — the guard ran at all — and `assertEqual` then pins
+        # WHICH cases reached it, catching both a blocking case that quietly
+        # stops blocking and a `CASES` entry that starts.
+        self.assertTrue(
+            reached,
+            "no case in the matrix started from a BLOCKED state, so the guard body never "
+            "executed — this test would pass under a no-op implementation (#1203)",
+        )
+        self.assertEqual(
+            reached,
+            list(self.BLOCKING_CASES),
+            "the blocked-before guard did not execute over exactly the blocking matrix — "
+            "the property this test is named for was not actually checked",
+        )
+
+
+class SelfReviewExclusionKeepsTechDebtBlockTests(_ResolveOverFakeCommentsHarness):
+    """M13: the #1210 exclusion must not swallow the missing-TechDebt block.
+
+    In `check_comment_reviews` the self-review exclusion and the TechDebt
+    attestation check are two INDEPENDENT `if is_verdict_comment:` blocks, and
+    the non-relaxing argument for #1210 leans on that independence: the
+    exclusion may only ever remove a name from the reviewer SET, never relieve
+    a verdict of its attestation. Nothing pinned it. Moving the TechDebt block
+    inside the `if not is_self_review(...)` branch left the entire suite green
+    while a BLOCK turned into a PASS — the sole survivor of Nino Kavtaradze's
+    15-mutation run on this PR.
+
+    The transition is real, not theoretical: `check()` reaches the TechDebt
+    gate only AFTER clearing the 2-reviewer gate, so a PR with two clean
+    approvals plus the branch author's own attestation-less verdict is blocked
+    today and merges under the mutant.
+    """
+
+    HEAD_REF = "feature/hand-made"  # names no persona — commits are the ONLY author source
+    AUTHOR = "Aino Virtanen"
+
+    @staticmethod
+    def _verdict_without_tech_debt(requestor: str) -> dict:
+        """A well-formed Approved verdict carrying NO `TechDebt:` line."""
+        return {
+            "body": (
+                f"Requestor: {requestor}\nRequestee: Someone Else\nRequestOrReplied: Approved"
+            ),
+            "created_at": "2026-07-20T00:00:00Z",
+        }
+
+    def _comments(self) -> list[dict]:
+        # Two clean approvals clear the 2-reviewer gate, so the ONLY thing that
+        # can still block is the branch author's missing attestation.
+        return [
+            self._verdict("Lucas Ferreira"),
+            self._verdict("Nino Kavtaradze"),
+            self._verdict_without_tech_debt(self.AUTHOR),
+        ]
+
+    def _commits(self) -> list[dict]:
+        return [_api_commit("c0", "2026-07-15T19:13:59Z", author_name=self.AUTHOR)]
+
+    def test_branch_authors_own_verdict_is_excluded_but_still_owes_tech_debt(self):
+        """The two effects are independent: dropped from the set, still attesting."""
+        verdicts = self._resolve(self.HEAD_REF, self._comments(), commits=self._commits())
+        # Excluded from the reviewer set — the #1210 behaviour, unchanged.
+        self.assertEqual(
+            verdicts.distinct_reviewers,
+            {"lucas ferreira", "nino kavtaradze"},
+            "author not excluded",
+        )
+        self.assertEqual(verdicts.total_distinct, 2)
+        # ...and STILL on the hook for the attestation. This is the assertion
+        # the mutant kills.
+        self.assertEqual(verdicts.reviews_missing_tech_debt, [self.AUTHOR])
+
+    def test_check_still_blocks_the_merge_on_the_authors_missing_attestation(self):
+        """The same property as a merge decision — a BLOCK the mutant turns into a PASS."""
+        input_data = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "gh pr merge 691 --repo noorinalabs/noorinalabs-main"},
+        }
+        comments, commits = self._comments(), self._commits()
+
+        def fake_run(args, capture_output, text, timeout):  # noqa: ARG001
+            result = mock.MagicMock()
+            result.returncode = 0
+            if args[0] == "gh" and args[1:3] == ["repo", "view"]:
+                result.stdout = json.dumps({"owner": {"login": "noorinalabs"}, "name": "r"})
+            else:
+                result.stdout = json.dumps(comments)
+            return result
+
+        with (
+            mock.patch.object(hook.subprocess, "run", side_effect=fake_run),
+            mock.patch.object(hook, "fetch_pr_commits", return_value=commits),
+            mock.patch.object(hook, "_load_roster_names", return_value=set(self.ROSTER)),
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data(self.HEAD_REF)),
+            mock.patch.object(hook, "log_pretooluse_block"),
+        ):
+            result = hook.check(input_data)
+
+        assert result is not None, (
+            "check() returned None — the merge was ALLOWED despite the branch author's "
+            "verdict carrying no TechDebt line (the M13 mutant's signature)"
+        )
+        self.assertEqual(result["decision"], "block")
+        reason = str(result["reason"])
+        # Pin the REASON too: blocking for some unrelated cause (a reviewer
+        # shortfall, say) would satisfy a bare `decision == "block"` while the
+        # attestation check was in fact suppressed.
+        self.assertIn("TechDebt: attestation line", reason)
+        self.assertIn(self.AUTHOR, reason)
 
 
 class CommitAuthorBlockDiagnosticTests(_ResolveOverFakeCommentsHarness):
