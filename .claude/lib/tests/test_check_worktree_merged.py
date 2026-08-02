@@ -1,39 +1,49 @@
 """Tests for check_worktree_merged — patch-id-based merged classification
-(main#1212, sibling of #1177).
+(main#1212, sibling of #1177; residual-history fix from the PR #1213 review
+round).
 
 Every test drives REAL git against a throwaway temp repo so the plumbing is
-exercised end-to-end (ancestry probe, merge-base, `git log -p`/`git diff`
-piped through `git patch-id --stable`, and `git cherry`). Coverage matches
-the issue's acceptance criteria:
+exercised end-to-end (ancestry probe, merge-base, `git rev-list --reverse`,
+`git diff`/`git log -p` piped through `git patch-id --stable`, and
+`git cherry`). Coverage matches both the issue's original acceptance
+criteria and the review round's must-fix list:
 
-  * merge-commit merged            -> merged / ancestor (fast path)
-  * squash merged, single commit   -> merged / content-equivalent (aggregate
-                                       patch-id match)
-  * squash merged, multi-commit    -> merged / content-equivalent (no single
-                                       original commit's patch-id would match
-                                       the squash commit — this is the case a
-                                       per-commit `git cherry` alone cannot
-                                       catch; the aggregate whole-branch-diff
-                                       patch-id test is what catches it)
-  * rebase-merge (replayed commits, new hashes, same content)  -> merged /
-                                       content-equivalent (per-commit
-                                       `git cherry` match — the aggregate
-                                       test does NOT match here because two
-                                       separate main commits, not one, each
-                                       account for one original commit)
-  * cherry-pick (new commit, same diff)                        -> merged /
-                                       content-equivalent
+  * merge-commit merged                    -> merged / ancestor (fast path)
+  * squash merged, single commit           -> merged / content-equivalent
+  * squash merged, multi-commit            -> merged / content-equivalent
+    (no single original commit's patch-id would match the squash commit —
+    this is the case a per-commit `git cherry` alone cannot catch)
+  * rebase-merge (replayed commits, new hashes, same content), where the
+    FIRST replayed commit incidentally matches a prefix on its own and the
+    rest are corroborated via `git cherry`                -> merged /
+    content-equivalent
+  * cherry-pick (new commit, same diff)                    -> merged /
+    content-equivalent
   * partially-landed: squashed history PLUS one extra unlanded commit on the
-    tip -> unmerged / unlanded-changes (must stay FLAGGED)
-  * never-merged (no relation to remote_ref content at all)    -> unmerged /
-                                       unlanded-changes
-  * orphan branch (no common ancestor at all)                  -> unmerged /
-                                       no-common-ancestor
-  * ancestry probe itself errors (bad rev)                     -> error /
-                                       ancestor-check-failed, never "merged"
-  * content-check machinery errors (injected failing pipe_runner) -> unmerged
-                                       / content-check-failed (degrades
-                                       safely, never "merged")
+    tip -> unmerged / content-matched-with-unlanded-history (must stay
+    FLAGGED — the residual, not the matched prefix, decides)
+  * cancel-out residual: a landed commit, then an unlanded add + unlanded
+    remove whose NET diff is zero -> unmerged / content-matched-with-
+    unlanded-history (PR #1213 review must-fix 1 — the earliest-matching-
+    prefix search never lets a later cancellation hide an earlier residual)
+  * whitespace-only residual: a landed commit, then an unlanded reindent-only
+    commit (patch-id is whitespace-insensitive at the aggregate level, but
+    the per-commit `git cherry` corroboration still sees it as unmatched)
+    -> unmerged / content-matched-with-unlanded-history (must-fix 2)
+  * never-merged (no relation to remote_ref content at all)   -> unmerged /
+    unlanded-changes
+  * orphan branch (no common ancestor at all)                 -> unmerged /
+    no-common-ancestor
+  * ancestry probe itself errors (bad rev)                    -> error /
+    ancestor-check-failed, never "merged"
+  * trivial no-op tip (`--allow-empty` commit off main's tip, reaching the
+    empty-diff branch for real rather than via the ancestor fast path)
+    -> merged / content-equivalent
+  * every internal git-command failure/unexpected-result site degrades to
+    unmerged, never merged: own diff, rev-list, rev-list-empty-despite-diff
+    (defensive), main log, main patch-id, prefix diff, prefix patch-id,
+    prefix patch-id producing no output for a non-empty diff (must-fix 6 —
+    fail-open guard), and git cherry
   * CLI exit code mirrors `.merged` (0 iff merged, 1 otherwise)
 """
 
@@ -51,6 +61,7 @@ from tempfile import TemporaryDirectory
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from check_worktree_merged import (  # noqa: E402
+    GitRunner,
     PipeRunner,
     classify_merged,
 )
@@ -102,6 +113,56 @@ def _git_pipe_real(
     )
 
 
+def _fail(args: Sequence[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(
+        args=["git", *args], returncode=128, stdout="", stderr="simulated failure"
+    )
+
+
+def _empty_ok(args: Sequence[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(args=["git", *args], returncode=0, stdout="", stderr="")
+
+
+def _runner_intercepting(subcommand: str, occurrence: int, *, mode: str = "fail") -> GitRunner:
+    """A GitRunner that delegates every call to real git, EXCEPT the
+    `occurrence`-th call whose `args[0] == subcommand`, which it fails
+    (`mode="fail"`) or answers with an empty-but-successful result
+    (`mode="empty"`) instead of actually running it.
+
+    Precisely targeting one call site (rather than failing every call, as an
+    earlier version of this test file's fake did) is what lets each of
+    classify_merged's several degrade-to-unmerged sites be pinned
+    independently — a fake that fails everything can only ever prove the
+    FIRST site is safe (PR #1213 review, must-fix 2)."""
+    seen = {"n": 0}
+
+    def wrapper(args: Sequence[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+        if args and args[0] == subcommand:
+            seen["n"] += 1
+            if seen["n"] == occurrence:
+                return _fail(args) if mode == "fail" else _empty_ok(args)
+        return _git_ok(list(args), cwd)
+
+    return wrapper
+
+
+def _pipe_intercepting(occurrence: int, *, mode: str = "fail") -> PipeRunner:
+    """Like `_runner_intercepting`, but for the pipe_runner (`git patch-id`
+    calls) — every call is the same subcommand, so occurrence-counting is
+    unconditional rather than subcommand-filtered."""
+    seen = {"n": 0}
+
+    def wrapper(
+        args: Sequence[str], cwd: Path, input_text: str
+    ) -> subprocess.CompletedProcess[str]:
+        seen["n"] += 1
+        if seen["n"] == occurrence:
+            return _fail(args) if mode == "fail" else _empty_ok(args)
+        return _git_pipe_real(list(args), cwd, input_text)
+
+    return wrapper
+
+
 def _write(repo: Path, name: str, content: str) -> None:
     path = repo / name
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -131,8 +192,6 @@ class CheckWorktreeMergedTest(unittest.TestCase):
         self._tmp.cleanup()
 
     def _classify(self, head: str, remote_ref: str = "main", **kwargs: object):
-        # Route through the identity-scoped git wrappers so temp-repo commits
-        # never fall back to an ambient (unset) user.name/email.
         return classify_merged(
             self.repo,
             head,
@@ -141,6 +200,37 @@ class CheckWorktreeMergedTest(unittest.TestCase):
             pipe_runner=_git_pipe_real,
             **kwargs,  # type: ignore[arg-type]
         )
+
+    # ---- shared fixture builders --------------------------------------------
+
+    def _multi_commit_squash(self) -> str:
+        """feature = C1 (a.txt), C2 (b.txt); main squashes BOTH -> fully
+        landed, no residual. Returns feature's tip sha. Used for the failure-
+        injection tests too, since its call sequence (diff x3, patch-id x3,
+        rev-list x1, log x1, NO cherry) is fully deterministic."""
+        _git(["checkout", "-b", "feature"], self.repo)
+        _commit(self.repo, "a.txt", "A\n", "feature commit 1")
+        _commit(self.repo, "b.txt", "B\n", "feature commit 2")
+        feature_tip = _head(self.repo)
+        _git(["checkout", "main"], self.repo)
+        _git(["merge", "--squash", "feature"], self.repo)
+        _git(["commit", "-m", "squash feature (2 commits)"], self.repo)
+        return feature_tip
+
+    def _partially_landed(self) -> tuple[str, str]:
+        """feature = C1+C2 (squashed onto main), then C3 (never landed).
+        Returns (feature_tip, c3_sha). Has a non-empty residual -> reaches
+        the `git cherry` corroboration call (unlike `_multi_commit_squash`)."""
+        _git(["checkout", "-b", "feature"], self.repo)
+        _commit(self.repo, "a.txt", "A\n", "feature commit 1")
+        _commit(self.repo, "b.txt", "B\n", "feature commit 2")
+        _git(["checkout", "main"], self.repo)
+        _git(["merge", "--squash", "feature"], self.repo)
+        _git(["commit", "-m", "squash feature (2 commits)"], self.repo)
+        _git(["checkout", "feature"], self.repo)
+        c3 = _commit(self.repo, "c.txt", "C (unlanded)\n", "feature commit 3 (not merged)")
+        feature_tip = _head(self.repo)
+        return feature_tip, c3
 
     # ---- fast path: ancestry ------------------------------------------------
 
@@ -176,21 +266,18 @@ class CheckWorktreeMergedTest(unittest.TestCase):
         self.assertEqual(result.status, "merged")
         self.assertEqual(result.reason, "content-equivalent")
         self.assertIn("patch-id", result.detail)
+        self.assertEqual(result.unmatched_commits, [])
 
     def test_squash_merged_multi_commit(self) -> None:
         """No single commit's patch-id matches the squash — must still classify
-        merged, via the AGGREGATE (whole-branch-diff) patch-id test."""
-        _git(["checkout", "-b", "feature"], self.repo)
-        _commit(self.repo, "a.txt", "A\n", "feature commit 1")
-        _commit(self.repo, "b.txt", "B\n", "feature commit 2")
-        feature_tip = _head(self.repo)
+        merged, via the earliest-matching-prefix test finding its match at the
+        LAST commit (full coverage, no residual)."""
+        feature_tip = self._multi_commit_squash()
 
-        _git(["checkout", "main"], self.repo)
-        _git(["merge", "--squash", "feature"], self.repo)
-        _git(["commit", "-m", "squash feature (2 commits)"], self.repo)
-
-        # Confirm the premise: per-commit git cherry alone would NOT find an
-        # equivalent (this is exactly the gap the aggregate test closes).
+        # Premise check: per-commit git cherry alone would NOT find an
+        # equivalent for either original commit (this is exactly the gap the
+        # prefix-aggregate test closes; classify_merged itself never calls
+        # cherry here, because the prefix match covers every commit).
         cherry = _git_ok(["cherry", "main", feature_tip], self.repo)
         self.assertTrue(
             all(line.startswith("+ ") for line in cherry.stdout.splitlines() if line),
@@ -201,13 +288,13 @@ class CheckWorktreeMergedTest(unittest.TestCase):
         self.assertEqual(result.status, "merged")
         self.assertEqual(result.reason, "content-equivalent")
         self.assertIn("patch-id", result.detail)
+        self.assertEqual(result.unmatched_commits, [])
 
     def test_rebase_merged_replayed_commits(self) -> None:
-        """Rebase-merge: commits replayed onto main with new hashes, same diffs.
-
-        The aggregate test does NOT match here (two separate main commits,
-        not one, each carry one original commit's diff) — this exercises the
-        per-commit `git cherry` fallback."""
+        """Rebase-merge: commits replayed onto main with new hashes, same
+        diffs. The first replayed commit incidentally matches a prefix on its
+        own (aggregate test finds match_index=0); the second is corroborated
+        via the per-commit `git cherry` residual check, not the prefix test."""
         _git(["checkout", "-b", "feature"], self.repo)
         c1 = _commit(self.repo, "a.txt", "A\n", "feature commit 1")
         c2 = _commit(self.repo, "b.txt", "B\n", "feature commit 2")
@@ -250,29 +337,106 @@ class CheckWorktreeMergedTest(unittest.TestCase):
         self.assertEqual(result.status, "merged")
         self.assertEqual(result.reason, "content-equivalent")
 
+    def test_prefix_scan_skips_empty_commit_mid_branch(self) -> None:
+        """An `--allow-empty` commit BEFORE the commit that actually matches
+        must be skipped (its cumulative diff-so-far is empty) rather than
+        mistaken for a match or an error — the scan continues to the next
+        commit and finds the real match there."""
+        _git(["checkout", "-b", "feature"], self.repo)
+        _git(["commit", "--allow-empty", "-m", "empty commit (no tree change)"], self.repo)
+        _commit(self.repo, "a.txt", "A\n", "feature commit: add a.txt")
+        feature_tip = _head(self.repo)
+
+        _git(["checkout", "main"], self.repo)
+        _git(["merge", "--squash", "feature"], self.repo)
+        _git(["commit", "-m", "squash feature"], self.repo)
+
+        result = self._classify(feature_tip)
+        self.assertEqual(result.status, "merged")
+        self.assertEqual(result.reason, "content-equivalent")
+        self.assertEqual(result.unmatched_commits, [])
+
     # ---- safety guard: must stay FLAGGED -----------------------------------
 
     def test_partially_landed_tip_has_one_extra_unlanded_commit(self) -> None:
         """Squashed history landed, but the branch tip has grown one more
         commit since — must still classify unmerged (never auto-removed)."""
-        _git(["checkout", "-b", "feature"], self.repo)
-        _commit(self.repo, "a.txt", "A\n", "feature commit 1")
-        _commit(self.repo, "b.txt", "B\n", "feature commit 2")
-
-        _git(["checkout", "main"], self.repo)
-        _git(["merge", "--squash", "feature"], self.repo)
-        _git(["commit", "-m", "squash feature (2 commits)"], self.repo)
-
-        # Back on feature, add a third, never-landed commit.
-        _git(["checkout", "feature"], self.repo)
-        c3 = _commit(self.repo, "c.txt", "C (unlanded)\n", "feature commit 3 (not merged)")
-        feature_tip = _head(self.repo)
+        feature_tip, c3 = self._partially_landed()
 
         result = self._classify(feature_tip)
         self.assertEqual(result.status, "unmerged")
-        self.assertEqual(result.reason, "unlanded-changes")
+        self.assertEqual(result.reason, "content-matched-with-unlanded-history")
         self.assertFalse(result.merged)
-        self.assertIn(c3, result.unmatched_commits)
+        self.assertEqual(result.unmatched_commits, [c3])
+
+    def test_cancel_out_unlanded_commits_stay_flagged(self) -> None:
+        """PR #1213 review, must-fix 1: a landed commit, then an unlanded
+        ADD and an unlanded REMOVE of the same file. Their net effect on the
+        full-range aggregate diff is zero, so a full-range-only aggregate
+        test would falsely match — the earliest-matching-prefix search must
+        stop at the landed commit and flag the two residual commits."""
+        _git(["checkout", "-b", "feature"], self.repo)
+        c1 = _commit(self.repo, "a.txt", "A\n", "feature commit 1 (landed)")
+
+        _git(["checkout", "main"], self.repo)
+        _git(["merge", "--squash", "feature"], self.repo)
+        _git(["commit", "-m", "squash feature (commit 1 only)"], self.repo)
+
+        _git(["checkout", "feature"], self.repo)
+        c2 = _commit(self.repo, "f2.txt", "f2 content\n", "commit 2: add f2 (unlanded)")
+        _git(["rm", "f2.txt"], self.repo)
+        _git(["commit", "-m", "commit 3: remove f2 (unlanded)"], self.repo)
+        c3 = _head(self.repo)
+        feature_tip = c3
+
+        # Ground truth: the FULL aggregate diff (merge_base..feature_tip) is
+        # empty for f2.txt (added then removed) -- confirms this is a genuine
+        # net-zero cancellation, not a fixture mistake.
+        full_diff = _git_ok(["diff", f"{c1}..{feature_tip}", "--", "f2.txt"], self.repo)
+        self.assertEqual(full_diff.stdout.strip(), "")
+
+        cherry = _git_ok(["cherry", "main", feature_tip], self.repo)
+        unmatched_ground_truth = [
+            line.split()[1] for line in cherry.stdout.splitlines() if line.startswith("+ ")
+        ]
+        self.assertEqual(sorted(unmatched_ground_truth), sorted([c2, c3]))
+
+        result = self._classify(feature_tip)
+        self.assertEqual(result.status, "unmerged")
+        self.assertEqual(result.reason, "content-matched-with-unlanded-history")
+        self.assertFalse(result.merged)
+        self.assertEqual(sorted(result.unmatched_commits), sorted([c2, c3]))
+
+    def test_whitespace_only_unlanded_commit_stays_flagged(self) -> None:
+        """PR #1213 review, must-fix 2: a landed commit, then an unlanded
+        whitespace-only reindent. `git patch-id` is whitespace-insensitive at
+        the aggregate level (an earlier version of this fix classified this
+        `merged`), but the per-commit `git cherry` residual check still sees
+        the reindent commit as unmatched, since no equivalent reindent
+        commit exists on main."""
+        _git(["checkout", "-b", "feature"], self.repo)
+        _write(self.repo, "ws.txt", "def f():\n    x = 1\n")
+        _git(["add", "ws.txt"], self.repo)
+        _git(["commit", "-m", "feature commit: add ws.txt"], self.repo)
+
+        _git(["checkout", "main"], self.repo)
+        _git(["merge", "--squash", "feature"], self.repo)
+        _git(["commit", "-m", "squash feature"], self.repo)
+
+        _git(["checkout", "feature"], self.repo)
+        d = _commit(self.repo, "ws.txt", "def f():\n        x = 1\n", "reindent (unlanded)")
+        feature_tip = _head(self.repo)
+
+        # Ground truth: the tree genuinely differs from main (this is not a
+        # purely cosmetic non-difference).
+        differs = _git_ok(["diff", "--quiet", "main", feature_tip, "--", "ws.txt"], self.repo)
+        self.assertNotEqual(differs.returncode, 0)
+
+        result = self._classify(feature_tip)
+        self.assertEqual(result.status, "unmerged")
+        self.assertEqual(result.reason, "content-matched-with-unlanded-history")
+        self.assertFalse(result.merged)
+        self.assertEqual(result.unmatched_commits, [d])
 
     def test_never_merged(self) -> None:
         _git(["checkout", "-b", "feature"], self.repo)
@@ -303,44 +467,134 @@ class CheckWorktreeMergedTest(unittest.TestCase):
         self.assertEqual(result.reason, "ancestor-check-failed")
         self.assertFalse(result.merged)
 
-    def test_content_check_failure_degrades_to_unmerged(self) -> None:
-        """A git-command failure mid content-check must degrade to the
-        pre-fix (ancestry-only) conclusion — never guess merged."""
+    def test_trivial_empty_tip_commit_reaches_empty_diff_branch(self) -> None:
+        """#1203 pattern: the fixture must actually REACH the branch it is
+        named for, not merely happen to satisfy `.merged` via a different
+        code path (an earlier version of this test used a branch with zero
+        unique commits, which the ANCESTOR fast path already covers, making
+        it inert -- flipping the empty-diff branch's return left the suite
+        green). This one is a branch AHEAD of main by one `--allow-empty`
+        commit, so ancestry genuinely fails (main lacks this commit) and the
+        empty-diff branch is what actually classifies it merged."""
         _git(["checkout", "-b", "feature"], self.repo)
-        _commit(self.repo, "a.txt", "A\n", "feature commit")
+        _git(["commit", "--allow-empty", "-m", "empty commit, no tree change"], self.repo)
         feature_tip = _head(self.repo)
-        _git(["checkout", "main"], self.repo)
-        _git(["merge", "--squash", "feature"], self.repo)
-        _git(["commit", "-m", "squash feature"], self.repo)
 
-        calls = {"n": 0}
+        anc = _git_ok(["merge-base", "--is-ancestor", feature_tip, "main"], self.repo)
+        self.assertNotEqual(anc.returncode, 0, "premise: ancestry must genuinely fail here")
 
-        def flaky_pipe(
-            args: Sequence[str], cwd: Path, input_text: str
-        ) -> subprocess.CompletedProcess[str]:
-            calls["n"] += 1
-            return subprocess.CompletedProcess(
-                args=["git", *args], returncode=128, stdout="", stderr="simulated failure"
-            )
+        result = self._classify(feature_tip)
+        self.assertTrue(result.merged)
+        self.assertEqual(result.reason, "content-equivalent")
+        self.assertIn("introduces no changes", result.detail)
 
-        pipe_runner: PipeRunner = flaky_pipe
+    # ---- degrade-to-unmerged: every internal failure/unexpected-result site ---
+
+    def test_own_diff_failure_degrades(self) -> None:
+        feature_tip = self._multi_commit_squash()
+        runner = _runner_intercepting("diff", occurrence=1, mode="fail")
+        result = classify_merged(
+            self.repo, feature_tip, "main", runner=runner, pipe_runner=_git_pipe_real
+        )
+        self.assertEqual(result.status, "unmerged")
+        self.assertEqual(result.reason, "content-check-failed")
+        self.assertFalse(result.merged)
+
+    def test_rev_list_failure_degrades(self) -> None:
+        feature_tip = self._multi_commit_squash()
+        runner = _runner_intercepting("rev-list", occurrence=1, mode="fail")
+        result = classify_merged(
+            self.repo, feature_tip, "main", runner=runner, pipe_runner=_git_pipe_real
+        )
+        self.assertEqual(result.status, "unmerged")
+        self.assertEqual(result.reason, "content-check-failed")
+        self.assertFalse(result.merged)
+
+    def test_rev_list_empty_despite_nonempty_diff_degrades(self) -> None:
+        """Defensive branch: a non-empty diff should always list at least one
+        commit over the same range. Force the "should never happen" state via
+        dependency injection and confirm it fails closed rather than crashing
+        or (worse) treating "no commits" as "no changes"."""
+        feature_tip = self._multi_commit_squash()
+        runner = _runner_intercepting("rev-list", occurrence=1, mode="empty")
+        result = classify_merged(
+            self.repo, feature_tip, "main", runner=runner, pipe_runner=_git_pipe_real
+        )
+        self.assertEqual(result.status, "unmerged")
+        self.assertEqual(result.reason, "content-check-failed")
+        self.assertFalse(result.merged)
+
+    def test_main_log_failure_degrades(self) -> None:
+        feature_tip = self._multi_commit_squash()
+        runner = _runner_intercepting("log", occurrence=1, mode="fail")
+        result = classify_merged(
+            self.repo, feature_tip, "main", runner=runner, pipe_runner=_git_pipe_real
+        )
+        self.assertEqual(result.status, "unmerged")
+        self.assertEqual(result.reason, "content-check-failed")
+        self.assertFalse(result.merged)
+
+    def test_main_patch_id_failure_degrades(self) -> None:
+        feature_tip = self._multi_commit_squash()
+        pipe_runner = _pipe_intercepting(occurrence=1, mode="fail")
         result = classify_merged(
             self.repo, feature_tip, "main", runner=_git_ok, pipe_runner=pipe_runner
         )
         self.assertEqual(result.status, "unmerged")
         self.assertEqual(result.reason, "content-check-failed")
         self.assertFalse(result.merged)
-        self.assertGreaterEqual(calls["n"], 1)
 
-    def test_trivial_no_diff_over_merge_base(self) -> None:
-        """head == merge_base with remote_ref (no unique commits at all)."""
-        _git(["checkout", "-b", "feature"], self.repo)
-        feature_tip = _head(self.repo)  # same commit as main, no new commits
+    def test_prefix_diff_failure_degrades(self) -> None:
+        """Targets the loop's OWN diff call (the 2nd "diff" invocation
+        overall — the 1st is the whole-range trivial-check diff)."""
+        feature_tip = self._multi_commit_squash()
+        runner = _runner_intercepting("diff", occurrence=2, mode="fail")
+        result = classify_merged(
+            self.repo, feature_tip, "main", runner=runner, pipe_runner=_git_pipe_real
+        )
+        self.assertEqual(result.status, "unmerged")
+        self.assertEqual(result.reason, "content-check-failed")
+        self.assertFalse(result.merged)
 
-        result = self._classify(feature_tip)
-        # Ancestor test already covers this (feature_tip IS main's tip here),
-        # so the fast path fires — still "merged", just via ancestor.
-        self.assertTrue(result.merged)
+    def test_prefix_patch_id_failure_degrades(self) -> None:
+        """Targets the loop's patch-id call (the 2nd pipe invocation overall
+        — the 1st is the main-range table build)."""
+        feature_tip = self._multi_commit_squash()
+        pipe_runner = _pipe_intercepting(occurrence=2, mode="fail")
+        result = classify_merged(
+            self.repo, feature_tip, "main", runner=_git_ok, pipe_runner=pipe_runner
+        )
+        self.assertEqual(result.status, "unmerged")
+        self.assertEqual(result.reason, "content-check-failed")
+        self.assertFalse(result.merged)
+
+    def test_prefix_patch_id_empty_output_degrades(self) -> None:
+        """Must-fix 6 (PR #1213 review): a non-empty diff whose `git
+        patch-id` call succeeds but produces no output is an UNKNOWN state,
+        not evidence of "no changes" -- must degrade to unmerged, not fail
+        open to merged."""
+        feature_tip = self._multi_commit_squash()
+        pipe_runner = _pipe_intercepting(occurrence=2, mode="empty")
+        result = classify_merged(
+            self.repo, feature_tip, "main", runner=_git_ok, pipe_runner=pipe_runner
+        )
+        self.assertEqual(result.status, "unmerged")
+        self.assertEqual(result.reason, "content-check-failed")
+        self.assertFalse(result.merged)
+        self.assertIn("produced no output", result.detail)
+
+    def test_cherry_failure_degrades(self) -> None:
+        """Cherry is only invoked when there is a non-empty residual, so this
+        needs the partially-landed fixture rather than the fully-covered
+        multi-commit-squash one (which never reaches the cherry call)."""
+        feature_tip, _c3 = self._partially_landed()
+        runner = _runner_intercepting("cherry", occurrence=1, mode="fail")
+        result = classify_merged(
+            self.repo, feature_tip, "main", runner=runner, pipe_runner=_git_pipe_real
+        )
+        self.assertEqual(result.status, "unmerged")
+        self.assertEqual(result.reason, "content-check-failed")
+        self.assertFalse(result.merged)
 
     # ---- CLI ----------------------------------------------------------------
 
