@@ -134,6 +134,13 @@ class ReviewState:
     # findings when neither was one. Defaults to NOT_RUN so an omission renders
     # as not-measured rather than as a false measurement.
     comment_scan: str = gate.COMMENT_SCAN_NOT_RUN
+    # Branch author(s) derived from the PR's COMMITS (#1210) — display strings
+    # only, so `dataclasses.asdict` keeps the payload JSON-serializable. Empty
+    # whenever the head ref already named a persona (the derivation is not run
+    # there) or nothing was derivable. Reported because a reviewer whose verdict
+    # was subtracted as a self-review has to be able to see WHO the gate thought
+    # they were.
+    commit_authors: list[str] = dataclasses.field(default_factory=list)
 
     @property
     def comment_scan_ran(self) -> bool:
@@ -274,6 +281,7 @@ def compute_review_state(pr_number: str, repo: str | None = None) -> ReviewState
         content_ts=verdicts.content_ts.isoformat() if verdicts.content_ts else None,
         stale_verdicts=stale_verdicts,
         comment_scan=verdicts.comment_scan,
+        commit_authors=[identity.display for identity in verdicts.commit_author_identities],
     )
 
 
@@ -297,10 +305,21 @@ def _describe_comment_scan(state: ReviewState) -> str:
             f"RAN — head ref names branch author {author!r}, whose own verdicts are "
             "excluded from the reviewer set (self-review exclusion active)."
         )
+    if state.comment_scan == gate.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED:
+        # Name the derived identities: this mode SUBTRACTS verdicts on evidence
+        # the head ref does not show, so a report that only said "exclusion
+        # active" would leave an operator unable to check the subtraction.
+        derived = ", ".join(state.commit_authors) or "(none)"
+        return (
+            "RAN — head ref names no branch author, so the branch author was derived "
+            f"from COMMIT IDENTITY: {derived}. Their own verdicts are excluded from the "
+            "reviewer set (self-review exclusion active, #1210)."
+        )
     return (
-        "RAN — head ref names no branch author (bot / wave-merge / non-charter branch), "
-        "so no self-review exclusion was applied. Roster filtering and the 2-reviewer "
-        "threshold are unchanged."
+        "RAN — head ref names no branch author (bot / wave-merge / non-charter branch) "
+        "and the PR's commits named no persona either (bot author, merge-only branch, or "
+        "a squash-flattened identity — #1177/#1210), so no self-review exclusion was "
+        "applied. Roster filtering and the 2-reviewer threshold are unchanged."
     )
 
 
