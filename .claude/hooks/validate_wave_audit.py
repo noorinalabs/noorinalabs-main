@@ -54,8 +54,16 @@ Carry-forward bypass (warn-but-allow):
 Block condition:
     Either:
       - matched_skill AND open_count > 0 AND args lacks carry-forward marker
-      - matched_skill ∈ _COVERAGE_BLOCKING_SKILLS AND the audit could not query
-        every org repo (incomplete coverage — #1226, § Failure modes below)
+      - matched_skill ∈ _COVERAGE_BLOCKING_SKILLS AND the audit queried SOME but
+        not all org repos (PARTIAL coverage — #1226, § Failure modes below)
+    Note the all-vs-some line: a partial failure blocks (1-of-8 through 7-of-8),
+    but a TOTAL failure — no repo queried at all, 8-of-8 — fail-opens with a
+    warning and does NOT block. That is deliberate, not an oversight: every
+    remedy this block prescribes (`gh auth status`, `gh api rate_limit`, running
+    the canonical audit by hand) requires a working `gh`, which at total failure
+    is by definition unavailable, so blocking there would be an unrecoverable
+    deadlock whose only exit is the settings.json removal that disables the gate
+    for every skill. The asymmetry is under review in #1230.
 
 Allow condition:
     Any of:
@@ -165,7 +173,10 @@ Exit codes (per Claude Code hook convention):
         carry-forward WITH full coverage; infra failure fail-open, always
         accompanied by a system message)
     2 — block (matched skill AND open count > 0 without a carry-forward marker,
-        OR incomplete audit coverage for a _COVERAGE_BLOCKING_SKILLS skill)
+        OR PARTIAL audit coverage — some org repos queried, some not — for a
+        _COVERAGE_BLOCKING_SKILLS skill. A TOTAL coverage failure, where no repo
+        could be queried at all, exits 0 with a warning instead; see § Block
+        condition for why that asymmetry is deliberate.)
 
 Promotion provenance:
     memory feedback_honest_audit_over_conclusion_claim (2026-04-22) →
@@ -695,14 +706,32 @@ def check(input_data: dict) -> dict | None:
 
     total, per_repo, unqueried = _audit_open_count(labels, wave_branch)
 
+    # DELIBERATE EARLY ALLOW — this branch precedes the hard blocks below, and
+    # the precedence is intended, not an oversight. Total failure (no repo
+    # queried at all) fail-opens even for _COVERAGE_BLOCKING_SKILLS, while a
+    # PARTIAL failure blocks them at the `if unqueried:` gate further down.
+    # Rationale: every remedy that gate prescribes needs a working `gh`, which
+    # is by definition dead here, so blocking would deadlock with no exit but
+    # the settings.json removal that disables the gate for every skill.
+    # This is exactly the shape memory feedback_gate_early_allow_is_the_failopen
+    # warns about (#981: "a verify-gate's hole is usually an allow-with-warning
+    # branch short-circuiting AHEAD of the hard-blocks"), so it is marked at the
+    # site rather than left to be rediscovered. The all-vs-some line itself is
+    # under review in #1230 — if that rules for a block, this is the branch to
+    # change, and `test_partial_failure_is_never_quieter_than_total_failure`
+    # (#1234) is the test that pins it.
     if total is None:
         return {
             "decision": "allow",
             "systemMessage": (
                 f"WARNING: Wave-audit hook could not query any of the {len(_ORG_REPOS)} "
                 f"org repos for label(s) {label_display} (gh CLI missing, unauthenticated, "
-                f"or all calls failed). Allowing /{skill_name} to proceed without an audit. "
-                "Run the canonical audit manually before claiming the wave is concluded."
+                f"or all calls failed). There is NO open-item count for this wave — not a "
+                f"zero, no count at all.\n"
+                f"Allowing /{skill_name} to proceed, because every remedy for this failure "
+                "needs a working `gh` and blocking would leave no way out. Do NOT state or "
+                "imply the wave is clean or concluded — run the canonical audit manually "
+                "(charter skills.md § Wave Lifecycle — Audit command) first."
             ),
         }
 
