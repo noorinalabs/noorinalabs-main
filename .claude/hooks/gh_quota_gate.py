@@ -78,6 +78,8 @@ from _repo_flag_parse import extract_repo  # noqa: E402
 from _shell_parse import (  # noqa: E402
     find_gh_subcommand,
     iter_command_segments,
+    iter_command_segments_ast,
+    normalize_command_separators,
     strip_heredocs,
     tokenize,
 )
@@ -214,15 +216,36 @@ _ADVISE_ONLY_TOPICS: set[tuple[str, str]] = {
 }
 
 
+def _segments(command: str) -> list[list[str]]:
+    """Command-position segments via the AST path, falling back to shlex.
+
+    Mirrors `block_bare_grep._segments()` (main#1225 review): the shlex-only
+    path this hook previously used only ever sees a `gh` call that sits at
+    top level of the command string, so a `gh` invocation inside a
+    `$(...)`/backtick command substitution or a `for ... do gh ...; done`
+    loop body silently never matched — the gate's own blind spot, live in
+    this repo's own skills (`.claude/skills/wave-scope/SKILL.md`). The AST
+    path additionally surfaces those shapes; shlex remains the fallback when
+    bashlex is unavailable or the command fails to parse (fail-open, matching
+    the existing `tokens is None` behaviour this hook already had).
+    """
+    cleaned = strip_heredocs(command)
+    ast = iter_command_segments_ast(cleaned)
+    if ast is not None:
+        return ast
+    tokens = tokenize(normalize_command_separators(cleaned))
+    if tokens is None:
+        return []
+    return list(iter_command_segments(tokens))
+
+
 def _match(command: str) -> tuple[str, tuple[str, str], list[str], str | None] | None:
     """Return (kind, (topic, verb), rest_tokens, repo) for a GraphQL-shaped gh call, else None.
 
     `kind` is "block" (a verified rewrite exists) or "advise" (recognized
     GraphQL shape, no verified rewrite — including a raw `gh api graphql` call).
     """
-    body = strip_heredocs(command)
-    tokens = tokenize(body)
-    segments = list(iter_command_segments(tokens)) if tokens is not None else []
+    segments = _segments(command)
 
     for seg in segments:
         found = find_gh_subcommand(seg)

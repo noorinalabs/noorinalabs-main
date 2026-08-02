@@ -72,6 +72,42 @@ class CheapPrefilterTests(unittest.TestCase):
         rq.assert_not_called()
 
 
+class AstSegmentDiscoveryTests(unittest.TestCase):
+    """The shlex-only path only ever sees a `gh` call sitting at the TOP
+    LEVEL of the command string — a `gh` invocation inside a `$(...)`/backtick
+    command substitution, or inside a `for ... do ... done` loop body, never
+    reached `find_gh_subcommand` at all (main#1225 review, the must-fix on
+    Nadia Khoury's merge-gate verdict). These pin the AST-first `_segments()`
+    fix: each must now match and block under low quota."""
+
+    def test_command_substitution_dollar_paren_matches(self):
+        command = (
+            "SHA=$(gh pr view 1225 --repo noorinalabs/noorinalabs-main "
+            "--json headRefOid --jq '.headRefOid')"
+        )
+        with mock.patch.object(gate.gh_quota, "resource_quota", return_value=_quota(0)):
+            result = gate.check(_input(command))
+        self.assertIsNotNone(result, "gh call inside $(...) must be seen by the gate")
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("gh_rest.py pr view 1225", result["reason"])
+
+    def test_backtick_command_substitution_matches(self):
+        command = "SHA=`gh pr view 1225 --repo noorinalabs/noorinalabs-main --json headRefOid`"
+        with mock.patch.object(gate.gh_quota, "resource_quota", return_value=_quota(0)):
+            result = gate.check(_input(command))
+        self.assertIsNotNone(result, "gh call inside backticks must be seen by the gate")
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("gh_rest.py pr view 1225", result["reason"])
+
+    def test_loop_body_matches(self):
+        command = "for i in 1 2; do gh issue view $i --repo noorinalabs/noorinalabs-main; done"
+        with mock.patch.object(gate.gh_quota, "resource_quota", return_value=_quota(0)):
+            result = gate.check(_input(command))
+        self.assertIsNotNone(result, "gh call inside a loop body must be seen by the gate")
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("gh_rest.py issue view", result["reason"])
+
+
 class DegradeToAllowTests(unittest.TestCase):
     """The load-bearing #1224 design requirement."""
 
