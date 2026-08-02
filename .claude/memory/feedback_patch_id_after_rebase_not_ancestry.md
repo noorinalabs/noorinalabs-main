@@ -1,11 +1,40 @@
 ---
 name: feedback_patch_id_after_rebase_not_ancestry
-description: "After a rebased head move, an ancestry check FAILS and a two-dot diff OVERSTATES the delta — use `git patch-id --stable` to prove the reviewed content survived, then diff from the rewritten base"
+description: "`git merge-base --is-ancestor` answers 'was history preserved?', NOT 'is this content on main?' — it fails on rebase AND on squash. Use `git patch-id --stable` to prove content landed/survived. Two surfaces: re-anchoring a review after a head move, and classifying a worktree as merged."
 metadata:
   node_type: memory
   type: feedback
-last_verified: 2026-07-30
+last_verified: 2026-08-02
 ---
+
+**The one claim, stated generally:** an ancestry test answers *"was this reached by preserved history?"* It does **not** answer *"is this content on the target?"* Every history-rewriting merge — rebase, **squash**, cherry-pick — makes it answer NO while the content is fully present. Reach for `git patch-id --stable` whenever the real question is about content. Two surfaces follow.
+
+## Surface 2 — classifying a worktree/branch as merged (main#1212, 2026-08-02)
+
+`/session-start` Step 0 decided "merged" with `git merge-base --is-ancestor "$head" origin/main`, then auto-removed anything it called merged. A **squash** merge writes a new single-parent commit, so the branch tip is never made an ancestor. The predicate was therefore really *"was this merged with a merge commit?"* — and it returns NO forever for squash-merged branches no matter how completely the content landed.
+
+**Measured:** 5 worktrees flagged `UNMERGED` at session start; all 5 fully merged 2026-07-30 (PRs #1153/#1154/#1155/#1156/#1173), all 5 issues closed, content byte-identical on `main`. **0% precision.** Because Step 0 correctly refuses to auto-remove a FLAGGED worktree, each false flag recurs *every session, forever*.
+
+Proving content landed, when ancestry says no:
+
+```bash
+# per-commit equivalence (catches rebase-merge replay, cherry-pick)
+git cherry origin/main <head>          # lines starting '+' are NOT upstream
+# aggregate equivalence (catches a MULTI-commit squash, which no single
+# original commit's patch-id will ever match)
+git log -p --first-parent <merge-base>..origin/main | git patch-id --stable
+git diff <merge-base>..<head>          | git patch-id --stable
+```
+
+**Two traps, both hit live:**
+- **`git cherry` alone is insufficient for a squash of >1 commit** — the squash collapses N patches into one, so no individual patch-id matches. You need the aggregate form.
+- **Comparing the branch's touched files against `origin/main`'s *current* content decays and is not a valid test.** The first implementation of the #1212 fix did exactly that and failed all 5 real fixtures, because unrelated later commits keep touching the same files (`_shell_parse.py` had 600+ further lines changed within days). Compare against **history**, not the current tip.
+
+**Safety direction is asymmetric here and must be stated in the brief:** the caller auto-*deletes* what it classifies merged, so a false "merged" destroys unmerged work while a false "unmerged" only leaves a stale directory. Every failure path must degrade to *not*-merged.
+
+**Related:** #1177 is the prevention half (Hook 22 blocks `--squash` only into wave bases, so squash into `main` is unenforced — and it re-authors the commit to the bare `parametrization` principal, discarding persona authorship). `conventions.md:203`: **never `--squash`, on any base including `main`** (owner directive 2026-07-30). Detection and prevention are separate fixes; neither subsumes the other.
+
+## Surface 1 — re-anchoring a review after a head move
 
 When a PR's head moves and the branch was **rebased**, the two obvious ways to answer *"what changed since I reviewed?"* both mislead:
 
