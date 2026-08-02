@@ -1,6 +1,7 @@
 """Tests for check_worktree_merged — net-content, order-independent merged
 classification (main#1212, sibling of #1177; owner decision 2026-08-02 on
-PR #1213 round 3 superseding acceptance criterion 2 as originally filed).
+PR #1213 round 3 superseding acceptance criterion 2 as originally filed;
+round 4 closes the evil-merge gap round 3 left open).
 
 Every test drives REAL git against a throwaway temp repo so the plumbing is
 exercised end-to-end (ancestry probe, merge-base, `git diff`/`git log -p`
@@ -37,6 +38,16 @@ piped through `git patch-id --stable`, and `git cherry`). Coverage:
     `git cherry` DOES mark it `+` (verified — it is not silently omitted the
     way a merge commit is), because it is explicitly filtered by checking
     its own diff against its immediate parent is empty.
+  * evil-merge discriminator pair (round 4): a CLEAN internal merge (no
+    unique resolution content) stays `merged` -> `git diff-tree --cc
+    --no-commit-id <merge-sha>` is genuinely empty; an EVIL merge (resolution
+    adds content present in neither parent, the population `git cherry`
+    structurally cannot examine) classifies `unmerged` -> the same command
+    is non-empty. Mutation-paired: dropping `--cc` breaks the evil case
+    (bare `git diff-tree` shows nothing for a merge without it); dropping
+    `--no-commit-id` breaks the clean case (bare `--cc` always prints the
+    commit-id line first, so every merge — even a content-free one — would
+    show up as "non-empty").
   * partially-landed: squashed history PLUS one extra unlanded commit on the
     tip -> unmerged / unlanded-changes (must stay FLAGGED; per-commit
     precision in `unmatched_commits` is not guaranteed under net-content
@@ -53,8 +64,9 @@ piped through `git patch-id --stable`, and `git cherry`). Coverage:
   * every internal git-command failure/unexpected-result site degrades to
     unmerged, never merged: own diff, own diff patch-id, own diff patch-id
     producing no output for a non-empty diff (fail-open guard), main log,
-    main patch-id, git cherry, and the per-"+"-candidate empty-commit
-    diff check
+    main patch-id, git cherry, the per-"+"-candidate empty-commit diff
+    check, the merges rev-list enumeration, and the evil-merge
+    diff-tree --cc check
   * CLI exit code mirrors `.merged` (0 iff merged, 1 otherwise)
 """
 
@@ -407,14 +419,24 @@ class CheckWorktreeMergedTest(unittest.TestCase):
         result = self._classify(feature_tip)
         self.assertEqual(result.status, "merged")
 
-    # ---- git-cherry-invisible commits (round 3, finding 2) -------------------
+    # ---- git-cherry-invisible commits (round 3, finding 2; round 4 evil-merge) -
 
     def test_internal_merge_commit_not_treated_as_unlanded(self) -> None:
         """`git cherry` never lists merge commits — routine on a feature
         branch that merges `main` in to resolve conflicts. An earlier
         version of this module treated "not explicitly matched by cherry"
         as "unmatched", which reported the merge commit as having no
-        equivalent — a statement `git cherry`'s own output contradicts."""
+        equivalent — a statement `git cherry`'s own output contradicts.
+
+        This is the CLEAN half of the round-4 evil-merge discriminator pair
+        (see test_evil_merge_flags_unmerged for the other half): a routine,
+        content-free merge must stay `merged`. `git diff-tree --cc
+        --no-commit-id <merge-sha>` on a clean merge is genuinely EMPTY —
+        bare `--cc` (no `--no-commit-id`) would print the commit-id line
+        even for a clean merge, which is why dropping `--no-commit-id` is
+        exactly the mutation that must fail THIS test (see the module for
+        why: it would false-flag every routine internal merge, reopening
+        the over-strict round-2 bug)."""
         _git(["checkout", "-b", "feature"], self.repo)
         c1 = _commit(self.repo, "a.txt", "A\n", "feature commit 1")
 
@@ -423,6 +445,7 @@ class CheckWorktreeMergedTest(unittest.TestCase):
 
         _git(["checkout", "feature"], self.repo)
         _git(["merge", "main", "-m", "merge main into feature to resolve conflicts"], self.repo)
+        merge_commit = _head(self.repo)
         c2 = _commit(self.repo, "b.txt", "B\n", "feature commit 2 (after the merge)")
         feature_tip = _head(self.repo)
 
@@ -437,9 +460,70 @@ class CheckWorktreeMergedTest(unittest.TestCase):
         # commit is simply absent from its output, neither "+" nor "-".
         self.assertEqual(_cherry_unmatched(self.repo, "main", feature_tip), [])
 
+        # Ground truth: the discriminator is genuinely empty for this clean
+        # merge with --no-commit-id, but NOT with bare --cc (which always
+        # prints the commit-id line first).
+        cc_no_id = _git_ok(["diff-tree", "--cc", "--no-commit-id", merge_commit], self.repo)
+        self.assertEqual(cc_no_id.stdout.strip(), "")
+        cc_with_id = _git_ok(["diff-tree", "--cc", merge_commit], self.repo)
+        self.assertEqual(cc_with_id.stdout.strip(), merge_commit)
+
         result = self._classify(feature_tip)
         self.assertEqual(result.status, "merged")
         self.assertEqual(result.unmatched_commits, [])
+
+    def test_evil_merge_flags_unmerged(self) -> None:
+        """The EVIL half of the round-4 discriminator pair: a merge commit
+        whose conflict resolution adds content present in NEITHER parent
+        (an ordinary, if unusual, thing to do while resolving a merge) must
+        be classified `unmerged` -- `git cherry` never examines merge
+        commits at all, and test 1 (net-content match) cannot cover this
+        path either, since test 2 is only reached once test 1 has already
+        failed to match anything.
+
+        Mirrors GitHub's rebase-merge behavior: it flattens a branch and
+        replays only the non-merge commits, dropping the merge (and
+        therefore its resolution content) entirely -- exactly what landing
+        c1/c2 individually via separate cherry-picks below simulates."""
+        _git(["checkout", "-b", "feature"], self.repo)
+        c1 = _commit(self.repo, "x.txt", "x content\n", "X: add x.txt")
+
+        _git(["checkout", "main"], self.repo)
+        _commit(self.repo, "m.txt", "m content\n", "unrelated main work")
+
+        _git(["checkout", "feature"], self.repo)
+        _git(["merge", "--no-commit", "main"], self.repo)
+        _write(self.repo, "evil.txt", "evil resolution content\n")
+        _git(["add", "evil.txt"], self.repo)
+        _git(["commit", "-m", "merge main into feature (resolution adds evil.txt)"], self.repo)
+        merge_commit = _head(self.repo)
+        c2 = _commit(self.repo, "y.txt", "y content\n", "Y: add y.txt")
+        feature_tip = _head(self.repo)
+
+        # Land ONLY the non-merge commits individually onto main -- the
+        # merge (and evil.txt with it) never lands, matching a real
+        # rebase-merge's flatten-and-replay behavior.
+        _git(["checkout", "main"], self.repo)
+        _git(["cherry-pick", c1], self.repo)
+        _git(["cherry-pick", c2], self.repo)
+
+        # Ground truth: git cherry shows 0 unlanded commits (X and Y both
+        # matched; the merge commit is simply absent from its output) --
+        # this is exactly why cherry alone cannot catch it.
+        self.assertEqual(_cherry_unmatched(self.repo, "main", feature_tip), [])
+        # Ground truth: evil.txt is genuinely absent from main.
+        missing = _git_ok(["show", "main:evil.txt"], self.repo)
+        self.assertNotEqual(missing.returncode, 0)
+        # Ground truth: the discriminator is non-empty for this merge.
+        cc_no_id = _git_ok(["diff-tree", "--cc", "--no-commit-id", merge_commit], self.repo)
+        self.assertNotEqual(cc_no_id.stdout.strip(), "")
+        self.assertIn("evil.txt", cc_no_id.stdout)
+
+        result = self._classify(feature_tip)
+        self.assertEqual(result.status, "unmerged")
+        self.assertEqual(result.reason, "unlanded-changes")
+        self.assertFalse(result.merged)
+        self.assertIn(merge_commit, result.unmatched_commits)
 
     def test_empty_commit_not_treated_as_unlanded(self) -> None:
         """Unlike a merge commit, `git cherry` does NOT silently omit a
@@ -649,6 +733,52 @@ class CheckWorktreeMergedTest(unittest.TestCase):
         # 1st "diff" call is the own (full-range) diff; the 2nd is the
         # per-candidate empty-commit check this test targets.
         runner = _runner_intercepting("diff", occurrence=2, mode="fail")
+        result = classify_merged(
+            self.repo, feature_tip, "main", runner=runner, pipe_runner=_git_pipe_real
+        )
+        self.assertEqual(result.status, "unmerged")
+        self.assertEqual(result.reason, "content-check-failed")
+        self.assertFalse(result.merged)
+
+    def test_merges_rev_list_failure_degrades(self) -> None:
+        """The `git rev-list --merges` enumeration (evil-merge detection)
+        failing must degrade, not silently skip the check (which would
+        fail open exactly on the population it exists to catch)."""
+        _git(["checkout", "-b", "feature"], self.repo)
+        _commit(self.repo, "a.txt", "A\n", "never merged")
+        feature_tip = _head(self.repo)
+
+        runner = _runner_intercepting("rev-list", occurrence=1, mode="fail")
+        result = classify_merged(
+            self.repo, feature_tip, "main", runner=runner, pipe_runner=_git_pipe_real
+        )
+        self.assertEqual(result.status, "unmerged")
+        self.assertEqual(result.reason, "content-check-failed")
+        self.assertFalse(result.merged)
+
+    def test_evil_merge_diff_tree_failure_degrades(self) -> None:
+        """`git diff-tree --cc --no-commit-id` (the evil-merge discriminator
+        itself) failing must degrade, never silently treat the merge as
+        clean."""
+        _git(["checkout", "-b", "feature"], self.repo)
+        c1 = _commit(self.repo, "x.txt", "x content\n", "X: add x.txt")
+
+        _git(["checkout", "main"], self.repo)
+        _commit(self.repo, "m.txt", "m content\n", "unrelated main work")
+
+        _git(["checkout", "feature"], self.repo)
+        _git(["merge", "--no-commit", "main"], self.repo)
+        _write(self.repo, "evil.txt", "evil resolution content\n")
+        _git(["add", "evil.txt"], self.repo)
+        _git(["commit", "-m", "merge main into feature (resolution adds evil.txt)"], self.repo)
+        c2 = _commit(self.repo, "y.txt", "y content\n", "Y: add y.txt")
+        feature_tip = _head(self.repo)
+
+        _git(["checkout", "main"], self.repo)
+        _git(["cherry-pick", c1], self.repo)
+        _git(["cherry-pick", c2], self.repo)
+
+        runner = _runner_intercepting("diff-tree", occurrence=1, mode="fail")
         result = classify_merged(
             self.repo, feature_tip, "main", runner=runner, pipe_runner=_git_pipe_real
         )

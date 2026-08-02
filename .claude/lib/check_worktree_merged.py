@@ -60,10 +60,18 @@ internal commit ordering:**
      landing).** `git cherry remote_ref head` reports, for each commit
      `git cherry` examines, whether an equivalent patch-id already exists on
      `remote_ref`. If none of the commits `git cherry` marks `+` (no
-     equivalent found) remain, every commit it examined has landed — this is
-     what recognizes a rebase-merge replay or a cherry-pick of *several*
-     original commits, none of which individually equals the (single-commit)
-     net-content diff test A is comparing against.
+     equivalent found) remain — see the two carve-outs below — every commit
+     it examined has landed. This is what recognizes a rebase-merge replay
+     or a cherry-pick of *several* original commits, none of which
+     individually equals the (single-commit) net-content diff test 1 is
+     comparing against. It is order-independent for a different reason than
+     test 1: reordering `head`'s commits (the only reordering that preserves
+     the same commit *set*, i.e. commutative changes touching disjoint
+     content) does not change any individual commit's own diff against its
+     immediate predecessor, and `git patch-id --stable` hashes each diff's
+     content while ignoring line-number/context shifts — so the same set of
+     per-commit patch-ids, and hence the same match/no-match verdicts, comes
+     out regardless of the order those commits were made in.
 
      Only commits `git cherry` explicitly marks `+` count as unmatched
      candidates — NOT "everything git cherry didn't explicitly mark `-`".
@@ -74,12 +82,7 @@ internal commit ordering:**
      `remote_ref` in to resolve conflicts) as having "no patch-id-equivalent
      anywhere on `remote_ref`" — a statement `git cherry`'s own output
      contradicts, recreating #1212's exact "flagged every session, forever"
-     symptom for a new population. Test 1 still sees the true net content
-     either way (an internal merge's own resolution, if it introduces
-     genuinely unique content, shows up in `merge_base..head` regardless of
-     commit graph shape), so this narrowing does not create a silent-
-     content-loss gap — it only stops treating "not examined by cherry" as
-     evidence of "unlanded".
+     symptom for a new population.
 
      A truly **empty** commit (`--allow-empty`, zero diff against its own
      immediate parent) is a separate case: unlike a merge commit, `git
@@ -89,9 +92,33 @@ internal commit ordering:**
      cherry` marks `+` is checked against its own immediate-parent diff, and
      dropped from the unmatched set if that diff is empty.
 
-Deliberately NOT special-cased by merge-strategy name — both tests look only
-at patch-id (diff content) and `git cherry`'s own explicit verdicts, never
-at commit graph shape or a fixed strategy label.
+     A merge commit's OWN unique content is a **third, separate check**, not
+     covered by anything above. An earlier version of this module argued
+     that ignoring merge commits was safe because "test 1 still sees the
+     true net content either way" — that argument does not hold: **test 2 is
+     only reached when test 1 has already failed to match**, so on the
+     exact path where a merge commit's content would matter, test 1 has
+     already been ruled out as a source of cover. Concretely: an ordinary
+     conflict resolution can add content present in **neither parent** (an
+     "evil merge"), and `git cherry` never examines merge commits at all —
+     GitHub's rebase-merge makes this a realistic, not contrived, shape: it
+     flattens a branch and replays only the *non-merge* commits, dropping
+     the merge (and its resolution) entirely. This module therefore
+     enumerates `git rev-list --merges merge_base..head` and, for each merge
+     commit, runs `git diff-tree --cc --no-commit-id <sha>` — the combined
+     diff of the merge against both parents, with the leading commit-id line
+     stripped. A **non-empty** result is resolution content unique to the
+     merge; that commit is added to the unmatched set. `--no-commit-id`
+     matters: bare `--cc` alone always prints the commit-id as its first
+     line, so *every* merge (including a routine, content-free one) would
+     show up as "non-empty" without it — silently reopening the exact
+     over-strict bug (merge commits wrongly treated as unlanded) the earlier
+     fix above exists to close.
+
+Deliberately NOT special-cased by merge-strategy name — every test here
+looks only at patch-id (diff content), `git cherry`'s own explicit
+verdicts, or a merge's own combined diff, never at commit graph shape or a
+fixed strategy label as such.
 
 **Safety stance (never relaxed):**
 
@@ -197,12 +224,13 @@ class MergeClassification:
         (not a normal negative result). Still not-merged for every caller.
 
     ``unmatched_commits`` — populated only for ``unlanded-changes``: the
-    commit(s) `git cherry` explicitly marked `+` (no patch-id-equivalent
-    found on ``remote_ref``) AND which are not themselves empty commits.
-    Never includes a merge commit (`git cherry` never examines them at all)
-    or a truly empty commit (explicitly filtered even though `git cherry`
-    does mark it `+`) — see the module docstring's per-commit-corroboration
-    section.
+    non-merge commit(s) `git cherry` explicitly marked `+` and which are not
+    themselves empty commits, UNION any merge commit whose own combined diff
+    (`git diff-tree --cc --no-commit-id`) is non-empty (unique conflict-
+    resolution content `git cherry` never examines at all). Never includes a
+    truly empty commit (explicitly filtered even though `git cherry` does
+    mark it `+`) or a merge commit with no unique content of its own — see
+    the module docstring's per-commit-corroboration section.
     """
 
     status: str
@@ -370,23 +398,77 @@ def classify_merged(
             unmatched.append(c)
         # else: c is an empty commit — contributes no content, not a residual.
 
-    if not unmatched:
+    # ---- merge commits: git cherry never examines them at all, so a merge's
+    # OWN unique resolution content (an ordinary conflict resolution can add
+    # content present in NEITHER parent) is invisible to everything above.
+    # Test 1 provides no cover here either — this code is only reached when
+    # test 1 has already failed to match, which is exactly the branch shape
+    # (a multi-commit non-squash landing) where a merge's resolution content
+    # would otherwise slip through undetected.
+    merges_res = runner(["rev-list", "--merges", f"{merge_base}..{head}"], root)
+    if merges_res.returncode != 0:
+        return _degrade(
+            "content-check-failed",
+            f"git rev-list --merges {merge_base}..{head} failed "
+            f"(exit {merges_res.returncode}): {merges_res.stderr.strip()} "
+            f"— degraded to ancestry-only result",
+        )
+    merge_commits = [c for c in merges_res.stdout.splitlines() if c]
+    evil_merges: list[str] = []
+    for m in merge_commits:
+        # `--cc` alone always prints the commit-id line first, so EVERY merge
+        # (including a routine, content-free one) shows >=1 line — that would
+        # false-flag every ordinary "merge remote_ref into head" and reopen
+        # the exact over-strict bug the empty-commit/merge-commit fix above
+        # exists to close. `--no-commit-id` strips that header, leaving
+        # genuinely empty output for a clean merge and the actual combined
+        # resolution diff for one that isn't.
+        resolution = runner(["diff-tree", "--cc", "--no-commit-id", m], root)
+        if resolution.returncode != 0:
+            return _degrade(
+                "content-check-failed",
+                f"git diff-tree --cc --no-commit-id {m[:12]} failed "
+                f"(exit {resolution.returncode}): {resolution.stderr.strip()} "
+                f"— degraded to ancestry-only result",
+            )
+        if resolution.stdout.strip():
+            evil_merges.append(m)
+        # else: a clean merge — its content is the union of its parents',
+        # nothing unique to check for.
+
+    if not unmatched and not evil_merges:
         return MergeClassification(
             "merged",
             "content-equivalent",
             f"every commit git cherry examined for {head} has a patch-id-equivalent "
-            f"commit already on {remote_ref} (no commit marked unmatched) — "
-            f"rebase-merge or cherry-pick landed the content",
+            f"commit already on {remote_ref} (no commit marked unmatched), and no "
+            f"merge commit in range carries resolution content absent from "
+            f"{remote_ref} — rebase-merge or cherry-pick landed the content",
         )
 
-    shown = ", ".join(c[:12] for c in unmatched[:5]) + (", ..." if len(unmatched) > 5 else "")
+    detail_parts = []
+    if unmatched:
+        shown = ", ".join(c[:12] for c in unmatched[:5]) + (", ..." if len(unmatched) > 5 else "")
+        detail_parts.append(
+            f"{len(unmatched)} commit(s) unique to {head} have no patch-id-equivalent "
+            f"on {remote_ref} (git cherry): {shown}"
+        )
+    if evil_merges:
+        shown_m = ", ".join(m[:12] for m in evil_merges[:5]) + (
+            ", ..." if len(evil_merges) > 5 else ""
+        )
+        detail_parts.append(
+            f"{len(evil_merges)} merge commit(s) carry resolution content not present "
+            f"on {remote_ref} (git diff-tree --cc), invisible to git cherry entirely: "
+            f"{shown_m}"
+        )
+    detail_parts.append(f"and the cumulative diff does not match anything on {remote_ref} either")
+
     return MergeClassification(
         "unmerged",
         "unlanded-changes",
-        f"{len(unmatched)} commit(s) unique to {head} have no patch-id-equivalent "
-        f"on {remote_ref} (git cherry) and the cumulative diff does not match "
-        f"anything on {remote_ref} either — genuine unlanded content: {shown}",
-        unmatched_commits=unmatched,
+        "; ".join(detail_parts) + " — genuine unlanded content",
+        unmatched_commits=[*unmatched, *evil_merges],
     )
 
 
