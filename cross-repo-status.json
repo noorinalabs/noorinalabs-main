@@ -2050,7 +2050,7 @@
   },
   "wave_18_scope_reconciliation_note": "Greenfield wave (no prior wave-18 drift). 6 P6 framework carry-forwards decomposed per owner decision into 6 per-repo fan-out issues + 2 generator-refinement (ts-enum #870, merge-driver #871) + 3 framework (#862/#863/#868). isnad-graph excluded (pilot). Slates null at scope; kickoff Step 0.4 drafts per-repo 2-reviewer slate from each child roster.",
   "phase_7_carry_forwards": [],
-  "phase_10_carry_forwards": [],
+  "phase_10_carry_forwards": ["noorinalabs-main#1222 (failing `cd` does not abort the rest of a multi-line command — subsequent lines run in the previous cwd; runtime sibling of #1151/#1169). OWNER-DIRECTED to wave-30 on 2026-08-02. Filed deliberately WITHOUT a wave label: `wave-30` does not exist until wave-30 kickoff, and a `wave-29` label would create false drift against that wave's labelled==scoped invariant. Recorded here so wave-30 scoping picks it up rather than rediscovering it. Origin: live near-miss on PR #1213 round 2 — two junk commits landed on a branch under active review, caught pre-push, origin never polluted; self-disclosed by the implementer."],
   "wave_17_phase": 6,
   "wave_17_phase_ordinal": 4,
   "wave_17_scope_reconciled_at": "2026-06-24T01:48:21Z",
