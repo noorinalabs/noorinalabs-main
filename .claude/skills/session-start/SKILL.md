@@ -17,7 +17,7 @@ Execute all 7 steps below. Steps that are independent of each other SHOULD run i
 
 ### Step 0 — Worktree cleanup (parent + child repos)
 
-Worktrees accumulate in the parent AND every child repo (#526 — ~33 stale child worktrees found uncaught on 2026-05-24). The block iterates all 8 repos with a **verify-merged-then-remove guard**: auto-remove only a worktree whose HEAD is an ancestor of that repo's `origin/main`; FLAG (never auto-remove) anything locked or unmerged.
+Worktrees accumulate in the parent AND every child repo (#526 — ~33 stale child worktrees found uncaught on 2026-05-24). The block iterates all 8 repos with a **verify-merged-then-remove guard**: auto-remove only a worktree whose HEAD is fully merged into that repo's `origin/main`; FLAG (never auto-remove) anything locked, unmerged, or that fails to remove cleanly. "Fully merged" is decided by `.claude/lib/check_worktree_merged.py` (#1212, sibling of #1177; guarantee revised by owner decision 2026-08-02, PR #1213 round 3): ancestry is the fast path (the merge-commit majority); the fallback classifies `merged` iff **the branch's cumulative diff since its merge-base is fully present on `origin/main`** — a net-content test, not a per-commit one, searched over `origin/main`'s own history (not a snapshot compare against its current tip, which would decay as unrelated later commits keep touching the same files) — so a squash-merged (single- or multi-commit), rebase-merged, or cherry-picked branch is recognized as landed instead of being flagged `UNMERGED` forever just because its tip is never an ancestor. Verdicts are **order-independent**: the same commit set in a different order always classifies identically, because the primary test depends only on the branch's final tree state, never on the order of the commits that produced it (and the per-commit fallback test is order-independent too, for the separate reason that `git patch-id --stable` is invariant to the line-number shifts a commutative reorder causes) — a per-commit design (tried in an earlier round) could not provide this. A branch's own internal merge commit (round 4, PR #1213) is checked for unique conflict-resolution content (`git diff-tree --cc --no-commit-id`) that `git cherry` structurally cannot see, since `git cherry` never examines merge commits at all — this closes the one path where a merge's resolution could carry unlanded content past both other tests undetected. The disclosed residual is `git patch-id`'s own whitespace-normalization (a change indistinguishable from an already-landed one, character-for-character after whitespace is stripped, is treated as landed — the same reason `--verbatim` is deliberately not used, since it would misclassify the real #1156 fixture as unmerged); see the module docstring for the full guarantee and its two coordinated tests. The check is 100% local git plumbing (no `gh`/network dependency) and degrades to the pre-fix ancestry-only result on any internal git-command failure. **Step 0 never force-removes** (owner decision, round 3): the plain `git worktree remove` call either succeeds or the worktree is FLAGGED — the `--force` fallback that used to destroy uncommitted content on a dirty worktree is gone, so the worst a misclassification can now cost is a stale worktree directory (a commit or branch was never at risk either way, since `worktree remove` never deletes the branch ref).
 
 ```bash
 # Anchor REPO_ROOT to the PARENT org repo deterministically (#533). Using a
@@ -108,11 +108,41 @@ for repo in "${REPOS[@]}"; do
         if [ "$wt" = "$main_repo" ]; then wt=""; continue; fi  # skip main checkout
         if [ "$locked" -eq 1 ]; then
           FLAGGED+=("LOCKED  $repo :: $wt")
-        elif [ -n "$head" ] && git -C "$repo" merge-base --is-ancestor "$head" origin/main 2>/dev/null; then
-          echo "removing merged worktree: $wt"
-          git -C "$repo" worktree remove "$wt" 2>/dev/null \
-            || git -C "$repo" worktree remove --force "$wt" 2>/dev/null \
-            || FLAGGED+=("REMOVE-FAILED  $repo :: $wt")
+        elif [ -n "$head" ]; then
+          # Delegate the merged-vs-unmerged call to the tested helper (#1212):
+          # ancestry is the fast path, with a patch-id content-equivalence
+          # fallback so a squash/rebase-merge/cherry-picked branch is not
+          # flagged forever just because its tip is never an ancestor. A
+          # `$(...)` command substitution assigning to a variable (not a
+          # `<(...)` process substitution) stays statically analyzable —
+          # same property the temp-file loop above preserves (#839).
+          if [ -f "$REPO_ROOT/.claude/lib/check_worktree_merged.py" ]; then
+            _mreason="$(python3 "$REPO_ROOT/.claude/lib/check_worktree_merged.py" "$repo" "$head" origin/main 2>/dev/null)"
+            _mrc=$?
+          else
+            # Helper missing (very old checkout) — degrade to the legacy
+            # ancestry-only test rather than failing closed.
+            git -C "$repo" merge-base --is-ancestor "$head" origin/main 2>/dev/null
+            _mrc=$?
+            _mreason="ancestry-only (helper not found)"
+          fi
+          if [ "$_mrc" -eq 0 ]; then
+            # Never force-remove (owner decision, PR #1213 round 3): a
+            # worktree that does not remove cleanly (uncommitted/untracked
+            # content in the way) is FLAGGED for a manual decision instead.
+            # `git worktree remove` never deletes the branch ref either way,
+            # so dropping the --force fallback means a misclassification by
+            # the helper above can cost at most a stale worktree directory —
+            # never a commit, never a branch, and (with --force gone) never
+            # even uncommitted content either.
+            if git -C "$repo" worktree remove "$wt" 2>/dev/null; then
+              echo "removed merged worktree: $wt ($_mreason)"
+            else
+              FLAGGED+=("DIRTY  $repo :: $wt (merged but remove refused — uncommitted/untracked content; never force-removed)")
+            fi
+          else
+            FLAGGED+=("UNMERGED  $repo :: $wt (HEAD ${head:-?}) [$_mreason]")
+          fi
         else
           FLAGGED+=("UNMERGED  $repo :: $wt (HEAD ${head:-?})")
         fi
