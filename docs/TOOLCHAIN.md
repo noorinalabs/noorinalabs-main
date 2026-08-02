@@ -167,8 +167,8 @@ Structural (AST-dependent) search is a different tool again — see below.
 `gh` splits its hourly rate limit across **two independent quotas**
 (`gh api rate_limit`): **`core`** (REST, 5,000/hr) and **`graphql`**
 (5,000/hr). They drain independently — REST can sit near-full while GraphQL
-is flat zero (`feedback_gh_cli_gotchas` §12; enforced by `gh_quota_gate.py`,
-#1224).
+is flat zero (`feedback_gh_cli_gotchas` §12; enforced by
+`gh_quota_gate.py`, #1224).
 
 `gh`'s ergonomic read/write surfaces are mostly **GraphQL-backed**, so a
 GraphQL-exhausted session fails on `gh issue view/list/create`, `gh pr
