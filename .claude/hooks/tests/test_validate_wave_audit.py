@@ -732,6 +732,258 @@ class OpenIssueNumbersUnion(unittest.TestCase):
             )
 
 
+class PartialAuditFailureCoverage(unittest.TestCase):
+    """#1226 — a PARTIAL per-repo query failure must never produce a bare allow.
+
+    Why these tests stub `_open_issue_numbers_for_label` and not `_audit_open_count`:
+    every pre-existing test in this file injects `_audit_open_count`'s *return
+    value* (`_patch_audit`), so no test in the suite has ever executed the
+    aggregation loop — which is precisely why this defect survived. Stubbing at
+    the subprocess boundary (the leaf that shells out to `gh`) makes the real
+    `_audit_open_count` → `_count_open_for_repo` → `_open_issue_numbers_for_repo`
+    chain run for all 8 org repos, exactly as it does in production.
+
+    Ground truth is the live distribution measured 2026-08-02: `noorinalabs-main`
+    carries 30 open `wave-29` issues and the other 7 repos carry 0. That skew is
+    the whole danger — ONE failed query, on main, used to sum to a confident 0.
+    """
+
+    _LABELS = ["p10-wave-29", "wave-29"]
+    # repo → open wave-issue numbers. Absent repo == queried, found nothing.
+    _TRUTH = {"noorinalabs-main": list(range(1, 31))}
+
+    def _run(
+        self,
+        failing_repos: set[str],
+        skill: str = "wave-wrapup",
+        args: str = "",
+        wave_branch: str | None = None,
+        exempt: set[int] | None = None,
+    ):
+        """Drive the real aggregation loop with `failing_repos` failing to query.
+
+        Returns `(result, queried_repos)`. `queried_repos` is the inertness
+        guard: it proves the loop actually ran over every org repo rather than
+        short-circuiting before the assertions could mean anything.
+        """
+        queried: list[str] = []
+
+        def _stub(repo: str, label: str):
+            queried.append(repo)
+            if repo in failing_repos:
+                # Exactly what a non-zero `gh` exit / timeout yields.
+                return None
+            return list(self._TRUTH.get(repo, []))
+
+        patches = [
+            mock.patch.object(hook, "_read_current_wave_labels", return_value=self._LABELS),
+            mock.patch.object(hook, "_read_current_wave_branch", return_value=wave_branch),
+            mock.patch.object(hook, "_open_issue_numbers_for_label", side_effect=_stub),
+            mock.patch.object(hook, "_mergeready_exempt_issues", return_value=exempt or set()),
+        ]
+        with patches[0], patches[1], patches[2], patches[3]:
+            result = hook.check(_skill_input(skill, args=args))
+        return result, set(queried)
+
+    def _assert_loop_ran(self, queried: set[str]) -> None:
+        """Guard against an inert test: every org repo must have been attempted."""
+        self.assertEqual(
+            queried,
+            set(hook._ORG_REPOS),
+            "aggregation loop did not attempt every org repo — this test would be inert",
+        )
+
+    # -- the reproduction matrix from issue #1226 ------------------------------
+
+    def test_baseline_all_repos_queried_blocks(self) -> None:
+        """CONTROL: full coverage, 30 open in main → block. (Passes pre-fix.)"""
+        result, queried = self._run(set())
+        self._assert_loop_ran(queried)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("Open items across the org: 30", result["reason"])
+
+    def test_only_main_fails_is_not_a_bare_allow(self) -> None:
+        """1-of-8, the dangerous case: main unqueried → MUST NOT be a bare allow.
+
+        Pre-fix this returns None (exit 0, no output) — indistinguishable from
+        a genuinely clean wave.
+        """
+        result, queried = self._run({"noorinalabs-main"})
+        self._assert_loop_ran(queried)
+        self.assertIsNotNone(
+            result,
+            "partial audit failure returned a BARE ALLOW (no decision, no message) — #1226",
+        )
+
+    def test_only_main_fails_blocks_wave_wrapup(self) -> None:
+        """1-of-8 → /wave-wrapup blocks, naming the repo it could not see."""
+        result, queried = self._run({"noorinalabs-main"})
+        self._assert_loop_ran(queried)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("noorinalabs-main", result["reason"])
+        self.assertIn("could not be queried", result["reason"])
+
+    def test_two_repos_fail_names_both(self) -> None:
+        """2-of-8 → block, both unqueried repos named."""
+        result, queried = self._run({"noorinalabs-main", "noorinalabs-deploy"})
+        self._assert_loop_ran(queried)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("noorinalabs-main", result["reason"])
+        self.assertIn("noorinalabs-deploy", result["reason"])
+
+    def test_zero_issue_repo_failure_still_reports_the_gap(self) -> None:
+        """1-of-8 on a repo that has no issues: the total is unchanged (30) and
+        the gate still blocks on open items — but the incomplete coverage MUST
+        still be surfaced, because the audit cannot know that repo was empty."""
+        result, queried = self._run({"noorinalabs-isnad-graph"})
+        self._assert_loop_ran(queried)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("noorinalabs-isnad-graph", result["reason"])
+        self.assertIn("NOT AUDITED", result["reason"])
+
+    def test_total_failure_still_allows_with_warning(self) -> None:
+        """CONTROL: all 8 fail → unchanged fail-open WITH warning. (Passes pre-fix.)"""
+        result, queried = self._run(set(hook._ORG_REPOS))
+        self._assert_loop_ran(queried)
+        assert result is not None
+        self.assertEqual(result["decision"], "allow")
+        self.assertIn("could not query any of", result["systemMessage"])
+
+    def test_partial_failure_is_never_quieter_than_total_failure(self) -> None:
+        """The acceptance criterion stated directly: the partial path must carry
+        at least as much operator signal as the total path it sits beside."""
+        partial, q1 = self._run({"noorinalabs-main"})
+        total, q2 = self._run(set(hook._ORG_REPOS))
+        self._assert_loop_ran(q1)
+        self._assert_loop_ran(q2)
+        assert total is not None
+        self.assertTrue(total.get("systemMessage"))
+        assert partial is not None, "partial failure was SILENT while total failure warned"
+        self.assertTrue(
+            partial.get("reason") or partial.get("systemMessage"),
+            "partial failure produced no operator-visible text",
+        )
+
+    # -- per-skill policy -----------------------------------------------------
+
+    def test_wave_retro_partial_failure_blocks(self) -> None:
+        """/wave-retro writes the durable wave record → coverage-blocking."""
+        result, queried = self._run({"noorinalabs-main"}, skill="wave-retro")
+        self._assert_loop_ran(queried)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_handoff_partial_failure_allows_with_explicit_warning(self) -> None:
+        """/handoff is deliberately NOT coverage-blocked — hard-blocking it on a
+        transient API failure would strand a session with no way to record
+        state. It allows, but LOUDLY and never bare."""
+        result, queried = self._run({"noorinalabs-main"}, skill="handoff")
+        self._assert_loop_ran(queried)
+        assert result is not None
+        self.assertEqual(result["decision"], "allow")
+        self.assertIn("noorinalabs-main", result["systemMessage"])
+        self.assertIn("LOWER BOUND", result["systemMessage"])
+
+    def test_coverage_blocking_skills_are_a_subset_of_gated_skills(self) -> None:
+        """Drift guard: a coverage-blocking skill the hook never fires on is dead
+        policy, and would silently narrow the gate."""
+        self.assertTrue(hook._COVERAGE_BLOCKING_SKILLS <= hook._GATED_SKILLS)
+        self.assertNotIn("handoff", hook._COVERAGE_BLOCKING_SKILLS)
+
+    def test_carry_forward_does_not_clear_a_coverage_block(self) -> None:
+        """A carry-forward marker acknowledges items the operator has SEEN. An
+        unqueried repo was never read, so the marker cannot speak for it."""
+        args = "Wrapup. Carry-forward: #194 → wave-30, #845 → backlog"
+        result, queried = self._run({"noorinalabs-main"}, args=args)
+        self._assert_loop_ran(queried)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("carry-forward", result["reason"].lower())
+
+    def test_coverage_block_survives_the_mergeready_exemption(self) -> None:
+        """#664's exemption cannot paper over a coverage gap: even with every
+        *visible* issue exempted, an unqueried repo still blocks."""
+        result, queried = self._run(
+            {"noorinalabs-main"},
+            wave_branch="deployments/phase-10/wave-29",
+            exempt=set(range(1, 31)),
+        )
+        self._assert_loop_ran(queried)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_full_coverage_genuine_zero_still_allows_silently(self) -> None:
+        """NEG: the fix must not make a genuinely clean wave noisy. Full
+        coverage + zero open → bare allow, as before."""
+        with mock.patch.dict(self._TRUTH, {}, clear=True):
+            result, queried = self._run(set())
+        self._assert_loop_ran(queried)
+        self.assertIsNone(result)
+
+
+class AuditOpenCountReportsCoverage(unittest.TestCase):
+    """#1226 — the aggregator must record failed repos, not discard them."""
+
+    _LABELS = ["p10-wave-29", "wave-29"]
+
+    def _audit(self, failing_repos: set[str], truth: dict[str, list[int]]):
+        def _stub(repo: str, label: str):
+            return None if repo in failing_repos else list(truth.get(repo, []))
+
+        with mock.patch.object(hook, "_open_issue_numbers_for_label", side_effect=_stub):
+            return hook._audit_open_count(self._LABELS, None)
+
+    def test_returns_unqueried_repo_names(self) -> None:
+        out = self._audit({"noorinalabs-main"}, {"noorinalabs-main": [1, 2, 3]})
+        self.assertEqual(
+            len(out), 3, "aggregator must report which repos it could not query (#1226)"
+        )
+        total, per_repo, unqueried = out
+        self.assertEqual(unqueried, ["noorinalabs-main"])
+        self.assertEqual(per_repo, {})
+        self.assertEqual(total, 0)  # a LOWER BOUND — check() must not trust it alone
+
+    def test_full_coverage_reports_no_gaps(self) -> None:
+        out = self._audit(set(), {"noorinalabs-deploy": [7, 8]})
+        self.assertEqual(len(out), 3)
+        total, per_repo, unqueried = out
+        self.assertEqual(unqueried, [])
+        self.assertEqual(per_repo, {"noorinalabs-deploy": 2})
+        self.assertEqual(total, 2)
+
+    def test_total_failure_lists_every_repo_as_unqueried(self) -> None:
+        out = self._audit(set(hook._ORG_REPOS), {})
+        self.assertEqual(len(out), 3)
+        total, _per_repo, unqueried = out
+        self.assertIsNone(total)
+        self.assertEqual(sorted(unqueried), sorted(hook._ORG_REPOS))
+
+
+class FormatPerRepoCoverage(unittest.TestCase):
+    """#1226 — the summary must never imply the audit saw repos it did not."""
+
+    def test_no_false_all_returned_zero_claim_when_repos_skipped(self) -> None:
+        out = hook._format_per_repo({}, ["noorinalabs-main"])
+        self.assertNotIn("all audited repos returned 0", out)
+        self.assertIn("noorinalabs-main", out)
+        self.assertIn("NOT AUDITED", out)
+
+    def test_skipped_repos_listed_alongside_counts(self) -> None:
+        out = hook._format_per_repo({"noorinalabs-deploy": 4}, ["noorinalabs-main"])
+        self.assertIn("noorinalabs/noorinalabs-deploy: 4 open", out)
+        self.assertIn("noorinalabs-main", out)
+        self.assertIn("NOT AUDITED", out)
+
+    def test_full_coverage_zero_keeps_the_all_zero_line(self) -> None:
+        out = hook._format_per_repo({}, [])
+        self.assertIn("returned 0", out)
+        self.assertNotIn("NOT AUDITED", out)
+
+
 class CheckEndToEndExemption(unittest.TestCase):
     """check() integration: a fully-exempt wave allows /wave-wrapup (#664)."""
 
