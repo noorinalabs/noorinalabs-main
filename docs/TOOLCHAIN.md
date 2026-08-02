@@ -162,6 +162,62 @@ Two gotchas the rule carries:
 
 Structural (AST-dependent) search is a different tool again — see below.
 
+## GitHub API quota: `gh`'s two independent limits
+
+`gh` splits its hourly rate limit across **two independent quotas**
+(`gh api rate_limit`): **`core`** (REST, 5,000/hr) and **`graphql`**
+(5,000/hr). They drain independently — REST can sit near-full while GraphQL
+is flat zero (`feedback_gh_cli_gotchas` §12; enforced by
+`gh_quota_gate.py`, #1224).
+
+`gh`'s ergonomic read/write surfaces are mostly **GraphQL-backed**, so a
+GraphQL-exhausted session fails on `gh issue view/list/create`, `gh pr
+view/list/checks/comment`, and `gh project item-add/item-list` — while `gh
+api repos/...` (REST), `gh pr diff`, and `gh api rate_limit` itself (free —
+it costs no quota) keep working. Two counter-intuitive shapes worth knowing:
+
+- **`gh issue list` fails even without `--json`.** The GraphQL dependency is
+  not about output formatting; dropping `--json` is not a workaround.
+- **`gh pr view --json` is flaky, not cleanly REST or GraphQL** — it can
+  succeed once and fail on an immediate repeat with an identical field set.
+  Never build logic that depends on a single success.
+
+**The failure is a silent zero, not a raised error.** The response body is
+the bare string `GraphQL: API rate limit already exceeded for user ID <n>`;
+piped through `jq` it's a parse error, and the customary `2>/dev/null` turns
+the whole thing into an indistinguishable-from-empty result — a quota outage
+can misread as "zero issues found" or "board membership: none." Never
+`2>/dev/null` a `gh` call whose result you're about to treat as a finding.
+
+**When GraphQL is low, use the REST fallback layer** instead of retrying into
+the same wall:
+
+- `python3 .claude/lib/gh_quota.py check` — report both quotas' remaining/
+  reset without consuming any (the sensor).
+- `python3 .claude/lib/gh_rest.py <issue|pr|comment|project> ...` — REST
+  equivalents for the GraphQL-backed surfaces above, same output shape as the
+  `--json` form (the fallback). Two traps it guards against: the
+  `repos/{o}/{r}/issues` endpoint returns pull requests too (filter
+  `select(.pull_request == null)` or an issue count silently overcounts), and
+  every list read paginates with `--paginate` (a >100-item result must not
+  silently truncate — sibling of the `item-list --limit` trap).
+- `gh_quota_gate.py` (PreToolUse hook) intercepts a GraphQL-shaped `gh`
+  invocation when quota is low and blocks with the concrete `gh_rest.py`
+  rewrite — or, for a shape with no derivable rewrite (a raw `gh api graphql`
+  call, or an unmapped `gh project` verb), advises rather than blocks, so a
+  bespoke mutation with no built-in fallback isn't stranded.
+
+Posting a comment via REST is a **two-step** operation, not one: write the
+`{"body": ...}` payload to a file in an earlier, separate call
+(`gh_rest.py comment write-payload`), THEN POST it
+(`gh_rest.py comment post`). Combining them in one Bash call trips
+`validate_review_comment_format` — that hook reads the payload file to
+validate the charter review format, and blocks when the file doesn't exist
+yet at match time.
+
+Full detail, the measured attribution table, and the org-owned ProjectV2
+REST-write correction: `.claude/memory/feedback_gh_cli_gotchas.md` §12.
+
 ## Structural & AST tooling
 
 Every code/YAML/shell-scanning gate we run today is Python regex / line-scan,

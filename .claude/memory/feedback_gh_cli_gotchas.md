@@ -1,8 +1,9 @@
 ---
 name: feedback_gh_cli_gotchas
-description: "Consolidated gh-CLI gotcha family — silent no-ops, truncating lists, @file expansion, cwd-resolved bare numbers, async mutations, self-approve 422, closing-keyword semantics, validate_labels false-blocks, ProjectV2 field edits. Universal rule: never trust exit 0 on a gh mutation; read-back-verify via a query that cannot truncate."
+description: "Consolidated gh-CLI gotcha family — silent no-ops, truncating lists, @file expansion, cwd-resolved bare numbers, async mutations, self-approve 422, closing-keyword semantics, validate_labels false-blocks, ProjectV2 field edits, GraphQL/REST quota split with enforced REST fallback tooling. Universal rule: never trust exit 0 on a gh mutation; read-back-verify via a query that cannot truncate."
 metadata:
   type: feedback
+last_verified: 2026-08-02
 ---
 
 Consolidates (2026-07-13, #944/#931): feedback_gh_pr_edit_silent_noop, feedback_github_negated_close_keyword, feedback_wave_branch_issue_close, reference_closing_refs_empty_wave_prs, feedback_gh_review_self_approve_422, feedback_update_branch_async_window, feedback_validate_labels_hook_gotchas, feedback_projectv2_field_option. Every rule survives; history in git.
@@ -75,7 +76,7 @@ Adding an option to a Projects-v2 single-select field (e.g. a Wave option on pro
 
 ## 12. GraphQL quota exhausts independently of REST — and fails as a silent zero
 
-`gh` splits across two quotas (`gh api rate_limit`): **core** (REST, 5000/h) and **graphql** (5000/h). They drain independently, so REST can read 4988/5000 while GraphQL is flat 0 (observed live 2026-07-20, wave-26 scope run).
+`gh` splits across two quotas (`gh api rate_limit`): **core** (REST, 5000/h) and **graphql** (5000/h). They drain independently, so REST can read 4988/5000 while GraphQL is flat 0 (observed live 2026-07-20, wave-26 scope run; re-observed live 2026-08-02, `core=4986/5000, graphql=0/5000`, #1224 — building `gh_quota.py`/`gh_rest.py`/`gh_quota_gate.py` against this exact live-exhausted state).
 
 **What burns GraphQL fastest:** `gh project item-list <n> --limit 2000` paginates ~100 items/page, so ONE run is ~20 GraphQL calls. A handful of board queries while chasing a membership question exhausted 5000. Prefer `/board-audit` over hand-rolled board sweeps.
 
@@ -83,14 +84,35 @@ Adding an option to a Projects-v2 single-select field (e.g. a Wave option on pro
 
 **Note the convergence with #888.** That bug — `first: > 100` in a `gh api graphql` block, now linted by `lint_skill_graphql_pagination.py` — produced the *identical* symptom: `/board-audit` reading every issue as an orphan. Over-cap paging and quota exhaustion are different causes with the same false-negative shape, so treat "everything is missing from the board" as a **tooling** hypothesis first and a finding second.
 
-**Which subcommands need GraphQL (fail under exhaustion):** `gh pr comment`, `gh pr view --json`, `gh project item-list`, `gh project item-add` (the last fails with a *misleading* `unknown owner type` rather than a quota message).
+**Which subcommands need GraphQL (fail under exhaustion) — measured table, re-derived live 2026-08-02 (#1224):**
 
-**REST fallbacks that keep working:**
-- post a PR/issue comment → `gh api repos/{owner}/{repo}/issues/{N}/comments -f body='...'` (verified live by Lucas Ferreira on PR#1049 — charter verdict trailer parsed identically)
-- `gh issue create` / `gh issue edit` — already REST
-- read comments → `gh api repos/{owner}/{repo}/issues/{N}/comments`
+| surface | result | notes |
+|---|---|---|
+| `gh issue view --json`, `gh issue list` (**even without `--json`**) | FAIL | dropping `--json` is not a workaround — the GraphQL dependency isn't about output formatting |
+| `gh issue create` | FAIL | **corrects the earlier "already REST" claim below** — modern `gh` needs GraphQL even for a plain create (likely Issue-Types/board metadata resolution); no wrapped helper exists yet, use the raw REST recipe in `gh_quota_gate.py`'s rewrite text |
+| `gh pr view --json <fields>`, `gh pr list --json` | FAIL | **flaky at the single-field edge**: `gh pr view N --json number` alone succeeded twice in a row, but any richer field set (`state,headRefOid,baseRefName,mergedAt`) failed every time. Never rely on a single success — the flaky case is not a safe workaround |
+| `gh pr checks`, `gh pr comment` | FAIL | |
+| `gh project item-list`, `gh project item-add` | FAIL | item-add fails with a **misleading** `unknown owner type`, not a quota message |
+| `gh api repos/…` (REST), `gh pr diff`, `gh api rate_limit` | OK | `rate_limit` itself costs **no quota** — free to poll |
+
+**Correction to the org's own assumption: `gh project item-add` DOES have a REST equivalent now.** Verified LIVE 2026-08-02 by actually adding #1224 to project board 2 through it:
+```
+gh api -X POST orgs/{org}/projectsV2/{project_number}/items -f type=Issue -F id=<issue's REST database id>
+```
+`type` is `Issue` or `PullRequest` (capitalized); `id` is the numeric REST `id` field — **not** the issue `number`, **not** the GraphQL `node_id`. Read-side counterpart: `GET orgs/{org}/projectsV2/{project_number}/items` (paginated, no server-side content filter — page the whole board and filter client-side on `.content.number` + `.content.repository.full_name`, same multi-repo-collision care as §3). `gh` the CLI tool has **not** been updated to use this endpoint — `gh project item-add` is still GraphQL-backed and still fails under exhaustion; this is a genuine fallback for that gap, not a claim that `gh` itself changed. Only verified for an **org-owned** board with the current token's scopes — a user-owned project or a differently-scoped PAT is unverified. The one project surface confirmed to have **no** REST equivalent at all: classic Projects (`gh api orgs/{org}/projects` → 404, fully removed).
+
+**REST fallbacks that keep working (now backed by `.claude/lib/gh_rest.py`, #1224):**
+- post a PR/issue comment → `gh api repos/{owner}/{repo}/issues/{N}/comments -f body='...'` (verified live by Lucas Ferreira on PR#1049 — charter verdict trailer parsed identically), or the wrapped two-step `gh_rest.py comment write-payload` + `comment post`
+- **the write-payload/post split is not a style choice — it works around a hook.** `validate_review_comment_format` reads the `--input` file to validate the charter format and false-blocks when that file doesn't exist yet at match time. Writing the payload in an EARLIER, separate tool call (not `write > f.json && gh api ... --input f.json` in one Bash call) sidesteps it.
+- `gh issue create` — **NOT REST-safe** (see corrected table above); the "already REST" claim in the original version of this note was wrong
+- `gh issue edit` — unverified either way this round; no direct measurement contradicts the original "already REST" claim, so it stays untouched pending a live check
+- read comments → `gh api repos/{owner}/{repo}/issues/{N}/comments`, or `gh_rest.py pr comments`
+- `gh_rest.py issue view/list`, `pr view/list/checks/timeline`, `project add/items/membership` — every function raises rather than returning `[]`/`{}` on a genuine failure (never masks a real error as an empty result — the exact silent-zero shape this section exists to prevent, recreated at a new layer)
+- **traps `gh_rest.py` pins with tests:** (a) `repos/{o}/{r}/issues` returns pull requests too — a naive count once read 57 where the true issue count was 50; every list/view function filters `select(.pull_request == null)` or rejects a PR number outright; (b) pagination — every list read uses `--paginate` (verified live: one compact JSON object per line, across every page), so a >100-item result is never silently truncated, sibling of the `item-list --limit` trap in §3
 
 A reviewer blocked mid-verdict should switch to the REST comment endpoint, not wait out the hour.
+
+**Enforcement promotion (#1224):** this section sat at the weakest enforcement tier (`feedback_enforcement_hierarchy`: hook > skill > charter > memory) for ~2 weeks after being written (2026-07-20) and did not prevent a recurrence — four concurrent agents exhausted the quota again in the session that filed #1224, holding two PR re-reviews ~40 minutes. Promoted to a hook: `gh_quota_gate.py` (PreToolUse) blocks a GraphQL-shaped `gh` call with a concrete REST rewrite when quota is low, or advises (never blocks) when no rewrite is derivable (a raw `gh api graphql` call, or an unmapped project mutation like `item-edit`/`field-list`) — see `ontology/conventions.md` § Automation hooks and § GitHub API quota, `docs/TOOLCHAIN.md` § GitHub API quota. Sensor: `.claude/lib/gh_quota.py` (`gh api rate_limit` costs no quota — free to poll; TTL-cached at the hook). Fallback: `.claude/lib/gh_rest.py`. A quota-check failure degrades to ALLOW, never to block — the sensor itself must not become a new single point of failure.
 
 ## 13. CI green: `check-runs` is authoritative, `status` is not
 
