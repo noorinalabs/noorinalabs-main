@@ -888,6 +888,120 @@ class SweepIntegrationTests(unittest.TestCase):
         self.assertIn("UNKNOWN, not clean", out)
         self.assertIn("not_found", out)
 
+    def test_findings_join_reaches_verdict_with_custom_thresholds_and_renders(self) -> None:
+        # The `findings` seam (flagged, deliberately left out of scope, by
+        # the commit immediately above this one): `findings` reaches
+        # sweep()'s returned verdict via a plain list comprehension in the
+        # SAME return statement — not a separate append/extend like
+        # `unknown` — and nothing previously drove a REAL finding through
+        # sweep() end-to-end. That leaves three things unverified:
+        #   1. the comprehension itself actually runs (a hardcoded
+        #      `"findings": []` would look identical to a clean sweep),
+        #   2. sweep()'s caller-supplied `*_threshold_days=` kwargs actually
+        #      reach the compute_drift(...) call (rather than silently
+        #      falling back to the module defaults), and
+        #   3. compute_drift's producer dict shape (`detail`) matches what
+        #      render_check's consumer side reads — compute_drift is unit
+        #      tested against `DriftFinding` objects and render_check
+        #      against hand-built dicts, so nothing previously compared the
+        #      two directly.
+        #
+        # Two repos pin the SAME tag to differently-dated digests (15 days
+        # apart -> a cross_repo finding), and the tag's current digest is
+        # dated later still, 23 days past the OLDER pin but only 8 days past
+        # the NEWER one -> exactly one behind_current_tag finding (for the
+        # older pin only). Both dates clear a threshold of 10 but NEITHER
+        # clears the module default of 30 — so a mutant that drops both
+        # `*_threshold_days=` kwargs from the compute_drift(...) call would
+        # silently fall back to the 30-day defaults and this test would see
+        # an EMPTY findings list.
+        pin_digest_a = "1" * 64
+        pin_digest_b = "2" * 64
+        config_digest_a = "a1" * 32
+        config_digest_b = "b2" * 32
+        config_digest_tag = "c3" * 32
+
+        dockerfile_a = (
+            f"FROM python:3.14-slim@sha256:{pin_digest_a}\n"
+            "RUN apt-get update && apt-get -y upgrade\n"
+        )
+        dockerfile_b = (
+            f"FROM python:3.14-slim@sha256:{pin_digest_b}\n"
+            "RUN apt-get update && apt-get -y upgrade\n"
+        )
+
+        def gh(args: list[str]) -> str:
+            joined = " ".join(args)
+            if joined.endswith(".default_branch"):
+                return "main\n"
+            if "repo-a/git/trees/main" in joined:
+                return _tree_json(["Dockerfile"])
+            if "repo-b/git/trees/main" in joined:
+                return _tree_json(["Dockerfile"])
+            if "repo-a/contents/Dockerfile" in joined:
+                return _b64(dockerfile_a)
+            if "repo-b/contents/Dockerfile" in joined:
+                return _b64(dockerfile_b)
+            raise AssertionError(f"unexpected gh call: {args}")
+
+        manifest_url_a = (
+            f"https://registry-1.docker.io/v2/library/python/manifests/sha256:{pin_digest_a}"
+        )
+        manifest_url_b = (
+            f"https://registry-1.docker.io/v2/library/python/manifests/sha256:{pin_digest_b}"
+        )
+        tag_url = "https://registry-1.docker.io/v2/library/python/manifests/3.14-slim"
+        blob_url_a = (
+            f"https://registry-1.docker.io/v2/library/python/blobs/sha256:{config_digest_a}"
+        )
+        blob_url_b = (
+            f"https://registry-1.docker.io/v2/library/python/blobs/sha256:{config_digest_b}"
+        )
+        blob_url_tag = (
+            f"https://registry-1.docker.io/v2/library/python/blobs/sha256:{config_digest_tag}"
+        )
+
+        http = FakeHttp(
+            {
+                manifest_url_a: _resp(200, {"config": {"digest": "sha256:" + config_digest_a}}),
+                manifest_url_b: _resp(200, {"config": {"digest": "sha256:" + config_digest_b}}),
+                tag_url: _resp(200, {"config": {"digest": "sha256:" + config_digest_tag}}),
+                blob_url_a: _resp(200, {"created": "2026-06-01T00:00:00Z"}),
+                blob_url_b: _resp(200, {"created": "2026-06-16T00:00:00Z"}),  # +15d vs A
+                blob_url_tag: _resp(200, {"created": "2026-06-24T00:00:00Z"}),  # +23d/+8d
+            }
+        )
+
+        verdict = bpd.sweep(
+            ("repo-a", "repo-b"),
+            run_gh=gh,
+            http_get=http,
+            now=_NOW,
+            cross_repo_threshold_days=10.0,
+            behind_tag_threshold_days=10.0,
+        )
+
+        findings = verdict["findings"]
+        self.assertEqual(len(findings), 2)
+        kinds = {f["kind"] for f in findings}
+        self.assertEqual(kinds, {"cross_repo", "behind_current_tag"})
+
+        by_kind = {f["kind"]: f for f in findings}
+        cross_repo_detail = by_kind["cross_repo"]["detail"]
+        behind_detail = by_kind["behind_current_tag"]["detail"]
+        self.assertTrue(cross_repo_detail)
+        self.assertTrue(behind_detail)
+
+        # Feed the SAME verdict sweep() actually produced into render_check —
+        # a mutant that renames the producer's `detail` key to `details`
+        # would leave `findings` non-empty (so the assertions above would
+        # still pass) while render_check's `item.get("detail")` silently
+        # resolves to None: drift found, evidence lost. Asserting the real
+        # detail text appears in the rendered report is what catches that.
+        rendered = bpd.render_check(verdict, now=_NOW)
+        self.assertIn(cross_repo_detail, rendered)
+        self.assertIn(behind_detail, rendered)
+
     def test_checked_at_carries_injected_now(self) -> None:
         gh = FakeGh(table={"git/trees/main": _tree_json([])})
         verdict = bpd.sweep(("repo-a",), run_gh=gh, http_get=FakeHttp({}), now=_NOW)
