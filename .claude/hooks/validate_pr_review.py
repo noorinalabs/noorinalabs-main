@@ -227,6 +227,7 @@ from _repo_flag_parse import extract_repo
 from annunaki_log import log_pretooluse_block
 from charter_trailer import (
     branch_author_first_initial,
+    extract_branch_author_lastname,
     extract_charter_field,
     is_branch_author,
     name_first_initial,
@@ -984,20 +985,13 @@ def is_self_review(
     )
 
 
-def extract_branch_author_lastname(head_ref: str) -> str | None:
-    """Extract the last name from branch format '{FirstInitial}.{LastName}[-/]...'.
-
-    Accepts both separator styles seen in practice:
-    - slash: `A.Virtanen/0179-branch-regex-fix` (legacy/charter spec)
-    - dash:  `A.Virtanen-0179-branch-regex-fix` (observed on recent branches)
-
-    Returns None if the head_ref does not match the `{Initial}.{LastName}` prefix
-    followed by one of the accepted separators.
-    """
-    match = re.match(r"[A-Za-z]\.([A-Za-z]+)[-/]", head_ref)
-    if match:
-        return match.group(1)
-    return None
+# `extract_branch_author_lastname` is imported from `charter_trailer` (#1175) —
+# do NOT reimplement it here. It lived in this file and in
+# `validate_review_comment_format` as two hand-maintained copies, #179 taught
+# only this one the dash separator, and the other stayed slash-only for four
+# months. `test_validate_pr_review.py::SharedBranchAuthorParsingTests` asserts
+# the identity of this module's binding with `charter_trailer`'s, so a
+# re-declared local copy fails a named test rather than drifting silently.
 
 
 # How the PR-comment verdict scan was dispatched for a given PR (#1206).
@@ -2106,9 +2100,11 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
     # verdicts that already exist countable.
     #
     # `branch_author_first_initial` returns `""` on exactly the refs
-    # `extract_branch_author_lastname` returns None for (the two regexes have
-    # the same shape), so the two halves of the branch author's identity cannot
-    # disagree about whether an author was found.
+    # `extract_branch_author_lastname` returns None for — since #1175 both read
+    # the SAME compiled `charter_trailer._BRANCH_AUTHOR_PREFIX_RE`, so this is
+    # now structural rather than two regexes kept in sync — and the two halves
+    # of the branch author's identity cannot disagree about whether an author
+    # was found.
     scan_scope = comment_scan_scope(head_ref)
     if scan_scope == COMMENT_SCAN_NOT_RUN:
         # Defense in depth (#1206): unreachable today, because

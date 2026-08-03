@@ -212,6 +212,7 @@ from _repo_flag_parse import extract_repo
 from annunaki_log import log_pretooluse_block
 from charter_trailer import (
     branch_author_first_initial,
+    extract_branch_author_lastname,
     extract_charter_field,
     is_branch_author,
     name_lastname,
@@ -637,12 +638,15 @@ def get_branch_name(pr_number: str, repo: str | None = None) -> str | None:
         return None
 
 
-def extract_branch_author_lastname(head_ref: str) -> str | None:
-    """Extract the last name from branch format '{FirstInitial}.{LastName}/...'."""
-    match = re.match(r"[A-Za-z]\.([A-Za-z]+)/", head_ref)
-    if match:
-        return match.group(1)
-    return None
+# `extract_branch_author_lastname` is imported from `charter_trailer` (#1175) —
+# do NOT reimplement it here. The local copy this replaces was slash-only, while
+# `validate_pr_review`'s copy learned the dash separator in #179 and
+# `branch_author_first_initial` (imported into this very module) accepted dash
+# all along. On `A.Virtanen-1175-x` the local parser returned None first and
+# short-circuited `check()` to allow-with-warning, so the Requestor/Requestee
+# swap check never ran — two parsers over one `head_ref`, and the wrong one won.
+# `test_validate_review_comment_format.py::SharedBranchAuthorParsingTests`
+# asserts this module's binding IS `charter_trailer`'s.
 
 
 # Verdict direction values from charter `pull-requests.md` § Comment-Based

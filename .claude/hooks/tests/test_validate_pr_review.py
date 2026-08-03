@@ -38,8 +38,11 @@ from unittest import mock
 
 _HERE = Path(__file__).resolve().parent
 _HOOKS_DIR = _HERE.parent
+_LIB_DIR = _HOOKS_DIR.parent / "lib"
 sys.path.insert(0, str(_HOOKS_DIR))
-sys.path.insert(0, str(_HOOKS_DIR.parent / "lib"))
+sys.path.insert(0, str(_LIB_DIR))
+
+import charter_trailer  # noqa: E402
 
 # The oracle driver (`.claude/lib/`) is the THIRD surface that renders the
 # comment-scan enum, alongside `check()`'s block message and its allow-path
@@ -681,6 +684,69 @@ class ExtractBranchAuthorLastnameTests(unittest.TestCase):
     def test_no_separator_rejected(self):
         """Prefix present but no separator before trailing content returns None."""
         self.assertIsNone(hook.extract_branch_author_lastname("A.Virtanen0001"))
+
+
+class SharedBranchAuthorParsingTests(unittest.TestCase):
+    """The branch-prefix parsers are SHARED, not merely equal (#1175).
+
+    `extract_branch_author_lastname` used to be defined here AND in
+    `validate_review_comment_format`. #179 taught this copy the dash separator;
+    the other stayed slash-only until #1175 — four months of silent divergence
+    that every value-equality test in both suites passed straight through,
+    because each suite only ever asserted against its own copy.
+
+    Object identity is the assertion that cannot be satisfied by a coincidence:
+    it fails the instant a second definition exists, whatever that definition
+    returns. `comment_scan_scope` and `resolve_review_verdicts` both read this
+    binding, so a local re-declaration here silently owns the self-review
+    exclusion for the whole merge gate.
+    """
+
+    def test_lastname_parser_is_the_charter_trailer_one(self):
+        self.assertIs(
+            hook.extract_branch_author_lastname,
+            charter_trailer.extract_branch_author_lastname,
+        )
+
+    def test_initial_parser_is_the_charter_trailer_one(self):
+        self.assertIs(
+            hook.branch_author_first_initial,
+            charter_trailer.branch_author_first_initial,
+        )
+
+    def test_both_hooks_share_one_binding(self):
+        """The two hooks resolve to the SAME object — the #1175 invariant itself.
+
+        Asserted from this suite as well as the format hook's, so deleting
+        either file's copy still leaves the invariant pinned somewhere.
+        """
+        sys.path.insert(0, str(_HOOKS_DIR))
+        import validate_review_comment_format as format_hook
+
+        self.assertIs(
+            hook.extract_branch_author_lastname,
+            format_hook.extract_branch_author_lastname,
+        )
+
+    def test_comment_scan_scope_reads_the_shared_parser(self):
+        """The merge gate's ref classification is downstream of the shared parser.
+
+        Pins the wiring, not just the import: a dash ref must classify as
+        author-excluded, which is only true if `comment_scan_scope` calls a
+        parser that accepts dash.
+        """
+        self.assertEqual(
+            hook.comment_scan_scope("A.Virtanen-1175-consolidation"),
+            hook.COMMENT_SCAN_AUTHOR_EXCLUDED,
+        )
+        self.assertEqual(
+            hook.comment_scan_scope("A.Virtanen/1175-consolidation"),
+            hook.COMMENT_SCAN_AUTHOR_EXCLUDED,
+        )
+        self.assertEqual(
+            hook.comment_scan_scope("deployments/phase-3/wave-29"),
+            hook.COMMENT_SCAN_NO_BRANCH_AUTHOR,
+        )
 
 
 class MergeCommandMatchTests(unittest.TestCase):
@@ -4173,6 +4239,85 @@ class HeadRefScanRegressionTests(_ResolveOverFakeCommentsHarness):
         )
         self.assertEqual(verdicts.total_distinct, 1)
         self.assertFalse(verdicts.total_distinct >= 2)
+
+
+class HyphenatedSurnameCountingGateTests(_ResolveOverFakeCommentsHarness):
+    """The COUNTING gate on a hyphenated-surname branch (main#1269 review).
+
+    This half was not introduced by #1175 — `validate_pr_review`'s local copy
+    already used `[-/]`, so it already truncated `K.Mensah-Williams/…` to
+    `Mensah`. It is fixed here because the #1269 charset fix lands in the one
+    shared regex both hooks now read, so repairing the format hook repairs this
+    too, and an unpinned improvement is one refactor away from being undone.
+
+    `Kofi Mensah` (design-system) and `Kofi Mensah-Williams` (landing-page) are
+    two distinct roster members sharing a first initial, so the truncated surname
+    matched the WRONG person exactly — the self-review exclusion then fired on a
+    legitimate reviewer and failed to fire on the actual author. Both directions
+    are asserted; asserting only one would pass under a gate that excludes
+    nobody at all.
+    """
+
+    ROSTER = {
+        "kofi mensah",
+        "kofi mensah-williams",
+        "aino virtanen",
+        "nadia khoury",
+    }
+    REF = "K.Mensah-Williams/0001-project-scaffolding"
+
+    def test_the_same_initial_colleague_is_counted_not_swallowed(self):
+        """THE DEFECT: Kofi Mensah's verdict was dropped as a self-review.
+
+        Pre-fix the ref parsed to `Mensah`, which IS his surname, so a genuine
+        reviewer was excluded and the PR sat one approval short with no
+        observable explanation.
+        """
+        verdicts = self._resolve(
+            self.REF,
+            [self._verdict("Kofi Mensah"), self._verdict("Aino Virtanen")],
+        )
+        self.assertEqual(verdicts.branch_author_lastname, "Mensah-Williams")
+        self.assertIn("kofi mensah", verdicts.distinct_reviewers)
+        self.assertEqual(verdicts.distinct_reviewers, {"kofi mensah", "aino virtanen"})
+        self.assertEqual(verdicts.total_distinct, 2)
+
+    def test_the_actual_branch_author_is_still_excluded(self):
+        """The other direction. Pre-fix `Mensah-Williams` did NOT match the
+        truncated `Mensah`, so the real author's self-review was counted —
+        a two-reviewer gate satisfiable by one person plus themselves.
+
+        Aino Virtanen is the positive control: her verdict must survive, so a
+        regression that excluded everyone would fail here rather than pass the
+        absence assertion for free.
+        """
+        verdicts = self._resolve(
+            self.REF,
+            [self._verdict("Kofi Mensah-Williams"), self._verdict("Aino Virtanen")],
+        )
+        self.assertNotIn("kofi mensah-williams", verdicts.distinct_reviewers)
+        self.assertEqual(verdicts.distinct_reviewers, {"aino virtanen"})
+        self.assertEqual(verdicts.total_distinct, 1)
+        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_AUTHOR_EXCLUDED)
+
+    def test_the_dash_form_of_the_same_ref_behaves_identically(self):
+        """The truncation hit both separators, so both are pinned."""
+        verdicts = self._resolve(
+            "K.Mensah-Williams-0001-project-scaffolding",
+            [self._verdict("Kofi Mensah"), self._verdict("Kofi Mensah-Williams")],
+        )
+        self.assertEqual(verdicts.branch_author_lastname, "Mensah-Williams")
+        self.assertEqual(verdicts.distinct_reviewers, {"kofi mensah"})
+
+    def test_the_fixture_ref_is_not_silently_unparsed(self):
+        """Anti-vacuity: a ref that parsed to None would ALSO count both
+        reviewers (the `""` wave-merge sentinel excludes nobody), so
+        `test_the_same_initial_colleague_is_counted_not_swallowed` could pass
+        for entirely the wrong reason. Prove the prefix really was read."""
+        for ref in (self.REF, "K.Mensah-Williams-0001-project-scaffolding"):
+            with self.subTest(ref=ref):
+                self.assertEqual(hook.extract_branch_author_lastname(ref), "Mensah-Williams")
+                self.assertEqual(hook.branch_author_first_initial(ref), "k")
 
 
 class CommentScanNotMeasuredTests(_ResolveOverFakeCommentsHarness):
