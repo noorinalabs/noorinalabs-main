@@ -327,12 +327,24 @@ def _describe_comment_scan(state: ReviewState) -> str:
             "web-UI commit, or an outside contributor), so no self-review exclusion was "
             "applied and no verdict was subtracted (#1220)."
         )
+    if state.comment_scan == gate.COMMENT_SCAN_WAVE_INTEGRATION:
+        # #1216: the ONLY mode whose non-exclusion is a decision rather than a
+        # missing measurement, so it must not borrow the "commits named no
+        # persona" wording below — on a wave branch they named up to 11.
+        return (
+            "RAN — head ref is a wave branch, so this is a wave->main INTEGRATION PR: its "
+            "commits were already 2x-reviewed on their per-issue PRs and it authors no "
+            "content of its own, so commit-derived self-review exclusion is deliberately "
+            "NOT applied and an implementer's integration verdict counts (#1216). Nothing "
+            "was subtracted; roster filtering and the 2-reviewer threshold are unchanged."
+        )
     if state.comment_scan == gate.COMMENT_SCAN_NO_BRANCH_AUTHOR:
         return (
-            "RAN — head ref names no branch author (bot / wave-merge / non-charter branch) "
-            "and the PR's commits named no persona either (bot author, merge-only branch, or "
-            "a squash-flattened identity — #1177/#1210), so no self-review exclusion was "
-            "applied. Roster filtering and the 2-reviewer threshold are unchanged."
+            "RAN — head ref names no branch author (bot / non-wave `deployments/**` / "
+            "non-charter branch) and the PR's commits named no persona either (bot author, "
+            "merge-only branch, or a squash-flattened identity — #1177/#1210), so no "
+            "self-review exclusion was applied. Roster filtering and the 2-reviewer "
+            "threshold are unchanged."
         )
     # Explicit fallback, added with #1220's fifth mode (narrowing #1273).
     #

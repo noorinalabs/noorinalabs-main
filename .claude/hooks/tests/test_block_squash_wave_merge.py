@@ -206,5 +206,70 @@ class HeredocAndSegmentSafety(unittest.TestCase):
         self.assertEqual(result["decision"], "block")
 
 
+class SharedWaveBranchParsingTests(unittest.TestCase):
+    """This hook and the merge gate must agree on what a wave branch IS (#1216).
+
+    The hook used to carry its own `^deployments/phase-\\d+/wave-\\d+$`. The
+    merge gate now keys a review-policy carve-out on the same charter shape, and
+    two hand-maintained copies of one charter shape is exactly what cost the org
+    four months of divergence on `extract_branch_author_lastname` (main#1175) —
+    where #179 taught one copy the dash separator and the other never learned it.
+    """
+
+    def test_the_hook_binds_charter_trailers_predicate(self):
+        """Identity, not equivalence. A re-declared local copy fails HERE."""
+        sys.path.insert(0, str(_HOOKS_DIR.parent / "lib"))
+        import charter_trailer
+
+        self.assertIs(hook.is_wave_branch, charter_trailer.is_wave_branch)
+
+    def test_the_hook_no_longer_declares_its_own_pattern(self):
+        """A stale module-level `WAVE_BRANCH_RE` would be dead but readable, and
+        the next editor would reasonably believe it is the live definition."""
+        self.assertFalse(hasattr(hook, "WAVE_BRANCH_RE"))
+
+
+class UndashedPhaseWaveBranchTests(unittest.TestCase):
+    """The 32-PR blind spot the consolidation closes (#1216).
+
+    `deployments/phase15/wave-1` is a real production base ref. Across the 202
+    `deployments/**`-head PRs measured on 2026-08-03, 32 carry the undashed
+    `phase{N}` form — in isnad-graph, design-system, data-acquisition and
+    landing-page — and the hook's own pattern did not match any of them, so a
+    `--squash` into those wave branches was allowed straight through.
+    """
+
+    UNDASHED = "deployments/phase15/wave-1"
+
+    def test_squash_into_an_undashed_wave_branch_now_blocks(self):
+        result = hook.check(
+            _input("gh pr merge 890 --squash"),
+            base_runner=_runner({"890": self.UNDASHED}),
+        )
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_merge_into_an_undashed_wave_branch_still_allows(self):
+        """Anti-vacuity: the test above must not be satisfied by a hook that
+        blocks every merge onto that base."""
+        self.assertIsNone(
+            hook.check(
+                _input("gh pr merge 890 --merge"),
+                base_runner=_runner({"890": self.UNDASHED}),
+            )
+        )
+
+    def test_squash_into_a_non_wave_deployments_base_still_allows(self):
+        """The widening was `phase-?`, not `deployments/**`. Real ref
+        (isnad-graph#603/#612) — blocking here would be a new false positive."""
+        self.assertIsNone(
+            hook.check(
+                _input("gh pr merge 890 --squash"),
+                base_runner=_runner({"890": "deployments/phase12/cleanup"}),
+            )
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

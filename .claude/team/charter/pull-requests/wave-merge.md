@@ -76,6 +76,8 @@ At the **end of a wave or phase**, the Manager creates a PR from the deployments
 
 The **user approves the merge sequence**; the orchestrator executes the `wave-merge` merges per point 5. Do not proceed to the next phase until every wave→main PR is merged and the Step 11.5 reachability gate is clean.
 
+> **Who may review the integration PR (main#1216).** Point 5 says fresh 2-reviewer approval is not *required* here. When reviews are nonetheless posted — good practice, and what the team has actually done — **an implementer whose merged work the branch contains may post a counting `Approved`**: the integration PR authors no content of its own, and each of its commits already carried two independent reviewers on its per-issue PR. The full rule, the residual it leaves open, and the 202-PR measurement behind it are in [`reviews.md`](reviews.md) § Who Counts as "the PR Author". Between main#1210 and main#1216 the merge gate silently enforced the opposite, subtracting genuine reviewers on 4 measured PRs.
+
 ## Wave-Wrapup Staging-Promotion Gate (Mandatory) <!-- promotion-target: skill -->
 
 A wave is **not closeable** until its merged code has been promoted to **staging green**. This is Phase-3 end-state criterion #3 (`noorinalabs-main#325`): "/wave-wrapup requires successful stg promotion as a wave-completion criterion." The gate is the wrapup-time enforcement counterpart of the same liveness contract the deploy track exists to satisfy — code that merged to main but never reached a green staging deploy is the deploy-track analogue of the stranded-wave-branch pattern (§ the reachability gate in `/wave-wrapup` Step 11.5).

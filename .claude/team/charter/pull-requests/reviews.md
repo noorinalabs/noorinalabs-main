@@ -35,7 +35,57 @@ The role names always describe the **comment** (not the PR):
 - The `TechDebt:` line is **mandatory** on every `Approved` and `ChangesRequested` comment. If the reviewer found non-blocking observations, they MUST create `tech-debt`-labeled issues BEFORE posting the verdict, then list the issue numbers, e.g. `TechDebt: #1054, #1055`. If no tech-debt was found, write `TechDebt: none`. The `#` is accepted either way (`#1054` or a bare `1054` both capture), but a value that is neither `none` nor a number — free text like "filed later" — parses to ZERO issue references and is recorded as unparseable rather than silently dropped (main#1055). Enforced by `validate_pr_review.py` PreToolUse hook at merge time.
 - The 2-reviewer rule is satisfied when there are `Approved` comments from **two distinct `Requestor` values**, neither of which is the PR author. Single-reviewer waivers per § Single-Reviewer Exception (Wave-Bootstrap Only) are honored by the hook (resolves main#228) when the PR is labeled `wave-bootstrap` and the single reviewer is the Standards & Quality Lead.
 - Each `Requestor` value on an `Approved` comment must name a persona in the local `.claude/team/roster/` (full-name match against `**Name:**` lines). Non-roster Requestor strings do NOT count toward the 2-reviewer threshold — Hook 4 filters them out and reports them in the BLOCK diagnostic. Mirrors `validate_commit_identity.py`'s strict-roster discipline (resolves main#498).
+- **Who counts as "the PR author"** — see § Who Counts as "the PR Author" (and Who May Review a Wave→Main Integration PR) below. The exclusion above is of the **PR author**, singular; on a wave→main integration PR that is nobody on the branch, and an implementer whose already-reviewed work the branch contains MAY post a counting `Approved`.
 - Charter-format fields (`Requestor:` / `Requestee:` / `RequestOrReplied:` / `TechDebt:`) MUST appear ONLY in the trailer block — a contiguous structured-fields block at the end of the comment body, ideally after a bare-line `---` separator. Hook 4 extracts fields only from the trailer-block substring (post-last-`---`) and strips inline (`` `…` ``) and fenced (```` ```…``` ````) code regions before matching. Prose that quotes the field syntax above the trailer (or uses backticks to discuss it) will be ignored by the extractor, but reviewers should still avoid duplicating field patterns in prose for clarity. Pre-#511 the regex first-matched any `<Field>:` mention, which false-blocked 3 reviewer verdicts in P3W11 batch 11 (main#509, deploy#337, deploy#339) — each required orchestrator REST PATCH (resolves main#511).
+
+## Who Counts as "the PR Author" (and Who May Review a Wave→Main Integration PR) <!-- promotion-target: hook -->
+
+The 2-reviewer rule excludes **the PR author**, singular. Because every agent shares one GitHub account, "the PR author" is not readable from the PR's `author` field; the gate derives it from two independent sources and uses whichever is available:
+
+1. **The head ref's `{FirstInitial}.{LastName}` prefix** — the author the human *declared*. Authoritative whenever present, which is 86.7% of the org's PRs (568/655 measured across 7 repos).
+2. **The authors of the PR's own non-merge commits** (main#1210) — the only discriminator available on a ref carrying no prefix (`feature/x`, `dependabot/**`, an empty ref). Without it, a human on a hand-made branch could post their own `Approved`, add one genuine reviewer, and reach 2/2 where 1/2 is correct.
+
+### The rule
+
+**An implementer MAY post a counting `Approved` on the wave→main integration PR that contains their own merged work.** Their commits are on that branch; they are not its author.
+
+**An implementer MAY NOT review the per-issue PR that contains their own commits.** This is unchanged and is where the whole force of the self-review rule lives. A per-issue PR carries the `{FirstInitial}.{LastName}` prefix, so source 1 excludes its author; a per-issue PR on a hand-made ref is caught by source 2.
+
+### Why the wave→main integration PR is the exception
+
+A wave→main integration PR has head ref `deployments/phase-{P}/wave-{M}` and base `main`. Neither source names its author:
+
+- The ref names no persona — it names a wave.
+- Its non-merge commits are **the wave's entire implementer roster**, because a wave branch accumulates every per-issue PR merged into it. Those commits **already carried two independent reviewers each, on their own per-issue PR**, and reached the branch through those reviewed merges. The integration PR authors no content of its own.
+
+Treating all of them as "the PR author" applies a content-review rule to a PR that is not a content review — which [`wave-merge.md`](wave-merge.md) § Wave Merge PR Verification point 5 already says in as many words: *"the wave→main PR is an integration merge, not new code to re-review… Collecting fresh 2-reviewer approvals on the integration PR is not required and should not be requested."* This section states explicitly the corollary that was previously left implicit and that a hook had silently decided the other way.
+
+The verdict an implementer casts on an integration PR is an **integration** verdict — this branch merges cleanly into `main`, CI is green on the combined tree, the scope is what the wave declared — not a re-review of their own diff. Reviewers should write it that way (cf. main#711's verdicts: *"an integration verdict over work already 2-reviewed and CI-green on the wave branch, not a line re-review"*).
+
+### What this is NOT
+
+- It is **not** a relaxation of the 2-reviewer threshold. Two distinct roster-valid current `Approved` Requestors are still required, and roster filtering is untouched.
+- It is **not** a licence to self-approve anywhere else. On every non-wave ref — including a `deployments/**` ref that is not a wave branch, e.g. `deployments/phase12/cleanup` — commit-derived exclusion is fully in force.
+- It does **not** make the integration PR's reviews mandatory. Point 5 of `wave-merge.md` still governs: fresh approvals are not required there, and the `wave-merge` admin exception remains the expected merge path.
+
+### Stated residual
+
+Nothing identifies the persona who *opened* the integration PR. They contribute merge commits (from `gh pr merge <per-issue-PR>` into the wave branch), and merge commits are deliberately excluded from author derivation — running a merge does not make you an author of the merged content. So on this PR class, a persona who both sequenced the wave merges and posts an `Approved` is not subtracted. This is the pre-main#294 state, not a new gap, and it sits inside the tolerance point 5 already grants a PR class that requires no fresh approvals at all. It is recorded here rather than left to be rediscovered.
+
+### Evidence
+
+Measured on 2026-08-03 over **every** `deployments/**`-head PR in all 7 repos (**202** PRs), driven through the gate's own `resolve_review_verdicts`:
+
+| PR | ref | before → after | genuine reviewer subtracted |
+|---|---|---|---|
+| `noorinalabs-main#711` | `deployments/phase-5/wave-5` | 2/2 → 1/2 | Wanjiku Mwangi |
+| `noorinalabs-main#530` | `deployments/phase-3/wave-11` | 2/2 → 1/2 | Aino Virtanen |
+| `noorinalabs-main#293` | `deployments/phase-3/wave-6` | 2/2 → 1/2 | Aino Virtanen |
+| `noorinalabs-main#229` | `deployments/phase-2/wave-10` | 1/2 → 0/2 | Aino Virtanen |
+
+112 of the 202 derived **two or more** "branch authors"; the largest derived **11**. The eligible reviewer pool does **not** collapse below two — the roster gate unions all 7 repos' rosters (76 personas), so the remaining pool never dropped below 67 in the sweep. The cost is a **false subtraction of review work that was actually done**, plus a block message asserting that five people are "the branch author" of a PR none of them opened.
+
+<!-- Resolves main#1216. Enforced by `validate_pr_review.py` (`COMMENT_SCAN_WAVE_INTEGRATION`, keyed on `charter_trailer.is_wave_branch`). -->
 
 ## Review Prompt Template (Mandatory) <!-- promotion-target: none -->
 When the orchestrator assigns a review to any agent, the prompt **MUST** include a copy-paste-ready `gh pr comment` command with all fields pre-filled. Do not rely on agents writing the format from memory — this has a 100% error rate.

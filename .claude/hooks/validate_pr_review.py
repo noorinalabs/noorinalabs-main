@@ -185,8 +185,48 @@ Branch author from COMMIT IDENTITY (#1210):
     - ambiguous / wrong match  → OVER-excludes, dropping a reviewer and
                                  blocking; the block message names every derived
                                  identity so the mistake is visible, not silent
-  Scope: consulted ONLY where the ref names nobody. Where the ref names a
-  persona the behaviour is byte-for-byte unchanged.
+  Scope: consulted ONLY where the ref names nobody AND the ref is not a wave
+  branch (#1216, below). Where the ref names a persona the behaviour is
+  byte-for-byte unchanged.
+
+Wave->main integration PRs are NOT self-reviewed by their implementers (#1216):
+  #1210's derivation answers "who wrote this branch's content". On a
+  `{Initial}.{Lastname}` ref that is one person. On a `deployments/phase-N/
+  wave-M` ref it is the wave's ENTIRE implementer roster, because a wave branch
+  accumulates every per-issue PR merged into it — and #1210 then treated all of
+  them as "the branch author" of the integration PR and subtracted their
+  verdicts.
+
+  That is the wrong question on that ref. Every commit on a wave branch arrived
+  through a per-issue PR that already carried two independent reviewers; the
+  integration PR authors nothing of its own; and the charter already says so —
+  `pull-requests/wave-merge.md` § Wave Merge PR Verification point 5 declares
+  fresh 2-reviewer approval on an integration PR not required, with the
+  `wave-merge` admin exception as the expected path. So an implementer whose
+  merged work the branch contains is not its author, and their INTEGRATION
+  verdict counts. The rule is written in `pull-requests/reviews.md` § Who
+  counts as "the PR author"; this hook enforces it, it does not define it.
+
+  Measured over EVERY `deployments/**`-head PR in all 7 repos, 2026-08-03 (202
+  PRs, driven through `resolve_review_verdicts` itself): 4 PRs lose a genuine
+  Approved roster reviewer to the #1210 derivation and 3 cross the bar —
+  main#711 2/2->1/2 (Wanjiku Mwangi), main#530 2/2->1/2 and main#293 2/2->1/2
+  (Aino Virtanen), main#229 1/2->0/2. 112 of the 202 derive two or more
+  "authors"; the largest derives 11.
+
+  DIRECTION, STATED PLAINLY: this is the one change in this file's history that
+  moves the gate toward passing. It restores the pre-main#294 state on the wave
+  slice ONLY — `StrictlyNonRelaxingTests`' `before` baseline is exactly that
+  state, so the non-relaxing property still holds against it — and it is
+  bounded by `charter_trailer.is_wave_branch`, an anchored match on the charter
+  ref shape. Every other ref keeps #1210 intact, including a `deployments/**`
+  ref that is not a wave branch (`deployments/phase12/cleanup`, 2 real PRs).
+
+  RESIDUAL, not closed here: nothing identifies the persona who OPENED the
+  integration PR. They contribute merge commits, which the derivation skips by
+  design, so they were never subtracted pre-#1216 either. That is the
+  pre-main#294 state and is within the charter's stated tolerance for a PR class
+  that requires no fresh approvals at all — tracked separately, not hidden.
 
 Single-Reviewer Exception (resolves #228):
   When the PR is labeled `wave-bootstrap` AND there is exactly ONE distinct
@@ -230,6 +270,7 @@ from charter_trailer import (
     extract_branch_author_lastname,
     extract_charter_field,
     is_branch_author,
+    is_wave_branch,
     name_first_initial,
     name_lastname,
     strip_code_regions,
@@ -1051,6 +1092,26 @@ COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED = "commit-author-excluded"
 # NO_BRANCH_AUTHOR — which is why this is a reporting distinction and touches no
 # threshold.
 COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER = "commit-author-non-roster"
+# The head ref is a charter WAVE BRANCH, so this is a wave->main integration PR
+# and commit-derived self-review exclusion is DELIBERATELY not applied (#1216).
+#
+# This is a POLICY mode, and it is the only one that is. The other four describe
+# what evidence happened to be available; this one records a decision the charter
+# makes — `pull-requests/reviews.md` § Who counts as "the PR author", and
+# `pull-requests/wave-merge.md` § Wave Merge PR Verification point 5: the code on
+# a wave branch was already 2x-reviewed on its per-issue PRs, the integration PR
+# introduces no authored content of its own, and an implementer whose merged work
+# it contains is not its author. Read the charter section before changing this;
+# the hook is the enforcement of a written rule, not the rule.
+#
+# WHY IT IS NOT `NO_BRANCH_AUTHOR`. That mode's claim is "the PR's commits named
+# no persona." On a wave branch they named five (measured: main#1083 -> Nurul
+# Hakim, Lucas Ferreira, Aino Virtanen, Weronika Zielinska, Nino Kavtaradze; 112
+# of 202 `deployments/**` PRs derive two or more). Rendering the deliberate
+# non-exclusion as an evidentiary absence is the #1220 defect exactly — a true
+# count under a false description — so it gets its own value and its own wording
+# on all three surfaces.
+COMMENT_SCAN_WAVE_INTEGRATION = "wave-integration"
 
 # Every comment-scan mode, in one place (#1220, narrowing #1273).
 #
@@ -1068,6 +1129,7 @@ COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER = "commit-author-non-roster"
 ALL_COMMENT_SCAN_MODES = (
     COMMENT_SCAN_NOT_RUN,
     COMMENT_SCAN_NO_BRANCH_AUTHOR,
+    COMMENT_SCAN_WAVE_INTEGRATION,
     COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER,
     COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED,
     COMMENT_SCAN_AUTHOR_EXCLUDED,
@@ -1078,18 +1140,29 @@ def comment_scan_scope(head_ref: str) -> str:
     """Return which self-review-exclusion mode the HEAD REF alone selects.
 
     The head ref's ONLY role in the comment scan is naming the branch author for
-    the self-review exclusion, so there are exactly two ref-derived modes and
-    **no third "don't scan" mode**:
+    the self-review exclusion, so there are exactly three ref-derived modes and
+    **no fourth "don't scan" mode**:
 
       - `COMMENT_SCAN_AUTHOR_EXCLUDED` — the ref carries the charter
         `{Initial}.{Lastname}[-/]…` prefix, so the branch author is identifiable
         and is excluded from the reviewer set.
-      - `COMMENT_SCAN_NO_BRANCH_AUTHOR` — the ref names no persona (a
-        `deployments/phase-N/wave-M` wave-merge branch, a `dependabot/**` bot
-        branch, a hand-made `feature/x`, or an empty `headRefName`). The scan
-        still runs, under the `""` sentinel the wave-merge path has used since
-        main#294, which `charter_trailer.is_branch_author` reads as "nobody is
-        the branch author".
+      - `COMMENT_SCAN_WAVE_INTEGRATION` — the ref is a charter wave branch
+        (`charter_trailer.is_wave_branch`), so this is a wave->main integration
+        PR. The scan runs and NO self-review exclusion is applied, by policy
+        rather than for want of evidence (#1216 — see the constant, and
+        `pull-requests/reviews.md` § Who counts as "the PR author").
+      - `COMMENT_SCAN_NO_BRANCH_AUTHOR` — the ref names no persona and is not a
+        wave branch (a `dependabot/**` bot branch, a hand-made `feature/x`, a
+        `deployments/**` ref that is not a wave branch, or an empty
+        `headRefName`). The scan still runs, under the `""` sentinel the
+        wave-merge path has used since main#294, which
+        `charter_trailer.is_branch_author` reads as "nobody is the branch
+        author"; `refine_comment_scan_scope` then decides what the COMMITS said.
+
+    ORDER MATTERS AND IS TESTED. The author-prefix arm is checked FIRST, so a
+    (currently impossible) ref that satisfied both shapes would keep its declared
+    author rather than acquiring the wave carve-out. The wave arm never widens
+    who may review a PR whose ref names its author.
 
     This function stays a pure function OF THE REF. `refine_comment_scan_scope`
     applies the second, commit-derived discriminator (#1210) on top of its
@@ -1110,11 +1183,11 @@ def comment_scan_scope(head_ref: str) -> str:
     never a roster persona, so it could never have been in the reviewer set. On
     a ref that DOES name a persona, exclusion is unchanged.
     """
-    return (
-        COMMENT_SCAN_AUTHOR_EXCLUDED
-        if extract_branch_author_lastname(head_ref)
-        else COMMENT_SCAN_NO_BRANCH_AUTHOR
-    )
+    if extract_branch_author_lastname(head_ref):
+        return COMMENT_SCAN_AUTHOR_EXCLUDED
+    if is_wave_branch(head_ref):
+        return COMMENT_SCAN_WAVE_INTEGRATION
+    return COMMENT_SCAN_NO_BRANCH_AUTHOR
 
 
 def commit_author_exclusion_is_live(
@@ -1168,6 +1241,14 @@ def refine_comment_scan_scope(
 
       - `AUTHOR_EXCLUDED` is never downgraded — a ref that names a persona keeps
         its exclusion no matter what the commits say.
+      - `WAVE_INTEGRATION` is never refined (#1216). It is a POLICY answer about
+        a wave->main integration PR, not a claim about what evidence was
+        available, so no amount of commit data may turn it into an exclusion.
+        `resolve_review_verdicts` passes `()` on that ref anyway, so the
+        `not commit_authors` guard below would already return it untouched —
+        this arm is stated because relying on the caller to keep passing `()`
+        would make the policy a property of one call site instead of of the
+        mode.
       - `NOT_RUN` is never upgraded — a scan that did not happen cannot acquire
         a mode. `resolve_review_verdicts` hard-blocks on it upstream, and
         silently relabelling it here would launder that block into a result.
@@ -2121,7 +2202,8 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
 
     branch_author_lastname = extract_branch_author_lastname(head_ref)
 
-    # Commit-derived authors are consulted ONLY where the ref is silent (#1210).
+    # Commit-derived authors are consulted ONLY where the ref is silent (#1210)
+    # AND the PR is not a wave->main integration merge (#1216).
     #
     # Scope, and why it is this narrow. On a `{Initial}.{Lastname}` ref the
     # prefix is the author the human DECLARED, exclusion already works, and
@@ -2132,8 +2214,29 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
     # nobody, `commit_author_identities` is the ONLY discriminator available and
     # `()` was the standing answer: for `deployments/**` since main#294, and for
     # every other non-charter ref since #1207 widened the sentinel.
+    #
+    # THE WAVE-BRANCH CARVE-OUT (#1216). On a wave branch the derivation answers
+    # a question nobody asked: it returns every implementer who landed a per-issue
+    # PR into the wave (measured max 11 identities; 112 of 202 `deployments/**`
+    # PRs derive 2+), calls them all "the branch author" of an integration PR
+    # that authored nothing, and subtracts their integration verdicts. Measured
+    # over every `deployments/**`-head PR in all 7 repos on 2026-08-03: 4 PRs
+    # lose a genuine Approved roster reviewer and 3 of those cross the bar
+    # (2/2 -> 1/2) — main#711 (Wanjiku Mwangi), main#530 and main#293 (Aino
+    # Virtanen). The charter rule this implements is in
+    # `pull-requests/reviews.md` § Who counts as "the PR author"; the substantive
+    # reason is that every commit on the branch already carried two independent
+    # reviewers on its own per-issue PR.
+    #
+    # DERIVED FROM `scan_scope`, not from a second read of the head ref. The mode
+    # that will be REPORTED and the tuple the exclusion is APPLIED from now come
+    # out of one value, so they cannot disagree about whether exclusion is live —
+    # which is the #1297 shape (narrow the tuple, leave the mode, ship a green
+    # suite over a re-opened hole) made structurally impossible here rather than
+    # argued against. For the two pre-#1216 ref classes this is exactly
+    # equivalent to the old `() if branch_author_lastname else …`.
     commit_authors: tuple[CommitAuthorIdentity, ...] = (
-        () if branch_author_lastname else commit_author_identities(commits)
+        commit_author_identities(commits) if scan_scope == COMMENT_SCAN_NO_BRANCH_AUTHOR else ()
     )
 
     comment_result = check_comment_reviews(
@@ -2561,11 +2664,31 @@ def check(input_data: dict) -> dict | None:
                 "counts. The scan DID run; the count below is a real measurement "
                 "(#1206/#1220).\n\n"
             )
+        elif verdicts.comment_scan == COMMENT_SCAN_WAVE_INTEGRATION:
+            # #1216. An operator staring at a short count on a wave-merge PR must
+            # not be told the gate subtracted somebody — it did not — nor be left
+            # to infer that the wave's implementers were silently dropped, which
+            # is what the pre-#1216 message asserted in so many words.
+            scan_diagnostic = (
+                f"NOTE: head ref `{verdicts.head_ref or '(unknown)'}` is a wave branch, so "
+                "this is a wave->main INTEGRATION PR. Its commits are the wave's "
+                "implementers, each already 2x-reviewed on its own per-issue PR, and the "
+                "integration PR authors no content of its own — so no self-review "
+                "exclusion was applied and EVERY roster-valid Approved Requestor counts, "
+                "including an implementer's (charter `pull-requests/reviews.md` § Who "
+                'counts as "the PR author", #1216). The scan DID run and nothing was '
+                "subtracted; the count below is short on approvals, not on eligibility.\n"
+                "Per `pull-requests/wave-merge.md` § Wave Merge PR Verification point 5, "
+                "fresh 2-reviewer approval on an integration PR is NOT required — the "
+                'expected path is `ADMIN_MERGE_EXCEPTION="wave-merge:<rationale>" gh pr '
+                "merge <N> --merge --admin`.\n\n"
+            )
         elif verdicts.comment_scan == COMMENT_SCAN_NO_BRANCH_AUTHOR:
             scan_diagnostic = (
                 f"NOTE: head ref `{verdicts.head_ref or '(unknown)'}` carries no "
-                "`{Initial}.{Lastname}` branch-author prefix (a bot branch, a wave-merge "
-                "branch, or a branch off the charter naming convention), AND the PR's "
+                "`{Initial}.{Lastname}` branch-author prefix (a bot branch, a non-wave "
+                "`deployments/**` branch, or a branch off the charter naming convention), "
+                "AND the PR's "
                 "commits named no persona either (a bot author, a merge-only branch, or a "
                 "squashed commit re-authored to the bare principal — #1177/#1210), so the "
                 "comment verdict scan ran WITHOUT self-review exclusion — every "
@@ -2760,6 +2883,23 @@ def check(input_data: dict) -> dict | None:
             "counted, including any posted by whoever wrote this branch. The scan DID "
             "run and the charter threshold is unchanged — this states which "
             "discriminator was unavailable, not a defect (#1206/#1211)."
+        )
+    elif verdicts.comment_scan == COMMENT_SCAN_WAVE_INTEGRATION:
+        # #1216. This is the surface that matters most for the carve-out: the
+        # merge is ALLOWED and the reader must be able to see, without reading
+        # the hook, that one of the counted approvals may be an implementer's.
+        # `total_distinct` is interpolated for the same reason as every other
+        # advisory here — a hardcoded `2/2` survived all 318 tests once (#1292).
+        advisories.append(
+            f"NOTE: PR {pr_display} reached {total_distinct}/2 WITHOUT self-review "
+            f"exclusion. Head ref `{verdicts.head_ref or '(unknown)'}` is a wave branch, "
+            "so this is a wave->main INTEGRATION PR: its commits were already 2x-reviewed "
+            "on their own per-issue PRs and it authors no content of its own, so by "
+            "charter an implementer whose merged work it contains is NOT its author and "
+            "their integration verdict counts (`pull-requests/reviews.md` § Who counts as "
+            '"the PR author", #1216). No verdict was subtracted. The scan DID run and the '
+            "charter threshold is unchanged — this states which exclusion was deliberately "
+            "not applied, not a defect."
         )
     elif verdicts.comment_scan == COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER:
         derived = ", ".join(i.display for i in verdicts.commit_author_identities) or "(none)"

@@ -34,11 +34,11 @@ Exit codes:
 
 import json
 import os
-import re
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib"))
 from _shell_parse import (
     find_gh_subcommand,
     iter_command_segments,
@@ -48,9 +48,18 @@ from _shell_parse import (
 )
 from annunaki_log import log_pretooluse_block
 
-# A wave branch is exactly `deployments/phase-<P>/wave-<M>` — anchored so a
-# feature branch that merely contains the substring does not match.
-WAVE_BRANCH_RE = re.compile(r"^deployments/phase-\d+/wave-\d+$")
+# The wave-branch shape is `charter_trailer.is_wave_branch` (main#1216) — do NOT
+# reimplement it here. This hook used to carry its own
+# `^deployments/phase-\d+/wave-\d+$`, which does not match the undashed
+# `deployments/phase15/wave-1` form that 4 of the org's repos actually use: 32 of
+# the 202 `deployments/**`-head PRs measured on 2026-08-03. The guard was
+# therefore silently OFF on those branches. One definition, shared with the merge
+# gate, is what keeps a second reader of the same charter shape from disagreeing
+# with the first — the `extract_branch_author_lastname` lesson (main#1175).
+# `test_block_squash_wave_merge.py::SharedWaveBranchParsingTests` asserts this
+# module's binding IS `charter_trailer`'s, so a re-declared local copy fails a
+# named test rather than drifting silently.
+from charter_trailer import is_wave_branch
 
 
 def _iter_squash_merges(command):
@@ -150,7 +159,7 @@ def check(input_data, *, base_runner=None):
         return None
     for pr, repo in _iter_squash_merges(command):
         base = _resolve_base_ref(pr, repo, runner=base_runner)
-        if base and WAVE_BRANCH_RE.match(base):
+        if is_wave_branch(base):
             reason = _reason(pr, repo)
             log_pretooluse_block("block_squash_wave_merge", command, reason)
             return {"decision": "block", "reason": reason}
