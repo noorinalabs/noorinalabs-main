@@ -851,7 +851,7 @@
       "last_tracked": "8a6989dd1e2f06cdc852b1f17ce8a76c4e4396f395c7a80d953010a01f4e9417",
       "last_resolved": "8a6989dd1e2f06cdc852b1f17ce8a76c4e4396f395c7a80d953010a01f4e9417",
       "tracked_at": "2026-08-03T03:42:04.875531+00:00",
-      "resolved_at": "2026-08-03T16:55:06.550042+00:00"
+      "resolved_at": "2026-08-03T17:47:28.703805+00:00"
     },
     "noorinalabs-isnad-graph/.claude/lib/tests/test_pre_commit_ci_sync.py": {
       "last_tracked": "aa209279deec3844b51e384157ba3e67a6d0f325410941f63f38d57535e6498c",
@@ -1752,6 +1752,12 @@
       "last_resolved": "e23fb24628c5db470682108619cbbb7ad3f1fc5457ae0f7012bcf11a951f77d6",
       "tracked_at": "2026-08-03T16:54:47.358144+00:00",
       "resolved_at": "2026-08-03T16:55:06.550042+00:00"
+    },
+    ".claude/memory/feedback_allowlist_membership_needs_adversarial_measurement.md": {
+      "last_tracked": "e76452995a08e2db348f038f00b7b83ab946ac7f18e63173e61044ba9b2d0d2a",
+      "last_resolved": "e76452995a08e2db348f038f00b7b83ab946ac7f18e63173e61044ba9b2d0d2a",
+      "tracked_at": "2026-08-03T17:47:07.325456+00:00",
+      "resolved_at": "2026-08-03T17:47:28.703805+00:00"
     }
   },
   "last_cleanup": {
