@@ -124,3 +124,7 @@ ontology/structural/
 
 # Obsidian editor workspace state (local, not shared)
 ontology/.obsidian/
+
+# Reviewer/agent scratch clones (never committed; keeps the ontology
+# change-tracker from recording throwaway drafts — see checksums cleanup 2026-08-03)
+/scratchpad/
