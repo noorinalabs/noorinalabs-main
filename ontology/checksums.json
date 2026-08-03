@@ -1694,10 +1694,10 @@
       "resolved_at": "2026-08-02T18:52:44.952844+00:00"
     },
     ".claude/memory/feedback_corpus_misses_its_constant_dimension.md": {
-      "last_tracked": "2b2421d8fe8c8ed2c38eb17517f9398ab23cb5cd41f51cc9c36ab57a3c51f86f",
-      "last_resolved": "2b2421d8fe8c8ed2c38eb17517f9398ab23cb5cd41f51cc9c36ab57a3c51f86f",
-      "tracked_at": "2026-08-03T14:00:04.987468+00:00",
-      "resolved_at": "2026-08-03T14:00:15.927491+00:00"
+      "last_tracked": "009f57d86330853ddcbfa0eac26bbc93265a8017c9fc61790645e6f15e5145ba",
+      "last_resolved": "009f57d86330853ddcbfa0eac26bbc93265a8017c9fc61790645e6f15e5145ba",
+      "tracked_at": "2026-08-03T19:24:18.452473+00:00",
+      "resolved_at": "2026-08-03T19:24:35.702340+00:00"
     },
     ".claude/memory/feedback_ontology_context_spawn_gate.md": {
       "last_tracked": "3126db88180e64b7c563cf1d5e462900bac50890b67e2534aaf61acd01a01b12",

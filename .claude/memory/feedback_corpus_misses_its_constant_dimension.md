@@ -92,6 +92,22 @@ Strictly cheaper than enumerating dimensions, and complementary: dimension-listi
 
 ---
 
+## Fourth instance — varying each axis is NOT crossing them (W29, PR #1325)
+
+The rule above says: enumerate the dimensions the corpus varies, then ask what is missing from that list. **Here nothing was missing from the list.** Both dimensions were present and both were individually varied. The **interaction** was untested.
+
+A fix folded a stdin-redirect target into an interpreter invocation's `operands[0]`. Its adversarial corpus tested *"positional operand only"* and *"stdin redirect only"* — never both together. That single uncrossed cell contained **three defects**: a BLOCK→ALLOW bypass (`bash s.sh < /dev/null`, nine characters, strictly worse than the bypass the PR closed), a second BLOCK→ALLOW on the on-disk walker path, and an over-block on `bash deploy.sh < notes.txt`.
+
+**The discriminator that proved it, and the technique worth stealing:** the reviewer wrote the *corrected* implementation and ran it as a **mutant of the shipped one**. It survived all 100 tests in the changed files and the full 2697-test suite — while moving **six verdicts, three from BLOCK to ALLOW**. A mutant that changes six real answers and passes everything is not an equivalent mutant; it is proof the corpus cannot tell the two implementations apart.
+
+> **If you cannot construct a test that distinguishes your implementation from the correction, your corpus does not test the thing you changed.**
+
+Both reviewers found this independently on the same PR, which is what a genuinely uncrossed axis looks like — obvious from outside, invisible from within.
+
+**How to apply:** for a change touching N binary conditions, the axis list is necessary and the **product** is the corpus. Write the matrix — {no operand, positional operand} × {no redirect, one, many} × {flag present, absent} — and mark which cells existed before. A cell nobody wrote is where the defect is, and it will not appear in a list of *dimensions varied*.
+
+---
+
 ## Provenance caveat — why this note says "reviewer A / reviewer B"
 
 Two **distinct agents** reviewed PR #1193 under the **single roster persona `Weronika Zielinska`** (an orchestrator spawn-routing error: one persona assigned to one PR twice). Both produced real, independent, competent work — but the review record cannot tell them apart, and the first draft of this note narrated their combined measurements as one reviewer's arc.
