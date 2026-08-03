@@ -14,6 +14,7 @@ Exit codes:
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -21,6 +22,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
+_LIB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib")
+sys.path.insert(0, os.path.abspath(_LIB_DIR))
+from org_repos import ALL_REPOS  # noqa: E402
 
 # Project memory is version-controlled in-repo (#732 relocation) so it travels
 # with a git pull. The handoff file itself stays gitignored — it's per-session
@@ -64,18 +69,14 @@ def _get_git_state() -> dict:
 
 
 def _get_open_prs() -> list[str]:
-    """Get open PRs across all repos."""
-    repos = [
-        "noorinalabs-main",
-        "noorinalabs-isnad-graph",
-        "noorinalabs-user-service",
-        "noorinalabs-deploy",
-        "noorinalabs-design-system",
-        "noorinalabs-landing-page",
-        "noorinalabs-data-acquisition",
-    ]
+    """Get open PRs across all repos.
+
+    Queries org_repos.ALL_REPOS (main#1118 / audit G6) — the previous hand-copied
+    list here omitted noorinalabs-isnad-ingest-platform (BUG-08), silently
+    querying only 7 of 8 org repos.
+    """
     prs = []
-    for repo in repos:
+    for repo in ALL_REPOS:
         raw = _run(
             f"gh pr list --repo noorinalabs/{repo} --state open --json number,title --limit 5",
             timeout=15,

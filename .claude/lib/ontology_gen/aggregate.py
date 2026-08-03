@@ -36,22 +36,19 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from org_repos import CHILD_REPOS
+
 from .generate import generate
 from .model import CodeGraph, Edge, GraphDict, Node, serialize_graph
 
 # Short namespace -> repo directory relative to the noorinalabs-main root. The short
 # names match the overlay's repo vocabulary (domain.yaml ``repos: [isnad-graph, ...]``).
-# Child repos are cloned beneath the parent root (CLAUDE.md § Repository Map); "main" is
-# the parent itself (".") so its own index is rolled in alongside the children.
+# Child repos are cloned beneath the parent root, sourced from org_repos.CHILD_REPOS
+# (main#1118 / audit G6, the org repo-list SSOT); "main" is the parent itself (".")
+# so its own index is rolled in alongside the children.
 DEFAULT_REPOS: dict[str, str] = {
     "main": ".",
-    "isnad-graph": "noorinalabs-isnad-graph",
-    "user-service": "noorinalabs-user-service",
-    "deploy": "noorinalabs-deploy",
-    "design-system": "noorinalabs-design-system",
-    "data-acquisition": "noorinalabs-data-acquisition",
-    "isnad-ingest-platform": "noorinalabs-isnad-ingest-platform",
-    "landing-page": "noorinalabs-landing-page",
+    **{r.removeprefix("noorinalabs-"): r for r in CHILD_REPOS},
 }
 
 # Where each repo's generated per-repo index lives (relative to that repo's root).

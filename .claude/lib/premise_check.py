@@ -76,6 +76,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from org_repos import ALL_REPOS
+
 # Repo root = two parents above .claude/lib/ (lib -> .claude -> root). Resolved
 # from this file so the default repos-root is correct from any cwd or worktree.
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -149,8 +151,10 @@ _BACKTICK_RE = re.compile(r"`([^`\n]+)`")
 # is a real repo path even without a recognized extension (main#1047: a slash
 # alone is NOT evidence — "A/B", "recall/precision", "origin/main", "986/650"
 # all contain "/" and are not paths). Covers this org's top-level source roots
-# plus every child repo name (a cross-repo mention like
-# `noorinalabs-deploy/terraform/...` is a real path even mid-prose).
+# plus every repo name (a cross-repo mention like
+# `noorinalabs-deploy/terraform/...` is a real path even mid-prose). The repo
+# names come from org_repos.ALL_REPOS (main#1118 / audit G6, the org repo-list
+# SSOT) rather than being hand-copied here.
 _KNOWN_ROOT_COMPONENTS = frozenset(
     {
         "src",
@@ -167,16 +171,8 @@ _KNOWN_ROOT_COMPONENTS = frozenset(
         "alembic",
         "docker",
         "integration-tests",
-        "noorinalabs-main",
-        "noorinalabs-isnad-graph",
-        "noorinalabs-user-service",
-        "noorinalabs-deploy",
-        "noorinalabs-design-system",
-        "noorinalabs-data-acquisition",
-        "noorinalabs-isnad-ingest-platform",
-        "noorinalabs-landing-page",
     }
-)
+) | frozenset(ALL_REPOS)
 
 # Known git refs / ref prefixes: `origin/main`, `refs/heads/x`, `HEAD` are
 # never file paths even though `origin/main` contains a slash (main#1047).

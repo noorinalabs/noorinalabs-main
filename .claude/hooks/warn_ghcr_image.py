@@ -45,7 +45,13 @@ from _shell_parse import (  # noqa: E402
 # Deploy-related workflow names/files
 DEPLOY_PATTERNS = re.compile(r"deploy|release|cd[.-]|deliver", re.IGNORECASE)
 
-# Map of repo short names to GHCR image paths
+# Map of repo short names to GHCR image paths. Deliberately NOT the full
+# org_repos.CHILD_REPOS membership (main#1118 / audit G6) — this is the
+# GHCR-image-publishing subset of children, a different axis (build/publish
+# topology) than "which repos exist in the org". test_warn_ghcr_image.py
+# asserts every key here is a real child repo name (org_repos.CHILD_REPOS) —
+# catches a typo/rename drifting silently — without forcing full membership
+# or importing org_repos into this advisory hook's runtime path.
 REPO_IMAGE_MAP = {
     "noorinalabs-isnad-graph": "ghcr.io/noorinalabs/noorinalabs-isnad-graph",
     "noorinalabs-landing-page": "ghcr.io/noorinalabs/noorinalabs-landing-page",

@@ -46,20 +46,12 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-_ORG = "noorinalabs"
-_MAIN_REPO = "noorinalabs-main"
+from org_repos import ALL_REPOS as CANONICAL_REPOS
+from org_repos import MAIN_REPO as _MAIN_REPO
+from org_repos import ORG as _ORG
 
-#: All canonical org repos (CLAUDE.md Repository Map) — the cron sweeps every one.
-CANONICAL_REPOS: tuple[str, ...] = (
-    "noorinalabs-main",
-    "noorinalabs-isnad-graph",
-    "noorinalabs-user-service",
-    "noorinalabs-deploy",
-    "noorinalabs-design-system",
-    "noorinalabs-data-acquisition",
-    "noorinalabs-isnad-ingest-platform",
-    "noorinalabs-landing-page",
-)
+#: All canonical org repos (CLAUDE.md Repository Map) — the cron sweeps every
+#: one. Sourced from org_repos.py (main#1118 / audit G6), the org repo-list SSOT.
 
 #: Publish/deploy/release-class workflow names (same pattern the skill used).
 _WORKFLOW_CLASS_RE = re.compile(r"publish|deploy|release|promote|ghcr|image", re.IGNORECASE)

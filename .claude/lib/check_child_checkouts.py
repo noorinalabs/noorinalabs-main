@@ -43,6 +43,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# The 7 canonical child repos (CLAUDE.md Repository Map), sourced from
+# org_repos.py (main#1118 / audit G6) — the org repo-list SSOT. Kept in sync
+# with the session-start Step 0 worktree iteration list.
+from org_repos import CHILD_REPOS
+
 # Reuse the deterministic git primitives + safe fast-forward from sync_main so
 # the two guards share one implementation of "what is dirty" / "how to ff".
 from sync_main import (
@@ -54,18 +59,6 @@ from sync_main import (
 )
 from sync_main import (
     sync_main as _sync_branch,
-)
-
-# The 7 canonical child repos (CLAUDE.md Repository Map). Kept in sync with the
-# session-start Step 0 worktree iteration list.
-CHILD_REPOS: tuple[str, ...] = (
-    "noorinalabs-isnad-graph",
-    "noorinalabs-user-service",
-    "noorinalabs-deploy",
-    "noorinalabs-design-system",
-    "noorinalabs-data-acquisition",
-    "noorinalabs-isnad-ingest-platform",
-    "noorinalabs-landing-page",
 )
 
 # Statuses that need a human call (the FLAGGED block). Everything else
