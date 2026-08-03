@@ -1159,10 +1159,16 @@ def comment_scan_scope(head_ref: str) -> str:
         `charter_trailer.is_branch_author` reads as "nobody is the branch
         author"; `refine_comment_scan_scope` then decides what the COMMITS said.
 
-    ORDER MATTERS AND IS TESTED. The author-prefix arm is checked FIRST, so a
-    (currently impossible) ref that satisfied both shapes would keep its declared
-    author rather than acquiring the wave carve-out. The wave arm never widens
-    who may review a PR whose ref names its author.
+    ORDER MATTERS, AND IS PINNED AGAINST THE PREDICATE — not against a ref. The
+    author-prefix arm is checked FIRST, so a ref satisfying both shapes keeps its
+    declared author rather than acquiring the wave carve-out. No ref can satisfy
+    both today (`_BRANCH_AUTHOR_PREFIX_RE` anchors at the start and needs
+    `{letter}.`, which `deployments/…` cannot supply), so swapping these two
+    `if`s is a no-op against every real input — it SURVIVED mutation M7 with the
+    suite green. `CommentScanScopeTotalityTests::test_the_declared_author_arm_
+    outranks_the_wave_arm` therefore forces `is_wave_branch` True and asserts a
+    persona ref still yields AUTHOR_EXCLUDED. Stating "order matters" without
+    that test would be a claim nothing could falsify (#1215).
 
     This function stays a pure function OF THE REF. `refine_comment_scan_scope`
     applies the second, commit-derived discriminator (#1210) on top of its

@@ -4024,6 +4024,38 @@ class CommentScanScopeTotalityTests(unittest.TestCase):
             with self.subTest(ref=ref):
                 self.assertEqual(hook.comment_scan_scope(ref), hook.COMMENT_SCAN_NO_BRANCH_AUTHOR)
 
+    def test_the_declared_author_arm_outranks_the_wave_arm(self):
+        """#1216 precedence, pinned where it is otherwise UNFALSIFIABLE.
+
+        No real ref can satisfy both shapes — `_BRANCH_AUTHOR_PREFIX_RE` anchors
+        at the start and needs `{letter}.`, which `deployments/…` cannot supply —
+        so swapping the two `if`s in `comment_scan_scope` is a no-op against
+        every input and SURVIVED mutation M7 with the whole suite green.
+
+        A docstring saying "order matters" that no test can falsify is the
+        #1215 shape (an anti-vacuity claim that is itself vacuous). So the
+        precedence is pinned against the predicate rather than against a ref:
+        with `is_wave_branch` forced True, a ref that names its author must
+        STILL keep its exclusion. This is not a hypothetical guard — it is the
+        exact property that starts mattering the moment anyone widens
+        `is_wave_branch`, which is the likeliest future edit to this code.
+        """
+        with mock.patch.object(hook, "is_wave_branch", return_value=True):
+            self.assertEqual(
+                hook.comment_scan_scope("A.Virtanen/1216-x"),
+                hook.COMMENT_SCAN_AUTHOR_EXCLUDED,
+            )
+            self.assertEqual(
+                hook.comment_scan_scope("A.Virtanen-1216-x"),
+                hook.COMMENT_SCAN_AUTHOR_EXCLUDED,
+            )
+            # Anti-vacuity: the patch must actually be reaching the function, or
+            # the assertions above would pass against an unpatched call.
+            self.assertEqual(
+                hook.comment_scan_scope("feature/hand-made"),
+                hook.COMMENT_SCAN_WAVE_INTEGRATION,
+            )
+
     def test_no_head_ref_shape_ever_yields_not_run(self):
         """The invariant itself, stated once: NOT_RUN is not a reachable scope.
 
@@ -4698,6 +4730,34 @@ class RefineCommentScanScopeTests(unittest.TestCase):
                 hook.COMMENT_SCAN_NO_BRANCH_AUTHOR, self.IDENT, self.ROSTER
             ),
             hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED,
+        )
+
+    def test_wave_integration_is_never_refined_even_with_derived_identities(self):
+        """#1216: the POLICY answer cannot be argued out of by commit evidence.
+
+        `resolve_review_verdicts` passes `()` on a wave ref, so in production
+        the `not commit_authors` guard already returns this untouched — which is
+        exactly why it needs a unit test: the property would otherwise hold by
+        the caller's grace rather than by the function's contract, and the next
+        caller would not inherit it. Deliberately passes a ROSTER-MATCHING
+        identity, the input that would upgrade any other non-terminal mode.
+        """
+        self.assertEqual(
+            hook.refine_comment_scan_scope(
+                hook.COMMENT_SCAN_WAVE_INTEGRATION, self.IDENT, self.ROSTER
+            ),
+            hook.COMMENT_SCAN_WAVE_INTEGRATION,
+        )
+        self.assertEqual(
+            hook.refine_comment_scan_scope(
+                hook.COMMENT_SCAN_WAVE_INTEGRATION, self.BOT, self.ROSTER
+            ),
+            hook.COMMENT_SCAN_WAVE_INTEGRATION,
+        )
+        # An unreadable roster must not shake it loose either.
+        self.assertEqual(
+            hook.refine_comment_scan_scope(hook.COMMENT_SCAN_WAVE_INTEGRATION, self.IDENT, set()),
+            hook.COMMENT_SCAN_WAVE_INTEGRATION,
         )
 
     def test_derived_identity_matching_no_roster_persona_is_reported_inert(self):
