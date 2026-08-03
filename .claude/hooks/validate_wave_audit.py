@@ -54,23 +54,35 @@ Carry-forward bypass (warn-but-allow):
 Block condition:
     Either:
       - matched_skill AND open_count > 0 AND args lacks carry-forward marker
-      - matched_skill ∈ _COVERAGE_BLOCKING_SKILLS AND the audit queried SOME but
-        not all org repos (PARTIAL coverage — #1226, § Failure modes below)
-    Note the all-vs-some line: a partial failure blocks (1-of-8 through 7-of-8),
-    but a TOTAL failure — no repo queried at all, 8-of-8 — fail-opens with a
-    warning and does NOT block. That is deliberate, not an oversight: every
-    remedy this block prescribes (`gh auth status`, `gh api rate_limit`, running
-    the canonical audit by hand) requires a working `gh`, which at total failure
-    is by definition unavailable, so blocking there would be an unrecoverable
-    deadlock whose only exit is the settings.json removal that disables the gate
-    for every skill. The asymmetry is under review in #1230.
+      - matched_skill ∈ _COVERAGE_BLOCKING_SKILLS AND the audit did not query
+        every org repo — PARTIAL coverage (1-of-8 through 7-of-8, #1226) OR
+        TOTAL coverage failure (8-of-8, no repo queried at all, #1230)
+    #1230 resolution (closing the all-vs-some asymmetry): total failure used to
+    fail-open unconditionally, AHEAD of the _COVERAGE_BLOCKING_SKILLS check —
+    making the bigger blind spot (8-of-8 unreadable) strictly MORE permissive
+    than the smaller one (1-of-8) for the exact two skills (/wave-wrapup,
+    /wave-retro) #1226 hardened specifically because "an unknown is never
+    green" (/session-start Step 5a). That inversion is now closed: for
+    _COVERAGE_BLOCKING_SKILLS, total failure blocks exactly as partial failure
+    does, with its own message — an audit that never ran at all is a different,
+    starker fact than one that ran short, so it earns different copy, not a
+    different verdict. The counter-argument (every remedy needs a working `gh`,
+    unavailable by definition at total failure, so blocking "deadlocks" except
+    via the settings.json emergency removal) does not survive scrutiny: it
+    proves too much, since it applies equally to 7-of-8, which this gate
+    already blocks; a rate-limit/API outage that happens to hit all 8 calls at
+    once resolves with the same "wait and re-run" remedy as a partial one; and
+    only a genuinely broken `gh` install forces the emergency exit — which was
+    already the only exit for an unfixable partial failure too. `/handoff`
+    remains outside _COVERAGE_BLOCKING_SKILLS and is unaffected: it still
+    allows, loudly, on both partial AND total failure.
 
 Allow condition:
     Any of:
       - matched_skill is False (different skill, different tool entirely)
       - open_count == 0 AND every org repo was successfully queried
       - args contains a carry-forward marker AND coverage is complete
-      - the audit could not run at all, or ran only partially for a skill
+      - the audit could not run at all, or ran only partially, for a skill
         outside _COVERAGE_BLOCKING_SKILLS (fail-open — but always WITH a
         system message; no degraded path is silent, see § Failure modes)
 
@@ -125,25 +137,38 @@ Merge-ready-PR exemption (issue #664, owner-adopted P4W7 retro):
     toward the stricter count — never false-exempt).
 
 Failure modes (never silent — every degraded path emits operator-visible text):
-    - `gh` not installed / not authenticated, or EVERY repo query failed →
-      cannot audit at all, allow with warning.
-    - Network/API/quota failure on SOME repos (partial coverage, #1226) → the
+    - `gh` not installed / not authenticated, or EVERY repo query failed
+      (TOTAL coverage failure, `_audit_open_count` returns `total is None`) →
+      the verdict splits by skill, same split as the partial case below:
+        * `_COVERAGE_BLOCKING_SKILLS` (/wave-wrapup, /wave-retro) BLOCK
+          (#1230). There is no open-item count at all — not a zero, no count —
+          which is a total UNKNOWN and an unknown is never green
+          (/session-start Step 5a). A carry-forward marker does not clear it,
+          same reasoning as the partial case: the marker can only vouch for
+          what the operator has SEEN, and nothing was seen this time.
+        * /handoff is ALLOWED with an explicit warning naming that no repo
+          could be queried. It only records session state, its degraded
+          outcome is recoverable, and stranding a session mid-outage would
+          push operators toward the settings.json emergency removal — which
+          would disable the gate for wrapup and retro too.
+      History: before #1230 this path fail-opened UNCONDITIONALLY — even for
+      _COVERAGE_BLOCKING_SKILLS — making the largest blind spot (8-of-8) more
+      permissive than a 1-of-8 gap the same gate already blocked. See § Block
+      condition for the full resolution.
+    - Network/API/quota failure on SOME repos (PARTIAL coverage, #1226) → the
       failed repos are recorded by name (`_audit_open_count`'s third return
       value) and the surviving sum is treated as a LOWER BOUND, never as an
-      authoritative zero. The verdict then splits by skill:
+      authoritative zero. The verdict splits by skill exactly as above:
         * `_COVERAGE_BLOCKING_SKILLS` (/wave-wrapup, /wave-retro) BLOCK. They
           write the durable "wave concluded" record and mutate wave state, and
           neither is time-critical, so waiting for the API and re-running is a
           cheap and complete remedy. A carry-forward marker does not clear it.
         * /handoff is ALLOWED with an explicit warning naming the unseen repos.
-          It only records session state, its degraded outcome is recoverable,
-          and stranding a session mid-outage would push operators toward the
-          settings.json emergency removal — which would disable the gate for
-          wrapup and retro too.
       History: before #1226 this path summed the survivors and returned a bare
       allow with NO output at all. Because `noorinalabs-main` was the only repo
       carrying wave issues, ONE failed query flipped the gate from BLOCK to a
-      silent ALLOW — quieter, and strictly more dangerous, than total failure.
+      silent ALLOW — quieter, and strictly more dangerous, than total failure
+      was at the time (#1230 has since closed that remaining gap too).
     - cross-repo-status.json missing or malformed → cannot determine wave,
       allow with warning.
     - current_wave field missing / not a "wave-<N>" string → cannot derive
@@ -170,13 +195,14 @@ Bypass policy:
 
 Exit codes (per Claude Code hook convention):
     0 — allow (not a matched skill; audit zero WITH full coverage; args has
-        carry-forward WITH full coverage; infra failure fail-open, always
-        accompanied by a system message)
+        carry-forward WITH full coverage; infra failure fail-open for a skill
+        outside _COVERAGE_BLOCKING_SKILLS, always accompanied by a system
+        message)
     2 — block (matched skill AND open count > 0 without a carry-forward marker,
-        OR PARTIAL audit coverage — some org repos queried, some not — for a
-        _COVERAGE_BLOCKING_SKILLS skill. A TOTAL coverage failure, where no repo
-        could be queried at all, exits 0 with a warning instead; see § Block
-        condition for why that asymmetry is deliberate.)
+        OR any audit-coverage gap — PARTIAL (some org repos queried, some not,
+        #1226) or TOTAL (no repo queried at all, #1230) — for a
+        _COVERAGE_BLOCKING_SKILLS skill. See § Block condition for the
+        all-vs-some history and why both now exit 2.)
 
 Promotion provenance:
     memory feedback_honest_audit_over_conclusion_claim (2026-04-22) →
@@ -207,23 +233,27 @@ from org_repos import ALL_REPOS  # noqa: E402
 _GATED_SKILLS = frozenset({"wave-wrapup", "wave-retro", "handoff"})
 
 # Subset of _GATED_SKILLS for which an INCOMPLETE audit — any org repo the
-# hook could not query — is itself a block, independent of the count it did
-# manage to compute (#1226).
+# hook could not query, whether PARTIAL (#1226) or TOTAL (#1230) — is itself a
+# block, independent of the count it did manage to compute.
 #
 # `wave-wrapup` and `wave-retro` write the durable record that a wave is
 # concluded: they merge the wave branch, close issues, advance the status file,
 # and fix the retrospective history. Neither is time-critical, so "wait for the
 # API and re-run" is a cheap and complete remedy, and an audit that could not
-# see a repo is an UNKNOWN — never green (/session-start Step 5a).
+# see a repo is an UNKNOWN — never green (/session-start Step 5a). This applies
+# whether ONE repo went unqueried or all EIGHT did: a bigger blind spot cannot
+# be the more permissive outcome (#1230 closed the asymmetry where TOTAL
+# failure used to fail-open unconditionally while PARTIAL failure blocked).
 #
-# `handoff` is deliberately EXCLUDED. It only *records* session state; its
-# degraded outcome (a thinner pickup prompt) is recoverable, and the Stop hook
-# writes a handoff automatically regardless. Hard-blocking it during exactly
-# the kind of API outage that makes recording state valuable would strand a
-# session — and the only escape is the settings.json emergency removal, which
-# would disable the gate for wrapup and retro too. So /handoff degrades to a
-# loud, explicit allow-with-warning naming the repos it could not see: not
-# green, but not a dead end either.
+# `handoff` is deliberately EXCLUDED, from both the partial AND total case. It
+# only *records* session state; its degraded outcome (a thinner pickup prompt)
+# is recoverable, and the Stop hook writes a handoff automatically regardless.
+# Hard-blocking it during exactly the kind of API outage that makes recording
+# state valuable would strand a session — and the only escape is the
+# settings.json emergency removal, which would disable the gate for wrapup and
+# retro too. So /handoff degrades to a loud, explicit allow-with-warning naming
+# the repos it could not see (or that none could be seen at all): not green,
+# but not a dead end either.
 _COVERAGE_BLOCKING_SKILLS = frozenset({"wave-wrapup", "wave-retro"})
 
 # Org-known repos for cross-repo audit. Sourced from org_repos.py (main#1118
@@ -702,22 +732,58 @@ def check(input_data: dict) -> dict | None:
     wave_branch = _read_current_wave_branch()
 
     total, per_repo, unqueried = _audit_open_count(labels, wave_branch)
+    args = tool_input.get("args", "")
 
-    # DELIBERATE EARLY ALLOW — this branch precedes the hard blocks below, and
-    # the precedence is intended, not an oversight. Total failure (no repo
-    # queried at all) fail-opens even for _COVERAGE_BLOCKING_SKILLS, while a
-    # PARTIAL failure blocks them at the `if unqueried:` gate further down.
-    # Rationale: every remedy that gate prescribes needs a working `gh`, which
-    # is by definition dead here, so blocking would deadlock with no exit but
-    # the settings.json removal that disables the gate for every skill.
-    # This is exactly the shape memory feedback_gate_early_allow_is_the_failopen
-    # warns about (#981: "a verify-gate's hole is usually an allow-with-warning
-    # branch short-circuiting AHEAD of the hard-blocks"), so it is marked at the
-    # site rather than left to be rediscovered. The all-vs-some line itself is
-    # under review in #1230 — if that rules for a block, this is the branch to
-    # change, and `test_partial_failure_is_never_quieter_than_total_failure`
-    # (#1234) is the test that pins it.
+    # TOTAL coverage failure — no repo queried at all. Resolved by #1230: this
+    # branch used to fail-open UNCONDITIONALLY, ahead of every hard block below
+    # (including the _COVERAGE_BLOCKING_SKILLS check further down), which made
+    # the largest blind spot (8-of-8 unreadable) MORE permissive than a 1-of-8
+    # gap the same gate already blocked. That inversion is exactly the shape
+    # memory feedback_gate_early_allow_is_the_failopen warns about (#981: "a
+    # verify-gate's hole is usually an allow-with-warning branch
+    # short-circuiting AHEAD of the hard-blocks") — noted here, at the site, so
+    # a future change to this branch doesn't reopen it.
+    #
+    # Now: for _COVERAGE_BLOCKING_SKILLS, total failure is treated exactly like
+    # a PARTIAL coverage gap (§ `if unqueried:` below) — it BLOCKS, with its own
+    # message ("could not run at all" vs "ran short" are different enough
+    # facts to warrant different copy, per #1230's ask). A carry-forward marker
+    # does not clear it, same as partial: the marker can only vouch for what
+    # the operator has SEEN, and nothing was seen this time. For every other
+    # gated skill (/handoff), the fail-open-with-warning behavior is unchanged.
     if total is None:
+        if skill_name in _COVERAGE_BLOCKING_SKILLS:
+            return _block(
+                skill_name,
+                args,
+                reason=(
+                    f"BLOCKED: /{skill_name} cannot claim wave conclusion — the open-item "
+                    f"audit could not run AT ALL.\n\n"
+                    f"Could not query any of the {len(_ORG_REPOS)} org repo(s) for label(s) "
+                    f"{label_display} (gh CLI missing, unauthenticated, or every call "
+                    "failed). There is NO open-item count for this wave — not a zero, no "
+                    "count at all.\n\n"
+                    "Charter § Wave Lifecycle — Open-Item Audit requires the audit to RUN, "
+                    "not merely to return a number. A total outage is a total UNKNOWN, and "
+                    "an unknown is never green (/session-start Step 5a) — the same "
+                    "principle that already blocks a PARTIAL coverage gap (#1226) applies "
+                    "with at least as much force to a complete one: a bigger blind spot "
+                    "cannot be the more permissive outcome (#1230).\n\n"
+                    "To proceed:\n"
+                    "  1. Diagnose the failure — usually auth (`gh auth status`), a "
+                    "missing/broken `gh` install, or a full API/quota outage (`gh api "
+                    f"rate_limit`). Fix it or wait for the quota window, then re-run "
+                    f"/{skill_name}, OR\n"
+                    "  2. Run the canonical audit by hand once `gh` is working and close "
+                    "or carry-forward whatever it finds, then re-run.\n\n"
+                    "A carry-forward marker does NOT clear this block: the marker "
+                    "acknowledges items the operator has SEEN, and NO repo was read this "
+                    "time.\n\n"
+                    "There is no in-band bypass flag — see charter/hooks/catalog-13-17.md "
+                    "§ Hook 17 for emergency procedure."
+                ),
+            )
+        # Not coverage-blocking (/handoff): allow, but never bare.
         return {
             "decision": "allow",
             "systemMessage": (
@@ -731,8 +797,6 @@ def check(input_data: dict) -> dict | None:
                 "(charter skills.md § Wave Lifecycle — Audit command) first."
             ),
         }
-
-    args = tool_input.get("args", "")
 
     # `total` sums only the repos the audit could actually see. With any repo
     # unqueried it is a LOWER BOUND, and the coverage gap has to travel with
