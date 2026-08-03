@@ -218,12 +218,20 @@ class HyphenatedSurnameTests(unittest.TestCase):
                 self.assertEqual(extract_branch_author_lastname(ref), surname)
 
     def test_the_initial_survives_alongside_the_hyphenated_surname(self):
-        """Both readers of the shared prefix must still agree on a hyphenated ref."""
+        """Both readers of the shared prefix must agree on a hyphenated ref.
+
+        The lastname half asserts the VALUE, not merely `is not None`. An
+        `assertIsNotNone` here would pass under the truncating charset too —
+        `Mensah` is not None — making this fixture pin nothing in the direction
+        that matters. (It was written that way first; the mutation run against
+        `([A-Za-z]+)` is what caught it, which is the same failure mode this
+        whole class exists to close.)
+        """
         for surname in self.HYPHENATED:
             for ref in (f"K.{surname}/0001-x", f"K.{surname}-0001-x"):
                 with self.subTest(ref=ref):
                     self.assertEqual(branch_author_first_initial(ref), "k")
-                    self.assertIsNotNone(extract_branch_author_lastname(ref))
+                    self.assertEqual(extract_branch_author_lastname(ref), surname)
 
     def test_a_truncating_charset_would_be_caught(self):
         """Anti-vacuity: assert the exact truncation the old charset produced.
@@ -339,11 +347,32 @@ class BranchPrefixReadersAgreeTests(unittest.TestCase):
         self.assertGreaterEqual(len(self.REFS) - len(matched), 4)
 
     def test_the_initial_and_lastname_come_from_the_same_prefix(self):
-        """Not just "both matched" — they must describe the SAME person."""
+        """Not just "both matched" — they must describe the SAME person.
+
+        The agreement property alone is too weak to pin the lastname charset:
+        under the truncating `([A-Za-z]+)`, `K.Mensah-Williams/…` still yields a
+        non-None lastname and a valid initial, so both readers still "agree"
+        while naming the wrong person. Hence the explicit values below.
+        """
         self.assertEqual(extract_branch_author_lastname("S.Ferreira/0001-x"), "Ferreira")
         self.assertEqual(branch_author_first_initial("S.Ferreira/0001-x"), "s")
         self.assertEqual(extract_branch_author_lastname("L.Ferreira-0001-x"), "Ferreira")
         self.assertEqual(branch_author_first_initial("L.Ferreira-0001-x"), "l")
+        # …and on the hyphenated refs added to REFS for #1269.
+        self.assertEqual(
+            extract_branch_author_lastname("K.Mensah-Williams/0001-project-scaffolding"),
+            "Mensah-Williams",
+        )
+        self.assertEqual(
+            branch_author_first_initial("K.Mensah-Williams/0001-project-scaffolding"), "k"
+        )
+        self.assertEqual(
+            extract_branch_author_lastname("M.Vega-Cruz-1120-integration-marker-leak"),
+            "Vega-Cruz",
+        )
+        self.assertEqual(
+            branch_author_first_initial("M.Vega-Cruz-1120-integration-marker-leak"), "m"
+        )
 
 
 class IsBranchAuthorTests(unittest.TestCase):
