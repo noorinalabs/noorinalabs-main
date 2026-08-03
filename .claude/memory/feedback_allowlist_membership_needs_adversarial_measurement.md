@@ -24,6 +24,25 @@ What made it a **blocker rather than debt**: the module comment and tests assert
 
 The other 30 members were then measured plain **and** exec-shaped in both shells and came back clean, including the highest-risk candidate `jq` (`env.PATH`, `$ENV.PATH`, `input_filename`, `@sh` — no `system()` in mainline).
 
+## Second instance, same PR, one round later — a CONTEXTUAL safety premise is a lower bar than inertness
+
+`rg` was then added to the same list, measured inert: `--pre` runs *per input PATH*, and a heredoc-fed stdin pipe has none. The measurement was correct. **The premise was contextual, and the context is attacker-supplied:**
+
+```
+rg --pre=/bin/sh pat /dev/stdin     # RAN, both shells — /dev/stdin names the pipe carrying the body
+```
+
+`rg` runs `COMMAND PATH` with the file on the child's stdin, so `sh /dev/stdin` executes the body.
+
+**The adversarial test written for exactly this flag still could not catch it** — it exercised only the no-PATH form. An adversarial test that *fixes* the context instead of varying it measures one cell, and here the fixed dimension was the attacker's to choose. That is [[feedback_corpus_misses_its_constant_dimension]] arriving inside a test that was already written to be adversarial.
+
+**Grade the premise, not just the measurement.** "This tool has no exec surface" is unconditional. "This tool's exec surface cannot be reached *in this context*" is conditional on something — ask who controls that something. If the answer is the caller, the premise is not a safety property.
+
+Two more things from that round worth keeping:
+
+- **The reviewer who recommended `rg` was the one who found the hole**, and named it as the same error he had just blocked `sort` for — a plain-form measurement plus a *policy* argument (the org mandates `rg`). **A policy argument is never a safety argument.** He retracted the recommendation on the tracking issue so nobody re-added it citing him.
+- Dropping `rg` left a **known contradiction open**: the list still admits `grep`, which this org hard-blocks (#1008), while omitting the mandated `rg`. Recorded deliberately as a residual rather than silently carried — a wrong entry removed for a good reason still leaves the policy conflict it was meant to fix.
+
 ## Second failure mode: the allowlist can contradict org policy
 
 The same list allowlisted **`grep`** and omitted **`rg`** — while this org **hard-blocks bare `grep`** (#1008) and mandates `rg`. The list admitted the forbidden tool and blocked the required one. Nobody checked the membership set against the conventions the org already enforces elsewhere.
