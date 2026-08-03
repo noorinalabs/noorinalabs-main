@@ -158,16 +158,36 @@ repos:
     hooks:
       - id: mypy
         name: mypy (pre-push)
-        entry: python3 -m mypy --ignore-missing-imports --no-error-summary
+        entry: mypy .claude/hooks/ .claude/lib/ --ignore-missing-imports --no-error-summary
         language: system
-        types: [python]
-        files: ^\.claude/(hooks|lib|skills)/.*\.py$
-        # Skip worktree copies, and conftest.py — two test dirs each ship a
-        # `conftest.py`, which collide under one flat mypy invocation ("Duplicate
-        # module named conftest"). CI type-checks them safely via its per-dir
-        # mypy loop (ci.yml); this file-list hook would pass both at once (#719).
-        exclude: (^\.claude/worktrees/|(^|/)conftest\.py$)
-        pass_filenames: true
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+      # `.claude/skills/` is type-checked in its OWN hook, per-skill-directory,
+      # rather than folded into the hook above (mirrors ci.yml's split exactly —
+      # see "Mypy — per-skill" there). Two skills each ship a `tests/__init__.py`
+      # (wave-scope, wave-wrapup); a single flat mypy invocation across all three
+      # trees (`hooks/` + `lib/` + `skills/`) previously fed `pass_filenames: true`
+      # a combined file list that pre-commit's xargs batches into multiple
+      # subprocess calls of nondeterministic size — whenever both `tests/
+      # __init__.py` files happened to land in the SAME batch, mypy raised
+      # "Duplicate module named tests" (#719 only documented the sibling
+      # `conftest.py`-collision class; this is the same class on `__init__.py`,
+      # order-dependent on unrelated file-count changes elsewhere in the tree —
+      # surfaced by #1114 adding one new hooks-test file). The per-skill loop
+      # gives each skill its own package root, exactly like CI, and drops the
+      # xargs-batching nondeterminism entirely (no `pass_filenames`, no giant
+      # arg list to split).
+      - id: mypy-skills
+        name: mypy-skills (pre-push)
+        entry: >-
+          bash -c 'status=0; for d in .claude/skills/*/; do
+          [ -n "$(find "$d" -name "*.py" -print -quit)" ] || continue;
+          mypy "$d" --ignore-missing-imports --no-error-summary || status=1;
+          done; exit $status'
+        language: system
+        pass_filenames: false
+        always_run: true
         stages: [pre-push]
       - id: pytest
         name: pytest (pre-push)
