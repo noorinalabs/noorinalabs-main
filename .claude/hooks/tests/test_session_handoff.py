@@ -109,35 +109,139 @@ class GetWaveStatusTests(unittest.TestCase):
         self.assertEqual(result, "No cross-repo-status.json found")
 
 
-class GetOpenPrsQueriesAllOrgReposTests(unittest.TestCase):
-    """main#1118 / audit G6, BUG-08 regression: `_get_open_prs()` used to iterate
-    a hand-copied 7-repo list that silently omitted
-    noorinalabs-isnad-ingest-platform. It now iterates org_repos.ALL_REPOS, so
-    this asserts all 8 org repos are queried (non-vacuous: fails if the count
-    regresses to 7, or if a caller reintroduces a hand-copied list)."""
+class GetOpenPrsSingleSearchCallTests(unittest.TestCase):
+    """main#1120 / audit G8: `_get_open_prs()` used to iterate ALL_REPOS with
+    one `gh pr list` subprocess per repo (7 serial pre-#1238, 8 post-#1238) —
+    worst case ~120s against a 30s Stop-hook timeout. It now issues exactly
+    ONE `gh search prs --owner noorinalabs` call spanning the whole org."""
 
-    def test_queries_all_eight_repos(self) -> None:
+    def test_issues_exactly_one_search_call(self) -> None:
         from unittest.mock import patch
 
-        queried: list[str] = []
+        calls: list[str] = []
 
         def _fake_run(cmd: str, cwd: str | None = None, timeout: int = 10) -> str:
-            for repo in hook.ALL_REPOS:
-                if f"noorinalabs/{repo}" in cmd:
-                    queried.append(repo)
-                    break
+            calls.append(cmd)
             return "[]"
 
         with patch.object(hook, "_run", side_effect=_fake_run):
             hook._get_open_prs()
 
-        self.assertEqual(sorted(queried), sorted(hook.ALL_REPOS))
-        self.assertEqual(len(queried), 8)
-        self.assertIn("noorinalabs-isnad-ingest-platform", queried)
+        # Non-vacuous shape assertion (the issue's own "Verify" ask): exactly
+        # one subprocess, and it's a single org-scoped search — not a
+        # per-repo `gh pr list`.
+        self.assertEqual(len(calls), 1)
+        self.assertIn("gh search prs", calls[0])
+        self.assertIn("--owner noorinalabs", calls[0])
+        self.assertNotIn("gh pr list", calls[0])
+
+    def test_parses_items_across_repos(self) -> None:
+        from unittest.mock import patch
+
+        raw = json.dumps(
+            [
+                {"number": 42, "title": "Fix thing", "repository": {"name": "noorinalabs-main"}},
+                {
+                    "number": 7,
+                    "title": "Add feature",
+                    "repository": {"name": "noorinalabs-isnad-ingest-platform"},
+                },
+            ]
+        )
+        with patch.object(hook, "_run", return_value=raw):
+            result = hook._get_open_prs()
+
+        self.assertFalse(result.failed)
+        self.assertFalse(result.truncated)
+        self.assertEqual(result.unknown_repos, ())
+        self.assertEqual(
+            result.lines,
+            [
+                "  - noorinalabs-main#42: Fix thing",
+                "  - noorinalabs-isnad-ingest-platform#7: Add feature",
+            ],
+        )
+
+    def test_failed_query_is_distinct_from_empty_result(self) -> None:
+        """A failed command (`_run` returns "") must NOT collapse into the same
+        state as a genuinely empty PR list ("[]") — that would misreport an
+        unknown PR state as "the org has zero open PRs" (main#1120)."""
+        from unittest.mock import patch
+
+        with patch.object(hook, "_run", return_value=""):
+            failed_result = hook._get_open_prs()
+        with patch.object(hook, "_run", return_value="[]"):
+            empty_result = hook._get_open_prs()
+
+        self.assertTrue(failed_result.failed)
+        self.assertFalse(empty_result.failed)
+        self.assertEqual(failed_result.lines, [])
+        self.assertEqual(empty_result.lines, [])
+        # The two must render differently even though `lines` is identical.
+        self.assertNotEqual(
+            hook._render_prs_section(failed_result),
+            hook._render_prs_section(empty_result),
+        )
+        self.assertIn("QUERY FAILED", "\n".join(hook._render_prs_section(failed_result)))
+
+    def test_malformed_json_treated_as_failure(self) -> None:
+        from unittest.mock import patch
+
+        with patch.object(hook, "_run", return_value="not json"):
+            result = hook._get_open_prs()
+
+        self.assertTrue(result.failed)
+
+    def test_truncation_detected_at_cap(self) -> None:
+        from unittest.mock import patch
+
+        items = [
+            {"number": i, "title": f"PR {i}", "repository": {"name": "noorinalabs-main"}}
+            for i in range(hook.PR_SEARCH_LIMIT)
+        ]
+        with patch.object(hook, "_run", return_value=json.dumps(items)):
+            result = hook._get_open_prs()
+
+        self.assertTrue(result.truncated)
+        rendered = "\n".join(hook._render_prs_section(result))
+        self.assertIn(f"{hook.PR_SEARCH_LIMIT}-result search cap", rendered)
+
+    def test_no_truncation_below_cap(self) -> None:
+        from unittest.mock import patch
+
+        items = [
+            {"number": 1, "title": "Only one", "repository": {"name": "noorinalabs-main"}},
+        ]
+        with patch.object(hook, "_run", return_value=json.dumps(items)):
+            result = hook._get_open_prs()
+
+        self.assertFalse(result.truncated)
+
+    def test_unknown_repo_flagged(self) -> None:
+        from unittest.mock import patch
+
+        raw = json.dumps(
+            [
+                {
+                    "number": 1,
+                    "title": "New repo PR",
+                    "repository": {"name": "noorinalabs-not-in-ssot"},
+                },
+            ]
+        )
+        with patch.object(hook, "_run", return_value=raw):
+            result = hook._get_open_prs()
+
+        self.assertEqual(result.unknown_repos, ("noorinalabs-not-in-ssot",))
+        rendered = "\n".join(hook._render_prs_section(result))
+        self.assertIn("noorinalabs-not-in-ssot", rendered)
+        self.assertIn("SSOT list may be stale", rendered)
 
     def test_all_repos_is_org_repos_ssot(self) -> None:
         # session_handoff.ALL_REPOS must BE org_repos.ALL_REPOS (imported, not
-        # re-derived) so the two can never drift apart again.
+        # re-derived) so the two can never drift apart again (kept intact
+        # across main#1120 — #1243 flags the sibling validate_wave_audit.py
+        # module for lacking this same guard, not this one).
         import org_repos
 
         self.assertIs(hook.ALL_REPOS, org_repos.ALL_REPOS)
