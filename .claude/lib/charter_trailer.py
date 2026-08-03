@@ -54,6 +54,7 @@ import re
 
 __all__ = [
     "branch_author_first_initial",
+    "extract_branch_author_lastname",
     "extract_charter_field",
     "is_branch_author",
     "name_first_initial",
@@ -240,17 +241,61 @@ def name_first_initial(field_value: str) -> str:
     return tokens[0][0].lower() if len(tokens) >= 2 else ""
 
 
+# The charter branch prefix, parsed in ONE place (main#1175).
+#
+# Both `{Initial}` and `{Lastname}` are captured by this single pattern because
+# the two readers of it — `branch_author_first_initial` and
+# `extract_branch_author_lastname` — must agree on *whether* a ref carries the
+# prefix at all, not merely on the substrings they pull out of it. When they
+# were two hand-written regexes they drifted: `extract_branch_author_lastname`
+# lived in both hooks, #179 taught `validate_pr_review`'s copy the dash
+# separator, and `validate_review_comment_format`'s copy stayed slash-only for
+# four months. On a dash branch the format hook's local parser returned None and
+# short-circuited to allow-with-warning BEFORE `branch_author_first_initial`
+# (which did accept dash) was ever consulted — two parsers over the same
+# `head_ref`, disagreeing, with the un-consolidated one winning.
+#
+# Separator alternatives, both observed in production refs:
+#   `A.Virtanen/0179-x`  charter spec (`branching.md`)
+#   `A.Virtanen-0179-x`  observed on recent branches (#179)
+# `_` is deliberately NOT accepted: it is the worktree-directory form, not a ref
+# form, and admitting it here would widen who counts as a branch author.
+_BRANCH_AUTHOR_PREFIX_RE = re.compile(r"([A-Za-z])\.([A-Za-z]+)[-/]")
+
+
 def branch_author_first_initial(head_ref: str) -> str:
     """Return the lowercased first initial from a `{Initial}.{Lastname}[-/]…` branch.
 
     Returns `""` when the head ref does not carry the charter branch prefix
     (e.g. a `deployments/phase-3/wave-29` wave-merge branch). Both separator
     styles seen in practice are accepted — `A.Virtanen/0179-x` (charter spec)
-    and `A.Virtanen-0179-x` (observed) — matching
-    `validate_pr_review.extract_branch_author_lastname`.
+    and `A.Virtanen-0179-x` (observed).
     """
-    match = re.match(r"([A-Za-z])\.[A-Za-z]+[-/]", head_ref)
+    match = _BRANCH_AUTHOR_PREFIX_RE.match(head_ref)
     return match.group(1).lower() if match else ""
+
+
+def extract_branch_author_lastname(head_ref: str) -> str | None:
+    """Extract the lastname from a `{FirstInitial}.{LastName}[-/]…` branch ref.
+
+    Returns `None` — never `""` — when the ref carries no charter prefix
+    (`main`, `deployments/phase-3/wave-29`, `dependabot/**`, `A.Virtanen_0179-x`).
+    The `None`/lastname distinction is load-bearing at both call sites:
+    `validate_pr_review.comment_scan_scope` reads it as
+    "`NO_BRANCH_AUTHOR`, scan under the `""` sentinel", and
+    `validate_review_comment_format.check` reads it as "cannot validate
+    direction, allow with a warning".
+
+    Case is preserved (`a.virtanen/…` -> `virtanen`); every consumer compares
+    through `is_branch_author`, which lowercases both sides.
+
+    Consolidated here from the two hook-local copies by main#1175 — see
+    `_BRANCH_AUTHOR_PREFIX_RE` for what those copies cost.
+    """
+    match = _BRANCH_AUTHOR_PREFIX_RE.match(head_ref)
+    if match:
+        return match.group(2)
+    return None
 
 
 def is_branch_author(field_value: str, branch_lastname: str, branch_initial: str = "") -> bool:

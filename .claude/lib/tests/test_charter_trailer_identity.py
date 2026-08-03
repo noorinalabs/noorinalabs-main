@@ -37,6 +37,7 @@ sys.path.insert(0, str(_LIB_DIR))
 
 from charter_trailer import (  # noqa: E402
     branch_author_first_initial,
+    extract_branch_author_lastname,
     is_branch_author,
     name_first_initial,
     name_lastname,
@@ -105,6 +106,115 @@ class BranchAuthorFirstInitialTests(unittest.TestCase):
 
     def test_plain_branch_name_has_no_prefix(self):
         self.assertEqual(branch_author_first_initial("main"), "")
+
+
+class ExtractBranchAuthorLastnameTests(unittest.TestCase):
+    """The lastname half of the branch prefix, consolidated here by #1175.
+
+    It was two hook-local copies before: `validate_pr_review`'s accepted both
+    separators after #179, `validate_review_comment_format`'s accepted only the
+    slash, and nothing tied them together. The hook suites assert the shared
+    binding (`SharedBranchAuthorParsingTests` in each); these tests own the
+    behaviour.
+    """
+
+    def test_slash_separator(self):
+        self.assertEqual(extract_branch_author_lastname("L.Ferreira/1151-cd-misroute"), "Ferreira")
+
+    def test_dash_separator(self):
+        self.assertEqual(
+            extract_branch_author_lastname("A.Virtanen-0179-branch-regex-fix"), "Virtanen"
+        )
+
+    def test_two_letter_lastname(self):
+        self.assertEqual(extract_branch_author_lastname("L.Li/0001-fix"), "Li")
+
+    def test_case_is_preserved_not_normalised(self):
+        """Callers compare through `is_branch_author`, which lowercases both sides.
+
+        Normalising here would silently change the block message's rendering of
+        the author's surname, so the raw ref casing is returned unchanged.
+        """
+        self.assertEqual(extract_branch_author_lastname("a.virtanen/0001-fix"), "virtanen")
+
+    def test_underscore_separator_is_rejected(self):
+        """The worktree-directory form is not a ref form — accepting it would
+        widen who counts as a branch author."""
+        self.assertIsNone(extract_branch_author_lastname("A.Virtanen_0179-x"))
+
+    def test_no_separator_is_rejected(self):
+        self.assertIsNone(extract_branch_author_lastname("A.Virtanen0179"))
+
+    def test_wave_merge_branch_is_rejected(self):
+        self.assertIsNone(extract_branch_author_lastname("deployments/phase-3/wave-29"))
+
+    def test_plain_branch_name_is_rejected(self):
+        self.assertIsNone(extract_branch_author_lastname("main"))
+
+    def test_empty_ref_is_rejected(self):
+        self.assertIsNone(extract_branch_author_lastname(""))
+
+    def test_absence_is_none_never_the_empty_string(self):
+        """`None` vs `""` is load-bearing at both call sites.
+
+        `validate_pr_review` passes the value into the `""` wave-merge sentinel
+        path, and `is_branch_author` treats `""` as "nobody is the author". A
+        parser that returned `""` for an unmatched ref would be indistinguishable
+        from one that matched an author with an empty surname.
+        """
+        for ref in ("main", "", "deployments/phase-3/wave-29", "A.Virtanen_0179-x"):
+            with self.subTest(ref=ref):
+                self.assertIsNone(extract_branch_author_lastname(ref))
+
+    def test_prefix_must_anchor_at_the_start_of_the_ref(self):
+        """A charter-shaped prefix buried mid-ref does not name a branch author."""
+        self.assertIsNone(extract_branch_author_lastname("feature/A.Virtanen/0001-x"))
+
+
+class BranchPrefixReadersAgreeTests(unittest.TestCase):
+    """The two readers of the branch prefix must agree that it IS one (#1175).
+
+    They share `_BRANCH_AUTHOR_PREFIX_RE`, so this is structural rather than a
+    coincidence to be maintained — but the property is what the call sites rely
+    on (`validate_pr_review.resolve_review_verdicts` derives lastname and
+    initial from the same ref and would otherwise build a half-known author),
+    so it is pinned at the level of the property and not of the regex.
+    """
+
+    REFS = (
+        "A.Virtanen/1175-consolidation",
+        "A.Virtanen-1175-consolidation",
+        "a.virtanen/1175-x",
+        "L.Li/0001-fix",
+        "A.Virtanen_1175-x",
+        "A.Virtanen1175",
+        "deployments/phase-3/wave-29",
+        "dependabot/pip/urllib3-2.5.0",
+        "feature/A.Virtanen/0001-x",
+        "main",
+        "",
+    )
+
+    def test_both_readers_match_the_same_refs(self):
+        for ref in self.REFS:
+            with self.subTest(ref=ref):
+                self.assertEqual(
+                    extract_branch_author_lastname(ref) is not None,
+                    bool(branch_author_first_initial(ref)),
+                )
+
+    def test_the_ref_table_covers_both_outcomes(self):
+        """Anti-vacuity: an all-matching or all-rejecting table proves nothing."""
+        matched = [r for r in self.REFS if extract_branch_author_lastname(r) is not None]
+        self.assertGreaterEqual(len(matched), 4)
+        self.assertGreaterEqual(len(self.REFS) - len(matched), 4)
+
+    def test_the_initial_and_lastname_come_from_the_same_prefix(self):
+        """Not just "both matched" — they must describe the SAME person."""
+        self.assertEqual(extract_branch_author_lastname("S.Ferreira/0001-x"), "Ferreira")
+        self.assertEqual(branch_author_first_initial("S.Ferreira/0001-x"), "s")
+        self.assertEqual(extract_branch_author_lastname("L.Ferreira-0001-x"), "Ferreira")
+        self.assertEqual(branch_author_first_initial("L.Ferreira-0001-x"), "l")
 
 
 class IsBranchAuthorTests(unittest.TestCase):

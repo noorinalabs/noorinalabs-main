@@ -31,8 +31,11 @@ from unittest import mock
 
 _HERE = Path(__file__).resolve().parent
 _HOOKS_DIR = _HERE.parent
+_LIB_DIR = _HOOKS_DIR.parent / "lib"
 sys.path.insert(0, str(_HOOKS_DIR))
+sys.path.insert(0, str(_LIB_DIR))
 
+import charter_trailer  # noqa: E402
 import validate_review_comment_format as hook  # noqa: E402
 
 
@@ -182,8 +185,10 @@ class ExtractCommentBodyTests(unittest.TestCase):
 class ExtractBranchAuthorLastnameTests(unittest.TestCase):
     """Branch head ref → lastname extraction.
 
-    Charter convention: branches are `{FirstInitial}.{LastName}/{IIII}-{slug}`.
-    Hook regex anchors on the `[A-Za-z]\\.([A-Za-z]+)/` shape.
+    Charter convention: branches are `{FirstInitial}.{LastName}/{IIII}-{slug}`;
+    the dash form `{FirstInitial}.{LastName}-{IIII}-{slug}` is also observed in
+    production refs and is accepted since #1175. Parsing lives in
+    `charter_trailer._BRANCH_AUTHOR_PREFIX_RE`, not in this hook.
     """
 
     def test_slash_separator_canonical(self):
@@ -195,15 +200,25 @@ class ExtractBranchAuthorLastnameTests(unittest.TestCase):
     def test_short_lastname(self):
         self.assertEqual(hook.extract_branch_author_lastname("L.Li/0001-fix"), "Li")
 
-    def test_dash_separator_not_supported(self):
-        """#302 input shape: `{Initial}.{Lastname}-{number}` (dash) — NOT matched.
+    def test_dash_separator_supported(self):
+        """#1175: `{Initial}.{Lastname}-{number}` (dash) IS matched.
 
-        Pin behavior: hook regex requires a slash separator after the lastname.
-        Branches using dash form fall through to the `branch_author = None`
-        path and the hook allow-with-warning (does not block). Hook docstring
-        documents the slash format as canonical.
+        This test REPLACES `test_dash_separator_not_supported`, which pinned the
+        opposite and pinned the bug: this hook's local regex was slash-only,
+        while `validate_pr_review`'s copy of the same function learned the dash
+        separator in #179 and this module's own imported
+        `branch_author_first_initial` accepted dash all along. The old test made
+        that divergence look intended, which is why it survived four months.
+
+        The consequence of the old behaviour was not cosmetic: a dash-branch
+        head ref yielded `branch_author = None`, and `check()` short-circuited
+        to allow-with-warning BEFORE the Requestor/Requestee swap heuristic ran
+        (see `SwapCheckReachesDashBranchesTests` for the end-to-end proof).
         """
-        self.assertIsNone(hook.extract_branch_author_lastname("A.Virtanen-0373-ruff-format"))
+        self.assertEqual(
+            hook.extract_branch_author_lastname("A.Virtanen-0373-ruff-format"),
+            "Virtanen",
+        )
 
     def test_underscore_separator_not_supported(self):
         """Charter-allowed underscore form (some implementer agents use `_` for `+`)."""
@@ -221,6 +236,95 @@ class ExtractBranchAuthorLastnameTests(unittest.TestCase):
             hook.extract_branch_author_lastname("a.virtanen/0001-fix"),
             "virtanen",
         )
+
+
+class SharedBranchAuthorParsingTests(unittest.TestCase):
+    """The branch-prefix parsers are SHARED, not merely equal (#1175).
+
+    Value-equality tests cannot catch the defect this class exists for. A
+    re-declared local `extract_branch_author_lastname` that happens to agree
+    with `charter_trailer`'s TODAY passes every behavioural assertion in this
+    file and then drifts on the next fix applied to only one copy — which is
+    literally what happened between #179 (Apr 2026) and #1175. Object identity
+    is the only assertion that fails the moment a second definition exists.
+    """
+
+    def test_lastname_parser_is_the_charter_trailer_one(self):
+        self.assertIs(
+            hook.extract_branch_author_lastname,
+            charter_trailer.extract_branch_author_lastname,
+        )
+
+    def test_initial_parser_is_the_charter_trailer_one(self):
+        self.assertIs(
+            hook.branch_author_first_initial,
+            charter_trailer.branch_author_first_initial,
+        )
+
+    def test_the_two_parsers_agree_on_prefix_presence(self):
+        """Both halves of the branch author's identity must be found together.
+
+        `check()` gates on the lastname and then reads the initial; a ref where
+        one parser matches and the other does not would produce a half-known
+        author and a display string missing its initial.
+        """
+        refs = (
+            "A.Virtanen/1175-consolidation",
+            "A.Virtanen-1175-consolidation",
+            "a.virtanen/1175-consolidation",
+            "L.Li/0001-fix",
+            "A.Virtanen_1175-consolidation",
+            "deployments/phase-3/wave-29",
+            "dependabot/pip/urllib3-2.5.0",
+            "main",
+            "",
+        )
+        for ref in refs:
+            with self.subTest(ref=ref):
+                self.assertEqual(
+                    hook.extract_branch_author_lastname(ref) is not None,
+                    bool(hook.branch_author_first_initial(ref)),
+                )
+
+
+class SwapCheckReachesDashBranchesTests(unittest.TestCase):
+    """#1175, at the level of the decision — not the regex.
+
+    Pre-fix, EVERY case below returned the same allow-with-warning dict, because
+    the slash-only local parser produced `branch_author = None` and `check()`
+    returned before the swap heuristic. The pair is deliberate: the block proves
+    the check now RUNS on a dash ref, and the allow proves consolidating it did
+    not turn the hook into "block everything on a dash branch" — a gate that
+    stops false-negativing by firing unconditionally has not been fixed.
+    """
+
+    DASH_BRANCH = "A.Virtanen-0373-ruff-format"
+
+    def _check(self, command: str) -> dict | None:
+        with mock.patch.object(hook, "get_branch_name", return_value=self.DASH_BRANCH):
+            return hook.check(_bash_input(command))
+
+    def test_swapped_verdict_on_a_dash_branch_now_blocks(self):
+        """Requestor = Aino Virtanen = the dash branch's author → swap → block."""
+        result = self._check(CheckIntegrationTests.HEREDOC_POST244_SWAP)
+        assert result is not None
+        self.assertEqual(result.get("decision"), "block")
+        self.assertIn("swapped", result["reason"].lower())
+        self.assertIn("A.Virtanen", result["reason"])
+
+    def test_correct_verdict_on_a_dash_branch_still_allows(self):
+        """Requestor = Nadia Khoury (the reviewer) → no swap → no block."""
+        self.assertIsNone(self._check(CheckIntegrationTests.HEREDOC_CANONICAL))
+
+    def test_the_dash_branch_fixture_is_not_silently_unparsed(self):
+        """Anti-vacuity: prove the fixture ref really carries the prefix.
+
+        Without this, a future edit that broke parsing outright would leave
+        `test_correct_verdict_on_a_dash_branch_still_allows` passing for the
+        wrong reason — allow-with-warning is also "not a block".
+        """
+        self.assertEqual(hook.extract_branch_author_lastname(self.DASH_BRANCH), "Virtanen")
+        self.assertEqual(hook.branch_author_first_initial(self.DASH_BRANCH), "a")
 
 
 class CheckIntegrationTests(unittest.TestCase):

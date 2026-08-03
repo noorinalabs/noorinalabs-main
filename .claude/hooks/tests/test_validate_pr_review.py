@@ -38,8 +38,11 @@ from unittest import mock
 
 _HERE = Path(__file__).resolve().parent
 _HOOKS_DIR = _HERE.parent
+_LIB_DIR = _HOOKS_DIR.parent / "lib"
 sys.path.insert(0, str(_HOOKS_DIR))
+sys.path.insert(0, str(_LIB_DIR))
 
+import charter_trailer  # noqa: E402
 import validate_pr_review as hook  # noqa: E402
 
 
@@ -672,6 +675,69 @@ class ExtractBranchAuthorLastnameTests(unittest.TestCase):
     def test_no_separator_rejected(self):
         """Prefix present but no separator before trailing content returns None."""
         self.assertIsNone(hook.extract_branch_author_lastname("A.Virtanen0001"))
+
+
+class SharedBranchAuthorParsingTests(unittest.TestCase):
+    """The branch-prefix parsers are SHARED, not merely equal (#1175).
+
+    `extract_branch_author_lastname` used to be defined here AND in
+    `validate_review_comment_format`. #179 taught this copy the dash separator;
+    the other stayed slash-only until #1175 — four months of silent divergence
+    that every value-equality test in both suites passed straight through,
+    because each suite only ever asserted against its own copy.
+
+    Object identity is the assertion that cannot be satisfied by a coincidence:
+    it fails the instant a second definition exists, whatever that definition
+    returns. `comment_scan_scope` and `resolve_review_verdicts` both read this
+    binding, so a local re-declaration here silently owns the self-review
+    exclusion for the whole merge gate.
+    """
+
+    def test_lastname_parser_is_the_charter_trailer_one(self):
+        self.assertIs(
+            hook.extract_branch_author_lastname,
+            charter_trailer.extract_branch_author_lastname,
+        )
+
+    def test_initial_parser_is_the_charter_trailer_one(self):
+        self.assertIs(
+            hook.branch_author_first_initial,
+            charter_trailer.branch_author_first_initial,
+        )
+
+    def test_both_hooks_share_one_binding(self):
+        """The two hooks resolve to the SAME object — the #1175 invariant itself.
+
+        Asserted from this suite as well as the format hook's, so deleting
+        either file's copy still leaves the invariant pinned somewhere.
+        """
+        sys.path.insert(0, str(_HOOKS_DIR))
+        import validate_review_comment_format as format_hook
+
+        self.assertIs(
+            hook.extract_branch_author_lastname,
+            format_hook.extract_branch_author_lastname,
+        )
+
+    def test_comment_scan_scope_reads_the_shared_parser(self):
+        """The merge gate's ref classification is downstream of the shared parser.
+
+        Pins the wiring, not just the import: a dash ref must classify as
+        author-excluded, which is only true if `comment_scan_scope` calls a
+        parser that accepts dash.
+        """
+        self.assertEqual(
+            hook.comment_scan_scope("A.Virtanen-1175-consolidation"),
+            hook.COMMENT_SCAN_AUTHOR_EXCLUDED,
+        )
+        self.assertEqual(
+            hook.comment_scan_scope("A.Virtanen/1175-consolidation"),
+            hook.COMMENT_SCAN_AUTHOR_EXCLUDED,
+        )
+        self.assertEqual(
+            hook.comment_scan_scope("deployments/phase-3/wave-29"),
+            hook.COMMENT_SCAN_NO_BRANCH_AUTHOR,
+        )
 
 
 class MergeCommandMatchTests(unittest.TestCase):
