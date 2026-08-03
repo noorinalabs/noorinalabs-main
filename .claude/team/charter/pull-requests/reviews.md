@@ -68,13 +68,17 @@ The verdict an implementer casts on an integration PR is an **integration** verd
 - It is **not** a licence to self-approve anywhere else. On every non-wave ref — including a `deployments/**` ref that is not a wave branch, e.g. `deployments/phase12/cleanup` — commit-derived exclusion is fully in force.
 - It does **not** make the integration PR's reviews mandatory. Point 5 of `wave-merge.md` still governs: fresh approvals are not required there, and the `wave-merge` admin exception remains the expected merge path.
 
-### Stated residual
+### Stated residuals
 
-Nothing identifies the persona who *opened* the integration PR. They contribute merge commits (from `gh pr merge <per-issue-PR>` into the wave branch), and merge commits are deliberately excluded from author derivation — running a merge does not make you an author of the merged content. So on this PR class, a persona who both sequenced the wave merges and posts an `Approved` is not subtracted. This is the pre-main#294 state, not a new gap, and it sits inside the tolerance point 5 already grants a PR class that requires no fresh approvals at all. It is recorded here rather than left to be rediscovered.
+Two, both recorded here rather than left to be rediscovered. Neither is a regression — each is strictly narrower than the pre-main#294 state this section restores — and both sit inside the tolerance `wave-merge.md` point 5 already grants a PR class that requires no fresh approvals at all.
+
+1. **The opener is not identified.** Nothing identifies the persona who *opened* the integration PR. They contribute merge commits (from `gh pr merge <per-issue-PR>` into the wave branch), and merge commits are deliberately excluded from author derivation — running a merge does not make you an author of the merged content. So on this PR class, a persona who both sequenced the wave merges and posts an `Approved` is not subtracted.
+
+2. **The carve-out keys on head-ref *shape* alone** ([main#1312](https://github.com/noorinalabs/noorinalabs-main/issues/1312)). `comment_scan_scope` never consults the base ref, nor whether the branch actually accumulated reviewed per-issue merges — only whether the head ref matches `deployments/phase{-}N/wave-M`. So a hand-named branch of that shape carrying *original* content gets the carve-out, and its author's own `Approved` counts toward 2/2 (measured; a `feature/**` control gives 1/2). This is a residual of a **different kind** from the opener above: that one is about who is missed, this one is about a ref that was never a wave branch being treated as one. Options and their costs are in the issue.
 
 ### Evidence
 
-Measured on 2026-08-03 over **every** `deployments/**`-head PR in all 7 repos (**202** PRs), driven through the gate's own `resolve_review_verdicts`:
+Measured on 2026-08-03 over **every** `deployments/**`-head PR in all **8** repos — the 7 children **and** this parent, which contributes 41 of them (**202** PRs) — driven through the gate's own `resolve_review_verdicts`:
 
 | PR | ref | before → after | genuine reviewer subtracted |
 |---|---|---|---|
@@ -83,7 +87,11 @@ Measured on 2026-08-03 over **every** `deployments/**`-head PR in all 7 repos (*
 | `noorinalabs-main#293` | `deployments/phase-3/wave-6` | 2/2 → 1/2 | Aino Virtanen |
 | `noorinalabs-main#229` | `deployments/phase-2/wave-10` | 1/2 → 0/2 | Aino Virtanen |
 
-112 of the 202 derived **two or more** "branch authors"; the largest derived **11**. The eligible reviewer pool does **not** collapse below two — the roster gate unions all 7 repos' rosters (76 personas), so the remaining pool never dropped below 67 in the sweep. The cost is a **false subtraction of review work that was actually done**, plus a block message asserting that five people are "the branch author" of a PR none of them opened.
+112 of the 202 derived **two or more** "branch authors"; the largest derived **11**.
+
+The eligible reviewer pool does **not** collapse below two. `_load_roster_names` unions the **parent** roster (which already carries all 76 personas, via the #1162 org manifest) with the named child repo's own roster — it is not a union across all 7 children, and every repo resolves to the same 76. Counting only the **roster-valid** derived identities, the remaining eligible pool never dropped below **67** across the 202 PRs. *(The naive `76 − 11 = 65` is the wrong figure: 2 of the largest derivation's 11 identities are not roster personas and were always inert, so they were never subtracting anything.)*
+
+The real cost is a **false subtraction of review work that was actually done**, plus a block message asserting that up to **11** people are "the branch author" of a PR none of them opened.
 
 <!-- Resolves main#1216. Enforced by `validate_pr_review.py` (`COMMENT_SCAN_WAVE_INTEGRATION`, keyed on `charter_trailer.is_wave_branch`). -->
 
