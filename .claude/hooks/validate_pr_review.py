@@ -2073,7 +2073,17 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
 
 
 def check(input_data: dict) -> dict | None:
-    """Check PR review requirements. Returns result dict if blocking/warning, None if allowed."""
+    """Check PR review requirements.
+
+    Returns a `{"decision": "block", "reason": …}` dict when the merge is
+    stopped, a `{"decision": "allow", "systemMessage": …}` dict when the merge
+    proceeds but something is worth stating (see the allow-path advisories at
+    the tail — main#1055 unparseable TechDebt, #1211 scan-mode disclosure), and
+    `None` when the merge proceeds with nothing to report.
+
+    Callers must therefore NOT read a non-`None` return as "blocked": `main()`
+    branches on `decision`, and an advisory exits 0.
+    """
     tool_name = input_data.get("tool_name", "")
     if tool_name != "Bash":
         return None
@@ -2531,23 +2541,69 @@ def check(input_data: dict) -> dict | None:
         if board_repo_name:
             ensure_issues_on_board(board_repo_name, td_issues)
 
-    # Non-blocking observability (main#1055): a TechDebt line that is present,
-    # not "none", but parsed to ZERO issue numbers used to vanish silently —
-    # neither flagged as missing nor recorded as filed. Surface it as an
-    # advisory `systemMessage` so the gap is visible without blocking merge.
+    # ---- Non-blocking allow-path advisories (#1211) -------------------------
+    #
+    # ACCUMULATE, never early-return. Every condition below is independently
+    # true or false of the same PR, and a PreToolUse hook may emit exactly ONE
+    # `systemMessage`. Before #1211 the main#1055 advisory `return`ed inline,
+    # so any advisory added after it would have been unreachable whenever an
+    # unparseable TechDebt value was also present — the two would race, and the
+    # loser would be silently dropped on precisely the PRs that had the most to
+    # report. Appending to `advisories` and joining once before the single
+    # `return` is what makes them compose. Do not reintroduce an early return
+    # here; add to the list instead.
+    advisories: list[str] = []
+
+    # main#1055: a TechDebt line that is present, not "none", but parsed to
+    # ZERO issue numbers used to vanish silently — neither flagged as missing
+    # nor recorded as filed. Surface it so the gap is visible without blocking.
     unparseable = verdicts.tech_debt_unparseable
     if unparseable:
         detail = "; ".join(f"{name}: {value!r}" for name, value in unparseable)
-        return {
-            "decision": "allow",
-            "systemMessage": (
-                f"NOTE: PR {pr_display} has {len(unparseable)} verdict(s) with a "
-                "TechDebt line present but not parseable as issue reference(s) — "
-                f"recorded as ZERO tech-debt refs, not blocked: {detail}. Charter "
-                "format: `TechDebt: none` or `TechDebt: #15, #16` (a bare `15, 16` "
-                "is also accepted); free text is not."
-            ),
-        }
+        advisories.append(
+            f"NOTE: PR {pr_display} has {len(unparseable)} verdict(s) with a "
+            "TechDebt line present but not parseable as issue reference(s) — "
+            f"recorded as ZERO tech-debt refs, not blocked: {detail}. Charter "
+            "format: `TechDebt: none` or `TechDebt: #15, #16` (a bare `15, 16` "
+            "is also accepted); free text is not."
+        )
+
+    # #1211: disclose the scan mode on the ALLOW path too.
+    #
+    # The block path has named the mode since #1206/#1210, but that is the path
+    # where the missing discriminator did NOT change the outcome. It is when
+    # the gate PASSES that "self-review exclusion was unavailable" is load-
+    # bearing: a persona's own verdict plus one genuine reviewer can reach 2/2
+    # on a ref that names nobody, and the operator would see no trace of it.
+    # Disclosing only on block told them the one thing they did not need.
+    #
+    # Scoped deliberately to NO_BRANCH_AUTHOR:
+    #   - AUTHOR_EXCLUDED / COMMIT_AUTHOR_EXCLUDED — exclusion WAS applied.
+    #     Applying it can only REMOVE verdicts, so it can never manufacture a
+    #     pass; the block path already names those subtractions, which is where
+    #     they matter.
+    #   - NOT_RUN — `resolve_review_verdicts` hard-blocks upstream, so it is
+    #     unreachable here; it is left alone rather than given wording that
+    #     could only ever fire on a regression already caught elsewhere.
+    #
+    # Wording is proportionate on purpose: an allowed merge is a correct
+    # outcome under the charter threshold, and this states which discriminator
+    # was unavailable — it is not a warning about the PR's validity.
+    if verdicts.comment_scan == COMMENT_SCAN_NO_BRANCH_AUTHOR:
+        advisories.append(
+            f"NOTE: PR {pr_display} reached {total_distinct}/2 WITHOUT self-review "
+            f"exclusion. Head ref `{verdicts.head_ref or '(unknown)'}` carries no "
+            "`{Initial}.{Lastname}` branch-author prefix and the PR's commits named no "
+            "roster persona either (a bot author, a merge-only branch, or a squashed "
+            "commit re-authored to the bare principal — #1177/#1210), so no verdict was "
+            "excluded as a self-review: every roster-valid Approved Requestor was "
+            "counted, including any posted by whoever wrote this branch. The scan DID "
+            "run and the charter threshold is unchanged — this states which "
+            "discriminator was unavailable, not a defect (#1206/#1211)."
+        )
+
+    if advisories:
+        return {"decision": "allow", "systemMessage": "\n\n".join(advisories)}
 
     return None
 
