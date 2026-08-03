@@ -852,10 +852,10 @@
       "resolved_at": "2026-06-21T21:02:19.551435+00:00"
     },
     ".claude/memory/MEMORY.md": {
-      "last_tracked": "d9d48bbc44250bd7a1120c2d1da6f133fe2de0bc22aa224e5eab82e25c8e9afd",
-      "last_resolved": "d9d48bbc44250bd7a1120c2d1da6f133fe2de0bc22aa224e5eab82e25c8e9afd",
-      "tracked_at": "2026-07-30T03:14:35.437516+00:00",
-      "resolved_at": "2026-07-30T04:19:44.681644+00:00"
+      "last_tracked": "4b09734d653a71bcdfdf99f4a14964c835a3181bbf50dd6e7b0f5bf93c6a866d",
+      "last_resolved": "4b09734d653a71bcdfdf99f4a14964c835a3181bbf50dd6e7b0f5bf93c6a866d",
+      "tracked_at": "2026-08-03T03:19:33.891512+00:00",
+      "resolved_at": "2026-08-03T03:20:00.811782+00:00"
     },
     "noorinalabs-isnad-graph/.claude/lib/tests/test_pre_commit_ci_sync.py": {
       "last_tracked": "aa209279deec3844b51e384157ba3e67a6d0f325410941f63f38d57535e6498c",
@@ -1548,10 +1548,10 @@
       "resolved_at": "2026-07-20T16:36:08.072015+00:00"
     },
     ".claude/memory/section_spawn_delegation.md": {
-      "last_tracked": "33c544027b70560df8045971616ab8d23d4747ee8263fe2d19c6624815ab664b",
-      "last_resolved": "33c544027b70560df8045971616ab8d23d4747ee8263fe2d19c6624815ab664b",
-      "tracked_at": "2026-07-30T03:14:29.748041+00:00",
-      "resolved_at": "2026-07-30T03:15:01.933657+00:00"
+      "last_tracked": "75af500a1e5a5719185d517eb25b2e7779a7a4f86be8c3bd60c25ff424722545",
+      "last_resolved": "75af500a1e5a5719185d517eb25b2e7779a7a4f86be8c3bd60c25ff424722545",
+      "tracked_at": "2026-08-03T03:19:29.872524+00:00",
+      "resolved_at": "2026-08-03T03:20:00.811782+00:00"
     },
     "noorinalabs-data-acquisition/src/utils/arabic.py": {
       "last_tracked": "495f021204688b0e8611929271d9a701ad4455ee9d82716f3ba96aefa330bd06",
@@ -1702,6 +1702,12 @@
       "last_resolved": "b937dee7f7200e575f7f463be0fd989c010008a608f37fea222e65a862c5f0ca",
       "tracked_at": "2026-07-30T05:28:12.729639+00:00",
       "resolved_at": "2026-07-30T05:28:30.231516+00:00"
+    },
+    ".claude/memory/feedback_ontology_context_spawn_gate.md": {
+      "last_tracked": "3126db88180e64b7c563cf1d5e462900bac50890b67e2534aaf61acd01a01b12",
+      "last_resolved": "3126db88180e64b7c563cf1d5e462900bac50890b67e2534aaf61acd01a01b12",
+      "tracked_at": "2026-08-03T03:19:16.284489+00:00",
+      "resolved_at": "2026-08-03T03:20:00.811782+00:00"
     }
   },
   "last_cleanup": {
