@@ -892,6 +892,38 @@ class GitCheckIgnoreNonAsciiTests(_FakeRepoRootMixin, unittest.TestCase):
 
         self.assertTrue(hook._is_git_ignored(target.resolve()))
 
+    def test_invalid_utf8_filename_is_detected(self):
+        """main#1263 review, Weronika Zielinska: the decode setting was an
+        UNTESTED guard — reverting it broke nothing, so it could regress
+        silently.
+
+        A POSIX filename is a byte string and need not be valid UTF-8.
+        ``os.fsdecode`` maps undecodable bytes to lone surrogates
+        (``b"\\xe9.log"`` -> ``"\\udce9.log"``), which is the pathspec
+        ``_is_git_ignored`` passes; git echoes the raw bytes back. Only
+        ``errors="surrogateescape"`` round-trips those byte-exact.
+
+        This fixture fails against BOTH rejected alternatives, which is what
+        makes it a real guard rather than a happy-path test:
+        ``errors="replace"`` decodes to U+FFFD (silently not-matched,
+        fail-open), and ``text=True`` decodes strict (raises, or likewise
+        fails to match). Ground truth is ``check-ignore -q``'s exit code —
+        the encoding-independent pre-#1122 method — which reports ignored.
+        """
+        raw_name = os.fsdecode(b"\xe9.log")
+        target = self._fake_root / raw_name
+        target.write_bytes(b"x\n")
+
+        ground_truth = subprocess.run(
+            ["git", "check-ignore", "-q", "--", raw_name],
+            cwd=str(self._fake_root),
+            capture_output=True,
+            env=hook._hermetic_git_env(),
+        ).returncode
+        self.assertEqual(ground_truth, 0, "fixture is wrong: git does not ignore this")
+
+        self.assertTrue(hook._is_git_ignored(target.resolve()))
+
     def test_echo_round_trips_the_caller_string(self):
         """Direct guard on the mechanism, independent of ``_is_git_ignored``:
         what git echoes back must be exactly what we passed in."""

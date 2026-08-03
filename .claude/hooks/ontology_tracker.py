@@ -335,13 +335,29 @@ def _run_check_ignore(git_root: Path, pathspecs: list[str]) -> set[str]:
     is what introduced the exposure, so the pin restores the property that
     change gave up. Do not remove it without replacing the matching scheme.
 
-    ``encoding="utf-8", errors="replace"`` rather than ``text=True`` for the
-    same reason: with the pin in place raw UTF-8 bytes now reach the decoder,
-    and ``text=True`` would decode with the locale encoding under
-    ``errors='strict'`` — so a ``LC_ALL=C`` runner would raise
-    ``UnicodeDecodeError``, which is NOT in the ``except`` clause below and
-    would escape ``check()``, breaking this hook's "exit 0 — always"
-    contract. ``errors="replace"`` makes that unraisable.
+    ``encoding="utf-8", errors="surrogateescape"`` rather than ``text=True``,
+    and the reason is the FILENAME BYTES, not the locale (main#1263 review,
+    Weronika Zielinska — an earlier version of this docstring blamed a
+    ``LC_ALL=C`` runner raising ``UnicodeDecodeError``; that is false, PEP 538
+    C-locale coercion yields UTF-8 anyway, and reverting to ``text=True``
+    leaves the suite green under ``LC_ALL=C``. Do not restore that rationale).
+
+    The real trigger: a POSIX filename is a byte string and need not be valid
+    UTF-8. The caller's pathspec comes from ``os.fsdecode``, which maps
+    undecodable bytes to lone surrogates (``b"\\xe9.log"`` -> ``"\\udce9.log"``).
+    For set-membership below to work, git's echoed stdout must decode back to
+    that SAME string. Only ``surrogateescape`` does:
+
+    - ``text=True`` (strict) can raise ``UnicodeDecodeError``, which is not in
+      the ``except`` clause and would escape ``check()``, breaking this hook's
+      "exit 0 — always" contract.
+    - ``errors="replace"`` cannot raise but is lossy — the byte decodes to
+      U+FFFD, which does not equal the caller's surrogate, so a genuinely
+      ignored file reads as NOT ignored. That is the same fail-open defect the
+      ``core.quotePath`` pin above exists to fix, one level narrower, and it
+      was shipped here briefly before review caught it.
+    - ``surrogateescape`` is non-raising AND byte-exact round-trips, so it
+      strictly dominates both.
 
     Deliberately omits ``-q`` (which would suppress that stdout) so a single
     call can answer more than one question at once (#1122) — the caller
@@ -365,7 +381,7 @@ def _run_check_ignore(git_root: Path, pathspecs: list[str]) -> set[str]:
             timeout=5,
             env=_hermetic_git_env(),
             encoding="utf-8",
-            errors="replace",
+            errors="surrogateescape",
         )
     except (OSError, subprocess.TimeoutExpired):
         return set()  # Subprocess failed — fail open.
