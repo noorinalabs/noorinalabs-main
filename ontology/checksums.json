@@ -1754,10 +1754,10 @@
       "resolved_at": "2026-08-03T16:55:06.550042+00:00"
     },
     ".claude/memory/feedback_allowlist_membership_needs_adversarial_measurement.md": {
-      "last_tracked": "cea81892d7b939d46ed6f0796d53f2f614ed5a2a1b8d4120924fc9bcfad40da5",
-      "last_resolved": "cea81892d7b939d46ed6f0796d53f2f614ed5a2a1b8d4120924fc9bcfad40da5",
-      "tracked_at": "2026-08-03T18:07:18.973071+00:00",
-      "resolved_at": "2026-08-03T18:07:36.167358+00:00"
+      "last_tracked": "e7c16784dd43abca27926ced6a49a9767c3929554285f7982a16d7e2456b63d0",
+      "last_resolved": "e7c16784dd43abca27926ced6a49a9767c3929554285f7982a16d7e2456b63d0",
+      "tracked_at": "2026-08-03T18:26:07.694218+00:00",
+      "resolved_at": "2026-08-03T18:26:25.436965+00:00"
     }
   },
   "last_cleanup": {

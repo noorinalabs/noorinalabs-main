@@ -43,6 +43,23 @@ Two more things from that round worth keeping:
 - **The reviewer who recommended `rg` was the one who found the hole**, and named it as the same error he had just blocked `sort` for — a plain-form measurement plus a *policy* argument (the org mandates `rg`). **A policy argument is never a safety argument.** He retracted the recommendation on the tracking issue so nobody re-added it citing him.
 - Dropping `rg` left a **known contradiction open**: the list still admits `grep`, which this org hard-blocks (#1008), while omitting the mandated `rg`. Recorded deliberately as a residual rather than silently carried — a wrong entry removed for a good reason still leaves the policy conflict it was meant to fix.
 
+## How `rg` got admitted: a missing binary makes ADMITTING assertions pass vacuously
+
+The mechanism, found by the same reviewer a round later and verified against the check-runs API:
+
+| head | Pytest check | what the rg rows asserted |
+|---|---|---|
+| `8507e4a` | **success** | `expect_runs=False` — "the shell did not run the body" |
+| `853c916` | **failure** | `expect_runs=True` — "the shell DID run the body" |
+
+**ripgrep is not installed on the runner.** The pipeline is `command not found`, so at `8507e4a` "the shell did not run the body" was **trivially true** — the suite reported `rg` measured inert on CI while measuring nothing, and the member was admitted on a check that **could not have gone red**. Local was green because rg is installed locally.
+
+**The asymmetry is the point, and it is directional:** a missing external tool pushes every `expect_runs=False` row toward **passing** and every `expect_runs=True` row toward **failing**. So it is **silent for rows that ADMIT a member and loud only for rows that EXCLUDE one** — the exact direction that lets bad entries in. The red that finally appeared was the suite telling the truth about `rg` for the first time on a runner.
+
+**Remedy is install AND guard, not guard alone.** Install the tool in the CI job — `ci.yml` already does this for bashlex ("this install makes CI run them, not skip them") and zsh ("so the zsh half of the oracle RUNS in CI rather than skipping"). Add `skipUnless(which(tool))` **alongside**, never instead: *a guard alone converts a silent vacuous pass into a silent skip, which is the state that let the member in.*
+
+**Generalise:** any test whose assertion is *negative* ("X does not happen") and whose subject is an **external binary** can pass because the binary is absent. Audit those rows against the runner's actual toolchain, not the developer's. And when a long-green check suddenly reds after a row flips from negative to positive, suspect the earlier green rather than the new red.
+
 ## Second failure mode: the allowlist can contradict org policy
 
 The same list allowlisted **`grep`** and omitted **`rg`** — while this org **hard-blocks bare `grep`** (#1008) and mandates `rg`. The list admitted the forbidden tool and blocked the required one. Nobody checked the membership set against the conventions the org already enforces elsewhere.
