@@ -13,9 +13,7 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-import __test_helpers  # noqa: E402,F401
-
-_bash_input = __test_helpers.bash_input
+import _test_helpers  # noqa: E402,F401
 import validate_labels as hook  # noqa: E402
 
 
@@ -228,7 +226,7 @@ class ExtractRepoTests(unittest.TestCase):
 class GateMatchingTests(unittest.TestCase):
     """The `check()` gate fires ONLY on gh issue create, not siblings."""
 
-    _input = staticmethod(_bash_input)
+    _input = staticmethod(_test_helpers.bash_input)
 
     def test_gh_issue_list_is_ignored(self):
         self.assertIsNone(hook.check(self._input("gh issue list --label bug")))
@@ -261,7 +259,7 @@ class CheckEndToEndTests(unittest.TestCase):
     correct repo.
     """
 
-    _input = staticmethod(_bash_input)
+    _input = staticmethod(_test_helpers.bash_input)
 
     def test_repo_is_forwarded_to_get_existing_labels(self):
         """Bug 1: --repo must be passed through to the label fetch."""

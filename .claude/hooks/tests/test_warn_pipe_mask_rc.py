@@ -25,9 +25,9 @@ import subprocess
 import sys
 import unittest
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 
-_HOOKS_DIR = __test_helpers.HOOKS_DIR
+_HOOKS_DIR = _test_helpers.HOOKS_DIR
 
 import warn_pipe_mask_rc as wpm  # noqa: E402
 

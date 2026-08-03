@@ -19,10 +19,10 @@ from __future__ import annotations
 
 import unittest
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 import block_gh_pr_review as hook  # noqa: E402
 
-_input = __test_helpers.bash_input
+_input = _test_helpers.bash_input
 
 
 class PositiveMatchTests(unittest.TestCase):

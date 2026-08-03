@@ -24,9 +24,9 @@ import sys
 import unittest
 from unittest import mock
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 
-_REPO_ROOT = __test_helpers.HOOKS_DIR.parent.parent
+_REPO_ROOT = _test_helpers.HOOKS_DIR.parent.parent
 
 
 import dispatcher as d  # noqa: E402

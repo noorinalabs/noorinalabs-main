@@ -40,9 +40,9 @@ from __future__ import annotations
 import json
 import unittest
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 
-_FIXTURES_DIR = __test_helpers.HOOKS_DIR / "fixtures" / "block_stale_tmp_message_file"
+_FIXTURES_DIR = _test_helpers.HOOKS_DIR / "fixtures" / "block_stale_tmp_message_file"
 
 
 import block_stale_tmp_message_file as hook  # noqa: E402

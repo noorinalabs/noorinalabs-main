@@ -40,9 +40,9 @@ import json
 import unittest
 from unittest import mock
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 
-_FIXTURES_DIR = __test_helpers.HOOKS_DIR / "fixtures" / "validate_review_comment_format"
+_FIXTURES_DIR = _test_helpers.HOOKS_DIR / "fixtures" / "validate_review_comment_format"
 
 
 import validate_review_comment_format as hook  # noqa: E402

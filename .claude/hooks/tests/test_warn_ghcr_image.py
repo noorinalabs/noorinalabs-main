@@ -22,13 +22,13 @@ import sys
 import unittest
 from unittest.mock import patch
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 
-_HOOKS_DIR = __test_helpers.HOOKS_DIR
+_HOOKS_DIR = _test_helpers.HOOKS_DIR
 
 import warn_ghcr_image as hook  # noqa: E402
 
-_input = __test_helpers.bash_input
+_input = _test_helpers.bash_input
 
 
 class ShapeDetectionTests(unittest.TestCase):

@@ -20,13 +20,13 @@ from __future__ import annotations
 import sys
 import unittest
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 
-_HOOKS_DIR = __test_helpers.HOOKS_DIR
+_HOOKS_DIR = _test_helpers.HOOKS_DIR
 
 import block_squash_wave_merge as hook  # noqa: E402
 
-_input = __test_helpers.bash_input
+_input = _test_helpers.bash_input
 
 
 def _runner(base_by_pr: dict[str, str | None]):

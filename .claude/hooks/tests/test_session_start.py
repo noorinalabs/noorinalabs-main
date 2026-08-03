@@ -30,7 +30,7 @@ import unittest
 from collections.abc import Iterator
 from pathlib import Path
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 import session_start as hook  # noqa: E402
 
 

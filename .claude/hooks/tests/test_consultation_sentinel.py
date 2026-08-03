@@ -27,9 +27,9 @@ import time
 import unittest
 from pathlib import Path
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 
-_HOOKS_DIR = __test_helpers.HOOKS_DIR
+_HOOKS_DIR = _test_helpers.HOOKS_DIR
 
 import _consultation_sentinel as sentinel  # noqa: E402
 

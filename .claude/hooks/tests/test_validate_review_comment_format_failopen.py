@@ -63,10 +63,10 @@ from typing import ClassVar
 from unittest import mock
 
 _HERE = Path(__file__).resolve().parent
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 
-_HOOKS_DIR = __test_helpers.HOOKS_DIR
-_LIB_DIR = __test_helpers.LIB_DIR
+_HOOKS_DIR = _test_helpers.HOOKS_DIR
+_LIB_DIR = _test_helpers.LIB_DIR
 
 import validate_review_comment_format as hook  # noqa: E402
 

@@ -16,7 +16,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 import auto_add_issue_to_board as hook  # noqa: E402
 import post_label_change_wave_field_sync as field_sync_hook  # noqa: E402
 

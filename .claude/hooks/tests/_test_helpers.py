@@ -14,11 +14,11 @@ Importing this module has the side effect of putting the hooks dir and
 the lib dir on `sys.path`, replacing the ~3-5 line `_HERE`/`_HOOKS_DIR`/
 `sys.path.insert(...)` preamble duplicated across the majority of files
 in this suite. Callers reference everything through the module (`import
-__test_helpers` + `__test_helpers.HOOKS_DIR` / `.bash_input(...)`)
-rather than `from __test_helpers import X` — deliberately: a bare `import
-__test_helpers` whose only job is its sys.path side effect is genuinely
+_test_helpers` + `_test_helpers.HOOKS_DIR` / `.bash_input(...)`) rather
+than `from _test_helpers import X` — deliberately: a bare `import
+_test_helpers` whose only job is its sys.path side effect is genuinely
 unused by ruff's F401 reading (suppressed with `# noqa: F401`, never
-autofix-deleted), whereas `from __test_helpers import X as Y` gets
+autofix-deleted), whereas `from _test_helpers import X as Y` gets
 resorted by ruff's isort autofix into the "from-import" group, which
 sorts AFTER every `import hook_module` line — silently moving the
 sys.path setup after the import that needs it. Caught in review via a
@@ -26,13 +26,26 @@ standalone per-file `--collect-only` sweep (running the whole suite
 together masked it: an earlier-collected file had already put the dirs
 on `sys.path`, so the broken ordering was invisible in a combined run).
 
-The double leading underscore in this module's own name is also
-load-bearing, not decorative: it makes `__test_helpers` sort
-alphabetically before every underscore-prefixed hook-side import in this
-suite (`_shell_parse`, `_repo_flag_parse`, `_consultation_sentinel`, …) —
-a single leading underscore does not, since e.g. `_shell_parse` (`s`)
-sorts before `_test_helpers` (`t`). Renaming a hook module is out of
-scope; renaming this module is not.
+Deliberately a SINGLE leading underscore, not double: an earlier revision
+of this module was `__test_helpers.py`, and a name like `__foo` gets
+mangled to `_ClassName__foo` when referenced textually inside a class
+body (Python name-mangling applies to any identifier with two+ leading
+and at most one trailing underscore, anywhere in class scope) — and
+51/54 files in this suite are `unittest.TestCase` classes,
+so a class-body reference is the dominant, not edge-case, shape here.
+`_test_helpers` (single underscore) is immune: mangling never applies to
+it, so `SomeTestCase._input = staticmethod(_test_helpers.bash_input)`
+resolves identically at module scope and inside a class body.
+
+The tradeoff this reintroduces: a handful of hook-side imports are
+ALSO single-underscore-prefixed with a letter alphabetically before `t`
+(`_shell_parse`, `_repo_flag_parse`, `_consultation_sentinel`) — ruff's
+isort would otherwise sort those ahead of `_test_helpers`, moving the
+sys.path setup after the import that needs it (the same class of bug
+`from X import Y` caused above, for a different reason). The 5 files
+that hit this carry an explicit `# isort: skip_file` directive — verified
+to survive `ruff check --fix` without reordering — rather than fighting
+the linter or reverting those files out of the consolidation.
 """
 
 from __future__ import annotations

@@ -13,9 +13,7 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-import __test_helpers  # noqa: E402,F401
-
-_bash_input = __test_helpers.bash_input
+import _test_helpers  # noqa: E402,F401
 import validate_branch_freshness as hook  # noqa: E402
 
 
@@ -102,7 +100,7 @@ class NegativeMatchTests(unittest.TestCase):
 class GateMatchingTests(unittest.TestCase):
     """The check() gate fires ONLY on the matched command, not siblings."""
 
-    _input = staticmethod(_bash_input)
+    _input = staticmethod(_test_helpers.bash_input)
 
     def test_gh_pr_list_is_ignored(self):
         self.assertIsNone(hook.check(self._input("gh pr list")))
@@ -146,7 +144,7 @@ class CheckLocalPathTests(unittest.TestCase):
     coverage in `CheckImplicitRepoTests`.
     """
 
-    _input = staticmethod(_bash_input)
+    _input = staticmethod(_test_helpers.bash_input)
 
     def test_local_fresh_branch_allows(self):
         with (
@@ -184,7 +182,7 @@ class CheckLocalPathTests(unittest.TestCase):
 class CheckRemotePathTests(unittest.TestCase):
     """Bug #118 fix: --repo must route to the API path, not cwd."""
 
-    _input = staticmethod(_bash_input)
+    _input = staticmethod(_test_helpers.bash_input)
 
     def test_repo_flag_uses_remote_path(self):
         """When --repo is set and --head is given, hit the API not cwd."""
@@ -337,7 +335,7 @@ class CheckImplicitRepoTests(unittest.TestCase):
 class CwdHandlingTests(unittest.TestCase):
     """#144: is_branch_fresh_local must run with the user's cwd, not the hook's parent cwd."""
 
-    _input = staticmethod(_bash_input)
+    _input = staticmethod(_test_helpers.bash_input)
 
     def test_cwd_passed_through_to_local_check(self):
         captured: dict[str, object] = {}
@@ -378,7 +376,7 @@ class Issue521CwdRecoveryTests(unittest.TestCase):
     in the command (resolve_invocation_cwd) and consults GH_REPO first.
     """
 
-    _input = staticmethod(_bash_input)
+    _input = staticmethod(_test_helpers.bash_input)
 
     def test_cd_target_recovers_child_repo_cwd(self):
         """`cd /worktree && gh pr create` resolves repo from the cd target,

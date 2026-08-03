@@ -15,11 +15,16 @@ silently misfires through `--repo=` / `-R` flag spellings).
 Run: python3 -m pytest .claude/hooks/tests/test_repo_flag_parse.py -v
 """
 
+# This file's own hook-side import is an underscore-prefixed module
+# whose name sorts alphabetically before `_test_helpers` — ruff's isort
+# autofix would otherwise reorder it ahead of the sys.path bootstrap it
+# depends on. See `_test_helpers.py`'s module docstring.
+# isort: skip_file
 from __future__ import annotations
 
 import unittest
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 import _repo_flag_parse as parser  # noqa: E402
 
 

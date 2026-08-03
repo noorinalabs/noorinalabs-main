@@ -46,7 +46,7 @@ import os
 import time
 import unittest
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 import post_label_change_wave_field_sync as hook  # noqa: E402
 
 

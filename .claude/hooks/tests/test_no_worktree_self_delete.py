@@ -14,7 +14,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 import no_worktree_self_delete as hook  # noqa: E402
 
 

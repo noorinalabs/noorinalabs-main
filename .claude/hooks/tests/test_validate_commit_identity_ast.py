@@ -21,6 +21,11 @@ Run: ENVIRONMENT=test python3 -m pytest \
         .claude/hooks/tests/test_validate_commit_identity_ast.py -v
 """
 
+# This file's own hook-side import is an underscore-prefixed module
+# whose name sorts alphabetically before `_test_helpers` — ruff's isort
+# autofix would otherwise reorder it ahead of the sys.path bootstrap it
+# depends on. See `_test_helpers.py`'s module docstring.
+# isort: skip_file
 from __future__ import annotations
 
 import io
@@ -28,7 +33,7 @@ import unittest
 from contextlib import redirect_stderr
 from unittest import mock
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 import _shell_parse as sp  # noqa: E402
 import validate_commit_identity as hook  # noqa: E402
 
@@ -37,7 +42,7 @@ _AINO_EMAIL = "parametrization+Aino.Virtanen@gmail.com"
 _VALID = f'git -c user.name="{_AINO}" -c user.email="{_AINO_EMAIL}"'
 
 
-_input = __test_helpers.bash_input
+_input = _test_helpers.bash_input
 
 
 def _find_git_commit(segments: list[list[str]]) -> list[str] | None:

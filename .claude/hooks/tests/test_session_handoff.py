@@ -17,7 +17,7 @@ import json
 import unittest
 from pathlib import Path
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 import session_handoff as hook  # noqa: E402
 
 

@@ -20,7 +20,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 import ontology_tracker as hook  # noqa: E402
 
 

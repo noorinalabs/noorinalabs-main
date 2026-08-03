@@ -28,7 +28,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 import charter_trailer  # noqa: E402
 import validate_review_comment_format as hook  # noqa: E402
 

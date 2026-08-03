@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import unittest
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 import enforce_ontology_context as hook  # noqa: E402
 
 

@@ -37,9 +37,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 
-_FIXTURES_DIR = __test_helpers.HOOKS_DIR / "fixtures" / "post_wave_kickoff_comment"
+_FIXTURES_DIR = _test_helpers.HOOKS_DIR / "fixtures" / "post_wave_kickoff_comment"
 
 
 import post_wave_kickoff_comment as hook  # noqa: E402

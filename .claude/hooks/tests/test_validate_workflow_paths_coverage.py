@@ -11,9 +11,7 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-import __test_helpers  # noqa: E402,F401
-
-_bash_input = __test_helpers.bash_input
+import _test_helpers  # noqa: E402,F401
 import validate_workflow_paths_coverage as hook  # noqa: E402
 
 
@@ -431,7 +429,7 @@ class IsWorkflowFileTests(unittest.TestCase):
 class CheckEndToEndTests(unittest.TestCase):
     """End-to-end: check() with mocked API calls."""
 
-    _input = staticmethod(_bash_input)
+    _input = staticmethod(_test_helpers.bash_input)
 
     def _patches(
         self,
@@ -548,7 +546,7 @@ class CwdAnchorResolutionTests(unittest.TestCase):
     repo/branch. The fix threads `resolve_invocation_cwd` through both.
     """
 
-    _input = staticmethod(_bash_input)
+    _input = staticmethod(_test_helpers.bash_input)
 
     def test_resolve_repo_anchors_git_on_cwd(self):
         captured: dict[str, object] = {}

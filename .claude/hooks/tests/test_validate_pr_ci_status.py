@@ -20,7 +20,7 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 import validate_pr_ci_status as hook  # noqa: E402
 
 

@@ -25,7 +25,7 @@ from pathlib import Path
 from unittest import mock
 
 # Put the hooks dir on sys.path so we can import the hook module.
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 import enforce_librarian_consulted as hook  # noqa: E402
 
 

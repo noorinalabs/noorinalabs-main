@@ -12,7 +12,7 @@ import time
 import unittest
 from pathlib import Path
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 import block_stale_tmp_message_file as hook  # noqa: E402
 
 

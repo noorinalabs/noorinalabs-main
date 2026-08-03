@@ -30,9 +30,9 @@ from __future__ import annotations
 import json
 import unittest
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 
-_FIXTURES_DIR = __test_helpers.HOOKS_DIR / "fixtures" / "validate_commit_identity"
+_FIXTURES_DIR = _test_helpers.HOOKS_DIR / "fixtures" / "validate_commit_identity"
 
 
 import validate_commit_identity as hook  # noqa: E402

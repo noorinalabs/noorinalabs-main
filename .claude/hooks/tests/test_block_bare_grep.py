@@ -10,15 +10,20 @@ Covers every syntactic form a `grep` invocation can take (per
 Run: ENVIRONMENT=test python3 -m pytest .claude/hooks/tests/test_block_bare_grep.py -v
 """
 
+# This file's own hook-side import is an underscore-prefixed module
+# whose name sorts alphabetically before `_test_helpers` — ruff's isort
+# autofix would otherwise reorder it ahead of the sys.path bootstrap it
+# depends on. See `_test_helpers.py`'s module docstring.
+# isort: skip_file
 from __future__ import annotations
 
 import unittest
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 import _shell_parse  # noqa: E402
 import block_bare_grep as hook  # noqa: E402
 
-_input = __test_helpers.bash_input
+_input = _test_helpers.bash_input
 
 
 def _blocks(command: str) -> bool:

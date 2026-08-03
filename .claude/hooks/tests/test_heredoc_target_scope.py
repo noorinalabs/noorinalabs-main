@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import unittest
 
-import __test_helpers  # noqa: E402,F401
+import _test_helpers  # noqa: E402,F401
 import validate_commit_identity as hook  # noqa: E402
 from _shell_parse import (  # noqa: E402
     HEREDOC_DATA_SINKS,
