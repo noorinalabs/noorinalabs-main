@@ -53,6 +53,24 @@ The four are genuine true positives — three `bash -euo pipefail -c '… git co
 
 ---
 
+## Second instance — a *confirming* measurement that holds the deciding variable constant confirms nothing (W29, PR #1263)
+
+The #1193 case was a corpus failing to vary an axis. The same shape bites a single one-line check, and it is easier to miss because the check **agrees with the conclusion you wanted**.
+
+A docstring claimed `LC_ALL=C` would raise `UnicodeDecodeError`. To test the retraction of that claim, three people independently ran `LC_ALL=C PYTHONCOERCECLOCALE=0 python3` , saw `utf-8`, and concluded "the retraction is accurate." All three got the **right conclusion by the wrong mechanism**: `PYTHONCOERCECLOCALE=0` defeats PEP **538** C-locale coercion, while what actually yields UTF-8 here is PEP **540** UTF-8 Mode, which `LC_ALL=C` auto-enables (`sys.flags.utf8_mode == 1` with `LC_CTYPE` still `C`). Coercion was never running. The `PYTHONUTF8` axis was held constant, so the deciding variable was invisible — and because the answer looked right, nobody re-ran it. Isolating requires varying both:
+
+```
+LC_ALL=C                                     -> utf8_mode=1, LC_CTYPE=C
+LC_ALL=C PYTHONCOERCECLOCALE=0               -> utf8_mode=1, LC_CTYPE=C   (538 defeated, 540 still on)
+LC_ALL=C PYTHONUTF8=0 PYTHONCOERCECLOCALE=0  -> ANSI_X3.4-1968
+```
+
+Only the reviewer who went looking for the *mechanism* rather than the *verdict* caught it — and she was correcting her own earlier imprecision, which two other people had by then inherited and repeated as independent confirmation.
+
+**How to apply:** a measurement that confirms what you expected is the one most likely to have skipped an axis, because nothing prompts a second look. Before citing a confirming run, state which variable it isolated and which it held fixed. **"Three people independently confirmed it" is not independence if they all ran the same one-variable command** — it is one measurement with three witnesses. Cross-reference [[feedback_pr_body_table_is_a_claim]]: this is how a wrong *mechanism* survives into prose even when the numbers were genuinely run.
+
+---
+
 ## Provenance caveat — why this note says "reviewer A / reviewer B"
 
 Two **distinct agents** reviewed PR #1193 under the **single roster persona `Weronika Zielinska`** (an orchestrator spawn-routing error: one persona assigned to one PR twice). Both produced real, independent, competent work — but the review record cannot tell them apart, and the first draft of this note narrated their combined measurements as one reviewer's arc.
