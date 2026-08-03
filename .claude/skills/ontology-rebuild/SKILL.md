@@ -40,12 +40,20 @@ This skill derives the ontology and the auto-updatable docs **FROM the code**. W
 
 ### 1. Read checksums and identify dirty files
 
+**Do not `cat` the file and compare fields by hand (#1142).** Ask the shared reader:
+
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-cat "$REPO_ROOT/ontology/checksums.json"
+python3 "$REPO_ROOT/.claude/lib/checksums_io.py" status
 ```
 
-Build a list of all files where `last_tracked != last_resolved`. If no dirty files exist, report "Ontology is up to date — no dirty files" and stop.
+It prints `N tracked, N dirty, N malformed` plus the offending paths, and exits **0** when clean, **1** when there is something to process, **3** when the ledger could not be read. Add `--json` if you want to consume it programmatically.
+
+The dirty list it prints IS the work list — take it verbatim. Hand-rolling this read is how the count has gone wrong twice: the predicate is `last_tracked != last_resolved`, the field names are not guessable (an earlier pass compared a `sha256` key that does not exist in the schema), and **every way of guessing wrong yields a plausible `0`** — which is also the healthy value, so a mistake here does not fail loudly, it just reports "nothing to do".
+
+If `status` exits 0, report "Ontology is up to date — no dirty files" and stop. If it exits 3, the ledger is missing/unparseable — that is a real problem to report, **not** an empty work list.
+
+**Malformed entries** are entries whose shape the reader does not recognize (a missing `last_tracked`, a `null` hash). They are counted separately and they block "clean" on purpose: an entry that cannot be classified is unknown state, not resolved state. Fix the entry — usually by deleting it so the tracker re-creates it on the next Edit/Write of that file — rather than `mark-resolved`ing it, which cannot work (there is no `last_tracked` to copy).
 
 If `scope` argument is provided, filter:
 - `code` — only source code files (`.py`, `.ts`, `.tsx`, `.js`, `.jsx`, `.go`, `.yaml`, `.yml`, `.toml`, `.json`, `.tf`, `.hcl`)
@@ -98,12 +106,20 @@ Pass every dirty path resolved in this run as a separate argument (a path not pr
 # NOT `git rev-parse --show-toplevel` — that resolves to the worktree when this
 # skill runs under agent isolation, which is the org's default working style.
 REPO_ROOT="$(cd "$(git rev-parse --git-common-dir)/.." && pwd)"
-python3 "$REPO_ROOT/.claude/lib/checksums_io.py" prune --dry-run   # list candidates
+python3 "$REPO_ROOT/.claude/lib/checksums_io.py" prune   # previews by default
 ```
 
-`prune` refuses rather than proceeds when the root looks wrong — a nonexistent `--repo-root` (exit 2), a root that is itself a linked worktree (exit 2), or a prune set over 25% of all entries (exit 1). `--force` overrides the last two. Those guards exist because every one of those cases previously reported a 50–100% wipe as ordinary output and exited 0.
+**`prune` previews by default and writes nothing without `--apply` (#1137).** A bare run lists the candidates and tells you how to proceed; `--dry-run` is still accepted as an explicit spelling of the default, so older invocations keep working. Passing both `--dry-run` and `--apply` is a usage error rather than a silent precedence rule.
 
-The guards are a backstop, not a substitute for reading the list: `prune` is an on-disk existence test, not a git-history one, so a file that exists on a child repo's `main` but not on the branch that child is currently checked out at reads as absent. Confirm candidates with `git -C <repo> cat-file -e origin/main:<path>`, then re-run without `--dry-run`. Report the pruned count in step 5.
+`prune` refuses rather than proceeds when the root looks wrong — a nonexistent `--repo-root` (exit 2), a root that is itself a linked worktree (exit 2), or a prune set over 25% of all entries (exit 1). `--force` overrides the last two, and is orthogonal to `--apply`: forcing past a guard still previews. Those guards exist because every one of those cases previously reported a 50–100% wipe as ordinary output and exited 0.
+
+The guards are a backstop, not a substitute for reading the list: `prune` is an on-disk existence test, not a git-history one, so a file that exists on a child repo's `main` but not on the branch that child is currently checked out at reads as absent. Confirm candidates with `git -C <repo> cat-file -e origin/main:<path>`, then re-run with `--apply`:
+
+```bash
+python3 "$REPO_ROOT/.claude/lib/checksums_io.py" prune --apply
+```
+
+Report the pruned count in step 5.
 
 ### 5. Report
 
