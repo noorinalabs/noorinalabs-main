@@ -9,8 +9,9 @@ Exit codes:
 """
 
 import json
-import sys
 from pathlib import Path
+
+from _hook_main import run_advisory
 
 _STATUS_PATH = Path(__file__).resolve().parent.parent.parent / "cross-repo-status.json"
 
@@ -28,27 +29,27 @@ def has_active_wave() -> bool:
         return False
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
+def check(input_data: dict) -> dict | None:
+    """Dispatcher-compatible entry point (main#1121 — extracted from the old
+    inline `main()` body, no logic change). Returns None to allow silently, or
+    an ``allow``-decision advisory dict when no wave context is active."""
     tool_name = input_data.get("tool_name", "")
     if tool_name != "Agent":
-        sys.exit(0)
+        return None
 
     if not has_active_wave():
-        result = {
+        return {
             "decision": "allow",
             "systemMessage": (
                 "WARNING: No active wave context detected in cross-repo-status.json. "
                 "Run `/wave-kickoff` to set up wave context before spawning agents."
             ),
         }
-        print(json.dumps(result))
+    return None
 
-    sys.exit(0)
+
+def main() -> None:
+    run_advisory(check, "validate_wave_context")
 
 
 if __name__ == "__main__":

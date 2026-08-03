@@ -167,6 +167,7 @@ from _consultation_sentinel import (  # noqa: E402
     cwd_sentinel_hash,
     find_attesting_sentinel,
 )
+from _hook_main import run_advisory
 
 # Sentinel-fallback config — delegated to `_consultation_sentinel` per #176.
 # These module-level names are preserved as back-compat shims for tests that
@@ -466,16 +467,7 @@ def check(input_data: dict) -> dict | None:
 
 
 def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
-    result = check(input_data)
-    if result and result.get("systemMessage"):
-        print(json.dumps({"systemMessage": result["systemMessage"]}))
-    # Advisory hook: always allow the edit to proceed.
-    sys.exit(0)
+    run_advisory(check, "enforce_librarian_consulted")
 
 
 if __name__ == "__main__":

@@ -1,8 +1,9 @@
 """Tests for annunaki_parse — the genuine-error reader/filter (#625).
 
 Verifies:
-  1. Benign-trace records (posttooluse_dispatch, pretooluse_diagnostic) are
-     skipped by default; genuine errors / blocks / events are kept.
+  1. Benign-trace records (posttooluse_dispatch, pretooluse_diagnostic,
+     pretooluse_dispatch) are skipped by default; genuine errors / blocks /
+     events are kept.
   2. Blank and corrupt lines are skipped (the JSONL-has-blank-lines history).
   3. include_traces=True yields everything.
   4. count_errors counts only genuine errors.
@@ -241,7 +242,10 @@ class TraceTypeSourceOfTruth(unittest.TestCase):
         from annunaki_log import TRACE_RECORD_TYPES as writer_set  # noqa: E402
 
         self.assertEqual(TRACE_RECORD_TYPES, writer_set)
-        self.assertEqual(writer_set, frozenset({"posttooluse_dispatch", "pretooluse_diagnostic"}))
+        self.assertEqual(
+            writer_set,
+            frozenset({"posttooluse_dispatch", "pretooluse_diagnostic", "pretooluse_dispatch"}),
+        )
 
 
 class Cli(unittest.TestCase):

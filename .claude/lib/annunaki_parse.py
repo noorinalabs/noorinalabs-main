@@ -3,8 +3,10 @@
 
 `/annunaki` (status viewer) and `/annunaki-attack` (processor) both read
 `.claude/annunaki/errors.jsonl`. Pre-#625 that file also carried benign
-forensic traces (`posttooluse_dispatch`, `pretooluse_diagnostic`) — 76% of the
-P4W1 log — and both skills counted them as errors, wildly over-reporting.
+forensic traces (`posttooluse_dispatch`, `pretooluse_diagnostic`, and — since
+main#1121 ported `post_dispatcher.py`'s logged-swallow into `dispatcher.py` —
+`pretooluse_dispatch`) — 76% of the P4W1 log — and both skills counted them as
+errors, wildly over-reporting.
 
 The #625 writer-side fix routes those benign traces to a separate
 `traces.jsonl`, so a freshly-written `errors.jsonl` is already clean. This
@@ -56,7 +58,9 @@ try:
     sys.path.insert(0, str(_HOOKS_DIR))
     from annunaki_log import TRACE_RECORD_TYPES  # type: ignore[import-not-found]
 except Exception:  # noqa: BLE001 — vendored-without-hooks fallback
-    TRACE_RECORD_TYPES = frozenset({"posttooluse_dispatch", "pretooluse_diagnostic"})
+    TRACE_RECORD_TYPES = frozenset(
+        {"posttooluse_dispatch", "pretooluse_diagnostic", "pretooluse_dispatch"}
+    )
 
 
 def iter_records(

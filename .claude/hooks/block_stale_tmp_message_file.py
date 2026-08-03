@@ -42,13 +42,13 @@ Exit codes:
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _hook_main import run_blocking
 from _shell_parse import (  # noqa: E402
     find_gh_subcommand,
     find_git_subcommand,
@@ -219,16 +219,7 @@ def check(input_data: dict) -> dict | None:
 
 
 def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
-    result = check(input_data)
-    if result and result.get("decision") == "block":
-        print(json.dumps(result))
-        sys.exit(2)
-    sys.exit(0)
+    run_blocking(check, "block_stale_tmp_message_file")
 
 
 if __name__ == "__main__":

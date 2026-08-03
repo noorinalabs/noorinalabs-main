@@ -72,7 +72,6 @@ Exit codes:
 
 from __future__ import annotations
 
-import json
 import re
 import sys
 from pathlib import Path
@@ -83,6 +82,7 @@ _HOOKS_DIR = Path(__file__).resolve().parent
 if str(_HOOKS_DIR) not in sys.path:
     sys.path.insert(0, str(_HOOKS_DIR))
 
+from _hook_main import run_advisory  # noqa: E402
 from _shell_parse import strip_heredocs  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -293,14 +293,7 @@ def check(input_data: dict) -> dict | None:
 
 
 def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-    result = check(input_data)
-    if result and result.get("systemMessage"):
-        print(json.dumps({"systemMessage": result["systemMessage"]}))
-    sys.exit(0)
+    run_advisory(check, "warn_zsh_wordsplit")
 
 
 if __name__ == "__main__":

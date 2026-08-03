@@ -33,11 +33,11 @@ Exit codes:
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _hook_main import run_blocking
 from _shell_parse import (  # noqa: E402
     find_git_subcommand,
     iter_command_segments,
@@ -107,16 +107,7 @@ def check(input_data: dict) -> dict | None:
 
 
 def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
-    result = check(input_data)
-    if result and result.get("decision") == "block":
-        print(json.dumps(result))
-        sys.exit(2)
-    sys.exit(0)
+    run_blocking(check, "block_no_verify")
 
 
 if __name__ == "__main__":

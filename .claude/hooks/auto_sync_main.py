@@ -26,6 +26,8 @@ import re
 import sys
 from pathlib import Path
 
+from _hook_main import run_advisory
+
 _HOOKS_DIR = Path(__file__).resolve().parent
 _PROJECT = _HOOKS_DIR.parent.parent  # .claude/hooks -> .claude -> repo root
 _LIB = _PROJECT / ".claude" / "lib"
@@ -73,16 +75,7 @@ def check(input_data: dict) -> dict | None:
 
 
 def main() -> None:
-    import json
-
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-    result = check(input_data)
-    if result and result.get("systemMessage"):
-        print(json.dumps({"systemMessage": result["systemMessage"]}))
-    sys.exit(0)
+    run_advisory(check, "auto_sync_main")
 
 
 if __name__ == "__main__":

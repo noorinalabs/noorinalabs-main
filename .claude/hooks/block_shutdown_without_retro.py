@@ -33,6 +33,7 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _hook_main import run_blocking  # noqa: E402
 from _shell_parse import is_shutdown_request_message  # noqa: E402
 from annunaki_log import log_pretooluse_block  # noqa: E402
 
@@ -128,24 +129,20 @@ def check(input_data: dict) -> dict | None:
     }
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
+def _check_and_log(input_data: dict) -> dict | None:
+    """Wraps `check()` with the annunaki block-log side effect the old
+    standalone `main()` performed directly (main#1121 conversion)."""
     result = check(input_data)
-    if result is None:
-        sys.exit(0)
-
-    print(json.dumps(result))
-    if result.get("decision") == "block":
+    if result and result.get("decision") == "block":
         message = (input_data.get("tool_input") or {}).get("message", "")
         log_pretooluse_block(
             "block_shutdown_without_retro", message, result["reason"], tool_name="SendMessage"
         )
-        sys.exit(2)
-    sys.exit(0)
+    return result
+
+
+def main() -> None:
+    run_blocking(_check_and_log, "block_shutdown_without_retro")
 
 
 if __name__ == "__main__":
