@@ -271,6 +271,56 @@ class CacheInvalidationOnRewrite(_CacheIsolated):
                 )
             self.assertGreater(wave_state.cache_info().uncacheable, 0)
 
+    def test_a_write_landing_during_the_read_is_never_cached(self) -> None:
+        """The post-read re-stat, without which a torn read gets pinned.
+
+        If a write lands between the pre-read `stat()` and the end of
+        `read_text()`, the bytes we parsed belong to the OLD file while the
+        file on disk has moved on. Caching that parse under the PRE-read stat
+        key leaves a stale entry addressed by a key the file has already left
+        — and the moment the file's stat key returns to that value, the stale
+        parse is served.
+
+        Found by mutation: deleting `key_after == key` from `load_status`
+        survived the rest of this suite, and a direct probe of both variants
+        showed they genuinely diverge on this sequence. Not an equivalent
+        mutant — a real hole, and this is the test that closes it.
+        """
+        original_tick = 1_000 * _ONE_SECOND_NS + 5
+        with TemporaryDirectory() as td:
+            path = Path(td) / "cross-repo-status.json"
+            _write(path, {"wave_29_final_pr_count": 1})
+            _pin_mtime(path, original_tick)
+
+            real_read_text = Path.read_text
+            fired: list[bool] = []
+
+            def interposing_read_text(self, *args, **kwargs):  # noqa: ANN001
+                text = real_read_text(self, *args, **kwargs)
+                if not fired and os.path.samefile(self, path):
+                    fired.append(True)
+                    _write(path, {"wave_29_final_pr_count": 2})
+                    _pin_mtime(path, 2_000 * _ONE_SECOND_NS + 5)
+                return text
+
+            with mock.patch.object(wave_state, "_now_ns", lambda: 9_000 * _ONE_SECOND_NS):
+                with mock.patch.object(Path, "read_text", interposing_read_text):
+                    first = wave_state.load_status(path)
+
+            self.assertTrue(fired, "the interposed write never ran — test is inert")
+            self.assertEqual(first["wave_29_final_pr_count"], 1)
+
+            # Bring the file's stat key back to the pre-read value with a THIRD
+            # content. A cache entry stored under that key would surface now.
+            _write(path, {"wave_29_final_pr_count": 3})
+            _pin_mtime(path, original_tick)
+            with mock.patch.object(wave_state, "_now_ns", lambda: 9_000 * _ONE_SECOND_NS):
+                self.assertEqual(
+                    wave_state.load_status(path)["wave_29_final_pr_count"],
+                    3,
+                    "a parse taken across a concurrent write was cached and re-served",
+                )
+
     def test_identical_stat_key_after_a_settled_tick_is_the_documented_boundary(self) -> None:
         """Pins WHY the guard is required, by showing what happens without it.
 
