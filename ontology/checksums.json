@@ -1758,6 +1758,30 @@
       "last_resolved": "af5c3515e01ea9d8c950e1f1cf095f6c19c1ea8f6cf1df4ec19833e504485390",
       "tracked_at": "2026-08-03T18:39:31.000024+00:00",
       "resolved_at": "2026-08-03T18:40:10.412082+00:00"
+    },
+    ".claude/memory/feedback_prose_guarantee_vs_mechanism.md": {
+      "last_tracked": "3ac1d54f47ec9c20bc91b863adb56f781351259e2efb8203137c3ac94ba03a0e",
+      "last_resolved": "3ac1d54f47ec9c20bc91b863adb56f781351259e2efb8203137c3ac94ba03a0e",
+      "tracked_at": "2026-08-03T20:25:53.364061+00:00",
+      "resolved_at": "2026-08-03T23:08:11.153244+00:00"
+    },
+    ".claude/memory/feedback_state_the_denominator_with_the_number.md": {
+      "last_tracked": "27023a7fb49f0510b1e08b5348545dd341f1bb4c1800c9ecaaf09939f7e29907",
+      "last_resolved": "27023a7fb49f0510b1e08b5348545dd341f1bb4c1800c9ecaaf09939f7e29907",
+      "tracked_at": "2026-08-03T20:33:13.691852+00:00",
+      "resolved_at": "2026-08-03T23:08:11.153244+00:00"
+    },
+    ".claude/memory/feedback_short_flag_consumes_next_token.md": {
+      "last_tracked": "7587d34fb1bd0e3345ffe921440f654bd300b3b482bd99590a842d1321f0351a",
+      "last_resolved": "7587d34fb1bd0e3345ffe921440f654bd300b3b482bd99590a842d1321f0351a",
+      "tracked_at": "2026-08-03T20:59:39.458450+00:00",
+      "resolved_at": "2026-08-03T23:08:11.153244+00:00"
+    },
+    ".claude/memory/feedback_test_refactor_triple.md": {
+      "last_tracked": "ec5f1bae2c0efa2b412dc12259c17d8150e12b14260003d77326eb7e8e20362a",
+      "last_resolved": "ec5f1bae2c0efa2b412dc12259c17d8150e12b14260003d77326eb7e8e20362a",
+      "tracked_at": "2026-08-03T22:01:38.884347+00:00",
+      "resolved_at": "2026-08-03T23:08:11.153244+00:00"
     }
   },
   "last_cleanup": {
