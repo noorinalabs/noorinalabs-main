@@ -32,13 +32,13 @@ Exit codes:
   2 — block (squash merge into a wave branch)
 """
 
-import json
 import os
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib"))
+from _hook_main import run_blocking
 from _shell_parse import (
     find_gh_subcommand,
     iter_command_segments,
@@ -174,17 +174,8 @@ def check(input_data, *, base_runner=None):
     return None
 
 
-def main():
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
-    result = check(input_data)
-    if result and result.get("decision") == "block":
-        print(json.dumps(result))
-        sys.exit(2)
-    sys.exit(0)
+def main() -> None:
+    run_blocking(check, "block_squash_wave_merge")
 
 
 if __name__ == "__main__":

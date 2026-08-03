@@ -12,6 +12,7 @@ Run from the repo root:
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
@@ -210,8 +211,32 @@ class StreamRoutingTests(unittest.TestCase):
     def test_trace_record_types_constant_shape(self):
         self.assertEqual(
             alog.TRACE_RECORD_TYPES,
-            frozenset({"posttooluse_dispatch", "pretooluse_diagnostic"}),
+            frozenset({"posttooluse_dispatch", "pretooluse_diagnostic", "pretooluse_dispatch"}),
         )
+
+    def test_pretooluse_dispatch_goes_to_traces_not_errors(self):
+        """The dispatcher.py loud-swallow (main#1121) — mirrors
+        `log_posttooluse_dispatch`'s stream routing, opposite phase."""
+        alog.log_pretooluse_dispatch(
+            "block_git_config", "git config user.name x", {"raised": "RuntimeError: boom"}
+        )
+        self.assertTrue(alog.TRACES_FILE.exists())
+        self.assertFalse(alog.ERRORS_FILE.exists())
+
+    def test_pretooluse_dispatch_record_shape(self):
+        alog.log_pretooluse_dispatch(
+            "block_git_config",
+            "git config user.name x",
+            {"raised": "RuntimeError: boom", "traceback_excerpt": "Traceback..."},
+            tool_name="Bash",
+        )
+        line = alog.TRACES_FILE.read_text().strip()
+        record = json.loads(line)
+        self.assertEqual(record["type"], "pretooluse_dispatch")
+        self.assertEqual(record["module"], "block_git_config")
+        self.assertEqual(record["tool_name"], "Bash")
+        self.assertEqual(record["command"], "git config user.name x")
+        self.assertEqual(record["outcome"]["raised"], "RuntimeError: boom")
 
 
 if __name__ == "__main__":

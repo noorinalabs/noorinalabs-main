@@ -33,7 +33,6 @@ Exit codes:
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -41,6 +40,8 @@ from pathlib import Path
 _LIB = Path(__file__).resolve().parent.parent / "lib"
 if str(_LIB) not in sys.path:
     sys.path.insert(0, str(_LIB))
+
+from _hook_main import run_advisory  # noqa: E402
 
 
 def check(input_data: dict) -> dict | None:
@@ -71,13 +72,8 @@ def check(input_data: dict) -> dict | None:
 
 
 def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
     # check() always returns None now; nothing is ever printed (no systemMessage).
-    check(input_data)
-    sys.exit(0)
+    run_advisory(check, "suggest_generic_prompt")
 
 
 if __name__ == "__main__":

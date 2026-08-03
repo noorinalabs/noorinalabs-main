@@ -241,7 +241,10 @@ class TraceTypeSourceOfTruth(unittest.TestCase):
         from annunaki_log import TRACE_RECORD_TYPES as writer_set  # noqa: E402
 
         self.assertEqual(TRACE_RECORD_TYPES, writer_set)
-        self.assertEqual(writer_set, frozenset({"posttooluse_dispatch", "pretooluse_diagnostic"}))
+        self.assertEqual(
+            writer_set,
+            frozenset({"posttooluse_dispatch", "pretooluse_diagnostic", "pretooluse_dispatch"}),
+        )
 
 
 class Cli(unittest.TestCase):

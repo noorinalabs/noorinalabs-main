@@ -84,7 +84,6 @@ Exit codes:
 
 from __future__ import annotations
 
-import json
 import re
 import sys
 from pathlib import Path
@@ -95,6 +94,7 @@ _HOOKS_DIR = Path(__file__).resolve().parent
 if str(_HOOKS_DIR) not in sys.path:
     sys.path.insert(0, str(_HOOKS_DIR))
 
+from _hook_main import run_advisory  # noqa: E402
 from _shell_parse import (  # noqa: E402
     find_gh_subcommand,
     find_git_subcommand,
@@ -346,15 +346,19 @@ def check(input_data: dict) -> dict | None:
     return {"systemMessage": message, "action": "footgun_shape", "labels": labels}
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
+def _check_message_only(input_data: dict) -> dict | None:
+    """Wraps `check()` to preserve main()'s pre-#1121 stdout SHAPE: only the
+    `systemMessage` key is ever printed, even though `check()` itself returns
+    extra diagnostic keys (`action`, `labels`) for OTHER consumers (the
+    PostToolUse dispatcher's `EMIT_DISPATCH_SUMMARY` opt-in)."""
     result = check(input_data)
     if result and result.get("systemMessage"):
-        print(json.dumps({"systemMessage": result["systemMessage"]}))
-    sys.exit(0)
+        return {"systemMessage": result["systemMessage"]}
+    return None
+
+
+def main() -> None:
+    run_advisory(_check_message_only, "warn_pipe_mask_rc")
 
 
 if __name__ == "__main__":

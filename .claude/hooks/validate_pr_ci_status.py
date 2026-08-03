@@ -106,6 +106,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _hook_main import run_blocking
 from _repo_flag_parse import extract_repo
 from annunaki_log import log_pretooluse_block
 
@@ -526,18 +527,7 @@ def check(input_data: dict) -> dict | None:
 
 
 def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
-    result = check(input_data)
-    if result is None:
-        sys.exit(0)
-    print(json.dumps(result))
-    if result.get("decision") == "block":
-        sys.exit(2)
-    sys.exit(0)
+    run_blocking(check, "validate_pr_ci_status")
 
 
 if __name__ == "__main__":

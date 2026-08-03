@@ -103,12 +103,12 @@ Exit codes:
 Enforcement artifact for: noorinalabs/noorinalabs-main#114, #476, #478
 """
 
-import json
 import os
 import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _hook_main import run_blocking
 from annunaki_log import log_pretooluse_block  # noqa: E402
 
 # Matches a leading `VAR=value` token (simple unquoted value).
@@ -676,24 +676,20 @@ def check(input_data: dict) -> dict | None:
     return None
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
+def _check_and_log(input_data: dict) -> dict | None:
+    """Wraps `check()` with the annunaki block-log side effect the old
+    standalone `main()` performed directly (main#1121 conversion — `check()`
+    itself has two separate block-return sites, see above, so the log call
+    is centralized here once rather than duplicated at each)."""
     result = check(input_data)
     if result and result.get("decision") == "block":
-        print(json.dumps(result))
         command = input_data.get("tool_input", {}).get("command", "")
-        log_pretooluse_block(
-            "auto_set_env_test",
-            command,
-            result["reason"],
-            tool_name="Bash",
-        )
-        sys.exit(2)
-    sys.exit(0)
+        log_pretooluse_block("auto_set_env_test", command, result["reason"], tool_name="Bash")
+    return result
+
+
+def main() -> None:
+    run_blocking(_check_and_log, "auto_set_env_test")
 
 
 if __name__ == "__main__":
