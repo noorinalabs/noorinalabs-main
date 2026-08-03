@@ -11,9 +11,9 @@ Verifies:
      "unreconciled"; a non-persona-shaped one (Annunaki/Steven-French shape)
      is "non_persona" and never actionable.
   5. CLI wiring with an injected (monkeypatched) fetcher so tests never touch
-     the network: clean union → exit 0, drift → exit 1, all-skipped → exit 0,
-     missing parent roster → exit 2, orphan drift → exit 1, orphan check
-     skipped when any child fetch failed.
+     the network: clean union → exit 0, forward DRIFT → exit 1, all-skipped →
+     exit 0, missing parent roster → exit 2, orphan check skipped when any
+     child fetch failed.
   6. A non-vacuous regression pinned to the ACTUAL #1181 measurement: the
      exact 18 manifest-only names, real emails, real "18 unbacked" count are
      reproduced verbatim from the issue as a frozen fixture (not a live
@@ -24,15 +24,25 @@ Verifies:
      correctly (2 non_persona + 16 unreconciled) rather than only ever
      exercising a contrived example (#1181 acceptance: "a test that passes
      today proves nothing").
+  7. The exit-code contract correction (owner review, PR #1240): the #1181
+     reverse (orphan) check is advisory in EXIT STATUS, not merely in CI
+     workflow config — it reports unreconciled/non-persona orphans loudly but
+     NEVER moves `exit_code`. Only the pre-existing forward direction (#634:
+     a child persona entirely missing from the parent) can fail the job. A
+     dedicated test pins both halves of that distinction together — advisory
+     orphan drift alongside a genuine forward violation still exits 1, driven
+     by the forward finding alone.
 """
 
 from __future__ import annotations
 
 import base64
+import io
 import json
 import subprocess
 import sys
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -170,15 +180,47 @@ class CliWithInjectedFetcher(unittest.TestCase):
             rc = main(["--repo-root", str(empty), "--repos", "noorinalabs-isnad-graph"])
             self.assertEqual(rc, 2)
 
-    def test_orphan_drift_exit_1(self) -> None:
-        """#1181: a persona-shaped, uncarded manifest entry is a hard advisory exit 1."""
-        rc = self._run(
-            {"Persona X": "parametrization+Persona.X@gmail.com"},
-            {"noorinalabs-isnad-graph": {}},
-            "noorinalabs-isnad-graph",
-            card_fetched={"noorinalabs-isnad-graph": set(), "noorinalabs-deploy": set()},
-        )
+    def test_orphan_drift_is_advisory_and_exits_0(self) -> None:
+        """#1181 orphan drift alone (owner correction, PR #1240 review): reported
+
+        loudly, but NEVER fails the job on its own — only a genuine forward
+        (#634) violation may do that. See the `_combined_pin` test below for
+        both halves of that distinction pinned together.
+        """
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            rc = self._run(
+                {"Persona X": "parametrization+Persona.X@gmail.com"},
+                {"noorinalabs-isnad-graph": {}},
+                "noorinalabs-isnad-graph",
+                card_fetched={"noorinalabs-isnad-graph": set(), "noorinalabs-deploy": set()},
+            )
+        self.assertEqual(rc, 0)
+        self.assertIn("Persona X", stderr.getvalue())
+        self.assertIn("MANIFEST ORPHAN", stderr.getvalue())
+
+    def test_forward_drift_exits_1_even_with_advisory_orphan_drift(self) -> None:
+        """Pins the exact distinction the owner asked for in one test:
+
+        advisory orphan drift (persona-shaped, uncarded manifest entry) present
+        AND a genuine forward (#634) violation (a child persona missing from
+        the parent) present, in the SAME run — exit 1, driven by the forward
+        finding alone, not the orphan one.
+        """
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            rc = self._run(
+                {"Persona X": "parametrization+Persona.X@gmail.com"},  # orphan: uncarded
+                {"noorinalabs-isnad-graph": {"Imelda Santos": "i@x"}},  # missing from parent
+                "noorinalabs-isnad-graph",
+                card_fetched={"noorinalabs-isnad-graph": set(), "noorinalabs-deploy": set()},
+            )
         self.assertEqual(rc, 1)
+        out = stderr.getvalue()
+        self.assertIn("DRIFT", out)
+        self.assertIn("Imelda Santos", out)
+        self.assertIn("MANIFEST ORPHAN", out)
+        self.assertIn("Persona X", out)
 
     def test_card_only_child_persona_is_not_a_false_positive_orphan(self) -> None:
         """#1181: a card whose OWN repo's roster.json aggregate lags it is not an orphan.
@@ -439,8 +481,17 @@ class RealMeasuredDriftRegressionTests(unittest.TestCase):
             self.assertNotIn(name, orphans["unreconciled"])
             self.assertNotIn(name, orphans["non_persona"])
 
-    def test_cli_exits_1_on_the_real_unreconciled_16(self) -> None:
-        """End-to-end: main() surfaces this as advisory exit 1 (job stays continue-on-error)."""
+    def test_cli_reports_the_real_unreconciled_16_but_exits_0(self) -> None:
+        """End-to-end against the real #1181 data: advisory, so exit 0.
+
+        Owner correction (PR #1240 review): `continue-on-error: true` on the
+        CI job protects the WORKFLOW run's conclusion, but `pr_ci_state.py` /
+        `validate_pr_ci_status.py` (the org's actual merge-readiness oracle)
+        read the JOB's own conclusion from the PR's `statusCheckRollup` — a
+        non-zero exit here would mark every future PR in the repo "failing"
+        until the (explicitly out-of-scope-for-#1181) disposition of these 16
+        names is resolved. So this must exit 0 while still naming all 16.
+        """
         with TemporaryDirectory() as td:
             repo = Path(td)
             _write_parent_roster(repo, {**self.REAL_UNBACKED_18, **self.REAL_BACKED})
@@ -451,12 +502,17 @@ class RealMeasuredDriftRegressionTests(unittest.TestCase):
             orig_cards = roster_union_sync.fetch_child_card_names
             roster_union_sync.fetch_child_roster = lambda owner, r: {}  # type: ignore[assignment]
             roster_union_sync.fetch_child_card_names = lambda owner, r: set()  # type: ignore[assignment]
+            stderr = io.StringIO()
             try:
-                rc = main(["--repo-root", str(repo), "--repos", "noorinalabs-isnad-graph"])
+                with redirect_stderr(stderr):
+                    rc = main(["--repo-root", str(repo), "--repos", "noorinalabs-isnad-graph"])
             finally:
                 roster_union_sync.fetch_child_roster = orig_roster
                 roster_union_sync.fetch_child_card_names = orig_cards
-            self.assertEqual(rc, 1)
+            self.assertEqual(rc, 0)
+            out = stderr.getvalue()
+            for name in set(self.REAL_UNBACKED_18) - {"Annunaki", "Steven French"}:
+                self.assertIn(name, out)
 
 
 if __name__ == "__main__":

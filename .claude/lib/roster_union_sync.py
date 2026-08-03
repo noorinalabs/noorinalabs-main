@@ -80,16 +80,41 @@ break its own commit identity (the annunaki-attack skill commits AS
 `Annunaki`), and `Steven French` is the owner's bare-principal mapping
 `verify_commit_identity.py` special-cases on purpose. The remaining
 persona-shaped orphans ARE an open reconciliation question (prune the row, or
-onboard the persona with a real card) and are what moves the exit code.
+onboard the persona with a real card) — but their disposition is explicitly
+OUT of #1181's scope (still undecided), so this check reports them loudly
+without gating on them; see "Exit codes" below for why.
 
-Same posture as the forward gate: continue-on-error, advisory, never a hard
-block. Unlike the forward direction, an INCOMPLETE fetch (any roster.json OR
-card-directory SKIPPED) makes the orphan report unreliable in the unsafe
-direction — a name backed only by something we failed to read would
-misreport as an orphan — so the orphan check does not run at all in that
-case, rather than risk a false "prune this" instruction. The card fetch pass
-only runs once the roster.json pass is already clean (no point fetching
-cards for a run that is already disqualified).
+An INCOMPLETE fetch (any roster.json OR card-directory SKIPPED) makes the
+orphan report unreliable in the unsafe direction — a name backed only by
+something we failed to read would misreport as an orphan — so the orphan
+check does not run at all in that case, rather than risk a false "prune
+this" instruction. The card fetch pass only runs once the roster.json pass
+is already clean (no point fetching cards for a run that is already
+disqualified).
+
+The orphan check NEVER moves the exit code (owner correction, PR #1240 review)
+=================================================================================
+The forward direction (#634) above predates this reverse check and keeps its
+established `continue-on-error` contract: the WORKFLOW run stays green even
+when it exits 1, because a single PR cannot deterministically reconcile a
+name a sibling repo just added. That contract does NOT extend cleanly to a
+non-zero exit from a check whose findings are individually out of THIS PR's
+scope to fix: `continue-on-error: true` only protects the workflow RUN's own
+conclusion — it does not change what the JOB itself reports into the PR's
+`statusCheckRollup`, which is exactly the surface `pr_ci_state.py` /
+`validate_pr_ci_status.py` (the org's actual merge-readiness oracle) reads.
+Measured: the reverse check returning exit 1 for the (already-known,
+disposition-still-open) 16 unreconciled names turned this job FAILING on
+every PR in the repo, not just this one — a permanently-red check that no
+amount of continue-on-error hides from the tooling that actually gates merges,
+which is precisely the state the org's "a red check is a stop, not a speed
+bump" rule exists to prevent (charter, owner directive). So the orphan branch
+below reports loudly (stderr, unabbreviated) but deliberately never sets
+`exit_code` — only a genuine forward-direction violation (#634: a child
+persona entirely missing from the parent) can fail this job. A future
+disposition of the 16 (§ above) could reasonably promote them to blocking;
+that is a separate, explicit decision, not a side effect of this check
+existing.
 
 Input Language
 ==============
@@ -99,10 +124,12 @@ CLI:  roster_union_sync.py [--repo-root <dir>] [--repos a,b,c] [--owner <org>]
 network). `--owner` defaults to `noorinalabs`.
 
 Exit codes (CLI):
-    0 — no drift AND no unreconciled manifest orphan (or every child fetch was
-        skipped, so neither check had enough data to assert anything)
-    1 — drift (a child persona is missing from the parent), OR at least one
-        persona-shaped manifest orphan has no backing card/child-roster entry
+    0 — no forward drift (#634). The reverse orphan report (#1181) is ALWAYS
+        advisory-only and never affects this — see "The orphan check NEVER
+        moves the exit code" above. Printed output still names every
+        unreconciled/non-persona orphan found; only the process exit stays 0.
+    1 — forward drift ONLY: a child persona positively observed in a child
+        `roster.json` is missing from the committed parent roster (#634)
     2 — usage / parent-roster load error
 """
 
@@ -469,16 +496,29 @@ def main(argv: list[str] | None = None) -> int:
             for name in orphans["non_persona"]:
                 print(f'  - "{name}"')
         if orphans["unreconciled"]:
+            # Advisory ONLY (owner correction, PR #1240 review): this must NOT
+            # move exit_code. continue-on-error at the WORKFLOW level does not
+            # make the JOB's conclusion advisory — `pr_ci_state.py` /
+            # `validate_pr_ci_status.py` (the org's actual merge-readiness
+            # oracle) read the per-check rollup, not the run conclusion, so a
+            # non-zero exit here would mark every future PR in this repo
+            # "failing" until the (explicitly out-of-scope-for-#1181)
+            # disposition of these names is resolved — exactly the
+            # permanently-red state the "red is a stop" rule exists to
+            # prevent. Reported loudly (stderr) precisely so it stays visible
+            # without blocking. Only the forward direction (#634) above,
+            # which predates this reverse check and has its own established
+            # contract, may set exit_code — see module docstring.
             print(
-                "\nMANIFEST ORPHAN (#1181): persona-shaped parent-roster entry with NO backing "
-                "card or child roster.json observed anywhere in the org. Pick one:\n"
+                "\nMANIFEST ORPHAN (#1181, advisory — does not fail this job): "
+                "persona-shaped parent-roster entry with NO backing card or child "
+                "roster.json observed anywhere in the org. Pick one:\n"
                 "  (a) onboard the persona — add a real roster card in the repo it belongs to, or\n"
                 "  (b) the persona is retired — remove the row from .claude/team/roster.json.",
                 file=sys.stderr,
             )
             for name in orphans["unreconciled"]:
                 print(f'  - "{name}"', file=sys.stderr)
-            exit_code = 1
         else:
             print(
                 "\nManifest-orphan check (#1181): every persona-shaped manifest entry is backed "
