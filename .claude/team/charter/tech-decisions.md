@@ -56,12 +56,26 @@ FROM nginx:alpine
 RUN apk upgrade --no-cache
 ```
 
+**The digest VALUE and the registry host are part of the rule (noorinalabs-main#1204):**
+
+A pin is only a pin if the thing it names is real and comes from where we expect. Two additional requirements, both statically checkable with no network access:
+
+- **Well-formed digest.** The digest MUST be `sha256:` followed by exactly **64 lowercase hex characters**. `@sha256:deadbeef` and `@sha256:` are not pins — they are the *shape* of a pin. (Uppercase hex is rejected rather than normalized: the OCI grammar is lowercase-only, so a ref Docker itself would refuse must not pass our lint.)
+- **Allowed registry host.** The reference MUST resolve to a registry in the repo's **declared** allowed set. "Expected" is a declared policy set, not one hardcoded hostname, because different repos legitimately pull from different registries:
+  1. the org floor built into the gate (`docker.io`, `ghcr.io`, `gcr.io` — each grounded in a registry some repo actually pulls a base image from, or that the distro table above names);
+  2. a per-repo extension via `--allow-registry HOST`, declared in that repo's `.pre-commit-config.yaml` `args:` and its CI step, so the widening is itself a reviewed line;
+  3. the `# RATIONALE:` exemption below, which remains total.
+
+  Anything outside that set **fails loudly (exit 1)** and names the flag to declare it. A legitimate-but-unanticipated registry is never silently permitted — an unrecognized registry is treated as unknown, and unknown means narrow and loud, not waved through. For the same reason the gate does not canonicalize Docker Hub aliases (`index.docker.io` must be allowlisted on its own), treats a port as part of the host, and flags a registry component that is a build arg (`FROM ${REGISTRY}/img@sha256:…`) rather than assuming Docker Hub.
+
+**What this does NOT cover:** the *ordering* of a pin change. A refresh that moves **backwards** to an older-but-well-formed digest on an allowed registry passes every check above, silently losing the distro updates the refresh existed to pick up. Forward-monotonicity requires resolving both images' config blobs over the network and is tracked separately (see the follow-up on #1204). Reviewers of a digest-bump PR still verify the direction of the move by hand.
+
 **Acceptable exemptions:**
 
 - `scratch` final layer in a multi-stage build — final image has no package manager; the upstream stages still follow this rule.
-- Vendor-supplied images that are not redistributable as digest-pinned (rare; document the exemption inline as a `# RATIONALE:` comment on the `FROM` line).
+- Vendor-supplied images that are not redistributable as digest-pinned (rare; document the exemption inline as a `# RATIONALE:` comment on the `FROM` line). A documented `RATIONALE` exempts the `FROM` from *every* rule in this section, including the digest-value and registry rules — the exemption is acceptable precisely because it is visible and reviewed in the diff.
 
-**Reviewer enforcement:** Absence of a digest pin OR absence of the upgrade step on a `Dockerfile` PR is grounds for `ChangesRequested`. The pattern is mechanical; reviewers cite this section.
+**Reviewer enforcement:** Absence of a digest pin, a malformed digest value, an undeclared registry host, OR absence of the upgrade step on a `Dockerfile` PR is grounds for `ChangesRequested`. The pattern is mechanical; reviewers cite this section.
 
 **Promotion path:** This is step 1 + 2 (charter + memory) of the [enforcement hierarchy](hooks.md). A future `validate_dockerfile_base_pin` PreToolUse hook (step 3) is filed if the convention proves load-bearing across multiple Dockerfile PRs without manual reviewer reminders.
 
