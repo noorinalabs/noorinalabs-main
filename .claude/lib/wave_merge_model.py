@@ -52,12 +52,15 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Repo root = two parents above .claude/lib/ (lib -> .claude -> root). Resolved
-# from this file so the default is correct from any cwd or worktree, with no
-# `git rev-parse` subprocess (which would re-introduce a shell dependency).
-# Same anchor as wave_status.py.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_DEFAULT_STATUS = _REPO_ROOT / "cross-repo-status.json"
+# Siblings live alongside this file in .claude/lib/. When this module is run as
+# a script its own directory is already sys.path[0]; the tests add the lib dir
+# explicitly (same bootstrap wave_status.py uses).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gh  # noqa: E402
+import wave_state  # noqa: E402
+
+_REPO_ROOT = wave_state.REPO_ROOT
+_DEFAULT_STATUS = wave_state.DEFAULT_STATUS_PATH
 
 # The two permitted merge models. A wave is exactly one of these for its whole
 # lifetime; mixing is the bug this module exists to prevent.
@@ -72,23 +75,11 @@ ADVISORY = "advisory"
 VIOLATION = "violation"
 
 
-def _run_gh(args: list[str]) -> str:
-    """Run ``gh <args>`` with an explicit arg list and return stdout.
-
-    Never a shell string and never ``shell=True`` — no shell means no
-    word-splitting, the main#688 contract shared with wave_status.py.
-    """
-    proc = subprocess.run(
-        ["gh", *args],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return proc.stdout
-
-
-def _load_status(status_path: Path) -> dict:
-    return json.loads(status_path.read_text())
+# Shared gh shim + status reader (main#1119). Module-level names, so
+# `wave_merge_model._run_gh` stays the same patchable seam it has always been
+# and `check_reachability`'s `run_gh=_run_gh` default keeps working.
+_run_gh = gh.run_gh
+_load_status = wave_state.load_status
 
 
 def validate_merge_model(model: str) -> str:
@@ -120,20 +111,10 @@ def read_merge_model(wave: str, status_path: Path) -> str | None:
     return validate_merge_model(str(val))
 
 
-def read_repos(wave: str, status_path: Path) -> list[str]:
-    """Return ``wave_{M}_repos_in_scope`` as a list of repo names.
-
-    Raises KeyError if absent — by the time the reachability check runs the
-    wave's scope must already be recorded (same contract as wave_status.py).
-    """
-    data = _load_status(status_path)
-    key = f"wave_{wave}_repos_in_scope"
-    if key not in data:
-        raise KeyError(key)
-    repos = data[key]
-    if not isinstance(repos, list):
-        raise TypeError(f"{key} is not a list: {repos!r}")
-    return [str(r) for r in repos]
+# Was a verbatim copy of wave_status.read_repos; both now resolve to the single
+# definition in wave_state (main#1119). Same contract: KeyError when the wave's
+# scope was never recorded, TypeError when it is present but not a list.
+read_repos = wave_state.read_repos
 
 
 def classify_reachability(
@@ -364,13 +345,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    def _add_status(p: argparse.ArgumentParser) -> None:
-        p.add_argument(
-            "--status",
-            type=Path,
-            default=_DEFAULT_STATUS,
-            help="path to cross-repo-status.json (default: repo-root copy)",
-        )
+    _add_status = wave_state.add_status_argument
 
     p_model = sub.add_parser("model", help="print the declared wave merge model")
     p_model.add_argument("phase", help="phase number (P)")

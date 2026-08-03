@@ -61,7 +61,9 @@ import subprocess
 import sys
 import time
 
+import gh
 import yaml
+from gh import GhError  # noqa: F401  (re-export: see the GhError comment below)
 
 # Conclusions GitHub may report on a *completed* run. Anything not in PASS and
 # not pending is treated as a failure — including a completed run with a null
@@ -325,23 +327,27 @@ def aggregate(expected: list[str], runs: list[dict]) -> Aggregate:
 # ---------------------------------------------------------------------------
 
 
-class GhError(RuntimeError):
-    """A gh/API call failed; readiness cannot be determined (exit 2)."""
+# `GhError` is imported from `gh` (see the import block) rather than defined
+# here, so `verify_deployable_merge.GhError is gh.GhError` and an isinstance
+# check works whichever spelling a caller reaches for (main#1119). The name
+# stays bound in this module's namespace, so every existing
+# `verify_deployable_merge.GhError` reference is unaffected.
 
 
 def _run_gh(args: list[str]) -> str:
-    """Run ``gh <args>`` with an explicit arg list (never a shell string).
+    """Run ``gh <args>`` and convert any failure into :class:`GhError`.
 
-    Mirrors ``wave_status._run_gh`` (main#688): no shell means no word-splitting,
-    so a multi-word value can never collapse into a bogus flag.
+    The subprocess call itself is `gh.run_gh` (explicit arg list, never a shell
+    string — main#688). The wrapping is this module's own behaviour and is why
+    it keeps a local `_run_gh`: everywhere else a gh failure propagates raw,
+    but here it must become "readiness cannot be determined" (exit 2).
     """
     try:
-        proc = subprocess.run(["gh", *args], capture_output=True, text=True, check=True)
+        return gh.run_gh(args)
     except FileNotFoundError as exc:  # gh not installed
         raise GhError("gh CLI not found on PATH") from exc
     except subprocess.CalledProcessError as exc:
         raise GhError(f"gh {' '.join(args)} failed: {exc.stderr.strip()}") from exc
-    return proc.stdout
 
 
 def fetch_workflow_files(repo: str, ref: str) -> dict[str, str]:

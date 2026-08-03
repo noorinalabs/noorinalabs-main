@@ -48,10 +48,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Repo root = two parents above .claude/lib/ (lib -> .claude -> root). Resolved
-# from this file so the default is correct from any cwd or worktree.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_DEFAULT_STATUS = _REPO_ROOT / "cross-repo-status.json"
+# Siblings live alongside this file in .claude/lib/ (same bootstrap as
+# wave_status.py / wave_merge_model.py).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gh  # noqa: E402
+import wave_state  # noqa: E402
+
+_REPO_ROOT = wave_state.REPO_ROOT
+_DEFAULT_STATUS = wave_state.DEFAULT_STATUS_PATH
 
 # Wrapup-marker key spellings, oldest-to-newest. ANY present-and-non-null value
 # means the wave was wrapped. ``completed_at`` is intentionally absent — see the
@@ -59,24 +63,11 @@ _DEFAULT_STATUS = _REPO_ROOT / "cross-repo-status.json"
 _WRAPUP_MARKERS = ("wrapped_up_at", "wrapup_completed_at", "wrapped_at")
 
 
-def _run_gh(args: list[str]) -> str:
-    """Run ``gh <args>`` with an explicit arg list and return stdout.
-
-    Explicit arg list (never a shell string, never ``shell=True``) so a
-    multi-word value can never word-split under zsh — same contract as
-    ``wave_status._run_gh`` (main#688).
-    """
-    proc = subprocess.run(
-        ["gh", *args],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return proc.stdout
-
-
-def _load_status(status_path: Path) -> dict:
-    return json.loads(Path(status_path).read_text())
+# Shared gh shim + status reader (main#1119). `_load_status` here used to wrap
+# its argument in `Path(...)` before reading, unlike its three siblings;
+# `wave_state.load_status` does the same coercion, so str paths keep working.
+_run_gh = gh.run_gh
+_load_status = wave_state.load_status
 
 
 def current_wave_number(data: dict) -> str | None:
@@ -266,12 +257,7 @@ def _build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_check = sub.add_parser("check", help="classify the current wave's wrap state")
-    p_check.add_argument(
-        "--status",
-        type=Path,
-        default=_DEFAULT_STATUS,
-        help="path to cross-repo-status.json (default: repo-root copy)",
-    )
+    wave_state.add_status_argument(p_check)
     p_check.add_argument("--phase", default=None, help="phase number (fallback for base branch)")
     p_check.add_argument("--wave", default=None, help="override the current-wave number")
     p_check.add_argument(
