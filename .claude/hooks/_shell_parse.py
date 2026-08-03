@@ -2095,6 +2095,23 @@ _SHELL_VALUE_LETTERS = frozenset("oO")
 # The letter that introduces a command string: `sh -c '<cmd>'`.
 _COMMAND_STRING_FLAG = "-c"
 
+# A bare stdin-redirect operator, fd-0-targeting spellings only (main#1170,
+# widened for main#1326): `<`, `0<`, `<>`, `0<>`. All four are the identical
+# redirect as far as a shell's own script-source resolution is concerned — fd
+# 0 is stdin's default, `<>` (read-write open) still opens the SAME fd, and
+# the explicit `0` prefix is fused to the operator by shlex whenever no space
+# separates them (`0< FILE` -> one token `"0<"`, never `"0"` + `"<"`). All
+# four spellings were verified with a real-shell marker proxy (fake `git` on
+# PATH) under both bash and zsh: `bash 0< s.sh`, `bash <> s.sh`, and
+# `bash 0<> s.sh` all genuinely execute `s.sh`'s body, exactly like the bare
+# `bash < s.sh` main#1170 already covers. A DIFFERENT fd number is a
+# different redirect entirely and must NOT match — `bash 2< s.sh` does not
+# feed `s.sh` to the interpreter as its script (confirmed: the marker never
+# fires), so the leading digit run is restricted to the literal `0`, not
+# `\d*` as #1326's own suggested pattern had it (that pattern would also
+# wrongly swallow `2<`/`9<`/... as if they were stdin sources).
+_STDIN_REDIRECT_RE = re.compile(r"^0?<>?$")
+
 
 class InterpreterInvocation(NamedTuple):
     """A decoded `<shell> [options] [operands ...]` command.
@@ -2108,9 +2125,20 @@ class InterpreterInvocation(NamedTuple):
     treats as `<command-string> [$0 $1 ...]` or `<script> [args]`. This is the
     shell-accurate answer and is what a consumer that must resolve a real path
     (the script-invocation check) should use. `operands[0]` also resolves a
-    stdin-redirect script (`bash < FILE`, main#1170/main#1287 shape 1) to
-    `FILE` — see `parse_interpreter_invocation`'s docstring for why that slot,
-    not a separate field, is the shell-accurate place for it.
+    stdin-redirect script (`bash < FILE`, main#1170/main#1287 shape 1, widened
+    to the `0<`/`<>`/`0<>` spellings by main#1326) to `FILE` — but ONLY when
+    NO other (non-redirect) operand is present anywhere in the invocation. A
+    real shell always prefers an ordinary positional operand over a stdin
+    redirect as its script source, regardless of whether that operand sits
+    before or after the redirect token in the invocation — a stdin redirect
+    is not counted as an argument slot at all, so `bash script.sh < FILE` runs
+    `script.sh` (FILE is just its stdin stream) and `bash < FILE arg1` runs
+    `arg1` (FILE is again just stdin; `arg1` is the only real operand) — real
+    bash and zsh confirmed via marker proxy for both orderings. Only the `-s`
+    option (not currently modeled here — main#1325 review, filed as a
+    follow-up) forces the stdin content itself to be the script even when a
+    positional operand is also present. See `parse_interpreter_invocation`'s
+    docstring for the resolution rule.
 
     `words` is every token of the invocation except the `--` sentinel — the set
     the command string is guaranteed to be a member of. It is deliberately a
@@ -2192,22 +2220,58 @@ def parse_interpreter_invocation(segment: list[str]) -> InterpreterInvocation | 
     `SHELL_INTERPRETERS` — callers must treat None as "not an interpreter
     invocation", never as "safe".
 
-    Stdin-redirect operand resolution (main#1170 / main#1287 shape 1):
-    `bash < FILE` feeds FILE to the interpreter as its script through the
-    process's own stdin rather than as a positional argument, but it answers
-    the exact same question `operands[0]` exists to answer — "what file does
-    this interpreter execute?" — so the redirect target is folded into
-    `operands` in the `[0]` slot, shell-accurately: any OTHER bare word in the
-    operand region becomes `$1`/`$2`/… passed TO that script, not a second
-    script, so it is never in the running for the `[0]` slot once a stdin
-    target is found. Only the spaced form (`< FILE`, not `<FILE`) is
+    Stdin-redirect operand resolution (main#1170 / main#1287 shape 1, widened
+    for main#1326): `bash < FILE` feeds FILE to the interpreter as its script
+    through the process's own stdin rather than as a positional argument, but
+    it answers the exact same question `operands[0]` exists to answer —
+    "what file does this interpreter execute?" — so the redirect target CAN
+    be folded into `operands` in the `[0]` slot.
+
+    Precedence — a positional operand always wins, regardless of position
+    relative to the redirect (main#1325 review round 2, corrected from this
+    function's own first cut): a real shell does not count a stdin redirect
+    as an argument slot at all, so it never competes with an ordinary word for
+    the `[0]` position. Confirmed with a real-shell marker proxy under both
+    bash and zsh, in both orderings:
+
+      - `bash script.sh < FILE` runs `script.sh` — FILE is only script.sh's
+        stdin stream, never a competing script. (This function's FIRST cut
+        got this backwards: it unconditionally promoted the redirect target
+        into `[0]` even when a positional operand was already present,
+        which silently swapped which file gets read for content inspection
+        and which file the write-then-exec correlation watches — a measured
+        BLOCK->ALLOW bypass, a measured ALLOW->BLOCK false positive on the
+        ordinary `bash migrate.sh < input.csv` shape, a BLOCK->ALLOW
+        regression in the on-disk script-content walker for `bash -x s.sh <
+        FILE` / `bash -- s.sh < FILE`, and an over-block reintroducing
+        main#1152's own failure mode for a benign `bash deploy.sh < data.txt`
+        stdin feed. All four were the SAME defect, not four separate ones.)
+      - `bash < FILE arg1` runs `arg1` (which will typically fail to exist,
+        exactly like a real shell) — FILE is still only stdin; `arg1` is the
+        one true operand present, regardless of appearing textually AFTER the
+        redirect token.
+      - `bash < FILE` (no other operand at all) is the only shape where FILE
+        genuinely becomes the executed script — this is the ONLY case the
+        redirect target is promoted into `operands[0]`.
+
+    Only the `-s` option (not modeled here — filed as a follow-up in the
+    main#1325 review) can force the redirect target to be the script even
+    when a positional operand is also present; this function does not special
+    case it, matching its behaviour before this correction.
+
+    Redirect spelling: only the spaced form (`< FILE`, not `<FILE`) is
     recognised — the same convention `_segment_write_targets` already applies
-    to `>`/`>>` — and only a BARE `<` token qualifies: `<<` (a heredoc opener)
-    is never present here (callers strip it before tokenizing — see
+    to `>`/`>>`. The token itself must match `_STDIN_REDIRECT_RE` (`<`, `0<`,
+    `<>`, `0<>` — all four verified to genuinely feed the interpreter's
+    script under both bash and zsh; a different fd number, e.g. `2<`, does
+    NOT and is deliberately excluded). `<<` (a heredoc opener) is never
+    present here (callers strip it before tokenizing — see
     `_HEREDOC_OPENER_RE`), and `<(` (process substitution) arrives from shlex
     fused into one token (`<(cmd)`) whenever it isn't preceded by whitespace,
-    so it can't be mistaken for a bare `<`. The LAST `< FILE` on the line
-    wins, mirroring a real shell's last-redirect-wins semantics.
+    so it can't be mistaken for a bare `<`. The LAST matching redirect token
+    on the line wins for STDIN-TARGET tracking, mirroring a real shell's
+    last-redirect-wins semantics — moot whenever a positional operand is also
+    present, since the redirect target is dropped entirely in that case.
     """
     tokens = strip_command_prefixes(segment)
     if not tokens:
@@ -2229,14 +2293,20 @@ def parse_interpreter_invocation(segment: list[str]) -> InterpreterInvocation | 
     n = len(rest)
     while j < n:
         tok = rest[j]
-        if tok == "<" and j + 1 < n:
+        if _STDIN_REDIRECT_RE.match(tok) and j + 1 < n:
             stdin_target = rest[j + 1]
             j += 2
             continue
         other_operands.append(tok)
         j += 1
+    # A positional operand always wins over a stdin redirect — see the
+    # docstring's "Precedence" section. The redirect target is only promoted
+    # into operands[0] when it is the SOLE operand candidate; otherwise it is
+    # dropped entirely (it names a stdin stream, not an argument or a script).
     operands = (
-        (stdin_target, *other_operands) if stdin_target is not None else tuple(other_operands)
+        tuple(other_operands)
+        if other_operands
+        else ((stdin_target,) if stdin_target is not None else ())
     )
     words = tuple(t for t in rest if t != "--")
     return InterpreterInvocation(name, has_command_string, operands, words)
