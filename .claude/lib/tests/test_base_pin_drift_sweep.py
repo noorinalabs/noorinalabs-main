@@ -841,6 +841,53 @@ class SweepIntegrationTests(unittest.TestCase):
         file_unknowns = [u for u in verdict["unknown"] if u["kind"] == "file"]
         self.assertEqual(len(file_unknowns), 1)
 
+    def test_registry_resolution_failure_reaches_persisted_verdict_and_render_check_warns(
+        self,
+    ) -> None:
+        # The seam: compute_drift's `unknown` (registry-resolution failures)
+        # is produced separately from sweep()'s own per-file `unknown`
+        # entries and only reaches the persisted verdict via
+        # `unknown.extend(drift_unknown)`. The existing
+        # `test_file_fetch_failure_surfaces_as_unknown` only drives the
+        # `kind=="file"` case, which is appended directly in sweep() and
+        # never touches that join — it cannot catch the join being dropped.
+        # Drive a REAL registry-resolution failure (both the pin's digest
+        # manifest fetch and its tag's current-digest fetch 404) through
+        # sweep() end-to-end, and confirm the resulting unknowns survive
+        # into the persisted verdict AND into render_check's rendering.
+        dockerfile = (
+            f"FROM python:3.14-slim@sha256:{_DIGEST_A}\nRUN apt-get update && apt-get -y upgrade\n"
+        )
+        gh = FakeGh(
+            table={
+                "git/trees/main": _tree_json(["Dockerfile"]),
+                "contents/Dockerfile": _b64(dockerfile),
+            }
+        )
+        manifest_url = (
+            f"https://registry-1.docker.io/v2/library/python/manifests/sha256:{_DIGEST_A}"
+        )
+        tag_url = "https://registry-1.docker.io/v2/library/python/manifests/3.14-slim"
+        http = FakeHttp(
+            {
+                manifest_url: _resp(404, {}),
+                tag_url: _resp(404, {}),
+            }
+        )
+        verdict = bpd.sweep(("repo-a",), run_gh=gh, http_get=http, now=_NOW)
+        self.assertEqual(verdict["repos_checked"], ["repo-a"])
+        self.assertEqual(verdict["findings"], [])
+        # compute_drift's registry-resolution-failure unknowns (kind "pin"
+        # and "current_tag") must be present in the persisted verdict, not
+        # just produced by compute_drift and then dropped on the floor.
+        kinds = {u["kind"] for u in verdict["unknown"]}
+        self.assertIn("pin", kinds)
+        self.assertIn("current_tag", kinds)
+
+        out = bpd.render_check(verdict, now=_NOW)
+        self.assertIn("UNKNOWN, not clean", out)
+        self.assertIn("not_found", out)
+
     def test_checked_at_carries_injected_now(self) -> None:
         gh = FakeGh(table={"git/trees/main": _tree_json([])})
         verdict = bpd.sweep(("repo-a",), run_gh=gh, http_get=FakeHttp({}), now=_NOW)
