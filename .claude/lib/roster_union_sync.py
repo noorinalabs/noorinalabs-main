@@ -195,13 +195,16 @@ def parent_roster_names(repo_root: Path) -> set[str]:
 def local_card_names(repo_root: Path) -> set[str]:
     """Parse member names from the LOCAL repo's own `.claude/team/roster/*.md` cards.
 
-    Local-only by design (#1181): this script runs in CI with just the
-    `noorinalabs-main` checkout, so a child repo's card directory is never on
-    disk here — there is no card-fetch equivalent to `fetch_child_roster`.
-    That is not a gap for `compute_manifest_orphans` below: #1183 measured
-    card-only == 0 across the org (no persona has a card but no entry in that
-    child's own `roster.json`), so the already-fetched child rosters are a
-    complete substitute for child cards without a second network round-trip.
+    This is the PARENT-repo-only half of the #1181 card union: this script
+    runs in CI with just the `noorinalabs-main` checkout, so a child repo's
+    card directory is never on disk here — only a NETWORK fetch can see it.
+    `fetch_child_card_names` below is that fetch — it exists precisely
+    because #1183's "card-only == 0" assumption (no persona has a card but no
+    entry in that child's own `roster.json`) turned out to be false (see the
+    module docstring § "The reverse direction: manifest orphans" for the live
+    Mei-Lin Chang / Aisha Idrissi counterexamples). `compute_manifest_orphans`
+    is called with `local_card_names(repo_root)` unioned with every fetched
+    child's card set, never with this function's return value alone.
     """
     roster_dir = repo_root / ".claude" / "team" / "roster"
     names: set[str] = set()

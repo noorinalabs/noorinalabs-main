@@ -42,7 +42,7 @@ import json
 import subprocess
 import sys
 import unittest
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -229,44 +229,72 @@ class CliWithInjectedFetcher(unittest.TestCase):
         `data_scientist_mei.md` (Mei-Lin Chang) but her name is absent from
         that repo's OWN `roster.json` — fetching only roster.json would
         false-positive her as unbacked.
+
+        Stream assertions (owner review, PR #1240): `rc` alone cannot pin
+        this — the orphan check is advisory in EVERY outcome, so `rc == 0`
+        whether or not the card union actually ran. Only the emitted report
+        text distinguishes "correctly recognized as backed" from "the card
+        union silently stopped running."
         """
-        rc = self._run(
-            {"Mei-Lin Chang": "parametrization+Mei-Lin.Chang@gmail.com"},
-            {"noorinalabs-isnad-graph": {}},  # absent from the repo's own aggregate
-            "noorinalabs-isnad-graph",
-            card_fetched={
-                "noorinalabs-isnad-graph": {"Mei-Lin Chang"},  # but her CARD exists
-                "noorinalabs-deploy": set(),
-            },
-        )
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            rc = self._run(
+                {"Mei-Lin Chang": "parametrization+Mei-Lin.Chang@gmail.com"},
+                {"noorinalabs-isnad-graph": {}},  # absent from the repo's own aggregate
+                "noorinalabs-isnad-graph",
+                card_fetched={
+                    "noorinalabs-isnad-graph": {"Mei-Lin Chang"},  # but her CARD exists
+                    "noorinalabs-deploy": set(),
+                },
+            )
         self.assertEqual(rc, 0)
+        self.assertNotIn("Mei-Lin Chang", stderr.getvalue())
+        self.assertIn("No unreconciled orphans", stdout.getvalue())
 
     def test_deploy_cards_seen_even_though_deploy_has_no_roster_json(self) -> None:
         """`noorinalabs-deploy` is excluded from --repos (no roster.json to fetch,
         DEFAULT_CHILD_REPOS comment) but the #1181 orphan check must still see
         its card directory — it is always added for the card-fetch pass.
+
+        Stream assertions for the same reason as the Mei-Lin Chang test above.
         """
-        rc = self._run(
-            {"Aisha Idrissi": "parametrization+Aisha.Idrissi@gmail.com"},
-            {"noorinalabs-isnad-graph": {}},
-            "noorinalabs-isnad-graph",
-            card_fetched={
-                "noorinalabs-isnad-graph": set(),
-                "noorinalabs-deploy": {"Aisha Idrissi"},
-            },
-        )
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            rc = self._run(
+                {"Aisha Idrissi": "parametrization+Aisha.Idrissi@gmail.com"},
+                {"noorinalabs-isnad-graph": {}},
+                "noorinalabs-isnad-graph",
+                card_fetched={
+                    "noorinalabs-isnad-graph": set(),
+                    "noorinalabs-deploy": {"Aisha Idrissi"},
+                },
+            )
         self.assertEqual(rc, 0)
+        self.assertNotIn("Aisha Idrissi", stderr.getvalue())
+        self.assertIn("No unreconciled orphans", stdout.getvalue())
 
     def test_orphan_check_skipped_when_card_fetch_incomplete(self) -> None:
         """A card-fetch skip (here: `noorinalabs-deploy` unreadable) also suppresses
-        the orphan check, same as a roster.json skip — never a false positive."""
-        rc = self._run(
-            {"Persona X": "parametrization+Persona.X@gmail.com"},
-            {"noorinalabs-isnad-graph": {}},
-            "noorinalabs-isnad-graph",
-            card_fetched={"noorinalabs-isnad-graph": set()},  # deploy missing -> None -> skip
-        )
+        the orphan check, same as a roster.json skip — never a false positive.
+
+        Stream assertions (owner review, PR #1240): `rc == 0` is also what an
+        UN-skipped, cleanly-passing run would report, so `rc` alone cannot
+        distinguish "the skip guard fired" from "the skip guard was removed
+        and the check just happened to find nothing." Assert the SKIPPED
+        notice printed and `Persona X` — who WOULD be unreconciled if the
+        check had actually run — never appears anywhere.
+        """
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            rc = self._run(
+                {"Persona X": "parametrization+Persona.X@gmail.com"},
+                {"noorinalabs-isnad-graph": {}},
+                "noorinalabs-isnad-graph",
+                card_fetched={"noorinalabs-isnad-graph": set()},  # deploy missing -> None -> skip
+            )
         self.assertEqual(rc, 0)
+        self.assertIn("Manifest-orphan check (#1181) SKIPPED", stdout.getvalue())
+        self.assertNotIn("Persona X", stdout.getvalue() + stderr.getvalue())
 
     def test_orphan_check_skipped_when_any_child_fetch_fails(self) -> None:
         """#1181: an incomplete fetch must not produce a false-positive orphan report.
@@ -275,13 +303,21 @@ class CliWithInjectedFetcher(unittest.TestCase):
         `noorinalabs-user-service` is unreadable, so the check does not run at
         all (fail-open, same posture as the forward direction) and the run
         stays exit 0 (forward drift is separately clean).
+
+        Stream assertions for the same reason as the card-fetch-incomplete
+        test above — `rc` alone does not distinguish "skipped" from "ran and
+        happened to pass."
         """
-        rc = self._run(
-            {"Amara Diallo": "parametrization+Amara.Diallo@gmail.com"},
-            {"noorinalabs-isnad-graph": {}, "noorinalabs-user-service": None},
-            "noorinalabs-isnad-graph,noorinalabs-user-service",
-        )
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            rc = self._run(
+                {"Amara Diallo": "parametrization+Amara.Diallo@gmail.com"},
+                {"noorinalabs-isnad-graph": {}, "noorinalabs-user-service": None},
+                "noorinalabs-isnad-graph,noorinalabs-user-service",
+            )
         self.assertEqual(rc, 0)
+        self.assertIn("Manifest-orphan check (#1181) SKIPPED", stdout.getvalue())
+        self.assertNotIn("Amara Diallo", stdout.getvalue() + stderr.getvalue())
 
 
 class FetchChildCardNamesTests(unittest.TestCase):
