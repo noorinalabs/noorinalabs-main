@@ -175,6 +175,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -233,33 +234,53 @@ def _git_log_patch_id(log_args: Sequence[str], cwd: Path) -> subprocess.Complete
     ``returncode`` is 0 only if *both* stages exited 0, so a `git log`
     failure degrades exactly like a `git patch-id` failure did before this
     change — the caller does not need to know which stage failed.
-    """
-    log_proc = subprocess.Popen(
-        ["git", *log_args],
-        cwd=str(cwd),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    assert log_proc.stdout is not None  # guaranteed by stdout=PIPE above
-    patch_id_proc = subprocess.Popen(
-        ["git", "patch-id", "--stable"],
-        cwd=str(cwd),
-        stdin=log_proc.stdout,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    # Standard Popen -> Popen pipe idiom: release our copy of the read end so
-    # patch_id_proc's own (already-duplicated) fd is what keeps it open, and
-    # `git log` gets a normal EOF/SIGPIPE signal once patch-id is done.
-    log_proc.stdout.close()
 
-    patch_stdout, patch_stderr = patch_id_proc.communicate()
-    log_proc.wait()
-    log_stderr = log_proc.stderr.read() if log_proc.stderr is not None else ""
-    if log_proc.stderr is not None:
-        log_proc.stderr.close()
+    **Why `git log`'s stderr goes to a `tempfile`, not a pipe (#1249).**
+    `patch_id_proc.communicate()` below drains `patch_id_proc`'s own
+    stdout+stderr concurrently (that is what `communicate()` is for), but it
+    knows nothing about `log_proc`'s stderr. If `log_proc`'s stderr were
+    `subprocess.PIPE` (as it originally was), nobody drains that pipe until
+    *after* `communicate()` returns — and `communicate()` doesn't return
+    until `git log` finishes writing its stdout. A `git log` that writes more
+    than one OS pipe-buffer's worth of stderr (~64KiB on Linux — plausible
+    across a large `merge_base..remote_ref` range, e.g. a per-commit warning
+    repeated many times) blocks mid-write on the full stderr pipe, which
+    stalls its stdout too, which stalls `patch_id_proc` waiting on stdin —
+    the classic "multiple pipes into one drain point, only one drained"
+    deadlock `communicate()` exists to avoid for a *single* process, just
+    relocated to the *other* process's stderr in a two-`Popen` pipeline.
+    Routing it to an unbounded-capacity `tempfile.TemporaryFile` instead
+    means a write there can never block on a reader, so this hazard cannot
+    reoccur regardless of how much `git log` writes to stderr.
+    """
+    with tempfile.TemporaryFile() as log_stderr_file:
+        log_proc = subprocess.Popen(
+            ["git", *log_args],
+            cwd=str(cwd),
+            stdout=subprocess.PIPE,
+            stderr=log_stderr_file,
+            text=True,
+        )
+        assert log_proc.stdout is not None  # guaranteed by stdout=PIPE above
+        patch_id_proc = subprocess.Popen(
+            ["git", "patch-id", "--stable"],
+            cwd=str(cwd),
+            stdin=log_proc.stdout,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        # Standard Popen -> Popen pipe idiom: release our copy of the read
+        # end so patch_id_proc's own (already-duplicated) fd is what keeps it
+        # open, and `git log` gets a normal EOF/SIGPIPE signal once patch-id
+        # is done — dropping this leaves our copy open, so `git log` never
+        # sees EOF/SIGPIPE if `patch-id` exits early (hang risk + fd leak).
+        log_proc.stdout.close()
+
+        patch_stdout, patch_stderr = patch_id_proc.communicate()
+        log_proc.wait()
+        log_stderr_file.seek(0)
+        log_stderr = log_stderr_file.read().decode("utf-8", errors="replace")
 
     argv_desc = ["git", *log_args, "|", "git", "patch-id", "--stable"]
     if log_proc.returncode != 0:

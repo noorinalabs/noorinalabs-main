@@ -743,17 +743,31 @@ class CheckWorktreeMergedTest(unittest.TestCase):
         OTHER helper in this module (`_git`, `_git_pipe`) goes through
         `subprocess.run` (`capture_output=True` / `input=<str>`, which
         necessarily buffers); `_git_log_patch_id` must never call
-        `subprocess.run` at all, only `Popen`, and the second `Popen`'s
-        `stdin` must be the first `Popen`'s own stdout pipe object (not a
-        string) — `input=` never appears in its kwargs."""
+        `subprocess.run` at all, only `Popen`.
+
+        Strengthened per #1251 finding 2: the ORIGINAL version of this test
+        (checking only `stdin is not None` and `not isinstance(stdin, str)`)
+        passed for a mutant that fully buffers `log_proc`'s output via
+        `log_proc.communicate()` and then feeds the buffered string to
+        `patch_id_proc.communicate(input=...)` with `stdin=subprocess.PIPE`
+        — `subprocess.PIPE` is an `int`, not a `str`, so the old assertions
+        were blind to it. The second `Popen`'s `stdin` must therefore be
+        checked to be neither `None` NOR the `subprocess.PIPE` sentinel, AND
+        must expose `fileno()` (a real OS-level pipe/file object, not the
+        "please give me a pipe" request constant) — verified to be exactly
+        the first `Popen`'s own `stdout` pipe object by identity, and that
+        object must end up closed (the fd-release idiom, #1251 finding 3)."""
         self._multi_commit_squash()
 
         popen_calls: list[dict[str, object]] = []
+        created_procs: list[subprocess.Popen[str]] = []
         real_popen = subprocess.Popen
 
         def recording_popen(*args: Any, **kwargs: Any) -> subprocess.Popen[str]:
             popen_calls.append(kwargs)
-            return real_popen(*args, **kwargs)
+            proc = real_popen(*args, **kwargs)
+            created_procs.append(proc)
+            return proc
 
         with (
             unittest.mock.patch("subprocess.run") as mock_run,
@@ -764,11 +778,25 @@ class CheckWorktreeMergedTest(unittest.TestCase):
         mock_run.assert_not_called()
         self.assertEqual(result.returncode, 0)
         self.assertEqual(len(popen_calls), 2)
+        self.assertEqual(len(created_procs), 2)
         log_kwargs, patch_kwargs = popen_calls
+        log_proc, _patch_id_proc = created_procs
         self.assertEqual(log_kwargs["stdout"], subprocess.PIPE)
         self.assertNotIn("input", patch_kwargs)
         self.assertIsNotNone(patch_kwargs.get("stdin"))
         self.assertNotIsInstance(patch_kwargs["stdin"], str)
+        # #1251 finding 2: PIPE is an int sentinel meaning "give me a new
+        # pipe" -- a mutant that fully buffers and re-feeds via
+        # `communicate(input=...)` would set stdin=subprocess.PIPE here, not
+        # an actual stream object. Must be a real pipe/file-like object AND
+        # the exact one log_proc itself produced (identity, not just shape).
+        self.assertNotEqual(patch_kwargs["stdin"], subprocess.PIPE)
+        self.assertTrue(hasattr(patch_kwargs["stdin"], "fileno"))
+        self.assertIs(patch_kwargs["stdin"], log_proc.stdout)
+        # #1251 finding 3: our copy of the read end must be released (closed)
+        # so `git log` gets a normal EOF/SIGPIPE once patch-id is done.
+        assert log_proc.stdout is not None
+        self.assertTrue(log_proc.stdout.closed)
 
     def test_git_log_patch_id_output_matches_manual_buffer_then_pipe(self) -> None:
         """Correctness pin (#1214): the streamed helper's output must be
@@ -797,6 +825,100 @@ class CheckWorktreeMergedTest(unittest.TestCase):
             self.repo,
         )
         self.assertNotEqual(result.returncode, 0)
+
+    def test_git_log_patch_id_patch_id_stage_failure_returns_nonzero(self) -> None:
+        """#1251 finding 1: the `git patch-id`-stage failure branch
+        (`if patch_id_proc.returncode != 0: ...`) was the only uncovered
+        line in the helper — the consolidated `test_main_log_patch_id_
+        failure_degrades` injects a fake at the whole `log_patch_id_runner`
+        seam (covers `classify_merged`'s degrade path, not this helper's own
+        two internal branches), and the log-stage-failure test above only
+        exercises the OTHER branch. Real `git patch-id --stable` essentially
+        never fails on well-formed stdin, so this exercises the branch by
+        substituting a failing command for the second `Popen` call only,
+        while the first (`git log`) call runs for real and unmodified."""
+        self._multi_commit_squash()
+        real_popen = subprocess.Popen
+
+        def failing_patch_id_popen(*args: Any, **kwargs: Any) -> subprocess.Popen[str]:
+            argv = args[0] if args else kwargs.pop("args", None)
+            if isinstance(argv, list) and "patch-id" in argv:
+                argv = ["false"]  # always exits 1, ignores stdin
+            return real_popen(argv, **kwargs)
+
+        with unittest.mock.patch("subprocess.Popen", failing_patch_id_popen):
+            result = _git_log_patch_id(["log", "-p", "--first-parent", "main"], self.repo)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
+
+    # ---- streaming (#1249): log-stage stderr must never deadlock the pipe ----
+
+    def test_git_log_patch_id_log_stderr_routed_off_bounded_pipe(self) -> None:
+        """#1249, fast structural pin: `_git_log_patch_id`'s FIRST `Popen`
+        call (`git log`) must not set `stderr=subprocess.PIPE` — a bounded OS
+        pipe that nobody drains until AFTER `patch_id_proc.communicate()`
+        returns, which cannot happen until `git log` itself finishes (see
+        the real-process reproduction below and the module docstring). A
+        real file object (has `fileno()`, unbounded by pipe-buffer size) is
+        required instead."""
+        self._multi_commit_squash()
+        popen_calls: list[dict[str, object]] = []
+        real_popen = subprocess.Popen
+
+        def recording_popen(*args: Any, **kwargs: Any) -> subprocess.Popen[str]:
+            popen_calls.append(kwargs)
+            return real_popen(*args, **kwargs)
+
+        with unittest.mock.patch("subprocess.Popen", recording_popen):
+            _git_log_patch_id(["log", "-p", "--first-parent", "main"], self.repo)
+
+        log_kwargs, _patch_kwargs = popen_calls
+        self.assertNotEqual(log_kwargs["stderr"], subprocess.PIPE)
+        self.assertTrue(hasattr(log_kwargs["stderr"], "fileno"))
+
+    def test_git_log_patch_id_large_log_stderr_does_not_deadlock(self) -> None:
+        """#1249, real-process reproduction: a `git log -p` whose diff driver
+        (`.gitattributes` `textconv`) writes well over one OS pipe-buffer's
+        worth (~64KiB on Linux) of STDERR across the range must not hang the
+        pipeline. Run in a genuinely separate process with a hard wall-clock
+        timeout so an actual regression fails this test FAST (seconds)
+        rather than hanging the whole suite indefinitely."""
+        noisy = self.repo / "noisy_textconv.sh"
+        noisy.write_text('#!/usr/bin/env bash\nyes x | head -c 20000 >&2\ncat "$1"\n')
+        noisy.chmod(0o755)
+        _git(["config", "diff.noisy.textconv", str(noisy)], self.repo)
+        _write(self.repo, ".gitattributes", "noisy.dat diff=noisy\n")
+        _git(["add", ".gitattributes"], self.repo)
+        _git(["commit", "-m", "add noisy.dat textconv driver"], self.repo)
+        for i in range(4):
+            _commit(self.repo, "noisy.dat", f"payload {i}\n" * 50, f"noisy commit {i}")
+
+        script = (
+            "import sys\n"
+            f"sys.path.insert(0, {str(Path(__file__).resolve().parent.parent)!r})\n"
+            "from pathlib import Path\n"
+            "from check_worktree_merged import _git_log_patch_id\n"
+            "result = _git_log_patch_id(\n"
+            "    ['log', '-p', '--first-parent', 'main'],\n"
+            f"    Path({str(self.repo)!r}),\n"
+            ")\n"
+            "print(result.returncode)\n"
+        )
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-c", script],
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+        except subprocess.TimeoutExpired:
+            self.fail(
+                "_git_log_patch_id deadlocked on a large git-log stderr stream "
+                "(#1249 regression) -- did not return within 20s"
+            )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stdout.strip(), "0")
 
     def test_cherry_failure_degrades(self) -> None:
         """Cherry is only reached when test 1 (net-content) does not match —
