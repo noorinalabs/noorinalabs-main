@@ -103,6 +103,12 @@ repos:
     hooks:
       - id: dockerfile-base-pin
         name: dockerfile-base-pin
+        # A repo that legitimately pulls a base image from a registry outside
+        # the gate's built-in floor (docker.io/ghcr.io/gcr.io) declares it here
+        # AND in the matching CI step, e.g.
+        #   entry: python3 .claude/lib/check_dockerfile_base_pin.py --allow-registry quay.io
+        # An undeclared registry is an exit-1 violation, never a silent pass
+        # (#1204).
         entry: python3 .claude/lib/check_dockerfile_base_pin.py
         language: system
         files: ((^|/)Dockerfile(\.[^/]+)?$|\.dockerfile$)

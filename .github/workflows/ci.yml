@@ -183,8 +183,12 @@ jobs:
         with:
           python-version: "3.12"
       # Charter-prose→code gate (#735, tech-decisions.md § Base Image Pinning).
-      # Discovers every Dockerfile and asserts each FROM is digest-pinned with the
-      # matching distro upgrade. Mirrors the `dockerfile-base-pin` pre-commit hook
+      # Discovers every Dockerfile and asserts each FROM is digest-pinned with a
+      # well-formed digest value, resolves to a declared registry host (#1204),
+      # and carries the matching distro upgrade. A repo needing a registry
+      # outside the built-in floor appends `--allow-registry HOST` here and in
+      # the matching pre-commit hook entry.
+      # Mirrors the `dockerfile-base-pin` pre-commit hook
       # (sync-drift gate classifies the kind). The parent ships no Dockerfiles, so
       # this is a no-op template here; child repos inherit it to scan their real
       # Dockerfiles (#735 follow-up rollout).
