@@ -55,6 +55,53 @@ import charter_trailer  # noqa: E402
 import pr_review_state as prs  # noqa: E402
 import validate_pr_review as hook  # noqa: E402
 
+# Every place check() interpolates the 2-reviewer count into a peer-review BLOCK.
+# Used both to anchor a single site's expectation and to assert the WHOLE set of
+# counts a reason carries (#1203).
+_PEER_REVIEW_COUNT_RE = re.compile(r"has (\d+)/2 required peer reviews")
+
+# Any ratio-shaped token at all, computed or literal. The collision this file's
+# assertions kept losing to was a LITERAL matching this shape (#1203).
+_ANY_RATIO_RE = re.compile(r"\b\d+/2\b")
+
+
+def assert_peer_review_count(test: unittest.TestCase, reason: str, *, pr_display: str, count: int):
+    """Assert the COMPUTED peer-review ratio inside a Hook 4 BLOCK reason.
+
+    Never assert a bare ratio substring (`assertIn("1/2", reason)`) against
+    `result["reason"]`. Hook 4's peer-review BLOCK reason is a ~60-line operator
+    help document, so a bare `N/2` literal can match help prose rather than the
+    interpolated count. That is the #1203 defect class: five assertions in this
+    file were matching three `1/2 false-block` boilerplate lines and stayed green
+    with the real ratio at 0/2 — degenerating to "some BLOCK happened", which the
+    preceding `decision == "block"` assertion already established.
+
+    Two checks, because the positive one alone is not sufficient:
+
+      1. the full computed clause INCLUDING `pr_display` is present — so a
+         mutation reporting the right count against the wrong PR still fails; and
+      2. the counts present are EXACTLY `[count]` — a whole-set assertion, so a
+         second, disagreeing computed ratio anywhere in the reason fails too, and
+         the assertion cannot be satisfied by boilerplate however the help
+         document is later reworded.
+
+    Prefer this helper over hand-rolling the anchor at a new site: five hand-rolled
+    sites are what produced this issue, and a sixth wrote itself the same way.
+    """
+    clause = f"BLOCKED: PR {pr_display} has {count}/2 required peer reviews"
+    test.assertIn(
+        clause,
+        reason,
+        f"expected the computed peer-review clause {clause!r} — assert the "
+        f"interpolated sentence, never a bare ratio (#1203). Reason began: "
+        f"{reason[:220]!r}",
+    )
+    test.assertEqual(
+        _PEER_REVIEW_COUNT_RE.findall(reason),
+        [str(count)],
+        "a peer-review BLOCK reason must carry exactly one computed count",
+    )
+
 
 class IsVerdictTests(unittest.TestCase):
     """Unit tests for the _is_verdict helper — the core filter for #147."""
@@ -1048,7 +1095,7 @@ class CheckEndToEndTests(_NoContentBindingHarness):
         self.assertIsNotNone(result)
         assert result is not None
         self.assertEqual(result["decision"], "block")
-        self.assertIn("1/2", result["reason"])
+        assert_peer_review_count(self, result["reason"], pr_display="#100", count=1)
 
     def test_block_message_explains_reply_vs_approved(self):
         """BLOCKED message MUST surface the Reply-vs-Approved distinction and
@@ -1234,7 +1281,7 @@ class CheckEndToEndTests(_NoContentBindingHarness):
         self.assertIsNotNone(result)
         assert result is not None
         self.assertEqual(result["decision"], "block")
-        self.assertIn("1/2", result["reason"])
+        assert_peer_review_count(self, result["reason"], pr_display="#100", count=1)
 
 
 class CommentPaginationTests(_CheckCommentReviewsHarness):
@@ -1448,8 +1495,10 @@ class RosterValidationGateTests(_NoContentBindingHarness):
         reason = result["reason"]
         self.assertIn(self.FABRICATED[1], reason.lower())
         self.assertNotIn("aino virtanen", reason.lower().split("non-roster:")[1].split("\n")[0])
-        # Final count should reflect the filtered roster-only set.
-        self.assertIn("1/2", reason)
+        # Final count should reflect the filtered roster-only set. Anchored on the
+        # computed sentence: a bare `assertIn("1/2", reason)` here matched the help
+        # boilerplate and survived the real count dropping to 0/2 (#1203).
+        assert_peer_review_count(self, reason, pr_display="#487", count=1)
 
     def test_two_roster_requestors_pass(self):
         """Regression baseline: 2 real roster members → allow (existing behavior)."""
@@ -1878,7 +1927,7 @@ class ChildRosterResolutionTests(_NoContentBindingHarness):
         assert result is not None
         self.assertEqual(result["decision"], "block")
         self.assertIn("phantom persona", result["reason"].lower())
-        self.assertIn("1/2", result["reason"])
+        assert_peer_review_count(self, result["reason"], pr_display="#935", count=1)
 
     def test_parent_pr_still_passes_with_parent_reviewers(self):
         """Regression: parent-repo PR (no `--repo`) with 2 parent reviewers → allow."""
@@ -1892,7 +1941,17 @@ class ChildRosterResolutionTests(_NoContentBindingHarness):
         self.assertIsNone(result, "parent-repo PR with 2 parent reviewers must still pass")
 
     def test_child_reviewer_does_not_count_on_parent_pr(self):
-        """A child-only persona must NOT satisfy the gate on a parent PR (no leak)."""
+        """A child-only persona must NOT satisfy the gate on a parent PR (no leak).
+
+        This is the property #1199 names as the price of making the org-manifest
+        union repo-agnostic, so it is the one site here whose looseness costs
+        something. #1203 found its ratio assertion inert; the count is now
+        anchored, and the REASON the count is 1 is asserted too — the child
+        persona must be named as non-roster. Without that, the test could not
+        distinguish "rejected as non-roster" (the property) from "dropped by some
+        other mechanism" (not the property), and a leak paired with any second
+        drop would read identically.
+        """
         review_result = hook.CommentReviewResult()
         review_result.reviewers = {"aino virtanen", "anya kowalczyk"}
         with (
@@ -1903,7 +1962,40 @@ class ChildRosterResolutionTests(_NoContentBindingHarness):
         self.assertIsNotNone(result, "child persona must not count on a parent-repo PR")
         assert result is not None
         self.assertEqual(result["decision"], "block")
-        self.assertIn("1/2", result["reason"])
+        assert_peer_review_count(self, result["reason"], pr_display="#100", count=1)
+        non_roster_line = result["reason"].lower().split("non-roster:")[1].split("\n")[0]
+        self.assertIn("anya kowalczyk", non_roster_line)
+        self.assertNotIn("aino virtanen", non_roster_line)
+
+    def test_child_reviewer_does_not_count_on_parent_pr_off_their_own_branch(self):
+        """The no-leak property with the branch-author confound removed (#1203).
+
+        The sibling above inherits `_pr_data`'s head ref `A.Kowalczyk/0900-fix` —
+        which names the very persona whose rejection it is asserting. That fixture
+        cannot separate the roster filter from self-review exclusion by
+        construction; it only passes today because `check_comment_reviews` (where
+        the exclusion lives) is mocked out, i.e. the confound is masked by the
+        mock rather than absent from the scenario. Re-pin the same property on a
+        head ref belonging to somebody else, so the roster filter is the ONLY
+        mechanism that can reject the child persona.
+        """
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = {"aino virtanen", "anya kowalczyk"}
+        with (
+            mock.patch.object(
+                hook,
+                "get_pr_data",
+                return_value=self._pr_data(headRefName="W.Zielinska/0901-unrelated"),
+            ),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input("gh pr merge 100 --squash"))
+        self.assertIsNotNone(result, "child persona must not count on a parent-repo PR")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        assert_peer_review_count(self, result["reason"], pr_display="#100", count=1)
+        non_roster_line = result["reason"].lower().split("non-roster:")[1].split("\n")[0]
+        self.assertIn("anya kowalczyk", non_roster_line)
 
     def test_missing_child_roster_dir_hard_blocks(self):
         """Safe direction: `--repo` names a child whose roster dir is absent →
@@ -2104,14 +2196,20 @@ class OrgManifestReviewerUnionTests(_NoContentBindingHarness):
     def test_tool_identity_cannot_supply_an_approval(self):
         """End-to-end: `Annunaki` + one real reviewer is 1/2, not 2/2.
 
-        The ratio assertion MUST stay anchored to the computed sentence. Hook 4's
-        peer-review BLOCK help text embeds the literal `1/2 false-block` three
-        times unconditionally (the P3W11 batch-11 instance list, source lines
-        1955/1957/1959), so a bare `assertIn("1/2", reason)` matches boilerplate
-        rather than the count. Measured on this fixture: the real ratio is 1/2
-        with 4 occurrences of `1/2` at head and 0/2 with 3 occurrences once the
-        manifest union is reverted — and the bare form passes in BOTH. Only the
-        anchored sentence discriminates. Do not "simplify" this back.
+        The ratio assertion MUST stay anchored to the computed sentence. This
+        landed with #1199 as the one site that got it right while five siblings
+        did not; #1203 then fixed those five and moved the anchor into
+        `assert_peer_review_count` so there is a single definition to get right.
+
+        Historical note, since the numbers below no longer reproduce: Hook 4's
+        BLOCK help text used to embed the literal `1/2 false-block` three times
+        unconditionally, so a bare `assertIn("1/2", reason)` matched boilerplate
+        rather than the count — measured on this fixture, the real ratio was 1/2
+        with 4 occurrences at head and 0/2 with 3 occurrences under a
+        union-reverted mutant, and the bare form passed in BOTH. #1203 removed
+        those literals from the help text (`BlockReasonRatioCollisionTests` now
+        forbids their return), so the collision is gone at the source as well as
+        at the call sites. Do not "simplify" this back to a bare substring.
         """
         review_result = hook.CommentReviewResult()
         review_result.reviewers = {"annunaki", "nikolaos papadopoulos"}
@@ -2123,7 +2221,7 @@ class OrgManifestReviewerUnionTests(_NoContentBindingHarness):
         self.assertIsNotNone(result, "a tool identity must not supply an approval")
         assert result is not None
         self.assertEqual(result["decision"], "block")
-        self.assertIn("BLOCKED: PR #42 has 1/2 required peer reviews", result["reason"])
+        assert_peer_review_count(self, result["reason"], pr_display="#42", count=1)
 
     def test_persona_filter_shape(self):
         """Direct coverage of the identity-shape rule, independent of the tree."""
@@ -6296,6 +6394,116 @@ def _review_state_for_mode(comment_scan, *, commit_authors=()):
         comment_scan=comment_scan,
         commit_authors=list(commit_authors),
     )
+
+
+class BlockReasonRatioCollisionTests(_NoContentBindingHarness):
+    """#1203 — the instrument must not emit a ratio it did not compute.
+
+    The root cause of the five inert assertions this class ships alongside was
+    NOT the assertions. It was that `check()`'s peer-review BLOCK reason embedded
+    the literal `1/2 false-block` three times in its operator-help document —
+    output-shaped text that no ratio assertion can tell apart from the
+    interpolated count. Correcting five call sites and leaving the collision in
+    place would leave the trap armed for the sixth, which is how #1203 came to
+    have five instances in the first place.
+
+    So the property is pinned at the source instead: **every `N/2` token a
+    peer-review BLOCK emits equals the computed count.** A future help-text edit
+    that reintroduces a ratio literal fails HERE, loudly, rather than silently
+    neutering somebody's assertion several waves downstream.
+    """
+
+    @staticmethod
+    def _input(command: str) -> dict:
+        return {"tool_name": "Bash", "tool_input": {"command": command}}
+
+    @staticmethod
+    def _pr_data(**overrides) -> dict:
+        base = {
+            "author": "parametrization",
+            "number": 100,
+            "reviews": [],
+            "headRefName": "L.Pham/0001-fix",
+            "labels": [],
+        }
+        base.update(overrides)
+        return base
+
+    def _block_reason(self, reviewers: set[str], head_ref: str) -> str:
+        review_result = hook.CommentReviewResult()
+        review_result.reviewers = set(reviewers)
+        with (
+            mock.patch.object(
+                hook, "get_pr_data", return_value=self._pr_data(headRefName=head_ref)
+            ),
+            mock.patch.object(hook, "check_comment_reviews", return_value=review_result),
+        ):
+            result = hook.check(self._input("gh pr merge 100 --squash"))
+        self.assertIsNotNone(result, f"{len(reviewers)} reviewer(s) on {head_ref} must BLOCK")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        return result["reason"]
+
+    # Head refs chosen to vary the scan mode, since each mode prepends its own
+    # diagnostic paragraph to the same reason — a literal could hide in any of
+    # them, not only in the shared help tail.
+    HEAD_REFS = (
+        "L.Pham/0001-fix",  # ordinary implementer branch
+        "deployments/phase-3/wave-6",  # wave-merge carve-out (#1310)
+        "dependabot/docker/x-1.2.3",  # no branch author (#1206)
+    )
+
+    def test_only_the_computed_count_appears_as_a_ratio(self):
+        """No `N/2` token in a BLOCK reason may disagree with the real count.
+
+        Driven at BOTH 0 and 1 reviewers deliberately. A set-equality guard run
+        only at 1 reviewer could not see a reintroduced `1/2` literal at all — it
+        would collapse into the count that is legitimately there. The zero-reviewer
+        row is what gives this assertion teeth, and it is the row to keep if this
+        matrix is ever trimmed.
+        """
+        for head_ref in self.HEAD_REFS:
+            for reviewers, expected in ((set(), 0), ({"aino virtanen"}, 1)):
+                with self.subTest(head_ref=head_ref, count=expected):
+                    reason = self._block_reason(reviewers, head_ref)
+                    self.assertEqual(
+                        set(_ANY_RATIO_RE.findall(reason)),
+                        {f"{expected}/2"},
+                        "a peer-review BLOCK reason must contain no ratio-shaped "
+                        "token other than its own computed count (#1203)",
+                    )
+
+    def test_the_guard_would_catch_a_reintroduced_literal(self):
+        """Anti-vacuity: show the guard above actually fires on the old text.
+
+        A guard asserting a set is empty-of-strangers is worthless if the
+        scenario it screens for cannot arise. Re-inject the exact boilerplate
+        #1203 removed into a real reason and confirm the same predicate rejects
+        it. Uses the zero-reviewer reason for the reason named above: at 1
+        reviewer the reinjected `1/2` is indistinguishable from the real count,
+        which is precisely the bug.
+        """
+        reason = self._block_reason(set(), "L.Pham/0001-fix")
+        self.assertEqual(set(_ANY_RATIO_RE.findall(reason)), {"0/2"})
+        reinjected = reason + "\n      Requestor as rest-of-line garbage; 1/2 false-block.\n"
+        self.assertEqual(
+            set(_ANY_RATIO_RE.findall(reinjected)),
+            {"0/2", "1/2"},
+            "the guard's predicate must flag a ratio literal that disagrees "
+            "with the computed count — otherwise it screens for nothing",
+        )
+
+    def test_help_text_still_names_the_historical_instances(self):
+        """Removing the ratio must not cost the operator the diagnosis.
+
+        The three P3W11 batch-11 instances are why the trailer-block rule exists;
+        the fix was to drop the `N/2` token from those lines, not the lines.
+        """
+        reason = self._block_reason({"aino virtanen"}, "L.Pham/0001-fix")
+        for instance in ("main#509", "deploy#337", "deploy#339"):
+            self.assertIn(instance, reason)
+        self.assertIn("false-blocked one approval short", reason)
+        self.assertIn("Historical instances driving this enforcement", reason)
 
 
 if __name__ == "__main__":
