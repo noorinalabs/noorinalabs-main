@@ -608,14 +608,6 @@ HEREDOC_DATA_SINKS = frozenset({"cat", "tee"})
 #     xxd (incl. `-r`), hexdump (incl. `-e`), join, paste, comm, tac,
 #     shuf (incl. `--random-source`), jq (incl. `env.PATH`, `$ENV.PATH`,
 #     `input_filename`, `@sh` — no `system()` in mainline)
-#     rg — plain AND `--pre COMMAND` / `-z`/`--search-zip` (both apply only
-#          "for each input PATH" per ripgrep's own docs; there is no PATH on
-#          a stdin pipe, so neither ever invokes anything): measured, both
-#          flags are genuine no-ops when the input is a heredoc-fed pipe in
-#          both bash and zsh. Folded in alongside this fix (main#1316) so the
-#          allowlist stops contradicting #1008's org-wide "no bare `grep`"
-#          rule — before this, the list admitted the forbidden tool (`grep`)
-#          while omitting the mandated replacement (`rg`).
 #
 #   RAN (data-driven code-execution surface — DELIBERATELY EXCLUDED even
 #   though they are common "genuinely inert filter" examples in casual
@@ -639,20 +631,46 @@ HEREDOC_DATA_SINKS = frozenset({"cat", "tee"})
 #             plain invocation being inert is not sufficient, exactly as for
 #             `sed`/`awk` below; the exec-shaped flag makes it unsafe as a
 #             blanket allowlist member. Excluded per main#1316.
+#     rg    — `--pre=COMMAND` runs COMMAND once "for each input PATH", and on
+#             a heredoc-fed pipe a PATH is attacker-supplied: naming the pipe
+#             itself (`/dev/stdin`, `/dev/fd/0`) gives `--pre` a PATH even
+#             though the input is a pure stdin pipe, and `rg` runs
+#             `COMMAND PATH` with that path opened on the child's own stdin
+#             — so `sh /dev/stdin` genuinely executes the heredoc body;
+#             measured: `cat <<'EOF' | rg --pre=/bin/sh pat /dev/stdin`
+#             genuinely runs the body in both bash and zsh. `rg`'s ORIGINAL
+#             addition to this allowlist (main#1316's first pass) measured
+#             only the no-PATH stdin-pipe form — fixing the CONTEXT
+#             (whether a PATH is present) instead of varying it, when that
+#             context is exactly what an attacker controls. Separately, `rg`
+#             also exposes `--hostname-bin=COMMAND`, a second exec-shaped
+#             flag that spawns an arbitrary program even on a pure stdin
+#             pipe with no PATH at all — but the spawned child gets no
+#             arguments and does not inherit the pipe, so it never reaches
+#             the heredoc body and is not a bypass on its own. Noted here
+#             anyway because its existence falsifies any claim that every
+#             `rg` flag is harmless on a heredoc-fed stdin pipe. Excluded
+#             per main#1316 (second pass) — previously allowlisted in this
+#             module's own first pass at the same PR, on a plain-form
+#             measurement plus a #1008 policy argument (closing the
+#             contradiction where this allowlist admitted forbidden `grep`
+#             while omitting mandated `rg`); that policy argument is not a
+#             safety argument, and the #1008 contradiction is left OPEN by
+#             this exclusion — see the PR body.
 #
-# All three risks above are ARGUMENT-driven (visible in the segment's own
+# All four risks above are ARGUMENT-driven (visible in the segment's own
 # tokens, not hidden in the heredoc body), so a narrower "allowlisted unless
-# the script argument contains `e`/`system(`/`--compress-program`" rule is
-# possible in principle — but that reintroduces a second, per-command
-# detector inside what this set is meant to keep a flat, reviewable
-# allowlist, and is deliberately left as a non-goal here: excluding
-# `sed`/`awk`/`sort` entirely accepts a real (if comparatively rare, in a
-# documentation-pipeline context) false-positive cost in exchange for never
-# having to get that per-command grammar right. `perl`, `python`, `ruby`,
-# `php`, `xargs`, `parallel`, `find`, `env` and any other general-purpose
-# interpreter or relay are excluded for the same reason, one level more
-# obviously (they are not "filters" in the first place — some of them are
-# exactly the relay family this fix targets).
+# the script argument contains `e`/`system(`/`--compress-program`/`--pre`"
+# rule is possible in principle — but that reintroduces a second,
+# per-command detector inside what this set is meant to keep a flat,
+# reviewable allowlist, and is deliberately left as a non-goal here:
+# excluding `sed`/`awk`/`sort`/`rg` entirely accepts a real (if comparatively
+# rare, in a documentation-pipeline context) false-positive cost in exchange
+# for never having to get that per-command grammar right. `perl`, `python`,
+# `ruby`, `php`, `xargs`, `parallel`, `find`, `env` and any other
+# general-purpose interpreter or relay are excluded for the same reason, one
+# level more obviously (they are not "filters" in the first place — some of
+# them are exactly the relay family this fix targets).
 HEREDOC_INERT_RELAY_FILTERS = frozenset(
     {
         "grep",
@@ -685,7 +703,6 @@ HEREDOC_INERT_RELAY_FILTERS = frozenset(
         "tac",
         "shuf",
         "jq",
-        "rg",
     }
 )
 

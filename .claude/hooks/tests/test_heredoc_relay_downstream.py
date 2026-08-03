@@ -33,11 +33,23 @@ threshold). Dropped from the allowlist for the same reason `sed`/`awk` are
 excluded — a plain invocation being inert does not make the command safe to
 allowlist wholesale, and a per-flag detector for `--compress-program` would
 reintroduce exactly the per-command grammar this set is designed to avoid.
-Folded in alongside it: `rg`, which was previously absent from the allowlist
-while `grep` (forbidden org-wide by main#1008) was present — the inverse of
-what this org mandates. `rg`'s exec-shaped flags (`--pre`, `-z`) are
-documented to apply only "for each input PATH"; measured genuinely inert on a
-heredoc-fed stdin pipe in both bash and zsh, plain and exec-shaped.
+main#1316 (second pass — merge-gate finding on the SAME PR): `rg` was folded
+INTO the allowlist by this fix's first pass, on the reasoning that `grep`
+(forbidden org-wide by main#1008) was on the list while its mandated
+replacement `rg` was not. That measurement covered only the no-PATH stdin-pipe
+form of `rg --pre=COMMAND`; ripgrep's own docs say `--pre` runs "for each input
+PATH", and a PATH is attacker-supplied — naming the pipe itself (`/dev/stdin`,
+`/dev/fd/0`) gives `--pre` a PATH even on a pure stdin pipe, and `rg` runs
+`COMMAND PATH` with that path opened on the child's own stdin, so
+`sh /dev/stdin` genuinely executes the heredoc body (measured, both bash and
+zsh). `rg` is now EXCLUDED from the allowlist entirely, same posture as
+`sed`/`awk`/`sort` below — a plain-form measurement is not sufficient, and a
+per-flag gate for `--pre` would reintroduce the per-command grammar this set
+avoids. `rg` also exposes `--hostname-bin=COMMAND`, a second exec-shaped flag
+that spawns an arbitrary program on a pure stdin pipe (no PATH needed) but
+does not itself reach the heredoc body. The #1008 contradiction (this
+allowlist admits forbidden `grep` while excluding mandated `rg`) is left OPEN
+by this exclusion — see the PR body.
 
 Test organisation
 ==================
@@ -46,12 +58,13 @@ Test organisation
     real `check()`.
   * `RelayFalsePositiveCorpusTests` — every `HEREDOC_INERT_RELAY_FILTERS`
     member, individually and chained, must stay ALLOW.
-  * `RelayExcludedFiltersBlockTests` — `sed`/`awk`/`sort` are DELIBERATELY
-    excluded from the allowlist (each has a data-driven code-execution
-    surface reachable through an exec-shaped flag — `sed`'s `e` flag, `awk`'s
-    `system()`, `sort`'s `--compress-program`); this pins that they now
-    resolve to CODE, and that the adversarial shapes which justify the
-    exclusion are real bypasses if they were ever allowlisted.
+  * `RelayExcludedFiltersBlockTests` — `sed`/`awk`/`sort`/`rg` are
+    DELIBERATELY excluded from the allowlist (each has a data-driven
+    code-execution surface reachable through an exec-shaped flag — `sed`'s
+    `e` flag, `awk`'s `system()`, `sort`'s `--compress-program`, `rg`'s
+    `--pre=COMMAND` with an attacker-supplied `/dev/stdin` PATH); this pins
+    that they now resolve to CODE, and that the adversarial shapes which
+    justify the exclusion are real bypasses if they were ever allowlisted.
   * `RealShellGroundTruthTests` — marker-proxy verification against an actual
     `bash`/`zsh`, per shape, so a verdict is checked against what the shell
     really does rather than against expectations.
@@ -197,7 +210,6 @@ class RelayFalsePositiveCorpusTests(unittest.TestCase):
         "tac": "tac",
         "shuf": "shuf",
         "jq": "jq -R .",
-        "rg": "rg foo",
     }
 
     def test_every_allowlisted_filter_has_a_representative_case(self):
@@ -234,13 +246,18 @@ class RelayFalsePositiveCorpusTests(unittest.TestCase):
 
 
 class RelayExcludedFiltersBlockTests(unittest.TestCase):
-    """`sed`/`awk`/`sort` are common "obviously inert filter" examples but
+    """`sed`/`awk`/`sort`/`rg` are common "obviously inert filter" examples but
     each carries a data-driven code-execution surface (real-shell-verified —
     see `RealShellGroundTruthTests`), so they are DELIBERATELY excluded from
     `HEREDOC_INERT_RELAY_FILTERS`. This costs a false positive on ordinary
-    `sed`/`awk`/`sort` documentation pipelines, accepted per the module
-    comment. `sort` was excluded in main#1316, after having shipped on the
-    allowlist measured only on its plain (no `--compress-program`) form."""
+    `sed`/`awk`/`sort`/`rg` documentation pipelines, accepted per the module
+    comment. `sort` was excluded in main#1316 (first pass), after having
+    shipped on the allowlist measured only on its plain (no
+    `--compress-program`) form. `rg` was excluded in main#1316's SECOND pass
+    (this rework) after having been ADDED in the same PR's first pass on a
+    measurement that covered only the no-PATH stdin-pipe form of `--pre` —
+    the same "measure the plain/context-fixed form only" mistake `sort` had
+    just been dropped for."""
 
     def test_sed_not_in_allowlist(self):
         self.assertNotIn("sed", HEREDOC_INERT_RELAY_FILTERS)
@@ -250,6 +267,9 @@ class RelayExcludedFiltersBlockTests(unittest.TestCase):
 
     def test_sort_not_in_allowlist(self):
         self.assertNotIn("sort", HEREDOC_INERT_RELAY_FILTERS)
+
+    def test_rg_not_in_allowlist(self):
+        self.assertNotIn("rg", HEREDOC_INERT_RELAY_FILTERS)
 
     def test_plain_sed_now_blocks_accepted_false_positive(self):
         """An ORDINARY, harmless `sed` substitution — the false-positive cost
@@ -265,6 +285,13 @@ class RelayExcludedFiltersBlockTests(unittest.TestCase):
         false-positive cost this exclusion accepts, same posture as
         `sed`/`awk` above."""
         _assert_blocked(self, f"cat <<'DELIM' | sort\n{REAL_COMMIT}\nDELIM")
+
+    def test_plain_rg_now_blocks_accepted_false_positive(self):
+        """An ORDINARY, harmless bare `rg` search — genuinely inert (see
+        `RealShellGroundTruthTests`), but no longer allowlisted; the
+        false-positive cost this exclusion accepts, same posture as
+        `sed`/`awk`/`sort` above."""
+        _assert_blocked(self, f"cat <<'DELIM' | rg foo\n{REAL_COMMIT}\nDELIM")
 
     def test_sed_e_flag_would_be_a_real_bypass_if_allowlisted(self):
         """The adversarial shape that justifies excluding `sed`: the GNU `e`
@@ -285,6 +312,24 @@ class RelayExcludedFiltersBlockTests(unittest.TestCase):
         _assert_blocked(
             self,
             "cat <<'DELIM' | sort --compress-program=/tmp/marker.sh\n" + REAL_COMMIT + "\nDELIM",
+        )
+
+    def test_rg_pre_dev_stdin_would_be_a_real_bypass_if_allowlisted(self):
+        """The adversarial shape that justifies excluding `rg`: `--pre=COMMAND`
+        runs `COMMAND PATH` once for each input PATH, and the PATH is
+        attacker-supplied — naming the pipe itself (`/dev/stdin`) gives
+        `--pre` a PATH even though the input is a pure stdin pipe, and `rg`
+        runs `COMMAND PATH` with that path opened on the child's own stdin,
+        so `sh /dev/stdin` genuinely executes the heredoc body. Confirmed
+        BLOCKED under the current (exclude) policy; `rg` must never be
+        re-added to the allowlist without also gating this flag (and
+        `--hostname-bin`, a second exec-shaped flag — see the module
+        comment). Deliberately varies the PATH (`/dev/stdin`) rather than
+        fixing it at none, unlike this same allowlist's own first-pass
+        `rg --pre` measurement, which is exactly why that pass missed this."""
+        _assert_blocked(
+            self,
+            "cat <<'DELIM' | rg --pre=/bin/sh pat /dev/stdin\n" + REAL_COMMIT + "\nDELIM",
         )
 
 
@@ -404,33 +449,6 @@ class RealShellGroundTruthTests(unittest.TestCase):
             expect_runs=False,
         )
 
-    def test_rg_relay_genuinely_inert(self):
-        self._assert_ground_truth_matches_verdict(
-            "cat <<'DELIM' | rg MARKERPATTERN_ABSENT\nMARKER\nDELIM",
-            expect_runs=False,
-        )
-
-    def test_rg_pre_flag_genuinely_inert_on_stdin(self):
-        """`rg --pre COMMAND` is documented to apply only "for each input
-        PATH"; a heredoc-fed pipe has no PATH (it is stdin), so the flag is a
-        no-op here — measured, not assumed from the docs. Uses a real marker
-        script (not an inline MARKER substitution) since `--pre` names an
-        external program, exactly like the `sort --compress-program` probe
-        below; if `--pre` ever fired on stdin, this script would append to
-        its own log and this test would fail loudly."""
-        marker = self._write_marker_passthrough_script()
-        template = f"cat <<'DELIM' | rg --pre {marker} commit\nMARKER\nDELIM"
-        for shell in self.SHELLS:
-            with self.subTest(shell=shell):
-                self.assertFalse(
-                    self._shell_actually_runs(template, shell),
-                    f"{shell} invoked `rg --pre` on a stdin pipe (no PATH) — should be a no-op",
-                )
-        self.assertFalse(
-            self._hook_blocks(f"cat <<'DELIM' | rg --pre {marker} commit\nMARKER\nDELIM"),
-            "rg is allowlisted; --pre must not newly false-block",
-        )
-
     # --- excluded filters: the adversarial flag genuinely runs the body ----
 
     def test_sed_plain_genuinely_inert_but_excluded_anyway(self):
@@ -495,6 +513,117 @@ class RealShellGroundTruthTests(unittest.TestCase):
             self._hook_blocks(f"cat <<'DELIM' | sort --compress-program={marker}\nMARKER\nDELIM"),
             "sort is excluded from the allowlist, so this must still block",
         )
+
+    def test_rg_plain_genuinely_inert_but_excluded_anyway(self):
+        """Ground truth: a bare `rg` search over stdin (no PATH argument, no
+        exec-shaped flag) does NOT execute the body — confirms the
+        false-positive cost `rg`'s exclusion accepts is real, not imagined,
+        same posture as `sed`/`sort` above."""
+        template = "cat <<'DELIM' | rg MARKERPATTERN_ABSENT\nMARKER\nDELIM"
+        for shell in self.SHELLS:
+            with self.subTest(shell=shell):
+                self.assertFalse(
+                    self._shell_actually_runs(template, shell),
+                    f"{shell} unexpectedly ran a plain rg search",
+                )
+        self.assertTrue(
+            self._hook_blocks(template),
+            "rg is excluded from the allowlist, so this accepted false positive must still block",
+        )
+
+    def test_rg_pre_flag_inert_without_a_path(self):
+        """The CONTEXT-FIXED measurement from main#1316's FIRST pass (the one
+        that got `rg` added to the allowlist in error): with no PATH argument
+        at all, `--pre` really is a no-op — rg reads stdin directly and never
+        invokes `--pre`'s COMMAND. Kept as a documented contrast with
+        `test_rg_pre_dev_stdin_path_genuinely_runs` immediately below: the
+        PATH is the variable that matters, and it is the ATTACKER'S to
+        supply, not a fixed property of the shape — measuring only this cell
+        is exactly the mistake that let `rg` onto the allowlist the first
+        time. `rg` is fully excluded regardless (second pass), so the hook
+        blocks here too, same as any other excluded-filter accepted false
+        positive; this test's job is only to confirm the shell-side no-op,
+        not the hook's verdict."""
+        marker = self._write_marker_passthrough_script()
+        template = f"cat <<'DELIM' | rg --pre={marker} commit\nMARKER\nDELIM"
+        for shell in self.SHELLS:
+            with self.subTest(shell=shell):
+                self.assertFalse(
+                    self._shell_actually_runs(template, shell),
+                    f"{shell} invoked `rg --pre` with no PATH — should still be a no-op",
+                )
+        self.assertTrue(
+            self._hook_blocks(f"cat <<'DELIM' | rg --pre={marker} commit\nMARKER\nDELIM"),
+            "rg is excluded from the allowlist entirely, so this must block "
+            "regardless of whether --pre happens to be a no-op in this particular cell",
+        )
+
+    def test_rg_pre_dev_stdin_path_genuinely_runs(self):
+        """The adversarial case that justifies excluding `rg` (main#1316
+        second pass): `--pre=COMMAND` runs `COMMAND PATH` once for each input
+        PATH, and the PATH is attacker-supplied. Naming the pipe itself
+        (`/dev/stdin`) gives `--pre` a PATH even though the input is a pure
+        stdin pipe, and rg runs `COMMAND PATH` with that path opened on the
+        child's own stdin — so `sh /dev/stdin` genuinely executes the
+        heredoc body. Deliberately VARIES the PATH (unlike the no-PATH test
+        immediately above) — this is the row this fix's own first-pass test
+        (`test_rg_pre_flag_genuinely_inert_on_stdin`, since removed/replaced)
+        was missing, and the whole reason that test alone was not sufficient
+        to allowlist `rg` safely."""
+        self._assert_ground_truth_matches_verdict(
+            "cat <<'DELIM' | rg --pre=/bin/sh pat /dev/stdin\nMARKER\nDELIM",
+            expect_runs=True,
+        )
+
+    def test_rg_hostname_bin_spawns_a_program_but_does_not_reach_the_body(self):
+        """`rg` exposes a SECOND exec-shaped flag, `--hostname-bin=COMMAND`,
+        found by the same systematic per-flag sweep that caught `--pre`.
+        Ground truth: it spawns COMMAND even on a pure stdin pipe with no
+        PATH at all — but the spawned child receives no arguments and does
+        not inherit the heredoc's stdin, so it never reaches the heredoc
+        body itself. Pinned here (rather than left as prose only) because
+        its existence falsifies any claim that every `rg` flag is harmless
+        on a heredoc-fed stdin pipe — the module comment names it explicitly
+        for exactly this reason, and this test guards against that comment
+        going stale if a future ripgrep version changes the behaviour.
+
+        Uses TWO independent logs, not one: `_write_marker_passthrough_script`
+        (used elsewhere in this class) writes its "I was invoked" marker to
+        the SAME log the body-execution check reads, which cannot
+        distinguish "the flag's program was spawned" from "the spawned
+        program then read the heredoc body" — exactly the two outcomes this
+        test needs to tell apart. `spawn_log` proves the flag's COMMAND ran
+        at all; `body_log` proves the heredoc body's own marker command ran;
+        the claim being pinned is spawn=True, body=False."""
+        spawn_log = str(Path(self._tmpdir) / "hostname_bin_spawn.log")
+        body_log = str(Path(self._tmpdir) / "hostname_bin_body.log")
+        script = Path(self._tmpdir) / "hostname_bin.sh"
+        script.write_text(f"#!/bin/sh\necho SPAWNED >> {spawn_log}\ncat\n")
+        script.chmod(0o755)
+        template = f"cat <<'DELIM' | rg --hostname-bin={script} --json pat\nMARKER\nDELIM"
+        for shell in self.SHELLS:
+            with self.subTest(shell=shell):
+                Path(spawn_log).unlink(missing_ok=True)
+                Path(body_log).unlink(missing_ok=True)
+                marker_cmd = f"echo BODYRAN >> {body_log}"
+                cmd = template.replace("MARKER", marker_cmd)
+                subprocess.run(
+                    [shell, "-c", cmd],
+                    cwd=self._tmpdir,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                self.assertTrue(
+                    Path(spawn_log).exists(),
+                    f"{shell}: --hostname-bin never spawned its COMMAND — the flag "
+                    "may no longer be exec-shaped in this ripgrep version",
+                )
+                self.assertFalse(
+                    Path(body_log).exists(),
+                    f"{shell}: --hostname-bin unexpectedly reached the heredoc body "
+                    "— this would make it a real bypass, not just a spawn",
+                )
 
     def test_sed_e_flag_genuinely_runs(self):
         """The adversarial case: ground truth confirms `sed`'s `e` flag really
