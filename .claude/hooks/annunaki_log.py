@@ -13,8 +13,10 @@ This module writes to TWO files under `.claude/annunaki/`:
     `posttooluse_event` (a hook reporting a follow-up condition). This is what
     `/annunaki` counts and `/annunaki-attack` processes.
   - `traces.jsonl`  — benign forensic traces: `posttooluse_dispatch` (the
-    dispatcher's per-check() view) and `pretooluse_diagnostic` forensics.
-    Informational only; NEVER counted as errors.
+    PostToolUse dispatcher's per-check() view), `pretooluse_diagnostic`
+    forensics, and `pretooluse_dispatch` (the PreToolUse dispatcher's
+    logged-swallow, main#1121 — same idea as `posttooluse_dispatch`,
+    opposite phase). Informational only; NEVER counted as errors.
 
 Pre-#625 both kinds shared `errors.jsonl`; dispatch traces were 76% of the
 P4W1 log and `/annunaki` over-counted them as errors. `TRACE_RECORD_TYPES` is
@@ -74,7 +76,9 @@ TRACES_FILE = REPO_ROOT / ".claude" / "annunaki" / "traces.jsonl"
 # Record `type` values that are benign forensic traces, NOT errors. The
 # annunaki parsers treat these as non-counting. Kept here as the single source
 # of truth so writers and readers agree.
-TRACE_RECORD_TYPES = frozenset({"posttooluse_dispatch", "pretooluse_diagnostic"})
+TRACE_RECORD_TYPES = frozenset(
+    {"posttooluse_dispatch", "pretooluse_diagnostic", "pretooluse_dispatch"}
+)
 
 
 def _is_test_mode() -> bool:
@@ -200,6 +204,43 @@ def log_posttooluse_dispatch(
     record = {
         "timestamp": datetime.now(UTC).isoformat(),
         "type": "posttooluse_dispatch",
+        "module": module_name,
+        "tool_name": tool_name,
+        "command": command[:500],
+        "outcome": outcome,
+    }
+    # Benign forensic trace → traces.jsonl, not errors.jsonl (#625).
+    append_jsonl_record(TRACES_FILE, record)
+
+
+def log_pretooluse_dispatch(
+    module_name: str,
+    command: str,
+    outcome: dict,
+    tool_name: str = "Bash",
+) -> None:
+    """Append a per-hook dispatch trace from `dispatcher.py` (main#1121).
+
+    The PreToolUse sibling of `log_posttooluse_dispatch` — same rationale,
+    same shape, opposite phase. `dispatcher.py` pre-#1121 swallowed a
+    `check()` exception with a bare ``except Exception: continue`` (never
+    let a hook crash block everything, but also never recorded *that it
+    happened*). This is the port of `post_dispatcher.py`'s already-loud
+    swallow: the exception is still swallowed (a single misbehaving hook
+    must never block every other PreToolUse gate, or the tool call itself),
+    but it is now visible via `/annunaki` forensics instead of vanishing.
+
+    Type is `pretooluse_dispatch`; written to `traces.jsonl` (NOT
+    `errors.jsonl`) so it never inflates `/annunaki` error counts (#625) —
+    informational unless `outcome.raised` is set.
+
+    `outcome` shape (all JSON-safe primitives):
+      - raised: exception type name + message, or null
+      - traceback_excerpt: first 500 chars of traceback if raised, else null
+    """
+    record = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "type": "pretooluse_dispatch",
         "module": module_name,
         "tool_name": tool_name,
         "command": command[:500],

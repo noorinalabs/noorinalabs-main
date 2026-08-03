@@ -19,6 +19,7 @@ import time
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _hook_main import run_blocking
 from annunaki_log import log_pretooluse_block
 
 # Cloudflare publishes their IP ranges at these URLs
@@ -107,14 +108,31 @@ def _load_cloudflare_ranges() -> list[ipaddress.IPv4Network | ipaddress.IPv6Netw
     return [ipaddress.ip_network(r, strict=False) for r in _FALLBACK_RANGES]
 
 
-CLOUDFLARE_RANGES = _load_cloudflare_ranges()
+# BUG-09 (main#1121): this used to be a MODULE-IMPORT-TIME call
+# (`CLOUDFLARE_RANGES = _load_cloudflare_ranges()`), which meant every
+# dispatched invocation of `check()` — i.e. every single Bash PreToolUse
+# call, not just a `gh variable set VPS_HOST` one — paid a cache read (or
+# worse, up to two 3-second network fetches on a cold/stale cache) at
+# `import validate_vps_host` time, before `check()` even inspected the
+# command. Lazily memoized instead: the load only happens on the first
+# call that actually reaches the Cloudflare-IP check, i.e. only when the
+# regex in `check()` already matched a `gh variable set VPS_HOST` command.
+_cloudflare_ranges_cache: list[ipaddress.IPv4Network | ipaddress.IPv6Network] | None = None
+
+
+def _get_cloudflare_ranges() -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    """Lazily load + memoize the Cloudflare ranges (BUG-09, main#1121)."""
+    global _cloudflare_ranges_cache
+    if _cloudflare_ranges_cache is None:
+        _cloudflare_ranges_cache = _load_cloudflare_ranges()
+    return _cloudflare_ranges_cache
 
 
 def is_cloudflare_ip(ip_str: str) -> bool:
     """Check if an IP address falls within known Cloudflare ranges."""
     try:
         addr = ipaddress.ip_address(ip_str)
-        return any(addr in net for net in CLOUDFLARE_RANGES)
+        return any(addr in net for net in _get_cloudflare_ranges())
     except ValueError:
         return False
 
@@ -189,18 +207,7 @@ def check(input_data: dict) -> dict | None:
 
 
 def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
-    result = check(input_data)
-    if result is None:
-        sys.exit(0)
-    print(json.dumps(result))
-    if result.get("decision") == "block":
-        sys.exit(2)
-    sys.exit(0)
+    run_blocking(check, "validate_vps_host")
 
 
 if __name__ == "__main__":

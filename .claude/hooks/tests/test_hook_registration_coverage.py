@@ -93,6 +93,167 @@ def _hook_modules() -> dict[str, Path]:
     }
 
 
+def _exposes_main(path: Path) -> bool:
+    """True if the module defines a top-level ``main`` function. Parse, not import."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    return any(
+        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "main"
+        for node in tree.body
+    )
+
+
+def _imports_hook_main(path: Path) -> bool:
+    """True if the module imports anything from ``_hook_main`` (the main#1121
+    consolidated ``run_blocking``/``run_advisory`` entry points)."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    return any(
+        isinstance(node, ast.ImportFrom) and node.module == "_hook_main" for node in ast.walk(tree)
+    )
+
+
+# Hooks with a top-level ``main()`` deliberately NOT on ``_hook_main``
+# (main#1121, epic main#1097). Population = ``_hook_modules()`` filtered to
+# those exposing ``main()`` — NOT raw ``_hook_modules()`` membership, because
+# ``annunaki_log.py`` is a shared lib living in ``.claude/hooks/`` without an
+# underscore prefix: it has no ``main()`` and is not a hook, and gating on raw
+# membership would demand a spurious entry for it on day one (#1330 review —
+# a gate whose first act is to require a false exclusion teaches its users
+# that entries are bureaucratic noise, and every later entry inherits that).
+#
+# Every entry needs a REASON, not just a name — unlike
+# ``INTENTIONALLY_UNREGISTERED`` above (which has stayed a bare ``set()``
+# only because it is EMPTY), this mapping ships with entries from day one,
+# which is precisely the condition under which a name-only set loses
+# provenance. The reasons mirror noorinalabs-main#1329's per-hook rationale —
+# keep them in sync; a name added here without updating #1329 (or vice
+# versa) is exactly the drift the two are supposed to jointly prevent.
+_UNCONVERTED: dict[str, str] = {
+    "validate_edit_completion": (
+        "check() returns None for any tool_name not in _DISPATCHED_PRE_TOOLS "
+        "(= _EDIT_TOOLS | {'Bash'}, L123/L522), and SendMessage is not in it. "
+        "main()'s PreToolUse branch calls _pre_tool_use_blocks directly, "
+        "bypassing that filter — which is how the SendMessage registration "
+        "in settings.json reaches the gate at all. run_blocking(check, ...) "
+        "would route SendMessage through the filter and silently return "
+        "None, disabling the hook for its only standalone registration."
+    ),
+    "auto_add_issue_to_board": (
+        "standalone main() catches a check() exception and logs it via "
+        "log_posttooluse_event, whose 'posttooluse_event' record type is "
+        "NOT in annunaki_log.TRACE_RECORD_TYPES — it writes to the COUNTED "
+        "errors.jsonl stream, unlike _hook_main's generic swallow "
+        "(log_pretooluse_diagnostic -> traces.jsonl, excluded from the "
+        "count). Converting would downgrade a deliberately louder existing "
+        "signal."
+    ),
+    "post_label_change_wave_field_sync": (
+        "standalone main() catches a check() exception and logs it via "
+        "log_posttooluse_event, whose 'posttooluse_event' record type is "
+        "NOT in annunaki_log.TRACE_RECORD_TYPES — it writes to the COUNTED "
+        "errors.jsonl stream, unlike _hook_main's generic swallow "
+        "(log_pretooluse_diagnostic -> traces.jsonl, excluded from the "
+        "count). Converting would downgrade a deliberately louder existing "
+        "signal."
+    ),
+    "post_wave_kickoff_comment": (
+        "standalone main() catches a check() exception and logs it via "
+        "log_posttooluse_event, whose 'posttooluse_event' record type is "
+        "NOT in annunaki_log.TRACE_RECORD_TYPES — it writes to the COUNTED "
+        "errors.jsonl stream, unlike _hook_main's generic swallow "
+        "(log_pretooluse_diagnostic -> traces.jsonl, excluded from the "
+        "count). Converting would downgrade a deliberately louder existing "
+        "signal."
+    ),
+    "annunaki_monitor": (
+        "standalone main() calls check(input_data) and discards the return "
+        "value entirely (side-effect-only; the return value is meaningful "
+        "only to the PostToolUse dispatcher's own aggregation). "
+        "run_advisory would start printing that return value on standalone "
+        "invocation — a stdout-shape change with no compensating benefit."
+    ),
+    "ontology_tracker": (
+        "standalone main() calls check(input_data) and discards the return "
+        "value entirely (side-effect-only; the return value is meaningful "
+        "only to the PostToolUse dispatcher's own aggregation). "
+        "run_advisory would start printing that return value on standalone "
+        "invocation — a stdout-shape change with no compensating benefit."
+    ),
+    "session_start": (
+        "SessionStart hook — does not read stdin at all (informational "
+        "only); does not fit the check(input_data) -> dict | None contract."
+    ),
+    "session_handoff": (
+        "Stop hook — main() does everything directly (git state, gh calls, "
+        "file write); no separate check() function to extract without a "
+        "larger refactor."
+    ),
+}
+
+
+def test_unconverted_population_matches_hooks_with_main_and_no_hook_main_import() -> None:
+    """Every hook module with a top-level ``main()`` must EITHER import
+    ``_hook_main`` (the main#1121 consolidated entry points) OR carry a
+    reasoned entry in ``_UNCONVERTED``.
+
+    This is the gate that would have caught the straggler a #1330 review
+    found by hand: ``block_shutdown_without_retro.py`` had a plain
+    boilerplate ``main()`` and was silently absent from BOTH the converted
+    set and the documented exclusion list until this test existed.
+    """
+    modules = _hook_modules()
+    population = {name: path for name, path in modules.items() if _exposes_main(path)}
+
+    # Direction 1 — every module with main() that isn't converted must be
+    # documented. Catches an ADDITION (a new/edited hook with a boilerplate
+    # main() slipping past both the helper and the exclusion list) — the
+    # block_shutdown_without_retro.py straggler class a #1330 review found
+    # by hand.
+    missing = sorted(
+        name
+        for name, path in population.items()
+        if not _imports_hook_main(path) and name not in _UNCONVERTED
+    )
+    assert not missing, (
+        "Hook module(s) have main() but are neither converted to _hook_main "
+        "NOR documented in _UNCONVERTED:\n"
+        + "".join(
+            f"  - {name}.py has no _hook_main import and no _UNCONVERTED entry\n"
+            for name in missing
+        )
+        + "\nEither convert the hook onto _hook_main.run_blocking/run_advisory, "
+        "or add a reasoned entry to _UNCONVERTED (and keep "
+        "noorinalabs-main#1329 in sync)."
+    )
+
+    # Direction 2 — every _UNCONVERTED entry must still apply. Catches a
+    # REMOVAL (a module later converted or deleted, whose stale exclusion
+    # entry would otherwise sit in the mapping indefinitely, unnoticed) —
+    # the self-cleaning half; without it the gate is honest about additions
+    # and blind to removals, and the reason strings decay silently.
+    stale = sorted(_UNCONVERTED)
+    stale_reasons = []
+    for name in stale:
+        if name not in population:
+            stale_reasons.append(f"  - _UNCONVERTED names {name}.py, which no longer exists\n")
+        elif _imports_hook_main(population[name]):
+            stale_reasons.append(
+                f"  - _UNCONVERTED names {name}.py, which now imports _hook_main — "
+                "remove the entry\n"
+            )
+    assert not stale_reasons, (
+        "_UNCONVERTED entry(ies) no longer apply — remove them and update "
+        "noorinalabs-main#1329:\n" + "".join(stale_reasons)
+    )
+
+
+def test_unconverted_does_not_include_dispatchers() -> None:
+    """``dispatcher.py``/``post_dispatcher.py`` are already excluded from the
+    population by ``DISPATCHERS``/``_hook_modules()`` — adding them to
+    ``_UNCONVERTED`` too would be a duplicate exclusion, exactly the kind of
+    drift this gate exists to prevent (#1330 review)."""
+    assert not (DISPATCHERS & set(_UNCONVERTED))
+
+
 def _resolved_config():
     """The live merged config, exactly as a dispatcher resolves it at runtime."""
     _framework_config.clear_cache()

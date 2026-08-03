@@ -79,7 +79,6 @@ Enforcement artifact for: noorinalabs/noorinalabs-main#173
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import subprocess
@@ -87,6 +86,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _hook_main import run_blocking
 from _shell_parse import resolve_invocation_cwd  # noqa: E402
 from annunaki_log import log_pretooluse_block  # noqa: E402
 
@@ -307,22 +307,18 @@ def check(input_data: dict) -> dict | None:
         return None
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
+def _check_and_log(input_data: dict) -> dict | None:
+    """Wraps `check()` with the annunaki block-log side effect the old
+    standalone `main()` performed directly (main#1121 conversion)."""
     result = check(input_data)
-    if result is None:
-        sys.exit(0)
-
-    print(json.dumps(result))
-    if result.get("decision") == "block":
+    if result and result.get("decision") == "block":
         command = input_data.get("tool_input", {}).get("command", "")
         log_pretooluse_block("no_worktree_self_delete", command, result["reason"])
-        sys.exit(2)
-    sys.exit(0)
+    return result
+
+
+def main() -> None:
+    run_blocking(_check_and_log, "no_worktree_self_delete")
 
 
 if __name__ == "__main__":

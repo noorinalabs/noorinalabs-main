@@ -61,6 +61,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _hook_main import run_blocking  # noqa: E402
 from _repo_flag_parse import extract_repo  # noqa: E402
 from _shell_parse import (  # noqa: E402
     find_gh_subcommand,
@@ -359,10 +360,9 @@ def check(input_data: dict) -> dict | None:
     return None
 
 
+def main() -> None:
+    run_blocking(check, "validate_wave_label_evidence")
+
+
 if __name__ == "__main__":
-    data = json.load(sys.stdin)
-    result = check(data)
-    if result is None:
-        sys.exit(0)
-    print(json.dumps(result))
-    sys.exit(2 if result.get("decision") == "block" else 0)
+    main()

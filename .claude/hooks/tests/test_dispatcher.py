@@ -290,6 +290,44 @@ class FailOpenTests(unittest.TestCase):
         self.assertEqual(out, "")
         sibling.assert_called_once()
 
+    def test_hook_raises_is_logged_loudly_not_silently(self) -> None:
+        """main#1121: the swallow ported from post_dispatcher.py must record
+        the exception via log_pretooluse_dispatch — a bare `continue` with no
+        record would make a real hook bug invisible."""
+        input_data = {
+            "tool_name": "Edit",
+            "hook_event_name": "PreToolUse",
+            "tool_input": {"file_path": "/tmp/x.py"},
+        }
+        with (
+            mock.patch("enforce_librarian_consulted.check", side_effect=RuntimeError("boom")),
+            mock.patch("validate_edit_completion.check", return_value=None),
+            mock.patch.object(d, "log_pretooluse_dispatch") as mock_log,
+        ):
+            code, _out = _run_dispatcher(input_data)
+        self.assertEqual(code, 0)
+        mock_log.assert_called_once()
+        _args, kwargs = mock_log.call_args
+        self.assertEqual(kwargs["module_name"], "enforce_librarian_consulted")
+        self.assertIn("RuntimeError: boom", kwargs["outcome"]["raised"])
+
+    def test_logging_failure_does_not_crash_dispatcher(self) -> None:
+        """Logging is itself best-effort — a broken log sink must not turn a
+        swallowed hook exception into a crashing dispatcher."""
+        input_data = {
+            "tool_name": "Edit",
+            "hook_event_name": "PreToolUse",
+            "tool_input": {"file_path": "/tmp/x.py"},
+        }
+        with (
+            mock.patch("enforce_librarian_consulted.check", side_effect=RuntimeError("boom")),
+            mock.patch("validate_edit_completion.check", return_value=None),
+            mock.patch.object(d, "log_pretooluse_dispatch", side_effect=OSError("disk full")),
+        ):
+            code, out = _run_dispatcher(input_data)
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "")
+
     def test_missing_check_attr_skipped(self) -> None:
         input_data = {
             "tool_name": "Edit",

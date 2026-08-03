@@ -263,6 +263,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib"))
+from _hook_main import run_blocking
 from _repo_flag_parse import extract_repo
 from annunaki_log import log_pretooluse_block
 from charter_trailer import (
@@ -2949,18 +2950,7 @@ def check(input_data: dict) -> dict | None:
 
 
 def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-
-    result = check(input_data)
-    if result is None:
-        sys.exit(0)
-    print(json.dumps(result))
-    if result.get("decision") == "block":
-        sys.exit(2)
-    sys.exit(0)
+    run_blocking(check, "validate_pr_review")
 
 
 if __name__ == "__main__":

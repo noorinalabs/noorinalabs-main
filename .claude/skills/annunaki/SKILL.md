@@ -18,7 +18,7 @@ The Annunaki system has two parts:
 The hooks write to **two** files under `.claude/annunaki/`:
 
 - **`errors.jsonl`** — genuine signals: command-failure records, `pretooluse_block` (a real prevented command), and `posttooluse_event` (a hook reporting a follow-up condition). **This is the file this skill counts.**
-- **`traces.jsonl`** — benign forensic traces (`posttooluse_dispatch`, `pretooluse_diagnostic`). Informational only; **never counted as errors**. Gitignored. Read it only when debugging the dispatcher itself.
+- **`traces.jsonl`** — benign forensic traces (`posttooluse_dispatch`, `pretooluse_diagnostic`, and `pretooluse_dispatch` — the PreToolUse dispatcher's own logged-swallow, main#1121). Informational only; **never counted as errors**. Gitignored. Read it only when debugging the dispatcher itself.
 
 Pre-#625 both kinds shared `errors.jsonl` and dispatch traces (76% of the P4W1 log) were mis-counted as errors. Use the shared reader `.claude/lib/annunaki_parse.py` — it skips blank/corrupt lines AND any benign-trace record (defending against historical mixed logs), so counts are correct on old and new logs alike.
 
@@ -48,7 +48,7 @@ Use the shared reader so benign traces and blank/corrupt lines are excluded auto
 python3 "$REPO_ROOT/.claude/lib/annunaki_parse.py" "$REPO_ROOT/.claude/annunaki/errors.jsonl" --count
 ```
 
-**Parsing note:** the log is JSONL but may contain blank or whitespace-only lines from historical manual edits, AND — in historical/not-yet-cleared logs — benign-trace records (`type` in `posttooluse_dispatch` / `pretooluse_diagnostic`) that are NOT errors. Any parser you write MUST skip both. Prefer `annunaki_parse.iter_records()`; the canonical inline pattern (if you must hand-roll) is:
+**Parsing note:** the log is JSONL but may contain blank or whitespace-only lines from historical manual edits, AND — in historical/not-yet-cleared logs — benign-trace records (`type` in `annunaki_log.TRACE_RECORD_TYPES` — `posttooluse_dispatch` / `pretooluse_diagnostic` / `pretooluse_dispatch`) that are NOT errors. Any parser you write MUST skip both. Prefer `annunaki_parse.iter_records()`; the canonical inline pattern (if you must hand-roll) is:
 
 ```python
 import sys

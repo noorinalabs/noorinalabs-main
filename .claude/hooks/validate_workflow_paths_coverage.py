@@ -90,13 +90,13 @@ Exit codes:
 from __future__ import annotations
 
 import fnmatch
-import json
 import os
 import re
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _hook_main import run_blocking
 from _shell_parse import (  # noqa: E402
     find_gh_subcommand,
     iter_command_segments,
@@ -582,23 +582,21 @@ def check(input_data: dict) -> dict | None:
     return {"decision": "block", "reason": reason}
 
 
-def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
+def _check_and_log(input_data: dict) -> dict | None:
+    """Wraps `check()` with the annunaki block-log side effect the old
+    standalone `main()` performed directly (main#1121 conversion)."""
     result = check(input_data)
-    if result is None:
-        sys.exit(0)
-    print(json.dumps(result))
-    if result.get("decision") == "block":
+    if result and result.get("decision") == "block":
         log_pretooluse_block(
             "validate_workflow_paths_coverage",
             (input_data.get("tool_input") or {}).get("command", ""),
             result["reason"],
         )
-        sys.exit(2)
-    sys.exit(0)
+    return result
+
+
+def main() -> None:
+    run_blocking(_check_and_log, "validate_workflow_paths_coverage")
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ Process the Annunaki error log, deduplicate errors, propose preventative automat
 
 ### 1. Read and deduplicate the error log
 
-Read **only genuine errors** via the shared reader (#625): it skips blank/corrupt lines AND benign-trace records (`posttooluse_dispatch` / `pretooluse_diagnostic`), which were 76% of the pre-#625 log and must never be classified as errors.
+Read **only genuine errors** via the shared reader (#625): it skips blank/corrupt lines AND benign-trace records (`type` in `annunaki_log.TRACE_RECORD_TYPES` — `posttooluse_dispatch` / `pretooluse_diagnostic` / `pretooluse_dispatch`), which were 76% of the pre-#625 log and must never be classified as errors.
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"

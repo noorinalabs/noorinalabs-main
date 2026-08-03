@@ -42,10 +42,10 @@ Exit codes:
 
 from __future__ import annotations
 
-import json
 import os
-import sys
 from pathlib import Path
+
+from _hook_main import run_advisory
 
 # A source line must be at least this long (post-normalisation) to count toward
 # the overlap, so common short lines (```bash, ---, `## PR Template`) never
@@ -174,21 +174,7 @@ def check(input_data: dict) -> dict | None:
 
 
 def main() -> None:
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        sys.exit(0)
-    try:
-        result = check(input_data)
-    except Exception:
-        # Advisory: never let a heuristic crash a spawn.
-        sys.exit(0)
-    if result is not None:
-        # Emit the advisory as a bare top-level ``systemMessage`` (no permission
-        # decision): ``systemMessage`` surfaces the warning to the model, and exit 0
-        # with no ``decision`` is the default allow — so the spawn is never gated.
-        print(json.dumps(result))
-    sys.exit(0)
+    run_advisory(check, "warn_oversized_brief")
 
 
 if __name__ == "__main__":
