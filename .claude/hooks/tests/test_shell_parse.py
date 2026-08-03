@@ -1667,16 +1667,32 @@ class ResolveSimpleAssignmentsTests(unittest.TestCase):
             "g=echo; echo commit; g=git",
         )
 
-    def test_same_segment_multiple_leading_assignments_resolve_within_segment(self) -> None:
-        """`A=1 B=git $B commit -m z` — a same-line assignment prefix DOES
-        apply to that same line's own command word (the one-shot
-        env-assignment shape `_strip_leading_env_assignments` already
-        treats as a single unit), unlike a reassignment across a `;` /
-        `&&` / `||` segment boundary.
+    def test_same_segment_leading_assignment_not_visible_to_own_expansion(self) -> None:
+        """`A=1 B=git $B commit -m z` — main#1195 review round 3,
+        real-shell-verified with a printf/marker proxy: POSIX expands a
+        command's words BEFORE applying that SAME command's own prefix
+        assignments, so `$B` is NOT visible to a reference inside its own
+        segment. A real shell never runs git here (`$B` is unset at
+        expansion time; `B=git` only scopes the invoked command's
+        environment). Supersedes the previous (wrong)
+        `test_same_segment_multiple_leading_assignments_resolve_within_segment`,
+        which encoded exactly this misreading of POSIX prefix-assignment
+        scope as the expected behaviour.
+        """
+        cmd = "A=1 B=git $B commit -m z"
+        self.assertEqual(sp.resolve_simple_assignments(cmd), cmd)
+
+    def test_same_segment_leading_assignment_becomes_visible_in_later_segment(self) -> None:
+        """The peeling loop must still consume BOTH leading assignment
+        tokens (`A=1` then `B=git`) in one segment — the multi-assignment
+        coverage the superseded test above was meant to pin, checked here
+        where a real shell agrees: once `;` moves the reference into a
+        LATER segment, `B`'s value from a two-assignment leading run is
+        visible.
         """
         self.assertEqual(
-            sp.resolve_simple_assignments("A=1 B=git $B commit -m z"),
-            "A=1 B=git git commit -m z",
+            sp.resolve_simple_assignments("A=1 B=git; $B commit -m z"),
+            "A=1 B=git; git commit -m z",
         )
 
     # --- name-prefix conflation guard (main#1195 review round 2, finding 2) -

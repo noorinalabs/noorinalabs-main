@@ -1247,6 +1247,18 @@ def _strip_leading_env_assignments(segment: list[str]) -> list[str]:
 # multi-word/prose values remain OUT of scope — same non-goal boundary as
 # the rest of this module's exclusions, documented in the function
 # docstring below.
+#
+# Round 3 correction (main#1195 review round 3): the paragraph above already
+# stated the correct rule ("never for references inside itself"), but the
+# implementation contradicted it — a segment's own leading assignments were
+# ALSO folded into the map used to substitute that same segment's own
+# references, which is not how a real shell resolves a prefix assignment
+# (word expansion happens before the prefix takes effect). See
+# `resolve_simple_assignments`'s docstring and the code comment at its
+# `active = assignments` line for the corrected behaviour and the real-shell
+# verification. `local`/`typeset`/`readonly` remain a documented non-goal
+# here regardless of this correction; #1308 tracks that `typeset`/`readonly`
+# (unlike `local`) are live at top level and may warrant a future widening.
 _SIMPLE_LITERAL_VALUE_RE = re.compile(r"^[A-Za-z0-9_./:@%+-]+$")
 
 # `$NAME` or `${NAME}` — a name starting with a letter/underscore, same
@@ -1374,22 +1386,27 @@ def resolve_simple_assignments(command: str) -> str:
     same `_SEGMENT_OPS` set `iter_command_segments` splits on, plus a bare
     newline as a statement terminator) IN SOURCE ORDER, maintaining a running
     map of literal `NAME=value` assignments seen in EARLIER segments. Each
-    segment's `$NAME` / `${NAME}` references are substituted against that
-    running map COMBINED WITH the segment's own leading assignments (see
-    `_leading_literal_assignments`; a bare literal value, optionally
-    prefixed by `export`/`declare`, #1305) — a same-line prefix like `A=1
-    B=git $B commit -m z` still resolves `$B`, matching the one-shot
-    env-assignment shape `_strip_leading_env_assignments` already treats as
-    a single unit, while a reassignment in a LATER segment (`g=git; $g
-    commit -m x; g=echo`) does NOT retroactively change what an EARLIER
-    segment's reference resolved to, and a reassignment that hasn't
-    happened YET (`g=echo; $g commit; g=git`) does not resolve early either.
-    This is what makes resolution POSITIONAL rather than "last write
-    anywhere wins" or "first write anywhere wins" — see the module comment
-    above this section for the two concrete cross-segment shapes that make
-    the distinction observable, not just theoretical. After a segment is
-    substituted, its own leading assignments are folded into the running
-    map for segments that follow.
+    segment's `$NAME` / `${NAME}` references are substituted ONLY against
+    that running (strictly-earlier) map — NEVER against the segment's own
+    leading assignments (see `_leading_literal_assignments`; a bare literal
+    value, optionally prefixed by `export`/`declare`, #1305). This mirrors
+    real POSIX shell semantics: a command's words are expanded BEFORE its
+    own prefix assignments take effect, so a same-line prefix like `A=1
+    B=git $B commit -m z` must NOT resolve `$B` (real-shell-verified with a
+    printf/marker proxy, main#1195 review round 3) — `$B` is unset at
+    expansion time, and the prefix assignment only scopes the invoked
+    command's environment, not the expansion of its own argument list. A
+    reassignment in a LATER segment (`g=git; $g commit -m x; g=echo`) does
+    NOT retroactively change what an EARLIER segment's reference resolved
+    to, and a reassignment that hasn't happened YET (`g=echo; $g commit;
+    g=git`) does not resolve early either. This is what makes resolution
+    POSITIONAL rather than "last write anywhere wins" or "first write
+    anywhere wins" — see the module comment above this section for the
+    concrete cross-segment shapes that make the distinction observable, not
+    just theoretical. After a segment is substituted, its own leading
+    assignments are folded into the running map for segments that follow
+    (so they become visible starting with the NEXT segment, never the
+    current one).
 
     Returns `command` unchanged when `tokenize()` fails (this pre-pass never
     manufactures a NEW parse failure — the existing `_PARSE_FAILURE`
@@ -1423,12 +1440,32 @@ def resolve_simple_assignments(command: str) -> str:
         seg_tokens = tokenize(orig_segment_text)
         own_assignments = _leading_literal_assignments(seg_tokens) if seg_tokens else {}
 
-        # This segment's own leading assignments apply to ITS OWN reference
-        # substitution too (the same-line shape above), so the map used
-        # HERE is the running (strictly-earlier) state extended with this
-        # segment's own assignments — never the running state alone, and
-        # never this segment's assignments alone.
-        active = {**assignments, **own_assignments} if own_assignments else assignments
+        # POSIX shells expand a command's words BEFORE applying that same
+        # command's own prefix assignments (main#1195 review round 3, real-
+        # shell verified with a printf/marker proxy). So a segment's OWN
+        # leading assignments must NOT be visible to references inside that
+        # SAME segment — only the running state accumulated from segments
+        # STRICTLY BEFORE it (this already matches the module's own top-of-
+        # file contract; merging `own_assignments` into `active` was the bug,
+        # not a documented design choice). Concretely:
+        #   - `A=1 B=git $B commit -m z` — `$B` is unset at expansion time
+        #     (its own segment's `B=git` prefix hasn't taken effect yet); a
+        #     real shell never runs git here, so `$B` must stay unresolved.
+        #   - `g=git; g=echo $g commit -m x` — `$g` in the second segment
+        #     must resolve against the RUNNING state (`git`, from segment 1),
+        #     NOT `echo` (this segment's own prefix): a real shell expands
+        #     `$g` to the OUTER shell's current value of `g` before the
+        #     prefix assignment takes effect, so the invoked command is
+        #     `git commit -m x` (with `g=echo` scoped only to that child's
+        #     environment).
+        #   - `g=git; g=echo $g commit -m x` reread the other way is the
+        #     LIVE-BYPASS direction: the OLD code (merging `own_assignments`
+        #     in) resolved `$g` to `echo` — this segment's own prefix — and
+        #     so allowed the command outright, hiding a real `git commit`
+        #     that the shell genuinely runs via the prior segment's `g=git`.
+        # `active = assignments` (no merge) makes all four rows in the
+        # main#1195 review-round-3 table shell-correct with one deletion.
+        active = assignments
         segment_text = orig_segment_text
         if active:
             segment_text = _substitute_var_refs(orig_segment_text, active)

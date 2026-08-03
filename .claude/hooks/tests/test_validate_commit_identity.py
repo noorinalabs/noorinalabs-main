@@ -1565,17 +1565,78 @@ class AssignmentAwarePrePassTests(unittest.TestCase):
 
     # --- multi-assignment / `${NAME}` form coverage -------------------------
 
-    def test_multiple_leading_assignments_in_one_segment_resolves_second(self) -> None:
-        """POS: `A=1 B=git $B commit -m z` — TWO leading env-style
-        assignments share one segment before the real command starts. Pins
-        the peeling loop consuming BOTH leading tokens (not just the first)
-        before it reaches `$B`.
+    def test_same_segment_leading_assignment_not_resolved_allows(self) -> None:
+        """NEG (main#1195 review round 3, real-shell-verified via
+        printf/marker proxy): `A=1 B=git $B commit -m z` — a same-segment
+        prefix assignment is NOT visible to that segment's OWN expansion.
+        `$B` stays unresolved, so this is not a detected git invocation and
+        must ALLOW. Supersedes the previous (wrong)
+        `test_multiple_leading_assignments_in_one_segment_resolves_second`,
+        which asserted a BLOCK verdict for a misreading of POSIX
+        prefix-assignment scope — a real shell never runs git for this
+        input; the PR body's own bypass-closed table row for this exact
+        string was likewise corrected (see the PR follow-up comment).
         """
-        result = hook.check(self._input("A=1 B=git $B commit -m z"))
-        self.assertIsNotNone(result, "second leading assignment (B=git) must still resolve")
+        self.assertIsNone(hook.check(self._input("A=1 B=git $B commit -m z")))
+
+    def test_two_leading_assignments_resolve_in_later_segment_blocks(self) -> None:
+        """POS: the peeling loop must still consume BOTH leading assignment
+        tokens (`A=1` then `B=git`) in one segment — pinned here where a
+        real shell agrees with the block verdict: once `;` moves the
+        reference into a LATER segment, `B`'s value resolves and the
+        hidden `git commit` is caught.
+        """
+        result = hook.check(self._input("A=1 B=git; $B commit -m z"))
+        self.assertIsNotNone(
+            result, "second leading assignment (B=git) must resolve once used in a later segment"
+        )
         assert result is not None
         self.assertEqual(result["decision"], "block")
         self.assertIn("missing `-c user.name=` flag", result["reason"])
+
+    # --- main#1195 review round 3: the four adversarial rows, marker-proxy
+    # verified against a real shell (printf/marker proxy: a fake `git`
+    # executable on PATH plus real `echo`), pinned exactly as measured -----
+
+    def test_row1_same_segment_prefix_never_reaches_git_allows(self) -> None:
+        """`A=1 B=git $B commit -m z` — marker proxy: real shell reports
+        `MARKERARG: command not found` (`$B` unset at expansion time). Must
+        ALLOW; the OLD code blocked this (false positive).
+        """
+        self.assertIsNone(hook.check(self._input("A=1 B=git $B commit -m z")))
+
+    def test_row2_own_prefix_reassignment_does_not_shadow_running_value_allows(
+        self,
+    ) -> None:
+        """`g=echo; g=git $g commit -m x` — marker proxy: real shell runs
+        `echo commit -m x` (`$g` resolves against the RUNNING state from the
+        prior segment, `echo`, not this segment's own `g=git` prefix). Must
+        ALLOW; the OLD code blocked this (false positive).
+        """
+        self.assertIsNone(hook.check(self._input("g=echo; g=git $g commit -m x")))
+
+    def test_row3_own_prefix_reassignment_cannot_hide_prior_running_value_blocks(
+        self,
+    ) -> None:
+        """`g=git; g=echo $g commit -m x` — marker proxy: real shell runs
+        the fake `git` executable (`$g` resolves against the RUNNING state
+        from the prior segment, `git`, not this segment's own `g=echo`
+        prefix). Must BLOCK; the OLD code ALLOWED this outright — a LIVE
+        BYPASS with no interpreter wrapper at all, not merely a cosmetic
+        false positive.
+        """
+        result = hook.check(self._input("g=git; g=echo $g commit -m x"))
+        self.assertIsNotNone(result, "prior-segment g=git must still resolve at the commit site")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("missing `-c user.name=` flag", result["reason"])
+
+    def test_row4_background_assignment_never_reaches_foreground_allows(self) -> None:
+        """`g=git & $g commit -m x` — marker proxy: real shell reports
+        `MARKERARG: command not found` (`g=git` runs as a backgrounded job
+        in its own subshell; the foreground `$g` is unset). Must ALLOW.
+        """
+        self.assertIsNone(hook.check(self._input("g=git & $g commit -m x")))
 
     def test_braced_variable_reference_form_resolves(self) -> None:
         """POS: `${g}` (braced form) must resolve the same as bare `$g`."""
