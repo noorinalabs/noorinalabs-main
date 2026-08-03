@@ -4,9 +4,11 @@ Deliberately NOT `conftest.py`: conftest fixtures are pytest-only and are
 invisible to a bare `python3 .claude/hooks/tests/test_foo.py` invocation,
 which most files in this suite still support (each carries its own
 `if __name__ == "__main__":` block — `rg -l '^if __name__ == "__main__"'
-.claude/hooks/tests/*.py` is the current count, anchored so this file's
-own citation of the pattern doesn't self-match; it moves as the suite
-grows, so it isn't pinned here). This module lives beside the test
+.claude/hooks/tests/test_*.py` is the current count: `test_*.py` scopes
+to actual test files (this helper module isn't one), and the `^` anchor
+means the count is right even for a file that isn't excluded by the glob
+but merely quotes the pattern in prose; it moves as the suite grows, so
+it isn't pinned here). This module lives beside the test
 files instead, so its containing directory is already importable in both
 modes — pytest's rootless import mode and the interpreter's implicit
 script-directory entry for direct execution both put `tests/` on
@@ -47,10 +49,12 @@ ALSO single-underscore-prefixed with a letter alphabetically before `t`
 `_test_helpers`, moving the sys.path setup after the import that needs
 it (the same class of bug `from X import Y` caused above, for a
 different reason). The 6 affected files (`rg -l '^# isort: skip_file'
-.claude/hooks/tests/*.py` is the source of truth for the current count —
-anchored at column zero so this file's own citation of the directive
-doesn't self-match and inflate the count by one; this docstring's own
-number has already gone stale once, see below) each carry an explicit
+.claude/hooks/tests/test_*.py` is the source of truth for the current
+count: `test_*.py` scopes to actual test files — this helper module
+isn't one, and would otherwise self-match its own citation of the
+directive below — and the `^` anchor holds independently, since the
+directive is a column-zero construct; this docstring's own number has
+already gone stale once, see below) each carry an explicit
 `# isort: skip_file` directive, verified to survive `ruff check --fix`
 without reordering.
 
