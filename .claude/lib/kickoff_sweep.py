@@ -74,9 +74,13 @@ import sys
 from pathlib import Path
 
 _LIB_DIR = Path(__file__).resolve().parent
-_REPO_ROOT = _LIB_DIR.parents[1]
+sys.path.insert(0, str(_LIB_DIR))
+import gh  # noqa: E402
+import wave_state  # noqa: E402
+
+_REPO_ROOT = wave_state.REPO_ROOT
 _HOOKS_DIR = _REPO_ROOT / ".claude" / "hooks"
-_DEFAULT_STATUS = _REPO_ROOT / "cross-repo-status.json"
+_DEFAULT_STATUS = wave_state.DEFAULT_STATUS_PATH
 
 # The kickoff hook is the single source of truth for the comment body, the
 # assignment-row lookup, the merge-model read and the idempotency check. The
@@ -116,15 +120,9 @@ SKIP_FETCH_UNKNOWN = "skip_fetch_unknown"
 _INCOMPLETE_ACTIONS = frozenset({POST_FAILED, SKIP_FETCH_UNKNOWN})
 
 
-def _run_gh(args: list[str]) -> str:
-    """Run ``gh <args>`` with an explicit arg list and return stdout.
-
-    Never a shell string and never ``shell=True`` — no shell means no
-    word-splitting, the main#688 contract shared with wave_status.py /
-    wave_merge_model.py.
-    """
-    proc = subprocess.run(["gh", *args], capture_output=True, text=True, check=True)
-    return proc.stdout
+# Shared gh shim (main#1119). Stays a module-level name because it is the
+# default for this module's injected `run_gh=` parameters.
+_run_gh = gh.run_gh
 
 
 def wave_labels(phase: str | int, wave: str | int) -> list[str]:
@@ -335,12 +333,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("phase", help="phase number (P)")
     parser.add_argument("wave", help="wave number (M)")
-    parser.add_argument(
-        "--status",
-        type=Path,
-        default=_DEFAULT_STATUS,
-        help="path to cross-repo-status.json (default: repo-root copy)",
-    )
+    wave_state.add_status_argument(parser)
     parser.add_argument(
         "--repo",
         action="append",

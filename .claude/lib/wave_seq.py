@@ -65,15 +65,17 @@ CLI:
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import sys
 from pathlib import Path
 
-# Repo root = two parents above .claude/lib/ (lib -> .claude -> root). Resolved
-# from this file so the default status path is correct from any cwd or worktree.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_DEFAULT_STATUS = _REPO_ROOT / "cross-repo-status.json"
+# wave_state lives alongside this file in .claude/lib/. Running as a script puts
+# this dir on sys.path[0]; the tests add it explicitly.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import wave_state  # noqa: E402
+
+_REPO_ROOT = wave_state.REPO_ROOT
+_DEFAULT_STATUS = wave_state.DEFAULT_STATUS_PATH
 
 # The counter is seeded at least this high at first allocation, so the first
 # global wave (HISTORICAL_FLOOR + 1 = 16) sits ABOVE every per-phase wave number
@@ -209,8 +211,10 @@ def phase_ordinal(status: dict, phase: int) -> int:
     return count + 1
 
 
-def _load(status_path: Path) -> dict:
-    return json.loads(status_path.read_text())
+# Shared status reader (main#1119). Spelled `_load` here rather than
+# `_load_status` for the same reason it always was — this module's CLI takes the
+# path positionally, not as `--status`.
+_load = wave_state.load_status
 
 
 def _cmd_peek(args: argparse.Namespace) -> int:

@@ -106,13 +106,11 @@ if str(_LIB_DIR) not in sys.path:
 import upsert_status_keys  # noqa: E402
 import wave_merge_model  # noqa: E402
 import wave_seq  # noqa: E402
+import wave_state  # noqa: E402
 import wave_status  # noqa: E402
 
-# Repo root = two parents above .claude/lib/ (lib -> .claude -> root). Same
-# anchor as wave_seq / wave_merge_model / wave_status so the default status path
-# is correct from any cwd or worktree with no `git rev-parse` subprocess.
-_REPO_ROOT = _LIB_DIR.parents[1]
-_DEFAULT_STATUS = _REPO_ROOT / "cross-repo-status.json"
+_REPO_ROOT = wave_state.REPO_ROOT
+_DEFAULT_STATUS = wave_state.DEFAULT_STATUS_PATH
 
 
 # ============================================================================
@@ -179,8 +177,11 @@ def _persist(
     return upsert_status_keys.main(argv)
 
 
-def _load_status(status_path: Path) -> dict:
-    return json.loads(status_path.read_text())
+# Shared status reader (main#1119). Writes still go through `_persist` ->
+# `upsert_status_keys.main`, which is text-surgical and reads the raw file
+# itself — deliberately NOT routed through this loader (wave_state module
+# docstring § READ ONLY).
+_load_status = wave_state.load_status
 
 
 # ============================================================================
@@ -392,13 +393,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     top = parser.add_subparsers(dest="group", required=True)
 
-    def _status_opt(p: argparse.ArgumentParser) -> None:
-        p.add_argument(
-            "--status",
-            type=Path,
-            default=_DEFAULT_STATUS,
-            help="path to cross-repo-status.json (default: repo-root copy)",
-        )
+    _status_opt = wave_state.add_status_argument
 
     # wave ...
     wave = top.add_parser("wave", help="wave allocator + lifecycle transitions")

@@ -62,10 +62,11 @@ from pathlib import Path
 # wave_status lives alongside this file in .claude/lib/. Running as a script puts
 # this dir on sys.path[0]; the tests add it explicitly.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import wave_state  # noqa: E402
 import wave_status  # noqa: E402
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_DEFAULT_STATUS = _REPO_ROOT / "cross-repo-status.json"
+_REPO_ROOT = wave_state.REPO_ROOT
+_DEFAULT_STATUS = wave_state.DEFAULT_STATUS_PATH
 
 # Neutral / default trust score. Decay drifts unsignalled scores back to it.
 NEUTRAL = 3
@@ -460,12 +461,7 @@ def _build_parser() -> argparse.ArgumentParser:
     def _add_pm(p: argparse.ArgumentParser) -> None:
         p.add_argument("phase", help="phase number (P)")
         p.add_argument("wave", help="wave number (M)")
-        p.add_argument(
-            "--status",
-            type=Path,
-            default=_DEFAULT_STATUS,
-            help="path to cross-repo-status.json (default: repo-root copy)",
-        )
+        wave_state.add_status_argument(p)
 
     p_extract = sub.add_parser("extract", help="emit per-engineer signals as JSON")
     _add_pm(p_extract)

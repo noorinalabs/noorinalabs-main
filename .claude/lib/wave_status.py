@@ -49,18 +49,17 @@ from pathlib import Path
 # is run as a script its own directory is on sys.path[0]; the tests add the
 # lib dir explicitly (mirrors the trust_signals.py -> wave_status.py import).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gh  # noqa: E402
 import wave_merge_model  # noqa: E402
+import wave_state  # noqa: E402
 
 # upsert_status_keys.py lives alongside this file in .claude/lib/. When this
 # module is run as a script its own directory is on sys.path[0]; the tests add
 # the lib dir explicitly. Import lazily inside _write_counters so a missing
 # helper only matters for the --write path.
 
-# Repo root = two parents above .claude/lib/ (lib -> .claude -> root). Resolved
-# from this file so the default is correct from any cwd or worktree, with no
-# `git rev-parse` subprocess (which would re-introduce a shell dependency).
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_DEFAULT_STATUS = _REPO_ROOT / "cross-repo-status.json"
+_REPO_ROOT = wave_state.REPO_ROOT
+_DEFAULT_STATUS = wave_state.DEFAULT_STATUS_PATH
 
 # A ChangesRequested verdict comment on a PR's issue-comments timeline. Mirrors
 # the regex the pre-#688 bash Step 10.5 block used. The DOUBLED backslash is
@@ -70,41 +69,15 @@ _DEFAULT_STATUS = _REPO_ROOT / "cross-repo-status.json"
 _CHANGES_REQUESTED_RE = "RequestOrReplied:\\\\s*ChangesRequested"
 
 
-def _run_gh(args: list[str]) -> str:
-    """Run ``gh <args>`` with an explicit arg list and return stdout.
-
-    Never a shell string and never ``shell=True`` — this is the whole point of
-    the helper (main#688): no shell means no word-splitting, so a multi-word
-    repo list can never collapse into one bogus ``--repo`` value.
-    """
-    proc = subprocess.run(
-        ["gh", *args],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return proc.stdout
-
-
-def _load_status(status_path: Path) -> dict:
-    return json.loads(status_path.read_text())
-
-
-def read_repos(wave: str, status_path: Path) -> list[str]:
-    """Return ``wave_{M}_repos_in_scope`` as a list of repo names.
-
-    Raises KeyError if the key is absent — by the time any of these subcommands
-    runs the wave's scope must already be recorded, so a missing key is an
-    operator error to surface rather than silently treat as the empty set.
-    """
-    data = _load_status(status_path)
-    key = f"wave_{wave}_repos_in_scope"
-    if key not in data:
-        raise KeyError(key)
-    repos = data[key]
-    if not isinstance(repos, list):
-        raise TypeError(f"{key} is not a list: {repos!r}")
-    return [str(r) for r in repos]
+# The shared gh shim and status reader (main#1119). These stay module-level
+# names rather than becoming direct `gh.run_gh(...)` / `wave_state.load_status(...)`
+# call sites so that `wave_status._run_gh` and `wave_status.read_repos` remain
+# patchable/importable exactly as before — `test_lifecycle` calls
+# `wave_status.read_repos` directly, and the module's own callers below resolve
+# `_run_gh` through the module globals, preserving every existing test seam.
+_run_gh = gh.run_gh
+_load_status = wave_state.load_status
+read_repos = wave_state.read_repos
 
 
 def _kickoff_ts(wave: str, status_path: Path) -> str | None:
@@ -768,23 +741,13 @@ def _build_parser() -> argparse.ArgumentParser:
     def _add_pm(p: argparse.ArgumentParser) -> None:
         p.add_argument("phase", help="phase number (P)")
         p.add_argument("wave", help="wave number (M)")
-        p.add_argument(
-            "--status",
-            type=Path,
-            default=_DEFAULT_STATUS,
-            help="path to cross-repo-status.json (default: repo-root copy)",
-        )
+        wave_state.add_status_argument(p)
 
     p_digest = sub.add_parser(
         "digest",
         help="emit a compact current-wave/phase projection of the status file (session-start)",
     )
-    p_digest.add_argument(
-        "--status",
-        type=Path,
-        default=_DEFAULT_STATUS,
-        help="path to cross-repo-status.json (default: repo-root copy)",
-    )
+    wave_state.add_status_argument(p_digest)
     p_digest.set_defaults(func=_cmd_digest)
 
     p_repos = sub.add_parser("repos", help="emit wave_{M}_repos_in_scope one per line")

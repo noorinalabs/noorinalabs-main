@@ -46,6 +46,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import gh
 from org_repos import ALL_REPOS as CANONICAL_REPOS
 from org_repos import MAIN_REPO as _MAIN_REPO
 from org_repos import ORG as _ORG
@@ -77,10 +78,9 @@ DEFAULT_MAX_AGE_HOURS = 24.0
 _GH_ERRORS = (subprocess.CalledProcessError, OSError)
 
 
-def _run_gh(args: list[str]) -> str:
-    """Run ``gh <args>`` (explicit arg list, never a shell string — main#688)."""
-    proc = subprocess.run(["gh", *args], capture_output=True, text=True, check=True)
-    return proc.stdout
+# Shared gh shim (main#1119). Still raises the raw CalledProcessError/OSError
+# that `_GH_ERRORS` above catches — see gh.py § Error behaviour.
+_run_gh = gh.run_gh
 
 
 def _utcnow() -> datetime:
