@@ -1,0 +1,81 @@
+# Base-image digest-pin drift sweep (#1205).
+#
+# Reporting-only sweep — NOT a merge-blocking gate. `check_dockerfile_base_pin.py`
+# already enforces, per-Dockerfile, that every `FROM` is digest-pinned; this
+# workflow adds the cross-repo view that gate cannot have: the same upstream
+# tag (e.g. `python:3.14-slim`) pinned to different, months-apart digests in
+# different repos, with nothing reconciling them (the isnad-graph/deploy skew
+# that motivated #1205). The remediation for any finding here is always "merge
+# the open Dependabot PR" — a human/merge-queue decision — so this workflow
+# only ever reports; it never fails a build.
+#
+# Modeled directly on `red-sweep.yml` + `.claude/lib/red_sweep.py`'s pattern:
+# persist a small JSON verdict to a dedicated lightweight ref
+# (`refs/meta/base-pin-drift`, distinct from `red-sweep`'s own ref), read
+# cheaply with a staleness guard (`base_pin_drift_sweep.py check`). Runs on
+# its OWN daily cadence rather than folded into `red-sweep.yml`'s 6h one —
+# see `.claude/lib/base_pin_drift_sweep.py`'s module docstring ("Home") for
+# the full rationale: base-image pin age moves on the order of
+# days-to-weeks, and this sweep's registry-API auth/rate-limit failure modes
+# (Docker Hub 429s) are a different surface than `red-sweep.yml`'s GH Actions
+# API polling.
+#
+# GITHUB_TOKEN suffices: `contents: write` covers this repo's git-database
+# writes (the verdict ref), and `gh api repos/<child>/git/trees|contents` on
+# the (public) child repos needs no PAT — same posture as `red-sweep.yml`
+# reading child repos' Actions runs.
+
+name: Base-pin drift sweep
+
+on:
+  schedule:
+    - cron: "43 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sweep:
+    name: Sweep + persist verdict
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run sweep (shared implementation, .claude/lib/base_pin_drift_sweep.py)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # `sweep` exits 2 only when NO repo's Dockerfiles could be enumerated;
+        # a partial sweep (some repos in `repos_errors`, some pins `unknown`)
+        # exits 0 and the verdict itself carries those UNKNOWN entries, which
+        # the reader (`check`) surfaces as a WARNING rather than a false
+        # all-clean.
+        run: |
+          python3 .claude/lib/base_pin_drift_sweep.py sweep --out /tmp/base-pin-drift.json
+
+      - name: Persist verdict to refs/meta/base-pin-drift
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          [ -s /tmp/base-pin-drift.json ] || { echo "no verdict produced — nothing to persist"; exit 0; }
+          repo="${GITHUB_REPOSITORY}"
+          blob="$(gh api "repos/${repo}/git/blobs" \
+            -f content="$(base64 -w0 /tmp/base-pin-drift.json)" \
+            -f encoding=base64 --jq .sha)"
+          jq -n --arg sha "$blob" \
+            '{tree: [{path: "base-pin-drift.json", mode: "100644", type: "blob", sha: $sha}]}' \
+            > /tmp/tree.json
+          tree="$(gh api "repos/${repo}/git/trees" --input /tmp/tree.json --jq .sha)"
+          jq -n --arg tree "$tree" \
+            --arg msg "base-pin-drift verdict $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{message: $msg, tree: $tree}' > /tmp/commit.json
+          commit="$(gh api "repos/${repo}/git/commits" --input /tmp/commit.json --jq .sha)"
+          # Force-update the meta ref; create it on first run.
+          jq -n --arg sha "$commit" '{sha: $sha, force: true}' > /tmp/ref.json
+          if ! gh api -X PATCH "repos/${repo}/git/refs/meta/base-pin-drift" --input /tmp/ref.json; then
+            jq -n --arg sha "$commit" '{ref: "refs/meta/base-pin-drift", sha: $sha}' > /tmp/newref.json
+            gh api "repos/${repo}/git/refs" --input /tmp/newref.json
+          fi
+          echo "persisted base-pin-drift verdict at refs/meta/base-pin-drift (${commit})"
