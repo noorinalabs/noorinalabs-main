@@ -282,4 +282,8 @@ class CoordinatorExemptIsBoundaryStrict(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    # `unittest.main()` would silently skip the pytest.mark.parametrize
+    # classes above (plain classes, not unittest.TestCase — see module
+    # docstring) when this file is run standalone. `pytest.main` discovers
+    # both styles.
+    raise SystemExit(pytest.main([__file__, "-v"]))

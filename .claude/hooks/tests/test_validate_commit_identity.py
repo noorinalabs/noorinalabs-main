@@ -1719,4 +1719,7 @@ class TestAssignmentAwarePrePass:
 
 
 if __name__ == "__main__":
-    unittest.main()
+    # `unittest.main()` would silently skip TestAssignmentAwarePrePass (a
+    # plain pytest class, not unittest.TestCase — see its docstring) when
+    # this file is run standalone. `pytest.main` discovers both styles.
+    raise SystemExit(pytest.main([__file__, "-v"]))

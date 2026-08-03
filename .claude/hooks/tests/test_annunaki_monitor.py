@@ -1321,4 +1321,7 @@ class Rc0PrecisionTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    # `unittest.main()` would silently skip TestSilentBooleanIdiom (a plain
+    # pytest class, not unittest.TestCase — see its docstring) when this file
+    # is run standalone. `pytest.main` discovers both styles.
+    raise SystemExit(pytest.main([__file__, "-v"]))
