@@ -322,12 +322,31 @@ def _run_check_ignore(git_root: Path, pathspecs: list[str]) -> set[str]:
     """Run ``git check-ignore`` for one or more pathspecs against ``git_root``.
 
     Returns the subset of ``pathspecs`` that ARE ignored, as the exact
-    strings passed in (git echoes back whichever supplied pathspec matched,
-    one per line, preserving the caller's original string — verified against
-    real git, not assumed). Deliberately omits ``-q`` (which would suppress
-    that stdout) so a single call can answer more than one question at once
-    (#1122) — the caller distinguishes "ignored" from "not ignored" by
-    set-membership instead of by exit code alone.
+    strings passed in: git echoes back whichever supplied pathspec matched,
+    one per line, and ``core.quotePath=false`` is pinned on the invocation
+    so that echo is the caller's ORIGINAL string rather than a C-quoted
+    rendering of it. That pin is load-bearing, not cosmetic (main#1265):
+    under git's default ``core.quotePath=true`` any pathspec containing a
+    non-ASCII byte comes back quoted and escaped (``سند.md`` echoes as
+    ``"\\330\\263\\331\\206\\330\\257.md"``), which equals nothing the
+    caller passed in, so set-membership below reports a genuinely-ignored
+    path as NOT ignored. The pre-#1122 code read only ``-q``'s exit status
+    and was encoding-independent by construction; matching on echoed text
+    is what introduced the exposure, so the pin restores the property that
+    change gave up. Do not remove it without replacing the matching scheme.
+
+    ``encoding="utf-8", errors="replace"`` rather than ``text=True`` for the
+    same reason: with the pin in place raw UTF-8 bytes now reach the decoder,
+    and ``text=True`` would decode with the locale encoding under
+    ``errors='strict'`` — so a ``LC_ALL=C`` runner would raise
+    ``UnicodeDecodeError``, which is NOT in the ``except`` clause below and
+    would escape ``check()``, breaking this hook's "exit 0 — always"
+    contract. ``errors="replace"`` makes that unraisable.
+
+    Deliberately omits ``-q`` (which would suppress that stdout) so a single
+    call can answer more than one question at once (#1122) — the caller
+    distinguishes "ignored" from "not ignored" by set-membership instead of
+    by exit code alone.
 
     Fails OPEN — returns an empty set (nothing reported ignored) — on any
     subprocess error or timeout, or on any exit code other than 0 (at least
@@ -340,12 +359,13 @@ def _run_check_ignore(git_root: Path, pathspecs: list[str]) -> set[str]:
     """
     try:
         result = subprocess.run(
-            ["git", "check-ignore", "--", *pathspecs],
+            ["git", "-c", "core.quotePath=false", "check-ignore", "--", *pathspecs],
             cwd=str(git_root),
             capture_output=True,
             timeout=5,
             env=_hermetic_git_env(),
-            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
     except (OSError, subprocess.TimeoutExpired):
         return set()  # Subprocess failed — fail open.

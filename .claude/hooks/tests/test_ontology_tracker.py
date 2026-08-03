@@ -814,6 +814,78 @@ class GitCheckIgnoreExcludeThenReincludeTests(_FakeRepoRootMixin, unittest.TestC
         self.assertIn("data/raw/", matched_slash)
 
 
+class GitCheckIgnoreNonAsciiTests(_FakeRepoRootMixin, unittest.TestCase):
+    """main#1265: matching on git's ECHOED pathspec is encoding-sensitive.
+
+    Under git's default ``core.quotePath=true`` a pathspec containing any
+    non-ASCII byte is C-quoted on the way out (``عربي.log`` echoes as
+    ``"\\330\\271\\330\\261\\330\\250\\331\\212.log"``), so exact-string
+    membership against what we passed in never matches and a genuinely
+    ignored file is reported NOT ignored. That is a behavioural regression
+    versus the pre-#1122 code, which read only ``check-ignore -q``'s exit
+    status and was encoding-independent by construction.
+
+    The failure direction is the safe one (fail-open -> over-track, never
+    under-track) and no repo currently holds a non-ASCII path, so it was
+    latent. It is pinned here anyway because this org's domain is
+    Arabic-language scholarly data and the over-tracked entries land in the
+    COMMITTED ``ontology/checksums.json`` — the #1038 phantom-drift-forever
+    shape.
+    """
+
+    def setUp(self):
+        super().setUp()
+        hook._GIT_CHECK_IGNORE_CACHE.clear()
+        hook._DIR_CHECK_IGNORE_CACHE.clear()
+        subprocess.run(
+            ["git", "init", "-q", str(self._fake_root)],
+            check=True,
+            capture_output=True,
+            env=hook._hermetic_git_env(),
+        )
+        (self._fake_root / ".gitignore").write_text("*.log\nبناء/\n", encoding="utf-8")
+
+    def tearDown(self):
+        hook._GIT_CHECK_IGNORE_CACHE.clear()
+        hook._DIR_CHECK_IGNORE_CACHE.clear()
+        super().tearDown()
+
+    def test_non_ascii_ignored_file_is_detected(self):
+        """The core case: removing the ``core.quotePath=false`` pin makes
+        this return False."""
+        target = self._fake_root / "عربي.log"
+        target.write_text("x\n", encoding="utf-8")
+
+        self.assertTrue(hook._is_git_ignored(target.resolve()))
+
+    def test_ascii_sibling_still_detected(self):
+        """Control: the ASCII path was never affected, so a passing
+        non-ASCII test alone would not prove the pin is what fixed it."""
+        target = self._fake_root / "plain.log"
+        target.write_text("x\n", encoding="utf-8")
+
+        self.assertTrue(hook._is_git_ignored(target.resolve()))
+
+    def test_non_ascii_ignored_directory_is_detected(self):
+        """The directory-cache half: a non-ASCII directory excluded by a
+        genuine directory pattern must cache True, which it cannot do while
+        the echo is quoted."""
+        d = self._fake_root / "بناء"
+        d.mkdir()
+        target = d / "a.md"
+        target.write_text("x\n", encoding="utf-8")
+
+        self.assertTrue(hook._is_git_ignored(target.resolve()))
+
+    def test_echo_round_trips_the_caller_string(self):
+        """Direct guard on the mechanism, independent of ``_is_git_ignored``:
+        what git echoes back must be exactly what we passed in."""
+        (self._fake_root / "عربي.log").write_text("x\n", encoding="utf-8")
+
+        matched = hook._run_check_ignore(self._fake_root, ["عربي.log"])
+        self.assertEqual(matched, {"عربي.log"})
+
+
 class RunCheckIgnoreFailOpenTests(_FakeRepoRootMixin, unittest.TestCase):
     """main#1263 review: the ``returncode not in (0, 1)`` fail-open branch
     in ``_run_check_ignore`` had no test pinning it — a mutation deleting it
