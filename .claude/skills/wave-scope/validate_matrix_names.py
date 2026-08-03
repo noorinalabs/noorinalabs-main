@@ -81,6 +81,34 @@ third-child implementer that newly *resolved* would exit 0 where today it exits
 1 as an unresolved name. Keeping the commit-capable resolution set narrow means
 the only way that slot passes is a name the target repo can actually vouch for.
 
+Unknown role slots default to the STRICT side (#1180)
+=====================================================
+Both loosenings above — the manifest widening the resolution set, and the
+membership check not applying — hang off the REVIEW class, so `REVIEW_CLASS_ROLES`
+is the allowlist and everything else, *including a role nobody has classified*,
+takes the commit-capable path. The seam was originally written the other way
+round (`COMMIT_CAPABLE_ROLES` as the allowlist, review as the fall-through),
+which meant an unclassified slot silently inherited BOTH loosenings. Measured on
+`main` at #1180: a matrix row with `co_implementer` / `pair_implementer` /
+`fixer` reported "all 3 names resolved", exit 0 — and `co_implementer` is
+semantically commit-capable, it would have to commit in the target repo.
+
+The asymmetry is the same consequence argument as § Why the manifest is
+acceptable HERE: a slot wrongly treated as review-class fails silently and
+expensively (the W28 mechanical merge-commit re-attribution); a slot wrongly
+treated as commit-capable fails loudly and cheaply at scope time, and the fix is
+one line in `REVIEW_CLASS_ROLES`. Default to the failure you can see.
+
+The same reasoning drives slot DISCOVERY. Scope mode used to iterate a hardcoded
+tuple of the four live slots, a third place a role had to be listed, so an
+unrecognised key there was not mis-classified but skipped outright (measured: a
+3-slot row reported "all 2 names resolved", exit 0). It now walks the row via
+`is_role_slot_key`, which admits `KNOWN_ROLE_SLOTS` plus any agentive-shaped key
+(`_ROLE_SLOT_KEY_RE`) not explicitly denied in `NON_ROLE_ROW_KEYS`. An admitted
+but unclassified key is reported `slot_class="unclassified"` and fails the run —
+NOT merely warned about, because a warning printed inside an otherwise-green job
+is exactly the advisory posture § Hard fail already records as insufficient.
+
 Why check 2 is implementer-only. The implementer is the only role that must
 produce a **commit in the target repo**, where `validate_commit_identity`
 (Hook 5) resolves the author against that repo's roster. Reviewers never
@@ -159,10 +187,11 @@ matrix — the repo is derived from each row's `id` (`noorinalabs-user-service#2
 copy a row into the matrix.
 
 Exit codes:
-    0 — all names resolve, and every child-repo implementer is a repo member
-        (or carries a recorded override)
+    0 — all names resolve, every child-repo implementer is a repo member (or
+        carries a recorded override), and every slot key is classified
     1 — one or more names don't resolve, OR a child-repo implementer is not on
-        that repo's roster and has no recorded override
+        that repo's roster and has no recorded override, OR a slot key is in
+        neither `COMMIT_CAPABLE_ROLES` nor `REVIEW_CLASS_ROLES` (#1180)
     2 — invalid input
 
 Resolution:
@@ -204,10 +233,21 @@ import re
 import sys
 from pathlib import Path
 
-# Role slots that must be able to COMMIT in the target repo. Only these are
-# subject to the #1134 repo-membership check; every other slot is review-class
-# and keeps the parent-union resolution (#319 semantics).
+# Role slots that must be able to COMMIT in the target repo: narrow (#319 card)
+# resolution + the #1134 repo-membership check.
 COMMIT_CAPABLE_ROLES: frozenset[str] = frozenset({"implementer"})
+
+# Review-class slots: the org-union manifest widens their resolution set (#1162)
+# and the #1134 membership check does NOT apply to them (charter
+# `spawn-discipline.md` § Child-Repo Implementer Rule step 5 permits cross-team
+# reviewers). THIS is the allowlist the two loosenings hang off (#1180) — see
+# § Unknown role slots default to the STRICT side in the module docstring.
+REVIEW_CLASS_ROLES: frozenset[str] = frozenset({"reviewer", "reviewer_2", "merge_gate_reviewer"})
+
+# Every slot key the validator knows how to classify. Scope mode drives its slot
+# list off THIS union rather than a second hardcoded tuple, so adding a role to
+# either frozenset above is the single edit that makes both modes see it (#1180).
+KNOWN_ROLE_SLOTS: frozenset[str] = COMMIT_CAPABLE_ROLES | REVIEW_CLASS_ROLES
 
 # Repo keys that mean "the parent repo itself" — membership is vacuous there
 # (the parent roster IS the repo roster), so #1134 never fires on them.
@@ -220,6 +260,51 @@ PARENT_REPO_KEYS: frozenset[str] = frozenset({"", "noorinalabs-main", "main"})
 # `_load_org_manifest_names` below for why this module keeps its own small
 # duplicate rather than importing across the hook/skill boundary (#1181).
 _PERSONA_ALIAS_RE = re.compile(r"^[^\s@+]+\+[^\s@+]+\.[^\s@+]+@[^\s@]+\.[^\s@]+$")
+
+# Scope rows carry role slots alongside free-form metadata (`id`, `ref`, `note`,
+# `found_by`, `blocked_on`, ...), so scope mode cannot simply treat every string
+# key as a person slot. Role slots in this schema are named after the AGENT that
+# fills them, so the key's last `_`-component is agentive — ends in `-er`/`-or`,
+# optionally with a `_<n>` ordinal (`reviewer_2`). Measured over all 293 rows in
+# every `wave_*_scope` of `cross-repo-status.json` (2026-08-02) this matches the
+# four known slots plus `pre_kickoff_blocker` and NOTHING else — the other 24
+# metadata keys (`found_by`, `reassigned_from`, `blocked_by`, `coupled_with`,
+# `follow_on_to`, `pair_with`, `scope_note`, `slate_note`, `open_risk`,
+# `merged_sha`, `sequence`, `bundle`, `spawn`, `status`, `role`, ...) do not end
+# in an agentive component.
+_ROLE_SLOT_KEY_RE = re.compile(r"(?:^|_)[a-z]+(?:er|or)(?:_\d+)?$")
+
+# Agentive-SHAPED row keys that are explicitly NOT person slots. This is the
+# escape hatch that keeps `_ROLE_SLOT_KEY_RE`'s generosity cheap: a false
+# positive costs one reviewable line here, not a redesign. `pre_kickoff_blocker`
+# is the one live instance (a bool flag, `wave_29_scope`).
+NON_ROLE_ROW_KEYS: frozenset[str] = frozenset({"pre_kickoff_blocker"})
+
+# Not a role slot and not metadata — the recorded #1134 escape hatch, consumed
+# by `_override_rationale` rather than validated as a name.
+OVERRIDE_KEY = "roster_union_override"
+
+
+def is_role_slot_key(key: str) -> bool:
+    """Is `key` a scope-row key that names a PERSON filling a role slot? (#1180)
+
+    Used by scope mode to decide which row keys to hand to `validate()`. A key is
+    a role slot if it is one of `KNOWN_ROLE_SLOTS`, or — so a slot nobody has
+    classified yet cannot be silently skipped — if it is agentive-shaped
+    (`_ROLE_SLOT_KEY_RE`) and not explicitly denied in `NON_ROLE_ROW_KEYS`.
+
+    An unknown agentive key is deliberately admitted rather than ignored:
+    `validate()` then marks it `slot_class="unclassified"`, which is a hard
+    exit-1 telling the operator to classify it. Ignoring it is the #1180 bug in
+    its scope-mode form (measured: a 3-slot row reported "all 2 names resolved",
+    exit 0 — the third slot was never looked at).
+    """
+    lowered = key.strip().lower()
+    if lowered in KNOWN_ROLE_SLOTS:
+        return True
+    if lowered in NON_ROLE_ROW_KEYS or lowered == OVERRIDE_KEY:
+        return False
+    return bool(_ROLE_SLOT_KEY_RE.search(lowered))
 
 
 def _find_org_dir() -> Path:
@@ -411,6 +496,12 @@ def validate(
                            cannot decide, so does not fail
       - ``"n/a"``        — review-class slot, parent-repo row, or unresolved name
 
+    `slot_class` (#1180) is ``"known"`` when the slot key is in
+    `KNOWN_ROLE_SLOTS`, else ``"unclassified"`` — a hard failure in
+    `_print_report_to_stderr`. It is orthogonal to `resolved` / `membership`:
+    an unclassified slot is ALSO validated (on the strict path), so a run can
+    report both "this name does not resolve" and "this slot key is unknown".
+
     A per-repo `roster_union_override` may be supplied as a slot key alongside
     the role names; scope mode maps each row's own override onto its repo.
     """
@@ -436,29 +527,34 @@ def validate(
         # § Review-class slots for why the manifest must not widen this one).
         combined = parent_roster | repo_roster
         review_combined = combined | org_manifest
-        override = _override_rationale(slots.get("roster_union_override"))
+        override = _override_rationale(slots.get(OVERRIDE_KEY))
         repo_findings: list[dict[str, object]] = []
         for role, raw in slots.items():
-            if role == "roster_union_override":
+            if role == OVERRIDE_KEY:
                 continue
             if not raw or not isinstance(raw, str):
                 continue
             declared = raw
             declared_clean = re.sub(r"\s*\(.*?\)\s*$", "", declared).strip()
-            candidates = combined if role in COMMIT_CAPABLE_ROLES else review_combined
+            # #1180: REVIEW class is the allowlist. Anything else — including a
+            # role nobody has classified — takes the strict commit-capable path:
+            # narrow resolution AND the #1134 membership check.
+            is_review_class = role in REVIEW_CLASS_ROLES
+            candidates = review_combined if is_review_class else combined
             resolved = any(declared_clean.lower() == known.lower() for known in candidates)
             entry: dict[str, object] = {
                 "role": role,
                 "declared": declared,
                 "resolved": resolved,
                 "membership": "n/a",
+                "slot_class": "known" if role in KNOWN_ROLE_SLOTS else "unclassified",
             }
             if not resolved:
                 entry["suggestions"] = _suggest(declared_clean, candidates)
                 repo_findings.append(entry)
                 continue
             # #1134: commit-capable slots on a child repo must be repo members.
-            if role in COMMIT_CAPABLE_ROLES and not is_parent_repo:
+            if not is_review_class and not is_parent_repo:
                 if not membership_decidable:
                     entry["membership"] = "unverified"
                 elif any(declared_clean.lower() == known.lower() for known in repo_roster):
@@ -519,17 +615,26 @@ def validate_scope(
     several stories reports — and overrides — each story independently. Rows
     with no parsable repo are treated as parent-repo rows, matching the
     `/wave-scope` convention that a bare `main#N` lives in `noorinalabs-main`.
+
+    Slot discovery is `is_role_slot_key` (#1180), NOT a hardcoded tuple. The old
+    tuple was a THIRD place a role had to be listed, so an unrecognised slot key
+    was not merely mis-classified here, it was skipped outright — measured on a
+    3-slot row: "all 2 names resolved", exit 0. Now every key in
+    `KNOWN_ROLE_SLOTS` is covered automatically, and an agentive-shaped key in
+    neither frozenset is still handed to `validate()`, which flags it
+    `slot_class="unclassified"` and fails the run.
     """
     report: dict[str, list[dict[str, object]]] = {}
     for row in _iter_tier_rows(scope):
         repo = repo_of_row(row) or "noorinalabs-main"
         slots: dict[str, object] = {}
-        for role in ("implementer", "reviewer", "reviewer_2", "merge_gate_reviewer"):
-            value = row.get(role)
+        for role, value in row.items():
+            if not is_role_slot_key(role):
+                continue
             if isinstance(value, str) and value:
                 slots[role] = value
-        if "roster_union_override" in row:
-            slots["roster_union_override"] = row["roster_union_override"]
+        if OVERRIDE_KEY in row:
+            slots[OVERRIDE_KEY] = row[OVERRIDE_KEY]
         if not slots:
             continue
         ref = row.get("ref") or row.get("id") or "?"
@@ -541,19 +646,22 @@ def validate_scope(
 def _print_report_to_stderr(report: dict[str, list[dict[str, object]]]) -> int:
     """Pretty-print the report to stderr; return exit code.
 
-    Two independent failure classes (#319 name resolution, #1134 repo
-    membership). Either one alone returns 1.
+    Three independent failure classes (#319 name resolution, #1134 repo
+    membership, #1180 slot classification). Any one alone returns 1.
     """
     total = 0
     unresolved = 0
     cross_repo = 0
     overridden = 0
     unverified = 0
+    unclassified = 0
     for findings in report.values():
         for f in findings:
             total += 1
             if not f["resolved"]:
                 unresolved += 1
+            if f.get("slot_class") == "unclassified":
+                unclassified += 1
             membership = f.get("membership")
             if membership == "cross-repo":
                 cross_repo += 1
@@ -623,7 +731,36 @@ def _print_report_to_stderr(report: dict[str, list[dict[str, object]]]) -> int:
             file=sys.stderr,
         )
 
-    if unresolved or cross_repo:
+    if unclassified:
+        print(
+            f"\nvalidate_matrix_names: {unclassified}/{total} UNCLASSIFIED role slot(s) (#1180).",
+            file=sys.stderr,
+        )
+        for repo, findings in report.items():
+            bad = [f for f in findings if f.get("slot_class") == "unclassified"]
+            if not bad:
+                continue
+            print(f"\n  {repo}:", file=sys.stderr)
+            for f in bad:
+                print(
+                    f"    - {f['role']}: {f['declared']!r} — slot key is in neither "
+                    "COMMIT_CAPABLE_ROLES nor REVIEW_CLASS_ROLES.",
+                    file=sys.stderr,
+                )
+        print(
+            "\n  An unclassified slot is validated on the STRICT path (narrow #319\n"
+            "  resolution + the #1134 membership check) — the safe default, since the\n"
+            "  loosenings (org-union manifest, membership exemption) are justified only\n"
+            "  for a slot that provably never commits.\n"
+            "\n  Classify the key in .claude/skills/wave-scope/validate_matrix_names.py:\n"
+            "    COMMIT_CAPABLE_ROLES — the slot must COMMIT in the target repo\n"
+            "    REVIEW_CLASS_ROLES   — review-only; never commits (manifest widens it,\n"
+            "                           #1134 membership does not apply)\n"
+            "    NON_ROLE_ROW_KEYS    — the key is row metadata, not a person slot",
+            file=sys.stderr,
+        )
+
+    if unresolved or cross_repo or unclassified:
         return 1
 
     detail = []
