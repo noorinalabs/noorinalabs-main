@@ -855,7 +855,7 @@
       "last_tracked": "8a6989dd1e2f06cdc852b1f17ce8a76c4e4396f395c7a80d953010a01f4e9417",
       "last_resolved": "8a6989dd1e2f06cdc852b1f17ce8a76c4e4396f395c7a80d953010a01f4e9417",
       "tracked_at": "2026-08-03T03:42:04.875531+00:00",
-      "resolved_at": "2026-08-03T03:42:15.846638+00:00"
+      "resolved_at": "2026-08-03T13:48:04.666256+00:00"
     },
     "noorinalabs-isnad-graph/.claude/lib/tests/test_pre_commit_ci_sync.py": {
       "last_tracked": "aa209279deec3844b51e384157ba3e67a6d0f325410941f63f38d57535e6498c",
@@ -1551,7 +1551,7 @@
       "last_tracked": "4b7948becc7e5dd6541d38d58bd29894dd3ae568c75c4b4b12bdcd187b06293a",
       "last_resolved": "4b7948becc7e5dd6541d38d58bd29894dd3ae568c75c4b4b12bdcd187b06293a",
       "tracked_at": "2026-08-03T03:42:03.449557+00:00",
-      "resolved_at": "2026-08-03T03:42:15.846638+00:00"
+      "resolved_at": "2026-08-03T13:48:04.666256+00:00"
     },
     "noorinalabs-data-acquisition/src/utils/arabic.py": {
       "last_tracked": "495f021204688b0e8611929271d9a701ad4455ee9d82716f3ba96aefa330bd06",
@@ -1710,10 +1710,16 @@
       "resolved_at": "2026-08-03T03:20:00.811782+00:00"
     },
     ".claude/memory/feedback_scratchpad_shared_across_agents.md": {
-      "last_tracked": "67d7957e60a6894a40fd54f50f1c0d046c909341f0b759988ff00a31f873ea36",
-      "last_resolved": "67d7957e60a6894a40fd54f50f1c0d046c909341f0b759988ff00a31f873ea36",
-      "tracked_at": "2026-08-03T03:41:57.619551+00:00",
-      "resolved_at": "2026-08-03T03:42:15.846638+00:00"
+      "last_tracked": "456f05896f7131343d162eb2472d69d2e4d9bb94155a1610363f5e8435782a89",
+      "last_resolved": "456f05896f7131343d162eb2472d69d2e4d9bb94155a1610363f5e8435782a89",
+      "tracked_at": "2026-08-03T13:47:12.861096+00:00",
+      "resolved_at": "2026-08-03T13:48:04.666256+00:00"
+    },
+    ".claude/memory/feedback_pr_body_table_is_a_claim.md": {
+      "last_tracked": "f14d1cf01410868b2f340ae3a95ecdc3d2b9ae295f0356635a6111ac13b5a3e8",
+      "last_resolved": "f14d1cf01410868b2f340ae3a95ecdc3d2b9ae295f0356635a6111ac13b5a3e8",
+      "tracked_at": "2026-08-03T13:47:39.244518+00:00",
+      "resolved_at": "2026-08-03T13:48:04.666256+00:00"
     }
   },
   "last_cleanup": {
