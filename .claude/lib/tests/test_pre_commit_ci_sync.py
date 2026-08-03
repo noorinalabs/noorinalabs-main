@@ -19,6 +19,7 @@ from pathlib import Path
 # .claude/lib/tests/test_*.py. parent.parent reaches the lib root.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from org_repos import CHILD_REPOS  # noqa: E402
 from pre_commit_ci_sync import (  # noqa: E402
     check_repo,
     compute_drift,
@@ -981,17 +982,10 @@ _EXPECTED_KINDS = {
 # checkout-independent OLD==NEW parity scan — never to assert a hardcoded kind
 # snapshot (see the _EXPECTED_KINDS note above). A child is scanned when its
 # checkout is present beside the parent and skipped when absent, so this can
-# never false-fail in the parent-less CI checkout. Keep in step with the
-# Repository Map in the org CLAUDE.md.
-_CHILD_REPO_DIRS = (
-    "noorinalabs-isnad-graph",
-    "noorinalabs-user-service",
-    "noorinalabs-deploy",
-    "noorinalabs-design-system",
-    "noorinalabs-data-acquisition",
-    "noorinalabs-isnad-ingest-platform",
-    "noorinalabs-landing-page",
-)
+# never false-fail in the parent-less CI checkout. Sourced from org_repos.py
+# (main#1118 / audit G6) — the org repo-list SSOT — instead of hand-copying
+# the Repository Map from the org CLAUDE.md.
+_CHILD_REPO_DIRS = CHILD_REPOS
 
 
 class ParityAcrossRealConfigs(unittest.TestCase):

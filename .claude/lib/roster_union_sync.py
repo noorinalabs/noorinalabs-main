@@ -62,19 +62,17 @@ import subprocess
 import sys
 from pathlib import Path
 
+from org_repos import CHILD_REPOS as _ALL_CHILD_REPOS
+
 # The org's child repos that publish an aggregated `.claude/team/roster.json`.
-# Mirrors the repo map in CLAUDE.md. `noorinalabs-deploy` is intentionally
-# absent: it keeps only a per-member `roster/` directory (no aggregated
-# roster.json), so there is nothing to fetch — its personas are folded into the
-# parent roster directly. A child not listed here is simply not cross-checked;
-# add it when it grows an aggregated roster.json.
-DEFAULT_CHILD_REPOS: tuple[str, ...] = (
-    "noorinalabs-isnad-graph",
-    "noorinalabs-user-service",
-    "noorinalabs-design-system",
-    "noorinalabs-data-acquisition",
-    "noorinalabs-isnad-ingest-platform",
-    "noorinalabs-landing-page",
+# Filtered from org_repos.CHILD_REPOS (main#1118 / audit G6, the org repo-list
+# SSOT) — `noorinalabs-deploy` is intentionally EXCLUDED: it keeps only a
+# per-member `roster/` directory (no aggregated roster.json), so there is
+# nothing to fetch — its personas are folded into the parent roster directly.
+# A child not listed here is simply not cross-checked; add it back when it
+# grows an aggregated roster.json.
+DEFAULT_CHILD_REPOS: tuple[str, ...] = tuple(
+    r for r in _ALL_CHILD_REPOS if r != "noorinalabs-deploy"
 )
 
 ROSTER_PATH_IN_REPO = ".claude/team/roster.json"

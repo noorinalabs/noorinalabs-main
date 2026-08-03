@@ -43,16 +43,11 @@ from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-ALL_REPOS = [
-    "noorinalabs-main",
-    "noorinalabs-isnad-graph",
-    "noorinalabs-user-service",
-    "noorinalabs-deploy",
-    "noorinalabs-design-system",
-    "noorinalabs-data-acquisition",
-    "noorinalabs-isnad-ingest-platform",
-    "noorinalabs-landing-page",
-]
+from org_repos import ALL_REPOS as _ALL_REPOS_TUPLE
+
+# main#1118 / audit G6: sourced from org_repos.py, the org repo-list SSOT.
+# Kept as a list (not the imported tuple) since callers mutate/slice it.
+ALL_REPOS = list(_ALL_REPOS_TUPLE)
 PERSONA_RE = re.compile(r"^[A-Z][A-Z.-]*_[A-Z][A-Z.-]*$")
 PERSONA_SPACE_RE = re.compile(r"^[A-Z][a-z][A-Za-z'’-]* [A-Z][A-Za-z'’-]+$")
 BRANCH_RE = re.compile(r"^([A-Za-z])\.([A-Za-z][A-Za-z'-]*)/0*([0-9]+)-")

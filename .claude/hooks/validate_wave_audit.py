@@ -199,6 +199,10 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from annunaki_log import log_pretooluse_block  # noqa: E402
 
+_LIB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib")
+sys.path.insert(0, os.path.abspath(_LIB_DIR))
+from org_repos import ALL_REPOS  # noqa: E402
+
 # Skills gated by this hook. Exact match against tool_input.skill.
 _GATED_SKILLS = frozenset({"wave-wrapup", "wave-retro", "handoff"})
 
@@ -222,18 +226,11 @@ _GATED_SKILLS = frozenset({"wave-wrapup", "wave-retro", "handoff"})
 # green, but not a dead end either.
 _COVERAGE_BLOCKING_SKILLS = frozenset({"wave-wrapup", "wave-retro"})
 
-# Org-known repos for cross-repo audit. Sourced from charter skills.md
-# § Audit command. This list MUST stay in sync with that charter section.
-_ORG_REPOS = (
-    "noorinalabs-main",
-    "noorinalabs-isnad-graph",
-    "noorinalabs-user-service",
-    "noorinalabs-deploy",
-    "noorinalabs-design-system",
-    "noorinalabs-landing-page",
-    "noorinalabs-data-acquisition",
-    "noorinalabs-isnad-ingest-platform",
-)
+# Org-known repos for cross-repo audit. Sourced from org_repos.py (main#1118
+# / audit G6) — the single source of truth for the org repo list; the charter
+# skills.md § Audit command example command should stay in sync with it too,
+# but this constant itself no longer hand-copies the list.
+_ORG_REPOS = ALL_REPOS
 
 # Carry-forward detection patterns (case-insensitive). Any one suffices.
 # Anchored loosely — looking for explicit author intent, not accidental phrasing.

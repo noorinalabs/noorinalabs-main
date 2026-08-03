@@ -109,6 +109,40 @@ class GetWaveStatusTests(unittest.TestCase):
         self.assertEqual(result, "No cross-repo-status.json found")
 
 
+class GetOpenPrsQueriesAllOrgReposTests(unittest.TestCase):
+    """main#1118 / audit G6, BUG-08 regression: `_get_open_prs()` used to iterate
+    a hand-copied 7-repo list that silently omitted
+    noorinalabs-isnad-ingest-platform. It now iterates org_repos.ALL_REPOS, so
+    this asserts all 8 org repos are queried (non-vacuous: fails if the count
+    regresses to 7, or if a caller reintroduces a hand-copied list)."""
+
+    def test_queries_all_eight_repos(self) -> None:
+        from unittest.mock import patch
+
+        queried: list[str] = []
+
+        def _fake_run(cmd: str, cwd: str | None = None, timeout: int = 10) -> str:
+            for repo in hook.ALL_REPOS:
+                if f"noorinalabs/{repo}" in cmd:
+                    queried.append(repo)
+                    break
+            return "[]"
+
+        with patch.object(hook, "_run", side_effect=_fake_run):
+            hook._get_open_prs()
+
+        self.assertEqual(sorted(queried), sorted(hook.ALL_REPOS))
+        self.assertEqual(len(queried), 8)
+        self.assertIn("noorinalabs-isnad-ingest-platform", queried)
+
+    def test_all_repos_is_org_repos_ssot(self) -> None:
+        # session_handoff.ALL_REPOS must BE org_repos.ALL_REPOS (imported, not
+        # re-derived) so the two can never drift apart again.
+        import org_repos
+
+        self.assertIs(hook.ALL_REPOS, org_repos.ALL_REPOS)
+
+
 class HandoffPathLocationTests(unittest.TestCase):
     """#741: the Stop hook must write the handoff into the in-repo,
     version-controlled .claude/memory/ — NOT the user-space auto-memory dir —

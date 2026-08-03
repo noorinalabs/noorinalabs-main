@@ -144,5 +144,26 @@ class WarningBehaviorTests(unittest.TestCase):
         self.assertIsNone(hook.check(_input(cmd)))
 
 
+class RepoImageMapDriftGuardTests(unittest.TestCase):
+    """main#1118 / audit G6: REPO_IMAGE_MAP is a deliberate GHCR-publishing
+    SUBSET of the org's children, not the full org_repos.CHILD_REPOS list —
+    but every key must still be a real, canonically-spelled child repo name,
+    or a typo/rename would silently drift with nothing to announce it."""
+
+    def test_every_key_is_a_canonical_child_repo(self):
+        sys.path.insert(0, str(_HOOKS_DIR.parent / "lib"))
+        from org_repos import CHILD_REPOS
+
+        self.assertTrue(set(hook.REPO_IMAGE_MAP).issubset(CHILD_REPOS))
+
+    def test_map_is_a_proper_subset_not_the_full_list(self):
+        # Documents the intentional divergence so a future "helpfully" full
+        # sync doesn't silently widen this GHCR-only map to non-publishing repos.
+        sys.path.insert(0, str(_HOOKS_DIR.parent / "lib"))
+        from org_repos import CHILD_REPOS
+
+        self.assertLess(set(hook.REPO_IMAGE_MAP), set(CHILD_REPOS))
+
+
 if __name__ == "__main__":
     unittest.main()
