@@ -101,6 +101,55 @@ Owning-repo check-ignore (#1039):
   calls within a single test run or a future batch invocation, not
   cross-invocation caching (there is no daemon to cache across).
 
+  ``_DIR_CHECK_IGNORE_CACHE`` (#1122) additionally memoizes the *containing
+  directory's* own check-ignore verdict, per (repo, relative-directory), same
+  process lifetime. Per gitignore(5) — "It is not possible to re-include a
+  file if a parent directory of that file is excluded" — a directory that
+  ``git check-ignore`` reports as ignored makes EVERY file beneath it ignored
+  too, no exceptions possible. So once a directory resolves to ignored, any
+  later file under it is a cache hit with zero subprocess calls: real
+  savings within a burst of edits/tests touching the same generated or
+  vendored subtree (e.g. a child repo's own ``.venv/``/``dist/``/``coverage/``
+  that ``SKIP_PATTERNS`` doesn't already substring-catch). A directory
+  verdict of NOT-ignored is not similarly reusable — it says nothing about a
+  specific file, since a filename pattern (``*.secret``) can still exclude
+  one file inside an otherwise-untouched directory — so that case still
+  falls through to a per-file check, same subprocess cost as before this
+  cache existed.
+
+  The directory verdict is resolved for free alongside the file's own
+  verdict: ``git check-ignore`` (without ``-q``) accepts more than one
+  pathspec and echoes back on stdout exactly which of the supplied
+  pathspecs matched, so the FIRST file seen in a directory pays one
+  subprocess call that answers "is this file ignored" AND "is its directory
+  ignored" simultaneously — no additional subprocess versus the pre-#1122
+  single-file check.
+
+  The directory pathspec passed to ``git check-ignore`` is the BARE relative
+  directory name, with NO trailing slash (main#1263 review finding, fixed
+  before merge). A trailing slash turns the pathspec into a literal STRING
+  that a contents-only pattern like ``data/raw/*`` matches directly (git
+  echoes back the exact string ``"data/raw/"`` as a match), which is a
+  different fact from the directory ITSELF being excluded — the bare
+  ``"data/raw"`` does not match that same pattern. Using the slash version
+  would cache a false "directory ignored" and silently mis-skip any file a
+  ``!`` rule re-includes inside it (e.g. the ``dir/*`` + ``!dir/**/.gitkeep``
+  idiom used by ``noorinalabs-isnad-ingest-platform``) — under-tracking,
+  the one direction this function must never risk. The bare name still
+  correctly answers "ignored" for a genuinely directory-excluding pattern
+  (``build/`` matches ``"build"`` too) and for a NESTED directory swept up
+  by a contents-only parent pattern (gitignore(5)'s no-re-include-under-an-
+  excluded-parent rule then really does apply to everything beneath it), so
+  the cache short-circuit stays sound in both directions — see
+  ``GitCheckIgnoreDirectoryCacheTests`` in the test module for the exact
+  fixtures.
+
+  Invalidation: none needed — both caches are
+  module-level dicts scoped to this one short-lived process (a fresh
+  Edit/Write hook invocation starts with empty caches), and the on-disk
+  ``.gitignore`` rules cannot change mid-invocation, so nothing can go stale
+  within the cache's own lifetime.
+
 Input Language:
   Fires on:      PostToolUse Edit, Write
   Matches:       Edit/Write whose `file_path` is non-empty AND resides inside
@@ -129,6 +178,12 @@ CHECKSUMS_FILE = REPO_ROOT / "ontology" / "checksums.json"
 # Memoizes (git_root, repo_relative_path) -> ignored? for the life of this
 # process. See "Owning-repo check-ignore (#1039)" in the module docstring.
 _GIT_CHECK_IGNORE_CACHE: dict[tuple[str, str], bool] = {}
+
+# Memoizes (git_root, repo_relative_directory) -> ignored? for the life of
+# this process (#1122). See "Owning-repo check-ignore (#1039)" in the module
+# docstring for why a directory-ignored verdict is authoritative for every
+# file beneath it, and why a not-ignored verdict is NOT similarly reusable.
+_DIR_CHECK_IGNORE_CACHE: dict[tuple[str, str], bool] = {}
 
 # Shared read/write helpers (#1042): both this hook and the /ontology-rebuild
 # resolver's `mark-resolved` CLI go through checksums_io so neither has to
@@ -263,6 +318,91 @@ def _hermetic_git_env() -> dict[str, str]:
     return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
 
 
+def _run_check_ignore(git_root: Path, pathspecs: list[str]) -> set[str]:
+    """Run ``git check-ignore`` for one or more pathspecs against ``git_root``.
+
+    Returns the subset of ``pathspecs`` that ARE ignored, as the exact
+    strings passed in: git echoes back whichever supplied pathspec matched,
+    one per line, and ``core.quotePath=false`` is pinned on the invocation
+    so that echo is the caller's ORIGINAL string rather than a C-quoted
+    rendering of it. That pin is load-bearing, not cosmetic (main#1265):
+    under git's default ``core.quotePath=true`` any pathspec containing a
+    non-ASCII byte comes back quoted and escaped (``سند.md`` echoes as
+    ``"\\330\\263\\331\\206\\330\\257.md"``), which equals nothing the
+    caller passed in, so set-membership below reports a genuinely-ignored
+    path as NOT ignored. The pre-#1122 code read only ``-q``'s exit status
+    and was encoding-independent by construction; matching on echoed text
+    is what introduced the exposure, so the pin restores the property that
+    change gave up. Do not remove it without replacing the matching scheme.
+
+    ``encoding="utf-8", errors="surrogateescape"`` rather than ``text=True``,
+    and the reason is the FILENAME BYTES, not the locale (main#1263 review,
+    Weronika Zielinska). An earlier version of this docstring blamed a
+    ``LC_ALL=C`` runner raising ``UnicodeDecodeError``. That was false, and
+    for a subtler reason than "coercion": ``LC_ALL=C python3`` auto-enables
+    **UTF-8 Mode (PEP 540)** — ``sys.flags.utf8_mode == 1`` while ``LC_CTYPE``
+    stays ``C`` — so PEP 538 C-locale *coercion* never runs at all. That is
+    why ``PYTHONCOERCECLOCALE=0`` does not restore ASCII either; it defeats
+    538, not 540. Only ``PYTHONUTF8=0 PYTHONCOERCECLOCALE=0`` yields
+    ``ANSI_X3.4-1968``. Do not restore the locale rationale.
+
+    Historical note on how that was caught, because it dates: when measured
+    at ``2c113e7`` the suite was green under ``LC_ALL=C`` with ``text=True``,
+    which is what falsified the claim. That is no longer reproducible —
+    ``test_invalid_utf8_filename_is_detected`` below now catches ``text=True``
+    at ANY locale, because the trigger is the filename bytes rather than the
+    environment. The fixture, not the locale, is what pins this line.
+
+    The real trigger: a POSIX filename is a byte string and need not be valid
+    UTF-8. The caller's pathspec comes from ``os.fsdecode``, which maps
+    undecodable bytes to lone surrogates (``b"\\xe9.log"`` -> ``"\\udce9.log"``).
+    For set-membership below to work, git's echoed stdout must decode back to
+    that SAME string. Only ``surrogateescape`` does:
+
+    - ``text=True`` (strict) can raise ``UnicodeDecodeError``, which is not in
+      the ``except`` clause and would escape ``check()``, breaking this hook's
+      "exit 0 — always" contract.
+    - ``errors="replace"`` cannot raise but is lossy — the byte decodes to
+      U+FFFD, which does not equal the caller's surrogate, so a genuinely
+      ignored file reads as NOT ignored. That is the same fail-open defect the
+      ``core.quotePath`` pin above exists to fix, one level narrower, and it
+      was shipped here briefly before review caught it.
+    - ``surrogateescape`` is non-raising AND byte-exact round-trips, so it
+      strictly dominates both.
+
+    Deliberately omits ``-q`` (which would suppress that stdout) so a single
+    call can answer more than one question at once (#1122) — the caller
+    distinguishes "ignored" from "not ignored" by set-membership instead of
+    by exit code alone.
+
+    Fails OPEN — returns an empty set (nothing reported ignored) — on any
+    subprocess error or timeout, or on any exit code other than 0 (at least
+    one match) / 1 (no match, e.g. every pathspec is genuinely not ignored).
+    Exit 128 is a fatal git error (e.g. not actually a git repo); folding it
+    into "nothing ignored" fails open the same way a single-path check
+    always has. See "Owning-repo check-ignore (#1039)" in the module
+    docstring for why fail-open (never skip on doubt) is the deliberate,
+    one-sided policy here.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-c", "core.quotePath=false", "check-ignore", "--", *pathspecs],
+            cwd=str(git_root),
+            capture_output=True,
+            timeout=5,
+            env=_hermetic_git_env(),
+            encoding="utf-8",
+            errors="surrogateescape",
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return set()  # Subprocess failed — fail open.
+
+    if result.returncode not in (0, 1):
+        return set()  # Fatal git error — fail open.
+
+    return {line for line in result.stdout.splitlines() if line}
+
+
 def _is_git_ignored(resolved_path: Path) -> bool:
     """True if ``resolved_path`` is gitignored BY ITS OWN REPO.
 
@@ -270,7 +410,9 @@ def _is_git_ignored(resolved_path: Path) -> bool:
     full rationale. Summary: resolve the nearest ``.git`` ancestor of the
     file (its OWNING repo, which may be a child repo nested under
     ``REPO_ROOT``, not ``REPO_ROOT`` itself), then run ``git check-ignore``
-    there against the path relative to that repo.
+    there against the path relative to that repo — checking the per-file AND
+    per-directory caches first (#1122; see the module docstring's cache
+    section for exactly what each caches and why both are sound).
 
     Fails OPEN (returns False -> file gets tracked) on every error case: no
     ``.git`` ancestor, a path that doesn't resolve relative to its own
@@ -287,28 +429,69 @@ def _is_git_ignored(resolved_path: Path) -> bool:
     except ValueError:
         return False  # Shouldn't happen (git_root is an ancestor), fail open anyway.
 
-    cache_key = (str(git_root), str(rel))
-    cached = _GIT_CHECK_IGNORE_CACHE.get(cache_key)
+    rel_str = str(rel)
+    file_key = (str(git_root), rel_str)
+    cached = _GIT_CHECK_IGNORE_CACHE.get(file_key)
     if cached is not None:
         return cached
 
-    try:
-        result = subprocess.run(
-            ["git", "check-ignore", "-q", "--", str(rel)],
-            cwd=str(git_root),
-            capture_output=True,
-            timeout=5,
-            env=_hermetic_git_env(),
-        )
-        # `git check-ignore -q` exit codes: 0 = ignored, 1 = not ignored,
-        # 128 = fatal error (e.g. not a git repo after all). Only 0 counts
-        # as ignored; anything else — including the fatal case — fails open.
-        ignored = result.returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
-        ignored = False  # Subprocess failed — fail open.
+    dir_rel_str = str(rel.parent)
+    dir_key = (str(git_root), dir_rel_str)
+    dir_cached = _DIR_CHECK_IGNORE_CACHE.get(dir_key)
 
-    _GIT_CHECK_IGNORE_CACHE[cache_key] = ignored
-    return ignored
+    if dir_cached is True:
+        # gitignore(5): a file cannot be re-included once a parent directory
+        # is excluded — authoritative without a subprocess call.
+        _GIT_CHECK_IGNORE_CACHE[file_key] = True
+        return True
+
+    if dir_cached is False:
+        # Directory itself isn't excluded — that says nothing about THIS
+        # file (a filename pattern can still match inside it), so fall
+        # through to a per-file check, same subprocess cost as before #1122.
+        ignored = rel_str in _run_check_ignore(git_root, [rel_str])
+        _GIT_CHECK_IGNORE_CACHE[file_key] = ignored
+        return ignored
+
+    # Neither the file nor its directory is cached yet: one subprocess call
+    # answers both questions and seeds both caches, so every LATER file
+    # under this same directory is a cache hit instead of a new subprocess.
+    #
+    # NO trailing slash on the directory pathspec (main#1263 review finding):
+    # a pattern like `data/raw/*` matches the literal STRING "data/raw/" —
+    # `git check-ignore -- data/raw/ ...` echoes it back as ignored even
+    # though the directory itself is not excluded, only its immediate
+    # contents are (minus whatever a later `!` re-include exempts). That
+    # false "directory ignored" verdict would then be cached and wrongly
+    # applied to every later file in the directory, INCLUDING one a `!`
+    # rule legitimately re-includes — a silent under-tracking regression.
+    # Querying the bare directory name instead asks git the real question
+    # ("is `data/raw` itself excluded?"): a genuinely directory-excluding
+    # pattern (`build/`) still matches the bare name, but a
+    # contents-only pattern (`data/raw/*`) does not, so `dir_ignored` stays
+    # False and each file is still checked on its own merits (same
+    # subprocess cost as before this cache existed). A NESTED directory
+    # whose own path is swept up by the contents-only pattern (e.g.
+    # `data/raw/sub` under `data/raw/*`) still correctly comes back
+    # ignored — gitignore(5)'s no-re-include-under-an-excluded-parent rule
+    # then genuinely applies to everything beneath it, so the cached True
+    # is not a false positive there.
+    #
+    # Why no `--no-index` (main#1263 review, Weronika Zielinska): git's
+    # index-masking applies to the DIRECTORY pathspec too, not just to
+    # files. `git check-ignore -- dist dist/manifest.json` exits 1 when
+    # `dist` holds force-added tracked files, where `--no-index` would
+    # report both as matched. The practical consequence is a useful
+    # invariant rather than a bug: `dir_ignored` can only ever cache True
+    # for a directory that holds ZERO tracked files, so the short-circuit
+    # can never suppress tracking of a path git already knows about.
+    dir_spec = dir_rel_str
+    matched = _run_check_ignore(git_root, [dir_spec, rel_str])
+    dir_ignored = dir_spec in matched
+    file_ignored = rel_str in matched
+    _DIR_CHECK_IGNORE_CACHE[dir_key] = dir_ignored
+    _GIT_CHECK_IGNORE_CACHE[file_key] = file_ignored
+    return file_ignored
 
 
 def _should_skip(file_path: str) -> bool:
@@ -402,6 +585,20 @@ def check(input_data: dict) -> dict | None:
     files = data.setdefault("files", {})
 
     existing = files.get(rel_path, {})
+    if existing.get("last_tracked") == sha:
+        # No-op re-save (#1122): the file's content hash is byte-for-byte
+        # what's already recorded — e.g. an edit that reverts to prior
+        # content, or a Write that rewrites identical bytes. `sha` is always
+        # a real 64-hex-char digest here (the `sha is None` case already
+        # returned above), so this only matches an EXISTING entry whose
+        # tracked hash is unchanged — never a brand-new path (`existing`
+        # empty -> `.get("last_tracked")` is `None`, which can't equal a
+        # real digest). Dirty-ness is driven by `last_tracked !=
+        # last_resolved`, not by `tracked_at`, so re-writing the full 103 KB
+        # file here would change zero meaningful state — skip the write
+        # (the read above still had to happen, to learn this).
+        return {"action": "skip_noop", "path": rel_path}
+
     files[rel_path] = {
         "last_tracked": sha,
         "last_resolved": existing.get("last_resolved", ""),
