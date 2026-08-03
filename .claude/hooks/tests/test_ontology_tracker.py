@@ -442,6 +442,7 @@ class GitCheckIgnoreGeneralizationTests(_FakeRepoRootMixin, unittest.TestCase):
     def setUp(self):
         super().setUp()
         hook._GIT_CHECK_IGNORE_CACHE.clear()
+        hook._DIR_CHECK_IGNORE_CACHE.clear()
         # `env=hook._hermetic_git_env()` is load-bearing (main#719): the
         # pre-push pytest hook is itself invoked by `git push`, which exports
         # GIT_DIR/GIT_WORK_TREE for the real repo into every subprocess this
@@ -458,6 +459,7 @@ class GitCheckIgnoreGeneralizationTests(_FakeRepoRootMixin, unittest.TestCase):
 
     def tearDown(self):
         hook._GIT_CHECK_IGNORE_CACHE.clear()
+        hook._DIR_CHECK_IGNORE_CACHE.clear()
         super().tearDown()
 
     def test_child_repo_file_ignored_by_parent_is_still_tracked(self):
@@ -597,6 +599,183 @@ class GitCheckIgnoreGeneralizationTests(_FakeRepoRootMixin, unittest.TestCase):
             self.assertEqual(checksums.read_bytes(), before)
         finally:
             hook.CHECKSUMS_FILE = orig_checksums_file
+
+    def _counting_run(self):
+        """Wrap ``subprocess.run`` with a call counter, returning
+        ``(wrapped_fn, get_count)``. Callers swap ``subprocess.run`` in and
+        restore it in a ``finally``."""
+        call_count = 0
+        orig_run = subprocess.run
+
+        def _wrapped(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return orig_run(*args, **kwargs)
+
+        return _wrapped, (lambda: call_count)
+
+    def test_first_file_in_a_directory_resolves_both_in_one_subprocess_call(self):
+        """#1122: the directory verdict is resolved for free alongside the
+        file's own verdict — no extra subprocess versus the pre-#1122
+        single-file check."""
+        (self._fake_root / ".gitignore").write_text("scratch/\n", encoding="utf-8")
+        scratch = self._fake_root / "scratch"
+        scratch.mkdir()
+        f = scratch / "a.md"
+        f.write_text("a\n", encoding="utf-8")
+
+        wrapped, get_count = self._counting_run()
+        orig_run = subprocess.run
+        subprocess.run = wrapped
+        try:
+            ignored = hook._is_git_ignored(f.resolve())
+        finally:
+            subprocess.run = orig_run
+
+        self.assertTrue(ignored)
+        self.assertEqual(get_count(), 1)
+
+    def test_second_file_in_same_ignored_directory_is_a_cache_hit(self):
+        """#1122's actual win: a LATER, DIFFERENT file under an
+        already-known-ignored directory costs zero subprocess calls."""
+        (self._fake_root / ".gitignore").write_text("scratch/\n", encoding="utf-8")
+        scratch = self._fake_root / "scratch"
+        scratch.mkdir()
+        a = scratch / "a.md"
+        a.write_text("a\n", encoding="utf-8")
+        b = scratch / "b.md"
+        b.write_text("b\n", encoding="utf-8")
+
+        self.assertTrue(hook._is_git_ignored(a.resolve()))  # seeds the dir cache
+
+        wrapped, get_count = self._counting_run()
+        orig_run = subprocess.run
+        subprocess.run = wrapped
+        try:
+            ignored = hook._is_git_ignored(b.resolve())
+        finally:
+            subprocess.run = orig_run
+
+        self.assertTrue(ignored)
+        self.assertEqual(get_count(), 0)
+
+    def test_second_file_in_a_not_ignored_directory_is_still_checked_individually(self):
+        """Mutation guard for #1122's directory cache: a not-ignored
+        DIRECTORY verdict must never be used to declare a DIFFERENT file
+        not-ignored — a filename pattern can still exclude that one file.
+        Without this guard (e.g. a broadened predicate that trusts a False
+        directory-cache hit as "file not ignored"), this test fails because
+        ``x.secret`` would wrongly come back as tracked.
+        """
+        (self._fake_root / ".gitignore").write_text("*.secret\n", encoding="utf-8")
+        kept = self._fake_root / "kept"
+        kept.mkdir()
+        plain = kept / "plain.md"
+        plain.write_text("plain\n", encoding="utf-8")
+        secret = kept / "x.secret"
+        secret.write_text("s\n", encoding="utf-8")
+
+        # Directory resolves to NOT ignored (seeds `_DIR_CHECK_IGNORE_CACHE`
+        # False for `kept`).
+        self.assertFalse(hook._is_git_ignored(plain.resolve()))
+
+        wrapped, get_count = self._counting_run()
+        orig_run = subprocess.run
+        subprocess.run = wrapped
+        try:
+            ignored = hook._is_git_ignored(secret.resolve())
+        finally:
+            subprocess.run = orig_run
+
+        self.assertTrue(ignored)
+        self.assertEqual(get_count(), 1)  # still had to ask, just for this one file
+
+
+class SkipNoopWriteTests(_FakeRepoRootMixin, unittest.TestCase):
+    """#1122: skip the ``checksums.json`` write when the SHA is unchanged.
+
+    Exercises the skip PREDICATE directly (by counting calls to
+    ``checksums_io.write_checksums``), not just its byte-stability side
+    effect (``ChecksumsSerializationTests`` already covers that) — these
+    fail if the predicate is dropped, inverted, or broadened to compare the
+    wrong field.
+    """
+
+    def setUp(self):
+        super().setUp()
+        checksums = self._fake_root / "ontology" / "checksums.json"
+        checksums.parent.mkdir(parents=True, exist_ok=True)
+        checksums.write_text('{"version": 1, "files": {}}\n', encoding="utf-8")
+        self._checksums = checksums
+        self._orig_checksums_file = hook.CHECKSUMS_FILE
+        hook.CHECKSUMS_FILE = checksums
+
+    def tearDown(self):
+        hook.CHECKSUMS_FILE = self._orig_checksums_file
+        super().tearDown()
+
+    def test_first_track_of_a_new_path_always_writes(self):
+        """A never-before-seen path has no `last_tracked` to compare against
+        (`existing.get("last_tracked")` is `None`, never equal to a real
+        64-hex-char digest) — must never be mistaken for a no-op."""
+        f = self._fake_root / "ontology" / "domain.yaml"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("entities: []\n", encoding="utf-8")
+
+        with mock.patch.object(hook.checksums_io, "write_checksums") as m:
+            result = hook.check({"tool_name": "Write", "tool_input": {"file_path": str(f)}})
+
+        self.assertEqual(result, {"action": "tracked", "path": "ontology/domain.yaml"})
+        m.assert_called_once()
+
+    def test_unchanged_content_reedit_skips_the_write(self):
+        """The exact no-op case #1122 targets: an edit that re-saves
+        byte-identical content must skip the 103 KB write entirely."""
+        f = self._fake_root / "ontology" / "domain.yaml"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("entities: []\n", encoding="utf-8")
+        payload = {"tool_name": "Write", "tool_input": {"file_path": str(f)}}
+        hook.check(payload)  # real track — establishes last_tracked
+
+        with mock.patch.object(hook.checksums_io, "write_checksums") as m:
+            result = hook.check(payload)  # identical content re-saved
+
+        self.assertEqual(result, {"action": "skip_noop", "path": "ontology/domain.yaml"})
+        m.assert_not_called()
+
+    def test_changed_content_after_a_noop_still_writes(self):
+        """Mutation guard: the predicate must not be too broad. A genuine
+        content change immediately after a no-op must still write — proves
+        the skip isn't sticky/state-leaking and isn't comparing the wrong
+        field (e.g. always True, or comparing `tracked_at`)."""
+        f = self._fake_root / "ontology" / "domain.yaml"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("entities: []\n", encoding="utf-8")
+        payload = {"tool_name": "Write", "tool_input": {"file_path": str(f)}}
+        hook.check(payload)
+        hook.check(payload)  # no-op — establishes the skip path was taken
+
+        f.write_text("entities: [foo]\n", encoding="utf-8")
+        with mock.patch.object(hook.checksums_io, "write_checksums") as m:
+            result = hook.check(payload)
+
+        self.assertEqual(result["action"], "tracked")
+        m.assert_called_once()
+
+    def test_skip_leaves_the_on_disk_entry_byte_identical(self):
+        """A skipped no-op write must leave the committed entry untouched —
+        not drop it, not corrupt it, not merely "similar"."""
+        f = self._fake_root / "ontology" / "domain.yaml"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("entities: []\n", encoding="utf-8")
+        payload = {"tool_name": "Write", "tool_input": {"file_path": str(f)}}
+        hook.check(payload)
+        before = self._checksums.read_bytes()
+
+        hook.check(payload)  # no-op re-save, write skipped
+        after = self._checksums.read_bytes()
+
+        self.assertEqual(before, after)
 
 
 class LinkedWorktreeTests(_FakeRepoRootMixin, unittest.TestCase):

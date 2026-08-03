@@ -101,6 +101,34 @@ Owning-repo check-ignore (#1039):
   calls within a single test run or a future batch invocation, not
   cross-invocation caching (there is no daemon to cache across).
 
+  ``_DIR_CHECK_IGNORE_CACHE`` (#1122) additionally memoizes the *containing
+  directory's* own check-ignore verdict, per (repo, relative-directory), same
+  process lifetime. Per gitignore(5) — "It is not possible to re-include a
+  file if a parent directory of that file is excluded" — a directory that
+  ``git check-ignore`` reports as ignored makes EVERY file beneath it ignored
+  too, no exceptions possible. So once a directory resolves to ignored, any
+  later file under it is a cache hit with zero subprocess calls: real
+  savings within a burst of edits/tests touching the same generated or
+  vendored subtree (e.g. a child repo's own ``.venv/``/``dist/``/``coverage/``
+  that ``SKIP_PATTERNS`` doesn't already substring-catch). A directory
+  verdict of NOT-ignored is not similarly reusable — it says nothing about a
+  specific file, since a filename pattern (``*.secret``) can still exclude
+  one file inside an otherwise-untouched directory — so that case still
+  falls through to a per-file check, same subprocess cost as before this
+  cache existed.
+
+  The directory verdict is resolved for free alongside the file's own
+  verdict: ``git check-ignore`` (without ``-q``) accepts more than one
+  pathspec and echoes back on stdout exactly which of the supplied
+  pathspecs matched, so the FIRST file seen in a directory pays one
+  subprocess call that answers "is this file ignored" AND "is its directory
+  ignored" simultaneously — no additional subprocess versus the pre-#1122
+  single-file check. Invalidation: none needed — both caches are
+  module-level dicts scoped to this one short-lived process (a fresh
+  Edit/Write hook invocation starts with empty caches), and the on-disk
+  ``.gitignore`` rules cannot change mid-invocation, so nothing can go stale
+  within the cache's own lifetime.
+
 Input Language:
   Fires on:      PostToolUse Edit, Write
   Matches:       Edit/Write whose `file_path` is non-empty AND resides inside
@@ -129,6 +157,12 @@ CHECKSUMS_FILE = REPO_ROOT / "ontology" / "checksums.json"
 # Memoizes (git_root, repo_relative_path) -> ignored? for the life of this
 # process. See "Owning-repo check-ignore (#1039)" in the module docstring.
 _GIT_CHECK_IGNORE_CACHE: dict[tuple[str, str], bool] = {}
+
+# Memoizes (git_root, repo_relative_directory) -> ignored? for the life of
+# this process (#1122). See "Owning-repo check-ignore (#1039)" in the module
+# docstring for why a directory-ignored verdict is authoritative for every
+# file beneath it, and why a not-ignored verdict is NOT similarly reusable.
+_DIR_CHECK_IGNORE_CACHE: dict[tuple[str, str], bool] = {}
 
 # Shared read/write helpers (#1042): both this hook and the /ontology-rebuild
 # resolver's `mark-resolved` CLI go through checksums_io so neither has to
@@ -263,6 +297,44 @@ def _hermetic_git_env() -> dict[str, str]:
     return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
 
 
+def _run_check_ignore(git_root: Path, pathspecs: list[str]) -> set[str]:
+    """Run ``git check-ignore`` for one or more pathspecs against ``git_root``.
+
+    Returns the subset of ``pathspecs`` that ARE ignored, as the exact
+    strings passed in (git echoes back whichever supplied pathspec matched,
+    one per line, preserving the caller's original string — verified against
+    real git, not assumed). Deliberately omits ``-q`` (which would suppress
+    that stdout) so a single call can answer more than one question at once
+    (#1122) — the caller distinguishes "ignored" from "not ignored" by
+    set-membership instead of by exit code alone.
+
+    Fails OPEN — returns an empty set (nothing reported ignored) — on any
+    subprocess error or timeout, or on any exit code other than 0 (at least
+    one match) / 1 (no match, e.g. every pathspec is genuinely not ignored).
+    Exit 128 is a fatal git error (e.g. not actually a git repo); folding it
+    into "nothing ignored" fails open the same way a single-path check
+    always has. See "Owning-repo check-ignore (#1039)" in the module
+    docstring for why fail-open (never skip on doubt) is the deliberate,
+    one-sided policy here.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "check-ignore", "--", *pathspecs],
+            cwd=str(git_root),
+            capture_output=True,
+            timeout=5,
+            env=_hermetic_git_env(),
+            text=True,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return set()  # Subprocess failed — fail open.
+
+    if result.returncode not in (0, 1):
+        return set()  # Fatal git error — fail open.
+
+    return {line for line in result.stdout.splitlines() if line}
+
+
 def _is_git_ignored(resolved_path: Path) -> bool:
     """True if ``resolved_path`` is gitignored BY ITS OWN REPO.
 
@@ -270,7 +342,9 @@ def _is_git_ignored(resolved_path: Path) -> bool:
     full rationale. Summary: resolve the nearest ``.git`` ancestor of the
     file (its OWNING repo, which may be a child repo nested under
     ``REPO_ROOT``, not ``REPO_ROOT`` itself), then run ``git check-ignore``
-    there against the path relative to that repo.
+    there against the path relative to that repo — checking the per-file AND
+    per-directory caches first (#1122; see the module docstring's cache
+    section for exactly what each caches and why both are sound).
 
     Fails OPEN (returns False -> file gets tracked) on every error case: no
     ``.git`` ancestor, a path that doesn't resolve relative to its own
@@ -287,28 +361,40 @@ def _is_git_ignored(resolved_path: Path) -> bool:
     except ValueError:
         return False  # Shouldn't happen (git_root is an ancestor), fail open anyway.
 
-    cache_key = (str(git_root), str(rel))
-    cached = _GIT_CHECK_IGNORE_CACHE.get(cache_key)
+    rel_str = str(rel)
+    file_key = (str(git_root), rel_str)
+    cached = _GIT_CHECK_IGNORE_CACHE.get(file_key)
     if cached is not None:
         return cached
 
-    try:
-        result = subprocess.run(
-            ["git", "check-ignore", "-q", "--", str(rel)],
-            cwd=str(git_root),
-            capture_output=True,
-            timeout=5,
-            env=_hermetic_git_env(),
-        )
-        # `git check-ignore -q` exit codes: 0 = ignored, 1 = not ignored,
-        # 128 = fatal error (e.g. not a git repo after all). Only 0 counts
-        # as ignored; anything else — including the fatal case — fails open.
-        ignored = result.returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
-        ignored = False  # Subprocess failed — fail open.
+    dir_rel_str = str(rel.parent)
+    dir_key = (str(git_root), dir_rel_str)
+    dir_cached = _DIR_CHECK_IGNORE_CACHE.get(dir_key)
 
-    _GIT_CHECK_IGNORE_CACHE[cache_key] = ignored
-    return ignored
+    if dir_cached is True:
+        # gitignore(5): a file cannot be re-included once a parent directory
+        # is excluded — authoritative without a subprocess call.
+        _GIT_CHECK_IGNORE_CACHE[file_key] = True
+        return True
+
+    if dir_cached is False:
+        # Directory itself isn't excluded — that says nothing about THIS
+        # file (a filename pattern can still match inside it), so fall
+        # through to a per-file check, same subprocess cost as before #1122.
+        ignored = rel_str in _run_check_ignore(git_root, [rel_str])
+        _GIT_CHECK_IGNORE_CACHE[file_key] = ignored
+        return ignored
+
+    # Neither the file nor its directory is cached yet: one subprocess call
+    # answers both questions and seeds both caches, so every LATER file
+    # under this same directory is a cache hit instead of a new subprocess.
+    dir_spec = f"{dir_rel_str}/"
+    matched = _run_check_ignore(git_root, [dir_spec, rel_str])
+    dir_ignored = dir_spec in matched
+    file_ignored = rel_str in matched
+    _DIR_CHECK_IGNORE_CACHE[dir_key] = dir_ignored
+    _GIT_CHECK_IGNORE_CACHE[file_key] = file_ignored
+    return file_ignored
 
 
 def _should_skip(file_path: str) -> bool:
@@ -402,6 +488,20 @@ def check(input_data: dict) -> dict | None:
     files = data.setdefault("files", {})
 
     existing = files.get(rel_path, {})
+    if existing.get("last_tracked") == sha:
+        # No-op re-save (#1122): the file's content hash is byte-for-byte
+        # what's already recorded — e.g. an edit that reverts to prior
+        # content, or a Write that rewrites identical bytes. `sha` is always
+        # a real 64-hex-char digest here (the `sha is None` case already
+        # returned above), so this only matches an EXISTING entry whose
+        # tracked hash is unchanged — never a brand-new path (`existing`
+        # empty -> `.get("last_tracked")` is `None`, which can't equal a
+        # real digest). Dirty-ness is driven by `last_tracked !=
+        # last_resolved`, not by `tracked_at`, so re-writing the full 103 KB
+        # file here would change zero meaningful state — skip the write
+        # (the read above still had to happen, to learn this).
+        return {"action": "skip_noop", "path": rel_path}
+
     files[rel_path] = {
         "last_tracked": sha,
         "last_resolved": existing.get("last_resolved", ""),
