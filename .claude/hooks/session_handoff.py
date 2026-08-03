@@ -20,12 +20,13 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import NamedTuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 _LIB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib")
 sys.path.insert(0, os.path.abspath(_LIB_DIR))
-from org_repos import ALL_REPOS  # noqa: E402
+from org_repos import ALL_REPOS, ORG  # noqa: E402
 
 # Project memory is version-controlled in-repo (#732 relocation) so it travels
 # with a git pull. The handoff file itself stays gitignored — it's per-session
@@ -68,27 +69,111 @@ def _get_git_state() -> dict:
     }
 
 
-def _get_open_prs() -> list[str]:
-    """Get open PRs across all repos.
+# GitHub's search API pages at 100 results/request and caps at 1000 total.
+# We stay at exactly one page (--limit == the page max) so "one search call"
+# is literally one HTTP request, not gh silently paginating under the hood.
+PR_SEARCH_LIMIT = 100
 
-    Queries org_repos.ALL_REPOS (main#1118 / audit G6) — the previous hand-copied
-    list here omitted noorinalabs-isnad-ingest-platform (BUG-08), silently
-    querying only 7 of 8 org repos.
+
+class PrQueryResult(NamedTuple):
+    """Outcome of the single org-wide open-PR search.
+
+    `failed` and an empty `lines` list are DISTINCT states — a failed query
+    must never render the same as "the org genuinely has zero open PRs"
+    (main#1120). `truncated` flags a possible partial result: the result set
+    hit PR_SEARCH_LIMIT, so PRs beyond the cap (e.g. a large repo crowding
+    out others under `--sort updated`) may be missing without any command
+    error. `unknown_repos` are repos the search returned that are NOT in
+    org_repos.ALL_REPOS — the inverse of BUG-08 (a repo added org-side that
+    the SSOT list doesn't know about yet), something the old per-repo loop
+    could structurally never detect since it only ever queried repos already
+    in its list.
     """
-    prs = []
-    for repo in ALL_REPOS:
-        raw = _run(
-            f"gh pr list --repo noorinalabs/{repo} --state open --json number,title --limit 5",
-            timeout=15,
+
+    lines: list[str]
+    failed: bool
+    truncated: bool
+    unknown_repos: tuple[str, ...]
+
+
+def _get_open_prs() -> PrQueryResult:
+    """Get open PRs across the whole org in a single search call.
+
+    Replaces the previous 7-serial (pre-#1238) / 8-serial (post-#1238) loop
+    of `gh pr list --repo ...` subprocesses — worst case ~120s against a 30s
+    Stop-hook timeout (main#1120 / audit G8) — with one `gh search prs
+    --owner noorinalabs` call spanning all repos the token can see, so it no
+    longer needs a repo list to construct the query at all (pairs with G6).
+
+    Collapsing 8 independent calls into 1 changes the failure shape: before,
+    one repo's `gh pr list` timing out only dropped that repo's PRs (still
+    silently — `_run()` swallows failures into ""), leaving the other 7
+    repos' results intact. Now a single failed call drops the WHOLE org's PR
+    list in one shot. `_run()` returns "" on any failure, which is
+    byte-for-byte different from a genuine empty result ("[]" parses to an
+    empty list, not ""), so that distinction is preserved explicitly here
+    and surfaced up through `failed` — main() must render "query failed",
+    never "None", when `failed` is True.
+    """
+    raw = _run(
+        f"gh search prs --owner {ORG} --state open --sort updated "
+        f"--json number,title,repository --limit {PR_SEARCH_LIMIT}",
+        timeout=15,
+    )
+    if not raw:
+        return PrQueryResult(lines=[], failed=True, truncated=False, unknown_repos=())
+    try:
+        items = json.loads(raw)
+    except json.JSONDecodeError:
+        return PrQueryResult(lines=[], failed=True, truncated=False, unknown_repos=())
+
+    lines = []
+    repos_seen: set[str] = set()
+    for item in items:
+        try:
+            repo = item["repository"]["name"]
+            lines.append(f"  - {repo}#{item['number']}: {item['title']}")
+            repos_seen.add(repo)
+        except (KeyError, TypeError):
+            continue
+
+    truncated = len(items) >= PR_SEARCH_LIMIT
+    unknown_repos = tuple(sorted(repos_seen - set(ALL_REPOS)))
+    return PrQueryResult(
+        lines=lines, failed=False, truncated=truncated, unknown_repos=unknown_repos
+    )
+
+
+def _render_prs_section(result: PrQueryResult) -> list[str]:
+    """Build the '### Open PRs' markdown block from a PrQueryResult.
+
+    A failed query is never rendered as "None" — that would misreport an
+    unknown PR state as "the org has zero open PRs". Truncation at the
+    search cap and unexpected repos are both surfaced as explicit notes
+    rather than silently folded into (or dropped from) the list.
+    """
+    section = ["### Open PRs"]
+    if result.failed:
+        section.append(
+            "  - QUERY FAILED (gh search prs errored or timed out) — PR state "
+            "unknown, NOT confirmed empty"
         )
-        if raw:
-            try:
-                items = json.loads(raw)
-                for item in items:
-                    prs.append(f"  - {repo}#{item['number']}: {item['title']}")
-            except (json.JSONDecodeError, KeyError):
-                pass
-    return prs
+        return section
+    if not result.lines:
+        section.append("  - None")
+    else:
+        section.extend(result.lines)
+    if result.truncated:
+        section.append(
+            f"  - NOTE: hit the {PR_SEARCH_LIMIT}-result search cap — some open "
+            "PRs may be missing from this list"
+        )
+    if result.unknown_repos:
+        section.append(
+            "  - NOTE: PR(s) found in repo(s) not in org_repos.ALL_REPOS: "
+            f"{', '.join(result.unknown_repos)} — SSOT list may be stale"
+        )
+    return section
 
 
 def _get_open_issues() -> list[str]:
@@ -184,7 +269,7 @@ def main() -> None:
     date_str = now.strftime("%Y-%m-%d %H:%M UTC")
 
     git = _get_git_state()
-    prs = _get_open_prs()
+    pr_result = _get_open_prs()
     issues = _get_open_issues()
     ontology = _get_ontology_staleness()
     wave = _get_wave_status()
@@ -216,10 +301,7 @@ def main() -> None:
         "",
     ]
 
-    if prs:
-        lines.extend(["### Open PRs", *prs, ""])
-    else:
-        lines.extend(["### Open PRs", "  - None", ""])
+    lines.extend([*_render_prs_section(pr_result), ""])
 
     if issues:
         lines.extend(["### Open issues (noorinalabs-main)", *issues, ""])
@@ -254,9 +336,16 @@ def main() -> None:
         f"Branch: {git['branch']} | Uncommitted: {'Yes' if git['uncommitted'] else 'No'}",
         f"Wave: {wave} | Ontology: {ontology}",
     ]
-    if prs:
-        display_lines.append(f"Open PRs: {len(prs)}")
-        display_lines.extend(prs[:5])
+    if pr_result.failed:
+        display_lines.append("Open PRs: QUERY FAILED — see handoff file, NOT confirmed empty")
+    else:
+        suffix = " (truncated at cap)" if pr_result.truncated else ""
+        display_lines.append(f"Open PRs: {len(pr_result.lines)}{suffix}")
+        display_lines.extend(pr_result.lines[:5])
+        if pr_result.unknown_repos:
+            display_lines.append(
+                f"Unknown repos in PR results: {', '.join(pr_result.unknown_repos)}"
+            )
     if issues:
         display_lines.append(f"Open issues (main): {len(issues)}")
         display_lines.extend(issues[:5])
