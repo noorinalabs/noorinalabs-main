@@ -530,14 +530,15 @@ Do NOT delete the original body — copy it (or post the pre-update version as a
 
 If any step surfaced a process gap (stale memory, missing meta-issue, vague reference), include a `**Process gaps surfaced**` section so the next retro can address them.
 
-### 12.5. Validate implementer/reviewer names + child-repo membership (#319, #1134) — MANDATORY
+### 12.5. Validate implementer/reviewer names + child-repo membership (#319, #1134, #1180) — MANDATORY
 
-Validate every declared name against the relevant roster BEFORE `/wave-kickoff` fan-out. The validator runs **two independent checks**:
+Validate every declared name against the relevant roster BEFORE `/wave-kickoff` fan-out. The validator runs **three independent checks** — any one alone exits 1:
 
 | # | Check | Applies to | Failure |
 |---|---|---|---|
 | #319 | **Name resolution** — does the name exist at all? | every slot, but the candidate set differs by slot class (#1162 — see Resolution rules) | unresolved name + fuzzy suggestions |
-| #1134 | **Repo membership** — is the implementer on the TARGET repo's roster? | `implementer` on a child repo | cross-repo implementer with no recorded override |
+| #1134 | **Repo membership** — is the implementer on the TARGET repo's roster? | every non-review-class slot on a child repo | cross-repo implementer with no recorded override |
+| #1180 | **Slot classification** — is this slot key classified at all? | every slot key the row carries | `UNCLASSIFIED role slot(s)` — classify it in `validate_matrix_names.py` |
 
 **#319 (name resolution).** Pre-#319 a stale alias like "Anya Volkov" (canonical: "Anya Kowalczyk") would propagate through scope and only surface at first-spawn time — P3W7 retro recorded TWO such substitutions in `wave_7_decisions.implementer_substitutions`.
 
@@ -546,9 +547,11 @@ Validate every declared name against the relevant roster BEFORE `/wave-kickoff` 
 **Resolution rules:**
 - Name resolution — **the candidate set depends on the slot class (#1162):**
   - **Review-class slots** (`reviewer`, `reviewer_2`, `merge_gate_reviewer`): child-repo roster (`<repo>/.claude/team/roster/*.md`) UNION parent roster UNION the **org-union manifest** `.claude/team/roster.json`. The manifest is what makes a reviewer drawn from a **third child repo** valid — e.g. a `noorinalabs-data-acquisition` persona reviewing an `isnad-ingest-platform` story. **A third-child reviewer is a correct assignment, not drift: do not "fix" one by reassigning it.** Before #1162 the parent side was the parent's *card directory* only (9 names, not the manifest's 78), so such a reviewer resolved against neither roster and hard-blocked this step and `/wave-kickoff` § 0b.
-  - **`implementer`**: child-repo roster UNION parent roster only — **the manifest is deliberately excluded.** Including it would loosen the #1134 membership check in the `unverified` case below: when the target roster is unreadable, membership fails open, so a manifest-only implementer would resolve, be reported `unverified`, and pass. Keeping the set narrow means that slot only passes on a name the target repo (or the parent) can vouch for.
+  - **`implementer` — and every slot that is not review-class (#1180):** child-repo roster UNION parent roster only — **the manifest is deliberately excluded.** Including it would loosen the #1134 membership check in the `unverified` case below: when the target roster is unreadable, membership fails open, so a manifest-only implementer would resolve, be reported `unverified`, and pass. Keeping the set narrow means that slot only passes on a name the target repo (or the parent) can vouch for.
   - Both sets let org-level coordinators (Aino, Nadia, Wanjiku, Santiago) fill child-repo slots without duplicating roster entries.
-- Repo membership: the **target repo's roster only**, and **only for the `implementer` slot**. Reviewers keep the wider resolution set above and are never membership-gated — cross-team reviewers are explicitly permitted by `charter/agents/spawn-discipline.md` § Child-Repo Implementer Rule step 5. The implementer is the only role that must produce a commit in the target repo.
+  - **`REVIEW_CLASS_ROLES` is the allowlist, not `COMMIT_CAPABLE_ROLES` (#1180).** The wide set and the membership exemption are both justified only for a slot that *provably never commits*, so an unrecognised slot key defaults to the strict side and fails loudly. Pre-#1180 the seam ran the other way: a `co_implementer` slot silently inherited the manifest widening AND the membership exemption, and a matrix of `co_implementer` / `pair_implementer` / `fixer` reported "all 3 names resolved", exit 0.
+- Repo membership: the **target repo's roster only**, and **for every non-review-class slot** (`implementer` today). Review-class slots keep the wider resolution set above and are never membership-gated — cross-team reviewers are explicitly permitted by `charter/agents/spawn-discipline.md` § Child-Repo Implementer Rule step 5. The implementer is the only role that must produce a commit in the target repo.
+- **Slot classification (#1180).** Scope mode discovers slots from `KNOWN_ROLE_SLOTS` (= `COMMIT_CAPABLE_ROLES | REVIEW_CLASS_ROLES`) plus any agentive-shaped row key (`_ROLE_SLOT_KEY_RE`) not denied in `NON_ROLE_ROW_KEYS` — it no longer iterates a hardcoded 4-slot tuple that skipped an unrecognised key outright. An admitted-but-unclassified key is a **third failure class**: `UNCLASSIFIED role slot(s) (#1180)`, exit 1. **Adding a role slot to the scope schema is therefore a code change**, not just a data change — classify the key in one of the three frozensets in `validate_matrix_names.py`.
 - Parent entries (`noorinalabs-main` or empty repo key) → parent-only roster; membership is vacuous there and never fires.
 - Match is case-insensitive; trailing parenthetical role suffix (`Aino Virtanen (Standards & Quality Lead)`) is stripped before comparison.
 - On a name miss: fuzzy-match via difflib SequenceMatcher; surface the top-3 closest matches to the operator.

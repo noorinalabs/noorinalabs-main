@@ -50,7 +50,8 @@ This is the scope-time twin of `charter/agents/spawn-discipline.md` § Child-Rep
 
 ### Scope
 
-- Applies to the **`implementer` slot only**. Reviewer / `reviewer_2` / `merge_gate_reviewer` slots keep the parent-union resolution — cross-team reviewers are explicitly permitted (spawn-discipline § step 5). The implementer is the only role that must produce a commit in the target repo.
+- Applies to **every slot that is not review-class**. `reviewer` / `reviewer_2` / `merge_gate_reviewer` are the review class and keep the wider parent-union-plus-manifest resolution with no membership check — cross-team reviewers are explicitly permitted (spawn-discipline § step 5). `implementer` is the only commit-capable slot today, so in practice this is the implementer slot; the rule is written around the *class* because **the review class is the allowlist, not the commit-capable one (#1180)**. A slot key nobody has classified takes the strict path and fails loudly rather than silently inheriting the reviewer exemption.
+- **Adding a role slot to the wave-scope schema is a code change, not a data change.** A new slot key must be classified in `validate_matrix_names.py` (`COMMIT_CAPABLE_ROLES`, `REVIEW_CLASS_ROLES`, or `NON_ROLE_ROW_KEYS` for a non-person row key); an unclassified key is its own hard STOP (#1180). Scoping a row with an unclassified slot is not permitted, because neither the resolution set nor the membership decision for that slot would have been made deliberately.
 - Does not apply to `noorinalabs-main` rows (membership is vacuous — the parent roster *is* the repo roster).
 - A child repo whose roster cannot be read (not cloned locally) is reported `unverified` and does **not** fail the run. Fail-open on unverifiable, never fail-closed.
 

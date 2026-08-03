@@ -64,7 +64,8 @@ python3 "$REPO_ROOT/.claude/skills/wave-scope/validate_matrix_names.py" \
     --scope "$REPO_ROOT/cross-repo-status.json" --wave {M}
 RC=$?
 if [ "$RC" -ne 0 ]; then
-  echo "ERROR: wave_{M}_scope has unresolved names or cross-repo implementer(s)."
+  echo "ERROR: wave_{M}_scope has unresolved names, cross-repo implementer(s),"
+  echo "  or an unclassified role slot key (#1180)."
   echo "  Fix the scope rows (reassign, onboard, or record a roster_union_override"
   echo "  with a rationale) and re-run. See /wave-scope SKILL.md § 12.5."
   exit 1
@@ -72,6 +73,8 @@ fi
 ```
 
 Deterministic and hermetic by default — reads only local rosters and `cross-repo-status.json`, no GitHub API calls. A child repo not cloned locally is reported `unverified` and does not block; add `--fetch-missing` to resolve those over the network. Charter rule: `charter/skills.md` § Wave Scoping — Child-Repo Implementer Must Be a Repo-Roster Member.
+
+Since #1180 this step also fails on an **unclassified role slot key** — a row slot in neither `COMMIT_CAPABLE_ROLES` nor `REVIEW_CLASS_ROLES`. Adding a new role slot to the scope schema is a code change: classify the key in `validate_matrix_names.py` so both the resolution set and the membership check are chosen deliberately rather than inherited from a fall-through.
 
 ### 0. Derive wave repos in scope (Mandatory first step)
 

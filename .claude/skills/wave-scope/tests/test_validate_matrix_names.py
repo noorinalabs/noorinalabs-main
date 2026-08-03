@@ -15,14 +15,20 @@ import json
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import validate_matrix_names  # noqa: E402
 from validate_matrix_names import (  # noqa: E402
+    COMMIT_CAPABLE_ROLES,
+    KNOWN_ROLE_SLOTS,
+    REVIEW_CLASS_ROLES,
     _load_org_manifest_names,
     _override_rationale,
     _print_report_to_stderr,
+    is_role_slot_key,
     repo_of_row,
     validate,
     validate_scope,
@@ -858,6 +864,337 @@ class PersonaShapeFilterTests(unittest.TestCase):
                 },
             )
             self.assertEqual(_load_org_manifest_names(org), {"Real Persona"})
+
+
+class UnclassifiedRoleSlotTests(unittest.TestCase):
+    """#1180: an unclassified slot key takes the STRICT path and fails loudly.
+
+    Pre-#1180 the seam was `combined if role in COMMIT_CAPABLE_ROLES else
+    review_combined` — an allowlist of the NARROW side, so an unclassified role
+    inherited BOTH review-class loosenings: the org-union manifest widened its
+    resolution set, and the #1134 membership check was skipped. Measured on the
+    pre-fix code, a matrix of `co_implementer` / `pair_implementer` / `fixer`
+    reported "all 3 names resolved", exit 0.
+
+    Every test here goes RED against the pre-#1180 module.
+    """
+
+    THIRD_CHILD_REVIEWER = "Nikolaos Papadopoulos"
+    # A commit-capable-by-meaning slot key nobody has classified — the #1180
+    # example. It would have to COMMIT in the target repo.
+    UNCLASSIFIED_SLOT = "co_implementer"
+
+    def _build_org(self, tmp: Path) -> Path:
+        """Fake org: parent cards, two child rosters, a third-child reviewer, a manifest."""
+        org = _build_fake_org_dir(tmp)
+        _write_roster_card(
+            org / "noorinalabs-data-acquisition" / ".claude" / "team" / "roster",
+            "data_engineer_nikolaos",
+            self.THIRD_CHILD_REVIEWER,
+        )
+        manifest = {
+            name: f"parametrization+{name.replace(' ', '.')}@gmail.com"
+            for name in (
+                "Nadia Khoury",
+                "Wanjiku Mwangi",
+                "Aino Virtanen",
+                "Anya Kowalczyk",
+                self.THIRD_CHILD_REVIEWER,
+            )
+        }
+        (org / ".claude" / "team" / "roster.json").write_text(json.dumps(manifest, indent=2))
+        return org
+
+    # ---- the seam itself -------------------------------------------------
+
+    def test_unclassified_slot_resolves_against_the_narrow_set(self):
+        """The literal acceptance criterion: manifest-only name in an unclassified slot → exit 1.
+
+        `Nikolaos Papadopoulos` is manifest-resolvable and is a real persona in a
+        THIRD child repo, so he resolves in a `reviewer` slot (#1162). In an
+        unclassified slot he must NOT — the manifest widens review-class only.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            matrix = {
+                "noorinalabs-isnad-graph": {self.UNCLASSIFIED_SLOT: self.THIRD_CHILD_REVIEWER}
+            }
+            report = validate(matrix, org)
+            finding = report["noorinalabs-isnad-graph"][0]
+            self.assertFalse(
+                finding["resolved"],
+                "manifest must not widen an unclassified slot's resolution set",
+            )
+            self.assertEqual(_print_report_to_stderr(report), 1)
+
+    def test_same_name_still_resolves_in_a_review_slot(self):
+        """The paired control: only the SLOT CLASS differs between this and the test above.
+
+        Without this pair, `test_unclassified_slot_resolves_against_the_narrow_set`
+        would also pass if the manifest had simply stopped being loaded at all.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            report = validate(
+                {"noorinalabs-isnad-graph": {"reviewer": self.THIRD_CHILD_REVIEWER}}, org
+            )
+            self.assertTrue(report["noorinalabs-isnad-graph"][0]["resolved"])
+
+    def test_unclassified_slot_gets_the_membership_check(self):
+        """The second loosening: #1134 membership must apply to an unclassified slot.
+
+        `Nadia Khoury` is on the parent cards, so she RESOLVES on the narrow set
+        too — the resolution seam alone would let this pass. She is not on the
+        isnad-graph roster, and a `co_implementer` commits there.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            report = validate(
+                {"noorinalabs-isnad-graph": {self.UNCLASSIFIED_SLOT: "Nadia Khoury"}}, org
+            )
+            finding = report["noorinalabs-isnad-graph"][0]
+            self.assertTrue(finding["resolved"], "parent-card name resolves on the narrow set")
+            self.assertEqual(finding["membership"], "cross-repo")
+            self.assertEqual(_print_report_to_stderr(report), 1)
+
+    def test_unclassified_slot_fails_even_when_fully_valid(self):
+        """A resolvable, repo-member name in an unclassified slot is STILL exit 1.
+
+        Neither the #319 nor the #1134 class fires here — only the #1180 slot
+        class does. This is the test that pins the classification failure as its
+        own signal rather than a side effect of a name miss.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            report = validate(
+                {"noorinalabs-isnad-graph": {self.UNCLASSIFIED_SLOT: "Anya Kowalczyk"}}, org
+            )
+            finding = report["noorinalabs-isnad-graph"][0]
+            self.assertTrue(finding["resolved"])
+            self.assertEqual(finding["membership"], "member")
+            self.assertEqual(finding["slot_class"], "unclassified")
+            self.assertEqual(_print_report_to_stderr(report), 1)
+
+    def test_known_slots_are_marked_known(self):
+        """All four live slots stay `slot_class="known"` — no false unclassified."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            matrix = {
+                "noorinalabs-isnad-graph": {
+                    "implementer": "Anya Kowalczyk",
+                    "reviewer": "Aino Virtanen",
+                    "reviewer_2": "Nadia Khoury",
+                    "merge_gate_reviewer": "Wanjiku Mwangi",
+                }
+            }
+            report = validate(matrix, org)
+            for f in report["noorinalabs-isnad-graph"]:
+                self.assertEqual(f["slot_class"], "known", f"{f['role']} must be classified")
+            self.assertEqual(_print_report_to_stderr(report), 0)
+
+    def test_every_review_class_role_keeps_the_wide_set(self):
+        """Regression anchor for the inversion: drop a name from REVIEW_CLASS_ROLES and this reds.
+
+        Each review slot is checked INDEPENDENTLY with a manifest-only name, so
+        losing any single member of the frozenset is caught, not just losing all
+        three (which a combined-matrix assertion would also catch).
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            for role in ("reviewer", "reviewer_2", "merge_gate_reviewer"):
+                with self.subTest(role=role):
+                    report = validate(
+                        {"noorinalabs-isnad-graph": {role: self.THIRD_CHILD_REVIEWER}}, org
+                    )
+                    finding = report["noorinalabs-isnad-graph"][0]
+                    self.assertTrue(finding["resolved"], f"{role} must keep the manifest union")
+                    self.assertEqual(finding["membership"], "n/a", f"{role} must not be gated")
+                    self.assertEqual(finding["slot_class"], "known")
+                    self.assertEqual(_print_report_to_stderr(report), 0)
+
+    def test_role_classes_are_disjoint(self):
+        """A slot cannot be both commit-capable and review-class — the seam would be ambiguous."""
+        self.assertEqual(COMMIT_CAPABLE_ROLES & REVIEW_CLASS_ROLES, frozenset())
+        self.assertEqual(KNOWN_ROLE_SLOTS, COMMIT_CAPABLE_ROLES | REVIEW_CLASS_ROLES)
+
+
+class SlotKeyRecognitionTests(unittest.TestCase):
+    """#1180: `is_role_slot_key` — which scope-row keys name a PERSON.
+
+    Scope rows mix role slots with free-form metadata, so scope mode cannot
+    treat every string key as a person. The recogniser admits the known slots
+    plus any agentive-shaped key not explicitly denied.
+    """
+
+    # Every non-role key measured across all 293 rows of every `wave_*_scope`
+    # in cross-repo-status.json (2026-08-02). Snapshotted rather than read from
+    # the live file so the guard cannot rot when the wave data changes.
+    LIVE_METADATA_KEYS = (
+        "batch",
+        "blocked_by",
+        "blocked_on",
+        "blocks",
+        "blocks_next_wave_scope",
+        "bundle",
+        "coupled_with",
+        "follow_on_to",
+        "found_by",
+        "id",
+        "merged_sha",
+        "note",
+        "open_risk",
+        "pair_with",
+        "pr",
+        "pre_kickoff_blocker",
+        "priority",
+        "reassigned_from",
+        "ref",
+        "role",
+        "scope_note",
+        "sequence",
+        "slate_note",
+        "spawn",
+        "status",
+    )
+
+    def test_known_slots_are_recognised(self):
+        for key in sorted(KNOWN_ROLE_SLOTS):
+            with self.subTest(key=key):
+                self.assertTrue(is_role_slot_key(key))
+
+    def test_no_live_metadata_key_is_mistaken_for_a_slot(self):
+        """Zero false positives over the measured live key census.
+
+        `pre_kickoff_blocker` IS agentive-shaped (`_blocker`) and is caught only
+        by the `NON_ROLE_ROW_KEYS` denylist — delete that branch and this reds.
+        """
+        for key in self.LIVE_METADATA_KEYS:
+            with self.subTest(key=key):
+                self.assertFalse(is_role_slot_key(key), f"{key} is metadata, not a person slot")
+
+    def test_unclassified_agentive_keys_are_recognised(self):
+        """The #1180 examples plus plausible neighbours — all must be SEEN, then flagged."""
+        for key in ("co_implementer", "pair_implementer", "fixer", "author", "owner", "reviewer_3"):
+            with self.subTest(key=key):
+                self.assertTrue(is_role_slot_key(key))
+
+    def test_override_key_is_not_a_slot(self):
+        """`roster_union_override` is the #1134 escape hatch, not a person's name."""
+        self.assertFalse(is_role_slot_key("roster_union_override"))
+
+    def test_recognition_is_case_and_whitespace_insensitive(self):
+        self.assertTrue(is_role_slot_key("  Implementer  "))
+        self.assertFalse(is_role_slot_key("  Pre_Kickoff_Blocker  "))
+
+
+class ScopeModeSlotDiscoveryTests(unittest.TestCase):
+    """#1180: scope mode must not silently SKIP an unrecognised slot key.
+
+    Pre-fix, `validate_scope` iterated a hardcoded
+    `("implementer", "reviewer", "reviewer_2", "merge_gate_reviewer")` tuple —
+    a third place a role had to be listed. Measured on the pre-fix code, the
+    3-slot row below reported "all 2 names resolved", exit 0: the third slot was
+    never looked at, so neither the resolution seam nor the membership check
+    could have caught it.
+    """
+
+    def _build_org(self, tmp: Path) -> Path:
+        return _build_fake_org_dir(tmp)
+
+    def _row(self, **extra: object) -> dict[str, object]:
+        row: dict[str, object] = {
+            "id": "noorinalabs-isnad-graph#9999",
+            "ref": "isnad-graph#9999",
+            "priority": "P1",
+            "implementer": "Anya Kowalczyk",
+            "reviewer": "Aino Virtanen",
+        }
+        row.update(extra)
+        return row
+
+    def test_unrecognised_slot_key_is_not_skipped(self):
+        """The reproducer: 3 slots in, 3 findings out, exit 1 (was 2 findings, exit 0)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            scope = {"tier_1_core": [self._row(co_implementer="Nadia Khoury")]}
+            report = validate_scope(scope, org)
+            findings = report["noorinalabs-isnad-graph (isnad-graph#9999)"]
+            roles = sorted(f["role"] for f in findings)
+            self.assertEqual(roles, ["co_implementer", "implementer", "reviewer"])
+            extra = next(f for f in findings if f["role"] == "co_implementer")
+            self.assertEqual(extra["slot_class"], "unclassified")
+            self.assertEqual(_print_report_to_stderr(report), 1)
+
+    def test_metadata_keys_are_still_ignored_in_scope_mode(self):
+        """Walking the row must not start validating `note` / `found_by` as names.
+
+        Weaken `is_role_slot_key` to `return True` and this reds — the guard that
+        the widened discovery did not become "every string key is a person".
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            row = self._row(
+                note="a long prose annotation about sequencing",
+                found_by="Weronika Zielinska (PR #1143 adversarial pass)",
+                reassigned_from="Jean-Claude Habimana (da-roster)",
+                blocked_on="noorinalabs-main#870",
+                status="completed",
+                pre_kickoff_blocker="yes",
+            )
+            report = validate_scope({"tier_1_core": [row]}, org)
+            findings = report["noorinalabs-isnad-graph (isnad-graph#9999)"]
+            self.assertEqual(sorted(f["role"] for f in findings), ["implementer", "reviewer"])
+            self.assertEqual(_print_report_to_stderr(report), 0)
+
+    def test_scope_mode_covers_every_known_slot(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            row = self._row(reviewer_2="Nadia Khoury", merge_gate_reviewer="Wanjiku Mwangi")
+            report = validate_scope({"tier_1_core": [row]}, org)
+            findings = report["noorinalabs-isnad-graph (isnad-graph#9999)"]
+            self.assertEqual(sorted(f["role"] for f in findings), sorted(KNOWN_ROLE_SLOTS))
+            self.assertEqual(_print_report_to_stderr(report), 0)
+
+    def test_scope_mode_slot_list_is_driven_by_the_frozensets(self):
+        """Single source of truth: classifying a role reaches scope mode with no second edit.
+
+        `co_lead` is deliberately NOT agentive-shaped, so the only way scope mode
+        can see it is via `KNOWN_ROLE_SLOTS`. Under the old hardcoded tuple this
+        row's third slot stayed invisible no matter what the frozensets said.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            self.assertFalse(is_role_slot_key("co_lead"), "fixture premise: not agentive-shaped")
+            scope = {"tier_1_core": [self._row(co_lead="Aino Virtanen")]}
+
+            before = validate_scope(scope, org)["noorinalabs-isnad-graph (isnad-graph#9999)"]
+            self.assertNotIn("co_lead", [f["role"] for f in before])
+
+            widened = REVIEW_CLASS_ROLES | {"co_lead"}
+            with unittest.mock.patch.multiple(
+                validate_matrix_names,
+                REVIEW_CLASS_ROLES=widened,
+                KNOWN_ROLE_SLOTS=COMMIT_CAPABLE_ROLES | widened,
+            ):
+                after = validate_scope(scope, org)["noorinalabs-isnad-graph (isnad-graph#9999)"]
+                entry = next(f for f in after if f["role"] == "co_lead")
+                self.assertEqual(entry["slot_class"], "known")
+                self.assertTrue(entry["resolved"])
+
+    def test_override_key_still_applies_in_scope_mode(self):
+        """The widened row walk must not swallow or re-validate the override key."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            row = self._row(
+                implementer="Nadia Khoury",  # parent-only → cross-repo without the override
+                roster_union_override={"rationale": "intended, owner-approved"},
+            )
+            report = validate_scope({"tier_1_core": [row]}, org)
+            findings = report["noorinalabs-isnad-graph (isnad-graph#9999)"]
+            self.assertNotIn("roster_union_override", [f["role"] for f in findings])
+            impl = next(f for f in findings if f["role"] == "implementer")
+            self.assertEqual(impl["membership"], "overridden")
+            self.assertEqual(_print_report_to_stderr(report), 0)
 
 
 if __name__ == "__main__":
