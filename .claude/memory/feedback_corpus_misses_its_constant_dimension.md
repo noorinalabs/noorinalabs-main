@@ -1,10 +1,10 @@
 ---
 name: feedback_corpus_misses_its_constant_dimension
-description: "A differential corpus finds defects only in the dimensions it VARIES — whatever it holds constant is invisible by construction, and knowing this rule does not prevent repeating it"
+description: "A differential corpus finds defects only in the dimensions it VARIES — whatever it holds constant is invisible by construction, and knowing this rule does not prevent repeating it. Cheapest detector: score two candidate implementations; an identical score means the suite does not pin that decision."
 metadata:
   node_type: memory
   type: feedback
-last_verified: 2026-07-30
+last_verified: 2026-08-03
 ---
 
 A test corpus that varies N dimensions and holds one fixed will pass cleanly while a defect sits in the fixed one. The corpus is not weak — it is **blind by construction**, and its green result is what makes the blindness convincing.
@@ -68,6 +68,27 @@ LC_ALL=C PYTHONUTF8=0 PYTHONCOERCECLOCALE=0  -> ANSI_X3.4-1968
 Only the reviewer who went looking for the *mechanism* rather than the *verdict* caught it — and she was correcting her own earlier imprecision, which two other people had by then inherited and repeated as independent confirmation.
 
 **How to apply:** a measurement that confirms what you expected is the one most likely to have skipped an axis, because nothing prompts a second look. Before citing a confirming run, state which variable it isolated and which it held fixed. **"Three people independently confirmed it" is not independence if they all ran the same one-variable command** — it is one measurement with three witnesses. Cross-reference [[feedback_pr_body_table_is_a_claim]]: this is how a wrong *mechanism* survives into prose even when the numbers were genuinely run.
+
+---
+
+## Third instance — the cheapest detector for a held-constant axis: score two candidate implementations (W29, PR #1269)
+
+The instances above found the blind axis by *adding* one. There is a mechanical way to detect one **without** knowing what it is, and it cost nothing here.
+
+`charter_trailer._BRANCH_AUTHOR_PREFIX_RE` parses `{Initial}.{Lastname}[-/]…` branch refs and feeds both review hooks. Its suite varied separator, case, anchoring, `None`-vs-`""`, wave-merge/dependabot/underscore rejection, and cross-hook binding identity — and held **surname shape** constant: every fixture surname was a single unhyphenated ASCII word. So `([A-Za-z]+)` looked fully pinned while it silently *truncated* hyphenated surnames (`K.Mensah-Williams/…` -> `Mensah`), colliding with a different real roster member and making the hook fail-closed and fail-open at once.
+
+**The detector.** The reviewer ran the suite against **three** candidate charsets — the shipped one and two proposed fixes with materially different semantics. All three scored an **identical `420 passed`**.
+
+> **If two implementations that disagree about real inputs score identically on your suite, the suite does not pin that decision — regardless of how green or how large it is.** No knowledge of the missing axis is required to run this; the identical score *is* the signal, and it names the decision that is unpinned.
+
+Strictly cheaper than enumerating dimensions, and complementary: dimension-listing tells you what you never tried; implementation-scoring tells you what your suite cannot decide. Run it whenever a change turns on a single expression (a regex, a comparator, a threshold) — write the alternative you rejected, score it, and if the suite cannot tell them apart you have found the fixture gap rather than the fix.
+
+**Two corollaries measured on the same PR:**
+
+- **The fix is not the deliverable; the fixture that distinguishes it is.** After adding hyphenated-surname fixtures, the rejected candidate failed exactly **1 test out of 3,685** — one assertion is all that stood between two live-behaviour-different implementations, and before this it was zero.
+- **Mutation-test your own new fixtures, not just the code.** Two fixtures written *specifically* to close this gap were themselves vacuous: they asserted `assertIsNotNone(parse(ref))`, and the truncating charset returns `Mensah`, which is not `None` — so they passed in **both** directions and pinned nothing. Only running them against the old implementation exposed it. Writing a test *about* a defect does not make it sensitive to that defect; `assertIsNotNone` on a parser that fails by returning a **wrong value** rather than `None` is the specific trap. Cross-reference [[feedback_fixture_makes_guard_assertion_inert]].
+
+**A scoping corollary, independent of the corpus property.** The original change surveyed open branches for the risky shape, found **0 of 136**, and scoped the defect "latent, not active" — but surveyed only the *parent* repo, while the parser is shared by all 8. A re-survey across all 860 org-wide branches found **77 live matches in 4 child repos**. **Scope the blast-radius survey to the artifact's consumers, not to the repo you are committing in** — a shared-library change measured in one repo produces a confident, precisely-wrong zero.
 
 ---
 

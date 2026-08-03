@@ -978,5 +978,127 @@ class CommitAuthorScanModeReportTests(unittest.TestCase):
         self.assertFalse(state.passes())
 
 
+class InertCommitDerivationReportTests(unittest.TestCase):
+    """#1220 at the report layer: derived an identity, subtracted nothing.
+
+    This is the surface the issue was filed FROM — an operator running the
+    oracle on a dependabot PR was told "Their own verdicts are excluded from the
+    reviewer set (self-review exclusion active)" about `dependabot[bot]`, on a
+    PR where both roster approvals had been counted in full.
+    """
+
+    BOT_REF = "dependabot/docker/integration-tests/fake_oauth/python-d3400aa"
+
+    @staticmethod
+    def _state(comment_scan, **overrides):
+        kwargs = dict(
+            pr_number="1220",
+            repo="noorinalabs/noorinalabs-deploy",
+            head_ref="dependabot/docker/integration-tests/fake_oauth/python-d3400aa",
+            branch_author_lastname=None,
+            formal_reviewers=[],
+            comment_reviewers=["lucas ferreira", "nino kavtaradze"],
+            non_roster_requestors=[],
+            distinct_reviewer_count=2,
+            wave_bootstrap_exception=False,
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=[],
+            content_sha="837c272a",
+            comment_scan=comment_scan,
+        )
+        kwargs.update(overrides)
+        return prs.ReviewState(**kwargs)
+
+    def test_inert_mode_names_the_derivation_and_denies_the_subtraction(self):
+        text = prs._render_text(
+            self._state(
+                prs.gate.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER,
+                commit_authors=["dependabot[bot]"],
+            )
+        )
+        self.assertIn("comment verdict scan: RAN", text)
+        # Still names WHO was derived — the auditable part.
+        self.assertIn("COMMIT IDENTITY", text)
+        self.assertIn("dependabot[bot]", text)
+        # And denies the subtraction the old line asserted.
+        self.assertIn("matches NO roster persona", text)
+        self.assertIn("no verdict was subtracted", text)
+        self.assertNotIn("self-review exclusion active", text)
+
+    def test_inert_and_live_lines_read_differently(self):
+        """Opposite claims about the same count must not share wording."""
+        inert = prs._render_text(
+            self._state(
+                prs.gate.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER,
+                commit_authors=["dependabot[bot]"],
+            )
+        )
+        live = prs._render_text(
+            self._state(
+                prs.gate.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED,
+                commit_authors=["Nino Kavtaradze"],
+            )
+        )
+        self.assertNotEqual(inert, live)
+        self.assertIn("self-review exclusion active", live)
+        self.assertNotIn("matches NO roster persona", live)
+
+    def test_unrecognized_mode_says_so_instead_of_borrowing_a_neighbour(self):
+        """The catch-all used to be NO_BRANCH_AUTHOR's text, so an unwired mode
+        was described as "the PR's commits named no persona" — a specific claim
+        about evidence nobody had looked at."""
+        text = prs._render_text(self._state("some-future-mode"))
+        self.assertIn("UNRECOGNIZED SCAN MODE", text)
+        self.assertIn("some-future-mode", text)
+        self.assertNotIn("commits named no persona either", text)
+
+    def test_compute_review_state_reports_the_inert_mode_end_to_end(self):
+        """Wiring, through the REAL `resolve_review_verdicts` — the issue's own
+        reproduction shape: a dependabot head ref, one bot-authored commit, two
+        genuine roster approvals. Both must still count (deploy#691) and the
+        mode must no longer claim an exclusion."""
+        pr_data = {
+            "author": "app/dependabot",
+            "number": 691,
+            "reviews": [],
+            "headRefName": self.BOT_REF,
+            "labels": [],
+        }
+        comments = [
+            _charter_comment("Lucas Ferreira", "Approved", _AFTER),
+            _charter_comment("Nino Kavtaradze", "Approved", _AFTER),
+        ]
+
+        def fake_run(args, capture_output, text, timeout):  # noqa: ARG001
+            result = mock.MagicMock()
+            result.returncode = 0
+            result.stdout = json.dumps(comments)
+            return result
+
+        with (
+            mock.patch.object(prs.gate, "get_pr_data", return_value=pr_data),
+            mock.patch.object(prs.gate.subprocess, "run", side_effect=fake_run),
+            mock.patch.object(
+                prs.gate,
+                "fetch_pr_commits",
+                return_value=[_api_commit("c0", _NOW, name="dependabot[bot]")],
+            ),
+            mock.patch.object(
+                prs.gate,
+                "_load_roster_names",
+                return_value={"lucas ferreira", "nino kavtaradze"},
+            ),
+        ):
+            state = prs.compute_review_state("691", repo="noorinalabs/noorinalabs-deploy")
+
+        self.assertEqual(state.comment_scan, prs.gate.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER)
+        self.assertEqual(state.commit_authors, ["dependabot[bot]"])
+        # deploy#691 stays fixed: the count is untouched by the description fix.
+        self.assertEqual(state.comment_reviewers, ["lucas ferreira", "nino kavtaradze"])
+        self.assertEqual(state.distinct_reviewer_count, 2)
+        self.assertTrue(state.passes())
+        self.assertNotIn("self-review exclusion active", prs._render_text(state))
+
+
 if __name__ == "__main__":
     unittest.main()

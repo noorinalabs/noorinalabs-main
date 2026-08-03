@@ -43,6 +43,15 @@ sys.path.insert(0, str(_HOOKS_DIR))
 sys.path.insert(0, str(_LIB_DIR))
 
 import charter_trailer  # noqa: E402
+
+# The oracle driver (`.claude/lib/`) is the THIRD surface that renders the
+# comment-scan enum, alongside `check()`'s block message and its allow-path
+# advisory (#1273). `CommentScanModeTotalityTests` below asserts all three agree
+# on the same mode set, which is only possible from a module that can see both;
+# this import exists for that class and for nothing else. The dependency runs
+# test -> lib -> hook (pr_review_state already imports the gate), so it adds no
+# cycle to the shipped code.
+import pr_review_state as prs  # noqa: E402
 import validate_pr_review as hook  # noqa: E402
 
 
@@ -4651,25 +4660,97 @@ class IsSelfReviewTests(unittest.TestCase):
 
 
 class RefineCommentScanScopeTests(unittest.TestCase):
-    """#1210: the ONE allowed scope transition, and the three forbidden ones."""
+    """#1210's allowed transitions, re-keyed by #1220 on roster membership."""
 
+    ROSTER = {"aino virtanen", "santiago ferreira", "nino kavtaradze"}
     IDENT = (hook.CommitAuthorIdentity(lastname="Virtanen", initial="a", display="Aino Virtanen"),)
+    BOT = (
+        hook.CommitAuthorIdentity(
+            lastname="dependabot[bot]", initial="d", display="dependabot[bot]"
+        ),
+    )
 
-    def test_no_branch_author_upgrades_when_commits_named_someone(self):
+    def test_no_branch_author_upgrades_when_commits_named_a_roster_persona(self):
         self.assertEqual(
-            hook.refine_comment_scan_scope(hook.COMMENT_SCAN_NO_BRANCH_AUTHOR, self.IDENT),
+            hook.refine_comment_scan_scope(
+                hook.COMMENT_SCAN_NO_BRANCH_AUTHOR, self.IDENT, self.ROSTER
+            ),
+            hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED,
+        )
+
+    def test_derived_identity_matching_no_roster_persona_is_reported_inert(self):
+        """THE #1220 unit-level kill-shot.
+
+        Pre-fix this returned COMMIT_AUTHOR_EXCLUDED — "an identity was derived"
+        reported as "an exclusion was applied". `dependabot[bot]` can never be a
+        Requestor that survives roster filtering, so nothing was subtracted and
+        the mode must not claim one was.
+        """
+        self.assertEqual(
+            hook.refine_comment_scan_scope(
+                hook.COMMENT_SCAN_NO_BRANCH_AUTHOR, self.BOT, self.ROSTER
+            ),
+            hook.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER,
+        )
+
+    def test_one_roster_persona_among_several_derivations_is_still_live(self):
+        """A human fixup on a bot branch. Exclusion IS live for that human, so
+        the inert reading must not win just because a bot is also in the tuple —
+        the predicate is ANY, not ALL."""
+        self.assertEqual(
+            hook.refine_comment_scan_scope(
+                hook.COMMENT_SCAN_NO_BRANCH_AUTHOR, self.BOT + self.IDENT, self.ROSTER
+            ),
+            hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED,
+        )
+
+    def test_same_surname_different_person_is_not_live(self):
+        """#1172 must hold in the new predicate too: Lucas is not Santiago.
+
+        The roster here contains `santiago ferreira` and NOT Lucas. A liveness
+        check written as a surname `in` test would call this live and re-open the
+        Ferreira/Ferreira collision inside the reporting layer.
+        """
+        lucas = (
+            hook.CommitAuthorIdentity(lastname="Ferreira", initial="l", display="Lucas Ferreira"),
+        )
+        self.assertEqual(
+            hook.refine_comment_scan_scope(hook.COMMENT_SCAN_NO_BRANCH_AUTHOR, lucas, self.ROSTER),
+            hook.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER,
+        )
+
+    def test_unreadable_roster_keeps_the_pre_1220_answer(self):
+        """An empty roster means the roster could not be READ, not that the org
+        is empty — so "matches no roster persona" would be a finding derived
+        from a failed read. The undecidable case keeps the modal EXCLUDED
+        wording rather than asserting inertness it cannot establish."""
+        self.assertEqual(
+            hook.refine_comment_scan_scope(hook.COMMENT_SCAN_NO_BRANCH_AUTHOR, self.IDENT, set()),
             hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED,
         )
 
     def test_no_branch_author_stays_when_commits_named_nobody(self):
         self.assertEqual(
-            hook.refine_comment_scan_scope(hook.COMMENT_SCAN_NO_BRANCH_AUTHOR, ()),
+            hook.refine_comment_scan_scope(hook.COMMENT_SCAN_NO_BRANCH_AUTHOR, (), self.ROSTER),
             hook.COMMENT_SCAN_NO_BRANCH_AUTHOR,
         )
 
     def test_ref_derived_author_is_never_downgraded(self):
         self.assertEqual(
-            hook.refine_comment_scan_scope(hook.COMMENT_SCAN_AUTHOR_EXCLUDED, self.IDENT),
+            hook.refine_comment_scan_scope(
+                hook.COMMENT_SCAN_AUTHOR_EXCLUDED, self.IDENT, self.ROSTER
+            ),
+            hook.COMMENT_SCAN_AUTHOR_EXCLUDED,
+        )
+
+    def test_ref_derived_author_is_not_downgraded_by_a_non_roster_derivation(self):
+        """The #1220 arm must not leak onto the ref path either: a declared
+        `{Initial}.{Lastname}` author keeps its exclusion whatever the commits
+        say, including when they say `dependabot[bot]`."""
+        self.assertEqual(
+            hook.refine_comment_scan_scope(
+                hook.COMMENT_SCAN_AUTHOR_EXCLUDED, self.BOT, self.ROSTER
+            ),
             hook.COMMENT_SCAN_AUTHOR_EXCLUDED,
         )
 
@@ -4680,9 +4761,28 @@ class RefineCommentScanScopeTests(unittest.TestCase):
         defense-in-depth hard-block one layer up.
         """
         self.assertEqual(
-            hook.refine_comment_scan_scope(hook.COMMENT_SCAN_NOT_RUN, self.IDENT),
+            hook.refine_comment_scan_scope(hook.COMMENT_SCAN_NOT_RUN, self.IDENT, self.ROSTER),
             hook.COMMENT_SCAN_NOT_RUN,
         )
+
+    def test_not_run_is_not_relabelled_as_inert_either(self):
+        """#1220 added a second reachable answer, so NOT_RUN now has two ways to
+        be laundered. Both must be closed."""
+        self.assertEqual(
+            hook.refine_comment_scan_scope(hook.COMMENT_SCAN_NOT_RUN, self.BOT, self.ROSTER),
+            hook.COMMENT_SCAN_NOT_RUN,
+        )
+
+    def test_roster_names_is_required_not_defaulted(self):
+        """A caller that forgets the roster must fail loudly.
+
+        A `set()` default would read as "roster unreadable" and hand them a
+        plausible EXCLUDED answer for every input — the silent-wrong direction.
+        """
+        with self.assertRaises(TypeError):
+            hook.refine_comment_scan_scope(  # type: ignore[call-arg]
+                hook.COMMENT_SCAN_NO_BRANCH_AUTHOR, self.BOT
+            )
 
 
 class CommitIdentitySelfReviewExclusionTests(_ResolveOverFakeCommentsHarness):
@@ -4803,6 +4903,69 @@ class CommitIdentitySelfReviewExclusionTests(_ResolveOverFakeCommentsHarness):
         self.assertEqual(
             [i.display for i in verdicts.commit_author_identities], ["dependabot[bot]"]
         )
+        # #1220: THE assertion this test was missing, and the reason it stayed
+        # green through the defect. It pinned the count and the derived
+        # identities — the safe half of the claim — while the mode said
+        # `commit-author-excluded`, i.e. announced a subtraction of a verdict
+        # that was never subtracted. Both approvals are still counted above; the
+        # mode must now describe that honestly.
+        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER)
+
+    def test_bot_branch_with_a_human_fixup_commit_still_reports_live_exclusion(self):
+        """Anti-vacuity control for the test above (#1220).
+
+        Same dependabot ref, same two roster approvals — except one commit is
+        authored by one of the approvers. Without this, the assertion above would
+        be satisfied by a change that simply stopped ever reporting
+        COMMIT_AUTHOR_EXCLUDED on a non-charter ref, which would re-open #1210:
+        Nino's own verdict must still be subtracted AND still be described as
+        subtracted.
+        """
+        verdicts = self._resolve(
+            self.DEPENDABOT_REF,
+            [self._verdict("Lucas Ferreira"), self._verdict("Nino Kavtaradze")],
+            commits=[
+                _api_commit(
+                    "c0",
+                    "2026-07-15T19:13:59Z",
+                    author_name="dependabot[bot]",
+                    author_email="49699333+dependabot[bot]@users.noreply.github.com",
+                ),
+                _api_commit(
+                    "c1",
+                    "2026-07-15T19:13:59Z",
+                    author_name="Nino Kavtaradze",
+                    author_email="parametrization+Nino.Kavtaradze@gmail.com",
+                ),
+            ],
+        )
+        self.assertEqual(verdicts.distinct_reviewers, {"lucas ferreira"})
+        self.assertEqual(verdicts.total_distinct, 1)
+        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED)
+
+    def test_an_unreadable_roster_does_not_report_the_bot_as_inert(self):
+        """The degraded read must not masquerade as an inertness measurement.
+
+        With an unreadable roster (`_load_roster_names` returns the empty set)
+        EVERY identity trivially matches nothing, so a naive predicate would
+        report `commit-author-non-roster` — a confident claim about roster
+        membership derived from a failed roster read. The mode falls back to the
+        pre-#1220 answer instead.
+        """
+        verdicts = self._resolve(
+            self.DEPENDABOT_REF,
+            [self._verdict("Lucas Ferreira"), self._verdict("Nino Kavtaradze")],
+            roster=set(),
+            commits=[
+                _api_commit(
+                    "c0",
+                    "2026-07-15T19:13:59Z",
+                    author_name="dependabot[bot]",
+                    author_email="49699333+dependabot[bot]@users.noreply.github.com",
+                )
+            ],
+        )
+        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED)
 
     def test_squash_flattened_identity_excludes_nobody(self):
         """The bare principal must not resolve to the persona roster.json maps it to.
@@ -5214,6 +5377,67 @@ class CommitAuthorBlockDiagnosticTests(_ResolveOverFakeCommentsHarness):
         self.assertIn("WITHOUT self-review exclusion", unavailable)
         self.assertNotIn("WITHOUT self-review exclusion", excluded)
 
+    BOT = hook.CommitAuthorIdentity(
+        lastname="dependabot[bot]", initial="d", display="dependabot[bot]"
+    )
+
+    def test_non_roster_derivation_does_not_claim_a_subtraction(self):
+        """#1220 at the block surface.
+
+        Pre-fix this input produced the COMMIT_AUTHOR_EXCLUDED text, which told
+        the operator "Verdicts from those personas were excluded as self-reviews"
+        on a PR where nothing had been excluded — sending them to look for a
+        dropped verdict that never existed.
+        """
+        reason = self._block_reason(
+            self._verdicts(hook.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER, (self.BOT,))
+        )
+        # Still NAMES the derivation — it is what an operator would audit if
+        # they suspected the wrong person had been picked.
+        self.assertIn("COMMIT IDENTITY", reason)
+        self.assertIn("dependabot[bot]", reason)
+        # And states the fact the old message got wrong.
+        self.assertIn("matches no roster persona", reason)
+        self.assertIn("NO verdict was excluded as a self-review", reason)
+        # The false claim must be gone, not merely joined by a true one.
+        self.assertNotIn("is excluded as a self-review;", reason)
+        # The count itself is untouched by the mode (this is a description fix).
+        self.assertIn("1/2 required peer reviews", reason)
+
+    def test_inert_and_live_commit_derivations_read_differently(self):
+        """The two commit-derived modes make OPPOSITE claims about whether a
+        verdict was subtracted, so sharing wording would restore exactly the
+        ambiguity #1220 removed. Both name the derivation; only one asserts an
+        exclusion."""
+        live = self._block_reason(
+            self._verdicts(
+                hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED,
+                (
+                    hook.CommitAuthorIdentity(
+                        lastname="Kavtaradze", initial="n", display="Nino Kavtaradze"
+                    ),
+                ),
+            )
+        )
+        inert = self._block_reason(
+            self._verdicts(hook.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER, (self.BOT,))
+        )
+        self.assertNotEqual(live, inert)
+        self.assertIn("is excluded as a self-review", live)
+        self.assertNotIn("matches no roster persona", live)
+        self.assertIn("matches no roster persona", inert)
+
+    def test_inert_mode_is_not_collapsed_into_the_no_author_wording(self):
+        """It must not borrow NO_BRANCH_AUTHOR's text either: that mode's claim
+        is "the PR's commits named no persona", and here they named one."""
+        inert = self._block_reason(
+            self._verdicts(hook.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER, (self.BOT,))
+        )
+        no_author = self._block_reason(self._verdicts(hook.COMMENT_SCAN_NO_BRANCH_AUTHOR))
+        self.assertNotEqual(inert, no_author)
+        self.assertIn("commits named no persona either", no_author)
+        self.assertNotIn("commits named no persona either", inert)
+
 
 class AllowPathScanDisclosureTests(_ResolveOverFakeCommentsHarness):
     """#1211: the ALLOW path must say when self-review exclusion was unavailable.
@@ -5423,6 +5647,273 @@ class AllowPathScanDisclosureTests(_ResolveOverFakeCommentsHarness):
         allowed = self._allow_result(self._verdicts(hook.COMMENT_SCAN_NO_BRANCH_AUTHOR))
         assert allowed is not None
         self.assertEqual(allowed["decision"], "allow")
+
+    BOT_IDENTITY = (
+        hook.CommitAuthorIdentity(
+            lastname="dependabot[bot]", initial="d", display="dependabot[bot]"
+        ),
+    )
+
+    def test_inert_commit_derivation_also_discloses_on_the_allow_path(self):
+        """#1220 extends #1211's disclosure to the mode it split off.
+
+        COMMIT_AUTHOR_NON_ROSTER produces a reviewer set byte-identical to
+        NO_BRANCH_AUTHOR's — no verdict was excluded in either — so the #1211
+        exposure is identical and the disclosure must fire. Pre-#1220 this input
+        was labelled COMMIT_AUTHOR_EXCLUDED and the advisory stayed SILENT on it,
+        i.e. the gate skipped the disclosure on the strength of a subtraction it
+        had not performed.
+        """
+        result = self._allow_result(
+            self._verdicts(hook.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER, identities=self.BOT_IDENTITY)
+        )
+        assert result is not None, "an inert derivation excluded nothing — that must be disclosed"
+        self.assertEqual(result["decision"], "allow")
+        message = result["systemMessage"]
+        self.assertIn("WITHOUT self-review exclusion", message)
+        self.assertIn("dependabot[bot]", message)
+        self.assertIn("matches no roster persona", message)
+        self.assertIn(self.HEAD_REF, message)
+        self.assertIn("2/2", message)
+        self.assertNotIn("BLOCKED", message)
+
+    def test_the_two_no_exclusion_advisories_are_not_the_same_text(self):
+        """Both disclose "nothing was excluded" and they do so for different
+        reasons — one because nobody was derivable, one because the person
+        derived is not a roster persona. A reader has to be able to tell which,
+        because only the second one names an identity worth auditing."""
+        derived = self._allow_result(
+            self._verdicts(hook.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER, identities=self.BOT_IDENTITY)
+        )
+        none_derived = self._allow_result(self._verdicts(hook.COMMENT_SCAN_NO_BRANCH_AUTHOR))
+        assert derived is not None and none_derived is not None
+        self.assertNotEqual(derived["systemMessage"], none_derived["systemMessage"])
+        self.assertIn("COMMIT IDENTITY", derived["systemMessage"])
+        self.assertNotIn("COMMIT IDENTITY", none_derived["systemMessage"])
+        # Exactly one advisory each — the new branch must not double-emit.
+        self.assertEqual(derived["systemMessage"].count("NOTE: PR"), 1)
+        self.assertEqual(none_derived["systemMessage"].count("NOTE: PR"), 1)
+
+    def test_advisory_reports_the_real_count_on_a_wave_bootstrap_single_reviewer(self):
+        """The allow tail is reachable at 1/2, and the count must not be a literal.
+
+        `check()` allows a 1/2 PR through the wave-bootstrap single-reviewer
+        exception, so this advisory can fire on a PR with ONE reviewer. Every
+        pre-existing test here supplies a 2/2 fixture, which is why hardcoding
+        the count to `2/2` survived the whole suite — found by Nadia Khoury
+        reviewing #1270. Both no-exclusion modes are checked, so neither branch
+        can regress to a literal.
+        """
+        for mode, identities in (
+            (hook.COMMENT_SCAN_NO_BRANCH_AUTHOR, ()),
+            (hook.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER, self.BOT_IDENTITY),
+        ):
+            with self.subTest(mode=mode):
+                verdicts = self._verdicts(mode, identities=identities)
+                verdicts.distinct_reviewers = {"aino virtanen"}
+                verdicts.wave_bootstrap_exception = True
+                result = self._allow_result(verdicts)
+                assert result is not None, "the disclosure must ride the bootstrap allow too"
+                self.assertEqual(result["decision"], "allow")
+                message = result["systemMessage"]
+                self.assertIn("reached 1/2 WITHOUT self-review exclusion", message)
+                self.assertNotIn("2/2", message)
+
+
+class CommentScanModeTotalityTests(unittest.TestCase):
+    """Every COMMENT_SCAN_* mode must be WIRED on every surface that renders it.
+
+    #1273: the enum is rendered by three independent hand-written surfaces —
+    `check()`'s block `scan_diagnostic`, `check()`'s allow-path advisory, and
+    `pr_review_state._describe_comment_scan` — and nothing pinned that a new
+    mode reached all three. #1220 added a fifth mode, which is exactly the event
+    that would have exercised the gap, so the pin lands with it.
+
+    The coverage table below is DELIBERATE, not derived: a mode's absence from a
+    surface is a decision (AUTHOR_EXCLUDED needs no block diagnostic — the ref
+    names the author, nothing is surprising), and the `_TABLE` equality guard
+    makes adding a sixth mode fail here until someone records that decision.
+    """
+
+    # mode -> (block diagnostic expected?, allow advisory expected?)
+    _TABLE = {
+        # The scan never ran: the block path must SHOUT, and the allow path is
+        # unreachable (`resolve_review_verdicts` hard-blocks upstream).
+        hook.COMMENT_SCAN_NOT_RUN: (True, False),
+        # Nothing excluded, nobody derived: both surfaces disclose (#1206/#1211).
+        hook.COMMENT_SCAN_NO_BRANCH_AUTHOR: (True, True),
+        # Nothing excluded, someone derived: both surfaces disclose (#1220).
+        hook.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER: (True, True),
+        # Exclusion applied on commit evidence: block names the subtraction; the
+        # allow path stays silent because exclusion can only remove verdicts and
+        # so can never manufacture a pass (#1210/#1211).
+        hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED: (True, False),
+        # Exclusion applied on the ref the human declared: nothing surprising to
+        # report on either surface.
+        hook.COMMENT_SCAN_AUTHOR_EXCLUDED: (False, False),
+    }
+
+    UNRECOGNIZED = "UNRECOGNIZED SCAN MODE"
+
+    def test_table_covers_exactly_the_declared_mode_set(self):
+        """The guard that makes every other test in this class total.
+
+        Without it, adding a sixth constant would leave the loops below iterating
+        five modes and passing — the vacuity #1215 is about.
+        """
+        self.assertEqual(set(self._TABLE), set(hook.ALL_COMMENT_SCAN_MODES))
+        self.assertEqual(
+            len(hook.ALL_COMMENT_SCAN_MODES),
+            len(set(hook.ALL_COMMENT_SCAN_MODES)),
+            "ALL_COMMENT_SCAN_MODES must not contain duplicates",
+        )
+
+    @staticmethod
+    def _verdicts(comment_scan, *, reviewers):
+        return hook.ReviewVerdicts(
+            number=691,
+            head_ref="dependabot/docker/x-1.2.3",
+            labels=[],
+            branch_author_lastname=None,
+            content_sha="837c272a",
+            content_ts=None,
+            formal_reviewers=set(),
+            comment_reviewers=set(reviewers),
+            non_roster_requestors=set(),
+            roster_comment_reviewers=set(reviewers),
+            roster_names={"aino virtanen", "nino kavtaradze"},
+            distinct_reviewers=set(reviewers),
+            stale_verdicts_comment=[],
+            stale_verdicts_formal=[],
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=[],
+            tech_debt_unparseable=[],
+            wave_bootstrap_exception=False,
+            comment_scan=comment_scan,
+            commit_author_identities=(
+                hook.CommitAuthorIdentity(
+                    lastname="dependabot[bot]", initial="d", display="dependabot[bot]"
+                ),
+            ),
+        )
+
+    def _check(self, comment_scan, *, reviewers):
+        input_data = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "gh pr merge 691 --repo noorinalabs/noorinalabs-main"},
+        }
+        with (
+            mock.patch.object(
+                hook,
+                "get_pr_data",
+                return_value={
+                    "author": "parametrization",
+                    "number": 691,
+                    "reviews": [],
+                    "headRefName": "dependabot/docker/x-1.2.3",
+                    "labels": [],
+                },
+            ),
+            mock.patch.object(
+                hook,
+                "resolve_review_verdicts",
+                return_value=self._verdicts(comment_scan, reviewers=reviewers),
+            ),
+            mock.patch.object(hook, "log_pretooluse_block"),
+        ):
+            return hook.check(input_data)
+
+    def test_every_mode_gets_its_declared_block_diagnostic(self):
+        """A mode with no block branch renders a bare count — the pre-#1206
+        state, where a number with no provenance read as a measurement."""
+        for mode, (wants_block, _) in self._TABLE.items():
+            with self.subTest(mode=mode):
+                result = self._check(mode, reviewers={"aino virtanen"})
+                assert result is not None
+                reason = str(result["reason"])
+                # The generic 2-reviewer body is always present; the scan
+                # diagnostic is the prefix that precedes it.
+                prefix = reason.split("BLOCKED: PR #691 has 1/2 required peer reviews")[0]
+                if wants_block:
+                    self.assertTrue(
+                        prefix.strip(), f"{mode} renders no block scan diagnostic at all"
+                    )
+                    self.assertIn(
+                        "scan",
+                        prefix.lower(),
+                        f"{mode}'s block diagnostic never mentions the scan",
+                    )
+                else:
+                    self.assertEqual(prefix, "", f"{mode} unexpectedly renders a block diagnostic")
+
+    def test_every_mode_matches_its_declared_allow_advisory_coverage(self):
+        for mode, (_, wants_advisory) in self._TABLE.items():
+            with self.subTest(mode=mode):
+                result = self._check(mode, reviewers={"aino virtanen", "nino kavtaradze"})
+                if wants_advisory:
+                    assert result is not None, f"{mode} must disclose on the allow path"
+                    self.assertEqual(result["decision"], "allow")
+                    self.assertIn("self-review exclusion", result["systemMessage"])
+                else:
+                    self.assertIsNone(result, f"{mode} must stay silent on the allow path")
+
+    def test_every_mode_renders_a_recognized_report_line(self):
+        """`pr_review_state._describe_comment_scan` used to end in a bare
+        `return` on NO_BRANCH_AUTHOR's text, so an unwired mode was described as
+        "the PR's commits named no persona" — confident, specific, wrong. The
+        fallback now says UNRECOGNIZED; no declared mode may reach it."""
+        for mode in hook.ALL_COMMENT_SCAN_MODES:
+            with self.subTest(mode=mode):
+                line = prs._describe_comment_scan(
+                    _review_state_for_mode(mode, commit_authors=["dependabot[bot]"])
+                )
+                self.assertTrue(line.strip(), f"{mode} renders an empty report line")
+                self.assertNotIn(self.UNRECOGNIZED, line, f"{mode} is unwired in the oracle report")
+
+    def test_report_lines_are_pairwise_distinct(self):
+        """Two modes that render identically cannot be told apart by the reader,
+        which is the whole reason the enum exists."""
+        rendered = {
+            mode: prs._describe_comment_scan(
+                _review_state_for_mode(mode, commit_authors=["dependabot[bot]"])
+            )
+            for mode in hook.ALL_COMMENT_SCAN_MODES
+        }
+        self.assertEqual(
+            len(set(rendered.values())),
+            len(rendered),
+            f"collapsed report lines: {rendered}",
+        )
+
+    def test_the_unrecognized_marker_is_actually_reachable(self):
+        """Positive control for the two tests above.
+
+        If the fallback were unreachable — or the marker string a typo — the
+        `assertNotIn` assertions would pass for every input forever, including
+        for a mode nobody wired. An undeclared mode must hit it.
+        """
+        line = prs._describe_comment_scan(_review_state_for_mode("some-future-mode"))
+        self.assertIn(self.UNRECOGNIZED, line)
+        self.assertIn("some-future-mode", line)
+
+
+def _review_state_for_mode(comment_scan, *, commit_authors=()):
+    """A minimal `pr_review_state.ReviewState` carrying just the scan mode."""
+    return prs.ReviewState(
+        pr_number="691",
+        repo="noorinalabs/noorinalabs-main",
+        head_ref="dependabot/docker/x-1.2.3",
+        branch_author_lastname="Ferreira",
+        formal_reviewers=[],
+        comment_reviewers=[],
+        non_roster_requestors=[],
+        distinct_reviewer_count=0,
+        wave_bootstrap_exception=False,
+        reviews_missing_tech_debt=[],
+        tech_debt_issue_numbers=[],
+        comment_scan=comment_scan,
+        commit_authors=list(commit_authors),
+    )
 
 
 if __name__ == "__main__":
