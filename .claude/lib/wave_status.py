@@ -142,7 +142,9 @@ def _commit_author_name(repo: str, sha: str) -> str:
     ).strip()
 
 
-def _canonical_issue_numbers_by_repo(wave: str, status_path: Path) -> dict[str, set[int]]:
+def _canonical_issue_numbers_by_repo(
+    wave: str, status_path: Path
+) -> tuple[dict[str, set[int]], int]:
     """Canonical scope-issue numbers per repo, from ``wave_{M}_scope``.
 
     ``wave_{M}_scope`` (the record ``/wave-scope`` maintains) holds an
@@ -152,13 +154,21 @@ def _canonical_issue_numbers_by_repo(wave: str, status_path: Path) -> dict[str, 
     ``key.startswith("tier_")``, exactly as
     ``post_wave_kickoff_comment.py:find_assignment_row`` does. Each dict row's
     ``id`` field is the fully-qualified ``noorinalabs-<repo>#<number>`` shape;
-    rows without a parseable ``id`` (legacy plain-string tier entries) are
-    skipped — they carry no repo/number to key on.
+    rows without a parseable ``id`` (legacy plain-string tier entries, or a
+    dict whose ``id`` has no ``#`` / a non-numeric tail) are skipped — they
+    carry no repo/number to key on.
 
     This is the base+timestamp-is-not-sufficient fix from the wave-28 retro:
     a merged-to-main PR in the timestamp window is only in scope if it closes
     an issue that is actually recorded as part of the wave's scope (the
     wave-28 false positive was ``us#213`` — in-window, but never a scope row).
+
+    Returns ``(by_repo, unparseable)`` — main#1201 Edge 1: a row this function
+    skips vanishes from both the numerator AND the denominator of the
+    reconciliation warning (main#1190) unless its count is carried out
+    alongside the parsed rows, so :func:`_reconciliation_warning_from_claims`
+    can report against the wave's actual declared row count rather than
+    silently reporting against only the rows that happened to parse.
     """
     data = _load_status(status_path)
     scope = data.get(f"wave_{wave}_scope")
@@ -166,20 +176,24 @@ def _canonical_issue_numbers_by_repo(wave: str, status_path: Path) -> dict[str, 
         raise KeyError(f"wave_{wave}_scope")
 
     by_repo: dict[str, set[int]] = {}
+    unparseable = 0
     for key, value in scope.items():
         if not key.startswith("tier_") or not isinstance(value, list):
             continue
         for row in value:
             if not isinstance(row, dict):
+                unparseable += 1
                 continue
             row_id = row.get("id")
             if not isinstance(row_id, str) or "#" not in row_id:
+                unparseable += 1
                 continue
             repo, _, number = row_id.rpartition("#")
             if not repo or not number.isdigit():
+                unparseable += 1
                 continue
             by_repo.setdefault(repo, set()).add(int(number))
-    return by_repo
+    return by_repo, unparseable
 
 
 def _pr_closing_issue_numbers(repo: str, number: int) -> set[tuple[str, int]]:
@@ -211,7 +225,11 @@ def _pr_closing_issue_numbers(repo: str, number: int) -> set[tuple[str, int]]:
     field, so it is the maximum obtainable in a single page; a PR closing
     over 100 issues would need real pagination (``endCursor``/``hasNextPage``)
     — no real wave has approached that, so it is flagged here rather than
-    silently left uncapped or unremarked.
+    silently left uncapped or unremarked: main#1201 Edge 2 — a full page of
+    exactly 100 nodes is indistinguishable from "closed exactly 100" unless
+    the caller is told, so a page this full prints a stderr WARNING at the
+    point of detection (the raise from ``first:25`` did not, by itself, buy
+    that signal).
     """
     query = (
         "query($owner:String!,$name:String!,$number:Int!){"
@@ -238,6 +256,12 @@ def _pr_closing_issue_numbers(repo: str, number: int) -> set[tuple[str, int]]:
         ]
     )
     nodes = json.loads(raw or "[]")
+    if len(nodes) == 100:
+        print(
+            f"WARNING: PR {repo}#{number} closing references may be truncated "
+            "at the 100-node page cap.",
+            file=sys.stderr,
+        )
     return {(str(n["repo"]), int(n["number"])) for n in nodes}
 
 
@@ -360,7 +384,7 @@ def _merged_prs_direct_to_main(
     """
     repos = read_repos(wave, status_path)
     kickoff = _kickoff_ts(wave, status_path)
-    issue_numbers_by_repo = _canonical_issue_numbers_by_repo(wave, status_path)
+    issue_numbers_by_repo, _unparseable = _canonical_issue_numbers_by_repo(wave, status_path)
     canonical_pairs: set[tuple[str, int]] = {
         (repo_name, n) for repo_name, nums in issue_numbers_by_repo.items() for n in nums
     }
@@ -443,12 +467,18 @@ def merged_prs(phase: str, wave: str, status_path: Path) -> list[dict]:
     return prs
 
 
-def _canonical_pairs(wave: str, status_path: Path) -> set[tuple[str, int]]:
+def _canonical_pairs(wave: str, status_path: Path) -> tuple[set[tuple[str, int]], int]:
     """Flatten :func:`_canonical_issue_numbers_by_repo` into ``(repo, number)``
     pairs across every repo — the same shape :func:`_merged_prs_direct_to_main`
-    matches closing references against."""
-    issue_numbers_by_repo = _canonical_issue_numbers_by_repo(wave, status_path)
-    return {(repo_name, n) for repo_name, nums in issue_numbers_by_repo.items() for n in nums}
+    matches closing references against.
+
+    Returns ``(pairs, unparseable)`` — the unparseable-row count is carried
+    through from :func:`_canonical_issue_numbers_by_repo` unchanged (main#1201
+    Edge 1) so the reconciliation warning can report it without a second scan.
+    """
+    issue_numbers_by_repo, unparseable = _canonical_issue_numbers_by_repo(wave, status_path)
+    pairs = {(repo_name, n) for repo_name, nums in issue_numbers_by_repo.items() for n in nums}
+    return pairs, unparseable
 
 
 def _reconciliation_warning_from_claims(
@@ -462,18 +492,55 @@ def _reconciliation_warning_from_claims(
     Deliberately a WARNING, never an error: an open scope row is normal
     mid-wave. Returns ``None`` for a wave-branch wave (``claimed is None`` —
     that path's base+timestamp counting has no closing-reference dependency
-    to reconcile against) or when every canonical row is claimed.
+    to reconcile against) or when there is nothing at all to report (no
+    canonical rows, no unparseable rows, nothing unclaimed).
+
+    main#1201 closes three blind spots the plain "N of M claimed" line above
+    used to have:
+
+    * Edge 1 — an unparseable scope row (see :func:`_canonical_issue_numbers_by_repo`)
+      used to vanish from both the numerator AND the denominator, including the
+      degenerate case where EVERY row is unparseable (``canonical`` empty),
+      which used to return ``None`` here — a silent zero. ``unparseable`` is
+      now folded into the reported denominator and called out by name, and the
+      early-return guards below no longer trigger on unparseable rows alone.
+    * Edge 3 — a canonical row naming a repo absent from ``wave_{M}_repos_in_scope``
+      can never be claimed (that repo's merged PRs are never listed), so it
+      would read as unclaimed on every single run regardless of whether it was
+      actually delivered. Such rows are flagged distinctly in the row list so
+      the operator can tell "not delivered yet" from "structurally unreachable
+      by this instrument" (the exact discrimination main#1190 exists to give).
     """
     if claimed is None:
         return None
-    canonical = _canonical_pairs(wave, status_path)
-    if not canonical:
+    canonical, unparseable = _canonical_pairs(wave, status_path)
+    if not canonical and not unparseable:
         return None
     unclaimed = sorted(canonical - claimed)
-    if not unclaimed:
+    if not unclaimed and not unparseable:
         return None
-    rows = ", ".join(f"{repo_name.removeprefix('noorinalabs-')}#{n}" for repo_name, n in unclaimed)
-    return f"scope rows with no matching merged PR: {rows} ({len(unclaimed)} of {len(canonical)})"
+
+    repos_in_scope = set(read_repos(wave, status_path))
+
+    def _fmt(pair: tuple[str, int]) -> str:
+        repo_name, n = pair
+        label = f"{repo_name.removeprefix('noorinalabs-')}#{n}"
+        if repo_name not in repos_in_scope:
+            label += " (repo not in repos_in_scope)"
+        return label
+
+    total_declared = len(canonical) + unparseable
+    if unclaimed:
+        rows = ", ".join(_fmt(pair) for pair in unclaimed)
+        message = (
+            f"scope rows with no matching merged PR: {rows} ({len(unclaimed)} of {total_declared})"
+        )
+    else:
+        message = f"0 scope rows unclaimed (of {total_declared} declared)"
+    if unparseable:
+        plural = "s" if unparseable != 1 else ""
+        message += f"; {unparseable} scope row{plural} unparseable (excluded from the count above)"
+    return message
 
 
 def reconciliation_warning(phase: str, wave: str, status_path: Path) -> str | None:
