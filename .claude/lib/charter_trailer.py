@@ -399,13 +399,22 @@ def is_branch_author(field_value: str, branch_lastname: str, branch_initial: str
 #
 # That measurement is also a finding about the hook this pattern is consolidated
 # FROM: `block_squash_wave_merge.WAVE_BRANCH_RE` was `^deployments/phase-\d+/
-# wave-\d+$`, so Hook 22's squash guard has been silently OFF for those 32 PRs'
-# branches — a gate that returns "not a wave branch" for a wave branch. Reusing
-# one pattern closes that as a byproduct, in the fail-CLOSED direction (more
-# squashes blocked, never fewer). Writing a second, wider pattern in
-# `validate_pr_review` instead would have left the two definitions to drift
-# exactly as `extract_branch_author_lastname`'s two copies did for four months
-# (main#1175) — one definition, no drifting copy.
+# wave-\d+$`, so Hook 22's squash guard answered "not a wave branch" for a wave
+# branch on all 32. Reusing one pattern closes that as a byproduct, in the
+# fail-CLOSED direction (more squashes blocked, never fewer).
+#
+# SCOPE OF THAT GAP, STATED HONESTLY: the undashed form is HISTORICAL. All 32
+# PRs date from 2026-03-15..2026-04-06 and every wave-branch NAME CONSTRUCTOR in
+# the repo emits the dashed form (`wave_merge_model`, `validate_wave_audit`,
+# `validate_wave_label_evidence`, `post_wave_kickoff_comment`, `wave_unwrapped`,
+# `framework.config.json`), so nothing produces the undashed spelling today. It
+# still matters because wave branches are RETAINED permanently as rollback
+# anchors (memory `feedback_wave_branch_merge_retain`) — those 28 refs are live
+# and squashable — but this is a historical-tail fix, not a live outage.
+#
+# Writing a second, wider pattern in `validate_pr_review` instead would have left
+# the two definitions to drift exactly as `extract_branch_author_lastname`'s two
+# copies did for four months (main#1175) — one definition, no drifting copy.
 #
 # ANCHORED AT BOTH ENDS, deliberately. `deployments/phase-3/wave-6-hotfix` and
 # `deployments/phase12/cleanup` (2 real PRs in isnad-graph) are NOT wave

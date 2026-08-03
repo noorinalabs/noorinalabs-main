@@ -237,6 +237,12 @@ class UndashedPhaseWaveBranchTests(unittest.TestCase):
     `phase{N}` form — in isnad-graph, design-system, data-acquisition and
     landing-page — and the hook's own pattern did not match any of them, so a
     `--squash` into those wave branches was allowed straight through.
+
+    The form is HISTORICAL (all 32 from 2026-03-15..04-06; every wave-branch
+    name constructor in the repo emits the dashed form). It is still worth
+    guarding because wave branches are retained permanently as rollback anchors
+    — the 28 refs exist today and are squashable — but this is a historical-tail
+    fix, not a live outage, and the test says so rather than overstating it.
     """
 
     UNDASHED = "deployments/phase15/wave-1"

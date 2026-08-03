@@ -51,11 +51,14 @@ from annunaki_log import log_pretooluse_block
 # The wave-branch shape is `charter_trailer.is_wave_branch` (main#1216) — do NOT
 # reimplement it here. This hook used to carry its own
 # `^deployments/phase-\d+/wave-\d+$`, which does not match the undashed
-# `deployments/phase15/wave-1` form that 4 of the org's repos actually use: 32 of
-# the 202 `deployments/**`-head PRs measured on 2026-08-03. The guard was
-# therefore silently OFF on those branches. One definition, shared with the merge
-# gate, is what keeps a second reader of the same charter shape from disagreeing
-# with the first — the `extract_branch_author_lastname` lesson (main#1175).
+# `deployments/phase15/wave-1` form that 4 of the org's repos used historically:
+# 32 of the 202 `deployments/**`-head PRs measured on 2026-08-03, all from
+# 2026-03-15..04-06. Nothing emits that spelling today, but wave branches are
+# RETAINED permanently as rollback anchors, so those 28 refs are still live and
+# still squashable — the guard was simply off for them. One definition, shared
+# with the merge gate, is what keeps a second reader of the same charter shape
+# from disagreeing with the first — the `extract_branch_author_lastname` lesson
+# (main#1175).
 # `test_block_squash_wave_merge.py::SharedWaveBranchParsingTests` asserts this
 # module's binding IS `charter_trailer`'s, so a re-declared local copy fails a
 # named test rather than drifting silently.
