@@ -18,6 +18,18 @@ known-first-party = []
 # Intentionally minimal — the CI/pre-commit invocations still pass their own
 # CLI flags (--ignore-missing-imports --no-error-summary). This section exists
 # only to host the per-module override below.
+#
+# #1116: `.claude/hooks/tests/conftest.py` and the pre-existing
+# `.claude/lib/tests/conftest.py` are both invoked in a single flat
+# `mypy .claude/hooks/ .claude/lib/` run with no `__init__.py` in either
+# `tests/` package (needed for pytest's rootless import mode — adding one
+# would break every sibling `import hook_module` in both suites). Without
+# package markers mypy resolves modules by basename alone and reports the
+# two same-named conftest.py files as a "Duplicate module" error. Excluding
+# the newer file by its exact path is the narrowest fix: it leaves
+# `.claude/lib/tests/conftest.py` type-checked exactly as before, and the
+# excluded file is a 6-line autouse-fixture mirror of that one.
+exclude = ["^\\.claude/hooks/tests/conftest\\.py$"]
 
 [[tool.mypy.overrides]]
 # bashlex (the Bash-AST shell parser the commit-identity hooks use, #748 D3b)

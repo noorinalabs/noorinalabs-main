@@ -17,14 +17,9 @@ Run: python3 -m pytest .claude/hooks/tests/test_repo_flag_parse.py -v
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-sys.path.insert(0, str(_HOOKS_DIR))
-
+import __test_helpers  # noqa: E402,F401
 import _repo_flag_parse as parser  # noqa: E402
 
 

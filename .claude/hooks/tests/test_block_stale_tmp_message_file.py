@@ -7,16 +7,12 @@ Run: python3 -m pytest .claude/hooks/tests/test_block_stale_tmp_message_file.py 
 from __future__ import annotations
 
 import os
-import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-sys.path.insert(0, str(_HOOKS_DIR))
-
+import __test_helpers  # noqa: E402,F401
 import block_stale_tmp_message_file as hook  # noqa: E402
 
 

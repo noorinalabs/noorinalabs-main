@@ -24,16 +24,11 @@ Run: ENVIRONMENT=test python3 -m pytest \
 from __future__ import annotations
 
 import io
-import sys
 import unittest
 from contextlib import redirect_stderr
-from pathlib import Path
 from unittest import mock
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-sys.path.insert(0, str(_HOOKS_DIR))
-
+import __test_helpers  # noqa: E402,F401
 import _shell_parse as sp  # noqa: E402
 import validate_commit_identity as hook  # noqa: E402
 
@@ -42,8 +37,7 @@ _AINO_EMAIL = "parametrization+Aino.Virtanen@gmail.com"
 _VALID = f'git -c user.name="{_AINO}" -c user.email="{_AINO_EMAIL}"'
 
 
-def _input(command: str) -> dict:
-    return {"tool_name": "Bash", "tool_input": {"command": command}}
+_input = __test_helpers.bash_input
 
 
 def _find_git_commit(segments: list[list[str]]) -> list[str] | None:

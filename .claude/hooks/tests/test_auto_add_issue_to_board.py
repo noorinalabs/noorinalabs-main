@@ -13,15 +13,10 @@ Run from the repo root:
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-sys.path.insert(0, str(_HOOKS_DIR))
-
+import __test_helpers  # noqa: E402,F401
 import auto_add_issue_to_board as hook  # noqa: E402
 import post_label_change_wave_field_sync as field_sync_hook  # noqa: E402
 

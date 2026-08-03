@@ -13,17 +13,11 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-_LIB_DIR = _HOOKS_DIR.parent / "lib"
-sys.path.insert(0, str(_HOOKS_DIR))
-sys.path.insert(0, str(_LIB_DIR))
-
+import __test_helpers  # noqa: E402,F401
 import annunaki_log as alog  # noqa: E402
 import annunaki_monitor as am  # noqa: E402
 import annunaki_parse as ap  # noqa: E402

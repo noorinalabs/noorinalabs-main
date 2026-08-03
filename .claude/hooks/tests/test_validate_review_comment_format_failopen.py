@@ -56,7 +56,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -64,10 +63,10 @@ from typing import ClassVar
 from unittest import mock
 
 _HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-_LIB_DIR = _HOOKS_DIR.parent / "lib"
-sys.path.insert(0, str(_HOOKS_DIR))
-sys.path.insert(0, str(_LIB_DIR))
+import __test_helpers  # noqa: E402,F401
+
+_HOOKS_DIR = __test_helpers.HOOKS_DIR
+_LIB_DIR = __test_helpers.LIB_DIR
 
 import validate_review_comment_format as hook  # noqa: E402
 

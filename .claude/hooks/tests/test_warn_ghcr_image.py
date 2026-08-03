@@ -20,21 +20,15 @@ from __future__ import annotations
 
 import sys
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-sys.path.insert(0, str(_HOOKS_DIR))
+import __test_helpers  # noqa: E402,F401
+
+_HOOKS_DIR = __test_helpers.HOOKS_DIR
 
 import warn_ghcr_image as hook  # noqa: E402
 
-
-def _input(command: str, cwd: str | None = None) -> dict:
-    data: dict = {"tool_name": "Bash", "tool_input": {"command": command}}
-    if cwd is not None:
-        data["cwd"] = cwd
-    return data
+_input = __test_helpers.bash_input
 
 
 class ShapeDetectionTests(unittest.TestCase):

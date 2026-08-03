@@ -27,9 +27,9 @@ import time
 import unittest
 from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-sys.path.insert(0, str(_HOOKS_DIR))
+import __test_helpers  # noqa: E402,F401
+
+_HOOKS_DIR = __test_helpers.HOOKS_DIR
 
 import _consultation_sentinel as sentinel  # noqa: E402
 

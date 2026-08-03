@@ -8,15 +8,12 @@ Run:
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 from unittest import mock
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-sys.path.insert(0, str(_HOOKS_DIR))
+import __test_helpers  # noqa: E402,F401
 
+_bash_input = __test_helpers.bash_input
 import validate_workflow_paths_coverage as hook  # noqa: E402
 
 
@@ -434,9 +431,7 @@ class IsWorkflowFileTests(unittest.TestCase):
 class CheckEndToEndTests(unittest.TestCase):
     """End-to-end: check() with mocked API calls."""
 
-    @staticmethod
-    def _input(command: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}}
+    _input = staticmethod(_bash_input)
 
     def _patches(
         self,
@@ -553,9 +548,7 @@ class CwdAnchorResolutionTests(unittest.TestCase):
     repo/branch. The fix threads `resolve_invocation_cwd` through both.
     """
 
-    @staticmethod
-    def _input(command: str, cwd: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": cwd}
+    _input = staticmethod(_bash_input)
 
     def test_resolve_repo_anchors_git_on_cwd(self):
         captured: dict[str, object] = {}

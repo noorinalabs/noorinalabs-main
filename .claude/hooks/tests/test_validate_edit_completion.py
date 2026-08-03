@@ -17,17 +17,13 @@ Test classes:
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-sys.path.insert(0, str(_HOOKS_DIR))
-
+import __test_helpers  # noqa: E402,F401
 import validate_edit_completion as hook  # noqa: E402
 
 

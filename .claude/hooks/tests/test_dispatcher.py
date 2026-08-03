@@ -22,14 +22,12 @@ import io
 import json
 import sys
 import unittest
-from pathlib import Path
 from unittest import mock
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-_REPO_ROOT = _HOOKS_DIR.parent.parent
+import __test_helpers  # noqa: E402,F401
 
-sys.path.insert(0, str(_HOOKS_DIR))
+_REPO_ROOT = __test_helpers.HOOKS_DIR.parent.parent
+
 
 import dispatcher as d  # noqa: E402
 
