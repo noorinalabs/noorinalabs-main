@@ -59,6 +59,14 @@
     ],
     "post_notebook": [
       "validate_edit_completion"
+    ],
+    "pre_file": [
+      "enforce_librarian_consulted",
+      "validate_edit_completion"
+    ],
+    "pre_notebook": [
+      "enforce_librarian_consulted",
+      "validate_edit_completion"
     ]
   }
 }

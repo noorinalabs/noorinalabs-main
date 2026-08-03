@@ -1,22 +1,36 @@
 #!/usr/bin/env python3
-"""PreToolUse dispatcher: Single entry point for all Bash PreToolUse hooks.
+"""PreToolUse dispatcher: Single entry point for all Bash/Edit/Write/NotebookEdit
+PreToolUse hooks.
 
-Instead of 12 separate subprocess invocations per Bash tool call, this
-dispatcher runs all hook checks in-process by importing each hook module
-and calling its `check()` function.
+Instead of one subprocess invocation per hook per tool call, this dispatcher
+runs all hook checks in-process by importing each hook module and calling its
+`check()` function.
 
 Each hook module exposes:
     check(input_data: dict) -> dict | None
         Returns None to allow, or a dict with "decision" and "reason"/"systemMessage".
 
-The active module list + order is read from the framework config
-(``hooks.pre_bash`` in ``.claude/framework.config.json``), so enabling,
-disabling, or reordering a check is a config edit rather than a code change.
-The loader fails open to the full default list, so a missing/corrupt config
-still dispatches every gate. Order matters: cheap/local checks first (e.g.
+Matcher → the framework-config ``hooks.<event>`` key whose ordered module list
+runs for that tool (mirrors `post_dispatcher.py`'s `_MATCHER_CFG_KEY`, the
+PostToolUse sibling):
+
+    Bash          -> hooks.pre_bash
+    Edit          -> hooks.pre_file
+    Write         -> hooks.pre_file   (shares the list with Edit)
+    NotebookEdit  -> hooks.pre_notebook
+
+The active module list + order per matcher is read from the framework config
+(``.claude/framework.config.json``), so enabling, disabling, or reordering a
+check is a config edit rather than a code change. The loader fails open to the
+full default list, so a missing/corrupt config still dispatches every gate.
+Order matters within ``pre_bash``: cheap/local checks first (e.g.
 smart_grep_ontology routes a symbol search before the block_bare_grep backstop,
 #1017), network-calling checks last (block_squash_wave_merge resolves a PR base
 via `gh pr view`).
+
+A tool_name with no entry in the matcher table (e.g. `Read`) dispatches
+nothing and exits 0 immediately — same "no matcher, no-op" contract as
+`post_dispatcher.py`.
 
 Exit codes:
   0 — allow (all hooks passed, or aggregated warnings)
@@ -35,6 +49,24 @@ if str(_HOOKS_DIR) not in sys.path:
 
 from _framework_config import config  # noqa: E402
 
+# Matcher -> the framework-config ``hooks.<event>`` key whose ordered module list
+# runs for that tool. See the module docstring for the mapping and rationale.
+_MATCHER_CFG_KEY: dict[str, str] = {
+    "Bash": "hooks.pre_bash",
+    "Edit": "hooks.pre_file",
+    "Write": "hooks.pre_file",
+    "NotebookEdit": "hooks.pre_notebook",
+}
+
+
+def _modules_for(tool_name: str, input_data: dict | None = None) -> list[str]:
+    """Resolve the ordered hook-module list for ``tool_name`` from the framework
+    config. Returns ``[]`` for a tool with no registered matcher."""
+    cfg_key = _MATCHER_CFG_KEY.get(tool_name)
+    if cfg_key is None:
+        return []
+    return list(config(input_data).get(cfg_key, []))
+
 
 def main() -> None:
     try:
@@ -43,12 +75,13 @@ def main() -> None:
         sys.exit(0)
 
     tool_name = input_data.get("tool_name", "")
-    if tool_name != "Bash":
+    modules = _modules_for(tool_name, input_data)
+    if not modules:
         sys.exit(0)
 
     warnings: list[str] = []
 
-    for module_name in config(input_data).get("hooks.pre_bash", []):
+    for module_name in modules:
         try:
             mod = importlib.import_module(module_name)
         except ImportError:

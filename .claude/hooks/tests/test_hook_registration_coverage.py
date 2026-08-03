@@ -55,9 +55,10 @@ DISPATCHERS = {"dispatcher", "post_dispatcher"}
 INTENTIONALLY_UNREGISTERED: set[str] = set()
 
 # Every ``hooks.<event>`` list the dispatchers read. ``dispatcher.py`` reads
-# ``pre_bash``; ``post_dispatcher.py`` reads ``post_bash`` (Bash), ``post_file``
-# (Edit/Write) and ``post_notebook`` (NotebookEdit).
-HOOK_LIST_KEYS = ("pre_bash", "post_bash", "post_file", "post_notebook")
+# ``pre_bash`` (Bash), ``pre_file`` (Edit/Write) and ``pre_notebook``
+# (NotebookEdit, #1114); ``post_dispatcher.py`` reads ``post_bash`` (Bash),
+# ``post_file`` (Edit/Write) and ``post_notebook`` (NotebookEdit).
+HOOK_LIST_KEYS = ("pre_bash", "pre_file", "pre_notebook", "post_bash", "post_file", "post_notebook")
 
 # A shell tail that swallows a non-zero exit and reports success. Appended to a
 # hook ``command`` it converts *"this gate could not run"* (a missing script

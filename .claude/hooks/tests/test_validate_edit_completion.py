@@ -513,5 +513,112 @@ class BashAcksPathTests(unittest.TestCase):
         self.assertFalse(hook._bash_acks_path("cat /etc/hosts", "/tmp/x.py"))
 
 
+class CheckDispatchTests(_SentinelHarness):
+    """`check()` (the dispatcher-facing entry point, #1114) must route
+    PreToolUse Bash AND Edit/Write/NotebookEdit to `_pre_tool_use_blocks` —
+    prior to #1114 only Bash was dispatched (Edit/Write/NotebookEdit ran
+    exclusively via the standalone `main()` registered directly in
+    settings.json). These tests pin the fixed routing: they fail under the
+    pre-#1114 `check()` (which returned None unconditionally for any
+    tool_name != "Bash"), proving the guard is load-bearing rather than
+    vacuous.
+    """
+
+    def _seed_error(self, path: str = "/tmp/CHECK_DISPATCH.py") -> str:
+        abs_path = str(Path(path).resolve())
+        sf = self._sentinel_file()
+        sf.parent.mkdir(parents=True, exist_ok=True)
+        sf.write_text(
+            json.dumps({"path": abs_path, "tool": "Edit", "error": "boom", "ts": _now_iso()})
+            + "\n",
+            encoding="utf-8",
+        )
+        return abs_path
+
+    def test_check_routes_preTooluse_edit_to_block(self):
+        abs_path = self._seed_error()
+        inp = self._input(
+            hook_event_name="PreToolUse",
+            tool_name="Edit",
+            tool_input={"file_path": abs_path},
+        )
+        result = hook.check(inp)
+        self.assertIsNotNone(result, "check() must block an unacked re-edit of the errored path")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_check_routes_preTooluse_write_to_block(self):
+        abs_path = self._seed_error()
+        inp = self._input(
+            hook_event_name="PreToolUse",
+            tool_name="Write",
+            tool_input={"file_path": abs_path},
+        )
+        result = hook.check(inp)
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_check_routes_preTooluse_notebook_edit_to_block(self):
+        abs_path = self._seed_error("/tmp/CHECK_DISPATCH.ipynb")
+        inp = self._input(
+            hook_event_name="PreToolUse",
+            tool_name="NotebookEdit",
+            tool_input={"notebook_path": abs_path},
+        )
+        result = hook.check(inp)
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_check_routes_preTooluse_bash_to_block(self):
+        # Regression guard: the Edit/Write/NotebookEdit fix must not narrow
+        # (or otherwise disturb) the pre-existing Bash routing.
+        self._seed_error()
+        inp = self._input(
+            hook_event_name="PreToolUse",
+            tool_name="Bash",
+            tool_input={"command": "git commit -m x"},
+        )
+        result = hook.check(inp)
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_check_edit_allows_when_unrelated_path(self):
+        self._seed_error("/tmp/OTHER.py")
+        inp = self._input(
+            hook_event_name="PreToolUse",
+            tool_name="Edit",
+            tool_input={"file_path": "/tmp/UNRELATED.py"},
+        )
+        self.assertIsNone(hook.check(inp))
+
+    def test_check_sendmessage_returns_none_not_dispatched(self):
+        """SendMessage has no PreToolUse dispatcher entry (it is standalone-
+        registered in settings.json), so `check()` must return None for it
+        even with a matching unhandled error in the sentinel — routing
+        SendMessage through `check()` would double-run `_pre_tool_use_blocks`
+        once via the (nonexistent) dispatcher and once via `main()`."""
+        self._seed_error()
+        inp = self._input(
+            hook_event_name="PreToolUse",
+            tool_name="SendMessage",
+            tool_input={"to": "team-lead", "message": "status update"},
+        )
+        self.assertIsNone(hook.check(inp))
+
+    def test_check_read_returns_none(self):
+        inp = self._input(
+            hook_event_name="PreToolUse",
+            tool_name="Read",
+            tool_input={"file_path": "/tmp/x.py"},
+        )
+        self.assertIsNone(hook.check(inp))
+
+    def test_dispatched_pre_tools_matches_edit_tools_plus_bash(self):
+        self.assertEqual(hook._DISPATCHED_PRE_TOOLS, hook._EDIT_TOOLS | {"Bash"})
+
+
 if __name__ == "__main__":
     unittest.main()
