@@ -1502,17 +1502,33 @@ class AssignmentAwarePrePassTests(unittest.TestCase):
         self.assertIsNone(hook.check(self._input("d=$(date); echo $d")))
 
     def test_prose_value_with_git_commit_words_not_resolved_allows(self) -> None:
-        """NEG: a quoted, multi-word value merely mentioning "git commit".
+        """NEG: a quoted, multi-word value merely mentioning "git commit" as
+        an ARGUMENT (`echo $msg`), not in command position.
 
         `msg="please git commit this later"; echo $msg` is prose, not an
-        invocation. A quoted value survives shlex de-quoting as ONE token
-        containing whitespace, so the literal-charset check (which never
-        allows whitespace) rejects it — `msg` is never captured, so
-        resolving `$msg` cannot manufacture a `git ... commit` bridge out of
-        this prose. This is the false-positive class the assignment-aware
-        pre-pass could otherwise introduce; it must not fire.
+        invocation: even resolved, `$msg` lands as an argument to `echo`,
+        never as the first token of a segment, so `find_git_subcommand`
+        (which requires `git` to be that first token) does not fire either
+        way. Pinned as a regression guard that the pre-pass does not change
+        this outcome for an ordinary "argument merely mentions git" shape.
         """
         cmd = 'msg="please git commit this later"; echo $msg'
+        self.assertIsNone(hook.check(self._input(cmd)))
+
+    def test_multiword_command_string_value_not_resolved_allows(self) -> None:
+        """NEG: `cmd="git commit -m z"; $cmd` — a full command line assigned
+        to a variable, then invoked BARE (real shell word-splitting would
+        actually run it). This is the test that pins the literal-charset
+        guard itself: the value contains whitespace, so `cmd` is never
+        captured and `$cmd` is left as one unresolved literal token (not
+        equal to `git`), so `find_git_subcommand` does not see a `git`
+        command in command position. Deliberately out of scope (multi-word
+        values are not resolved) — this is a documented boundary, not an
+        oversight: resolving it would reopen the prose-argument
+        false-positive class one level lower (through direct segment
+        matching instead of `_INNER_COMMIT_RE`).
+        """
+        cmd = 'cmd="git commit -m z"; $cmd'
         self.assertIsNone(hook.check(self._input(cmd)))
 
     def test_unrelated_assignment_and_reuse_allows(self) -> None:
@@ -1578,6 +1594,25 @@ class AssignmentAwarePrePassTests(unittest.TestCase):
         not need to for THIS shape — nothing here spells `git`).
         """
         self.assertIsNone(hook.check(self._input("$NEVERASSIGNED commit -m x")))
+
+    def test_unresolved_reference_leaves_exact_literal_not_merely_nonempty(self) -> None:
+        """NEG (truncating-mutant guard): an UNASSIGNED reference sitting
+        between two literal fragments must be left EXACTLY as typed, not
+        collapsed to an empty string, when substitution runs at all (i.e.
+        when at least one OTHER name in the command WAS assigned, so the
+        `assignments` map is non-empty and the substitution pass executes).
+
+        `h=other; gi${x}t commit -m z` — `x` is never assigned. If the
+        "leave unresolved" fallback ever degraded from returning the
+        original matched text to returning `""`, `${x}` would vanish and the
+        surrounding literal fragments would collapse into `git` by
+        coincidence (`"gi" + "" + "t"` == `"git"`), manufacturing a command
+        word that was never there. Asserting merely `assertIsNotNone` on the
+        wrong branch would pass under exactly this truncating mutant; this
+        asserts the correct (allowed) OUTCOME instead.
+        """
+        cmd = "h=other; gi${x}t commit -m z"
+        self.assertIsNone(hook.check(self._input(cmd)))
 
 
 if __name__ == "__main__":
