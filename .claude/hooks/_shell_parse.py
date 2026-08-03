@@ -54,6 +54,31 @@ Public API
         inside quotes), strips leading `KEY=value` env-var assignments from
         each segment, and yields the surviving tokens.
 
+    resolve_simple_assignments(command) -> str
+        Bounded assignment-aware pre-pass (main#1195): resolves a leading
+        `NAME=value` assignment (bare literal value only — no `$`,
+        backticks, parens, or whitespace; an optional single leading
+        `export`/`declare` keyword is tolerated, #1305) and substitutes
+        later `$NAME` / `${NAME}` references with that value, so
+        `g=git; $g commit` normalizes to `git commit` before either the
+        indirect-exec detector or the direct commit-segment finder sees it.
+        Resolution is POSITIONAL, not a single flat last-wins map: each
+        pipeline segment is substituted using only the assignment state
+        accumulated from segments STRICTLY BEFORE it, in source order — the
+        same rule a real shell applies. This closes the order-blind hole a
+        flat map opens (main#1195 review round 2): `g=git; $g commit -m x;
+        g=echo` must still resolve `$g` to `git` at the commit site even
+        though `g` is reassigned afterward, and — the mirror image a naive
+        "first assignment wins" flip would introduce — `g=echo; $g commit;
+        g=git` must NOT resolve `$g` to `git`, because that reassignment
+        hasn't happened yet at the point `$g` is used.
+        Returns `command` unchanged when tokenize() fails or no qualifying
+        assignment is found — can only ADD a detection, never remove one.
+        Deliberately does not resolve command substitution (`d=$(date)`),
+        positional/special parameters (`$1`, `$?`, ...), or multi-word/prose
+        values — see the module comment above the implementation for the
+        false-positive this excludes.
+
     iter_command_segments_ast(command) -> list[list[str]] | None
         Structural (bashlex) alternative to tokenize + iter_command_segments:
         parses `command` into a real Bash AST and returns every
@@ -1112,6 +1137,484 @@ def _strip_leading_env_assignments(segment: list[str]) -> list[str]:
     while i < len(segment) and _ENV_ASSIGN_RE.match(segment[i]):
         i += 1
     return segment[i:]
+
+
+# ---------------------------------------------------------------------------
+# Assignment-aware pre-pass (main#1195)
+# ---------------------------------------------------------------------------
+#
+# `_payload_looks_like_commit` (validate_commit_identity) and the direct
+# `git ... commit` finder (`find_git_subcommand`) both require the literal
+# token `git` in command position. Holding the command word in a shell
+# variable defeats BOTH with no interpreter wrapper at all:
+#
+#     g=git; $g commit -m x
+#
+# `$g` sits in command position exactly like a literal `git` would, and the
+# shell resolves it at runtime; neither matcher can see through the
+# indirection (measured on main#1193's head: `_payload_looks_like_commit`
+# returns False on this exact string, and the direct-typed form with no
+# wrapper at all is likewise allowed).
+#
+# This is a BOUNDED pre-pass, not general shell evaluation. It resolves only
+# a LEADING run of `NAME=value` tokens at a segment's start (the same shape
+# `_strip_leading_env_assignments` already recognises — one segment, one
+# leading run) whose value is a bare literal, and substitutes later `$NAME`
+# / `${NAME}` references anywhere in the command with that literal value.
+# Deliberately does NOT resolve:
+#   - command substitution (`d=$(date)`) — the value fails the
+#     literal-charset check below, so `d` is never added to the map and a
+#     later `$d` is left untouched. This is the guard against exactly the
+#     false-positive shape the issue calls out: `d=$(date); echo $d` is an
+#     ordinary shape and must not block.
+#   - positional/special parameters (`$1`, `$?`, `$@`, `$$`, ...) — the
+#     capture regex requires a name starting with a letter or underscore, so
+#     these never match as an assignment NAME in the first place.
+#   - multi-word / prose values (`msg="please git commit this later"`) — a
+#     quoted value survives shlex de-quoting as ONE token, so a value
+#     containing a space is caught and rejected by the literal-charset check
+#     (values in this module's charset never contain whitespace). Without
+#     this exclusion, resolving `$msg` inside an unrelated `echo $msg` would
+#     manufacture a `git ... commit` bridge out of prose that was never
+#     going to run a commit — a false positive of exactly the class the
+#     issue warns a false positive here is an outage.
+#   - `$1`-style arrays, `eval`-of-a-variable, and command substitution of
+#     the COMMAND WORD itself (`$(printf git) commit`) — out of scope per
+#     the issue; same family, strictly harder.
+#
+# Applied ONCE, on the raw command, before either the indirect-exec detector
+# or the direct commit-segment finder run — a single pre-pass point rather
+# than teaching two independent matchers the same resolution. main#1152's
+# repeated lesson is exactly this: two places answering the same question
+# independently drift. `resolve_simple_assignments` returns the command
+# UNCHANGED whenever no qualifying assignment is found (the overwhelming
+# majority of commands), so it can only ever ADD a detection, never remove
+# one, and is a no-op for every pre-existing passing shape.
+#
+# ---------------------------------------------------------------------------
+# Positional resolution, not a flat last-wins map (main#1195 review round 2)
+# ---------------------------------------------------------------------------
+#
+# The first cut of this pre-pass built ONE flat `{name: value}` map across
+# EVERY segment of the command (last assignment to a given name wins,
+# regardless of where in the command it appears) and then substituted every
+# `$NAME` reference in the whole command against that single map. That is
+# order-blind, and a trailing reassignment reopens the exact bypass this
+# pre-pass exists to close:
+#
+#     g=git; $g commit -m x; g=echo
+#
+# A real shell resolves `$g` at the point it is used — `git`, because that
+# is the value `g` holds when the second segment runs; the later `g=echo`
+# hasn't happened yet. The flat map instead sees `g`'s LAST assignment
+# anywhere in the command (`echo`) and substitutes it everywhere, including
+# at the earlier reference — turning `$g commit -m x` into `echo commit -m
+# x`, which is not a `git` invocation at all. Neither the indirect-exec
+# detector nor the direct commit-segment finder can then see the commit,
+# and it sails through unvalidated. Confirmed against real shell behaviour
+# (a printf/marker proxy shows the indirected command genuinely runs): this
+# is a live bypass, not a cosmetic mismatch, and it reproduces the same way
+# for `; g=true`, `|| g=x`, and `; false && g=nope` — any trailing
+# reassignment, on any of the operators this module treats as a segment
+# separator, erases the earlier resolution.
+#
+# The fix is POSITIONAL resolution: walk segments in the ORDER they appear
+# in `command`, keep a running map of assignments seen so far, and resolve
+# each segment's `$NAME` references against that running map BEFORE folding
+# in that segment's own leading assignments (a segment's own assignment
+# takes effect for segments that follow it, never for references inside
+# itself — matching how a real shell evaluates one line before the next).
+#
+# A "first assignment wins, globally" flip was considered and rejected: it
+# fixes the above shape but breaks its mirror image,
+#
+#     g=echo; $g commit; g=git
+#
+# where the FIRST assignment (`echo`) is genuinely what `$g` holds at the
+# point of use, and the LATER `g=git` must NOT retroactively "resolve" the
+# reference — that would manufacture a `git commit` detection out of a
+# command that never runs one. Position-aware resolution (this
+# implementation) gets both directions right, because it always asks "what
+# does `g` hold at THIS point in the command", not "what is `g`'s first or
+# last value anywhere in the command".
+#
+# Still not covered (measured, not a gap in the mechanism above — a
+# different limitation entirely): `export g=git` / `declare g=git` are
+# folded IN here (main#1195's own reviewer: same bare-literal shape one
+# token to the right, arguably the most idiomatic spelling of the issue).
+# `local`/`typeset`/`readonly`, any wrapper (`env g=git ...`), command
+# substitution of the assigned value or the command word itself, and
+# multi-word/prose values remain OUT of scope — same non-goal boundary as
+# the rest of this module's exclusions, documented in the function
+# docstring below.
+#
+# Round 3 correction (main#1195 review round 3): the paragraph above already
+# stated the correct rule ("never for references inside itself"), but the
+# implementation contradicted it — a segment's own leading assignments were
+# ALSO folded into the map used to substitute that same segment's own
+# references, which is not how a real shell resolves a prefix assignment
+# (word expansion happens before the prefix takes effect). See
+# `resolve_simple_assignments`'s docstring and the code comment at its
+# `active = assignments` line for the corrected behaviour and the real-shell
+# verification. `local`/`typeset`/`readonly` remain a documented non-goal
+# here regardless of this correction; #1308 tracks that `typeset`/`readonly`
+# (unlike `local`) are live at top level and may warrant a future widening.
+_SIMPLE_LITERAL_VALUE_RE = re.compile(r"^[A-Za-z0-9_./:@%+-]+$")
+
+# `$NAME` or `${NAME}` — a name starting with a letter/underscore, same
+# identifier shape `_ENV_ASSIGN_RE` requires on the assignment side. Digits-
+# leading references (`$1`, `$2`, ...) and single-punctuation specials
+# (`$?`, `$@`, `$$`, `$*`, `$#`) never match this pattern, by construction.
+# The trailing `\b` on the bare form is load-bearing, not decorative: it is
+# what stops a shorter assigned name from being treated as a PREFIX of a
+# longer, unrelated reference (`$gone`, `$g_2`, `$gx` must never be read as
+# `$g` followed by literal `one`/`_2`/`x` — see the name-prefix-conflation
+# tests in `ResolveSimpleAssignmentsTests`, test_shell_parse.py, which
+# assert the resolver's OUTPUT STRING directly rather than a downstream
+# verdict, precisely so that weakening this anchor is caught here rather
+# than staying invisible behind a matcher that would reject the corrupted
+# name anyway).
+_VAR_REF_RE = re.compile(r"\$\{(?P<name_braced>[A-Za-z_]\w*)\}|\$(?P<name_bare>[A-Za-z_]\w*)\b")
+
+# Shell keywords that may prefix a literal `NAME=value` assignment at a
+# segment's leading position (#1305): `export FOO=bar` and `declare
+# FOO=bar` are the same bare-literal shape one token to the right of a bare
+# `FOO=bar`, not a harder family — folded in here rather than deferred.
+# Recognised only as a SINGLE leading token (one keyword, not stacked or
+# wrapped); `local`/`typeset`/`readonly` and any other wrapper stay out of
+# scope, same as everything else this pre-pass declines to resolve.
+_ASSIGNMENT_KEYWORDS = frozenset({"export", "declare"})
+
+
+def _leading_literal_assignments(tokens: list[str]) -> dict[str, str]:
+    """Literal `NAME=value` pairs from the LEADING run of assignment tokens
+    in `tokens`, tolerating one optional `export`/`declare` prefix (#1305).
+
+    `tokens` is first run through `strip_command_prefixes()` (main#1311) —
+    the SAME helper `find_git_subcommand` / `find_gh_subcommand` already use
+    to skip a compound-statement leader (`do`, `then`, `else`, `if`, `elif`,
+    `while`, `until`, `{`, `(`) or a transparent wrapper (`timeout`, `env`,
+    `nice`, ...) before looking for the command word. Without this, `for f
+    in a; do g=git; $g commit -m x; done` tokenizes its `do`-segment to
+    `["do", "g=git"]`; the leading-position check saw `"do"` (not an
+    assignment, not `export`/`declare`) and stopped immediately, so the
+    assignment one token to the right — at index 1, not 0 — was never
+    captured, and the hook ALLOWed a command a real shell genuinely runs
+    (confirmed with a marker proxy; same gap defeats `while`/`if` bodies and
+    a wrapped `bash -c '...'` indirect-exec payload the same way). This is
+    the module's own documented hazard
+    (`extract_dash_c_pairs` vs `find_git_subcommand` holding different views
+    of one segment) recurring one level up — `_leading_literal_assignments`
+    had its own, narrower notion of "leading" than the rest of the module.
+    Routing through `strip_command_prefixes()` here (default
+    `compound_leaders=True`, the gate-matcher setting: over-matching can at
+    worst capture an assignment from a body that may not run, which per this
+    pre-pass's own invariant can only ADD a detection, never remove one) is
+    the fix, rather than adding `do`/`then` to `_ASSIGNMENT_KEYWORDS` (a
+    THIRD independent view of the same segment, reproducing the hazard
+    again).
+
+    Returns `{}` when `tokens` carries no qualifying leading assignment.
+    """
+    if not tokens:
+        return {}
+    tokens = strip_command_prefixes(tokens)
+    if not tokens:
+        return {}
+    i = 1 if tokens[0] in _ASSIGNMENT_KEYWORDS else 0
+    found: dict[str, str] = {}
+    while i < len(tokens) and _ENV_ASSIGN_RE.match(tokens[i]):
+        name, _eq, value = tokens[i].partition("=")
+        if _SIMPLE_LITERAL_VALUE_RE.match(value):
+            found[name] = value
+        i += 1
+    return found
+
+
+def _iter_original_segment_spans(command: str) -> list[tuple[int, int]]:
+    """Quote/escape-aware (start, end) span of each pipeline segment in
+    `command`, as ORIGINAL-text character offsets (main#1195 review round 2).
+
+    Mirrors `normalize_command_separators`'s operator/quote/escape rules
+    exactly — the same `;` / `|` / `&&` / `||` operator set, plus a bare
+    unescaped newline counting as a statement terminator — so segmentation
+    can never drift from the rest of this module's notion of "one command".
+    Unlike `normalize_command_separators`, this records spans into the
+    ORIGINAL text rather than rewriting it: `resolve_simple_assignments`
+    needs to substitute EACH segment using only the assignment state visible
+    strictly BEFORE it (positional resolution), while every other byte of
+    `command` — separators, whitespace, a backslash-newline continuation —
+    must survive untouched in the final output (downstream heredoc handling
+    depends on real newlines staying real newlines).
+
+    A backslash-newline continuation is not special-cased separately: it
+    falls out of the generic "backslash escapes the next character outside
+    quotes" rule below, which consumes the backslash AND the following
+    newline as one unit before the newline-terminator check ever sees it —
+    the same outcome `normalize_command_separators` reaches via an explicit
+    pre-pass, without needing one here.
+    """
+    spans: list[tuple[int, int]] = []
+    quote: str | None = None
+    seg_start = 0
+    i = 0
+    n = len(command)
+    while i < n:
+        c = command[i]
+        if quote is not None:
+            if c == "\\" and quote == '"' and i + 1 < n:
+                i += 2
+                continue
+            if c == quote:
+                quote = None
+            i += 1
+            continue
+        if c in ("'", '"'):
+            quote = c
+            i += 1
+            continue
+        if c == "\\" and i + 1 < n:
+            i += 2
+            continue
+        if c == "\n":
+            spans.append((seg_start, i))
+            i += 1
+            seg_start = i
+            continue
+        if command[i : i + 2] in ("&&", "||"):
+            spans.append((seg_start, i))
+            i += 2
+            seg_start = i
+            continue
+        if c in (";", "|"):
+            spans.append((seg_start, i))
+            i += 1
+            seg_start = i
+            continue
+        i += 1
+    spans.append((seg_start, n))
+    return spans
+
+
+def _substitute_var_refs(text: str, assignments: dict[str, str]) -> str:
+    """Replace every `$NAME` / `${NAME}` in `text` found in `assignments`."""
+
+    def _sub(m: re.Match[str]) -> str:
+        name = m.group("name_braced") or m.group("name_bare")
+        return assignments.get(name, m.group(0))
+
+    return _VAR_REF_RE.sub(_sub, text)
+
+
+def _single_quoted_spans(text: str) -> list[tuple[int, int]]:
+    """(start, end) spans of every single-quoted region's INSIDE text.
+
+    Main#1195 finding 1 (round 4): a SAME-segment prefix assignment (`g=git
+    bash -c '$g commit -m x'`) genuinely resolves inside a SINGLE-quoted
+    argument, because that argument is opaque text handed to a CHILD
+    interpreter (`bash -c '...'`) which does its OWN expansion, in its OWN
+    environment — and a prefix assignment is placed into the invoked
+    command's environment regardless of `export` (real-shell-verified with a
+    marker proxy: this genuinely runs `git commit -m x`). That is a DIFFERENT
+    evaluator, and a different visibility rule, than the bare/double-quoted
+    reference `resolve_simple_assignments`'s docstring already covers (`A=1
+    B=git $B commit -m z` — the OUTER shell expands `$B` itself, before its
+    own prefix takes effect, so it stays unresolved; `bash -c "$g commit"`
+    is the identical case one level down — the OUTER shell expands the
+    double-quoted argument at that SAME expansion point, so `$g` is unset
+    there too and must NOT resolve). Quotes are the only signal available
+    post-tokenization for which evaluator will see a given `$NAME` — hence
+    scanning for single-quoted spans specifically, rather than teaching
+    `_substitute_var_refs` about "this is a child payload" some other way.
+
+    Escape-aware the same way `_iter_original_segment_spans` is: a backslash
+    escapes the next character when inside DOUBLE quotes or unquoted (POSIX:
+    single quotes take no backslash-escaping at all, so none is honoured
+    while scanning for the close of a `'...'` span — an escaped quote is not
+    a thing single quotes support). Returned spans exclude the delimiting
+    quote characters themselves, so callers can substitute inside them
+    without disturbing the quoting.
+    """
+    spans: list[tuple[int, int]] = []
+    quote: str | None = None
+    inner_start = 0
+    i = 0
+    n = len(text)
+    while i < n:
+        c = text[i]
+        if quote is not None:
+            if quote == '"' and c == "\\" and i + 1 < n:
+                i += 2
+                continue
+            if c == quote:
+                if quote == "'":
+                    spans.append((inner_start, i))
+                quote = None
+            i += 1
+            continue
+        if c == "\\" and i + 1 < n:
+            i += 2
+            continue
+        if c in ("'", '"'):
+            quote = c
+            inner_start = i + 1
+            i += 1
+            continue
+        i += 1
+    return spans
+
+
+def _substitute_within_single_quotes(text: str, assignments: dict[str, str]) -> str:
+    """Apply `_substitute_var_refs` to `text`, restricted to single-quoted spans.
+
+    Returns `text` unchanged (same object) when nothing inside any
+    single-quoted span actually changes, matching the no-op contract the
+    rest of `resolve_simple_assignments` relies on.
+    """
+    spans = _single_quoted_spans(text)
+    if not spans:
+        return text
+    parts: list[str] = []
+    prev_end = 0
+    changed = False
+    for start, end in spans:
+        parts.append(text[prev_end:start])
+        quoted = text[start:end]
+        substituted = _substitute_var_refs(quoted, assignments)
+        if substituted != quoted:
+            changed = True
+        parts.append(substituted)
+        prev_end = end
+    parts.append(text[prev_end:])
+    return "".join(parts) if changed else text
+
+
+def resolve_simple_assignments(command: str) -> str:
+    """Resolve simple literal `NAME=value` assignments before matching (main#1195).
+
+    Walks `command`'s pipeline segments (split on `;`, `&&`, `||`, `|` — the
+    same `_SEGMENT_OPS` set `iter_command_segments` splits on, plus a bare
+    newline as a statement terminator) IN SOURCE ORDER, maintaining a running
+    map of literal `NAME=value` assignments seen in EARLIER segments. Each
+    segment's `$NAME` / `${NAME}` references are substituted ONLY against
+    that running (strictly-earlier) map — NEVER against the segment's own
+    leading assignments (see `_leading_literal_assignments`; a bare literal
+    value, optionally prefixed by `export`/`declare`, #1305). This mirrors
+    real POSIX shell semantics: a command's words are expanded BEFORE its
+    own prefix assignments take effect, so a same-line prefix like `A=1
+    B=git $B commit -m z` must NOT resolve `$B` (real-shell-verified with a
+    printf/marker proxy, main#1195 review round 3) — `$B` is unset at
+    expansion time, and the prefix assignment only scopes the invoked
+    command's environment, not the expansion of its own argument list. A
+    reassignment in a LATER segment (`g=git; $g commit -m x; g=echo`) does
+    NOT retroactively change what an EARLIER segment's reference resolved
+    to, and a reassignment that hasn't happened YET (`g=echo; $g commit;
+    g=git`) does not resolve early either. This is what makes resolution
+    POSITIONAL rather than "last write anywhere wins" or "first write
+    anywhere wins" — see the module comment above this section for the
+    concrete cross-segment shapes that make the distinction observable, not
+    just theoretical. After a segment is substituted, its own leading
+    assignments are folded into the running map for segments that follow
+    (so they become visible starting with the NEXT segment, never the
+    current one).
+
+    Round 4 exception (main#1195 finding 1): a segment's own leading
+    assignments DO apply within a single-quoted span of that SAME segment —
+    `g=git bash -c '$g commit -m x'` genuinely runs `git commit -m x`,
+    real-shell-verified, because the quoted text is a CHILD interpreter's
+    payload (expanded later, in an environment the prefix assignment already
+    populated), not a reference the outer shell expands itself. See
+    `_single_quoted_spans` for the full reasoning; `bash -c "$g commit"`
+    (double-quoted) is unaffected and stays unresolved, same as a bare
+    same-segment reference.
+
+    Returns `command` unchanged when `tokenize()` fails (this pre-pass never
+    manufactures a NEW parse failure — the existing `_PARSE_FAILURE`
+    fail-closed path in the caller already handles unparseable input) or
+    when no substitution actually changes the text (the overwhelming
+    majority of commands) — so it can only ever ADD a detection, never
+    remove one, and is a no-op for every pre-existing passing shape.
+    """
+    if tokenize(normalize_command_separators(command)) is None:
+        return command
+
+    spans = _iter_original_segment_spans(command)
+    if not spans:
+        return command
+
+    assignments: dict[str, str] = {}
+    out_parts: list[str] = []
+    prev_end = 0
+    changed = False
+    for start, end in spans:
+        out_parts.append(command[prev_end:start])
+        orig_segment_text = command[start:end]
+
+        # Assignments are extracted from the segment's ORIGINAL (pre-
+        # substitution) text, never the substituted text: a value that is
+        # itself a variable reference (`g=$a`) fails the literal-charset
+        # check regardless, but resolving `$a` first and THEN re-checking
+        # the substituted text would let a chained reference become newly
+        # "literal" — reopening the `a=git; g=$a` non-goal this module
+        # already, correctly, declines to resolve.
+        seg_tokens = tokenize(orig_segment_text)
+        own_assignments = _leading_literal_assignments(seg_tokens) if seg_tokens else {}
+
+        # POSIX shells expand a command's words BEFORE applying that same
+        # command's own prefix assignments (main#1195 review round 3, real-
+        # shell verified with a printf/marker proxy). So a segment's OWN
+        # leading assignments must NOT be visible to references inside that
+        # SAME segment — only the running state accumulated from segments
+        # STRICTLY BEFORE it (this already matches the module's own top-of-
+        # file contract; merging `own_assignments` into `active` was the bug,
+        # not a documented design choice). Concretely:
+        #   - `A=1 B=git $B commit -m z` — `$B` is unset at expansion time
+        #     (its own segment's `B=git` prefix hasn't taken effect yet); a
+        #     real shell never runs git here, so `$B` must stay unresolved.
+        #   - `g=git; g=echo $g commit -m x` — `$g` in the second segment
+        #     must resolve against the RUNNING state (`git`, from segment 1),
+        #     NOT `echo` (this segment's own prefix): a real shell expands
+        #     `$g` to the OUTER shell's current value of `g` before the
+        #     prefix assignment takes effect, so the invoked command is
+        #     `git commit -m x` (with `g=echo` scoped only to that child's
+        #     environment).
+        #   - `g=git; g=echo $g commit -m x` reread the other way is the
+        #     LIVE-BYPASS direction: the OLD code (merging `own_assignments`
+        #     in) resolved `$g` to `echo` — this segment's own prefix — and
+        #     so allowed the command outright, hiding a real `git commit`
+        #     that the shell genuinely runs via the prior segment's `g=git`.
+        # `active = assignments` (no merge) makes all four rows in the
+        # main#1195 review-round-3 table shell-correct with one deletion.
+        active = assignments
+        segment_text = orig_segment_text
+        if active:
+            segment_text = _substitute_var_refs(orig_segment_text, active)
+            if segment_text != orig_segment_text:
+                changed = True
+
+        # Round 4 (main#1195 finding 1): a segment's OWN leading assignments
+        # — unlike the running `active` map above — apply ONLY inside a
+        # single-quoted span of THIS SAME segment (see
+        # `_single_quoted_spans`'s docstring for the real-shell reasoning:
+        # that text is opaque to the outer shell and is expanded later by a
+        # CHILD interpreter that inherits the prefix-assigned environment).
+        # A bare or double-quoted reference in the same segment is expanded
+        # by the OUTER shell instead, at the same point `active` (never
+        # `own_assignments`) already governs — untouched by this pass.
+        if own_assignments:
+            quoted_text = _substitute_within_single_quotes(segment_text, own_assignments)
+            if quoted_text != segment_text:
+                segment_text = quoted_text
+                changed = True
+
+        out_parts.append(segment_text)
+        prev_end = end
+
+        if own_assignments:
+            assignments.update(own_assignments)
+
+    out_parts.append(command[prev_end:])
+    return "".join(out_parts) if changed else command
 
 
 def bashlex_available() -> bool:

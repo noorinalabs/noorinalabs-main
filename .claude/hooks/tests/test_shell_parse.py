@@ -1580,5 +1580,273 @@ class CdRoutingWhenBashlexCannotParse(unittest.TestCase):
             self.assertEqual(resolved, self._shell_truth(template, shell))
 
 
+class ResolveSimpleAssignmentsTests(unittest.TestCase):
+    """Direct output-string tests for `resolve_simple_assignments` (main#1195
+    review round 2).
+
+    Every OTHER test that touches this pre-pass — in `test_validate_commit_
+    identity.py` — only observes `check()`'s downstream block/allow verdict.
+    That is the wrong level to catch a resolver that silently produces the
+    WRONG substituted text but happens to still be rejected (or still
+    happens to still be blocked) by whatever consumes it: main#1195's own
+    review found that mutating `_VAR_REF_RE`'s bare-name capture to drop its
+    trailing `\\b` boundary AND weaken its quantifier corrupts `$gone` into
+    `gitone` — a downstream matcher rejects "gitone" as not `git` either, so
+    a verdict-only test suite of 16 cases passed unchanged under that
+    mutation. Asserting the resolver's RETURNED STRING directly, as this
+    class does, is the only level at which that corruption is observable.
+    `resolve_simple_assignments` had no direct unit test before this class.
+    """
+
+    def test_basic_bare_assignment_resolves(self) -> None:
+        self.assertEqual(
+            sp.resolve_simple_assignments("g=git; $g commit -m x"),
+            "g=git; git commit -m x",
+        )
+
+    def test_braced_form_resolves(self) -> None:
+        self.assertEqual(
+            sp.resolve_simple_assignments("g=git; ${g} commit -m x"),
+            "g=git; git commit -m x",
+        )
+
+    def test_no_qualifying_assignment_returns_input_unchanged(self) -> None:
+        cmd = "echo hello world"
+        self.assertEqual(sp.resolve_simple_assignments(cmd), cmd)
+
+    def test_unassigned_reference_left_literal(self) -> None:
+        cmd = "echo $NEVERASSIGNED"
+        self.assertEqual(sp.resolve_simple_assignments(cmd), cmd)
+
+    def test_unparseable_command_returned_unchanged(self) -> None:
+        cmd = 'git commit -m "unterminated'
+        self.assertEqual(sp.resolve_simple_assignments(cmd), cmd)
+
+    # --- positional resolution (main#1195 review round 2: the resolver was
+    # order-blind — one flat last-wins map across the whole command) --------
+
+    def test_trailing_reassignment_via_semicolon_does_not_corrupt_earlier_use(self) -> None:
+        """`g=git; $g commit -m x; g=echo` — the primary repro. A flat
+        last-wins map resolves `$g` to `echo` (the LAST assignment anywhere
+        in the command), turning this into `echo commit -m x` and hiding
+        the git invocation entirely. Positional resolution must still read
+        `$g` as `git` at the point it is actually used.
+        """
+        self.assertEqual(
+            sp.resolve_simple_assignments("g=git; $g commit -m x; g=echo"),
+            "g=git; git commit -m x; g=echo",
+        )
+
+    def test_trailing_reassignment_to_true_does_not_corrupt_earlier_use(self) -> None:
+        self.assertEqual(
+            sp.resolve_simple_assignments("g=git; $g commit -m x; g=true"),
+            "g=git; git commit -m x; g=true",
+        )
+
+    def test_trailing_reassignment_via_or_operator_does_not_corrupt_earlier_use(self) -> None:
+        self.assertEqual(
+            sp.resolve_simple_assignments("g=git; $g commit -m x || g=x"),
+            "g=git; git commit -m x || g=x",
+        )
+
+    def test_trailing_reassignment_via_and_operator_does_not_corrupt_earlier_use(self) -> None:
+        self.assertEqual(
+            sp.resolve_simple_assignments("g=git; $g commit -m x; false && g=nope"),
+            "g=git; git commit -m x; false && g=nope",
+        )
+
+    def test_reassignment_that_has_not_happened_yet_is_not_used_early(self) -> None:
+        """Mirror image of the trailing-reassignment shapes above — a naive
+        "first assignment wins, globally" fix (rejected; see the module
+        comment above `resolve_simple_assignments` in `_shell_parse.py`)
+        would get THIS shape wrong. `$g` is used while `g` still holds
+        `echo`; the LATER `g=git` must not retroactively resolve it.
+        """
+        self.assertEqual(
+            sp.resolve_simple_assignments("g=echo; $g commit; g=git"),
+            "g=echo; echo commit; g=git",
+        )
+
+    def test_same_segment_leading_assignment_not_visible_to_own_expansion(self) -> None:
+        """`A=1 B=git $B commit -m z` — main#1195 review round 3,
+        real-shell-verified with a printf/marker proxy: POSIX expands a
+        command's words BEFORE applying that SAME command's own prefix
+        assignments, so `$B` is NOT visible to a reference inside its own
+        segment. A real shell never runs git here (`$B` is unset at
+        expansion time; `B=git` only scopes the invoked command's
+        environment). Supersedes the previous (wrong)
+        `test_same_segment_multiple_leading_assignments_resolve_within_segment`,
+        which encoded exactly this misreading of POSIX prefix-assignment
+        scope as the expected behaviour.
+        """
+        cmd = "A=1 B=git $B commit -m z"
+        self.assertEqual(sp.resolve_simple_assignments(cmd), cmd)
+
+    def test_same_segment_leading_assignment_becomes_visible_in_later_segment(self) -> None:
+        """The peeling loop must still consume BOTH leading assignment
+        tokens (`A=1` then `B=git`) in one segment — the multi-assignment
+        coverage the superseded test above was meant to pin, checked here
+        where a real shell agrees: once `;` moves the reference into a
+        LATER segment, `B`'s value from a two-assignment leading run is
+        visible.
+        """
+        self.assertEqual(
+            sp.resolve_simple_assignments("A=1 B=git; $B commit -m z"),
+            "A=1 B=git; git commit -m z",
+        )
+
+    # --- name-prefix conflation guard (main#1195 review round 2, finding 2) -
+
+    def test_shorter_assignment_not_conflated_with_longer_bare_name(self) -> None:
+        """`$gone` is a DIFFERENT variable from `$g`. The greedy identifier
+        match plus the trailing `\\b` boundary in `_VAR_REF_RE` must capture
+        the FULL name "gone" (never assigned) and leave it untouched. A
+        weakened boundary/quantifier would instead read this as `$g` +
+        literal "one", corrupting the output to "gitone" — invisible to any
+        test that only checks a downstream block/allow verdict.
+        """
+        cmd = "g=git; echo $gone"
+        self.assertEqual(sp.resolve_simple_assignments(cmd), cmd)
+
+    def test_shorter_assignment_not_conflated_with_underscore_suffixed_name(self) -> None:
+        cmd = "g=git; echo $g_2"
+        self.assertEqual(sp.resolve_simple_assignments(cmd), cmd)
+
+    def test_shorter_assignment_not_conflated_with_bare_suffix(self) -> None:
+        cmd = "g=git; echo $gx"
+        self.assertEqual(sp.resolve_simple_assignments(cmd), cmd)
+
+    # --- documented non-goals: must remain unresolved ------------------------
+
+    def test_command_substitution_value_not_resolved(self) -> None:
+        cmd = "d=$(date); echo $d"
+        self.assertEqual(sp.resolve_simple_assignments(cmd), cmd)
+
+    def test_multiword_value_not_resolved(self) -> None:
+        cmd = 'msg="please git commit this later"; echo $msg'
+        self.assertEqual(sp.resolve_simple_assignments(cmd), cmd)
+
+    def test_value_containing_variable_reference_does_not_chain(self) -> None:
+        """`g=$a` fails the literal-value check (contains `$`), so `g` is
+        never added to the assignment map — a later `$g` stays literal even
+        though `a` itself resolved earlier in the command. (The `a=git; g=$a`
+        segment's own displayed text still shows `a`'s value substituted in
+        — a pre-existing textual side effect of substituting every segment,
+        not a resolution of `g`; the load-bearing assertion here is that the
+        trailing `$g` is untouched.)
+        """
+        self.assertEqual(
+            sp.resolve_simple_assignments("a=git; g=$a; $g commit -m x"),
+            "a=git; g=git; $g commit -m x",
+        )
+
+    def test_local_keyword_prefix_is_out_of_scope(self) -> None:
+        """Only `export`/`declare` are folded in (#1305); `local` and any
+        other prefix keyword remain a non-goal.
+        """
+        cmd = "local g=git; $g commit -m x"
+        self.assertEqual(sp.resolve_simple_assignments(cmd), cmd)
+
+    # --- #1305: export/declare fold-in ---------------------------------------
+
+    def test_export_prefixed_assignment_resolves(self) -> None:
+        self.assertEqual(
+            sp.resolve_simple_assignments("export g=git; $g commit -m x"),
+            "export g=git; git commit -m x",
+        )
+
+    def test_declare_prefixed_assignment_resolves(self) -> None:
+        self.assertEqual(
+            sp.resolve_simple_assignments("declare g=git; $g commit -m x"),
+            "declare g=git; git commit -m x",
+        )
+
+    # --- main#1195 round 4, finding 1: same-segment prefix DOES resolve
+    # inside a single-quoted CHILD payload, real-shell-verified with a
+    # marker proxy (`g=git bash -c '$g commit -m x'` genuinely runs
+    # `git commit -m x`) -------------------------------------------------
+
+    def test_same_segment_prefix_resolves_inside_single_quoted_child_payload(
+        self,
+    ) -> None:
+        self.assertEqual(
+            sp.resolve_simple_assignments("g=git bash -c '$g commit -m x'"),
+            "g=git bash -c 'git commit -m x'",
+        )
+
+    def test_same_segment_prefix_resolves_inside_single_quoted_sh_dash_c(self) -> None:
+        """Same shape, `sh -c` instead of `bash -c` — the fix lives in the
+        assignment/quote resolver, not in anything interpreter-specific.
+        """
+        self.assertEqual(
+            sp.resolve_simple_assignments("g=git sh -c '$g commit -m x'"),
+            "g=git sh -c 'git commit -m x'",
+        )
+
+    def test_same_segment_prefix_resolves_inside_single_quoted_braced_payload(
+        self,
+    ) -> None:
+        self.assertEqual(
+            sp.resolve_simple_assignments("g=git bash -c '${g} commit -m x'"),
+            "g=git bash -c 'git commit -m x'",
+        )
+
+    def test_same_segment_prefix_not_resolved_inside_double_quoted_payload(
+        self,
+    ) -> None:
+        """Control for the above: `bash -c "$g commit -m x"` (double-quoted)
+        is expanded by the OUTER shell at the same expansion point a bare
+        same-segment reference is (`A=1 B=git $B commit -m z`) — BEFORE its
+        own prefix assignment takes effect — so `$g` must stay unresolved,
+        real-shell-verified with a marker proxy (no git run).
+        """
+        cmd = 'g=git bash -c "$g commit -m x"'
+        self.assertEqual(sp.resolve_simple_assignments(cmd), cmd)
+
+    # --- main#1195 round 4, finding 3: a compound-statement leader (`do`,
+    # `then`, ...) at a segment's leading position must not hide the
+    # assignment one token to the right, real-shell-verified with a marker
+    # proxy (each row genuinely runs `git commit -m x`) -------------------
+
+    def test_do_prefixed_segment_assignment_resolves_in_later_segment(self) -> None:
+        self.assertEqual(
+            sp.resolve_simple_assignments("for f in a; do g=git; $g commit -m x; done"),
+            "for f in a; do g=git; git commit -m x; done",
+        )
+
+    def test_then_prefixed_segment_assignment_resolves_in_later_segment(self) -> None:
+        self.assertEqual(
+            sp.resolve_simple_assignments("if true; then g=git; $g commit -m x; fi"),
+            "if true; then g=git; git commit -m x; fi",
+        )
+
+    def test_do_prefixed_segment_assignment_multichar_name_resolves(self) -> None:
+        """Vary the incidental dimension a single-character-name fixture
+        would hide (main#1195 finding 2's lesson, applied here too): `gg`,
+        not `g`.
+        """
+        self.assertEqual(
+            sp.resolve_simple_assignments("for f in a; do gg=git; $gg commit -m x; done"),
+            "for f in a; do gg=git; git commit -m x; done",
+        )
+
+    def test_do_prefixed_segment_assignment_braced_reference_resolves(self) -> None:
+        self.assertEqual(
+            sp.resolve_simple_assignments("for f in a; do g=git; ${g} commit -m x; done"),
+            "for f in a; do g=git; git commit -m x; done",
+        )
+
+    def test_do_prefixed_single_quoted_child_payload_resolves(self) -> None:
+        """Finding 1 and finding 3 compose: a `do`-prefixed segment's own
+        leading assignment feeding a single-quoted `bash -c` payload in the
+        SAME segment must resolve, real-shell-verified (genuinely runs
+        `git commit -m x`).
+        """
+        self.assertEqual(
+            sp.resolve_simple_assignments("for f in a; do g=git bash -c '$g commit -m x'; done"),
+            "for f in a; do g=git bash -c 'git commit -m x'; done",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
