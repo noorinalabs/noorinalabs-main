@@ -1018,9 +1018,20 @@ def _opener_feeds_interpreter(line: str, pos: int, scan: _LineScan) -> bool:
 #     bash "$F"`) or any other divergent spelling defeats it exactly as
 #     variable resolution in general would.
 #   - `bash < FILE` (script fed via stdin redirect rather than a positional
-#     argument) is a different execution mechanism than the positional
-#     `InterpreterInvocation.operands` this correlation reads, and is not
-#     resolved by the pre-existing shape-7 walker either — out of scope here.
+#     argument) IS now covered (main#1170): `parse_interpreter_invocation`
+#     folds a bare `< FILE` redirect into `operands[0]`, the same slot this
+#     correlation already reads via `_script_invocation_targets`, so a heredoc
+#     written to FILE and later fed to an interpreter through `< FILE` (a
+#     `mkfifo`-relayed FIFO, in main#1170's shape, or an ordinary regular
+#     file) reclassifies as CODE without any new correlation machinery. This
+#     resolves main#1287 shape 1 as a byproduct — its shapes 2 (`$(...)`
+#     -produced path) and 3 (`cp` copy indirection) remain unresolved and stay
+#     filed there. The pre-existing shape-7 walker in `validate_commit_identity`
+#     (which reads a script's CONTENT off disk, not this module's path
+#     correlation) is unaffected by this change either way: it fires
+#     PreToolUse, before a same-command heredoc write has run, so the file it
+#     would read never has the relevant content yet regardless of which
+#     operand slot names it.
 #   - The attached-operator redirect form with no surrounding whitespace
 #     (`cat>/tmp/x`, as opposed to `cat > /tmp/x`) is not recognised by
 #     `_segment_write_targets`'s tokenizer, which relies on shlex already
@@ -2096,7 +2107,10 @@ class InterpreterInvocation(NamedTuple):
     `operands` are the tokens after the option run, i.e. what the shell itself
     treats as `<command-string> [$0 $1 ...]` or `<script> [args]`. This is the
     shell-accurate answer and is what a consumer that must resolve a real path
-    (the script-invocation check) should use.
+    (the script-invocation check) should use. `operands[0]` also resolves a
+    stdin-redirect script (`bash < FILE`, main#1170/main#1287 shape 1) to
+    `FILE` — see `parse_interpreter_invocation`'s docstring for why that slot,
+    not a separate field, is the shell-accurate place for it.
 
     `words` is every token of the invocation except the `--` sentinel — the set
     the command string is guaranteed to be a member of. It is deliberately a
@@ -2177,6 +2191,23 @@ def parse_interpreter_invocation(segment: list[str]) -> InterpreterInvocation | 
     Returns None when the segment is empty or its head is not one of
     `SHELL_INTERPRETERS` — callers must treat None as "not an interpreter
     invocation", never as "safe".
+
+    Stdin-redirect operand resolution (main#1170 / main#1287 shape 1):
+    `bash < FILE` feeds FILE to the interpreter as its script through the
+    process's own stdin rather than as a positional argument, but it answers
+    the exact same question `operands[0]` exists to answer — "what file does
+    this interpreter execute?" — so the redirect target is folded into
+    `operands` in the `[0]` slot, shell-accurately: any OTHER bare word in the
+    operand region becomes `$1`/`$2`/… passed TO that script, not a second
+    script, so it is never in the running for the `[0]` slot once a stdin
+    target is found. Only the spaced form (`< FILE`, not `<FILE`) is
+    recognised — the same convention `_segment_write_targets` already applies
+    to `>`/`>>` — and only a BARE `<` token qualifies: `<<` (a heredoc opener)
+    is never present here (callers strip it before tokenizing — see
+    `_HEREDOC_OPENER_RE`), and `<(` (process substitution) arrives from shlex
+    fused into one token (`<(cmd)`) whenever it isn't preceded by whitespace,
+    so it can't be mistaken for a bare `<`. The LAST `< FILE` on the line
+    wins, mirroring a real shell's last-redirect-wins semantics.
     """
     tokens = strip_command_prefixes(segment)
     if not tokens:
@@ -2191,7 +2222,22 @@ def parse_interpreter_invocation(segment: list[str]) -> InterpreterInvocation | 
 
     end = _consume_wrapper_options(rest, SHELL_VALUE_OPTIONS, 0)
     has_command_string = _COMMAND_STRING_FLAG in rest[:end]
-    operands = tuple(rest[end:])
+
+    stdin_target: str | None = None
+    other_operands: list[str] = []
+    j = end
+    n = len(rest)
+    while j < n:
+        tok = rest[j]
+        if tok == "<" and j + 1 < n:
+            stdin_target = rest[j + 1]
+            j += 2
+            continue
+        other_operands.append(tok)
+        j += 1
+    operands = (
+        (stdin_target, *other_operands) if stdin_target is not None else tuple(other_operands)
+    )
     words = tuple(t for t in rest if t != "--")
     return InterpreterInvocation(name, has_command_string, operands, words)
 
