@@ -65,6 +65,12 @@ CONFIG_FILENAME = "framework.config.json"
 # runs LAST because it unconditionally resolves a PR base via ``gh pr view``
 # (a network call, cheap-prefiltered on ``--squash``).
 #
+# ``pre_file`` / ``pre_notebook`` (#1114) are the PreToolUse siblings of
+# ``post_file`` / ``post_notebook`` — the PreToolUse dispatcher (`dispatcher.py`)
+# reads them for the ``Edit``/``Write`` and ``NotebookEdit`` matchers respectively,
+# consolidating what used to be N standalone ``settings.json`` command entries per
+# matcher into one dispatcher invocation each (3 processes/edit -> 2).
+#
 # A supplied ``hooks.*`` list REPLACES the default (see _deep_merge: lists are
 # not merged) so a repo can disable a default hook by omitting it. The cost is
 # that an omission is indistinguishable from an oversight —
@@ -124,6 +130,14 @@ _DEFAULTS: dict[str, Any] = {
             "validate_edit_completion",
         ],
         "post_notebook": [
+            "validate_edit_completion",
+        ],
+        "pre_file": [
+            "enforce_librarian_consulted",
+            "validate_edit_completion",
+        ],
+        "pre_notebook": [
+            "enforce_librarian_consulted",
             "validate_edit_completion",
         ],
     },

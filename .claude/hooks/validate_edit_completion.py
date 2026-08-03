@@ -115,6 +115,13 @@ SENTINEL_TTL_SECONDS = 24 * 3600  # 24 hours
 # the same file (PreToolUse).
 _EDIT_TOOLS = {"Edit", "Write", "NotebookEdit"}
 
+# tool_name values the PreToolUse dispatcher (`dispatcher.py`) actually routes
+# to `check()` — Bash (via `hooks.pre_bash`) plus the edit tools (via
+# `hooks.pre_file` / `hooks.pre_notebook`). SendMessage has no PreToolUse
+# dispatcher entry and reaches `_pre_tool_use_blocks` only via the standalone
+# `main()` registration in `settings.json` — see `check()`'s docstring.
+_DISPATCHED_PRE_TOOLS = _EDIT_TOOLS | {"Bash"}
+
 # Bash-command shapes that count as state-sensitive actions (artifact-state
 # claims downstream of an edit). These match command-position git/gh
 # invocations within any compound-command segment.
@@ -476,20 +483,27 @@ def _pre_tool_use_blocks(input_data: dict) -> dict | None:
 def check(input_data: dict) -> dict | None:
     """Dispatcher-compatible entry point for Bash and Edit/Write/NotebookEdit.
 
-    Both the PreToolUse Bash dispatcher (`dispatcher.py`) and the PostToolUse
+    Both the PreToolUse dispatcher (`dispatcher.py`) and the PostToolUse
     dispatcher (`post_dispatcher.py`) route tool calls through this function.
 
     Dispatch is `hook_event_name`-aware (with a tool_response-presence
     fallback for inputs that omit the field):
 
-      - PreToolUse Bash             → `_pre_tool_use_blocks` (may return a block)
+      - PreToolUse Bash/Edit/Write/
+        NotebookEdit                → `_pre_tool_use_blocks` (may return a block)
       - PostToolUse Edit/Write/
         NotebookEdit                → `_post_tool_use` (records sentinel)
 
-    Other matcher/event pairs return None.
+    `SendMessage` is NOT routed through this function — it has no PreToolUse
+    dispatcher of its own (only Bash/Edit/Write/NotebookEdit do, per
+    `dispatcher.py`'s `_MATCHER_CFG_KEY`), so it stays reachable only via the
+    standalone `main()` entry point registered directly in `settings.json`,
+    which calls `_pre_tool_use_blocks` unconditionally. Other matcher/event
+    pairs return None here.
 
-    Returns None to allow, or a block dict for PreToolUse Bash. For
-    PostToolUse the return is always None (side-effect only: sentinel append).
+    Returns None to allow, or a block dict for a state-sensitive PreToolUse
+    call. For PostToolUse the return is always None (side-effect only:
+    sentinel append).
     """
     tool_name = input_data.get("tool_name", "")
     event = input_data.get("hook_event_name", "")
@@ -501,8 +515,11 @@ def check(input_data: dict) -> dict | None:
             _post_tool_use(input_data)
         return None
 
-    # PreToolUse path — only Bash goes through the dispatcher for this hook
-    if tool_name != "Bash":
+    # PreToolUse path — Bash and Edit/Write/NotebookEdit are the matchers the
+    # PreToolUse dispatcher (`dispatcher.py`) routes through `check()`; every
+    # other tool_name (e.g. SendMessage, which has no dispatcher of its own)
+    # returns None here and is reachable only via the standalone `main()`.
+    if tool_name not in _DISPATCHED_PRE_TOOLS:
         return None
     return _pre_tool_use_blocks(input_data)
 

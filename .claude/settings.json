@@ -61,13 +61,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/enforce_librarian_consulted.py",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/validate_edit_completion.py",
-            "timeout": 10
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/dispatcher.py",
+            "timeout": 30
           }
         ]
       },
@@ -76,13 +71,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/enforce_librarian_consulted.py",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/validate_edit_completion.py",
-            "timeout": 10
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/dispatcher.py",
+            "timeout": 30
           }
         ]
       },
@@ -91,13 +81,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/enforce_librarian_consulted.py",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/validate_edit_completion.py",
-            "timeout": 10
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/dispatcher.py",
+            "timeout": 30
           }
         ]
       }
