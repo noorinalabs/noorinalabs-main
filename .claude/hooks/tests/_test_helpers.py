@@ -3,8 +3,9 @@
 Deliberately NOT `conftest.py`: conftest fixtures are pytest-only and are
 invisible to a bare `python3 .claude/hooks/tests/test_foo.py` invocation,
 which most files in this suite still support (each carries its own
-`if __name__ == "__main__":` block — `rg -l 'if __name__ == "__main__"'
-.claude/hooks/tests/*.py` is the current count; it moves as the suite
+`if __name__ == "__main__":` block — `rg -l '^if __name__ == "__main__"'
+.claude/hooks/tests/*.py` is the current count, anchored so this file's
+own citation of the pattern doesn't self-match; it moves as the suite
 grows, so it isn't pinned here). This module lives beside the test
 files instead, so its containing directory is already importable in both
 modes — pytest's rootless import mode and the interpreter's implicit
@@ -45,11 +46,13 @@ ALSO single-underscore-prefixed with a letter alphabetically before `t`
 `_hook_main`) — ruff's isort would otherwise sort those ahead of
 `_test_helpers`, moving the sys.path setup after the import that needs
 it (the same class of bug `from X import Y` caused above, for a
-different reason). The 6 affected files (`rg -l "isort: skip_file"
+different reason). The 6 affected files (`rg -l '^# isort: skip_file'
 .claude/hooks/tests/*.py` is the source of truth for the current count —
-this docstring's own number has already gone stale once, see below)
-each carry an explicit `# isort: skip_file` directive, verified to
-survive `ruff check --fix` without reordering.
+anchored at column zero so this file's own citation of the directive
+doesn't self-match and inflate the count by one; this docstring's own
+number has already gone stale once, see below) each carry an explicit
+`# isort: skip_file` directive, verified to survive `ruff check --fix`
+without reordering.
 
 That directive is the ONLY thing load-bearing per file — do not rely on
 an incidental statement between the two imports to keep them apart
