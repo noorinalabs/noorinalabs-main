@@ -112,11 +112,32 @@ jobs:
           for f in .claude/hooks/*.py .claude/lib/*.py $(find .claude/skills -name '*.py'); do
             python3 -c "import py_compile; py_compile.compile('$f', doraise=True)"
           done
-      - name: Verify hooks exit 0 on empty stdin
+      - name: Verify hooks exit 0 on empty, malformed, and minimal stdin
+        # main#1121/#1330 review: this step was doubly vacuous pre-fix — it
+        # piped `echo '{}'` (valid JSON, NOT empty stdin, despite the OLD step
+        # name "...on empty stdin") AND ended in `|| true` (no exit code could
+        # ever fail it). The bug this PR fixes
+        # (`validate_wave_label_evidence.py` crashing with exit 1 on genuinely
+        # empty/malformed stdin) landed with nothing in CI able to detect a
+        # regression. The step name itself was part of the defect — it
+        # described an input its body never supplied — so the rename is load-
+        # bearing, not cosmetic: it is now kept honest by actually probing all
+        # three cases it names, with no swallow, and both the failing file AND
+        # the failing probe named in the output.
         run: |
+          fail=0
+          count=0
           for f in .claude/hooks/*.py; do
-            echo '{}' | python3 "$f" || true
+            count=$((count + 1))
+            for probe in '' 'not-json' '{}'; do
+              if ! printf '%s' "$probe" | python3 "$f" >/dev/null 2>&1; then
+                echo "FAIL(${probe:-<empty>}): $f"
+                fail=1
+              fi
+            done
           done
+          echo "checked $count hook files"
+          exit "$fail"
 
   pytest:
     name: Pytest — hooks and lib test suites

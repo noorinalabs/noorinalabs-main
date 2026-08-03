@@ -73,13 +73,39 @@ def test_check_lockfile_fails_open_on_called_process_error():
         assert vlp.check_lockfile("package-lock.json") == []
 
 
-def test_check_never_calls_gh():
-    """Positive instrument pairing (#1318): this hook never shells out to
-    `gh` — confirmed by asserting `run_git` (not some other binary) is the
-    one and only subprocess seam it uses."""
+def test_check_uses_run_git_seam():
+    """`check()` reaches `subprocess.run` (if at all) only through `run_git`.
+
+    A positive-only row: proves the seam IS used, but does not by itself
+    prove `gh` was never invoked — see `test_check_never_invokes_gh_binary`
+    below for the negative half of the #1318 pairing."""
     with mock.patch.object(vlp, "run_git", return_value="") as mock_run_git:
         vlp.check({"tool_name": "Bash", "tool_input": {"command": "git commit -m x"}})
     assert mock_run_git.called
+
+
+def test_check_never_invokes_gh_binary():
+    """Positive-instrument pairing (#1318): this hook never shells out to
+    `gh`. Unlike a mock on `run_git` (which only proves that seam is USED,
+    never that a DIFFERENT seam to `gh` is absent — the surviving-mutant
+    shape a #1330 review caught: adding a real `subprocess.run(["gh", ...])`
+    to `check()` left the old assertion passing), this patches the actual
+    `subprocess.run` primitive underneath `run_git` and inspects every call's
+    argv[0] directly, so a `gh` invocation anywhere in the call tree — not
+    just bypassing `run_git` — would be caught."""
+    calls: list[list[str]] = []
+
+    def _fake_run(argv, **kwargs):
+        calls.append(list(argv))
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="", stderr="")
+
+    with mock.patch("git.subprocess.run", side_effect=_fake_run):
+        vlp.check({"tool_name": "Bash", "tool_input": {"command": "git commit -m x"}})
+
+    assert calls, "expected at least one subprocess invocation for a git-commit command"
+    for argv in calls:
+        assert argv[0] != "gh", f"check() invoked gh directly: {argv}"
+        assert argv[0] == "git", f"unexpected non-git subprocess invocation: {argv}"
 
 
 def test_check_end_to_end_block_on_local_path():

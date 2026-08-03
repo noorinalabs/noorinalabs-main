@@ -33,11 +33,15 @@ nothing and exits 0 immediately — same "no matcher, no-op" contract as
 `post_dispatcher.py`.
 
 A `check()` raising is swallowed (a single misbehaving hook must never block
-every other PreToolUse gate) — but the swallow is LOUD, not silent (main#1121,
-porting `post_dispatcher.py`'s pre-existing logged-swallow): it is recorded
-via `log_pretooluse_dispatch` (`.claude/annunaki/traces.jsonl`) so a
-previously-invisible hook exception is now forensically visible via
-`/annunaki`, instead of vanishing into a bare `except Exception: continue`.
+every other PreToolUse gate) — but the swallow is now RECORDED, not silent
+(main#1121, porting `post_dispatcher.py`'s pre-existing logged-swallow): it is
+written via `log_pretooluse_dispatch` to `.claude/annunaki/traces.jsonl`
+instead of vanishing into a bare `except Exception: continue`. Recorded is
+not the same as surfaced by default — `traces.jsonl` is excluded from
+`annunaki_parse`'s default read, and both `/annunaki` and `/annunaki-attack`
+are documented to skip it during routine sweeps (deliberate, avoids
+re-creating the #625 over-count) — so this is retrievable forensic evidence
+for someone already debugging a specific hook, not a routine-count signal.
 
 Exit codes:
   0 — allow (all hooks passed, or aggregated warnings)
@@ -115,8 +119,10 @@ def main() -> None:
         except Exception as e:  # noqa: BLE001
             # Never let a hook crash block everything — but unlike the
             # pre-#1121 bare `except: continue`, capture the exception so
-            # the swallow is loud (recoverable via /annunaki), mirroring
-            # post_dispatcher.py's logged-swallow (main#1121).
+            # the swallow is recorded (retrievable forensic evidence via
+            # traces.jsonl, not a routine-count signal — see module
+            # docstring), mirroring post_dispatcher.py's logged-swallow
+            # (main#1121).
             tb_text = traceback.format_exc()[:500]
             try:
                 log_pretooluse_dispatch(

@@ -13,8 +13,10 @@ This module writes to TWO files under `.claude/annunaki/`:
     `posttooluse_event` (a hook reporting a follow-up condition). This is what
     `/annunaki` counts and `/annunaki-attack` processes.
   - `traces.jsonl`  — benign forensic traces: `posttooluse_dispatch` (the
-    dispatcher's per-check() view) and `pretooluse_diagnostic` forensics.
-    Informational only; NEVER counted as errors.
+    PostToolUse dispatcher's per-check() view), `pretooluse_diagnostic`
+    forensics, and `pretooluse_dispatch` (the PreToolUse dispatcher's
+    logged-swallow, main#1121 — same idea as `posttooluse_dispatch`,
+    opposite phase). Informational only; NEVER counted as errors.
 
 Pre-#625 both kinds shared `errors.jsonl`; dispatch traces were 76% of the
 P4W1 log and `/annunaki` over-counted them as errors. `TRACE_RECORD_TYPES` is

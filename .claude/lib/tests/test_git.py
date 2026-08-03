@@ -74,7 +74,7 @@ class RunGitRawPropagationTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 g.run_git(["status"], timeout=5)
 
-    def test_no_ge_error_wrapper_class_exists_on_the_module(self) -> None:
+    def test_no_git_error_wrapper_class_exists_on_the_module(self) -> None:
         """Deliberate absence: gh.py needed GhError for verify_deployable_merge's
         wrapper; no converted git call site needs an analogous wrapper (all of
         them already caught the raw stdlib exception types) — so this module

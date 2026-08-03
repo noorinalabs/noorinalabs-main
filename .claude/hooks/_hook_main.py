@@ -29,17 +29,29 @@ Canonical policy (this module is now the ONE dialect)
 =======================================================
 - Malformed stdin — empty (``EOFError``), invalid JSON
   (``json.JSONDecodeError``), or bytes that don't decode under the process
-  locale (``UnicodeDecodeError``, not previously guarded ANYWHERE in this
-  directory) — exits 0 silently. No converted hook can crash on bad stdin.
+  locale (``UnicodeDecodeError``) — exits 0 silently. No converted hook can
+  crash on bad stdin. The ``UnicodeDecodeError`` guard was not previously
+  present in ANY hook's stdin-decode try/except — it is real defense for a
+  strict-``errors`` or non-UTF-8-locale process, though it is INERT under
+  this org's default environment: ``sys.stdin.errors`` is ``surrogateescape``
+  here, so invalid UTF-8 on stdin is escaped into lone surrogates rather than
+  raising. Not a demonstrated live gap on this box — a guard against one.
 - ``check_fn(input_data)`` is called inside a ``try/except Exception``. A
   raised exception is treated exactly like a ``None`` result (allow / no
   advisory) — it can never surface as a traceback — but unlike the historic
   bare ``except Exception: continue`` in ``dispatcher.py``, the swallow is
-  LOUD: it is logged to Annunaki's informational ``traces.jsonl`` via
+  RECORDED, not silent: it is written to Annunaki's ``traces.jsonl`` via
   ``log_pretooluse_diagnostic`` (mirrors the ``post_dispatcher.py`` logged-
-  swallow this issue also ports into ``dispatcher.py`` itself). "A hook must
-  never crash" is a hard contract; "an exception is invisible" is not — this
-  module keeps the first and drops the second.
+  swallow this issue also ports into ``dispatcher.py`` itself). Recorded is
+  not the same as surfaced by default — ``traces.jsonl`` is excluded from
+  ``annunaki_parse``'s default read, and both ``/annunaki`` and
+  ``/annunaki-attack`` are documented to skip it during routine sweeps
+  (deliberate: folding it into the counted-error stream would re-create the
+  #625 over-count) — so a swallowed ``check_fn`` exception is retrievable
+  evidence for someone already debugging a specific hook, not something that
+  shows up in a routine error count (surfacing tracked separately, #1331).
+  "A hook must never crash" is a hard contract; "an exception is invisible"
+  is not — this module keeps the first and drops the second.
 - A truthy ``check_fn()`` result is always printed as JSON (dialect 2 above).
   :func:`run_blocking` additionally exits 2 iff ``result.get("decision") ==
   "block"``; :func:`run_advisory` always exits 0 regardless of what the

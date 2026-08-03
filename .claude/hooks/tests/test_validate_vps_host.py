@@ -39,8 +39,13 @@ class LazyLoadTests(unittest.TestCase):
         self.assertFalse(hasattr(vvh, "CLOUDFLARE_RANGES"))
 
     def test_loader_not_called_until_first_real_use(self) -> None:
+        """The loader is called by the FIRST `is_cloudflare_ip` call, not
+        before. (Module-import-time is covered separately by
+        `test_no_module_level_eager_attribute` above — a
+        `mock.patch.object(...)` applied here, after import already
+        happened, cannot itself prove anything about import time; asserting
+        that would be vacuous.)"""
         with mock.patch.object(vvh, "_load_cloudflare_ranges", return_value=[]) as mock_load:
-            mock_load.assert_not_called()  # importing the module alone must not call it
             vvh.is_cloudflare_ip("1.2.3.4")
             mock_load.assert_called_once()
 

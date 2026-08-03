@@ -95,5 +95,34 @@ class NegativeMatchTests(unittest.TestCase):
         self.assertIsNone(result)
 
 
+class CheckAndLogWrapperTests(unittest.TestCase):
+    """main#1121 conversion: the pre-PR standalone main() called
+    log_pretooluse_block itself (not check()) on a block decision — the
+    _check_and_log wrapper must preserve that side effect exactly, or a
+    real block silently stops being recorded to Annunaki even though the
+    hook keeps blocking correctly (a pure observability regression a
+    #1330 review flagged by name as the exact trap that bit
+    validate_edit_completion.py's naive-conversion draft)."""
+
+    @mock.patch.object(hook, "log_pretooluse_block")
+    def test_block_logs_to_annunaki(self, mock_log) -> None:
+        with mock.patch.object(hook, "has_retro_for_today", return_value=False):
+            result = hook._check_and_log(_input({"type": "shutdown_request", "reason": "done"}))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        mock_log.assert_called_once()
+        args, kwargs = mock_log.call_args
+        self.assertEqual(args[0], "block_shutdown_without_retro")
+        self.assertEqual(kwargs.get("tool_name"), "SendMessage")
+
+    @mock.patch.object(hook, "log_pretooluse_block")
+    def test_allow_does_not_log(self, mock_log) -> None:
+        with mock.patch.object(hook, "has_retro_for_today", return_value=True):
+            result = hook._check_and_log(_input({"type": "shutdown_request"}))
+        self.assertIsNone(result)
+        mock_log.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
