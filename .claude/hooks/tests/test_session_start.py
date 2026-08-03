@@ -10,6 +10,10 @@ Regression coverage:
   /session-start, prints one-line counts, and NEVER dumps the handoff file
   contents or an auto `/annunaki-attack` directive (attack is on-demand /
   wave-wrapup, re #925). The skill owns the step detail.
+* #1142 — `_ontology_staleness` no longer re-implements the
+  `last_tracked != last_resolved` predicate. It delegates to
+  `checksums_io.read_status`, so a malformed entry counts as malformed
+  (not clean) and an unreadable ledger reports as unreadable (not `0 dirty`).
 
 Run from the repo root:
     ENVIRONMENT=test python3 -m pytest \\
@@ -18,9 +22,13 @@ Run from the repo root:
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import sys
+import tempfile
 import unittest
+from collections.abc import Iterator
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
@@ -122,6 +130,97 @@ class HandoffPathLocationTests(unittest.TestCase):
     def test_handoff_not_in_user_space(self) -> None:
         self.assertNotIn("/.claude/projects/", hook._HANDOFF.as_posix())
         self.assertFalse(hook._HANDOFF.is_relative_to(Path.home() / ".claude" / "projects"))
+
+
+class OntologyStalenessTests(unittest.TestCase):
+    """#1142: the hook consumes the shared predicate, it does not re-derive it.
+
+    The inline version this replaced was the ONLY correct implementation of
+    `last_tracked != last_resolved` in the repo, and it lived in a private hook
+    function nothing could import — so every other reader reproduced it from
+    memory, and two consecutive sessions reproduced it wrong.
+    """
+
+    @contextlib.contextmanager
+    def _checksums(self, payload: str) -> Iterator[Path]:
+        """Point the hook at a temporary ledger for the duration of the block."""
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "checksums.json"
+            path.write_text(payload, encoding="utf-8")
+            original = hook._CHECKSUMS
+            try:
+                hook._CHECKSUMS = path
+                yield path
+            finally:
+                hook._CHECKSUMS = original
+
+    def _capture_main(self) -> str:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            hook.main()
+        return buf.getvalue()
+
+    def test_delegates_to_the_shared_reader(self) -> None:
+        """Not an isinstance ceremony — the point is that the hook returns the
+        shared module's type, so there is nothing left here to drift."""
+        payload = json.dumps(
+            {"version": 1, "files": {"a.md": {"last_tracked": "1", "last_resolved": "1"}}}
+        )
+        with self._checksums(payload):
+            status = hook._ontology_staleness()
+        self.assertIsInstance(status, hook.checksums_io.ChecksumsStatus)
+        assert status is not None
+        self.assertTrue(status.clean)
+
+    def test_dirty_entry_is_counted(self) -> None:
+        payload = json.dumps(
+            {
+                "version": 1,
+                "files": {
+                    "a.md": {"last_tracked": "1", "last_resolved": "1"},
+                    "b.md": {"last_tracked": "1", "last_resolved": "2"},
+                },
+            }
+        )
+        with self._checksums(payload):
+            status = hook._ontology_staleness()
+            out = self._capture_main()
+        assert status is not None
+        self.assertEqual(status.dirty, ("b.md",))
+        self.assertIn("1/2 dirty", out)
+
+    def test_malformed_entry_is_not_reported_as_current(self) -> None:
+        """The real committed shape: `{"last_resolved": null, "resolved_at": ...}`.
+
+        The previous inline reader compared `.get("last_tracked")` (None)
+        against `.get("last_resolved")` (None), found them equal, and reported
+        "current (0/N dirty)" — which it did, every session, for seven weeks.
+        """
+        payload = json.dumps(
+            {
+                "version": 1,
+                "files": {
+                    "a.md": {"last_tracked": "1", "last_resolved": "1"},
+                    "b.md": {"last_resolved": None, "resolved_at": "2026-06-14T00:16:00Z"},
+                },
+            }
+        )
+        with self._checksums(payload):
+            status = hook._ontology_staleness()
+            out = self._capture_main()
+        assert status is not None
+        self.assertFalse(status.clean)
+        self.assertEqual(len(status.malformed), 1)
+        self.assertNotIn("current (", out)
+        self.assertIn("1 malformed", out)
+
+    def test_unreadable_ledger_is_reported_not_counted_as_clean(self) -> None:
+        with self._checksums("{not json"):
+            status = hook._ontology_staleness()
+            out = self._capture_main()
+        self.assertIsNone(status)
+        self.assertIn("unreadable", out)
+        self.assertNotIn("0/0 dirty", out)
 
 
 class SlimStdoutTests(unittest.TestCase):

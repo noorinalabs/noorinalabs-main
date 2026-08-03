@@ -73,6 +73,12 @@ from _shell_parse import (  # noqa: E402
 )
 from annunaki_log import log_pretooluse_block  # noqa: E402
 
+# Shared checksums reader — the ONE implementation of the dirty predicate (#1142).
+_LIB = Path(__file__).resolve().parent.parent / "lib"
+if str(_LIB) not in sys.path:
+    sys.path.insert(0, str(_LIB))
+import checksums_io  # noqa: E402
+
 # Repo root, resolved module-relative exactly like ontology_tracker.py: the hook
 # lives at ``<repo>/.claude/hooks/smart_grep_ontology.py``, so three parents up
 # is the repo root that owns ``ontology/structural/code-graph.json``. This is
@@ -228,20 +234,24 @@ def _load_graph() -> dict | None:
 
 
 def _dirty_files() -> set[str]:
-    """Paths whose ``last_tracked`` checksum has drifted from ``last_resolved`` —
-    same staleness signal `/ontology-librarian` reports. Empty on any read error
-    (advisory only; never blocks the hook itself)."""
+    """Paths NOT known to be resolved — same staleness signal the librarian reports.
+
+    Delegates the predicate to ``checksums_io`` (#1142) rather than
+    re-deriving ``last_tracked != last_resolved`` here; that comparison used to
+    be hand-rolled in four places, and every wrong hand-rolling of it returns a
+    plausible empty set rather than an error.
+
+    Malformed entries join the dirty set on purpose: this drives a "[STALE]"
+    annotation, and an entry whose shape the reader cannot classify is
+    not-known-current, which is what the annotation says. Empty on any read
+    error (advisory only; never blocks the hook itself).
+    """
     path = _ontology_dir() / "checksums.json"
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        status = checksums_io.read_status(path)
+    except checksums_io.ChecksumsUnreadable:
         return set()
-    files = data.get("files", {}) if isinstance(data, dict) else {}
-    return {
-        f
-        for f, v in files.items()
-        if isinstance(v, dict) and v.get("last_tracked") != v.get("last_resolved")
-    }
+    return set(status.dirty) | {rel for rel, _ in status.malformed}
 
 
 def _lookup_symbol(graph: dict, pattern: str) -> list[dict]:
