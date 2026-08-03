@@ -57,6 +57,7 @@ __all__ = [
     "extract_branch_author_lastname",
     "extract_charter_field",
     "is_branch_author",
+    "is_wave_branch",
     "name_first_initial",
     "name_lastname",
     "strip_code_regions",
@@ -373,3 +374,83 @@ def is_branch_author(field_value: str, branch_lastname: str, branch_initial: str
         # Same surname, different people (main#1172 — Lucas vs Santiago Ferreira).
         return False
     return True
+
+
+# The charter's WAVE BRANCH ref shape, parsed in ONE place (main#1216).
+#
+# A wave branch is the integration branch a `wave-branch`-model wave accumulates
+# its per-issue merges on (`pull-requests/wave-merge.md` § One Merge Model Per
+# Wave). It is the second charter-defined ref shape, alongside the
+# `{Initial}.{Lastname}` author prefix above, and it lives here for the same
+# reason that one does: two hooks must agree on what it means.
+#
+#   validate_pr_review        — a wave->main integration PR applies no
+#                               commit-derived self-review exclusion (main#1216).
+#   block_squash_wave_merge   — `gh pr merge --squash` into a wave branch is
+#                               hard-blocked (Hook 22, main#898/#222).
+#
+# BOTH `phase-N` AND `phaseN` ARE ACCEPTED, because both are in production. The
+# form the charter writes is `deployments/phase-{P}/wave-{M}`; the form 4 of the
+# org's repos actually use is `deployments/phase{P}/wave-{M}`. Measured on
+# 2026-08-03 over every `deployments/**`-head PR in all 8 repos (202 PRs) — the
+# 7 children AND this parent, which contributes 41 of the 202 — of which 168
+# carry the dashed form and **32 carry the undashed one**: 28 distinct refs
+# across isnad-graph, design-system, data-acquisition and landing-page
+# (`deployments/phase15/wave-1`, `deployments/phase10/wave-4`, …).
+#
+# That measurement is also a finding about the hook this pattern is consolidated
+# FROM: `block_squash_wave_merge.WAVE_BRANCH_RE` was `^deployments/phase-\d+/
+# wave-\d+$`, so Hook 22's squash guard answered "not a wave branch" for a wave
+# branch on all 32. Reusing one pattern closes that as a byproduct, in the
+# fail-CLOSED direction (more squashes blocked, never fewer).
+#
+# SCOPE OF THAT GAP: THE UNDASHED FORM IS CURRENT, NOT HISTORICAL. An earlier
+# draft of this comment said the opposite — that all 32 PRs date from
+# 2026-03-15..2026-04-06 and therefore "nothing produces the undashed spelling
+# today." The date range is accurate; the inference from it was FALSE, and is
+# retracted here (#1310 review). Every wave-branch name constructor IN THIS REPO
+# does emit the dashed form (`wave_merge_model`, `validate_wave_audit`,
+# `validate_wave_label_evidence`, `post_wave_kickoff_comment`, `wave_unwrapped`,
+# `framework.config.json`) — but this repo is not the only producer, and two
+# sources emit or prescribe the undashed spelling on `main` RIGHT NOW:
+#
+#   1. `noorinalabs-isnad-graph/scripts/create-wave.sh:38` — a committed,
+#      runnable constructor: BRANCH="deployments/phase${PHASE}/wave-${WAVE}".
+#   2. `ontology/conventions.md:213` IN THIS REPO documents the convention as
+#      `deployments/phase{N}/wave-{M}` — undashed — and both
+#      `noorinalabs-data-acquisition/.claude/team/charter.md` and
+#      `noorinalabs-deploy/.claude/team/charter.md` mirror it as the literal base
+#      an implementer is instructed to branch from and target.
+#
+# So the parent charter writes the dashed form while the org's own convention
+# document and two child charters write the undashed one. That spelling conflict
+# is real, is NOT resolved here, and is tracked by #1313; this pattern accepts
+# BOTH rather than picking a winner a hook has no standing to pick.
+#
+# DO NOT NARROW THIS PATTERN BACK TO `phase-` ON THE GROUNDS THAT THE UNDASHED
+# FORM IS DEAD — it is not. It is emitted by a live script, prescribed by the
+# live convention doc, and carried by 28 refs that are RETAINED permanently as
+# rollback anchors (memory `feedback_wave_branch_merge_retain`) and so stay
+# squashable indefinitely. This is a live gap, not a historical tail.
+#
+# Writing a second, wider pattern in `validate_pr_review` instead would have left
+# the two definitions to drift exactly as `extract_branch_author_lastname`'s two
+# copies did for four months (main#1175) — one definition, no drifting copy.
+#
+# ANCHORED AT BOTH ENDS, deliberately. `deployments/phase-3/wave-6-hotfix` and
+# `deployments/phase12/cleanup` (2 real PRs in isnad-graph) are NOT wave
+# branches, and each consumer's fail direction on a non-match is the safe one:
+# the merge gate keeps its commit-derived exclusion, Hook 22 keeps allowing a
+# squash it was already allowing.
+_WAVE_BRANCH_RE = re.compile(r"^deployments/phase-?\d+/wave-\d+$")
+
+
+def is_wave_branch(ref: str) -> bool:
+    """True when `ref` is a charter wave branch — `deployments/phase{-}N/wave-M`.
+
+    See `_WAVE_BRANCH_RE` for why both the dashed and undashed `phase` forms are
+    accepted and why the pattern is anchored. A `None`/empty ref is False, so a
+    caller that could not read the head ref gets "not a wave branch" — the
+    answer that leaves every consumer's stricter path in force.
+    """
+    return bool(ref) and bool(_WAVE_BRANCH_RE.match(ref))

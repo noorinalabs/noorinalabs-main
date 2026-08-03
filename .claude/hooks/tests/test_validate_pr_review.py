@@ -28,6 +28,7 @@ Or:  ENVIRONMENT=test python3 .claude/hooks/tests/test_validate_pr_review.py
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 import sys
@@ -743,8 +744,16 @@ class SharedBranchAuthorParsingTests(unittest.TestCase):
             hook.comment_scan_scope("A.Virtanen/1175-consolidation"),
             hook.COMMENT_SCAN_AUTHOR_EXCLUDED,
         )
+        # #1216: a wave branch now selects its own mode. Still the point of this
+        # assertion — the parser must not see an author in it — but the negative
+        # is now stated as "not AUTHOR_EXCLUDED" plus the specific mode, so the
+        # test keeps pinning the shared-parser wiring rather than the mode name.
         self.assertEqual(
             hook.comment_scan_scope("deployments/phase-3/wave-29"),
+            hook.COMMENT_SCAN_WAVE_INTEGRATION,
+        )
+        self.assertEqual(
+            hook.comment_scan_scope("deployments/phase12/cleanup"),
             hook.COMMENT_SCAN_NO_BRANCH_AUTHOR,
         )
 
@@ -3994,10 +4003,18 @@ class CommentScanScopeTotalityTests(unittest.TestCase):
 
     def test_non_persona_refs_select_the_no_branch_author_scan(self):
         """THE DEFECT, at the dispatch level. Every one of these returned "no
-        scan" before #1206; each must now name a real scanning mode."""
+        scan" before #1206; each must now name a real scanning mode.
+
+        `deployments/phase-10/wave-29` moved OUT of this list at #1216 — it
+        selects `WAVE_INTEGRATION` now, asserted in
+        `WaveBranchScanScopeTests` below. The remaining `deployments/**` entry is
+        a REAL production ref (isnad-graph#603/#612) that is NOT a wave branch,
+        and it is here to pin that the carve-out did not widen to the whole
+        `deployments/` namespace.
+        """
         for ref in (
             "dependabot/docker/integration-tests/fake_oauth/python-d3400aa",
-            "deployments/phase-10/wave-29",
+            "deployments/phase12/cleanup",
             "feature/some-hand-made-branch",
             "nohashinthisref",  # no `/` at all
             "",  # headRefName absent from the API response
@@ -4006,6 +4023,38 @@ class CommentScanScopeTotalityTests(unittest.TestCase):
         ):
             with self.subTest(ref=ref):
                 self.assertEqual(hook.comment_scan_scope(ref), hook.COMMENT_SCAN_NO_BRANCH_AUTHOR)
+
+    def test_the_declared_author_arm_outranks_the_wave_arm(self):
+        """#1216 precedence, pinned where it is otherwise UNFALSIFIABLE.
+
+        No real ref can satisfy both shapes — `_BRANCH_AUTHOR_PREFIX_RE` anchors
+        at the start and needs `{letter}.`, which `deployments/…` cannot supply —
+        so swapping the two `if`s in `comment_scan_scope` is a no-op against
+        every input and SURVIVED mutation M7 with the whole suite green.
+
+        A docstring saying "order matters" that no test can falsify is the
+        #1215 shape (an anti-vacuity claim that is itself vacuous). So the
+        precedence is pinned against the predicate rather than against a ref:
+        with `is_wave_branch` forced True, a ref that names its author must
+        STILL keep its exclusion. This is not a hypothetical guard — it is the
+        exact property that starts mattering the moment anyone widens
+        `is_wave_branch`, which is the likeliest future edit to this code.
+        """
+        with mock.patch.object(hook, "is_wave_branch", return_value=True):
+            self.assertEqual(
+                hook.comment_scan_scope("A.Virtanen/1216-x"),
+                hook.COMMENT_SCAN_AUTHOR_EXCLUDED,
+            )
+            self.assertEqual(
+                hook.comment_scan_scope("A.Virtanen-1216-x"),
+                hook.COMMENT_SCAN_AUTHOR_EXCLUDED,
+            )
+            # Anti-vacuity: the patch must actually be reaching the function, or
+            # the assertions above would pass against an unpatched call.
+            self.assertEqual(
+                hook.comment_scan_scope("feature/hand-made"),
+                hook.COMMENT_SCAN_WAVE_INTEGRATION,
+            )
 
     def test_no_head_ref_shape_ever_yields_not_run(self):
         """The invariant itself, stated once: NOT_RUN is not a reachable scope.
@@ -4217,14 +4266,19 @@ class HeadRefScanRegressionTests(_ResolveOverFakeCommentsHarness):
     def test_wave_merge_branch_behaviour_is_unchanged(self):
         """`deployments/phase-N/wave-M` counted every roster reviewer before the
         fix (main#294's empty sentinel) and must still do so — same reviewers,
-        same count, and now under the generalised no-branch-author mode."""
+        same count.
+
+        The MODE changed at #1216 (`WAVE_INTEGRATION`, the policy answer) but the
+        counted set did not, which is this test's actual subject and the reason
+        it survives #1216 with one line touched.
+        """
         verdicts = self._resolve(
             "deployments/phase-10/wave-29",
             [self._verdict("Lucas Ferreira"), self._verdict("Nino Kavtaradze")],
         )
         self.assertEqual(verdicts.distinct_reviewers, {"lucas ferreira", "nino kavtaradze"})
         self.assertEqual(verdicts.total_distinct, 2)
-        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_NO_BRANCH_AUTHOR)
+        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_WAVE_INTEGRATION)
         self.assertIsNone(verdicts.branch_author_lastname)
 
     def test_two_reviewer_threshold_is_not_relaxed_anywhere(self):
@@ -4678,6 +4732,34 @@ class RefineCommentScanScopeTests(unittest.TestCase):
             hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED,
         )
 
+    def test_wave_integration_is_never_refined_even_with_derived_identities(self):
+        """#1216: the POLICY answer cannot be argued out of by commit evidence.
+
+        `resolve_review_verdicts` passes `()` on a wave ref, so in production
+        the `not commit_authors` guard already returns this untouched — which is
+        exactly why it needs a unit test: the property would otherwise hold by
+        the caller's grace rather than by the function's contract, and the next
+        caller would not inherit it. Deliberately passes a ROSTER-MATCHING
+        identity, the input that would upgrade any other non-terminal mode.
+        """
+        self.assertEqual(
+            hook.refine_comment_scan_scope(
+                hook.COMMENT_SCAN_WAVE_INTEGRATION, self.IDENT, self.ROSTER
+            ),
+            hook.COMMENT_SCAN_WAVE_INTEGRATION,
+        )
+        self.assertEqual(
+            hook.refine_comment_scan_scope(
+                hook.COMMENT_SCAN_WAVE_INTEGRATION, self.BOT, self.ROSTER
+            ),
+            hook.COMMENT_SCAN_WAVE_INTEGRATION,
+        )
+        # An unreadable roster must not shake it loose either.
+        self.assertEqual(
+            hook.refine_comment_scan_scope(hook.COMMENT_SCAN_WAVE_INTEGRATION, self.IDENT, set()),
+            hook.COMMENT_SCAN_WAVE_INTEGRATION,
+        )
+
     def test_derived_identity_matching_no_roster_persona_is_reported_inert(self):
         """THE #1220 unit-level kill-shot.
 
@@ -4839,11 +4921,23 @@ class CommitIdentitySelfReviewExclusionTests(_ResolveOverFakeCommentsHarness):
         self.assertEqual(verdicts.distinct_reviewers, {"nino kavtaradze", "aino virtanen"})
         self.assertEqual(verdicts.total_distinct, 2)
 
-    def test_wave_merge_branch_now_excludes_its_author_too(self):
-        """The PRE-EXISTING main#294 hole, closed by the same derivation.
+    def test_wave_merge_branch_does_not_exclude_its_implementers(self):
+        """#1216 REVERSES #1210 on this ref, deliberately. Read the charter first.
 
-        `deployments/**` has carried this since main#294; #1210 closes it, not
-        just the increment #1207 added.
+        This test replaces `test_wave_merge_branch_now_excludes_its_author_too`,
+        which asserted the opposite. That is not a weakened assertion, it is a
+        different rule: `pull-requests/reviews.md` § Who Counts as "the PR
+        Author" states that a wave->main integration PR has no author on its
+        branch — its commits are the wave's implementers, each already
+        2x-reviewed on its own per-issue PR, and the integration PR authors
+        nothing of its own. #1210 subtracted a genuine Approved reviewer on 4
+        real PRs (main#711/#530/#293/#229) by treating them as authors.
+
+        The exclusion #1210 exists for is unaffected: it still fires on every
+        non-wave ref, pinned by `test_self_approval_on_a_non_charter_ref_no_
+        longer_reaches_two_of_two` and by
+        `test_a_non_wave_deployments_ref_keeps_the_commit_derived_exclusion`
+        below.
         """
         verdicts = self._resolve(
             self.WAVE_REF,
@@ -4851,8 +4945,72 @@ class CommitIdentitySelfReviewExclusionTests(_ResolveOverFakeCommentsHarness):
             roster=self.ROSTER | {"nadia khoury"},
             commits=self._authored_by("Nadia Khoury"),
         )
+        self.assertEqual(verdicts.distinct_reviewers, {"nadia khoury", "aino virtanen"})
+        self.assertEqual(verdicts.total_distinct, 2)
+        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_WAVE_INTEGRATION)
+        # ONE tuple, not two (#1297). The carve-out is applied by NOT deriving,
+        # so there is no unfiltered second set for a diagnostic to disagree with.
+        self.assertEqual(verdicts.commit_author_identities, ())
+
+    def test_a_non_wave_deployments_ref_keeps_the_commit_derived_exclusion(self):
+        """The carve-out is the WAVE-BRANCH shape, not the `deployments/` prefix.
+
+        `deployments/phase12/cleanup` is a real production ref (isnad-graph#603
+        and #612). Widening `is_wave_branch` to `startswith("deployments/")`
+        turns this RED — which is the mutation that would silently re-open #1210
+        on a hand-made release branch.
+        """
+        verdicts = self._resolve(
+            "deployments/phase12/cleanup",
+            [self._verdict("Nadia Khoury"), self._verdict("Aino Virtanen")],
+            roster=self.ROSTER | {"nadia khoury"},
+            commits=self._authored_by("Nadia Khoury"),
+        )
         self.assertEqual(verdicts.distinct_reviewers, {"aino virtanen"})
         self.assertEqual(verdicts.total_distinct, 1)
+        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED)
+
+    def test_the_undashed_phase_wave_ref_gets_the_same_carve_out(self):
+        """`deployments/phase15/wave-1` — 32 of 202 real PRs use this form.
+
+        Keying the carve-out on the charter's dashed spelling alone would leave
+        4 of the org's 7 repos on the #1210 behaviour while the other 3 moved,
+        i.e. two policies decided by a hyphen. RED if `_WAVE_BRANCH_RE` loses
+        its `-?`.
+        """
+        verdicts = self._resolve(
+            "deployments/phase15/wave-1",
+            [self._verdict("Nadia Khoury"), self._verdict("Aino Virtanen")],
+            roster=self.ROSTER | {"nadia khoury"},
+            commits=self._authored_by("Nadia Khoury"),
+        )
+        self.assertEqual(verdicts.distinct_reviewers, {"nadia khoury", "aino virtanen"})
+        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_WAVE_INTEGRATION)
+
+    def test_main_711_replayed_from_its_real_payload(self):
+        """The measured false block, reproduced offline (main#711).
+
+        Real ref, real derived identities from the real commit payload, real
+        Approved Requestors. Under #1210 this is 1/2 and blocked with Wanjiku
+        Mwangi subtracted; under #1216 it is the 2/2 the reviewers actually
+        earned. A count assertion, not a substring one (#1203).
+        """
+        commits = self._authored_by("Aino Virtanen", "Santiago Ferreira", "Wanjiku Mwangi")
+        roster = self.ROSTER | {"nadia khoury", "wanjiku mwangi"}
+        thread = [self._verdict("Nadia Khoury"), self._verdict("Wanjiku Mwangi")]
+
+        after = self._resolve("deployments/phase-5/wave-5", thread, roster=roster, commits=commits)
+        self.assertEqual(after.distinct_reviewers, {"nadia khoury", "wanjiku mwangi"})
+        self.assertEqual(after.total_distinct, 2)
+
+        # The pre-#1216 answer on the identical input, so the delta is measured
+        # here rather than asserted from memory of what #1210 did.
+        with mock.patch.object(hook, "is_wave_branch", return_value=False):
+            before = self._resolve(
+                "deployments/phase-5/wave-5", thread, roster=roster, commits=commits
+            )
+        self.assertEqual(before.distinct_reviewers, {"nadia khoury"})
+        self.assertEqual(before.total_distinct, 1)
 
     def test_both_authors_of_a_handed_over_branch_are_excluded(self):
         verdicts = self._resolve(
@@ -5008,9 +5166,17 @@ class CommitIdentitySelfReviewExclusionTests(_ResolveOverFakeCommentsHarness):
         self.assertEqual(verdicts.commit_author_identities, ())
 
     def test_merge_only_branch_derives_no_author(self):
-        """No authored commits ⇒ no identity ⇒ the pre-#1210 state, unchanged."""
+        """No authored commits ⇒ no identity ⇒ the pre-#1210 state, unchanged.
+
+        Re-targeted from `WAVE_REF` to a non-charter ref at #1216: on a wave ref
+        the carve-out now short-circuits the derivation, so a wave ref could no
+        longer distinguish "derived nothing" from "did not derive" and this
+        test's subject would have quietly become untested (the vacuity shape
+        `feedback_fixture_makes_guard_assertion_inert`). The merge-commit skip
+        is what is under test, so it is asserted where the derivation still runs.
+        """
         verdicts = self._resolve(
-            self.WAVE_REF,
+            self.NON_CHARTER_REF,
             [self._verdict("Lucas Ferreira"), self._verdict("Nino Kavtaradze")],
             commits=[
                 _api_commit("m0", "2026-07-15T19:13:59Z", parents=2, author_name="Lucas Ferreira")
@@ -5029,6 +5195,124 @@ class CommitIdentitySelfReviewExclusionTests(_ResolveOverFakeCommentsHarness):
         ):
             with self.assertRaises(hook.CommitFetchError):
                 hook.resolve_review_verdicts(self._pr_data(self.NON_CHARTER_REF), repo=self.REPO)
+
+
+class OneDerivationDrivesModeAndExclusionTests(_ResolveOverFakeCommentsHarness):
+    """One value decides both the reported mode and whether exclusion runs.
+
+    `resolve_review_verdicts` derives `commit_authors` FROM `scan_scope`, so the
+    mode that is REPORTED and the tuple the exclusion is APPLIED from cannot
+    disagree about whether exclusion is live. #1216 adds a slice where exclusion
+    is turned OFF, which is exactly the kind of edit that could desynchronise
+    them; these tests pin the equivalence over every mode in both directions.
+
+    SCOPE — THIS DOES NOT CLOSE #1297, WHICH REMAINS OPEN. An earlier version of
+    this docstring said it did ("the #1297 shape, closed structurally"). That was
+    FALSE and is retracted (#1310 review): #1297's mutation applied verbatim to
+    this tree leaves the suite fully GREEN and lets a self-approver reach 2/2 on
+    3 of its 4 identity shapes, with the mode never moving. The coupling binds
+    whether the tuple is DERIVED; #1297 inserts a filtered COPY downstream of the
+    derivation, so derivation and mode still agree and nothing here notices. What
+    is caught is the mode-moving variant (M8/M9), which is a real and different
+    property. #1297 needs the two count assertions its own closing section
+    specifies — it must not be closed on the strength of this class.
+    """
+
+    # (head_ref, expected mode, expected reviewer set). The reviewer set is
+    # MEASURED per case, not shared: on `A.Virtanen/…` Aino is excluded by the
+    # REF arm even though the commit tuple is empty, and folding that case in
+    # with the wave refs would either assert something false or weaken the
+    # arithmetic assertion for all of them. (Caught by this very test on its
+    # first run — the two exclusion arms are not interchangeable.)
+    MODES_WITHOUT_DERIVATION = (
+        ("A.Virtanen/1216-x", hook.COMMENT_SCAN_AUTHOR_EXCLUDED, {"nino kavtaradze"}),
+        (
+            "deployments/phase-10/wave-29",
+            hook.COMMENT_SCAN_WAVE_INTEGRATION,
+            {"aino virtanen", "nino kavtaradze"},
+        ),
+        (
+            "deployments/phase15/wave-1",
+            hook.COMMENT_SCAN_WAVE_INTEGRATION,
+            {"aino virtanen", "nino kavtaradze"},
+        ),
+    )
+
+    MODES_WITH_DERIVATION = (
+        ("feature/hand-made", hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED),
+        ("deployments/phase12/cleanup", hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED),
+        ("dependabot/npm_and_yarn/x-1.2.3", hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED),
+        ("", hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED),
+    )
+
+    def _resolve_ref(self, head_ref):
+        return self._resolve(
+            head_ref,
+            [self._verdict("Aino Virtanen"), self._verdict("Nino Kavtaradze")],
+            commits=[
+                _api_commit(
+                    "c0",
+                    "2026-07-15T19:13:59Z",
+                    author_name="Aino Virtanen",
+                    author_email="parametrization+Aino.Virtanen@gmail.com",
+                )
+            ],
+        )
+
+    def test_a_mode_that_applies_no_commit_exclusion_carries_no_identities(self):
+        """No second tuple can exist for a diagnostic to disagree with."""
+        for head_ref, expected_mode, expected_reviewers in self.MODES_WITHOUT_DERIVATION:
+            with self.subTest(head_ref=head_ref):
+                verdicts = self._resolve_ref(head_ref)
+                self.assertEqual(verdicts.comment_scan, expected_mode)
+                self.assertEqual(verdicts.commit_author_identities, ())
+                # The arithmetic the empty tuple implies, asserted rather than
+                # inferred: on the wave refs Aino's own verdict is COUNTED;
+                # on the persona ref the REF arm still drops it.
+                self.assertEqual(verdicts.distinct_reviewers, expected_reviewers)
+
+    def test_a_mode_that_applies_commit_exclusion_carries_the_identities(self):
+        """Anti-vacuity: without this, a mutant that always passes `()` would
+        satisfy the test above for every ref and silently kill #1210."""
+        for head_ref, expected_mode in self.MODES_WITH_DERIVATION:
+            with self.subTest(head_ref=head_ref):
+                verdicts = self._resolve_ref(head_ref)
+                self.assertEqual(verdicts.comment_scan, expected_mode)
+                self.assertEqual(
+                    [i.display for i in verdicts.commit_author_identities], ["Aino Virtanen"]
+                )
+                # Aino authored the branch, so her verdict is SUBTRACTED.
+                self.assertEqual(verdicts.distinct_reviewers, {"nino kavtaradze"})
+                self.assertEqual(verdicts.total_distinct, 1)
+
+    def test_the_reported_identities_are_the_ones_the_exclusion_used(self):
+        """The invariant itself, over both groups: a NON-empty identity tuple
+        must coincide exactly with a mode that claims exclusion is live.
+
+        On `main` the reported tuple and the excluded-from tuple are two separate
+        expressions that merely happen to be equal today; here they are one
+        value, and this asserts it over every mode.
+
+        NOT #1297's closing assertion — that one is a COUNT test on an
+        alias-only identity, and it is not written yet (#1297 stays open; see
+        the class docstring).
+        """
+        refs = [case[0] for case in self.MODES_WITHOUT_DERIVATION] + [
+            case[0] for case in self.MODES_WITH_DERIVATION
+        ]
+        for head_ref in refs:
+            with self.subTest(head_ref=head_ref):
+                verdicts = self._resolve_ref(head_ref)
+                exclusion_claimed = verdicts.comment_scan in (
+                    hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED,
+                    hook.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER,
+                )
+                self.assertEqual(
+                    bool(verdicts.commit_author_identities),
+                    exclusion_claimed,
+                    f"{head_ref!r}: mode {verdicts.comment_scan!r} disagrees with the "
+                    f"identity tuple {verdicts.commit_author_identities!r}",
+                )
 
 
 class StrictlyNonRelaxingTests(_ResolveOverFakeCommentsHarness):
@@ -5438,6 +5722,46 @@ class CommitAuthorBlockDiagnosticTests(_ResolveOverFakeCommentsHarness):
         self.assertIn("commits named no persona either", no_author)
         self.assertNotIn("commits named no persona either", inert)
 
+    def test_wave_integration_block_states_the_short_count_is_not_a_subtraction(self):
+        """#1216 at the block surface.
+
+        An operator reading `1/2` on a wave-merge PR must be able to tell,
+        without opening the hook, that the gate dropped nobody — and must be
+        pointed at the merge path the charter actually prescribes for this PR
+        class rather than sent to hunt for a missing approval.
+        """
+        reason = self._block_reason(self._verdicts(hook.COMMENT_SCAN_WAVE_INTEGRATION))
+        self.assertIn("wave->main INTEGRATION PR", reason)
+        self.assertIn("no self-review exclusion was applied", reason)
+        self.assertIn("nothing was subtracted", reason)
+        self.assertIn("wave-merge:<rationale>", reason)
+        self.assertIn("1/2 required peer reviews", reason)
+        # The claim that would be FALSE here, and that NO_BRANCH_AUTHOR makes.
+        self.assertNotIn("commits named no persona either", reason)
+        # And it must not announce a derivation it deliberately did not perform.
+        self.assertNotIn("COMMIT IDENTITY", reason)
+
+    def test_wave_integration_reads_differently_from_every_other_mode(self):
+        """Five modes, five block texts. Two that collapse cannot be told apart
+        by the reader, which is the entire reason the enum exists (#1273)."""
+        rendered = {
+            hook.COMMENT_SCAN_WAVE_INTEGRATION: self._block_reason(
+                self._verdicts(hook.COMMENT_SCAN_WAVE_INTEGRATION)
+            ),
+            hook.COMMENT_SCAN_NO_BRANCH_AUTHOR: self._block_reason(
+                self._verdicts(hook.COMMENT_SCAN_NO_BRANCH_AUTHOR)
+            ),
+            hook.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER: self._block_reason(
+                self._verdicts(hook.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER, (self.BOT,))
+            ),
+            hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED: self._block_reason(
+                self._verdicts(hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED, (self.BOT,))
+            ),
+        }
+        self.assertEqual(
+            len(set(rendered.values())), len(rendered), f"collapsed block texts: {rendered}"
+        )
+
 
 class AllowPathScanDisclosureTests(_ResolveOverFakeCommentsHarness):
     """#1211: the ALLOW path must say when self-review exclusion was unavailable.
@@ -5552,6 +5876,57 @@ class AllowPathScanDisclosureTests(_ResolveOverFakeCommentsHarness):
         )
         self.assertIsNone(by_ref, "ref-derived exclusion was applied — nothing to disclose")
         self.assertIsNone(by_commit, "commit-derived exclusion was applied — nothing to disclose")
+
+    def test_wave_integration_allow_discloses_that_an_implementer_may_have_counted(self):
+        """#1216 at the surface that matters most: the merge is ALLOWED.
+
+        The whole risk of the carve-out is that a counted approval came from
+        someone whose work is in the branch. That is permitted, so the gate does
+        not block — but a reader who cannot see it happened cannot audit it, and
+        an undisclosed relaxation is the shape this advisory path was built for
+        (#1211).
+        """
+        wave_ref = "deployments/phase-10/wave-29"
+        result = self._allow_result(
+            self._verdicts(hook.COMMENT_SCAN_WAVE_INTEGRATION, head_ref=wave_ref),
+            head_ref=wave_ref,
+        )
+        assert result is not None, "an allowed wave-integration merge must disclose the carve-out"
+        self.assertEqual(result["decision"], "allow")
+        message = result["systemMessage"]
+        self.assertIn(wave_ref, message)
+        self.assertIn("WITHOUT self-review exclusion", message)
+        self.assertIn("wave->main INTEGRATION PR", message)
+        self.assertIn("their integration verdict counts", message)
+        self.assertIn("No verdict was subtracted", message)
+        # The count is interpolated, never a literal — a hardcoded `2/2` here
+        # survived all 318 tests once (#1292), so it is asserted as a fact about
+        # THIS fixture's two reviewers rather than as a constant.
+        self.assertIn("2/2", message)
+        # The false claim NO_BRANCH_AUTHOR makes and this mode must not borrow.
+        self.assertNotIn("commits named no roster persona either", message)
+        self.assertNotIn("BLOCKED", message)
+
+    def test_wave_integration_advisory_reports_a_one_of_two_count_honestly(self):
+        """Anti-hardcode control for the `2/2` above.
+
+        The wave-bootstrap exception can allow at 1/2, and a literal count in
+        the advisory would misreport exactly the PR with the fewest reviewers to
+        lose. Same mode, one reviewer, exception on.
+        """
+        wave_ref = "deployments/phase-10/wave-29"
+        verdicts = dataclasses.replace(
+            self._verdicts(hook.COMMENT_SCAN_WAVE_INTEGRATION, head_ref=wave_ref),
+            comment_reviewers={"aino virtanen"},
+            roster_comment_reviewers={"aino virtanen"},
+            distinct_reviewers={"aino virtanen"},
+            wave_bootstrap_exception=True,
+        )
+        result = self._allow_result(verdicts, head_ref=wave_ref)
+        assert result is not None
+        self.assertEqual(result["decision"], "allow")
+        self.assertIn("1/2", result["systemMessage"])
+        self.assertNotIn("2/2", result["systemMessage"])
 
     def test_both_advisories_survive_when_both_conditions_hold(self):
         """THE composition test — the case a second early `return` breaks.
@@ -5742,6 +6117,13 @@ class CommentScanModeTotalityTests(unittest.TestCase):
         hook.COMMENT_SCAN_NOT_RUN: (True, False),
         # Nothing excluded, nobody derived: both surfaces disclose (#1206/#1211).
         hook.COMMENT_SCAN_NO_BRANCH_AUTHOR: (True, True),
+        # Nothing excluded BY POLICY on a wave->main integration PR: both
+        # surfaces disclose (#1216). The block path must say the short count is
+        # not a subtraction (and point at the `wave-merge` admin exception); the
+        # allow path must say a counted approval may be an implementer's. This
+        # is the one mode where the reader could otherwise reasonably assume the
+        # gate had dropped someone.
+        hook.COMMENT_SCAN_WAVE_INTEGRATION: (True, True),
         # Nothing excluded, someone derived: both surfaces disclose (#1220).
         hook.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER: (True, True),
         # Exclusion applied on commit evidence: block names the subtraction; the

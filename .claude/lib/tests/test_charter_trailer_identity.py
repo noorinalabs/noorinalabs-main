@@ -39,6 +39,7 @@ from charter_trailer import (  # noqa: E402
     branch_author_first_initial,
     extract_branch_author_lastname,
     is_branch_author,
+    is_wave_branch,
     name_first_initial,
     name_lastname,
 )
@@ -417,6 +418,106 @@ class IsBranchAuthorTests(unittest.TestCase):
     def test_branch_initial_defaults_to_unknown(self):
         """Omitting the initial degrades to surname-only, not to "no match"."""
         self.assertTrue(is_branch_author("Santiago Ferreira", "Ferreira"))
+
+
+class IsWaveBranchTests(unittest.TestCase):
+    """`is_wave_branch` — the charter wave-branch ref shape (main#1216).
+
+    Two hooks read this one predicate and their fail directions differ, so the
+    cases below are split by which consumer a wrong answer would hurt:
+
+      * a FALSE NEGATIVE costs `block_squash_wave_merge` its guard (a squash
+        into a wave branch is allowed through) and costs `validate_pr_review`
+        nothing (it keeps the stricter commit-derived exclusion);
+      * a FALSE POSITIVE costs `validate_pr_review` the exclusion on a ref where
+        #1210 must still fire, which is the direction that matters here.
+
+    Every `deployments/**` string below is a REAL production head ref taken from
+    the 2026-08-03 sweep of all 202 `deployments/**`-head PRs across the 7 repos,
+    not an invented shape.
+    """
+
+    def test_the_charter_dashed_form_is_a_wave_branch(self):
+        for ref in (
+            "deployments/phase-10/wave-29",
+            "deployments/phase-5/wave-5",
+            "deployments/phase-3/wave-11",
+            "deployments/phase-2/wave-10",
+        ):
+            with self.subTest(ref=ref):
+                self.assertTrue(is_wave_branch(ref))
+
+    def test_the_undashed_phase_form_is_also_a_wave_branch(self):
+        """32 of the 202 measured PRs; 4 of the 7 repos use only this form.
+
+        `block_squash_wave_merge` carried `^deployments/phase-\\d+/wave-\\d+$`
+        before main#1216, so its squash guard answered "not a wave branch" for
+        every one of these — a gate silently off. RED if `_WAVE_BRANCH_RE`
+        loses its `-?`.
+        """
+        for ref in (
+            "deployments/phase15/wave-1",
+            "deployments/phase10/wave-4",
+            "deployments/phase9/wave-3",
+            "deployments/phase1/wave-1",
+            "deployments/phase5/wave-0",
+        ):
+            with self.subTest(ref=ref):
+                self.assertTrue(is_wave_branch(ref))
+
+    def test_a_non_wave_deployments_ref_is_not_a_wave_branch(self):
+        """The carve-out is a SHAPE, not the `deployments/` namespace.
+
+        `deployments/phase12/cleanup` is real (isnad-graph#603, #612). Relaxing
+        the predicate to `startswith("deployments/")` turns these green and
+        re-opens main#1210 on a hand-made release branch.
+        """
+        for ref in (
+            "deployments/phase12/cleanup",
+            "deployments/phase-3/wave-6-hotfix",
+            "deployments/phase-3/wave",
+            "deployments/wave-3",
+            "deployments/phase-3/wave-x",
+            "deployments/phase-/wave-3",
+            "deployments/",
+        ):
+            with self.subTest(ref=ref):
+                self.assertFalse(is_wave_branch(ref))
+
+    def test_the_pattern_is_anchored_at_both_ends(self):
+        """An unanchored `search` would match any ref CONTAINING the shape."""
+        for ref in (
+            "refs/heads/deployments/phase-3/wave-6",
+            "A.Virtanen/1216-deployments/phase-3/wave-6",
+            "deployments/phase-3/wave-6/nested",
+            " deployments/phase-3/wave-6",
+            "deployments/phase-3/wave-6 ",
+        ):
+            with self.subTest(ref=ref):
+                self.assertFalse(is_wave_branch(ref))
+
+    def test_a_persona_branch_is_never_a_wave_branch(self):
+        """Positive control against a predicate that just returns True.
+
+        Without this, every `assertTrue` above is satisfied by `lambda r: True`,
+        which would strip commit-derived exclusion from EVERY non-persona ref —
+        main#1210 fully re-opened.
+        """
+        for ref in (
+            "A.Virtanen/1216-wave-branch-implementer-exclusion",
+            "A.Virtanen-0179-branch-regex-fix",
+            "dependabot/npm_and_yarn/x-1.2.3",
+            "feature/some-hand-made-branch",
+            "main",
+        ):
+            with self.subTest(ref=ref):
+                self.assertFalse(is_wave_branch(ref))
+
+    def test_an_absent_ref_is_not_a_wave_branch(self):
+        """A ref the API did not return must leave every consumer's stricter
+        path in force, never acquire the carve-out."""
+        self.assertFalse(is_wave_branch(""))
+        self.assertFalse(is_wave_branch(None))  # type: ignore[arg-type]
 
 
 if __name__ == "__main__":
