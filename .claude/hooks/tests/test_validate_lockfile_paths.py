@@ -11,14 +11,9 @@ behavior survived the conversion (both `except` clauses now catch
 from __future__ import annotations
 
 import subprocess
-import sys
-from pathlib import Path
 from unittest import mock
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-sys.path.insert(0, str(_HOOKS_DIR))
-
+import _test_helpers  # noqa: E402,F401
 import validate_lockfile_paths as vlp  # noqa: E402
 
 

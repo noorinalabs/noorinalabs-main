@@ -19,17 +19,14 @@ from __future__ import annotations
 
 import sys
 import unittest
-from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-sys.path.insert(0, str(_HOOKS_DIR))
+import _test_helpers  # noqa: E402,F401
+
+_HOOKS_DIR = _test_helpers.HOOKS_DIR
 
 import block_squash_wave_merge as hook  # noqa: E402
 
-
-def _input(command: str) -> dict:
-    return {"tool_name": "Bash", "tool_input": {"command": command}}
+_input = _test_helpers.bash_input
 
 
 def _runner(base_by_pr: dict[str, str | None]):

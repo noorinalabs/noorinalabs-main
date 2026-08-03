@@ -37,11 +37,9 @@ from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-_LIB_DIR = _HOOKS_DIR.parent / "lib"
-sys.path.insert(0, str(_HOOKS_DIR))
-sys.path.insert(0, str(_LIB_DIR))
+import _test_helpers  # noqa: E402,F401
+
+_HOOKS_DIR = _test_helpers.HOOKS_DIR
 
 import charter_trailer  # noqa: E402
 
@@ -1045,9 +1043,7 @@ class _NoContentBindingHarness(unittest.TestCase):
 class CheckEndToEndTests(_NoContentBindingHarness):
     """End-to-end check() integration tests for #244 + #228 paths."""
 
-    @staticmethod
-    def _input(command: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}}
+    _input = staticmethod(_test_helpers.bash_input)
 
     def _patch_pr_data(self, **overrides) -> dict:
         """Build a stub PR-data dict with sensible defaults; override per test."""
@@ -1446,9 +1442,7 @@ class RosterValidationGateTests(_NoContentBindingHarness):
     # for these, so they cannot silently become real the way #487's names did.
     FABRICATED = ("phantom persona", "fabricated reviewer")
 
-    @staticmethod
-    def _input(command: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}}
+    _input = staticmethod(_test_helpers.bash_input)
 
     @staticmethod
     def _pr_data(**overrides) -> dict:
@@ -1887,9 +1881,7 @@ class ChildRosterResolutionTests(_NoContentBindingHarness):
 
     # --- end-to-end check() behavior --------------------------------------
 
-    @staticmethod
-    def _input(command: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}}
+    _input = staticmethod(_test_helpers.bash_input)
 
     @staticmethod
     def _pr_data(**overrides) -> dict:
@@ -2081,9 +2073,7 @@ class OrgManifestReviewerUnionTests(_NoContentBindingHarness):
         "Steven French": "parametrization@gmail.com",
     }
 
-    @staticmethod
-    def _input(command: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}}
+    _input = staticmethod(_test_helpers.bash_input)
 
     @staticmethod
     def _pr_data(**overrides) -> dict:
@@ -2567,9 +2557,7 @@ class BatchLoopMergeEndToEndTests(_NoContentBindingHarness):
     """#567 end-to-end: check() HARD BLOCKS a batch-loop variable merge, and a
     literal merge still flows to the normal 2-reviewer gate unchanged."""
 
-    @staticmethod
-    def _input(command: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}}
+    _input = staticmethod(_test_helpers.bash_input)
 
     def test_loop_var_merge_hard_blocked(self):
         # The guard returns BEFORE get_pr_data; patch it to a sentinel that
@@ -3590,9 +3578,7 @@ class UnresolvableRepoFailsClosedTests(_NoContentBindingHarness):
     downstream check happening to block.
     """
 
-    @staticmethod
-    def _input(command: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}}
+    _input = staticmethod(_test_helpers.bash_input)
 
     @staticmethod
     def _approved_pr_data() -> dict:
@@ -3796,9 +3782,7 @@ class IncompleteCommentScanFailsClosedTests(_NoContentBindingHarness):
     stopped in `undetermined`, and `check()` hard-blocks on it.
     """
 
-    @staticmethod
-    def _input(command: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}}
+    _input = staticmethod(_test_helpers.bash_input)
 
     @staticmethod
     def _fake_run(returncode: int = 0, stdout: str = "[]", stderr: str = ""):
@@ -6413,9 +6397,7 @@ class BlockReasonRatioCollisionTests(_NoContentBindingHarness):
     neutering somebody's assertion several waves downstream.
     """
 
-    @staticmethod
-    def _input(command: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}}
+    _input = staticmethod(_test_helpers.bash_input)
 
     @staticmethod
     def _pr_data(**overrides) -> dict:

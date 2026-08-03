@@ -10,15 +10,10 @@ Or:  python3 .claude/hooks/tests/test_validate_labels.py
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 from unittest import mock
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-sys.path.insert(0, str(_HOOKS_DIR))
-
+import _test_helpers  # noqa: E402,F401
 import validate_labels as hook  # noqa: E402
 
 
@@ -231,9 +226,7 @@ class ExtractRepoTests(unittest.TestCase):
 class GateMatchingTests(unittest.TestCase):
     """The `check()` gate fires ONLY on gh issue create, not siblings."""
 
-    @staticmethod
-    def _input(command: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}}
+    _input = staticmethod(_test_helpers.bash_input)
 
     def test_gh_issue_list_is_ignored(self):
         self.assertIsNone(hook.check(self._input("gh issue list --label bug")))
@@ -266,9 +259,7 @@ class CheckEndToEndTests(unittest.TestCase):
     correct repo.
     """
 
-    @staticmethod
-    def _input(command: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}}
+    _input = staticmethod(_test_helpers.bash_input)
 
     def test_repo_is_forwarded_to_get_existing_labels(self):
         """Bug 1: --repo must be passed through to the label fetch."""

@@ -16,6 +16,16 @@ Plus dogfood / regression:
 Run: python3 -m pytest .claude/hooks/tests/test_consultation_sentinel.py -v
 """
 
+# This file's own hook-side import (`_consultation_sentinel`) is an
+# underscore-prefixed module whose name sorts alphabetically before
+# `_test_helpers` — ruff's isort autofix would otherwise reorder it
+# ahead of the sys.path bootstrap it depends on. See
+# `_test_helpers.py`'s module docstring. Before this directive, the
+# `_HOOKS_DIR = _test_helpers.HOOKS_DIR` assignment below happened to
+# block the reorder (isort won't move an import across a statement) —
+# an accidental protection, not a documented one; the directive makes
+# it explicit and independent of that assignment staying put.
+# isort: skip_file
 from __future__ import annotations
 
 import hashlib
@@ -27,9 +37,9 @@ import time
 import unittest
 from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-sys.path.insert(0, str(_HOOKS_DIR))
+import _test_helpers  # noqa: E402,F401
+
+_HOOKS_DIR = _test_helpers.HOOKS_DIR
 
 import _consultation_sentinel as sentinel  # noqa: E402
 

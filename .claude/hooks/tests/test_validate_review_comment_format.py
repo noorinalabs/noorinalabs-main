@@ -23,18 +23,12 @@ Run: python3 -m unittest discover -s .claude/hooks/tests \
 
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-_LIB_DIR = _HOOKS_DIR.parent / "lib"
-sys.path.insert(0, str(_HOOKS_DIR))
-sys.path.insert(0, str(_LIB_DIR))
-
+import _test_helpers  # noqa: E402,F401
 import charter_trailer  # noqa: E402
 import validate_review_comment_format as hook  # noqa: E402
 

@@ -17,15 +17,10 @@ Run:
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 from unittest import mock
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-sys.path.insert(0, str(_HOOKS_DIR))
-
+import _test_helpers  # noqa: E402,F401
 import validate_pr_ci_status as hook  # noqa: E402
 
 

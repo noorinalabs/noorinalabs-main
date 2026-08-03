@@ -10,15 +10,11 @@ Run: python3 -m pytest .claude/hooks/tests/test_validate_commit_identity.py -v
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-sys.path.insert(0, str(_HOOKS_DIR))
-
+import _test_helpers  # noqa: E402,F401
 import validate_commit_identity as hook  # noqa: E402
 
 
@@ -241,9 +237,7 @@ class CheckIntegrationTests(unittest.TestCase):
 class MatcherRobustnessTests(unittest.TestCase):
     """Negative-match coverage for the substring-bug cluster (#226, #188, #216)."""
 
-    @staticmethod
-    def _input(command: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}}
+    _input = staticmethod(_test_helpers.bash_input)
 
     def test_unquoted_email_value_bounded_by_whitespace(self):
         """#226 repro: bare `-c user.email=val` does NOT slurp to EOL.
@@ -360,9 +354,7 @@ class ParseFailureFailClosedTests(unittest.TestCase):
     contract pinned with Linh.)
     """
 
-    @staticmethod
-    def _input(command: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}}
+    _input = staticmethod(_test_helpers.bash_input)
 
     def test_unbalanced_quote_with_commit_blocks(self):
         """Unterminated quote + git commit shape → block (don't silently allow)."""
@@ -439,9 +431,7 @@ class HyphenatedNameFixtures(unittest.TestCase):
     setup needed; the parent roster is the union of all child rosters.
     """
 
-    @staticmethod
-    def _input(command: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}}
+    _input = staticmethod(_test_helpers.bash_input)
 
     # (name, email) tuples that MUST be present in the local roster for the
     # fixture to be meaningful. Skipping on missing keeps the test stable if
@@ -557,9 +547,7 @@ class CrossRepoCommitIdentityFixtures(unittest.TestCase):
     silently miss a tokenization bug for hyphens in `cd <path>`.
     """
 
-    @staticmethod
-    def _input(command: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}}
+    _input = staticmethod(_test_helpers.bash_input)
 
     def test_cross_repo_dilara_data_acq_commit_allowed(self):
         """`cd <data-acq-clone> && git -c user.name="Dilara Erdogan" commit`."""
@@ -765,12 +753,7 @@ class IndirectExecBypassTests(unittest.TestCase):
     (the detector requires both `git` AND `commit` in the inner payload).
     """
 
-    @staticmethod
-    def _input(command: str, cwd: str | None = None) -> dict:
-        d: dict = {"tool_name": "Bash", "tool_input": {"command": command}}
-        if cwd is not None:
-            d["cwd"] = cwd
-        return d
+    _input = staticmethod(_test_helpers.bash_input)
 
     def _assert_blocked_as_indirect(self, result):
         self.assertIsNotNone(result, "indirect-exec bypass must block")
@@ -965,12 +948,7 @@ class IndirectExecExtensionTests(unittest.TestCase):
     are strictly additive to `_detect_indirect_commit`'s dispatcher.
     """
 
-    @staticmethod
-    def _input(command: str, cwd: str | None = None) -> dict:
-        d: dict = {"tool_name": "Bash", "tool_input": {"command": command}}
-        if cwd is not None:
-            d["cwd"] = cwd
-        return d
+    _input = staticmethod(_test_helpers.bash_input)
 
     def _assert_blocked_with_shape(self, result, shape_label: str) -> None:
         """Assert the result is an indirect-exec block and the reason
@@ -1328,9 +1306,7 @@ class WrappedCommitIdentityRegression(unittest.TestCase):
     message that reads as a lie. Both directions are pinned below.
     """
 
-    @staticmethod
-    def _input(command: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}}
+    _input = staticmethod(_test_helpers.bash_input)
 
     def _commit(self, prefix: str, *, identity: bool) -> str:
         ident = (
@@ -1391,9 +1367,7 @@ class AssignmentAwarePrePassTests(unittest.TestCase):
     `None`, not merely "not exceptional".
     """
 
-    @staticmethod
-    def _input(command: str) -> dict:
-        return {"tool_name": "Bash", "tool_input": {"command": command}}
+    _input = staticmethod(_test_helpers.bash_input)
 
     def _valid_identity(self) -> tuple[str, str]:
         name = next(iter(hook.ROSTER), None)

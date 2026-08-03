@@ -10,15 +10,11 @@ Run: python3 -m pytest .claude/hooks/tests/test_no_worktree_self_delete.py -v
 from __future__ import annotations
 
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-sys.path.insert(0, str(_HOOKS_DIR))
-
+import _test_helpers  # noqa: E402,F401
 import no_worktree_self_delete as hook  # noqa: E402
 
 

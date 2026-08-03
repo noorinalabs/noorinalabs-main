@@ -35,20 +35,21 @@ asserted in both shells rather than trusted.
 Run: ENVIRONMENT=test python3 -m pytest .claude/hooks/tests/test_shell_parse.py -v
 """
 
+# This file's own hook-side import is an underscore-prefixed module
+# whose name sorts alphabetically before `_test_helpers` — ruff's isort
+# autofix would otherwise reorder it ahead of the sys.path bootstrap it
+# depends on. See `_test_helpers.py`'s module docstring.
+# isort: skip_file
 from __future__ import annotations
 
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-sys.path.insert(0, str(_HOOKS_DIR))
-
+import _test_helpers  # noqa: E402,F401
 import _shell_parse as sp  # noqa: E402
 
 

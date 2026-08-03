@@ -17,19 +17,12 @@ Run: ENVIRONMENT=test python3 -m pytest .claude/hooks/tests/test_block_gh_pr_rev
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-sys.path.insert(0, str(_HOOKS_DIR))
-
+import _test_helpers  # noqa: E402,F401
 import block_gh_pr_review as hook  # noqa: E402
 
-
-def _input(command: str) -> dict:
-    return {"tool_name": "Bash", "tool_input": {"command": command}}
+_input = _test_helpers.bash_input
 
 
 class PositiveMatchTests(unittest.TestCase):
