@@ -14,13 +14,15 @@ import io
 import json
 import sys
 import unittest
-from pathlib import Path
 from unittest import mock
 
-_HERE = Path(__file__).resolve().parent
-_HOOKS_DIR = _HERE.parent
-
-sys.path.insert(0, str(_HOOKS_DIR))
+# This file's own hook-side import (`_hook_main`) is an
+# underscore-prefixed module whose name sorts alphabetically before
+# `_test_helpers` — ruff's isort autofix would otherwise reorder it
+# ahead of the sys.path bootstrap it depends on. See
+# `_test_helpers.py`'s module docstring.
+# isort: skip_file
+import _test_helpers  # noqa: E402,F401
 
 import _hook_main as hm  # noqa: E402
 
