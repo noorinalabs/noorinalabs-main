@@ -748,6 +748,254 @@ def _opener_feeds_interpreter(line: str, pos: int, scan: _LineScan) -> bool:
     return False
 
 
+# ---------------------------------------------------------------------------
+# Cross-segment "write-then-exec" correlation (main#1167)
+# ---------------------------------------------------------------------------
+#
+# `_opener_feeds_interpreter` answers "is this heredoc's body consumed by an
+# interpreter reachable through a PIPE from the same physical line?" That is
+# the wrong question for a heredoc whose owning segment redirects the body
+# into a FILE (`cat > FILE <<'DELIM'`, or `tee FILE <<'DELIM'`) and a LATER
+# segment — connected by `;`, a newline, or anything else, not a pipe —
+# invokes an interpreter on that same file:
+#
+#     cat > /tmp/s.txt <<'DELIM'
+#     git -c user.name=X -c user.email=Y commit -m z
+#     DELIM
+#     bash /tmp/s.txt
+#
+# `cat` is a recognised data sink and nothing downstream of it on the SAME
+# line is a `|`-connected interpreter, so `_opener_feeds_interpreter` says
+# DATA — correctly, for the question it answers. But the body reaches a real
+# shell one command later. `_read_script_if_safe` (the OTHER existing defense,
+# in validate_commit_identity) is structurally blind to this too: the hook
+# fires PreToolUse, before `cat` has created the file, so reading it back
+# fails and no content is inspected either — see the #1167 issue body for the
+# full "why every matcher misses it" account. Belongs to the #1150 umbrella.
+#
+# The fix stays inside the classifier (the issue's preferred option 1):
+# record the file path(s) a heredoc's owning segment writes the body to, and
+# if ANY segment anywhere else in the same command later invokes a
+# `SHELL_INTERPRETERS` member with that same path as its script operand,
+# reclassify the body as CODE.
+#
+# Deliberately positionally-agnostic: a `bash /tmp/x` segment appearing
+# BEFORE `cat > /tmp/x <<...` in the command still counts. A real shell would
+# only execute meaningful content if the write happens first, but this is a
+# security gate — main#1152's own rule ("every ambiguity resolves toward
+# CODE") already commits this module to erring toward over-detection rather
+# than depending on textual ordering to save a rare false positive.
+#
+# Deliberately NOT resolved through `iter_interpreter_invocations`: that
+# helper's `strip_heredocs` call (the coarse, single-regex eraser — NOT the
+# per-line `classify_heredocs`/`strip_data_heredocs` machinery) consumes
+# everything from a heredoc opener through to its terminator in ONE pass,
+# INCLUDING any command chained onto the OPENER's own line with `;` before
+# the heredoc's first newline (`cat <<'DELIM' > /tmp/x; bash /tmp/x`, the
+# issue's stated semicolon-equivalent shape). Measured:
+# `_HEREDOC_RE.sub("", "cat <<'DELIM' > /tmp/x; bash /tmp/x\\n...")` erases
+# "; bash /tmp/x" along with the heredoc syntax, so a target scan built on
+# `iter_interpreter_invocations` would silently miss the semicolon variant
+# even though `_opener_write_targets`/`_scan_command_line` (the mechanism the
+# rest of this module already trusts) see it fine. This module's own per-line
+# scan is reused instead — see `_iter_non_heredoc_segments` — which has no
+# such erasure bug: it only ever skips a heredoc's OWN body lines, never
+# trailing text on the opener's own line.
+#
+# Explicit scope boundary — NOT covered, by deliberate decision, not oversight:
+#   - `source FILE` / `. FILE`: shell BUILTINS, not members of
+#     `SHELL_INTERPRETERS`. Reading a file into the CURRENT shell is a
+#     structurally different mechanism from spawning a new interpreter
+#     process on it, and folding them in would widen `SHELL_INTERPRETERS`
+#     itself — a set several OTHER matchers in this module and in
+#     validate_commit_identity key on. That is a broader decision than this
+#     fix and belongs in its own issue.
+#   - `env bash FILE`: no new work needed here — `parse_interpreter_invocation`
+#     already strips the `env` wrapper via `strip_command_prefixes` before
+#     resolving the interpreter, so this shape already correlates correctly
+#     through the same path as a bare `bash FILE`.
+#   - A redirect target given via an unexpanded shell variable is not
+#     RESOLVED — the hook cannot evaluate `$F` without running the shell, the
+#     same documented punt this module already makes for `eval "$cmd"`. Note
+#     the caveat: comparison here is by LITERAL TOKEN, not by value, so
+#     `cat > "$F" <<'DELIM' ...; bash "$F"` is still caught — not because `$F`
+#     was resolved, but because both sides spell the identical literal token
+#     `$F`. A rename between the two positions (`cat > "$OUT" ...; F=$OUT;
+#     bash "$F"`) or any other divergent spelling defeats it exactly as
+#     variable resolution in general would.
+#   - `bash < FILE` (script fed via stdin redirect rather than a positional
+#     argument) is a different execution mechanism than the positional
+#     `InterpreterInvocation.operands` this correlation reads, and is not
+#     resolved by the pre-existing shape-7 walker either — out of scope here.
+#   - The attached-operator redirect form with no surrounding whitespace
+#     (`cat>/tmp/x`, as opposed to `cat > /tmp/x`) is not recognised by
+#     `_segment_write_targets`'s tokenizer, which relies on shlex already
+#     splitting `>`/`>>` into their own token — shlex only does that when
+#     whitespace separates them. Every shape in the issue, and every heredoc
+#     redirect in this codebase's own conventions, uses the spaced form.
+
+# `tee`'s own value-less options. `tee` has no value-taking flags besides the
+# attached-`=` long form `--output-error[=MODE]`, which never starts a new
+# bare token and needs no entry here.
+_TEE_BOOL_FLAGS = frozenset({"-a", "--append", "-i", "--ignore-interrupts", "-p", "--output-error"})
+
+
+def _segment_write_targets(seg_text: str) -> list[str]:
+    """File paths the DATA-SINK head of `seg_text` could write a heredoc body to.
+
+    Two independent sources, both checked unconditionally:
+      - a `>`/`>>` shell redirect (any command may carry one);
+      - if the head command is `tee`, every non-flag positional argument
+        (`tee` writes to each of its own file arguments, with or without an
+        ADDITIONAL `>`/`>>` redirect).
+
+    `cat` never contributes a positional target: `cat FILE` READS FILE, it
+    does not write to it — only `cat`'s redirect (if any) is a write.
+    """
+    tokens = tokenize(_HEREDOC_OPENER_RE.sub(" ", seg_text))
+    if not tokens:
+        return []
+    head = tokens[0].rsplit("/", 1)[-1]
+    is_tee = head == "tee"
+    targets: list[str] = []
+    i = 1
+    n = len(tokens)
+    while i < n:
+        tok = tokens[i]
+        if tok in (">", ">>"):
+            if i + 1 < n:
+                targets.append(tokens[i + 1])
+                i += 2
+                continue
+            i += 1
+            continue
+        if tok.startswith(">>") and len(tok) > 2:
+            targets.append(tok[2:])
+            i += 1
+            continue
+        if tok.startswith(">") and len(tok) > 1 and tok[1] not in ("(", "&", ">"):
+            targets.append(tok[1:])
+            i += 1
+            continue
+        if is_tee and tok not in _TEE_BOOL_FLAGS and not _looks_like_flag(tok):
+            targets.append(tok)
+        i += 1
+    return targets
+
+
+def _opener_write_targets(line: str, pos: int, scan: _LineScan) -> list[str]:
+    """`_segment_write_targets` for the segment that OWNS the opener at `pos`."""
+    idx = next(
+        (k for k, (start, end, _sep) in enumerate(scan.segments) if start <= pos < end),
+        None,
+    )
+    if idx is None:
+        return []
+    start, end, _sep = scan.segments[idx]
+    return _segment_write_targets(line[start:end])
+
+
+def _normalize_path_for_compare(path: str) -> str:
+    """Loose normalization so `./x` and `x` — or a doubled slash — written two
+    ways still compare equal. Deliberately narrow: `os.path.normpath` collapses
+    redundant `.`/`//` segments only; it does NOT resolve against a cwd (the
+    write and the invocation share the same shell cwd, so this is the right
+    amount of normalization — resolving further would require knowing that
+    cwd, which this module deliberately does not read) and does NOT expand a
+    leading `~` (harmless either way here: `~/x` written identically on both
+    sides already compares equal as a plain string, and there is no realistic
+    same-command shape where the two sides spell a home-relative path
+    differently — expanding `~` would add a branch with no distinguishing
+    test, so it is left out).
+    """
+    try:
+        return os.path.normpath(path)
+    except (TypeError, ValueError):
+        return path
+
+
+def _iter_non_heredoc_segments(cmd: str) -> Iterator[str]:
+    """Every pipeline segment in `cmd` that is NOT inside a heredoc body.
+
+    Reuses the exact line-walk + terminator-search `_classify_heredocs_cached`
+    and `strip_data_heredocs` already use, so a heredoc BODY line is never
+    mistaken for a segment of the surrounding command (a body line containing
+    the word `bash` must not itself look like an interpreter invocation).
+    Deliberately NOT built on `iter_interpreter_invocations`/`strip_heredocs`
+    — see the module comment above `_segment_write_targets` for the measured
+    erasure bug that makes that helper unsuitable here.
+    """
+    lines = cmd.split("\n")
+    n = len(lines)
+    i = 0
+    while i < n:
+        line = lines[i]
+        i += 1
+        scan = _scan_command_line(line)
+        for start, end, _sep in scan.segments:
+            yield line[start:end]
+        for _pos, dash_form, delim in scan.openers:
+            j = i
+            while j < n:
+                candidate = lines[j].rstrip("\r")
+                if (candidate.lstrip("\t") if dash_form else candidate) == delim:
+                    i = j + 1
+                    break
+                j += 1
+            else:
+                i = n  # unterminated: nothing after this belongs to real command text
+
+
+@lru_cache(maxsize=256)
+def _script_invocation_targets(cmd: str) -> frozenset[str]:
+    """Normalized script-path operands of every interpreter invocation in `cmd`.
+
+    Used to correlate a heredoc's file-redirect target against a later (or
+    earlier — see the positional-agnostic note above) interpreter invocation
+    of that same file (main#1167). Memoized: pure in `cmd`, and both
+    `_classify_heredocs_cached` and `strip_data_heredocs` call it on the same
+    `cmd` within one hook invocation.
+    """
+    if not any(name in cmd for name in SHELL_INTERPRETERS):
+        return frozenset()
+    targets: set[str] = set()
+    for seg_text in _iter_non_heredoc_segments(cmd):
+        tokens = tokenize(_HEREDOC_OPENER_RE.sub(" ", seg_text))
+        if not tokens:
+            continue
+        invocation = parse_interpreter_invocation(tokens)
+        if invocation is None or invocation.has_command_string:
+            continue
+        if invocation.operands:
+            targets.add(_normalize_path_for_compare(invocation.operands[0]))
+    return frozenset(targets)
+
+
+def _is_opener_code(cmd: str, line: str, pos: int, scan: _LineScan) -> bool:
+    """Single source of truth: is the heredoc opened at `pos` on `line` (within
+    the larger command `cmd`) executed as shell code?
+
+    `classify_heredocs` and `strip_data_heredocs` MUST both call this rather
+    than reimplementing the decision. main#1152 already flagged the drift
+    hazard of two independent "is this body code" definitions; main#1167 is
+    exactly that hazard realized once — extending only one of the two
+    pre-existing call sites would silently leave the gap open in the other
+    (in practice: `strip_data_heredocs` feeds `validate_commit_identity`'s
+    `scanned` text, so a fix applied only to `classify_heredocs` would still
+    let the body's `git commit` text get stripped as data before any matcher
+    reading `scanned` ever saw it).
+    """
+    if _opener_feeds_interpreter(line, pos, scan):
+        return True
+    script_targets = _script_invocation_targets(cmd)
+    if not script_targets:
+        return False
+    return any(
+        _normalize_path_for_compare(target) in script_targets
+        for target in _opener_write_targets(line, pos, scan)
+    )
+
+
 def classify_heredocs(cmd: str) -> tuple[HeredocSpan, ...]:
     """Find every heredoc in `cmd` and say whether its body is code or data.
 
@@ -771,7 +1019,7 @@ def _classify_heredocs_cached(cmd: str) -> tuple[HeredocSpan, ...]:
         i += 1
         scan = _scan_command_line(line)
         for pos, dash_form, delim in scan.openers:
-            is_code = _opener_feeds_interpreter(line, pos, scan)
+            is_code = _is_opener_code(cmd, line, pos, scan)
             body: list[str] = []
             term = None
             j = i
@@ -816,7 +1064,7 @@ def strip_data_heredocs(cmd: str) -> str:
         i += 1
         scan = _scan_command_line(line)
         for pos, dash_form, delim in scan.openers:
-            is_code = _opener_feeds_interpreter(line, pos, scan)
+            is_code = _is_opener_code(cmd, line, pos, scan)
             term = None
             j = i
             while j < len(lines):
