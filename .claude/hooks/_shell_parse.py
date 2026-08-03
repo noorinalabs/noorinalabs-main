@@ -560,6 +560,152 @@ SHELL_INTERPRETERS = frozenset({"bash", "sh", "zsh", "dash", "ksh"})
 # addition is an explicit, reviewable decision.
 HEREDOC_DATA_SINKS = frozenset({"cat", "tee"})
 
+# ---------------------------------------------------------------------------
+# Downstream-relay default (main#1168)
+# ---------------------------------------------------------------------------
+#
+# `_opener_feeds_interpreter`'s pipe-follow walk (condition 3 below) used to
+# resolve an unrecognised downstream segment head toward DATA ("not proven to
+# be an interpreter, so keep walking; if nothing downstream matches, the body
+# is inert"). That is backwards relative to every other ambiguity in this
+# module, which resolves toward CODE (main#1152's own rule), and it is a
+# measured live bypass: a RELAY command that is not itself a member of
+# `SHELL_INTERPRETERS` but hands its stdin to one defeats the walk entirely —
+#
+#     cat <<'DELIM' | xargs -I{} bash -c "{}"
+#     git -c user.name=X -c user.email=Y commit -m z
+#     DELIM
+#
+# `xargs` is not an interpreter, so the old walk found nothing and returned
+# DATA; the body — a real `git commit` — genuinely runs (real-shell-verified
+# with a marker proxy: a marker command appended to a log file, confirmed to
+# execute). The same family: `parallel`, `env -S`, and (for the OTHER
+# classifier, main#1167's cross-segment write-then-exec correlation —
+# out of scope for the fix here, see that module's comment) `find -exec`.
+#
+# The fix: an unrecognised downstream segment head now resolves to CODE,
+# matching the rest of this module's posture. `HEREDOC_INERT_RELAY_FILTERS`
+# below is the narrow escape hatch — the mirror image of `HEREDOC_DATA_SINKS`
+# — for commands MEASURED to have no code-execution surface reachable from
+# their own stdin content, so a legitimate documentation pipeline
+# (`cat <<'EOF' | grep foo`) does not newly false-block. Same posture as
+# `HEREDOC_DATA_SINKS`: a tiny, explicit, reviewed ALLOWLIST, never a
+# denylist — an unlisted filter fails toward CODE, which is the entire point
+# of inverting the default (an allowlist's safety property IS its default).
+#
+# Every entry here was verified with a real-shell marker probe — BOTH the
+# plain invocation AND every exec-shaped flag the command exposes (a command
+# appended to a log file inside the heredoc body / a marker script standing
+# in for an external-program flag, checked for the log actually being
+# written, in both bash and zsh) BEFORE being added, not reasoned from a man
+# page and not measured on the bare invocation alone:
+#
+#   DID-NOT-RUN (genuinely inert — plain form AND every exec-shaped flag
+#   probed — confirmed safe to allowlist):
+#     grep, egrep, fgrep (incl. `-f -`), wc, uniq, head, tail, cut, tr,
+#     column, nl, rev, fold, expand, unexpand, base64 (incl. `-d`),
+#     md5sum (incl. `-c`), sha1sum, sha256sum, sha512sum, cksum, od,
+#     xxd (incl. `-r`), hexdump (incl. `-e`), join, paste, comm, tac,
+#     shuf (incl. `--random-source`), jq (incl. `env.PATH`, `$ENV.PATH`,
+#     `input_filename`, `@sh` — no `system()` in mainline)
+#
+#   RAN (data-driven code-execution surface — DELIBERATELY EXCLUDED even
+#   though they are common "genuinely inert filter" examples in casual
+#   reasoning about this shape):
+#     sed   — the GNU `e` flag/command executes the (input-derived) pattern
+#             space as a shell command and substitutes its output; measured:
+#             `cat <<'EOF' | sed 's/.*/&/e'` genuinely runs the body.
+#     awk   — `system()` (and piped `print ... | "cmd"` / `getline < "cmd"`)
+#             executes a command built from field/record data; measured:
+#             `cat <<'EOF' | awk '{system($0)}'` genuinely runs the body.
+#     sort  — `--compress-program=CMD` runs CMD with the heredoc's own data
+#             on its stdin once the sort spills to a temp file (`-S` sets
+#             the spill threshold; the padding needed to cross it is
+#             attacker-controlled, same as any other input-size trigger);
+#             measured: `cat <<'EOF' | sort -S 1 --compress-program=CMD`
+#             genuinely runs CMD in both bash and zsh once enough body lines
+#             are present to force a spill. The PLAIN invocation (no
+#             `--compress-program`) is genuinely inert — this is why `sort`
+#             shipped on this allowlist in the first place (main#1168's
+#             original measurement covered only the bare form) — but a
+#             plain invocation being inert is not sufficient, exactly as for
+#             `sed`/`awk` below; the exec-shaped flag makes it unsafe as a
+#             blanket allowlist member. Excluded per main#1316.
+#     rg    — `--pre=COMMAND` runs COMMAND once "for each input PATH", and on
+#             a heredoc-fed pipe a PATH is attacker-supplied: naming the pipe
+#             itself (`/dev/stdin`, `/dev/fd/0`) gives `--pre` a PATH even
+#             though the input is a pure stdin pipe, and `rg` runs
+#             `COMMAND PATH` with that path opened on the child's own stdin
+#             — so `sh /dev/stdin` genuinely executes the heredoc body;
+#             measured: `cat <<'EOF' | rg --pre=/bin/sh pat /dev/stdin`
+#             genuinely runs the body in both bash and zsh. `rg`'s ORIGINAL
+#             addition to this allowlist (main#1316's first pass) measured
+#             only the no-PATH stdin-pipe form — fixing the CONTEXT
+#             (whether a PATH is present) instead of varying it, when that
+#             context is exactly what an attacker controls. Separately, `rg`
+#             also exposes `--hostname-bin=COMMAND`, a second exec-shaped
+#             flag that spawns an arbitrary program even on a pure stdin
+#             pipe with no PATH at all — but the spawned child gets no
+#             arguments and does not inherit the pipe, so it never reaches
+#             the heredoc body and is not a bypass on its own. Noted here
+#             anyway because its existence falsifies any claim that every
+#             `rg` flag is harmless on a heredoc-fed stdin pipe. Excluded
+#             per main#1316 (second pass) — previously allowlisted in this
+#             module's own first pass at the same PR, on a plain-form
+#             measurement plus a #1008 policy argument (closing the
+#             contradiction where this allowlist admitted forbidden `grep`
+#             while omitting mandated `rg`); that policy argument is not a
+#             safety argument, and the #1008 contradiction is left OPEN by
+#             this exclusion — see the PR body.
+#
+# All four risks above are ARGUMENT-driven (visible in the segment's own
+# tokens, not hidden in the heredoc body), so a narrower "allowlisted unless
+# the script argument contains `e`/`system(`/`--compress-program`/`--pre`"
+# rule is possible in principle — but that reintroduces a second,
+# per-command detector inside what this set is meant to keep a flat,
+# reviewable allowlist, and is deliberately left as a non-goal here:
+# excluding `sed`/`awk`/`sort`/`rg` entirely accepts a real (if comparatively
+# rare, in a documentation-pipeline context) false-positive cost in exchange
+# for never having to get that per-command grammar right. `perl`, `python`,
+# `ruby`, `php`, `xargs`, `parallel`, `find`, `env` and any other
+# general-purpose interpreter or relay are excluded for the same reason, one
+# level more obviously (they are not "filters" in the first place — some of
+# them are exactly the relay family this fix targets).
+HEREDOC_INERT_RELAY_FILTERS = frozenset(
+    {
+        "grep",
+        "egrep",
+        "fgrep",
+        "wc",
+        "uniq",
+        "head",
+        "tail",
+        "cut",
+        "tr",
+        "column",
+        "nl",
+        "rev",
+        "fold",
+        "expand",
+        "unexpand",
+        "base64",
+        "md5sum",
+        "sha1sum",
+        "sha256sum",
+        "sha512sum",
+        "cksum",
+        "od",
+        "xxd",
+        "hexdump",
+        "join",
+        "paste",
+        "comm",
+        "tac",
+        "shuf",
+        "jq",
+    }
+)
+
 # A heredoc opener: `<<EOF`, `<<'EOF'`, `<<"EOF"`, `<<-EOF`. Matched with
 # `.match(line, i)` from a scanner that has already excluded `<<<` (here-string)
 # and quoted regions, so no lookbehind is needed here.
@@ -725,7 +871,8 @@ def _opener_feeds_interpreter(line: str, pos: int, scan: _LineScan) -> bool:
       1. the segment's head command is a known inert sink (`cat`, `tee`), AND
       2. that segment carries no process substitution, AND
       3. no segment downstream of it *in the same pipeline* is a shell
-         interpreter or itself carries a process substitution.
+         interpreter, a RELAY that hands its stdin to one (main#1168), or
+         itself carries a process substitution.
 
     Condition 2 is the one that is easy to miss, and missing it is a live
     bypass (main#1155 review, M1):
@@ -741,6 +888,19 @@ def _opener_feeds_interpreter(line: str, pos: int, scan: _LineScan) -> bool:
     anywhere in a reachable segment therefore forces CODE without trying to
     resolve what is inside it: an unresolvable sink resolves toward CODE, which
     is the rule the rest of this classifier already follows.
+
+    Condition 3's downstream default is the OTHER historically-inverted case
+    (main#1168): a downstream segment head that is not a known
+    `SHELL_INTERPRETERS` member, a known `HEREDOC_DATA_SINKS` member (`cat`,
+    `tee` — relaying to a FILE, not an interpreter, is exactly as inert
+    downstream as it is in the owning-segment position), or a known-inert
+    `HEREDOC_INERT_RELAY_FILTERS` member now resolves to CODE — not "keep
+    walking, default to DATA" as before. A RELAY command (`xargs -I{} bash -c
+    "{}"` and the same family via `parallel`/`env -S`) is not itself an
+    interpreter, so the old walk found nothing downstream and returned DATA
+    even though the body genuinely runs (real-shell-verified with a marker
+    proxy). See the module comment above `HEREDOC_INERT_RELAY_FILTERS` for
+    the full false-positive corpus that justifies the allowlist's contents.
 
     `&&`, `||`, `;` and `&` break the pipeline: what follows them does not
     receive this stdin. A `&` that is part of a redirect (`2>&1`) is not a
@@ -761,7 +921,16 @@ def _opener_feeds_interpreter(line: str, pos: int, scan: _LineScan) -> bool:
         head = _segment_head_command(line[start:end])
         if head_must_be_inert_sink:
             return head not in HEREDOC_DATA_SINKS
-        return head in SHELL_INTERPRETERS
+        if head in SHELL_INTERPRETERS:
+            return True
+        # main#1168: an unresolved/unknown relay (including `head is None` —
+        # the segment didn't tokenize) resolves to CODE. A downstream
+        # `HEREDOC_DATA_SINKS` member (`cat`, `tee` — e.g. `| tee /tmp/a.md`
+        # relaying to a FILE, not an interpreter) is just as inert here as it
+        # is in the owning-segment position, so it joins
+        # `HEREDOC_INERT_RELAY_FILTERS` as a reason to keep walking rather
+        # than stop at CODE.
+        return head not in HEREDOC_DATA_SINKS and head not in HEREDOC_INERT_RELAY_FILTERS
 
     if _reachable_sink_is_code(idx, head_must_be_inert_sink=True):
         return True

@@ -156,6 +156,20 @@ jobs:
       # bare checkout without it).
       - name: Install zsh (second shell-truth oracle)
         run: sudo apt-get update && sudo apt-get install -y zsh
+      # ripgrep (main#1316/#1318): `RealShellGroundTruthTests` real-shell-
+      # verifies the `rg`-exclusion's adversarial rows (`--pre=.../dev/stdin`,
+      # `--hostname-bin`) against an actual `rg` binary. This runner image does
+      # not ship ripgrep, so those rows were previously either genuinely
+      # failing (an expect_runs=True row: `rg: command not found`, so the
+      # marker never ran) or passing VACUOUSLY (an expect_runs=False row is
+      # trivially true when the shell never even attempts `rg` — measuring
+      # nothing while looking identical to a real inertness result). Install
+      # it so the measurement actually RUNS in CI, same pattern as the
+      # bashlex/zsh installs above — a `skipUnless(which("rg"))` guard alone
+      # would only convert the loud failure back into a silent skip, which is
+      # the state that let `rg` reach the allowlist in the first place.
+      - name: Install ripgrep (real-shell ground truth for the rg exclusion)
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
       - name: Run hook and lib tests
         run: pytest .claude/hooks/tests/ .claude/lib/tests/ -q
       # .claude/skills/*/tests/ added per #326. Run PER-SKILL (each from its own
