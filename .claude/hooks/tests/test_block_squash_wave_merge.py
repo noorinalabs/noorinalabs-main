@@ -238,11 +238,16 @@ class UndashedPhaseWaveBranchTests(unittest.TestCase):
     landing-page — and the hook's own pattern did not match any of them, so a
     `--squash` into those wave branches was allowed straight through.
 
-    The form is HISTORICAL (all 32 from 2026-03-15..04-06; every wave-branch
-    name constructor in the repo emits the dashed form). It is still worth
-    guarding because wave branches are retained permanently as rollback anchors
-    — the 28 refs exist today and are squashable — but this is a historical-tail
-    fix, not a live outage, and the test says so rather than overstating it.
+    The form is CURRENT, not historical. An earlier version of this docstring
+    called it a historical tail on the strength of the 2026-03-15..04-06 date
+    range; that inference was FALSE and is retracted (#1310 review).
+    `noorinalabs-isnad-graph/scripts/create-wave.sh:38` constructs the undashed
+    form live, and `ontology/conventions.md:213` — mirrored into the
+    data-acquisition and deploy child charters — prescribes it as THE convention
+    an implementer is told to target. The spelling conflict with the parent
+    charter's dashed form is tracked by #1313. Independently, wave branches are
+    retained permanently as rollback anchors, so the 28 refs stay squashable.
+    This guards a live gap; do not delete it as legacy coverage.
     """
 
     UNDASHED = "deployments/phase15/wave-1"

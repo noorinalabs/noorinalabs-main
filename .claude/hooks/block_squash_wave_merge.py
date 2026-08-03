@@ -51,11 +51,16 @@ from annunaki_log import log_pretooluse_block
 # The wave-branch shape is `charter_trailer.is_wave_branch` (main#1216) — do NOT
 # reimplement it here. This hook used to carry its own
 # `^deployments/phase-\d+/wave-\d+$`, which does not match the undashed
-# `deployments/phase15/wave-1` form that 4 of the org's repos used historically:
-# 32 of the 202 `deployments/**`-head PRs measured on 2026-08-03, all from
-# 2026-03-15..04-06. Nothing emits that spelling today, but wave branches are
-# RETAINED permanently as rollback anchors, so those 28 refs are still live and
-# still squashable — the guard was simply off for them. One definition, shared
+# `deployments/phase15/wave-1` form that 4 of the org's repos use: 32 of the 202
+# `deployments/**`-head PRs measured on 2026-08-03. That form is CURRENT, not
+# historical — an earlier draft of this comment claimed nothing emits it today
+# and that was wrong (retracted, #1310 review):
+# `noorinalabs-isnad-graph/scripts/create-wave.sh:38` constructs it live, and
+# `ontology/conventions.md:213` plus two child charters prescribe it as THE
+# convention. See `charter_trailer._WAVE_BRANCH_RE` for the full evidence and
+# #1313 for the spelling conflict. Wave branches are also RETAINED permanently
+# as rollback anchors, so those 28 refs stay live and squashable regardless —
+# the guard was simply off for all of them. One definition, shared
 # with the merge gate, is what keeps a second reader of the same charter shape
 # from disagreeing with the first — the `extract_branch_author_lastname` lesson
 # (main#1175).

@@ -392,8 +392,9 @@ def is_branch_author(field_value: str, branch_lastname: str, branch_initial: str
 # BOTH `phase-N` AND `phaseN` ARE ACCEPTED, because both are in production. The
 # form the charter writes is `deployments/phase-{P}/wave-{M}`; the form 4 of the
 # org's repos actually use is `deployments/phase{P}/wave-{M}`. Measured on
-# 2026-08-03 over every `deployments/**`-head PR in all 7 repos (202 PRs): 168
-# carry the dashed form and **32 carry the undashed one** — 28 distinct refs
+# 2026-08-03 over every `deployments/**`-head PR in all 8 repos (202 PRs) — the
+# 7 children AND this parent, which contributes 41 of the 202 — of which 168
+# carry the dashed form and **32 carry the undashed one**: 28 distinct refs
 # across isnad-graph, design-system, data-acquisition and landing-page
 # (`deployments/phase15/wave-1`, `deployments/phase10/wave-4`, …).
 #
@@ -403,14 +404,34 @@ def is_branch_author(field_value: str, branch_lastname: str, branch_initial: str
 # branch on all 32. Reusing one pattern closes that as a byproduct, in the
 # fail-CLOSED direction (more squashes blocked, never fewer).
 #
-# SCOPE OF THAT GAP, STATED HONESTLY: the undashed form is HISTORICAL. All 32
-# PRs date from 2026-03-15..2026-04-06 and every wave-branch NAME CONSTRUCTOR in
-# the repo emits the dashed form (`wave_merge_model`, `validate_wave_audit`,
+# SCOPE OF THAT GAP: THE UNDASHED FORM IS CURRENT, NOT HISTORICAL. An earlier
+# draft of this comment said the opposite — that all 32 PRs date from
+# 2026-03-15..2026-04-06 and therefore "nothing produces the undashed spelling
+# today." The date range is accurate; the inference from it was FALSE, and is
+# retracted here (#1310 review). Every wave-branch name constructor IN THIS REPO
+# does emit the dashed form (`wave_merge_model`, `validate_wave_audit`,
 # `validate_wave_label_evidence`, `post_wave_kickoff_comment`, `wave_unwrapped`,
-# `framework.config.json`), so nothing produces the undashed spelling today. It
-# still matters because wave branches are RETAINED permanently as rollback
-# anchors (memory `feedback_wave_branch_merge_retain`) — those 28 refs are live
-# and squashable — but this is a historical-tail fix, not a live outage.
+# `framework.config.json`) — but this repo is not the only producer, and two
+# sources emit or prescribe the undashed spelling on `main` RIGHT NOW:
+#
+#   1. `noorinalabs-isnad-graph/scripts/create-wave.sh:38` — a committed,
+#      runnable constructor: BRANCH="deployments/phase${PHASE}/wave-${WAVE}".
+#   2. `ontology/conventions.md:213` IN THIS REPO documents the convention as
+#      `deployments/phase{N}/wave-{M}` — undashed — and both
+#      `noorinalabs-data-acquisition/.claude/team/charter.md` and
+#      `noorinalabs-deploy/.claude/team/charter.md` mirror it as the literal base
+#      an implementer is instructed to branch from and target.
+#
+# So the parent charter writes the dashed form while the org's own convention
+# document and two child charters write the undashed one. That spelling conflict
+# is real, is NOT resolved here, and is tracked by #1313; this pattern accepts
+# BOTH rather than picking a winner a hook has no standing to pick.
+#
+# DO NOT NARROW THIS PATTERN BACK TO `phase-` ON THE GROUNDS THAT THE UNDASHED
+# FORM IS DEAD — it is not. It is emitted by a live script, prescribed by the
+# live convention doc, and carried by 28 refs that are RETAINED permanently as
+# rollback anchors (memory `feedback_wave_branch_merge_retain`) and so stay
+# squashable indefinitely. This is a live gap, not a historical tail.
 #
 # Writing a second, wider pattern in `validate_pr_review` instead would have left
 # the two definitions to drift exactly as `extract_branch_author_lastname`'s two
