@@ -410,6 +410,34 @@ class StdinRedirectOperandTests(unittest.TestCase):
         inv = parse_interpreter_invocation(["bash", "-x", "<", "/tmp/s.txt"])
         self.assertTrue(set(inv.operands).issubset(set(inv.words)))
 
+    # --- Incidental side effect: the pre-existing shape-7 script-content
+    # walker in validate_commit_identity.py also reads `operands[0]`
+    # (`_read_script_if_safe(invocation.operands[0], cwd)`), so it silently
+    # benefits from this same resolution for a script that already exists ON
+    # DISK (unlike the write-then-exec case, where the file does not exist
+    # yet when the PreToolUse hook fires). Pinned here as a regression guard,
+    # not claimed as part of main#1170's own scope — it is the SAME operand
+    # slot, read by a completely different, pre-existing consumer.
+
+    def test_incidental_shape_7_now_reads_stdin_redirected_scripts_too(self):
+        """Before this fix: `bash < FILE` left `operands[0] == "<"`, so
+        `_read_script_if_safe` was handed a nonexistent path and the hidden
+        commit in an ALREADY-ON-DISK script went undetected. After: the
+        stdin form is symmetric with the pre-existing, already-trusted
+        positional form (`bash FILE`)."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            script_path = f"{d}/existing_script.sh"
+            with open(script_path, "w", encoding="utf-8") as f:
+                f.write(REAL_COMMIT + "\n")
+            result = hook.check(
+                {"tool_name": "Bash", "tool_input": {"command": f"bash < {script_path}", "cwd": d}}
+            )
+            self.assertIsNotNone(result, "on-disk script fed via stdin must still be inspected")
+            assert result is not None
+            self.assertEqual(result["decision"], "block")
+
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
