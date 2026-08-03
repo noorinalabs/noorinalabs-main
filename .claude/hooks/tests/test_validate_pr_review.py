@@ -5198,20 +5198,24 @@ class CommitIdentitySelfReviewExclusionTests(_ResolveOverFakeCommentsHarness):
 
 
 class OneDerivationDrivesModeAndExclusionTests(_ResolveOverFakeCommentsHarness):
-    """The #1297 shape, closed structurally rather than argued (#1216).
+    """One value decides both the reported mode and whether exclusion runs.
 
-    #1297 (open, from the #1292 merge gate) is the demonstration that narrowing
-    ONLY the tuple handed to `check_comment_reviews` — leaving the mode and every
-    diagnostic reading an unfiltered second tuple — keeps the whole suite green
-    while a self-approver reaches 2/2 on a non-charter ref. #1216 introduces
-    exactly the kind of edit that could do it: a slice where exclusion is turned
-    OFF.
+    `resolve_review_verdicts` derives `commit_authors` FROM `scan_scope`, so the
+    mode that is REPORTED and the tuple the exclusion is APPLIED from cannot
+    disagree about whether exclusion is live. #1216 adds a slice where exclusion
+    is turned OFF, which is exactly the kind of edit that could desynchronise
+    them; these tests pin the equivalence over every mode in both directions.
 
-    It is closed by construction instead: `resolve_review_verdicts` derives
-    `commit_authors` FROM `scan_scope`, so the mode that is reported and the
-    tuple the exclusion is applied from are one value. These tests pin that
-    equivalence directly, so an edit that reintroduces a second tuple fails here
-    rather than shipping green.
+    SCOPE — THIS DOES NOT CLOSE #1297, WHICH REMAINS OPEN. An earlier version of
+    this docstring said it did ("the #1297 shape, closed structurally"). That was
+    FALSE and is retracted (#1310 review): #1297's mutation applied verbatim to
+    this tree leaves the suite fully GREEN and lets a self-approver reach 2/2 on
+    3 of its 4 identity shapes, with the mode never moving. The coupling binds
+    whether the tuple is DERIVED; #1297 inserts a filtered COPY downstream of the
+    derivation, so derivation and mode still agree and nothing here notices. What
+    is caught is the mode-moving variant (M8/M9), which is a real and different
+    property. #1297 needs the two count assertions its own closing section
+    specifies — it must not be closed on the strength of this class.
     """
 
     # (head_ref, expected mode, expected reviewer set). The reviewer set is
@@ -5285,9 +5289,13 @@ class OneDerivationDrivesModeAndExclusionTests(_ResolveOverFakeCommentsHarness):
         """The invariant itself, over both groups: a NON-empty identity tuple
         must coincide exactly with a mode that claims exclusion is live.
 
-        This is the assertion #1297 says is missing on `main` — there, the
-        reported tuple and the excluded-from tuple are two expressions that
-        merely happen to be equal today.
+        On `main` the reported tuple and the excluded-from tuple are two separate
+        expressions that merely happen to be equal today; here they are one
+        value, and this asserts it over every mode.
+
+        NOT #1297's closing assertion — that one is a COUNT test on an
+        alias-only identity, and it is not written yet (#1297 stays open; see
+        the class docstring).
         """
         refs = [case[0] for case in self.MODES_WITHOUT_DERIVATION] + [
             case[0] for case in self.MODES_WITH_DERIVATION

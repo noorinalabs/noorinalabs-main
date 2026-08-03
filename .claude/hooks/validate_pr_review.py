@@ -2236,11 +2236,27 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
     #
     # DERIVED FROM `scan_scope`, not from a second read of the head ref. The mode
     # that will be REPORTED and the tuple the exclusion is APPLIED from now come
-    # out of one value, so they cannot disagree about whether exclusion is live —
-    # which is the #1297 shape (narrow the tuple, leave the mode, ship a green
-    # suite over a re-opened hole) made structurally impossible here rather than
-    # argued against. For the two pre-#1216 ref classes this is exactly
-    # equivalent to the old `() if branch_author_lastname else …`.
+    # out of one value, so they cannot disagree about WHETHER exclusion is live.
+    # That is the whole of what this buys, and it is worth having: #1216 adds a
+    # slice where exclusion is turned OFF, and this makes it impossible to report
+    # such a slice under a mode that claims exclusion is on. Pinned by
+    # `OneDerivationDrivesModeAndExclusionTests`. For the two pre-#1216 ref
+    # classes this is exactly equivalent to the old
+    # `() if branch_author_lastname else …`.
+    #
+    # IT DOES **NOT** CLOSE #1297, WHICH REMAINS OPEN. An earlier draft of this
+    # comment claimed the coupling made #1297's shape "structurally impossible."
+    # That claim was FALSE and is retracted here (#1310 review). #1297's mutation
+    # was applied to this tree verbatim: the full suite stays GREEN (3733 passed,
+    # 793 subtests) and 3 of its 4 identity shapes go 1/2 -> 2/2 — a self-approver
+    # reaching the threshold — with the mode unchanged at `commit-author-excluded`
+    # in every row. The coupling misses it because it binds whether the tuple is
+    # DERIVED to the reported mode, whereas #1297 inserts a FILTERED COPY
+    # downstream, between this derivation and the `check_comment_reviews` call
+    # below. The derivation and the mode still agree, so nothing moves; only a
+    # mutation that also moves a mode (M8/M9, the wave-slice variants) is caught.
+    # #1297 needs the two count assertions its own closing section specifies —
+    # that is its own change, and it must not be closed on the strength of this.
     commit_authors: tuple[CommitAuthorIdentity, ...] = (
         commit_author_identities(commits) if scan_scope == COMMENT_SCAN_NO_BRANCH_AUTHOR else ()
     )
