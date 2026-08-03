@@ -54,6 +54,20 @@ Public API
         inside quotes), strips leading `KEY=value` env-var assignments from
         each segment, and yields the surviving tokens.
 
+    resolve_simple_assignments(command) -> str
+        Bounded assignment-aware pre-pass (main#1195): resolves a leading
+        `NAME=value` assignment (bare literal value only — no `$`,
+        backticks, parens, or whitespace) and substitutes later `$NAME` /
+        `${NAME}` references elsewhere in `command` with that value, so
+        `g=git; $g commit` normalizes to `git commit` before either the
+        indirect-exec detector or the direct commit-segment finder sees it.
+        Returns `command` unchanged when tokenize() fails or no qualifying
+        assignment is found — can only ADD a detection, never remove one.
+        Deliberately does not resolve command substitution (`d=$(date)`),
+        positional/special parameters (`$1`, `$?`, ...), or multi-word/prose
+        values — see the module comment above the implementation for the
+        false-positive this excludes.
+
     iter_command_segments_ast(command) -> list[list[str]] | None
         Structural (bashlex) alternative to tokenize + iter_command_segments:
         parses `command` into a real Bash AST and returns every
@@ -1112,6 +1126,130 @@ def _strip_leading_env_assignments(segment: list[str]) -> list[str]:
     while i < len(segment) and _ENV_ASSIGN_RE.match(segment[i]):
         i += 1
     return segment[i:]
+
+
+# ---------------------------------------------------------------------------
+# Assignment-aware pre-pass (main#1195)
+# ---------------------------------------------------------------------------
+#
+# `_payload_looks_like_commit` (validate_commit_identity) and the direct
+# `git ... commit` finder (`find_git_subcommand`) both require the literal
+# token `git` in command position. Holding the command word in a shell
+# variable defeats BOTH with no interpreter wrapper at all:
+#
+#     g=git; $g commit -m x
+#
+# `$g` sits in command position exactly like a literal `git` would, and the
+# shell resolves it at runtime; neither matcher can see through the
+# indirection (measured on main#1193's head: `_payload_looks_like_commit`
+# returns False on this exact string, and the direct-typed form with no
+# wrapper at all is likewise allowed).
+#
+# This is a BOUNDED pre-pass, not general shell evaluation. It resolves only
+# a LEADING run of `NAME=value` tokens at a segment's start (the same shape
+# `_strip_leading_env_assignments` already recognises — one segment, one
+# leading run) whose value is a bare literal, and substitutes later `$NAME`
+# / `${NAME}` references anywhere in the command with that literal value.
+# Deliberately does NOT resolve:
+#   - command substitution (`d=$(date)`) — the value fails the
+#     literal-charset check below, so `d` is never added to the map and a
+#     later `$d` is left untouched. This is the guard against exactly the
+#     false-positive shape the issue calls out: `d=$(date); echo $d` is an
+#     ordinary shape and must not block.
+#   - positional/special parameters (`$1`, `$?`, `$@`, `$$`, ...) — the
+#     capture regex requires a name starting with a letter or underscore, so
+#     these never match as an assignment NAME in the first place.
+#   - multi-word / prose values (`msg="please git commit this later"`) — a
+#     quoted value survives shlex de-quoting as ONE token, so a value
+#     containing a space is caught and rejected by the literal-charset check
+#     (values in this module's charset never contain whitespace). Without
+#     this exclusion, resolving `$msg` inside an unrelated `echo $msg` would
+#     manufacture a `git ... commit` bridge out of prose that was never
+#     going to run a commit — a false positive of exactly the class the
+#     issue warns a false positive here is an outage.
+#   - `$1`-style arrays, `eval`-of-a-variable, and command substitution of
+#     the COMMAND WORD itself (`$(printf git) commit`) — out of scope per
+#     the issue; same family, strictly harder.
+#
+# Applied ONCE, on the raw command, before either the indirect-exec detector
+# or the direct commit-segment finder run — a single pre-pass point rather
+# than teaching two independent matchers the same resolution. main#1152's
+# repeated lesson is exactly this: two places answering the same question
+# independently drift. `resolve_simple_assignments` returns the command
+# UNCHANGED whenever no qualifying assignment is found (the overwhelming
+# majority of commands), so it can only ever ADD a detection, never remove
+# one, and is a no-op for every pre-existing passing shape.
+_SIMPLE_LITERAL_VALUE_RE = re.compile(r"^[A-Za-z0-9_./:@%+-]+$")
+
+# `$NAME` or `${NAME}` — a name starting with a letter/underscore, same
+# identifier shape `_ENV_ASSIGN_RE` requires on the assignment side. Digits-
+# leading references (`$1`, `$2`, ...) and single-punctuation specials
+# (`$?`, `$@`, `$$`, `$*`, `$#`) never match this pattern, by construction.
+_VAR_REF_RE = re.compile(r"\$\{(?P<name_braced>[A-Za-z_]\w*)\}|\$(?P<name_bare>[A-Za-z_]\w*)\b")
+
+
+def resolve_simple_assignments(command: str) -> str:
+    """Resolve simple literal `NAME=value` assignments before matching (main#1195).
+
+    Scans every pipeline segment (split on `;`, `&&`, `||`, `|` — the same
+    `_SEGMENT_OPS` set `iter_command_segments` splits on) for a LEADING run
+    of `NAME=value` tokens whose value is a bare literal (see the module
+    comment above for the exact exclusions), then substitutes later `$NAME`
+    / `${NAME}` references anywhere in `command` with the resolved value.
+
+    Returns `command` unchanged when `tokenize()` fails (this pre-pass never
+    manufactures a NEW parse failure — the existing `_PARSE_FAILURE`
+    fail-closed path in the caller already handles unparseable input) or
+    when no qualifying assignment is found.
+
+    Tokenizes `normalize_command_separators(command)`, NOT `command` itself
+    (measured defect, fixed before this function's first release): shlex
+    only recognises `;`/`|`/`&&`/`||` as standalone tokens when they are
+    ALREADY surrounded by whitespace, so the issue's own primary shape,
+    `g=git; $g commit -m x` (no space before `;`), tokenizes `g=git;` as ONE
+    token. The trailing `;` then lands inside the captured value ("git;"),
+    fails the literal-charset check below, and `g` is silently never
+    resolved — reintroducing the exact bug this function exists to close.
+    `normalize_command_separators` is quote-aware and pads every unquoted
+    separator with spaces first, so segmentation is correct regardless of
+    the operator's original spacing. Substitution is still applied to the
+    ORIGINAL `command` text — normalization only adds whitespace around
+    operators, never changes a token's value, so the assignment map built
+    from the normalized tokens is valid for substitution into either string.
+    """
+    tokens = tokenize(normalize_command_separators(command))
+    if tokens is None:
+        return command
+
+    segments: list[list[str]] = []
+    cur: list[str] = []
+    for tok in tokens:
+        if tok in _SEGMENT_OPS:
+            if cur:
+                segments.append(cur)
+            cur = []
+            continue
+        cur.append(tok)
+    if cur:
+        segments.append(cur)
+
+    assignments: dict[str, str] = {}
+    for segment in segments:
+        i = 0
+        while i < len(segment) and _ENV_ASSIGN_RE.match(segment[i]):
+            name, _eq, value = segment[i].partition("=")
+            if _SIMPLE_LITERAL_VALUE_RE.match(value):
+                assignments[name] = value
+            i += 1
+
+    if not assignments:
+        return command
+
+    def _substitute(m: re.Match[str]) -> str:
+        name = m.group("name_braced") or m.group("name_bare")
+        return assignments.get(name, m.group(0))
+
+    return _VAR_REF_RE.sub(_substitute, command)
 
 
 def bashlex_available() -> bool:

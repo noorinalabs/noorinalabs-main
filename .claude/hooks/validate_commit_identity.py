@@ -118,6 +118,7 @@ from _shell_parse import (  # noqa: E402
     iter_command_segments,
     iter_command_segments_ast,
     iter_interpreter_invocations,
+    resolve_simple_assignments,
     resolve_tool_cwd,
     strip_data_heredocs,
     strip_heredocs,
@@ -404,10 +405,25 @@ _INNER_COMMIT_RE = re.compile(
 
 
 def _payload_looks_like_commit(payload: str) -> bool:
-    """Return True if the (already-extracted) inner payload contains git commit."""
+    """Return True if the (already-extracted) inner payload contains git commit.
+
+    main#1195: the payload itself may be a compound mini-script (a `bash -c`
+    argument, a heredoc body, an `eval` argument, ...) carrying its OWN
+    `NAME=value; $NAME commit` indirection — the top-level
+    `resolve_simple_assignments` pass in `check()` only sees the OUTER
+    command, and an outer-quoted payload is one opaque token there (it fails
+    the literal-value check because it contains whitespace, so it is never
+    treated as an outer assignment). Applying the same bounded resolution
+    HERE, on the extracted payload text itself, is what makes
+    `bash -c 'g=git; $g commit -m x'` resolve the same way the unwrapped
+    `g=git; $g commit -m x` does — one shared resolver, applied at both the
+    outer-command choke point and this inner-payload choke point, rather
+    than two independent copies of the same logic (main#1152's drift
+    lesson).
+    """
     if not payload:
         return False
-    return bool(_INNER_COMMIT_RE.search(strip_heredocs(payload)))
+    return bool(_INNER_COMMIT_RE.search(resolve_simple_assignments(strip_heredocs(payload))))
 
 
 def _strip_outer_quotes(s: str) -> str:
@@ -654,12 +670,22 @@ def check(input_data: dict) -> dict | None:
     command = input_data.get("tool_input", {}).get("command", "")
     cwd = resolve_tool_cwd(input_data)
 
+    # main#1195: assignment-aware pre-pass. `g=git; $g commit -m x` needs no
+    # interpreter wrapper at all — `$g` sits in command position exactly
+    # like a literal `git` would, and both the indirect-exec detector below
+    # and `_find_commit_segment` require the literal token `git`. Resolving
+    # simple literal assignments FIRST, once, means both matchers see
+    # `git commit -m x` and neither needs its own copy of this logic. Only
+    # this resolved copy is used for detection; `command` (the original,
+    # as typed) is still what gets logged in a block reason.
+    resolved_command = resolve_simple_assignments(command)
+
     # #475 fix 2: indirect-exec bypass detection. Runs BEFORE the segment
     # tokenizer because wrappers like `printf '…git commit…' | bash` and
     # `bash <script>` hide the actual git invocation from the outer-command
     # parser — if we let `_find_commit_segment` decide first it would return
     # None and the command would slip through unvalidated.
-    indirect_shape = _detect_indirect_commit(command, cwd=cwd)
+    indirect_shape = _detect_indirect_commit(resolved_command, cwd=cwd)
     if indirect_shape is not None:
         result = {
             "decision": "block",
@@ -683,7 +709,7 @@ def check(input_data: dict) -> dict | None:
         log_pretooluse_block("validate_commit_identity", command, result["reason"])
         return result
 
-    commit_segment = _find_commit_segment(command)
+    commit_segment = _find_commit_segment(resolved_command)
     if commit_segment is _PARSE_FAILURE:
         # tokenize() returned None — shlex could not parse the command. Use
         # the regex fallback: if it looks like a git commit, block (fail-closed);
