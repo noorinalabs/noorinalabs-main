@@ -64,6 +64,23 @@ The mechanism, found by the same reviewer a round later and verified against the
 
 The same list allowlisted **`grep`** and omitted **`rg`** — while this org **hard-blocks bare `grep`** (#1008) and mandates `rg`. The list admitted the forbidden tool and blocked the required one. Nobody checked the membership set against the conventions the org already enforces elsewhere.
 
+## The general rule — pair every negative row with a positive one sharing its instrument
+
+Found by mutating the **instrument** rather than the code, which is the move that generalises everything above:
+
+| instrument mutation | what went red | the plain-`sort` (negative) row |
+|---|---|---|
+| marker substitution dead | 6 rows incl. the positive `sort_compress_program` | **stayed green** |
+| passthrough script not executable | `sort_compress_program` | **stayed green** |
+
+**A negative row cannot detect its own instrument breaking** — *"did not run"* is exactly what a dead instrument reports. That is the missing-binary vacuity **without needing a missing binary**, and it holds for every `expect_runs=False` assertion regardless of tooling.
+
+What makes such a row sound is the **pair**: a positive row in the same class, sharing the same instrument, red-sensitive to every break the negative row is blind to. `rg` was admitted because at that commit it had **only negative rows**, so nothing could distinguish "inert" from "not installed."
+
+> **A negative ground-truth row is only trustworthy when a positive row in the same class shares its instrument. A member whose measurement can never fail is equivalent to a member with no measurement.**
+
+That is mechanically checkable — for each allowlist member, does at least one row using the same harness *assert something happens*? — and it subsumes the missing-binary case rather than sitting beside it. Recorded on #1318.
+
 ## How to apply
 
 - **For each member, ask: can *any* invocation of this execute its input?** Not "is the usual invocation safe." Flags worth probing: `--compress-program`, `-e`/`--exec`, `--filter`, `-f -`, `--random-source`, anything taking a *command* or a *program* as a value.
