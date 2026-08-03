@@ -1109,10 +1109,20 @@ class CheckEndToEndTests(_NoContentBindingHarness):
             ) as ccr_mock,
         ):
             result = hook.check(self._input("gh pr merge 100 --squash"))
-        self.assertIsNone(
-            result,
+        # The merge is ALLOWED, which is what #294 is about. As of #1211 a
+        # wave-merge ref — a no-branch-author ref by construction — carries the
+        # scan-mode disclosure with that allow, so the outcome is an explicit
+        # `{"decision": "allow", …}` rather than the bare `None` this test
+        # originally used as its proxy for "allowed". Assert the decision, not
+        # the proxy; asserting `is None` here would now be asserting the ABSENCE
+        # of the #1211 disclosure, which is not this test's subject.
+        assert result is not None, "wave-merge PR with 2 Approveds must not block"
+        self.assertEqual(
+            result["decision"],
+            "allow",
             "wave-merge PR with 2 charter-format Approveds should allow merge",
         )
+        self.assertIn("WITHOUT self-review exclusion", result["systemMessage"])
         ccr_mock.assert_called_once()
         # Empty-string sentinel is what permits any non-empty reviewer name.
         call_args = ccr_mock.call_args
@@ -5058,6 +5068,216 @@ class CommitAuthorBlockDiagnosticTests(_ResolveOverFakeCommentsHarness):
         self.assertNotIn("COMMIT IDENTITY", unavailable)
         self.assertIn("WITHOUT self-review exclusion", unavailable)
         self.assertNotIn("WITHOUT self-review exclusion", excluded)
+
+
+class AllowPathScanDisclosureTests(_ResolveOverFakeCommentsHarness):
+    """#1211: the ALLOW path must say when self-review exclusion was unavailable.
+
+    #1206/#1210 made the scan mode loud on the paths that STOP a merge — the
+    paths where the missing discriminator did not change the outcome. The
+    exposure only bites when the gate PASSES: a persona's own verdict plus one
+    genuine reviewer reaches 2/2 on a ref naming nobody, and pre-#1211 the hook
+    returned `None` and said nothing. These pin that the disclosure now rides
+    the allow path, that it does NOT fire when exclusion was actually applied,
+    and — the case a naive fix silently breaks — that it COMPOSES with the
+    main#1055 unparseable-TechDebt advisory instead of racing it.
+    """
+
+    HEAD_REF = "dependabot/docker/x-1.2.3"
+
+    def _allow_result(self, verdicts, head_ref=None):
+        input_data = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "gh pr merge 691 --repo noorinalabs/noorinalabs-main"},
+        }
+        with (
+            mock.patch.object(
+                hook, "get_pr_data", return_value=self._pr_data(head_ref or self.HEAD_REF)
+            ),
+            mock.patch.object(hook, "resolve_review_verdicts", return_value=verdicts),
+            mock.patch.object(hook, "log_pretooluse_block") as mock_log,
+        ):
+            result = hook.check(input_data)
+        # A merge that passes the threshold must never be logged as a block, no
+        # matter how many advisories rode along with it.
+        mock_log.assert_not_called()
+        return result
+
+    def _verdicts(self, comment_scan, *, unparseable=(), identities=(), head_ref=None):
+        """Two distinct roster reviewers, nothing missing — a clean 2/2 ALLOW.
+
+        Only `comment_scan` / `tech_debt_unparseable` vary, so any difference in
+        the returned message is attributable to those and nothing else.
+        """
+        return hook.ReviewVerdicts(
+            number=691,
+            head_ref=head_ref or self.HEAD_REF,
+            labels=[],
+            branch_author_lastname=None,
+            content_sha="837c272a",
+            content_ts=None,
+            formal_reviewers=set(),
+            comment_reviewers={"aino virtanen", "nino kavtaradze"},
+            non_roster_requestors=set(),
+            roster_comment_reviewers={"aino virtanen", "nino kavtaradze"},
+            roster_names=set(self.ROSTER),
+            distinct_reviewers={"aino virtanen", "nino kavtaradze"},
+            stale_verdicts_comment=[],
+            stale_verdicts_formal=[],
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=[],
+            tech_debt_unparseable=list(unparseable),
+            wave_bootstrap_exception=False,
+            comment_scan=comment_scan,
+            commit_author_identities=identities,
+        )
+
+    def test_allowed_merge_discloses_that_exclusion_was_unavailable(self):
+        """The core #1211 fix: a passing gate on a no-branch-author ref must
+        return an ALLOW carrying the disclosure, not a bare `None`.
+
+        Pre-fix this returned `None` — the `assertIsNotNone` alone is the
+        kill-shot, and the content assertions pin WHAT is disclosed so a future
+        edit cannot satisfy the test with an empty or unrelated message.
+        """
+        result = self._allow_result(self._verdicts(hook.COMMENT_SCAN_NO_BRANCH_AUTHOR))
+
+        self.assertIsNotNone(
+            result, "an allowed merge with no self-review exclusion must disclose that"
+        )
+        assert result is not None  # narrow `dict | None` for mypy
+        self.assertEqual(result["decision"], "allow", "the disclosure must NOT block the merge")
+        message = result["systemMessage"]
+        # Names the ref, so the operator can check the classification themselves.
+        self.assertIn(self.HEAD_REF, message)
+        # States the fact that matters: no verdict was excluded as a self-review.
+        self.assertIn("WITHOUT self-review exclusion", message)
+        self.assertIn("including any posted by whoever wrote this branch", message)
+        # Reports the count the missing discriminator applied to.
+        self.assertIn("2/2", message)
+        # Proportionate: an advisory, not a verdict on the PR's validity.
+        self.assertNotIn("BLOCKED", message)
+        self.assertNotIn("WARNING", message)
+
+    def test_exclusion_applied_modes_stay_silent_on_the_allow_path(self):
+        """The negative control the positive test cannot supply on its own.
+
+        Applying exclusion can only REMOVE verdicts, so it can never manufacture
+        a pass — there is nothing to disclose. Both exclusion-active modes must
+        return `None`, so a change that emitted the note unconditionally fails
+        here just as loudly as one that emitted it never.
+        """
+        by_ref = self._allow_result(
+            self._verdicts(hook.COMMENT_SCAN_AUTHOR_EXCLUDED, head_ref="A.Virtanen/1211-x"),
+            head_ref="A.Virtanen/1211-x",
+        )
+        by_commit = self._allow_result(
+            self._verdicts(
+                hook.COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED,
+                identities=(
+                    hook.CommitAuthorIdentity(
+                        lastname="Virtanen", initial="a", display="Aino Virtanen"
+                    ),
+                ),
+            )
+        )
+        self.assertIsNone(by_ref, "ref-derived exclusion was applied — nothing to disclose")
+        self.assertIsNone(by_commit, "commit-derived exclusion was applied — nothing to disclose")
+
+    def test_both_advisories_survive_when_both_conditions_hold(self):
+        """THE composition test — the case a second early `return` breaks.
+
+        `check()` may emit exactly one `systemMessage`. main#1055's
+        unparseable-TechDebt note and #1211's scan disclosure are independent
+        facts that can both be true of one PR, so bolting the new advisory on as
+        its own early return would make whichever ran first silently swallow the
+        other. Both texts must appear in the single returned message.
+        """
+        result = self._allow_result(
+            self._verdicts(
+                hook.COMMENT_SCAN_NO_BRANCH_AUTHOR,
+                unparseable=[("Nino Kavtaradze", "filed later")],
+            )
+        )
+
+        assert result is not None, "both advisories must produce a message"
+        self.assertEqual(result["decision"], "allow")
+        message = result["systemMessage"]
+        # main#1055 advisory survived, verbatim payload included.
+        self.assertIn("not parseable as issue reference(s)", message)
+        self.assertIn("filed later", message)
+        self.assertIn("Nino Kavtaradze", message)
+        # #1211 advisory survived alongside it.
+        self.assertIn("WITHOUT self-review exclusion", message)
+        self.assertIn(self.HEAD_REF, message)
+        # Two distinct advisories, joined — not one truncated or overwritten.
+        self.assertEqual(message.count("NOTE: PR"), 2, f"expected 2 joined advisories: {message!r}")
+
+    def test_each_advisory_still_stands_alone(self):
+        """Composition must not have made either advisory depend on the other.
+
+        The TechDebt note must be emitted with the scan mode exclusion-active
+        (so only it fires), and its text must be exactly what it was before the
+        accumulator — pinning that #1211 refactored the return shape without
+        rewording main#1055's message.
+        """
+        td_only = self._allow_result(
+            self._verdicts(
+                hook.COMMENT_SCAN_AUTHOR_EXCLUDED,
+                unparseable=[("Nino Kavtaradze", "filed later")],
+                head_ref="A.Virtanen/1211-x",
+            ),
+            head_ref="A.Virtanen/1211-x",
+        )
+        assert td_only is not None, "main#1055 advisory must still fire on its own"
+        self.assertEqual(td_only["decision"], "allow")
+        self.assertIn("filed later", td_only["systemMessage"])
+        self.assertEqual(td_only["systemMessage"].count("NOTE: PR"), 1)
+        self.assertNotIn("self-review exclusion", td_only["systemMessage"])
+
+        scan_only = self._allow_result(self._verdicts(hook.COMMENT_SCAN_NO_BRANCH_AUTHOR))
+        assert scan_only is not None, "#1211 advisory must still fire on its own"
+        self.assertEqual(scan_only["systemMessage"].count("NOTE: PR"), 1)
+        self.assertNotIn("filed later", scan_only["systemMessage"])
+
+    def test_clean_pr_still_returns_none(self):
+        """No advisory condition, no message. The accumulator must not have
+        turned every allowed merge into a chatty one — `None` is the contract
+        `main()` reads as 'exit 0, say nothing'."""
+        self.assertIsNone(
+            self._allow_result(
+                self._verdicts(hook.COMMENT_SCAN_AUTHOR_EXCLUDED, head_ref="A.Virtanen/1211-x"),
+                head_ref="A.Virtanen/1211-x",
+            )
+        )
+
+    def test_disclosure_never_relaxes_or_tightens_the_gate(self):
+        """The advisory is orthogonal to the decision (#1211's stated scope).
+
+        Same NO_BRANCH_AUTHOR ref, two counts: 1/2 must still BLOCK and 2/2 must
+        still ALLOW. Without this, a disclosure implemented as a `decision` key
+        on the wrong branch could pass every content assertion above while
+        letting a 1/2 PR through.
+        """
+        short = self._verdicts(hook.COMMENT_SCAN_NO_BRANCH_AUTHOR)
+        short.distinct_reviewers = {"aino virtanen"}
+        input_data = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "gh pr merge 691 --repo noorinalabs/noorinalabs-main"},
+        }
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data(self.HEAD_REF)),
+            mock.patch.object(hook, "resolve_review_verdicts", return_value=short),
+            mock.patch.object(hook, "log_pretooluse_block"),
+        ):
+            blocked = hook.check(input_data)
+        assert blocked is not None
+        self.assertEqual(blocked["decision"], "block")
+        self.assertIn("1/2 required peer reviews", blocked["reason"])
+
+        allowed = self._allow_result(self._verdicts(hook.COMMENT_SCAN_NO_BRANCH_AUTHOR))
+        assert allowed is not None
+        self.assertEqual(allowed["decision"], "allow")
 
 
 if __name__ == "__main__":
