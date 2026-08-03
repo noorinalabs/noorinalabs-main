@@ -39,18 +39,27 @@ printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(pwd)" > .claude/.consulted/
 
 #### 1a. Semantic overlay (checksums.json)
 
-Read `ontology/checksums.json` and count dirty files (where `last_tracked != last_resolved`):
+Ask the shared reader for the dirty count. **Do not `cat` the file and compare fields by hand (#1142)** — the predicate is `last_tracked != last_resolved`, the field names are not guessable, and every way of getting the read wrong returns a plausible `0`, which is also the healthy value. Two consecutive sessions reported a wrong `0` that way; a staleness reporter that under-reports staleness is worse than no reporter.
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-cat "$REPO_ROOT/ontology/checksums.json"
+python3 "$REPO_ROOT/.claude/lib/checksums_io.py" status
 ```
 
-Report semantic overlay staleness:
-- **0 dirty files**: "Semantic overlay: current."
+Report semantic overlay staleness from the counts it prints — and branch on its **exit code**, not on the shape of the output:
+
+| Exit | Meaning | Report |
+|---|---|---|
+| 0 | clean | "Semantic overlay: current." |
+| 1 | dirty and/or malformed | Use the bands below |
+| 3 | ledger missing/unparseable | "Semantic overlay: checksums.json unreadable — cannot assess staleness." **Never** report this as current |
+
+Bands for a dirty ledger:
 - **1–5 dirty files**: "{N} files pending — semantic overlay slightly behind; run `/ontology-rebuild`."
 - **6–15 dirty files**: "{N} files pending — consider running `/ontology-rebuild`."
 - **16+ dirty files**: "{N} files pending — strongly recommend `/ontology-rebuild` before starting work."
+
+**Malformed entries** (unrecognized shape — a missing `last_tracked`, a `null` hash) are counted separately and block "current" deliberately: an entry that cannot be classified is unknown state, not resolved state. Report the count and name the paths; `/ontology-rebuild` step 1 documents the repair.
 
 **Important:** The librarian does NOT trigger the resolver. It reports staleness so the user can decide.
 

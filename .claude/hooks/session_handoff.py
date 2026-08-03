@@ -26,6 +26,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 _LIB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib")
 sys.path.insert(0, os.path.abspath(_LIB_DIR))
+# `checksums_io` is the ONE implementation of the dirty predicate (#1142) —
+# `_get_ontology_staleness` below consumes it instead of re-deriving the
+# `last_tracked != last_resolved` comparison.
+import checksums_io  # noqa: E402
 from org_repos import ALL_REPOS, ORG  # noqa: E402
 
 # Project memory is version-controlled in-repo (#732 relocation) so it travels
@@ -197,21 +201,32 @@ def _get_open_issues() -> list[str]:
 
 
 def _get_ontology_staleness() -> str:
-    """Check ontology checksums for dirty files."""
+    """Check ontology checksums for dirty files.
+
+    Delegates to ``checksums_io.read_status`` (#1142) instead of re-deriving
+    ``last_tracked != last_resolved``. The handoff this writes is what the next
+    session reads first, so a wrong "Ontology is current (0 dirty files)" here
+    is a wrong belief carried across a session boundary — which is exactly how
+    the #1142 miscount propagated into a handoff in the first place.
+    """
     checksums_file = REPO_ROOT / "ontology" / "checksums.json"
     if not checksums_file.exists():
         return "No ontology checksums found"
     try:
-        with open(checksums_file) as f:
-            data = json.load(f)
-        files = data.get("files", {})
-        dirty = [k for k, v in files.items() if v.get("last_tracked") != v.get("last_resolved")]
-        if not dirty:
-            return "Ontology is current (0 dirty files)"
-        suffix = "..." if len(dirty) > 5 else ""
-        return f"Ontology has {len(dirty)} dirty files: {', '.join(dirty[:5])}{suffix}"
-    except (json.JSONDecodeError, OSError):
+        status = checksums_io.read_status(checksums_file)
+    except checksums_io.ChecksumsUnreadable:
         return "Could not read checksums"
+    if status.clean:
+        return "Ontology is current (0 dirty files)"
+    parts = []
+    if status.dirty:
+        suffix = "..." if len(status.dirty) > 5 else ""
+        parts.append(f"{len(status.dirty)} dirty files: {', '.join(status.dirty[:5])}{suffix}")
+    if status.malformed:
+        names = [rel for rel, _ in status.malformed[:5]]
+        suffix = "..." if len(status.malformed) > 5 else ""
+        parts.append(f"{len(status.malformed)} malformed entries: {', '.join(names)}{suffix}")
+    return f"Ontology has {'; '.join(parts)}"
 
 
 def _wave_phase_started(data: dict) -> tuple[str, str, str]:

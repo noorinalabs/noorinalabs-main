@@ -267,5 +267,63 @@ class HandoffPathLocationTests(unittest.TestCase):
         self.assertFalse(hasattr(hook, "MEMORY_INDEX"))
 
 
+class OntologyStalenessTests(unittest.TestCase):
+    """#1142: the handoff's ontology line consumes the shared predicate.
+
+    This line is what the NEXT session reads first, so a wrong "0 dirty files"
+    here is a wrong belief carried across a session boundary — which is how the
+    original miscount propagated into a handoff and was then re-litigated as a
+    suspected "instrument disagreement".
+    """
+
+    def _with_checksums(self, payload: str) -> str:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "ontology").mkdir()
+            (root / "ontology" / "checksums.json").write_text(payload, encoding="utf-8")
+            original = hook.REPO_ROOT
+            try:
+                hook.REPO_ROOT = root
+                return hook._get_ontology_staleness()
+            finally:
+                hook.REPO_ROOT = original
+
+    def test_clean_ledger_reports_current(self) -> None:
+        payload = json.dumps(
+            {"version": 1, "files": {"a.md": {"last_tracked": "1", "last_resolved": "1"}}}
+        )
+        self.assertEqual(self._with_checksums(payload), "Ontology is current (0 dirty files)")
+
+    def test_dirty_entry_is_named(self) -> None:
+        payload = json.dumps(
+            {"version": 1, "files": {"a.md": {"last_tracked": "1", "last_resolved": "2"}}}
+        )
+        result = self._with_checksums(payload)
+        self.assertIn("1 dirty files", result)
+        self.assertIn("a.md", result)
+
+    def test_malformed_entry_is_not_reported_as_current(self) -> None:
+        """The exact committed shape that stayed invisible: `last_resolved: null`."""
+        payload = json.dumps(
+            {
+                "version": 1,
+                "files": {
+                    "a.md": {"last_tracked": "1", "last_resolved": "1"},
+                    "b.md": {"last_resolved": None, "resolved_at": "2026-06-14T00:16:00Z"},
+                },
+            }
+        )
+        result = self._with_checksums(payload)
+        self.assertNotIn("current", result)
+        self.assertIn("1 malformed entries", result)
+        self.assertIn("b.md", result)
+
+    def test_unparseable_ledger_is_not_reported_as_current(self) -> None:
+        result = self._with_checksums("{not json")
+        self.assertEqual(result, "Could not read checksums")
+
+
 if __name__ == "__main__":
     unittest.main()

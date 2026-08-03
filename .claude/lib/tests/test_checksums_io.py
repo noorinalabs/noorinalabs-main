@@ -10,6 +10,8 @@ byte-stability contract is enforced by code on BOTH writers, not just one.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -37,6 +39,20 @@ def _tmp_file(contents: str):
 def _tmp_dir():
     with tempfile.TemporaryDirectory() as tmpdir:
         yield Path(tmpdir)
+
+
+@contextmanager
+def _capture_stdout():
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        yield buf
+
+
+@contextmanager
+def _capture_stderr():
+    buf = io.StringIO()
+    with contextlib.redirect_stderr(buf):
+        yield buf
 
 
 class ReadChecksumsTests(unittest.TestCase):
@@ -272,7 +288,9 @@ class PruneCliTests(unittest.TestCase):
             files["ontology/domain.yaml"] = {"last_tracked": "s"}
             files["da-wt-490/src/cli.py"] = {}
             path = self._seed(root, files)
-            rc = checksums_io.main(["checksums_io.py", "prune", "--checksums", str(path)])
+            rc = checksums_io.main(
+                ["checksums_io.py", "prune", "--checksums", str(path), "--apply"]
+            )
             self.assertEqual(rc, 0)
             data = json.loads(path.read_text(encoding="utf-8"))
             self.assertNotIn("da-wt-490/src/cli.py", data["files"])
@@ -287,7 +305,10 @@ class PruneCliTests(unittest.TestCase):
             files["gone.md"] = {}
             path = self._seed(root, files)
             self.assertEqual(
-                checksums_io.main(["checksums_io.py", "prune", "--checksums", str(path)]), 0
+                checksums_io.main(
+                    ["checksums_io.py", "prune", "--checksums", str(path), "--apply"]
+                ),
+                0,
             )
             data = json.loads(path.read_text(encoding="utf-8"))
             self.assertIn("kept.md", data["files"])
@@ -323,6 +344,67 @@ class PruneCliTests(unittest.TestCase):
                 ["checksums_io.py", "prune", "--checksums", str(path), "--dry-run"]
             )
             self.assertEqual(rc, 0)
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_bare_prune_previews_and_does_not_write(self) -> None:
+        """#1137: the destructive default is inverted — no flag means no write.
+
+        This is the whole issue. A `prune` run from muscle memory, or a
+        copy-paste that dropped `--dry-run`, used to mutate a version-
+        controlled artifact on the strength of an on-disk existence test whose
+        own docstring flags a documented false-positive scenario.
+        """
+        with _tmp_dir() as root:
+            files = self._ballast(root)
+            files["gone.md"] = {"last_tracked": "s"}
+            path = self._seed(root, files)
+            before = path.read_bytes()
+            rc = checksums_io.main(["checksums_io.py", "prune", "--checksums", str(path)])
+            self.assertEqual(rc, 0)
+            self.assertEqual(path.read_bytes(), before)
+            self.assertIn("gone.md", json.loads(path.read_text(encoding="utf-8"))["files"])
+
+    def test_preview_output_names_the_apply_flag(self) -> None:
+        """A preview must tell the reader how to proceed, or the flip just
+        strands whoever ran the old spelling."""
+        with _tmp_dir() as root:
+            files = self._ballast(root)
+            files["gone.md"] = {"last_tracked": "s"}
+            path = self._seed(root, files)
+            with _capture_stdout() as out:
+                checksums_io.main(["checksums_io.py", "prune", "--checksums", str(path)])
+        printed = out.getvalue()
+        self.assertIn("Would prune", printed)
+        self.assertIn("--apply", printed)
+
+    def test_apply_output_says_pruned_not_would_prune(self) -> None:
+        with _tmp_dir() as root:
+            files = self._ballast(root)
+            files["gone.md"] = {"last_tracked": "s"}
+            path = self._seed(root, files)
+            with _capture_stdout() as out:
+                checksums_io.main(["checksums_io.py", "prune", "--checksums", str(path), "--apply"])
+        printed = out.getvalue()
+        self.assertIn("Pruned 1 orphan entry", printed)
+        self.assertNotIn("Would prune", printed)
+
+    def test_dry_run_plus_apply_is_a_usage_error(self) -> None:
+        """Contradictory flags refuse rather than resolve by silent precedence.
+
+        Either precedence is defensible and neither is guessable — the same
+        shape as the undocumented `--checksums`-must-come-first rule that
+        already bit once. Refusing costs one re-run; guessing wrong in the
+        write direction costs the artifact.
+        """
+        with _tmp_dir() as root:
+            files = self._ballast(root)
+            files["gone.md"] = {"last_tracked": "s"}
+            path = self._seed(root, files)
+            before = path.read_bytes()
+            rc = checksums_io.main(
+                ["checksums_io.py", "prune", "--checksums", str(path), "--dry-run", "--apply"]
+            )
+            self.assertEqual(rc, 2)
             self.assertEqual(path.read_bytes(), before)
 
     def test_no_orphans_does_not_rewrite_the_file(self) -> None:
@@ -390,7 +472,10 @@ class PruneCliTests(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual(
-                checksums_io.main(["checksums_io.py", "prune", "--checksums", str(path)]), 0
+                checksums_io.main(
+                    ["checksums_io.py", "prune", "--checksums", str(path), "--apply"]
+                ),
+                0,
             )
             raw = path.read_text(encoding="utf-8")
             self.assertIn(description, raw)
@@ -474,16 +559,35 @@ class PruneGuardTests(unittest.TestCase):
         with _tmp_dir() as root:
             path = self._seed(root, n_present=2, n_missing=8)
             rc = checksums_io.main(
-                ["checksums_io.py", "prune", "--checksums", str(path), "--force"]
+                ["checksums_io.py", "prune", "--checksums", str(path), "--force", "--apply"]
             )
             self.assertEqual(rc, 0)
             self.assertEqual(len(json.loads(path.read_text(encoding="utf-8"))["files"]), 2)
+
+    def test_force_alone_still_only_previews(self) -> None:
+        """--force overrides the GUARDS, not the preview default (#1137).
+
+        The two axes are orthogonal: --force says "I know this root is
+        unusual", --apply says "write it". Collapsing them would make the
+        escape hatch for a false-positive guard also the escape hatch for the
+        write, which is precisely the pairing that should stay hard.
+        """
+        with _tmp_dir() as root:
+            path = self._seed(root, n_present=2, n_missing=8)
+            before = path.read_bytes()
+            rc = checksums_io.main(
+                ["checksums_io.py", "prune", "--checksums", str(path), "--force"]
+            )
+            self.assertEqual(rc, 0)
+            self.assertEqual(path.read_bytes(), before)
 
     def test_under_threshold_prune_still_proceeds(self) -> None:
         """The guard must not block a legitimate steady-state prune."""
         with _tmp_dir() as root:
             path = self._seed(root, n_present=19, n_missing=1)
-            rc = checksums_io.main(["checksums_io.py", "prune", "--checksums", str(path)])
+            rc = checksums_io.main(
+                ["checksums_io.py", "prune", "--checksums", str(path), "--apply"]
+            )
             self.assertEqual(rc, 0)
             self.assertEqual(len(json.loads(path.read_text(encoding="utf-8"))["files"]), 19)
 
@@ -655,6 +759,313 @@ class MainCliTests(unittest.TestCase):
 
     def test_checksums_flag_missing_value_is_usage_error(self) -> None:
         self.assertEqual(checksums_io.main(["checksums_io.py", "mark-resolved", "--checksums"]), 2)
+
+
+class ClassifyEntryTests(unittest.TestCase):
+    """#1142: the ONE dirty predicate, and its third state.
+
+    Every historical wrong read of this ledger produced a comparison that
+    quietly evaluated to "equal" — a key that does not exist, a nesting level
+    that is not there — so the failure mode was a plausible 0, never an
+    error. `classify_entry` exists so nobody re-derives the comparison, and
+    MALFORMED exists so a shape it does not recognize cannot land in "clean".
+    """
+
+    def test_differing_hashes_are_dirty(self) -> None:
+        state, detail = checksums_io.classify_entry({"last_tracked": "aaa", "last_resolved": "bbb"})
+        self.assertEqual(state, checksums_io.ENTRY_DIRTY)
+        self.assertEqual(detail, "")
+
+    def test_matching_hashes_are_clean(self) -> None:
+        state, _ = checksums_io.classify_entry({"last_tracked": "aaa", "last_resolved": "aaa"})
+        self.assertEqual(state, checksums_io.ENTRY_CLEAN)
+
+    def test_empty_last_resolved_is_dirty_not_malformed(self) -> None:
+        """A freshly (re-)tracked file legitimately carries `last_resolved: ""`.
+
+        The tracker writes that shape on purpose, and `prune_missing`'s
+        docstring documents it as the post-re-tracking state. Treating it as
+        malformed would flag ~every new file; treating it as clean would hide
+        exactly the entries a rebuild needs to process.
+        """
+        state, _ = checksums_io.classify_entry({"last_tracked": "aaa", "last_resolved": ""})
+        self.assertEqual(state, checksums_io.ENTRY_DIRTY)
+
+    def test_missing_both_keys_is_malformed_not_clean(self) -> None:
+        """`.get(...) != .get(...)` compares None != None -> "clean". It is not.
+
+        This is the exact shape of the wrong read recorded in #1142: a
+        comparison against keys that are not in the schema, yielding equality
+        on every entry and a total of 0 dirty.
+        """
+        state, detail = checksums_io.classify_entry({"sha256": "aaa", "tracked_at": "t"})
+        self.assertEqual(state, checksums_io.ENTRY_MALFORMED)
+        self.assertIn("last_tracked", detail)
+        self.assertIn("last_resolved", detail)
+
+    def test_missing_only_last_tracked_is_malformed(self) -> None:
+        """The real in-the-wild case: `{"last_resolved": null, "resolved_at": ...}`.
+
+        Hand-written into the committed ledger by a pre-#1042 resolver pass
+        and invisible to every reader since, because None != None is False.
+        """
+        state, detail = checksums_io.classify_entry(
+            {"last_resolved": None, "resolved_at": "2026-06-14T00:16:00Z"}
+        )
+        self.assertEqual(state, checksums_io.ENTRY_MALFORMED)
+        self.assertIn("missing last_tracked", detail)
+
+    def test_null_hash_is_malformed_not_clean(self) -> None:
+        """Two nulls compare equal. Equal is not the same as resolved."""
+        state, detail = checksums_io.classify_entry({"last_tracked": None, "last_resolved": None})
+        self.assertEqual(state, checksums_io.ENTRY_MALFORMED)
+        self.assertIn("expected a string", detail)
+
+    def test_non_dict_entry_is_malformed(self) -> None:
+        for value in ("a string", 42, None, ["list"]):
+            with self.subTest(value=value):
+                state, detail = checksums_io.classify_entry(value)
+                self.assertEqual(state, checksums_io.ENTRY_MALFORMED)
+                self.assertIn("expected an object", detail)
+
+
+class ComputeStatusTests(unittest.TestCase):
+    def test_counts_dirty_and_reports_paths_sorted(self) -> None:
+        status = checksums_io.compute_status(
+            {
+                "files": {
+                    "z.md": {"last_tracked": "1", "last_resolved": "2"},
+                    "a.md": {"last_tracked": "1", "last_resolved": "2"},
+                    "clean.md": {"last_tracked": "1", "last_resolved": "1"},
+                }
+            }
+        )
+        self.assertEqual(status.total, 3)
+        self.assertEqual(status.dirty, ("a.md", "z.md"))
+        self.assertEqual(status.malformed, ())
+        self.assertFalse(status.clean)
+
+    def test_clean_ledger_is_clean(self) -> None:
+        status = checksums_io.compute_status(
+            {"files": {"a.md": {"last_tracked": "1", "last_resolved": "1"}}}
+        )
+        self.assertTrue(status.clean)
+        self.assertEqual((status.total, status.dirty, status.malformed), (1, (), ()))
+
+    def test_empty_ledger_is_clean(self) -> None:
+        status = checksums_io.compute_status({"files": {}})
+        self.assertTrue(status.clean)
+        self.assertEqual(status.total, 0)
+
+    def test_malformed_entry_blocks_clean(self) -> None:
+        """The core #1142 assertion: an unclassifiable entry is NOT clean.
+
+        Everything else is well-formed and resolved, so a reader that folds
+        malformed into clean reports a perfectly healthy ledger here — which
+        is how the real `last_resolved: null` entry stayed invisible for
+        seven weeks.
+        """
+        status = checksums_io.compute_status(
+            {
+                "files": {
+                    "ok.md": {"last_tracked": "1", "last_resolved": "1"},
+                    "broken.md": {"last_resolved": None},
+                }
+            }
+        )
+        self.assertEqual(status.dirty, ())
+        self.assertFalse(status.clean)
+        self.assertEqual([rel for rel, _ in status.malformed], ["broken.md"])
+
+    def test_missing_files_key_raises_rather_than_reporting_zero(self) -> None:
+        """The legacy `data.get("files", data)` fallback turned a shape
+        mismatch into a plausible zero. Raise instead."""
+        with self.assertRaises(checksums_io.ChecksumsUnreadable):
+            checksums_io.compute_status({"version": 1})
+
+    def test_non_dict_files_raises(self) -> None:
+        with self.assertRaises(checksums_io.ChecksumsUnreadable):
+            checksums_io.compute_status({"files": ["a.md"]})
+
+
+class StrictReadTests(unittest.TestCase):
+    """A reader must never turn "could not read" into "0 dirty" (#1142)."""
+
+    def test_missing_file_raises_instead_of_defaulting(self) -> None:
+        with self.assertRaises(checksums_io.ChecksumsUnreadable):
+            checksums_io.read_status(Path("/nonexistent/path/checksums.json"))
+
+    def test_invalid_json_raises(self) -> None:
+        with _tmp_file("{not valid json") as path:
+            with self.assertRaises(checksums_io.ChecksumsUnreadable):
+                checksums_io.read_status(path)
+
+    def test_non_object_top_level_raises(self) -> None:
+        with _tmp_file("[1, 2, 3]") as path:
+            with self.assertRaises(checksums_io.ChecksumsUnreadable):
+                checksums_io.read_status(path)
+
+    def test_writers_read_path_still_fails_open(self) -> None:
+        """The fork is deliberate: `read_checksums` must keep failing open.
+
+        It is the PostToolUse tracker hook's read path, and a hook that raises
+        fails the tool call that triggered it. Only the READER side is strict.
+        """
+        self.assertEqual(
+            checksums_io.read_checksums(Path("/nonexistent/path/checksums.json")),
+            {"version": 1, "files": {}},
+        )
+
+    def test_read_status_round_trips_a_real_ledger(self) -> None:
+        with _tmp_file(
+            json.dumps(
+                {
+                    "version": 1,
+                    "files": {
+                        "a.md": {"last_tracked": "1", "last_resolved": "1"},
+                        "b.md": {"last_tracked": "1", "last_resolved": "0"},
+                    },
+                }
+            )
+        ) as path:
+            status = checksums_io.read_status(path)
+        self.assertEqual(status.total, 2)
+        self.assertEqual(status.dirty, ("b.md",))
+
+
+class StatusCliTests(unittest.TestCase):
+    """The reader-facing surface #1142 asks for: total / dirty / dirty paths."""
+
+    @staticmethod
+    def _seed(root: Path, files: dict[str, Any]) -> Path:
+        path = root / "ontology" / "checksums.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"version": 1, "files": files}), encoding="utf-8")
+        return path
+
+    def test_clean_ledger_exits_zero(self) -> None:
+        with _tmp_dir() as root:
+            path = self._seed(root, {"a.md": {"last_tracked": "1", "last_resolved": "1"}})
+            with _capture_stdout() as out:
+                rc = checksums_io.main(["checksums_io.py", "status", "--checksums", str(path)])
+        self.assertEqual(rc, 0)
+        self.assertIn("1 tracked, 0 dirty, 0 malformed", out.getvalue())
+
+    def test_dirty_ledger_reports_count_and_paths(self) -> None:
+        with _tmp_dir() as root:
+            path = self._seed(
+                root,
+                {
+                    "a.md": {"last_tracked": "1", "last_resolved": "1"},
+                    "team/trust_matrix.md": {"last_tracked": "3fe1", "last_resolved": "d35e"},
+                },
+            )
+            with _capture_stdout() as out:
+                rc = checksums_io.main(["checksums_io.py", "status", "--checksums", str(path)])
+        printed = out.getvalue()
+        self.assertEqual(rc, 1)
+        self.assertIn("2 tracked, 1 dirty, 0 malformed", printed)
+        self.assertIn("team/trust_matrix.md", printed)
+
+    def test_malformed_entry_does_not_silently_count_as_clean(self) -> None:
+        """The whole point of #1142, at the CLI boundary.
+
+        One well-formed resolved entry plus one entry the reader cannot
+        classify. A reader that skips what it does not understand prints
+        "0 dirty" and exits 0 — indistinguishable from a healthy ledger, and
+        the caller has no way to notice. This asserts the opposite on all
+        three channels: nonzero exit, a nonzero malformed count, and the
+        offending path named in the output.
+        """
+        with _tmp_dir() as root:
+            path = self._seed(
+                root,
+                {
+                    "ok.md": {"last_tracked": "1", "last_resolved": "1"},
+                    "broken.md": {"last_resolved": None, "resolved_at": "2026-06-14T00:16:00Z"},
+                },
+            )
+            with _capture_stdout() as out:
+                rc = checksums_io.main(["checksums_io.py", "status", "--checksums", str(path)])
+        printed = out.getvalue()
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(rc, 1)
+        self.assertIn("1 malformed", printed)
+        self.assertIn("broken.md", printed)
+        self.assertIn("missing last_tracked", printed)
+        # And it must not be sold as clean anywhere in the report.
+        self.assertNotIn("0 malformed", printed)
+
+    def test_unreadable_ledger_exits_three_not_zero(self) -> None:
+        """Exit 3, never 0 — "I could not read it" is not "it is clean"."""
+        with _tmp_dir() as root:
+            path = root / "ontology" / "checksums.json"
+            with _capture_stdout() as out, _capture_stderr() as err:
+                rc = checksums_io.main(["checksums_io.py", "status", "--checksums", str(path)])
+        self.assertEqual(rc, 3)
+        self.assertNotIn("0 dirty", out.getvalue())
+        self.assertIn("cannot read", err.getvalue())
+
+    def test_malformed_json_exits_three(self) -> None:
+        with _tmp_file("{not json") as path:
+            with _capture_stdout() as out, _capture_stderr() as err:
+                rc = checksums_io.main(["checksums_io.py", "status", "--checksums", str(path)])
+        self.assertEqual(rc, 3)
+        self.assertNotIn("dirty", out.getvalue())
+        self.assertIn("not valid JSON", err.getvalue())
+
+    def test_json_output_is_machine_readable(self) -> None:
+        with _tmp_dir() as root:
+            path = self._seed(
+                root,
+                {
+                    "dirty.md": {"last_tracked": "1", "last_resolved": "2"},
+                    "broken.md": {},
+                },
+            )
+            with _capture_stdout() as out:
+                rc = checksums_io.main(
+                    ["checksums_io.py", "status", "--checksums", str(path), "--json"]
+                )
+        payload = json.loads(out.getvalue())
+        self.assertEqual(rc, 1)
+        self.assertEqual(payload["total"], 2)
+        self.assertEqual(payload["dirty"], ["dirty.md"])
+        self.assertEqual(payload["malformed"][0]["path"], "broken.md")
+        self.assertFalse(payload["clean"])
+
+    def test_status_never_writes_the_ledger(self) -> None:
+        """A reader is read-only — including its byte-for-byte non-touching."""
+        with _tmp_dir() as root:
+            path = self._seed(root, {"a.md": {"last_tracked": "1", "last_resolved": "2"}})
+            before = path.read_bytes()
+            with _capture_stdout():
+                checksums_io.main(["checksums_io.py", "status", "--checksums", str(path)])
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_unexpected_status_argument_is_usage_error(self) -> None:
+        with _capture_stderr():
+            rc = checksums_io.main(["checksums_io.py", "status", "--bogus"])
+        self.assertEqual(rc, 2)
+
+    def test_status_is_reachable_as_a_subprocess(self) -> None:
+        """The skills shell out to this — the in-process `main()` call is not
+        proof the real invocation works."""
+        with _tmp_dir() as root:
+            path = self._seed(root, {"a.md": {"last_tracked": "1", "last_resolved": "1"}})
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).resolve().parent.parent / "checksums_io.py"),
+                    "status",
+                    "--checksums",
+                    str(path),
+                ],
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("1 tracked, 0 dirty, 0 malformed", proc.stdout)
 
 
 if __name__ == "__main__":

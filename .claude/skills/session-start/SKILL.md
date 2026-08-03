@@ -197,7 +197,23 @@ The in-repo memory index `.claude/memory/MEMORY.md` is a **two-tier** index (#10
 
 Two independent layers, two checks (#820/C×T2, #862):
 
-**3a. Semantic overlay** — run `/ontology-rebuild` to resolve dirty checksums. If 0 dirty files in `checksums.json`, report "Semantic overlay: current"; otherwise process them and commit the result.
+**3a. Semantic overlay** — ask the shared reader for the dirty count. **Do not read `checksums.json` by hand (#1142)** — the predicate is `last_tracked != last_resolved`, and every way of getting that read wrong (a field name that is not in the schema, the wrong nesting level) returns a plausible `0`, which is also the healthy value. Two consecutive sessions reported a wrong `0` that way.
+
+```bash
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
+[ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+python3 "$REPO_ROOT/.claude/lib/checksums_io.py" status
+```
+
+Interpret the exit code, not the vibe of the output:
+
+| Exit | Meaning | Action |
+|---|---|---|
+| 0 | clean | Report "Semantic overlay: current" |
+| 1 | dirty and/or malformed entries | Run `/ontology-rebuild`, process them, commit the result |
+| 3 | ledger missing/unparseable | Report it as a problem — this is **not** an empty work list |
+
+A **malformed** entry (unrecognized shape — missing `last_tracked`, a `null` hash) counts separately and blocks "clean" deliberately: unknown state is not resolved state. `/ontology-rebuild` step 1 documents the repair.
 
 **3b. Structural index** — regenerate the generated index from the current source tree. It is a gitignored build product (main#939 — never committed; nothing to compare or commit), so just rebuild it locally; the aggregator refreshes every in-scope repo's index before rolling up:
 

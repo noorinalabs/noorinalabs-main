@@ -301,6 +301,25 @@ def test_stale_source_is_flagged(repo, tmp_path) -> None:
     assert "STALE" in result["reason"]
 
 
+def test_malformed_checksum_entry_is_flagged_stale_not_current(repo, tmp_path) -> None:
+    """#1142: an entry the reader cannot classify is not-known-current.
+
+    `_dirty_files` drives the "[STALE]" annotation. An entry with no
+    `last_tracked` compares None != None -> "equal" under the hand-rolled
+    predicate this delegation replaced, so the source silently presented as
+    fresh. Unknown state must annotate, not reassure.
+    """
+    checksums = json.loads((tmp_path / "ontology" / "checksums.json").read_text())
+    checksums["files"]["pkg/mod.py"] = {
+        "last_resolved": None,
+        "resolved_at": "2026-06-14T00:00:00Z",
+    }
+    (tmp_path / "ontology" / "checksums.json").write_text(json.dumps(checksums), encoding="utf-8")
+    result = mod.check(repo("rg foo_bar ."))
+    assert result is not None
+    assert "STALE" in result["reason"]
+
+
 def test_truncates_past_max_matches(repo, tmp_path) -> None:
     graph = json.loads((tmp_path / "ontology" / "structural" / "code-graph.json").read_text())
     for i in range(mod._MAX_MATCHES + 1):

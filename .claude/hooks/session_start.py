@@ -17,9 +17,21 @@ Exit codes:
 
 import json
 import re
+import sys
 from pathlib import Path
 
 _PROJECT = Path(__file__).resolve().parent.parent.parent
+
+# The dirty predicate (`last_tracked != last_resolved`) lives in exactly one
+# place — `checksums_io.classify_entry` (#1142). This hook used to re-implement
+# it inline, which made it the only correct implementation in the repo and
+# therefore the one every ad-hoc reader had to reproduce from memory. Two
+# consecutive sessions reproduced it wrong and both got a plausible `0`.
+_LIB = _PROJECT / ".claude" / "lib"
+if str(_LIB) not in sys.path:
+    sys.path.insert(0, str(_LIB))
+import checksums_io  # noqa: E402
+
 _CHECKSUMS = _PROJECT / "ontology" / "checksums.json"
 _ERRORS_LOG = _PROJECT / ".claude" / "annunaki" / "errors.jsonl"
 _CROSS_REPO_STATUS = _PROJECT / "cross-repo-status.json"
@@ -29,20 +41,24 @@ _CROSS_REPO_STATUS = _PROJECT / "cross-repo-status.json"
 _HANDOFF = _PROJECT / ".claude" / "memory" / "session_handoff.md"
 
 
-def _ontology_staleness() -> tuple[int, int]:
-    """Return (dirty_count, total_count) from checksums.json."""
+def _ontology_staleness() -> checksums_io.ChecksumsStatus | None:
+    """Return the shared reader's ledger status, or None if it is unreadable.
+
+    Delegates to `checksums_io.read_status` rather than re-deriving the dirty
+    predicate here (#1142). Two consequences beyond de-duplication:
+
+    * A malformed entry now counts as malformed, not clean. The previous
+      inline version skipped non-dict entries entirely and compared
+      `.get(...) != .get(...)` on the rest, so an entry missing both keys
+      compared `None != None` and read as clean.
+    * An unreadable ledger returns None (reported as such) instead of being
+      folded into a count. `read_status` raises rather than failing open, so
+      "could not read" can never surface as "0 dirty".
+    """
     try:
-        data = json.loads(_CHECKSUMS.read_text(encoding="utf-8"))
-        # Nested format: {version, description, files: {...}}
-        data = data.get("files", data)
-        dirty = sum(
-            1
-            for v in data.values()
-            if isinstance(v, dict) and v.get("last_tracked") != v.get("last_resolved")
-        )
-        return dirty, len(data)
-    except (OSError, json.JSONDecodeError):
-        return -1, 0
+        return checksums_io.read_status(_CHECKSUMS)
+    except checksums_io.ChecksumsUnreadable:
+        return None
 
 
 def _annunaki_error_count() -> int:
@@ -103,13 +119,16 @@ def _wave_status() -> str | None:
 
 
 def main() -> None:
-    dirty, total = _ontology_staleness()
-    if dirty < 0:
-        ontology = "checksums.json missing — run /ontology-rebuild"
-    elif dirty == 0:
-        ontology = f"current (0/{total} dirty)"
+    overlay = _ontology_staleness()
+    if overlay is None:
+        ontology = "checksums.json missing or unreadable — run /ontology-rebuild"
+    elif overlay.clean:
+        ontology = f"current (0/{overlay.total} dirty)"
     else:
-        ontology = f"{dirty}/{total} dirty — /session-start Step 3 resolves"
+        counts = f"{len(overlay.dirty)}/{overlay.total} dirty"
+        if overlay.malformed:
+            counts += f", {len(overlay.malformed)} malformed"
+        ontology = f"{counts} — /session-start Step 3 resolves"
 
     errors = _annunaki_error_count()
     annunaki = (
