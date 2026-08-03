@@ -4232,6 +4232,85 @@ class HeadRefScanRegressionTests(_ResolveOverFakeCommentsHarness):
         self.assertFalse(verdicts.total_distinct >= 2)
 
 
+class HyphenatedSurnameCountingGateTests(_ResolveOverFakeCommentsHarness):
+    """The COUNTING gate on a hyphenated-surname branch (main#1269 review).
+
+    This half was not introduced by #1175 — `validate_pr_review`'s local copy
+    already used `[-/]`, so it already truncated `K.Mensah-Williams/…` to
+    `Mensah`. It is fixed here because the #1269 charset fix lands in the one
+    shared regex both hooks now read, so repairing the format hook repairs this
+    too, and an unpinned improvement is one refactor away from being undone.
+
+    `Kofi Mensah` (design-system) and `Kofi Mensah-Williams` (landing-page) are
+    two distinct roster members sharing a first initial, so the truncated surname
+    matched the WRONG person exactly — the self-review exclusion then fired on a
+    legitimate reviewer and failed to fire on the actual author. Both directions
+    are asserted; asserting only one would pass under a gate that excludes
+    nobody at all.
+    """
+
+    ROSTER = {
+        "kofi mensah",
+        "kofi mensah-williams",
+        "aino virtanen",
+        "nadia khoury",
+    }
+    REF = "K.Mensah-Williams/0001-project-scaffolding"
+
+    def test_the_same_initial_colleague_is_counted_not_swallowed(self):
+        """THE DEFECT: Kofi Mensah's verdict was dropped as a self-review.
+
+        Pre-fix the ref parsed to `Mensah`, which IS his surname, so a genuine
+        reviewer was excluded and the PR sat one approval short with no
+        observable explanation.
+        """
+        verdicts = self._resolve(
+            self.REF,
+            [self._verdict("Kofi Mensah"), self._verdict("Aino Virtanen")],
+        )
+        self.assertEqual(verdicts.branch_author_lastname, "Mensah-Williams")
+        self.assertIn("kofi mensah", verdicts.distinct_reviewers)
+        self.assertEqual(verdicts.distinct_reviewers, {"kofi mensah", "aino virtanen"})
+        self.assertEqual(verdicts.total_distinct, 2)
+
+    def test_the_actual_branch_author_is_still_excluded(self):
+        """The other direction. Pre-fix `Mensah-Williams` did NOT match the
+        truncated `Mensah`, so the real author's self-review was counted —
+        a two-reviewer gate satisfiable by one person plus themselves.
+
+        Aino Virtanen is the positive control: her verdict must survive, so a
+        regression that excluded everyone would fail here rather than pass the
+        absence assertion for free.
+        """
+        verdicts = self._resolve(
+            self.REF,
+            [self._verdict("Kofi Mensah-Williams"), self._verdict("Aino Virtanen")],
+        )
+        self.assertNotIn("kofi mensah-williams", verdicts.distinct_reviewers)
+        self.assertEqual(verdicts.distinct_reviewers, {"aino virtanen"})
+        self.assertEqual(verdicts.total_distinct, 1)
+        self.assertEqual(verdicts.comment_scan, hook.COMMENT_SCAN_AUTHOR_EXCLUDED)
+
+    def test_the_dash_form_of_the_same_ref_behaves_identically(self):
+        """The truncation hit both separators, so both are pinned."""
+        verdicts = self._resolve(
+            "K.Mensah-Williams-0001-project-scaffolding",
+            [self._verdict("Kofi Mensah"), self._verdict("Kofi Mensah-Williams")],
+        )
+        self.assertEqual(verdicts.branch_author_lastname, "Mensah-Williams")
+        self.assertEqual(verdicts.distinct_reviewers, {"kofi mensah"})
+
+    def test_the_fixture_ref_is_not_silently_unparsed(self):
+        """Anti-vacuity: a ref that parsed to None would ALSO count both
+        reviewers (the `""` wave-merge sentinel excludes nobody), so
+        `test_the_same_initial_colleague_is_counted_not_swallowed` could pass
+        for entirely the wrong reason. Prove the prefix really was read."""
+        for ref in (self.REF, "K.Mensah-Williams-0001-project-scaffolding"):
+            with self.subTest(ref=ref):
+                self.assertEqual(hook.extract_branch_author_lastname(ref), "Mensah-Williams")
+                self.assertEqual(hook.branch_author_first_initial(ref), "k")
+
+
 class CommentScanNotMeasuredTests(_ResolveOverFakeCommentsHarness):
     """#1206 half two: a non-measurement must never render as a measurement.
 

@@ -260,7 +260,47 @@ def name_first_initial(field_value: str) -> str:
 #   `A.Virtanen-0179-x`  observed on recent branches (#179)
 # `_` is deliberately NOT accepted: it is the worktree-directory form, not a ref
 # form, and admitting it here would widen who counts as a branch author.
-_BRANCH_AUTHOR_PREFIX_RE = re.compile(r"([A-Za-z])\.([A-Za-z]+)[-/]")
+#
+# Why the lastname charset admits `-` and `'`, and why the separator carries a
+# digit lookahead (main#1269 review, Weronika Zielinska)
+# ----------------------------------------------------------------------------
+# The first consolidation of this pattern kept the historical `([A-Za-z]+)`
+# lastname charset. On a HYPHENATED surname that charset does not fail cleanly:
+# the surname's own `-` satisfies the separator, so the match SUCCEEDS and
+# returns a truncated lastname — `K.Mensah-Williams/0001-x` -> `Mensah`.
+#
+# That is not a degradation, it is an inversion, because the roster contains
+# `Kofi Mensah` AND `Kofi Mensah-Williams` — two distinct people sharing a first
+# initial. The truncated `Mensah` + initial `k` matches the OTHER person exactly,
+# so on `K.Mensah-Williams/**` the format hook simultaneously:
+#   fail-closed: BLOCKS Kofi Mensah's *correct* verdict as a swap, and
+#   fail-open:   silently ALLOWS a genuinely swapped one.
+# That is the unblockable-false-positive shape #1172 exists to eliminate and
+# #934 already fixed once in this hook — reintroduced by a different mechanism.
+# 11 roster members carry a hyphenated surname; 77 open branches across 4 child
+# repos matched the prefix at the time of the fix.
+#
+# The separator is `/` OR `-` *followed by a digit*, rather than a bare `[-/]`,
+# because the lastname charset now contains `-` itself. A plain wide charset
+# (`([A-Za-z][A-Za-z'-]*)[-/]`) is greedy across the separator and mis-parses a
+# dash-form ref with a non-numeric slug —
+# `A.Virtanen-branch-name-with-no-number` -> `Virtanen-branch-name-with-no`,
+# a confident wrong answer. Requiring a digit (the charter's mandatory `{IIII}`
+# issue number) returns None there instead, i.e. it fails SAFE into the existing
+# "cannot validate direction, allow with a warning" path.
+#
+# Known, deliberate limits — tracked on #1271, pinned by tests below:
+#   * Non-ASCII surnames (`C.Méndez-Ríos/…`, `C.Novák/…`) return None, exactly as
+#     they did before this change. Widening to Unicode letters would also widen
+#     `branch_author_first_initial`, which feeds the *counting* merge gate, so it
+#     is a separate decision and not smuggled in here. None is the fail-safe
+#     direction for the format hook. Note the roster's own commit-identity emails
+#     transliterate (`Carolina.Mendez-Rios@`), and every live branch uses the
+#     ASCII form, which this pattern DOES parse.
+#   * A surname whose hyphen is followed by a digit (`X.Smith-3rd/…` -> `Smith`)
+#     still truncates. No roster surname has that shape, and the plain wide
+#     charset truncates it identically — the digit lookahead is not the cause.
+_BRANCH_AUTHOR_PREFIX_RE = re.compile(r"([A-Za-z])\.([A-Za-z][A-Za-z'-]*?)(?:/|-(?=\d))")
 
 
 def branch_author_first_initial(head_ref: str) -> str:
@@ -269,7 +309,9 @@ def branch_author_first_initial(head_ref: str) -> str:
     Returns `""` when the head ref does not carry the charter branch prefix
     (e.g. a `deployments/phase-3/wave-29` wave-merge branch). Both separator
     styles seen in practice are accepted — `A.Virtanen/0179-x` (charter spec)
-    and `A.Virtanen-0179-x` (observed).
+    and `A.Virtanen-0179-x` (observed). The dash form additionally requires the
+    charter's `{IIII}` issue number to follow, so that a hyphenated surname is
+    not split at its own hyphen (see `_BRANCH_AUTHOR_PREFIX_RE`).
     """
     match = _BRANCH_AUTHOR_PREFIX_RE.match(head_ref)
     return match.group(1).lower() if match else ""
@@ -280,11 +322,21 @@ def extract_branch_author_lastname(head_ref: str) -> str | None:
 
     Returns `None` — never `""` — when the ref carries no charter prefix
     (`main`, `deployments/phase-3/wave-29`, `dependabot/**`, `A.Virtanen_0179-x`).
-    The `None`/lastname distinction is load-bearing at both call sites:
-    `validate_pr_review.comment_scan_scope` reads it as
-    "`NO_BRANCH_AUTHOR`, scan under the `""` sentinel", and
-    `validate_review_comment_format.check` reads it as "cannot validate
-    direction, allow with a warning".
+
+    `None` vs `""` is **a typed invariant the tests pin**, not a runtime
+    discriminator: every non-test consumer normalises the two together
+    (`validate_pr_review.comment_scan_scope` and `:2020` test truthiness, `:2032`
+    passes `branch_author_lastname or ""`, `validate_review_comment_format.check`
+    tests `if not branch_author`). Returning `""` for an unmatched ref changes no
+    live control flow — it was measured, and every failure it causes is a
+    contract assertion. Keep the invariant (an unmatched ref and an author with an
+    empty surname should not be the same value), but do not assume a caller is
+    relying on the distinction while refactoring. Corrected from an earlier
+    "load-bearing at both call sites" claim by the #1269 review.
+
+    Hyphenated surnames parse whole (`K.Mensah-Williams/0001-x` ->
+    `Mensah-Williams`); a truncating charset here silently renames one roster
+    member into another. See `_BRANCH_AUTHOR_PREFIX_RE`.
 
     Case is preserved (`a.virtanen/…` -> `virtanen`); every consumer compares
     through `is_branch_author`, which lowercases both sides.
