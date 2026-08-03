@@ -441,6 +441,17 @@ class RelayClassifierUnitTests(unittest.TestCase):
         (span,) = classify_heredocs(f"cat <<'DELIM' | grep foo | sort | uniq\n{REAL_COMMIT}\nDELIM")
         self.assertFalse(span.is_code)
 
+    def test_unresolvable_downstream_segment_resolves_to_code(self):
+        """A downstream segment that does not even TOKENIZE (an unbalanced
+        quote — `_segment_head_command` returns `None`) must resolve to CODE,
+        independent of any specific relay name. Pinned directly rather than
+        only through the main#1171 coincidence in
+        `SiblingIssueMeasurementTests`, so a future change to that sibling
+        shape cannot silently stop exercising this branch."""
+        cmd = "cat <<'DELIM' | \"unterminated\n" + REAL_COMMIT + "\nDELIM"
+        (span,) = classify_heredocs(cmd)
+        self.assertTrue(span.is_code)
+
 
 class SiblingIssueMeasurementTests(unittest.TestCase):
     """main#1170 / main#1171 measurements, per the #1168 spawn brief's
