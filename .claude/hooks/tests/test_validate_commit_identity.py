@@ -1387,8 +1387,14 @@ class TestAssignmentAwarePrePass:
 
     def _valid_identity(self) -> tuple[str, str]:
         name = next(iter(hook.ROSTER), None)
-        if not name:
+        if name is None:
             pytest.skip("local roster is empty")
+        # `pytest.skip` is annotated NoReturn, but CI's mypy job installs only
+        # `mypy types-PyYAML bashlex` (no pytest) — without pytest's stubs,
+        # `pytest.skip` resolves to `Any` and the NoReturn narrowing above
+        # never happens, so `name` stays `str | None` at the return below.
+        # Narrow explicitly instead of relying on stub-dependent inference.
+        assert name is not None
         return name, hook.ROSTER[name]
 
     # --- the issue's own measured shapes -----------------------------------
