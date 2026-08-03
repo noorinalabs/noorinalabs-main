@@ -312,14 +312,43 @@ def _describe_comment_scan(state: ReviewState) -> str:
         derived = ", ".join(state.commit_authors) or "(none)"
         return (
             "RAN — head ref names no branch author, so the branch author was derived "
-            f"from COMMIT IDENTITY: {derived}. Their own verdicts are excluded from the "
+            f"from COMMIT IDENTITY: {derived}. Any verdict of theirs is excluded from the "
             "reviewer set (self-review exclusion active, #1210)."
         )
+    if state.comment_scan == gate.COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER:
+        # #1220: derived an identity, excluded nothing. Pre-#1220 this state was
+        # reported as COMMIT_AUTHOR_EXCLUDED above, and this report line told a
+        # dependabot PR's reader that a self-review had been subtracted when the
+        # count had subtracted nothing at all.
+        derived = ", ".join(state.commit_authors) or "(none)"
+        return (
+            "RAN — head ref names no branch author, so the branch author was derived "
+            f"from COMMIT IDENTITY: {derived} — which matches NO roster persona (a bot, a "
+            "web-UI commit, or an outside contributor), so no self-review exclusion was "
+            "applied and no verdict was subtracted (#1220)."
+        )
+    if state.comment_scan == gate.COMMENT_SCAN_NO_BRANCH_AUTHOR:
+        return (
+            "RAN — head ref names no branch author (bot / wave-merge / non-charter branch) "
+            "and the PR's commits named no persona either (bot author, merge-only branch, or "
+            "a squash-flattened identity — #1177/#1210), so no self-review exclusion was "
+            "applied. Roster filtering and the 2-reviewer threshold are unchanged."
+        )
+    # Explicit fallback, added with #1220's fifth mode (narrowing #1273).
+    #
+    # This used to be a bare `return` on the NO_BRANCH_AUTHOR text, i.e. a silent
+    # catch-all: any mode the gate grew that nobody wired here would have been
+    # rendered as "the PR's commits named no persona" — a confident, specific,
+    # WRONG claim, which is the exact failure this whole enum exists to prevent.
+    # An unrecognized mode is now reported as unrecognized. The marker string is
+    # asserted-absent for every `gate.ALL_COMMENT_SCAN_MODES` entry by
+    # `test_validate_pr_review.py::CommentScanModeTotalityTests`, so reaching
+    # this line in production means a mode was added without wiring this surface.
     return (
-        "RAN — head ref names no branch author (bot / wave-merge / non-charter branch) "
-        "and the PR's commits named no persona either (bot author, merge-only branch, or "
-        "a squash-flattened identity — #1177/#1210), so no self-review exclusion was "
-        "applied. Roster filtering and the 2-reviewer threshold are unchanged."
+        f"RAN — but this report does not recognize scan mode {state.comment_scan!r} "
+        "(UNRECOGNIZED SCAN MODE), so it cannot say whether self-review exclusion was "
+        "applied. Treat the exclusion state as unknown and report this — it is a tooling "
+        "defect, not a finding about the PR (#1220/#1273)."
     )
 
 
