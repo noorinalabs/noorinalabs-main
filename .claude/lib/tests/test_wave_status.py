@@ -548,8 +548,9 @@ class CanonicalIssueNumbers(unittest.TestCase):
                     "tier_99_never_seen_before": [9999],
                 },
             )
-            by_repo = wave_status._canonical_issue_numbers_by_repo("29", status)
+            by_repo, unparseable = wave_status._canonical_issue_numbers_by_repo("29", status)
         self.assertEqual(by_repo["noorinalabs-main"], {1114, 1160, 1162, 9999})
+        self.assertEqual(unparseable, 0)
 
     def test_legacy_string_tier_rows_skipped_not_raised(self) -> None:
         with TemporaryDirectory() as td:
@@ -560,8 +561,32 @@ class CanonicalIssueNumbers(unittest.TestCase):
                 }
             }
             status.write_text(json.dumps(data))
-            by_repo = wave_status._canonical_issue_numbers_by_repo("29", status)
+            by_repo, unparseable = wave_status._canonical_issue_numbers_by_repo("29", status)
         self.assertEqual(by_repo, {"noorinalabs-main": {1114}})
+        self.assertEqual(unparseable, 1)  # "main#322" -- the legacy plain-string row
+
+    def test_unparseable_rows_are_counted_not_just_skipped(self) -> None:
+        """main#1201 Edge 1: a legacy plain-string row and a dict row with a
+        malformed `id` (no `#`, or a non-numeric tail) both vanish from
+        `by_repo` -- but their COUNT must now be carried out alongside it, or
+        the reconciliation warning built on top has no way to know they ever
+        existed."""
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            data = {
+                "wave_29_scope": {
+                    "tier_1_backlog": [
+                        "main#322",  # legacy plain string
+                        {"id": "main-1116"},  # malformed: no "#"
+                        {"id": "noorinalabs-main#abc"},  # malformed: non-numeric tail
+                        {"id": "noorinalabs-main#1160"},  # parses fine
+                    ],
+                }
+            }
+            status.write_text(json.dumps(data))
+            by_repo, unparseable = wave_status._canonical_issue_numbers_by_repo("29", status)
+        self.assertEqual(by_repo, {"noorinalabs-main": {1160}})
+        self.assertEqual(unparseable, 3)
 
 
 class MergedPrsDirectToMain(unittest.TestCase):
@@ -1021,6 +1046,238 @@ class ReconciliationWarning(unittest.TestCase):
         stderr_val = err.getvalue()
         json.loads(stdout_val)  # stdout is pure valid JSON -- no warning text mixed in
         self.assertIn("main#1160", stderr_val)
+
+
+class ReconciliationWarningEdges(unittest.TestCase):
+    """main#1201: the main#1190 warning was silent at its own edges -- an
+    unparseable scope row vanished from both the numerator and the
+    denominator (Edge 1, including the degenerate all-unparseable case), and
+    a canonical row naming a repo absent from `repos_in_scope` read as an
+    ordinary unclaimed row with no way to tell it apart from "not delivered
+    yet" (Edge 3). Edge 2 (a full 100-node `closingIssuesReferences` page)
+    is covered by :class:`ClosingReferencesPageCap` below."""
+
+    def test_edge1_unparseable_rows_shrink_the_reported_denominator(self) -> None:
+        """4 declared rows, 2 unparseable, 1 of the remaining 2 unclaimed.
+        Pre-#1201 this reported "1 of 2" -- main#1201 must report against
+        the full declared count (4) and name the unparseable rows, mutation
+        cross-checked against :class:`CanonicalIssueNumbers`'s "2 of 3"
+        no-unparseable-rows case above, which stays byte-for-byte unchanged."""
+        prs = [
+            {
+                "repo": "noorinalabs-main",
+                "number": 1173,
+                "sha": "sha1173",
+                "mergedAt": "2026-07-30T02:16:40Z",
+                "login": "octocat",
+                "commit_author": "Nino Kavtaradze",
+                "closes": [1172],
+            }
+        ]
+        fake = _FakeGhDirectToMain(prs)
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            data = {
+                "current_wave": 29,
+                "wave_29_repos_in_scope": ["noorinalabs-main"],
+                "wave_29_kicked_off_at": "2026-07-27T22:56:17Z",
+                "wave_29_merge_model": "direct-to-main",
+                "wave_29_scope": {
+                    "tier_1_backlog": [
+                        "main#322",  # legacy string -- unparseable
+                        {"id": "main-1116"},  # malformed id (no "#") -- unparseable
+                        {"id": "noorinalabs-main#1172"},  # claimed
+                        {"id": "noorinalabs-main#1160"},  # unclaimed
+                    ]
+                },
+            }
+            status.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            with mock.patch.object(wave_status.subprocess, "run", fake):
+                warning = wave_status.reconciliation_warning("10", "29", status)
+        self.assertIsNotNone(warning)
+        assert warning is not None  # narrows the type for the checks below
+        self.assertIn("main#1160", warning)
+        self.assertNotIn("main#1172", warning.split(";")[0])  # claimed -- absent from the row list
+        self.assertIn("1 of 4", warning)  # denominator now reflects ALL 4 declared rows
+        self.assertIn("2 scope rows unparseable", warning)
+
+    def test_edge1_all_rows_unparseable_still_warns(self) -> None:
+        """Degenerate case: every declared row is unparseable, so `canonical`
+        is empty. Pre-#1201 this returned `None` here -- `counters` exited 0
+        printing `final_pr_count: 0` with no warning on stderr at all, a
+        silent zero that reads as "nothing to report". It must now warn."""
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            data = {
+                "current_wave": 29,
+                "wave_29_repos_in_scope": ["noorinalabs-main"],
+                "wave_29_kicked_off_at": "2026-07-27T22:56:17Z",
+                "wave_29_merge_model": "direct-to-main",
+                "wave_29_scope": {
+                    "tier_1_backlog": ["main#322", {"id": "main-1116"}],
+                },
+            }
+            status.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            fake = _FakeGhDirectToMain([])
+            with mock.patch.object(wave_status.subprocess, "run", fake):
+                warning = wave_status.reconciliation_warning("10", "29", status)
+        self.assertIsNotNone(warning)
+        assert warning is not None  # narrows the type for the checks below
+        self.assertIn("2 scope rows unparseable", warning)
+        # No `gh` call of any kind was made -- nothing parseable could ever
+        # match (main#1200's early-skip, main#1131) -- yet the warning fires.
+        self.assertEqual(fake.calls, [])
+
+    def test_edge3_repo_absent_from_repos_in_scope_is_flagged_distinctly(self) -> None:
+        """A canonical row naming a repo NOT in `repos_in_scope` can never be
+        claimed -- that repo's merged PRs are never listed at all. It reads
+        as unclaimed on every single run regardless of whether it was
+        delivered; main#1201 requires it be flagged so an operator can tell
+        "not delivered yet" from "structurally unreachable by this
+        instrument" -- the exact discrimination main#1190 exists to give.
+        `noorinalabs-user-service#500` here WAS delivered (PR #900 closes
+        it) but can never be claimed because user-service is absent from
+        `repos_in_scope`; `noorinalabs-main#1200` is an ordinary,
+        reachable, not-yet-delivered row and must NOT be flagged."""
+        prs = [
+            {
+                "repo": "noorinalabs-user-service",
+                "number": 900,
+                "sha": "sha900",
+                "mergedAt": "2026-07-30T02:16:40Z",
+                "login": "octocat",
+                "commit_author": "Someone",
+                "closes": [("noorinalabs-user-service", 500)],
+            }
+        ]
+        fake = _FakeGhDirectToMain(prs)
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            scope: dict = {"theme": "test fixture", "merge_model": "direct-to-main"}
+            scope["tier_1_main"] = [_scope_row(("noorinalabs-main", 1200))]
+            scope["tier_2_user_service"] = [_scope_row(("noorinalabs-user-service", 500))]
+            data = {
+                "current_wave": 29,
+                # Only noorinalabs-main is in repos_in_scope -- user-service's
+                # merged PRs (including #900, which DID deliver #500) are
+                # never listed, so #500 is structurally unclaimable here.
+                "wave_29_repos_in_scope": ["noorinalabs-main"],
+                "wave_29_kicked_off_at": "2026-07-27T22:56:17Z",
+                "wave_29_merge_model": "direct-to-main",
+                "wave_29_scope": scope,
+            }
+            status.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            with mock.patch.object(wave_status.subprocess, "run", fake):
+                warning = wave_status.reconciliation_warning("10", "29", status)
+        self.assertIsNotNone(warning)
+        assert warning is not None  # narrows the type for the checks below
+        self.assertIn("main#1200", warning)
+        self.assertIn(
+            "user-service#500 (repo not in repos_in_scope)",
+            warning,
+            "the structurally-unreachable row must be flagged distinctly from "
+            "an ordinary not-yet-delivered row",
+        )
+        self.assertNotIn(
+            "main#1200 (repo not in repos_in_scope)",
+            warning,
+            "main#1200 IS reachable (its repo is in scope) -- it must not be flagged",
+        )
+
+
+class ClosingReferencesPageCap(unittest.TestCase):
+    """main#1201 Edge 2: `first:100` is GitHub's real GraphQL page-size
+    ceiling for `closingIssuesReferences` -- a PR that closes exactly 100
+    issues returns a full page indistinguishable from "closed 100" unless
+    the caller is told."""
+
+    def test_full_100_node_page_warns_to_stderr(self) -> None:
+        import io
+        from contextlib import redirect_stderr
+
+        prs = [
+            {
+                "repo": "noorinalabs-main",
+                "number": 1173,
+                "sha": "sha1173",
+                "mergedAt": "2026-07-30T02:16:40Z",
+                "login": "octocat",
+                "commit_author": "Nino Kavtaradze",
+                "closes": list(range(1, 101)),  # exactly 100 -- the page cap
+            }
+        ]
+        fake = _FakeGhDirectToMain(prs)
+        err = io.StringIO()
+        with mock.patch.object(wave_status.subprocess, "run", fake):
+            with redirect_stderr(err):
+                closes = wave_status._pr_closing_issue_numbers("noorinalabs-main", 1173)
+        self.assertEqual(len(closes), 100)
+        self.assertIn("noorinalabs-main#1173", err.getvalue())
+        self.assertIn("100-node page cap", err.getvalue())
+
+    def test_99_nodes_does_not_warn(self) -> None:
+        """One node under the cap -- no truncation possible, no warning.
+        Proves the trigger is the exact page-size boundary, not "a lot of
+        closing references"."""
+        import io
+        from contextlib import redirect_stderr
+
+        prs = [
+            {
+                "repo": "noorinalabs-main",
+                "number": 1173,
+                "sha": "sha1173",
+                "mergedAt": "2026-07-30T02:16:40Z",
+                "login": "octocat",
+                "commit_author": "Nino Kavtaradze",
+                "closes": list(range(1, 100)),  # 99 -- one under the cap
+            }
+        ]
+        fake = _FakeGhDirectToMain(prs)
+        err = io.StringIO()
+        with mock.patch.object(wave_status.subprocess, "run", fake):
+            with redirect_stderr(err):
+                wave_status._pr_closing_issue_numbers("noorinalabs-main", 1173)
+        self.assertEqual(err.getvalue(), "")
+
+    def test_warning_surfaces_through_the_real_merged_prs_call_path(self) -> None:
+        """The 'silent warning' class of bug this issue belongs to: a signal
+        that exists but never reaches anyone. Exercises the ACTUAL call path
+        (`merged_prs` -> `_merged_prs_direct_to_main` -> `_pr_closing_issue_numbers`)
+        rather than asserting the private helper's own stderr write in
+        isolation -- proving the warning is observable from the top of the
+        real stack, not merely constructed somewhere underneath it and
+        discarded by a caller that never looks at it."""
+        import io
+        from contextlib import redirect_stderr
+
+        prs = [
+            {
+                "repo": "noorinalabs-main",
+                "number": 1173,
+                "sha": "sha1173",
+                "mergedAt": "2026-07-30T02:16:40Z",
+                "login": "octocat",
+                "commit_author": "Nino Kavtaradze",
+                "closes": [1172, *range(2000, 2099)],  # 100 nodes total
+            }
+        ]
+        fake = _FakeGhDirectToMain(prs)
+        err = io.StringIO()
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            _write_direct_to_main_status(
+                status,
+                wave="29",
+                repos=["noorinalabs-main"],
+                kickoff="2026-07-27T22:56:17Z",
+                tiers={"tier_4_in_wave_findings": [1172]},
+            )
+            with mock.patch.object(wave_status.subprocess, "run", fake):
+                with redirect_stderr(err):
+                    got = wave_status.merged_prs("10", "29", status)
+        self.assertEqual([p["number"] for p in got], [1173])
+        self.assertIn("100-node page cap", err.getvalue())
 
 
 class PrListPageCap(unittest.TestCase):
