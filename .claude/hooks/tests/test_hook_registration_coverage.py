@@ -147,12 +147,22 @@ _UNCONVERTED: dict[str, str] = {
         "signal."
     ),
     "post_label_change_wave_field_sync": (
-        "same log_posttooluse_event exception-logging shape as "
-        "auto_add_issue_to_board — see that entry."
+        "standalone main() catches a check() exception and logs it via "
+        "log_posttooluse_event, whose 'posttooluse_event' record type is "
+        "NOT in annunaki_log.TRACE_RECORD_TYPES — it writes to the COUNTED "
+        "errors.jsonl stream, unlike _hook_main's generic swallow "
+        "(log_pretooluse_diagnostic -> traces.jsonl, excluded from the "
+        "count). Converting would downgrade a deliberately louder existing "
+        "signal."
     ),
     "post_wave_kickoff_comment": (
-        "same log_posttooluse_event exception-logging shape as "
-        "auto_add_issue_to_board — see that entry."
+        "standalone main() catches a check() exception and logs it via "
+        "log_posttooluse_event, whose 'posttooluse_event' record type is "
+        "NOT in annunaki_log.TRACE_RECORD_TYPES — it writes to the COUNTED "
+        "errors.jsonl stream, unlike _hook_main's generic swallow "
+        "(log_pretooluse_diagnostic -> traces.jsonl, excluded from the "
+        "count). Converting would downgrade a deliberately louder existing "
+        "signal."
     ),
     "annunaki_monitor": (
         "standalone main() calls check(input_data) and discards the return "
@@ -162,7 +172,11 @@ _UNCONVERTED: dict[str, str] = {
         "invocation — a stdout-shape change with no compensating benefit."
     ),
     "ontology_tracker": (
-        "same discard-the-return-value shape as annunaki_monitor — see that entry."
+        "standalone main() calls check(input_data) and discards the return "
+        "value entirely (side-effect-only; the return value is meaningful "
+        "only to the PostToolUse dispatcher's own aggregation). "
+        "run_advisory would start printing that return value on standalone "
+        "invocation — a stdout-shape change with no compensating benefit."
     ),
     "session_start": (
         "SessionStart hook — does not read stdin at all (informational "
