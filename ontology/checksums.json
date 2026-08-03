@@ -851,7 +851,7 @@
       "last_tracked": "8a6989dd1e2f06cdc852b1f17ce8a76c4e4396f395c7a80d953010a01f4e9417",
       "last_resolved": "8a6989dd1e2f06cdc852b1f17ce8a76c4e4396f395c7a80d953010a01f4e9417",
       "tracked_at": "2026-08-03T03:42:04.875531+00:00",
-      "resolved_at": "2026-08-03T16:09:50.797026+00:00"
+      "resolved_at": "2026-08-03T16:55:06.550042+00:00"
     },
     "noorinalabs-isnad-graph/.claude/lib/tests/test_pre_commit_ci_sync.py": {
       "last_tracked": "aa209279deec3844b51e384157ba3e67a6d0f325410941f63f38d57535e6498c",
@@ -1673,7 +1673,7 @@
       "last_tracked": "d7d5b76fe6c1ea48b420d3d1c83947bad64dc2d5dec0ac58aba64be4d3c1dfe5",
       "last_resolved": "d7d5b76fe6c1ea48b420d3d1c83947bad64dc2d5dec0ac58aba64be4d3c1dfe5",
       "tracked_at": "2026-08-02T17:04:55.734950+00:00",
-      "resolved_at": "2026-08-03T15:29:17.359821+00:00"
+      "resolved_at": "2026-08-03T16:55:06.550042+00:00"
     },
     ".claude/memory/feedback_spawn_worktree_follows_orchestrator_cwd.md": {
       "last_tracked": "79593ba50e31ba6c795c32fb3e3fd92cb0d22ffcf23e7abb83c28b4c6306c8a8",
@@ -1746,6 +1746,12 @@
       "last_resolved": "fc5db82c82f20c8a15002addad699e3e454d5c44df0ce549de5d0ef3ae7696fd",
       "tracked_at": "2026-08-03T16:09:41.724539+00:00",
       "resolved_at": "2026-08-03T16:09:50.797026+00:00"
+    },
+    ".claude/memory/feedback_fold_in_or_defer_a_gate_finding.md": {
+      "last_tracked": "e23fb24628c5db470682108619cbbb7ad3f1fc5457ae0f7012bcf11a951f77d6",
+      "last_resolved": "e23fb24628c5db470682108619cbbb7ad3f1fc5457ae0f7012bcf11a951f77d6",
+      "tracked_at": "2026-08-03T16:54:47.358144+00:00",
+      "resolved_at": "2026-08-03T16:55:06.550042+00:00"
     }
   },
   "last_cleanup": {
