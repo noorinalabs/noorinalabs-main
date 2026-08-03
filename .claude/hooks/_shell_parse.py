@@ -1290,8 +1290,35 @@ def _leading_literal_assignments(tokens: list[str]) -> dict[str, str]:
     """Literal `NAME=value` pairs from the LEADING run of assignment tokens
     in `tokens`, tolerating one optional `export`/`declare` prefix (#1305).
 
+    `tokens` is first run through `strip_command_prefixes()` (main#1311) —
+    the SAME helper `find_git_subcommand` / `find_gh_subcommand` already use
+    to skip a compound-statement leader (`do`, `then`, `else`, `if`, `elif`,
+    `while`, `until`, `{`, `(`) or a transparent wrapper (`timeout`, `env`,
+    `nice`, ...) before looking for the command word. Without this, `for f
+    in a; do g=git; $g commit -m x; done` tokenizes its `do`-segment to
+    `["do", "g=git"]`; the leading-position check saw `"do"` (not an
+    assignment, not `export`/`declare`) and stopped immediately, so the
+    assignment one token to the right — at index 1, not 0 — was never
+    captured, and the hook ALLOWed a command a real shell genuinely runs
+    (confirmed with a marker proxy; same gap defeats `while`/`if` bodies and
+    a wrapped `bash -c '...'` indirect-exec payload the same way). This is
+    the module's own documented hazard
+    (`extract_dash_c_pairs` vs `find_git_subcommand` holding different views
+    of one segment) recurring one level up — `_leading_literal_assignments`
+    had its own, narrower notion of "leading" than the rest of the module.
+    Routing through `strip_command_prefixes()` here (default
+    `compound_leaders=True`, the gate-matcher setting: over-matching can at
+    worst capture an assignment from a body that may not run, which per this
+    pre-pass's own invariant can only ADD a detection, never remove one) is
+    the fix, rather than adding `do`/`then` to `_ASSIGNMENT_KEYWORDS` (a
+    THIRD independent view of the same segment, reproducing the hazard
+    again).
+
     Returns `{}` when `tokens` carries no qualifying leading assignment.
     """
+    if not tokens:
+        return {}
+    tokens = strip_command_prefixes(tokens)
     if not tokens:
         return {}
     i = 1 if tokens[0] in _ASSIGNMENT_KEYWORDS else 0
@@ -1379,6 +1406,89 @@ def _substitute_var_refs(text: str, assignments: dict[str, str]) -> str:
     return _VAR_REF_RE.sub(_sub, text)
 
 
+def _single_quoted_spans(text: str) -> list[tuple[int, int]]:
+    """(start, end) spans of every single-quoted region's INSIDE text.
+
+    Main#1195 finding 1 (round 4): a SAME-segment prefix assignment (`g=git
+    bash -c '$g commit -m x'`) genuinely resolves inside a SINGLE-quoted
+    argument, because that argument is opaque text handed to a CHILD
+    interpreter (`bash -c '...'`) which does its OWN expansion, in its OWN
+    environment — and a prefix assignment is placed into the invoked
+    command's environment regardless of `export` (real-shell-verified with a
+    marker proxy: this genuinely runs `git commit -m x`). That is a DIFFERENT
+    evaluator, and a different visibility rule, than the bare/double-quoted
+    reference `resolve_simple_assignments`'s docstring already covers (`A=1
+    B=git $B commit -m z` — the OUTER shell expands `$B` itself, before its
+    own prefix takes effect, so it stays unresolved; `bash -c "$g commit"`
+    is the identical case one level down — the OUTER shell expands the
+    double-quoted argument at that SAME expansion point, so `$g` is unset
+    there too and must NOT resolve). Quotes are the only signal available
+    post-tokenization for which evaluator will see a given `$NAME` — hence
+    scanning for single-quoted spans specifically, rather than teaching
+    `_substitute_var_refs` about "this is a child payload" some other way.
+
+    Escape-aware the same way `_iter_original_segment_spans` is: a backslash
+    escapes the next character when inside DOUBLE quotes or unquoted (POSIX:
+    single quotes take no backslash-escaping at all, so none is honoured
+    while scanning for the close of a `'...'` span — an escaped quote is not
+    a thing single quotes support). Returned spans exclude the delimiting
+    quote characters themselves, so callers can substitute inside them
+    without disturbing the quoting.
+    """
+    spans: list[tuple[int, int]] = []
+    quote: str | None = None
+    inner_start = 0
+    i = 0
+    n = len(text)
+    while i < n:
+        c = text[i]
+        if quote is not None:
+            if quote == '"' and c == "\\" and i + 1 < n:
+                i += 2
+                continue
+            if c == quote:
+                if quote == "'":
+                    spans.append((inner_start, i))
+                quote = None
+            i += 1
+            continue
+        if c == "\\" and i + 1 < n:
+            i += 2
+            continue
+        if c in ("'", '"'):
+            quote = c
+            inner_start = i + 1
+            i += 1
+            continue
+        i += 1
+    return spans
+
+
+def _substitute_within_single_quotes(text: str, assignments: dict[str, str]) -> str:
+    """Apply `_substitute_var_refs` to `text`, restricted to single-quoted spans.
+
+    Returns `text` unchanged (same object) when nothing inside any
+    single-quoted span actually changes, matching the no-op contract the
+    rest of `resolve_simple_assignments` relies on.
+    """
+    spans = _single_quoted_spans(text)
+    if not spans:
+        return text
+    parts: list[str] = []
+    prev_end = 0
+    changed = False
+    for start, end in spans:
+        parts.append(text[prev_end:start])
+        quoted = text[start:end]
+        substituted = _substitute_var_refs(quoted, assignments)
+        if substituted != quoted:
+            changed = True
+        parts.append(substituted)
+        prev_end = end
+    parts.append(text[prev_end:])
+    return "".join(parts) if changed else text
+
+
 def resolve_simple_assignments(command: str) -> str:
     """Resolve simple literal `NAME=value` assignments before matching (main#1195).
 
@@ -1407,6 +1517,16 @@ def resolve_simple_assignments(command: str) -> str:
     assignments are folded into the running map for segments that follow
     (so they become visible starting with the NEXT segment, never the
     current one).
+
+    Round 4 exception (main#1195 finding 1): a segment's own leading
+    assignments DO apply within a single-quoted span of that SAME segment —
+    `g=git bash -c '$g commit -m x'` genuinely runs `git commit -m x`,
+    real-shell-verified, because the quoted text is a CHILD interpreter's
+    payload (expanded later, in an environment the prefix assignment already
+    populated), not a reference the outer shell expands itself. See
+    `_single_quoted_spans` for the full reasoning; `bash -c "$g commit"`
+    (double-quoted) is unaffected and stays unresolved, same as a bare
+    same-segment reference.
 
     Returns `command` unchanged when `tokenize()` fails (this pre-pass never
     manufactures a NEW parse failure — the existing `_PARSE_FAILURE`
@@ -1471,6 +1591,22 @@ def resolve_simple_assignments(command: str) -> str:
             segment_text = _substitute_var_refs(orig_segment_text, active)
             if segment_text != orig_segment_text:
                 changed = True
+
+        # Round 4 (main#1195 finding 1): a segment's OWN leading assignments
+        # — unlike the running `active` map above — apply ONLY inside a
+        # single-quoted span of THIS SAME segment (see
+        # `_single_quoted_spans`'s docstring for the real-shell reasoning:
+        # that text is opaque to the outer shell and is expanded later by a
+        # CHILD interpreter that inherits the prefix-assigned environment).
+        # A bare or double-quoted reference in the same segment is expanded
+        # by the OUTER shell instead, at the same point `active` (never
+        # `own_assignments`) already governs — untouched by this pass.
+        if own_assignments:
+            quoted_text = _substitute_within_single_quotes(segment_text, own_assignments)
+            if quoted_text != segment_text:
+                segment_text = quoted_text
+                changed = True
+
         out_parts.append(segment_text)
         prev_end = end
 

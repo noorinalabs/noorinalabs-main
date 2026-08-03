@@ -1761,6 +1761,92 @@ class ResolveSimpleAssignmentsTests(unittest.TestCase):
             "declare g=git; git commit -m x",
         )
 
+    # --- main#1195 round 4, finding 1: same-segment prefix DOES resolve
+    # inside a single-quoted CHILD payload, real-shell-verified with a
+    # marker proxy (`g=git bash -c '$g commit -m x'` genuinely runs
+    # `git commit -m x`) -------------------------------------------------
+
+    def test_same_segment_prefix_resolves_inside_single_quoted_child_payload(
+        self,
+    ) -> None:
+        self.assertEqual(
+            sp.resolve_simple_assignments("g=git bash -c '$g commit -m x'"),
+            "g=git bash -c 'git commit -m x'",
+        )
+
+    def test_same_segment_prefix_resolves_inside_single_quoted_sh_dash_c(self) -> None:
+        """Same shape, `sh -c` instead of `bash -c` — the fix lives in the
+        assignment/quote resolver, not in anything interpreter-specific.
+        """
+        self.assertEqual(
+            sp.resolve_simple_assignments("g=git sh -c '$g commit -m x'"),
+            "g=git sh -c 'git commit -m x'",
+        )
+
+    def test_same_segment_prefix_resolves_inside_single_quoted_braced_payload(
+        self,
+    ) -> None:
+        self.assertEqual(
+            sp.resolve_simple_assignments("g=git bash -c '${g} commit -m x'"),
+            "g=git bash -c 'git commit -m x'",
+        )
+
+    def test_same_segment_prefix_not_resolved_inside_double_quoted_payload(
+        self,
+    ) -> None:
+        """Control for the above: `bash -c "$g commit -m x"` (double-quoted)
+        is expanded by the OUTER shell at the same expansion point a bare
+        same-segment reference is (`A=1 B=git $B commit -m z`) — BEFORE its
+        own prefix assignment takes effect — so `$g` must stay unresolved,
+        real-shell-verified with a marker proxy (no git run).
+        """
+        cmd = 'g=git bash -c "$g commit -m x"'
+        self.assertEqual(sp.resolve_simple_assignments(cmd), cmd)
+
+    # --- main#1195 round 4, finding 3: a compound-statement leader (`do`,
+    # `then`, ...) at a segment's leading position must not hide the
+    # assignment one token to the right, real-shell-verified with a marker
+    # proxy (each row genuinely runs `git commit -m x`) -------------------
+
+    def test_do_prefixed_segment_assignment_resolves_in_later_segment(self) -> None:
+        self.assertEqual(
+            sp.resolve_simple_assignments("for f in a; do g=git; $g commit -m x; done"),
+            "for f in a; do g=git; git commit -m x; done",
+        )
+
+    def test_then_prefixed_segment_assignment_resolves_in_later_segment(self) -> None:
+        self.assertEqual(
+            sp.resolve_simple_assignments("if true; then g=git; $g commit -m x; fi"),
+            "if true; then g=git; git commit -m x; fi",
+        )
+
+    def test_do_prefixed_segment_assignment_multichar_name_resolves(self) -> None:
+        """Vary the incidental dimension a single-character-name fixture
+        would hide (main#1195 finding 2's lesson, applied here too): `gg`,
+        not `g`.
+        """
+        self.assertEqual(
+            sp.resolve_simple_assignments("for f in a; do gg=git; $gg commit -m x; done"),
+            "for f in a; do gg=git; git commit -m x; done",
+        )
+
+    def test_do_prefixed_segment_assignment_braced_reference_resolves(self) -> None:
+        self.assertEqual(
+            sp.resolve_simple_assignments("for f in a; do g=git; ${g} commit -m x; done"),
+            "for f in a; do g=git; git commit -m x; done",
+        )
+
+    def test_do_prefixed_single_quoted_child_payload_resolves(self) -> None:
+        """Finding 1 and finding 3 compose: a `do`-prefixed segment's own
+        leading assignment feeding a single-quoted `bash -c` payload in the
+        SAME segment must resolve, real-shell-verified (genuinely runs
+        `git commit -m x`).
+        """
+        self.assertEqual(
+            sp.resolve_simple_assignments("for f in a; do g=git bash -c '$g commit -m x'; done"),
+            "for f in a; do g=git bash -c 'git commit -m x'; done",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

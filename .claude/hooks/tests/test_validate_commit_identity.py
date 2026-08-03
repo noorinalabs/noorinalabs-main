@@ -1675,6 +1675,185 @@ class AssignmentAwarePrePassTests(unittest.TestCase):
         cmd = "h=other; gi${x}t commit -m z"
         self.assertIsNone(hook.check(self._input(cmd)))
 
+    # --- main#1195 round 4, finding 2: row1/row3 must be pinned across
+    # braced AND multi-char-name variants, not just the bare single-char
+    # spelling — a mutant that composes the fix only for `${NAME}` refs, or
+    # only for names longer than one character, survived mutation testing
+    # against the original four rows (290 passed unchanged). Varying the
+    # incidental dimensions here is what makes those mutants die. --------
+
+    def test_row1_braced_variant_never_reaches_git_allows(self) -> None:
+        """`A=1 B=git ${B} commit -m z` — braced-reference sibling of row 1.
+        Real shell: `${B}` is unset at expansion time for the same reason
+        the bare form is (own-segment prefix not yet in effect). Must ALLOW.
+        """
+        self.assertIsNone(hook.check(self._input("A=1 B=git ${B} commit -m z")))
+
+    def test_row1_multichar_name_variant_never_reaches_git_allows(self) -> None:
+        """`A=1 BB=git $BB commit -m z` — multi-char-name sibling of row 1.
+        Must ALLOW for the identical real-shell reason (own-segment prefix
+        not yet in effect at expansion time), regardless of name length.
+        """
+        self.assertIsNone(hook.check(self._input("A=1 BB=git $BB commit -m z")))
+
+    def test_row3_braced_variant_cannot_hide_prior_running_value_blocks(self) -> None:
+        """`g=git; g=echo ${g} commit -m x` — braced-reference sibling of
+        row 3. Real shell: `${g}` resolves against the RUNNING state from
+        the prior segment (`git`), not this segment's own `g=echo` prefix.
+        Must BLOCK.
+        """
+        result = hook.check(self._input("g=git; g=echo ${g} commit -m x"))
+        self.assertIsNotNone(result, "prior-segment g=git must still resolve via ${g}")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("missing `-c user.name=` flag", result["reason"])
+
+    def test_row3_multichar_name_variant_cannot_hide_prior_running_value_blocks(
+        self,
+    ) -> None:
+        """`gg=git; gg=echo $gg commit -m x` — multi-char-name sibling of
+        row 3. Must BLOCK for the identical real-shell reason, regardless of
+        name length.
+        """
+        result = hook.check(self._input("gg=git; gg=echo $gg commit -m x"))
+        self.assertIsNotNone(result, "prior-segment gg=git must still resolve at the commit site")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("missing `-c user.name=` flag", result["reason"])
+
+    # --- main#1195 round 4, finding 1: same-segment prefix assignment DOES
+    # resolve inside a SINGLE-quoted child payload (`bash -c '...'`), because
+    # that text is expanded by the CHILD interpreter in an environment the
+    # prefix assignment already populated — real-shell-verified with a
+    # marker proxy. All six rows below were measured against a real shell
+    # (fake `git` on PATH, printing a marker iff it actually runs) before
+    # being pinned here. -------------------------------------------------
+
+    def test_prefix_in_single_quoted_bash_dash_c_payload_blocks(self) -> None:
+        """Row 1: `g=git bash -c '$g commit -m x'` — marker proxy: real
+        shell RUNS the fake `git`. Must BLOCK; ALLOWed at 632b99d (the
+        round-3 fix's own regression, against this PR's previous head).
+        """
+        result = hook.check(self._input("g=git bash -c '$g commit -m x'"))
+        self.assertIsNotNone(
+            result, "same-segment prefix feeding a quoted child payload must block"
+        )
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertTrue(
+            result["reason"].startswith(
+                "BLOCKED: indirect-exec wrapper detected (shell -c) carrying a hidden `git commit`."
+            ),
+            result["reason"],
+        )
+
+    def test_prefix_in_double_quoted_bash_dash_c_payload_allows(self) -> None:
+        """Row 2 (control): `g=git bash -c "$g commit -m x"` — marker proxy:
+        real shell does NOT run `git` (the OUTER shell expands the
+        double-quoted argument itself, before the prefix takes effect, same
+        expansion point as a bare same-segment reference). Must ALLOW.
+        """
+        self.assertIsNone(hook.check(self._input('g=git bash -c "$g commit -m x"')))
+
+    def test_prefix_in_single_quoted_sh_dash_c_payload_blocks(self) -> None:
+        """Row 3: `g=git sh -c '$g commit -m x'` — marker proxy: real shell
+        RUNS the fake `git`. Must BLOCK, same as the `bash -c` spelling.
+        """
+        result = hook.check(self._input("g=git sh -c '$g commit -m x'"))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_prefix_in_single_quoted_braced_payload_blocks(self) -> None:
+        """Row 4: `g=git bash -c '${g} commit -m x'` — braced form inside
+        the single-quoted payload. Marker proxy: real shell RUNS the fake
+        `git`. Must BLOCK.
+        """
+        result = hook.check(self._input("g=git bash -c '${g} commit -m x'"))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_no_prefix_unset_reference_in_single_quoted_payload_allows(self) -> None:
+        """Row 5 (control): `bash -c '$g commit -m x'` with no `g=git`
+        prefix anywhere. Marker proxy: real shell does NOT run `git` (`$g`
+        is genuinely unset). Must ALLOW.
+        """
+        self.assertIsNone(hook.check(self._input("bash -c '$g commit -m x'")))
+
+    def test_cross_segment_semicolon_single_quoted_payload_still_blocks(self) -> None:
+        """Row 6: `g=git; bash -c '$g commit -m x'` — the assignment is in
+        an EARLIER segment (`;`, not a same-segment prefix), so it reaches
+        the quoted payload via the pre-existing RUNNING map, unchanged by
+        this round's fix (the running map already applies everywhere,
+        quote-blind). Pinned so a future change to the running map's
+        quote-awareness is caught here.
+        """
+        result = hook.check(self._input("g=git; bash -c '$g commit -m x'"))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    # --- main#1195 round 4, finding 3 (#1311): a compound-statement leader
+    # (`do`, `then`, ...) at a segment's leading position must not hide an
+    # assignment one token to the right — real-shell-verified with a marker
+    # proxy (each row genuinely runs `git commit -m x`), the same defect
+    # class as the wrapped `bash -c` choke point above. ------------------
+
+    def test_for_loop_do_body_assignment_blocks(self) -> None:
+        """`for f in a; do g=git; $g commit -m x; done` — marker proxy: real
+        shell RUNS the fake `git`. Must BLOCK; ALLOWed before the
+        `strip_command_prefixes()` fix (`_leading_literal_assignments` saw
+        `"do"` at the leading position and stopped before ever looking at
+        `g=git` one token to the right).
+        """
+        result = hook.check(self._input("for f in a; do g=git; $g commit -m x; done"))
+        self.assertIsNotNone(result, "do-prefixed segment assignment must still resolve")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("missing `-c user.name=` flag", result["reason"])
+
+    def test_while_loop_do_body_assignment_blocks(self) -> None:
+        result = hook.check(
+            self._input('n=0; while [ "$n" -lt 1 ]; do g=git; $g commit -m x; n=1; done')
+        )
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_if_then_body_assignment_blocks(self) -> None:
+        result = hook.check(self._input("if true; then g=git; $g commit -m x; fi"))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_for_loop_do_body_multichar_name_blocks(self) -> None:
+        """Vary the incidental dimension: a multi-char name (`gg`), not `g`
+        — the exact fixture-narrowness finding 2 (above) is about."""
+        result = hook.check(self._input("for f in a; do gg=git; $gg commit -m x; done"))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_for_loop_do_body_braced_reference_blocks(self) -> None:
+        result = hook.check(self._input("for f in a; do g=git; ${g} commit -m x; done"))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_for_loop_do_body_single_quoted_child_payload_blocks(self) -> None:
+        """Finding 1 and finding 3 compose: a `do`-prefixed segment's own
+        leading assignment feeding a single-quoted `bash -c` payload in the
+        SAME segment. Marker proxy: real shell RUNS the fake `git`. Must
+        BLOCK.
+        """
+        result = hook.check(self._input("for f in a; do g=git bash -c '$g commit -m x'; done"))
+        self.assertIsNotNone(
+            result, "do-prefixed same-segment prefix must resolve in the quoted payload"
+        )
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
 
 if __name__ == "__main__":
     unittest.main()
