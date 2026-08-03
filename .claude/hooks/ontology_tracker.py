@@ -123,7 +123,28 @@ Owning-repo check-ignore (#1039):
   pathspecs matched, so the FIRST file seen in a directory pays one
   subprocess call that answers "is this file ignored" AND "is its directory
   ignored" simultaneously — no additional subprocess versus the pre-#1122
-  single-file check. Invalidation: none needed — both caches are
+  single-file check.
+
+  The directory pathspec passed to ``git check-ignore`` is the BARE relative
+  directory name, with NO trailing slash (main#1263 review finding, fixed
+  before merge). A trailing slash turns the pathspec into a literal STRING
+  that a contents-only pattern like ``data/raw/*`` matches directly (git
+  echoes back the exact string ``"data/raw/"`` as a match), which is a
+  different fact from the directory ITSELF being excluded — the bare
+  ``"data/raw"`` does not match that same pattern. Using the slash version
+  would cache a false "directory ignored" and silently mis-skip any file a
+  ``!`` rule re-includes inside it (e.g. the ``dir/*`` + ``!dir/**/.gitkeep``
+  idiom used by ``noorinalabs-isnad-ingest-platform``) — under-tracking,
+  the one direction this function must never risk. The bare name still
+  correctly answers "ignored" for a genuinely directory-excluding pattern
+  (``build/`` matches ``"build"`` too) and for a NESTED directory swept up
+  by a contents-only parent pattern (gitignore(5)'s no-re-include-under-an-
+  excluded-parent rule then really does apply to everything beneath it), so
+  the cache short-circuit stays sound in both directions — see
+  ``GitCheckIgnoreDirectoryCacheTests`` in the test module for the exact
+  fixtures.
+
+  Invalidation: none needed — both caches are
   module-level dicts scoped to this one short-lived process (a fresh
   Edit/Write hook invocation starts with empty caches), and the on-disk
   ``.gitignore`` rules cannot change mid-invocation, so nothing can go stale
@@ -388,7 +409,27 @@ def _is_git_ignored(resolved_path: Path) -> bool:
     # Neither the file nor its directory is cached yet: one subprocess call
     # answers both questions and seeds both caches, so every LATER file
     # under this same directory is a cache hit instead of a new subprocess.
-    dir_spec = f"{dir_rel_str}/"
+    #
+    # NO trailing slash on the directory pathspec (main#1263 review finding):
+    # a pattern like `data/raw/*` matches the literal STRING "data/raw/" —
+    # `git check-ignore -- data/raw/ ...` echoes it back as ignored even
+    # though the directory itself is not excluded, only its immediate
+    # contents are (minus whatever a later `!` re-include exempts). That
+    # false "directory ignored" verdict would then be cached and wrongly
+    # applied to every later file in the directory, INCLUDING one a `!`
+    # rule legitimately re-includes — a silent under-tracking regression.
+    # Querying the bare directory name instead asks git the real question
+    # ("is `data/raw` itself excluded?"): a genuinely directory-excluding
+    # pattern (`build/`) still matches the bare name, but a
+    # contents-only pattern (`data/raw/*`) does not, so `dir_ignored` stays
+    # False and each file is still checked on its own merits (same
+    # subprocess cost as before this cache existed). A NESTED directory
+    # whose own path is swept up by the contents-only pattern (e.g.
+    # `data/raw/sub` under `data/raw/*`) still correctly comes back
+    # ignored — gitignore(5)'s no-re-include-under-an-excluded-parent rule
+    # then genuinely applies to everything beneath it, so the cached True
+    # is not a false positive there.
+    dir_spec = dir_rel_str
     matched = _run_check_ignore(git_root, [dir_spec, rel_str])
     dir_ignored = dir_spec in matched
     file_ignored = rel_str in matched

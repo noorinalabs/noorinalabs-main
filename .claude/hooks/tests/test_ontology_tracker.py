@@ -691,6 +691,186 @@ class GitCheckIgnoreGeneralizationTests(_FakeRepoRootMixin, unittest.TestCase):
         self.assertEqual(get_count(), 1)  # still had to ask, just for this one file
 
 
+class GitCheckIgnoreExcludeThenReincludeTests(_FakeRepoRootMixin, unittest.TestCase):
+    """main#1263 review finding: a trailing-slash directory pathspec is
+    unsound for the `dir/*` + `!dir/**/keeper` idiom.
+
+    ``git check-ignore`` treats a trailing-slash pathspec (``"data/raw/"``)
+    as a literal STRING that a contents-only pattern like ``data/raw/*``
+    matches directly — git echoes that exact string back as "ignored". That
+    is a DIFFERENT fact from the directory itself being excluded, and it is
+    NOT true that every file inside is unconditionally ignored the way a
+    genuine directory-exclusion (``build/``) implies. Caching the
+    trailing-slash answer as ``dir_ignored=True`` therefore silently
+    mis-skips any file a ``!`` rule re-includes — this is the exact
+    ``data/raw/*`` + ``!data/**/.gitkeep`` idiom used by
+    ``noorinalabs-isnad-ingest-platform/.gitignore`` (four committed
+    ``.gitkeep`` files use it).
+
+    Reviewer correction that shaped these fixtures: a COMMITTED keeper is
+    masked by git's index (``check-ignore`` never flags a tracked path
+    regardless of pattern), so a test using an already-``git add``-ed
+    keeper passes for an unrelated reason and proves nothing about the
+    pattern-matching bug. The live bug surface is a keeper that is NOT YET
+    tracked (a newly created ``.gitkeep``, exactly the moment the tracker
+    hook would actually run on it) — that case is kept as its own,
+    explicitly-labeled test alongside the (also explicitly-labeled) tracked
+    case, per review, so nobody later mistakes the tracked test for
+    covering the fix it does not exercise.
+    """
+
+    def setUp(self):
+        super().setUp()
+        hook._GIT_CHECK_IGNORE_CACHE.clear()
+        hook._DIR_CHECK_IGNORE_CACHE.clear()
+        subprocess.run(
+            ["git", "init", "-q", str(self._fake_root)],
+            check=True,
+            capture_output=True,
+            env=hook._hermetic_git_env(),
+        )
+        (self._fake_root / ".gitignore").write_text(
+            "data/raw/*\n!data/**/.gitkeep\n", encoding="utf-8"
+        )
+
+    def tearDown(self):
+        hook._GIT_CHECK_IGNORE_CACHE.clear()
+        hook._DIR_CHECK_IGNORE_CACHE.clear()
+        super().tearDown()
+
+    def test_untracked_reincluded_keeper_is_not_skipped(self):
+        """THE live-bug case (untracked keeper — see class docstring). Seeds
+        the directory cache via the excluded sibling first, matching
+        production call order (whichever file ``check()`` sees first in a
+        directory), then proves the re-included keeper is still tracked."""
+        raw = self._fake_root / "data" / "raw"
+        raw.mkdir(parents=True)
+        dump = raw / "dump.parquet"
+        dump.write_text("binary-stand-in\n", encoding="utf-8")
+        keeper = raw / ".gitkeep"
+        keeper.write_text("", encoding="utf-8")
+
+        self.assertTrue(hook._is_git_ignored(dump.resolve()))  # genuinely excluded
+        self.assertFalse(hook._is_git_ignored(keeper.resolve()))  # re-included by `!`
+
+    def test_tracked_reincluded_keeper_is_not_skipped_for_index_reasons(self):
+        """The steady-state case once a keeper is committed. Passes for a
+        DIFFERENT reason than the fix above (git's index masks a tracked
+        path from check-ignore regardless of pattern matching) and would
+        pass even against the buggy trailing-slash code — see class
+        docstring. Kept only so the tracked case is covered too, and
+        labeled so it is never mistaken for covering the pattern fix."""
+        raw = self._fake_root / "data" / "raw"
+        raw.mkdir(parents=True)
+        dump = raw / "dump.parquet"
+        dump.write_text("binary-stand-in\n", encoding="utf-8")
+        keeper = raw / ".gitkeep"
+        keeper.write_text("", encoding="utf-8")
+        subprocess.run(
+            ["git", "add", "data/raw/.gitkeep"],
+            cwd=str(self._fake_root),
+            check=True,
+            capture_output=True,
+            env=hook._hermetic_git_env(),
+        )
+
+        self.assertTrue(hook._is_git_ignored(dump.resolve()))
+        self.assertFalse(hook._is_git_ignored(keeper.resolve()))
+
+    def test_nested_directory_swept_up_by_contents_pattern_is_still_ignored(self):
+        """A NESTED directory whose own bare name is itself matched by the
+        contents-only pattern (``data/raw/sub`` matches ``data/raw/*``) IS
+        genuinely excluded — gitignore(5)'s no-re-include-under-an-excluded-
+        parent rule then really does apply to everything beneath it, so the
+        directory-cache shortcut short-circuiting to True there is correct
+        behavior, not a regression of the fix above."""
+        sub = self._fake_root / "data" / "raw" / "sub"
+        sub.mkdir(parents=True)
+        nested_keeper = sub / ".gitkeep"
+        nested_keeper.write_text("", encoding="utf-8")
+
+        self.assertTrue(hook._is_git_ignored(nested_keeper.resolve()))
+        self.assertTrue(hook._DIR_CHECK_IGNORE_CACHE[(str(self._fake_root), "data/raw/sub")])
+
+    def test_trailing_slash_is_unsound_bare_name_is_not(self):
+        """Direct guard on the exact mechanism, independent of
+        ``_is_git_ignored``'s call sequence: proves the trap AND the fix in
+        one place, so a future re-introduction of the trailing slash fails
+        immediately rather than needing the fuller scenario above to
+        surface it."""
+        raw = self._fake_root / "data" / "raw"
+        raw.mkdir(parents=True)
+        (raw / "dump.parquet").write_text("x\n", encoding="utf-8")
+
+        # The fix: the bare directory name is NOT reported as matched by a
+        # contents-only pattern.
+        matched_bare = hook._run_check_ignore(self._fake_root, ["data/raw"])
+        self.assertNotIn("data/raw", matched_bare)
+
+        # The trap this guards against: WITH a trailing slash, git DOES
+        # echo the literal string back as matched, proving the slash
+        # version is unsound for this idiom (not merely untested).
+        matched_slash = hook._run_check_ignore(self._fake_root, ["data/raw/"])
+        self.assertIn("data/raw/", matched_slash)
+
+
+class RunCheckIgnoreFailOpenTests(_FakeRepoRootMixin, unittest.TestCase):
+    """main#1263 review: the ``returncode not in (0, 1)`` fail-open branch
+    in ``_run_check_ignore`` had no test pinning it — a mutation deleting it
+    survived the suite. Exit 128 is git's fatal-error code (e.g. an
+    out-of-repo or otherwise invalid pathspec); folding it into "nothing
+    ignored" must fail open (track the file), matching the single-path
+    behavior this module has always had for a subprocess failure.
+    """
+
+    def setUp(self):
+        super().setUp()
+        subprocess.run(
+            ["git", "init", "-q", str(self._fake_root)],
+            check=True,
+            capture_output=True,
+            env=hook._hermetic_git_env(),
+        )
+
+    def test_mocked_fatal_returncode_fails_open(self):
+        """The ``stdout`` here is deliberately NON-empty and formatted
+        exactly like a real ignored-pathspec echo — if the ``returncode not
+        in (0, 1)`` guard were deleted, the code would fall straight
+        through to parsing ``stdout`` and (wrongly) report ``some/path`` as
+        matched anyway, because an empty-stdout fatal error is
+        indistinguishable from "nothing ignored" without this guard. An
+        empty-``stdout`` version of this test would pass with or without
+        the guard and prove nothing (this is exactly the gap the reviewer
+        found survived undetected)."""
+        real_run = subprocess.run
+
+        def _fake_fatal(*args, **kwargs):
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=128,
+                stdout="some/path\n",
+                stderr="fatal: not a git repository\n",
+            )
+
+        subprocess.run = _fake_fatal
+        try:
+            matched = hook._run_check_ignore(self._fake_root, ["some/path"])
+        finally:
+            subprocess.run = real_run
+
+        self.assertEqual(matched, set())
+
+    def test_real_fatal_returncode_also_fails_open(self):
+        """Not mocked: a real ``git check-ignore`` invocation with an
+        out-of-repo pathspec genuinely exits 128 (verified: real git prints
+        ``fatal: ... is outside repository`` and returns 128 for this
+        exact input) — must also fail open, end to end through the real
+        subprocess path."""
+        outside = "/etc/hostname"  # universally readable on Linux test runners
+        matched = hook._run_check_ignore(self._fake_root, [outside])
+        self.assertEqual(matched, set())
+
+
 class SkipNoopWriteTests(_FakeRepoRootMixin, unittest.TestCase):
     """#1122: skip the ``checksums.json`` write when the SHA is unchanged.
 
