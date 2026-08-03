@@ -258,6 +258,7 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -2328,31 +2329,121 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
     )
 
 
-def check(input_data: dict) -> dict | None:
-    """Check PR review requirements.
+# ---------------------------------------------------------------------------
+# Gate decomposition (#1123)
+#
+# `check()` is a FIRST-BLOCKER-WINS gate: its behaviour is defined not only by
+# which conditions block, but by which one blocks FIRST — that selects the
+# message the operator sees, and where gates interact it selects whether
+# anything blocks at all (an `--admin` override ahead of the batch-loop guard;
+# the batch-loop guard ahead of the `is_merge_command` early-exit; the
+# TechDebt block ahead of the board-sync side effect). The sequence below is
+# that order, made explicit.
+#
+# Making it explicit also makes it EDITABLE, which the inline version was not.
+# Three gates ESTABLISH state later gates read — `_gate_merge_command_shape`
+# (PR target), `_gate_pr_fetch` (`pr_data`), `_gate_review_verdicts`
+# (`verdicts`) — and one, `_gate_board_sync`, is a pure side effect that never
+# stops. Those four are the complete set of order-coupled gates; every other
+# gate is a read-only predicate over `_GateContext`. A reorder that moves a
+# consumer ahead of its producer is caught by `_gate_order_block`, which
+# BLOCKS rather than raising (see its docstring).
+# ---------------------------------------------------------------------------
 
-    Returns a `{"decision": "block", "reason": …}` dict when the merge is
-    stopped, a `{"decision": "allow", "systemMessage": …}` dict when the merge
-    proceeds but something is worth stating (see the allow-path advisories at
-    the tail — main#1055 unparseable TechDebt, #1211 scan-mode disclosure), and
-    `None` when the merge proceeds with nothing to report.
 
-    Callers must therefore NOT read a non-`None` return as "blocked": `main()`
-    branches on `decision`, and an advisory exits 0.
+@dataclasses.dataclass(frozen=True)
+class _Stop:
+    """A gate's decision to END `check()`; `result` IS `check()`'s return value.
+
+    Three outcomes have to stay distinguishable, and `dict | None` alone can
+    only express two:
+
+      `None`                       — no blocker HERE; run the next gate.
+      `_Stop(None)`                — allow, nothing to report (exit 0).
+      `_Stop({"decision": ...})`   — block, or allow with a `systemMessage`.
+
+    Collapsing the first two — the mistake a bare `dict | None` gate signature
+    invites — would turn "not my concern" into "merge approved" for every gate
+    that declines to fire, i.e. it would fail open on all of them.
     """
-    tool_name = input_data.get("tool_name", "")
-    if tool_name != "Bash":
-        return None
 
-    command = input_data.get("tool_input", {}).get("command", "")
+    result: dict | None
 
+
+@dataclasses.dataclass
+class _GateContext:
+    """State threaded through the gate sequence.
+
+    Populated progressively: `tool_name`/`command` at construction, the PR
+    target by `_gate_merge_command_shape`, `pr_data` by `_gate_pr_fetch`, and
+    `verdicts` by `_gate_review_verdicts`. Consumers guard their producer
+    explicitly (`if ctx.verdicts is None: return _gate_order_block(...)`)
+    rather than trusting the tuple order.
+    """
+
+    tool_name: str
+    command: str
+    pr_number: str | None = None
+    repo: str | None = None
+    pr_display: str = ""
+    pr_data: dict | None = None
+    verdicts: ReviewVerdicts | None = None
+
+    @classmethod
+    def from_input(cls, input_data: dict) -> "_GateContext":
+        return cls(
+            tool_name=input_data.get("tool_name", ""),
+            command=input_data.get("tool_input", {}).get("command", ""),
+        )
+
+
+def _gate_order_block(ctx: _GateContext, consumer: str, producer: str) -> _Stop:
+    """Fail-CLOSED response to a gate that ran before its producer (#1123).
+
+    Unreachable while `_GATES` holds its declared order — it exists precisely
+    because the decomposition made that order editable, and the cheap failure
+    is the silent one: a verdict-consuming gate that read an unresolved
+    `verdicts` as "nothing to report" would ALLOW the merge, which is the
+    fail-open direction #950 and #981 were both filed for.
+
+    It BLOCKS rather than raising because raising would not block:
+    `_hook_main.run_blocking` catches every `Exception` out of `check()`, logs
+    it, and `sys.exit(0)` — allow. An exception here would therefore be the
+    fail-open it is meant to prevent.
+    """
+    reason = (
+        f"BLOCKED: PR {ctx.pr_display or '(unknown)'} — internal gate-ordering defect: "
+        f"`{consumer}` ran before `{producer}` established the state it reads, so the "
+        "2-reviewer gate was never evaluated.\n"
+        "This is a hook defect, not a review shortfall — report it rather than asking "
+        "reviewers to re-approve. It blocks because a gate that did not run must never "
+        "read as a gate that passed (#1123).\n"
+        "Pass `--admin` for emergency overrides only."
+    )
+    log_pretooluse_block("validate_pr_review", ctx.command, reason)
+    return _Stop({"decision": "block", "reason": reason})
+
+
+def _gate_non_bash_tool(ctx: _GateContext) -> _Stop | None:
+    """Gate 1 — this hook only inspects Bash commands."""
+    if ctx.tool_name != "Bash":
+        return _Stop(None)
+    return None
+
+
+def _gate_admin_override(ctx: _GateContext) -> _Stop | None:
+    """Gate 2 — the `--admin` emergency override."""
     # `--admin` is the emergency override — it bypasses the whole gate
     # (including the batch-loop guard below), matching the existing
     # short-circuit semantics. Checked first so an explicit admin override
     # is honored even for the loop shape.
-    if "--admin" in command:
-        return None
+    if "--admin" in ctx.command:
+        return _Stop(None)
+    return None
 
+
+def _gate_batch_loop_merge(ctx: _GateContext) -> _Stop | None:
+    """Gate 3 — the batch-loop merge guard, which MUST precede gate 4."""
     # Batch-loop merge guard (#567/#894/#897): a `gh pr merge` with no resolvable
     # literal PR number inside a for/while loop fail-opens the 2-reviewer gate.
     # That covers a loop-variable arg (`$pr`, `${prs[$i]}`, `$(get_pr)`) AND a
@@ -2370,7 +2461,7 @@ def check(input_data: dict) -> dict | None:
     # returns False and `check()` would early-exit — re-opening the exact
     # fail-open hole this guard closes. Detecting the loop shape here is the
     # only placement that fires on it.
-    if is_variable_pr_merge_in_loop(command):
+    if is_variable_pr_merge_in_loop(ctx.command):
         result = {
             "decision": "block",
             "reason": (
@@ -2391,18 +2482,33 @@ def check(input_data: dict) -> dict | None:
                 "is checked for two distinct Approved reviewers individually."
             ),
         }
-        log_pretooluse_block("validate_pr_review", command, result["reason"])
-        return result
+        log_pretooluse_block("validate_pr_review", ctx.command, result["reason"])
+        return _Stop(result)
+    return None
 
+
+def _gate_merge_command_shape(ctx: _GateContext) -> _Stop | None:
+    """Gate 4 — the merge shape, and the PR target every later gate reads.
+
+    Resolves `pr_number`/`repo`/`pr_display` here rather than at context
+    construction on purpose: this hook fires on EVERY Bash tool call, and
+    `extract_repo` runs a full bashlex parse. Parsing eagerly would pay that
+    cost on every `ls`, and would run the parser against commands the gate
+    never inspects.
+    """
     # Not the loop shape — only a plain `gh pr merge <N>` invocation is gated
     # below. Anything else (gh pr list/view/create, git merge, …) is allowed.
-    if not is_merge_command(command):
-        return None
+    if not is_merge_command(ctx.command):
+        return _Stop(None)
 
-    pr_number = extract_pr_number(command)
-    repo = extract_repo(command)
-    pr_display = f"#{pr_number}" if pr_number else "(current branch)"
+    ctx.pr_number = extract_pr_number(ctx.command)
+    ctx.repo = extract_repo(ctx.command)
+    ctx.pr_display = f"#{ctx.pr_number}" if ctx.pr_number else "(current branch)"
+    return None
 
+
+def _gate_repo_argument(ctx: _GateContext) -> _Stop | None:
+    """Gate 5 — a `--repo` value that cannot be resolved to an OWNER/NAME."""
     # Unresolvable `--repo` (#981). A `-R` value the gate cannot resolve to an
     # OWNER/NAME — an unexpanded `$DA`, or a value with no `/` — is checked
     # BEFORE any fetch, because no fetch can succeed against it and the failure
@@ -2419,6 +2525,8 @@ def check(input_data: dict) -> dict | None:
     # never reached — so the 2-reviewer gate was silently off for four P9W25 da
     # merges. Note the issue body pins this on `_resolve_owner_repo` inside
     # `check_comment_reviews`; that path is NOT reachable on the merge path.
+    pr_display = ctx.pr_display
+    repo = ctx.repo
     defect = repo_argument_defect(repo)
     if defect is not None:
         result = {
@@ -2440,10 +2548,16 @@ def check(input_data: dict) -> dict | None:
                 "Pass `--admin` for emergency overrides only."
             ),
         }
-        log_pretooluse_block("validate_pr_review", command, result["reason"])
-        return result
+        log_pretooluse_block("validate_pr_review", ctx.command, result["reason"])
+        return _Stop(result)
+    return None
 
-    pr_data = get_pr_data(pr_number, repo=repo)
+
+def _gate_pr_fetch(ctx: _GateContext) -> _Stop | None:
+    """Gate 6 — fetch the PR, and hard-block if it cannot be fetched."""
+    pr_display = ctx.pr_display
+    repo = ctx.repo
+    ctx.pr_data = get_pr_data(ctx.pr_number, repo=repo)
 
     # Generic fetch failure (#981). The repo argument is well-formed (or absent),
     # so this is an auth / network / wrong-PR-number problem — a DIFFERENT
@@ -2451,7 +2565,7 @@ def check(input_data: dict) -> dict | None:
     # fix. It still fails CLOSED: an unverifiable merge is blocked, never
     # allowed-with-a-warning (`feedback_safety_direction_over_ux_friction` — when
     # a hook cannot verify, HARD BLOCK with a diagnostic).
-    if pr_data is None:
+    if ctx.pr_data is None:
         result = {
             "decision": "block",
             "reason": (
@@ -2473,17 +2587,24 @@ def check(input_data: dict) -> dict | None:
                 "Pass `--admin` for emergency overrides only."
             ),
         }
-        log_pretooluse_block("validate_pr_review", command, result["reason"])
-        return result
+        log_pretooluse_block("validate_pr_review", ctx.command, result["reason"])
+        return _Stop(result)
+    return None
 
+
+def _gate_review_verdicts(ctx: _GateContext) -> _Stop | None:
+    """Gate 7 — resolve the verdict set; every resolution failure hard-blocks."""
     # Resolve the full review-verdict set through the ONE shared pipeline
     # (#1048) — content binding, formal + comment reviewer partitioning,
     # roster filtering, and the union/threshold inputs. `check()` and
     # `pr_review_state.compute_review_state` both call `resolve_review_verdicts`
     # rather than each re-assembling this pipeline with their own argument
     # list; that re-derivation was the #1046 defect class.
+    if ctx.pr_data is None:
+        return _gate_order_block(ctx, "_gate_review_verdicts", "_gate_pr_fetch")
+    pr_display = ctx.pr_display
     try:
-        verdicts = resolve_review_verdicts(pr_data, repo=repo)
+        ctx.verdicts = resolve_review_verdicts(ctx.pr_data, repo=ctx.repo)
     except CommitFetchError as exc:
         # Content binding (#950): T_content — the committer timestamp of the
         # branch's latest NON-MERGE commit — could not be established. Without
@@ -2511,8 +2632,8 @@ def check(input_data: dict) -> dict | None:
                 "Pass `--admin` for emergency overrides only."
             ),
         }
-        log_pretooluse_block("validate_pr_review", command, result["reason"])
-        return result
+        log_pretooluse_block("validate_pr_review", ctx.command, result["reason"])
+        return _Stop(result)
     except CommentScanUndeterminedError as exc:
         # Incomplete comment scan (#981 defense-in-depth). An empty reviewer
         # set that came from a FAILED scan is not evidence of anything — it is
@@ -2538,8 +2659,8 @@ def check(input_data: dict) -> dict | None:
                 "Pass `--admin` for emergency overrides only."
             ),
         }
-        log_pretooluse_block("validate_pr_review", command, result["reason"])
-        return result
+        log_pretooluse_block("validate_pr_review", ctx.command, result["reason"])
+        return _Stop(result)
     except RosterResolutionError as exc:
         # Roster resolved relative to the PR's TARGET repo (#552): the parent
         # roster is unioned with the named child repo's `.claude/team/roster/`.
@@ -2565,15 +2686,175 @@ def check(input_data: dict) -> dict | None:
                 "Pass `--admin` for emergency overrides only."
             ),
         }
-        log_pretooluse_block("validate_pr_review", command, result["reason"])
-        return result
+        log_pretooluse_block("validate_pr_review", ctx.command, result["reason"])
+        return _Stop(result)
+    return None
 
-    content_ts = verdicts.content_ts
-    content_sha = verdicts.content_sha
+
+def _stale_verdict_diagnostic(verdicts: ReviewVerdicts, pr_display: str) -> str:
+    """Threshold-block preamble naming each STALE verdict (#950), or ""."""
+    total_distinct = verdicts.total_distinct
     stale_verdicts = verdicts.stale_verdicts
-    roster_names = verdicts.roster_names
+    content_sha = verdicts.content_sha
+    content_ts = verdicts.content_ts
+    # If the shortfall is wholly or partly caused by STALE verdicts, lead with
+    # a diagnostic that names each one (#950). Without this an operator seeing
+    # `0/2 approvals` on a PR with two visible `Approved` comments concludes
+    # the hook is broken — so the message must say WHICH verdict went stale,
+    # WHEN it was cast, and WHICH commit invalidated it, and must pre-empt the
+    # natural next fear ("did a branch update just invalidate my approvals?").
+    stale_diagnostic = ""
+    if stale_verdicts:
+        lines = [
+            f"BLOCKED: PR {pr_display} has {total_distinct}/2 CURRENT approvals — "
+            f"{len(stale_verdicts)} verdict(s) went STALE.\n"
+        ]
+        for sv in sorted(stale_verdicts, key=lambda v: v.created_at):
+            cast_at = sv.created_at or "<no timestamp>"
+            lines.append(
+                f"  {sv.reviewer:<18} {sv.verdict:<17} {cast_at}  "
+                f"x STALE — cast before {content_sha} "
+                f"({content_ts.isoformat() if content_ts else '?'})\n"
+            )
+        lines.append(
+            "\nA verdict cast BEFORE the branch's latest non-merge commit reviewed code "
+            "that has since been rewritten, so it does not count toward the 2-reviewer "
+            "threshold. It has not been deleted or dismissed — only not counted.\n"
+            "Branch updates from `main` (merge commits) do NOT invalidate a verdict; "
+            "only NEW AUTHORED commits do. If you just ran `update-branch`, that is not "
+            "what happened here.\n"
+            "Fix: ask the reviewer to re-review at the current head and post a fresh "
+            f"`RequestOrReplied: Approved` comment (head content commit: {content_sha}).\n"
+            "Rationale (#950): on da#423 this gate counted an approval of the revision "
+            "that deleted the Prophet's daughter — after that revision had been rewritten "
+            "precisely because it was wrong.\n\n"
+        )
+        stale_diagnostic = "".join(lines)
+    return stale_diagnostic
+
+
+def _non_roster_requestor_diagnostic(verdicts: ReviewVerdicts, pr_display: str) -> str:
+    """Threshold-block preamble naming non-roster Requestors (#498), or ""."""
     non_roster_requestors = verdicts.non_roster_requestors
+    roster_names = verdicts.roster_names
     roster_comment_reviewers = verdicts.roster_comment_reviewers
+    # If the shortfall is wholly or partly caused by non-roster Requestor
+    # strings, prepend a dedicated diagnostic that names them (#498). The
+    # general 2-reviewer guidance still follows below.
+    roster_diagnostic = ""
+    if non_roster_requestors:
+        sample_roster = sorted(roster_names)[:20]
+        sample_label = (
+            f"Valid roster ({len(roster_names)} total, first 20): {', '.join(sample_roster)}"
+            if roster_names
+            else "Valid roster: <empty — local roster dir could not be read>"
+        )
+        raw_total = len(verdicts.comment_reviewers)
+        roster_count = len(roster_comment_reviewers)
+        roster_diagnostic = (
+            f"BLOCKED: PR {pr_display} has {raw_total} distinct Requestor string(s) "
+            f"on Approved verdicts but only {roster_count} are recognized roster "
+            "members.\n"
+            f"Non-roster: {', '.join(sorted(non_roster_requestors))}\n"
+            f"{sample_label}\n"
+            "Hook 4 (#498) requires every Approved verdict's Requestor to match a "
+            "persona in `.claude/team/roster/` — non-roster Requestor strings do "
+            "NOT count toward the 2-reviewer threshold. Re-post the verdict under a "
+            "roster persona, or amend the roster if this is a new member.\n\n"
+        )
+    return roster_diagnostic
+
+
+def _scan_mode_diagnostic(verdicts: ReviewVerdicts, pr_display: str) -> str:
+    """Threshold-block preamble naming the comment-scan mode (#1206), or ""."""
+    total_distinct = verdicts.total_distinct
+    # State the comment scan's OWN status alongside the count (#1206). A
+    # shortfall reported without it is ambiguous between "the thread was
+    # read and the approvals are not there" and "the thread was never
+    # read" — and for every non-persona head ref the answer used to be the
+    # second one, silently. Naming the mode makes the count self-describing
+    # on the surface an operator actually sees at merge time.
+    scan_diagnostic = ""
+    if not verdicts.comment_scan_ran:
+        scan_diagnostic = (
+            f"BLOCKED: PR {pr_display} — the PR-comment verdict scan DID NOT RUN, so the "
+            f"{total_distinct}/2 count below is NOT a measurement of this PR's approvals.\n"
+            "Any comment-based Approved verdicts on this PR were never read (#1206). This "
+            "is a hook defect, not a review shortfall — report it rather than asking "
+            "reviewers to re-approve.\n\n"
+        )
+    elif verdicts.comment_scan == COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED:
+        # Name the derived authors. A reviewer whose verdict was dropped
+        # because the gate concluded they wrote the branch must be able to
+        # SEE that conclusion and check it — an unexplained subtraction is
+        # the #950 "operator concludes the hook is broken" failure with a
+        # new cause.
+        derived = ", ".join(i.display for i in verdicts.commit_author_identities) or "(none)"
+        scan_diagnostic = (
+            f"NOTE: head ref `{verdicts.head_ref or '(unknown)'}` carries no "
+            "`{Initial}.{Lastname}` branch-author prefix, so the branch author was "
+            f"derived from COMMIT IDENTITY instead: {derived}. Any verdict from those "
+            "personas is excluded as a self-review; every other roster-valid Approved "
+            "Requestor counts. The scan DID run; the count below is a real measurement "
+            "(#1210).\n\n"
+        )
+    elif verdicts.comment_scan == COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER:
+        # #1220: an identity WAS derived, and it excluded nothing. Saying so
+        # is the point — the pre-#1220 message claimed a subtraction here,
+        # which sent an operator looking for a verdict that was never
+        # dropped. Naming the identity still matters: it is what they would
+        # audit if they thought the derivation had picked the wrong person.
+        derived = ", ".join(i.display for i in verdicts.commit_author_identities) or "(none)"
+        scan_diagnostic = (
+            f"NOTE: head ref `{verdicts.head_ref or '(unknown)'}` carries no "
+            "`{Initial}.{Lastname}` branch-author prefix, so the branch author was "
+            f"derived from COMMIT IDENTITY instead: {derived} — which matches no roster "
+            "persona, so NO verdict was excluded as a self-review (a bot, a web-UI "
+            "commit, or an outside contributor). Every roster-valid Approved Requestor "
+            "counts. The scan DID run; the count below is a real measurement "
+            "(#1206/#1220).\n\n"
+        )
+    elif verdicts.comment_scan == COMMENT_SCAN_WAVE_INTEGRATION:
+        # #1216. An operator staring at a short count on a wave-merge PR must
+        # not be told the gate subtracted somebody — it did not — nor be left
+        # to infer that the wave's implementers were silently dropped, which
+        # is what the pre-#1216 message asserted in so many words.
+        scan_diagnostic = (
+            f"NOTE: head ref `{verdicts.head_ref or '(unknown)'}` is a wave branch, so "
+            "this is a wave->main INTEGRATION PR. Its commits are the wave's "
+            "implementers, each already 2x-reviewed on its own per-issue PR, and the "
+            "integration PR authors no content of its own — so no self-review "
+            "exclusion was applied and EVERY roster-valid Approved Requestor counts, "
+            "including an implementer's (charter `pull-requests/reviews.md` § Who "
+            'counts as "the PR author", #1216). The scan DID run and nothing was '
+            "subtracted; the count below is short on approvals, not on eligibility.\n"
+            "Per `pull-requests/wave-merge.md` § Wave Merge PR Verification point 5, "
+            "fresh 2-reviewer approval on an integration PR is NOT required — the "
+            'expected path is `ADMIN_MERGE_EXCEPTION="wave-merge:<rationale>" gh pr '
+            "merge <N> --merge --admin`.\n\n"
+        )
+    elif verdicts.comment_scan == COMMENT_SCAN_NO_BRANCH_AUTHOR:
+        scan_diagnostic = (
+            f"NOTE: head ref `{verdicts.head_ref or '(unknown)'}` carries no "
+            "`{Initial}.{Lastname}` branch-author prefix (a bot branch, a non-wave "
+            "`deployments/**` branch, or a branch off the charter naming convention), "
+            "AND the PR's "
+            "commits named no persona either (a bot author, a merge-only branch, or a "
+            "squashed commit re-authored to the bare principal — #1177/#1210), so the "
+            "comment verdict scan ran WITHOUT self-review exclusion — every "
+            "roster-valid Approved Requestor counts. The scan DID run; the count below "
+            "is a real measurement (#1206).\n\n"
+        )
+    return scan_diagnostic
+
+
+def _gate_reviewer_threshold(ctx: _GateContext) -> _Stop | None:
+    """Gate 8 — the two-distinct-reviewer threshold, and its Single-Reviewer
+    Exception."""
+    if ctx.verdicts is None:
+        return _gate_order_block(ctx, "_gate_reviewer_threshold", "_gate_review_verdicts")
+    verdicts = ctx.verdicts
+    pr_display = ctx.pr_display
     total_distinct = verdicts.total_distinct
 
     # Single-Reviewer Exception (resolves #228) — wave-bootstrap PRs reviewed
@@ -2583,141 +2864,9 @@ def check(input_data: dict) -> dict | None:
         # Exception applies — fall through to TechDebt check, then allow.
         pass
     elif total_distinct < 2:
-        # If the shortfall is wholly or partly caused by STALE verdicts, lead with
-        # a diagnostic that names each one (#950). Without this an operator seeing
-        # `0/2 approvals` on a PR with two visible `Approved` comments concludes
-        # the hook is broken — so the message must say WHICH verdict went stale,
-        # WHEN it was cast, and WHICH commit invalidated it, and must pre-empt the
-        # natural next fear ("did a branch update just invalidate my approvals?").
-        stale_diagnostic = ""
-        if stale_verdicts:
-            lines = [
-                f"BLOCKED: PR {pr_display} has {total_distinct}/2 CURRENT approvals — "
-                f"{len(stale_verdicts)} verdict(s) went STALE.\n"
-            ]
-            for sv in sorted(stale_verdicts, key=lambda v: v.created_at):
-                cast_at = sv.created_at or "<no timestamp>"
-                lines.append(
-                    f"  {sv.reviewer:<18} {sv.verdict:<17} {cast_at}  "
-                    f"x STALE — cast before {content_sha} "
-                    f"({content_ts.isoformat() if content_ts else '?'})\n"
-                )
-            lines.append(
-                "\nA verdict cast BEFORE the branch's latest non-merge commit reviewed code "
-                "that has since been rewritten, so it does not count toward the 2-reviewer "
-                "threshold. It has not been deleted or dismissed — only not counted.\n"
-                "Branch updates from `main` (merge commits) do NOT invalidate a verdict; "
-                "only NEW AUTHORED commits do. If you just ran `update-branch`, that is not "
-                "what happened here.\n"
-                "Fix: ask the reviewer to re-review at the current head and post a fresh "
-                f"`RequestOrReplied: Approved` comment (head content commit: {content_sha}).\n"
-                "Rationale (#950): on da#423 this gate counted an approval of the revision "
-                "that deleted the Prophet's daughter — after that revision had been rewritten "
-                "precisely because it was wrong.\n\n"
-            )
-            stale_diagnostic = "".join(lines)
-
-        # If the shortfall is wholly or partly caused by non-roster Requestor
-        # strings, prepend a dedicated diagnostic that names them (#498). The
-        # general 2-reviewer guidance still follows below.
-        roster_diagnostic = ""
-        if non_roster_requestors:
-            sample_roster = sorted(roster_names)[:20]
-            sample_label = (
-                f"Valid roster ({len(roster_names)} total, first 20): {', '.join(sample_roster)}"
-                if roster_names
-                else "Valid roster: <empty — local roster dir could not be read>"
-            )
-            raw_total = len(verdicts.comment_reviewers)
-            roster_count = len(roster_comment_reviewers)
-            roster_diagnostic = (
-                f"BLOCKED: PR {pr_display} has {raw_total} distinct Requestor string(s) "
-                f"on Approved verdicts but only {roster_count} are recognized roster "
-                "members.\n"
-                f"Non-roster: {', '.join(sorted(non_roster_requestors))}\n"
-                f"{sample_label}\n"
-                "Hook 4 (#498) requires every Approved verdict's Requestor to match a "
-                "persona in `.claude/team/roster/` — non-roster Requestor strings do "
-                "NOT count toward the 2-reviewer threshold. Re-post the verdict under a "
-                "roster persona, or amend the roster if this is a new member.\n\n"
-            )
-        # State the comment scan's OWN status alongside the count (#1206). A
-        # shortfall reported without it is ambiguous between "the thread was
-        # read and the approvals are not there" and "the thread was never
-        # read" — and for every non-persona head ref the answer used to be the
-        # second one, silently. Naming the mode makes the count self-describing
-        # on the surface an operator actually sees at merge time.
-        scan_diagnostic = ""
-        if not verdicts.comment_scan_ran:
-            scan_diagnostic = (
-                f"BLOCKED: PR {pr_display} — the PR-comment verdict scan DID NOT RUN, so the "
-                f"{total_distinct}/2 count below is NOT a measurement of this PR's approvals.\n"
-                "Any comment-based Approved verdicts on this PR were never read (#1206). This "
-                "is a hook defect, not a review shortfall — report it rather than asking "
-                "reviewers to re-approve.\n\n"
-            )
-        elif verdicts.comment_scan == COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED:
-            # Name the derived authors. A reviewer whose verdict was dropped
-            # because the gate concluded they wrote the branch must be able to
-            # SEE that conclusion and check it — an unexplained subtraction is
-            # the #950 "operator concludes the hook is broken" failure with a
-            # new cause.
-            derived = ", ".join(i.display for i in verdicts.commit_author_identities) or "(none)"
-            scan_diagnostic = (
-                f"NOTE: head ref `{verdicts.head_ref or '(unknown)'}` carries no "
-                "`{Initial}.{Lastname}` branch-author prefix, so the branch author was "
-                f"derived from COMMIT IDENTITY instead: {derived}. Any verdict from those "
-                "personas is excluded as a self-review; every other roster-valid Approved "
-                "Requestor counts. The scan DID run; the count below is a real measurement "
-                "(#1210).\n\n"
-            )
-        elif verdicts.comment_scan == COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER:
-            # #1220: an identity WAS derived, and it excluded nothing. Saying so
-            # is the point — the pre-#1220 message claimed a subtraction here,
-            # which sent an operator looking for a verdict that was never
-            # dropped. Naming the identity still matters: it is what they would
-            # audit if they thought the derivation had picked the wrong person.
-            derived = ", ".join(i.display for i in verdicts.commit_author_identities) or "(none)"
-            scan_diagnostic = (
-                f"NOTE: head ref `{verdicts.head_ref or '(unknown)'}` carries no "
-                "`{Initial}.{Lastname}` branch-author prefix, so the branch author was "
-                f"derived from COMMIT IDENTITY instead: {derived} — which matches no roster "
-                "persona, so NO verdict was excluded as a self-review (a bot, a web-UI "
-                "commit, or an outside contributor). Every roster-valid Approved Requestor "
-                "counts. The scan DID run; the count below is a real measurement "
-                "(#1206/#1220).\n\n"
-            )
-        elif verdicts.comment_scan == COMMENT_SCAN_WAVE_INTEGRATION:
-            # #1216. An operator staring at a short count on a wave-merge PR must
-            # not be told the gate subtracted somebody — it did not — nor be left
-            # to infer that the wave's implementers were silently dropped, which
-            # is what the pre-#1216 message asserted in so many words.
-            scan_diagnostic = (
-                f"NOTE: head ref `{verdicts.head_ref or '(unknown)'}` is a wave branch, so "
-                "this is a wave->main INTEGRATION PR. Its commits are the wave's "
-                "implementers, each already 2x-reviewed on its own per-issue PR, and the "
-                "integration PR authors no content of its own — so no self-review "
-                "exclusion was applied and EVERY roster-valid Approved Requestor counts, "
-                "including an implementer's (charter `pull-requests/reviews.md` § Who "
-                'counts as "the PR author", #1216). The scan DID run and nothing was '
-                "subtracted; the count below is short on approvals, not on eligibility.\n"
-                "Per `pull-requests/wave-merge.md` § Wave Merge PR Verification point 5, "
-                "fresh 2-reviewer approval on an integration PR is NOT required — the "
-                'expected path is `ADMIN_MERGE_EXCEPTION="wave-merge:<rationale>" gh pr '
-                "merge <N> --merge --admin`.\n\n"
-            )
-        elif verdicts.comment_scan == COMMENT_SCAN_NO_BRANCH_AUTHOR:
-            scan_diagnostic = (
-                f"NOTE: head ref `{verdicts.head_ref or '(unknown)'}` carries no "
-                "`{Initial}.{Lastname}` branch-author prefix (a bot branch, a non-wave "
-                "`deployments/**` branch, or a branch off the charter naming convention), "
-                "AND the PR's "
-                "commits named no persona either (a bot author, a merge-only branch, or a "
-                "squashed commit re-authored to the bare principal — #1177/#1210), so the "
-                "comment verdict scan ran WITHOUT self-review exclusion — every "
-                "roster-valid Approved Requestor counts. The scan DID run; the count below "
-                "is a real measurement (#1206).\n\n"
-            )
+        stale_diagnostic = _stale_verdict_diagnostic(verdicts, pr_display)
+        roster_diagnostic = _non_roster_requestor_diagnostic(verdicts, pr_display)
+        scan_diagnostic = _scan_mode_diagnostic(verdicts, pr_display)
 
         result = {
             "decision": "block",
@@ -2795,10 +2944,17 @@ def check(input_data: dict) -> dict | None:
                 "See memory feedback_pr_review_verdict_format.md for full context."
             ),
         }
-        log_pretooluse_block("validate_pr_review", command, result["reason"])
-        return result
+        log_pretooluse_block("validate_pr_review", ctx.command, result["reason"])
+        return _Stop(result)
+    return None
 
-    missing = verdicts.reviews_missing_tech_debt
+
+def _gate_tech_debt_attestation(ctx: _GateContext) -> _Stop | None:
+    """Gate 9 — every counted verdict must carry a `TechDebt:` line."""
+    if ctx.verdicts is None:
+        return _gate_order_block(ctx, "_gate_tech_debt_attestation", "_gate_review_verdicts")
+    pr_display = ctx.pr_display
+    missing = ctx.verdicts.reviews_missing_tech_debt
     if missing:
         names = ", ".join(missing)
         result = {
@@ -2816,9 +2972,23 @@ def check(input_data: dict) -> dict | None:
                 "Pass `--admin` for emergency overrides only."
             ),
         }
-        log_pretooluse_block("validate_pr_review", command, result["reason"])
-        return result
+        log_pretooluse_block("validate_pr_review", ctx.command, result["reason"])
+        return _Stop(result)
+    return None
 
+
+def _gate_board_sync(ctx: _GateContext) -> _Stop | None:
+    """Gate 10 — a SIDE EFFECT, never a blocker: put every referenced
+    tech-debt issue on the board.
+
+    Ordered AFTER every block above on purpose — a PR that is about to be
+    blocked must not have its referenced issues added to the board as though
+    the review had been accepted.
+    """
+    if ctx.verdicts is None:
+        return _gate_order_block(ctx, "_gate_board_sync", "_gate_review_verdicts")
+    verdicts = ctx.verdicts
+    repo = ctx.repo
     # All checks passed — ensure any referenced tech-debt issues are on the board
     td_issues = verdicts.tech_debt_issue_numbers
     if td_issues:
@@ -2839,6 +3009,16 @@ def check(input_data: dict) -> dict | None:
                 pass
         if board_repo_name:
             ensure_issues_on_board(board_repo_name, td_issues)
+    return None
+
+
+def _gate_allow_advisories(ctx: _GateContext) -> _Stop | None:
+    """Gate 11 — the allow path: accumulate non-blocking advisories (#1211)."""
+    if ctx.verdicts is None:
+        return _gate_order_block(ctx, "_gate_allow_advisories", "_gate_review_verdicts")
+    verdicts = ctx.verdicts
+    pr_display = ctx.pr_display
+    total_distinct = verdicts.total_distinct
 
     # ---- Non-blocking allow-path advisories (#1211) -------------------------
     #
@@ -2944,8 +3124,44 @@ def check(input_data: dict) -> dict | None:
         )
 
     if advisories:
-        return {"decision": "allow", "systemMessage": "\n\n".join(advisories)}
+        return _Stop({"decision": "allow", "systemMessage": "\n\n".join(advisories)})
+    return None
 
+
+# The gate sequence, first blocker wins. ORDER IS BEHAVIOUR — see the module
+# header block above; every entry's docstring names what it depends on.
+_GATES: tuple[Callable[[_GateContext], _Stop | None], ...] = (
+    _gate_non_bash_tool,
+    _gate_admin_override,
+    _gate_batch_loop_merge,
+    _gate_merge_command_shape,
+    _gate_repo_argument,
+    _gate_pr_fetch,
+    _gate_review_verdicts,
+    _gate_reviewer_threshold,
+    _gate_tech_debt_attestation,
+    _gate_board_sync,
+    _gate_allow_advisories,
+)
+
+
+def check(input_data: dict) -> dict | None:
+    """Check PR review requirements.
+
+    Returns a `{"decision": "block", "reason": …}` dict when the merge is
+    stopped, a `{"decision": "allow", "systemMessage": …}` dict when the merge
+    proceeds but something is worth stating (see the allow-path advisories at
+    the tail — main#1055 unparseable TechDebt, #1211 scan-mode disclosure), and
+    `None` when the merge proceeds with nothing to report.
+
+    Callers must therefore NOT read a non-`None` return as "blocked": `main()`
+    branches on `decision`, and an advisory exits 0.
+    """
+    ctx = _GateContext.from_input(input_data)
+    for gate in _GATES:
+        stop = gate(ctx)
+        if stop is not None:
+            return stop.result
     return None
 
 
