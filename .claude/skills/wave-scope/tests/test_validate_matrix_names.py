@@ -1411,6 +1411,38 @@ class ManifestSourcedSuggestionTests(unittest.TestCase):
             self.assertIn("implementer_substitutions", err)
             self.assertIn("2/2 names UNRESOLVED", err)
 
+    def test_all_three_unresolved_classes_print_their_own_remediation(self):
+        """All three trailers are independent `if`s, not one chained decision.
+
+        Two classes is not enough to catch chaining: with only one of the two
+        LATER counters non-zero, an `elif` still runs. Only a run carrying all
+        three distinguishes independent `if`s from a chain — measured, the
+        two-class test left the `elif org_persona_unreadable` mutant ALIVE.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            report = validate(
+                {
+                    self.UNCLONED_REPO: {"implementer": self.ORG_PERSONA},  # unreadable
+                    self.CLONED_REPO: {"implementer": self.ORG_PERSONA},  # not-a-member
+                    "noorinalabs-isnad-graph": {"implementer": "Totally Unknown"},
+                },
+                org,
+            )
+            reasons = sorted(
+                f["unresolved_reason"] for fs in report.values() for f in fs if not f["resolved"]
+            )
+            self.assertEqual(
+                reasons,
+                ["org-persona-not-a-member", "org-persona-unreadable-roster", "unknown-name"],
+            )
+            code, err = _report_stderr(report)
+            self.assertEqual(code, 1)
+            self.assertIn("Resolve each unknown name", err)
+            self.assertIn("resolve as KNOWN org personas but are NOT on", err)
+            self.assertIn("--fetch-missing", err)
+            self.assertIn("3/3 names UNRESOLVED", err)
+
     def test_scope_mode_carries_the_diagnostic_end_to_end(self):
         """The path /wave-scope § 12.5 and /wave-kickoff § 0b actually run."""
         with tempfile.TemporaryDirectory() as tmpdir:
