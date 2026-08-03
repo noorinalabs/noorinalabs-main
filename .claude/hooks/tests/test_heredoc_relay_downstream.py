@@ -767,19 +767,16 @@ class SiblingIssueMeasurementTests(unittest.TestCase):
         cmd = "cat > \\\nnotes.md <<'EOF'\nsome prose about bash -c 'foo'\nEOF"
         _assert_allowed(self, cmd)
 
-    def test_1170_fifo_relay_measured_still_open(self):
-        """main#1170: `mkfifo p; bash < p & cat <<'D' > p` — a structurally
-        different gap (dataflow through a named pipe across a `&`
-        background-job boundary, not a `|`-connected pipeline segment this
-        fix's walk ever reaches). Measured to remain ALLOW after this fix;
-        NOT folded in per the spawn brief's explicit scope boundary. This
-        test pins today's measurement and is expected to start FAILING (in
-        the good direction) once #1170 lands its own fix — at which point it
-        should be deleted, not "fixed" to assert BLOCK, since that fix
-        belongs to #1170's own PR.
-        """
-        cmd = "mkfifo p; bash < p & cat <<'D' > p\n" + REAL_COMMIT + "\nD"
-        _assert_allowed(self, cmd)
+    # test_1170_fifo_relay_measured_still_open removed: main#1170 landed its
+    # own fix (stdin-redirect operand resolution in
+    # `parse_interpreter_invocation`/`_script_invocation_targets`, see
+    # `_shell_parse.py`'s "Explicit scope boundary" comment above
+    # `_segment_write_targets`). Both FIFO shapes from that issue now BLOCK;
+    # coverage moved to `test_heredoc_write_then_exec.py`'s
+    # `StdinRedirectOperandTests` (main#1170 reuses that same write-then-exec
+    # correlation, just with the interpreter's script fed via `< FILE` rather
+    # than a positional operand), per this test's own docstring instruction
+    # to delete rather than flip the assertion here.
 
 
 if __name__ == "__main__":  # pragma: no cover
