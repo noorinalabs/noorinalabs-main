@@ -63,10 +63,16 @@ piped through `git patch-id --stable`, and `git cherry`). Coverage:
     -> merged / content-equivalent
   * every internal git-command failure/unexpected-result site degrades to
     unmerged, never merged: own diff, own diff patch-id, own diff patch-id
-    producing no output for a non-empty diff (fail-open guard), main log,
-    main patch-id, git cherry, the per-"+"-candidate empty-commit diff
-    check, the merges rev-list enumeration, and the evil-merge
-    diff-tree --cc check
+    producing no output for a non-empty diff (fail-open guard), the
+    streamed main-range log|patch-id pipeline (either stage), git cherry,
+    the per-"+"-candidate empty-commit diff check, the merges rev-list
+    enumeration, and the evil-merge diff-tree --cc check
+  * streaming (#1214): `_git_log_patch_id` connects `git log -p`'s stdout
+    directly to `git patch-id`'s stdin over an OS pipe instead of buffering
+    the full patch text into a Python string first — pinned structurally
+    (no `subprocess.run`/`input=` call site, `stdin` is a pipe object) and
+    for output-equivalence against the old buffer-then-pipe two-step, with
+    a dedicated failure case for the `git log` stage itself
   * CLI exit code mirrors `.merged` (0 iff merged, 1 otherwise)
 """
 
@@ -75,9 +81,11 @@ from __future__ import annotations
 import subprocess
 import sys
 import unittest
+import unittest.mock
 from collections.abc import Sequence
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 
 # Helper lives at .claude/lib/check_worktree_merged.py; this test is at
 # .claude/lib/tests/.
@@ -85,7 +93,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from check_worktree_merged import (  # noqa: E402
     GitRunner,
+    LogPatchIdRunner,
     PipeRunner,
+    _git_log_patch_id,
     classify_merged,
 )
 from check_worktree_merged import (
@@ -164,6 +174,25 @@ def _runner_intercepting(subcommand: str, occurrence: int, *, mode: str = "fail"
             if seen["n"] == occurrence:
                 return _fail(args) if mode == "fail" else _empty_ok(args)
         return _git_ok(list(args), cwd)
+
+    return wrapper
+
+
+def _log_patch_id_failing(
+    returncode: int = 128, stderr: str = "simulated failure"
+) -> LogPatchIdRunner:
+    """A LogPatchIdRunner fake that fails unconditionally — stands in for
+    EITHER of the two stages `_git_log_patch_id` pipes together (`git log`
+    or `git patch-id`) failing, since #1214 merged both into one seam that
+    classify_merged only ever sees a single combined pass/fail result from."""
+
+    def wrapper(log_args: Sequence[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args=["git", *log_args, "|", "git", "patch-id", "--stable"],
+            returncode=returncode,
+            stdout="",
+            stderr=stderr,
+        )
 
     return wrapper
 
@@ -686,25 +715,88 @@ class CheckWorktreeMergedTest(unittest.TestCase):
         self.assertFalse(result.merged)
         self.assertIn("produced no output", result.detail)
 
-    def test_main_log_failure_degrades(self) -> None:
+    def test_main_log_patch_id_failure_degrades(self) -> None:
+        """Covers BOTH failure surfaces `_git_log_patch_id` pipes together
+        (`git log` itself failing, or `git patch-id` itself failing) — #1214
+        merged the two into one streamed seam, so classify_merged only ever
+        sees a single combined pass/fail result from `log_patch_id_runner`
+        regardless of which internal stage actually failed."""
         feature_tip = self._multi_commit_squash()
-        runner = _runner_intercepting("log", occurrence=1, mode="fail")
         result = classify_merged(
-            self.repo, feature_tip, "main", runner=runner, pipe_runner=_git_pipe_real
+            self.repo,
+            feature_tip,
+            "main",
+            runner=_git_ok,
+            pipe_runner=_git_pipe_real,
+            log_patch_id_runner=_log_patch_id_failing(),
         )
         self.assertEqual(result.status, "unmerged")
         self.assertEqual(result.reason, "content-check-failed")
         self.assertFalse(result.merged)
 
-    def test_main_patch_id_failure_degrades(self) -> None:
-        feature_tip = self._multi_commit_squash()
-        pipe_runner = _pipe_intercepting(occurrence=2, mode="fail")
-        result = classify_merged(
-            self.repo, feature_tip, "main", runner=_git_ok, pipe_runner=pipe_runner
+    # ---- streaming (#1214): no full patch-text buffering ---------------------
+
+    def test_git_log_patch_id_streams_without_buffering_full_text(self) -> None:
+        """The actual point of #1214: `git log`'s stdout must be connected
+        directly to `git patch-id`'s stdin via an OS pipe, never fully
+        materialized as a Python string first. Proven structurally: every
+        OTHER helper in this module (`_git`, `_git_pipe`) goes through
+        `subprocess.run` (`capture_output=True` / `input=<str>`, which
+        necessarily buffers); `_git_log_patch_id` must never call
+        `subprocess.run` at all, only `Popen`, and the second `Popen`'s
+        `stdin` must be the first `Popen`'s own stdout pipe object (not a
+        string) — `input=` never appears in its kwargs."""
+        self._multi_commit_squash()
+
+        popen_calls: list[dict[str, object]] = []
+        real_popen = subprocess.Popen
+
+        def recording_popen(*args: Any, **kwargs: Any) -> subprocess.Popen[str]:
+            popen_calls.append(kwargs)
+            return real_popen(*args, **kwargs)
+
+        with (
+            unittest.mock.patch("subprocess.run") as mock_run,
+            unittest.mock.patch("subprocess.Popen", recording_popen),
+        ):
+            result = _git_log_patch_id(["log", "-p", "--first-parent", "main"], self.repo)
+
+        mock_run.assert_not_called()
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(len(popen_calls), 2)
+        log_kwargs, patch_kwargs = popen_calls
+        self.assertEqual(log_kwargs["stdout"], subprocess.PIPE)
+        self.assertNotIn("input", patch_kwargs)
+        self.assertIsNotNone(patch_kwargs.get("stdin"))
+        self.assertNotIsInstance(patch_kwargs["stdin"], str)
+
+    def test_git_log_patch_id_output_matches_manual_buffer_then_pipe(self) -> None:
+        """Correctness pin (#1214): the streamed helper's output must be
+        byte-identical to the old buffer-then-pipe two-step it replaces —
+        proving the memory-profile change did not alter WHAT is computed,
+        only how much text is held resident in this process at once."""
+        self._multi_commit_squash()
+        merge_base = _git(["merge-base", "feature", "main"], self.repo).stdout.strip()
+        log_args = ["log", "-p", "--first-parent", f"{merge_base}..main"]
+
+        streamed = _git_log_patch_id(log_args, self.repo)
+        manual_log = _git_ok(log_args, self.repo)
+        manual = _git_pipe_real(["patch-id", "--stable"], self.repo, manual_log.stdout)
+
+        self.assertEqual(streamed.returncode, 0)
+        self.assertEqual(manual.returncode, 0)
+        self.assertEqual(streamed.stdout, manual.stdout)
+
+    def test_git_log_patch_id_log_stage_failure_returns_nonzero(self) -> None:
+        """When the `git log` stage itself fails (bad range), the combined
+        helper must report failure, not silently succeed with empty patch-id
+        output — which `classify_merged` would otherwise misread as "no
+        commits on the range" rather than "the command failed"."""
+        result = _git_log_patch_id(
+            ["log", "-p", "--first-parent", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef..main"],
+            self.repo,
         )
-        self.assertEqual(result.status, "unmerged")
-        self.assertEqual(result.reason, "content-check-failed")
-        self.assertFalse(result.merged)
+        self.assertNotEqual(result.returncode, 0)
 
     def test_cherry_failure_degrades(self) -> None:
         """Cherry is only reached when test 1 (net-content) does not match —

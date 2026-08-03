@@ -48,8 +48,11 @@ internal commit ordering:**
      (the branch's *entire* accumulated change, computed once, over the
      full range — never an intermediate prefix) is compared by patch-id
      against every commit `remote_ref` has gained since `merge_base`
-     (`git log -p --first-parent merge_base..remote_ref` fed through
-     `git patch-id --stable`). A match means some single commit on
+     (`git log -p --first-parent merge_base..remote_ref` streamed directly
+     into `git patch-id --stable` over an OS pipe — `_git_log_patch_id`,
+     #1214 — rather than buffered into a Python string first; this is a
+     memory-profile change only, the comparison result is unaffected). A
+     match means some single commit on
      `remote_ref` — the squash, or a single-commit rebase/cherry-pick — *is*
      the landed form of `head`'s entire accumulated content. Because this
      only ever looks at `merge_base` and `head`'s final trees, it is
@@ -177,9 +180,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 GitRunner = Callable[[Sequence[str], Path], "subprocess.CompletedProcess[str]"]
-# A second runner shape for the two commands that need to feed a diff/log
-# stream to `git patch-id` on stdin rather than take a rev-range argument.
+# A second runner shape for the one command that needs to feed a diff stream
+# to `git patch-id` on stdin (the branch's own, bounded-size diff).
 PipeRunner = Callable[[Sequence[str], Path, str], "subprocess.CompletedProcess[str]"]
+# A third runner shape for `git log -p ... | git patch-id --stable` (#1214):
+# unlike PipeRunner, this one never receives the log text as a Python string
+# at all — see `_git_log_patch_id`. Same call shape as GitRunner (a git
+# argv + cwd in, a CompletedProcess-shaped result out) since the caller never
+# needs to supply input text; only the *implementation* streams internally.
+LogPatchIdRunner = Callable[[Sequence[str], Path], "subprocess.CompletedProcess[str]"]
 
 
 def _git(args: Sequence[str], cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -201,6 +210,67 @@ def _git_pipe(args: Sequence[str], cwd: Path, input_text: str) -> subprocess.Com
         text=True,
         check=False,
     )
+
+
+def _git_log_patch_id(log_args: Sequence[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+    """Run ``git <log_args>`` piped directly into ``git patch-id --stable``
+    over an OS-level pipe, without ever materializing the (potentially large,
+    O(worktree staleness)) patch text as a Python string (#1214).
+
+    Behaviourally identical to::
+
+        log = _git(log_args, cwd)
+        return _git_pipe(["patch-id", "--stable"], cwd, log.stdout)
+
+    — same combined exit-code/stdout/stderr contract from the caller's point
+    of view — but `git log`'s stdout file descriptor is connected straight to
+    `git patch-id`'s stdin via `Popen(stdin=<the other process's stdout
+    pipe>)`, so this process never holds more than `git patch-id`'s own
+    output resident (one short line per commit, not the full diff text).
+
+    Only `git patch-id`'s stdout is meaningful on success (the same
+    ``<patch-id> [<sha>]`` lines `_parse_patch_ids` expects); the combined
+    ``returncode`` is 0 only if *both* stages exited 0, so a `git log`
+    failure degrades exactly like a `git patch-id` failure did before this
+    change — the caller does not need to know which stage failed.
+    """
+    log_proc = subprocess.Popen(
+        ["git", *log_args],
+        cwd=str(cwd),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert log_proc.stdout is not None  # guaranteed by stdout=PIPE above
+    patch_id_proc = subprocess.Popen(
+        ["git", "patch-id", "--stable"],
+        cwd=str(cwd),
+        stdin=log_proc.stdout,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    # Standard Popen -> Popen pipe idiom: release our copy of the read end so
+    # patch_id_proc's own (already-duplicated) fd is what keeps it open, and
+    # `git log` gets a normal EOF/SIGPIPE signal once patch-id is done.
+    log_proc.stdout.close()
+
+    patch_stdout, patch_stderr = patch_id_proc.communicate()
+    log_proc.wait()
+    log_stderr = log_proc.stderr.read() if log_proc.stderr is not None else ""
+    if log_proc.stderr is not None:
+        log_proc.stderr.close()
+
+    argv_desc = ["git", *log_args, "|", "git", "patch-id", "--stable"]
+    if log_proc.returncode != 0:
+        return subprocess.CompletedProcess(
+            args=argv_desc, returncode=log_proc.returncode, stdout="", stderr=log_stderr
+        )
+    if patch_id_proc.returncode != 0:
+        return subprocess.CompletedProcess(
+            args=argv_desc, returncode=patch_id_proc.returncode, stdout="", stderr=patch_stderr
+        )
+    return subprocess.CompletedProcess(args=argv_desc, returncode=0, stdout=patch_stdout, stderr="")
 
 
 @dataclass
@@ -268,6 +338,7 @@ def classify_merged(
     *,
     runner: GitRunner = _git,
     pipe_runner: PipeRunner = _git_pipe,
+    log_patch_id_runner: LogPatchIdRunner = _git_log_patch_id,
 ) -> MergeClassification:
     """Classify whether ``head`` is fully merged into ``remote_ref``. See module docs."""
     root = Path(repo_root)
@@ -337,20 +408,20 @@ def classify_merged(
         )
     own_patch_id = own_pairs[0][0]
 
-    main_log = runner(["log", "-p", "--first-parent", f"{merge_base}..{remote_ref}"], root)
-    if main_log.returncode != 0:
-        return _degrade(
-            "content-check-failed",
-            f"git log -p --first-parent {merge_base}..{remote_ref} failed "
-            f"(exit {main_log.returncode}): {main_log.stderr.strip()} "
-            f"— degraded to ancestry-only result",
-        )
-    main_pid_res = pipe_runner(["patch-id", "--stable"], root, main_log.stdout)
+    # Streamed (#1214): `git log -p ...` is piped straight into `git patch-id`
+    # over an OS pipe rather than buffered into a Python string first — see
+    # `_git_log_patch_id`. Same net effect as the old two-step
+    # runner(["log", ...]) + pipe_runner(["patch-id", ...], log.stdout)
+    # sequence, just without the O(patch size) resident string in between.
+    main_pid_res = log_patch_id_runner(
+        ["log", "-p", "--first-parent", f"{merge_base}..{remote_ref}"], root
+    )
     if main_pid_res.returncode != 0:
         return _degrade(
             "content-check-failed",
-            f"git patch-id (main range) failed (exit {main_pid_res.returncode}): "
-            f"{main_pid_res.stderr.strip()} — degraded to ancestry-only result",
+            f"git log -p --first-parent {merge_base}..{remote_ref} | git patch-id --stable "
+            f"failed (exit {main_pid_res.returncode}): {main_pid_res.stderr.strip()} "
+            f"— degraded to ancestry-only result",
         )
     main_pids = dict(_parse_patch_ids(main_pid_res.stdout))
 
