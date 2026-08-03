@@ -51,6 +51,22 @@ does not itself reach the heredoc body. The #1008 contradiction (this
 allowlist admits forbidden `grep` while excluding mandated `rg`) is left OPEN
 by this exclusion — see the PR body.
 
+main#1316 (third pass — CI-only red, #1318): the `rg` ground-truth rows above
+passed locally but failed on the CI runner. Root cause: `ci.yml` never
+installed ripgrep, so `rg` was simply absent on `ubuntu-latest` — the
+`--pre`/`--hostname-bin` rows either genuinely failed (an `expect_runs=True`
+assertion, loud) or, worse, would have passed VACUOUSLY had they asserted
+`expect_runs=False` (the shell never even attempts a missing binary, which is
+indistinguishable from a real inertness result). That means the FIRST-pass
+measurement that got `rg` allowlisted in error was never actually exercised
+against `rg` on CI at all — a vacuous pass, not a green light. Fixed by
+installing ripgrep in the pytest job (same "install it so it RUNS in CI
+rather than skipping" pattern already used for bashlex/zsh above), with a
+`skipUnless(shutil.which("rg"))` guard kept alongside — not instead — as a
+documented fallback for a runner that genuinely lacks it (a guard with no
+install would just convert the vacuous pass back into a silent skip, which is
+the state that let this happen in the first place).
+
 Test organisation
 ==================
 
@@ -103,6 +119,26 @@ from _shell_parse import (  # noqa: E402
 )
 
 REAL_COMMIT = 'git -c user.name="X" -c user.email="Y" commit -m z'
+
+# main#1316/#1318: `rg` is not part of the base ubuntu-latest image (unlike
+# grep/sed/awk/sort/coreutils, which ship on every runner). A missing binary
+# is directional poison for a ground-truth row: an `expect_runs=False`
+# assertion passes VACUOUSLY when the shell never even attempts `rg` (measures
+# nothing, looks identical to a real inertness result), while an
+# `expect_runs=True` assertion fails loudly (the real bug signal that
+# surfaced this). `ci.yml` now installs ripgrep for the pytest job so these
+# rows normally RUN rather than skip; this guard is the documented fallback
+# for a runner that genuinely lacks it, not a substitute for the install —
+# per main#1318's finding, a guard alone would just convert the vacuous pass
+# back into a silent skip, which is the state that let `rg` reach the
+# allowlist in the first place.
+_RG_INSTALLED = shutil.which("rg") is not None
+_RG_SKIP_REASON = (
+    "rg not installed on this runner — see main#1316/#1318: without it this "
+    "row cannot measure real rg behaviour (an expect_runs=False assertion "
+    "would pass vacuously); ci.yml installs ripgrep for the pytest job so "
+    "this should normally run here, not skip"
+)
 
 
 def _bash(command: str) -> dict:
@@ -514,6 +550,7 @@ class RealShellGroundTruthTests(unittest.TestCase):
             "sort is excluded from the allowlist, so this must still block",
         )
 
+    @unittest.skipUnless(_RG_INSTALLED, _RG_SKIP_REASON)
     def test_rg_plain_genuinely_inert_but_excluded_anyway(self):
         """Ground truth: a bare `rg` search over stdin (no PATH argument, no
         exec-shaped flag) does NOT execute the body — confirms the
@@ -531,6 +568,7 @@ class RealShellGroundTruthTests(unittest.TestCase):
             "rg is excluded from the allowlist, so this accepted false positive must still block",
         )
 
+    @unittest.skipUnless(_RG_INSTALLED, _RG_SKIP_REASON)
     def test_rg_pre_flag_inert_without_a_path(self):
         """The CONTEXT-FIXED measurement from main#1316's FIRST pass (the one
         that got `rg` added to the allowlist in error): with no PATH argument
@@ -558,6 +596,7 @@ class RealShellGroundTruthTests(unittest.TestCase):
             "regardless of whether --pre happens to be a no-op in this particular cell",
         )
 
+    @unittest.skipUnless(_RG_INSTALLED, _RG_SKIP_REASON)
     def test_rg_pre_dev_stdin_path_genuinely_runs(self):
         """The adversarial case that justifies excluding `rg` (main#1316
         second pass): `--pre=COMMAND` runs `COMMAND PATH` once for each input
@@ -575,6 +614,7 @@ class RealShellGroundTruthTests(unittest.TestCase):
             expect_runs=True,
         )
 
+    @unittest.skipUnless(_RG_INSTALLED, _RG_SKIP_REASON)
     def test_rg_hostname_bin_spawns_a_program_but_does_not_reach_the_body(self):
         """`rg` exposes a SECOND exec-shaped flag, `--hostname-bin=COMMAND`,
         found by the same systematic per-flag sweep that caught `--pre`.
