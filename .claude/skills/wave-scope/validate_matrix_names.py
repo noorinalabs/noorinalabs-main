@@ -833,9 +833,9 @@ def _print_report_to_stderr(report: dict[str, list[dict[str, object]]]) -> int:
             )
         if org_persona_not_member:
             print(
-                f"\n  {org_persona_not_member} of the above resolve as KNOWN org personas but"
-                " are NOT on\n"
-                "  the target repo's roster, so a commit-capable slot cannot take them\n"
+                f"\n  {org_persona_not_member} unresolved row(s) above name a KNOWN org persona"
+                " who is NOT on the\n"
+                "  target repo's roster, so a commit-capable slot cannot take them\n"
                 "  (#1134 — that slot must COMMIT there). This IS an assignment problem:\n"
                 "    (a) reassign to a member of the target repo's roster (preferred), or\n"
                 "    (b) onboard the persona into <repo>/.claude/team/roster/ + roster.json.\n"
@@ -846,7 +846,8 @@ def _print_report_to_stderr(report: dict[str, list[dict[str, object]]]) -> int:
             )
         if org_persona_unreadable:
             print(
-                f"\n  {org_persona_unreadable} of the above is a KNOWN org persona on a repo\n"
+                f"\n  {org_persona_unreadable} unresolved row(s) above name a KNOWN org persona"
+                " on a repo\n"
                 "  whose roster could not be read. That is an ENVIRONMENT gap, not a bad\n"
                 "  assignment — do NOT record an implementer_substitution for it, and note\n"
                 "  that the same name DOES resolve in a review-class slot (the org-union\n"

@@ -1439,7 +1439,7 @@ class ManifestSourcedSuggestionTests(unittest.TestCase):
             code, err = _report_stderr(report)
             self.assertEqual(code, 1)
             self.assertIn("Resolve each unknown name", err)
-            self.assertIn("resolve as KNOWN org personas but are NOT on", err)
+            self.assertIn("a commit-capable slot cannot take them", err)
             self.assertIn("--fetch-missing", err)
             self.assertIn("3/3 names UNRESOLVED", err)
 
