@@ -164,7 +164,16 @@ class NegativeMatchScoping(unittest.TestCase):
 
 
 class FailOpenInfrastructure(unittest.TestCase):
-    """NEG — infrastructure failures fail OPEN with system warning, never block."""
+    """NEG — infra failures the audit never runs against fail OPEN with a warning.
+
+    Total AUDIT coverage failure (every org-repo query failed, but the audit
+    itself ran) is deliberately NOT covered here since #1230: it now BLOCKS for
+    _COVERAGE_BLOCKING_SKILLS (`PartialAuditFailureCoverage`) and only fail-opens
+    for skills outside that set (`test_audit_total_failure_allows_for_noncoverage_skill`
+    below). What stays unconditionally fail-open regardless of skill is failure
+    to even determine the active wave (no `cross-repo-status.json` / no active
+    wave) — there the audit cannot run for ANY skill, coverage-blocking or not.
+    """
 
     def test_no_active_wave_allows(self) -> None:
         """NEG: cross-repo-status.json has wave_active=false → allow with warning."""
@@ -174,10 +183,17 @@ class FailOpenInfrastructure(unittest.TestCase):
         self.assertEqual(result["decision"], "allow")
         self.assertIn("could not determine an active wave label", result["systemMessage"])
 
-    def test_audit_total_failure_allows(self) -> None:
-        """NEG: every gh call failed (gh missing / no auth) → allow with warning."""
+    def test_audit_total_failure_allows_for_noncoverage_skill(self) -> None:
+        """NEG: every gh call failed (gh missing / no auth), /handoff → allow with warning.
+
+        #1230: total failure only fail-opens for skills OUTSIDE
+        _COVERAGE_BLOCKING_SKILLS. Pre-#1230 this test exercised "wave-wrapup"
+        and asserted allow unconditionally — see
+        `PartialAuditFailureCoverage.test_total_failure_blocks_coverage_blocking_skill`
+        for the (now different) wave-wrapup/wave-retro behavior on the same input.
+        """
         with _patch_label("p2-wave-10"), _patch_audit(None, {}):
-            result = hook.check(_skill_input("wave-wrapup"))
+            result = hook.check(_skill_input("handoff"))
         assert result is not None
         self.assertEqual(result["decision"], "allow")
         self.assertIn("could not query any of", result["systemMessage"])
@@ -858,9 +874,46 @@ class PartialAuditFailureCoverage(unittest.TestCase):
         self.assertIn("noorinalabs-isnad-graph", result["reason"])
         self.assertIn("NOT AUDITED", result["reason"])
 
-    def test_total_failure_still_allows_with_warning(self) -> None:
-        """CONTROL: all 8 fail → unchanged fail-open WITH warning. (Passes pre-fix.)"""
+    def test_total_failure_blocks_coverage_blocking_skill(self) -> None:
+        """#1230: all 8 fail, /wave-wrapup → BLOCK, not allow.
+
+        Pre-#1230 this was `test_total_failure_still_allows_with_warning`, a
+        CONTROL pinning the old (buggy) contract that total failure fail-opens
+        UNCONDITIONALLY — even for _COVERAGE_BLOCKING_SKILLS. That was the
+        asymmetry itself: an 8-of-8 blind spot was MORE permissive than the
+        1-of-8 gap `test_only_main_fails_blocks_wave_wrapup` already blocks.
+        Renamed and re-asserted rather than deleted, since the input (all 8
+        org repos failing) is still exactly the scenario worth a named test.
+        """
         result, queried = self._run(set(hook._ORG_REPOS))
+        self._assert_loop_ran(queried)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("could not run AT ALL", result["reason"])
+        self.assertIn("any of the 8 org repo(s)", result["reason"])
+
+    def test_total_failure_blocks_wave_retro(self) -> None:
+        """#1230: total failure blocks /wave-retro too, not just /wave-wrapup."""
+        result, queried = self._run(set(hook._ORG_REPOS), skill="wave-retro")
+        self._assert_loop_ran(queried)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_total_failure_carry_forward_does_not_clear_the_block(self) -> None:
+        """#1230: a carry-forward marker cannot vouch for a wave nothing was
+        read from — same reasoning as `test_carry_forward_does_not_clear_a_coverage_block`
+        for the partial case, now extended to total failure."""
+        args = "Wrapup. Carry-forward: #194 → wave-30, #845 → backlog"
+        result, queried = self._run(set(hook._ORG_REPOS), args=args)
+        self._assert_loop_ran(queried)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_total_failure_still_allows_handoff_with_warning(self) -> None:
+        """CONTROL: all 8 fail, /handoff → unchanged fail-open WITH warning.
+        `/handoff` sits outside _COVERAGE_BLOCKING_SKILLS on both the partial
+        AND total path — #1230 only closed the gap for wave-wrapup/wave-retro."""
+        result, queried = self._run(set(hook._ORG_REPOS), skill="handoff")
         self._assert_loop_ran(queried)
         assert result is not None
         self.assertEqual(result["decision"], "allow")
@@ -868,18 +921,32 @@ class PartialAuditFailureCoverage(unittest.TestCase):
 
     def test_partial_failure_is_never_quieter_than_total_failure(self) -> None:
         """The acceptance criterion stated directly: the partial path must carry
-        at least as much operator signal as the total path it sits beside."""
+        at least as much operator signal as the total path it sits beside.
+
+        Re-expressed per #1234 (which flagged the original version of this test
+        for pinning total failure to an *absolute* allow-shaped verdict, when
+        the property in its own name is *relative* signal strength, not verdict
+        kind). #1234 was right that the old assertion pre-decided #1230 by
+        accident; #1230 has now RULED — total failure blocks alongside partial
+        failure for a coverage-blocking skill — so this test compares signal
+        presence on both sides rather than asserting either verdict is "allow".
+        It still holds, and now for a stronger reason: both sides are BLOCK.
+        """
         partial, q1 = self._run({"noorinalabs-main"})
         total, q2 = self._run(set(hook._ORG_REPOS))
         self._assert_loop_ran(q1)
         self._assert_loop_ran(q2)
-        assert total is not None
-        self.assertTrue(total.get("systemMessage"))
+        assert total is not None, "total failure was SILENT — must carry operator signal"
+        total_signal = total.get("reason") or total.get("systemMessage")
+        self.assertTrue(total_signal, "total failure produced no operator-visible text")
         assert partial is not None, "partial failure was SILENT while total failure warned"
-        self.assertTrue(
-            partial.get("reason") or partial.get("systemMessage"),
-            "partial failure produced no operator-visible text",
-        )
+        partial_signal = partial.get("reason") or partial.get("systemMessage")
+        self.assertTrue(partial_signal, "partial failure produced no operator-visible text")
+        # The actual "never quieter" property: block (a `reason`, logged and
+        # non-bypassable-by-carry-forward) is never a quieter signal than an
+        # allow-with-warning `systemMessage`. Both are BLOCK here post-#1230.
+        self.assertEqual(partial["decision"], "block")
+        self.assertEqual(total["decision"], "block")
 
     # -- per-skill policy -----------------------------------------------------
 
