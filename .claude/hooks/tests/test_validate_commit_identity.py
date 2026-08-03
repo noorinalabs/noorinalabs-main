@@ -15,6 +15,7 @@ import unittest
 from pathlib import Path
 
 import _test_helpers  # noqa: E402,F401
+import pytest
 import validate_commit_identity as hook  # noqa: E402
 
 
@@ -1346,7 +1347,7 @@ class WrappedCommitIdentityRegression(unittest.TestCase):
         self.assertIsNotNone(hook.check(self._input(self._commit("", identity=False))))
 
 
-class AssignmentAwarePrePassTests(unittest.TestCase):
+class TestAssignmentAwarePrePass:
     """main#1195 — a payload/command-word held in a shell variable defeats
     both the phrase matcher (`_payload_looks_like_commit`) and the direct
     commit-segment finder (`find_git_subcommand`, via `_find_commit_segment`)
@@ -1365,6 +1366,21 @@ class AssignmentAwarePrePassTests(unittest.TestCase):
     checks the SPECIFIC reason string (not a bare substring that survives if
     the wrong row fires), and every ALLOW assertion checks the value is
     `None`, not merely "not exceptional".
+
+    Not `unittest.TestCase` (#1117 — G5 clone-group parametrization): 5
+    `pytest.mark.parametrize` tables below cover 30 of this class's 39
+    original methods, across 5 distinct AST shapes (single-statement ALLOW;
+    single-statement-with-a-`cmd`-variable ALLOW; and 3 different BLOCK
+    shapes distinguished by which combination of a `self.assertIsNotNone`
+    message arg and a trailing `self.assertIn(reason)` line they carried —
+    kept as SEPARATE tables rather than force-fit into one, since collapsing
+    distinct assertion shapes into a shared body is exactly the
+    "structurally identical, not safely mergeable" trap). The remaining 9
+    methods (a unique full-reason-string pin, the `_valid_identity` compliant-
+    commit mirror, `startswith`/`assertTrue` reason-prefix checks, etc.) keep
+    individual bodies — every `self.assertX` in the class, merged or not, was
+    mechanically rewritten to a bare `assert` since a plain class has no
+    `self.assertX`. `ids=` is each original method's bare name.
     """
 
     _input = staticmethod(_test_helpers.bash_input)
@@ -1372,7 +1388,7 @@ class AssignmentAwarePrePassTests(unittest.TestCase):
     def _valid_identity(self) -> tuple[str, str]:
         name = next(iter(hook.ROSTER), None)
         if not name:
-            self.skipTest("local roster is empty")
+            pytest.skip("local roster is empty")
         return name, hook.ROSTER[name]
 
     # --- the issue's own measured shapes -----------------------------------
@@ -1389,15 +1405,14 @@ class AssignmentAwarePrePassTests(unittest.TestCase):
         the `normalize_command_separators` fix.
         """
         result = hook.check(self._input("g=git; $g commit -m x"))
-        self.assertIsNotNone(result, "variable-held command word must be seen as git commit")
+        assert result is not None, "variable-held command word must be seen as git commit"
         assert result is not None
-        self.assertEqual(result["decision"], "block")
-        self.assertEqual(
-            result["reason"],
+        assert result["decision"] == "block"
+        assert result["reason"] == (
             "BLOCKED: git commit missing `-c user.name=` flag. "
             "Charter § Commit Identity requires per-commit identity via -c flags. "
             'Example: git -c user.name="Kwame Asante" '
-            '-c user.email="parametrization+Kwame.Asante@gmail.com" commit -m "..."',
+            '-c user.email="parametrization+Kwame.Asante@gmail.com" commit -m "..."'
         )
 
     def test_direct_typed_variable_command_word_glued_semicolon_valid_identity_allows(
@@ -1412,7 +1427,7 @@ class AssignmentAwarePrePassTests(unittest.TestCase):
         name, email = self._valid_identity()
         cmd = f'g=git; $g -c user.name="{name}" -c user.email="{email}" commit -m x'
         result = hook.check(self._input(cmd))
-        self.assertIsNone(result, f"compliant commit behind $g must be ALLOWED, got: {result}")
+        assert result is None, f"compliant commit behind $g must be ALLOWED, got: {result}"
 
     def test_direct_typed_variable_command_word_spaced_semicolon_blocks(self) -> None:
         """POS: same shape with a space before `;` (`g=git ; $g commit -m x`).
@@ -1425,10 +1440,10 @@ class AssignmentAwarePrePassTests(unittest.TestCase):
         caught independently.
         """
         result = hook.check(self._input("g=git ; $g commit -m x"))
-        self.assertIsNotNone(result)
         assert result is not None
-        self.assertEqual(result["decision"], "block")
-        self.assertIn("missing `-c user.name=` flag", result["reason"])
+        assert result is not None
+        assert result["decision"] == "block"
+        assert "missing `-c user.name=` flag" in result["reason"]
 
     def test_wrapped_bash_dash_c_variable_command_word_blocks(self) -> None:
         """POS: the issue's wrapped shape, `bash -c 'g=git; $g commit -m x'`.
@@ -1440,15 +1455,12 @@ class AssignmentAwarePrePassTests(unittest.TestCase):
         """
         cmd = "bash -c 'g=git; $g commit -m x'"
         result = hook.check(self._input(cmd))
-        self.assertIsNotNone(result, "indirect wrapper hiding a variable command word must block")
+        assert result is not None, "indirect wrapper hiding a variable command word must block"
         assert result is not None
-        self.assertEqual(result["decision"], "block")
-        self.assertTrue(
-            result["reason"].startswith(
-                "BLOCKED: indirect-exec wrapper detected (shell -c) carrying a hidden `git commit`."
-            ),
-            result["reason"],
-        )
+        assert result["decision"] == "block"
+        assert result["reason"].startswith(
+            "BLOCKED: indirect-exec wrapper detected (shell -c) carrying a hidden `git commit`."
+        ), result["reason"]
 
     def test_heredoc_body_variable_command_word_blocks(self) -> None:
         """POS: same indirection inside a heredoc fed to a real interpreter.
@@ -1459,249 +1471,215 @@ class AssignmentAwarePrePassTests(unittest.TestCase):
         """
         cmd = "bash <<'EOF'\ng=git\n$g commit -m x\nEOF"
         result = hook.check(self._input(cmd))
-        self.assertIsNotNone(result)
         assert result is not None
-        self.assertEqual(result["decision"], "block")
-        self.assertIn("indirect-exec", result["reason"])
+        assert result is not None
+        assert result["decision"] == "block"
+        assert "indirect-exec" in result["reason"]
 
     # --- false-positive corpus: ordinary shapes must NOT block -------------
 
-    def test_command_substitution_value_not_resolved_allows(self) -> None:
-        """NEG (the issue's own required sweep item): `d=$(date); echo $d`.
+    @pytest.mark.parametrize(
+        "command",
+        [
+            # (the issue's own required sweep item): `d=$(date); echo $d`.
+            # Command substitution is explicitly out of scope: the value
+            # fails the literal-charset check, so `d` is never captured and
+            # `$d` is left untouched. An ordinary shape; must not block.
+            "d=$(date); echo $d",
+            # Ordinary env-var reuse with no relation to git at all.
+            "FOO=bar; echo $FOO",
+            # `g=$(echo git); $g commit -m x` — command substitution OF the
+            # command word itself. Explicitly out of scope per the issue
+            # (same family as `$(printf git) commit`, strictly harder) —
+            # `g`'s value contains `$` and parens, so it fails the literal
+            # check and is never captured; `$g` stays literal and unresolved.
+            "g=$(echo git); $g commit -m x",
+            # `g=git; $gone commit -m x` — `$gone` is a DIFFERENT variable
+            # from `$g`; the greedy identifier match in the reference regex
+            # captures the name "gone" in full, which was never assigned, so
+            # it is left untouched. Guards against a name-prefix conflation
+            # bug.
+            "g=git; $gone commit -m x",
+            # `set -- git commit; echo $1` — positional parameters (`$1`)
+            # are explicitly out of scope; the capture regex requires a name
+            # starting with a letter or underscore, so `$1` can never be an
+            # assignment target in the first place. `git commit` here is a
+            # DATA argument to `set --`, not an invocation — must not block.
+            "set -- git commit; echo $1",
+            # (main#1195 review round 3, real-shell-verified via printf/marker
+            # proxy): `A=1 B=git $B commit -m z` — a same-segment prefix
+            # assignment is NOT visible to that segment's OWN expansion. `$B`
+            # stays unresolved, so this is not a detected git invocation and
+            # must ALLOW.
+            "A=1 B=git $B commit -m z",
+            # marker proxy: real shell reports `MARKERARG: command not
+            # found` (`$B` unset at expansion time). Must ALLOW; the OLD
+            # code blocked this (false positive).
+            "A=1 B=git $B commit -m z",
+            # `g=echo; g=git $g commit -m x` — marker proxy: real shell runs
+            # `echo commit -m x` (`$g` resolves against the RUNNING state
+            # from the prior segment, `echo`, not this segment's own
+            # `g=git` prefix). Must ALLOW.
+            "g=echo; g=git $g commit -m x",
+            # `g=git & $g commit -m x` — marker proxy: real shell reports
+            # `MARKERARG: command not found` (`g=git` runs as a backgrounded
+            # job in its own subshell; the foreground `$g` is unset).
+            "g=git & $g commit -m x",
+            # `$NEVERASSIGNED commit -m x` — no assignment anywhere in the
+            # command, so `assignments.get(name, m.group(0))` must return
+            # the ORIGINAL text unchanged.
+            "$NEVERASSIGNED commit -m x",
+            # `A=1 B=git ${B} commit -m z` — braced-reference sibling of
+            # row 1. Must ALLOW for the identical real-shell reason.
+            "A=1 B=git ${B} commit -m z",
+            # `A=1 BB=git $BB commit -m z` — multi-char-name sibling of
+            # row 1. Must ALLOW regardless of name length.
+            "A=1 BB=git $BB commit -m z",
+            # Row 2 (control): `g=git bash -c "$g commit -m x"` — marker
+            # proxy: real shell does NOT run `git` (the OUTER shell expands
+            # the double-quoted argument itself, before the prefix takes
+            # effect).
+            'g=git bash -c "$g commit -m x"',
+            # Row 5 (control): `bash -c '$g commit -m x'` with no `g=git`
+            # prefix anywhere. Must ALLOW (`$g` is genuinely unset).
+            "bash -c '$g commit -m x'",
+        ],
+        ids=[
+            "command_substitution_value_not_resolved_allows",
+            "unrelated_assignment_and_reuse_allows",
+            "double_indirection_via_command_substitution_of_command_word_allows",
+            "similarly_named_variable_not_conflated_allows",
+            "positional_parameter_not_treated_as_assignment_target_allows",
+            "same_segment_leading_assignment_not_resolved_allows",
+            "row1_same_segment_prefix_never_reaches_git_allows",
+            "row2_own_prefix_reassignment_does_not_shadow_running_value_allows",
+            "row4_background_assignment_never_reaches_foreground_allows",
+            "unassigned_variable_reference_left_literal_allows",
+            "row1_braced_variant_never_reaches_git_allows",
+            "row1_multichar_name_variant_never_reaches_git_allows",
+            "prefix_in_double_quoted_bash_dash_c_payload_allows",
+            "no_prefix_unset_reference_in_single_quoted_payload_allows",
+        ],
+    )
+    def test_allowed(self, command):
+        assert hook.check(self._input(command)) is None
 
-        Command substitution is explicitly out of scope: the value fails the
-        literal-charset check, so `d` is never captured and `$d` is left
-        untouched. An ordinary shape; must not block.
-        """
-        self.assertIsNone(hook.check(self._input("d=$(date); echo $d")))
+    @pytest.mark.parametrize(
+        "command",
+        [
+            # A quoted, multi-word value merely mentioning "git commit" as
+            # an ARGUMENT (`echo $msg`), not in command position. Prose, not
+            # an invocation.
+            'msg="please git commit this later"; echo $msg',
+            # `cmd="git commit -m z"; $cmd` — a full command line assigned
+            # to a variable, then invoked BARE. Deliberately out of scope
+            # (multi-word values are not resolved).
+            'cmd="git commit -m z"; $cmd',
+            # (truncating-mutant guard): an UNASSIGNED reference sitting
+            # between two literal fragments must be left EXACTLY as typed,
+            # not collapsed to an empty string. `h=other; gi${x}t commit -m
+            # z` — `x` is never assigned.
+            "h=other; gi${x}t commit -m z",
+        ],
+        ids=[
+            "prose_value_with_git_commit_words_not_resolved_allows",
+            "multiword_command_string_value_not_resolved_allows",
+            "unresolved_reference_leaves_exact_literal_not_merely_nonempty",
+        ],
+    )
+    def test_allowed_via_intermediate_cmd_var(self, command):
+        assert hook.check(self._input(command)) is None
 
-    def test_prose_value_with_git_commit_words_not_resolved_allows(self) -> None:
-        """NEG: a quoted, multi-word value merely mentioning "git commit" as
-        an ARGUMENT (`echo $msg`), not in command position.
+    # --- BLOCK shapes: `assertIsNotNone(result, msg)` + `assertIn(reason)` -
 
-        `msg="please git commit this later"; echo $msg` is prose, not an
-        invocation: even resolved, `$msg` lands as an argument to `echo`,
-        never as the first token of a segment, so `find_git_subcommand`
-        (which requires `git` to be that first token) does not fire either
-        way. Pinned as a regression guard that the pre-pass does not change
-        this outcome for an ordinary "argument merely mentions git" shape.
-        """
-        cmd = 'msg="please git commit this later"; echo $msg'
-        self.assertIsNone(hook.check(self._input(cmd)))
-
-    def test_multiword_command_string_value_not_resolved_allows(self) -> None:
-        """NEG: `cmd="git commit -m z"; $cmd` — a full command line assigned
-        to a variable, then invoked BARE (real shell word-splitting would
-        actually run it). This is the test that pins the literal-charset
-        guard itself: the value contains whitespace, so `cmd` is never
-        captured and `$cmd` is left as one unresolved literal token (not
-        equal to `git`), so `find_git_subcommand` does not see a `git`
-        command in command position. Deliberately out of scope (multi-word
-        values are not resolved) — this is a documented boundary, not an
-        oversight: resolving it would reopen the prose-argument
-        false-positive class one level lower (through direct segment
-        matching instead of `_INNER_COMMIT_RE`).
-        """
-        cmd = 'cmd="git commit -m z"; $cmd'
-        self.assertIsNone(hook.check(self._input(cmd)))
-
-    def test_unrelated_assignment_and_reuse_allows(self) -> None:
-        """NEG: ordinary env-var reuse with no relation to git at all."""
-        self.assertIsNone(hook.check(self._input("FOO=bar; echo $FOO")))
-
-    def test_double_indirection_via_command_substitution_of_command_word_allows(
-        self,
-    ) -> None:
-        """NEG: `g=$(echo git); $g commit -m x` — command substitution OF the
-        command word itself. Explicitly out of scope per the issue (same
-        family as `$(printf git) commit`, strictly harder) — `g`'s value
-        contains `$` and parens, so it fails the literal check and is never
-        captured; `$g` stays literal and unresolved.
-        """
-        self.assertIsNone(hook.check(self._input("g=$(echo git); $g commit -m x")))
-
-    def test_similarly_named_variable_not_conflated_allows(self) -> None:
-        """NEG: `g=git; $gone commit -m x` — `$gone` is a DIFFERENT variable
-        from `$g`; the greedy identifier match in the reference regex
-        captures the name "gone" in full, which was never assigned, so it is
-        left untouched. Guards against a name-prefix conflation bug.
-        """
-        self.assertIsNone(hook.check(self._input("g=git; $gone commit -m x")))
-
-    def test_positional_parameter_not_treated_as_assignment_target_allows(self) -> None:
-        """NEG: `set -- git commit; echo $1` — positional parameters (`$1`)
-        are explicitly out of scope; the capture regex requires a name
-        starting with a letter or underscore, so `$1` can never be an
-        assignment target in the first place. `git commit` here is a DATA
-        argument to `set --`, not an invocation — must not block.
-        """
-        self.assertIsNone(hook.check(self._input("set -- git commit; echo $1")))
-
-    # --- multi-assignment / `${NAME}` form coverage -------------------------
-
-    def test_same_segment_leading_assignment_not_resolved_allows(self) -> None:
-        """NEG (main#1195 review round 3, real-shell-verified via
-        printf/marker proxy): `A=1 B=git $B commit -m z` — a same-segment
-        prefix assignment is NOT visible to that segment's OWN expansion.
-        `$B` stays unresolved, so this is not a detected git invocation and
-        must ALLOW. Supersedes the previous (wrong)
-        `test_multiple_leading_assignments_in_one_segment_resolves_second`,
-        which asserted a BLOCK verdict for a misreading of POSIX
-        prefix-assignment scope — a real shell never runs git for this
-        input; the PR body's own bypass-closed table row for this exact
-        string was likewise corrected (see the PR follow-up comment).
-        """
-        self.assertIsNone(hook.check(self._input("A=1 B=git $B commit -m z")))
-
-    def test_two_leading_assignments_resolve_in_later_segment_blocks(self) -> None:
-        """POS: the peeling loop must still consume BOTH leading assignment
-        tokens (`A=1` then `B=git`) in one segment — pinned here where a
-        real shell agrees with the block verdict: once `;` moves the
-        reference into a LATER segment, `B`'s value resolves and the
-        hidden `git commit` is caught.
-        """
-        result = hook.check(self._input("A=1 B=git; $B commit -m z"))
-        self.assertIsNotNone(
-            result, "second leading assignment (B=git) must resolve once used in a later segment"
-        )
+    @pytest.mark.parametrize(
+        ("command", "not_none_msg"),
+        [
+            (
+                "A=1 B=git; $B commit -m z",
+                "second leading assignment (B=git) must resolve once used in a later segment",
+            ),
+            (
+                "g=git; g=echo $g commit -m x",
+                "prior-segment g=git must still resolve at the commit site",
+            ),
+            ("g=git; ${g} commit -m x", "braced ${g} reference must resolve to git"),
+            (
+                "g=git; g=echo ${g} commit -m x",
+                "prior-segment g=git must still resolve via ${g}",
+            ),
+            (
+                "gg=git; gg=echo $gg commit -m x",
+                "prior-segment gg=git must still resolve at the commit site",
+            ),
+            (
+                "for f in a; do g=git; $g commit -m x; done",
+                "do-prefixed segment assignment must still resolve",
+            ),
+        ],
+        ids=[
+            "two_leading_assignments_resolve_in_later_segment_blocks",
+            "row3_own_prefix_reassignment_cannot_hide_prior_running_value_blocks",
+            "braced_variable_reference_form_resolves",
+            "row3_braced_variant_cannot_hide_prior_running_value_blocks",
+            "row3_multichar_name_variant_cannot_hide_prior_running_value_blocks",
+            "for_loop_do_body_assignment_blocks",
+        ],
+    )
+    def test_blocks_with_message_and_reason_substring(self, command, not_none_msg):
+        result = hook.check(self._input(command))
+        assert result is not None, not_none_msg
         assert result is not None
-        self.assertEqual(result["decision"], "block")
-        self.assertIn("missing `-c user.name=` flag", result["reason"])
+        assert result["decision"] == "block"
+        assert "missing `-c user.name=` flag" in result["reason"]
 
-    # --- main#1195 review round 3: the four adversarial rows, marker-proxy
-    # verified against a real shell (printf/marker proxy: a fake `git`
-    # executable on PATH plus real `echo`), pinned exactly as measured -----
+    # --- BLOCK shapes: bare `assertIsNotNone(result)`, no reason check -----
 
-    def test_row1_same_segment_prefix_never_reaches_git_allows(self) -> None:
-        """`A=1 B=git $B commit -m z` — marker proxy: real shell reports
-        `MARKERARG: command not found` (`$B` unset at expansion time). Must
-        ALLOW; the OLD code blocked this (false positive).
-        """
-        self.assertIsNone(hook.check(self._input("A=1 B=git $B commit -m z")))
-
-    def test_row2_own_prefix_reassignment_does_not_shadow_running_value_allows(
-        self,
-    ) -> None:
-        """`g=echo; g=git $g commit -m x` — marker proxy: real shell runs
-        `echo commit -m x` (`$g` resolves against the RUNNING state from the
-        prior segment, `echo`, not this segment's own `g=git` prefix). Must
-        ALLOW; the OLD code blocked this (false positive).
-        """
-        self.assertIsNone(hook.check(self._input("g=echo; g=git $g commit -m x")))
-
-    def test_row3_own_prefix_reassignment_cannot_hide_prior_running_value_blocks(
-        self,
-    ) -> None:
-        """`g=git; g=echo $g commit -m x` — marker proxy: real shell runs
-        the fake `git` executable (`$g` resolves against the RUNNING state
-        from the prior segment, `git`, not this segment's own `g=echo`
-        prefix). Must BLOCK; the OLD code ALLOWED this outright — a LIVE
-        BYPASS with no interpreter wrapper at all, not merely a cosmetic
-        false positive.
-        """
-        result = hook.check(self._input("g=git; g=echo $g commit -m x"))
-        self.assertIsNotNone(result, "prior-segment g=git must still resolve at the commit site")
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "g=git sh -c '$g commit -m x'",
+            "g=git bash -c '${g} commit -m x'",
+            "g=git; bash -c '$g commit -m x'",
+            "for f in a; do gg=git; $gg commit -m x; done",
+        ],
+        ids=[
+            "prefix_in_single_quoted_sh_dash_c_payload_blocks",
+            "prefix_in_single_quoted_braced_payload_blocks",
+            "cross_segment_semicolon_single_quoted_payload_still_blocks",
+            "for_loop_do_body_multichar_name_blocks",
+        ],
+    )
+    def test_blocks_bare(self, command):
+        result = hook.check(self._input(command))
         assert result is not None
-        self.assertEqual(result["decision"], "block")
-        self.assertIn("missing `-c user.name=` flag", result["reason"])
-
-    def test_row4_background_assignment_never_reaches_foreground_allows(self) -> None:
-        """`g=git & $g commit -m x` — marker proxy: real shell reports
-        `MARKERARG: command not found` (`g=git` runs as a backgrounded job
-        in its own subshell; the foreground `$g` is unset). Must ALLOW.
-        """
-        self.assertIsNone(hook.check(self._input("g=git & $g commit -m x")))
-
-    def test_braced_variable_reference_form_resolves(self) -> None:
-        """POS: `${g}` (braced form) must resolve the same as bare `$g`."""
-        result = hook.check(self._input("g=git; ${g} commit -m x"))
-        self.assertIsNotNone(result, "braced ${g} reference must resolve to git")
         assert result is not None
-        self.assertEqual(result["decision"], "block")
-        self.assertIn("missing `-c user.name=` flag", result["reason"])
+        assert result["decision"] == "block"
 
-    def test_unassigned_variable_reference_left_literal_allows(self) -> None:
-        """NEG: `$NEVERASSIGNED commit -m x` — no assignment anywhere in the
-        command, so `assignments.get(name, m.group(0))` must return the
-        ORIGINAL text unchanged, not an empty string or a KeyError. An
-        unresolved variable used as a command word is not a `git` command
-        (whatever it resolves to at runtime, the hook cannot know, and does
-        not need to for THIS shape — nothing here spells `git`).
-        """
-        self.assertIsNone(hook.check(self._input("$NEVERASSIGNED commit -m x")))
-
-    def test_unresolved_reference_leaves_exact_literal_not_merely_nonempty(self) -> None:
-        """NEG (truncating-mutant guard): an UNASSIGNED reference sitting
-        between two literal fragments must be left EXACTLY as typed, not
-        collapsed to an empty string, when substitution runs at all (i.e.
-        when at least one OTHER name in the command WAS assigned, so the
-        `assignments` map is non-empty and the substitution pass executes).
-
-        `h=other; gi${x}t commit -m z` — `x` is never assigned. If the
-        "leave unresolved" fallback ever degraded from returning the
-        original matched text to returning `""`, `${x}` would vanish and the
-        surrounding literal fragments would collapse into `git` by
-        coincidence (`"gi" + "" + "t"` == `"git"`), manufacturing a command
-        word that was never there. Asserting merely `assertIsNotNone` on the
-        wrong branch would pass under exactly this truncating mutant; this
-        asserts the correct (allowed) OUTCOME instead.
-        """
-        cmd = "h=other; gi${x}t commit -m z"
-        self.assertIsNone(hook.check(self._input(cmd)))
-
-    # --- main#1195 round 4, finding 2: row1/row3 must be pinned across
-    # braced AND multi-char-name variants, not just the bare single-char
-    # spelling — a mutant that composes the fix only for `${NAME}` refs, or
-    # only for names longer than one character, survived mutation testing
-    # against the original four rows (290 passed unchanged). Varying the
-    # incidental dimensions here is what makes those mutants die. --------
-
-    def test_row1_braced_variant_never_reaches_git_allows(self) -> None:
-        """`A=1 B=git ${B} commit -m z` — braced-reference sibling of row 1.
-        Real shell: `${B}` is unset at expansion time for the same reason
-        the bare form is (own-segment prefix not yet in effect). Must ALLOW.
-        """
-        self.assertIsNone(hook.check(self._input("A=1 B=git ${B} commit -m z")))
-
-    def test_row1_multichar_name_variant_never_reaches_git_allows(self) -> None:
-        """`A=1 BB=git $BB commit -m z` — multi-char-name sibling of row 1.
-        Must ALLOW for the identical real-shell reason (own-segment prefix
-        not yet in effect at expansion time), regardless of name length.
-        """
-        self.assertIsNone(hook.check(self._input("A=1 BB=git $BB commit -m z")))
-
-    def test_row3_braced_variant_cannot_hide_prior_running_value_blocks(self) -> None:
-        """`g=git; g=echo ${g} commit -m x` — braced-reference sibling of
-        row 3. Real shell: `${g}` resolves against the RUNNING state from
-        the prior segment (`git`), not this segment's own `g=echo` prefix.
-        Must BLOCK.
-        """
-        result = hook.check(self._input("g=git; g=echo ${g} commit -m x"))
-        self.assertIsNotNone(result, "prior-segment g=git must still resolve via ${g}")
+    @pytest.mark.parametrize(
+        "command",
+        [
+            'n=0; while [ "$n" -lt 1 ]; do g=git; $g commit -m x; n=1; done',
+            "if true; then g=git; $g commit -m x; fi",
+            "for f in a; do g=git; ${g} commit -m x; done",
+        ],
+        ids=[
+            "while_loop_do_body_assignment_blocks",
+            "if_then_body_assignment_blocks",
+            "for_loop_do_body_braced_reference_blocks",
+        ],
+    )
+    def test_blocks_bare_second_shape(self, command):
+        result = hook.check(self._input(command))
         assert result is not None
-        self.assertEqual(result["decision"], "block")
-        self.assertIn("missing `-c user.name=` flag", result["reason"])
-
-    def test_row3_multichar_name_variant_cannot_hide_prior_running_value_blocks(
-        self,
-    ) -> None:
-        """`gg=git; gg=echo $gg commit -m x` — multi-char-name sibling of
-        row 3. Must BLOCK for the identical real-shell reason, regardless of
-        name length.
-        """
-        result = hook.check(self._input("gg=git; gg=echo $gg commit -m x"))
-        self.assertIsNotNone(result, "prior-segment gg=git must still resolve at the commit site")
         assert result is not None
-        self.assertEqual(result["decision"], "block")
-        self.assertIn("missing `-c user.name=` flag", result["reason"])
+        assert result["decision"] == "block"
 
     # --- main#1195 round 4, finding 1: same-segment prefix assignment DOES
     # resolve inside a SINGLE-quoted child payload (`bash -c '...'`), because
     # that text is expanded by the CHILD interpreter in an environment the
     # prefix assignment already populated — real-shell-verified with a
-    # marker proxy. All six rows below were measured against a real shell
-    # (fake `git` on PATH, printing a marker iff it actually runs) before
-    # being pinned here. -------------------------------------------------
+    # marker proxy. -------------------------------------------------------
 
     def test_prefix_in_single_quoted_bash_dash_c_payload_blocks(self) -> None:
         """Row 1: `g=git bash -c '$g commit -m x'` — marker proxy: real
@@ -1709,111 +1687,16 @@ class AssignmentAwarePrePassTests(unittest.TestCase):
         round-3 fix's own regression, against this PR's previous head).
         """
         result = hook.check(self._input("g=git bash -c '$g commit -m x'"))
-        self.assertIsNotNone(
-            result, "same-segment prefix feeding a quoted child payload must block"
-        )
+        assert result is not None, "same-segment prefix feeding a quoted child payload must block"
         assert result is not None
-        self.assertEqual(result["decision"], "block")
-        self.assertTrue(
-            result["reason"].startswith(
-                "BLOCKED: indirect-exec wrapper detected (shell -c) carrying a hidden `git commit`."
-            ),
-            result["reason"],
-        )
-
-    def test_prefix_in_double_quoted_bash_dash_c_payload_allows(self) -> None:
-        """Row 2 (control): `g=git bash -c "$g commit -m x"` — marker proxy:
-        real shell does NOT run `git` (the OUTER shell expands the
-        double-quoted argument itself, before the prefix takes effect, same
-        expansion point as a bare same-segment reference). Must ALLOW.
-        """
-        self.assertIsNone(hook.check(self._input('g=git bash -c "$g commit -m x"')))
-
-    def test_prefix_in_single_quoted_sh_dash_c_payload_blocks(self) -> None:
-        """Row 3: `g=git sh -c '$g commit -m x'` — marker proxy: real shell
-        RUNS the fake `git`. Must BLOCK, same as the `bash -c` spelling.
-        """
-        result = hook.check(self._input("g=git sh -c '$g commit -m x'"))
-        self.assertIsNotNone(result)
-        assert result is not None
-        self.assertEqual(result["decision"], "block")
-
-    def test_prefix_in_single_quoted_braced_payload_blocks(self) -> None:
-        """Row 4: `g=git bash -c '${g} commit -m x'` — braced form inside
-        the single-quoted payload. Marker proxy: real shell RUNS the fake
-        `git`. Must BLOCK.
-        """
-        result = hook.check(self._input("g=git bash -c '${g} commit -m x'"))
-        self.assertIsNotNone(result)
-        assert result is not None
-        self.assertEqual(result["decision"], "block")
-
-    def test_no_prefix_unset_reference_in_single_quoted_payload_allows(self) -> None:
-        """Row 5 (control): `bash -c '$g commit -m x'` with no `g=git`
-        prefix anywhere. Marker proxy: real shell does NOT run `git` (`$g`
-        is genuinely unset). Must ALLOW.
-        """
-        self.assertIsNone(hook.check(self._input("bash -c '$g commit -m x'")))
-
-    def test_cross_segment_semicolon_single_quoted_payload_still_blocks(self) -> None:
-        """Row 6: `g=git; bash -c '$g commit -m x'` — the assignment is in
-        an EARLIER segment (`;`, not a same-segment prefix), so it reaches
-        the quoted payload via the pre-existing RUNNING map, unchanged by
-        this round's fix (the running map already applies everywhere,
-        quote-blind). Pinned so a future change to the running map's
-        quote-awareness is caught here.
-        """
-        result = hook.check(self._input("g=git; bash -c '$g commit -m x'"))
-        self.assertIsNotNone(result)
-        assert result is not None
-        self.assertEqual(result["decision"], "block")
+        assert result["decision"] == "block"
+        assert result["reason"].startswith(
+            "BLOCKED: indirect-exec wrapper detected (shell -c) carrying a hidden `git commit`."
+        ), result["reason"]
 
     # --- main#1195 round 4, finding 3 (#1311): a compound-statement leader
     # (`do`, `then`, ...) at a segment's leading position must not hide an
-    # assignment one token to the right — real-shell-verified with a marker
-    # proxy (each row genuinely runs `git commit -m x`), the same defect
-    # class as the wrapped `bash -c` choke point above. ------------------
-
-    def test_for_loop_do_body_assignment_blocks(self) -> None:
-        """`for f in a; do g=git; $g commit -m x; done` — marker proxy: real
-        shell RUNS the fake `git`. Must BLOCK; ALLOWed before the
-        `strip_command_prefixes()` fix (`_leading_literal_assignments` saw
-        `"do"` at the leading position and stopped before ever looking at
-        `g=git` one token to the right).
-        """
-        result = hook.check(self._input("for f in a; do g=git; $g commit -m x; done"))
-        self.assertIsNotNone(result, "do-prefixed segment assignment must still resolve")
-        assert result is not None
-        self.assertEqual(result["decision"], "block")
-        self.assertIn("missing `-c user.name=` flag", result["reason"])
-
-    def test_while_loop_do_body_assignment_blocks(self) -> None:
-        result = hook.check(
-            self._input('n=0; while [ "$n" -lt 1 ]; do g=git; $g commit -m x; n=1; done')
-        )
-        self.assertIsNotNone(result)
-        assert result is not None
-        self.assertEqual(result["decision"], "block")
-
-    def test_if_then_body_assignment_blocks(self) -> None:
-        result = hook.check(self._input("if true; then g=git; $g commit -m x; fi"))
-        self.assertIsNotNone(result)
-        assert result is not None
-        self.assertEqual(result["decision"], "block")
-
-    def test_for_loop_do_body_multichar_name_blocks(self) -> None:
-        """Vary the incidental dimension: a multi-char name (`gg`), not `g`
-        — the exact fixture-narrowness finding 2 (above) is about."""
-        result = hook.check(self._input("for f in a; do gg=git; $gg commit -m x; done"))
-        self.assertIsNotNone(result)
-        assert result is not None
-        self.assertEqual(result["decision"], "block")
-
-    def test_for_loop_do_body_braced_reference_blocks(self) -> None:
-        result = hook.check(self._input("for f in a; do g=git; ${g} commit -m x; done"))
-        self.assertIsNotNone(result)
-        assert result is not None
-        self.assertEqual(result["decision"], "block")
+    # assignment one token to the right. -----------------------------------
 
     def test_for_loop_do_body_single_quoted_child_payload_blocks(self) -> None:
         """Finding 1 and finding 3 compose: a `do`-prefixed segment's own
@@ -1822,11 +1705,11 @@ class AssignmentAwarePrePassTests(unittest.TestCase):
         BLOCK.
         """
         result = hook.check(self._input("for f in a; do g=git bash -c '$g commit -m x'; done"))
-        self.assertIsNotNone(
-            result, "do-prefixed same-segment prefix must resolve in the quoted payload"
+        assert result is not None, (
+            "do-prefixed same-segment prefix must resolve in the quoted payload"
         )
         assert result is not None
-        self.assertEqual(result["decision"], "block")
+        assert result["decision"] == "block"
 
 
 if __name__ == "__main__":

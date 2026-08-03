@@ -7,6 +7,23 @@ Covers every syntactic form a `grep` invocation can take (per
 / heredoc / flag-value NEGATIVES that must NOT trigger, and the documented
 `NOORINA_ALLOW_GREP` override.
 
+`PositiveMatchTests` and `NegativeMatchTests` are `pytest.mark.parametrize`
+tables (#1117 — G5 clone-group parametrization): every member of each
+originally-duplicated group was a single-statement `self.assertTrue(_blocks(cmd))`
+/ `self.assertFalse(_blocks(cmd))` method differing only in `cmd`, so they are
+NOT `unittest.TestCase` (parametrize is silently a no-op on `TestCase`
+methods — verified empirically before converting: a probe class collected 1
+test instead of N). `OverrideTests` and the two non-matching `NegativeMatchTests`
+methods (`test_non_bash_tool`, `test_empty_command`) keep their own bodies:
+they are AST-shape-identical to the parametrized tables (same
+`self.assertFalse(_blocks(...))` call shape) but belong to a semantically
+different scenario (the escape hatch, not "not a grep invocation" /
+"a different tool entirely") — collapsing across that boundary is exactly the
+"structurally identical, not safely mergeable" trap, so they stay separate.
+Every `ids=` entry below is the original method's bare name (the `test_`
+prefix stripped) so each parametrized case is traceable 1:1 back to the test
+it replaces.
+
 Run: ENVIRONMENT=test python3 -m pytest .claude/hooks/tests/test_block_bare_grep.py -v
 """
 
@@ -18,6 +35,8 @@ Run: ENVIRONMENT=test python3 -m pytest .claude/hooks/tests/test_block_bare_grep
 from __future__ import annotations
 
 import unittest
+
+import pytest
 
 import _test_helpers  # noqa: E402,F401
 import _shell_parse  # noqa: E402
@@ -31,142 +50,127 @@ def _blocks(command: str) -> bool:
     return result is not None and result.get("decision") == "block"
 
 
-class PositiveMatchTests(unittest.TestCase):
+class TestPositiveMatch:
     """Real bare-grep invocations MUST be blocked."""
 
-    def test_direct(self):
-        self.assertTrue(_blocks("grep foo file"))
-
-    def test_direct_with_flags(self):
-        self.assertTrue(_blocks('grep -rn "foo" src/'))
-
-    def test_piped(self):
-        # grep as a downstream pipeline segment — the most common real form.
-        self.assertTrue(_blocks("rg foo | grep bar"))
-
-    def test_piped_from_cat(self):
-        self.assertTrue(_blocks("cat file | grep foo"))
-
-    def test_egrep(self):
-        self.assertTrue(_blocks("egrep foo file"))
-
-    def test_fgrep(self):
-        self.assertTrue(_blocks("fgrep foo file"))
-
-    def test_absolute_path(self):
-        self.assertTrue(_blocks("/usr/bin/grep foo file"))
-
-    def test_wrapper_sudo(self):
-        self.assertTrue(_blocks("sudo grep foo /var/log/syslog"))
-
-    def test_wrapper_env_with_assignment(self):
-        self.assertTrue(_blocks("env LC_ALL=C grep foo file"))
-
-    def test_wrapper_time(self):
-        self.assertTrue(_blocks("time grep foo file"))
-
-    def test_wrapper_xargs(self):
-        self.assertTrue(_blocks("echo file | xargs grep foo"))
-
-    def test_wrapper_xargs_replace_flag(self):
-        # `-I {}` takes a value — the `{}` must not be mistaken for the command.
-        self.assertTrue(_blocks("echo file | xargs -I {} grep foo {}"))
-
-    def test_wrapper_command(self):
-        self.assertTrue(_blocks("command grep foo file"))
-
-    def test_wrapper_sudo_login_flag(self):
-        # #1008 review (Weronika): `-i` is BOOLEAN on sudo (login shell), not a
-        # value flag — it must not eat the following `grep` token. Regression.
-        self.assertTrue(_blocks("sudo -i grep foo file"))
-
-    def test_wrapper_sudo_shell_flag(self):
-        self.assertTrue(_blocks("sudo -s grep foo file"))
-
-    def test_wrapper_sudo_mixed_value_and_boolean_flags(self):
-        # `-u root` consumes `root`; `-i` is boolean — grep still resolves.
-        self.assertTrue(_blocks("sudo -u root -i grep foo file"))
-
-    def test_wrapper_sudo_value_flag_still_consumes(self):
-        # `-u root` (value flag) consumes `root`, leaving grep as the command.
-        self.assertTrue(_blocks("sudo -u root grep foo file"))
-
-    def test_wrapper_stdbuf_value_flag_preserved(self):
-        # `-i` IS a value flag on stdbuf (buffer mode) — the per-wrapper dict
-        # must keep that behavior while fixing sudo. `stdbuf -i L grep` still
-        # resolves grep as the command (L is -i's value).
-        self.assertTrue(_blocks("stdbuf -i L grep foo file"))
-
-    def test_wrapper_xargs_s_value_flag_preserved(self):
-        # `-s` is a value flag on xargs (max size) — must still consume its value.
-        self.assertTrue(_blocks("echo f | xargs -s 1000 grep foo"))
-
-    def test_second_segment_of_and_list(self):
-        self.assertTrue(_blocks("rg foo file && grep bar file2"))
-
-    def test_leading_env_assignment(self):
-        self.assertTrue(_blocks("LC_ALL=C grep foo file"))
-
-    def test_override_off_value_still_blocks(self):
-        # An explicit falsey override does NOT open the gate.
-        self.assertTrue(_blocks("NOORINA_ALLOW_GREP=0 grep foo file"))
-
-    @unittest.skipUnless(
-        _shell_parse.bashlex_available(),
-        "command-substitution detection needs the bashlex AST path",
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "grep foo file",
+            'grep -rn "foo" src/',
+            # grep as a downstream pipeline segment — the most common real form.
+            "rg foo | grep bar",
+            "cat file | grep foo",
+            "egrep foo file",
+            "fgrep foo file",
+            "/usr/bin/grep foo file",
+            "sudo grep foo /var/log/syslog",
+            "env LC_ALL=C grep foo file",
+            "time grep foo file",
+            "echo file | xargs grep foo",
+            # `-I {}` takes a value — the `{}` must not be mistaken for the command.
+            "echo file | xargs -I {} grep foo {}",
+            "command grep foo file",
+            # #1008 review (Weronika): `-i` is BOOLEAN on sudo (login shell), not a
+            # value flag — it must not eat the following `grep` token. Regression.
+            "sudo -i grep foo file",
+            "sudo -s grep foo file",
+            # `-u root` consumes `root`; `-i` is boolean — grep still resolves.
+            "sudo -u root -i grep foo file",
+            # `-u root` (value flag) consumes `root`, leaving grep as the command.
+            "sudo -u root grep foo file",
+            # `-i` IS a value flag on stdbuf (buffer mode) — the per-wrapper dict
+            # must keep that behavior while fixing sudo. `stdbuf -i L grep` still
+            # resolves grep as the command (L is -i's value).
+            "stdbuf -i L grep foo file",
+            # `-s` is a value flag on xargs (max size) — must still consume its value.
+            "echo f | xargs -s 1000 grep foo",
+            "rg foo file && grep bar file2",
+            "LC_ALL=C grep foo file",
+            # An explicit falsey override does NOT open the gate.
+            "NOORINA_ALLOW_GREP=0 grep foo file",
+            pytest.param(
+                "x=$(grep foo bar)",
+                id="command_substitution",
+                marks=pytest.mark.skipif(
+                    not _shell_parse.bashlex_available(),
+                    reason="command-substitution detection needs the bashlex AST path",
+                ),
+            ),
+        ],
+        ids=[
+            "direct",
+            "direct_with_flags",
+            "piped",
+            "piped_from_cat",
+            "egrep",
+            "fgrep",
+            "absolute_path",
+            "wrapper_sudo",
+            "wrapper_env_with_assignment",
+            "wrapper_time",
+            "wrapper_xargs",
+            "wrapper_xargs_replace_flag",
+            "wrapper_command",
+            "wrapper_sudo_login_flag",
+            "wrapper_sudo_shell_flag",
+            "wrapper_sudo_mixed_value_and_boolean_flags",
+            "wrapper_sudo_value_flag_still_consumes",
+            "wrapper_stdbuf_value_flag_preserved",
+            "wrapper_xargs_s_value_flag_preserved",
+            "second_segment_of_and_list",
+            "leading_env_assignment",
+            "override_off_value_still_blocks",
+            None,  # the pytest.param above carries its own id
+        ],
     )
-    def test_command_substitution(self):
-        self.assertTrue(_blocks("x=$(grep foo bar)"))
+    def test_blocks(self, command):
+        assert _blocks(command)
 
 
-class NegativeMatchTests(unittest.TestCase):
+class TestNegativeMatch:
     """The tools we want, and data-position 'grep', must NOT trigger."""
 
-    def test_rg(self):
-        self.assertFalse(_blocks("rg foo file"))
-
-    def test_ripgrep(self):
-        self.assertFalse(_blocks("ripgrep foo file"))
-
-    def test_ast_grep(self):
-        self.assertFalse(_blocks("ast-grep -p 'foo(bar)' src/"))
-
-    def test_pgrep(self):
-        self.assertFalse(_blocks("pgrep -f myproc"))
-
-    def test_zgrep(self):
-        self.assertFalse(_blocks("zgrep foo file.gz"))
-
-    def test_git_grep(self):
-        # git's own tracked-file search — `git` is the command, not `grep`.
-        self.assertFalse(_blocks("git grep foo"))
-
-    def test_echo_data_position(self):
-        self.assertFalse(_blocks('echo "use grep for this"'))
-
-    def test_gh_body_flag_value(self):
-        self.assertFalse(_blocks('gh pr create --body "we mention grep in prose"'))
-
-    def test_heredoc_body(self):
-        cmd = "cat > /tmp/x.md <<'EOF'\nDo not use grep here.\nEOF"
-        self.assertFalse(_blocks(cmd))
-
-    def test_filename_containing_grep(self):
-        self.assertFalse(_blocks("cat grepped_output.txt"))
-
-    def test_word_containing_grep(self):
-        self.assertFalse(_blocks("echo pgrep"))
-
-    def test_no_grep_at_all(self):
-        self.assertFalse(_blocks("rg foo src/"))
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "rg foo file",
+            "ripgrep foo file",
+            "ast-grep -p 'foo(bar)' src/",
+            "pgrep -f myproc",
+            "zgrep foo file.gz",
+            # git's own tracked-file search — `git` is the command, not `grep`.
+            "git grep foo",
+            'echo "use grep for this"',
+            'gh pr create --body "we mention grep in prose"',
+            "cat > /tmp/x.md <<'EOF'\nDo not use grep here.\nEOF",
+            "cat grepped_output.txt",
+            "echo pgrep",
+            "rg foo src/",
+        ],
+        ids=[
+            "rg",
+            "ripgrep",
+            "ast_grep",
+            "pgrep",
+            "zgrep",
+            "git_grep",
+            "echo_data_position",
+            "gh_body_flag_value",
+            "heredoc_body",
+            "filename_containing_grep",
+            "word_containing_grep",
+            "no_grep_at_all",
+        ],
+    )
+    def test_does_not_block(self, command):
+        assert not _blocks(command)
 
     def test_non_bash_tool(self):
-        self.assertIsNone(
-            hook.check({"tool_name": "Edit", "tool_input": {"command": "grep foo file"}})
-        )
+        assert hook.check({"tool_name": "Edit", "tool_input": {"command": "grep foo file"}}) is None
 
     def test_empty_command(self):
-        self.assertIsNone(hook.check(_input("")))
+        assert hook.check(_input("")) is None
 
 
 class OverrideTests(unittest.TestCase):
@@ -197,4 +201,7 @@ class BlockMessageTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    # `unittest.main()` would silently skip TestPositiveMatch/TestNegativeMatch
+    # (plain pytest classes, not unittest.TestCase — see module docstring) when
+    # this file is run standalone. `pytest.main` discovers both styles.
+    raise SystemExit(pytest.main([__file__, "-v"]))
