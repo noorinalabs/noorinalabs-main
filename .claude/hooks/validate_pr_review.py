@@ -2772,13 +2772,20 @@ def check(input_data: dict) -> dict | None:
                 "  sure the actual structured-fields block follows a `---` separator AND\n"
                 "  is the very last block. Inline-code fences (`Requestor: foo`) and fenced\n"
                 "  code (``` ... ```) are stripped before matching.\n"
+                # Ratio-shaped literals are BANNED from this help document (#1203).
+                # These three lines each ended in `1/2 false-block` — text a reader
+                # cannot distinguish from the computed `{total_distinct}/2` clause
+                # above, and neither could five of this file's own assertions, which
+                # matched the boilerplate and stayed green with the real ratio at 0/2.
+                # `BlockReasonRatioCollisionTests` enforces the ban; keep any new
+                # phrasing here free of an `N/2` token.
                 "  Historical instances driving this enforcement (P3W11 batch 11, 2026-05-19):\n"
                 "    - main#509 — Wanjiku's prose described the bare-line block; captured\n"
-                "      Requestor as rest-of-line garbage; 1/2 false-block.\n"
+                "      Requestor as rest-of-line garbage; false-blocked one approval short.\n"
                 "    - deploy#337 — Lucas noted PR body lacked the trailer; captured\n"
-                "      garbage Requestor; 1/2 false-block.\n"
+                "      garbage Requestor; false-blocked one approval short.\n"
                 "    - deploy#339 — Bereket quoted `Requestor: (TBD — orchestrator will\n"
-                "      assign)`; captured TBD as Requestor; 1/2 false-block.\n"
+                "      assign)`; captured TBD as Requestor; false-blocked one approval short.\n"
                 "  All three required orchestrator REST PATCH pre-#511 fix.\n\n"
                 "Single-Reviewer Exception (charter § Single-Reviewer Exception (Wave-Bootstrap "
                 "Only)): label PR `wave-bootstrap` AND have a charter-enforcer review (Standards "
