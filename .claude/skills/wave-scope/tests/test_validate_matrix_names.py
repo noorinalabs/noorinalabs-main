@@ -81,6 +81,20 @@ def _report_stderr(report: dict) -> tuple[int, str]:
     return code, buf.getvalue()
 
 
+def _finding_row(err: str, role: str) -> str:
+    """Return the single per-finding line for `role` from captured stderr (#1182).
+
+    Whole-stream `assertIn` is not enough here: the remediation TRAILERS repeat
+    the same phrases the per-row line uses, so a stream-level assertion stays
+    green with the row line deleted. Tests that care about what the row says
+    must assert against the row.
+    """
+    rows = [ln for ln in err.splitlines() if ln.strip().startswith(f"- {role}:")]
+    if len(rows) != 1:
+        raise AssertionError(f"expected exactly 1 {role!r} finding row, got {len(rows)}:\n{err}")
+    return rows[0]
+
+
 def _write_slim_roster_card(roster_dir: Path, role_slug: str, name: str) -> None:
     """Mimic the NEW slim card shape (#1010): H1 `# <Name> — <Role>`, no
     `**Name:**` field. Verbatim to the shipped template so the fixture can't
@@ -1284,7 +1298,14 @@ class ManifestSourcedSuggestionTests(unittest.TestCase):
             code, err = _report_stderr(report)
             self.assertEqual(code, 1)
             self.assertNotIn("(no close matches)", err)
-            self.assertIn("KNOWN org persona", err)
+            # Assert on the ROW, not on the whole stream: the trailer paragraph
+            # also contains "KNOWN org persona", so a whole-stream assertion
+            # passes even with the per-row line deleted (measured — that
+            # mutation SURVIVED the first draft of this test).
+            row = _finding_row(err, "implementer")
+            self.assertIn("KNOWN org persona", row)
+            # And it must not echo the declared name back as its own suggestion.
+            self.assertNotIn("suggestions:", row)
 
     def test_uncloned_org_persona_is_steered_to_fetch_missing_not_substitution(self):
         """Bullet 2: the remediation must not point at changing a correct assignment."""
