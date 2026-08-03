@@ -149,9 +149,14 @@ named on the `unverified` path this row never reaches.
 
 `suggestions` is advisory text: nothing reads it, and it never feeds `resolved`
 or the exit code. So it is sourced from `review_combined` for every slot, and an
-unresolved commit-capable name that IS a known org persona whose target roster
-could not be read gets its own diagnostic (`unresolved_reason`) pointing at
-`--fetch-missing` instead of at the substitution guidance.
+unresolved commit-capable name that IS a known org persona gets its own
+diagnostic (`unresolved_reason`) instead of a suggestion list — because
+`_suggest` returns the declared name ITSELF for an exact manifest hit, and
+"suggestions: Anya Kowalczyk" printed against `implementer: 'Anya Kowalczyk'`
+reads as a second bug. Two such rows, distinguished by whether membership is
+even decidable: roster unreadable (not cloned) points at `--fetch-missing`;
+roster readable and the name is not on it is a genuine assignment problem and
+keeps the reassign/onboard/substitution guidance.
 
 This is deliberately MESSAGE-ONLY. `resolved` stays False and the exit code
 stays 1 for exactly the rows they did before — the #1134 carve-out pinned by
@@ -340,6 +345,7 @@ OVERRIDE_KEY = "roster_union_override"
 # remediation paragraph is printed for an unresolved row and are read nowhere
 # else — never by the exit-code arithmetic, which keys off `resolved`.
 _REASON_ORG_PERSONA_UNREADABLE = "org-persona-unreadable-roster"
+_REASON_ORG_PERSONA_NOT_A_MEMBER = "org-persona-not-a-member"
 _REASON_UNKNOWN_NAME = "unknown-name"
 
 
@@ -560,7 +566,14 @@ def validate(
       - ``"org-persona-unreadable-roster"`` — the name is a known org-manifest
         persona and the target repo's roster could not be read (not cloned).
         Remedy: `--fetch-missing` or clone the repo — NOT a substitution.
+      - ``"org-persona-not-a-member"`` — known org-manifest persona, target
+        roster IS readable, and the name is not on it. A genuine assignment
+        problem (reassign / onboard), but still not a "no close matches" one.
       - ``"unknown-name"``  — every other unresolved name.
+
+    The two org-persona reasons exist so the row can STATE the finding instead
+    of echoing the declared name back as its own suggestion, which is what
+    `_suggest` returns for an exact manifest hit.
 
     `slot_class` (#1180) is ``"known"`` when the slot key is in
     `KNOWN_ROLE_SLOTS`, else ``"unclassified"`` — a hard failure in
@@ -629,11 +642,16 @@ def validate(
                 # construction: `review_combined` contains `org_manifest`, so a
                 # manifest name in a review slot has already resolved.
                 in_manifest = any(declared_clean.lower() == known.lower() for known in org_manifest)
-                entry["unresolved_reason"] = (
-                    _REASON_ORG_PERSONA_UNREADABLE
-                    if in_manifest and not membership_decidable
-                    else _REASON_UNKNOWN_NAME
-                )
+                if not in_manifest:
+                    entry["unresolved_reason"] = _REASON_UNKNOWN_NAME
+                elif membership_decidable:
+                    # Known org persona, target roster READABLE and he is not on
+                    # it. A genuine assignment problem — but the row must still
+                    # not "suggest" the declared name back at the operator.
+                    entry["unresolved_reason"] = _REASON_ORG_PERSONA_NOT_A_MEMBER
+                    entry["repo_roster"] = sorted(repo_roster)
+                else:
+                    entry["unresolved_reason"] = _REASON_ORG_PERSONA_UNREADABLE
                 repo_findings.append(entry)
                 continue
             # #1134: commit-capable slots on a child repo must be repo members.
@@ -736,6 +754,7 @@ def _print_report_to_stderr(report: dict[str, list[dict[str, object]]]) -> int:
     unresolved = 0
     unknown_name = 0
     org_persona_unreadable = 0
+    org_persona_not_member = 0
     cross_repo = 0
     overridden = 0
     unverified = 0
@@ -745,8 +764,11 @@ def _print_report_to_stderr(report: dict[str, list[dict[str, object]]]) -> int:
             total += 1
             if not f["resolved"]:
                 unresolved += 1
-                if f.get("unresolved_reason") == _REASON_ORG_PERSONA_UNREADABLE:
+                reason = f.get("unresolved_reason")
+                if reason == _REASON_ORG_PERSONA_UNREADABLE:
                     org_persona_unreadable += 1
+                elif reason == _REASON_ORG_PERSONA_NOT_A_MEMBER:
+                    org_persona_not_member += 1
                 else:
                     unknown_name += 1
             if f.get("slot_class") == "unclassified":
@@ -771,13 +793,26 @@ def _print_report_to_stderr(report: dict[str, list[dict[str, object]]]) -> int:
                 continue
             print(f"\n  {repo}:", file=sys.stderr)
             for f in bad:
-                if f.get("unresolved_reason") == _REASON_ORG_PERSONA_UNREADABLE:
-                    # #1182: printing "suggestions: <the declared name itself>"
-                    # here would read as a bug, so this row states the finding.
+                # #1182: for a name the manifest holds EXACTLY, printing
+                # "suggestions: <the declared name itself>" reads as a bug, so
+                # these two rows state the finding instead of suggesting.
+                reason = f.get("unresolved_reason")
+                if reason == _REASON_ORG_PERSONA_UNREADABLE:
                     print(
                         f"    - {f['role']}: {f['declared']!r}  →  KNOWN org persona "
                         "(present in .claude/team/roster.json); this repo's roster "
                         "could not be read — not cloned?",
+                        file=sys.stderr,
+                    )
+                    continue
+                if reason == _REASON_ORG_PERSONA_NOT_A_MEMBER:
+                    raw_roster = f.get("repo_roster")
+                    roster = raw_roster if isinstance(raw_roster, list) else []
+                    roster_str = ", ".join(roster) if roster else "(empty)"
+                    print(
+                        f"    - {f['role']}: {f['declared']!r}  →  KNOWN org persona "
+                        "(present in .claude/team/roster.json), but NOT on this "
+                        f"repo's roster.\n      repo roster: {roster_str}",
                         file=sys.stderr,
                     )
                     continue
@@ -794,6 +829,19 @@ def _print_report_to_stderr(report: dict[str, list[dict[str, object]]]) -> int:
                 "  Approved substitutions: record under"
                 " wave_{M}_decisions.implementer_substitutions"
                 " in cross-repo-status.json with rationale.",
+                file=sys.stderr,
+            )
+        if org_persona_not_member:
+            print(
+                f"\n  {org_persona_not_member} of the above resolve as KNOWN org personas but"
+                " are NOT on\n"
+                "  the target repo's roster, so a commit-capable slot cannot take them\n"
+                "  (#1134 — that slot must COMMIT there). This IS an assignment problem:\n"
+                "    (a) reassign to a member of the target repo's roster (preferred), or\n"
+                "    (b) onboard the persona into <repo>/.claude/team/roster/ + roster.json.\n"
+                "  If the assignment is genuinely intended, record it under"
+                " wave_{M}_decisions.implementer_substitutions\n"
+                "  in cross-repo-status.json with a rationale.",
                 file=sys.stderr,
             )
         if org_persona_unreadable:

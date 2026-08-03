@@ -1348,22 +1348,33 @@ class ManifestSourcedSuggestionTests(unittest.TestCase):
             self.assertEqual(_report_stderr(report)[0], 1)
 
     def test_manifest_persona_on_a_CLONED_repo_still_gets_substitution_guidance(self):
-        """The `not membership_decidable` conjunct is load-bearing.
+        """The `membership_decidable` branch is load-bearing.
 
         Same name, same manifest — but the target roster IS readable, so this is
-        a genuine wrong-assignment and the substitution guidance is correct.
-        Drop the conjunct and this reds on the `--fetch-missing` assertion.
+        a genuine wrong-assignment: reassign / onboard / record a substitution,
+        NOT `--fetch-missing`. Collapse the branch and this reds.
+
+        The row must still not echo the declared name back as its own
+        suggestion, which is exactly what `_suggest` returns on an exact
+        manifest hit — measured against the real org roster on the first draft
+        of this change: `implementer: 'Nikolaos Papadopoulos'  ->  suggestions:
+        Nikolaos Papadopoulos`.
         """
         with tempfile.TemporaryDirectory() as tmpdir:
             org = self._build_org(Path(tmpdir))
             report = validate({self.CLONED_REPO: {"implementer": self.ORG_PERSONA}}, org)
             finding = report[self.CLONED_REPO][0]
             self.assertFalse(finding["resolved"])
-            self.assertEqual(finding["unresolved_reason"], "unknown-name")
+            self.assertEqual(finding["unresolved_reason"], "org-persona-not-a-member")
             code, err = _report_stderr(report)
             self.assertEqual(code, 1)
             self.assertIn("implementer_substitutions", err)
             self.assertNotIn("--fetch-missing", err)
+            row = _finding_row(err, "implementer")
+            self.assertIn("NOT on this repo's roster", row)
+            self.assertNotIn("suggestions:", row)
+            # The roster it COULD take is named, so the fix is one read away.
+            self.assertIn("Bereket Tadesse", err)
 
     def test_genuine_typo_on_an_uncloned_repo_still_reports_unknown_name(self):
         """A misspelling is NOT the environment gap — but it still gets a real suggestion.
