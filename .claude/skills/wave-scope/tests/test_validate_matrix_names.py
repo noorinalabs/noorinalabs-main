@@ -11,6 +11,8 @@ org-dir state (which changes wave-to-wave).
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import sys
 import tempfile
@@ -64,6 +66,19 @@ def _build_fake_org_dir(tmp: Path) -> Path:
     _write_roster_card(graph_roster, "eng_idris", "Idris Yusuf")
     _write_roster_card(graph_roster, "eng_marisol", "Marisol Vega-Cruz")
     return tmp
+
+
+def _report_stderr(report: dict) -> tuple[int, str]:
+    """Run `_print_report_to_stderr` capturing its output (#1182).
+
+    Returns `(exit_code, captured_stderr)` so a test can assert on the exit
+    code AND on the operator-facing text in one call, instead of asserting on
+    report internals and merely hoping they reach the terminal.
+    """
+    buf = io.StringIO()
+    with contextlib.redirect_stderr(buf):
+        code = _print_report_to_stderr(report)
+    return code, buf.getvalue()
 
 
 def _write_slim_roster_card(roster_dir: Path, role_slug: str, name: str) -> None:
@@ -1195,6 +1210,207 @@ class ScopeModeSlotDiscoveryTests(unittest.TestCase):
             impl = next(f for f in findings if f["role"] == "implementer")
             self.assertEqual(impl["membership"], "overridden")
             self.assertEqual(_print_report_to_stderr(report), 0)
+
+
+class ManifestSourcedSuggestionTests(unittest.TestCase):
+    """#1182: never claim "(no close matches)" about a name held in the same frame.
+
+    Symptom, measured against the real org roster with
+    `noorinalabs-user-service` deliberately not cloned:
+
+        - implementer: 'Anya Kowalczyk'  ->  suggestions: (no close matches)
+          reviewer     resolved=True
+
+    `Anya Kowalczyk` is an exact key of the `org_manifest` set `validate()` had
+    already loaded, so the assertion was disprovable from a local; and the same
+    name resolved one slot away, leaving the operator unable to tell whether the
+    persona exists. The trailer then pointed at recording an
+    `implementer_substitution` — changing a CORRECT assignment — when the real
+    remedy is `--fetch-missing` or cloning the repo.
+
+    The fix is MESSAGE-ONLY. `test_1182_message_change_is_semantically_inert`
+    is the load-bearing guard: widening the RESOLUTION set instead of the
+    SUGGESTION set flips this exact row to `resolved=True membership=unverified`,
+    exit 0 — the silent pass #1134 exists to stop.
+    """
+
+    # In the manifest and on a THIRD child's roster; on neither the parent cards
+    # nor the target repo's, so unresolved for a commit-capable slot.
+    ORG_PERSONA = "Nikolaos Papadopoulos"
+    # `_build_fake_org_dir` creates no design-system dir at all → roster
+    # unreadable → membership undecidable. This is the "not cloned" case.
+    UNCLONED_REPO = "noorinalabs-design-system"
+    # Created WITH a roster by `_build_fake_org_dir` (Bereket Tadesse, Lucas
+    # Ferreira) → membership decidable. The discriminator for the second conjunct.
+    CLONED_REPO = "noorinalabs-deploy"
+
+    def _build_org(self, tmp: Path) -> Path:
+        org = _build_fake_org_dir(tmp)
+        _write_roster_card(
+            org / "noorinalabs-data-acquisition" / ".claude" / "team" / "roster",
+            "data_engineer_nikolaos",
+            self.ORG_PERSONA,
+        )
+        manifest = {
+            name: f"parametrization+{name.replace(' ', '.')}@gmail.com"
+            for name in ("Nadia Khoury", "Anya Kowalczyk", self.ORG_PERSONA)
+        }
+        (org / ".claude" / "team" / "roster.json").write_text(json.dumps(manifest, indent=2))
+        return org
+
+    def test_no_close_matches_is_not_claimed_about_a_manifest_name(self):
+        """Bullet 1: the report may not deny holding a name it holds.
+
+        Also pins problem 2 — the SAME name in the SAME run resolves in the
+        review-class slot, which is what made the old output unreadable.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            self.assertIn(self.ORG_PERSONA, _load_org_manifest_names(org), "fixture premise")
+            report = validate(
+                {
+                    self.UNCLONED_REPO: {
+                        "implementer": self.ORG_PERSONA,
+                        "reviewer": self.ORG_PERSONA,
+                    }
+                },
+                org,
+            )
+            by_role = {f["role"]: f for f in report[self.UNCLONED_REPO]}
+            self.assertFalse(by_role["implementer"]["resolved"])
+            self.assertTrue(by_role["reviewer"]["resolved"], "the asymmetry being explained")
+            # Sourced from `review_combined`: the manifest is now visible here.
+            self.assertIn(self.ORG_PERSONA, by_role["implementer"]["suggestions"])
+            code, err = _report_stderr(report)
+            self.assertEqual(code, 1)
+            self.assertNotIn("(no close matches)", err)
+            self.assertIn("KNOWN org persona", err)
+
+    def test_uncloned_org_persona_is_steered_to_fetch_missing_not_substitution(self):
+        """Bullet 2: the remediation must not point at changing a correct assignment."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            report = validate({self.UNCLONED_REPO: {"implementer": self.ORG_PERSONA}}, org)
+            finding = report[self.UNCLONED_REPO][0]
+            self.assertEqual(finding["unresolved_reason"], "org-persona-unreadable-roster")
+            code, err = _report_stderr(report)
+            self.assertEqual(code, 1)
+            self.assertIn("--fetch-missing", err)
+            self.assertIn("clone the repo", err)
+            self.assertNotIn("implementer_substitutions", err)
+
+    def test_1182_message_change_is_semantically_inert(self):
+        """THE guard: #1182 added advisory keys and nothing else.
+
+        Strips the two advisory keys and asserts the remaining entry is
+        byte-identical to the pre-#1182 shape, with exit 1. A future
+        "improvement" that widens the RESOLUTION set to fix the message reds
+        here on `resolved`, on `membership`, and on the exit code at once.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            report = validate({self.UNCLONED_REPO: {"implementer": self.ORG_PERSONA}}, org)
+            finding = dict(report[self.UNCLONED_REPO][0])
+            for advisory_key in ("suggestions", "unresolved_reason"):
+                self.assertIn(advisory_key, finding, "fixture premise: advisory key present")
+                finding.pop(advisory_key)
+            self.assertEqual(
+                finding,
+                {
+                    "role": "implementer",
+                    "declared": self.ORG_PERSONA,
+                    "resolved": False,
+                    "membership": "n/a",
+                    "slot_class": "known",
+                },
+            )
+            self.assertEqual(_report_stderr(report)[0], 1)
+
+    def test_manifest_persona_on_a_CLONED_repo_still_gets_substitution_guidance(self):
+        """The `not membership_decidable` conjunct is load-bearing.
+
+        Same name, same manifest — but the target roster IS readable, so this is
+        a genuine wrong-assignment and the substitution guidance is correct.
+        Drop the conjunct and this reds on the `--fetch-missing` assertion.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            report = validate({self.CLONED_REPO: {"implementer": self.ORG_PERSONA}}, org)
+            finding = report[self.CLONED_REPO][0]
+            self.assertFalse(finding["resolved"])
+            self.assertEqual(finding["unresolved_reason"], "unknown-name")
+            code, err = _report_stderr(report)
+            self.assertEqual(code, 1)
+            self.assertIn("implementer_substitutions", err)
+            self.assertNotIn("--fetch-missing", err)
+
+    def test_genuine_typo_on_an_uncloned_repo_still_reports_unknown_name(self):
+        """A misspelling is NOT the environment gap — but it still gets a real suggestion.
+
+        This is the case where widening the SUGGESTION source pays off without
+        the new diagnostic: `combined` had nothing close, so the operator was
+        told "(no close matches)" for a one-character typo of a real persona.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            report = validate({self.UNCLONED_REPO: {"implementer": "Nikolas Papadopolous"}}, org)
+            finding = report[self.UNCLONED_REPO][0]
+            self.assertEqual(finding["unresolved_reason"], "unknown-name")
+            self.assertIn(self.ORG_PERSONA, finding["suggestions"])
+            code, err = _report_stderr(report)
+            self.assertEqual(code, 1)
+            self.assertIn(f"suggestions: {self.ORG_PERSONA}", err)
+            self.assertIn("implementer_substitutions", err)
+
+    def test_both_remediations_print_when_both_classes_are_present(self):
+        """The two trailers are independent, not mutually exclusive."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            report = validate(
+                {
+                    self.UNCLONED_REPO: {"implementer": self.ORG_PERSONA},
+                    self.CLONED_REPO: {"implementer": "Totally Unknown"},
+                },
+                org,
+            )
+            code, err = _report_stderr(report)
+            self.assertEqual(code, 1)
+            self.assertIn("--fetch-missing", err)
+            self.assertIn("implementer_substitutions", err)
+            self.assertIn("2/2 names UNRESOLVED", err)
+
+    def test_scope_mode_carries_the_diagnostic_end_to_end(self):
+        """The path /wave-scope § 12.5 and /wave-kickoff § 0b actually run."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            scope = {
+                "tier_1_core": [
+                    {
+                        "id": f"{self.UNCLONED_REPO}#77",
+                        "ref": "design-system#77",
+                        "implementer": self.ORG_PERSONA,
+                        "reviewer": "Nadia Khoury",
+                    }
+                ]
+            }
+            report = validate_scope(scope, org)
+            findings = report[f"{self.UNCLONED_REPO} (design-system#77)"]
+            impl = next(f for f in findings if f["role"] == "implementer")
+            self.assertFalse(impl["resolved"])
+            self.assertEqual(impl["unresolved_reason"], "org-persona-unreadable-roster")
+            code, err = _report_stderr(report)
+            self.assertEqual(code, 1)
+            self.assertIn("--fetch-missing", err)
+
+    def test_resolved_rows_carry_no_unresolved_reason(self):
+        """The key exists only where it means something."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org(Path(tmpdir))
+            report = validate({"noorinalabs-isnad-graph": {"implementer": "Anya Kowalczyk"}}, org)
+            finding = report["noorinalabs-isnad-graph"][0]
+            self.assertTrue(finding["resolved"])
+            self.assertNotIn("unresolved_reason", finding)
+            self.assertEqual(_report_stderr(report)[0], 0)
 
 
 if __name__ == "__main__":
