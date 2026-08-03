@@ -88,10 +88,25 @@ membership check not applying — hang off the REVIEW class, so `REVIEW_CLASS_RO
 is the allowlist and everything else, *including a role nobody has classified*,
 takes the commit-capable path. The seam was originally written the other way
 round (`COMMIT_CAPABLE_ROLES` as the allowlist, review as the fall-through),
-which meant an unclassified slot silently inherited BOTH loosenings. Measured on
-`main` at #1180: a matrix row with `co_implementer` / `pair_implementer` /
-`fixer` reported "all 3 names resolved", exit 0 — and `co_implementer` is
-semantically commit-capable, it would have to commit in the target repo.
+which meant an unclassified slot silently inherited BOTH loosenings.
+
+Measured against the pre-fix module, on a `co_implementer` slot — a name that is
+semantically commit-capable, it would have to commit in the target repo:
+
+    {"noorinalabs-user-service": {"co_implementer": "Nikolaos Papadopoulos"}}
+        -> "all 1 names resolved", exit 0   (loosening 1: the manifest widened
+           a commit-capable slot; his cards live in a THIRD child repo)
+
+    {"noorinalabs-user-service": {"co_implementer": "Nurul Hakim"}}
+        -> "all 1 names resolved", exit 0   (loosening 2: #1134 membership
+           skipped — this is the W27/W28 cross-repo-implementer failure exactly,
+           re-admitted by nothing more than renaming the slot key)
+
+Note the FIRST measurement is what the `#1180` issue body approximated with a
+three-slot matrix (`co_implementer` / `pair_implementer` / `fixer`); that matrix
+also names `Annunaki` and `Steven French`, which #1181's persona-shape filter
+already rejects, so it exits 1 for reasons unrelated to this seam and MASKS the
+one slot that actually passes. Isolate the slot when re-measuring.
 
 The asymmetry is the same consequence argument as § Why the manifest is
 acceptable HERE: a slot wrongly treated as review-class fails silently and
