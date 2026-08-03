@@ -337,10 +337,21 @@ def _run_check_ignore(git_root: Path, pathspecs: list[str]) -> set[str]:
 
     ``encoding="utf-8", errors="surrogateescape"`` rather than ``text=True``,
     and the reason is the FILENAME BYTES, not the locale (main#1263 review,
-    Weronika Zielinska — an earlier version of this docstring blamed a
-    ``LC_ALL=C`` runner raising ``UnicodeDecodeError``; that is false, PEP 538
-    C-locale coercion yields UTF-8 anyway, and reverting to ``text=True``
-    leaves the suite green under ``LC_ALL=C``. Do not restore that rationale).
+    Weronika Zielinska). An earlier version of this docstring blamed a
+    ``LC_ALL=C`` runner raising ``UnicodeDecodeError``. That was false, and
+    for a subtler reason than "coercion": ``LC_ALL=C python3`` auto-enables
+    **UTF-8 Mode (PEP 540)** — ``sys.flags.utf8_mode == 1`` while ``LC_CTYPE``
+    stays ``C`` — so PEP 538 C-locale *coercion* never runs at all. That is
+    why ``PYTHONCOERCECLOCALE=0`` does not restore ASCII either; it defeats
+    538, not 540. Only ``PYTHONUTF8=0 PYTHONCOERCECLOCALE=0`` yields
+    ``ANSI_X3.4-1968``. Do not restore the locale rationale.
+
+    Historical note on how that was caught, because it dates: when measured
+    at ``2c113e7`` the suite was green under ``LC_ALL=C`` with ``text=True``,
+    which is what falsified the claim. That is no longer reproducible —
+    ``test_invalid_utf8_filename_is_detected`` below now catches ``text=True``
+    at ANY locale, because the trigger is the filename bytes rather than the
+    environment. The fixture, not the locale, is what pins this line.
 
     The real trigger: a POSIX filename is a byte string and need not be valid
     UTF-8. The caller's pathspec comes from ``os.fsdecode``, which maps

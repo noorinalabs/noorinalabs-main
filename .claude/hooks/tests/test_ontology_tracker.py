@@ -995,14 +995,31 @@ class RunCheckIgnoreFailOpenTests(_FakeRepoRootMixin, unittest.TestCase):
 
         Kept because it pins the PREMISE the mocked test is built on — that
         128 is really what git returns here, rather than a return code we
-        invented for a fixture. Labeled so the pair is never miscounted as
-        two guards on the same branch (cf. main#1215: an anti-vacuity
-        assertion can itself be vacuous).
+        invented for a fixture. **That premise is now asserted directly**
+        (main#1263 review, Weronika Zielinska, second pass): the earlier
+        version claimed to pin it while asserting only ``matched == set()``,
+        an observable identical for simulated exits 0, 1 and 128 with empty
+        stdout — so a change to exit 1 would have evaporated the premise
+        silently. Claiming to guard a premise while measuring something else
+        is the same #1215 mode this docstring invokes, one level in.
 
         Not a flake risk despite naming a system path: any absolute
         out-of-repo pathspec exits 128 whether or not the file exists
         (verified against a nonexistent path)."""
         outside = "/etc/hostname"  # any absolute out-of-repo path works
+
+        # The premise, measured rather than asserted about: real git treats
+        # an out-of-repo pathspec as a FATAL error, not as "not ignored".
+        probe = subprocess.run(
+            ["git", "-c", "core.quotePath=false", "check-ignore", "--", outside],
+            cwd=str(self._fake_root),
+            capture_output=True,
+            env=hook._hermetic_git_env(),
+            encoding="utf-8",
+            errors="surrogateescape",
+        )
+        self.assertEqual(probe.returncode, 128, "premise gone: git no longer exits 128 here")
+
         matched = hook._run_check_ignore(self._fake_root, [outside])
         self.assertEqual(matched, set())
 
