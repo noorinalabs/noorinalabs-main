@@ -25,6 +25,20 @@ surface reachable from their own stdin — the false-positive escape hatch so
 `cat <<'EOF' | grep foo` (a genuinely inert documentation pipeline) does not
 newly false-block.
 
+main#1316 (PR #1316 rework, merge-gate finding): `sort` shipped on this
+allowlist measured only on its PLAIN invocation; `sort --compress-program=CMD`
+genuinely runs CMD with the heredoc's own data on its stdin once the sort
+spills to a temp file (attacker-controlled padding crosses the `-S` spill
+threshold). Dropped from the allowlist for the same reason `sed`/`awk` are
+excluded — a plain invocation being inert does not make the command safe to
+allowlist wholesale, and a per-flag detector for `--compress-program` would
+reintroduce exactly the per-command grammar this set is designed to avoid.
+Folded in alongside it: `rg`, which was previously absent from the allowlist
+while `grep` (forbidden org-wide by main#1008) was present — the inverse of
+what this org mandates. `rg`'s exec-shaped flags (`--pre`, `-z`) are
+documented to apply only "for each input PATH"; measured genuinely inert on a
+heredoc-fed stdin pipe in both bash and zsh, plain and exec-shaped.
+
 Test organisation
 ==================
 
@@ -32,10 +46,12 @@ Test organisation
     real `check()`.
   * `RelayFalsePositiveCorpusTests` — every `HEREDOC_INERT_RELAY_FILTERS`
     member, individually and chained, must stay ALLOW.
-  * `RelayExcludedFiltersBlockTests` — `sed`/`awk` are DELIBERATELY excluded
-    from the allowlist (both have a data-driven code-execution surface); this
-    pins that they now resolve to CODE, and that the adversarial shapes which
-    justify the exclusion are real bypasses if they were ever allowlisted.
+  * `RelayExcludedFiltersBlockTests` — `sed`/`awk`/`sort` are DELIBERATELY
+    excluded from the allowlist (each has a data-driven code-execution
+    surface reachable through an exec-shaped flag — `sed`'s `e` flag, `awk`'s
+    `system()`, `sort`'s `--compress-program`); this pins that they now
+    resolve to CODE, and that the adversarial shapes which justify the
+    exclusion are real bypasses if they were ever allowlisted.
   * `RealShellGroundTruthTests` — marker-proxy verification against an actual
     `bash`/`zsh`, per shape, so a verdict is checked against what the shell
     really does rather than against expectations.
@@ -155,7 +171,6 @@ class RelayFalsePositiveCorpusTests(unittest.TestCase):
         "egrep": "egrep foo",
         "fgrep": "fgrep foo",
         "wc": "wc -l",
-        "sort": "sort -u",
         "uniq": "uniq -c",
         "head": "head -n 5",
         "tail": "tail -n 5",
@@ -182,6 +197,7 @@ class RelayFalsePositiveCorpusTests(unittest.TestCase):
         "tac": "tac",
         "shuf": "shuf",
         "jq": "jq -R .",
+        "rg": "rg foo",
     }
 
     def test_every_allowlisted_filter_has_a_representative_case(self):
@@ -196,9 +212,11 @@ class RelayFalsePositiveCorpusTests(unittest.TestCase):
                 _assert_allowed(self, f"cat <<'DELIM' | {invocation}\n{REAL_COMMIT}\nDELIM")
 
     def test_chained_allowlisted_filters_stay_allowed(self):
-        """A realistic documentation pipeline chaining several filters."""
+        """A realistic documentation pipeline chaining several filters.
+        Uses `cut`/`uniq` rather than `sort` — `sort` is no longer
+        allowlisted as of main#1316 (see `RelayExcludedFiltersBlockTests`)."""
         _assert_allowed(
-            self, f"cat <<'DELIM' | grep -v '^#' | sort | uniq -c\n{REAL_COMMIT}\nDELIM"
+            self, f"cat <<'DELIM' | grep -v '^#' | cut -d, -f1 | uniq -c\n{REAL_COMMIT}\nDELIM"
         )
 
     def test_tee_downstream_of_a_relay_chain_stays_allowed(self):
@@ -216,17 +234,22 @@ class RelayFalsePositiveCorpusTests(unittest.TestCase):
 
 
 class RelayExcludedFiltersBlockTests(unittest.TestCase):
-    """`sed`/`awk` are common "obviously inert filter" examples but carry a
-    data-driven code-execution surface (real-shell-verified — see
-    `RealShellGroundTruthTests`), so they are DELIBERATELY excluded from
+    """`sed`/`awk`/`sort` are common "obviously inert filter" examples but
+    each carries a data-driven code-execution surface (real-shell-verified —
+    see `RealShellGroundTruthTests`), so they are DELIBERATELY excluded from
     `HEREDOC_INERT_RELAY_FILTERS`. This costs a false positive on ordinary
-    `sed`/`awk` documentation pipelines, accepted per the module comment."""
+    `sed`/`awk`/`sort` documentation pipelines, accepted per the module
+    comment. `sort` was excluded in main#1316, after having shipped on the
+    allowlist measured only on its plain (no `--compress-program`) form."""
 
     def test_sed_not_in_allowlist(self):
         self.assertNotIn("sed", HEREDOC_INERT_RELAY_FILTERS)
 
     def test_awk_not_in_allowlist(self):
         self.assertNotIn("awk", HEREDOC_INERT_RELAY_FILTERS)
+
+    def test_sort_not_in_allowlist(self):
+        self.assertNotIn("sort", HEREDOC_INERT_RELAY_FILTERS)
 
     def test_plain_sed_now_blocks_accepted_false_positive(self):
         """An ORDINARY, harmless `sed` substitution — the false-positive cost
@@ -235,6 +258,13 @@ class RelayExcludedFiltersBlockTests(unittest.TestCase):
 
     def test_plain_awk_now_blocks_accepted_false_positive(self):
         _assert_blocked(self, f"cat <<'DELIM' | awk '{{print}}'\n{REAL_COMMIT}\nDELIM")
+
+    def test_plain_sort_now_blocks_accepted_false_positive(self):
+        """An ORDINARY, harmless bare `sort` — genuinely inert (see
+        `RealShellGroundTruthTests`), but no longer allowlisted; the
+        false-positive cost this exclusion accepts, same posture as
+        `sed`/`awk` above."""
+        _assert_blocked(self, f"cat <<'DELIM' | sort\n{REAL_COMMIT}\nDELIM")
 
     def test_sed_e_flag_would_be_a_real_bypass_if_allowlisted(self):
         """The adversarial shape that justifies excluding `sed`: the GNU `e`
@@ -245,6 +275,17 @@ class RelayExcludedFiltersBlockTests(unittest.TestCase):
 
     def test_awk_system_would_be_a_real_bypass_if_allowlisted(self):
         _assert_blocked(self, f"cat <<'DELIM' | awk '{{system($0)}}'\n{REAL_COMMIT}\nDELIM")
+
+    def test_sort_compress_program_would_be_a_real_bypass_if_allowlisted(self):
+        """The adversarial shape that justifies excluding `sort`:
+        `--compress-program=CMD` runs CMD with the heredoc's own data on its
+        stdin once the sort spills to a temp file. Confirmed BLOCKED under
+        the current (exclude) policy; `sort` must never be re-added to the
+        allowlist without also gating this flag."""
+        _assert_blocked(
+            self,
+            "cat <<'DELIM' | sort --compress-program=/tmp/marker.sh\n" + REAL_COMMIT + "\nDELIM",
+        )
 
 
 @unittest.skipUnless(shutil.which("bash"), "bash not installed")
@@ -287,6 +328,18 @@ class RealShellGroundTruthTests(unittest.TestCase):
         cmd = template.replace("MARKER", REAL_COMMIT)
         result = hook.check(_bash(cmd))
         return result is not None and result.get("decision") == "block"
+
+    def _write_marker_passthrough_script(self) -> str:
+        """Write an executable that appends to `self._log` (proof of
+        execution) then passes stdin to stdout unchanged. Some exec-shaped
+        flags (`sort --compress-program=CMD`, `rg --pre COMMAND`) name an
+        external PROGRAM rather than accepting an inline shell fragment, so
+        the MARKER-substitution used elsewhere in this class does not apply
+        — a real file is required."""
+        script = Path(self._tmpdir) / "marker_passthrough.sh"
+        script.write_text(f"#!/bin/sh\necho RAN >> {self._log}\nexec cat\n")
+        script.chmod(0o755)
+        return str(script)
 
     def _assert_ground_truth_matches_verdict(self, template: str, *, expect_runs: bool) -> None:
         for shell in self.SHELLS:
@@ -333,12 +386,6 @@ class RealShellGroundTruthTests(unittest.TestCase):
             expect_runs=False,
         )
 
-    def test_sort_relay_genuinely_inert(self):
-        self._assert_ground_truth_matches_verdict(
-            "cat <<'DELIM' | sort\nMARKER\nDELIM",
-            expect_runs=False,
-        )
-
     def test_column_relay_genuinely_inert(self):
         self._assert_ground_truth_matches_verdict(
             "cat <<'DELIM' | column -t\nMARKER\nDELIM",
@@ -355,6 +402,33 @@ class RealShellGroundTruthTests(unittest.TestCase):
         self._assert_ground_truth_matches_verdict(
             "cat <<'DELIM' | grep -v NOPE | tee /dev/null\nMARKER\nDELIM",
             expect_runs=False,
+        )
+
+    def test_rg_relay_genuinely_inert(self):
+        self._assert_ground_truth_matches_verdict(
+            "cat <<'DELIM' | rg MARKERPATTERN_ABSENT\nMARKER\nDELIM",
+            expect_runs=False,
+        )
+
+    def test_rg_pre_flag_genuinely_inert_on_stdin(self):
+        """`rg --pre COMMAND` is documented to apply only "for each input
+        PATH"; a heredoc-fed pipe has no PATH (it is stdin), so the flag is a
+        no-op here — measured, not assumed from the docs. Uses a real marker
+        script (not an inline MARKER substitution) since `--pre` names an
+        external program, exactly like the `sort --compress-program` probe
+        below; if `--pre` ever fired on stdin, this script would append to
+        its own log and this test would fail loudly."""
+        marker = self._write_marker_passthrough_script()
+        template = f"cat <<'DELIM' | rg --pre {marker} commit\nMARKER\nDELIM"
+        for shell in self.SHELLS:
+            with self.subTest(shell=shell):
+                self.assertFalse(
+                    self._shell_actually_runs(template, shell),
+                    f"{shell} invoked `rg --pre` on a stdin pipe (no PATH) — should be a no-op",
+                )
+        self.assertFalse(
+            self._hook_blocks(f"cat <<'DELIM' | rg --pre {marker} commit\nMARKER\nDELIM"),
+            "rg is allowlisted; --pre must not newly false-block",
         )
 
     # --- excluded filters: the adversarial flag genuinely runs the body ----
@@ -376,6 +450,50 @@ class RealShellGroundTruthTests(unittest.TestCase):
         self.assertTrue(
             self._hook_blocks(template),
             "sed is excluded from the allowlist, so this accepted false positive must still block",
+        )
+
+    def test_sort_plain_genuinely_inert_but_excluded_anyway(self):
+        """Ground truth: a bare `sort` (no `--compress-program`) does NOT
+        execute the body (confirms the false-positive cost `sort`'s
+        exclusion accepts is real, not imagined) — same posture as the
+        `sed` case above. This is why `sort` shipped on the allowlist in the
+        first place before main#1316: its plain form really is inert."""
+        template = "cat <<'DELIM' | sort\nMARKER\nDELIM"
+        for shell in self.SHELLS:
+            with self.subTest(shell=shell):
+                self.assertFalse(
+                    self._shell_actually_runs(template, shell),
+                    f"{shell} unexpectedly ran a plain sort",
+                )
+        self.assertTrue(
+            self._hook_blocks(template),
+            "sort is excluded from the allowlist, so this accepted false positive must still block",
+        )
+
+    def test_sort_compress_program_genuinely_runs(self):
+        """The adversarial case that justifies excluding `sort` (main#1316):
+        `--compress-program=CMD` genuinely runs CMD with the heredoc's own
+        (padded) data on its stdin once the sort spills to a temp file.
+        `-S 1` sets a 1024-byte in-memory buffer; enough padded body lines
+        cross that threshold and force the spill — the padding is exactly
+        the attacker-controlled lever the module comment describes. Uses a
+        real marker script (see `_write_marker_passthrough_script`), not an
+        inline MARKER substitution, since `--compress-program` names an
+        external program."""
+        marker = self._write_marker_passthrough_script()
+        padded_lines = "\n".join(f"line{i}-padding-padding-padding-padding" for i in range(500))
+        template = (
+            f"cat <<'DELIM' | sort -S 1 --compress-program={marker}\n{padded_lines}\nMARKER\nDELIM"
+        )
+        for shell in self.SHELLS:
+            with self.subTest(shell=shell):
+                self.assertTrue(
+                    self._shell_actually_runs(template, shell),
+                    f"{shell} did not invoke the `sort --compress-program` marker script",
+                )
+        self.assertTrue(
+            self._hook_blocks(f"cat <<'DELIM' | sort --compress-program={marker}\nMARKER\nDELIM"),
+            "sort is excluded from the allowlist, so this must still block",
         )
 
     def test_sed_e_flag_genuinely_runs(self):
@@ -437,8 +555,11 @@ class RelayClassifierUnitTests(unittest.TestCase):
     def test_multi_hop_pipeline_stops_walk_correctly_at_end_of_segments(self):
         """A pipeline ending in an allowlisted filter (nothing after it) must
         resolve overall to DATA — the loop must not spuriously continue past
-        the last segment."""
-        (span,) = classify_heredocs(f"cat <<'DELIM' | grep foo | sort | uniq\n{REAL_COMMIT}\nDELIM")
+        the last segment. Uses `cut` rather than `sort` — `sort` is no
+        longer allowlisted as of main#1316."""
+        (span,) = classify_heredocs(
+            f"cat <<'DELIM' | grep foo | cut -d, -f1 | uniq\n{REAL_COMMIT}\nDELIM"
+        )
         self.assertFalse(span.is_code)
 
     def test_unresolvable_downstream_segment_resolves_to_code(self):

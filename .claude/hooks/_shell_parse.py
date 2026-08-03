@@ -593,44 +593,72 @@ HEREDOC_DATA_SINKS = frozenset({"cat", "tee"})
 # denylist — an unlisted filter fails toward CODE, which is the entire point
 # of inverting the default (an allowlist's safety property IS its default).
 #
-# Every entry here was verified with a real-shell marker probe (a command
-# appended to a log file inside the heredoc body, checked for the log
-# actually being written) BEFORE being added, not reasoned from a man page:
+# Every entry here was verified with a real-shell marker probe — BOTH the
+# plain invocation AND every exec-shaped flag the command exposes (a command
+# appended to a log file inside the heredoc body / a marker script standing
+# in for an external-program flag, checked for the log actually being
+# written, in both bash and zsh) BEFORE being added, not reasoned from a man
+# page and not measured on the bare invocation alone:
 #
-#   DID-NOT-RUN (genuinely inert, confirmed safe to allowlist):
-#     grep, wc, sort, uniq, head, tail, cut, tr, column, nl, rev, fold,
-#     expand, unexpand, base64, md5sum, sha1sum, sha256sum, od, xxd, join,
-#     paste, comm, tac, shuf, jq
+#   DID-NOT-RUN (genuinely inert — plain form AND every exec-shaped flag
+#   probed — confirmed safe to allowlist):
+#     grep, egrep, fgrep (incl. `-f -`), wc, uniq, head, tail, cut, tr,
+#     column, nl, rev, fold, expand, unexpand, base64 (incl. `-d`),
+#     md5sum (incl. `-c`), sha1sum, sha256sum, sha512sum, cksum, od,
+#     xxd (incl. `-r`), hexdump (incl. `-e`), join, paste, comm, tac,
+#     shuf (incl. `--random-source`), jq (incl. `env.PATH`, `$ENV.PATH`,
+#     `input_filename`, `@sh` — no `system()` in mainline)
+#     rg — plain AND `--pre COMMAND` / `-z`/`--search-zip` (both apply only
+#          "for each input PATH" per ripgrep's own docs; there is no PATH on
+#          a stdin pipe, so neither ever invokes anything): measured, both
+#          flags are genuine no-ops when the input is a heredoc-fed pipe in
+#          both bash and zsh. Folded in alongside this fix (main#1316) so the
+#          allowlist stops contradicting #1008's org-wide "no bare `grep`"
+#          rule — before this, the list admitted the forbidden tool (`grep`)
+#          while omitting the mandated replacement (`rg`).
 #
 #   RAN (data-driven code-execution surface — DELIBERATELY EXCLUDED even
 #   though they are common "genuinely inert filter" examples in casual
 #   reasoning about this shape):
-#     sed  — the GNU `e` flag/command executes the (input-derived) pattern
-#            space as a shell command and substitutes its output; measured:
-#            `cat <<'EOF' | sed 's/.*/&/e'` genuinely runs the body.
-#     awk  — `system()` (and piped `print ... | "cmd"` / `getline < "cmd"`)
-#            executes a command built from field/record data; measured:
-#            `cat <<'EOF' | awk '{system($0)}'` genuinely runs the body.
+#     sed   — the GNU `e` flag/command executes the (input-derived) pattern
+#             space as a shell command and substitutes its output; measured:
+#             `cat <<'EOF' | sed 's/.*/&/e'` genuinely runs the body.
+#     awk   — `system()` (and piped `print ... | "cmd"` / `getline < "cmd"`)
+#             executes a command built from field/record data; measured:
+#             `cat <<'EOF' | awk '{system($0)}'` genuinely runs the body.
+#     sort  — `--compress-program=CMD` runs CMD with the heredoc's own data
+#             on its stdin once the sort spills to a temp file (`-S` sets
+#             the spill threshold; the padding needed to cross it is
+#             attacker-controlled, same as any other input-size trigger);
+#             measured: `cat <<'EOF' | sort -S 1 --compress-program=CMD`
+#             genuinely runs CMD in both bash and zsh once enough body lines
+#             are present to force a spill. The PLAIN invocation (no
+#             `--compress-program`) is genuinely inert — this is why `sort`
+#             shipped on this allowlist in the first place (main#1168's
+#             original measurement covered only the bare form) — but a
+#             plain invocation being inert is not sufficient, exactly as for
+#             `sed`/`awk` below; the exec-shaped flag makes it unsafe as a
+#             blanket allowlist member. Excluded per main#1316.
 #
-# Both risks are ARGUMENT-driven (visible in the segment's own tokens, not
-# hidden in the heredoc body), so a narrower "allowlisted unless the script
-# argument contains `e`/`system(`" rule is possible in principle — but that
-# reintroduces a second, per-command detector inside what this set is meant
-# to keep a flat, reviewable allowlist, and is deliberately left as a
-# non-goal here: excluding `sed`/`awk` entirely accepts a real (if
-# comparatively rare, in a documentation-pipeline context) false-positive
-# cost in exchange for never having to get that per-command grammar right.
-# `perl`, `python`, `ruby`, `php`, `xargs`, `parallel`, `find`, `env` and any
-# other general-purpose interpreter or relay are excluded for the same
-# reason, one level more obviously (they are not "filters" in the first
-# place — some of them are exactly the relay family this fix targets).
+# All three risks above are ARGUMENT-driven (visible in the segment's own
+# tokens, not hidden in the heredoc body), so a narrower "allowlisted unless
+# the script argument contains `e`/`system(`/`--compress-program`" rule is
+# possible in principle — but that reintroduces a second, per-command
+# detector inside what this set is meant to keep a flat, reviewable
+# allowlist, and is deliberately left as a non-goal here: excluding
+# `sed`/`awk`/`sort` entirely accepts a real (if comparatively rare, in a
+# documentation-pipeline context) false-positive cost in exchange for never
+# having to get that per-command grammar right. `perl`, `python`, `ruby`,
+# `php`, `xargs`, `parallel`, `find`, `env` and any other general-purpose
+# interpreter or relay are excluded for the same reason, one level more
+# obviously (they are not "filters" in the first place — some of them are
+# exactly the relay family this fix targets).
 HEREDOC_INERT_RELAY_FILTERS = frozenset(
     {
         "grep",
         "egrep",
         "fgrep",
         "wc",
-        "sort",
         "uniq",
         "head",
         "tail",
@@ -657,6 +685,7 @@ HEREDOC_INERT_RELAY_FILTERS = frozenset(
         "tac",
         "shuf",
         "jq",
+        "rg",
     }
 )
 
