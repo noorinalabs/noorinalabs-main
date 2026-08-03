@@ -87,14 +87,20 @@ def bash_input(command: str, cwd: str | None = None) -> dict:
 
     Mirrors the `{"tool_name": "Bash", "tool_input": {"command": ...}}`
     shape that was duplicated — byte-for-byte, modulo a local variable
-    name — across 32 of the 37 `_input()` builders that existed in
-    `.claude/hooks/tests/` at #1116's merge (26 byte-identical
-    `command`-only + 4 variable-name-only variants of a `cwd`-optional
-    shape + 2 `cwd`-required singletons folded in after confirming every
-    call site always passes a non-`None` `cwd`). That count is a
-    snapshot of the suite at merge time, not a live invariant this
-    module enforces — a later PR adding its own `_input()` builder
-    doesn't retroactively change it and this docstring won't notice.
+    name — across 30 of the 37 `_input()` builders that existed in
+    `.claude/hooks/tests/` at #1116's merge: 26 byte-identical
+    `command`-only bodies + 4 variable-name-only variants of a
+    `cwd`-optional shape. That's a narrower population than "consolidated
+    onto this function" — this function ALSO absorbed 2 further
+    `cwd`-required singletons (folded in separately, after confirming
+    every call site always passes a non-`None` `cwd`; NOT byte-for-byte-
+    modulo-varname with the other 30, which is why they needed their own
+    justification), for 32 consolidated total; the remaining 5 of the 37
+    kept their own local `_input`. Both counts (30, 32) are correct for
+    what they each describe — a snapshot of the suite at merge time, not
+    a live invariant this module enforces; a later PR adding its own
+    `_input()` builder doesn't retroactively change either number and
+    this docstring won't notice.
     `cwd` is omitted from the payload entirely when not given, matching
     every duplicate's behavior (callers that need `cwd` unconditionally
     present, or a non-None default, keep their own local `_input` — see
