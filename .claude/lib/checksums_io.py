@@ -30,6 +30,31 @@ permanent flip-flop diff on the committed file (#1038). The atomic
 tmp-file-then-``Path.replace()`` write means a concurrent reader (e.g. the
 librarian, or a second hook invocation) never observes a partially written
 file.
+
+No-silent-zeros contract (#1142)
+================================
+This module used to expose two WRITERS (``mark-resolved``, ``prune``) and no
+reader, so every consumer that needed the dirty count hand-rolled a JSON read
+against a schema it had to recall correctly. Two consecutive sessions got that
+read wrong and **both wrong reads returned a plausible ``0``** — one compared a
+``sha256`` key that does not exist in the entry schema, so the comparison was
+skipped on all 277 entries and the loop counted nothing. ``0`` is also the
+healthy value, so no shape of mistake failed loudly.
+
+Three things close that class:
+
+1. ``classify_entry`` is the ONE implementation of the canonical
+   ``last_tracked != last_resolved`` predicate. ``session_start.py``'s
+   ``_ontology_staleness`` consumes it instead of re-implementing it.
+2. An entry that does not match the schema is ``ENTRY_MALFORMED`` — a third
+   state, never folded into "clean". The two historical wrong reads both
+   produced entries that a ``.get(...) != .get(...)`` comparison silently
+   called clean; here they are counted and named.
+3. The read path forks. ``read_checksums`` still fails OPEN (a PostToolUse
+   hook must never raise) and is for WRITERS. ``read_checksums_strict`` /
+   ``read_status`` raise ``ChecksumsUnreadable`` and are for READERS — a
+   missing or unparseable ledger must never be reported as "0 dirty", which
+   is exactly what a fail-open read would produce.
 """
 
 from __future__ import annotations
@@ -37,6 +62,7 @@ from __future__ import annotations
 import copy
 import json
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -50,6 +76,60 @@ from typing import Any
 # never pollute this module-global.
 _EMPTY: dict[str, Any] = {"version": 1, "files": {}}
 
+# Entry states returned by `classify_entry`. MALFORMED is deliberately a third
+# state rather than a flavor of clean: the whole point of #1142 is that an
+# entry the reader does not understand must not be silently counted as fine.
+ENTRY_CLEAN = "clean"
+ENTRY_DIRTY = "dirty"
+ENTRY_MALFORMED = "malformed"
+
+# The two fields the dirty predicate compares. `tracked_at` / `resolved_at` are
+# timestamps, informational only — the predicate never looks at them.
+_TRACKED_KEY = "last_tracked"
+_RESOLVED_KEY = "last_resolved"
+
+# `status` exit codes. Split so a caller can tell "clean" from "could not read"
+# — conflating them is the #1142 failure itself.
+EXIT_CLEAN = 0
+EXIT_NEEDS_ATTENTION = 1
+EXIT_USAGE = 2
+EXIT_UNREADABLE = 3
+
+
+class ChecksumsUnreadable(Exception):
+    """The ledger could not be read or is not the shape a reader understands.
+
+    Raised only by the STRICT read path (``read_checksums_strict`` /
+    ``compute_status`` / ``read_status``). The writers' ``read_checksums``
+    keeps failing open, because a PostToolUse hook that raises fails the tool
+    call that triggered it. Readers get the opposite policy: refusing to answer
+    is correct, answering ``0 dirty`` for a file that could not be parsed is
+    not.
+    """
+
+
+def read_checksums_strict(path: Path) -> dict[str, Any]:
+    """Read and parse ``checksums.json``, raising rather than defaulting.
+
+    Same failure set ``read_checksums`` swallows — missing/unreadable file,
+    invalid JSON, non-object top level — but surfaced as
+    ``ChecksumsUnreadable`` with a message naming the cause. Use this (not
+    ``read_checksums``) whenever the answer is going to be *reported* rather
+    than written back.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except OSError as exc:
+        raise ChecksumsUnreadable(f"cannot read {path}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ChecksumsUnreadable(f"{path} is not valid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ChecksumsUnreadable(
+            f"{path} top level is {type(data).__name__}, expected a JSON object"
+        )
+    return data
+
 
 def read_checksums(path: Path) -> dict[str, Any]:
     """Read and parse ``checksums.json``, defaulting to an empty structure.
@@ -57,15 +137,104 @@ def read_checksums(path: Path) -> dict[str, Any]:
     Returns a fresh ``{"version": 1, "files": {}}`` if the file is missing or
     is not valid JSON — matching the tracker hook's historical fail-open
     behavior (a PostToolUse hook must never raise).
+
+    This is the WRITERS' read path. It cannot distinguish "clean" from
+    "unreadable", so a reader must use ``read_checksums_strict`` /
+    ``read_status`` instead (#1142).
     """
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError):
+        return read_checksums_strict(path)
+    except ChecksumsUnreadable:
         return copy.deepcopy(_EMPTY)
-    if not isinstance(data, dict):
-        return copy.deepcopy(_EMPTY)
-    return data
+
+
+def classify_entry(entry: Any) -> tuple[str, str]:
+    """Classify one ``files`` entry. THE single dirty predicate (#1142).
+
+    Returns ``(state, detail)`` where state is ``ENTRY_CLEAN``,
+    ``ENTRY_DIRTY``, or ``ENTRY_MALFORMED``. ``detail`` names the schema
+    problem for a malformed entry and is ``""`` otherwise.
+
+    The predicate is ``last_tracked != last_resolved``. Every caller that
+    needs a dirty count must come through here rather than re-deriving it —
+    the field names are not guessable (the historical wrong read compared a
+    ``sha256`` key that has never existed in this schema) and every way of
+    guessing wrong yields a comparison that quietly evaluates to "equal".
+
+    An entry missing either field, or holding a non-string in either, is
+    MALFORMED — not clean. ``last_resolved: ""`` is well-formed and DIRTY
+    against any non-empty ``last_tracked``: that is the legitimate shape of a
+    freshly (re-)tracked file, and the tracker writes it on purpose.
+    """
+    if not isinstance(entry, dict):
+        return ENTRY_MALFORMED, f"entry is {type(entry).__name__}, expected an object"
+    missing = [key for key in (_TRACKED_KEY, _RESOLVED_KEY) if key not in entry]
+    if missing:
+        return ENTRY_MALFORMED, f"missing {', '.join(missing)}"
+    tracked = entry[_TRACKED_KEY]
+    resolved = entry[_RESOLVED_KEY]
+    for key, value in ((_TRACKED_KEY, tracked), (_RESOLVED_KEY, resolved)):
+        if not isinstance(value, str):
+            return ENTRY_MALFORMED, f"{key} is {type(value).__name__}, expected a string"
+    return (ENTRY_DIRTY, "") if tracked != resolved else (ENTRY_CLEAN, "")
+
+
+@dataclass(frozen=True)
+class ChecksumsStatus:
+    """Reader-facing summary of a checksums ledger.
+
+    ``dirty`` and ``malformed`` are sorted for stable output. ``malformed``
+    carries ``(path, reason)`` pairs so the report says *why* an entry could
+    not be classified rather than just how many there were.
+    """
+
+    total: int
+    dirty: tuple[str, ...]
+    malformed: tuple[tuple[str, str], ...]
+
+    @property
+    def clean(self) -> bool:
+        """True only when nothing is dirty AND nothing is malformed.
+
+        A malformed entry blocks "clean" deliberately: an entry the reader
+        cannot classify is unknown state, and reporting unknown as fine is the
+        bug this module exists to prevent.
+        """
+        return not self.dirty and not self.malformed
+
+
+def compute_status(data: dict[str, Any]) -> ChecksumsStatus:
+    """Summarize an already-parsed ledger. Raises on an unrecognized shape.
+
+    ``data["files"]`` must be present and a mapping. A ledger without it is
+    ``ChecksumsUnreadable`` rather than "0 tracked, 0 dirty": the legacy
+    flat-map fallback some ad-hoc readers used (``data.get("files", data)``)
+    turns a shape mismatch into a plausible zero, which is the #1142 failure.
+    Every ledger this module writes has a ``files`` mapping, and ``_EMPTY``
+    seeds one, so the strict reading costs nothing real.
+    """
+    files = data.get("files")
+    if not isinstance(files, dict):
+        kind = "missing" if files is None else f"a {type(files).__name__}"
+        raise ChecksumsUnreadable(f"checksums document has no 'files' object ('files' is {kind})")
+    dirty: list[str] = []
+    malformed: list[tuple[str, str]] = []
+    for rel in sorted(files):
+        state, detail = classify_entry(files[rel])
+        if state == ENTRY_DIRTY:
+            dirty.append(rel)
+        elif state == ENTRY_MALFORMED:
+            malformed.append((rel, detail))
+    return ChecksumsStatus(total=len(files), dirty=tuple(dirty), malformed=tuple(malformed))
+
+
+def read_status(path: Path) -> ChecksumsStatus:
+    """Strict read + summarize. The one call a reader needs (#1142).
+
+    Raises ``ChecksumsUnreadable`` if the file is missing, unparseable, or not
+    shaped like a checksums ledger.
+    """
+    return compute_status(read_checksums_strict(path))
 
 
 def write_checksums(path: Path, data: dict[str, Any]) -> None:
@@ -180,12 +349,13 @@ def prune_missing(data: dict[str, Any], repo_root: Path) -> list[str]:
     CAVEAT — this is an on-disk existence test, not a git-history one. A file
     that exists on a child repo's ``main`` but not on the branch that repo
     happens to be checked out at right now reads as absent and would be
-    pruned. That is why the ``prune`` CLI is opt-in with a ``--dry-run``
-    rather than something a lifecycle skill runs unattended: confirm the
-    candidate list is genuinely-deleted (``git cat-file -e origin/main:<path>``)
-    before writing. Re-tracking is cheap if a prune does go wrong — the next
-    Edit/Write of the file re-creates the entry — but it re-enters with an
-    empty ``last_resolved`` and so reports dirty once.
+    pruned. That is why the ``prune`` CLI PREVIEWS by default and needs an
+    explicit ``--apply`` to write (#1137), rather than being something a
+    lifecycle skill runs unattended: confirm the candidate list is
+    genuinely-deleted (``git cat-file -e origin/main:<path>``) before applying.
+    Re-tracking is cheap if a prune does go wrong — the next Edit/Write of the
+    file re-creates the entry — but it re-enters with an empty
+    ``last_resolved`` and so reports dirty once.
     """
     files = data.setdefault("files", {})
     removed = sorted(rel for rel in files if not (repo_root / rel).exists())
@@ -219,11 +389,17 @@ def main(argv: list[str]) -> int:
     ``prune_missing``): it drops entries whose file no longer exists on disk,
     which the resolver otherwise has to hand-``mark-resolved`` every pass.
 
+    The ``status`` subcommand is the READER (#1142) — the dirty count the
+    ``/ontology-rebuild`` and ``/session-start`` skills need, so neither has
+    to hand-roll a JSON read against a schema whose every mis-guess yields a
+    plausible ``0``.
+
     Usage:
+        python3 .claude/lib/checksums_io.py status [--checksums <file>] [--json]
         python3 .claude/lib/checksums_io.py mark-resolved <path> [<path> ...]
         python3 .claude/lib/checksums_io.py mark-resolved --checksums <file> <path> ...
         python3 .claude/lib/checksums_io.py prune
-            [--checksums <file>] [--repo-root <dir>] [--dry-run] [--force]
+            [--checksums <file>] [--repo-root <dir>] [--apply] [--dry-run] [--force]
 
     ``--checksums`` may appear at any position. This is hand-rolled parsing
     rather than argparse, and an earlier revision required it FIRST — so
@@ -233,17 +409,24 @@ def main(argv: list[str]) -> int:
     agnostically instead.
 
     Exit codes:
-        0 — success (including "nothing to resolve/prune", still 0)
+        0 — success (including "nothing to resolve/prune", still 0); for
+            ``status``, additionally means the ledger is clean
+        1 — ``status``: the ledger is dirty and/or has malformed entries.
+            ``prune``: the sanity threshold refused the run
         2 — usage error
+        3 — ``status``: the ledger could not be read (missing, unparseable,
+            or not shaped like a checksums document). Deliberately distinct
+            from 0 — "could not read" must never look like "clean"
     """
-    if len(argv) < 2 or argv[1] not in ("mark-resolved", "prune"):
+    if len(argv) < 2 or argv[1] not in ("mark-resolved", "prune", "status"):
         print(
-            "usage: checksums_io.py mark-resolved [--checksums PATH] <rel-path> [<rel-path> ...]\n"
+            "usage: checksums_io.py status [--checksums PATH] [--json]\n"
+            "       checksums_io.py mark-resolved [--checksums PATH] <rel-path> [<rel-path> ...]\n"
             "       checksums_io.py prune [--checksums PATH] [--repo-root DIR] "
-            "[--dry-run] [--force]",
+            "[--apply] [--dry-run] [--force]",
             file=sys.stderr,
         )
-        return 2
+        return EXIT_USAGE
 
     subcommand = argv[1]
     rest = argv[2:]
@@ -252,16 +435,19 @@ def main(argv: list[str]) -> int:
         i = rest.index("--checksums")
         if i + 1 >= len(rest):
             print("error: --checksums requires a PATH argument", file=sys.stderr)
-            return 2
+            return EXIT_USAGE
         checksums_path = Path(rest[i + 1])
         rest = rest[:i] + rest[i + 2 :]
+
+    if subcommand == "status":
+        return _status_cli(checksums_path, rest)
 
     if subcommand == "prune":
         return _prune_cli(checksums_path, rest)
 
     if not rest:
         print("error: at least one <rel-path> is required", file=sys.stderr)
-        return 2
+        return EXIT_USAGE
 
     data = read_checksums(checksums_path)
     now = datetime.now(timezone.utc).isoformat()
@@ -273,6 +459,66 @@ def main(argv: list[str]) -> int:
     if skipped:
         print(f"Skipped (not tracked): {', '.join(skipped)}")
     return 0
+
+
+def _status_cli(checksums_path: Path, rest: list[str]) -> int:
+    """``status`` subcommand body. ``--checksums`` is already consumed by ``main``.
+
+    Read-only. Prints ``total`` / ``dirty`` / ``malformed`` counts plus the
+    offending paths, and returns an exit code that distinguishes the three
+    outcomes a caller actually cares about: clean (0), needs attention (1),
+    unreadable (3). The 0/3 split is the point — a reader that answers
+    "0 dirty" for a file it failed to parse is the #1142 bug.
+
+    ``--json`` emits the same summary as a machine-readable object, so a hook
+    or a future wrap-time gate (#1086) consumes this instead of re-parsing
+    prose or, worse, re-deriving the predicate from the raw JSON.
+    """
+    as_json = False
+    while rest:
+        if rest[0] == "--json":
+            as_json = True
+            rest = rest[1:]
+        else:
+            print(f"error: unexpected argument {rest[0]!r} for status", file=sys.stderr)
+            return EXIT_USAGE
+
+    try:
+        status = read_status(checksums_path)
+    except ChecksumsUnreadable as exc:
+        # NOT exit 0 with a zero count — see the module's no-silent-zeros contract.
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_UNREADABLE
+
+    if as_json:
+        json.dump(
+            {
+                "checksums": str(checksums_path),
+                "total": status.total,
+                "dirty": list(status.dirty),
+                "malformed": [{"path": rel, "reason": why} for rel, why in status.malformed],
+                "clean": status.clean,
+            },
+            sys.stdout,
+            indent=2,
+            ensure_ascii=False,
+        )
+        sys.stdout.write("\n")
+    else:
+        print(
+            f"{checksums_path}: {status.total} tracked, {len(status.dirty)} dirty, "
+            f"{len(status.malformed)} malformed"
+        )
+        if status.dirty:
+            print("dirty (last_tracked != last_resolved):")
+            for rel in status.dirty:
+                print(f"  - {rel}")
+        if status.malformed:
+            print("malformed (unrecognized entry schema — NOT counted clean):")
+            for rel, why in status.malformed:
+                print(f"  - {rel}: {why}")
+
+    return EXIT_CLEAN if status.clean else EXIT_NEEDS_ATTENTION
 
 
 # Refuse a prune that would remove more than this fraction of the tracked
@@ -291,6 +537,32 @@ def _prune_cli(checksums_path: Path, rest: list[str]) -> int:
     needs no flags. Entry keys are relative to that root, which is exactly
     what ``ontology_tracker._relative_path`` writes.
 
+    PREVIEW BY DEFAULT (#1137). A bare ``prune`` lists what it would remove
+    and writes nothing; ``--apply`` is required to mutate the file. The
+    documented safe-usage pattern (``/ontology-rebuild`` SKILL.md step 4) was
+    already "preview, verify each candidate against ``origin/main``, then
+    write" — the old write-by-default merely left that pattern unenforced, so
+    an invocation from muscle memory or a copy-paste that dropped the flag
+    mutated a version-controlled artifact on the strength of an on-disk
+    existence test this module's own docstring flags as unreliable in a
+    documented scenario.
+
+    ``--dry-run`` is still accepted and is now a no-op spelling of the
+    default: every previously-safe invocation stays safe and keeps working.
+    ``--dry-run --apply`` together is a usage error rather than a silent
+    precedence rule — an undocumented precedence in a destructive CLI is the
+    same trap as the ordering rule that already bit ``--checksums``.
+
+    The asymmetry with ``mark-resolved`` (which writes unconditionally, no
+    dry-run) is deliberate, not an oversight: ``mark-resolved`` is ADDITIVE
+    and idempotent — it stamps ``last_resolved``/``resolved_at`` on entries
+    that are already present, and its worst misfire quiets a file that should
+    have stayed dirty, recoverable by the next Edit re-stamping
+    ``last_tracked``. ``prune`` DELETES entries, and its inputs (the on-disk
+    existence of ~280 paths, half of them in gitignored child clones) depend
+    on which branch each child repo is checked out at. Same module, different
+    blast radius.
+
     Three guards stand between a mistyped invocation and a mass delete of a
     committed artifact. Each turns a silent exit-0 "success" into a refusal:
 
@@ -303,29 +575,43 @@ def _prune_cli(checksums_path: Path, rest: list[str]) -> int:
        default working style, proposed wiping half the file.
     3. The prune set must stay under ``PRUNE_SANITY_FRACTION`` of all entries.
 
-    ``--force`` overrides 2 and 3 (never 1). The guards apply to ``--dry-run``
-    too: a preview that reports a 141-entry wipe as normal output is exactly
-    how the mistake gets rubber-stamped.
+    ``--force`` overrides 2 and 3 (never 1), and is orthogonal to ``--apply``
+    — forcing past a guard still previews unless you also ask to write. The
+    guards apply to the preview too: a preview that reports a 141-entry wipe
+    as normal output is exactly how the mistake gets rubber-stamped.
     """
     repo_root = checksums_path.resolve().parent.parent
-    dry_run = False
+    apply_changes = False
+    explicit_dry_run = False
     force = False
     while rest:
         if rest[0] == "--repo-root":
             if len(rest) < 2:
                 print("error: --repo-root requires a DIR argument", file=sys.stderr)
-                return 2
+                return EXIT_USAGE
             repo_root = Path(rest[1]).resolve()
             rest = rest[2:]
+        elif rest[0] == "--apply":
+            apply_changes = True
+            rest = rest[1:]
         elif rest[0] == "--dry-run":
-            dry_run = True
+            explicit_dry_run = True
             rest = rest[1:]
         elif rest[0] == "--force":
             force = True
             rest = rest[1:]
         else:
             print(f"error: unexpected argument {rest[0]!r} for prune", file=sys.stderr)
-            return 2
+            return EXIT_USAGE
+
+    # Contradictory intent — refuse rather than pick a silent winner (#1137).
+    if apply_changes and explicit_dry_run:
+        print(
+            "error: --dry-run and --apply are contradictory. --dry-run is now the "
+            "default (preview); drop it to apply.",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
 
     # Guard 1 — a nonexistent root makes EVERY entry look orphaned.
     if not repo_root.is_dir():
@@ -334,7 +620,7 @@ def _prune_cli(checksums_path: Path, rest: list[str]) -> int:
             "prune (every entry would read as orphaned).",
             file=sys.stderr,
         )
-        return 2
+        return EXIT_USAGE
 
     # Guard 2 — inside a linked worktree the gitignored child-repo clones are
     # structurally absent, so their entries all read as orphaned.
@@ -345,7 +631,7 @@ def _prune_cli(checksums_path: Path, rest: list[str]) -> int:
             "orphaned. Re-run from the main checkout, or pass --force if you are certain.",
             file=sys.stderr,
         )
-        return 2
+        return EXIT_USAGE
 
     data = read_checksums(checksums_path)
     total = len(data.get("files", {}))
@@ -362,19 +648,22 @@ def _prune_cli(checksums_path: Path, rest: list[str]) -> int:
             "correct.",
             file=sys.stderr,
         )
-        return 1
+        return EXIT_NEEDS_ATTENTION
 
-    if removed and not dry_run:
+    if removed and apply_changes:
         write_checksums(checksums_path, data)
 
-    verb = "Would prune" if dry_run else "Pruned"
+    verb = "Pruned" if apply_changes else "Would prune"
     print(
         f"{verb} {len(removed)} orphan entr{'y' if len(removed) == 1 else 'ies'} "
         f"in {checksums_path} (repo root {repo_root})."
     )
     for rel in removed:
         print(f"  - {rel}")
-    return 0
+    if removed and not apply_changes:
+        print("Preview only — nothing written. Verify each candidate is genuinely deleted")
+        print("(git -C <repo> cat-file -e origin/main:<path>), then re-run with --apply.")
+    return EXIT_CLEAN
 
 
 if __name__ == "__main__":
