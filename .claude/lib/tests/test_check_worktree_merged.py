@@ -836,14 +836,26 @@ class CheckWorktreeMergedTest(unittest.TestCase):
         exercises the OTHER branch. Real `git patch-id --stable` essentially
         never fails on well-formed stdin, so this exercises the branch by
         substituting a failing command for the second `Popen` call only,
-        while the first (`git log`) call runs for real and unmodified."""
+        while the first (`git log`) call runs for real and unmodified.
+
+        Must DRAIN stdin before exiting, not just exit immediately: a
+        command that exits without reading stdin (the original `["false"]`
+        here) makes `git log` take SIGPIPE while still writing, which sends
+        `log_proc.returncode` negative — and `_git_log_patch_id` checks
+        `log_proc.returncode != 0` FIRST, so the test would silently pass
+        through the OTHER (log-stage) branch instead of the one it names
+        and claims to isolate (caught in merge-gate review of PR #1247:
+        `log_proc.returncode` went to -13, line 290 — the target branch —
+        was never reached, yet the assertions still passed on the wrong
+        branch). `sh -c "cat >/dev/null; exit 1"` reads stdin to EOF (so
+        `git log` finishes writing and exits 0 normally) before failing."""
         self._multi_commit_squash()
         real_popen = subprocess.Popen
 
         def failing_patch_id_popen(*args: Any, **kwargs: Any) -> subprocess.Popen[str]:
             argv = args[0] if args else kwargs.pop("args", None)
             if isinstance(argv, list) and "patch-id" in argv:
-                argv = ["false"]  # always exits 1, ignores stdin
+                argv = ["sh", "-c", "cat >/dev/null; exit 1"]
             return real_popen(argv, **kwargs)
 
         with unittest.mock.patch("subprocess.Popen", failing_patch_id_popen):
