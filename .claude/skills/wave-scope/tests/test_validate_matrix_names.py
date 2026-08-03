@@ -763,13 +763,101 @@ class OrgUnionManifestTests(unittest.TestCase):
     def test_manifest_names_are_trimmed_and_non_strings_skipped(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             org = self._build_org(
-                Path(tmpdir), manifest={"  Padded Persona  ": "p@example.com", "": "x@example.com"}
+                Path(tmpdir),
+                manifest={
+                    # Persona-shaped so this test exercises TRIMMING, not the
+                    # #1181 shape filter (covered separately below).
+                    "  Padded Persona  ": "parametrization+Padded.Persona@gmail.com",
+                    "": "parametrization+Empty.Name@gmail.com",
+                },
             )
             self.assertEqual(_load_org_manifest_names(org), {"Padded Persona"})
             report = validate(
                 {"noorinalabs-isnad-ingest-platform": {"reviewer": "padded persona"}}, org
             )
             self.assertTrue(report["noorinalabs-isnad-ingest-platform"][0]["resolved"])
+
+
+class PersonaShapeFilterTests(unittest.TestCase):
+    """#1181: manifest entries with no charter-conformant `+alias` do not resolve.
+
+    Mirrors `OrgUnionManifestTests` fixture style. The two cases here are the
+    literal acceptance criterion (`reviewer: "Annunaki"` must not resolve) and
+    its sibling (the bare-principal `Steven French` mapping), plus a guard that
+    the filter does NOT over-correct: a persona-shaped manifest-only name (one
+    of the other 16 #1181 measured) must keep resolving.
+    """
+
+    def _build_org_with_manifest(self, tmp: Path, manifest: dict[str, str]) -> Path:
+        org = _build_fake_org_dir(tmp)
+        path = org / ".claude" / "team" / "roster.json"
+        path.write_text(json.dumps(manifest, indent=2))
+        return org
+
+    def test_annunaki_tool_identity_does_not_resolve(self):
+        """The literal #1181 acceptance criterion."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org_with_manifest(
+                Path(tmpdir),
+                {
+                    "Aino Virtanen": "parametrization+Aino.Virtanen@gmail.com",
+                    "Annunaki": "parametrization+Annunaki@gmail.com",
+                },
+            )
+            self.assertNotIn("Annunaki", _load_org_manifest_names(org))
+            report = validate({"noorinalabs-isnad-ingest-platform": {"reviewer": "Annunaki"}}, org)
+            finding = report["noorinalabs-isnad-ingest-platform"][0]
+            self.assertFalse(finding["resolved"], "Annunaki (tool identity) must not resolve")
+            self.assertEqual(_print_report_to_stderr(report), 1)
+
+    def test_bare_principal_does_not_resolve(self):
+        """`Steven French` maps to the bare `parametrization@gmail.com` (no `+alias`)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org_with_manifest(
+                Path(tmpdir),
+                {
+                    "Aino Virtanen": "parametrization+Aino.Virtanen@gmail.com",
+                    "Steven French": "parametrization@gmail.com",
+                },
+            )
+            self.assertNotIn("Steven French", _load_org_manifest_names(org))
+            report = validate(
+                {"noorinalabs-isnad-ingest-platform": {"reviewer": "Steven French"}}, org
+            )
+            self.assertFalse(report["noorinalabs-isnad-ingest-platform"][0]["resolved"])
+
+    def test_persona_shaped_manifest_only_name_still_resolves(self):
+        """The filter narrows exactly the non-persona entries, not every uncarded one.
+
+        A manifest-only name that IS persona-shaped (one of #1181's other 16,
+        real-looking but still uncarded anywhere) must keep resolving as a
+        reviewer — #1181 does not reconcile that disposition, only the two
+        definitionally-wrong entries.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org_with_manifest(
+                Path(tmpdir),
+                {"Amara Diallo": "parametrization+Amara.Diallo@gmail.com"},
+            )
+            self.assertIn("Amara Diallo", _load_org_manifest_names(org))
+            report = validate(
+                {"noorinalabs-isnad-ingest-platform": {"reviewer": "Amara Diallo"}}, org
+            )
+            self.assertTrue(report["noorinalabs-isnad-ingest-platform"][0]["resolved"])
+
+    def test_non_persona_shape_variants_excluded(self):
+        """Pure unit coverage of the regex boundary, independent of `validate()`."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            org = self._build_org_with_manifest(
+                Path(tmpdir),
+                {
+                    "No Alias": "parametrization@gmail.com",
+                    "No Dot": "parametrization+NoDot@gmail.com",
+                    "Bot Login": "12345+octocat@users.noreply.github.com",
+                    "Real Persona": "parametrization+Real.Persona@gmail.com",
+                },
+            )
+            self.assertEqual(_load_org_manifest_names(org), {"Real Persona"})
 
 
 if __name__ == "__main__":

@@ -28,6 +28,36 @@ THIRD child repo — permitted by `charter/agents/spawn-discipline.md`
 target repo's, so it was reported UNRESOLVED with "(no close matches)". Live
 instance: `Nikolaos Papadopoulos` / `Oyunbileg Batbayar` (cards in
 `noorinalabs-data-acquisition`) reviewing `isnad-ingest-platform` stories in W28.
+
+Manifest entries are filtered to PERSONAS only (#1181)
+=======================================================
+#1181 measured `roster.json` (78 entries) against the union of every roster
+card in the org (60 names) and found 18 manifest-only entries — names the
+manifest widens the review-class set with but that back no spawnable persona
+anywhere. Two of the 18 are not merely uncarded, they are DEFINITIONALLY not
+reviewers: `Annunaki` (the error-monitoring tool's commit identity — it posts
+real PR comments, so admitting it as a `reviewer` is a live risk) and
+`Steven French` mapping to the bare `parametrization@gmail.com` (no `+alias`
+tag — the #1177 squash-collapse address, not a person's own address).
+
+`_load_org_manifest_names` therefore only returns entries whose address is a
+charter-conformant per-persona commit identity, `_PERSONA_ALIAS_RE`
+(`<principal>+<First>.<Last>@<domain>`) — the SAME matcher
+`.claude/hooks/validate_pr_review.py::_PERSONA_ALIAS_RE` uses for the
+merge-time twin of this check (#1179/#1181; that gate got this filter first,
+this one did not, which is exactly the drift #1181 flags). A small duplicated
+regex across the two sibling parsers is the established pattern here (see
+`_load_roster_names` below on the H1/verbose card dual-format regexes) rather
+than a cross-module import between a hook and a skill.
+
+Filtering on identity SHAPE — not a hand-maintained non-persona blocklist —
+is deliberate: it keeps this gate correct today without waiting on a
+disposition decision for the other 16 manifest-only names (prune vs onboard,
+still open), and it stays correct if the manifest ever grows another tool
+identity. The remaining 16 manifest-only names ARE persona-shaped and keep
+resolving as reviewers post-#1181 — #1181 narrows the DEFINITIONALLY-wrong
+two, it does not reconcile the other 16 (that disposition is tracked
+separately; see `.claude/lib/roster_union_sync.py`'s manifest-orphan report).
 Pre-existing since #319, but #1134 made § 12.5 mandatory over every canonical
 `tier_*` row and added a hard `exit 1` at `/wave-kickoff` § 0b, turning a latent
 gap into a STOP on a charter-permitted assignment.
@@ -183,6 +213,14 @@ COMMIT_CAPABLE_ROLES: frozenset[str] = frozenset({"implementer"})
 # (the parent roster IS the repo roster), so #1134 never fires on them.
 PARENT_REPO_KEYS: frozenset[str] = frozenset({"", "noorinalabs-main", "main"})
 
+# A manifest entry is a PERSONA only if its address is a charter-conformant
+# per-persona commit identity: `<principal>+<First>.<Last>@<domain>` (CLAUDE.md
+# § Key Rules / charter `pull-requests.md` § Commit Identity). Same matcher as
+# `.claude/hooks/validate_pr_review.py::_PERSONA_ALIAS_RE` (#1179) — see
+# `_load_org_manifest_names` below for why this module keeps its own small
+# duplicate rather than importing across the hook/skill boundary (#1181).
+_PERSONA_ALIAS_RE = re.compile(r"^[^\s@+]+\+[^\s@+]+\.[^\s@+]+@[^\s@]+\.[^\s@]+$")
+
 
 def _find_org_dir() -> Path:
     """Find the directory that contains all `noorinalabs-*` repo checkouts.
@@ -239,16 +277,30 @@ def _load_roster_names(roster_dir: Path) -> set[str]:
 
 
 def _load_org_manifest_names(org_dir: Path) -> set[str]:
-    """Parse names from the parent's org-union manifest `.claude/team/roster.json`.
+    """Parse PERSONA names from the parent's org-union manifest `.claude/team/roster.json`.
 
     The manifest is a flat `{"<name>": "<email>"}` object covering every persona
     across the org (78 at time of writing) — a strict superset of the parent's
     own card directory, and the only place a persona from a repo that is not the
     target repo can be recognised without cloning that repo.
 
+    **Persona filter (#1181).** Only entries whose address matches
+    `_PERSONA_ALIAS_RE` are returned. The manifest is the LOOSER authority — it
+    can (and, measured, does) carry an entry that backs no spawnable person:
+    18 manifest-only names at #1181's measurement, of which `Annunaki` (the
+    error-monitor's commit identity) and `Steven French` (the bare
+    `parametrization@gmail.com` principal, no `+alias`) are DEFINITIONALLY not
+    reviewers regardless of whether they ever get a roster card. Filtering on
+    identity SHAPE keeps this gate correct today without waiting on the
+    disposition of the other 16 (real-looking, still-uncarded) names, and
+    stays correct if the manifest ever grows another tool identity.
+
     Fails OPEN (empty set) when the file is missing or malformed: the manifest
     only ever WIDENS the review-class resolution set, so an unreadable manifest
-    degrades to exactly the pre-#1162 behaviour rather than blocking a run.
+    degrades to exactly the pre-#1162 behaviour rather than blocking a run. A
+    non-string address is likewise treated as non-persona rather than crashing
+    — if `roster.json` ever grows a richer per-entry schema, this parser
+    narrows rather than guessing, which is the recoverable direction.
     """
     path = org_dir / ".claude" / "team" / "roster.json"
     try:
@@ -257,7 +309,14 @@ def _load_org_manifest_names(org_dir: Path) -> set[str]:
         return set()
     if not isinstance(data, dict):
         return set()
-    return {name.strip() for name in data if isinstance(name, str) and name.strip()}
+    return {
+        name.strip()
+        for name, address in data.items()
+        if isinstance(name, str)
+        and name.strip()
+        and isinstance(address, str)
+        and _PERSONA_ALIAS_RE.match(address.strip())
+    }
 
 
 def _load_repo_roster(org_dir: Path, repo: str) -> set[str]:
