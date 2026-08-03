@@ -449,6 +449,15 @@ def _is_git_ignored(resolved_path: Path) -> bool:
     # ignored — gitignore(5)'s no-re-include-under-an-excluded-parent rule
     # then genuinely applies to everything beneath it, so the cached True
     # is not a false positive there.
+    #
+    # Why no `--no-index` (main#1263 review, Weronika Zielinska): git's
+    # index-masking applies to the DIRECTORY pathspec too, not just to
+    # files. `git check-ignore -- dist dist/manifest.json` exits 1 when
+    # `dist` holds force-added tracked files, where `--no-index` would
+    # report both as matched. The practical consequence is a useful
+    # invariant rather than a bug: `dir_ignored` can only ever cache True
+    # for a directory that holds ZERO tracked files, so the short-circuit
+    # can never suppress tracking of a path git already knows about.
     dir_spec = dir_rel_str
     matched = _run_check_ignore(git_root, [dir_spec, rel_str])
     dir_ignored = dir_spec in matched

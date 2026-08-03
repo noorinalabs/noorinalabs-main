@@ -793,11 +793,26 @@ class GitCheckIgnoreExcludeThenReincludeTests(_FakeRepoRootMixin, unittest.TestC
         self.assertTrue(hook._DIR_CHECK_IGNORE_CACHE[(str(self._fake_root), "data/raw/sub")])
 
     def test_trailing_slash_is_unsound_bare_name_is_not(self):
-        """Direct guard on the exact mechanism, independent of
-        ``_is_git_ignored``'s call sequence: proves the trap AND the fix in
-        one place, so a future re-introduction of the trailing slash fails
-        immediately rather than needing the fuller scenario above to
-        surface it."""
+        """Characterization of GIT's behavior — the PREMISE the fix rests
+        on — not a regression guard on our code.
+
+        Read the scope carefully (main#1263 review, Weronika Zielinska).
+        An earlier version of this docstring claimed a future
+        re-introduction of the trailing slash would "fail immediately"
+        here. **That is false**, and was measured false: this test calls
+        ``_run_check_ignore`` with literal strings, so it never touches
+        ``_is_git_ignored``'s ``dir_spec`` at all and passes unchanged when
+        the trailing slash is reinstated. The test that actually catches
+        that mutation is ``test_untracked_reincluded_keeper_is_not_skipped``
+        in the class above — and only that one.
+
+        What this DOES pin is worth keeping: that real git treats a
+        trailing-slash pathspec as a literal string matched by a
+        contents-only pattern while the bare name is not. If git ever
+        changed that, the fix's rationale would evaporate silently and
+        every other test here would still pass. Keeping it labeled
+        honestly is the point — a test that overstates what it guards is
+        how a suite comes to look stronger than it is (cf. main#1215)."""
         raw = self._fake_root / "data" / "raw"
         raw.mkdir(parents=True)
         (raw / "dump.parquet").write_text("x\n", encoding="utf-8")
@@ -933,12 +948,29 @@ class RunCheckIgnoreFailOpenTests(_FakeRepoRootMixin, unittest.TestCase):
         self.assertEqual(matched, set())
 
     def test_real_fatal_returncode_also_fails_open(self):
-        """Not mocked: a real ``git check-ignore`` invocation with an
-        out-of-repo pathspec genuinely exits 128 (verified: real git prints
-        ``fatal: ... is outside repository`` and returns 128 for this
-        exact input) — must also fail open, end to end through the real
-        subprocess path."""
-        outside = "/etc/hostname"  # universally readable on Linux test runners
+        """Not mocked: a real ``git check-ignore`` with an out-of-repo
+        pathspec genuinely exits 128 (real git prints ``fatal: ... is
+        outside repository``) and must fail open end to end.
+
+        **This test is vacuous with respect to the guard it appears to
+        cover** (main#1263 review, Weronika Zielinska — measured, not
+        assumed). A real fatal exit also produces EMPTY stdout, so the
+        function returns an empty set with or without the
+        ``returncode not in (0, 1)`` branch: deleting that branch leaves
+        this test passing. ``test_mocked_fatal_returncode_fails_open`` is
+        the only test that catches it, which is exactly why that one feeds
+        deliberately NON-empty stdout.
+
+        Kept because it pins the PREMISE the mocked test is built on — that
+        128 is really what git returns here, rather than a return code we
+        invented for a fixture. Labeled so the pair is never miscounted as
+        two guards on the same branch (cf. main#1215: an anti-vacuity
+        assertion can itself be vacuous).
+
+        Not a flake risk despite naming a system path: any absolute
+        out-of-repo pathspec exits 128 whether or not the file exists
+        (verified against a nonexistent path)."""
+        outside = "/etc/hostname"  # any absolute out-of-repo path works
         matched = hook._run_check_ignore(self._fake_root, [outside])
         self.assertEqual(matched, set())
 
