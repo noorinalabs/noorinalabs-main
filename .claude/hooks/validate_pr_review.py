@@ -1025,7 +1025,59 @@ COMMENT_SCAN_NO_BRANCH_AUTHOR = "no-branch-author"
 # different evidence and an operator reading a block message needs to know
 # which: the ref prefix is a human declaration, the commit author is a
 # measurement, and only the latter can be defeated by a squash (#1177).
+#
+# As of #1220 this mode requires the derived identity to name a ROSTER persona.
+# See COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER below for why.
 COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED = "commit-author-excluded"
+# The ref named no persona, the COMMITS named someone, and that someone matches
+# NO roster persona — a `dependabot[bot]`, a `GitHub` web-UI commit, an outside
+# contributor (#1220).
+#
+# WHY THIS IS ITS OWN STATE AND NOT A REUSE OF EITHER NEIGHBOUR. "An identity
+# was derived" and "an exclusion was applied" are two different facts, and
+# pre-#1220 `refine_comment_scan_scope` reported the first as if it were the
+# second: on a dependabot head ref carrying two genuine roster approvals the
+# gate correctly counted both (deploy#691 stays fixed) and then described itself
+# as having subtracted a self-review that never existed. The COUNT was right and
+# the DESCRIPTION was false — the same defect class #1206/#1207 fixed, one layer
+# up.
+#
+# It is not NO_BRANCH_AUTHOR either: that mode's whole claim is "the PR's commits
+# named no persona", and here they named `dependabot[bot]`. Collapsing the two
+# would throw away the derived identity an operator needs in order to check the
+# classification — the derivation is exactly what they would want to audit if
+# they suspected it had picked the wrong person.
+#
+# The inertness is provable, not incidental, and it is the same argument
+# `commit_author_identities` already makes for not roster-filtering the
+# derivation itself: only roster-valid Requestors can enter `distinct_reviewers`
+# (`resolve_review_verdicts` filters them), so an exclusion keyed on a non-roster
+# identity can only ever remove a verdict that roster filtering would have
+# removed anyway. The count under this mode is identical to the count under
+# NO_BRANCH_AUTHOR — which is why this is a reporting distinction and touches no
+# threshold.
+COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER = "commit-author-non-roster"
+
+# Every comment-scan mode, in one place (#1220, narrowing #1273).
+#
+# Exists so a totality test can iterate the mode set rather than a hand-copied
+# list: the enum is rendered by THREE independent hand-written surfaces
+# (`check()`'s block `scan_diagnostic`, `check()`'s allow-path advisory, and
+# `pr_review_state._describe_comment_scan`), and before this tuple existed a
+# sixth mode could be added with none of them noticing — the reader would get a
+# blank or a wrong description, silently. `test_validate_pr_review.py::
+# CommentScanModeTotalityTests` iterates this tuple and fails if any mode is
+# unwired on any surface.
+#
+# Order is narrative (least to most evidence about the branch author), not
+# semantic; nothing may branch on position.
+ALL_COMMENT_SCAN_MODES = (
+    COMMENT_SCAN_NOT_RUN,
+    COMMENT_SCAN_NO_BRANCH_AUTHOR,
+    COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER,
+    COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED,
+    COMMENT_SCAN_AUTHOR_EXCLUDED,
+)
 
 
 def comment_scan_scope(head_ref: str) -> str:
@@ -1071,15 +1123,54 @@ def comment_scan_scope(head_ref: str) -> str:
     )
 
 
+def commit_author_exclusion_is_live(
+    commit_authors: tuple[CommitAuthorIdentity, ...],
+    roster_names: set[str],
+) -> bool:
+    """True when a commit-derived identity could actually remove a verdict (#1220).
+
+    An exclusion keyed on an identity that matches no roster persona is INERT by
+    construction: `resolve_review_verdicts` filters `comment_reviewers` against
+    the roster, so a Requestor that `is_self_review` would drop for matching
+    `dependabot[bot]` could never have reached `distinct_reviewers` anyway. This
+    is the same argument `commit_author_identities` makes for NOT roster-filtering
+    the derivation itself — stated here as a predicate so the reporting layer can
+    tell an operator which of the two situations they are in.
+
+    Comparison is `charter_trailer.is_branch_author`, the ONE person-comparison
+    in the org (#1172). There is deliberately no surname `in` test written here:
+    a roster containing `santiago ferreira` must NOT make a commit authored by
+    `Lucas Ferreira` look live, and the initial discriminator is what prevents
+    that.
+
+    `roster_names` are lowercase canonical persona names as `_load_roster_names`
+    returns them; `is_branch_author` lowercases both sides, so the case does not
+    matter here.
+
+    NOTE the empty-roster case is NOT decided here — an empty `roster_names`
+    means the roster could not be READ (`_load_roster_names`'s documented
+    degraded return), not that the org has no members, and this function would
+    answer False for every identity on that input. `refine_comment_scan_scope`
+    handles it explicitly rather than letting the degraded read masquerade as a
+    finding.
+    """
+    return any(
+        is_branch_author(name, identity.lastname, identity.initial)
+        for identity in commit_authors
+        for name in roster_names
+    )
+
+
 def refine_comment_scan_scope(
     ref_scope: str,
     commit_authors: tuple[CommitAuthorIdentity, ...],
+    roster_names: set[str],
 ) -> str:
-    """Upgrade a ref-derived scan scope with what the PR's COMMITS said (#1210).
+    """Refine a ref-derived scan scope with what the PR's COMMITS said (#1210/#1220).
 
-    Exactly ONE transition: `NO_BRANCH_AUTHOR` → `COMMIT_AUTHOR_EXCLUDED`, and
-    only when at least one identity was derived. Everything else is returned
-    untouched, which is the whole safety argument for this function:
+    Only `NO_BRANCH_AUTHOR` is ever refined, into one of three answers. Every
+    other input is returned untouched, which is the whole safety argument for
+    this function:
 
       - `AUTHOR_EXCLUDED` is never downgraded — a ref that names a persona keeps
         its exclusion no matter what the commits say.
@@ -1087,16 +1178,45 @@ def refine_comment_scan_scope(
         a mode. `resolve_review_verdicts` hard-blocks on it upstream, and
         silently relabelling it here would launder that block into a result.
       - `NO_BRANCH_AUTHOR` with no derived identity stays as it was, so the
-        honest "exclusion was not available" reporting survives for genuine bot
-        branches and for commit data that named nobody.
+        honest "exclusion was not available" reporting survives for a
+        merge-only branch and for commit data that named nobody.
+
+    #1220 SPLIT THE UPGRADE IN TWO. It used to be keyed on `commit_authors`
+    being non-empty alone, i.e. on "an identity was derived" — which is not the
+    same fact as "an exclusion was applied". On a `dependabot/**` ref the first
+    is true and the second is false, so the mode announced a subtraction that
+    never happened while the count (correctly) included both roster approvals.
+    Keying the EXCLUDED answer on `commit_author_exclusion_is_live` and giving
+    the inert case its own `COMMIT_AUTHOR_NON_ROSTER` mode makes the description
+    match the arithmetic. The count is untouched either way — both modes produce
+    exactly the reviewer set `NO_BRANCH_AUTHOR` would have produced, because the
+    exclusion itself still runs off the same unfiltered `commit_authors` tuple.
+
+    AN UNREADABLE ROSTER IS NOT AN INERTNESS FINDING. `_load_roster_names`
+    returns the empty set when the roster dirs could not be read, and on that
+    input every identity trivially "matches no roster persona" — reporting
+    NON_ROSTER there would state a measurement derived from a failed read, the
+    `feedback_silent_zero_is_not_a_measurement` shape this enum exists to
+    prevent. So an empty roster keeps the pre-#1220 answer: an identity WAS
+    derived, `is_self_review` IS keyed on it, and whether it bit is unknown —
+    which is what `COMMIT_AUTHOR_EXCLUDED`'s (modal, post-#1220) wording says.
 
     The mode is a REPORT, not a decision: the exclusion itself is applied by
-    `is_self_review` from the same `commit_authors` tuple. They cannot drift
-    because both read that one value.
+    `is_self_review` from the same `commit_authors` tuple, unfiltered. They
+    cannot drift because both read that one value.
+
+    `roster_names` is REQUIRED, not defaulted. A default of `set()` would read
+    as "roster unreadable" to the branch above and quietly hand a caller who
+    forgot the argument a plausible answer; a missing argument must be a
+    TypeError at the call site instead.
     """
-    if ref_scope == COMMENT_SCAN_NO_BRANCH_AUTHOR and commit_authors:
+    if ref_scope != COMMENT_SCAN_NO_BRANCH_AUTHOR or not commit_authors:
+        return ref_scope
+    if not roster_names:
         return COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED
-    return ref_scope
+    if commit_author_exclusion_is_live(commit_authors, roster_names):
+        return COMMENT_SCAN_COMMIT_AUTHOR_EXCLUDED
+    return COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER
 
 
 PROJECT_NUMBER = 2
@@ -2019,7 +2139,6 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
     commit_authors: tuple[CommitAuthorIdentity, ...] = (
         () if branch_author_lastname else commit_author_identities(commits)
     )
-    scan_scope = refine_comment_scan_scope(scan_scope, commit_authors)
 
     comment_result = check_comment_reviews(
         number,
@@ -2040,6 +2159,21 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
         raise CommentScanUndeterminedError(comment_result.undetermined)
 
     roster_names = _load_roster_names(repo=repo)
+
+    # Refined AFTER the roster load, not before, because #1220's discriminator
+    # is "does a derived identity name a roster persona" and that needs the
+    # roster. Deliberately placed here rather than hoisting `_load_roster_names`
+    # above `check_comment_reviews`: hoisting it would move `RosterResolutionError`
+    # ahead of `CommentScanUndeterminedError` in the raise order, so a PR with
+    # BOTH an unreadable comment thread and an unresolvable child roster would
+    # start reporting a different one of its two determinate failures. Both
+    # hard-block, so nothing counts differently — but the diagnosis an operator
+    # is handed would silently change, and this issue is about descriptions.
+    #
+    # `scan_scope` is not read between `comment_scan_scope` above and here;
+    # `check_comment_reviews` takes the branch author and the identities, never
+    # the mode.
+    scan_scope = refine_comment_scan_scope(scan_scope, commit_authors, roster_names)
 
     non_roster_requestors = {r for r in comment_result.reviewers if r not in roster_names}
     roster_comment_reviewers = comment_result.reviewers - non_roster_requestors
@@ -2410,10 +2544,26 @@ def check(input_data: dict) -> dict | None:
             scan_diagnostic = (
                 f"NOTE: head ref `{verdicts.head_ref or '(unknown)'}` carries no "
                 "`{Initial}.{Lastname}` branch-author prefix, so the branch author was "
-                f"derived from COMMIT IDENTITY instead: {derived}. Verdicts from those "
-                "personas were excluded as self-reviews; every other roster-valid Approved "
+                f"derived from COMMIT IDENTITY instead: {derived}. Any verdict from those "
+                "personas is excluded as a self-review; every other roster-valid Approved "
                 "Requestor counts. The scan DID run; the count below is a real measurement "
                 "(#1210).\n\n"
+            )
+        elif verdicts.comment_scan == COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER:
+            # #1220: an identity WAS derived, and it excluded nothing. Saying so
+            # is the point — the pre-#1220 message claimed a subtraction here,
+            # which sent an operator looking for a verdict that was never
+            # dropped. Naming the identity still matters: it is what they would
+            # audit if they thought the derivation had picked the wrong person.
+            derived = ", ".join(i.display for i in verdicts.commit_author_identities) or "(none)"
+            scan_diagnostic = (
+                f"NOTE: head ref `{verdicts.head_ref or '(unknown)'}` carries no "
+                "`{Initial}.{Lastname}` branch-author prefix, so the branch author was "
+                f"derived from COMMIT IDENTITY instead: {derived} — which matches no roster "
+                "persona, so NO verdict was excluded as a self-review (a bot, a web-UI "
+                "commit, or an outside contributor). Every roster-valid Approved Requestor "
+                "counts. The scan DID run; the count below is a real measurement "
+                "(#1206/#1220).\n\n"
             )
         elif verdicts.comment_scan == COMMENT_SCAN_NO_BRANCH_AUTHOR:
             scan_diagnostic = (
@@ -2577,7 +2727,16 @@ def check(input_data: dict) -> dict | None:
     # on a ref that names nobody, and the operator would see no trace of it.
     # Disclosing only on block told them the one thing they did not need.
     #
-    # Scoped deliberately to NO_BRANCH_AUTHOR:
+    # Scoped deliberately to the two modes under which NOTHING was excluded:
+    #   - NO_BRANCH_AUTHOR — neither the ref nor the commits named anyone.
+    #   - COMMIT_AUTHOR_NON_ROSTER (#1220) — the commits named someone who is
+    #     not a roster persona, so the exclusion was armed on an identity that
+    #     could not appear in the reviewer set and removed nothing. The reviewer
+    #     set here is byte-identical to the one NO_BRANCH_AUTHOR would produce,
+    #     so the #1211 exposure is byte-identical too: staying silent because an
+    #     identity happened to be derivable would disclose on the arithmetic's
+    #     twin and not on the arithmetic itself.
+    # and deliberately NOT to:
     #   - AUTHOR_EXCLUDED / COMMIT_AUTHOR_EXCLUDED — exclusion WAS applied.
     #     Applying it can only REMOVE verdicts, so it can never manufacture a
     #     pass; the block path already names those subtractions, which is where
@@ -2585,6 +2744,11 @@ def check(input_data: dict) -> dict | None:
     #   - NOT_RUN — `resolve_review_verdicts` hard-blocks upstream, so it is
     #     unreachable here; it is left alone rather than given wording that
     #     could only ever fire on a regression already caught elsewhere.
+    #
+    # `total_distinct` is interpolated, never a literal `2`: this tail is also
+    # reachable at 1/2 through the wave-bootstrap single-reviewer exception, and
+    # a hardcoded count would misreport exactly the PR that had the fewest
+    # reviewers to lose.
     #
     # Wording is proportionate on purpose: an allowed merge is a correct
     # outcome under the charter threshold, and this states which discriminator
@@ -2600,6 +2764,17 @@ def check(input_data: dict) -> dict | None:
             "counted, including any posted by whoever wrote this branch. The scan DID "
             "run and the charter threshold is unchanged — this states which "
             "discriminator was unavailable, not a defect (#1206/#1211)."
+        )
+    elif verdicts.comment_scan == COMMENT_SCAN_COMMIT_AUTHOR_NON_ROSTER:
+        derived = ", ".join(i.display for i in verdicts.commit_author_identities) or "(none)"
+        advisories.append(
+            f"NOTE: PR {pr_display} reached {total_distinct}/2 WITHOUT self-review "
+            f"exclusion. Head ref `{verdicts.head_ref or '(unknown)'}` carries no "
+            "`{Initial}.{Lastname}` branch-author prefix, and the branch author derived "
+            f"from COMMIT IDENTITY — {derived} — matches no roster persona, so no verdict "
+            "was excluded as a self-review: every roster-valid Approved Requestor was "
+            "counted. The scan DID run and the charter threshold is unchanged — this "
+            "states which discriminator was unavailable, not a defect (#1211/#1220)."
         )
 
     if advisories:
