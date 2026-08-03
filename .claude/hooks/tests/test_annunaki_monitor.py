@@ -21,6 +21,7 @@ import _test_helpers  # noqa: E402,F401
 import annunaki_log as alog  # noqa: E402
 import annunaki_monitor as am  # noqa: E402
 import annunaki_parse as ap  # noqa: E402
+import pytest
 
 
 def _bash_event(command: str, stdout: str = "", stderr: str = "", exit_code: int = 0) -> dict:
@@ -168,31 +169,42 @@ class AnnunakiMonitorTests(unittest.TestCase):
         self.assertIsNone(result)
 
 
-class SilentBooleanTestIdiomTests(unittest.TestCase):
+class TestSilentBooleanIdiom:
     """#474 coverage: documented boolean-test idioms whose by-design failure
     branch is non-zero exit with empty output must NOT produce log entries
     after #473 closed the silent-failure capture path. Each idiom gets a
     NEGATIVE-match test (no log) plus a precedence test that confirms a real
-    stderr-pattern match still wins."""
+    stderr-pattern match still wins.
 
-    def setUp(self):
-        self._saved_env = {
+    Not `unittest.TestCase` (#1117 — G5 clone-group parametrization):
+    `test_negative_match` below is a `pytest.mark.parametrize` table — 12
+    members were a single-statement `self.assertIsNone(am.check(_bash_event(
+    cmd, exit_code=n)))` differing only in `cmd`/`exit_code`. Converting the
+    class required moving `setUp`/`tearDown` to an autouse fixture (the
+    other methods in this class, including the ones NOT in the clone group,
+    depend on the same `ERRORS_FILE`/`_seen_hashes` isolation); every
+    `self.assertX` call in the class — merged or not — was mechanically
+    rewritten to a bare `assert` as a consequence, since a plain class has no
+    `self.assertX`. `ids=` is each original method's bare name."""
+
+    @pytest.fixture(autouse=True)
+    def _isolate_annunaki_state(self):
+        saved_env = {
             "ENVIRONMENT": os.environ.pop("ENVIRONMENT", None),
             "NOORIN_HOOK_TEST_MODE": os.environ.pop("NOORIN_HOOK_TEST_MODE", None),
         }
         am._seen_hashes.clear()
-        self._tmpdir = tempfile.TemporaryDirectory()
-        self._errors_path = Path(self._tmpdir.name) / "errors.jsonl"
-        self._orig_monitor_file = am.ERRORS_FILE
-        self._orig_log_file = alog.ERRORS_FILE
+        tmpdir = tempfile.TemporaryDirectory()
+        self._errors_path = Path(tmpdir.name) / "errors.jsonl"
+        orig_monitor_file = am.ERRORS_FILE
+        orig_log_file = alog.ERRORS_FILE
         am.ERRORS_FILE = self._errors_path
         alog.ERRORS_FILE = self._errors_path
-
-    def tearDown(self):
-        am.ERRORS_FILE = self._orig_monitor_file
-        alog.ERRORS_FILE = self._orig_log_file
-        self._tmpdir.cleanup()
-        for k, v in self._saved_env.items():
+        yield
+        am.ERRORS_FILE = orig_monitor_file
+        alog.ERRORS_FILE = orig_log_file
+        tmpdir.cleanup()
+        for k, v in saved_env.items():
             if v is None:
                 os.environ.pop(k, None)
             else:
@@ -203,78 +215,58 @@ class SilentBooleanTestIdiomTests(unittest.TestCase):
     def test_posix_bracket_silent_exit_not_logged(self):
         """NEG: `[ -d /nonexistent ]` exit 1 silent → no log."""
         result = am.check(_bash_event("[ -d /nonexistent ]", exit_code=1))
-        self.assertIsNone(result)
-        self.assertFalse(self._errors_path.exists())
+        assert result is None
+        assert not self._errors_path.exists()
 
-    def test_bash_double_bracket_silent_exit_not_logged(self):
-        """NEG: `[[ -f /nonexistent ]]` exit 1 silent → no log."""
-        result = am.check(_bash_event("[[ -f /nonexistent ]]", exit_code=1))
-        self.assertIsNone(result)
-
-    def test_test_builtin_silent_exit_not_logged(self):
-        """NEG: `test -f /nonexistent` exit 1 silent → no log."""
-        result = am.check(_bash_event("test -f /nonexistent", exit_code=1))
-        self.assertIsNone(result)
-
-    def test_grep_q_no_match_silent_exit_not_logged(self):
-        """NEG: `grep -q pattern file` non-error miss → no log."""
-        result = am.check(_bash_event("grep -q needle /tmp/haystack.txt", exit_code=1))
-        self.assertIsNone(result)
+    @pytest.mark.parametrize(
+        ("command", "exit_code"),
+        [
+            ("[[ -f /nonexistent ]]", 1),
+            ("test -f /nonexistent", 1),
+            ("grep -q needle /tmp/haystack.txt", 1),
+            ("pgrep nginx", 1),
+            ("pkill -0 nginx", 1),
+            ("which nonexistent-binary", 1),
+            ("command -v nonexistent-binary", 1),
+            ("diff --quiet /tmp/a /tmp/b", 1),
+            ("git diff --quiet", 1),
+            ("[ -f /tmp ]", 0),
+            # NEG: `if [ -f /nonexistent ]; then echo unreachable; fi` exits 0
+            # (false branch, body skipped) → no log. The whole-`if` regex was
+            # removed in #490 because it silenced body failures (gap #3); the
+            # false-branch path is now handled by exit_code=0 not being an
+            # error, not by idiom-skip.
+            ("if [ -f /nonexistent ]; then echo unreachable; fi", 0),
+            # NEG: same shape with `[[`. exit 0 → no log.
+            ("if [[ -f /nonexistent ]]; then echo unreachable; fi", 0),
+        ],
+        ids=[
+            "bash_double_bracket_silent_exit_not_logged",
+            "test_builtin_silent_exit_not_logged",
+            "grep_q_no_match_silent_exit_not_logged",
+            "pgrep_no_match_silent_exit_not_logged",
+            "pkill_no_match_silent_exit_not_logged",
+            "which_not_found_silent_exit_not_logged",
+            "command_v_not_found_silent_exit_not_logged",
+            "diff_quiet_differs_silent_exit_not_logged",
+            "git_diff_quiet_dirty_silent_exit_not_logged",
+            "idiom_exit_zero_not_logged",
+            "if_bracket_conditional_false_branch_exit_zero_not_logged",
+            "if_double_bracket_conditional_false_branch_exit_zero_not_logged",
+        ],
+    )
+    def test_negative_match(self, command, exit_code):
+        """NEG: a documented boolean-test idiom's by-design silent branch
+        (exit-1 miss, or exit-0 false-branch) must not produce a log entry."""
+        result = am.check(_bash_event(command, exit_code=exit_code))
+        assert result is None
 
     def test_grep_q_with_flags_silent_exit_not_logged(self):
         """NEG: `grep -qE` / `grep -qi` variants → no log."""
         for cmd in ("grep -qE '^foo' f.txt", "grep -qi BAR f.txt", "grep -Eq '^foo' f.txt"):
             am._seen_hashes.clear()
             result = am.check(_bash_event(cmd, exit_code=1))
-            self.assertIsNone(result, f"{cmd!r} must not log")
-
-    def test_pgrep_no_match_silent_exit_not_logged(self):
-        """NEG: `pgrep nginx` not-running → no log."""
-        result = am.check(_bash_event("pgrep nginx", exit_code=1))
-        self.assertIsNone(result)
-
-    def test_pkill_no_match_silent_exit_not_logged(self):
-        """NEG: `pkill -0 nginx` not-running → no log."""
-        result = am.check(_bash_event("pkill -0 nginx", exit_code=1))
-        self.assertIsNone(result)
-
-    def test_which_not_found_silent_exit_not_logged(self):
-        """NEG: `which foo` not-installed → no log."""
-        result = am.check(_bash_event("which nonexistent-binary", exit_code=1))
-        self.assertIsNone(result)
-
-    def test_command_v_not_found_silent_exit_not_logged(self):
-        """NEG: `command -v foo` not-installed → no log."""
-        result = am.check(_bash_event("command -v nonexistent-binary", exit_code=1))
-        self.assertIsNone(result)
-
-    def test_diff_quiet_differs_silent_exit_not_logged(self):
-        """NEG: `diff --quiet a b` files differ → no log."""
-        result = am.check(_bash_event("diff --quiet /tmp/a /tmp/b", exit_code=1))
-        self.assertIsNone(result)
-
-    def test_git_diff_quiet_dirty_silent_exit_not_logged(self):
-        """NEG: `git diff --quiet` working tree dirty → no log."""
-        result = am.check(_bash_event("git diff --quiet", exit_code=1))
-        self.assertIsNone(result)
-
-    def test_if_bracket_conditional_false_branch_exit_zero_not_logged(self):
-        """NEG: `if [ -f /nonexistent ]; then echo unreachable; fi` exits 0
-        (false branch, body skipped) → no log. The whole-`if` regex was
-        removed in #490 because it silenced body failures (gap #3); the
-        false-branch path is now handled by exit_code=0 not being an error,
-        not by idiom-skip."""
-        result = am.check(
-            _bash_event("if [ -f /nonexistent ]; then echo unreachable; fi", exit_code=0)
-        )
-        self.assertIsNone(result)
-
-    def test_if_double_bracket_conditional_false_branch_exit_zero_not_logged(self):
-        """NEG: same shape with `[[`. exit 0 → no log."""
-        result = am.check(
-            _bash_event("if [[ -f /nonexistent ]]; then echo unreachable; fi", exit_code=0)
-        )
-        self.assertIsNone(result)
+            assert result is None, f"{cmd!r} must not log"
 
     # --- Precedence: pattern match wins over idiom-on-silent-exit ---
 
@@ -290,11 +282,11 @@ class SilentBooleanTestIdiomTests(unittest.TestCase):
                 exit_code=1,
             )
         )
-        self.assertIsNotNone(result, "stderr pattern match must override idiom skip")
+        assert result is not None, "stderr pattern match must override idiom skip"
         rec = _read_records(self._errors_path)[0]
         # Both signals present: exit_code AND stderr pattern
-        self.assertIn("exit_code=1", rec["matched_patterns"])
-        self.assertTrue(any("fatal" in p for p in rec["matched_patterns"]))
+        assert "exit_code=1" in rec["matched_patterns"]
+        assert any("fatal" in p for p in rec["matched_patterns"])
 
     def test_idiom_with_stdout_pattern_still_logged(self):
         """POS: silent-test idiom that produces a stdout Traceback (would be
@@ -306,20 +298,13 @@ class SilentBooleanTestIdiomTests(unittest.TestCase):
                 exit_code=1,
             )
         )
-        self.assertIsNotNone(result)
+        assert result is not None
 
     def test_real_silent_failure_still_logged(self):
         """POS regression for #472: `false` is NOT in the idiom list, so the
         silent-failure capture path still works for non-idiom commands."""
         result = am.check(_bash_event("false", exit_code=1))
-        self.assertIsNotNone(result, "non-idiom silent failures must still log")
-
-    def test_idiom_exit_zero_not_logged(self):
-        """NEG: idiom command exits 0 (true branch) → no log because not
-        even is_error=True. Sanity check that the idiom filter doesn't get
-        in the way of the happy path."""
-        result = am.check(_bash_event("[ -f /tmp ]", exit_code=0))
-        self.assertIsNone(result)
+        assert result is not None, "non-idiom silent failures must still log"
 
 
 class ConfidenceTaggingTests(unittest.TestCase):
@@ -1336,4 +1321,7 @@ class Rc0PrecisionTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    # `unittest.main()` would silently skip TestSilentBooleanIdiom (a plain
+    # pytest class, not unittest.TestCase — see its docstring) when this file
+    # is run standalone. `pytest.main` discovers both styles.
+    raise SystemExit(pytest.main([__file__, "-v"]))
