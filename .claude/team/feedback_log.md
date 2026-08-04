@@ -686,6 +686,6 @@ The main#690 blank-slug guard is correct and must stay; the defect is that it re
 | #1348 | `review_false_positives` | docstring guarantees a conservatism the mechanism cannot implement |
 | #1349 | `score_delta` | the passing branch is unreachable in practice |
 | #1352 | `block_stale_tmp_message_file` | 0/11 precision; the documented workaround is defeated by hook ordering |
-| #1355 | `skill_invocations` | the gate measures the wrong side of the transition; 0/34 can qualify |
+| #1355 | `skill_invocations` | the gate measures the wrong side of the transition; 0/25 can qualify |
 
 Each is a mechanism that **reports success or benign inaction while being incapable of the outcome it describes**. None would fail a test that only asserts "it runs without error"; all four survived because the passing state and the broken state are observationally identical from outside. That is the generalizable lesson of wave-29, and it applies to the process tooling exactly as it applied to the shell classifiers the wave was themed on.
