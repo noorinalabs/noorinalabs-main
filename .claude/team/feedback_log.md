@@ -556,7 +556,13 @@ Full signal tables, corrected values, and the Done Well / Needs Improvement matr
 
    **Scores are held for every engineer pending the owner's decision on #1349.** Writing deltas from an instrument proven non-functional into a permanent, load-bearing file is the precise failure this wave was themed on.
 
-2. **A fail-open in the board-sync hook, 64 times.** `post_label_change_wave_field_sync` emitted `skip_parser_returned_empty` on 64 occasions: it recognized `gh issue edit` plus a canonical wave label, its parser returned empty, and it **silently no-opped**. A hook that cannot parse its input and therefore does nothing is indistinguishable, from the outside, from a hook that ran and found nothing to do — the same silent-zero class as `feedback_silent_zero_is_not_a_measurement`.
+2. **The error monitor cries wolf — 15% of the wave's entire error log is one false alarm.** `post_label_change_wave_field_sync` emitted `skip_parser_returned_empty` **64 times**, 15% of all 427 genuine records.
+
+   **Correction to this retro's own first reading.** I initially recorded this as a fail-open in which the hook silently skipped syncing the Wave field. The board audit disproved that, and the corrected finding is narrower and different in kind. The parser returns `[]` **correctly** for the unresolved-variable shape (`for n in 1114 1116; do gh issue edit "$n" --add-label wave-28; done` — `"$n"` is not a digit run), and `parse_unresolved_wave_label_edits()` *does* handle that case. **No board sync was missed.** The defect is that the heuristic at `post_label_change_wave_field_sync.py:681-689` treats every empty parser return as a suspected failure without first asking whether the unresolved-variable path already handled it. A secondary factor: `_CANONICAL_WAVE_LABEL_IN_CMD` also matches wave labels inside shell **comments**, not just flag values.
+
+   The cost is inverted from what I first wrote — not a silent miss, but a **loud false alarm that buries real signal**. A monitor whose top class by volume is its own false positive trains readers to skim it, which is how a genuine error goes unread. Recorded here rather than quietly amended because the misreading is itself the wave's thesis: I asserted a mechanism's behavior from its log line instead of from its code, which is exactly what #1348's docstring did.
+
+   Board audit outcome, run this retro: **0 orphans**, **26 Wave-field drift rows** repaired (24 unset-but-labeled spanning W21-W27, 2 populated-with-no-label cleared), read-back verified at 0 remaining. The drift was historical accumulation across seven waves, **not** caused by these 64 records.
 
 3. **Hook ergonomics are blocking correct actions.** 78 `validate_commit_identity` blocks and 53 `validate_review_comment_format` blocks share one root shape: the standard way to author a multi-line body — `cat > /tmp/file` then `git commit -F` / `gh pr comment -F` — makes the body unreadable to the hook, so a *correct* action is refused. Plus 86 bare-`grep` blocks and **52 records where the Annunaki monitor itself errored** (11 identical `git show <SHA>:.claude/lib/wave_status.py` → exit 128). An error monitor that throws is blind exactly when it matters most.
 
@@ -577,3 +583,30 @@ Full signal tables, corrected values, and the Done Well / Needs Improvement matr
 | #1349 | Trust rubric's positive branch is unreachable under multi-head review | tech-debt, process, phase-10 |
 
 Filed deliberately **without** a wave label: `wave-30` does not exist until wave-30 kickoff, and a `wave-29` label would create false drift against that wave's labelled==scoped invariant.
+
+### Memory hygiene (Steps 7.8 + 7.9)
+
+Two orthogonal sweeps ran: `memory_budget.py --staleness` (size/age) and the `/memory-judge` content pass.
+
+**Size/age (advisory, 121 topic files, 5 flagged):**
+
+| file | size | last touch | disposition |
+|---|---|---|---|
+| `project_narrator_chokepoints_enrich.md` | 52,024 B | 16d | **Archive candidate** — Phase-9 narrator/data-quality work, superseded by the Phase-10 focus. 3.6× the soft ceiling and the largest file in the store. Recommended for `.claude/memory/archive/`; deferred to an explicit owner decision, since archiving is never automatic. |
+| `feedback_fixture_makes_guard_assertion_inert.md` | 22,005 B | 1d | **Keep** — written this wave, actively referenced. Consolidation candidate later. |
+| `feedback_gh_cli_gotchas.md` | 18,348 B | 1d | **Keep** — age is edit-recency, not reference-recency; this is a high-recall standing convention. |
+| `feedback_corpus_misses_its_constant_dimension.md` | 16,639 B | 0d | **Keep** — written today. |
+| `feedback_sweep_expensive_stage_before_launch.md` | 15,344 B | 24d | **Keep** — marginally over ceiling, still live. |
+
+**Content staleness (`/memory-judge`, 107 notes examined — every note lacking `last_verified`):**
+
+| classification | count |
+|---|---|
+| Still-current | 97 |
+| Partially-stale | 0 |
+| Fully-stale | 0 |
+| Already carrying `superseded_by` | 10 |
+
+**Zero false positives this pass** — a material improvement on the wave-28 run, where all 9 "fully-stale" flags were wrong (examples, child-repo refs, external URLs, env vars misread as dead claims). The calibration warning written into the wave-29 judge brief, derived from that failure, appears to have worked. `feedback_memory_judge_overflags_fully_stale` remains accurate as a standing caution and should not be retired on one clean run.
+
+The 10 `superseded_by`-marked notes remain queued for a human-approved prune diff; no deletions were made, per protocol.
