@@ -37,9 +37,16 @@ Signals per engineer (all integers, all countable from the merged-PR set):
                                required check (negative — hard ding).
   rework_cycles                PRs they authored that needed >=1 rework
                                round (received >=1 ChangesRequested).
-  review_false_positives       must-fix items they raised that were later
-                               marked withdrawn/false-positive (negative —
-                               review-quality signal).
+  review_false_positives       ChangesRequested items they raised that the
+                               SAME comment explicitly self-retracts via a
+                               dedicated ``Retracted:`` field (negative —
+                               review-quality signal). Free-text substring
+                               matching on "false positive"/"withdrawn" was
+                               tried and dropped (main#1348 — 17/17 wave-29
+                               hits were prose false alarms, including
+                               grammatically-genuine-looking retraction
+                               language pointing at an unrelated finding);
+                               only an explicit self-mark counts.
   ===========================  ============================================
 
 CLI:
@@ -84,32 +91,108 @@ BOTTOM_TIER = 2
 # A verdict comment field, e.g. ``Requestor: Aino Virtanen`` or the bold form
 # ``**Requestor:** Aino Virtanen`` (feedback_pr_review_verdict_format). Optional
 # surrounding ``**`` on the label AND the value; value trimmed of trailing bold.
+#
+# #1347: ``verdict`` used to capture only ``(\w+)`` — the first word — so
+# ``RequestOrReplied: Changes Requested`` captured just ``"Changes"`` and the
+# equality check against ``"changesrequested"`` silently failed, dropping the
+# verdict from every counter. Widened to a full-line capture mirroring
+# requestor/requestee; classification of the captured text into a verdict
+# kind is now a separate step (`_verdict_kind`, below) so trailing text past
+# the first word (e.g. ``Approved (post-merge)``) doesn't defeat an exact
+# match either.
 _FIELD_RE = {
     "requestor": re.compile(r"^\**Requestor\**:\**\s*(.+?)\**\s*$", re.MULTILINE),
     "requestee": re.compile(r"^\**Requestee\**:\**\s*(.+?)\**\s*$", re.MULTILINE),
-    "verdict": re.compile(r"^\**RequestOrReplied\**:\**\s*(\w+)", re.MULTILINE),
+    "verdict": re.compile(r"^\**RequestOrReplied\**:\**\s*(.+?)\**\s*$", re.MULTILINE),
 }
 
-# A verdict comment is a "false positive" when its author explicitly retracts it
-# (withdrawn / false-positive / retracted). Heuristic, deliberately conservative
-# — only a self-marked retraction counts, never an inferred one.
-_FALSE_POSITIVE_RE = re.compile(
-    r"\b(false[\s-]?positive|withdrawn|withdraw|retracted|retract|invalid finding)\b",
-    re.IGNORECASE,
-)
+# Canonical verdict-kind vocabulary for the `RequestOrReplied:` field.
+# Reviewers write ChangesRequested three ways in practice: the
+# charter-canonical one-word `ChangesRequested`, the human-typed spaced
+# `Changes Requested`, and the short `Changes`. Two siblings already
+# independently tolerate the same three forms:
+# `.claude/hooks/validate_pr_review.py`'s `_VERDICT_REQUIRING_TECH_DEBT`
+# (~line 1410) and `.claude/hooks/validate_review_comment_format.py`'s
+# `_VERDICT_DIRECTIONS` (~line 664). This is a third private copy rather
+# than a shared `.claude/lib/` vocabulary module (the pattern #1081
+# established for the `resolve_review_verdicts` pipeline): trust_signals.py
+# lives in `.claude/lib/`, both siblings are `.claude/hooks/`, and lib code
+# importing from hooks/ would invert the intended dependency direction
+# (hooks depend on lib, not the reverse). If a fourth copy of this
+# vocabulary appears, that's the trigger to extract a shared lib module all
+# three sides import.
+_VERDICT_KIND = {
+    "approved": "approved",
+    "changesrequested": "changesrequested",
+    "changes": "changesrequested",
+    "request": "request",
+    "reply": "reply",
+    "replied": "reply",
+}
+
+
+def _normalize_verdict_token(raw: str) -> str:
+    """Casefold + strip everything but alphanumerics from one token.
+
+    Collapses spelling/formatting variants of the SAME token to one key
+    (``**ChangesRequested**`` and ``ChangesRequested`` both normalize to
+    ``"changesrequested"``).
+    """
+    return re.sub(r"[^a-z0-9]", "", raw.casefold())
+
+
+def _verdict_kind(verdict: str | None) -> str:
+    """Classify a captured ``RequestOrReplied`` value into a canonical kind.
+
+    Returns ``"approved"``, ``"changesrequested"``, ``"request"``,
+    ``"reply"``, or ``""`` for anything unrecognized. Only the FIRST word of
+    the (now full-line) captured value is classified — ``"changes"`` alone
+    already maps to ``"changesrequested"`` in :data:`_VERDICT_KIND`, so both
+    the one-word ``ChangesRequested`` and the spaced ``Changes Requested``
+    resolve via their shared first word, and trailing noise past the first
+    word (e.g. ``Approved (post-merge)``) never defeats the match.
+    """
+    if not verdict:
+        return ""
+    parts = verdict.split()
+    if not parts:
+        return ""
+    return _VERDICT_KIND.get(_normalize_verdict_token(parts[0]), "")
+
+
+# main#1348: a bare word match (`false[\s-]?positive|withdrawn|...`) over the
+# whole comment body was tried first and produced a 100% false-positive rate
+# in the wave-29 audit (17/17 hits wrong) — reviewers discussing their own
+# false-positive test corpus, naming the defect class in prose, or
+# retracting an unrelated note, all read identically to a genuine
+# self-retraction to a substring search. One sampled hit ("retracted my
+# earlier '...' note") is grammatically indistinguishable from a real
+# retraction while pointing at a different finding entirely — no amount of
+# regex tightening over free prose can separate the two.
+#
+# Gated on an explicit, structured same-comment ``Retracted:`` field instead
+# (mirrors the `Requestor:`/`Requestee:`/`RequestOrReplied:` field shape).
+# This is a narrower, module-local convention — NOT the org's floated
+# cross-comment `RequestOrReplied: Retracted` + latest-verdict-wins design
+# (`validate_review_comment_format.py` module docstring, "Scope boundary"
+# section, ~lines 120-144), which needs comment-ordering semantics and is
+# explicitly future work ("proposed there, not implemented here"). Until
+# reviewers adopt this field, `review_false_positives` will read as (near)
+# always zero — an honest zero, not a false one.
+_RETRACTION_RE = re.compile(r"^\**Retracted\**:\**\s*\S", re.MULTILINE)
 
 
 def _strip_code_markup(text: str) -> str:
     """Remove fenced code blocks and inline code spans from *text*.
 
-    Called before :data:`_FALSE_POSITIVE_RE` is applied so that symbol names
-    and test identifiers that happen to contain the retraction vocabulary
-    (e.g. ``test_no_false_positive_type`` inside a code span) are not
-    mistaken for genuine self-withdrawal language.  The removal is
-    positional — we replace each code region with whitespace of the same
-    length so that surrounding context positions are preserved for any
-    subsequent line-oriented parsing, though :data:`_FALSE_POSITIVE_RE`
-    does not rely on positions.
+    Called before :data:`_RETRACTION_RE` is applied so that a quoted example
+    or symbol name containing the literal ``Retracted:`` field shape inside
+    a code span or fenced block (e.g. someone pasting a sample comment) is
+    not mistaken for a genuine self-mark.  The removal is positional — we
+    replace each code region with whitespace of the same length so that
+    surrounding context positions are preserved for any subsequent
+    line-oriented parsing, though :data:`_RETRACTION_RE` does not rely on
+    positions.
     """
     # Fenced blocks first (```...``` or ~~~...~~~, possibly multiline).
     text = re.sub(r"```.*?```|~~~.*?~~~", lambda m: " " * len(m.group()), text, flags=re.DOTALL)
@@ -163,7 +246,10 @@ def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
 
     Pure function — no I/O. Accepts both the bare (``Requestor: Name``) and bold
     (``**Requestor:** Name``) forms so it matches everything Hook 4 accepts. A
-    comment with no ``RequestOrReplied`` line is not a verdict and is skipped.
+    comment with no ``RequestOrReplied`` line is not a verdict and is skipped —
+    this still builds a :class:`Verdict` for ``Request``/``Reply`` comments
+    (some callers want the full set), but see :func:`_verdict_kind`: those two
+    kinds can never carry ``false_positive=True`` (main#1348).
     """
     out: list[Verdict] = []
     for body in comment_bodies:
@@ -173,15 +259,16 @@ def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
         req_m = _FIELD_RE["requestor"].search(body)
         ree_m = _FIELD_RE["requestee"].search(body)
         verdict_str = verdict_m.group(1).strip()
-        # A retraction only counts when the reviewer actually raised a
-        # finding — approvals are never retractions.  Also strip code
-        # spans and fenced blocks first so symbol/test names that contain
-        # the retraction vocabulary (e.g. `test_no_false_positive_*`) are
-        # not matched.
-        if verdict_str.lower() == "approved":
-            is_false_positive = False
-        else:
-            is_false_positive = bool(_FALSE_POSITIVE_RE.search(_strip_code_markup(body)))
+        # A retraction only counts on a ChangesRequested comment — the
+        # reviewer must have actually raised a finding on THIS comment for
+        # there to be anything to retract. Approved never raised one;
+        # Request/Reply are process metadata, not verdicts at all
+        # (main#1348 defect 2). Strip code spans and fenced blocks first so
+        # a quoted/pasted example containing the literal `Retracted:` shape
+        # is not mistaken for a real self-mark.
+        is_false_positive = _verdict_kind(verdict_str) == "changesrequested" and bool(
+            _RETRACTION_RE.search(_strip_code_markup(body))
+        )
         out.append(
             Verdict(
                 requestor=req_m.group(1).strip() if req_m else None,
@@ -194,7 +281,16 @@ def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
 
 
 def _is_changes_requested(verdict: str | None) -> bool:
-    return verdict is not None and verdict.lower() == "changesrequested"
+    """True if *verdict* (a captured ``RequestOrReplied`` value) is ChangesRequested.
+
+    #1347: routes through :func:`_verdict_kind` so the three spelling
+    variants (``ChangesRequested`` / ``Changes Requested`` / ``Changes``)
+    all classify identically — the previous
+    ``verdict.lower() == "changesrequested"`` exact-match silently dropped
+    the spaced form because the capturing regex used to stop at the first
+    space.
+    """
+    return _verdict_kind(verdict) == "changesrequested"
 
 
 def _pr_comment_bodies(repo: str, number: int) -> list[str]:
