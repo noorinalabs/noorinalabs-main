@@ -237,8 +237,30 @@ class Counters(unittest.TestCase):
     # cannot catch this class of defect — the mocked suite stayed green
     # while the live counter undercounted. This test shells out to the real
     # `jq` binary and feeds it the exact filter string
-    # `_changes_requested_cycles` builds, so it exercises the actual
-    # regex engine (Oniguruma via jq), not a Python approximation of it.
+    # `_changes_requested_cycles` builds, so it exercises a real jq
+    # implementation rather than a Python approximation of one.
+    #
+    # SCOPE LIMIT (main#1362) — this is NOT the production engine. Production
+    # runs the filter through `gh --jq`, and gh embeds **gojq**
+    # (`itchyny/gojq`, confirmed in the gh 2.45.0 binary), which compiles
+    # regexes through Go's `regexp` — i.e. **RE2**. The system `jq` invoked
+    # here is **Oniguruma**. They agree on everything this constant currently
+    # uses (verified: gojq vs Oniguruma over all 45 wave-29 PRs, 51 vs 51,
+    # zero disagreements), but they diverge on syntax RE2 does not support.
+    # Lookarounds are the trap — RE2 has none:
+    #
+    #     jq      'test("RequestOrReplied:\\s*(?=Changes)Changes")'  -> 1
+    #     gh --jq  same filter -> "invalid or unsupported Perl syntax: `(?=`"
+    #
+    # So a future widening expressed with a lookahead (a natural way to say
+    # "`Changes` not followed by `et`") passes this suite green and HARD-ERRORS
+    # in production. Pinning the production engine is #1362; until then, treat
+    # a green here as evidence about the pattern's semantics, not about its
+    # portability to gojq.
+    #
+    # Second scope limit: `skipUnless(shutil.which("jq"))` means that where jq
+    # is absent, the only behavioural test of this constant silently vanishes
+    # rather than failing — also tracked in #1362.
     @unittest.skipUnless(shutil.which("jq"), "jq not installed")
     def test_changes_requested_regex_variants_via_real_jq(self) -> None:
         filt = f'[.[] | select(.body | test("{wave_status._CHANGES_REQUESTED_RE}"))] | length'
