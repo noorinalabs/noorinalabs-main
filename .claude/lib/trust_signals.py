@@ -109,29 +109,49 @@ _FIELD_RE = {
 # Canonical verdict-kind vocabulary for the `RequestOrReplied:` field.
 # Reviewers write ChangesRequested three ways in practice: the
 # charter-canonical one-word `ChangesRequested`, the human-typed spaced
-# `Changes Requested`, and the short `Changes`. Three siblings already
-# independently tolerate the same three forms:
-# `.claude/hooks/validate_pr_review.py`'s `_VERDICT_REQUIRING_TECH_DEBT`
-# (~line 1410), `.claude/hooks/validate_review_comment_format.py`'s
-# `_VERDICT_DIRECTIONS` (~line 664), and `.claude/lib/wave_status.py`'s
-# `_CHANGES_REQUESTED_RE` (main#1357 — a jq regex, not a Python one). This
-# is a fourth private copy rather than a shared `.claude/lib/` vocabulary
-# module (the pattern #1081 established for the `resolve_review_verdicts`
-# pipeline): kept separate on scope discipline for THIS PR (a wave retro
-# fixing the two verified defects it landed for — extraction is real work
-# that touches two hooks and a lib module, each with their own test
-# suites, and does not belong bundled into a retro fix), and because the
-# four copies genuinely differ in shape, not just spelling tolerance — the
-# two hook sets are membership checks (`is this string in a fixed set of
-# verdict tokens?`), wave_status's is a boolean substring test embedded in
-# a jq filter string (a different regex ENGINE, not just a different
-# language), and `_VERDICT_KIND` here is the richest of the four: a
-# classifier that returns a canonical KIND (`approved` / `changesrequested`
-# / `request` / `reply`), not a yes/no membership test, because
-# `_is_changes_requested` and the main#1348 false-positive gate both need
-# to distinguish Request from Reply from Approved, which none of the other
-# three copies need to do. Extraction into a shared module is real,
-# tracked work — main#1357 stays open for it.
+# `Changes Requested`, and the short `Changes`.
+#
+# main#1359 (MF1 on this PR, Aino/Nino): an earlier version of this comment
+# argued extraction was blocked by a dependency-direction problem and that
+# the two sibling hooks already agreed on all three spellings. BOTH claims
+# are false and were verified false, not merely disputed:
+#
+#   * There is no dependency-direction problem. The shared home for this
+#     vocabulary already exists, in `.claude/lib/`, not `.claude/hooks/`:
+#     `.claude/lib/charter_trailer.py` (main#932/#934) is the org's declared
+#     "single source of truth for the charter trailer-block convention",
+#     and this module already does `sys.path.insert(0, ...parent)`, so
+#     `import charter_trailer` costs zero path changes.
+#     `charter_trailer.extract_charter_field("RequestOrReplied", body)`
+#     ALREADY returns `"Changes Requested"` correctly — the value
+#     `_FIELD_RE["verdict"]` above reproduces was already correct, one file
+#     over, before this PR ever touched the regex.
+#   * The two sibling hooks do NOT already agree.
+#     `.claude/hooks/validate_review_comment_format.py`'s
+#     `_VERDICT_DIRECTIONS` (~line 664) deliberately EXCLUDES bare
+#     `changes` — its own comment: "The bare 'Changes' prefix is NOT a
+#     verdict on its own." `.claude/hooks/validate_pr_review.py`'s
+#     `_VERDICT_REQUIRING_TECH_DEBT` (~line 1410) includes it. The siblings
+#     disagree with each other, which is an argument FOR one shared owner,
+#     not evidence that copies are safe.
+#
+# `_VERDICT_KIND` / `_normalize_verdict_token` / `_verdict_kind` stay a
+# private copy in THIS PR anyway, for the two reasons that survived
+# scrutiny: (1) scope discipline — this is a retro PR landing two verified
+# defect fixes (#1347, #1348); migrating to `charter_trailer` means adding
+# a verdict-KIND classifier to ITS public API (it currently only extracts
+# raw field values, it does not classify Request/Reply vs
+# Approved/ChangesRequested) and re-verifying two hooks with large test
+# surfaces — real, cross-file work that does not belong bundled into this
+# fix. (2) a REAL, already-diverged dependency, not a hypothetical one:
+# `_strip_code_markup` (below) and `charter_trailer.strip_code_regions` are
+# two copies of one concept in the same directory that already disagree
+# outcome-changingly for the new `Retracted:` guard —
+# `_strip_code_markup` strips `~~~`-fenced code blocks, `strip_code_regions`
+# does not, and `_strip_code_markup`'s answer is the more correct one here.
+# Folding `~~~` support into `charter_trailer` has to happen as PART of the
+# migration, not incidentally alongside it. Extraction is real, tracked
+# work: main#1359.
 _VERDICT_KIND = {
     "approved": "approved",
     "changesrequested": "changesrequested",

@@ -72,16 +72,22 @@ _DEFAULT_STATUS = wave_state.DEFAULT_STATUS_PATH
 # (``Changes``) were silently uncounted — the identical narrow-capture defect
 # #1347 fixed in trust_signals.py's ``_verdict_kind``, just reimplemented as a
 # jq regex instead of a Python one. ``Changes(\s*Requested)?\b`` accepts all
-# three spellings the org's own hooks already tolerate
-# (validate_pr_review.py's ``_VERDICT_REQUIRING_TECH_DEBT``, ~line 1410;
-# validate_review_comment_format.py's ``_VERDICT_DIRECTIONS``, ~line 664;
-# trust_signals.py's ``_VERDICT_KIND``): the optional group matches
-# "Requested" immediately after "Changes" (no space — the unspaced form) or
-# after a space (the spaced form), and is skippable entirely for the bare
-# short form. ``\b`` after the group stops it from matching an unrelated word
-# that merely starts with "Changes" (e.g. "Changeset"). Verified directly
-# against jq 1.7 (not just the mocked Python tests, which stub out the gh
-# call and never exercise the real regex — see
+# three spellings — the union of what the org's own PR templates and hooks
+# actually produce, NOT a claim that every existing consumer already agrees
+# on all three: ``validate_pr_review.py``'s ``_VERDICT_REQUIRING_TECH_DEBT``
+# (~line 1410) and ``trust_signals.py``'s ``_VERDICT_KIND`` both accept the
+# bare short form, but ``validate_review_comment_format.py``'s
+# ``_VERDICT_DIRECTIONS`` (~line 664) deliberately excludes it (see main#1359
+# — the sibling consumers disagreeing with each other is itself evidence for
+# a single shared vocabulary owner, not a reason to assume copies stay in
+# sync). This counter counts every ChangesRequested verdict regardless of
+# form, so it takes the wider set. The optional group matches "Requested"
+# immediately after "Changes" (no space — the unspaced form) or after a
+# space (the spaced form), and is skippable entirely for the bare short
+# form. ``\b`` after the group stops it from matching an unrelated word that
+# merely starts with "Changes" (e.g. "Changeset"). Verified directly against
+# jq 1.7 (not just the mocked Python tests, which stub out the gh call and
+# never exercise the real regex — see
 # ``test_changes_requested_regex_variants_via_real_jq``) and against the live
 # wave-29 merged-PR set, where it now reproduces the retro's corrected 51
 # (was 49).
