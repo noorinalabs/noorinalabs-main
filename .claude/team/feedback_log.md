@@ -564,7 +564,28 @@ Full signal tables, corrected values, and the Done Well / Needs Improvement matr
 
    Board audit outcome, run this retro: **0 orphans**, **26 Wave-field drift rows** repaired (24 unset-but-labeled spanning W21-W27, 2 populated-with-no-label cleared), read-back verified at 0 remaining. The drift was historical accumulation across seven waves, **not** caused by these 64 records.
 
-3. **Hook ergonomics are blocking correct actions.** 78 `validate_commit_identity` blocks and 53 `validate_review_comment_format` blocks share one root shape: the standard way to author a multi-line body — `cat > /tmp/file` then `git commit -F` / `gh pr comment -F` — makes the body unreadable to the hook, so a *correct* action is refused. Plus 86 bare-`grep` blocks and **52 records where the Annunaki monitor itself errored** (11 identical `git show <SHA>:.claude/lib/wave_status.py` → exit 128). An error monitor that throws is blind exactly when it matters most.
+3. **Hooks hand-rolling command grammars narrower than `_shell_parse` — four separate instances this wave.** Denominator for all percentages: the **427** genuine records in the wave window (`annunaki_parse.py`, benign traces and low-confidence excluded). Live counts have since drifted up because the triage session itself wrote records; the frozen 427 is the basis.
+
+   | class | n | % | verdict |
+   |---|---|---|---|
+   | `block_bare_grep` | 86 | 20.1% | working-as-designed friction — 0 defects; `git grep` *is* carved out |
+   | `validate_commit_identity` | 78 | 18.3% | working-as-designed friction |
+   | `post_label_change_wave_field_sync` | 64 | 15.0% | monitoring false alarm (pain point 2) |
+   | `validate_review_comment_format` | 53 | 12.4% | mixed — 46 are the known #1174 prose class, **1 new defect → #1350** |
+   | `annunaki_monitor` | 52 | 12.2% | mixed — 35 genuine catches, **17 false → #1354** |
+   | `smart_grep_ontology` | 34 | 8.0% | **mis-shelved** — these are *successful* ontology redirects. 8% of the error log is a working feature reporting itself. Cheapest cleanup available. |
+   | `validate_branch_freshness` | 16 | 3.7% | as designed |
+   | `block_stale_tmp_message_file` | 11 | 2.6% | **defect — 0/11 precision → #1352** |
+   | `enforce_ontology_context` | 10 | 2.3% | friction + a charter divergence (below) |
+   | tail (7 hooks) | 23 | 5.4% | as designed except `validate_labels` — **0/3 → #1351** |
+
+   **Correction to this retro's second misreading.** I recorded "52 records where the Annunaki monitor itself errored," reasoning that an error monitor which throws is blind when it matters. That is wrong in both directions. The monitor **did not throw once**: `hook:` is the *writer-attribution* field, not "the hook that failed," and all 52 records carry `exit_code: 0`, `confidence: high`, `category: masked-failure` — the monitor working correctly, catching failures a pipe (`| head`, `|| true`) had masked behind a zero exit. 35 of the 52 are genuine catches. And the `git show b290d611` cluster is **17 records, not 11**, all from one test (`test_wave_status.py::BaseVsHeadDifferential`) whose `git show` of a historical commit failed under `actions/checkout`'s shallow clone — **already fixed in-wave** at `ci.yml:148-158` (`fetch-depth: 0`).
+
+   The real defect there is #1354: `_is_content_display` omits `gh run view --log-failed` and `rg`-over-a-saved-log, and disqualifies any command containing `2>&1` — which a log read requires. So *reading a CI log* mints high-confidence "masked-failure" records. **That class scales with how hard a failure was to debug**, systematically over-weighting already-solved problems in the artifact meant to surface unsolved ones.
+
+   The genuine defects — #1350 (`_PATH_TOKEN` ends at whitespace, so a structurally-required trailing `;` on `--body-file` fail-closes a valid verdict), #1351 (`extract_labels` mints `meta-issue)` from `$( )` capture and `c` from a clustered `-lc`; one of the 3 blocked the creation of #1150 itself), and #1352 (30s mtime threshold, every path under the *current session's* scratchpad, and the documented `touch` workaround is defeated because PreToolUse stats before the command runs) — are all the **same class**: a hook hand-rolling a command grammar narrower than `_shell_parse`, in hooks that **#1150 already names as un-audited**. Wave-29 filed individual instances four times; that demonstrably does not stop the class. #1150's own acceptance criterion — a shared conformance suite that fails CI when a hook hand-rolls a parser — is the only thing that prevents instance 7.
+
+   Separately, `enforce_ontology_context` revealed a **charter divergence worth a line rather than a ticket**: 2 of its 10 blocks carried the `/ontology-librarian` instruction and were blocked anyway, because CLAUDE.md documents a transcript-scanning enforcement model while the hook demands the librarian *output* pasted under a literal `## Ontology Context` heading. Two enforcement models documented for one rule.
 
 ### Proposed Process Changes
 
@@ -572,17 +593,32 @@ Full signal tables, corrected values, and the Done Well / Needs Improvement matr
 2. **A guarantee stated in a docstring must be tested, or it must be deleted.** Rationale: #1348's "conservative — never inferred" is a promise the mechanism structurally cannot keep, and it went unchallenged for 12 waves because the prose read as a specification. This is the wave's own thesis turned on its own tooling — see `feedback_prose_guarantee_vs_mechanism`.
 3. **A shared vocabulary needs one owner, not N private copies.** Rationale: #147 hardened the verdict vocabulary in two places; `trust_signals.py` arrived later and re-implemented it wrong. #1081 already established the shared-entry-point pattern for exactly this. Every new consumer of the verdict vocabulary must route through it.
 4. **Batch review findings during a wave tail.** Rationale: the #1333 push freeze — 5 heads in 20 minutes staled 3 verdicts mid-authorship. Orchestrator dispatch failure, already recorded in the wave-29 handoff; restated here because it materially inflates one engineer's rework count.
-5. **A hook that cannot parse its input must say so, not skip.** Rationale: the 64× `skip_parser_returned_empty` fail-open. Silence and success must not look identical from outside.
+5. **A hook must distinguish "I could not evaluate this" from "I evaluated it and found nothing."** Rationale: the 64× `skip_parser_returned_empty` records and the 25× `skill_invocations=0 < 5` lines are both a *cannot-evaluate* state rendered as a *benign-result* state. Silence and success must not look identical from outside. (Restated from the original "must say so, not skip" after the board audit showed nothing was actually skipped — the defect is the reporting, not the skipping.)
+
+6. **Ship the #1150 shared parser-conformance suite; stop filing instances.** Rationale — and this is the wave's highest-priority recommendation. #1350, #1351, and #1352 are each "a hook hand-rolls a command grammar narrower than `_shell_parse`," each in a hook **#1150 already names as un-audited**, each found by measurement rather than inspection, and each hard-blocking correct work. One of the three (#1351) blocked the creation of **#1150 itself**. Wave-29 filed individual instances four separate times; that demonstrably does not stop the class. #1150's own acceptance criterion — a shared conformance suite that fails CI when a new hook hand-rolls a parser — is the only thing that prevents instance 7. If exactly one thing ships first, make it **#1352**: 100% false-positive rate, on the `gh pr create` critical path, and the fix is an exemption for the session-scoped scratchpad path.
+
+7. **Reclassify `smart_grep_ontology` out of the error log.** Rationale: its 34 records (8.0% of 427) are *successful* ontology redirects — a working feature reporting itself as an error. Cheapest single cleanup available, and it directly improves the signal-to-noise of the artifact every other finding is read from.
+
+8. **Reconcile the two documented enforcement models for the ontology-context rule.** Rationale: CLAUDE.md documents transcript scanning; `enforce_ontology_context` demands the librarian *output* pasted under a literal `## Ontology Context` heading. 2 of its 10 blocks hit briefs that carried the librarian instruction and were blocked anyway. One rule, two specifications — a charter line, not a ticket.
 
 ### Retro-Filed Issues
 
-| # | Title | Labels |
-|---|---|---|
-| #1347 | `trust_signals.py` silently drops `Changes Requested` (spaced) verdicts | tech-debt, bug, phase-10 |
-| #1348 | `review_false_positives` is a bare word match: 17/17 wrong in wave-29 | tech-debt, bug, phase-10 |
-| #1349 | Trust rubric's positive branch is unreachable under multi-head review | tech-debt, process, phase-10 |
+| # | Title | Source | Labels |
+|---|---|---|---|
+| #1347 | `trust_signals.py` silently drops `Changes Requested` (spaced) verdicts | Step 2.5 counter check | tech-debt, bug, phase-10 |
+| #1348 | `review_false_positives` is a bare word match: 17/17 wrong in wave-29 | Step 4 assessment | tech-debt, bug, phase-10 |
+| #1349 | Trust rubric's positive branch is unreachable under multi-head review | Step 5 trust matrix | tech-debt, process, phase-10 |
+| #1350 | `validate_review_comment_format._PATH_TOKEN` stops only at whitespace — a trailing `;` on `--body-file` fail-closes a valid verdict | Step 7.6 annunaki | bug, tech-debt, phase-10 |
+| #1351 | `validate_labels` mints garbage labels from `$( )` capture and clustered `-lc`; 3/3 wave-29 blocks false | Step 7.6 annunaki | bug, tech-debt, phase-10 |
+| #1352 | `block_stale_tmp_message_file` 30s threshold — 0/11 precision, `touch` workaround defeated by PreToolUse ordering | Step 7.6 annunaki | bug, tech-debt, phase-10 |
+| #1354 | `annunaki_monitor._is_content_display` misses `gh run view` / `rg`-over-a-log — one CI diagnosis minted 17 false records | Step 7.6 annunaki | bug, tech-debt, phase-10 |
+| #1355 | Promotion AUTO tier unreachable: `skill_invocations` counts the not-yet-created target; 0/25 gated sections can qualify | Step 7.5 promotion audit | tech-debt, bug, process, phase-10 |
 
 Filed deliberately **without** a wave label: `wave-30` does not exist until wave-30 kickoff, and a `wave-29` label would create false drift against that wave's labelled==scoped invariant.
+
+**Not filed, deliberately.** Three `post_wave_kickoff_comment` records report *"No assignment row found in `wave_29_scope` tiers"* for #1156, #1210, #1211 — all three carry the `wave-29` label and have zero kickoff comments, i.e. they entered wave scope without a `/wave-scope` assignment row, so no reviewer pairing and no kickoff comment. All three completed anyway, so no harm materialized. This is a `/wave-scope` reconciliation gap rather than a defect, and it belongs in scope reconciliation, not an issue.
+
+**A sibling finding was raised and then retracted after verification.** Two `post_wave_kickoff_comment` `skip_unresolved_issue_number` records were initially read as a second silent-miss fail-open by analogy to pain point 2. They are not: the hook detected the unresolved `"$n"` shape, correctly declined, **named its own remediation** (`.claude/lib/kickoff_sweep.py`), and the sweep then ran — #1140, #1149, #1151, #1152 each received a Wave 29 Kickoff comment 8 seconds later. Working as designed end to end. Recorded because the retraction is the point: the same analogy that produced my pain-point-2 error nearly produced a second one, and only re-verification caught it.
 
 ### Memory hygiene (Steps 7.8 + 7.9)
 
@@ -610,3 +646,28 @@ Two orthogonal sweeps ran: `memory_budget.py --staleness` (size/age) and the `/m
 **Zero false positives this pass** — a material improvement on the wave-28 run, where all 9 "fully-stale" flags were wrong (examples, child-repo refs, external URLs, env vars misread as dead claims). The calibration warning written into the wave-29 judge brief, derived from that failure, appears to have worked. `feedback_memory_judge_overflags_fully_stale` remains accurate as a standing caution and should not be retired on one clean run.
 
 The 10 `superseded_by`-marked notes remain queued for a human-approved prune diff; no deletions were made, per protocol.
+
+### Promotion audit (Step 7.5) — and a fourth unreachable gate
+
+`/promotion-audit` for wave-29 reports **0 AUTO · 0 DECIDE · 243 KEPT · 24 SUPERSEDED/ALREADY-PROMOTED** — nominally a clean steady state. It is not. Checking *why* `skill_invocations=0` recurred throughout the log produced **#1355**.
+
+`skill_invocations` is `0` in **220 of 220** occurrences across every wave audit log ever written, and AUTO promotions have fired exactly once in ~20 recorded waves (`p2-wave-5`, and that predates the main#690 blank-slug guard, i.e. it is from the mis-fire era).
+
+The counter itself is healthy — 21 of 24 skills on disk return non-zero (`wave-scope` 97, `wave-kickoff` 74, `wave-wrapup` 74, `wave-retro` 55). It is being handed the wrong argument. `run.py:253` passes `section.promoted_to` — **the target artifact the section would be promoted INTO**, which by definition does not exist yet. Counting invocations of a not-yet-created skill is always 0.
+
+Measured against the real charter: 114 sections, 34 declaring a real `promotion_target`, of which **25 target `skill`** — the only population the invocation gate reaches — and **all 25 have a blank `promoted_to`**. So **0 of 25 can ever qualify**, exactly matching the 25 `skill_invocations=0 < 5` lines in the wave-29 log. (The other 9 target `hook`, an invalid transition the pipeline rejects earlier — charter sections promote only to skill — so they never reach the gate. My first pass wrote "32 of 34," conflating those two populations; corrected on #1355, and it is the same denominator error this wave keeps producing.)
+
+For **memories** the gate is different and works as intended: `retro_citations` against a threshold of 5, which genuinely accumulates. The two wave-29 memories with the strongest narrative evidence — `feedback_prose_guarantee_vs_mechanism` and `feedback_state_the_denominator_with_the_number` — classified KEPT for mechanical reasons, not judgment: neither sets `promotion_target`, and both sit at `retro_citations=1`. Citation count, not this-wave severity, gates promotion by design. Making either eligible is a deliberate human act (set `promotion_target: charter`), and I did not override the classifier to force it.
+
+The main#690 blank-slug guard is correct and must stay; the defect is that it renders an *unconfigured target* as `Invocation threshold not met; wait for more operator-invoked runs`, telling the reader to wait for something that cannot arrive.
+
+**This is the fourth instance of one failure shape in a single wave**, which is the wave's real finding:
+
+| # | artifact | the shape |
+|---|---|---|
+| #1348 | `review_false_positives` | docstring guarantees a conservatism the mechanism cannot implement |
+| #1349 | `score_delta` | the passing branch is unreachable in practice |
+| #1352 | `block_stale_tmp_message_file` | 0/11 precision; the documented workaround is defeated by hook ordering |
+| #1355 | `skill_invocations` | the gate measures the wrong side of the transition; 0/34 can qualify |
+
+Each is a mechanism that **reports success or benign inaction while being incapable of the outcome it describes**. None would fail a test that only asserts "it runs without error"; all four survived because the passing state and the broken state are observationally identical from outside. That is the generalizable lesson of wave-29, and it applies to the process tooling exactly as it applied to the shell classifiers the wave was themed on.
