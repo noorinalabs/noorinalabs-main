@@ -15,7 +15,7 @@
 |---|---|---|
 | User & owner directives — Who the owner is + standing owner policy calls (correctness over expediency, IaC, full CI parity, stg→prod, MVP autonomy, brand). | 7 | [section_user_owner_directives.md](section_user_owner_directives.md) |
 | Review / PR / merge mechanics — PR-review verdict format, reviewer rules, CI-readiness, merge ordering & wave-branch merge mechanics. | 21 | [section_review_pr_merge.md](section_review_pr_merge.md) |
-| Spawn / delegation / agent coordination — Spawning implementers: brief protocol, child-repo & worktree rules, agent coordination and the shared task system. | 22 | [section_spawn_delegation.md](section_spawn_delegation.md) |
+| Spawn / delegation / agent coordination — Spawning implementers: brief protocol, child-repo & worktree rules, agent coordination and the shared task system. | 23 | [section_spawn_delegation.md](section_spawn_delegation.md) |
 | Wave / issue / enforcement process — Wave & issue planning, TD intake, enforcement hierarchy, issue relocation and PR-number hygiene. | 6 | [section_wave_process.md](section_wave_process.md) |
 | CI / tooling / lint / gh-cli — CI gates, linters (ruff/actionlint/cspell), gh-cli gotchas, commit-identity and zsh/git tooling traps. | 25 | [section_ci_tooling.md](section_ci_tooling.md) |
 | Verification discipline — Verify-before-claim: run the instrument, full-read state, mocks mask prod, refresh before a status claim, re-verify stale trees. | 25 | [section_verification_discipline.md](section_verification_discipline.md) |

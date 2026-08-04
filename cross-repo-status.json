@@ -1,4 +1,5 @@
 {
+  "wave_30_meta_issue": 1353,
   "wave_29_meta_issue": 1133,
   "wave_29_phase": 10,
   "wave_29_phase_ordinal": 2,
@@ -169,6 +170,7 @@
   "wave_29_stg_promotion_note": "Latest deploy-stg.yml run is SUCCESS but was created 2026-07-26T23:43:37Z — BEFORE this wave kicked off (2026-07-27T22:56:17Z). Wave-29 scope was noorinalabs-main + noorinalabs-isnad-ingest-platform, neither of which is a staging fan-in repo (fan-in is isnad-graph + user-service), so this wave produced no deployable surface to promote. Recorded as not-applicable rather than success: claiming a green promotion this wave did not cause would be a false attribution.",
   "wave_29_counter_corrections": [{"counter":"wave_29_changes_requested_cycles","claimed":49,"actual":51,"corrected_at":"2026-08-03T00:00:00Z","root_cause":"noorinalabs-main#1347 — trust_signals.py verdict regex captures (\\w+) so the spaced form `Changes Requested` yields \"Changes\", which then fails the == \"changesrequested\" equality. Two genuine blocking verdicts (#1173 Nino->Aino, #1153 Weronika->Nurul) were dropped. Recomputed HIGHER than claimed, so this is NOT the edit-in-place measurement conflict documented in /wave-retro Step 2.5.","note":"wave_29_trust_signals left as-written by wrapup; corrected values are recorded in trust_matrix.md and are pending the #1347/#1348 fixes."}],
   "wave_29_retro_completed_at": "2026-08-03T00:00:00Z",
+  "wave_29_annunaki_attack_ran_at": "2026-08-04T01:38:13Z",
   "wave_28_phase": 10,
   "wave_28_phase_ordinal": 1,
   "wave_28_scope_reconciled_at": "2026-07-26T14:15:00Z",
