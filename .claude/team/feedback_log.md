@@ -620,6 +620,16 @@ Filed deliberately **without** a wave label: `wave-30` does not exist until wave
 
 **A sibling finding was raised and then retracted after verification.** Two `post_wave_kickoff_comment` `skip_unresolved_issue_number` records were initially read as a second silent-miss fail-open by analogy to pain point 2. They are not: the hook detected the unresolved `"$n"` shape, correctly declined, **named its own remediation** (`.claude/lib/kickoff_sweep.py`), and the sweep then ran — #1140, #1149, #1151, #1152 each received a Wave 29 Kickoff comment 8 seconds later. Working as designed end to end. Recorded because the retraction is the point: the same analogy that produced my pain-point-2 error nearly produced a second one, and only re-verification caught it.
 
+### The tests were defending the defect
+
+The sharpest single finding of the wave, surfaced while fixing #1348: **four pre-existing tests in `test_trust_signals.py` encoded the buggy behavior as expected.** One of them — `test_withdrawal_keyword_in_plain_prose_on_non_approval_counts` — asserted that a **`Reply`-verdict comment counts as a review false positive**. That is #1348 defect 2, stated as a requirement, with a passing test defending it.
+
+This reframes the whole retro. The four instruments in the table above were not merely untested at their boundary; at least one was **actively protected by its test suite**. A regression test that locks in the defect is strictly worse than no test, because it converts "nobody checked" into "somebody checked and this is correct" — and it makes the fix look like the regression. That is why every one of this wave's five instrument defects was found by *measurement against live data* (running the extractor over real PRs, counting real records, loading the real charter) and **not one** was found by inspection or by CI.
+
+The generalizable rule, and the strongest candidate for charter promotion out of this wave: **a test asserting a heuristic's output is only evidence if the heuristic's guarantee was independently validated first.** Otherwise the test encodes the author's belief about the mechanism, which is precisely the thing in doubt. Related: `feedback_prose_guarantee_vs_mechanism`, `feedback_fixture_makes_guard_assertion_inert`.
+
+Corollary worth keeping: the orchestrator's own red-before-green verification **failed twice before it succeeded** — first by copying a stale `__pycache__` (so `rg` read the old source on disk while Python loaded the new compiled module), then by comparing `HEAD` against itself after the implementer had committed. Both produced a confident, well-formed, wrong answer with no error raised. What exposed it was two instruments disagreeing about the same file, not any single check. A verification harness is an instrument too, and inherits every failure mode in the table above.
+
 ### Memory hygiene (Steps 7.8 + 7.9)
 
 Two orthogonal sweeps ran: `memory_budget.py --staleness` (size/age) and the `/memory-judge` content pass.
