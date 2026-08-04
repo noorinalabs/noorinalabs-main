@@ -66,7 +66,26 @@ _DEFAULT_STATUS = wave_state.DEFAULT_STATUS_PATH
 # load-bearing: this string is embedded into a jq filter, and jq's own string
 # parser collapses ``\\s`` to the regex ``\s`` — a single backslash would be an
 # "invalid escape sequence" jq error (caught live, not by the mocked tests).
-_CHANGES_REQUESTED_RE = "RequestOrReplied:\\\\s*ChangesRequested"
+#
+# #1357: was the literal one-word ``ChangesRequested`` only, so the
+# human-typed spaced form (``Changes Requested``) and the short form
+# (``Changes``) were silently uncounted — the identical narrow-capture defect
+# #1347 fixed in trust_signals.py's ``_verdict_kind``, just reimplemented as a
+# jq regex instead of a Python one. ``Changes(\s*Requested)?\b`` accepts all
+# three spellings the org's own hooks already tolerate
+# (validate_pr_review.py's ``_VERDICT_REQUIRING_TECH_DEBT``, ~line 1410;
+# validate_review_comment_format.py's ``_VERDICT_DIRECTIONS``, ~line 664;
+# trust_signals.py's ``_VERDICT_KIND``): the optional group matches
+# "Requested" immediately after "Changes" (no space — the unspaced form) or
+# after a space (the spaced form), and is skippable entirely for the bare
+# short form. ``\b`` after the group stops it from matching an unrelated word
+# that merely starts with "Changes" (e.g. "Changeset"). Verified directly
+# against jq 1.7 (not just the mocked Python tests, which stub out the gh
+# call and never exercise the real regex — see
+# ``test_changes_requested_regex_variants_via_real_jq``) and against the live
+# wave-29 merged-PR set, where it now reproduces the retro's corrected 51
+# (was 49).
+_CHANGES_REQUESTED_RE = "RequestOrReplied:\\\\s*Changes(\\\\s*Requested)?\\\\b"
 
 
 # The shared gh shim and status reader (main#1119). These stay module-level

@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -222,6 +224,65 @@ class Counters(unittest.TestCase):
         comments_calls = [c for c in fake.calls if c[1] == "api" and c[2].endswith("/comments")]
         self.assertTrue(comments_calls)
         self.assertIn("\\\\s", comments_calls[0][-1])
+
+    # -- Regression: main#1357 -- `_CHANGES_REQUESTED_RE` had the identical
+    # narrow-capture defect main#1347 fixed in trust_signals.py, just
+    # reimplemented as a jq regex: it matched only the literal one-word
+    # `ChangesRequested`, silently undercounting the spaced `Changes
+    # Requested` and short `Changes` forms (live evidence: main PR #1173,
+    # #1153 — reproduced 49, not the retro's corrected 51).
+    #
+    # `_FakeGh` above returns a pre-baked count (`p["cr"]`) for the comments
+    # call rather than running the body text through the real regex, so it
+    # cannot catch this class of defect — the mocked suite stayed green
+    # while the live counter undercounted. This test shells out to the real
+    # `jq` binary and feeds it the exact filter string
+    # `_changes_requested_cycles` builds, so it exercises the actual
+    # regex engine (Oniguruma via jq), not a Python approximation of it.
+    @unittest.skipUnless(shutil.which("jq"), "jq not installed")
+    def test_changes_requested_regex_variants_via_real_jq(self) -> None:
+        filt = f'[.[] | select(.body | test("{wave_status._CHANGES_REQUESTED_RE}"))] | length'
+
+        def _count(body: str) -> int:
+            payload = json.dumps([{"body": body}])
+            out = subprocess.run(
+                ["jq", filt], input=payload, capture_output=True, text=True, check=True
+            )
+            return int(out.stdout.strip())
+
+        cases = {
+            "unspaced (ChangesRequested)": (
+                "Requestor: A\nRequestee: B\nRequestOrReplied: ChangesRequested\n",
+                1,
+            ),
+            "spaced (Changes Requested)": (
+                "Requestor: A\nRequestee: B\nRequestOrReplied: Changes Requested\n",
+                1,
+            ),
+            "short (Changes)": (
+                "Requestor: A\nRequestee: B\nRequestOrReplied: Changes\n",
+                1,
+            ),
+            "Approved never counts": (
+                "Requestor: A\nRequestee: B\nRequestOrReplied: Approved\n",
+                0,
+            ),
+            "Request never counts": (
+                "Requestor: A\nRequestee: B\nRequestOrReplied: Request\n",
+                0,
+            ),
+            "Reply never counts": (
+                "Requestor: A\nRequestee: B\nRequestOrReplied: Reply\n",
+                0,
+            ),
+            "unrelated word starting with Changes never counts": (
+                "some unrelated Changeset text",
+                0,
+            ),
+        }
+        for label, (body, expected) in cases.items():
+            with self.subTest(label=label):
+                self.assertEqual(_count(body), expected)
 
     def test_empty_wave_is_zeros_no_div_by_zero(self) -> None:
         with TemporaryDirectory() as td:

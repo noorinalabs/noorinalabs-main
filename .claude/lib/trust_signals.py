@@ -109,18 +109,29 @@ _FIELD_RE = {
 # Canonical verdict-kind vocabulary for the `RequestOrReplied:` field.
 # Reviewers write ChangesRequested three ways in practice: the
 # charter-canonical one-word `ChangesRequested`, the human-typed spaced
-# `Changes Requested`, and the short `Changes`. Two siblings already
+# `Changes Requested`, and the short `Changes`. Three siblings already
 # independently tolerate the same three forms:
 # `.claude/hooks/validate_pr_review.py`'s `_VERDICT_REQUIRING_TECH_DEBT`
-# (~line 1410) and `.claude/hooks/validate_review_comment_format.py`'s
-# `_VERDICT_DIRECTIONS` (~line 664). This is a third private copy rather
-# than a shared `.claude/lib/` vocabulary module (the pattern #1081
-# established for the `resolve_review_verdicts` pipeline): trust_signals.py
-# lives in `.claude/lib/`, both siblings are `.claude/hooks/`, and lib code
-# importing from hooks/ would invert the intended dependency direction
-# (hooks depend on lib, not the reverse). If a fourth copy of this
-# vocabulary appears, that's the trigger to extract a shared lib module all
-# three sides import.
+# (~line 1410), `.claude/hooks/validate_review_comment_format.py`'s
+# `_VERDICT_DIRECTIONS` (~line 664), and `.claude/lib/wave_status.py`'s
+# `_CHANGES_REQUESTED_RE` (main#1357 — a jq regex, not a Python one). This
+# is a fourth private copy rather than a shared `.claude/lib/` vocabulary
+# module (the pattern #1081 established for the `resolve_review_verdicts`
+# pipeline): kept separate on scope discipline for THIS PR (a wave retro
+# fixing the two verified defects it landed for — extraction is real work
+# that touches two hooks and a lib module, each with their own test
+# suites, and does not belong bundled into a retro fix), and because the
+# four copies genuinely differ in shape, not just spelling tolerance — the
+# two hook sets are membership checks (`is this string in a fixed set of
+# verdict tokens?`), wave_status's is a boolean substring test embedded in
+# a jq filter string (a different regex ENGINE, not just a different
+# language), and `_VERDICT_KIND` here is the richest of the four: a
+# classifier that returns a canonical KIND (`approved` / `changesrequested`
+# / `request` / `reply`), not a yes/no membership test, because
+# `_is_changes_requested` and the main#1348 false-positive gate both need
+# to distinguish Request from Reply from Approved, which none of the other
+# three copies need to do. Extraction into a shared module is real,
+# tracked work — main#1357 stays open for it.
 _VERDICT_KIND = {
     "approved": "approved",
     "changesrequested": "changesrequested",

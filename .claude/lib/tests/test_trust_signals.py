@@ -167,6 +167,55 @@ class ParseVerdicts(unittest.TestCase):
         v = ts.parse_verdicts([body])[0]
         self.assertTrue(v.false_positive)
 
+    # -- Regression: main#1358 -- three mutants of the #1347/#1348 code
+    # survived the suite above (production behavior was already correct in
+    # all three; only the test coverage was missing). Each test target is
+    # named after the specific line the mutant strips.
+
+    def test_bold_only_verdict_value_still_classifies(self) -> None:
+        """`_normalize_verdict_token`'s alnum-stripping, not just casefold.
+
+        A verdict field with no surrounding whitespace before the bold
+        marker (`RequestOrReplied: **ChangesRequested**`) is captured with
+        its LEADING `**` intact — only the trailing `**` is stripped by the
+        field regex's `\\**\\s*$` tail, so the captured token is literally
+        `"**ChangesRequested"`. Removing `_normalize_verdict_token`'s
+        `re.sub(r"[^a-z0-9]", "", ...)` step (leaving only `.casefold()`)
+        does not fail any other test in this file — `_normalize_verdict_token`
+        needs its own direct assertion.
+        """
+        body = "Requestor: A\nRequestee: B\nRequestOrReplied: **ChangesRequested**\n"
+        v = ts.parse_verdicts([body])[0]
+        self.assertEqual(v.verdict, "**ChangesRequested")
+        self.assertEqual(ts._verdict_kind(v.verdict), "changesrequested")
+        self.assertTrue(ts._is_changes_requested(v.verdict))
+
+    def test_retracted_mentioned_mid_prose_never_counts(self) -> None:
+        """`_RETRACTION_RE`'s leading `^` line-start anchor.
+
+        A comment merely discussing the field-format convention in prose
+        (e.g. quoting `Retracted: <reason>` as an example, not posting it as
+        an actual field) must never count — this is the identical
+        false-positive class main#1348 exists to eliminate, now unguarded
+        on the *replacement* mechanism if the anchor is dropped.
+        """
+        body = (
+            _verdict("Aino Virtanen", "Nadia Khoury", "ChangesRequested")
+            + "\nSee the field format convention: Retracted: <reason> for self-marks."
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertFalse(v.false_positive)
+
+    def test_bare_retracted_field_with_no_value_never_counts(self) -> None:
+        """`_RETRACTION_RE`'s trailing `\\S` (non-empty-value) requirement.
+
+        An unfilled `Retracted:` placeholder/template line, with nothing
+        after the colon, must never count as a genuine self-mark.
+        """
+        body = _verdict("Aino Virtanen", "Nadia Khoury", "ChangesRequested") + "\nRetracted:\n"
+        v = ts.parse_verdicts([body])[0]
+        self.assertFalse(v.false_positive)
+
     def test_plain_prose_without_the_marker_never_counts(self) -> None:
         """'false-positive'/'withdrawn'/'retracted' in prose, with no explicit
         `Retracted:` field, must never count — even on a ChangesRequested verdict."""
