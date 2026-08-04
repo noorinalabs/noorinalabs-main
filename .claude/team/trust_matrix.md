@@ -416,3 +416,61 @@ Distribution discipline (`trust_signals.apply_distribution_discipline`): Nino's 
 **Concentration note:** 17% top (Weronika / Nino tied at 2/12) — well below the 60% fragility line, spread across 11 people. Healthy distribution for a cross-repo stop-the-bleeding wave; no redistribution needed.
 
 **Orchestrator self-assessment:** clean Phase-10-opening wave — the direct-to-main "stop-the-bleeding" batch was merged the prior session; this was the closeout + retro. 0 CI-red across all 12 PRs; both genuine must-fix threads (da#502 ×2, #1126 ×1) caught at the Opus merge gate and fixed. All post-merge deployable workflows green; staging promotion green. Notable process finding this wave: the wave-counter and trust-signal helpers do not support direct-to-main waves (both returned empty), forcing manual computation — filed as #1131. Roster-drift (Nurul Hakim scoped onto a user-service story he cannot commit to) carried forward from wave-27→28, still unresolved.
+
+## Phase 10 Wave 29 Trust Updates (2026-08-03) — Hook/gate hardening + test-suite consolidation; scores HELD pending #1349
+
+Mechanical scoring over the canonical direct-to-main PR set: **45 PRs** across 2 repos (main 44, ingest-platform 1), top-concentration **20%** (Aino Virtanen, 9/45 — well below the 60% fragility line), **0 CI-red merges across all 45 PRs**, **51** changes-requested verdicts.
+
+**Scores are HELD this wave (Old = New for every engineer). This is a deliberate, evidence-backed departure from the mechanical-application rule, and it needs an owner decision.** The retro's Step 2.5 counter check and Step 4 assessment found three defects in the measuring instrument itself, filed as #1347, #1348, #1349. Two are corrected below; the third is structural and unresolved. Applying deltas computed by a rubric that has been demonstrated non-functional would write known-false state into a permanent, load-bearing file — the exact failure class this wave was themed on.
+
+### Signal corrections applied before scoring
+
+| correction | issue | effect |
+|---|---|---|
+| Spaced `Changes Requested` verdicts restored | #1347 | Aino `must_fix_received` 3→4, `rework_cycles` 3→4; Nurul `must_fix_received` 1→2, `rework_cycles` 1→2; Nino `must_fix_caught` 10→11; Weronika `must_fix_caught` 16→17. Wave CR counter 49→**51**. |
+| `review_false_positives` zeroed for all engineers | #1348 | All 17 recorded false-positives were detector artifacts, verified one by one against the comment text. True value is **0** for every engineer. |
+
+### Org-Level / Tooling Team (main)
+
+`Rubric delta` is what `score_delta` returns on the **corrected** signals. `Applied` is what actually lands.
+
+| Rated | Old | New | Rubric delta | Reason |
+|---|---|---|---|---|
+| Aino Virtanen | 5 | 5 (held) | -1 | prs_merged=9 (wave's highest), must_fix_caught=12, must_fix_received=4, **0 CI-red**, false_positives=0 (was 3, all spurious — #1348). The -1 is driven solely by `must_fix_received >= 3` over 9 authored PRs (0.44/PR, the **best** rate of any multi-PR author this wave). Held pending #1349. |
+| Nino Kavtaradze | 5 | 5 (held) | -1 | prs_merged=8, must_fix_caught=11 (2nd highest), must_fix_received=4 (0.50/PR), **0 CI-red**, false_positives=0 (was **7**, every one a reference to his own false-positive test corpus — #1348). As recorded he was docked -7 raw for the most rigorous corpus-based reviewing in the wave. Held pending #1349. |
+| Weronika Zielinska | 3 | 3 (held) | -1 | prs_merged=6, **must_fix_caught=17 — the wave's highest review-catch count**, must_fix_received=12, **0 CI-red**, false_positives=0 (was 2, spurious). Held pending #1349. |
+| Lucas Ferreira | 4 | 4 (held) | -1 | prs_merged=7, must_fix_caught=3, must_fix_received=15 (2.1/PR — genuinely the wave's highest rework rate, and the one -1 that survives on its merits), **0 CI-red**, false_positives=0 (was 2, spurious). Held pending #1349; see the push-freeze note in the feedback log — part of this rework volume is an orchestrator dispatch failure, not his. |
+| Nurul Hakim | 4 | 4 (held) | 0 | prs_merged=2, must_fix_caught=0, must_fix_received=2 (corrected from 1 — #1347), **0 CI-red**, false_positives=0 (was 1, and it was matched on a `Request` comment that is not a verdict at all). |
+| Nadia Khoury | (untracked) | (untracked) | 0 | prs_merged=4, must_fix_caught=5, must_fix_received=1, **0 CI-red**, false_positives=0 (was 2, spurious). First implementer-class wave for the PD. Seeding deferred to #1349's resolution rather than seeding against a broken rubric. |
+| Santiago Ferreira | hold | hold | -1 | prs_merged=4, must_fix_caught=1, must_fix_received=4, **0 CI-red**, false_positives=0. Coordinator-class; remains held. |
+| Wanjiku Mwangi | (untracked) | (untracked) | -1 | prs_merged=3, must_fix_caught=1, must_fix_received=6, **0 CI-red**, false_positives=0. Seeding deferred, as above. |
+| Bereket Tadesse | (untracked) | (untracked) | -1 | prs_merged=1 (#1330, the 31-hook `_hook_main` consolidation), must_fix_caught=1, must_fix_received=3, **0 CI-red**, false_positives=0. Seeding deferred, as above. |
+
+### Child-Repo Team (isnad-ingest-platform)
+
+| Rated | Old | New | Rubric delta | Reason |
+|---|---|---|---|---|
+| Yusuke Inoue | 3 | 3 | 0 | prs_merged=1 (ip#153 stale Kafka topic names in the CLAUDE.md worker-topology table), clean on every signal. Single PR — below both positive thresholds. Genuine delta 0; not a hold. |
+
+Distribution discipline (`trust_signals.apply_distribution_discipline`): not exercised — no proposed score reached 5 from below, because **no engineer was eligible for a positive delta at all** (see #1349).
+
+### Done Well / Needs Improvement (Phase 10 Wave 29) — evidence-anchored, bare "None" banned
+
+| Member | Done Well (with evidence) | Gap (metric, or explicit "clean: numbers") |
+|---|---|---|
+| Aino Virtanen | 9 PRs, the wave's highest output, at the wave's lowest rework rate (0.44 must-fix/PR); 12 review catches | 4 must-fix received across 9 PRs, rework_cycles=4 — the best per-PR rate of any multi-PR author, but non-zero |
+| Nino Kavtaradze | 11 review catches incl. the #1337 `validate_pr_review.check()` decomposition; built and re-ran a 20-case false-positive corpus across base and head rather than arguing from documentation | 4 must-fix received across 8 PRs (0.50/PR), rework_cycles=3 |
+| Weronika Zielinska | **17 review catches — the wave's highest**; caught the #1153 blocking verdict that the trust extractor then silently dropped (#1347) | 12 must-fix received across 6 PRs (2.0/PR), rework_cycles=4 |
+| Lucas Ferreira | 7 PRs incl. #1333 (conftest + `_test_helpers.py`, ~51 `sys.path` preambles and 32 `_input` builders deduped) and #1343 (12 clone groups / 97 cases parametrized) | 15 must-fix received across 7 PRs (2.1/PR) — the wave's highest rework rate; partly attributable to the orchestrator's unbatched dispatch during the #1333 push freeze |
+| Nurul Hakim | 2 PRs (#1187, #1153) landed clean on CI | 2 must-fix received, rework_cycles=2; must_fix_caught=0 — no review catches this wave |
+| Nadia Khoury | 4 PRs with 5 review catches and only 1 must-fix received — the cleanest authoring record of any multi-PR contributor | 1 must-fix received on 4 PRs (0.25/PR) |
+| Santiago Ferreira | 4 PRs merged, 0 CI-red | 4 must-fix received across 4 PRs (1.0/PR), must_fix_caught=1 |
+| Wanjiku Mwangi | 3 PRs merged, 0 CI-red | 6 must-fix received across 3 PRs (2.0/PR), rework_cycles=3 — high rework rate on low volume |
+| Bereket Tadesse | #1330 consolidated 31 hooks onto `run_blocking`/`run_advisory` — the wave's single largest structural cleanup | 3 must-fix received on 1 PR, rework_cycles=1 — highest per-PR rework in the wave, though on a PR of exceptional blast radius |
+| Yusuke Inoue | ip#153 corrected the stale Kafka topic names in the worker-topology table | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0, must_fix_caught=0 |
+
+**Fire/hire:** none. Retirement trigger (`trust_signals.retirement_trigger`) fired for no engineer. Note that had the recorded (uncorrected) deltas been applied, Weronika would have moved 3→1 and entered bottom-tier territory on the strength of the wave's best review record — a concrete illustration of why #1348 and #1349 are filed as defects rather than as numbers.
+
+**Concentration note:** 20% top (Aino, 9/45) — well below the 60% fragility line, spread across 10 people. Healthy distribution; no redistribution needed.
+
+**Orchestrator self-assessment:** the wave delivered 45 PRs with a **perfect CI record** and every merged PR's code held up under mutation testing and differential harnesses. Two failures are mine. First, the **#1333 push freeze**: 5 review heads in 20 minutes staled 3 verdicts mid-authorship because I dispatched each finding as it arrived instead of batching — a coordination failure that inflates Lucas's rework count above what his work warrants. Second, and larger: **wrapup wrote 49 as the changes-requested count and I narrated it as authoritative without re-deriving it.** The retro's own Step 2.5 exists precisely to catch that, and it did — but only because the step is mandatory, not because I was suspicious. The instrument defects in #1347/#1348/#1349 have been latent since #842 (P6W17), meaning every trust delta computed since then is suspect to an unknown degree.

@@ -505,3 +505,75 @@ check anyway and got the correct answer, so the gate held — but it held becaus
 reviewers distrusted their brief, which is not a control. Captured in memory as
 `feedback_patch_id_after_rebase_not_ancestry`; the standing rule is that a brief must
 never hand a reviewer an unverified state assertion.
+
+---
+
+## Retrospective: Phase 10 Wave 29 — 2026-08-03
+
+**Theme:** hook/gate hardening + test-suite consolidation. **Merge model:** direct-to-main. **Repos in scope:** `noorinalabs-main`, `noorinalabs-isnad-ingest-platform`.
+
+### Team Performance
+
+| Metric | Value |
+|---|---|
+| PRs merged | **45** (main 44, ingest-platform 1) |
+| Issues closed | 30 |
+| CI health | **0 CI-red merges across all 45 PRs** |
+| Changes-requested verdicts | **51** (wrapup recorded 49 — corrected, see below) |
+| Top-implementer concentration | 9 / 45 = **20%** (Aino Virtanen) — well below the 60% fragility line |
+| Tech-debt filed | 14 during the wave, +3 at retro (#1347, #1348, #1349) |
+| Carry-forwards | 86 |
+| Contributors | 10 |
+
+Wave-29 was, on the evidence, a **strong delivery wave**: a perfect CI record across 45 PRs, and every merged PR's code held up under mutation testing and differential review harnesses. The defects this wave surfaced lived almost entirely in the **artifacts describing** the code, not the code — and the retro found that this pattern extends to the retro's own instruments.
+
+### Status-counter verification (Step 2.5)
+
+| Counter | Claimed | Actual | Disposition |
+|---|---|---|---|
+| `wave_29_final_pr_count` | 45 | 45 | ✅ matches |
+| `wave_29_top_concentration_pct` | 20 | 20 | ✅ matches |
+| `wave_29_changes_requested_cycles` | 49 | **51** | ❌ **drift +2** — corrected, `wave_29_counter_corrections` written |
+
+The +2 gap is **not** the edit-in-place measurement conflict the skill documents (that case is recomputed **<** claimed). Recomputed is *higher* than claimed: two genuine blocking verdicts were never counted at all. Root cause filed as **#1347**.
+
+### Per-Engineer Assessments
+
+Full signal tables, corrected values, and the Done Well / Needs Improvement matrix are in `.claude/team/trust_matrix.md` § Phase 10 Wave 29. Summary: 45 PRs across 10 contributors, 0 CI-red merges, top concentration 20%, no fire/hire actions, no retirement trigger. **All scores HELD** — see pain point 1.
+
+### Top 3 Going Well
+
+1. **A perfect CI record at scale.** 45 PRs, 0 red merges, in a wave whose whole subject was rewiring hooks and gates — the surface most likely to break CI. The full local⇄CI parity requirement is doing its job.
+2. **Adversarial review found real defects, repeatedly.** Reviewers built false-positive corpora, ran mutation testing, and reproduced findings in real shells rather than reasoning from documentation. #1345 is the wave's most transferable result: a verified instrument triple **plus** green CI was compatible with 20 of 37 tests silently skipping while `OK` printed. Weronika's 17 review catches and Nino's 11 were the backbone of the wave.
+3. **Healthy load distribution.** 20% top concentration across 10 people, on a 45-PR wave. No single-owner fragility, and no redistribution needed for wave-30.
+
+### Top 3 Pain Points
+
+1. **The trust-measurement instrument is broken, and it has been since #842 (P6W17).** Three independent defects, all found this retro, all verified against live PR data:
+   - **#1347** — `trust_signals.py` silently drops `Changes Requested` (spaced). `(\w+)` captures `"Changes"`, then `== "changesrequested"` fails. It is the **lone holdout**: the merge gate and Hook 4 both accept all three spellings (hardened under #147), so **merge safety was never at risk** — but two real blocking verdicts vanished from the counters.
+   - **#1348** — `review_false_positives` is a bare word match. **17 of 17 wave-29 hits were wrong.** The dominant class is reviewers discussing their own *false-positive test corpus* — and the wave's subject matter was shell-classifier false positives, so the detector fired hardest on the wave it was least able to read. Its docstring guarantees "conservative — only a self-marked retraction, never inferred"; a substring search cannot carry that guarantee. Two hits landed on `Request`/`Reply` comments, which are not verdicts at all.
+   - **#1349** — the rubric's positive branch is **unreachable**. `clean = not has_negative()` requires zero must-fix received. Across 45 PRs drawing 51 blocking verdicts under 3-6 review heads, **no engineer was eligible for a bump** — in a wave with zero CI-red merges. Correcting #1347 and #1348 still leaves 7 down, 0 up. The rubric penalizes exactly the review intensity the org deliberately increased, and had it been applied, Weronika would have gone 3→1 on the strength of the wave's best review record.
+
+   **Scores are held for every engineer pending the owner's decision on #1349.** Writing deltas from an instrument proven non-functional into a permanent, load-bearing file is the precise failure this wave was themed on.
+
+2. **A fail-open in the board-sync hook, 64 times.** `post_label_change_wave_field_sync` emitted `skip_parser_returned_empty` on 64 occasions: it recognized `gh issue edit` plus a canonical wave label, its parser returned empty, and it **silently no-opped**. A hook that cannot parse its input and therefore does nothing is indistinguishable, from the outside, from a hook that ran and found nothing to do — the same silent-zero class as `feedback_silent_zero_is_not_a_measurement`.
+
+3. **Hook ergonomics are blocking correct actions.** 78 `validate_commit_identity` blocks and 53 `validate_review_comment_format` blocks share one root shape: the standard way to author a multi-line body — `cat > /tmp/file` then `git commit -F` / `gh pr comment -F` — makes the body unreadable to the hook, so a *correct* action is refused. Plus 86 bare-`grep` blocks and **52 records where the Annunaki monitor itself errored** (11 identical `git show <SHA>:.claude/lib/wave_status.py` → exit 128). An error monitor that throws is blind exactly when it matters most.
+
+### Proposed Process Changes
+
+1. **Verify counters before narrating them, not after.** Rationale: wrapup wrote 49 and the orchestrator repeated it as authoritative. Step 2.5 caught it — but only because it is mandatory. The generalizable rule is `feedback_state_the_denominator_with_the_number`, written *during* this wave and then not applied to the wave's own bookkeeping.
+2. **A guarantee stated in a docstring must be tested, or it must be deleted.** Rationale: #1348's "conservative — never inferred" is a promise the mechanism structurally cannot keep, and it went unchallenged for 12 waves because the prose read as a specification. This is the wave's own thesis turned on its own tooling — see `feedback_prose_guarantee_vs_mechanism`.
+3. **A shared vocabulary needs one owner, not N private copies.** Rationale: #147 hardened the verdict vocabulary in two places; `trust_signals.py` arrived later and re-implemented it wrong. #1081 already established the shared-entry-point pattern for exactly this. Every new consumer of the verdict vocabulary must route through it.
+4. **Batch review findings during a wave tail.** Rationale: the #1333 push freeze — 5 heads in 20 minutes staled 3 verdicts mid-authorship. Orchestrator dispatch failure, already recorded in the wave-29 handoff; restated here because it materially inflates one engineer's rework count.
+5. **A hook that cannot parse its input must say so, not skip.** Rationale: the 64× `skip_parser_returned_empty` fail-open. Silence and success must not look identical from outside.
+
+### Retro-Filed Issues
+
+| # | Title | Labels |
+|---|---|---|
+| #1347 | `trust_signals.py` silently drops `Changes Requested` (spaced) verdicts | tech-debt, bug, phase-10 |
+| #1348 | `review_false_positives` is a bare word match: 17/17 wrong in wave-29 | tech-debt, bug, phase-10 |
+| #1349 | Trust rubric's positive branch is unreachable under multi-head review | tech-debt, process, phase-10 |
+
+Filed deliberately **without** a wave label: `wave-30` does not exist until wave-30 kickoff, and a `wave-29` label would create false drift against that wave's labelled==scoped invariant.
