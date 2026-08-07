@@ -5,8 +5,10 @@ Covers:
   * Extraction maps author identity (commit author) → prs_merged / ci_red /
     rework, and reviewer identity (Requestor field) → must_fix_caught, reusing
     wave_status.merged_prs with its no-shell list-arg-vector contract.
-  * Verdict parsing accepts bare AND bold Requestor/RequestOrReplied forms and
-    detects self-marked false-positives.
+  * Verdict parsing accepts bare AND bold Requestor/RequestOrReplied forms,
+    tolerates all three ChangesRequested spellings (main#1347), and detects
+    self-marked false-positives via the explicit `Retracted:` field, never
+    free-text substring matching (main#1348).
   * score_delta is bidirectional and clamped to [-2, +2].
   * decay drifts unsignalled scores one step toward NEUTRAL after N waves.
   * distribution discipline reserves 5 for the top relative performer.
@@ -120,13 +122,135 @@ class ParseVerdicts(unittest.TestCase):
         self.assertEqual(verdicts[1].requestor, "Santiago Ferreira")
         self.assertEqual(verdicts[1].verdict, "Approved")
 
-    def test_false_positive_detected(self) -> None:
+    # -- Regression: main#1347 -- all three ChangesRequested spellings must
+    # classify identically. `(\w+)` used to stop at the first space, so the
+    # spaced form captured only "Changes" and silently fell out of every
+    # counter (real evidence: main PR #1173, #1153).
+
+    def test_three_changes_requested_spellings_classify_identically(self) -> None:
+        for spelling in ("ChangesRequested", "Changes Requested", "Changes"):
+            with self.subTest(spelling=spelling):
+                self.assertTrue(ts._is_changes_requested(spelling))
+
+    def test_spaced_changes_requested_verdict_field_captured_in_full(self) -> None:
+        """The regex capture itself must not truncate at the first space."""
+        body = _verdict("Nino Kavtaradze", "Aino Virtanen", "Changes Requested")
+        v = ts.parse_verdicts([body])[0]
+        self.assertEqual(v.verdict, "Changes Requested")
+        self.assertTrue(ts._is_changes_requested(v.verdict))
+
+    def test_trailing_text_after_approved_still_classifies_as_approved(self) -> None:
+        """Widening the capture to a full line must not defeat the approved match."""
+        body = _verdict("Aino Virtanen", "Nadia Khoury", "Approved (post-merge)")
+        v = ts.parse_verdicts([body])[0]
+        self.assertEqual(ts._verdict_kind(v.verdict), "approved")
+
+    # -- Regression: main#1348 -- `review_false_positives` is gated on an
+    # explicit `Retracted:` field, never free-text substring matching. A word
+    # match cannot distinguish a genuine self-retraction from a reviewer
+    # merely discussing false positives as the wave's technical topic.
+
+    def test_retracted_field_on_changes_requested_is_a_false_positive(self) -> None:
+        """Positive control: an explicit self-mark is still detected."""
         body = (
-            _verdict("Aino Virtanen", "Nadia Khoury", "ChangesRequested")
-            + "\nUpdate: this was a false-positive, withdrawing."
+            _verdict("Idris Yusuf", "Mateo Salazar", "ChangesRequested")
+            + "\nRetracted: on reflection this finding was invalid, my mistake."
         )
         v = ts.parse_verdicts([body])[0]
         self.assertTrue(v.false_positive)
+
+    def test_bold_retracted_field_is_detected(self) -> None:
+        body = (
+            _verdict("Idris Yusuf", "Mateo Salazar", "ChangesRequested")
+            + "\n**Retracted:** superseded by the comment above."
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertTrue(v.false_positive)
+
+    # -- Regression: main#1358 -- three mutants of the #1347/#1348 code
+    # survived the suite above (production behavior was already correct in
+    # all three; only the test coverage was missing). Each test target is
+    # named after the specific line the mutant strips.
+
+    def test_bold_only_verdict_value_still_classifies(self) -> None:
+        """`_normalize_verdict_token`'s alnum-stripping, not just casefold.
+
+        A verdict field with no surrounding whitespace before the bold
+        marker (`RequestOrReplied: **ChangesRequested**`) is captured with
+        its LEADING `**` intact — only the trailing `**` is stripped by the
+        field regex's `\\**\\s*$` tail, so the captured token is literally
+        `"**ChangesRequested"`. Removing `_normalize_verdict_token`'s
+        `re.sub(r"[^a-z0-9]", "", ...)` step (leaving only `.casefold()`)
+        does not fail any other test in this file — `_normalize_verdict_token`
+        needs its own direct assertion.
+        """
+        body = "Requestor: A\nRequestee: B\nRequestOrReplied: **ChangesRequested**\n"
+        v = ts.parse_verdicts([body])[0]
+        self.assertEqual(v.verdict, "**ChangesRequested")
+        self.assertEqual(ts._verdict_kind(v.verdict), "changesrequested")
+        self.assertTrue(ts._is_changes_requested(v.verdict))
+
+    def test_retracted_mentioned_mid_prose_never_counts(self) -> None:
+        """`_RETRACTION_RE`'s leading `^` line-start anchor.
+
+        A comment merely discussing the field-format convention in prose
+        (e.g. quoting `Retracted: <reason>` as an example, not posting it as
+        an actual field) must never count — this is the identical
+        false-positive class main#1348 exists to eliminate, now unguarded
+        on the *replacement* mechanism if the anchor is dropped.
+        """
+        body = (
+            _verdict("Aino Virtanen", "Nadia Khoury", "ChangesRequested")
+            + "\nSee the field format convention: Retracted: <reason> for self-marks."
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertFalse(v.false_positive)
+
+    def test_bare_retracted_field_with_no_value_never_counts(self) -> None:
+        """`_RETRACTION_RE`'s trailing `\\S` (non-empty-value) requirement.
+
+        An unfilled `Retracted:` placeholder/template line, with nothing
+        after the colon, must never count as a genuine self-mark.
+        """
+        body = _verdict("Aino Virtanen", "Nadia Khoury", "ChangesRequested") + "\nRetracted:\n"
+        v = ts.parse_verdicts([body])[0]
+        self.assertFalse(v.false_positive)
+
+    def test_plain_prose_without_the_marker_never_counts(self) -> None:
+        """'false-positive'/'withdrawn'/'retracted' in prose, with no explicit
+        `Retracted:` field, must never count — even on a ChangesRequested verdict."""
+        body = (
+            _verdict("Aino Virtanen", "Nadia Khoury", "ChangesRequested")
+            + "\nOn reflection this was invalid — withdrawn, my mistake, false-positive."
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertFalse(v.false_positive)
+
+    def test_request_verdict_never_counts_even_with_the_marker(self) -> None:
+        """main#1348 non-negotiable: Request/Reply are process metadata, not
+        verdicts — they can never contribute a false positive, even if the
+        comment happens to contain the `Retracted:` field text."""
+        body = (
+            _verdict("Nurul Hakim", "Weronika Zielinska", "Request")
+            + "\nRetracted: n/a, just re-requesting review."
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertFalse(v.false_positive)
+
+    def test_reply_verdict_never_counts_even_with_the_marker(self) -> None:
+        body = (
+            _verdict("Wanjiku Mwangi", "Nadia Khoury", "Reply")
+            + "\nRetracted: my earlier finding after re-reading the spec."
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertFalse(v.false_positive)
+
+    def test_approved_verdict_with_marker_never_counts(self) -> None:
+        """Approved never raised a finding, so there is nothing to retract,
+        even if the field is present."""
+        body = _verdict("Aino Virtanen", "Nadia Khoury", "Approved") + "\nRetracted: n/a."
+        v = ts.parse_verdicts([body])[0]
+        self.assertFalse(v.false_positive)
 
     # -- Regression: #881 -- Approving verdicts must never score as FP even when
     # the prose mentions "false-positive" (real evidence from PR #873).
@@ -161,32 +285,37 @@ class ParseVerdicts(unittest.TestCase):
         self.assertFalse(v.false_positive)
 
     def test_fp_in_fenced_block_is_not_a_fp(self) -> None:
-        """FP keyword inside a fenced code block is ignored."""
+        """A `Retracted:` field quoted inside a fenced code block is ignored."""
         body = (
             _verdict("Aino Virtanen", "Nadia Khoury", "ChangesRequested")
-            + "\n```\n# test_no_false_positive_type passes\nretracted = False\n```\n"
+            + "\n```\n# example comment shape\nRetracted: true\n```\n"
             "Looks good otherwise."
         )
         v = ts.parse_verdicts([body])[0]
         self.assertFalse(v.false_positive)
 
-    def test_genuine_withdrawal_on_changes_requested_still_counts(self) -> None:
-        """A real self-retraction on a ChangesRequested verdict must still score 1."""
-        body = (
-            _verdict("Idris Yusuf", "Mateo Salazar", "ChangesRequested")
-            + "\nOn reflection this was invalid — withdrawn, my mistake."
-        )
-        v = ts.parse_verdicts([body])[0]
-        self.assertTrue(v.false_positive)
+    # -- Regression: main#1348 wave-29 corpus. All 17 real wave-29 hits under
+    # the old free-text regex were wrong — reviewers discussing their own
+    # false-positive test corpus, naming the defect class in prose, or
+    # retracting an unrelated note. These five are representative shapes;
+    # none carries the explicit `Retracted:` field, so none may count.
 
-    def test_withdrawal_keyword_in_plain_prose_on_non_approval_counts(self) -> None:
-        """'retracted' outside any code markup on a non-Approved verdict counts."""
-        body = (
-            _verdict("Wanjiku Mwangi", "Nadia Khoury", "Reply")
-            + "\nI retracted my earlier finding after re-reading the spec."
-        )
-        v = ts.parse_verdicts([body])[0]
-        self.assertTrue(v.false_positive)
+    _WAVE_29_COMMENT_SHAPES = (
+        "## False-positive corpus I extended rather than re-ran",
+        "my 20-case false-positive corpus byte-identical to this head's output",
+        "retracted my earlier 'yq is an obvious win' note",
+        "the false-positive removal itself is sound and well-guarded",
+        "this is #1152's false positive, so 'base BLOCK -> head ALLOW' is the intended change",
+    )
+
+    def test_wave_29_comment_corpus_yields_zero_false_positives(self) -> None:
+        for shape in self._WAVE_29_COMMENT_SHAPES:
+            with self.subTest(shape=shape):
+                body = (
+                    _verdict("Nino Kavtaradze", "Nadia Khoury", "ChangesRequested") + f"\n{shape}"
+                )
+                v = ts.parse_verdicts([body])[0]
+                self.assertFalse(v.false_positive)
 
 
 # --------------------------------------------------------------------------- #
@@ -244,7 +373,7 @@ class Extract(unittest.TestCase):
                 "commit_author": "Mateo Salazar",
                 "comments": [
                     _verdict("Idris Yusuf", "Mateo Salazar", "ChangesRequested")
-                    + "\nOn reflection this finding was invalid finding — withdrawn."
+                    + "\nRetracted: on reflection this finding was invalid."
                 ],
                 "ci_red": False,
             },
@@ -252,6 +381,80 @@ class Extract(unittest.TestCase):
         sigs = self._run(prs)
         self.assertEqual(sigs["Idris Yusuf"].review_false_positives, 1)
         self.assertEqual(sigs["Idris Yusuf"].must_fix_caught, 1)
+
+    # -- Regression: main#1347 -- all three ChangesRequested spellings must
+    # flow through extraction identically (real evidence: main PR #1173,
+    # #1153, both dropped by the old `(\w+)` capture).
+
+    def test_spaced_changes_requested_counted_same_as_unspaced(self) -> None:
+        prs = [
+            {
+                "repo": _REPOS[0],
+                "number": 1173,
+                "sha": "s1173",
+                "mergedAt": "2026-06-24T02:00:00Z",
+                "commit_author": "Aino Virtanen",
+                "comments": [_verdict("Nino Kavtaradze", "Aino Virtanen", "Changes Requested")],
+                "ci_red": False,
+            },
+            {
+                "repo": _REPOS[1],
+                "number": 1153,
+                "sha": "s1153",
+                "mergedAt": "2026-06-24T03:00:00Z",
+                "commit_author": "Nurul Hakim",
+                "comments": [_verdict("Weronika Zielinska", "Nurul Hakim", "Changes Requested")],
+                "ci_red": False,
+            },
+        ]
+        sigs = self._run(prs)
+        self.assertEqual(sigs["Aino Virtanen"].must_fix_received, 1)
+        self.assertEqual(sigs["Aino Virtanen"].rework_cycles, 1)
+        self.assertEqual(sigs["Nurul Hakim"].must_fix_received, 1)
+        self.assertEqual(sigs["Nino Kavtaradze"].must_fix_caught, 1)
+        self.assertEqual(sigs["Weronika Zielinska"].must_fix_caught, 1)
+
+    # -- Regression: main#1348 defect 2 -- Request/Reply comments can never
+    # contribute to review_false_positives, end to end (real evidence: main
+    # PR #1310 verdict=Reply, #1153 verdict=Request).
+
+    def test_reply_comment_never_dings_reviewer_even_with_marker(self) -> None:
+        prs = [
+            {
+                "repo": _REPOS[0],
+                "number": 1310,
+                "sha": "s1310",
+                "mergedAt": "2026-06-24T02:00:00Z",
+                "commit_author": "Nadia Khoury",
+                "comments": [
+                    _verdict("Aino Virtanen", "Nadia Khoury", "Reply")
+                    + "\nRetracted: claim retracted, issue stays open."
+                ],
+                "ci_red": False,
+            },
+        ]
+        sigs = self._run(prs)
+        aino_sig = sigs.get("Aino Virtanen", ts.Signals())
+        self.assertEqual(aino_sig.review_false_positives, 0)
+
+    def test_request_comment_never_dings_reviewer_even_with_marker(self) -> None:
+        prs = [
+            {
+                "repo": _REPOS[0],
+                "number": 1153,
+                "sha": "s1153b",
+                "mergedAt": "2026-06-24T02:00:00Z",
+                "commit_author": "Weronika Zielinska",
+                "comments": [
+                    _verdict("Nurul Hakim", "Weronika Zielinska", "Request")
+                    + "\nRetracted: n/a, re-requesting review."
+                ],
+                "ci_red": False,
+            },
+        ]
+        sigs = self._run(prs)
+        nurul_sig = sigs.get("Nurul Hakim", ts.Signals())
+        self.assertEqual(nurul_sig.review_false_positives, 0)
 
     def test_gh_calls_are_list_vectors_no_shell(self) -> None:
         prs = [
