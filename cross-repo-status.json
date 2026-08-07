@@ -31,10 +31,10 @@
     ],
     "ci_red_merges": 0,
     "must_fix_caught": 12,
-    "must_fix_received": 3,
+    "must_fix_received": 4,
     "prs_merged": 9,
-    "review_false_positives": 3,
-    "rework_cycles": 3
+    "review_false_positives": 0,
+    "rework_cycles": 4
   },
   "Bereket Tadesse": {
     "authored_prs": [
@@ -61,7 +61,7 @@
     "must_fix_caught": 3,
     "must_fix_received": 15,
     "prs_merged": 7,
-    "review_false_positives": 2,
+    "review_false_positives": 0,
     "rework_cycles": 7
   },
   "Nadia Khoury": {
@@ -75,7 +75,7 @@
     "must_fix_caught": 5,
     "must_fix_received": 1,
     "prs_merged": 4,
-    "review_false_positives": 2,
+    "review_false_positives": 0,
     "rework_cycles": 1
   },
   "Nino Kavtaradze": {
@@ -90,10 +90,10 @@
       1193
     ],
     "ci_red_merges": 0,
-    "must_fix_caught": 10,
+    "must_fix_caught": 11,
     "must_fix_received": 4,
     "prs_merged": 8,
-    "review_false_positives": 7,
+    "review_false_positives": 0,
     "rework_cycles": 3
   },
   "Nurul Hakim": {
@@ -103,10 +103,10 @@
     ],
     "ci_red_merges": 0,
     "must_fix_caught": 0,
-    "must_fix_received": 1,
+    "must_fix_received": 2,
     "prs_merged": 2,
-    "review_false_positives": 1,
-    "rework_cycles": 1
+    "review_false_positives": 0,
+    "rework_cycles": 2
   },
   "Santiago Ferreira": {
     "authored_prs": [
@@ -145,10 +145,10 @@
       1155
     ],
     "ci_red_merges": 0,
-    "must_fix_caught": 16,
+    "must_fix_caught": 17,
     "must_fix_received": 12,
     "prs_merged": 6,
-    "review_false_positives": 2,
+    "review_false_positives": 0,
     "rework_cycles": 4
   },
   "Yusuke Inoue": {
@@ -168,7 +168,7 @@
   "wave_29_stg_promotion": "not-applicable",
   "wave_29_stg_promotion_url": "https://github.com/noorinalabs/noorinalabs-deploy/actions/runs/30225856434",
   "wave_29_stg_promotion_note": "Latest deploy-stg.yml run is SUCCESS but was created 2026-07-26T23:43:37Z — BEFORE this wave kicked off (2026-07-27T22:56:17Z). Wave-29 scope was noorinalabs-main + noorinalabs-isnad-ingest-platform, neither of which is a staging fan-in repo (fan-in is isnad-graph + user-service), so this wave produced no deployable surface to promote. Recorded as not-applicable rather than success: claiming a green promotion this wave did not cause would be a false attribution.",
-  "wave_29_counter_corrections": [{"counter":"wave_29_changes_requested_cycles","claimed":49,"actual":51,"corrected_at":"2026-08-03T00:00:00Z","root_cause":"noorinalabs-main#1347 — trust_signals.py verdict regex captures (\\w+) so the spaced form `Changes Requested` yields \"Changes\", which then fails the == \"changesrequested\" equality. Two genuine blocking verdicts (#1173 Nino->Aino, #1153 Weronika->Nurul) were dropped. Recomputed HIGHER than claimed, so this is NOT the edit-in-place measurement conflict documented in /wave-retro Step 2.5.","note":"wave_29_trust_signals left as-written by wrapup; corrected values are recorded in trust_matrix.md and are pending the #1347/#1348 fixes."}],
+  "wave_29_counter_corrections": [{"counter":"wave_29_changes_requested_cycles","claimed":49,"actual":51,"corrected_at":"2026-08-03T00:00:00Z","root_cause":"noorinalabs-main#1347 — trust_signals.py verdict regex captures (\\w+) so the spaced form `Changes Requested` yields \"Changes\", which then fails the == \"changesrequested\" equality. Two genuine blocking verdicts (#1173 Nino->Aino, #1153 Weronika->Nurul) were dropped. Recomputed HIGHER than claimed, so this is NOT the edit-in-place measurement conflict documented in /wave-retro Step 2.5.","note":"wave_29_trust_signals left as-written by wrapup; corrected values are recorded in trust_matrix.md and are pending the #1347/#1348 fixes."}, {"counter": "wave_29_trust_signals", "corrected_at": "2026-08-07T00:00:00Z", "root_cause": "The persisted snapshot was written by /wave-wrapup before noorinalabs-main#1347 and #1348 were fixed, so it carries the uncorrected detector output: spaced `Changes Requested` verdicts dropped from must_fix_received/must_fix_caught (#1347) and review_false_positives populated by the retired free-text substring match (#1348, 17/17 wave-29 hits verified spurious). #1356 fixed the detectors but did not rewrite this snapshot.", "resolution": "Refreshed from a live `trust_signals.py extract 10 29` run at 69c2e08 with both fixes in place. 6 of 10 engineer rows changed; prs_merged and authored_prs are identical for all 10 (the defects were verdict-parsing only, never PR-set membership). Under the #1349 two-band rubric the uncorrected snapshot yields 1 up / 7 down / 2 flat versus 5 up / 2 down / 3 flat on the corrected signals, differing on 6 of 10 deltas — so /wave-retro Step 4 would have reproduced the very distribution #1349 exists to eliminate.", "discharges": "the note on the 2026-08-03 entry above: 'wave_29_trust_signals left as-written by wrapup; corrected values are recorded in trust_matrix.md and are pending the #1347/#1348 fixes'.", "applied_by": "noorinalabs-main#1363", "previous_value": {"Aino Virtanen": {"authored_prs": [1323, 1310, 1292, 1283, 1270, 1269, 1215, 1207, 1173], "ci_red_merges": 0, "must_fix_caught": 12, "must_fix_received": 3, "prs_merged": 9, "review_false_positives": 3, "rework_cycles": 3}, "Bereket Tadesse": {"authored_prs": [1330], "ci_red_merges": 0, "must_fix_caught": 1, "must_fix_received": 3, "prs_merged": 1, "review_false_positives": 0, "rework_cycles": 1}, "Lucas Ferreira": {"authored_prs": [1343, 1333, 1295, 1247, 1225, 1213, 1156], "ci_red_merges": 0, "must_fix_caught": 3, "must_fix_received": 15, "prs_merged": 7, "review_false_positives": 2, "rework_cycles": 7}, "Nadia Khoury": {"authored_prs": [1293, 1277, 1178, 1154], "ci_red_merges": 0, "must_fix_caught": 5, "must_fix_received": 1, "prs_merged": 4, "review_false_positives": 2, "rework_cycles": 1}, "Nino Kavtaradze": {"authored_prs": [1337, 1320, 1275, 1250, 1239, 1229, 1199, 1193], "ci_red_merges": 0, "must_fix_caught": 10, "must_fix_received": 4, "prs_merged": 8, "review_false_positives": 7, "rework_cycles": 3}, "Nurul Hakim": {"authored_prs": [1187, 1153], "ci_red_merges": 0, "must_fix_caught": 0, "must_fix_received": 1, "prs_merged": 2, "review_false_positives": 1, "rework_cycles": 1}, "Santiago Ferreira": {"authored_prs": [1258, 1248, 1198, 1185], "ci_red_merges": 0, "must_fix_caught": 1, "must_fix_received": 4, "prs_merged": 4, "review_false_positives": 0, "rework_cycles": 2}, "Wanjiku Mwangi": {"authored_prs": [1263, 1240, 1186], "ci_red_merges": 0, "must_fix_caught": 1, "must_fix_received": 6, "prs_merged": 3, "review_false_positives": 0, "rework_cycles": 3}, "Weronika Zielinska": {"authored_prs": [1325, 1316, 1302, 1280, 1238, 1155], "ci_red_merges": 0, "must_fix_caught": 16, "must_fix_received": 12, "prs_merged": 6, "review_false_positives": 2, "rework_cycles": 4}, "Yusuke Inoue": {"authored_prs": [153], "ci_red_merges": 0, "must_fix_caught": 0, "must_fix_received": 0, "prs_merged": 1, "review_false_positives": 0, "rework_cycles": 0}}}],
   "wave_29_retro_completed_at": "2026-08-03T00:00:00Z",
   "wave_29_annunaki_attack_ran_at": "2026-08-04T01:38:13Z",
   "wave_28_phase": 10,

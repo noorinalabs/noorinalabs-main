@@ -88,6 +88,16 @@ DECAY_AFTER_WAVES = 3
 RETIRE_AFTER_WAVES = 3
 BOTTOM_TIER = 2
 
+# Rework bands (main#1349, owner ruling 2026-08-07). Both are must-fix-received
+# coefficients **per PR authored**, applied to `prs_merged` as a multiplication
+# so the comparison stays integer — no ratio, no float, no zero-guard. Named
+# rather than inlined for the same reason NEUTRAL / BOTTOM_TIER /
+# DECAY_AFTER_WAVES are: they are tuning knobs, and the charter states their
+# values (`.claude/team/trust_matrix.md` § The two rework bands), so a change
+# here is a charter change and is pinned as such by the tests.
+CLEAN_BAR_MUST_FIX_PER_PR = 1
+PENALTY_BAR_MUST_FIX_PER_PR = 2
+
 # A verdict comment field, e.g. ``Requestor: Aino Virtanen`` or the bold form
 # ``**Requestor:** Aino Virtanen`` (feedback_pr_review_verdict_format). Optional
 # surrounding ``**`` on the label AND the value; value trimmed of trailing bold.
@@ -301,18 +311,20 @@ class Signals:
         """True if authoring rework is at or below **1 must-fix per PR merged**.
 
         The rework half of :meth:`qualifies_for_bump`; on its own it says
-        nothing about CI-red merges or review false-positives.
+        nothing about CI-red merges or review false-positives. The coefficient
+        is :data:`CLEAN_BAR_MUST_FIX_PER_PR`.
         """
-        return self.must_fix_received <= self.prs_merged
+        return self.must_fix_received <= CLEAN_BAR_MUST_FIX_PER_PR * self.prs_merged
 
     def rework_above_penalty_bar(self) -> bool:
         """True if authoring rework exceeds **2 must-fix per PR merged**.
 
         The ``-1`` rework ding in :func:`score_delta`. Strictly stronger than
         :meth:`rework_within_clean_bar` being false — the gap between the two
-        is the neutral band, which is neither a bump nor a ding.
+        is the neutral band, which is neither a bump nor a ding. The
+        coefficient is :data:`PENALTY_BAR_MUST_FIX_PER_PR`.
         """
-        return self.must_fix_received > 2 * self.prs_merged
+        return self.must_fix_received > PENALTY_BAR_MUST_FIX_PER_PR * self.prs_merged
 
     def qualifies_for_bump(self) -> bool:
         """True if the wave is clean enough to reach :func:`score_delta`'s positive branch.

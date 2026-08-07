@@ -75,7 +75,11 @@ The neutral band is the point of the design: above the clean bar an author forfe
 
 `trust_signals.apply_distribution_discipline(...)` — **5 is reserved** for exceptional *relative* wave performance, not handed out for merely-clean work. A proposed 5 is allowed only for the engineer(s) with the wave's top composite signal score (and that score must be strictly positive); every other proposed 5 is capped to 4.
 
-**It is an entry gate, not an eviction rule.** The cap applies to a score *reaching* 5 from below (the wave-28 entry records the same reading: "not exercised — no proposed score reached 5 **from below**"); an engineer already at 5 whose delta is non-negative holds at 5 by the `clamp(old + delta, 1, 5)` rule. The function itself cannot tell the two cases apart — it receives only `(proposed_score, signals)` and never the old score — so the caller supplies that distinction. Fed the whole roster indiscriminately it will cap a ceiling-holder with a **positive** delta down to 4, converting a `+2` into a net `−1`; that is a known rough edge, surfaced while applying #1349 (see the wave-29 section) and not fixed here.
+**It is an entry gate, not an eviction rule.** The cap applies to a score *reaching* 5 from below; an engineer already at 5 whose delta is non-negative holds at 5 by the `clamp(old + delta, 1, 5)` rule. The evidence is the applied history, not a sentence about it: **W25 held 4 engineers at 5, W26 6, W27 5, W28 5 — 20 ceiling-holder rows across four waves, none evicted.**
+
+**Feed it the whole roster.** `top` is the maximum composite *within the batch*, so restricting the batch changes the answer: over wave-29's two ceiling entrants alone, Nadia becomes her own maximum and keeps a 5 that the full-roster run caps to 4. Run it over every engineer with signals this wave and read off the entrants' results.
+
+The function cannot tell entry from eviction — it receives only `(proposed_score, signals)` and never the old score — so the caller supplies that distinction. Applied indiscriminately to the output it will cap a ceiling-holder with a **positive** delta down to 4, converting a `+2` into a net `−1`; that is a known rough edge, surfaced while applying #1349 (see the wave-29 section) and not fixed here.
 
 ### Forced negative-signal pass (bare "None" is banned)
 
@@ -478,9 +482,21 @@ The signal set below was re-verified on 2026-08-07 by a live `trust_signals.py e
 
 **Distribution comparison.** Old rubric: **0 up / 7 down / 3 flat** — the defect #1349 reports, in a wave with a perfect CI record. New rubric: **5 up / 2 down / 3 flat**, satisfying #1349 acceptance criterion 2. Both distributions were computed by running `score_delta` over the extracted signal set — the old one from a clean `git archive` of `69c2e08`, the new one from this branch — not by hand. The end-to-end distribution is pinned as a regression test (`ScoreDeltaReworkBands::test_wave_29_distribution_is_not_uniformly_non_positive`).
 
-**Distribution discipline (`trust_signals.apply_distribution_discipline`): exercised.** Wave composite maximum is Aino at 17. Two proposed 5s reached the ceiling from below and were both capped to 4 — Nurul (composite 0) and Nadia's seed (composite 8). The function was run, not hand-applied; the result is identical whether it is fed the full roster or only the ceiling-entrants (verified both ways).
+**Distribution discipline (`trust_signals.apply_distribution_discipline`): exercised.** Wave composite maximum is Aino at 17. Two proposed 5s reached the ceiling from below and were both capped to 4 — Nurul (composite 0) and Nadia's seed (composite 8). The function was run, not hand-applied.
 
-> **Finding, not applied — `apply_distribution_discipline` fed the full roster evicts a ceiling-holder with a positive delta.** Run over all ten proposals it caps **Nino** from 5 to 4, because only the single top composite (Aino, 17) may hold a 5 — converting his `+2` into a net `−1`. That is treated here as a rough edge in the cap, not as the wave's result: the cap is an **entry gate** (wave-28's entry: "no proposed score reached 5 **from below**"; prior waves have held several engineers at 5 simultaneously), and the function cannot distinguish entry from eviction because it never sees the old score. Nino is applied at 5 per `clamp(5 + 2)`. Wave-29's outcome does not otherwise depend on the reading — every ceiling-*entrant* gets the same answer either way. Flagged for a separate decision; see the note in § Distribution discipline.
+**The batch fed to the function must retain the full roster.** `top` is the maximum composite *within the batch*, so the batch composition is load-bearing and the cap is not invariant under it. Three compositions were run:
+
+| batch | `top` | Nurul | Nadia |
+|---|---|---|---|
+| full roster (10) | 17 (Aino) | 4 | 4 |
+| full roster minus the two ceiling-holders (8) | 11 (Weronika) | 4 | 4 |
+| **only the two reaching 5 from below (2)** | **8 (Nadia)** | 4 | **5** ← wrong |
+
+Restricting the batch to the two entrants makes Nadia her own batch maximum and she keeps the 5. The correct procedure is therefore: **run the function over the whole roster** so `top` is anchored at the wave maximum, and read off the entrants' results. What is invariant is the outcome *for the ceiling entrants* between the first two compositions — not the outcome under an arbitrary batch.
+
+> **Finding, not applied — `apply_distribution_discipline` fed the full roster evicts a ceiling-holder with a positive delta.** Run over all ten proposals it caps **Nino** from 5 to 4, because only the single top composite (Aino, 17) may hold a 5 — converting his `+2` into a net `−1`. That is treated here as a rough edge in the cap, not as the wave's result, and it matches the #1349 ruling's own table (`Nino Kavtaradze | +2 | 5 -> 5 (at ceiling)`, distinguished there from Nurul's `4 -> 4 (capped)`). The cap is an **entry gate**, and the function cannot distinguish entry from eviction because it never sees the old score. Nino is applied at 5 per `clamp(5 + 2)`.
+>
+> The historical record is the evidence, re-derived from the wave sections at `69c2e08`: **W25 held 4 engineers at 5, W26 6, W27 5, W28 5 — 20 ceiling-holder rows across four waves, and the cap evicted none of them.** Under a naive "run it over everyone and apply the output" procedure, all but the single top-composite holder in each of those waves would have been demoted. Flagged for a separate decision; see the note in § Distribution discipline.
 
 ### Done Well / Needs Improvement (Phase 10 Wave 29) — evidence-anchored, bare "None" banned
 

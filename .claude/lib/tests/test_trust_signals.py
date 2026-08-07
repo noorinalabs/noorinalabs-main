@@ -553,6 +553,27 @@ class ReworkBandPredicates(unittest.TestCase):
     rounded rate.
     """
 
+    def test_band_coefficients_match_the_charter(self) -> None:
+        """The two bars are named constants, and their values are charter state.
+
+        `trust_matrix.md` § The two rework bands states 1/PR and 2/PR as the
+        owner-ruled values (#1349). Changing either constant is a charter
+        change, not a code change — this pins them so the two cannot drift
+        apart silently, and so the multiplication cannot be re-inlined.
+        """
+        self.assertEqual(ts.CLEAN_BAR_MUST_FIX_PER_PR, 1)
+        self.assertEqual(ts.PENALTY_BAR_MUST_FIX_PER_PR, 2)
+        # And the predicates are actually wired to them, not to inline literals.
+        prs = 4
+        on_clean_bar = ts.Signals(
+            prs_merged=prs, must_fix_received=ts.CLEAN_BAR_MUST_FIX_PER_PR * prs
+        )
+        self.assertTrue(on_clean_bar.rework_within_clean_bar())
+        on_penalty_bar = ts.Signals(
+            prs_merged=prs, must_fix_received=ts.PENALTY_BAR_MUST_FIX_PER_PR * prs
+        )
+        self.assertFalse(on_penalty_bar.rework_above_penalty_bar())  # bar is exclusive
+
     def test_recv_equal_to_prs_is_within_clean_bar(self) -> None:
         s = ts.Signals(prs_merged=4, must_fix_received=4)  # exactly 1.0/PR
         self.assertTrue(s.rework_within_clean_bar())
