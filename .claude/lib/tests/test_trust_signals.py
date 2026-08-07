@@ -9,7 +9,10 @@ Covers:
     tolerates all three ChangesRequested spellings (main#1347), and detects
     self-marked false-positives via the explicit `Retracted:` field, never
     free-text substring matching (main#1348).
-  * score_delta is bidirectional and clamped to [-2, +2].
+  * score_delta is bidirectional and clamped to [-2, +2], and its rework
+    signal is the two-band, rate-relative rule of main#1349 (clean bar at
+    1 must-fix/PR, penalty bar at 2/PR, neutral band between) rather than the
+    pre-#1349 absolute thresholds.
   * decay drifts unsignalled scores one step toward NEUTRAL after N waves.
   * distribution discipline reserves 5 for the top relative performer.
   * the forced negative-signal pass bans bare "None".
@@ -537,6 +540,157 @@ class ScoreDelta(unittest.TestCase):
     def test_one_clean_pr_no_increase(self) -> None:
         # A single clean PR is not "exceptional" — no bump.
         self.assertEqual(ts.score_delta(ts.Signals(prs_merged=1)), 0)
+
+
+# --------------------------------------------------------------------------- #
+# Two-band, rate-relative rework rule (main#1349, owner ruling 2026-08-07)
+# --------------------------------------------------------------------------- #
+class ReworkBandPredicates(unittest.TestCase):
+    """The band boundaries themselves, independent of score_delta.
+
+    Both bars are multiplications of ``prs_merged`` — no ratio, no float, no
+    zero-guard — so these pin the exact integer boundaries rather than a
+    rounded rate.
+    """
+
+    def test_recv_equal_to_prs_is_within_clean_bar(self) -> None:
+        s = ts.Signals(prs_merged=4, must_fix_received=4)  # exactly 1.0/PR
+        self.assertTrue(s.rework_within_clean_bar())
+        self.assertFalse(s.rework_above_penalty_bar())
+
+    def test_one_over_clean_bar_enters_neutral_band(self) -> None:
+        s = ts.Signals(prs_merged=4, must_fix_received=5)
+        self.assertFalse(s.rework_within_clean_bar())
+        self.assertFalse(s.rework_above_penalty_bar())  # neutral: no bump, no ding
+
+    def test_exactly_double_is_still_neutral_band(self) -> None:
+        s = ts.Signals(prs_merged=4, must_fix_received=8)  # exactly 2.0/PR
+        self.assertFalse(s.rework_within_clean_bar())
+        self.assertFalse(s.rework_above_penalty_bar())
+
+    def test_one_over_double_crosses_the_penalty_bar(self) -> None:
+        s = ts.Signals(prs_merged=4, must_fix_received=9)
+        self.assertFalse(s.rework_within_clean_bar())
+        self.assertTrue(s.rework_above_penalty_bar())
+
+    def test_non_authoring_engineer_is_clean_without_a_zero_guard(self) -> None:
+        # prs_merged == 0 implies must_fix_received == 0, so 0 <= 0 classifies
+        # a non-author as clean naturally — the reason the bars are a
+        # multiplication and not a ratio.
+        s = ts.Signals(must_fix_caught=3)
+        self.assertTrue(s.rework_within_clean_bar())
+        self.assertFalse(s.rework_above_penalty_bar())
+        self.assertTrue(s.qualifies_for_bump())
+
+    def test_hard_dings_still_disqualify_the_bump_absolutely(self) -> None:
+        # Rework is rate-relative; CI-red and review false-positives are not.
+        # Both engineers below are within the clean bar on rework alone.
+        self.assertTrue(ts.Signals(prs_merged=3, ci_red_merges=1).rework_within_clean_bar())
+        self.assertFalse(ts.Signals(prs_merged=3, ci_red_merges=1).qualifies_for_bump())
+        self.assertFalse(ts.Signals(prs_merged=3, review_false_positives=1).qualifies_for_bump())
+
+    def test_has_negative_and_qualifies_for_bump_are_different_predicates(self) -> None:
+        """The #1349 predicate split, asserted directly.
+
+        Aino's wave-29 record: four blocking verdicts over nine PRs. There IS a
+        negative to report (``negative_signal_line`` must cite it), and the wave
+        IS bump-eligible. Before #1349 one predicate answered both questions,
+        which is what made the positive branch unreachable.
+        """
+        s = ts.Signals(prs_merged=9, must_fix_caught=12, must_fix_received=4)
+        self.assertTrue(s.has_negative())
+        self.assertTrue(s.qualifies_for_bump())
+        # And the reporting line still cites the gap rather than claiming clean.
+        line = ts.negative_signal_line("Aino Virtanen", s)
+        self.assertIn("4 must-fix received", line)
+        self.assertNotIn("metrics clean", line)
+
+
+class ScoreDeltaReworkBands(unittest.TestCase):
+    """score_delta over the two-band rule — boundaries and the acceptance case."""
+
+    def test_strong_reviewer_with_normal_authoring_record_scores_positive(self) -> None:
+        """main#1349 acceptance criterion 1.
+
+        ``must_fix_caught >= 2`` plus a normal authoring record must be able to
+        reach a positive delta. Pre-#1349 this returned -1.
+        """
+        s = ts.Signals(prs_merged=9, must_fix_caught=12, must_fix_received=4)
+        self.assertEqual(ts.score_delta(s), 2)
+
+    def test_clean_bar_boundary_recv_equals_prs_earns_the_bump(self) -> None:
+        s = ts.Signals(prs_merged=4, must_fix_caught=1, must_fix_received=4)
+        self.assertEqual(ts.score_delta(s), 1)
+
+    def test_one_over_clean_bar_forfeits_the_bump_but_takes_no_ding(self) -> None:
+        # A wave-leading review record does not rescue the bump once the clean
+        # bar is crossed — but it is not punished either.
+        s = ts.Signals(prs_merged=6, must_fix_caught=17, must_fix_received=12)
+        self.assertEqual(ts.score_delta(s), 0)
+
+    def test_penalty_bar_boundary_exactly_double_is_neutral(self) -> None:
+        s = ts.Signals(prs_merged=3, must_fix_received=6)
+        self.assertEqual(ts.score_delta(s), 0)
+
+    def test_penalty_bar_boundary_one_over_double_dings(self) -> None:
+        s = ts.Signals(prs_merged=3, must_fix_received=7)
+        self.assertEqual(ts.score_delta(s), -1)
+
+    def test_genuine_rate_outlier_still_takes_minus_one(self) -> None:
+        # Lucas's wave-29 record (2.14/PR) — the one -1 the ruling says must
+        # survive the change on its merits.
+        s = ts.Signals(prs_merged=7, must_fix_caught=3, must_fix_received=15)
+        self.assertEqual(ts.score_delta(s), -1)
+
+    def test_old_absolute_three_threshold_no_longer_fires(self) -> None:
+        # Pre-#1349, `must_fix_received >= 3` was an absolute -1, so a single
+        # defect found independently by three review heads tripped it. Three
+        # verdicts over nine PRs is now well within the clean bar.
+        s = ts.Signals(prs_merged=9, must_fix_received=3)
+        self.assertEqual(ts.score_delta(s), 1)
+
+    def test_wave_29_distribution_is_not_uniformly_non_positive(self) -> None:
+        """main#1349 acceptance criterion 2, pinned end-to-end.
+
+        The ten corrected wave-29 signal sets, verified against a live
+        ``extract_signals`` run at 69c2e08. Under the pre-#1349 rubric every
+        one of these returned <= 0 (7 negative, 3 zero, 0 positive), which is
+        the defect #1349 reports.
+        """
+        wave_29 = {
+            # name: (prs_merged, must_fix_caught, must_fix_received)
+            "Aino Virtanen": (9, 12, 4),
+            "Nino Kavtaradze": (8, 11, 4),
+            "Lucas Ferreira": (7, 3, 15),
+            "Weronika Zielinska": (6, 17, 12),
+            "Nadia Khoury": (4, 5, 1),
+            "Santiago Ferreira": (4, 1, 4),
+            "Wanjiku Mwangi": (3, 1, 6),
+            "Nurul Hakim": (2, 0, 2),
+            "Bereket Tadesse": (1, 1, 3),
+            "Yusuke Inoue": (1, 0, 0),
+        }
+        expected = {
+            "Aino Virtanen": 2,
+            "Nino Kavtaradze": 2,
+            "Lucas Ferreira": -1,
+            "Weronika Zielinska": 0,
+            "Nadia Khoury": 2,
+            "Santiago Ferreira": 1,
+            "Wanjiku Mwangi": 0,
+            "Nurul Hakim": 1,
+            "Bereket Tadesse": -1,
+            "Yusuke Inoue": 0,
+        }
+        actual = {
+            name: ts.score_delta(ts.Signals(prs_merged=p, must_fix_caught=c, must_fix_received=r))
+            for name, (p, c, r) in wave_29.items()
+        }
+        self.assertEqual(actual, expected)
+        deltas = list(actual.values())
+        self.assertEqual(sum(1 for d in deltas if d > 0), 5)
+        self.assertEqual(sum(1 for d in deltas if d < 0), 2)
+        self.assertEqual(sum(1 for d in deltas if d == 0), 3)
 
 
 class Decay(unittest.TestCase):

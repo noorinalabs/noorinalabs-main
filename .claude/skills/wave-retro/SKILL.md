@@ -125,9 +125,10 @@ PY
 
 Trust deltas are **mechanical** (`.claude/team/trust_matrix.md` § Mechanical Scoring, implemented in `.claude/lib/trust_signals.py`) — every row cites the countable signal behind it:
 
-- **Delta:** `new = clamp(old + score_delta(signals), 1, 5)` — bidirectional, clamped to ±2/wave. Each CI-red merge / false-positive is −1; clean multi-PR delivery or strong reviewing (`must_fix_caught ≥ 2`) is +1. A single clean PR is **not** a bump.
+- **Delta:** `new = clamp(old + score_delta(signals), 1, 5)` — bidirectional, clamped to ±2/wave. Each CI-red merge / false-positive is −1 (absolute, and each disqualifies the bump outright); multi-PR delivery (`prs_merged ≥ 2`) is +1 and strong reviewing (`must_fix_caught ≥ 2`) is +1, both only for a wave clearing the clean bar. A single clean PR is **not** a bump.
+- **Rework is rate-relative, two-band (#1349):** `must_fix_received ≤ prs_merged` is clean (bump-eligible); `> 2 × prs_merged` is −1; **between them is a neutral band — no bump, no ding**. Never apply an absolute must-fix threshold: under 3–6 review heads one defect is counted once per head, so an absolute bar measures review breadth, not author quality.
 - **Decay:** an engineer with no signal for 3 consecutive waves drifts one step toward 3 (`trust_signals.decay`).
-- **Distribution discipline:** 5 is reserved for the wave's top relative performer (`trust_signals.apply_distribution_discipline`) — never handed out for merely-clean work.
+- **Distribution discipline:** 5 is reserved for the wave's top relative performer (`trust_signals.apply_distribution_discipline`) — never handed out for merely-clean work. It is an **entry gate**: apply it to scores reaching 5 *from below*: fed a ceiling-holder with a positive delta it will cap them down to 4, which is not the intent.
 - **Retirement trigger:** run `trust_signals.retirement_trigger(score_history, ci_red_history)` per engineer; if it fires (bottom-tier ≤2 or ≥1 CI-red merge in each of the last 3 waves), surface a **persona-archive recommendation** for owner confirmation — do not auto-delete.
 
 Append a new `## Phase {N} Wave {M} Trust Updates ({DATE}) — {theme}` section with:

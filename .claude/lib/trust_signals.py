@@ -259,7 +259,77 @@ class Signals:
         )
 
     def has_negative(self) -> bool:
+        """True if **any** negative signal occurred at all — an absolute test.
+
+        This answers the literal reporting question "is there a gap to cite?",
+        and it is what :func:`negative_signal_line` needs: that function's
+        ``else`` branch prints a hard-coded ``must_fix_received=0`` in its
+        "metrics clean" evidence string, so weakening this predicate would make
+        it emit a false number.
+
+        **This is NOT the scoring gate.** The bar that decides whether a wave
+        has earned a *bump* is :meth:`qualifies_for_bump`, which is
+        deliberately weaker on the rework dimension (main#1349). The two
+        predicates were one predicate until #1349; conflating them is the
+        defect that issue reports. Do not re-merge them.
+        """
         return bool(self.must_fix_received or self.ci_red_merges or self.review_false_positives)
+
+    # ---- Rework bands (main#1349) ---------------------------------------- #
+    #
+    # ``must_fix_received`` counts blocking verdict ROUNDS received as an
+    # author. Under the 3-6 independent review heads this org runs, those are
+    # abundant *by design* — one genuine defect found independently by three
+    # reviewers counts three times. An **absolute** threshold over that number
+    # therefore measures review breadth, not author quality, which is why the
+    # old ``must_fix_received == 0`` clean gate was unreachable for every
+    # active author and the old ``>= 3`` penalty tripped on a single defect.
+    #
+    # Both bars are expressed **per PR authored**, as a multiplication — no
+    # float, no zero-guard. ``prs_merged == 0`` implies
+    # ``must_fix_received == 0`` (``extract_signals`` only ever increments the
+    # two together), so ``0 <= 0`` classifies a non-authoring engineer as
+    # within the clean bar naturally.
+    #
+    #     within clean bar   : must_fix_received <= prs_merged      (<= 1 / PR)
+    #     above penalty bar  : must_fix_received >  2 * prs_merged  ( > 2 / PR)
+    #
+    # Between them sits a **neutral band** — above the clean bar so no bump,
+    # below the penalty bar so no ding.
+
+    def rework_within_clean_bar(self) -> bool:
+        """True if authoring rework is at or below **1 must-fix per PR merged**.
+
+        The rework half of :meth:`qualifies_for_bump`; on its own it says
+        nothing about CI-red merges or review false-positives.
+        """
+        return self.must_fix_received <= self.prs_merged
+
+    def rework_above_penalty_bar(self) -> bool:
+        """True if authoring rework exceeds **2 must-fix per PR merged**.
+
+        The ``-1`` rework ding in :func:`score_delta`. Strictly stronger than
+        :meth:`rework_within_clean_bar` being false — the gap between the two
+        is the neutral band, which is neither a bump nor a ding.
+        """
+        return self.must_fix_received > 2 * self.prs_merged
+
+    def qualifies_for_bump(self) -> bool:
+        """True if the wave is clean enough to reach :func:`score_delta`'s positive branch.
+
+        Weaker than ``not has_negative()`` on the **rework dimension only**:
+        rework is judged against the per-PR clean bar rather than against an
+        absolute zero. The two hard dings — CI-red merges and review
+        false-positives — still disqualify absolutely, unchanged from the
+        pre-#1349 gate (the ruling: "``ci_red_merges`` and
+        ``review_false_positives`` remain absolute per-instance ``-1``s, the
+        positive branch still requires ``clean``").
+        """
+        return (
+            self.rework_within_clean_bar()
+            and not self.ci_red_merges
+            and not self.review_false_positives
+        )
 
 
 @dataclass
@@ -423,19 +493,38 @@ def score_delta(sig: Signals) -> int:
       negative
         - each CI-red merge:                      -1  (hard ding)
         - each review false-positive:             -1
-        - 3+ must-fix items received as author:   -1
-      positive (only when the wave is clean of the negatives above)
-        - 2+ PRs merged clean:                    +1
+        - rework above the penalty bar
+          (must_fix_received > 2 * prs_merged):   -1
+      positive (only when Signals.qualifies_for_bump())
+        - 2+ PRs merged:                          +1
         - 2+ must-fix items caught as reviewer:   +1
+
+    **Two-band rework rule (main#1349, owner ruling 2026-08-07).** The rework
+    signal is rate-relative, not absolute, and the two bars do not touch:
+
+        must_fix_received <= prs_merged        -> clean   (bump eligible)
+        prs_merged < recv <= 2 * prs_merged    -> NEUTRAL (no bump, no ding)
+        must_fix_received >  2 * prs_merged    -> penalty (-1)
+
+    The neutral band is the point of the design: an author with more rework
+    than the clean bar allows forfeits the bump, but does not take a ding
+    until the rate is genuinely an outlier. Both bars live on
+    :class:`Signals` (:meth:`~Signals.rework_within_clean_bar`,
+    :meth:`~Signals.rework_above_penalty_bar`) so each boundary is
+    independently testable.
+
+    The positive branch gate is :meth:`Signals.qualifies_for_bump`, **not**
+    :meth:`Signals.has_negative` — see those two docstrings. Before #1349 they
+    were the same predicate, which made the entire positive branch unreachable
+    for any author who received even one blocking verdict.
     """
     delta = 0
     delta -= sig.ci_red_merges
     delta -= sig.review_false_positives
-    if sig.must_fix_received >= 3:
+    if sig.rework_above_penalty_bar():
         delta -= 1
 
-    clean = not sig.has_negative()
-    if clean:
+    if sig.qualifies_for_bump():
         if sig.prs_merged >= 2:
             delta += 1
         if sig.must_fix_caught >= 2:
