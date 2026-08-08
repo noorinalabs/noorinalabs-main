@@ -23,6 +23,7 @@ Run: python3 -m unittest discover -s .claude/hooks/tests \
 
 from __future__ import annotations
 
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -1088,6 +1089,136 @@ class ConditionalVerdictFieldTests(unittest.TestCase):
         if result is not None:
             self.assertNotIn("only meaningful on", result.get("reason", ""))
 
+    # -- main#1363 MF1: presence must be LINE-ANCHORED, matching the counter.
+    # Before the fix these four `Approved` trailers were blocked for a field
+    # nobody wrote — and #1364 makes them likely, because the field is now a
+    # documented obligation reviewers will write *about* in `TechDebt:` lines.
+
+    MID_LINE_TRAILERS = (
+        "TechDebt: file Retracted: as an obligation\n",
+        "TechDebt: adoption of Retracted: is tracked by #1364\n",
+        "TechDebt: OrchestratorCaused: should be named in briefs\n",
+        "TechDebt: none — see Retracted: rollout\n",
+    )
+
+    def test_mid_line_prose_mention_does_not_block(self):
+        for trailer in self.MID_LINE_TRAILERS:
+            with self.subTest(trailer=trailer.strip()):
+                command = (
+                    "gh pr comment 42 --body \"$(cat <<'EOF'\n"
+                    "Looks good.\n\n---\n"
+                    "Requestor: Nadia Khoury\n"
+                    "Requestee: Aino Virtanen\n"
+                    "RequestOrReplied: Approved\n" + trailer + 'EOF\n)"'
+                )
+                result = self._check(command)
+                if result is not None:
+                    self.assertNotIn("only meaningful on", result.get("reason", ""))
+
+    def test_field_quoted_in_a_code_span_does_not_block(self):
+        result = self._check(
+            self._comment("Approved", "TechDebt: adoption of `Retracted:` tracked by #1364\n")
+        )
+        if result is not None:
+            self.assertNotIn("only meaningful on", result.get("reason", ""))
+
+    def test_field_quoted_in_a_tilde_fence_does_not_block(self):
+        # `charter_trailer.strip_code_regions` leaves `~~~` intact while
+        # `trust_signals._strip_code_markup` strips it — the second axis.
+        command = (
+            "gh pr comment 42 --body \"$(cat <<'EOF'\n"
+            "Here is the shape:\n~~~\nRetracted: example only\n~~~\n\n---\n"
+            "Requestor: Nadia Khoury\n"
+            "Requestee: Aino Virtanen\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none\n" + 'EOF\n)"'
+        )
+        result = self._check(command)
+        if result is not None:
+            self.assertNotIn("only meaningful on", result.get("reason", ""))
+
+    def test_genuine_field_above_the_trailer_separator_still_blocks(self):
+        # The third axis, scope: the counter reads the WHOLE body, so a
+        # line-anchored field above the `---` is present to it. The hook now
+        # agrees rather than missing it.
+        command = (
+            "gh pr comment 42 --body \"$(cat <<'EOF'\n"
+            "Retracted: withdrawing my earlier finding.\n\n---\n"
+            "Requestor: Nadia Khoury\n"
+            "Requestee: Aino Virtanen\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none\n" + 'EOF\n)"'
+        )
+        result = self._check(command)
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+
+class ConditionalFieldGrammarAgreementTests(unittest.TestCase):
+    """The hook and `trust_signals` must detect field PRESENCE identically.
+
+    main#1363 MF1: they had two grammars — the hook's was unanchored and
+    trailer-scoped, the counter's line-anchored over the whole body — so a
+    prose mention was present to one and absent to the other, and the hook
+    blocked a comment for a field nobody wrote.
+
+    The hook's copy is a deliberate mirror rather than an import (a blocking
+    PreToolUse gate should not take a 26ms dependency for one regex, and
+    `charter_trailer` cannot own it yet — `trust_signals` § main#1359 records
+    that it lacks `~~~` support and that adding it belongs to that migration).
+    This drives both implementations over one corpus so the mirror cannot
+    drift silently. Consolidation terminus: main#1359 / main#1371.
+    """
+
+    CORPUS = (
+        "Retracted: withdrawn.",
+        "**Retracted:** withdrawn.",
+        "OrchestratorCaused: stale brief.",
+        "TechDebt: adoption of Retracted: is tracked by #1364",
+        "TechDebt: OrchestratorCaused: should be named in briefs",
+        "prose mentioning Retracted: mid-sentence",
+        "TechDebt: adoption of `Retracted:` tracked",
+        "```\nRetracted: example\n```",
+        "~~~\nRetracted: example\n~~~",
+        "Retracted:",
+        "Retracted:\n",
+        "  Retracted: indented — not line-start-anchored after strip",
+        "TechDebt: none",
+        "",
+        "Retracted: a\nOrchestratorCaused: b",
+    )
+
+    def test_presence_detection_agrees_field_by_field(self):
+        lib_dir = Path(__file__).resolve().parents[2] / "lib"
+        if str(lib_dir) not in sys.path:
+            sys.path.insert(0, str(lib_dir))
+        import trust_signals as ts
+
+        counter_re = {
+            "Retracted": ts._RETRACTION_RE,
+            "OrchestratorCaused": ts._ORCHESTRATOR_CAUSED_RE,
+        }
+        for body in self.CORPUS:
+            hook_says = hook._conditional_fields_present(body)
+            counter_says = [
+                name
+                for name in hook._CONDITIONAL_VERDICT_FIELDS
+                if counter_re[name].search(ts._strip_code_markup(body))
+            ]
+            with self.subTest(body=body):
+                self.assertEqual(hook_says, counter_says)
+
+    def test_code_stripper_agrees_with_the_counters(self):
+        lib_dir = Path(__file__).resolve().parents[2] / "lib"
+        if str(lib_dir) not in sys.path:
+            sys.path.insert(0, str(lib_dir))
+        import trust_signals as ts
+
+        for body in self.CORPUS:
+            with self.subTest(body=body):
+                self.assertEqual(hook._strip_code_for_field_scan(body), ts._strip_code_markup(body))
+
 
 class ConditionalFieldEndToEndTests(unittest.TestCase):
     """#1364 acceptance: a hook-accepted comment must actually set the signal.
@@ -1117,8 +1248,6 @@ class ConditionalFieldEndToEndTests(unittest.TestCase):
         string annotations through `sys.modules[cls.__module__]` and a module
         that was never registered there fails at class-creation time.
         """
-        import sys
-
         lib_dir = Path(__file__).resolve().parents[2] / "lib"
         if str(lib_dir) not in sys.path:
             sys.path.insert(0, str(lib_dir))

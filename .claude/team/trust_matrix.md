@@ -79,7 +79,9 @@ The neutral band is the point of the design: above the clean bar an author forfe
 
 Until #1365 the function received only `(proposed_score, signals)` and never the old score, so this was a prose obligation on the caller. Applied mechanically, it capped a ceiling-holder with a `+2` delta down to 4 — converting the delta into a net `−1`.
 
-**One obligation the signature cannot carry: feed it the whole roster.** `top` is the maximum composite *within the batch*, which is inherent to a relative rule. Restricting the batch changes the answer: over wave-29's two ceiling entrants alone, Nadia becomes her own maximum and keeps a 5 that the full-roster run caps to 4. Run it over every engineer with signals this wave.
+**One obligation the signature does not carry: feed it the whole roster.** `top` is the maximum composite *within the batch*. Restricting the batch changes the answer: over wave-29's two ceiling entrants alone, Nadia becomes her own maximum and keeps a 5 that the full-roster run caps to 4. Run it over every engineer with signals this wave. Making that obligation detectable rather than documented — by taking the anchoring population as its own argument — is tracked as [#1370](https://github.com/noorinalabs/noorinalabs-main/issues/1370).
+
+**Open, tracked, deliberately not settled in #1363:** whether `composite()` should use the raw `must_fix_received` or the orchestrator-adjusted `attributable_rework()` — [#1369](https://github.com/noorinalabs/noorinalabs-main/issues/1369), with both reviewers' arguments recorded there. Today it uses the raw count.
 
 ### Rate-band calibration and revisit trigger (#1368)
 

@@ -778,15 +778,20 @@ def apply_distribution_discipline(
     (:meth:`Proposal.is_ceiling_holder` — this is an entry gate, not an
     eviction rule).
 
-    **The one caller obligation the signature cannot carry: feed it the whole
-    roster.** ``top`` is the maximum composite *within the batch*, so a
+    **The one caller obligation this signature does not carry: feed it the
+    whole roster.** ``top`` is the maximum composite *within the batch*, so a
     restricted batch silently changes the answer — an engineer can become their
     own maximum and keep a 5 the full-roster run would cap. Concretely, over
     wave-29's two ceiling entrants alone the batch maximum becomes 8 (Nadia's
-    own composite) instead of 17 (Aino's), and Nadia keeps a 5. This is
-    inherent to a relative rule and is pinned by
+    own composite) instead of 17 (Aino's), and Nadia keeps a 5. Pinned by
     ``DistributionDiscipline::test_top_is_batch_relative_so_feed_the_whole_roster``
     so it is known behaviour rather than a surprise.
+
+    Labelling it is the terminus **for this change**, not the end state:
+    **main#1370** carries the next iteration — take the full signal map
+    separately from the set being capped, which makes the anchoring population
+    an argument and the obligation detectable rather than documented. Same
+    defect shape as the one main#1365 just closed, one parameter over.
     """
 
     def composite(s: Signals) -> int:
@@ -794,10 +799,19 @@ def apply_distribution_discipline(
         # key, not a trust score.
         #
         # Uses the RAW must_fix_received, not the orchestrator-adjusted
-        # attributable count (main#1366). Deliberate: composite is a relative
-        # ranking key for one cap, the attribution adjustment was ruled for the
-        # absolute rate bars, and changing a ranking key has no evidence base
-        # here. Revisit as its own decision, not incidentally.
+        # attributable count (main#1366).
+        #
+        # **Tracked as main#1369, not settled here.** The #1363 reviewers split
+        # on it — one judging the raw count correct (composite is a relative
+        # ranking key for one cap, the attribution was ruled for the absolute
+        # rate bars, and the `2x` weights below are themselves uncalibrated, so
+        # this is a heuristic and not an instrument), the other quantifying the
+        # exposure (one marked round is worth one composite point, so with a
+        # gap as narrow as 2 between adjacent engineers, two marks could flip
+        # which of them keeps the ceiling 5 while leaving both score_delta
+        # bands untouched). Both arguments are recorded on #1369 on their
+        # merits. Leaving the behaviour unchanged and the decision tracked
+        # rather than buried in this comment.
         return (
             s.prs_merged
             + s.must_fix_caught
