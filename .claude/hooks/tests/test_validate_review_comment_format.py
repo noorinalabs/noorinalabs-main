@@ -983,5 +983,169 @@ class SurnameCollisionTests(unittest.TestCase):
                 )
 
 
+class ConditionalVerdictFieldTests(unittest.TestCase):
+    """`Retracted:` / `OrchestratorCaused:` — validated when present, never required.
+
+    main#1364 / main#1366. Both fields are gated on `ChangesRequested` by
+    `trust_signals.parse_verdicts`, so one placed on any other direction is
+    read by nobody. The hook blocks exactly that, and nothing else: absence is
+    never an error, because no hook can know a comment *is* a retraction.
+    """
+
+    @staticmethod
+    def _comment(direction: str, extra: str = "") -> str:
+        return (
+            "gh pr comment 42 --body \"$(cat <<'EOF'\n"
+            "Looks good apart from one thing.\n\n"
+            "---\n"
+            "Requestor: Nadia Khoury\n"
+            "Requestee: Aino Virtanen\n"
+            f"RequestOrReplied: {direction}\n"
+            "TechDebt: none\n" + extra + 'EOF\n)"'
+        )
+
+    def _check(self, command: str):
+        with mock.patch.object(hook, "get_branch_name", return_value="A.Virtanen/1349-x"):
+            return hook.check(_bash_input(command))
+
+    # -- absence is never blocked ----------------------------------------- #
+
+    def test_absent_fields_never_block(self):
+        for direction in ("Approved", "ChangesRequested", "Request", "Reply"):
+            with self.subTest(direction=direction):
+                result = self._check(self._comment(direction))
+                if result is not None:
+                    self.assertNotIn("only meaningful on", result.get("reason", ""))
+
+    # -- present + ChangesRequested = fine -------------------------------- #
+
+    def test_retracted_on_changes_requested_allows(self):
+        result = self._check(
+            self._comment("ChangesRequested", "Retracted: my finding was wrong.\n")
+        )
+        self.assertIsNone(result)
+
+    def test_orchestrator_caused_on_changes_requested_allows(self):
+        result = self._check(
+            self._comment("ChangesRequested", "OrchestratorCaused: stale brief.\n")
+        )
+        self.assertIsNone(result)
+
+    def test_both_fields_together_on_changes_requested_allow(self):
+        result = self._check(
+            self._comment(
+                "ChangesRequested",
+                "Retracted: withdrawn.\nOrchestratorCaused: unbatched dispatch.\n",
+            )
+        )
+        self.assertIsNone(result)
+
+    def test_spaced_and_bare_changes_spellings_are_accepted(self):
+        # Must agree with `trust_signals._verdict_kind`, which counts all three
+        # spellings — including the bare `Changes` that `_VERDICT_DIRECTIONS`
+        # deliberately excludes.
+        for direction in ("ChangesRequested", "Changes Requested", "Changes"):
+            with self.subTest(direction=direction):
+                result = self._check(
+                    self._comment(direction, "Retracted: withdrawn on reflection.\n")
+                )
+                self.assertIsNone(result)
+
+    # -- present + wrong direction = block -------------------------------- #
+
+    def test_retracted_on_approved_blocks(self):
+        result = self._check(self._comment("Approved", "Retracted: never mind.\n"))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("only meaningful on a `ChangesRequested` verdict", result["reason"])
+        self.assertIn("Retracted", result["reason"])
+
+    def test_orchestrator_caused_on_reply_blocks(self):
+        result = self._check(self._comment("Reply", "OrchestratorCaused: my dispatch.\n"))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("OrchestratorCaused", result["reason"])
+
+    def test_misplaced_field_on_request_blocks_despite_the_verdict_early_return(self):
+        """Request/Reply exit before the swap heuristic — the gate must run first."""
+        result = self._check(self._comment("Request", "Retracted: n/a.\n"))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_block_names_every_misplaced_field(self):
+        result = self._check(self._comment("Approved", "Retracted: a.\nOrchestratorCaused: b.\n"))
+        assert result is not None
+        self.assertIn("Retracted", result["reason"])
+        self.assertIn("OrchestratorCaused", result["reason"])
+
+    def test_empty_value_is_not_treated_as_present(self):
+        # An unfilled template line carries no claim; trust_signals ignores it,
+        # so the hook must not block on it either.
+        result = self._check(self._comment("Approved", "Retracted:\n"))
+        if result is not None:
+            self.assertNotIn("only meaningful on", result.get("reason", ""))
+
+
+class ConditionalFieldEndToEndTests(unittest.TestCase):
+    """#1364 acceptance: a hook-accepted comment must actually set the signal.
+
+    Verified against `trust_signals.parse_verdicts` itself rather than a unit
+    fixture — the two live in different files with independently-written
+    regexes, and the failure this closes is precisely them disagreeing.
+    """
+
+    BODY = (
+        "Found a real problem, then talked myself out of it.\n\n"
+        "---\n"
+        "Requestor: Nadia Khoury\n"
+        "Requestee: Aino Virtanen\n"
+        "RequestOrReplied: ChangesRequested\n"
+        "TechDebt: none\n"
+        "Retracted: the finding was mine to withdraw.\n"
+        "OrchestratorCaused: brief pointed at a stale head.\n"
+    )
+
+    @staticmethod
+    def _load_trust_signals():
+        """Import the real `.claude/lib/trust_signals.py`.
+
+        A plain import rather than a by-path `exec_module`: the module uses
+        `from __future__ import annotations`, so `@dataclass` resolves its
+        string annotations through `sys.modules[cls.__module__]` and a module
+        that was never registered there fails at class-creation time.
+        """
+        import sys
+
+        lib_dir = Path(__file__).resolve().parents[2] / "lib"
+        if str(lib_dir) not in sys.path:
+            sys.path.insert(0, str(lib_dir))
+        import trust_signals
+
+        return trust_signals
+
+    def test_hook_accepts_and_trust_signals_reads_both_markers(self):
+        command = "gh pr comment 42 --repo noorinalabs/noorinalabs-main --body \"$(cat <<'EOF'\n"
+        command += self.BODY + 'EOF\n)"'
+        with mock.patch.object(hook, "get_branch_name", return_value="A.Virtanen/1349-x"):
+            self.assertIsNone(hook.check(_bash_input(command)))
+
+        ts = self._load_trust_signals()
+        verdict = ts.parse_verdicts([self.BODY])[0]
+        self.assertTrue(verdict.false_positive, "Retracted: did not reach review_false_positives")
+        self.assertTrue(verdict.orchestrator_caused, "OrchestratorCaused: did not reach the signal")
+
+    def test_signal_is_capable_of_reading_non_zero(self):
+        """`review_false_positives` must be able to leave its structural zero."""
+        ts = self._load_trust_signals()
+        sig = ts.Signals()
+        for v in ts.parse_verdicts([self.BODY]):
+            if v.false_positive:
+                sig.review_false_positives += 1
+        self.assertEqual(sig.review_false_positives, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -47,6 +47,13 @@ Signals per engineer (all integers, all countable from the merged-PR set):
                                grammatically-genuine-looking retraction
                                language pointing at an unrelated finding);
                                only an explicit self-mark counts.
+  orchestrator_caused_rework   Subset of must_fix_received whose blocking
+                               comment carried ``OrchestratorCaused:`` — the
+                               block stemmed from a dispatch/brief error, not
+                               the author's work (main#1366). Excluded from
+                               the rate bars via
+                               ``Signals.attributable_rework()``; the raw
+                               must_fix_received count is unchanged.
   ===========================  ============================================
 
 CLI:
@@ -54,6 +61,10 @@ CLI:
   trust_signals.py score   <P> <M> [--status PATH]    # signals + proposed
                                                       # deltas + forced
                                                       # negative-signal line
+  trust_signals.py calibration <P> <M> [--status PATH]  # rate-band calibration
+                                                        # check; EXIT 1 = the
+                                                        # bars have drifted
+                                                        # (main#1368)
 """
 
 from __future__ import annotations
@@ -97,6 +108,40 @@ BOTTOM_TIER = 2
 # here is a charter change and is pinned as such by the tests.
 CLEAN_BAR_MUST_FIX_PER_PR = 1
 PENALTY_BAR_MUST_FIX_PER_PR = 2
+
+# ---- Calibration basis for the two bars above (main#1368) ----------------- #
+#
+# #1349 happened because `must_fix_received >= 3` was calibrated for a 1-2
+# reviewer world, silently became wrong at 3-6 review heads, and carried no
+# statement of what it assumed — so nobody noticed for eleven waves. The bars
+# above are rate-relative, which makes them robust to review *breadth* in a way
+# the old absolute threshold was not. They are NOT robust to a change in how
+# much rework is normal per PR, which is a function of head count, PR size and
+# review depth. So the assumption is recorded here, and `calibration_drift`
+# below turns it into something a future wave can mechanically check.
+#
+# Derived from P10W29 (the wave #1349 was filed against): 45 PRs, 10 authors,
+# 3-6 independent review heads. The observed must-fix-per-PR distribution had
+# median exactly 1.00 (0.00, 0.25, 0.44, 0.50, 1.00, 1.00, 2.00, 2.00, 2.14,
+# 3.00). The clean bar was set AT that median so a typical author clears it,
+# and the penalty bar at TWICE it so only a genuine rate outlier is dinged.
+#
+# The bars stop meaning what they were set to mean if the wave's median rate
+# moves materially away from 1.0 — that is the revisit trigger, and it is
+# checked by `trust_signals.py calibration <P> <M>`, which exits non-zero.
+CALIBRATION_WAVE = "P10W29"
+CALIBRATION_MEDIAN_RATE = 1.0
+CALIBRATION_REVIEW_HEADS = (3, 6)
+# How far the observed wave median may sit from CALIBRATION_MEDIAN_RATE before
+# the bars are no longer where they were meant to be. 0.5 keeps the acceptable
+# band at [0.5, 1.5]: at 1.5 the clean bar has fallen below the typical author
+# (most of the roster forfeits the bump), and at 0.5 the penalty bar has risen
+# to 4x the typical author (effectively unreachable).
+CALIBRATION_DRIFT_TOLERANCE = 0.5
+# A median over a handful of authors is noise, not a measurement — the same
+# objection the #1349 ruling raised against median-relative *scoring*. Below
+# this many authors the check reports "insufficient sample", never "drifted".
+CALIBRATION_MIN_AUTHORS = 5
 
 # A verdict comment field, e.g. ``Requestor: Aino Virtanen`` or the bold form
 # ``**Requestor:** Aino Virtanen`` (feedback_pr_review_verdict_format). Optional
@@ -217,10 +262,33 @@ def _verdict_kind(verdict: str | None) -> str:
 # cross-comment `RequestOrReplied: Retracted` + latest-verdict-wins design
 # (`validate_review_comment_format.py` module docstring, "Scope boundary"
 # section, ~lines 120-144), which needs comment-ordering semantics and is
-# explicitly future work ("proposed there, not implemented here"). Until
-# reviewers adopt this field, `review_false_positives` will read as (near)
-# always zero — an honest zero, not a false one.
+# explicitly future work ("proposed there, not implemented here").
+#
+# main#1364 promoted the field from a module-local convention to a charter
+# obligation (`.claude/team/charter/pull-requests/reviews.md` § Optional
+# verdict fields) validated by `validate_review_comment_format.py`. A hook
+# cannot *require* a conditional field — nothing can tell it a comment is
+# retracting something — so the obligation is: documented in the charter,
+# named in reviewer briefs, and validated whenever it IS present. Adoption is
+# what turns `review_false_positives`'s zero from an artifact into evidence.
 _RETRACTION_RE = re.compile(r"^\**Retracted\**:\**\s*\S", re.MULTILINE)
+
+# main#1366: rework caused by an orchestrator dispatch/brief error rather than
+# by the author's work. `must_fix_received` counts blocking rounds against the
+# author with no way to express this, so misattributed rework lands on their
+# score — documented in prose in the wave-29 matrix entry for Lucas Ferreira
+# ("partly attributable to the orchestrator's unbatched dispatch during the
+# #1333 push freeze") and invisible to the instrument one column over.
+#
+# Same shape and same constraints as `Retracted:` above, deliberately: an
+# explicit structured field on the ChangesRequested comment that raises the
+# block, set at the time it happens by whoever raises it. NOT an appeal
+# mechanism — it cannot be added after the fact to re-litigate a score,
+# because the extractor reads the durable PR thread, and a marker that
+# appears later changes nothing already applied. #842 retired narrative
+# self-grading; an attribution nobody can check would reintroduce it through
+# the back door, which is why this is a countable field and not a retro note.
+_ORCHESTRATOR_CAUSED_RE = re.compile(r"^\**OrchestratorCaused\**:\**\s*\S", re.MULTILINE)
 
 
 def _strip_code_markup(text: str) -> str:
@@ -252,6 +320,11 @@ class Signals:
     ci_red_merges: int = 0
     rework_cycles: int = 0
     review_false_positives: int = 0
+    # Subset of must_fix_received marked `OrchestratorCaused:` on the blocking
+    # comment — rework the author did not cause (main#1366). Never exceeds
+    # must_fix_received: it is only set on a ChangesRequested verdict, which
+    # increments both.
+    orchestrator_caused_rework: int = 0
     # PR numbers the engineer authored (for the evidence citation in the line).
     authored_prs: list[int] = field(default_factory=list)
 
@@ -285,6 +358,23 @@ class Signals:
         """
         return bool(self.must_fix_received or self.ci_red_merges or self.review_false_positives)
 
+    def attributable_rework(self) -> int:
+        """Must-fix rounds attributable to the **author's own work** (main#1366).
+
+        ``must_fix_received`` minus the rounds explicitly marked
+        ``OrchestratorCaused:`` on the blocking comment. This is what the rate
+        bars measure — the question they are asking is "how much rework did
+        this engineer's work generate", and a round caused by an unbatched
+        dispatch or a wrong brief is not an answer to it.
+
+        ``must_fix_received`` itself stays the raw, honest count and is what
+        :meth:`has_negative` and :func:`negative_signal_line` report, so the
+        forced negative-signal pass still shows every round that happened. The
+        ``max(0, ...)`` is defensive only; extraction cannot produce a marked
+        count above the total.
+        """
+        return max(0, self.must_fix_received - self.orchestrator_caused_rework)
+
     # ---- Rework bands (main#1349) ---------------------------------------- #
     #
     # ``must_fix_received`` counts blocking verdict ROUNDS received as an
@@ -314,7 +404,7 @@ class Signals:
         nothing about CI-red merges or review false-positives. The coefficient
         is :data:`CLEAN_BAR_MUST_FIX_PER_PR`.
         """
-        return self.must_fix_received <= CLEAN_BAR_MUST_FIX_PER_PR * self.prs_merged
+        return self.attributable_rework() <= CLEAN_BAR_MUST_FIX_PER_PR * self.prs_merged
 
     def rework_above_penalty_bar(self) -> bool:
         """True if authoring rework exceeds **2 must-fix per PR merged**.
@@ -324,7 +414,7 @@ class Signals:
         is the neutral band, which is neither a bump nor a ding. The
         coefficient is :data:`PENALTY_BAR_MUST_FIX_PER_PR`.
         """
-        return self.must_fix_received > PENALTY_BAR_MUST_FIX_PER_PR * self.prs_merged
+        return self.attributable_rework() > PENALTY_BAR_MUST_FIX_PER_PR * self.prs_merged
 
     def qualifies_for_bump(self) -> bool:
         """True if the wave is clean enough to reach :func:`score_delta`'s positive branch.
@@ -346,12 +436,16 @@ class Signals:
 
 @dataclass
 class Verdict:
-    """A parsed verdict comment: who reviewed whom, the call, and retraction."""
+    """A parsed verdict comment: who reviewed whom, the call, and its markers."""
 
     requestor: str | None
     requestee: str | None
     verdict: str | None
     false_positive: bool
+    # `OrchestratorCaused:` — this block stems from a dispatch/brief error, not
+    # from the author's work (main#1366). Defaulted so existing constructions
+    # stay valid.
+    orchestrator_caused: bool = False
 
 
 def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
@@ -379,8 +473,14 @@ def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
         # (main#1348 defect 2). Strip code spans and fenced blocks first so
         # a quoted/pasted example containing the literal `Retracted:` shape
         # is not mistaken for a real self-mark.
-        is_false_positive = _verdict_kind(verdict_str) == "changesrequested" and bool(
-            _RETRACTION_RE.search(_strip_code_markup(body))
+        scanned = _strip_code_markup(body)
+        is_changes_requested = _verdict_kind(verdict_str) == "changesrequested"
+        is_false_positive = is_changes_requested and bool(_RETRACTION_RE.search(scanned))
+        # `OrchestratorCaused:` is gated identically and for the same reason
+        # (main#1366): there is no rework round to reattribute unless THIS
+        # comment raised a block.
+        is_orchestrator_caused = is_changes_requested and bool(
+            _ORCHESTRATOR_CAUSED_RE.search(scanned)
         )
         out.append(
             Verdict(
@@ -388,6 +488,7 @@ def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
                 requestee=ree_m.group(1).strip() if ree_m else None,
                 verdict=verdict_str,
                 false_positive=is_false_positive,
+                orchestrator_caused=is_orchestrator_caused,
             )
         )
     return out
@@ -485,6 +586,11 @@ def extract_signals(phase: str, wave: str, status_path: Path) -> dict[str, Signa
             if _is_changes_requested(v.verdict):
                 pr_had_changes_requested = True
                 author_sig.must_fix_received += 1
+                # Marked rounds still count in the raw total (the round DID
+                # happen); attribution is applied by Signals.attributable_rework
+                # when the rate bars are evaluated (main#1366).
+                if v.orchestrator_caused:
+                    author_sig.orchestrator_caused_rework += 1
                 if v.requestor:
                     _bucket(v.requestor).must_fix_caught += 1
             if v.false_positive and v.requestor:
@@ -545,6 +651,71 @@ def score_delta(sig: Signals) -> int:
     return max(-2, min(2, delta))
 
 
+def rework_rate_median(signals: dict[str, Signals]) -> float | None:
+    """Median must-fix-received per PR across the wave's authors.
+
+    ``None`` when nobody authored anything. Non-authoring engineers are
+    excluded (a rate is undefined without a denominator); every author counts
+    once regardless of volume, because this measures where the *typical author*
+    sits, which is what the bars were calibrated against.
+
+    This is the only float in the module and it is deliberately **diagnostic
+    only** — it never feeds :func:`score_delta`, whose bars stay integer
+    multiplications (main#1349: "no float, no zero-guard"). Nothing here can
+    change a score.
+    """
+    rates = sorted(s.must_fix_received / s.prs_merged for s in signals.values() if s.prs_merged)
+    if not rates:
+        return None
+    mid = len(rates) // 2
+    if len(rates) % 2:
+        return rates[mid]
+    return (rates[mid - 1] + rates[mid]) / 2
+
+
+def calibration_drift(signals: dict[str, Signals]) -> tuple[bool, str]:
+    """Has the wave drifted far enough that the rate bars no longer sit right?
+
+    Returns ``(drifted, human_readable_reason)``. The revisit trigger for
+    :data:`CLEAN_BAR_MUST_FIX_PER_PR` / :data:`PENALTY_BAR_MUST_FIX_PER_PR`
+    (main#1368) — see the calibration block beside those constants for what
+    they assume and why.
+
+    Drift is **not** a defect and not a reason to withhold a wave's scores. It
+    is a signal that the coefficients were calibrated against a different
+    world and should be re-derived by an owner decision, exactly as #1349
+    re-derived the thresholds it replaced.
+    """
+    authors = sum(1 for s in signals.values() if s.prs_merged)
+    if authors < CALIBRATION_MIN_AUTHORS:
+        return False, (
+            f"insufficient sample: {authors} author(s) < {CALIBRATION_MIN_AUTHORS} — "
+            f"a median this thin is noise, not a measurement; calibration not assessed"
+        )
+    median = rework_rate_median(signals)
+    assert median is not None  # authors >= CALIBRATION_MIN_AUTHORS >= 1
+    delta = abs(median - CALIBRATION_MEDIAN_RATE)
+    band = (
+        CALIBRATION_MEDIAN_RATE - CALIBRATION_DRIFT_TOLERANCE,
+        CALIBRATION_MEDIAN_RATE + CALIBRATION_DRIFT_TOLERANCE,
+    )
+    detail = (
+        f"observed median {median:.2f} must-fix/PR over {authors} authors; "
+        f"calibrated at {CALIBRATION_MEDIAN_RATE:.2f} ({CALIBRATION_WAVE}, "
+        f"{CALIBRATION_REVIEW_HEADS[0]}-{CALIBRATION_REVIEW_HEADS[1]} review heads); "
+        f"acceptable band [{band[0]:.2f}, {band[1]:.2f}]"
+    )
+    if delta > CALIBRATION_DRIFT_TOLERANCE:
+        return True, (
+            f"CALIBRATION DRIFT: {detail}. The clean bar "
+            f"({CLEAN_BAR_MUST_FIX_PER_PR}x) and penalty bar "
+            f"({PENALTY_BAR_MUST_FIX_PER_PR}x) were set against the calibrated "
+            f"median and no longer sit where they were meant to. Re-derive them "
+            f"by owner decision (see main#1368); do not silently keep scoring."
+        )
+    return False, f"calibration OK: {detail}"
+
+
 def decay(old_score: int, waves_since_signal: int, *, after: int = DECAY_AFTER_WAVES) -> int:
     """Drift an unsignalled score one step toward NEUTRAL after ``after`` waves.
 
@@ -560,21 +731,73 @@ def decay(old_score: int, waves_since_signal: int, *, after: int = DECAY_AFTER_W
     return NEUTRAL
 
 
+@dataclass
+class Proposal:
+    """One engineer's pending score change, as fed to distribution discipline.
+
+    Carries ``old_score`` because the cap is an **entry gate**: it exists to
+    stop a 5 being handed out too freely, not to evict an engineer who already
+    holds one. Before main#1365 this type was a bare
+    ``(proposed_score, signals)`` tuple, the old score was never passed, and so
+    the entry-vs-eviction distinction lived only in prose in
+    ``trust_matrix.md`` and ``wave-retro/SKILL.md`` — untestable, and wrong the
+    first time it was applied mechanically (it capped a ceiling-holder with a
+    ``+2`` delta down to 4, turning the delta into a net ``-1``).
+
+    Named fields rather than the 3-tuple the issue proposed: ``old_score`` and
+    ``proposed_score`` are adjacent same-typed ints, and a positional swap
+    between them is silent, plausible, and exactly the misuse this type exists
+    to prevent.
+    """
+
+    old_score: int
+    proposed_score: int
+    signals: Signals
+
+    def is_ceiling_holder(self) -> bool:
+        """True if the engineer was already at the ceiling before this wave.
+
+        Such an engineer is exempt from the cap — they are not *entering* the
+        ceiling, so there is nothing for an entry gate to gate. Four waves of
+        applied history agree: W25 held 4 engineers at 5, W26 6, W27 5, W28 5
+        — 20 rows, none ever evicted.
+        """
+        return self.old_score >= MAX_SCORE
+
+
 def apply_distribution_discipline(
-    proposals: dict[str, tuple[int, Signals]],
+    proposals: dict[str, Proposal],
 ) -> dict[str, int]:
     """Cap 5 to the wave's exceptional **relative** performers (distribution
     discipline). 5 is reserved — it is not handed out for merely-clean work.
 
-    ``proposals`` maps name → (proposed_new_score, signals). A proposed 5 is
-    allowed only for the engineer(s) whose composite signal score is the wave
-    maximum AND strictly positive; every other proposed 5 is capped to 4. Scores
-    of 4 and below pass through untouched.
+    A proposed 5 is allowed only for the engineer(s) whose composite signal
+    score is the wave maximum AND strictly positive; every other proposed 5 is
+    capped to 4. Scores of 4 and below pass through untouched, and so does any
+    :class:`Proposal` whose ``old_score`` is already at the ceiling
+    (:meth:`Proposal.is_ceiling_holder` — this is an entry gate, not an
+    eviction rule).
+
+    **The one caller obligation the signature cannot carry: feed it the whole
+    roster.** ``top`` is the maximum composite *within the batch*, so a
+    restricted batch silently changes the answer — an engineer can become their
+    own maximum and keep a 5 the full-roster run would cap. Concretely, over
+    wave-29's two ceiling entrants alone the batch maximum becomes 8 (Nadia's
+    own composite) instead of 17 (Aino's), and Nadia keeps a 5. This is
+    inherent to a relative rule and is pinned by
+    ``DistributionDiscipline::test_top_is_batch_relative_so_feed_the_whole_roster``
+    so it is known behaviour rather than a surprise.
     """
 
     def composite(s: Signals) -> int:
         # Reward output + good reviewing; penalise the negatives. Pure ranking
         # key, not a trust score.
+        #
+        # Uses the RAW must_fix_received, not the orchestrator-adjusted
+        # attributable count (main#1366). Deliberate: composite is a relative
+        # ranking key for one cap, the attribution adjustment was ruled for the
+        # absolute rate bars, and changing a ranking key has no evidence base
+        # here. Revisit as its own decision, not incidentally.
         return (
             s.prs_merged
             + s.must_fix_caught
@@ -585,13 +808,15 @@ def apply_distribution_discipline(
 
     if not proposals:
         return {}
-    top = max(composite(s) for _, (_, s) in proposals.items())
+    top = max(composite(p.signals) for p in proposals.values())
     out: dict[str, int] = {}
-    for name, (proposed, sig) in proposals.items():
-        if proposed >= MAX_SCORE and not (composite(sig) == top and top > 0):
-            out[name] = MAX_SCORE - 1
-        else:
-            out[name] = proposed
+    for name, p in proposals.items():
+        capped = (
+            p.proposed_score >= MAX_SCORE
+            and not p.is_ceiling_holder()
+            and not (composite(p.signals) == top and top > 0)
+        )
+        out[name] = MAX_SCORE - 1 if capped else p.proposed_score
     return out
 
 
@@ -607,7 +832,15 @@ def negative_signal_line(name: str, sig: Signals) -> str:
         if sig.ci_red_merges:
             gaps.append(f"{sig.ci_red_merges} CI-red merge(s)")
         if sig.must_fix_received:
-            gaps.append(f"{sig.must_fix_received} must-fix received")
+            gap = f"{sig.must_fix_received} must-fix received"
+            if sig.orchestrator_caused_rework:
+                # Show both numbers — the raw count is what happened, the
+                # attributable count is what the rate bars scored (main#1366).
+                gap += (
+                    f" ({sig.orchestrator_caused_rework} orchestrator-caused, "
+                    f"{sig.attributable_rework()} attributable)"
+                )
+            gaps.append(gap)
         if sig.review_false_positives:
             gaps.append(f"{sig.review_false_positives} review false-positive(s)")
         return f"{name}: " + ", ".join(gaps)
@@ -667,7 +900,15 @@ def _cmd_extract(args: argparse.Namespace) -> int:
 
 def _cmd_score(args: argparse.Namespace) -> int:
     sigs = extract_signals(args.phase, args.wave, args.status)
-    proposals = {n: (NEUTRAL + score_delta(s), s) for n, s in sigs.items()}
+    # This command reports what each engineer would score *seeded from neutral*
+    # — it has no access to real old scores — so every proposal is a ceiling
+    # entrant by construction (NEUTRAL < MAX_SCORE) and the cap applies to all
+    # of them, exactly as it did before main#1365. /wave-retro Step 5 is the
+    # caller that passes real old scores and therefore exempts ceiling-holders.
+    proposals = {
+        n: Proposal(old_score=NEUTRAL, proposed_score=NEUTRAL + score_delta(s), signals=s)
+        for n, s in sigs.items()
+    }
     disciplined = apply_distribution_discipline(proposals)
     report = {
         n: {
@@ -680,6 +921,21 @@ def _cmd_score(args: argparse.Namespace) -> int:
     }
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0
+
+
+def _cmd_calibration(args: argparse.Namespace) -> int:
+    """Rate-band calibration check (main#1368). **Exit 1 means drifted.**
+
+    Deliberately a separate subcommand with a failing exit code rather than a
+    field in ``score``'s JSON: a value someone has to notice is the same shape
+    as the eleven-wave silence #1349 was filed about. ``/wave-retro`` runs this
+    as a mandatory step, so a drifted wave stops the retro and forces a
+    decision instead of scoring quietly against stale coefficients.
+    """
+    sigs = extract_signals(args.phase, args.wave, args.status)
+    drifted, reason = calibration_drift(sigs)
+    print(reason)
+    return 1 if drifted else 0
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -698,6 +954,13 @@ def _build_parser() -> argparse.ArgumentParser:
     p_score = sub.add_parser("score", help="emit signals + proposed deltas as JSON")
     _add_pm(p_score)
     p_score.set_defaults(func=_cmd_score)
+
+    p_cal = sub.add_parser(
+        "calibration",
+        help="check the rate bars against the wave's observed median (exit 1 = drifted)",
+    )
+    _add_pm(p_cal)
+    p_cal.set_defaults(func=_cmd_calibration)
     return parser
 
 

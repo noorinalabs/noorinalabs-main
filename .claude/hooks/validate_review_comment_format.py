@@ -670,6 +670,48 @@ _VERDICT_DIRECTIONS = frozenset(
 )
 
 
+# main#1364 / main#1366: two OPTIONAL trailer fields that `trust_signals.py`
+# reads, both meaningful ONLY on a ChangesRequested verdict:
+#
+#   Retracted:          the reviewer withdraws the must-fix raised in THIS
+#                       comment (feeds `review_false_positives` — the only
+#                       accountability term on the reviewing side).
+#   OrchestratorCaused: this block stems from a dispatch/brief error rather
+#                       than the author's work (feeds
+#                       `Signals.orchestrator_caused_rework`, excluded from the
+#                       rate bars).
+#
+# A hook cannot REQUIRE either one — nothing can tell it that a given comment
+# is retracting something, or that a block was the orchestrator's fault. So
+# these are validated **when present**, never demanded by their absence. The
+# failure they close is narrow and real: a field placed on an Approved /
+# Request / Reply comment is silently ignored by `parse_verdicts` (both are
+# gated on ChangesRequested), so the author believes they recorded something
+# and the counter never sees it.
+_CONDITIONAL_VERDICT_FIELDS = ("Retracted", "OrchestratorCaused")
+
+
+def _direction_is_changes_requested(body: str) -> bool:
+    """True if the `RequestOrReplied:` value is specifically ChangesRequested.
+
+    Narrower than :func:`_direction_is_verdict`, which also accepts Approved.
+    Accepts the bare ``Changes`` spelling that `_VERDICT_DIRECTIONS`
+    deliberately excludes, because `trust_signals._verdict_kind` DOES count it
+    as ChangesRequested — this predicate must agree with the consumer whose
+    behaviour it is protecting, not with the sibling verdict-set.
+    """
+    match = re.search(r"RequestOrReplied:\s*(.+)", body)
+    if not match:
+        return False
+    raw = match.group(1).strip().strip("*").strip().lower()
+    if not raw:
+        return False
+    parts = raw.split()
+    if not parts:
+        return False
+    return re.sub(r"[^a-z0-9]", "", parts[0]) in {"changesrequested", "changes"}
+
+
 def _direction_is_verdict(body: str) -> bool:
     """True if the comment body's `RequestOrReplied:` value is a verdict direction.
 
@@ -875,6 +917,40 @@ def check(input_data: dict) -> dict | None:
                 f"Fix: put the four charter fields in a trailer block at the very "
                 f"END of the comment, after a final `---` line. Renaming the field "
                 f"alone will NOT fix this.\n\n"
+                f"Charter: {CHARTER_REF}"
+            ),
+        }
+        log_pretooluse_block("validate_review_comment_format", command, result["reason"])
+        return result
+
+    # main#1364/#1366: validate the two conditional fields WHEN PRESENT. Both
+    # are gated on ChangesRequested by `trust_signals.parse_verdicts`, so one
+    # placed on any other direction is read by nobody — the author thinks they
+    # recorded a retraction or an attribution and the counter never sees it.
+    # This runs BEFORE the `_direction_is_verdict` early-return below,
+    # deliberately: Request/Reply exit there, and Request/Reply is exactly one
+    # of the misplacements worth catching.
+    misplaced = [f for f in _CONDITIONAL_VERDICT_FIELDS if extract_charter_field(f, body)]
+    if misplaced and not _direction_is_changes_requested(body):
+        direction = extract_charter_field(CHARTER_FIELD, body) or "(unreadable)"
+        result = {
+            "decision": "block",
+            "reason": (
+                f"BLOCKED: `{'`, `'.join(misplaced)}:` "
+                f"{'is' if len(misplaced) == 1 else 'are'} only meaningful on a "
+                f"`ChangesRequested` verdict, but this comment's "
+                f"`{CHARTER_FIELD}:` is `{direction}`.\n\n"
+                "`trust_signals.parse_verdicts` gates both fields on "
+                "ChangesRequested — there is no must-fix to retract, and no "
+                "rework round to reattribute, unless THIS comment raised a "
+                "block. As written the field is silently ignored: the trust "
+                "signal it feeds will read zero and nothing will report that "
+                "it was dropped.\n\n"
+                "Fix: put the field on the `ChangesRequested` comment that "
+                "raised the finding. To withdraw a must-fix raised in an "
+                "EARLIER comment, amend that comment rather than marking a "
+                "later one — cross-comment retraction is not implemented "
+                "(see § Scope boundary above).\n\n"
                 f"Charter: {CHARTER_REF}"
             ),
         }

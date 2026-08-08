@@ -297,6 +297,61 @@ class ParseVerdicts(unittest.TestCase):
         v = ts.parse_verdicts([body])[0]
         self.assertFalse(v.false_positive)
 
+    # -- main#1366: `OrchestratorCaused:` is a sibling of `Retracted:` and is
+    # gated identically — structured field, ChangesRequested only, code
+    # regions stripped. These mirror the `Retracted:` cases above.
+
+    def test_orchestrator_caused_field_on_changes_requested_is_detected(self) -> None:
+        body = (
+            _verdict("Nino Kavtaradze", "Lucas Ferreira", "ChangesRequested")
+            + "\nOrchestratorCaused: stale brief — dispatched against a pre-#1333 head."
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertTrue(v.orchestrator_caused)
+        self.assertFalse(v.false_positive)  # independent markers
+
+    def test_bold_orchestrator_caused_field_is_detected(self) -> None:
+        body = (
+            _verdict("Nino Kavtaradze", "Lucas Ferreira", "Changes Requested")
+            + "\n**OrchestratorCaused:** unbatched dispatch staled this verdict."
+        )
+        self.assertTrue(ts.parse_verdicts([body])[0].orchestrator_caused)
+
+    def test_orchestrator_caused_on_approved_is_ignored(self) -> None:
+        """No block was raised, so there is no rework round to reattribute."""
+        body = (
+            _verdict("Nino Kavtaradze", "Lucas Ferreira", "Approved") + "\nOrchestratorCaused: n/a."
+        )
+        self.assertFalse(ts.parse_verdicts([body])[0].orchestrator_caused)
+
+    def test_orchestrator_caused_on_reply_is_ignored(self) -> None:
+        body = (
+            _verdict("Lucas Ferreira", "Nino Kavtaradze", "Reply")
+            + "\nOrchestratorCaused: the brief was stale."
+        )
+        self.assertFalse(ts.parse_verdicts([body])[0].orchestrator_caused)
+
+    def test_orchestrator_caused_empty_value_does_not_count(self) -> None:
+        body = (
+            _verdict("Nino Kavtaradze", "Lucas Ferreira", "ChangesRequested")
+            + "\nOrchestratorCaused:\n"
+        )
+        self.assertFalse(ts.parse_verdicts([body])[0].orchestrator_caused)
+
+    def test_orchestrator_caused_mid_line_prose_does_not_count(self) -> None:
+        body = (
+            _verdict("Nino Kavtaradze", "Lucas Ferreira", "ChangesRequested")
+            + "\nSee the field convention: OrchestratorCaused: <reason> marks dispatch errors."
+        )
+        self.assertFalse(ts.parse_verdicts([body])[0].orchestrator_caused)
+
+    def test_orchestrator_caused_in_fenced_block_is_ignored(self) -> None:
+        body = (
+            _verdict("Nino Kavtaradze", "Lucas Ferreira", "ChangesRequested")
+            + "\n```\nOrchestratorCaused: example only\n```\n"
+        )
+        self.assertFalse(ts.parse_verdicts([body])[0].orchestrator_caused)
+
     # -- Regression: main#1348 wave-29 corpus. All 17 real wave-29 hits under
     # the old free-text regex were wrong — reviewers discussing their own
     # false-positive test corpus, naming the defect class in prose, or
@@ -554,25 +609,49 @@ class ReworkBandPredicates(unittest.TestCase):
     """
 
     def test_band_coefficients_match_the_charter(self) -> None:
-        """The two bars are named constants, and their values are charter state.
+        """Pin the coefficient VALUES to the charter, and each predicate's
+        boundary to its own coefficient — from **both** sides.
 
         `trust_matrix.md` § The two rework bands states 1/PR and 2/PR as the
-        owner-ruled values (#1349). Changing either constant is a charter
-        change, not a code change — this pins them so the two cannot drift
-        apart silently, and so the multiplication cannot be re-inlined.
+        owner-ruled values (#1349), so changing either constant is a charter
+        change rather than a code change. This test proves exactly two things:
+
+        1. the constants still hold the charter's values; and
+        2. each predicate flips at the point its constant names — asserted at
+           the boundary AND one step past it, so a predicate that is *looser*
+           than its constant fails here and not merely in a neighbouring test.
+
+        **What it cannot prove (main#1367).** It does not prove the predicates
+        reference the constants rather than equal-valued literals. Replacing
+        ``CLEAN_BAR_MUST_FIX_PER_PR *`` with ``1 *`` is an *equivalent mutant*
+        — identical behaviour on every input — so no test can discriminate it,
+        and the earlier version of this docstring claimed otherwise. Keeping
+        the constants referenced is a review concern, not a testable one.
         """
         self.assertEqual(ts.CLEAN_BAR_MUST_FIX_PER_PR, 1)
         self.assertEqual(ts.PENALTY_BAR_MUST_FIX_PER_PR, 2)
-        # And the predicates are actually wired to them, not to inline literals.
+
         prs = 4
-        on_clean_bar = ts.Signals(
-            prs_merged=prs, must_fix_received=ts.CLEAN_BAR_MUST_FIX_PER_PR * prs
+        clean_bar = ts.CLEAN_BAR_MUST_FIX_PER_PR * prs
+        penalty_bar = ts.PENALTY_BAR_MUST_FIX_PER_PR * prs
+
+        # Clean bar is inclusive: true AT the bar, false one past it. The
+        # second assertion is what a loosened predicate (e.g. an inline `2 *`
+        # where the constant says 1) trips on.
+        self.assertTrue(
+            ts.Signals(prs_merged=prs, must_fix_received=clean_bar).rework_within_clean_bar()
         )
-        self.assertTrue(on_clean_bar.rework_within_clean_bar())
-        on_penalty_bar = ts.Signals(
-            prs_merged=prs, must_fix_received=ts.PENALTY_BAR_MUST_FIX_PER_PR * prs
+        self.assertFalse(
+            ts.Signals(prs_merged=prs, must_fix_received=clean_bar + 1).rework_within_clean_bar()
         )
-        self.assertFalse(on_penalty_bar.rework_above_penalty_bar())  # bar is exclusive
+
+        # Penalty bar is exclusive: false AT the bar, true one past it.
+        self.assertFalse(
+            ts.Signals(prs_merged=prs, must_fix_received=penalty_bar).rework_above_penalty_bar()
+        )
+        self.assertTrue(
+            ts.Signals(prs_merged=prs, must_fix_received=penalty_bar + 1).rework_above_penalty_bar()
+        )
 
     def test_recv_equal_to_prs_is_within_clean_bar(self) -> None:
         s = ts.Signals(prs_merged=4, must_fix_received=4)  # exactly 1.0/PR
@@ -714,6 +793,172 @@ class ScoreDeltaReworkBands(unittest.TestCase):
         self.assertEqual(sum(1 for d in deltas if d == 0), 3)
 
 
+# --------------------------------------------------------------------------- #
+# Orchestrator-caused rework attribution (main#1366)
+# --------------------------------------------------------------------------- #
+class AttributableRework(unittest.TestCase):
+    def test_defaults_to_the_raw_count(self) -> None:
+        s = ts.Signals(prs_merged=7, must_fix_received=15)
+        self.assertEqual(s.attributable_rework(), 15)
+
+    def test_marked_rounds_are_subtracted(self) -> None:
+        s = ts.Signals(prs_merged=7, must_fix_received=15, orchestrator_caused_rework=2)
+        self.assertEqual(s.attributable_rework(), 13)
+
+    def test_never_negative(self) -> None:
+        s = ts.Signals(prs_merged=1, must_fix_received=1, orchestrator_caused_rework=9)
+        self.assertEqual(s.attributable_rework(), 0)
+
+    def test_raw_count_is_untouched_and_still_reported(self) -> None:
+        """The forced negative-signal pass must still show every round.
+
+        Attribution changes what the rate bars score, not what happened.
+        """
+        s = ts.Signals(prs_merged=7, must_fix_received=15, orchestrator_caused_rework=2)
+        self.assertEqual(s.must_fix_received, 15)
+        self.assertTrue(s.has_negative())
+        line = ts.negative_signal_line("Lucas Ferreira", s)
+        self.assertIn("15 must-fix received", line)
+        self.assertIn("2 orchestrator-caused", line)
+        self.assertIn("13 attributable", line)
+
+    def test_attribution_can_move_a_delta_across_the_penalty_bar(self) -> None:
+        """The mechanism has teeth — one marked round is the whole margin.
+
+        Lucas's wave-29 shape: 15 received over 7 PRs, penalty bar at 14. One
+        round reattributed puts him in the neutral band instead of at -1.
+        """
+        unmarked = ts.Signals(prs_merged=7, must_fix_caught=3, must_fix_received=15)
+        marked = ts.Signals(
+            prs_merged=7, must_fix_caught=3, must_fix_received=15, orchestrator_caused_rework=1
+        )
+        self.assertEqual(ts.score_delta(unmarked), -1)
+        self.assertEqual(ts.score_delta(marked), 0)
+
+    def test_attribution_can_restore_the_clean_bar_and_the_bump(self) -> None:
+        base = ts.Signals(prs_merged=4, must_fix_caught=3, must_fix_received=5)
+        self.assertEqual(ts.score_delta(base), 0)  # one over the clean bar
+        marked = ts.Signals(
+            prs_merged=4, must_fix_caught=3, must_fix_received=5, orchestrator_caused_rework=1
+        )
+        self.assertEqual(ts.score_delta(marked), 2)
+
+    def test_wave_29_deltas_are_unchanged_because_no_round_was_marked(self) -> None:
+        """#1366 acceptance: state the effect on Lucas's -1 explicitly.
+
+        The mechanism is prospective, not retroactive — no wave-29 comment
+        carries `OrchestratorCaused:` (the field did not exist), so every
+        engineer extracts `orchestrator_caused_rework=0` and every applied
+        delta is untouched. Marking wave-29 rounds after the fact is exactly
+        the appeal mechanism the issue forbids.
+        """
+        wave_29 = {
+            "Aino Virtanen": (9, 12, 4, 2),
+            "Nino Kavtaradze": (8, 11, 4, 2),
+            "Lucas Ferreira": (7, 3, 15, -1),
+            "Weronika Zielinska": (6, 17, 12, 0),
+            "Nadia Khoury": (4, 5, 1, 2),
+            "Santiago Ferreira": (4, 1, 4, 1),
+            "Wanjiku Mwangi": (3, 1, 6, 0),
+            "Nurul Hakim": (2, 0, 2, 1),
+            "Bereket Tadesse": (1, 1, 3, -1),
+            "Yusuke Inoue": (1, 0, 0, 0),
+        }
+        for name, (prs, caught, recv, expected) in wave_29.items():
+            with self.subTest(engineer=name):
+                sig = ts.Signals(prs_merged=prs, must_fix_caught=caught, must_fix_received=recv)
+                self.assertEqual(sig.orchestrator_caused_rework, 0)
+                self.assertEqual(sig.attributable_rework(), recv)
+                self.assertEqual(ts.score_delta(sig), expected)
+
+
+# --------------------------------------------------------------------------- #
+# Rate-band calibration + revisit trigger (main#1368)
+# --------------------------------------------------------------------------- #
+def _authors(*rates: tuple[int, int]) -> dict[str, ts.Signals]:
+    """Build a signal map from (prs_merged, must_fix_received) pairs."""
+    return {
+        f"E{i}": ts.Signals(prs_merged=p, must_fix_received=r) for i, (p, r) in enumerate(rates)
+    }
+
+
+class CalibrationDrift(unittest.TestCase):
+    def test_wave_29_median_is_the_recorded_calibration_point(self) -> None:
+        """The calibration basis is a fact about P10W29, not an assertion.
+
+        Recomputed from the corrected signal set the bars were derived
+        against. If this fails, the constants' calibration comment is wrong.
+        """
+        wave_29 = _authors(
+            (9, 4), (8, 4), (7, 15), (6, 12), (4, 1), (4, 4), (3, 6), (2, 2), (1, 3), (1, 0)
+        )
+        self.assertEqual(ts.rework_rate_median(wave_29), ts.CALIBRATION_MEDIAN_RATE)
+        drifted, reason = ts.calibration_drift(wave_29)
+        self.assertFalse(drifted)
+        self.assertIn("calibration OK", reason)
+
+    def test_median_excludes_non_authors_and_handles_even_counts(self) -> None:
+        # Non-authors have no denominator and must not be counted as rate 0.
+        sigs = _authors((2, 0), (2, 4))  # rates 0.0 and 2.0 -> median 1.0
+        sigs["Reviewer"] = ts.Signals(must_fix_caught=9)  # prs_merged == 0
+        self.assertEqual(ts.rework_rate_median(sigs), 1.0)
+
+    def test_median_is_none_when_nobody_authored(self) -> None:
+        self.assertIsNone(ts.rework_rate_median({"R": ts.Signals(must_fix_caught=3)}))
+        self.assertIsNone(ts.rework_rate_median({}))
+
+    def test_drift_fires_when_rework_rate_climbs(self) -> None:
+        # Every author at 2.0/PR — the clean bar now sits below the typical
+        # author, so the bars no longer mean what they were set to mean.
+        sigs = _authors(*[(3, 6)] * 6)
+        drifted, reason = ts.calibration_drift(sigs)
+        self.assertTrue(drifted)
+        self.assertIn("CALIBRATION DRIFT", reason)
+        self.assertIn("2.00", reason)
+
+    def test_drift_fires_when_rework_rate_collapses(self) -> None:
+        sigs = _authors(*[(4, 0)] * 6)
+        drifted, reason = ts.calibration_drift(sigs)
+        self.assertTrue(drifted)
+        self.assertIn("CALIBRATION DRIFT", reason)
+
+    def test_silent_inside_the_tolerance_band_on_both_edges(self) -> None:
+        # Exactly at each edge of [0.5, 1.5] is still OK — the trigger is
+        # strictly-greater-than, so an edge wave is not flagged.
+        for prs, recv in ((2, 1), (2, 3)):  # rates 0.5 and 1.5
+            sigs = _authors(*[(prs, recv)] * 6)
+            drifted, _ = ts.calibration_drift(sigs)
+            self.assertFalse(drifted, f"{recv}/{prs} should be inside the band")
+
+    def test_thin_sample_reports_insufficient_never_drifted(self) -> None:
+        # A wildly drifted rate over too few authors must NOT fire — a median
+        # this thin is noise (the #1349 ruling's own objection to Option 2).
+        sigs = _authors(*[(1, 9)] * (ts.CALIBRATION_MIN_AUTHORS - 1))
+        drifted, reason = ts.calibration_drift(sigs)
+        self.assertFalse(drifted)
+        self.assertIn("insufficient sample", reason)
+
+    def test_calibration_never_touches_a_score(self) -> None:
+        """The float median is diagnostic only — score_delta stays integer."""
+        drifted_wave = _authors(*[(3, 6)] * 6)
+        self.assertTrue(ts.calibration_drift(drifted_wave)[0])
+        # Same signals, scored: the neutral-band answer, unaffected by drift.
+        self.assertEqual(ts.score_delta(ts.Signals(prs_merged=3, must_fix_received=6)), 0)
+
+    def test_cli_exit_code_is_the_loud_part(self) -> None:
+        """`calibration` exits 1 on drift, 0 otherwise — verified both ways.
+
+        The exit code is the whole point of shipping this as a subcommand
+        rather than a field in `score`'s JSON (main#1368): /wave-retro runs it
+        as a mandatory step, so a drifted wave stops the retro.
+        """
+        drifted = _authors(*[(3, 6)] * 6)
+        ok = _authors(*[(2, 2)] * 6)
+        for sigs, expected in ((drifted, 1), (ok, 0)):
+            with mock.patch.object(ts, "extract_signals", return_value=sigs):
+                self.assertEqual(ts.main(["calibration", "10", "29"]), expected)
+
+
 class Decay(unittest.TestCase):
     def test_no_decay_before_threshold(self) -> None:
         self.assertEqual(ts.decay(5, 2), 5)
@@ -729,23 +974,116 @@ class Decay(unittest.TestCase):
         self.assertEqual(ts.decay(3, 9), 3)
 
 
+def _entrant(proposed: int, signals: ts.Signals, *, old: int = ts.NEUTRAL) -> ts.Proposal:
+    """A proposal from below the ceiling — the case the cap exists for."""
+    return ts.Proposal(old_score=old, proposed_score=proposed, signals=signals)
+
+
+def _holder(proposed: int, signals: ts.Signals) -> ts.Proposal:
+    """A proposal from an engineer already at the ceiling."""
+    return ts.Proposal(old_score=ts.MAX_SCORE, proposed_score=proposed, signals=signals)
+
+
 class DistributionDiscipline(unittest.TestCase):
     def test_five_reserved_for_top_performer(self) -> None:
         proposals = {
-            "Top": (5, ts.Signals(prs_merged=5, must_fix_caught=3)),
-            "AlsoFive": (5, ts.Signals(prs_merged=2)),
+            "Top": _entrant(5, ts.Signals(prs_merged=5, must_fix_caught=3)),
+            "AlsoFive": _entrant(5, ts.Signals(prs_merged=2)),
         }
         out = ts.apply_distribution_discipline(proposals)
         self.assertEqual(out["Top"], 5)
         self.assertEqual(out["AlsoFive"], 4)  # capped — not the top performer
 
     def test_four_passes_through(self) -> None:
-        proposals = {"X": (4, ts.Signals(prs_merged=2))}
+        proposals = {"X": _entrant(4, ts.Signals(prs_merged=2))}
         self.assertEqual(ts.apply_distribution_discipline(proposals)["X"], 4)
 
     def test_no_five_when_top_is_not_positive(self) -> None:
-        proposals = {"X": (5, ts.Signals())}
+        proposals = {"X": _entrant(5, ts.Signals())}
         self.assertEqual(ts.apply_distribution_discipline(proposals)["X"], 4)
+
+    # ---- Entry gate, not eviction rule (main#1365) ----------------------- #
+    # The ceiling-HOLDER path had no coverage at all before this.
+
+    def test_ceiling_holder_with_a_positive_delta_is_not_capped(self) -> None:
+        """#1365 acceptance 1 — the regression that motivated the signature.
+
+        Nino's wave-29 record: already at 5, earns +2, composite 15 against a
+        wave maximum of 17. Under the old bare-tuple signature this returned 4,
+        turning a +2 delta into a net -1.
+        """
+        proposals = {
+            "Aino": _holder(5, ts.Signals(prs_merged=9, must_fix_caught=12, must_fix_received=4)),
+            "Nino": _holder(5, ts.Signals(prs_merged=8, must_fix_caught=11, must_fix_received=4)),
+        }
+        out = ts.apply_distribution_discipline(proposals)
+        self.assertEqual(out["Nino"], 5)  # holder — exempt despite composite 15 < 17
+        self.assertEqual(out["Aino"], 5)  # top composite anyway
+
+    def test_ceiling_entrant_below_the_wave_max_is_capped(self) -> None:
+        """#1365 acceptance 2 — the entrant path still caps."""
+        proposals = {
+            "Aino": _holder(5, ts.Signals(prs_merged=9, must_fix_caught=12, must_fix_received=4)),
+            "Nurul": _entrant(5, ts.Signals(prs_merged=2, must_fix_received=2), old=4),
+        }
+        self.assertEqual(ts.apply_distribution_discipline(proposals)["Nurul"], 4)
+
+    def test_holder_exemption_does_not_rescue_a_dropping_score(self) -> None:
+        # Exemption is from the CAP, not from the delta. A holder proposed
+        # below the ceiling passes through at the proposed value.
+        proposals = {"Held": _holder(3, ts.Signals(prs_merged=1, must_fix_received=9))}
+        self.assertEqual(ts.apply_distribution_discipline(proposals)["Held"], 3)
+
+    def test_top_is_batch_relative_so_feed_the_whole_roster(self) -> None:
+        """The one caller obligation the signature cannot enforce.
+
+        `top` is the maximum composite *within the batch*. Restricted to the
+        two wave-29 ceiling entrants, Nadia (composite 8) becomes her own
+        maximum and keeps a 5 that the full-roster run caps to 4. Pinned as
+        known behaviour so the next reader meets it here rather than in a
+        trust score.
+        """
+        aino = ts.Signals(prs_merged=9, must_fix_caught=12, must_fix_received=4)  # composite 17
+        nadia = ts.Signals(prs_merged=4, must_fix_caught=5, must_fix_received=1)  # composite 8
+        nurul = ts.Signals(prs_merged=2, must_fix_received=2)  # composite 0
+
+        entrants_only = {
+            "Nadia": _entrant(5, nadia),
+            "Nurul": _entrant(5, nurul, old=4),
+        }
+        self.assertEqual(ts.apply_distribution_discipline(entrants_only)["Nadia"], 5)
+
+        whole_roster = dict(entrants_only, Aino=_holder(5, aino))
+        self.assertEqual(ts.apply_distribution_discipline(whole_roster)["Nadia"], 4)
+        self.assertEqual(ts.apply_distribution_discipline(whole_roster)["Nurul"], 4)
+
+    def test_wave_29_applied_scores_are_unchanged_by_the_entry_gate(self) -> None:
+        """The signature change must not move any applied wave-29 score.
+
+        Every row below is the score currently recorded in `trust_matrix.md`
+        § Phase 10 Wave 29. Re-derived here through the new signature; a
+        mismatch is an owner decision, not something to reconcile (main#1365).
+        """
+        # name: (old, prs, caught, recv, applied)
+        wave_29 = {
+            "Aino Virtanen": (5, 9, 12, 4, 5),
+            "Nino Kavtaradze": (5, 8, 11, 4, 5),
+            "Lucas Ferreira": (4, 7, 3, 15, 3),
+            "Weronika Zielinska": (3, 6, 17, 12, 3),
+            "Nadia Khoury": (3, 4, 5, 1, 4),
+            "Santiago Ferreira": (3, 4, 1, 4, 4),
+            "Wanjiku Mwangi": (3, 3, 1, 6, 3),
+            "Nurul Hakim": (4, 2, 0, 2, 4),
+            "Bereket Tadesse": (3, 1, 1, 3, 2),
+            "Yusuke Inoue": (3, 1, 0, 0, 3),
+        }
+        proposals = {}
+        for name, (old, prs, caught, recv, _) in wave_29.items():
+            sig = ts.Signals(prs_merged=prs, must_fix_caught=caught, must_fix_received=recv)
+            proposed = max(ts.MIN_SCORE, min(ts.MAX_SCORE, old + ts.score_delta(sig)))
+            proposals[name] = ts.Proposal(old_score=old, proposed_score=proposed, signals=sig)
+        out = ts.apply_distribution_discipline(proposals)
+        self.assertEqual(out, {n: v[4] for n, v in wave_29.items()})
 
 
 class NegativeSignalPass(unittest.TestCase):

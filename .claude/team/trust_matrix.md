@@ -75,11 +75,17 @@ The neutral band is the point of the design: above the clean bar an author forfe
 
 `trust_signals.apply_distribution_discipline(...)` — **5 is reserved** for exceptional *relative* wave performance, not handed out for merely-clean work. A proposed 5 is allowed only for the engineer(s) with the wave's top composite signal score (and that score must be strictly positive); every other proposed 5 is capped to 4.
 
-**It is an entry gate, not an eviction rule.** The cap applies to a score *reaching* 5 from below; an engineer already at 5 whose delta is non-negative holds at 5 by the `clamp(old + delta, 1, 5)` rule. The evidence is the applied history, not a sentence about it: **W25 held 4 engineers at 5, W26 6, W27 5, W28 5 — 20 ceiling-holder rows across four waves, none evicted.**
+**It is an entry gate, not an eviction rule — and since #1365 the signature enforces that.** The cap applies to a score *reaching* 5 from below; an engineer already at 5 whose delta is non-negative holds at 5. Callers pass `trust_signals.Proposal(old_score=…, proposed_score=…, signals=…)`, and the function exempts any proposal whose `old_score` is already at the ceiling, so the output is applied as returned. The evidence for the rule is the applied history, not a sentence about it: **W25 held 4 engineers at 5, W26 6, W27 5, W28 5 — 20 ceiling-holder rows across four waves, none evicted.**
 
-**Feed it the whole roster.** `top` is the maximum composite *within the batch*, so restricting the batch changes the answer: over wave-29's two ceiling entrants alone, Nadia becomes her own maximum and keeps a 5 that the full-roster run caps to 4. Run it over every engineer with signals this wave and read off the entrants' results.
+Until #1365 the function received only `(proposed_score, signals)` and never the old score, so this was a prose obligation on the caller. Applied mechanically, it capped a ceiling-holder with a `+2` delta down to 4 — converting the delta into a net `−1`.
 
-The function cannot tell entry from eviction — it receives only `(proposed_score, signals)` and never the old score — so the caller supplies that distinction. Applied indiscriminately to the output it will cap a ceiling-holder with a **positive** delta down to 4, converting a `+2` into a net `−1`; that is a known rough edge, surfaced while applying #1349 (see the wave-29 section) and not fixed here.
+**One obligation the signature cannot carry: feed it the whole roster.** `top` is the maximum composite *within the batch*, which is inherent to a relative rule. Restricting the batch changes the answer: over wave-29's two ceiling entrants alone, Nadia becomes her own maximum and keeps a 5 that the full-roster run caps to 4. Run it over every engineer with signals this wave.
+
+### Rate-band calibration and revisit trigger (#1368)
+
+`CLEAN_BAR_MUST_FIX_PER_PR = 1` and `PENALTY_BAR_MUST_FIX_PER_PR = 2` are calibrated against **P10W29**: 45 PRs, 10 authors, 3–6 independent review heads, observed must-fix-per-PR median **exactly 1.00**. The clean bar sits *at* that median so a typical author clears it; the penalty bar at *twice* it so only a rate outlier is dinged.
+
+Being rate-relative makes the bars robust to review *breadth* — the failure that produced #1349. It does **not** make them robust to a change in how much rework is normal per PR, which moves with head count, PR size and review depth. So the revisit trigger is mechanical, not a note asking someone to remember: `python3 .claude/lib/trust_signals.py calibration {P} {M}` **exits non-zero** when the wave's observed median leaves `[0.5, 1.5]`, and `/wave-retro` runs it as a mandatory step. Drift is not a defect — it means the coefficients were set against a different world and must be re-derived by owner decision, exactly as #1349 re-derived what it replaced. A median over fewer than 5 authors reports "insufficient sample" and never "drifted"; the diagnostic median is the module's only float and never reaches `score_delta`.
 
 ### Forced negative-signal pass (bare "None" is banned)
 
