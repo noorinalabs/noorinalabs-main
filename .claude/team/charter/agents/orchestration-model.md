@@ -296,6 +296,15 @@ Every reviewer-class spawn prompt MUST include, **in order**:
    ```
    (TechDebt still required even on ChangesRequested — the regex is unconditional.)
 
+   **Two optional ChangesRequested-only fields the brief MUST name** (`pull-requests/reviews.md` § Optional verdict fields; main#1364/#1366). Neither is ever required — nothing can tell a hook that a comment *is* a retraction — so adoption is what makes them work, and a brief that does not mention them is how they stay unused:
+   ```
+   Retracted: <the must-fix from THIS comment that you are withdrawing>
+   OrchestratorCaused: <the dispatch/brief error this block stems from>
+   ```
+   - `Retracted:` is the **only** accountability term on the reviewing side. Without it `review_false_positives` reads a structural zero, and the reviewing bump (`must_fix_caught >= 2 → +1`) has no counter-signal. Write it when you withdraw a finding you raised in that same comment.
+   - `OrchestratorCaused:` marks a block that exists because of an orchestrator error — a stale brief, or an unbatched dispatch that staled a verdict mid-authorship — rather than the author's work. It is excluded from the rate bars that score rework. **Set it when the block is raised, never afterwards**: it records causation at the time, and is not an appeal route for a score already applied.
+   - Both are valid **only** on `ChangesRequested`. The hook blocks either one placed on `Approved` / `Request` / `Reply`, because `trust_signals.parse_verdicts` would silently ignore it there.
+
    **Why literal:** P3W9 PR #409 cascade — both reviewers followed the prior prose template that prescribed `## TechDebt\n\n…` section header; `gh pr merge` blocked with `BLOCKED: PR #409 has review(s) missing the mandatory TechDebt: attestation line` at merge time, requiring per-comment PATCH amendments. Sibling pattern to P3W8 Approved-vs-Reply cascade — both fixable by spawning-brief template fixed-literal rewrite.
 
 6. **`gh pr review` vs `gh pr comment` discipline** — explicit reminder NOT to use `gh pr review` (`block_gh_pr_review` enforces; spawn-brief mention prevents the trip).

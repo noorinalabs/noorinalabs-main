@@ -670,6 +670,109 @@ _VERDICT_DIRECTIONS = frozenset(
 )
 
 
+# main#1364 / main#1366: two OPTIONAL trailer fields that `trust_signals.py`
+# reads, both meaningful ONLY on a ChangesRequested verdict:
+#
+#   Retracted:          the reviewer withdraws the must-fix raised in THIS
+#                       comment (feeds `review_false_positives` — the only
+#                       accountability term on the reviewing side).
+#   OrchestratorCaused: this block stems from a dispatch/brief error rather
+#                       than the author's work (feeds
+#                       `Signals.orchestrator_caused_rework`, excluded from the
+#                       rate bars).
+#
+# A hook cannot REQUIRE either one — nothing can tell it that a given comment
+# is retracting something, or that a block was the orchestrator's fault. So
+# these are validated **when present**, never demanded by their absence. The
+# failure they close is narrow and real: a field placed on an Approved /
+# Request / Reply comment is silently ignored by `parse_verdicts` (both are
+# gated on ChangesRequested), so the author believes they recorded something
+# and the counter never sees it.
+#
+# PRESENCE MUST BE DETECTED EXACTLY AS THE COUNTER DETECTS IT (main#1363 MF1).
+# The first cut asked `extract_charter_field`, whose pattern is NOT
+# line-anchored and which narrows to the trailer block, while
+# `trust_signals._RETRACTION_RE` / `._ORCHESTRATOR_CAUSED_RE` are
+# line-anchored (`^`, MULTILINE) over the whole code-stripped body. Three
+# axes disagreed, two of them producing a BLOCK on a field nobody wrote:
+#
+#   1. anchoring — `TechDebt: adoption of Retracted: is tracked by #1364`
+#      is a field to the hook and prose to the counter. #1364 makes this the
+#      likely case, not a contrived one: the field is now a documented
+#      obligation, so reviewers will write *about* it in trailers.
+#   2. code fences — `strip_code_regions` does not strip `~~~` blocks;
+#      `_strip_code_markup` does. A `~~~`-quoted example blocked.
+#   3. scope — trailer-block only vs whole body.
+#
+# The definitions below mirror the counter's exactly and are pinned against
+# it by `ConditionalFieldGrammarAgreementTests`, which drives both
+# implementations over one corpus so a future divergence reds rather than
+# silently false-blocks. Folding these into the shared `charter_trailer`
+# owner is the real terminus and is tracked work, NOT to be done incidentally
+# here: `trust_signals` § main#1359 records that `charter_trailer` lacks
+# `~~~` support and that adding it belongs to that migration. See also
+# main#1371 (verdict-direction classification has three implementations).
+_CONDITIONAL_VERDICT_FIELDS = ("Retracted", "OrchestratorCaused")
+
+# Mirrors trust_signals._RETRACTION_RE / ._ORCHESTRATOR_CAUSED_RE.
+_CONDITIONAL_FIELD_RE = {
+    name: re.compile(rf"^\**{name}\**:\**\s*\S", re.MULTILINE)
+    for name in _CONDITIONAL_VERDICT_FIELDS
+}
+
+
+def _strip_code_for_field_scan(text: str) -> str:
+    """Mirrors ``trust_signals._strip_code_markup``.
+
+    Deliberately NOT ``charter_trailer.strip_code_regions``: that one leaves
+    ``~~~`` fences intact, so a reviewer quoting the field shape in a ``~~~``
+    block would be present to the hook and absent to the counter. Replaces
+    each region with same-length whitespace so line structure — which the
+    line-anchored patterns depend on — is preserved.
+    """
+    text = re.sub(r"```.*?```|~~~.*?~~~", lambda m: " " * len(m.group()), text, flags=re.DOTALL)
+    return re.sub(r"`[^`\n]+`", lambda m: " " * len(m.group()), text)
+
+
+def _conditional_fields_present(body: str) -> list[str]:
+    """Which conditional fields the COUNTER would see in *body*, in field order.
+
+    Whole body, not the trailer block: `trust_signals.parse_verdicts` scans the
+    entire comment, and the point of this predicate is to agree with it.
+    """
+    scan = _strip_code_for_field_scan(body)
+    return [
+        name for name in _CONDITIONAL_VERDICT_FIELDS if _CONDITIONAL_FIELD_RE[name].search(scan)
+    ]
+
+
+def _direction_is_changes_requested(body: str) -> bool:
+    """True if the `RequestOrReplied:` value is specifically ChangesRequested.
+
+    Narrower than :func:`_direction_is_verdict`, which also accepts Approved.
+    Accepts the bare ``Changes`` spelling that `_VERDICT_DIRECTIONS`
+    deliberately excludes, because `trust_signals._verdict_kind` DOES count it
+    as ChangesRequested — this predicate must agree with the consumer whose
+    behaviour it is protecting, not with the sibling verdict-set.
+
+    That makes **three** verdict-direction classifiers across two files, two of
+    which disagree on bare ``Changes`` *by design*. Consolidating them is
+    tracked as **main#1371** (see also main#1359); it is not a change to make
+    incidentally, because the divergence is intentional per-consumer and
+    collapsing it wrongly would silently re-scope two hooks.
+    """
+    match = re.search(r"RequestOrReplied:\s*(.+)", body)
+    if not match:
+        return False
+    raw = match.group(1).strip().strip("*").strip().lower()
+    if not raw:
+        return False
+    parts = raw.split()
+    if not parts:
+        return False
+    return re.sub(r"[^a-z0-9]", "", parts[0]) in {"changesrequested", "changes"}
+
+
 def _direction_is_verdict(body: str) -> bool:
     """True if the comment body's `RequestOrReplied:` value is a verdict direction.
 
@@ -875,6 +978,40 @@ def check(input_data: dict) -> dict | None:
                 f"Fix: put the four charter fields in a trailer block at the very "
                 f"END of the comment, after a final `---` line. Renaming the field "
                 f"alone will NOT fix this.\n\n"
+                f"Charter: {CHARTER_REF}"
+            ),
+        }
+        log_pretooluse_block("validate_review_comment_format", command, result["reason"])
+        return result
+
+    # main#1364/#1366: validate the two conditional fields WHEN PRESENT. Both
+    # are gated on ChangesRequested by `trust_signals.parse_verdicts`, so one
+    # placed on any other direction is read by nobody — the author thinks they
+    # recorded a retraction or an attribution and the counter never sees it.
+    # This runs BEFORE the `_direction_is_verdict` early-return below,
+    # deliberately: Request/Reply exit there, and Request/Reply is exactly one
+    # of the misplacements worth catching.
+    misplaced = _conditional_fields_present(body)
+    if misplaced and not _direction_is_changes_requested(body):
+        direction = extract_charter_field(CHARTER_FIELD, body) or "(unreadable)"
+        result = {
+            "decision": "block",
+            "reason": (
+                f"BLOCKED: `{'`, `'.join(misplaced)}:` "
+                f"{'is' if len(misplaced) == 1 else 'are'} only meaningful on a "
+                f"`ChangesRequested` verdict, but this comment's "
+                f"`{CHARTER_FIELD}:` is `{direction}`.\n\n"
+                "`trust_signals.parse_verdicts` gates both fields on "
+                "ChangesRequested — there is no must-fix to retract, and no "
+                "rework round to reattribute, unless THIS comment raised a "
+                "block. As written the field is silently ignored: the trust "
+                "signal it feeds will read zero and nothing will report that "
+                "it was dropped.\n\n"
+                "Fix: put the field on the `ChangesRequested` comment that "
+                "raised the finding. To withdraw a must-fix raised in an "
+                "EARLIER comment, amend that comment rather than marking a "
+                "later one — cross-comment retraction is not implemented "
+                "(see § Scope boundary above).\n\n"
                 f"Charter: {CHARTER_REF}"
             ),
         }

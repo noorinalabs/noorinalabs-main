@@ -13,6 +13,20 @@ RequestOrReplied: Request | Reply | Approved | ChangesRequested
 TechDebt: none | #15, #16, ...
 ```
 
+### Optional verdict fields — `Retracted:` and `OrchestratorCaused:` <!-- promotion-target: none -->
+
+Two further trailer fields are **optional and conditional**. Both are valid **only on a `ChangesRequested` comment**, and both feed `trust_signals.py`:
+
+| Field | Write it when | Feeds |
+|---|---|---|
+| `Retracted: <what you are withdrawing>` | you are **withdrawing the must-fix you raised in this comment** — on reflection the finding was wrong | `review_false_positives` |
+| `OrchestratorCaused: <the dispatch/brief error>` | the block exists because of an **orchestrator dispatch or brief error, not the author's work** — a stale brief, an unbatched dispatch that staled a verdict mid-authorship | `Signals.orchestrator_caused_rework` |
+
+- **They are obligations of practice, not of the hook.** Nothing can tell a hook that a given comment *is* a retraction or *was* the orchestrator's fault, so their absence is never blocked. `validate_review_comment_format.py` validates them **when present** and blocks only the one failure it can see: a field placed on a comment whose `RequestOrReplied:` is not `ChangesRequested`, where `trust_signals.parse_verdicts` silently ignores it (main#1364, main#1366).
+- **`Retracted:` is why `review_false_positives` can be evidence.** It is the only accountability term on the reviewing side. #1348 replaced a free-text substring search after **17 of 17 wave-29 hits proved wrong**, and the structured field is the replacement — do **not** solve non-adoption by loosening the detector back toward prose matching; no regex over free prose separates "I retract my finding" from "I retracted an unrelated note". While nobody writes the field, the signal reads a structural zero rather than an earned one.
+- **`OrchestratorCaused:` is not an appeal mechanism.** It records who caused a rework round **at the time the round happens**, in the durable PR thread. It cannot be added later to re-litigate a score: the extractor reads the thread, and a marker that appears after a wave is scored changes nothing already applied. `must_fix_received` keeps the raw honest count — the forced negative-signal pass still reports every round — and only the rate bars in `score_delta` use the attributed figure (`Signals.attributable_rework()`).
+- **Cross-comment retraction is not implemented.** To withdraw a must-fix raised in an *earlier* comment, amend that comment. The broader `RequestOrReplied: Retracted` + latest-verdict-wins design floated in `validate_review_comment_format.py` § Scope boundary needs comment-ordering semantics and remains deferred.
+
 ### Canonical meaning (resolves main#233)
 
 The role names always describe the **comment** (not the PR):

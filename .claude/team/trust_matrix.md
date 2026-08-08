@@ -41,9 +41,29 @@ Each is an integer extracted by `trust_signals.extract_signals(phase, wave)` ove
 
 `trust_signals.score_delta(signals)` — pure, symmetric, clamped to **[−2, +2]** (one wave cannot swing trust across the whole scale):
 
-- **−1** per CI-red merge; **−1** per review false-positive; **−1** if `must_fix_received ≥ 3`.
-- **+1** if `prs_merged ≥ 2` *and* the wave is clean of the negatives above; **+1** if `must_fix_caught ≥ 2` and no false-positives.
+- **−1** per CI-red merge; **−1** per review false-positive. Both are **absolute**, per-instance, and both disqualify the positive branch outright.
+- **−1** if authoring rework is above the **penalty bar** (see the two bands below).
+- **+1** if `prs_merged ≥ 2`, and a further **+1** if `must_fix_caught ≥ 2` — both only when the wave clears the **clean bar** and carries no CI-red merge and no review false-positive (`Signals.qualifies_for_bump()`).
 - A single clean PR is **not** an increase (it is baseline expected delivery, not exceptional).
+
+#### The two rework bands (rate-relative — #1349, owner ruling 2026-08-07)
+
+`must_fix_received` counts blocking verdict **rounds** received as an author. Under the 3–6 independent review heads this org runs, those are abundant *by design* — one genuine defect found independently by three reviewers counts three times — so an **absolute** threshold over that number measures review breadth, not author quality. Both bars are therefore per PR authored, expressed as a multiplication (no ratio, no float, no zero-guard; `prs_merged = 0` implies `must_fix_received = 0`, so `0 ≤ 0` reads clean naturally):
+
+| Band | Condition | Effect |
+|---|---|---|
+| **Clean** | `must_fix_received ≤ prs_merged` (≤ 1 per PR) | bump-eligible |
+| **Neutral** | `prs_merged < must_fix_received ≤ 2 × prs_merged` | **no bump, no ding** |
+| **Penalty** | `must_fix_received > 2 × prs_merged` (> 2 per PR) | **−1** |
+
+The neutral band is the point of the design: above the clean bar an author forfeits the bump, but takes no ding until the rate is genuinely an outlier.
+
+**Two distinct predicates — do not conflate them.** Before #1349 the positive branch was gated on `not Signals.has_negative()`, i.e. `must_fix_received == 0` absolute, which made the entire positive branch unreachable for any author who received even one blocking verdict (0 of 10 engineers eligible in a wave with a perfect CI record). They are now separate and answer different questions:
+
+| Predicate | Question | Used by |
+|---|---|---|
+| `Signals.has_negative()` | is there **any** negative signal to report? (absolute) | `negative_signal_line` — the forced negative-signal pass |
+| `Signals.qualifies_for_bump()` | is the wave clean enough to **earn** a bump? (rework rate-relative; CI-red and false-positives still absolute) | `score_delta` — the positive branch |
 
 `new = clamp(old + delta, 1, 5)`. Every retro trust-table row MUST cite the numbers behind its delta — a row with no signal citation is rejected at review.
 
@@ -54,6 +74,20 @@ Each is an integer extracted by `trust_signals.extract_signals(phase, wave)` ove
 ### Distribution discipline
 
 `trust_signals.apply_distribution_discipline(...)` — **5 is reserved** for exceptional *relative* wave performance, not handed out for merely-clean work. A proposed 5 is allowed only for the engineer(s) with the wave's top composite signal score (and that score must be strictly positive); every other proposed 5 is capped to 4.
+
+**It is an entry gate, not an eviction rule — and since #1365 the signature enforces that.** The cap applies to a score *reaching* 5 from below; an engineer already at 5 whose delta is non-negative holds at 5. Callers pass `trust_signals.Proposal(old_score=…, proposed_score=…, signals=…)`, and the function exempts any proposal whose `old_score` is already at the ceiling, so the output is applied as returned. The evidence for the rule is the applied history, not a sentence about it: **W25 held 4 engineers at 5, W26 6, W27 5, W28 5 — 20 ceiling-holder rows across four waves, none evicted.**
+
+Until #1365 the function received only `(proposed_score, signals)` and never the old score, so this was a prose obligation on the caller. Applied mechanically, it capped a ceiling-holder with a `+2` delta down to 4 — converting the delta into a net `−1`.
+
+**One obligation the signature does not carry: feed it the whole roster.** `top` is the maximum composite *within the batch*. Restricting the batch changes the answer: over wave-29's two ceiling entrants alone, Nadia becomes her own maximum and keeps a 5 that the full-roster run caps to 4. Run it over every engineer with signals this wave. Making that obligation detectable rather than documented — by taking the anchoring population as its own argument — is tracked as [#1370](https://github.com/noorinalabs/noorinalabs-main/issues/1370).
+
+**Open, tracked, deliberately not settled in #1363:** whether `composite()` should use the raw `must_fix_received` or the orchestrator-adjusted `attributable_rework()` — [#1369](https://github.com/noorinalabs/noorinalabs-main/issues/1369), with both reviewers' arguments recorded there. Today it uses the raw count.
+
+### Rate-band calibration and revisit trigger (#1368)
+
+`CLEAN_BAR_MUST_FIX_PER_PR = 1` and `PENALTY_BAR_MUST_FIX_PER_PR = 2` are calibrated against **P10W29**: 45 PRs, 10 authors, 3–6 independent review heads, observed must-fix-per-PR median **exactly 1.00**. The clean bar sits *at* that median so a typical author clears it; the penalty bar at *twice* it so only a rate outlier is dinged.
+
+Being rate-relative makes the bars robust to review *breadth* — the failure that produced #1349. It does **not** make them robust to a change in how much rework is normal per PR, which moves with head count, PR size and review depth. So the revisit trigger is mechanical, not a note asking someone to remember: `python3 .claude/lib/trust_signals.py calibration {P} {M}` **exits non-zero** when the wave's observed median leaves `[0.5, 1.5]`, and `/wave-retro` runs it as a mandatory step. Drift is not a defect — it means the coefficients were set against a different world and must be re-derived by owner decision, exactly as #1349 re-derived what it replaced. A median over fewer than 5 authors reports "insufficient sample" and never "drifted"; the diagnostic median is the module's only float and never reaches `score_delta`.
 
 ### Forced negative-signal pass (bare "None" is banned)
 
@@ -417,11 +451,13 @@ Distribution discipline (`trust_signals.apply_distribution_discipline`): Nino's 
 
 **Orchestrator self-assessment:** clean Phase-10-opening wave — the direct-to-main "stop-the-bleeding" batch was merged the prior session; this was the closeout + retro. 0 CI-red across all 12 PRs; both genuine must-fix threads (da#502 ×2, #1126 ×1) caught at the Opus merge gate and fixed. All post-merge deployable workflows green; staging promotion green. Notable process finding this wave: the wave-counter and trust-signal helpers do not support direct-to-main waves (both returned empty), forcing manual computation — filed as #1131. Roster-drift (Nurul Hakim scoped onto a user-service story he cannot commit to) carried forward from wave-27→28, still unresolved.
 
-## Phase 10 Wave 29 Trust Updates (2026-08-03) — Hook/gate hardening + test-suite consolidation; scores HELD pending #1349
+## Phase 10 Wave 29 Trust Updates (2026-08-03; scores applied 2026-08-07 per #1349) — Hook/gate hardening + test-suite consolidation
 
 Mechanical scoring over the canonical direct-to-main PR set: **45 PRs** across 2 repos (main 44, ingest-platform 1), top-concentration **20%** (Aino Virtanen, 9/45 — well below the 60% fragility line), **0 CI-red merges across all 45 PRs**, **51** changes-requested verdicts.
 
-**Scores are HELD this wave (Old = New for every engineer). This is a deliberate, evidence-backed departure from the mechanical-application rule, and it needs an owner decision.** The retro's Step 2.5 counter check and Step 4 assessment found three defects in the measuring instrument itself, filed as #1347, #1348, #1349. Two are corrected below; the third is structural and unresolved. Applying deltas computed by a rubric that has been demonstrated non-functional would write known-false state into a permanent, load-bearing file — the exact failure class this wave was themed on.
+**Scores were HELD at the retro (2026-08-03) and are now APPLIED (2026-08-07) under the two-band rubric adopted in [#1349](https://github.com/noorinalabs/noorinalabs-main/issues/1349).** The retro's Step 2.5 counter check and Step 4 assessment found three defects in the measuring instrument itself, filed as #1347, #1348, #1349. Applying deltas computed by a rubric that had been demonstrated non-functional would have written known-false state into a permanent, load-bearing file, so the wave was scored but not applied pending the owner's ruling. Wave 29 is a **scored** wave, not a gap — `retirement_trigger` reads a 3-wave window and `decay()` drifts an unsignalled score after 3, so an unscored wave is not neutral in either.
+
+The signal set below was re-verified on 2026-08-07 by a live `trust_signals.py extract 10 29` run at `69c2e08` (post-#1347/#1348). All six signals for all ten engineers matched the corrected figures recorded at the retro exactly.
 
 ### Signal corrections applied before scoring
 
@@ -432,27 +468,43 @@ Mechanical scoring over the canonical direct-to-main PR set: **45 PRs** across 2
 
 ### Org-Level / Tooling Team (main)
 
-`Rubric delta` is what `score_delta` returns on the **corrected** signals. `Applied` is what actually lands.
+`Old rubric` is what the pre-#1349 `score_delta` returned on the corrected signals — the figure held at the retro. `New rubric` is what the adopted two-band `score_delta` returns on the **same** signals. `Applied` is what lands, after `clamp(old + delta, 1, 5)` and `apply_distribution_discipline`.
 
-| Rated | Old | New | Rubric delta | Reason |
-|---|---|---|---|---|
-| Aino Virtanen | 5 | 5 (held) | -1 | prs_merged=9 (wave's highest), must_fix_caught=12, must_fix_received=4, **0 CI-red**, false_positives=0 (was 3, all spurious — #1348). The -1 is driven solely by `must_fix_received >= 3` over 9 authored PRs (0.44/PR, the **best** rate of any multi-PR author this wave). Held pending #1349. |
-| Nino Kavtaradze | 5 | 5 (held) | -1 | prs_merged=8, must_fix_caught=11 (2nd highest), must_fix_received=4 (0.50/PR), **0 CI-red**, false_positives=0 (was **7**, every one a reference to his own false-positive test corpus — #1348). As recorded he was docked -7 raw for the most rigorous corpus-based reviewing in the wave. Held pending #1349. |
-| Weronika Zielinska | 3 | 3 (held) | -1 | prs_merged=6, **must_fix_caught=17 — the wave's highest review-catch count**, must_fix_received=12, **0 CI-red**, false_positives=0 (was 2, spurious). Held pending #1349. |
-| Lucas Ferreira | 4 | 4 (held) | -1 | prs_merged=7, must_fix_caught=3, must_fix_received=15 (2.1/PR — genuinely the wave's highest rework rate, and the one -1 that survives on its merits), **0 CI-red**, false_positives=0 (was 2, spurious). Held pending #1349; see the push-freeze note in the feedback log — part of this rework volume is an orchestrator dispatch failure, not his. |
-| Nurul Hakim | 4 | 4 (held) | 0 | prs_merged=2, must_fix_caught=0, must_fix_received=2 (corrected from 1 — #1347), **0 CI-red**, false_positives=0 (was 1, and it was matched on a `Request` comment that is not a verdict at all). |
-| Nadia Khoury | (untracked) | (untracked) | 0 | prs_merged=4, must_fix_caught=5, must_fix_received=1, **0 CI-red**, false_positives=0 (was 2, spurious). First implementer-class wave for the PD. Seeding deferred to #1349's resolution rather than seeding against a broken rubric. |
-| Santiago Ferreira | hold | hold | -1 | prs_merged=4, must_fix_caught=1, must_fix_received=4, **0 CI-red**, false_positives=0. Coordinator-class; remains held. |
-| Wanjiku Mwangi | (untracked) | (untracked) | -1 | prs_merged=3, must_fix_caught=1, must_fix_received=6, **0 CI-red**, false_positives=0. Seeding deferred, as above. |
-| Bereket Tadesse | (untracked) | (untracked) | -1 | prs_merged=1 (#1330, the 31-hook `_hook_main` consolidation), must_fix_caught=1, must_fix_received=3, **0 CI-red**, false_positives=0. Seeding deferred, as above. |
+| Rated | Old | Applied | Old rubric | New rubric | Reason |
+|---|---|---|---|---|---|
+| Aino Virtanen | 5 | **5** | -1 | **+2** | prs_merged=9 (wave's highest), must_fix_caught=12, must_fix_received=4 (0.44/PR — the **best** rate of any multi-PR author), **0 CI-red**, false_positives=0 (was 3, all spurious — #1348). Within the clean bar (4 ≤ 9), so both bumps land; `clamp(5+2)` holds at the ceiling. The old -1 was driven solely by the absolute `must_fix_received >= 3`. |
+| Nino Kavtaradze | 5 | **5** | -1 | **+2** | prs_merged=8, must_fix_caught=11 (2nd highest), must_fix_received=4 (0.50/PR), **0 CI-red**, false_positives=0 (was **7**, every one a reference to his own false-positive test corpus — #1348). Within the clean bar (4 ≤ 8); `clamp(5+2)` holds at the ceiling. See the distribution-discipline note below — the cap is an entry gate and does not evict him. |
+| Weronika Zielinska | 3 | **3** | -1 | **0** | prs_merged=6, **must_fix_caught=17 — the wave's highest review-catch count**, must_fix_received=12 (2.00/PR), **0 CI-red**, false_positives=0 (was 2, spurious). Lands exactly on the **neutral band's upper edge** (12 > 6 forfeits the bump; 12 > 12 is false, so no ding). High rework earns no bump; it no longer overrides the wave's best review record either. Under the old rubric she would have gone to 2 — bottom tier, two waves from arming the retirement trigger. |
+| Lucas Ferreira | 4 | **3** | -1 | **-1** | prs_merged=7, must_fix_caught=3, must_fix_received=15 (2.14/PR — above the penalty bar at 15 > 14, and the wave's genuine rate outlier), **0 CI-red**, false_positives=0 (was 2, spurious). The one -1 that survives the rubric change on its merits. See the push-freeze note in the feedback log — part of this rework volume is an orchestrator dispatch failure, not his. |
+| Nurul Hakim | 4 | **4** | 0 | **+1** | prs_merged=2, must_fix_caught=0, must_fix_received=2 (corrected from 1 — #1347), **0 CI-red**, false_positives=0 (was 1, matched on a `Request` comment that is not a verdict at all). Exactly on the clean bar (2 ≤ 2) → the delivery bump; no review bump (must_fix_caught=0). Proposed 5 **capped to 4** by `apply_distribution_discipline` (composite 0 vs the wave max of 17). |
+| Nadia Khoury | (untracked) | **4** (seeded) | 0 | **+2** | prs_merged=4, must_fix_caught=5, must_fix_received=1 (0.25/PR — the cleanest authoring record of any multi-PR contributor), **0 CI-red**, false_positives=0 (was 2, spurious). First implementer-class wave for the PD. Seeded at NEUTRAL 3 + 2 = 5, **capped to 4** by `apply_distribution_discipline` (composite 8 vs the wave max of 17). |
+| Santiago Ferreira | hold | hold | -1 | **+1** | prs_merged=4, must_fix_caught=1, must_fix_received=4 (exactly on the clean bar, 4 ≤ 4), **0 CI-red**, false_positives=0. Coordinator-class; remains held per prior-wave precedent. Had he been tracked, the computed value is 4. |
+| Wanjiku Mwangi | (untracked) | **3** (seeded) | -1 | **0** | prs_merged=3, must_fix_caught=1, must_fix_received=6 (2.00/PR), **0 CI-red**, false_positives=0. Neutral band's upper edge (6 > 3 forfeits the bump; 6 > 6 is false, no ding). Seeded at NEUTRAL 3 + 0. |
+| Bereket Tadesse | (untracked) | **2** (seeded) | -1 | **-1** | prs_merged=1 (#1330, the 31-hook `_hook_main` consolidation), must_fix_caught=1, must_fix_received=3 (3.00/PR — above the penalty bar at 3 > 2), **0 CI-red**, false_positives=0. Seeded at NEUTRAL 3 − 1. The rate is the wave's highest, though on a single PR of exceptional blast radius; n=1 is a weak measurement and this is a **watch item**, not evidence of a pattern — see the fire/hire note. |
 
 ### Child-Repo Team (isnad-ingest-platform)
 
-| Rated | Old | New | Rubric delta | Reason |
-|---|---|---|---|---|
-| Yusuke Inoue | 3 | 3 | 0 | prs_merged=1 (ip#153 stale Kafka topic names in the CLAUDE.md worker-topology table), clean on every signal. Single PR — below both positive thresholds. Genuine delta 0; not a hold. |
+| Rated | Old | Applied | Old rubric | New rubric | Reason |
+|---|---|---|---|---|---|
+| Yusuke Inoue | 3 | **3** | 0 | **0** | prs_merged=1 (ip#153 stale Kafka topic names in the CLAUDE.md worker-topology table), clean on every signal (0 ≤ 1). Single PR — below both positive thresholds. Genuine delta 0; not a hold. |
 
-Distribution discipline (`trust_signals.apply_distribution_discipline`): not exercised — no proposed score reached 5 from below, because **no engineer was eligible for a positive delta at all** (see #1349).
+**Distribution comparison.** Old rubric: **0 up / 7 down / 3 flat** — the defect #1349 reports, in a wave with a perfect CI record. New rubric: **5 up / 2 down / 3 flat**, satisfying #1349 acceptance criterion 2. Both distributions were computed by running `score_delta` over the extracted signal set — the old one from a clean `git archive` of `69c2e08`, the new one from this branch — not by hand. The end-to-end distribution is pinned as a regression test (`ScoreDeltaReworkBands::test_wave_29_distribution_is_not_uniformly_non_positive`).
+
+**Distribution discipline (`trust_signals.apply_distribution_discipline`): exercised.** Wave composite maximum is Aino at 17. Two proposed 5s reached the ceiling from below and were both capped to 4 — Nurul (composite 0) and Nadia's seed (composite 8). The function was run, not hand-applied.
+
+**The batch fed to the function must retain the full roster.** `top` is the maximum composite *within the batch*, so the batch composition is load-bearing and the cap is not invariant under it. Three compositions were run:
+
+| batch | `top` | Nurul | Nadia |
+|---|---|---|---|
+| full roster (10) | 17 (Aino) | 4 | 4 |
+| full roster minus the two ceiling-holders (8) | 11 (Weronika) | 4 | 4 |
+| **only the two reaching 5 from below (2)** | **8 (Nadia)** | 4 | **5** ← wrong |
+
+Restricting the batch to the two entrants makes Nadia her own batch maximum and she keeps the 5. The correct procedure is therefore: **run the function over the whole roster** so `top` is anchored at the wave maximum, and read off the entrants' results. What is invariant is the outcome *for the ceiling entrants* between the first two compositions — not the outcome under an arbitrary batch.
+
+> **Finding, not applied — `apply_distribution_discipline` fed the full roster evicts a ceiling-holder with a positive delta.** Run over all ten proposals it caps **Nino** from 5 to 4, because only the single top composite (Aino, 17) may hold a 5 — converting his `+2` into a net `−1`. That is treated here as a rough edge in the cap, not as the wave's result, and it matches the #1349 ruling's own table (`Nino Kavtaradze | +2 | 5 -> 5 (at ceiling)`, distinguished there from Nurul's `4 -> 4 (capped)`). The cap is an **entry gate**, and the function cannot distinguish entry from eviction because it never sees the old score. Nino is applied at 5 per `clamp(5 + 2)`.
+>
+> The historical record is the evidence, re-derived from the wave sections at `69c2e08`: **W25 held 4 engineers at 5, W26 6, W27 5, W28 5 — 20 ceiling-holder rows across four waves, and the cap evicted none of them.** Under a naive "run it over everyone and apply the output" procedure, all but the single top-composite holder in each of those waves would have been demoted. Flagged for a separate decision; see the note in § Distribution discipline.
 
 ### Done Well / Needs Improvement (Phase 10 Wave 29) — evidence-anchored, bare "None" banned
 
@@ -469,7 +521,12 @@ Distribution discipline (`trust_signals.apply_distribution_discipline`): not exe
 | Bereket Tadesse | #1330 consolidated 31 hooks onto `run_blocking`/`run_advisory` — the wave's single largest structural cleanup | 3 must-fix received on 1 PR, rework_cycles=1 — highest per-PR rework in the wave, though on a PR of exceptional blast radius |
 | Yusuke Inoue | ip#153 corrected the stale Kafka topic names in the worker-topology table | clean: prs_merged=1, must_fix_received=0, ci_red_merges=0, false_positives=0, must_fix_caught=0 |
 
-**Fire/hire:** none. Retirement trigger (`trust_signals.retirement_trigger`) fired for no engineer. Note that had the recorded (uncorrected) deltas been applied, Weronika would have moved 3→1 and entered bottom-tier territory on the strength of the wave's best review record — a concrete illustration of why #1348 and #1349 are filed as defects rather than as numbers.
+**Fire/hire:** none. Retirement trigger (`trust_signals.retirement_trigger`) was re-run against the **applied** scores and fired for no engineer. The CI-red trigger cannot fire for anyone — it requires ≥1 CI-red merge in each of the last 3 waves and this wave had 0 across all 45 PRs. The bottom-tier trigger requires ≤2 in each of the last 3 waves; the only engineer at ≤2 after this wave is **Bereket Tadesse (seeded 2)**, whose main-repo history is exactly one wave long, so there is insufficient evidence by construction. He is a **watch item** for waves 30–31, with the caveat that his rate is computed over a single PR.
+
+Two counterfactuals worth keeping visible, because they are why #1348 and #1349 were filed as defects rather than as numbers:
+
+- Had the **recorded (uncorrected)** deltas been applied, Weronika would have moved 3→1 (two spurious false-positives → −3, clamped to −2) on the strength of the wave's best review record.
+- Had the **corrected** signals been applied under the **pre-#1349** rubric, she would have moved 3→2 — bottom tier, and two waves from arming the retirement trigger. Under the adopted two-band rubric she holds at 3.
 
 **Concentration note:** 20% top (Aino, 9/45) — well below the 60% fragility line, spread across 10 people. Healthy distribution; no redistribution needed.
 
