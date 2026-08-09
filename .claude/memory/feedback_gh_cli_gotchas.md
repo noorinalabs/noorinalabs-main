@@ -9,7 +9,7 @@ last_verified: 2026-08-02
 Consolidates (2026-07-13, #944/#931): feedback_gh_pr_edit_silent_noop, feedback_github_negated_close_keyword, feedback_wave_branch_issue_close, reference_closing_refs_empty_wave_prs, feedback_gh_review_self_approve_422, feedback_update_branch_async_window, feedback_validate_labels_hook_gotchas, feedback_projectv2_field_option. Every rule survives; history in git.
 
 ## Surfaces
-1. [`gh pr edit` silent no-op → REST PATCH](#1-gh-pr-edit-silent-no-op)
+1. [`gh pr edit` silent no-op → REST PATCH](#1-gh-pr-edit-silent-no-op) — **1a: `--add-label` on a PR now HARD-FAILS** (projects-classic deprecation); use the issue-shaped REST labels endpoint
 2. [`gh project item-add` silent fail → per-issue read-back](#2-gh-project-item-add-silent-fail)
 3. [`item-list --limit` truncation — the limit IS the bug](#3-item-list---limit-truncation)
 4. [`gh issue list` silent default limit 30](#4-gh-issue-list-silent-default-limit-30)
@@ -30,8 +30,28 @@ jq -n --rawfile body /tmp/new_body.md '{body: $body}' > /tmp/patch.json   # NOT 
 gh api -X PATCH /repos/:o/:r/pulls/:N --input /tmp/patch.json
 gh api /repos/:o/:r/pulls/:N --jq '.body' | head -5          # read-back verify
 gh api -X PATCH /repos/:o/:r/pulls/:N -f base=<branch>       # base ref; verify --jq '.base.ref'
-gh api -X POST /repos/:o/:r/issues/:N/labels --input <(jq -n '{labels: ["x","y"]}')  # labels
+gh api --method POST repos/{owner}/{repo}/issues/:N/labels -f "labels[]=X"  # labels — see 1a
 ```
+
+### 1a. `--add-label` on a PR has since become a HARD FAIL, not a no-op (2026-08-09)
+
+The `--add-label` case above no longer merely returns exit 0 and do nothing. It now **errors outright**:
+
+```
+GraphQL: Projects (classic) is being deprecated … (repository.pullRequest.projectCards)
+```
+
+gh still requests the sunset `projectCards` field on the PR edit path, so the whole mutation is rejected. **This is the better failure** — the surface moved from silent to loud — but it means a script that tolerated the no-op now aborts, and the fix is not "retry" but "change endpoint."
+
+Working route, verified 2026-08-09 — the **issue-shaped** REST endpoint covers PRs (GitHub models a PR as an issue for labels), and is both live and unbroken:
+
+```bash
+gh api --method POST repos/{owner}/{repo}/issues/{n}/labels -f "labels[]=X" -f "labels[]=Y"
+```
+
+Prefer this `-f "labels[]=…"` form over the `--input <(jq …)` process substitution: process substitution trips the Claude Code permission engine's "cannot be statically analyzed" path and forces a prompt regardless of the allowlist (same property /session-start Step 0 preserves deliberately).
+
+Same family as §4's stale-index gotcha: the GraphQL-backed convenience path degrades as GitHub sunsets classic Projects, while the REST path keeps working. When any `gh <noun> edit` flag fails or no-ops, the first move is to find the REST endpoint, not to debug the flag.
 
 ## 2. `gh project item-add` silent fail
 Returns exit 0 without adding (~9 silent failures in one wave). Read-back with the **O(1) per-issue check** — never a `--limit`ed board pull (see §3):
