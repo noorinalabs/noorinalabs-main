@@ -848,10 +848,10 @@
       "resolved_at": "2026-06-21T21:02:19.551435+00:00"
     },
     ".claude/memory/MEMORY.md": {
-      "last_tracked": "8a6989dd1e2f06cdc852b1f17ce8a76c4e4396f395c7a80d953010a01f4e9417",
-      "last_resolved": "8a6989dd1e2f06cdc852b1f17ce8a76c4e4396f395c7a80d953010a01f4e9417",
-      "tracked_at": "2026-08-03T03:42:04.875531+00:00",
-      "resolved_at": "2026-08-03T17:47:28.703805+00:00"
+      "last_tracked": "278bd6045d09139a264b820ee0fbd6790fc36bc09050007d54efc372b05ca64f",
+      "last_resolved": "278bd6045d09139a264b820ee0fbd6790fc36bc09050007d54efc372b05ca64f",
+      "tracked_at": "2026-08-09T21:55:52.096266+00:00",
+      "resolved_at": "2026-08-09T21:56:19.917511+00:00"
     },
     "noorinalabs-isnad-graph/.claude/lib/tests/test_pre_commit_ci_sync.py": {
       "last_tracked": "aa209279deec3844b51e384157ba3e67a6d0f325410941f63f38d57535e6498c",
@@ -1532,10 +1532,10 @@
       "resolved_at": "2026-07-20T00:23:09.582636+00:00"
     },
     ".claude/memory/section_ci_tooling.md": {
-      "last_tracked": "85240d46c76fc1293e286f8308ba95059bcd1d65a905397af5d67e45a3d39d6c",
-      "last_resolved": "85240d46c76fc1293e286f8308ba95059bcd1d65a905397af5d67e45a3d39d6c",
-      "tracked_at": "2026-07-20T11:24:18.439101+00:00",
-      "resolved_at": "2026-08-03T14:17:07.332041+00:00"
+      "last_tracked": "fbdea87a9d2347eb3ce263723da10e367ecd899769142746411b1f8f8bd9a182",
+      "last_resolved": "fbdea87a9d2347eb3ce263723da10e367ecd899769142746411b1f8f8bd9a182",
+      "tracked_at": "2026-08-09T21:55:47.818928+00:00",
+      "resolved_at": "2026-08-09T21:56:19.917511+00:00"
     },
     ".claude/memory/feedback_shared_worktree_review_revert_hazard.md": {
       "last_tracked": "526f01ef91027af22b602099822563810daf0df4f34091e2a2c7ec937714ce88",
@@ -1788,6 +1788,24 @@
       "last_resolved": "d5db2176f7924b1cc7c8a7ea7d1c93ebd12b0d04ae67615ece952d1690a03d72",
       "tracked_at": "2026-08-04T01:25:57.954884+00:00",
       "resolved_at": "2026-08-04T01:41:39.379568+00:00"
+    },
+    ".claude/memory/feedback_gh_cli_gotchas.md": {
+      "last_tracked": "cbaecd58aa4afed2086e7431a2762cde24359e1ac8e9064cc9922cd1aefe23eb",
+      "last_resolved": "cbaecd58aa4afed2086e7431a2762cde24359e1ac8e9064cc9922cd1aefe23eb",
+      "tracked_at": "2026-08-09T21:55:11.843254+00:00",
+      "resolved_at": "2026-08-09T21:56:19.917511+00:00"
+    },
+    ".claude/memory/feedback_flag_precision_decays_with_age.md": {
+      "last_tracked": "6cd9820914325553ba1b7c19b02d255ce67de0d0b7cb64fa0fd434e3c7f503d4",
+      "last_resolved": "6cd9820914325553ba1b7c19b02d255ce67de0d0b7cb64fa0fd434e3c7f503d4",
+      "tracked_at": "2026-08-09T21:55:33.345946+00:00",
+      "resolved_at": "2026-08-09T21:56:19.917511+00:00"
+    },
+    ".claude/memory/section_verification_discipline.md": {
+      "last_tracked": "dcc5b4ffe77fb88beaa129f687c2971ea3989126240999466a464c16277a168f",
+      "last_resolved": "dcc5b4ffe77fb88beaa129f687c2971ea3989126240999466a464c16277a168f",
+      "tracked_at": "2026-08-09T21:55:41.460171+00:00",
+      "resolved_at": "2026-08-09T21:56:19.917511+00:00"
     }
   },
   "last_cleanup": {
