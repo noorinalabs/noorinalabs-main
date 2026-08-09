@@ -24,10 +24,31 @@ classifier, #1212) was measured across 5 worktrees in one session on 2026-08-09:
 *different commit* while unrelated later commits kept touching the same files no
 longer matches as a unit. The fresh branch had nothing to decay against.
 
-**This is not a defect, and do not "fix" it.** The conservatism is deliberate and
-load-bearing: Step 0 never force-removes, so a false `UNMERGED`/`DIRTY` costs at
-most a stale directory, while a false `merged` could cost work. The classifier is
-correctly biased. What is wrong is *reading its output as a verdict*.
+**The conservatism on THIS axis is not a defect — do not "fix" it.** Step 0 never
+force-removes, so a false `UNMERGED`/`DIRTY` costs at most a stale directory,
+while a false `merged` could cost work. What is wrong is *reading its output as a
+verdict*.
+
+**But "correctly biased" is not true in general — there is a known false-MERGED
+hole on a different axis (#1341, added 2026-08-09 within the hour of writing this
+note).** A **freshly-created worktree that has not committed yet** has
+`HEAD == origin/main`, which is trivially an ancestor, so the `merge-base
+--is-ancestor` **fast path** classifies it `merged` and removes it — correct about
+ancestry, wrong about intent — and it fires *before* the richer patch-id
+classification ever gets to disagree. Observed live during wave-29 on an active
+worktree for in-flight #1117. Non-force removal protects an agent that has already
+written files (removal refuses on uncommitted/untracked content → FLAGGED), so the
+exposed case is a **clean** fresh worktree, destroyed under an agent about to use it.
+
+So the two axes behave oppositely, and the safe reading is direction-specific:
+
+| axis | direction of error | cost |
+|---|---|---|
+| **age** (a landed branch) | false `UNMERGED` — over-flags | cheap: a stale directory |
+| **freshness** (an unstarted branch) | false `merged` — under-flags | destroys a clean live worktree |
+
+Treat `merged` as trustworthy only for a branch that has actually committed. Never
+generalize "this classifier errs safe" from the aged case to all cases.
 
 **The operational rule:** a FLAGGED list is **candidates to verify, ordered by
 suspicion — never a batch to act on.** Verify content, not the flag: compare the

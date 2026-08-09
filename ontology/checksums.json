@@ -1796,16 +1796,16 @@
       "resolved_at": "2026-08-09T21:56:19.917511+00:00"
     },
     ".claude/memory/feedback_flag_precision_decays_with_age.md": {
-      "last_tracked": "6cd9820914325553ba1b7c19b02d255ce67de0d0b7cb64fa0fd434e3c7f503d4",
-      "last_resolved": "6cd9820914325553ba1b7c19b02d255ce67de0d0b7cb64fa0fd434e3c7f503d4",
-      "tracked_at": "2026-08-09T21:55:33.345946+00:00",
-      "resolved_at": "2026-08-09T21:56:19.917511+00:00"
+      "last_tracked": "0a91e849d3542354f89e0be903a111f536d7e06292ff6f32a24b9d4d7724383c",
+      "last_resolved": "0a91e849d3542354f89e0be903a111f536d7e06292ff6f32a24b9d4d7724383c",
+      "tracked_at": "2026-08-09T22:09:11.947994+00:00",
+      "resolved_at": "2026-08-09T22:15:15.254021+00:00"
     },
     ".claude/memory/section_verification_discipline.md": {
-      "last_tracked": "dcc5b4ffe77fb88beaa129f687c2971ea3989126240999466a464c16277a168f",
-      "last_resolved": "dcc5b4ffe77fb88beaa129f687c2971ea3989126240999466a464c16277a168f",
-      "tracked_at": "2026-08-09T21:55:41.460171+00:00",
-      "resolved_at": "2026-08-09T21:56:19.917511+00:00"
+      "last_tracked": "1e0dfc26a3d7a8d8025ecab63db4a2af278646cc44401f78425d6ea9bc5b3bfe",
+      "last_resolved": "1e0dfc26a3d7a8d8025ecab63db4a2af278646cc44401f78425d6ea9bc5b3bfe",
+      "tracked_at": "2026-08-09T22:09:23.278885+00:00",
+      "resolved_at": "2026-08-09T22:15:15.254021+00:00"
     }
   },
   "last_cleanup": {
