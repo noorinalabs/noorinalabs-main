@@ -22,9 +22,9 @@ When starting any work session, the orchestrating Claude instance should:
 
 1. Read this org charter and the target repo's charter (`.claude/team/charter.md` in the child repo)
 2. Read all roster files in `.claude/team/roster/`
-3. Spawn the Program Director agent first (with their personality from roster), using the `team_name` specified in the target repo's charter
+3. Spawn the Program Director agent first (with their personality from roster). **Do not pass `team_name`** — see § Team Names below.
 4. **The Program Director plans and coordinates but CANNOT spawn agents.** Only the orchestrating Claude instance (team lead) has access to the Agent tool. The Program Director must send spawn requests back to the team lead via SendMessage, including the full context for each agent to be spawned.
-5. The team lead spawns all agents directly using the Agent tool — **all agents MUST use the same `team_name` as the Program Director**
+5. The team lead spawns all agents directly using the Agent tool
 6. All code-writing agents use `isolation: "worktree"`
 7. Coordinate via named agents and SendMessage
 
@@ -40,20 +40,15 @@ All spawned agents MUST be named `{repo-name}-{persona-firstname}` (e.g., `main-
 | `noorinalabs-landing-page` | `landing-page-` |
 | `noorinalabs-main` (cross-repo) | `main-` |
 
-## Team Names <!-- promotion-target: none -->
+## Team Names — RETIRED: never pass `team_name` <!-- promotion-target: none -->
 
-> **Single-Leader Constraint applies.** Per § Single-Leader Constraint below, only ONE team can exist per orchestrator session. The per-repo `team_name` rows in this table are therefore **only operative when you open a session dedicated to that one repo for repo-only work**. The common case — wave-kickoff orchestration from `noorinalabs-main` touching multiple child repos — uses `team_name: "noorinalabs"` for every agent regardless of which repo's code they're editing. Read § Single-Leader Constraint first; the rows below are the per-repo-session fallback, not the cross-repo default.
+> **`team_name` is a deprecated Agent-tool parameter and MUST NOT be passed** (#1375). The live tool schema documents it as *"Deprecated; ignored. The session has a single implicit team."* The correct number of `team_name` values in any spawn is **zero**, and `validate_no_team_name` (PreToolUse, `Agent` matcher) blocks a spawn that carries one.
 
-Each repo defines its own `team_name` in its repo charter. For dedicated per-repo sessions, use that name for all Agent tool calls when working in that repo. For cross-repo coordination (the common case), use `team_name: "noorinalabs"`.
+There is one implicit team per orchestrator session. Nothing creates it, nothing names it, and there is no `TeamCreate`/`TeamDelete` to call — so there is no name to choose and no per-repo table to consult. An agent working on child-repo code is a member of the same single session team as everyone else; **the repo it edits is expressed by its worktree and its brief, not by a team name.**
 
-| Context | team_name |
-|---------|-----------|
-| Cross-repo coordination (default for wave work orchestrated from `noorinalabs-main`) | `noorinalabs` |
-| Dedicated session in noorinalabs-isnad-graph (repo-only work) | `noorinalabs-isnad-graph` |
-| Dedicated session in noorinalabs-landing-page (repo-only work) | `noorinalabs-landing-page` |
-| Dedicated session in noorinalabs-deploy (repo-only work) | `noorinalabs-deploy` |
-| Dedicated session in noorinalabs-design-system (repo-only work) | `noorinalabs-design-system` |
-| Dedicated session in noorinalabs-data-acquisition (repo-only work) | `noorinalabs-data-acquisition` |
+Agents remain addressable by their **agent name** (§ Agent Naming with Repo Prefix above) via `SendMessage` — that is the routing mechanism, and it never depended on `team_name`.
+
+**What replaced the per-repo table:** nothing needed to. The rows previously listed here (`noorinalabs`, `noorinalabs-isnad-graph`, `noorinalabs-deploy`, …) mapped a session context to a team name for the Agent tool. With the parameter ignored, that mapping has no consumer. Per-repo *rosters* under `<repo>/.claude/team/roster/` remain fully canonical for commit identity, domain ownership, and reviewer pairing — those are unaffected and are what "which repo's team" actually means now.
 
 > **Agent tool limitation:** Spawned agents (including the Program Director and team members) do NOT have access to the Agent tool. They cannot spawn other agents. All agent spawning must be done by the orchestrating Claude instance. This is the harness reinforcement of the single-team constraint — see § Hub-and-Spoke Orchestration Model and § Single-Leader Constraint.
 

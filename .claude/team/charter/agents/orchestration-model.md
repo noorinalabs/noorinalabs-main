@@ -61,13 +61,13 @@ The harness provides a **single implicit team per orchestrator session** — the
 
 ### What this means in practice
 
-- **The `Team Names` table above is only operative when you open a session dedicated to one repo.** When a session is opened in `noorinalabs-main` to run a cross-repo wave, all spawning uses `team_name: "noorinalabs"` and there is only the one implicit team. Agents for deploy, isnad-graph, user-service, landing-page, etc. are all spawned as members of the single `noorinalabs` team.
-- **Cross-repo waves always use `team_name: "noorinalabs"`** for every agent — managers AND implementers — because the single-team constraint makes anything else technically impossible.
-- **Per-repo team names** (`noorinalabs-isnad-graph`, `noorinalabs-deploy`, etc.) only apply when a session is run in isolation in that repo — not the common case for wave-kickoff work orchestrated from `noorinalabs-main`.
+- **Never pass `team_name` (#1375).** It is a deprecated Agent-tool parameter — the live schema reads *"Deprecated; ignored. The session has a single implicit team."* — and `validate_no_team_name` (PreToolUse, `Agent` matcher) blocks any spawn carrying one. There is no team name to choose, for cross-repo waves or repo-only sessions alike. See § Team Names in [`naming-and-teams.md`](naming-and-teams.md#team-names--retired-never-pass-team_name).
+- **Every agent is a member of the one implicit session team**, regardless of which repo's code it edits. Agents for deploy, isnad-graph, user-service, landing-page, etc. are not distinguished by any team parameter — **the repo an agent works on is expressed by its worktree and its brief.**
+- **Per-repo rosters** under `<repo>/.claude/team/roster/` remain canonical for commit identity, domain ownership, and reviewer pairing. Those are what "which repo's team" now means; they were never the same thing as the retired `team_name` parameter.
 
 ### Delegation mechanics (reinforcement of § Hub-and-Spoke)
 
-1. **Orchestrator** spawns managers (Program Director + per-repo managers) via the `Agent` tool with `team_name: "noorinalabs"` — the single implicit team (no `TeamCreate` call exists in the current harness).
+1. **Orchestrator** spawns managers (Program Director + per-repo managers) via the `Agent` tool — with **no** `team_name` parameter (#1375); the session's single implicit team needs no naming and no `TeamCreate`.
 2. **Managers** do NOT have the Agent tool. When they need implementers, they `SendMessage` the orchestrator (team-lead) with a spawn request: "please spawn {Name} from {repo}/{roster-card} for {issue}, branch {X}, reviewers {Y, Z}."
 3. **Orchestrator spawns implementers** with the context the manager provided PLUS the Ontology Context bake (per `enforce_ontology_context.py` hook — see § Orchestrator checklist below) PLUS the expected `/ontology-librarian` first-action instruction (per Hook 15 in `hooks.md` — advisory since #857; still best practice in every spawn brief).
 4. **Implementers report** back to their assigning manager via `SendMessage`. Cross-manager coordination is in-band (`SendMessage`) plus on-GitHub (meta-issue comments + Cross-Contract PRs).

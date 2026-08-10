@@ -27,7 +27,8 @@ The constraints that still bind are the real ones, not permission:
 
 - **Hub-and-spoke only** — the orchestrator is the sole spawner; spawned agents have no
   `Agent` tool ([[feedback_child_repo_spawn_no_isolation]] covers the isolation half).
-- **`team_name: "noorinalabs"`** for every agent in a cross-repo wave.
+- **Never pass `team_name`** — deprecated and ignored by the Agent tool; `validate_no_team_name`
+  blocks a spawn carrying one (#1375). One implicit team per session, no name to choose.
 - **Model tier** per `.claude/team/charter/agents/orchestration-model.md` — mechanical
   read-only work is Haiku; substantive code is Sonnet; gate/security/merge-gate reasoning is
   Opus. Every PR still needs ≥1 Opus merge-gate review.

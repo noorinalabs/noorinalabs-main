@@ -173,7 +173,7 @@ Report merged-worktree removals and surface the FLAGGED list (locked + unmerged)
 
 ### Step 1 — Team orientation
 
-The current harness has **no `TeamCreate`/`TeamDelete` tools** (2026-06-16) — the session runs on a **single implicit team**; nothing to create, tear down, or go stale. Spawning is via the **`Agent` tool** with `team_name: "noorinalabs"`; the orchestrator is the sole spawner (spawned agents cannot spawn — charter `agents.md` § Single-Leader Constraint). Report "Single implicit team (no create/delete tools in this harness)" and move on.
+The current harness has **no `TeamCreate`/`TeamDelete` tools** (2026-06-16) — the session runs on a **single implicit team**; nothing to create, tear down, or go stale. Spawning is via the **`Agent` tool** with **no `team_name`** (deprecated and ignored; the `validate_no_team_name` hook blocks a spawn carrying one — #1375); the orchestrator is the sole spawner (spawned agents cannot spawn — charter `agents.md` § Single-Leader Constraint). Report "Single implicit team (no create/delete tools in this harness)" and move on.
 
 ### Step 2 — Handoff check
 

@@ -49,13 +49,10 @@ Images published to GHCR via ghcr-publish.yml workflow.
 ## Charter Split
 
 - **Org charter** (`noorinalabs-main/.claude/team/charter.md`): Team structure, roster, feedback, commit identity, branching conventions, cross-repo coordination protocol
-- **Repo charters** (each repo's `.claude/team/charter.md`): PRD reference, phases, team_name, deployment details, repo-specific labels
+- **Repo charters** (each repo's `.claude/team/charter.md`): PRD reference, phases, deployment details, repo-specific labels
 
-## team_name Convention
+## `team_name` — RETIRED (#1375)
 
-| Context | team_name |
-|---------|-----------|
-| isnad-graph work | `noorinalabs-isnad-graph` |
-| Landing page work | `noorinalabs-landing-page` |
-| Deploy repo work | `noorinalabs-deploy` |
-| Cross-repo coordination | `noorinalabs` |
+The per-repo `team_name` table that stood here is gone. `team_name` is a **deprecated Agent-tool parameter** — the live schema reads *"Deprecated; ignored. The session has a single implicit team"* — and `validate_no_team_name` (PreToolUse, `Agent` matcher) blocks any spawn that passes one.
+
+There is one implicit team per session, with no name to choose. Which repo an agent works on is expressed by its **worktree and brief**; which repo's *people* it draws on is expressed by the per-repo **roster** under `<repo>/.claude/team/roster/`, which is unaffected and remains canonical for commit identity, domain ownership, and reviewer pairing.
