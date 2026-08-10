@@ -496,7 +496,7 @@ Run `/ontology-librarian {topic}` **yourself** in this session before any Edit/W
 Per charter `agents.md` § Hub-and-Spoke Orchestration Model + § Single-Leader Constraint:
 
 - **Only the orchestrator (team lead) can call Agent.** Managers and implementers do not have the Agent tool.
-- **Single team per session** — the harness provides one implicit team per session (no `TeamCreate`/`TeamDelete` tools). Spawn via the `Agent` tool with `team_name: "noorinalabs"` for cross-repo waves.
+- **Single team per session** — the harness provides one implicit team per session (no `TeamCreate`/`TeamDelete` tools). Spawn via the `Agent` tool with **no `team_name`** — the parameter is deprecated and ignored, and `validate_no_team_name` blocks a spawn that passes it (#1375).
 - **Managers request implementer spawns** via `SendMessage` to the team lead with full context (name, roster file, issue, branch, reviewers, Contract ownership if applicable).
 - **Team lead spawns each implementer** following step 9 above (both bakes).
 - **Isolation: every implementer spawn MUST set `isolation: "worktree"`,** even when the parent-side worktree is cosmetic (child-repo work). Per charter `agents.md` § Spawn Isolation Default. The cost is a temporary parent-repo worktree per agent (auto-cleaned if no changes); the benefit is correct workspace-presentation in the harness UI (the operator sees agents under team membership rather than as anonymous background tasks) and consistent Hook 14 (`enforce_ontology_context`) enforcement.
