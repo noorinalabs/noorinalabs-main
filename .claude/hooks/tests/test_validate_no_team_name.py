@@ -13,11 +13,16 @@ Run: ENVIRONMENT=test python3 -m pytest .claude/hooks/tests/test_validate_no_tea
 
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
 import unittest
 
 import _test_helpers  # noqa: E402,F401
 import pytest
 import validate_no_team_name as hook  # noqa: E402
+
+_HOOKS_DIR = _test_helpers.HOOKS_DIR
 
 
 def _spawn(tool_input: dict, tool_name: str = "Agent") -> dict:
@@ -67,8 +72,8 @@ def test_spawn_without_team_name_is_allowed(tool_input):
 )
 def test_spawn_with_team_name_is_blocked(team_name):
     """Every value the retired charter table used to prescribe is now blocked —
-    including `noorinalabs`, which was the mandated cross-repo default at 14
-    charter sites before #1375."""
+    including `noorinalabs`, the mandated cross-repo default across 10 files /
+    18 references before #1375."""
     result = hook.check(_spawn({"prompt": "spawn", "team_name": team_name}))
     assert result is not None
     assert result["decision"] == "block"
@@ -114,6 +119,70 @@ class MalformedInputFailsOpen(unittest.TestCase):
 
     def test_empty_input(self):
         self.assertIsNone(hook.check({}))
+
+
+class MainEntrypointExitCode(unittest.TestCase):
+    """The registered entry point must exit **2** to block. MF1 of the #1376
+    merge-gate review (Nino Kavtaradze).
+
+    Why the `check()` tests above are not enough — and why this class is the
+    load-bearing one. Mutating `run_blocking` -> `run_advisory` in `main()`
+    leaves all 17 `check()` cases green AND still prints the byte-identical
+    `{"decision": "block", ...}` payload to stdout, while exiting **0**: the
+    gate announces "BLOCKED" and silently allows. Reproduced live before
+    writing this class. Nothing outside the exit code distinguishes the
+    working hook from the broken one, so nothing but an exit-code assertion
+    can pin it.
+
+    This is #1243's shape (a BLOCK gate that exits non-2 fails open, because
+    a PreToolUse non-2 non-zero does not block) and the wave-30 theme's
+    definition of an untestable gate: passing and broken states that are
+    observationally identical from outside.
+    """
+
+    def _run(self, payload: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(_HOOKS_DIR / "validate_no_team_name.py")],
+            input=payload,
+            capture_output=True,
+            text=True,
+        )
+
+    def _agent(self, tool_input: dict) -> str:
+        return json.dumps({"tool_name": "Agent", "tool_input": tool_input})
+
+    def test_team_name_spawn_exits_2(self):
+        """The assertion that kills the run_advisory mutant."""
+        proc = self._run(self._agent({"prompt": "spawn", "team_name": "noorinalabs"}))
+        self.assertEqual(
+            proc.returncode, 2, "a blocking gate MUST exit 2; non-2 fails open (#1243)"
+        )
+
+    def test_team_name_spawn_emits_block_decision(self):
+        proc = self._run(self._agent({"prompt": "spawn", "team_name": "noorinalabs"}))
+        self.assertEqual(json.loads(proc.stdout)["decision"], "block")
+
+    def test_padded_team_name_still_exits_2(self):
+        proc = self._run(self._agent({"prompt": "spawn", "team_name": "  noorinalabs  "}))
+        self.assertEqual(proc.returncode, 2)
+
+    def test_clean_spawn_exits_0(self):
+        proc = self._run(self._agent({"prompt": "spawn"}))
+        self.assertEqual(proc.returncode, 0)
+
+    def test_bash_call_exits_0(self):
+        payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": "ls"}})
+        self.assertEqual(self._run(payload).returncode, 0)
+
+    def test_non_dict_tool_input_exits_0(self):
+        payload = json.dumps({"tool_name": "Agent", "tool_input": "not-a-dict"})
+        self.assertEqual(self._run(payload).returncode, 0)
+
+    def test_empty_stdin_exits_0(self):
+        self.assertEqual(self._run("").returncode, 0)
+
+    def test_non_json_stdin_exits_0(self):
+        self.assertEqual(self._run("not json at all").returncode, 0)
 
 
 if __name__ == "__main__":

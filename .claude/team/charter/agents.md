@@ -24,7 +24,7 @@ The orchestrator is the single point that can create agents; managers request sp
 Agents are named `{repo-name}-{persona-firstname}` to identify their repo team. → [agents/naming-and-teams.md](agents/naming-and-teams.md#agent-naming-with-repo-prefix)
 
 ## Team Names
-`team_name` is RETIRED — never pass it to the Agent tool (#1375); the per-repo table is gone. → [agents/naming-and-teams.md](agents/naming-and-teams.md#team-names)
+`team_name` is RETIRED — never pass it to the Agent tool (#1375); the per-repo table is gone. → [agents/naming-and-teams.md](agents/naming-and-teams.md#team-names--retired-never-pass-team_name)
 
 ## Single-Leader Constraint: One Team Per Orchestrator Session
 One implicit team per orchestrator session; full delegation mechanics and the orchestrator checklists for spawning implementers and reviewers. → [agents/orchestration-model.md](agents/orchestration-model.md#single-leader-constraint-one-team-per-orchestrator-session)
