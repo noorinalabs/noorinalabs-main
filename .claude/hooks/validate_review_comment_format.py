@@ -700,18 +700,23 @@ _VERDICT_DIRECTIONS = frozenset(
 #      is a field to the hook and prose to the counter. #1364 makes this the
 #      likely case, not a contrived one: the field is now a documented
 #      obligation, so reviewers will write *about* it in trailers.
-#   2. code fences — `strip_code_regions` does not strip `~~~` blocks;
-#      `_strip_code_markup` does. A `~~~`-quoted example blocked.
-#   3. scope — trailer-block only vs whole body.
+#   2. code fences — RESOLVED by main#1359/#1361: `charter_trailer
+#      .strip_code_regions` now strips `~~~` blocks the same as the (now
+#      deleted) private `trust_signals._strip_code_markup` did, so this
+#      predicate uses the shared stripper directly (see
+#      `_strip_code_for_field_scan` below) instead of mirroring it.
+#   3. scope — trailer-block only vs whole body. STILL OPEN: `_CONDITIONAL_FIELD_RE`
+#      below is still a hook-local mirror of `trust_signals._RETRACTION_RE` /
+#      `._ORCHESTRATOR_CAUSED_RE`, because `charter_trailer.extract_charter_field`
+#      narrows to the trailer block and this predicate deliberately does not
+#      (main#1359 extracted the STRIPPER and the verdict-KIND vocabulary, not
+#      this presence-detection pair — tracked separately, main#1371/#1372).
 #
-# The definitions below mirror the counter's exactly and are pinned against
-# it by `ConditionalFieldGrammarAgreementTests`, which drives both
-# implementations over one corpus so a future divergence reds rather than
-# silently false-blocks. Folding these into the shared `charter_trailer`
-# owner is the real terminus and is tracked work, NOT to be done incidentally
-# here: `trust_signals` § main#1359 records that `charter_trailer` lacks
-# `~~~` support and that adding it belongs to that migration. See also
-# main#1371 (verdict-direction classification has three implementations).
+# The field-presence definitions below still mirror the counter's regexes
+# (axis 1 + axis 3 remain open) and are pinned against it by
+# `ConditionalFieldGrammarAgreementTests`, which drives both implementations
+# over one corpus so a future divergence reds rather than silently
+# false-blocks. Full consolidation of this remaining pair is main#1371/#1372.
 _CONDITIONAL_VERDICT_FIELDS = ("Retracted", "OrchestratorCaused")
 
 # Mirrors trust_signals._RETRACTION_RE / ._ORCHESTRATOR_CAUSED_RE.
@@ -721,17 +726,32 @@ _CONDITIONAL_FIELD_RE = {
 }
 
 
-def _strip_code_for_field_scan(text: str) -> str:
-    """Mirrors ``trust_signals._strip_code_markup``.
-
-    Deliberately NOT ``charter_trailer.strip_code_regions``: that one leaves
-    ``~~~`` fences intact, so a reviewer quoting the field shape in a ``~~~``
-    block would be present to the hook and absent to the counter. Replaces
-    each region with same-length whitespace so line structure — which the
-    line-anchored patterns depend on — is preserved.
-    """
-    text = re.sub(r"```.*?```|~~~.*?~~~", lambda m: " " * len(m.group()), text, flags=re.DOTALL)
-    return re.sub(r"`[^`\n]+`", lambda m: " " * len(m.group()), text)
+# The code-stripping step for the conditional-field presence scan is the
+# SAME function object as the shared stripper — a direct alias, not a
+# wrapper, and not a local mirror (main#1359/#1361, hardened per SF1 below).
+#
+# Before main#1359 this name bound a private `re.sub`-based copy of
+# `trust_signals._strip_code_markup` (kept apart from
+# `charter_trailer.strip_code_regions` specifically because that one left
+# `~~~` fences intact); now that the shared stripper handles `~~~` too,
+# there is nothing left for a second copy to diverge on.
+#
+# main#1359 merge-gate review (Aino Virtanen, SF1): reverting this name to a
+# local `def _strip_code_for_field_scan(text): return re.sub(...)` mirror
+# left the ENTIRE suite green — `test_no_second_definition_anywhere` greps
+# `^def _?{name}\(` against a fixed name set, so a copy bound under a
+# DIFFERENT function name (this one) is invisible to it, and the only
+# existing identity check (`test_both_hooks_share_one_function_object`)
+# asserted the module-level `strip_code_regions` import binding, never this
+# name. A plain assignment (mirroring `validate_pr_review._strip_code_regions
+# = strip_code_regions`) closes that hole: any future `def
+# _strip_code_for_field_scan(...)` here immediately fails
+# `test_code_stripper_is_the_shared_function_object`
+# (`test_validate_review_comment_format.py`), which asserts identity, not
+# merely equal output, and — because a `def` also constitutes a
+# reintroduced local implementation — no longer needs its own name added to
+# the singularity sweep's fixed set to be caught.
+_strip_code_for_field_scan = strip_code_regions
 
 
 def _conditional_fields_present(body: str) -> list[str]:
@@ -751,15 +771,20 @@ def _direction_is_changes_requested(body: str) -> bool:
 
     Narrower than :func:`_direction_is_verdict`, which also accepts Approved.
     Accepts the bare ``Changes`` spelling that `_VERDICT_DIRECTIONS`
-    deliberately excludes, because `trust_signals._verdict_kind` DOES count it
-    as ChangesRequested — this predicate must agree with the consumer whose
-    behaviour it is protecting, not with the sibling verdict-set.
+    deliberately excludes, because `trust_signals.parse_verdicts` (via
+    `charter_trailer.verdict_kind(..., include_bare_changes=True)`, main#1359)
+    DOES count it as ChangesRequested — this predicate must agree with the
+    consumer whose behaviour it is protecting, not with the sibling
+    verdict-set.
 
-    That makes **three** verdict-direction classifiers across two files, two of
-    which disagree on bare ``Changes`` *by design*. Consolidating them is
-    tracked as **main#1371** (see also main#1359); it is not a change to make
-    incidentally, because the divergence is intentional per-consumer and
-    collapsing it wrongly would silently re-scope two hooks.
+    That makes **two** verdict-direction classifiers left in this file
+    (`_VERDICT_DIRECTIONS` here and this function), disagreeing on bare
+    ``Changes`` *by design* — `trust_signals`'s own former third copy was
+    deleted in main#1359, which also added `charter_trailer.verdict_kind(...,
+    include_bare_changes=...)` as the shared classifier these two migrate
+    onto. Consolidating them is tracked as **main#1371**; it is not a change
+    to make incidentally, because the divergence is intentional per-consumer
+    and collapsing it wrongly would silently re-scope two hooks.
     """
     match = re.search(r"RequestOrReplied:\s*(.+)", body)
     if not match:

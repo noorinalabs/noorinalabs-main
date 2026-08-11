@@ -597,8 +597,21 @@ class TrailerHelperSingularityTests(unittest.TestCase):
     def test_no_second_definition_anywhere(self) -> None:
         """Scan hooks AND lib. Scoping this to one directory would make the
         guard silently stop guarding the moment the module moved — which it
-        just did (main#932)."""
-        defs = {"strip_code_regions", "trailer_block_substring", "extract_charter_field"}
+        just did (main#932).
+
+        `verdict_kind` / `normalize_verdict_token` joined the guarded set in
+        main#1359: before that extraction, `trust_signals.py` carried a
+        private `_verdict_kind` / `_normalize_verdict_token` pair this exact
+        sweep would have caught (verified against the pre-#1359 tree — the
+        sweep found `lib/trust_signals.py:normalize_verdict_token` and
+        `lib/trust_signals.py:verdict_kind`)."""
+        defs = {
+            "strip_code_regions",
+            "trailer_block_substring",
+            "extract_charter_field",
+            "verdict_kind",
+            "normalize_verdict_token",
+        }
         searched = sorted(_HOOKS_DIR.glob("*.py")) + sorted(_LIB_DIR.glob("*.py"))
         self.assertGreater(len(searched), 20, "file sweep found almost nothing — verify the glob")
 
@@ -617,7 +630,13 @@ class TrailerHelperSingularityTests(unittest.TestCase):
     def test_the_sweep_can_actually_find_a_definition(self) -> None:
         """Verify the instrument: the scan must match a known definition."""
         canonical = (_LIB_DIR / "charter_trailer.py").read_text()
-        for name in ("strip_code_regions", "trailer_block_substring", "extract_charter_field"):
+        for name in (
+            "strip_code_regions",
+            "trailer_block_substring",
+            "extract_charter_field",
+            "verdict_kind",
+            "normalize_verdict_token",
+        ):
             self.assertRegex(canonical, rf"(?m)^def {name}\(")
 
 

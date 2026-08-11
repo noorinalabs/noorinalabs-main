@@ -80,6 +80,7 @@ from pathlib import Path
 # wave_status lives alongside this file in .claude/lib/. Running as a script puts
 # this dir on sys.path[0]; the tests add it explicitly.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import charter_trailer  # noqa: E402
 import wave_state  # noqa: E402
 import wave_status  # noqa: E402
 
@@ -152,98 +153,39 @@ CALIBRATION_MIN_AUTHORS = 5
 # equality check against ``"changesrequested"`` silently failed, dropping the
 # verdict from every counter. Widened to a full-line capture mirroring
 # requestor/requestee; classification of the captured text into a verdict
-# kind is now a separate step (`_verdict_kind`, below) so trailing text past
-# the first word (e.g. ``Approved (post-merge)``) doesn't defeat an exact
-# match either.
+# kind is now a separate step (`charter_trailer.verdict_kind`, main#1359) so
+# trailing text past the first word (e.g. ``Approved (post-merge)``) doesn't
+# defeat an exact match either.
 _FIELD_RE = {
     "requestor": re.compile(r"^\**Requestor\**:\**\s*(.+?)\**\s*$", re.MULTILINE),
     "requestee": re.compile(r"^\**Requestee\**:\**\s*(.+?)\**\s*$", re.MULTILINE),
     "verdict": re.compile(r"^\**RequestOrReplied\**:\**\s*(.+?)\**\s*$", re.MULTILINE),
 }
 
-# Canonical verdict-kind vocabulary for the `RequestOrReplied:` field.
-# Reviewers write ChangesRequested three ways in practice: the
-# charter-canonical one-word `ChangesRequested`, the human-typed spaced
-# `Changes Requested`, and the short `Changes`.
+# Canonical verdict-kind vocabulary for the `RequestOrReplied:` field —
+# extracted to `charter_trailer.VERDICT_KIND` / `.verdict_kind()` (main#1359).
 #
-# main#1359 (MF1 on this PR, Aino/Nino): an earlier version of this comment
-# argued extraction was blocked by a dependency-direction problem and that
-# the two sibling hooks already agreed on all three spellings. BOTH claims
-# are false and were verified false, not merely disputed:
+# This module used to carry a private copy (`_VERDICT_KIND` /
+# `_normalize_verdict_token` / `_verdict_kind`) on the argument that lib code
+# importing from hooks/ would invert the intended dependency direction. That
+# premise never held: the shared home for this vocabulary is
+# `.claude/lib/charter_trailer.py`, which is ALSO `.claude/lib/`, not
+# `.claude/hooks/` — verified at PR #1356 head `0478497`, before this
+# migration ever touched the regex:
 #
-#   * There is no dependency-direction problem. The shared home for this
-#     vocabulary already exists, in `.claude/lib/`, not `.claude/hooks/`:
-#     `.claude/lib/charter_trailer.py` (main#932/#934) is the org's declared
-#     "single source of truth for the charter trailer-block convention",
-#     and this module already does `sys.path.insert(0, ...parent)`, so
-#     `import charter_trailer` costs zero path changes.
-#     `charter_trailer.extract_charter_field("RequestOrReplied", body)`
-#     ALREADY returns `"Changes Requested"` correctly — the value
-#     `_FIELD_RE["verdict"]` above reproduces was already correct, one file
-#     over, before this PR ever touched the regex.
-#   * The two sibling hooks do NOT already agree.
-#     `.claude/hooks/validate_review_comment_format.py`'s
-#     `_VERDICT_DIRECTIONS` (~line 664) deliberately EXCLUDES bare
-#     `changes` — its own comment: "The bare 'Changes' prefix is NOT a
-#     verdict on its own." `.claude/hooks/validate_pr_review.py`'s
-#     `_VERDICT_REQUIRING_TECH_DEBT` (~line 1410) includes it. The siblings
-#     disagree with each other, which is an argument FOR one shared owner,
-#     not evidence that copies are safe.
+#     import charter_trailer from lib: OK (same dir, already on ts's sys.path)
+#     charter_trailer.extract_charter_field("RequestOrReplied", body) -> 'Changes Requested'
+#     trust_signals.parse_verdicts(...)[0].verdict                    -> 'Changes Requested'
 #
-# `_VERDICT_KIND` / `_normalize_verdict_token` / `_verdict_kind` stay a
-# private copy in THIS PR anyway, for the two reasons that survived
-# scrutiny: (1) scope discipline — this is a retro PR landing two verified
-# defect fixes (#1347, #1348); migrating to `charter_trailer` means adding
-# a verdict-KIND classifier to ITS public API (it currently only extracts
-# raw field values, it does not classify Request/Reply vs
-# Approved/ChangesRequested) and re-verifying two hooks with large test
-# surfaces — real, cross-file work that does not belong bundled into this
-# fix. (2) a REAL, already-diverged dependency, not a hypothetical one:
-# `_strip_code_markup` (below) and `charter_trailer.strip_code_regions` are
-# two copies of one concept in the same directory that already disagree
-# outcome-changingly for the new `Retracted:` guard —
-# `_strip_code_markup` strips `~~~`-fenced code blocks, `strip_code_regions`
-# does not, and `_strip_code_markup`'s answer is the more correct one here.
-# Folding `~~~` support into `charter_trailer` has to happen as PART of the
-# migration, not incidentally alongside it. Extraction is real, tracked
-# work: main#1359.
-_VERDICT_KIND = {
-    "approved": "approved",
-    "changesrequested": "changesrequested",
-    "changes": "changesrequested",
-    "request": "request",
-    "reply": "reply",
-    "replied": "reply",
-}
-
-
-def _normalize_verdict_token(raw: str) -> str:
-    """Casefold + strip everything but alphanumerics from one token.
-
-    Collapses spelling/formatting variants of the SAME token to one key
-    (``**ChangesRequested**`` and ``ChangesRequested`` both normalize to
-    ``"changesrequested"``).
-    """
-    return re.sub(r"[^a-z0-9]", "", raw.casefold())
-
-
-def _verdict_kind(verdict: str | None) -> str:
-    """Classify a captured ``RequestOrReplied`` value into a canonical kind.
-
-    Returns ``"approved"``, ``"changesrequested"``, ``"request"``,
-    ``"reply"``, or ``""`` for anything unrecognized. Only the FIRST word of
-    the (now full-line) captured value is classified — ``"changes"`` alone
-    already maps to ``"changesrequested"`` in :data:`_VERDICT_KIND`, so both
-    the one-word ``ChangesRequested`` and the spaced ``Changes Requested``
-    resolve via their shared first word, and trailing noise past the first
-    word (e.g. ``Approved (post-merge)``) never defeats the match.
-    """
-    if not verdict:
-        return ""
-    parts = verdict.split()
-    if not parts:
-        return ""
-    return _VERDICT_KIND.get(_normalize_verdict_token(parts[0]), "")
+# `include_bare_changes=True` at every call site below reproduces this
+# module's pre-migration behaviour exactly (bare `Changes` counted as
+# `changesrequested`) — see `charter_trailer.verdict_kind` for why that is a
+# caller-supplied argument rather than a silently-forked table:
+# `validate_pr_review` and `validate_review_comment_format` migrate their own
+# remaining copies onto the same function under main#1371, one of which
+# deliberately excludes bare `Changes` for a different question. There is no
+# local wrapper — `charter_trailer.verdict_kind` is called directly, so a
+# future re-implementation here has nothing to shadow.
 
 
 # main#1348: a bare word match (`false[\s-]?positive|withdrawn|...`) over the
@@ -290,24 +232,10 @@ _RETRACTION_RE = re.compile(r"^\**Retracted\**:\**\s*\S", re.MULTILINE)
 # the back door, which is why this is a countable field and not a retro note.
 _ORCHESTRATOR_CAUSED_RE = re.compile(r"^\**OrchestratorCaused\**:\**\s*\S", re.MULTILINE)
 
-
-def _strip_code_markup(text: str) -> str:
-    """Remove fenced code blocks and inline code spans from *text*.
-
-    Called before :data:`_RETRACTION_RE` is applied so that a quoted example
-    or symbol name containing the literal ``Retracted:`` field shape inside
-    a code span or fenced block (e.g. someone pasting a sample comment) is
-    not mistaken for a genuine self-mark.  The removal is positional — we
-    replace each code region with whitespace of the same length so that
-    surrounding context positions are preserved for any subsequent
-    line-oriented parsing, though :data:`_RETRACTION_RE` does not rely on
-    positions.
-    """
-    # Fenced blocks first (```...``` or ~~~...~~~, possibly multiline).
-    text = re.sub(r"```.*?```|~~~.*?~~~", lambda m: " " * len(m.group()), text, flags=re.DOTALL)
-    # Inline code spans (`...`); single-backtick, non-newline interior.
-    text = re.sub(r"`[^`\n]+`", lambda m: " " * len(m.group()), text)
-    return text
+# `_strip_code_markup` (the private ``~~~``-aware code-stripper this module
+# used to carry) is deleted as of main#1359 — `charter_trailer.strip_code_regions`
+# now strips ``~~~`` fences too (main#1361), so `parse_verdicts` below calls it
+# directly instead of a local copy.
 
 
 @dataclass
@@ -455,8 +383,8 @@ def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
     (``**Requestor:** Name``) forms so it matches everything Hook 4 accepts. A
     comment with no ``RequestOrReplied`` line is not a verdict and is skipped —
     this still builds a :class:`Verdict` for ``Request``/``Reply`` comments
-    (some callers want the full set), but see :func:`_verdict_kind`: those two
-    kinds can never carry ``false_positive=True`` (main#1348).
+    (some callers want the full set), but see :func:`charter_trailer.verdict_kind`:
+    those two kinds can never carry ``false_positive=True`` (main#1348).
     """
     out: list[Verdict] = []
     for body in comment_bodies:
@@ -472,9 +400,30 @@ def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
         # Request/Reply are process metadata, not verdicts at all
         # (main#1348 defect 2). Strip code spans and fenced blocks first so
         # a quoted/pasted example containing the literal `Retracted:` shape
-        # is not mistaken for a real self-mark.
-        scanned = _strip_code_markup(body)
-        is_changes_requested = _verdict_kind(verdict_str) == "changesrequested"
+        # is not mistaken for a real self-mark. `charter_trailer.strip_code_regions`
+        # strips `~~~` fences as well as ``` ones as of main#1359/#1361.
+        #
+        # UNTERMINATED-FENCE DIRECTION CHANGE (main#1359 merge-gate review,
+        # Aino Virtanen — MF2): the deleted `_strip_code_markup` required a
+        # CLOSING fence marker to match (`` ```.*?``` `` is non-greedy over a
+        # closing pair), so an opened-but-never-closed fence was left
+        # entirely alone — anything after it, including a genuine
+        # `Retracted:` self-mark, still counted. `strip_code_regions` strips
+        # from an unterminated fence to end-of-body instead (the more
+        # CommonMark-correct behaviour: an unterminated fence runs to end of
+        # document). So a reviewer who pastes a snippet and forgets the
+        # closing fence now has any genuine self-mark BELOW it silently
+        # swallowed — they lose the false-positive credit, the author keeps
+        # the rework charge. Deliberate (consistency across every consumer of
+        # the shared stripper is the point of this migration, and this is the
+        # more-correct answer), but a real behaviour change on this one axis
+        # — pinned by `UnterminatedFenceDirectionChangeTests` in
+        # `test_trust_signals.py` so it is not rediscovered as a surprise.
+        scanned = charter_trailer.strip_code_regions(body)
+        is_changes_requested = (
+            charter_trailer.verdict_kind(verdict_str, include_bare_changes=True)
+            == "changesrequested"
+        )
         is_false_positive = is_changes_requested and bool(_RETRACTION_RE.search(scanned))
         # `OrchestratorCaused:` is gated identically and for the same reason
         # (main#1366): there is no rework round to reattribute unless THIS
@@ -497,14 +446,15 @@ def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
 def _is_changes_requested(verdict: str | None) -> bool:
     """True if *verdict* (a captured ``RequestOrReplied`` value) is ChangesRequested.
 
-    #1347: routes through :func:`_verdict_kind` so the three spelling
-    variants (``ChangesRequested`` / ``Changes Requested`` / ``Changes``)
-    all classify identically — the previous
+    #1347: routes through :func:`charter_trailer.verdict_kind` so the three
+    spelling variants (``ChangesRequested`` / ``Changes Requested`` /
+    ``Changes``) all classify identically — the previous
     ``verdict.lower() == "changesrequested"`` exact-match silently dropped
     the spaced form because the capturing regex used to stop at the first
-    space.
+    space. ``include_bare_changes=True`` preserves this module's original
+    (pre-main#1359) behaviour of counting bare ``Changes`` (main#1359).
     """
-    return _verdict_kind(verdict) == "changesrequested"
+    return charter_trailer.verdict_kind(verdict, include_bare_changes=True) == "changesrequested"
 
 
 def _pr_comment_bodies(repo: str, number: int) -> list[str]:

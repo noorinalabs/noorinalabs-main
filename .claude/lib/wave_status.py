@@ -70,13 +70,16 @@ _DEFAULT_STATUS = wave_state.DEFAULT_STATUS_PATH
 # #1357: was the literal one-word ``ChangesRequested`` only, so the
 # human-typed spaced form (``Changes Requested``) and the short form
 # (``Changes``) were silently uncounted — the identical narrow-capture defect
-# #1347 fixed in trust_signals.py's ``_verdict_kind``, just reimplemented as a
-# jq regex instead of a Python one. ``Changes(\s*Requested)?\b`` accepts all
-# three spellings — the union of what the org's own PR templates and hooks
-# actually produce, NOT a claim that every existing consumer already agrees
-# on all three: ``validate_pr_review.py``'s ``_VERDICT_REQUIRING_TECH_DEBT``
-# (~line 1410) and ``trust_signals.py``'s ``_VERDICT_KIND`` both accept the
-# bare short form, but ``validate_review_comment_format.py``'s
+# #1347 fixed in what was then trust_signals.py's private ``_verdict_kind``
+# (now ``charter_trailer.verdict_kind``, main#1359 — that private copy is
+# deleted), just reimplemented here as a jq regex instead of a Python one.
+# ``Changes(\s*Requested)?\b`` accepts all three spellings — the union of
+# what the org's own PR templates and hooks actually produce, NOT a claim
+# that every existing consumer already agrees on all three:
+# ``validate_pr_review.py``'s ``_VERDICT_REQUIRING_TECH_DEBT`` (~line 1410)
+# and ``charter_trailer.verdict_kind(..., include_bare_changes=True)`` (the
+# argument ``trust_signals.py`` now passes at its one call site) both accept
+# the bare short form, but ``validate_review_comment_format.py``'s
 # ``_VERDICT_DIRECTIONS`` (~line 664) deliberately excludes it (see main#1359
 # — the sibling consumers disagreeing with each other is itself evidence for
 # a single shared vocabulary owner, not a reason to assume copies stay in

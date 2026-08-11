@@ -34,6 +34,7 @@ from unittest import mock
 # .claude/lib/tests/test_*.py. parent.parent reaches the lib root.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import charter_trailer as ct  # noqa: E402
 import trust_signals as ts  # noqa: E402
 import wave_status  # noqa: E402
 
@@ -146,7 +147,7 @@ class ParseVerdicts(unittest.TestCase):
         """Widening the capture to a full line must not defeat the approved match."""
         body = _verdict("Aino Virtanen", "Nadia Khoury", "Approved (post-merge)")
         v = ts.parse_verdicts([body])[0]
-        self.assertEqual(ts._verdict_kind(v.verdict), "approved")
+        self.assertEqual(ct.verdict_kind(v.verdict, include_bare_changes=True), "approved")
 
     # -- Regression: main#1348 -- `review_false_positives` is gated on an
     # explicit `Retracted:` field, never free-text substring matching. A word
@@ -176,21 +177,22 @@ class ParseVerdicts(unittest.TestCase):
     # named after the specific line the mutant strips.
 
     def test_bold_only_verdict_value_still_classifies(self) -> None:
-        """`_normalize_verdict_token`'s alnum-stripping, not just casefold.
+        """`charter_trailer.normalize_verdict_token`'s alnum-stripping, not just casefold.
 
         A verdict field with no surrounding whitespace before the bold
         marker (`RequestOrReplied: **ChangesRequested**`) is captured with
         its LEADING `**` intact — only the trailing `**` is stripped by the
         field regex's `\\**\\s*$` tail, so the captured token is literally
-        `"**ChangesRequested"`. Removing `_normalize_verdict_token`'s
+        `"**ChangesRequested"`. Removing `charter_trailer.normalize_verdict_token`'s
         `re.sub(r"[^a-z0-9]", "", ...)` step (leaving only `.casefold()`)
-        does not fail any other test in this file — `_normalize_verdict_token`
-        needs its own direct assertion.
+        does not fail any other test in this file —
+        `charter_trailer.normalize_verdict_token` needs its own direct
+        assertion (see `test_charter_trailer.py`, main#1359).
         """
         body = "Requestor: A\nRequestee: B\nRequestOrReplied: **ChangesRequested**\n"
         v = ts.parse_verdicts([body])[0]
         self.assertEqual(v.verdict, "**ChangesRequested")
-        self.assertEqual(ts._verdict_kind(v.verdict), "changesrequested")
+        self.assertEqual(ct.verdict_kind(v.verdict, include_bare_changes=True), "changesrequested")
         self.assertTrue(ts._is_changes_requested(v.verdict))
 
     def test_retracted_mentioned_mid_prose_never_counts(self) -> None:
@@ -374,6 +376,161 @@ class ParseVerdicts(unittest.TestCase):
                 )
                 v = ts.parse_verdicts([body])[0]
                 self.assertFalse(v.false_positive)
+
+
+# --------------------------------------------------------------------------- #
+# Verdict-vocabulary extraction (main#1359) — singularity + the divergence
+# the extraction was filed to close.
+# --------------------------------------------------------------------------- #
+class VerdictVocabularySingularityTests(unittest.TestCase):
+    """One definition of the verdict-kind vocabulary, not a private copy here.
+
+    `trust_signals.py` used to carry `_VERDICT_KIND` / `_normalize_verdict_token`
+    / `_verdict_kind` / `_strip_code_markup` as private copies of concepts
+    `charter_trailer` (main#932/#934's declared single source of truth for the
+    trailer convention) now also owns. These assertions make a reintroduced
+    copy fail CI rather than rot quietly, mirroring
+    `TrailerHelperSingularityTests` in
+    `test_validate_review_comment_format_failopen.py`.
+    """
+
+    def test_module_has_no_private_vocabulary_symbols(self) -> None:
+        for name in ("_VERDICT_KIND", "_normalize_verdict_token", "_verdict_kind"):
+            self.assertFalse(hasattr(ts, name), f"trust_signals.{name} should not exist")
+
+    def test_module_has_no_private_stripper(self) -> None:
+        self.assertFalse(
+            hasattr(ts, "_strip_code_markup"), "trust_signals._strip_code_markup should not exist"
+        )
+
+    def test_trust_signals_imports_the_shared_module(self) -> None:
+        self.assertIs(ts.charter_trailer, ct)
+
+
+class TildeFenceDivergenceTests(unittest.TestCase):
+    """The divergence main#1359/main#1361 report: pre-fix, `charter_trailer
+    .strip_code_regions` left `~~~` fences intact while `trust_signals`'
+    now-deleted private `_strip_code_markup` stripped them — same input,
+    different answer, depending on which copy handled it.
+
+    Verified against the pre-#1359 tree (`git stash` over this same
+    reproduction): ``trust_signals._strip_code_markup`` stripped the ``~~~``
+    block (``false_positive=False``, correct) while feeding the identical
+    body through ``charter_trailer.strip_code_regions`` instead left the
+    ``Retracted:`` line visible (``false_positive=True`` — wrong: it is a
+    quoted example, not a real self-mark). Post-fix there is exactly one
+    stripper and both call sites necessarily agree.
+    """
+
+    _TILDE_FENCED_RETRACTED_EXAMPLE = (
+        "RequestOrReplied: ChangesRequested\n\n~~~\nRetracted: quoted example\n~~~\n"
+    )
+
+    def test_charter_trailer_strip_code_regions_strips_tilde_fences(self) -> None:
+        # Pre-#1359/#1361: FAILS — `strip_code_regions` only recognized
+        # ```` ``` ```` and left the `~~~`-fenced `Retracted:` line intact, so
+        # `"Retracted"` remained in the output.
+        result = ct.strip_code_regions(self._TILDE_FENCED_RETRACTED_EXAMPLE)
+        self.assertNotIn("Retracted", result)
+
+    def test_quoted_retracted_inside_tilde_fence_is_not_a_false_positive(self) -> None:
+        # Pre-#1359: this specific assertion already passed, because
+        # `trust_signals` routed through its OWN private `_strip_code_markup`,
+        # not the shared (then-buggy) `charter_trailer.strip_code_regions`.
+        # It is a regression guard for the migration, not the divergence
+        # proof itself — see `test_charter_trailer_strip_code_regions_strips_tilde_fences`
+        # and `ConsolidatedStripCodeRegionsAlsoFixesTheHookAlias` below for that.
+        v = ts.parse_verdicts([self._TILDE_FENCED_RETRACTED_EXAMPLE])[0]
+        self.assertFalse(v.false_positive)
+
+
+class ConsolidatedStripCodeRegionsAlsoFixesTheHookAlias(unittest.TestCase):
+    """main#1361's exact repro, run against the shared definition directly.
+
+    `validate_pr_review.py` aliases `charter_trailer.strip_code_regions`
+    (`_strip_code_regions = strip_code_regions`) and `charter_trailer
+    .extract_charter_field` calls it internally — so main#1359's fence fix,
+    made once in `charter_trailer.py`, closes main#1361 for every consumer
+    without a second change. Pre-#1359/#1361 this test FAILS: both fields
+    resolve out of the `~~~`-fenced example even though there is no real
+    `---` trailer anywhere in the body.
+    """
+
+    def test_tilde_fenced_trailer_example_with_no_real_trailer_extracts_nothing(self) -> None:
+        body = (
+            "Here is the format reviewers should use:\n\n"
+            "~~~\n"
+            "Requestor: Ghost Reviewer\n"
+            "Requestee: PR Author\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none\n"
+            "~~~\n\n"
+            "I have not reviewed this yet.\n"
+        )
+        self.assertIsNone(ct.extract_charter_field("Requestor", body))
+        self.assertIsNone(ct.extract_charter_field("RequestOrReplied", body))
+        self.assertIsNone(ct.extract_charter_field("TechDebt", body))
+
+    def test_tilde_fenced_example_above_a_real_trailer_still_resolves_the_real_one(self) -> None:
+        """Regression guard (main#1361 acceptance): a real `---` trailer AFTER
+        a `~~~`-fenced example still wins — unaffected by the fence fix
+        because `trailer_block_substring` already scoped to the last `---`."""
+        body = (
+            "Here is the format reviewers should use:\n\n"
+            "~~~\n"
+            "Requestor: Ghost Reviewer\n"
+            "RequestOrReplied: Approved\n"
+            "~~~\n\n"
+            "---\n"
+            "Requestor: Nadia Khoury\n"
+            "RequestOrReplied: ChangesRequested\n"
+        )
+        self.assertEqual(ct.extract_charter_field("Requestor", body), "Nadia Khoury")
+        self.assertEqual(ct.extract_charter_field("RequestOrReplied", body), "ChangesRequested")
+
+
+class UnterminatedFenceDirectionChangeTests(unittest.TestCase):
+    """main#1359 merge-gate review (Aino Virtanen, MF2): the stripper swap is
+    NOT parity-preserving on an unterminated fence, in the direction that
+    costs a reviewer their false-positive credit.
+
+    The deleted `trust_signals._strip_code_markup` required a CLOSING fence
+    marker to match, so an opened-but-never-closed fence was left alone and
+    anything after it — including a genuine `Retracted:` self-mark — still
+    counted. `charter_trailer.strip_code_regions` strips an unterminated
+    fence to end-of-body instead (the CommonMark-correct answer), which
+    silently swallows a genuine self-mark written below one. This is a
+    deliberate, documented trade (see the migration comment in
+    `parse_verdicts`), not something this PR is asked to change — the point
+    is that it is now STATED and PINNED rather than merely true.
+    """
+
+    def test_genuine_self_mark_below_an_unterminated_fence_is_now_swallowed(self) -> None:
+        body = (
+            "RequestOrReplied: ChangesRequested\n\n"
+            "```\n"
+            "snippet opened but never closed\n"
+            "Retracted: on reflection this finding was invalid, my mistake.\n"
+        )
+        v = ts.parse_verdicts([body])[0]
+        # Pre-#1359 (deleted `_strip_code_markup`): this was True — the
+        # reviewer's self-mark survived because the old stripper left an
+        # unterminated fence untouched. Post-#1359: False.
+        self.assertFalse(v.false_positive)
+
+    def test_same_shape_with_a_closed_fence_still_detects_the_self_mark(self) -> None:
+        """Regression guard: only the UNTERMINATED case changed. A closed
+        fence still correctly hides a quoted example, and a real self-mark
+        OUTSIDE any fence is still detected."""
+        body = (
+            "RequestOrReplied: ChangesRequested\n\n"
+            "```\n"
+            "quoted example, not a real self-mark\n"
+            "```\n"
+            "Retracted: on reflection this finding was invalid, my mistake.\n"
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertTrue(v.false_positive)
 
 
 # --------------------------------------------------------------------------- #
