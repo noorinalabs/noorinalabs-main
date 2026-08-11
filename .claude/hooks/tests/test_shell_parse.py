@@ -99,6 +99,106 @@ class StripHeredocsTests(unittest.TestCase):
         self.assertNotIn("body2", out)
 
 
+class NormalizeCommandSubstitutionsTests(unittest.TestCase):
+    """main#1351 — `$( )` / backtick / subshell edges must survive shlex.
+
+    The defect this closes is measured, not theoretical: shlex glues the
+    closing paren of a command substitution onto the last argument, which made
+    `validate_labels` demand a label named `meta-issue)` and BLOCK the filing
+    of main#1150. The same glue hides the substituted command's head token
+    (`url=$(gh`) from every `gh`/`git` finder in this module.
+    """
+
+    def test_pre_fix_tokenization_glues_the_closing_paren(self):
+        """Pin the raw shlex behaviour this helper exists to correct."""
+        cmd = "url=$(gh issue create --repo o/r --label meta-issue)"
+        self.assertEqual(
+            sp.tokenize(cmd),
+            ["url=$(gh", "issue", "create", "--repo", "o/r", "--label", "meta-issue)"],
+        )
+
+    def test_closing_paren_is_not_glued_to_the_last_argument(self):
+        cmd = "url=$(gh issue create --repo o/r --label meta-issue)"
+        tokens = sp.tokenize(sp.normalize_command_substitutions(cmd))
+        self.assertIn("meta-issue", tokens)
+        self.assertNotIn("meta-issue)", tokens)
+
+    def test_substituted_command_head_becomes_findable(self):
+        """`url=$(gh …)` — the `gh` must reach `find_gh_subcommand`."""
+        cmd = "url=$(gh issue create --repo o/r --label bug)"
+        tokens = sp.tokenize(sp.normalize_command_substitutions(cmd))
+        assert tokens is not None
+        segments = list(sp.iter_command_segments(tokens))
+        found = [sp.find_gh_subcommand(seg) for seg in segments]
+        self.assertIn(
+            ["issue", "create", "--repo", "o/r", "--label", "bug"],
+            [rest for hit in found if hit is not None for _globals, rest in [hit]],
+        )
+
+    def test_backticks_become_separators(self):
+        cmd = "url=`gh issue create --label bug`"
+        tokens = sp.tokenize(sp.normalize_command_substitutions(cmd))
+        assert tokens is not None
+        self.assertIn("bug", tokens)
+        self.assertNotIn("bug`", tokens)
+        self.assertTrue(any(sp.find_gh_subcommand(s) for s in sp.iter_command_segments(tokens)))
+
+    def test_bare_subshell_is_split(self):
+        cmd = "(gh issue create --label bug)"
+        tokens = sp.tokenize(sp.normalize_command_substitutions(cmd))
+        assert tokens is not None
+        self.assertEqual([t for t in tokens if t not in (";",)][:3], ["gh", "issue", "create"])
+
+    def test_parens_inside_double_quotes_are_data(self):
+        """A `--title "fix (again)"` is prose, not a subshell."""
+        cmd = 'gh issue create --title "fix (again)" --label bug'
+        self.assertEqual(sp.normalize_command_substitutions(cmd), cmd)
+        tokens = sp.tokenize(sp.normalize_command_substitutions(cmd))
+        assert tokens is not None
+        self.assertEqual(tokens[4], "fix (again)")
+
+    def test_parens_and_backticks_inside_single_quotes_are_data(self):
+        cmd = "gh issue create --body 'run `date` and (see below)' --label bug"
+        self.assertEqual(sp.normalize_command_substitutions(cmd), cmd)
+
+    def test_escaped_paren_is_data(self):
+        cmd = r"echo \(not a subshell\)"
+        self.assertEqual(sp.normalize_command_substitutions(cmd), cmd)
+
+    def test_unmatched_closing_paren_is_left_alone(self):
+        """A depth-0 `)` is a `case` arm or a syntax error — not ours to rewrite."""
+        cmd = "case $x in\n  a) echo a ;;\nesac"
+        self.assertEqual(sp.normalize_command_substitutions(cmd), cmd)
+
+    def test_nested_substitution_balances(self):
+        cmd = "x=$(basename $(git rev-parse --show-toplevel)) && gh issue create --label bug"
+        tokens = sp.tokenize(sp.normalize_command_substitutions(cmd))
+        assert tokens is not None
+        self.assertNotIn("--show-toplevel))", tokens)
+        self.assertIn("--show-toplevel", tokens)
+        self.assertIn("bug", tokens)
+
+    def test_quote_structure_is_never_changed(self):
+        """A command that failed to tokenize must still fail; one that parsed must still parse.
+
+        The helper only inserts ` ; ` and drops `$(`/`)`/backtick characters —
+        it never adds or removes a quote — so the #661 fail-open on
+        `tokenize() is None` cannot be silently converted into a parse.
+        """
+        broken = "gh issue create --body 'gh's ambient repo (see above)' --label bug"
+        self.assertIsNone(sp.tokenize(broken), "precondition: this must break shlex")
+        self.assertIsNone(sp.tokenize(sp.normalize_command_substitutions(broken)))
+
+    def test_no_paren_or_backtick_is_returned_unchanged(self):
+        cmd = "gh issue create --repo o/r --label bug --label tech-debt"
+        self.assertIs(sp.normalize_command_substitutions(cmd), cmd)
+
+    def test_memoized_value_stable(self):
+        cmd = "url=$(gh issue create --label bug)"
+        first = sp.normalize_command_substitutions(cmd)
+        self.assertEqual(sp.normalize_command_substitutions(cmd), first)
+
+
 class IterCommandSegmentsTests(unittest.TestCase):
     def test_empty(self):
         self.assertEqual(list(sp.iter_command_segments([])), [])

@@ -27,6 +27,17 @@ Public API
         validation — fall back to a regex check or a fail-closed decision.
         For warn-only matchers, fail-open on None is acceptable.
 
+    normalize_command_substitutions(cmd) -> str
+        Quote/escape-aware rewrite of command-substitution and subshell edges
+        (`$(`, `(`, the matching `)`, and backticks) into standalone ` ; `
+        separators, so `url=$(gh issue create … --label meta-issue)` survives
+        shlex with the closing paren OFF the last argument and the `gh` OFF the
+        assignment. The shlex-path counterpart of what
+        `iter_command_segments_ast` gets from a real grammar — needed because
+        bashlex is optional AND cannot parse a `<<'EOF'` heredoc at all. A `)`
+        at depth 0 (a `case` arm) is left alone; quoted/escaped parens and
+        backticks are DATA and never touched. main#1351.
+
     strip_heredocs(cmd) -> str
         Removes <<DELIM .. DELIM, <<'DELIM' .. DELIM, <<"DELIM" .. DELIM and
         <<-DELIM .. DELIM heredoc bodies (delimiter is rfc-shell-style: any
@@ -474,6 +485,117 @@ def normalize_command_separators(cmd: str) -> str:
             continue
         if c in (";", "|"):
             out.append(" " + c + " ")
+            i += 1
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+@lru_cache(maxsize=256)
+def normalize_command_substitutions(cmd: str) -> str:
+    """Quote/escape-aware normalization of command-substitution + subshell edges.
+
+    `normalize_command_separators` teaches shlex where one command in a
+    PIPELINE ends. It says nothing about the other boundary a shell has: the
+    edge of a command SUBSTITUTION or a subshell. shlex.split treats `$(`,
+    `` ` ``, `(` and `)` as ordinary word characters, so the single most common
+    "file the issue, then use its URL" idiom —
+
+        url=$(gh issue create --repo o/r --label tech-debt --label meta-issue)
+
+    tokenizes with the closing paren GLUED to the last argument
+    (`meta-issue)`), and with the first token of the substituted command glued
+    to the assignment (`url=$(gh`). Both are live defects, not hypotheticals:
+    the glued paren made `validate_labels` demand a label literally named
+    `meta-issue)` and block the filing of main#1150 (main#1351), and the glued
+    head hides the invocation from `is_gh_subcommand`/`find_gh_subcommand`
+    entirely, so a matcher anchored on either silently does nothing for every
+    `$(gh …)` / `$(git …)` command that has no wrapper word after the paren.
+
+    This helper rewrites the raw command so those boundaries survive
+    tokenization as their own separators:
+
+      - an unquoted, unescaped `$(` or `(`  -> ` ; ` (and pushes a depth level)
+      - the `)` that CLOSES one of those    -> ` ; `
+      - an unquoted, unescaped backtick     -> ` ; `
+
+    A `)` at depth 0 is left byte-for-byte alone: an unmatched closer is either
+    a `case` pattern arm (`a) …;;`) or a syntax error, and neither is ours to
+    rewrite. Quote/escape awareness is the same rule as
+    `normalize_command_separators` — a `(`/`)`/backtick inside single or double
+    quotes, or behind a backslash, is DATA (a `--title "fix (again)"`, a
+    markdown `` `code` `` span in a `--body`) and is never touched. Quote
+    characters themselves are never added or removed, so a command that
+    tokenized before still tokenizes after, and one that failed still fails
+    (the fail-open contract on `tokenize() is None` is unaffected).
+
+    Segment CONTENT is deliberately preserved rather than deleted: the
+    substituted command is real work that a gate matcher usually wants to see
+    (`url=$(gh issue create …)` genuinely creates an issue). Splitting rather
+    than stripping is what lets `iter_command_segments` hand it to
+    `find_gh_subcommand` as an ordinary segment.
+
+    This is the shlex-path counterpart of what `iter_command_segments_ast`
+    gets for free from a real grammar. It exists because the AST path is not
+    always available: bashlex is optional, and — measured, see
+    `test_bashlex_cannot_parse_quoted_delimiter_heredoc` — it cannot parse a
+    `<<'EOF'` heredoc at all, which is the dominant heredoc form here. A fix
+    that lived only in the AST path would regress to the glued-paren bug on
+    every command carrying a quoted-delimiter heredoc, and on any checkout
+    without bashlex installed.
+
+    Memoized (#1113): pure in `cmd` and returns an immutable `str`.
+    """
+    if not any(ch in cmd for ch in "()`"):
+        return cmd
+    out: list[str] = []
+    i = 0
+    n = len(cmd)
+    quote: str | None = None  # active quote char: "'" or '"', else None
+    depth = 0
+    while i < n:
+        c = cmd[i]
+        if quote is not None:
+            out.append(c)
+            # Inside double quotes a backslash escapes the next char; inside
+            # single quotes nothing is special (shell single-quote semantics).
+            if c == "\\" and quote == '"' and i + 1 < n:
+                out.append(cmd[i + 1])
+                i += 2
+                continue
+            if c == quote:
+                quote = None
+            i += 1
+            continue
+        if c in ("'", '"'):
+            quote = c
+            out.append(c)
+            i += 1
+            continue
+        if c == "\\" and i + 1 < n:
+            # Escaped char (incl. a line continuation) — emit both, verbatim.
+            out.append(c)
+            out.append(cmd[i + 1])
+            i += 2
+            continue
+        if cmd[i : i + 2] == "$(":
+            out.append(" ; ")
+            depth += 1
+            i += 2
+            continue
+        if c == "(":
+            out.append(" ; ")
+            depth += 1
+            i += 1
+            continue
+        if c == ")" and depth > 0:
+            out.append(" ; ")
+            depth -= 1
+            i += 1
+            continue
+        if c == "`":
+            out.append(" ; ")
             i += 1
             continue
         out.append(c)
