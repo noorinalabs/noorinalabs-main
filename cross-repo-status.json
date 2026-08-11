@@ -10,6 +10,7 @@
   "wave_30_merge_model": "direct-to-main",
   "wave_30_kicked_off_at": "2026-08-10T23:47:54Z",
   "wave_30_started_at": "2026-08-10T23:47:54Z",
+  "wave_30_reviewer_amendments": {"recorded_at":"2026-08-11T01:55:22Z","reason":"6 wave-30 scope rows name the same person as reviewer AND merge_gate_reviewer with reviewer_2=null. The validate_pr_review merge gate requires two DISTINCT roster-valid Approved requestors; the single-reviewer waiver is wave-bootstrap-only. As scoped these 6 PRs could never become mergeable. Second reviewers assigned by the orchestrator at wave-30 execution; author excluded in every case.","assignments":{"main#1352":"Nino Kavtaradze","main#1372":"Santiago Ferreira","main#1370":"Wanjiku Mwangi","main#1254":"Weronika Zielinska","main#1255":"Santiago Ferreira","main#1272":"Weronika Zielinska"},"unaffected_null_reviewer_2":["main#1374","main#1361","main#1362","main#1341"],"unaffected_note":"these 4 have reviewer != merge_gate_reviewer, so two distinct reviewers already exist"},
   "wave_29_meta_issue": 1133,
   "wave_29_phase": 10,
   "wave_29_phase_ordinal": 2,
