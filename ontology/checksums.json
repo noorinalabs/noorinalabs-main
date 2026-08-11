@@ -1790,9 +1790,9 @@
       "resolved_at": "2026-08-04T01:41:39.379568+00:00"
     },
     ".claude/memory/feedback_gh_cli_gotchas.md": {
-      "last_tracked": "cbaecd58aa4afed2086e7431a2762cde24359e1ac8e9064cc9922cd1aefe23eb",
+      "last_tracked": "c7611c3ee0ecb5ccddd0b9edc0172d40832117e28c8dc32cb058cd131972757d",
       "last_resolved": "cbaecd58aa4afed2086e7431a2762cde24359e1ac8e9064cc9922cd1aefe23eb",
-      "tracked_at": "2026-08-09T21:55:11.843254+00:00",
+      "tracked_at": "2026-08-11T02:52:22.399709+00:00",
       "resolved_at": "2026-08-09T21:56:19.917511+00:00"
     },
     ".claude/memory/feedback_flag_precision_decays_with_age.md": {

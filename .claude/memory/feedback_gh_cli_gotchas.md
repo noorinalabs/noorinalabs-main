@@ -73,6 +73,12 @@ Without `--limit`, `gh issue list` (and `gh pr list`, etc.) caps at 30 and says 
 - For `gh api`: capital `-F body=@file` expands; `--input <path>` takes a bare path (`--input @f` looks for a file literally named `@f`); or `jq -n --rawfile body <file> '{body:$body}'` piped to `--input -`.
 - Always read back the posted body (`--jq '.[-1].body' | head -5`) before claiming it landed; orchestrator re-derives verdict state from comment bodies, never from a reviewer's self-report.
 
+**Same class, worse blast radius: `gh pr create --body @file`** (W30 PR #1390, 2026-08-11). `--body` takes a *string*; `--body-file` takes a path. Passing `--body @/tmp/…/pr_body.md` creates a **syntactically valid PR whose entire body is the 126-char literal `@/tmp/…`**. Nothing catches it: CI is green, the PR is well-formed, `gh pr view` renders the path happily, and the merge gate does not read the body. It surfaced only because a merge-gate reviewer went looking for the precision table the body was supposed to contain.
+
+Why this one is urgent rather than cosmetic: the intended content lived **only in a session-scoped scratchpad** (`/tmp/claude-1000/<repo>/<session-uuid>/scratchpad/`), so the 10.5 KB write-up would have been **irrecoverable once that session ended** — the PR record would have been permanently empty. Recovered by copying the file out and `gh api repos/{o}/{r}/pulls/{N} -X PATCH -F body=@<file>` (capital `-F`; no commit pushed, head unchanged, so no verdict was staled).
+
+Rules: after ANY file-sourced PR body, assert `gh api repos/{o}/{r}/pulls/{N} --jq '.body | length'` is plausible and that `.body` does not match `^@`. Copy a scratchpad-authored body somewhere durable before it becomes the only copy. Note [[feedback_pr_body_vs_commit_linkage]] (#1403) covers the *closing-keyword* divergence between body and commit message; this is the orthogonal "body never arrived at all" failure and no gate covers it.
+
 ## 6. Bare numbers resolve against cwd
 Issue/PR numbers collide across every repo in a multi-repo workspace and `gh` silently resolves a bare number against the cwd's repo — no warning (`gh pr view 383` in main vs da = two different real PRs; a reviewer nearly reported head-moved on the wrong one). Asserting a sha proves *which commit*, nothing about *which repository*. Never write a bare number in a cross-repo brief (`da#383`, `owner/repo#N`); pass `-R owner/repo` on every `gh` call that names an issue/PR by number.
 
