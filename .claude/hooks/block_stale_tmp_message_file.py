@@ -3,15 +3,15 @@
 
 Refuses commands of the form ``git commit -F /tmp/...`` and ``gh {pr,issue}
 {create,comment,edit} --body-file /tmp/...`` (plus ``gh api ... --input
-/tmp/...``) when the target file's mtime is older than ~30s AND the file is
-not under the CURRENT session's own scratchpad. Such files are almost
-always leftovers from a prior task or session that the current command is
-about to consume by mistake — see ``feedback_tmp_msg_file_stale.md`` for the
-three documented surfaces and the 2026-05-03 ontology-rebuild recurrence
-that motivated this hook.
+/tmp/...``) when the target file's mtime is older than ~30s AND the target
+path does not contain the CURRENT session's id as a path segment. Such
+files are almost always leftovers from a prior task or session that the
+current command is about to consume by mistake — see
+``feedback_tmp_msg_file_stale.md`` for the three documented surfaces and
+the 2026-05-03 ontology-rebuild recurrence that motivated this hook.
 
-Session-scratchpad exemption (#1352)
-=====================================
+Session-identity exemption (#1352)
+===================================
 
 Wave-29 measured **0/11 precision** on the mtime check: every single block
 that wave was a false positive, and all 11 were body files under the
@@ -19,21 +19,41 @@ INVOKING SESSION's own scratchpad
 (``/tmp/claude-<uid>/<repo-slug>/<session-id>/scratchpad/...``) that the
 agent had simply spent more than 30s composing and verifying before
 posting — the write-then-verify-then-post shape, not the same-command
-heredoc shape the original threshold was calibrated for. A file whose path
-contains the CURRENT session's id cannot, by construction, be "a leftover
-from a prior task or session" — that is the hook's own stated threat
-model, and the discriminator (the session id) is already sitting in the
-filename. :func:`_is_current_session_path` checks for that id as a path
-segment and skips the mtime check entirely when it matches — no threshold
-value can substitute for this, because the threshold cannot tell "still
-composing" apart from "abandoned" by age alone (raising it to 15 minutes
-just moves the false-negative/false-positive line, it doesn't remove it;
-see the wave-29 harvested fixtures in
+heredoc shape the original threshold was calibrated for.
+:func:`_is_current_session_path` checks whether the CURRENT session's id
+appears as a path segment anywhere in the target path and, if so, skips
+the mtime check entirely — no threshold value can substitute for this,
+because the threshold cannot tell "still composing" apart from
+"abandoned" by age alone (raising it to 15 minutes just moves the
+false-negative/false-positive line, it doesn't remove it; see the
+wave-29 harvested fixtures in
 ``tests/test_block_stale_tmp_message_file_wave29.py``, several of which
 individually exceed a very generous retuned threshold).
 
-A body file under a DIFFERENT session's scratchpad, or a bare /tmp path
-with no session structure at all, is unaffected — the mtime check (and the
+**What the exemption does and does not guarantee (read this before
+assuming "by construction" covers more than it does):**
+
+A file under the current session's id cannot be a leftover from a *prior
+session* — that is true by construction (only the current session can
+produce a path containing its own id), and it is the entire wave-29
+false-positive class this fix closes. It can **still** be a leftover from
+an *earlier task in the same session*: the check is "does the current
+session's id appear anywhere in the path", not "is the path under the
+current session's scratchpad directory" (issue #1352 proposal 1's
+narrower ask). An 8-hour-old file at
+``/tmp/claude-<uid>/<slug>/<session-id>/scratchpad/verdict_1153_nino.md``
+is exempt just as readily as one written 20 seconds ago. That narrower
+class — a stale file from an earlier task in the SAME session — is
+deliberately surrendered here, not accidentally: wave-29 showed it is
+indistinguishable from "still composing" by age, and produced 0 true
+positives across 11 firings. Hard-coding the scratchpad root path was
+considered and rejected as its own fragility (the root is
+environment/uid-dependent); the id-as-path-segment check trades that
+narrower, position-dependent guarantee for a broader, position-independent
+one that is simpler to reason about and to keep correct.
+
+A body file under a DIFFERENT session's id, or a bare /tmp path with no
+session structure at all, is unaffected — the mtime check (and the
 existing 30s threshold) still applies, preserving the true positive the
 hook exists to catch.
 
@@ -42,12 +62,12 @@ wave-29) does NOT work and CANNOT be made to work by retuning the
 threshold: this is a PreToolUse hook, so it stats the file BEFORE the
 gated Bash command runs — the ``touch`` embedded in that same command has
 not executed yet when the hook checks, so it can never refresh the mtime
-the hook sees. The session-scratchpad exemption above fixes the cases that
-actually occurred in wave-29 (the touched file was always the agent's own
-scratchpad file) as a side effect of being path-identity-based rather than
-mtime-based; for a file NOT under the current session's scratchpad, no
-in-command ``touch`` can ever help, no matter the threshold — see the
-override paths below.
+the hook sees. The session-identity exemption above fixes the cases that
+actually occurred in wave-29 (the touched file was always under the
+agent's own session id) as a side effect of being path-identity-based
+rather than mtime-based; for a file whose path does NOT contain the
+current session's id, no in-command ``touch`` can ever help, no matter the
+threshold — see the override paths below.
 
 Override paths the user can take when blocked:
   - rename the file to a non-/tmp path (e.g. .claude/scratch/msg.txt)
@@ -81,11 +101,11 @@ shlex parse failure (`tokenize` returns None) fails OPEN — the command is
 allowed through and the downstream tool surfaces any real error itself.
 
 Exit codes:
-  0 — allow (no /tmp/* body-file argument, file is under the current
-       session's own scratchpad, file is fresh, file is missing, or shlex
-       parse failed)
-  2 — block (target file mtime older than threshold AND not under the
-       current session's scratchpad)
+  0 — allow (no /tmp/* body-file argument, target path contains the
+       current session's id as a path segment, file is fresh, file is
+       missing, or shlex parse failed)
+  2 — block (target file mtime older than threshold AND target path does
+       NOT contain the current session's id as a path segment)
 """
 
 from __future__ import annotations
@@ -226,10 +246,18 @@ def _is_current_session_path(path: str, session_id: str) -> bool:
     under a path containing the session's UUID as a segment (e.g.
     ``/tmp/claude-<uid>/<repo-slug>/<session-id>/scratchpad/...``). A
     /tmp/* file whose path contains the CURRENT session's id cannot, by
-    construction, be a leftover from a prior task or session — that is the
-    hook's own stated threat model (#1352). Matching on `session_id` as a
-    path SEGMENT (not a substring) avoids a session id that happens to be a
-    substring of an unrelated directory name from spuriously matching.
+    construction, be a leftover from a PRIOR SESSION — only the current
+    session can produce a path containing its own id. That is the narrower,
+    true guarantee; it is NOT "cannot be a leftover from a prior task in
+    the same session" — this check matches the session id ANYWHERE in the
+    path, not just under the session's scratchpad directory, so an old file
+    from an earlier task this same session is exempt too. That broader
+    exemption is intentional (see module docstring "What the exemption
+    does and does not guarantee", #1352) — the id-as-any-segment shape
+    trades a scratchpad-path-dependent guarantee for a simpler,
+    position-independent one. Matching on `session_id` as a path SEGMENT
+    (not a substring) avoids a session id that happens to be a substring of
+    an unrelated directory name from spuriously matching.
     """
     if not session_id:
         return False

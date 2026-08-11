@@ -236,5 +236,75 @@ class TruePositivePreservedTests(unittest.TestCase):
             self.assertEqual(result["decision"], "block")
 
 
+class ResidualBehaviorTests(unittest.TestCase):
+    """MF2 (PR #1384 merge-gate review, Aino Virtanen): the post-fix residual
+    behavior — a non-exempt file, `touch`-prefixed, must still block, AND
+    the rewritten block message must actually say `touch` cannot help
+    rather than merely block silently — was untested. Mutant M4 (revert
+    the message text to the old misleading `touch`-implying advice, change
+    nothing else) passed all 55 pre-existing assertions with zero
+    complaint, because none of them asserted on message CONTENT. These do.
+
+    Also closes mutant M2 (the `touch &&` prefix in
+    ``TouchWorkaroundOrderingDefectTests`` is inert — deleting it produces
+    byte-identical results) by making a test where the touch prefix and the
+    session id genuinely do NOT matter to the outcome, paired with one
+    where the session-SEGMENT-vs-substring distinction genuinely does
+    (mutant M3: `session_id in path` in place of
+    `session_id in Path(path).parts`).
+    """
+
+    def test_non_exempt_touch_prefixed_retry_still_blocks_and_message_says_touch_cannot_help(
+        self,
+    ):
+        """The residual the docstring claims: for a file NOT under the
+        current session's id, an in-command `touch` cannot help — it still
+        blocks, and the message says so instead of advising the touch.
+
+        Not vacuous: reverting the block message to the old `touch`-implying
+        advice (mutant M4, PR #1384 review) leaves `decision == "block"`
+        unchanged but trips the two `assertIn` checks below — see the PR
+        body for the captured failure output against that mutant.
+        """
+        mine = str(uuid.uuid4())
+        other = str(uuid.uuid4())
+        body = f"{_scratchpad_dir(other)}/leftover.md"
+        _touch(body, age_seconds=2 * 3600)
+        cmd = f"touch {body} && gh pr create --title x --body-file {body}"
+        result = hook.check(_bash(cmd, mine))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        reason = result["reason"]
+        self.assertIn(
+            "BEFORE your command runs",
+            reason,
+            "message must explain the PreToolUse ordering, not imply touch helps",
+        )
+        self.assertIn(
+            "SEPARATE",
+            reason,
+            "message must point at the remedy that actually works (a prior, "
+            "separate Write tool call), not an in-command touch",
+        )
+
+    def test_session_id_substring_not_segment_still_blocks(self):
+        """Mutant M3 guard: `session_id in path` (substring) must NOT count
+        as exempt — only `session_id in Path(path).parts` (a full path
+        SEGMENT) does. A directory name that merely CONTAINS the session id
+        as a substring (e.g. `x-<sid>-y`) is not a path the current session
+        actually produced under its own id and must still block."""
+        sid = str(uuid.uuid4())
+        with tempfile.TemporaryDirectory(dir="/tmp") as td:
+            sub = os.path.join(td, f"x-{sid}-y")
+            os.makedirs(sub, exist_ok=True)
+            body = f"{sub}/f.md"
+            _touch(body, age_seconds=120)
+            result = hook.check(_bash(f"git commit -F {body}", sid))
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertEqual(result["decision"], "block")
+
+
 if __name__ == "__main__":
     unittest.main()
