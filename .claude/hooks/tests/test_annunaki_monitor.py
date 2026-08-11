@@ -1490,19 +1490,51 @@ class Issue1354CiLogReadTests(unittest.TestCase):
             )
         )
 
-    def test_gh_run_view_genuine_failure_nonzero_exit_still_logged(self):
-        """A `gh run view` that itself fails (bad run id, network error —
-        nonzero exit) is a real failure, not a content display → must still
-        log (content-display requires exit_code == 0)."""
+    def test_gh_run_view_bare_nonzero_exit_still_logged(self):
+        """A BARE (unpiped) `gh run view` that itself fails — nonzero exit
+        propagates directly, no pager in the pipeline — is a real failure,
+        not a content display → must still log. This guards the
+        `exit_code != 0` short-circuit at the top of `_is_content_display`,
+        which fires before any #1354 verb/exemption logic runs; it is NOT a
+        guard on the `2>&1` exemption itself (that requires the piped form,
+        see `test_gh_run_view_piped_failure_no_pipefail_uncounted_drop`
+        below for the shape that actually exercises it, per Nino
+        Kavtaradze's #1385 merge-gate review)."""
         result = am.check(
             _bash_event(
-                "gh run view 99999999 --repo noorinalabs/noorinalabs-main "
-                "--log-failed 2>&1 | tail -c 8000",
+                "gh run view 99999999 --repo noorinalabs/noorinalabs-main --log-failed",
                 stdout="failed to get run: run not found\n",
                 exit_code=1,
             )
         )
         self.assertIsNotNone(result, "a genuinely failed gh run view must still log")
+
+    def test_gh_run_view_piped_failure_no_pipefail_uncounted_drop(self):
+        """The shell-realistic shape of a FAILING piped `gh run view`
+        (#1385 merge-gate MF2): this repo's shell has no `pipefail`, so
+        `gh run view <bad-id> --log-failed 2>&1 | tail -c 8000` exits 0 (the
+        pager's rc) even when `gh` itself failed — measured live. When gh's
+        failure text happens to trip an ERROR_PATTERNS entry (e.g. "error
+        connecting to ..."), the #1354 exemption now suppresses the record
+        entirely. Pre-#1354 this landed at confidence=low/
+        category=pipe-mask-suspect (already excluded from the genuine-error
+        count by annunaki_parse), so the record pinned here documents an
+        accepted, uncounted-forensics-only loss — not a `confidence=high`
+        regression. See the CONTENT_DISPLAY_LOG_READ_VERBS comment for the
+        full trade-off writeup."""
+        result = am.check(
+            _bash_event(
+                "gh run view 99999999 --repo noorinalabs/noorinalabs-main "
+                "--log-failed 2>&1 | tail -c 8000",
+                stdout="error connecting to api.github.com\n",
+                exit_code=0,
+            )
+        )
+        self.assertIsNone(
+            result,
+            "accepted trade-off: a failing piped gh run view with no pipefail is "
+            "indistinguishable from a successful content display and is dropped",
+        )
 
     def test_rg_over_log_with_stderr_pattern_still_logged(self):
         """`rg` over a saved log with a real stderr signal alongside (e.g. an

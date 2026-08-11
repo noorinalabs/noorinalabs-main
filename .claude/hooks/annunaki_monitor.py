@@ -220,7 +220,7 @@ CONTENT_DISPLAY_VERBS = re.compile(
         cat | head | tail | less | more | bat        # file pagers/dumpers
       | rg                                           # #1354: file-content search/dump
       | git\s+show | git\s+diff | git\s+log          # git content display
-      | gh\s+pr\s+diff | gh\s+pr\s+view               # gh PR content display
+      | gh\s+pr\s+diff | gh\s+pr\s+view              # gh PR content display
       | gh\s+run\s+view | gh\s+run\s+log             # #1354: gh CI-log content display
     )
     \b
@@ -258,13 +258,28 @@ CONTENT_DISPLAY_STDOUT_MERGE = re.compile(r"2>&1")
 # CI-log-read verbs (#1354): `gh run view --log-failed` / `gh run log` are the
 # canonical way to read a failed CI job's log, and routinely need `2>&1 |
 # tail -c N` to bound stdout size while still catching anything `gh` itself
-# writes to stderr (a warning, a rate-limit notice). Unlike `cat`/`head`/etc,
-# there is no "possibly-missing local path" for `gh run view` to probe — a
-# bad run id or network failure surfaces as a real nonzero exit, which the
-# `exit_code != 0` guard above already catches independently of this verb
-# check. So the general `2>&1` disqualifier is scoped away from these two
-# verbs specifically; every other content-display verb (including the new
-# `rg` verb, which is not a CI-log-specific idiom) keeps the disqualifier.
+# writes to stderr (a warning, a rate-limit notice).
+#
+# IMPORTANT — this repo's shell has no `pipefail` (zsh, no `setopt pipefail`
+# in play here), so for the piped canonical form the `exit_code != 0` guard
+# above does NOT independently catch a failing `gh run view`: the observed
+# exit code is the last stage's (`tail`'s), which is 0 even when `gh` itself
+# failed. Measured live: `gh run view <bad-id> --log-failed 2>&1 | tail -c
+# 8000; echo $?` → `0`, with `gh`'s failure text on stdout. So this
+# exemption is NOT "safe because a real failure would still surface via a
+# nonzero exit" — for the piped form, it would not.
+#
+# The exemption is accepted anyway because the residual class is bounded and
+# already low-value: a `gh run view` that itself fails emits either (a) gh's
+# own "failed to get run: HTTP 404: ..." text, which trips NO ERROR_PATTERNS
+# entry at all (dropped identically pre- and post-fix), or (b) a line that
+# DOES match a pattern (e.g. "error connecting to api.github.com"), which
+# pre-fix was retained at confidence=low/category=pipe-mask-suspect (#835) —
+# already excluded from annunaki_parse's genuine-error count — and post-fix
+# is dropped entirely. The loss is confined to uncounted forensic records;
+# no `confidence=high` shape is lost. Every other content-display verb
+# (including the new `rg` verb, which is not a CI-log-specific idiom) keeps
+# the `2>&1` disqualifier unchanged.
 CONTENT_DISPLAY_LOG_READ_VERBS = re.compile(
     r"""
     ^\s*
