@@ -186,6 +186,55 @@ class DegradedModeTests(unittest.TestCase):
         self.assertIsNone(result)
 
 
+class EvalPayloadParserPathTests(unittest.TestCase):
+    """#1399: `_eval_payloads` must give the same verdict on BOTH parser paths.
+
+    The walker prefers the bashlex AST and falls back to shlex + segment split.
+    The two disagree on detail — shlex leaves `x;` glued into one token, so the
+    `eval` segment of `eval git commit -m x; echo done` swallows the trailing
+    `echo done` — and the verdict must survive that: `_INNER_COMMIT_RE` bounds
+    the `git` → `commit` bridge at `;`, so the bridge inside the eval body is
+    what matches either way.
+
+    The third path is deliberate too: when NEITHER parser can read the command,
+    `_eval_payloads` returns [] and `_EVAL_RE`'s sweep is the fail-closed
+    backstop — so a quoted eval body must still block with both parsers off.
+    """
+
+    _BYPASS = "eval git commit -m x"
+
+    def _blocked(self, cmd: str) -> bool:
+        with redirect_stderr(io.StringIO()):
+            return hook.check(_input(cmd)) is not None
+
+    def test_ast_path_resolves_eval_payload(self):
+        self.assertEqual(hook._eval_payloads(self._BYPASS), ["git commit -m x"])
+        self.assertTrue(self._blocked(self._BYPASS))
+
+    def test_shlex_path_resolves_eval_payload(self):
+        """bashlex forced off — the shlex segment split must still find it."""
+        with mock.patch.object(sp, "_BASHLEX_AVAILABLE", False):
+            with redirect_stderr(io.StringIO()):
+                self.assertEqual(hook._eval_payloads(self._BYPASS), ["git commit -m x"])
+            self.assertTrue(self._blocked(self._BYPASS))
+            self.assertTrue(self._blocked(f"{self._BYPASS}; echo done"))
+            self.assertFalse(self._blocked("eval echo hello"))
+            self.assertFalse(self._blocked("eval $cmd"))
+
+    def test_bashlex_parse_failure_falls_back_to_shlex(self):
+        """bashlex present but returning None (the #748 fallthrough path)."""
+        with mock.patch.object(hook, "iter_command_segments_ast", return_value=None):
+            self.assertEqual(hook._eval_payloads(self._BYPASS), ["git commit -m x"])
+            self.assertTrue(self._blocked(self._BYPASS))
+
+    def test_both_parsers_failing_yields_no_payload_but_regex_backstops(self):
+        """Unparseable input → [] from the walker, `_EVAL_RE` still fail-closed."""
+        with mock.patch.object(hook, "iter_command_segments_ast", return_value=None):
+            with mock.patch.object(hook, "tokenize", return_value=None):
+                self.assertEqual(hook._eval_payloads(self._BYPASS), [])
+                self.assertTrue(self._blocked("eval 'git commit -m x'"))
+
+
 class BashlexParseFailureFallthroughTests(unittest.TestCase):
     """bashlex present but its parse returns None → fall through to shlex path."""
 
