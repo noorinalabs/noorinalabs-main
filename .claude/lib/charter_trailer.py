@@ -71,25 +71,46 @@ __all__ = [
 _FENCE_MARKERS = ("```", "~~~")
 
 # The prefix a fence opener is allowed to sit behind and still count as
-# "starting a line" (main#1359 merge-gate review round 3, MF5). CommonMark
-# permits up to 3 leading spaces of indentation before a fence marker (4+ is
-# INDENTED CODE BLOCK territory, a different construct); GitHub-flavoured
-# Markdown additionally permits one or more nested blockquote markers
-# (`>`, optionally followed by a single space, repeatable for nesting) ahead
-# of that indentation. Anything else preceding the marker on its line — any
-# non-blockquote, non-whitespace prose character — means the marker is NOT
-# an opener; see `strip_code_regions` for why that distinction is load-bearing.
-_FENCE_OPENER_PREFIX_RE = re.compile(r"^(?:>[ \t]?)*[ \t]{0,3}$")
+# "starting a line" (main#1359 merge-gate review, MF5 + MF6). Anything
+# preceding the marker on its line that is NOT a blockquote marker or plain
+# whitespace disqualifies it — that is what keeps MF4's fix intact (a marker
+# behind real prose text is not an opener). Indentation depth is otherwise
+# UNBOUNDED (main#1359 MF6) — deliberately NOT capped at CommonMark's own
+# 3-space fence-vs-indented-code-block boundary.
+#
+# Why uncapped, not "capped at 3 like CommonMark": that boundary answers a
+# question `strip_code_regions` does not need answered. CommonMark cares
+# whether a 4+-space-indented marker is a FENCE or an INDENTED CODE BLOCK —
+# two different constructs a real renderer treats differently. Both are
+# still CODE, and once a reviewer types a paired opening/closing marker on
+# its own line — however indented — that intent to mark off code is
+# unambiguous regardless of which construct a renderer would call it. A
+# 3-space cap here (MF5's first cut) left exactly that shape — a marker
+# preceded by ONLY 4+ spaces of indentation, nothing else — disqualified as
+# an opener, so its contents fell through to literal prose: a fabricated
+# trailer field inside a 4-space-indented, well-paired backtick block below
+# a real trailer won last-match-wins, a regression from base (which had no
+# indentation limit at all for a marker occurrence). The identical shape
+# with the tilde marker was already unsafe on base (tilde was not a
+# recognized marker at all pre-main#1359) — this fix closes that
+# pre-existing hole too, as a bonus, not as a second regression fix.
+#
+# What this does NOT do: give this function general CommonMark
+# indented-code-block recognition. Plain 4+-space-indented text with NO
+# triple marker anywhere is still never stripped, before or after this
+# change — that broader, marker-independent gap is tracked separately
+# (main#1420), out of scope here.
+_FENCE_OPENER_PREFIX_RE = re.compile(r"^(?:>[ \t]?)*[ \t]*$")
 
 
 def _is_fence_opener_position(body: str, i: int) -> bool:
     """True if position `i` in `body` is where a fence opener is allowed.
 
     "Allowed" means everything on the current line before `i` is only
-    blockquote markers and/or up to 3 spaces/tabs of indentation — the
-    CommonMark + GFM shape `strip_code_regions` treats as "starts a line"
-    for fence-opening purposes. A line's start is `i == 0` or the character
-    immediately after the nearest preceding newline.
+    blockquote markers and/or whitespace (any amount) — see
+    `_FENCE_OPENER_PREFIX_RE` for why indentation depth is deliberately
+    unbounded. A line's start is `i == 0` or the character immediately
+    after the nearest preceding newline.
     """
     line_start = body.rfind("\n", 0, i) + 1
     return bool(_FENCE_OPENER_PREFIX_RE.match(body[line_start:i]))
@@ -145,17 +166,13 @@ def strip_code_regions(body: str) -> str:
         # similarly anchored — that is unchanged, pre-existing behaviour and
         # not part of this fix.
         #
-        # "STARTS A LINE" MEANS UP TO 3 SPACES AND/OR A BLOCKQUOTE PREFIX,
-        # NOT COLUMN 0 EXACTLY (round-3 review, MF5). The first cut of the
-        # MF4 guard (`i == 0 or body[i - 1] == "\n"`) demanded column 0
-        # exactly, which is STRICTER than CommonMark and opened a new,
-        # worse-direction hole: an indented or blockquoted fence — exactly
-        # what GitHub's "Quote reply" button emits, no adversary needed — was
-        # no longer recognised as a fence at all, so a fabricated field
-        # inside one was left unstripped and could out-scope a genuine
-        # trailer above it via last-match-wins. `_is_fence_opener_position`
-        # accepts the CommonMark/GFM shape; a marker behind any OTHER prefix
-        # (ordinary prose text) still correctly fails to qualify.
+        # "STARTS A LINE" MEANS ANY AMOUNT OF WHITESPACE AND/OR A BLOCKQUOTE
+        # PREFIX, NOT COLUMN 0 EXACTLY (MF5, then MF6 removed MF5's own
+        # 3-space cap — see `_FENCE_OPENER_PREFIX_RE` for the full history
+        # and why the cap itself was a second fail-open regression). A
+        # marker behind any OTHER prefix (ordinary prose text) still
+        # correctly fails to qualify as an opener — that is MF4's fix, and
+        # neither MF5 nor MF6 touched it.
         fence = (
             next((m for m in _FENCE_MARKERS if body.startswith(m, i)), None)
             if _is_fence_opener_position(body, i)

@@ -262,14 +262,6 @@ class FenceOpenerAllowsBlockquoteAndIndentTests(unittest.TestCase):
         )
         self.assertEqual(extract_charter_field("Requestor", body), "Real Reviewer")
 
-    def test_four_space_indent_still_not_a_fence_opener(self) -> None:
-        """Regression guard for the boundary: 4+ spaces is CommonMark's
-        INDENTED CODE BLOCK territory, not a fence, and is correctly still
-        not recognised — this is unchanged, pre-existing behaviour, not a
-        new hole opened by widening the fence-opener check."""
-        body = self._spoofed_body("    ")
-        self.assertEqual(extract_charter_field("Requestor", body), "Fake Impostor")
-
     def test_mid_sentence_marker_is_still_prose_not_a_fence(self) -> None:
         """Regression guard for MF4: a marker prefixed by ordinary prose
         text (not blockquote markers or pure whitespace) must still fail to
@@ -278,6 +270,107 @@ class FenceOpenerAllowsBlockquoteAndIndentTests(unittest.TestCase):
             "Point A discusses the fence marker once.\n\n"
             "Point B discusses the fence marker a second time.\n\n"
             "Point C discusses the fence marker a third time (odd count).\n\n"
+            "---\n"
+            "Requestor: Nino Kavtaradze\n"
+            "RequestOrReplied: Approved\n"
+        ).replace("the fence marker", "the ~~~ fence marker")
+        self.assertEqual(extract_charter_field("Requestor", body), "Nino Kavtaradze")
+
+
+class FenceOpenerIndentationIsUnboundedTests(unittest.TestCase):
+    """main#1359 merge-gate review round 4 (coordinator's fuller matrix —
+    MF6): MF5's fix capped accepted indentation at 3 spaces, mirroring
+    CommonMark's fence-vs-indented-code-block boundary. That boundary
+    answers a DIFFERENT question than the one `strip_code_regions` needs
+    answered.
+
+    CommonMark cares whether a 4+-space-indented marker is a FENCE (a
+    delimited code region) or an INDENTED CODE BLOCK (a different code
+    construct, delimited by indentation alone). Both are still CODE. This
+    stripper's only job is "is this a code region a reviewer deliberately
+    marked off" — and once someone types a paired opening/closing marker on
+    its own line, indented by any amount, that intent is unambiguous
+    regardless of which CommonMark construct a renderer would call it.
+
+    Capping at 3 broke that: a marker preceded ONLY by 4+ spaces of
+    indentation (nothing else — still disqualified if preceded by real
+    prose text, per MF4) failed the fence-opener check, so its contents
+    fell through to being read as literal prose. A fabricated field inside
+    a 4-space-indented, well-paired marker block placed BELOW a real
+    trailer therefore won last-match-wins — a regression from BASE for the
+    backtick marker specifically:
+
+        BASE Requestor:  'Real Reviewer'   (any position was a valid opener)
+        HEAD Requestor:  'Fake Impostor'   (4+ spaces disqualified, MF5 head)
+
+    The identical shape with the tilde marker spoofs on BOTH base and the
+    MF5 head — tilde was never a recognised marker at all pre-main#1359, so
+    this is a PRE-EXISTING hole this fix additionally closes as a bonus,
+    not a regression main#1359 introduced.
+
+    Fix: the fence-opener prefix check no longer caps indentation at 3 —
+    any amount of leading whitespace (plus optional blockquote nesting) in
+    front of the marker still qualifies, as long as nothing else precedes
+    it on the line. This is a deliberate, acknowledged DIVERGENCE from
+    CommonMark's own fence-opener rule (which is capped at 3) — CommonMark
+    would call a 4+-space marker an INDENTED CODE BLOCK rather than a
+    FENCE, but this stripper does not implement that distinction and does
+    not need to for its own purpose (stripping deliberately-marked-off code
+    regions). What this fix does NOT do is give `strip_code_regions` general
+    indented-code-block recognition — an indented block with NO triple
+    marker at all (plain 4+-space-indented text, no `` ``` `` / `~~~` in
+    sight) is still never stripped by this function, before or after this
+    change. That broader, marker-independent gap is filed separately as
+    main#1416, out of scope here — this fix closes only the marker-present
+    case the regression above describes.
+
+    Every assertion below FAILS at head `2b95706` (verified directly before
+    writing this fix) and passes once the cap is removed.
+    """
+
+    @staticmethod
+    def _spoofed_body(prefix: str, marker: str) -> str:
+        fence = f"{prefix}{marker}"
+        return (
+            "---\n"
+            "Requestor: Real Reviewer\n"
+            "Requestee: Santiago Ferreira\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none\n\n"
+            f"{fence}\n"
+            "Requestor: Fake Impostor\n"
+            f"{fence}\n"
+        )
+
+    def test_four_space_indented_backtick_fence_is_stripped(self) -> None:
+        """The regression: safe on base, spoofable at the MF5 head."""
+        body = self._spoofed_body("    ", "```")
+        self.assertEqual(extract_charter_field("Requestor", body), "Real Reviewer")
+
+    def test_four_space_indented_tilde_fence_is_stripped(self) -> None:
+        """The pre-existing hole (unsafe on base too, tilde never recognized
+        pre-main#1359) that this same fix additionally closes."""
+        body = self._spoofed_body("    ", "~~~")
+        self.assertEqual(extract_charter_field("Requestor", body), "Real Reviewer")
+
+    def test_deeply_indented_backtick_fence_is_still_stripped(self) -> None:
+        """Indentation is UNBOUNDED now, not merely raised to a new cap —
+        8 spaces, well past any CommonMark construct's own ceiling."""
+        body = self._spoofed_body(" " * 8, "```")
+        self.assertEqual(extract_charter_field("Requestor", body), "Real Reviewer")
+
+    def test_indented_blockquoted_fence_is_still_stripped(self) -> None:
+        """Blockquote nesting composed with indentation past the old cap."""
+        body = self._spoofed_body(">     ", "```")
+        self.assertEqual(extract_charter_field("Requestor", body), "Real Reviewer")
+
+    def test_mid_sentence_marker_is_still_not_a_fence_opener(self) -> None:
+        """Regression guard: removing the indentation CAP must not also
+        remove the requirement that NOTHING but whitespace/blockquote
+        markers precede the opener — prose text still disqualifies it,
+        regardless of how it is indented."""
+        body = (
+            "    Point A discusses the fence marker, indented as prose.\n\n"
             "---\n"
             "Requestor: Nino Kavtaradze\n"
             "RequestOrReplied: Approved\n"
