@@ -402,6 +402,23 @@ def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
         # a quoted/pasted example containing the literal `Retracted:` shape
         # is not mistaken for a real self-mark. `charter_trailer.strip_code_regions`
         # strips `~~~` fences as well as ``` ones as of main#1359/#1361.
+        #
+        # UNTERMINATED-FENCE DIRECTION CHANGE (main#1359 merge-gate review,
+        # Aino Virtanen — MF2): the deleted `_strip_code_markup` required a
+        # CLOSING fence marker to match (`` ```.*?``` `` is non-greedy over a
+        # closing pair), so an opened-but-never-closed fence was left
+        # entirely alone — anything after it, including a genuine
+        # `Retracted:` self-mark, still counted. `strip_code_regions` strips
+        # from an unterminated fence to end-of-body instead (the more
+        # CommonMark-correct behaviour: an unterminated fence runs to end of
+        # document). So a reviewer who pastes a snippet and forgets the
+        # closing fence now has any genuine self-mark BELOW it silently
+        # swallowed — they lose the false-positive credit, the author keeps
+        # the rework charge. Deliberate (consistency across every consumer of
+        # the shared stripper is the point of this migration, and this is the
+        # more-correct answer), but a real behaviour change on this one axis
+        # — pinned by `UnterminatedFenceDirectionChangeTests` in
+        # `test_trust_signals.py` so it is not rediscovered as a surprise.
         scanned = charter_trailer.strip_code_regions(body)
         is_changes_requested = (
             charter_trailer.verdict_kind(verdict_str, include_bare_changes=True)

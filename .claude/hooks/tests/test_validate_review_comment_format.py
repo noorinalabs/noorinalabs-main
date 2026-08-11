@@ -1042,9 +1042,10 @@ class ConditionalVerdictFieldTests(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_spaced_and_bare_changes_spellings_are_accepted(self):
-        # Must agree with `trust_signals._verdict_kind`, which counts all three
-        # spellings — including the bare `Changes` that `_VERDICT_DIRECTIONS`
-        # deliberately excludes.
+        # Must agree with `_direction_is_changes_requested` (and, through it,
+        # `charter_trailer.verdict_kind(..., include_bare_changes=True)`,
+        # main#1359), which counts all three spellings — including the bare
+        # `Changes` that `_VERDICT_DIRECTIONS` deliberately excludes.
         for direction in ("ChangesRequested", "Changes Requested", "Changes"):
             with self.subTest(direction=direction):
                 result = self._check(
@@ -1123,8 +1124,12 @@ class ConditionalVerdictFieldTests(unittest.TestCase):
             self.assertNotIn("only meaningful on", result.get("reason", ""))
 
     def test_field_quoted_in_a_tilde_fence_does_not_block(self):
-        # `charter_trailer.strip_code_regions` leaves `~~~` intact while
-        # `trust_signals._strip_code_markup` strips it — the second axis.
+        # Regression guard, not a live divergence as of main#1359:
+        # `charter_trailer.strip_code_regions` now strips `~~~` the same as
+        # `trust_signals` (whose own private stripper is deleted), and this
+        # hook's `_strip_code_for_field_scan` calls the shared function
+        # directly — the "code fences" axis of the three-axis divergence is
+        # closed. Kept as a regression test for that closed gap.
         command = (
             "gh pr comment 42 --body \"$(cat <<'EOF'\n"
             "Here is the shape:\n~~~\nRetracted: example only\n~~~\n\n---\n"
@@ -1228,14 +1233,27 @@ class ConditionalFieldGrammarAgreementTests(unittest.TestCase):
                 )
 
     def test_code_stripper_is_the_shared_function_object(self):
-        """main#1359: no second definition — `_strip_code_for_field_scan` is
-        `charter_trailer.strip_code_regions`, not a call-alike mirror of it."""
+        """main#1359 SF1 (Aino Virtanen): `_strip_code_for_field_scan` — the
+        name `_conditional_fields_present` actually calls — IS
+        `charter_trailer.strip_code_regions`, not a call-alike mirror of it.
+
+        This is the identity assertion the mutation-testing finding asked
+        for: reverting `_strip_code_for_field_scan` to a local `def` mirror
+        left the entire suite green (`test_no_second_definition_anywhere`
+        only greps for a FIXED set of names, so a copy under this name was
+        invisible to it). Asserting identity on the name actually called —
+        not just the module-level `strip_code_regions` import binding this
+        test used to check — fails immediately the moment `def
+        _strip_code_for_field_scan(...)` reappears here, regardless of what
+        the reimplementation's body does or doesn't diverge on.
+        """
         lib_dir = Path(__file__).resolve().parents[2] / "lib"
         if str(lib_dir) not in sys.path:
             sys.path.insert(0, str(lib_dir))
         import charter_trailer as ct
 
         self.assertIs(hook.strip_code_regions, ct.strip_code_regions)
+        self.assertIs(hook._strip_code_for_field_scan, ct.strip_code_regions)
 
 
 class ConditionalFieldEndToEndTests(unittest.TestCase):

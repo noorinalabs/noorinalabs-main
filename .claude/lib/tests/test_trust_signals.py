@@ -489,6 +489,50 @@ class ConsolidatedStripCodeRegionsAlsoFixesTheHookAlias(unittest.TestCase):
         self.assertEqual(ct.extract_charter_field("RequestOrReplied", body), "ChangesRequested")
 
 
+class UnterminatedFenceDirectionChangeTests(unittest.TestCase):
+    """main#1359 merge-gate review (Aino Virtanen, MF2): the stripper swap is
+    NOT parity-preserving on an unterminated fence, in the direction that
+    costs a reviewer their false-positive credit.
+
+    The deleted `trust_signals._strip_code_markup` required a CLOSING fence
+    marker to match, so an opened-but-never-closed fence was left alone and
+    anything after it — including a genuine `Retracted:` self-mark — still
+    counted. `charter_trailer.strip_code_regions` strips an unterminated
+    fence to end-of-body instead (the CommonMark-correct answer), which
+    silently swallows a genuine self-mark written below one. This is a
+    deliberate, documented trade (see the migration comment in
+    `parse_verdicts`), not something this PR is asked to change — the point
+    is that it is now STATED and PINNED rather than merely true.
+    """
+
+    def test_genuine_self_mark_below_an_unterminated_fence_is_now_swallowed(self) -> None:
+        body = (
+            "RequestOrReplied: ChangesRequested\n\n"
+            "```\n"
+            "snippet opened but never closed\n"
+            "Retracted: on reflection this finding was invalid, my mistake.\n"
+        )
+        v = ts.parse_verdicts([body])[0]
+        # Pre-#1359 (deleted `_strip_code_markup`): this was True — the
+        # reviewer's self-mark survived because the old stripper left an
+        # unterminated fence untouched. Post-#1359: False.
+        self.assertFalse(v.false_positive)
+
+    def test_same_shape_with_a_closed_fence_still_detects_the_self_mark(self) -> None:
+        """Regression guard: only the UNTERMINATED case changed. A closed
+        fence still correctly hides a quoted example, and a real self-mark
+        OUTSIDE any fence is still detected."""
+        body = (
+            "RequestOrReplied: ChangesRequested\n\n"
+            "```\n"
+            "quoted example, not a real self-mark\n"
+            "```\n"
+            "Retracted: on reflection this finding was invalid, my mistake.\n"
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertTrue(v.false_positive)
+
+
 # --------------------------------------------------------------------------- #
 # Extraction (gh-mocked)
 # --------------------------------------------------------------------------- #

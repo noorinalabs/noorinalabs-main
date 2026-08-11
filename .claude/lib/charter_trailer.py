@@ -255,6 +255,18 @@ def extract_charter_field(field_name: str, body: str) -> str | None:
 VERDICT_KIND: dict[str, str] = {
     "approved": "approved",
     "changesrequested": "changesrequested",
+    # NOTE (main#1359 merge-gate review, Aino Virtanen — nit): this row is
+    # documentation-only and UNREACHABLE through `verdict_kind()` — that
+    # function intercepts the `token == "changes"` case in its own branch
+    # BEFORE ever reaching this dict lookup, precisely because bare `Changes`
+    # is the one distinction `include_bare_changes` exists to gate, and a
+    # flat dict lookup has no way to carry that argument. A caller that
+    # bypasses `verdict_kind()` and reads `VERDICT_KIND` directly (it is
+    # exported via `__all__` for exactly this) gets `"changesrequested"` for
+    # `"changes"` unconditionally — the same as `include_bare_changes=True`,
+    # never `=False`. Kept in the table for completeness of the documented
+    # vocabulary rather than dropped, since `verdict_kind()` is the intended
+    # entry point and existing consumers all go through it.
     "changes": "changesrequested",
     "request": "request",
     "reply": "reply",

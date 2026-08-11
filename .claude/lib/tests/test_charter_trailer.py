@@ -154,9 +154,23 @@ class VerdictKindTests(unittest.TestCase):
 
     def test_trailing_text_does_not_defeat_the_match(self) -> None:
         """`Approved (post-merge)` must still classify as approved — only the
-        FIRST token is classified. `validate_pr_review._is_verdict`'s
-        pre-#1371 whole-string exact match does NOT tolerate this (verified:
-        it returns False for this exact input on the pre-fix tree)."""
+        FIRST token is classified.
+
+        NOTE (main#1359 merge-gate review, Aino Virtanen — MF1): an earlier
+        draft of this docstring claimed `validate_pr_review._is_verdict`
+        rejects this exact input. That claim was wrong and has been
+        retracted (see main#1371): `_is_verdict` is only ever called on
+        `extract_charter_field`'s output, which already strips the trailing
+        parenthetical before `_is_verdict` ever sees it, so end-to-end there
+        is no divergence on `"Approved (post-merge)"` specifically. The
+        genuinely reachable divergences — `"Approved!"`,
+        `"Approved with nits"`, `"Approved - see below"`,
+        `"Changes  Requested"` (double space), `"Changes needed"` — are all
+        `False` under `validate_pr_review._is_verdict`/`._is_approved` today
+        and would become `True` under this function; see
+        `main#1371` for the full table and the `_is_approved` /
+        2-reviewer-approver-set consequence.
+        """
         self.assertEqual(verdict_kind("Approved (post-merge)"), "approved")
 
     def test_bold_markers_do_not_defeat_the_match(self) -> None:
