@@ -202,7 +202,33 @@ Exit codes (per Claude Code hook convention):
         OR any audit-coverage gap — PARTIAL (some org repos queried, some not,
         #1226) or TOTAL (no repo queried at all, #1230) — for a
         _COVERAGE_BLOCKING_SKILLS skill. See § Block condition for the
-        all-vs-some history and why both now exit 2.)
+        all-vs-some history and why both now exit 2.
+        ALSO: a gated skill when one of this hook's own hard dependencies
+        (`_hook_main`, `annunaki_log`, `org_repos`) cannot be imported — see
+        § Broken-dependency fail-closed below.)
+
+    There is deliberately no other exit code. Exit 1 in particular is NOT a
+    "the gate errored" signal here: PreToolUse reads any non-2 exit as
+    non-blocking, so a gate that exits 1 has allowed the call while looking
+    like it failed. Every path in this module ends at 0 or 2.
+
+Broken-dependency fail-closed (#1243):
+    This module imports three things — `_hook_main` (its runner),
+    `annunaki_log` (its block recorder) and `org_repos` (the SSOT repo list it
+    audits). Before #1243, an unresolvable import raised out of the module
+    body: traceback on stderr and exit **1**, which PreToolUse does not treat
+    as a block. So the gate stopped gating precisely when it was broken, and
+    the outcome was indistinguishable from a clean approval. Reachability is
+    low (all three are committed beside this file), but the *direction* of the
+    failure was wrong for a gate. The imports are now wrapped and any
+    ImportError routes to `_fail_closed`, which exits 2 with an explanatory
+    reason for a `_GATED_SKILLS` call and 0 for anything else — refusing the
+    calls this hook exists to gate, not every call it happens to see.
+
+    The same principle is enforced one step later inside `_block`: a *raising*
+    (rather than missing) `annunaki_log` would propagate into `run_blocking`,
+    which swallows exceptions and exits 0 — the identical silent allow. The log
+    call is therefore wrapped there too; see `_block`.
 
 Promotion provenance:
     memory feedback_honest_audit_over_conclusion_claim (2026-04-22) →
@@ -221,17 +247,105 @@ import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import NoReturn
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _hook_main import run_blocking  # noqa: E402
-from annunaki_log import log_pretooluse_block  # noqa: E402
-
 _LIB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib")
 sys.path.insert(0, os.path.abspath(_LIB_DIR))
-from org_repos import ALL_REPOS  # noqa: E402
 
 # Skills gated by this hook. Exact match against tool_input.skill.
+#
+# Defined ABOVE the dependency imports on purpose (#1243): the fail-closed
+# path below has to decide whether the incoming call is one this gate claims
+# jurisdiction over, and it must be able to do that when those imports are the
+# very thing that failed. It depends on nothing but the stdlib.
 _GATED_SKILLS = frozenset({"wave-wrapup", "wave-retro", "handoff"})
+
+
+def _gated_skill_on_stdin() -> str:
+    """Return the gated skill name on stdin, or "" (used only by _fail_closed).
+
+    A deliberately minimal, dependency-free re-read of the hook payload: this
+    runs when `_hook_main` may itself be the missing import, so it cannot use
+    `_hook_main._read_stdin_json`. Any malformed / non-Skill / ungated input
+    yields "", which the caller treats as "not ours — allow", matching
+    `_hook_main`'s exit-0-on-malformed-stdin policy.
+    """
+    try:
+        payload = json.loads(sys.stdin.read())
+    except (ValueError, OSError, UnicodeDecodeError):
+        return ""
+    if not isinstance(payload, dict) or payload.get("tool_name") != "Skill":
+        return ""
+    tool_input = payload.get("tool_input")
+    if not isinstance(tool_input, dict):
+        return ""
+    skill_name = str(tool_input.get("skill", ""))
+    return skill_name if skill_name in _GATED_SKILLS else ""
+
+
+def _fail_closed(module_name: str, detail: str) -> NoReturn:
+    """Exit 2 (BLOCK) when a hard dependency of this gate cannot be imported.
+
+    #1243 defect 2. This module is a PreToolUse gate, and in that contract exit
+    **2** blocks while every other non-zero exit is a mere non-blocking error
+    that lets the tool call proceed. Before this, an unresolvable
+    `from org_repos import ALL_REPOS` raised `ModuleNotFoundError` straight out
+    of the module body: traceback on stderr, exit **1**, /wave-wrapup runs. The
+    gate stopped gating at exactly the moment it was broken, and from the
+    outside that is indistinguishable from a gate that ran and approved — the
+    same silent-allow shape #1226 and #1230 each closed one level up, in the
+    audit's own aggregation, reappearing here in the import statement.
+
+    Scope is deliberately narrow: only a `_GATED_SKILLS` call is blocked. A
+    broken deployment must not newly block skills this hook never gated (the
+    registered matcher is `Skill`, so /ontology-librarian, /session-start etc.
+    all reach it), and it must not block on stdin it cannot even parse. Failing
+    closed means "refuse the calls I exist to gate", not "refuse everything".
+
+    There is no in-band bypass, as everywhere else in this hook — the remedy is
+    to restore the dependency (it is committed in this repo, one directory over
+    from this file) or, in a genuine emergency, remove the hook entry from
+    `.claude/settings.json`.
+    """
+    skill_name = _gated_skill_on_stdin()
+    if not skill_name:
+        sys.exit(0)
+
+    reason = (
+        f"BLOCKED: /{skill_name} cannot run — the wave-audit gate is broken.\n\n"
+        f"Its required dependency `{module_name}` could not be imported "
+        f"({detail}). The cross-repo open-item audit did not run, and no part of "
+        "it can run: there is no count, no coverage list, nothing to reason "
+        "about.\n\n"
+        "This gate BLOCKS rather than passing the call through, because a "
+        "blocking gate that exits non-2 fails OPEN — from the outside that is "
+        "indistinguishable from a gate that ran and approved (#1243). An "
+        "unknown is never green (/session-start Step 5a).\n\n"
+        "To proceed:\n"
+        f"  1. Restore `{module_name}` — the hook's dependencies are committed "
+        "in this repo under `.claude/hooks/` and `.claude/lib/`; a missing one "
+        "usually means a partial checkout, a stale worktree, or a `sys.path` "
+        "that no longer reaches `.claude/lib`. Then re-run "
+        f"/{skill_name}.\n"
+        '  2. Verify with: `echo \'{"tool_name":"Skill","tool_input":'
+        '{"skill":"wave-wrapup"}}\' | python3 .claude/hooks/validate_wave_audit.py; '
+        "echo $?` — a healthy gate exits 0 or 2, never 1.\n\n"
+        "There is no in-band bypass flag — see charter/hooks/catalog-13-17.md "
+        "§ Hook 17 for emergency procedure."
+    )
+    print(json.dumps({"decision": "block", "reason": reason}))
+    sys.exit(2)
+
+
+try:
+    from _hook_main import run_blocking  # noqa: E402
+    from annunaki_log import log_pretooluse_block  # noqa: E402
+    from org_repos import ALL_REPOS  # noqa: E402
+except ImportError as _exc:  # pragma: no cover — exercised via subprocess tests
+    # `_fail_closed` never returns, so every name imported above is bound for
+    # the rest of the module body whenever execution continues past here.
+    _fail_closed(_exc.name or "<unknown>", f"{type(_exc).__name__}: {_exc}")
 
 # Subset of _GATED_SKILLS for which an INCOMPLETE audit — any org repo the
 # hook could not query, whether PARTIAL (#1226) or TOTAL (#1230) — is itself a
@@ -261,6 +375,15 @@ _COVERAGE_BLOCKING_SKILLS = frozenset({"wave-wrapup", "wave-retro"})
 # / audit G6) — the single source of truth for the org repo list; the charter
 # skills.md § Audit command example command should stay in sync with it too,
 # but this constant itself no longer hand-copies the list.
+#
+# Do NOT re-type this list here, ever. `test_validate_wave_audit.py`'s
+# `OrgReposSsotIdentity` asserts `_ORG_REPOS is org_repos.ALL_REPOS` because
+# the alternative is undetectable (#1243): replacing this line with a
+# hand-copied 8-tuple carrying a single typo'd repo name left the entire
+# 4185-test suite green, while the audit silently swept 7 real repos and one
+# that does not exist and reported the org clean. That is BUG-08 — the exact
+# drift org_repos.py was created to end — reproduced inside the gate whose job
+# is to notice unaudited repos.
 _ORG_REPOS = ALL_REPOS
 
 # Carry-forward detection patterns (case-insensitive). Any one suffices.
@@ -683,14 +806,27 @@ def _block(skill_name: str, args: str, reason: str) -> dict:
 
     Shared by the open-items block and the incomplete-coverage block (#1226) so
     a new blocking path cannot be added without also being logged.
+
+    The log call cannot be allowed to decide the verdict (#1243). `run_blocking`
+    catches every exception out of `check()` and exits 0 — a deliberate "a hook
+    must never crash" contract (see `_hook_main`) — so an exception raised here
+    would convert this BLOCK into a silent, output-free ALLOW. That is the same
+    fail-open the import wrapper at the top of this module closes, one step
+    later in the lifecycle: there, `annunaki_log` was missing; here, it is
+    present but raising (a full disk, a read-only checkout, a permissions
+    change). Logging is observability for a decision already made, so the
+    decision is built first and returned regardless.
     """
     result = {"decision": "block", "reason": reason}
-    log_pretooluse_block(
-        "validate_wave_audit",
-        f"skill={skill_name} args={args[:200] if args else '<empty>'}",
-        reason,
-        tool_name="Skill",
-    )
+    try:
+        log_pretooluse_block(
+            "validate_wave_audit",
+            f"skill={skill_name} args={args[:200] if args else '<empty>'}",
+            reason,
+            tool_name="Skill",
+        )
+    except Exception:  # noqa: BLE001 — the block must survive any logging failure
+        pass
     return result
 
 

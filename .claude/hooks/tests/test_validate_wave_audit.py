@@ -10,6 +10,10 @@ Run: python3 -m pytest .claude/hooks/tests/test_validate_wave_audit.py -v
 from __future__ import annotations
 
 import json
+import os
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,6 +21,9 @@ from unittest import mock
 
 import _test_helpers  # noqa: E402,F401
 import validate_wave_audit as hook  # noqa: E402
+
+_HOOKS_DIR = _test_helpers.HOOKS_DIR
+_LIB_DIR = _test_helpers.LIB_DIR
 
 
 def _skill_input(skill_name: str, args: str = "") -> dict:
@@ -1107,6 +1114,353 @@ class CheckEndToEndExemption(unittest.TestCase):
         self.assertEqual(result["decision"], "block")
         self.assertIn("noorinalabs-main", result["reason"])
         self.assertIn("Open items across the org: 1", result["reason"])
+
+
+class OrgReposSsotIdentity(unittest.TestCase):
+    """#1243 defect 1: `_ORG_REPOS` must BE the org_repos SSOT object.
+
+    The sibling `session_handoff.py` got `assertIs(hook.ALL_REPOS,
+    org_repos.ALL_REPOS)` when main#1118 moved it onto the SSOT. This module —
+    the *blocking* gate, and the one #1226/#1229 hardened precisely because a
+    partial per-repo query failure summed to a confident zero and turned a
+    BLOCK into a silent ALLOW — got no equivalent guard.
+
+    Mutation evidence recorded on #1243 and reproduced before this class was
+    written: replacing `_ORG_REPOS = ALL_REPOS` with a hand-copied 7-tuple that
+    drops `noorinalabs-isnad-ingest-platform` — the literal BUG-08 shape that
+    motivated org_repos.py in the first place — left the whole suite GREEN
+    (3448 passed, 647 subtests, zero failures). The audit would then have swept
+    7 of 8 repos, reported a clean org, and nothing anywhere would have said a
+    word. Only `_ORG_REPOS = ()` (total emptiness) was loud.
+
+    So these assertions are the entire detector for a one-repo omission in a
+    gate whose whole job is to notice unaudited repos.
+    """
+
+    def test_org_repos_is_the_ssot_object(self) -> None:
+        """Kills the BUG-08 mutation: a hand-copied list is not the SSOT object.
+
+        `assertIs`, not `assertEqual`: an equal-but-distinct tuple is exactly
+        the drift this guards against at its birth moment — the copy is
+        correct on the day it is typed and rots silently afterwards. Identity
+        is the only assertion that fails on day one.
+        """
+        import org_repos
+
+        self.assertIs(
+            hook._ORG_REPOS,
+            org_repos.ALL_REPOS,
+            "_ORG_REPOS must be imported from org_repos (the SSOT), never re-typed",
+        )
+
+    def test_org_repos_has_all_eight_repos(self) -> None:
+        """Length guard — catches a drop made in org_repos.py itself.
+
+        `assertIs` alone cannot see a repo removed from the SSOT tuple, because
+        the alias would still be the same object. CLAUDE.md § Repository Map is
+        main + 7 children; `.claude/lib/tests/test_org_repos.py` owns the
+        prose→code row-for-row comparison, this is the cheap arity backstop at
+        the consuming gate.
+        """
+        self.assertEqual(len(hook._ORG_REPOS), 8)
+
+    def test_ingest_platform_is_audited(self) -> None:
+        """The specific repo BUG-08 dropped. Named explicitly so the historical
+        failure is a test, not a comment."""
+        self.assertIn("noorinalabs-isnad-ingest-platform", hook._ORG_REPOS)
+
+
+def _write_fake_gh(bin_dir: Path, issue_numbers: list[int]) -> None:
+    """Install a `gh` shim on PATH returning `issue_numbers` for every repo.
+
+    `gh issue list` → the given numbers; `gh pr list` → `[]` (no merge-ready PR,
+    so no #664 exemption). Lets the end-to-end subprocess tests below drive the
+    real audit loop to a deterministic BLOCK or ALLOW without network or auth.
+    """
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps([{"number": n} for n in issue_numbers])
+    script = bin_dir / "gh"
+    script.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = "issue" ]; then\n'
+        f"  printf '%s\\n' '{payload}'\n"
+        "else\n"
+        "  printf '%s\\n' '[]'\n"
+        "fi\n",
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+
+
+class MissingDependencyFailsClosed(unittest.TestCase):
+    """#1243 defect 2: an unimportable hard dependency must exit 2, not 1.
+
+    This hook is a PreToolUse gate. The convention is exit **2** blocks; any
+    other non-zero exit is a *non-blocking* error and the tool call proceeds.
+    Measured at head before this class was written, with the issue's own
+    reproduction:
+
+        $ mv .claude/lib/org_repos.py /tmp/
+        $ python3 .claude/hooks/validate_wave_audit.py < in.json; echo $?
+        ModuleNotFoundError: No module named 'org_repos'
+        1
+
+    Exit 1 — so /wave-wrapup proceeded. A BLOCKING gate FAILED OPEN, and from
+    outside it is indistinguishable from a gate that ran and approved: the same
+    silent-allow shape #1226 and #1230 already closed twice inside this file,
+    reappearing one layer down in the import statement.
+
+    Unit tests on `check()` cannot reach this: `check()` is never called — the
+    module never finishes importing. Only a subprocess invocation of the
+    registered entry point (`.claude/settings.json` runs `python3
+    .claude/hooks/validate_wave_audit.py`) observes the exit code, which is the
+    only thing that distinguishes block from allow here.
+
+    Each case builds a minimal faithful copy of the deployed layout —
+    `<root>/.claude/hooks/` + `<root>/.claude/lib/` — and omits exactly one
+    dependency file, rather than monkeypatching the import system, so the test
+    models the real "file is not there" condition the issue reproduces.
+    """
+
+    _HOOK_FILES = ("validate_wave_audit.py", "_hook_main.py", "annunaki_log.py")
+    _LIB_FILES = ("org_repos.py",)
+
+    def _build_tree(self, omit: str = "") -> Path:
+        """Copy the hook + its 3 transitive deps into a temp tree, minus `omit`.
+
+        Returns the path of the copied hook script. The tree is deliberately
+        minimal: `validate_wave_audit` imports only `_hook_main`,
+        `annunaki_log` and `org_repos`, and those import nothing outside the
+        stdlib, so this is the complete dependency closure.
+        """
+        root = Path(tempfile.mkdtemp()).resolve()
+        self.addCleanup(shutil.rmtree, root, True)
+        hooks = root / ".claude" / "hooks"
+        lib = root / ".claude" / "lib"
+        hooks.mkdir(parents=True)
+        lib.mkdir(parents=True)
+        for name in self._HOOK_FILES:
+            if name != omit:
+                shutil.copy2(_HOOKS_DIR / name, hooks / name)
+        for name in self._LIB_FILES:
+            if name != omit:
+                shutil.copy2(_LIB_DIR / name, lib / name)
+        return hooks / "validate_wave_audit.py"
+
+    def _run(self, script: Path, payload: dict, extra_path: Path | None = None):
+        """Invoke the copied hook exactly as settings.json does, over stdin.
+
+        `PYTHONPATH` is cleared so an ambient `.claude/lib` entry cannot
+        resurrect an omitted module and turn this test green for the wrong
+        reason; `NOORIN_HOOK_TEST_MODE=1` suppresses annunaki writes.
+        """
+        env = dict(os.environ)
+        env.pop("PYTHONPATH", None)
+        env["NOORIN_HOOK_TEST_MODE"] = "1"
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+        if extra_path is not None:
+            env["PATH"] = f"{extra_path}{os.pathsep}{env.get('PATH', '')}"
+        return subprocess.run(
+            [sys.executable, str(script)],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(script.parent),
+        )
+
+    def _assert_blocks(self, proc, needle: str) -> None:
+        self.assertEqual(
+            proc.returncode,
+            2,
+            f"a blocking gate MUST exit 2 — a non-2 exit fails OPEN (#1243). "
+            f"stdout={proc.stdout!r} stderr={proc.stderr[-400:]!r}",
+        )
+        decision = json.loads(proc.stdout)
+        self.assertEqual(decision["decision"], "block")
+        self.assertIn(needle, decision["reason"])
+
+    def test_premise_intact_tree_runs(self) -> None:
+        """Premise check: the minimal copied tree is a working hook.
+
+        Without this, every exit-2 assertion below could be satisfied by a tree
+        so broken that ANY input blocks — the test would pass for a reason
+        unrelated to the fix.
+        """
+        proc = self._run(self._build_tree(), _skill_input("ontology-librarian"))
+        self.assertEqual(proc.returncode, 0, f"stderr={proc.stderr[-400:]!r}")
+        self.assertEqual(proc.stdout.strip(), "")
+
+    def test_missing_org_repos_blocks_wave_wrapup(self) -> None:
+        """THE #1243 defect-2 assertion: absent SSOT → exit 2, not 1."""
+        proc = self._run(self._build_tree(omit="org_repos.py"), _skill_input("wave-wrapup"))
+        self._assert_blocks(proc, "org_repos")
+
+    def test_missing_org_repos_blocks_wave_retro(self) -> None:
+        proc = self._run(self._build_tree(omit="org_repos.py"), _skill_input("wave-retro"))
+        self._assert_blocks(proc, "org_repos")
+
+    def test_missing_org_repos_blocks_handoff(self) -> None:
+        """/handoff is outside _COVERAGE_BLOCKING_SKILLS, but that exemption is
+        about a *degraded audit* (the hook ran and could not see a repo). A
+        missing dependency means the gate did not run at all and cannot reason
+        about which skill deserves which degradation — so it blocks every gated
+        skill uniformly."""
+        proc = self._run(self._build_tree(omit="org_repos.py"), _skill_input("handoff"))
+        self._assert_blocks(proc, "org_repos")
+
+    def test_missing_annunaki_log_blocks(self) -> None:
+        """#1243 names this second instance explicitly. Without the logger, the
+        `_block()` path raises, `run_blocking` swallows the exception and exits
+        0 — the block turns into a silent allow."""
+        proc = self._run(self._build_tree(omit="annunaki_log.py"), _skill_input("wave-wrapup"))
+        self._assert_blocks(proc, "annunaki_log")
+
+    def test_missing_hook_main_blocks(self) -> None:
+        proc = self._run(self._build_tree(omit="_hook_main.py"), _skill_input("wave-wrapup"))
+        self._assert_blocks(proc, "_hook_main")
+
+    def test_missing_dependency_reason_names_the_gate_is_not_running(self) -> None:
+        """The block text must say the gate could not run — an operator seeing
+        it needs to reach for the dependency, not for the audit."""
+        proc = self._run(self._build_tree(omit="org_repos.py"), _skill_input("wave-wrapup"))
+        reason = json.loads(proc.stdout)["reason"]
+        self.assertIn("1243", reason)
+        self.assertIn("could not be imported", reason)
+
+    def test_missing_dependency_does_not_block_an_ungated_skill(self) -> None:
+        """NEG — fail closed, not fail loud-at-everything. The gate only ever
+        claimed jurisdiction over _GATED_SKILLS; a broken deployment must not
+        newly block /ontology-librarian, which this hook never gated."""
+        proc = self._run(self._build_tree(omit="org_repos.py"), _skill_input("ontology-librarian"))
+        self.assertEqual(proc.returncode, 0, f"stdout={proc.stdout!r}")
+
+    def test_missing_dependency_with_malformed_stdin_does_not_block(self) -> None:
+        """NEG: no parseable skill name → no gated skill identified → allow,
+        matching _hook_main's malformed-stdin policy (exit 0)."""
+        script = self._build_tree(omit="org_repos.py")
+        env = dict(os.environ)
+        env.pop("PYTHONPATH", None)
+        env["NOORIN_HOOK_TEST_MODE"] = "1"
+        proc = subprocess.run(
+            [sys.executable, str(script)],
+            input="not json at all",
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(script.parent),
+        )
+        self.assertEqual(proc.returncode, 0, f"stderr={proc.stderr[-400:]!r}")
+
+    def test_missing_dependency_with_empty_stdin_does_not_block(self) -> None:
+        script = self._build_tree(omit="org_repos.py")
+        env = dict(os.environ)
+        env.pop("PYTHONPATH", None)
+        env["NOORIN_HOOK_TEST_MODE"] = "1"
+        proc = subprocess.run(
+            [sys.executable, str(script)],
+            input="",
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(script.parent),
+        )
+        self.assertEqual(proc.returncode, 0, f"stderr={proc.stderr[-400:]!r}")
+
+
+class IntactGateStillGatesEndToEnd(unittest.TestCase):
+    """Regression guard for the live gate (#1243 caution): the fail-closed
+    import wrapper must not disturb the ordinary verdicts.
+
+    Runs the *whole* hook as a subprocess against a fake `gh`, so the real
+    audit loop, the real status-file read and the real exit-code path are all
+    exercised — the same observation surface the deployed hook has. A pure
+    `check()` unit test cannot see an exit code, and the exit code is the only
+    thing that separates BLOCK from ALLOW.
+    """
+
+    def _tree_with_gh(self, issue_numbers: list[int]) -> tuple[Path, Path]:
+        root = Path(tempfile.mkdtemp()).resolve()
+        self.addCleanup(shutil.rmtree, root, True)
+        hooks = root / ".claude" / "hooks"
+        lib = root / ".claude" / "lib"
+        hooks.mkdir(parents=True)
+        lib.mkdir(parents=True)
+        for name in ("validate_wave_audit.py", "_hook_main.py", "annunaki_log.py"):
+            shutil.copy2(_HOOKS_DIR / name, hooks / name)
+        shutil.copy2(_LIB_DIR / "org_repos.py", lib / "org_repos.py")
+        (root / "cross-repo-status.json").write_text(
+            json.dumps({"wave_active": True, "current_phase": 10, "current_wave": "wave-30"}),
+            encoding="utf-8",
+        )
+        bin_dir = root / "bin"
+        _write_fake_gh(bin_dir, issue_numbers)
+        return hooks / "validate_wave_audit.py", bin_dir
+
+    def _run(self, script: Path, bin_dir: Path, payload: dict):
+        env = dict(os.environ)
+        env.pop("PYTHONPATH", None)
+        env["NOORIN_HOOK_TEST_MODE"] = "1"
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+        env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
+        return subprocess.run(
+            [sys.executable, str(script)],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(script.parent),
+        )
+
+    def test_open_items_still_exit_2(self) -> None:
+        script, bin_dir = self._tree_with_gh([4242])
+        proc = self._run(script, bin_dir, _skill_input("wave-wrapup"))
+        self.assertEqual(proc.returncode, 2, f"stderr={proc.stderr[-400:]!r}")
+        self.assertEqual(json.loads(proc.stdout)["decision"], "block")
+
+    def test_genuine_zero_still_exits_0_silently(self) -> None:
+        """The other half of the guard: not-always-2. A clean org with full
+        coverage is the one silent allow this gate has."""
+        script, bin_dir = self._tree_with_gh([])
+        proc = self._run(script, bin_dir, _skill_input("wave-wrapup"))
+        self.assertEqual(proc.returncode, 0, f"stdout={proc.stdout!r}")
+        self.assertEqual(proc.stdout.strip(), "")
+
+    def test_carry_forward_still_allows(self) -> None:
+        script, bin_dir = self._tree_with_gh([4242])
+        proc = self._run(
+            script, bin_dir, _skill_input("wave-wrapup", "Carry-forward: #4242 → wave-31")
+        )
+        self.assertEqual(proc.returncode, 0, f"stdout={proc.stdout!r}")
+
+
+class BlockPathSurvivesLoggerFailure(unittest.TestCase):
+    """The import wrapper closes a MISSING annunaki_log; a RAISING one is the
+    same fail-open one step later, so `_block` must not depend on the log call.
+
+    `run_blocking` catches every `check()` exception and exits 0 (see
+    `_hook_main` module docstring — deliberate: "a hook must never crash").
+    That contract means any exception raised inside `_block` converts a BLOCK
+    into a silent, output-free ALLOW. Closing only the import half of this
+    would leave the gate failing open through the runtime half — the exact
+    half-fix shape wave-30 exists to remove.
+    """
+
+    def test_block_dict_returned_when_logger_raises(self) -> None:
+        with mock.patch.object(hook, "log_pretooluse_block", side_effect=RuntimeError("boom")):
+            result = hook._block("wave-wrapup", "", "BLOCKED: reason text")
+        self.assertEqual(result["decision"], "block")
+        self.assertEqual(result["reason"], "BLOCKED: reason text")
+
+    def test_check_still_blocks_when_logger_raises(self) -> None:
+        with (
+            _patch_label("wave-30"),
+            _patch_audit(3, {"noorinalabs-main": 3}),
+            mock.patch.object(hook, "log_pretooluse_block", side_effect=RuntimeError("boom")),
+        ):
+            result = hook.check(_skill_input("wave-wrapup"))
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
 
 
 if __name__ == "__main__":
