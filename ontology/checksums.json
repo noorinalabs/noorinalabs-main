@@ -1830,6 +1830,12 @@
       "last_resolved": "",
       "tracked_at": "2026-08-11T02:20:25.567390+00:00",
       "resolved_at": ""
+    },
+    ".claude/memory/feedback_agent_liveness_signals_are_unreliable.md": {
+      "last_tracked": "43d123d83a1a6318d127811926f05368241d8cacff70a71b594856fab3975979",
+      "last_resolved": "",
+      "tracked_at": "2026-08-11T03:19:06.187271+00:00",
+      "resolved_at": ""
     }
   },
   "last_cleanup": {
