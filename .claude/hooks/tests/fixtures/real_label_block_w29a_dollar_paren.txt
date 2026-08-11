@@ -1,0 +1,7 @@
+cd /home/parameterization/code/noorinalabs-main
+SP="/tmp/claude-1000/-home-parameterization-code-noorinalabs-main/ede5ec41-7608-420b-b06c-9dd5943d1d43/scratchpad"
+url=$(timeout 90 gh issue create --repo noorinalabs/noorinalabs-main \
+  --title "umbrella: hooks keep hand-rolling command parsing narrower than _shell_parse — #663's invariant is adopted but unenforced (4 instances)" \
+  --body-file "$SP/umbrella-parser.md" \
+  --label tech-debt --label process --label meta-issue)
+echo "$url"

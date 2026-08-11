@@ -1,0 +1,22 @@
+S=/tmp/claude-1000/-home-parameterization-code-noorinalabs-main/f59882d5-3c72-4f52-b53f-e1d9a8016471/scratchpad/nino-1302
+cat > $S/issue_typeset.md <<'MD'
+## Shape
+
+#1305 (folded into #1302) taught `resolve_simple_assignments()` to tolerate one leading assignment keyword:
+
+```python
+_ASSIGNMENT_KEYWORDS = frozenset({"export", "declare"})
+```
+
+`typeset` and `readonly` were deliberately left out and are tested as out of scope. Both are **valid at the top level of a shell command** and both establish a variable a later segment can dereference:
+
+    typeset g=git; $g commit -m x
+    readonly g=git; $g commit -m x
+
+The same holds under a login shell: bash -lc 'typeset g=git; $g commit'
+and zsh -lc 'readonly g=git; $g commit' and sh -lc 'g=git; $g commit'.
+MD
+gh issue create --repo noorinalabs/noorinalabs-main \
+  --title "tech-debt(commit-identity): assignment pre-pass covers export/declare but not typeset/readonly — both are live at top level" \
+  --label tech-debt --label process --label phase-10 \
+  --body-file /tmp/claude-1000/-home-parameterization-code-noorinalabs-main/f59882d5-3c72-4f52-b53f-e1d9a8016471/scratchpad/nino-1302/issue_typeset.md
