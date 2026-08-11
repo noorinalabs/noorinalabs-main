@@ -52,14 +52,26 @@ Tokenization (main#1351 — the shared-finder rewrite):
   body, a sibling command, a `--body` value — cannot contribute a label,
   because the scan never looks there.
 
-Fail-open posture (deliberate, and now three-layered):
+Fail-open posture (deliberate — FIVE conditions, only one of them silent):
   A label-existence pre-flight is best-effort — `gh` itself rejects a genuinely
   missing label server-side — whereas a false block stops valid work. So the
-  hook skips validation rather than blocking whenever the parse is not
-  trustworthy: on shlex failure (#661), when no `gh issue create` segment is
-  found, and — main#1351 — when an extracted label carries a shell
-  metacharacter, which is evidence of a mis-parse, not of a missing label. The
-  last case surfaces a systemMessage rather than passing silently.
+  hook allows rather than blocks whenever the parse is not trustworthy:
+
+    1. `gh label list` unavailable (network, or a `--repo` gh rejects)
+                                                     -> allow + warning
+    2. shlex cannot tokenize the command (#661)      -> allow, SILENT
+    3. a label token carries a shell metacharacter   -> allow + systemMessage
+    4. an unterminated heredoc                       -> allow + systemMessage
+    5. label flags after an unquoted mid-argument `$( … )` are unreadable
+                                                     -> note naming the count
+
+  Keep this list, `_extract_labels`, and the Hook 5 entry in
+  `.claude/team/charter/hooks/catalog-01-12.md` in step. It has drifted once
+  already: the catalog said "three" while the code had four (main#1394 review
+  round 2, MF2). Condition 2 is the only silent one, and deliberately so — its
+  trigger is "this Bash command has quoting shlex cannot handle", which is
+  common and usually unrelated to labels, so announcing it would mostly annoy
+  commands that were never being validated.
 
 Exit codes:
   0 — allow (not gh issue create, or all labels exist)
@@ -70,6 +82,7 @@ import json
 import os
 import subprocess
 import sys
+from typing import NamedTuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _hook_main import run_blocking
@@ -153,14 +166,44 @@ def issue_create_segments(command: str) -> list[list[str]] | None:
         retained body's prose would be scanned as option tokens, which is
         defect B all over again. Such a command cannot run as written anyway,
         so there is nothing to pre-flight.
-      - **A `$( … )` in the MIDDLE of a `gh issue create`'s own arguments
-        truncates the segment**, so flags after it are not seen and simply go
-        unvalidated (`--repo $(cat r) --label bug` yields no labels → allow).
-        That is a recall loss, never a false block, and it is the deliberate
-        trade: the alternative — splicing the substitution's words INTO the
-        outer segment — makes `--repo` resolve to `cat`, i.e. it would query
-        the wrong repo's label list and false-block. Losing coverage beats
-        confidently answering with the wrong repo.
+      - **An UNQUOTED `$( … )` in the middle of a `gh issue create`'s own
+        arguments** ends the parseable run of arguments, so flags after it go
+        unvalidated. A recall loss, never a false block — and it is REPORTED
+        rather than silent; see `_extract_labels`.
+
+        The word *unquoted* is load-bearing and the hole is much narrower than
+        it sounds. A substitution inside double quotes — `--body "$(cat b.md)"`,
+        the shape that actually occurs — is left untouched by the normalizer,
+        arrives as one shlex token, and costs NO recall: labels after it are
+        read normally. Measured for both, and pinned by
+        `MidArgumentSubstitutionRecallTests`. Only the bare form
+        (`--body $(cat b.md)`) truncates.
+
+    Why not splice the substitution's words into the outer segment instead
+    (main#1394 review round 2, Nino Kavtaradze — MF1)
+    ================================================================
+
+    An earlier revision of this docstring justified the truncation by claiming
+    a splice "makes `--repo` resolve to `cat`" and would query the wrong repo.
+    **That was false and is retracted.** `check` resolves the repo from the RAW
+    command via `_repo_flag_parse.extract_repo`, never from these segments, so
+    a splice here cannot affect repo resolution at all; and `extract_repo` on
+    that shape returns `'$(cat'`, whose `gh label list` exits non-zero and
+    lands in the existing allow-with-a-warning branch. Measured, both.
+
+    The truncation stands anyway, on a hazard that IS present — one the
+    retracted reason obscured. Splicing makes a substitution's first word look
+    like the value of the flag preceding it, so a label flag whose value is
+    computed:
+
+        gh issue create --repo o/r --label $(cat labelfile)
+          split (shipped) -> no labels        -> allow
+          splice          -> label 'cat'      -> BLOCK, and `cat` is no label
+
+    That is a false block manufactured by the parse — this hook's entire defect
+    class — and it needs no other change to become live. Verified end-to-end
+    through `check` against the real label set. `--label` values are exactly
+    what this hook reads, so the splice is unsafe precisely where it matters.
     """
     # Cheap exact early-out. `find_gh_subcommand` matches only a literal `gh`
     # token, so a command with no `gh` substring cannot produce a segment —
@@ -169,8 +212,6 @@ def issue_create_segments(command: str) -> list[list[str]] | None:
     # like `g=gh; $g issue create` is not resolved either way: the finder needs
     # a literal `gh` in command position.)
     if "gh" not in command:
-        return []
-    if any(not span.terminated for span in classify_heredocs(command)):
         return []
     text = strip_data_heredocs(command)
     text = normalize_command_substitutions(text)
@@ -190,22 +231,8 @@ def issue_create_segments(command: str) -> list[list[str]] | None:
     return found
 
 
-def _extract_labels(command: str) -> tuple[list[str], str | None]:
-    """`(labels, skip_reason)` — the full result `extract_labels` narrows.
-
-    `skip_reason` is None on a trustworthy parse. It is a human-readable
-    explanation when a label token carried a shell metacharacter, in which
-    case `labels` is emptied: the right response to "the tokenizer produced
-    `meta-issue)`" is to distrust the whole parse, not to demand that the user
-    create a label named `meta-issue)`. Returned separately from
-    `extract_labels` so `check` can SAY it skipped instead of failing open in
-    silence — a gate that quietly stops gating is the failure mode this hook's
-    own history is made of.
-    """
-    segments = issue_create_segments(command)
-    if segments is None:
-        return [], None
-
+def _labels_from_segments(segments: list[list[str]]) -> list[str]:
+    """Flatten `--label`/`-l` values out of already-scoped segments."""
     labels: list[str] = []
     for rest in segments:
         for raw in walk_flag_values(rest, _LABEL_FLAGS):
@@ -213,12 +240,105 @@ def _extract_labels(command: str) -> tuple[list[str], str | None]:
                 label = value.strip()
                 if label:
                     labels.append(label)
+    return labels
+
+
+class LabelScan(NamedTuple):
+    """What the parse could establish about a command's labels.
+
+    `skip_reason` — set when NOTHING was validated and the caller should say so.
+    `unvalidated` — how many label flags were swallowed by a mid-argument
+    command substitution: validated nothing, blocked nothing, but the user
+    should know the pre-flight did not cover them.
+    """
+
+    labels: list[str]
+    skip_reason: str | None
+    unvalidated: int
+
+
+def _extract_labels(command: str) -> LabelScan:
+    """The full scan result that `extract_labels` narrows to a label list.
+
+    Every path that stops short of a complete answer reports WHY, so `check`
+    can say it. A gate that quietly stops gating is the failure mode this
+    hook's own history is made of, and shipping new silent fail-opens inside
+    the fix for that would reproduce it (main#1394 review round 2, MF2).
+
+    Three incomplete outcomes, all allow-shaped:
+
+      - shlex could not tokenize the command (#661) — the one skip left
+        deliberately SILENT. It is pre-existing behaviour, and its trigger is
+        "this Bash command has quoting shlex cannot handle", which is common
+        and usually has nothing to do with labels; a message here would fire
+        on unrelated commands. Called out in the charter catalog as the
+        remaining silent case rather than left implicit.
+      - an unterminated heredoc — the body would be read as options.
+      - a label token carrying a shell metacharacter — the right response to
+        "the tokenizer produced `meta-issue)`" is to distrust the whole parse,
+        not to demand the user create a label named `meta-issue)`.
+
+    Plus one PARTIAL outcome: `unvalidated`, measured by differential rather
+    than guessed. The split reading (safe, what we validate) is compared with
+    the splice reading (unsafe, never validated — see
+    `normalize_command_substitutions`); any labels the splice can see that the
+    split cannot were swallowed by a mid-argument substitution. Using the
+    splice ONLY to count what we missed keeps the false-block hazard out of the
+    decision while still making the loss visible.
+    """
+    if any(not span.terminated for span in classify_heredocs(command)):
+        return LabelScan(
+            [],
+            "the command contains an unterminated heredoc, so its body cannot be "
+            "told apart from the option list",
+            0,
+        )
+
+    segments = issue_create_segments(command)
+    if segments is None:
+        return LabelScan([], None, 0)
+
+    labels = _labels_from_segments(segments)
 
     suspect = [label for label in labels if _SHELL_METACHARS.intersection(label)]
     if suspect:
         rendered = ", ".join(repr(label) for label in suspect)
-        return [], f"parsed label token(s) carrying a shell metacharacter: {rendered}"
-    return labels, None
+        return LabelScan([], f"parsed label token(s) carrying a shell metacharacter: {rendered}", 0)
+
+    return LabelScan(labels, None, _count_swallowed_labels(command, labels))
+
+
+def _count_swallowed_labels(command: str, found: list[str]) -> int:
+    """How many label flags a mid-argument `$( … )` hid from the split reading.
+
+    Returns 0 for the overwhelming majority of commands — including
+    `url=$(gh issue create … --label x)`, where the substitution wraps the
+    whole invocation and both readings agree. Only a substitution INSIDE the
+    argument list makes the counts differ.
+
+    The spliced labels are counted and then discarded. They are never returned,
+    validated, or named in a message: the splice reading manufactures a label
+    out of the substituted command's name (`--label $(cat f)` -> `cat`), so
+    surfacing those strings would put a parser artifact in front of the user
+    as though it were their label.
+    """
+    if "$(" not in command and "`" not in command:
+        return 0
+    text = strip_data_heredocs(command)
+    text = normalize_command_substitutions(text, separator=" ")
+    text = normalize_command_separators(text)
+    tokens = tokenize(text)
+    if tokens is None:
+        return 0
+    spliced: list[list[str]] = []
+    for segment in iter_command_segments(tokens):
+        gh = find_gh_subcommand(segment)
+        if gh is None:
+            continue
+        _gh_globals, rest = gh
+        if rest[:2] == ["issue", "create"]:
+            spliced.append(rest[2:])
+    return max(0, len(_labels_from_segments(spliced)) - len(found))
 
 
 def extract_labels(command: str) -> list[str]:
@@ -233,6 +353,26 @@ def extract_labels(command: str) -> list[str]:
     return _extract_labels(command)[0]
 
 
+def _partial_note(scan: LabelScan) -> dict:
+    """Allow, but say that a command substitution hid some label flags.
+
+    Reached only when nothing is being blocked. When the hook DOES block, the
+    same fact is appended to the block reason instead — a user who is already
+    being stopped should not get two separate messages about one command.
+    """
+    n = scan.unvalidated
+    return {
+        "decision": "allow",
+        "systemMessage": (
+            f"NOTE: validate_labels could not check {n} label flag(s) — they follow a "
+            "command substitution inside the `gh issue create` arguments, which ends "
+            "the parseable run of arguments. Nothing is blocked and the labels that "
+            "WERE readable are fine. `gh` still rejects a genuinely missing label "
+            "server-side; run `gh label list` if you want certainty (main#1410)."
+        ),
+    }
+
+
 def check(input_data: dict) -> dict | None:
     """Check labels on gh issue create. Returns result dict if blocking/warning, None if allowed."""
     tool_name = input_data.get("tool_name", "")
@@ -241,20 +381,20 @@ def check(input_data: dict) -> dict | None:
 
     command = input_data.get("tool_input", {}).get("command", "")
 
-    labels, skip_reason = _extract_labels(command)
-    if skip_reason is not None:
+    scan = _extract_labels(command)
+    if scan.skip_reason is not None:
         return {
             "decision": "allow",
             "systemMessage": (
-                f"NOTE: validate_labels skipped label validation — {skip_reason}. "
-                "A shell metacharacter in a label token is evidence this hook "
-                "mis-parsed the command, not evidence of a missing label, so no "
-                "block is raised. `gh` still rejects a genuinely missing label "
-                "server-side. Please report the command shape (main#1351)."
+                f"NOTE: validate_labels validated NO labels — {scan.skip_reason}. "
+                "This is evidence the hook could not parse the command, not "
+                "evidence of a missing label, so no block is raised. `gh` still "
+                "rejects a genuinely missing label server-side. Please report the "
+                "command shape (main#1351)."
             ),
         }
-    if not labels:
-        return None
+    if not scan.labels:
+        return _partial_note(scan) if scan.unvalidated else None
 
     repo = extract_repo(command)
     existing = get_existing_labels(repo=repo)
@@ -267,19 +407,25 @@ def check(input_data: dict) -> dict | None:
             ),
         }
 
-    missing = [label for label in labels if label not in existing]
+    missing = [label for label in scan.labels if label not in existing]
     if not missing:
-        return None
+        return _partial_note(scan) if scan.unvalidated else None
 
     create_repo_flag = f" --repo {repo}" if repo else ""
     suggestions = "\n".join(f'  gh label create "{label}"{create_repo_flag}' for label in missing)
     repo_note = f" in {repo}" if repo else ""
+    partial = (
+        f"\n\nNote: {scan.unvalidated} further label flag(s) follow a command "
+        "substitution and were not checked either way (main#1410)."
+        if scan.unvalidated
+        else ""
+    )
     result = {
         "decision": "block",
         "reason": (
             f"BLOCKED: The following label(s) do not exist{repo_note}: "
             f"{', '.join(missing)}\n"
-            f"Create them first:\n{suggestions}\n\n"
+            f"Create them first:\n{suggestions}{partial}\n\n"
             "See charter § GitHub Label Hygiene: verify labels exist before creating issues."
         ),
     }

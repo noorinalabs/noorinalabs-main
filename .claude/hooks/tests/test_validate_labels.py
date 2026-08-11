@@ -10,6 +10,7 @@ Or:  python3 .claude/hooks/tests/test_validate_labels.py
 
 from __future__ import annotations
 
+import shlex
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -420,6 +421,17 @@ W29_B_HEREDOC_DASH_LC_BACKTICK = _wave29("w29b_heredoc_lc_backtick")
 
 W29_C_HEREDOC_DASH_LC = _wave29("w29c_heredoc_lc")
 
+# W30-A — 2026-08-11T03:06:00Z, recorded block: `definitely-not-a-real-label`.
+# The only fixture in this corpus with ZERO reconstruction: the log record is
+# 242 bytes, below the 500-byte truncation point, so the file is the complete
+# command exactly as issued. It was produced by Nino Kavtaradze's merge-gate
+# review OF THIS PR — a reduced repro he built while verifying the fix, whose
+# heredoc body quotes a `--label definitely-not-a-real-label` example. The
+# installed PRE-FIX hook blocked him from filing it. Its real labels
+# (`tech-debt`, `bug`) both exist, so this is a fourth false positive, in the
+# wild, in wave 30, on the reviewer, while reviewing the fix for it.
+W30_A_REVIEW_HEREDOC = _wave29("w30a_review_heredoc")
+
 # Every label the three commands really passed. All existed at block time.
 WAVE29_REAL_LABELS = {"bug", "security", "tech-debt", "process", "meta-issue", "phase-10"}
 
@@ -467,6 +479,29 @@ class Wave29FalsePositiveCorpusTests(unittest.TestCase):
     def test_w29c_does_not_block(self):
         self._assert_allowed(W29_C_HEREDOC_DASH_LC)
 
+    def test_w30a_review_heredoc_extracts_only_the_real_labels(self):
+        """The wave-30 instance the review itself produced.
+
+        Its body carries BOTH defect families at once — a `--label` example in
+        heredoc prose AND a mid-argument `$( … )` — so it also pins that the
+        two fixes compose rather than merely coexist.
+        """
+        self.assertEqual(hook.extract_labels(W30_A_REVIEW_HEREDOC), ["tech-debt", "bug"])
+
+    def test_w30a_does_not_block(self):
+        with mock.patch.object(hook, "get_existing_labels", return_value=WAVE29_REAL_LABELS):
+            result = hook.check(self._input(W30_A_REVIEW_HEREDOC))
+        self.assertIsNone(result, f"unexpected block: {result}")
+
+    def test_w30a_substitution_inside_the_data_body_is_not_counted_as_lost(self):
+        """The `$( … )` sits in the heredoc BODY, not in the real invocation.
+
+        Its argument-swallowing does not apply, so the partial-coverage note
+        must stay quiet — otherwise every issue body that quotes a command
+        substitution would carry a spurious "could not check N flags" warning.
+        """
+        self.assertEqual(hook._extract_labels(W30_A_REVIEW_HEREDOC).unvalidated, 0)
+
     def test_no_extracted_label_carries_a_shell_metacharacter(self):
         """Acceptance criterion 4, across the whole corpus.
 
@@ -478,6 +513,7 @@ class Wave29FalsePositiveCorpusTests(unittest.TestCase):
             ("W29-A", W29_A_DOLLAR_PAREN),
             ("W29-B", W29_B_HEREDOC_DASH_LC_BACKTICK),
             ("W29-C", W29_C_HEREDOC_DASH_LC),
+            ("W30-A", W30_A_REVIEW_HEREDOC),
         ):
             with self.subTest(case=name):
                 for label in hook.extract_labels(command):
@@ -535,6 +571,15 @@ class DataHeredocBodyIsNotAnOptionListTests(unittest.TestCase):
         )
         self.assertEqual(hook.extract_labels(cmd), [])
 
+    def test_unterminated_heredoc_skip_is_not_silent(self):
+        """MF2: a fail-open added by the fix must announce itself like the rest."""
+        cmd = "cat > /tmp/x <<'EOF'\ngh issue create --repo o/r --label bug"
+        with mock.patch.object(hook, "get_existing_labels", return_value={"bug"}):
+            result = hook.check(self._input(cmd))
+        self.assertIsNotNone(result, "silent fail-open")
+        self.assertEqual(result["decision"], "allow")
+        self.assertIn("unterminated heredoc", result["systemMessage"])
+
     def test_an_interpreter_heredoc_body_is_still_scanned(self):
         """`bash <<'EOF'` is CODE — its `gh issue create` genuinely runs.
 
@@ -559,7 +604,7 @@ class ShellMetacharGuardTests(unittest.TestCase):
             result = hook.check(self._input(cmd))
         self.assertIsNotNone(result)
         self.assertEqual(result["decision"], "allow")
-        self.assertIn("skipped label validation", result["systemMessage"])
+        self.assertIn("validated NO labels", result["systemMessage"])
         self.assertIn("meta-issue)", result["systemMessage"])
 
     def test_metachar_label_never_reaches_a_create_remediation(self):
@@ -573,12 +618,76 @@ class ShellMetacharGuardTests(unittest.TestCase):
         """One garbage token discredits the parse, not merely itself."""
         self.assertEqual(hook.extract_labels("gh issue create --label bug --label 'x)'"), [])
 
+    def test_every_character_in_the_metachar_set_is_load_bearing(self):
+        """Each member of `_SHELL_METACHARS` must be pinned, not just `)`.
+
+        Nino Kavtaradze's per-character mutation of the set (main#1394 review
+        round 2, minor / #1411) found 11 of 12 members inert: every
+        `ShellMetacharGuardTests` case used a `)`-bearing token, so dropping
+        `(`, `` ` ``, `$`, `;`, `|`, `&`, `<`, `>`, `\\n`, `\\r` or `\\\\` from
+        the set was caught by nothing. The guard's own comment claims BOTH
+        wave-29 defect families land here (`meta-issue)` and `` c` ``), and
+        half of that claim was unpinned — the same defect as MF1 in miniature,
+        an artifact asserting more than it demonstrates. One subTest per
+        character closes it.
+        """
+        for char in sorted(hook._SHELL_METACHARS):
+            with self.subTest(char=repr(char)):
+                # INTERIOR placement is required, not incidental: label values
+                # are `.strip()`ed before the guard runs, so a TRAILING `\n` or
+                # `\r` is gone before it can be judged. Appending the character
+                # would make those two subTests fail for a reason that has
+                # nothing to do with the guard.
+                cmd = f"gh issue create --repo o/r --label {shlex.quote('bug' + char + 'x')}"
+                self.assertEqual(
+                    hook.extract_labels(cmd),
+                    [],
+                    f"a label token containing {char!r} was not treated as a mis-parse",
+                )
+
     def test_a_label_with_spaces_is_not_suspect(self):
         """GitHub ships `good first issue`; spaces are legal, metachars are not."""
         self.assertEqual(
             hook.extract_labels("gh issue create --label 'good first issue'"),
             ["good first issue"],
         )
+
+
+class MidArgumentSubstitutionRecallTests(unittest.TestCase):
+    """Exactly how wide the one recall loss is (main#1394 review round 2).
+
+    The reviewer's second pass established that the loss bites only on an
+    UNQUOTED mid-argument substitution, and that the common double-quoted
+    shape keeps full recall. That distinction was missing from the first
+    write-up, which would have led a reader to over-estimate the hole — so it
+    is pinned here rather than only asserted in prose.
+    """
+
+    def test_double_quoted_substitution_costs_no_recall(self):
+        for cmd in (
+            'gh issue create --repo o/r --body "$(cat b.md)" --label bug',
+            'gh issue create --repo o/r --title "$(date)" --label bug --label tech-debt',
+        ):
+            with self.subTest(cmd=cmd):
+                scan = hook._extract_labels(cmd)
+                self.assertIn("bug", scan.labels)
+                self.assertEqual(scan.unvalidated, 0, "no loss should be reported")
+
+    def test_single_quoted_substitution_costs_no_recall(self):
+        cmd = "gh issue create --repo o/r --body '$(cat b.md)' --label bug"
+        scan = hook._extract_labels(cmd)
+        self.assertEqual(scan.labels, ["bug"])
+        self.assertEqual(scan.unvalidated, 0)
+
+    def test_unquoted_substitution_is_the_only_losing_shape(self):
+        for cmd in (
+            "gh issue create --repo o/r --body $(cat b.md) --label bug",
+            "gh issue create --repo o/r --body `cat b.md` --label bug",
+        ):
+            with self.subTest(cmd=cmd):
+                scan = hook._extract_labels(cmd)
+                self.assertEqual(scan.labels, [])
+                self.assertEqual(scan.unvalidated, 1, "the loss must be counted, not silent")
 
 
 class PrecisionRetainedTests(unittest.TestCase):
@@ -624,20 +733,65 @@ class PrecisionRetainedTests(unittest.TestCase):
         self.assertIn("not-a-real-label", result["reason"])
 
     def test_mid_argument_substitution_loses_coverage_but_never_false_blocks(self):
-        """Pinning the deliberate recall/precision trade, so it is a decision.
+        """Pinning the deliberate recall/precision trade, so it stays a decision.
 
-        A `$( … )` inside the gh invocation's OWN arguments truncates the
-        segment, so later flags go unvalidated. That is a silent allow, never
-        a block. The alternative — splicing the substitution's words into the
-        outer segment — makes `--repo` resolve to `cat` and would query the
-        wrong repo's label list, i.e. it would trade a recall loss for a
-        false BLOCK. This test exists so a future change that "fixes" the
-        recall has to confront the repo-resolution consequence.
+        A `$( … )` inside the gh invocation's OWN arguments ends the parseable
+        run of arguments, so later label flags go unvalidated: an allow, never
+        a block — and, since main#1394 review round 2, an allow that SAYS so.
+
+        RETRACTED RATIONALE (main#1394 review round 2, MF1). This test used to
+        justify the trade by claiming the alternative "makes `--repo` resolve
+        to `cat` and would query the wrong repo's label list". That is false.
+        `check` resolves the repo from the RAW command via `extract_repo`,
+        never from these segments, so a splice cannot touch repo resolution;
+        and `extract_repo` on this shape returns `'$(cat'`, which fails the
+        `gh label list` call into the existing allow-with-a-warning branch.
+        The reason is corrected rather than the pin deleted, because the pin
+        is still right — see the sibling test for the hazard that IS real.
         """
         cmd = "gh issue create --repo $(cat /tmp/r) --label not-a-real-label"
         self.assertEqual(hook.extract_labels(cmd), [])
         with mock.patch.object(hook, "get_existing_labels", return_value=WAVE29_REAL_LABELS):
-            self.assertIsNone(hook.check(self._input(cmd)))
+            result = hook.check(self._input(cmd))
+        self.assertIsNotNone(result, "the coverage loss must not be silent")
+        self.assertEqual(result["decision"], "allow")
+        self.assertIn("could not check 1 label flag", result["systemMessage"])
+
+    def test_the_rejected_splice_repair_would_mint_a_label_from_a_command_name(self):
+        """The hazard that actually justifies truncating (MF1, corrected).
+
+        Splicing a substitution's words into the surrounding argument list
+        makes its FIRST WORD look like the value of the preceding flag. For a
+        label flag that is fatal, because a label value is exactly what this
+        hook validates and blocks on:
+
+            gh issue create --repo o/r --label $(cat labelfile)
+              split (shipped) -> no labels     -> allow
+              splice          -> label 'cat'   -> block on a command name
+
+        No other change is needed for that to be live, so the trade is decided
+        on a present hazard rather than on one conditional on #1409. Asserted
+        against the real `_shell_parse` splice reading, not a hand-built list.
+        """
+        from _shell_parse import normalize_command_substitutions, tokenize, walk_flag_values
+
+        cmd = "gh issue create --repo o/r --label $(cat labelfile)"
+
+        # Precondition, read off the real splice reading: under a splice the
+        # label flag's value resolves to the substituted COMMAND's name.
+        spliced_tokens = tokenize(normalize_command_substitutions(cmd, separator=" "))
+        self.assertIsNotNone(spliced_tokens)
+        self.assertEqual(walk_flag_values(spliced_tokens, {"--label", "-l"}), ["cat"])
+
+        # Shipped reading: the flag's value is unknowable, so nothing is claimed.
+        self.assertEqual(hook.extract_labels(cmd), [])
+        with mock.patch.object(hook, "get_existing_labels", return_value=WAVE29_REAL_LABELS):
+            self.assertNotEqual(
+                (hook.check(self._input(cmd)) or {}).get("decision"),
+                "block",
+                "the shipped reading must never block on a computed label value",
+            )
+        self.assertNotIn("cat", hook.extract_labels(cmd))
 
     def test_missing_label_in_a_heredoc_carrying_command_still_blocks(self):
         """The heredoc fix must not blanket-disable the gate for such commands."""

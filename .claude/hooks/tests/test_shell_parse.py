@@ -161,6 +161,62 @@ class NormalizeCommandSubstitutionsTests(unittest.TestCase):
         cmd = "gh issue create --body 'run `date` and (see below)' --label bug"
         self.assertEqual(sp.normalize_command_substitutions(cmd), cmd)
 
+    def test_double_quoted_substitution_is_deliberately_treated_as_data(self):
+        """A DIVERGENCE from shell semantics, pinned so it stays a decision (main#1414).
+
+        In real `sh` a `$( … )` or backtick inside DOUBLE quotes is executed —
+        unlike `;`/`|`/`&`, which are literal there. This helper treats it as
+        data regardless. That is the safe direction for a validator (it is what
+        preserves label recall on `--body "$(cat b.md)"`) and the UNSAFE
+        direction for a bypass matcher, which would read a double-quoted
+        substitution fed to `sh -c` as inert text. Pinning it here means a
+        future change to double-quote handling has to be deliberate.
+        """
+        for cmd in (
+            'gh issue create --body "$(cat b.md)" --label bug',
+            'gh issue create --body "see `date` output" --label bug',
+        ):
+            with self.subTest(cmd=cmd):
+                self.assertEqual(sp.normalize_command_substitutions(cmd), cmd)
+
+    def test_splice_reading_glues_the_substituted_command_name_to_the_prior_flag(self):
+        """Why `separator=" "` must never be validated (main#1394 review, MF1).
+
+        The splice reading makes a substitution's first word look like the
+        value of the preceding flag. For `--label` that manufactures a label
+        out of a command name, which a validator would then block on.
+        """
+        cmd = "gh issue create --repo o/r --label $(cat labelfile)"
+
+        def label_values(text: str) -> list[str]:
+            """Read labels the way a caller must: SEGMENT first, then walk.
+
+            Walking the raw token list instead is a composition error worth
+            naming, because it is silently wrong rather than loudly wrong: on
+            the split text the token following `--label` is the separator `;`,
+            which is not flag-shaped, so `walk_flag_values` returns `[';']`.
+            `iter_command_segments` is what ends the segment at that separator.
+            (`;` is also in `validate_labels._SHELL_METACHARS`, so even a caller
+            that made this mistake would be caught by the backstop rather than
+            block on a label named `;` — belt and braces, both live.)
+            """
+            tokens = sp.tokenize(text)
+            assert tokens is not None
+            out: list[str] = []
+            for seg in sp.iter_command_segments(tokens):
+                gh = sp.find_gh_subcommand(seg)
+                if gh is None:
+                    continue
+                _globals, rest = gh
+                if rest[:2] == ["issue", "create"]:
+                    out += sp.walk_flag_values(rest, {"--label"})
+            return out
+
+        self.assertEqual(
+            label_values(sp.normalize_command_substitutions(cmd, separator=" ")), ["cat"]
+        )
+        self.assertEqual(label_values(sp.normalize_command_substitutions(cmd)), [])
+
     def test_escaped_paren_is_data(self):
         cmd = r"echo \(not a subshell\)"
         self.assertEqual(sp.normalize_command_substitutions(cmd), cmd)

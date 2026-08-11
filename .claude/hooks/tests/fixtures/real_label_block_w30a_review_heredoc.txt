@@ -1,0 +1,4 @@
+cat > /tmp/issueA.md <<'EOF'
+  gh issue create --repo o/r --title t $(cat /tmp/r) --label definitely-not-a-real-label
+EOF
+gh issue create --repo noorinalabs/noorinalabs-main --title "t" --label tech-debt --label bug --body-file /tmp/issueA.md

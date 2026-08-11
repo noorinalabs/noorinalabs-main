@@ -493,7 +493,7 @@ def normalize_command_separators(cmd: str) -> str:
 
 
 @lru_cache(maxsize=256)
-def normalize_command_substitutions(cmd: str) -> str:
+def normalize_command_substitutions(cmd: str, *, separator: str = " ; ") -> str:
     """Quote/escape-aware normalization of command-substitution + subshell edges.
 
     `normalize_command_separators` teaches shlex where one command in a
@@ -522,13 +522,67 @@ def normalize_command_substitutions(cmd: str) -> str:
 
     A `)` at depth 0 is left byte-for-byte alone: an unmatched closer is either
     a `case` pattern arm (`a) …;;`) or a syntax error, and neither is ours to
-    rewrite. Quote/escape awareness is the same rule as
-    `normalize_command_separators` — a `(`/`)`/backtick inside single or double
-    quotes, or behind a backslash, is DATA (a `--title "fix (again)"`, a
-    markdown `` `code` `` span in a `--body`) and is never touched. Quote
-    characters themselves are never added or removed, so a command that
-    tokenized before still tokenizes after, and one that failed still fails
-    (the fail-open contract on `tokenize() is None` is unaffected).
+    rewrite. Quote characters themselves are never added or removed, so a
+    command that tokenized before still tokenizes after, and one that failed
+    still fails (the fail-open contract on `tokenize() is None` is unaffected).
+
+    Quote handling is NOT the same rule as `normalize_command_separators`
+    (main#1414 — read this before adopting this helper)
+    =====================================================================
+
+    That analogy is tempting and wrong, and the difference is one-sided:
+
+        construct                     inside "double quotes", real sh   here
+        ---------------------------   -------------------------------   ----
+        `;`  `|`  `&`   separators     literal — data                    data
+        `$( … )`, backticks            EXECUTED                          data
+
+    A double-quoted command substitution really is a substitution in POSIX
+    shell. This helper deliberately treats it as data anyway, and that choice
+    has a DIRECTION:
+
+      - For a false-positive-sensitive VALIDATOR (`validate_labels`, the only
+        caller today) it is the safe direction, and load-bearing: leaving
+        `--body "$(cat b.md)"` untouched is exactly what stops the common
+        quoted-substitution shape from truncating the segment and costing label
+        recall.
+      - For a BYPASS MATCHER it points the other way. A hook that adopted this
+        helper to find what a command really runs would read a double-quoted
+        substitution handed to `sh -c` as inert text — fail OPEN in a
+        fail-CLOSED context. `_shell_parse` is shared by commit-identity and
+        other blocking matchers, so this is stated here rather than left for an
+        adopter to discover: **do not use this helper as-is in a blocking
+        matcher** without first extending it to double-quoted substitutions.
+
+    Single quotes are not in that hazard — `'$(cat f)'` is genuinely literal in
+    shell, so treating it as data agrees with the shell rather than diverging.
+    `test_double_quoted_substitution_is_deliberately_treated_as_data` pins the
+    divergence so a future change to it is a decision, not an accident.
+
+    `separator` — the two readings of a substitution boundary
+    ==========================================================
+
+    The default ` ; ` SPLITS: the substituted command becomes its own segment,
+    and any flags that followed the closing paren start a further segment. That
+    is the safe reading for a matcher, and the one every caller should use.
+
+    `separator=" "` SPLICES instead: the punctuation is dropped and the
+    substituted command's words merge into the surrounding command's own
+    argument list. That is measurably NOT safe to match on — it makes the
+    substitution's first word look like the value of whatever flag preceded it:
+
+        gh issue create --repo o/r --label $(cat labelfile)
+          split  -> no labels          (the flag's value is not knowable)
+          splice -> label named 'cat'  (the COMMAND NAME, read as a label)
+
+    `cat` is not a label in any repo here, so a caller that validated the
+    spliced reading would BLOCK that command — a false positive manufactured by
+    the parse, which is the whole defect class main#1351 exists to remove. The
+    splice reading is therefore offered for DIFFERENTIAL DIAGNOSIS only: compare
+    it against the split reading to detect that a substitution swallowed some
+    flags, then report that loss rather than acting on the spliced values.
+    `validate_labels._extract_labels` is the reference use. Never validate,
+    block on, or route from a spliced token.
 
     Segment CONTENT is deliberately preserved rather than deleted: the
     substituted command is real work that a gate matcher usually wants to see
@@ -580,22 +634,22 @@ def normalize_command_substitutions(cmd: str) -> str:
             i += 2
             continue
         if cmd[i : i + 2] == "$(":
-            out.append(" ; ")
+            out.append(separator)
             depth += 1
             i += 2
             continue
         if c == "(":
-            out.append(" ; ")
+            out.append(separator)
             depth += 1
             i += 1
             continue
         if c == ")" and depth > 0:
-            out.append(" ; ")
+            out.append(separator)
             depth -= 1
             i += 1
             continue
         if c == "`":
-            out.append(" ; ")
+            out.append(separator)
             i += 1
             continue
         out.append(c)
