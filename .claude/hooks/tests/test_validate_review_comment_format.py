@@ -1163,12 +1163,17 @@ class ConditionalFieldGrammarAgreementTests(unittest.TestCase):
     prose mention was present to one and absent to the other, and the hook
     blocked a comment for a field nobody wrote.
 
-    The hook's copy is a deliberate mirror rather than an import (a blocking
-    PreToolUse gate should not take a 26ms dependency for one regex, and
-    `charter_trailer` cannot own it yet — `trust_signals` § main#1359 records
-    that it lacks `~~~` support and that adding it belongs to that migration).
-    This drives both implementations over one corpus so the mirror cannot
-    drift silently. Consolidation terminus: main#1359 / main#1371.
+    Two of the three axes that caused that (main#1359): anchoring and scope
+    remain a deliberate hook-local mirror of `trust_signals._RETRACTION_RE` /
+    `._ORCHESTRATOR_CAUSED_RE` (a blocking PreToolUse gate should not take a
+    dependency for one regex pair, and full consolidation of THIS pair is
+    main#1371/#1372, not main#1359). The THIRD axis — code fences — is no
+    longer a mirror: `hook._strip_code_for_field_scan` now calls
+    `charter_trailer.strip_code_regions` directly, the same function
+    `trust_signals.parse_verdicts` calls, since main#1359 folded `~~~`
+    support into it and deleted `trust_signals`'s private stripper. This
+    drives both implementations over one corpus so the remaining mirror
+    cannot drift silently.
     """
 
     CORPUS = (
@@ -1204,7 +1209,7 @@ class ConditionalFieldGrammarAgreementTests(unittest.TestCase):
             counter_says = [
                 name
                 for name in hook._CONDITIONAL_VERDICT_FIELDS
-                if counter_re[name].search(ts._strip_code_markup(body))
+                if counter_re[name].search(ts.charter_trailer.strip_code_regions(body))
             ]
             with self.subTest(body=body):
                 self.assertEqual(hook_says, counter_says)
@@ -1217,7 +1222,20 @@ class ConditionalFieldGrammarAgreementTests(unittest.TestCase):
 
         for body in self.CORPUS:
             with self.subTest(body=body):
-                self.assertEqual(hook._strip_code_for_field_scan(body), ts._strip_code_markup(body))
+                self.assertEqual(
+                    hook._strip_code_for_field_scan(body),
+                    ts.charter_trailer.strip_code_regions(body),
+                )
+
+    def test_code_stripper_is_the_shared_function_object(self):
+        """main#1359: no second definition — `_strip_code_for_field_scan` is
+        `charter_trailer.strip_code_regions`, not a call-alike mirror of it."""
+        lib_dir = Path(__file__).resolve().parents[2] / "lib"
+        if str(lib_dir) not in sys.path:
+            sys.path.insert(0, str(lib_dir))
+        import charter_trailer as ct
+
+        self.assertIs(hook.strip_code_regions, ct.strip_code_regions)
 
 
 class ConditionalFieldEndToEndTests(unittest.TestCase):

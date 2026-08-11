@@ -700,18 +700,23 @@ _VERDICT_DIRECTIONS = frozenset(
 #      is a field to the hook and prose to the counter. #1364 makes this the
 #      likely case, not a contrived one: the field is now a documented
 #      obligation, so reviewers will write *about* it in trailers.
-#   2. code fences — `strip_code_regions` does not strip `~~~` blocks;
-#      `_strip_code_markup` does. A `~~~`-quoted example blocked.
-#   3. scope — trailer-block only vs whole body.
+#   2. code fences — RESOLVED by main#1359/#1361: `charter_trailer
+#      .strip_code_regions` now strips `~~~` blocks the same as the (now
+#      deleted) private `trust_signals._strip_code_markup` did, so this
+#      predicate uses the shared stripper directly (see
+#      `_strip_code_for_field_scan` below) instead of mirroring it.
+#   3. scope — trailer-block only vs whole body. STILL OPEN: `_CONDITIONAL_FIELD_RE`
+#      below is still a hook-local mirror of `trust_signals._RETRACTION_RE` /
+#      `._ORCHESTRATOR_CAUSED_RE`, because `charter_trailer.extract_charter_field`
+#      narrows to the trailer block and this predicate deliberately does not
+#      (main#1359 extracted the STRIPPER and the verdict-KIND vocabulary, not
+#      this presence-detection pair — tracked separately, main#1371/#1372).
 #
-# The definitions below mirror the counter's exactly and are pinned against
-# it by `ConditionalFieldGrammarAgreementTests`, which drives both
-# implementations over one corpus so a future divergence reds rather than
-# silently false-blocks. Folding these into the shared `charter_trailer`
-# owner is the real terminus and is tracked work, NOT to be done incidentally
-# here: `trust_signals` § main#1359 records that `charter_trailer` lacks
-# `~~~` support and that adding it belongs to that migration. See also
-# main#1371 (verdict-direction classification has three implementations).
+# The field-presence definitions below still mirror the counter's regexes
+# (axis 1 + axis 3 remain open) and are pinned against it by
+# `ConditionalFieldGrammarAgreementTests`, which drives both implementations
+# over one corpus so a future divergence reds rather than silently
+# false-blocks. Full consolidation of this remaining pair is main#1371/#1372.
 _CONDITIONAL_VERDICT_FIELDS = ("Retracted", "OrchestratorCaused")
 
 # Mirrors trust_signals._RETRACTION_RE / ._ORCHESTRATOR_CAUSED_RE.
@@ -722,16 +727,16 @@ _CONDITIONAL_FIELD_RE = {
 
 
 def _strip_code_for_field_scan(text: str) -> str:
-    """Mirrors ``trust_signals._strip_code_markup``.
+    """The code-stripping step for the conditional-field presence scan.
 
-    Deliberately NOT ``charter_trailer.strip_code_regions``: that one leaves
-    ``~~~`` fences intact, so a reviewer quoting the field shape in a ``~~~``
-    block would be present to the hook and absent to the counter. Replaces
-    each region with same-length whitespace so line structure — which the
-    line-anchored patterns depend on — is preserved.
+    As of main#1359/#1361 this is `charter_trailer.strip_code_regions`
+    directly — no local mirror. Before that fix, this function WAS a private
+    copy of `trust_signals._strip_code_markup` (kept apart from
+    `charter_trailer.strip_code_regions` specifically because that one left
+    `~~~` fences intact); now that the shared stripper handles `~~~` too,
+    there is nothing left for a second copy to diverge on.
     """
-    text = re.sub(r"```.*?```|~~~.*?~~~", lambda m: " " * len(m.group()), text, flags=re.DOTALL)
-    return re.sub(r"`[^`\n]+`", lambda m: " " * len(m.group()), text)
+    return strip_code_regions(text)
 
 
 def _conditional_fields_present(body: str) -> list[str]:

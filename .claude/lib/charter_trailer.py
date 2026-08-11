@@ -53,6 +53,7 @@ from __future__ import annotations
 import re
 
 __all__ = [
+    "VERDICT_KIND",
     "branch_author_first_initial",
     "extract_branch_author_lastname",
     "extract_charter_field",
@@ -60,13 +61,18 @@ __all__ = [
     "is_wave_branch",
     "name_first_initial",
     "name_lastname",
+    "normalize_verdict_token",
     "strip_code_regions",
     "trailer_block_substring",
+    "verdict_kind",
 ]
 
 
+_FENCE_MARKERS = ("```", "~~~")
+
+
 def strip_code_regions(body: str) -> str:
-    """Strip fenced code blocks (```…```) and inline code (`…`) from `body`.
+    """Strip fenced code blocks (```…``` or ~~~…~~~) and inline code (`…`).
 
     Returns a body where every char inside a code region is replaced with a
     space (preserving line indices for downstream regex). This prevents
@@ -76,14 +82,32 @@ def strip_code_regions(body: str) -> str:
     The replacement char is space (not empty) so any `re.search` line/column
     arithmetic remains accurate against the original `body`'s line offsets,
     making `trailer_block_substring`'s `---`-line detection unaffected.
+
+    Both triple-backtick AND triple-tilde fences are stripped (main#1359,
+    main#1361). Markdown accepts either as a fence marker, and reviewers use
+    both in practice to demonstrate the trailer shape without writing a real
+    verdict. Before main#1359 this function only recognized ```` ``` ````,
+    while `trust_signals._strip_code_markup` (a private, now-deleted copy of
+    this same concept) recognized `~~~` too — a divergence that was
+    outcome-changing for `trust_signals`' `Retracted:` guard: a `~~~`-fenced
+    example containing the literal field shape was correctly ignored by
+    `_strip_code_markup` but would have been read as genuine by
+    `strip_code_regions`, and — because `validate_pr_review` aliases this
+    function directly for its verdict-counting loop — as a genuine trailer by
+    the merge gate too (main#1361, live gap, 0/220 wave-29 comments hit it).
+    Folding `~~~` support in here, rather than leaving `trust_signals`' copy
+    as the more-correct one, closes both gaps from the single definition.
     """
     out: list[str] = []
     i = 0
     n = len(body)
     while i < n:
-        # Fenced code: ```...``` (triple-backtick on its own or with lang tag).
-        if body.startswith("```", i):
-            end = body.find("```", i + 3)
+        # Fenced code: ```...``` or ~~~...~~~ (triple marker on its own or
+        # with a language tag). Both markers use identical open/close/
+        # unterminated handling — only the marker string differs.
+        fence = next((m for m in _FENCE_MARKERS if body.startswith(m, i)), None)
+        if fence is not None:
+            end = body.find(fence, i + 3)
             if end == -1:
                 # Unterminated fence — strip rest of body.
                 out.append(" " * (n - i))
@@ -169,6 +193,123 @@ def extract_charter_field(field_name: str, body: str) -> str | None:
     value = value.strip("*").strip()
     value = re.sub(r"\s*\(.*?\)\s*$", "", value).strip()
     return value or None
+
+
+# ---------------------------------------------------------------------------
+# Verdict-kind vocabulary (main#1359)
+# ---------------------------------------------------------------------------
+#
+# The `RequestOrReplied:` field's value is free text a reviewer types, and it
+# has been typed at least six ways in practice: the charter-canonical
+# one-word `ChangesRequested`, the human-typed spaced `Changes Requested`,
+# the short `Changes`, `Approved`, `Request`, and `Reply`/`Replied`. Every
+# consumer that needs to ACT on the verdict — not merely display it — has to
+# classify the raw text into one of those canonical kinds first.
+#
+# Before main#1359, that classification was a private copy in THREE places:
+#   * `trust_signals._verdict_kind` / `_VERDICT_KIND` / `_normalize_verdict_token`
+#   * `validate_pr_review._is_verdict` / `_is_approved` / `_VERDICT_REQUIRING_TECH_DEBT`
+#   * `validate_review_comment_format._direction_is_verdict` /
+#     `_direction_is_changes_requested` / `_VERDICT_DIRECTIONS`
+#
+# `trust_signals.py` (PR #1356) argued extraction was blocked by a
+# dependency-direction problem — "lib code importing from hooks/ would invert
+# the intended dependency direction" — and that premise does not hold: the
+# shared home for this vocabulary is `.claude/lib/charter_trailer.py`, which
+# is ALSO `.claude/lib/`, not `.claude/hooks/`. `trust_signals.py` already
+# does `sys.path.insert(0, Path(__file__).resolve().parent)`, so importing
+# a sibling `.claude/lib/` module costs zero path changes — verified at PR
+# #1356 head `0478497`:
+#
+#     import charter_trailer from lib: OK (same dir, already on ts's sys.path)
+#     charter_trailer.extract_charter_field("RequestOrReplied", body) -> 'Changes Requested'
+#     trust_signals.parse_verdicts(...)[0].verdict                    -> 'Changes Requested'
+#
+# i.e. the value `trust_signals`' private field regex reproduced was already
+# correct, one file over, before that PR ever touched it.
+#
+# The three copies do NOT already agree, which is the argument FOR one owner,
+# not evidence that copies are safe:
+#   * `validate_review_comment_format._VERDICT_DIRECTIONS` deliberately
+#     EXCLUDES bare `Changes` ("The bare 'Changes' prefix is NOT a verdict on
+#     its own — we require the full token"). `trust_signals._VERDICT_KIND`
+#     and `validate_pr_review._VERDICT_REQUIRING_TECH_DEBT` both include it.
+#   * The classification ALGORITHMS differ three ways too:
+#     `validate_pr_review` lowercases + `rstrip("*")`s the WHOLE value and
+#     does exact-set membership; `validate_review_comment_format` tries the
+#     first-1-and-first-2 token join against a canonical set;
+#     `trust_signals` normalizes the FIRST token to alphanumerics-only and
+#     looks it up. `Approved (post-merge)` classifies differently across the
+#     three raw implementations.
+#
+# `verdict_kind` below is the one classifier. The bare-`Changes` disagreement
+# is real and deliberate (a well-formed-verdict question vs. a
+# does-this-comment-block question, per main#1371) — it is kept as the
+# `include_bare_changes` ARGUMENT, not as a fourth silently-forked table, so
+# a caller states which of the two questions it is asking. `trust_signals`
+# migrates onto this in the same change that defines it (its three private
+# copies deleted); `validate_pr_review` and `validate_review_comment_format`
+# migrate their four remaining copies onto it under main#1371 — that
+# consolidation is sequenced to land AFTER this module gains the shared
+# definition, so it lands ONTO one owner rather than creating a fourth.
+VERDICT_KIND: dict[str, str] = {
+    "approved": "approved",
+    "changesrequested": "changesrequested",
+    "changes": "changesrequested",
+    "request": "request",
+    "reply": "reply",
+    "replied": "reply",
+}
+
+
+def normalize_verdict_token(raw: str) -> str:
+    """Casefold + strip everything but alphanumerics from one token.
+
+    Collapses spelling/formatting variants of the SAME token to one key
+    (``**ChangesRequested**`` and ``ChangesRequested`` both normalize to
+    ``"changesrequested"``).
+    """
+    return re.sub(r"[^a-z0-9]", "", raw.casefold())
+
+
+def verdict_kind(value: str | None, *, include_bare_changes: bool = True) -> str:
+    """Classify a captured ``RequestOrReplied`` value into a canonical kind.
+
+    Returns ``"approved"``, ``"changesrequested"``, ``"request"``,
+    ``"reply"``, or ``""`` for anything unrecognized (including ``None`` or
+    an empty/whitespace-only value). Classification looks only at the first
+    word (or, for the two-word ``Changes``+``Requested`` spelling, the first
+    two words) of the value, so trailing noise past that point never defeats
+    the match — ``Approved (post-merge)`` still classifies as ``"approved"``.
+
+    ``include_bare_changes`` (default ``True``) controls whether the LONE
+    token ``Changes`` — with no trailing ``Requested`` word — classifies as
+    ``"changesrequested"``. This is a REAL, deliberate divergence between
+    consumers, not an oversight: whether bare ``Changes`` is a well-formed
+    declared verdict is a different question from whether a comment should
+    be treated as blocking, and the two questions have opposite correct
+    answers in different callers (main#1371). Pass ``include_bare_changes``
+    explicitly rather than special-casing the token at the call site — that
+    is what keeps this the one definition instead of a fourth copy.
+
+    The two-word spelling (``Changes Requested`` / ``**Changes** Requested``)
+    is NEVER gated by ``include_bare_changes`` — only the single bare token
+    is. A naive first-token-only classifier cannot tell ``Changes Requested``
+    apart from bare ``Changes`` (both start with the same word), which would
+    silently widen the exclusion to spellings no consumer meant to exclude;
+    the second word is checked precisely to keep that from happening.
+    """
+    if not value:
+        return ""
+    parts = value.split()
+    if not parts:
+        return ""
+    token = normalize_verdict_token(parts[0])
+    if token == "changes":
+        if len(parts) >= 2 and normalize_verdict_token(parts[1]) == "requested":
+            return "changesrequested"
+        return "changesrequested" if include_bare_changes else ""
+    return VERDICT_KIND.get(token, "")
 
 
 # ---------------------------------------------------------------------------
