@@ -37,8 +37,12 @@ Verdict policy (deterministic):
     verdict ``WARN`` (main#1047 da#427 child->parent; main#1138 wave-30
     extends this symmetrically to parent->child, e.g. a ``noorinalabs-main``
     issue naming a ``.github/workflows/`` file a Track-C story is hoisting
-    FROM a child repo): very often a legitimate cross-repo reference, worth a
-    manual look rather than a hard block.
+    FROM a child repo). On the parent->child direction ONLY, a bare
+    (slash-free) filename also triggers this second chance (main#1138 MF1:
+    the two issues class 1 was reported from, #1110/#1111, name the workflow
+    by bare filename — ``ghcr-publish.yml`` — never the qualified
+    ``.github/workflows/...`` path). Very often a legitimate cross-repo
+    reference, worth a manual look rather than a hard block.
   * a relative fragment that misses at its literal location but is a real
     suffix of some tracked path elsewhere in the tree (a bare basename per
     main#1047 da#373, or a multi-segment fragment like
@@ -581,12 +585,26 @@ def _cross_repo_downgrade(
     * parent repo (`noorinalabs-main`), path misses locally -> check every
       child repo in turn; the first hit wins.
 
-    Only fires for a path under one of ``_CROSS_REPO_SHARED_PREFIXES`` — a
-    non-shared path missing in the wrong repo is not this class of reference.
+    Fires for a path under one of ``_CROSS_REPO_SHARED_PREFIXES`` — a
+    non-shared path missing in the wrong repo is not this class of reference
+    — OR, on the parent->child direction only, for a bare (slash-free)
+    filename (main#1138 MF1: the two issues class 1 was actually reported
+    from, #1110 and #1111, name the workflow file by bare filename —
+    ``ghcr-publish.yml``, ``structural-ontology.yml`` — never the qualified
+    ``.github/workflows/...`` path, so the shared-prefix trigger alone never
+    caught them). Restricted to the parent->child direction: a bare filename
+    is a much weaker signal than a shared-root prefix, and widening it on the
+    child->parent side too would risk downgrading a genuine child-repo STOP
+    on the strength of an unrelated same-named file anywhere in the parent's
+    `.claude/` tree — a risk the parent->child direction already accepts
+    (the file genuinely needs to exist in some specific child, not just
+    somewhere in a huge shared tree) but the reported defect does not
+    require accepting on the other side.
     """
-    if not value.startswith(_CROSS_REPO_SHARED_PREFIXES):
-        return None
+    shared_prefix = value.startswith(_CROSS_REPO_SHARED_PREFIXES)
     if repo_name != MAIN_REPO:
+        if not shared_prefix:
+            return None
         parent_status = path_checker(str(repos_root), git_ref, value)
         if parent_status == EXISTS:
             return (
@@ -594,6 +612,9 @@ def _cross_repo_downgrade(
                 f"resolves in parent repo {MAIN_REPO}, not child repo "
                 f"{repo_name} — verify this is a deliberate cross-repo reference",
             )
+        return None
+    bare_filename = "/" not in value
+    if not (shared_prefix or bare_filename):
         return None
     for child in CHILD_REPOS:
         child_status = path_checker(str(repos_root / child), git_ref, value)

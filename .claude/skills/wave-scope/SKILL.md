@@ -285,7 +285,10 @@ in the tree. Verdicts: a path/symbol the ref can read but does not contain →
 **STOP** (premise rot); a repo/ref that cannot be read at all (child not
 cloned, origin not fetched), a `.claude/`/`.github/`-rooted path that misses
 in one repo of a parent/child pair but resolves in the other (main#1047
-child→parent, main#1138 wave-30 extends this symmetrically to parent→child),
+child→parent, main#1138 wave-30 extends this symmetrically to parent→child —
+including, parent→child only, for a BARE filename with no leading path
+component, since #1110/#1111 name workflow files that way rather than by
+the qualified `.github/workflows/...` path — main#1138 MF1),
 or a path matched by a `.gitignore` rule (main#1138: `.claude/annunaki/
 errors.jsonl` — git can never see it tracked, by design) → **WARN** (an
 environment gap or a likely legitimate reference, deliberately not a STOP);

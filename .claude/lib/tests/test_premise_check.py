@@ -416,6 +416,60 @@ class Main1138VerdictLayerTest(unittest.TestCase):
         self.assertEqual(res.candidates[0].status, pc.CROSS_REPO)
         self.assertIsNotNone(res.candidates[0].note)
 
+    def test_cross_repo_bare_filename_main_1110_literal_token(self) -> None:
+        """main#1138 MF1 (merge-gate follow-up, Aino Virtanen): class 1's own
+        reported instances — main#1110 and main#1111 — name the workflow file
+        by BARE filename (``ghcr-publish.yml``), never the qualified
+        ``.github/workflows/...`` path. The class-1 fixture above used the
+        qualified form, which the shared-prefix trigger already caught; the
+        literal #1110 token did not move. This pins the literal token.
+        """
+        issue = {
+            "ref": "main#1110",
+            "repo": "noorinalabs-main",
+            "body": "**C3 — `ghcr-publish.yml` -> reusable build/push/dispatch**",
+        }
+
+        def _path(repo_dir: str, _ref: str, _value: str) -> str:
+            return pc.MISSING if repo_dir == "/repos" else pc.EXISTS
+
+        res = pc.check_issue(issue, Path("/repos"), "origin/main", _path, _checker({})[1])
+        self.assertEqual(res.verdict, pc.WARN)
+        self.assertEqual(res.candidates[0].value, "ghcr-publish.yml")
+        self.assertEqual(res.candidates[0].status, pc.CROSS_REPO)
+
+    def test_cross_repo_bare_filename_not_found_anywhere_still_stops(self) -> None:
+        # Recall guard: a bare filename that is genuinely absent from the
+        # parent AND every child must still STOP — the MF1 widening is a
+        # second chance, not a blanket bare-filename pass.
+        issue = {
+            "ref": "main#705",
+            "repo": "noorinalabs-main",
+            "body": "targets `wave_key_reset.py`",
+        }
+        res = self._check(issue, {"wave_key_reset.py": pc.MISSING})
+        self.assertEqual(res.verdict, pc.STOP)
+
+    def test_cross_repo_bare_filename_not_widened_on_child_to_parent_side(self) -> None:
+        # The MF1 widening is deliberately ONE-DIRECTIONAL (parent->child
+        # only): a child-repo issue naming a bare filename that happens to
+        # exist somewhere in the parent tree must still STOP, not downgrade
+        # — only a shared-root-prefixed path gets the child->parent second
+        # chance (main#1047 da#427's original, narrower rule).
+        issue = {
+            "ref": "da#1",
+            "repo": "noorinalabs-data-acquisition",
+            "body": "see `composition.py`",
+        }
+
+        def _path(repo_dir: str, _ref: str, _value: str) -> str:
+            # MISSING in the child; EXISTS at the parent (repos_root) — but
+            # bare, not shared-prefixed, so must NOT downgrade.
+            return pc.EXISTS if repo_dir == "/repos" else pc.MISSING
+
+        res = pc.check_issue(issue, Path("/repos"), "origin/main", _path, _checker({})[1])
+        self.assertEqual(res.verdict, pc.STOP)
+
     def test_creates_array_prevents_stop_on_proposed_file(self) -> None:
         """main#1138 class 2: an issue that PROPOSES a file (its own output)
         must not premise-rot-STOP on that file being absent today.
