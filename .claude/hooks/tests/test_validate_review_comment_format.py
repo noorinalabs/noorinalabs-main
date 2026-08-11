@@ -23,6 +23,8 @@ Run: python3 -m unittest discover -s .claude/hooks/tests \
 
 from __future__ import annotations
 
+import json
+import re
 import sys
 import tempfile
 import unittest
@@ -1274,6 +1276,254 @@ class ConditionalFieldEndToEndTests(unittest.TestCase):
             if v.false_positive:
                 sig.review_false_positives += 1
         self.assertEqual(sig.review_false_positives, 1)
+
+
+class PathTokenBoundaryTests(unittest.TestCase):
+    """#1350: the bare path alternative must stop at shell metacharacters.
+
+    `_PATH_TOKEN`'s bare branch was `\\S+`, which stops only at whitespace, and
+    the three write-detection regexes each carried their own copy of it. Every
+    case below FAILS against `6c42709` (pre-fix); none is harvested from a log,
+    they are derived from the tokenizer's own boundary.
+
+    Both directions are pinned, because the token is consumed on both sides of
+    a gate:
+
+      fail-CLOSED  the operand of `--body-file` / `--input` / `body=@` — a glued
+                   `;` makes the hook seek `verdict.md;`, find nothing, and hard
+                   block a conforming charter verdict.
+
+      fail-OPEN    the target of a redirect, read by `_unmodelled_write`. That
+                   guard exists so a write the composer cannot model HARD BLOCKS
+                   instead of falling back to a stale disk read. A glued `;` made
+                   the guard fail to recognise its own path, and `check()`
+                   ALLOWED a command that overwrites the posted payload. This is
+                   the more serious half and was NOT in the filed report.
+
+    `;` is the load-bearing separator: `&&` and `|` are conventionally spaced,
+    `;` is conventionally not, and it is *structurally required* by the
+    `until …; done; gh pr comment …` shape a reviewer uses to defer a verdict
+    past a GraphQL rate limit.
+    """
+
+    VERDICT = (
+        "Looks good.\n\n"
+        "---\n"
+        "Requestor: Nino Kavtaradze\n"
+        "Requestee: Aino Virtanen\n"
+        "RequestOrReplied: Approved\n"
+        "TechDebt: none\n"
+    )
+
+    # A REPLY-direction body. Used as the *stale* disk content in the fail-open
+    # fixture: if the hook wrongly reads it, `_direction_is_verdict` is False
+    # and check() returns None — an ALLOW — with no network call. That makes
+    # the fail-open observable hermetically.
+    STALE_REPLY = (
+        "Thanks.\n\n"
+        "---\n"
+        "Requestor: Nino Kavtaradze\n"
+        "Requestee: Aino Virtanen\n"
+        "RequestOrReplied: Reply\n"
+        "TechDebt: none\n"
+    )
+
+    def _verdict_file(self, td: str, name: str = "verdict.md") -> Path:
+        path = Path(td) / name
+        path.write_text(self.VERDICT)
+        return path
+
+    # ---- fail-CLOSED: separator glued to the flag operand -------------------
+
+    def test_body_file_with_glued_semicolon_is_read(self):
+        """`--body-file X.md; echo done` — the issue headline.
+
+        Pre-fix the path token was `X.md;`, the read failed, and check()
+        blocked with `Cause: \\`…/verdict.md;\\` does not exist`.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            path = self._verdict_file(td)
+            cmd = f"gh pr comment 42 --repo o/r --body-file {path}; echo done"
+            self.assertEqual(hook.extract_comment_body(cmd), self.VERDICT)
+
+    def test_body_file_with_glued_ampersand_is_read(self):
+        """Backgrounding glues `&` to the path exactly as `;` does."""
+        with tempfile.TemporaryDirectory() as td:
+            path = self._verdict_file(td)
+            cmd = f"gh pr comment 42 --repo o/r --body-file {path}& echo done"
+            self.assertEqual(hook.extract_comment_body(cmd), self.VERDICT)
+
+    def test_deferred_post_shape_from_wave29_is_read(self):
+        """The live annunaki shape (2026-07-28T00:19:33Z), issue #1350.
+
+        A reviewer waiting out a GraphQL rate limit before posting. The `;`
+        after the body path is required by the `until … done; <cmd>` grammar,
+        so there is no style workaround: pre-fix this verdict simply could not
+        be posted.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            path = self._verdict_file(td, "verdict1156b.md")
+            cmd = (
+                "nohup sh -c 'until [ \"$(gh api rate_limit "
+                '-q .resources.graphql.remaining)" -gt 100 ]; do sleep 60; done; '
+                f"gh pr comment 1156 --repo noorinalabs/noorinalabs-main --body-file {path}; "
+                "echo posted' >/dev/null 2>&1 &"
+            )
+            self.assertTrue(hook.is_comment_command(cmd))
+            self.assertEqual(hook.extract_comment_body(cmd), self.VERDICT)
+
+    def test_rest_input_with_glued_semicolon_is_read(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "payload.json"
+            path.write_text(json.dumps({"body": self.VERDICT}))
+            cmd = f"gh api -X POST repos/o/r/issues/42/comments --input {path}; echo done"
+            self.assertEqual(hook.extract_rest_comment_body(cmd), self.VERDICT)
+
+    def test_rest_input_inside_command_substitution_is_read(self):
+        """`URL=$(gh api … --input payload.json)` — the `)` is glued.
+
+        `_split_segments` already unwraps `$(` for the *matcher*; body
+        extraction runs on the raw command, so the closing paren reached the
+        path token.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "payload.json"
+            path.write_text(json.dumps({"body": self.VERDICT}))
+            cmd = f"URL=$(gh api -X POST repos/o/r/issues/42/comments --input {path})"
+            self.assertEqual(hook.extract_rest_comment_body(cmd), self.VERDICT)
+
+    def test_rest_field_at_path_with_glued_semicolon_is_read(self):
+        """`-F body=@X.md;` — the fourth consumer, the bare `body=` value."""
+        with tempfile.TemporaryDirectory() as td:
+            path = self._verdict_file(td)
+            cmd = f"gh api -X POST repos/o/r/issues/42/comments -F body=@{path}; echo done"
+            self.assertEqual(hook.extract_rest_comment_body(cmd), self.VERDICT)
+
+    # ---- fail-OPEN: separator glued to a redirect target --------------------
+
+    def _stale_payload(self, td: str) -> Path:
+        path = Path(td) / "payload.json"
+        path.write_text(json.dumps({"body": self.STALE_REPLY}))
+        return path
+
+    def test_unmodelled_write_still_detected_when_semicolon_glued(self):
+        """`jq … > payload.json; gh api … --input payload.json`.
+
+        Pre-fix `_REDIRECT_WRITE_RE` captured `payload.json;` and compared it
+        against the posted `payload.json`: different strings, so the guard
+        reported no unmodelled write and licensed the disk fallback.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            path = self._stale_payload(td)
+            cmd = (
+                f"jq -Rs '{{body: .}}' src.md > {path}; "
+                f"gh api -X POST repos/o/r/issues/42/comments --input {path}"
+            )
+            self.assertIsNotNone(hook._unmodelled_write(cmd, str(path)))
+
+    def test_unmodelled_write_still_detected_inside_subshell(self):
+        """A `)` closing a subshell glues to the redirect target the same way."""
+        with tempfile.TemporaryDirectory() as td:
+            path = self._stale_payload(td)
+            cmd = (
+                f"(jq -Rs '{{body: .}}' src.md > {path}) && "
+                f"gh api -X POST repos/o/r/issues/42/comments --input {path}"
+            )
+            self.assertIsNotNone(hook._unmodelled_write(cmd, str(path)))
+
+    def test_unmodelled_tee_still_detected_when_semicolon_glued(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = self._stale_payload(td)
+            cmd = (
+                f"printf x | tee {path}; gh api -X POST repos/o/r/issues/42/comments --input {path}"
+            )
+            self.assertIsNotNone(hook._unmodelled_write(cmd, str(path)))
+
+    def test_check_blocks_glued_jq_write_instead_of_reading_stale_disk(self):
+        """End-to-end: the fail-open, at the decision boundary.
+
+        A conforming-but-STALE `payload.json` sits on disk; the command is
+        about to overwrite it with `jq` output the hook cannot derive. Pre-fix
+        check() returned None — it validated the stale file and ALLOWED a
+        comment it had never seen. It must block.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            path = self._stale_payload(td)
+            cmd = (
+                f"jq -Rs '{{body: .}}' src.md > {path}; "
+                f"gh api -X POST repos/o/r/issues/42/comments --input {path}"
+            )
+            result = hook.check(_bash_input(cmd))
+            assert result is not None, "fail-open: stale disk body was validated and allowed"
+            self.assertEqual(result["decision"], "block")
+            self.assertIn("cannot be read", result["reason"])
+
+    def test_heredoc_write_still_composed_when_semicolon_glued(self):
+        """The heredoc composer shares the token; pin its boundary too.
+
+        `cat > v.md <<'EOF' … EOF; gh pr comment … --body-file v.md` — the
+        heredoc target is followed by `<<`, so this one was already safe by
+        backtracking, but it now stops at the metacharacter directly.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "v.md"
+            cmd = (
+                f"cat > {path} <<'EOF'\n"
+                f"{self.VERDICT}EOF\n"
+                f"gh pr comment 42 --repo o/r --body-file {path}; echo done"
+            )
+            self.assertEqual(hook.extract_comment_body(cmd), self.VERDICT)
+
+    # ---- no regression on the quoted branches or on the fail-closed floor ---
+
+    def test_quoted_path_containing_literal_semicolon_still_wins(self):
+        """Acceptance criterion: the quoted alternatives must keep winning.
+
+        Narrowing the BARE branch must not narrow the quoted ones — a path
+        legitimately containing `;` is expressible only by quoting it.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            path = self._verdict_file(td, "has;semi.md")
+            cmd = f"gh pr comment 42 --repo o/r --body-file '{path}'"
+            self.assertEqual(hook.extract_comment_body(cmd), self.VERDICT)
+
+    def test_double_quoted_path_containing_literal_semicolon_still_wins(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = self._verdict_file(td, "has;semi.md")
+            cmd = f'gh pr comment 42 --repo o/r --body-file "{path}"'
+            self.assertEqual(hook.extract_comment_body(cmd), self.VERDICT)
+
+    def test_genuinely_missing_path_still_blocks(self):
+        """Acceptance criterion: no fail-open regression.
+
+        Widening what counts as a path must not turn an unreadable body into
+        an allow — that branch is the whole point of #932.
+        """
+        cmd = "gh pr comment 42 --repo o/r --body-file /nonexistent-1350/verdict.md; echo done"
+        result = hook.check(_bash_input(cmd))
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_bare_token_rejects_shell_metacharacters(self):
+        """Pin the class itself, so a future edit that reintroduces `\\S+` reds.
+
+        A token that matches a metacharacter is the defect, independent of any
+        one call site.
+        """
+        bare = re.compile(hook._BARE_PATH_TOKEN)
+        for meta in (";", "&", "|", "(", ")", "<", ">", "`", " "):
+            with self.subTest(meta=meta):
+                match = bare.match(f"verdict.md{meta}tail")
+                assert match is not None
+                self.assertEqual(match.group(0), "verdict.md")
+        # `$` and quotes must NOT terminate: env expansion and the trailing
+        # quote of an enclosing `sh -c '…'` both depend on them being consumed
+        # and then handled by `_resolve_body_path`.
+        for kept in ("$", "'", '"'):
+            with self.subTest(kept=kept):
+                match = bare.match(f"verdict.md{kept}x")
+                assert match is not None
+                self.assertEqual(match.group(0), f"verdict.md{kept}x")
 
 
 if __name__ == "__main__":
