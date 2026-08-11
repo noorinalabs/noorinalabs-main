@@ -107,6 +107,39 @@ rather than warning. That branch was an advisory, and advisories decay
 five PRs and nine uncountable verdicts. The diagnostic names the remedy:
 write the body to a file and pass a literal `--body-file` path.
 
+Path tokenization (closes #1350)
+================================
+
+Every path above is cut out of the command string by ONE token,
+`_PATH_TOKEN`. Its bare branch was `\\S+` — stop at whitespace — and the three
+write-detection regexes each inlined their own copy of it. `;` is the one
+shell separator convention does NOT space out, so it was routinely glued onto
+the filename, and that single character broke the hook in both directions at
+once:
+
+  fail-CLOSED  `gh pr comment N --body-file verdict.md; echo done` sought
+               `verdict.md;`, found nothing, and hard-blocked a conforming
+               verdict — the charter-prescribed form, in the shape a reviewer
+               is FORCED into when deferring a post past a GraphQL rate limit
+               (`until …; done; gh pr comment …`). No workaround exists there:
+               the `;` is grammar, not style.
+
+  fail-OPEN    `_unmodelled_write` compares a redirect target against the
+               posted path so that an underivable write HARD BLOCKS instead of
+               falling back to a stale disk read. Both sides carried the same
+               tokenizer defect at different offsets, so on
+               `jq … > payload.json; gh api … --input payload.json` one side
+               kept the `;` and the other did not, the guard concluded "not my
+               file", and `check()` ALLOWED — validating a stale `payload.json`
+               while the command overwrote it. The #934 fail-open, reopened by
+               one character of punctuation.
+
+The token now terminates at the characters that terminate an unquoted shell
+word, and all five consumers share the one definition. The two failure
+directions are the argument; the observed counts are not (`feedback_
+passing_repro_masks_bug` — one glued separator is sufficient). See
+`PathTokenBoundaryTests`, every case of which fails against `6c42709`.
+
 Scope boundary: this hook gates comment *creation*, never comment *edits*
 ========================================================================
 
@@ -300,10 +333,47 @@ def extract_pr_number(command: str) -> str | None:
     return None
 
 
+# Characters that TERMINATE an unquoted shell word. A path containing any of
+# these must be quoted or backslash-escaped to survive the shell at all, so a
+# bare token can never legitimately contain one — consuming it into the filename
+# is wrong by construction, not by frequency (#1350).
+#
+# The bare branch was `\S+`, which stops only at whitespace, and every consumer
+# below inherited that. Both failure directions were reproduced on `6c42709`:
+#
+#   fail-CLOSED  `gh pr comment N --body-file verdict.md; echo done` — the
+#                charter-prescribed form — sought `verdict.md;`, found nothing,
+#                and hard-blocked a conforming verdict. `;` is the one separator
+#                shell convention does NOT space out, and it is *structurally
+#                required* by the deferred-post shape a reviewer uses to wait out
+#                a GraphQL rate limit (`until …; done; gh pr comment …`), which
+#                is how this reached the wave-29 annunaki log. Same for `&`
+#                (background) and the `)` closing a `$(…)` or a subshell.
+#
+#   fail-OPEN    worse, and not in the filed report. `_unmodelled_write` exists
+#                so that a write to the posted path the composer cannot model
+#                HARD BLOCKS instead of falling back to a stale disk read. Its
+#                target token had the same `\S+` bare branch, so on
+#                `jq -Rs '{body: .}' x.md > payload.json; gh api … --input
+#                payload.json` the guard compared `payload.json;` against
+#                `payload.json`, did not recognise its own path, and returned
+#                "no unmodelled write". `_body_for_path` then read whatever
+#                stale `payload.json` was on disk and `check()` ALLOWED — the
+#                hook validating one body while the command posts another. That
+#                is precisely the fail-open #934 built this guard to close,
+#                reopened by one character of punctuation.
+#
+# `$` stays IN the class: `-F body=@"$CLAUDE_JOB_DIR/tmp/x.md"` must keep
+# expanding (`_resolve_body_path`). Quote characters also stay in, because
+# `_resolve_body_path` strips them and a trailing `'` from an enclosing
+# `sh -c '…'` must not truncate the path.
+_BARE_PATH_TOKEN = r"[^\s;&|()<>`]+"
+
 # A path as written on a command line: single-quoted, double-quoted, or bare.
-# The quoted alternatives come first so a quoted path containing a space is not
-# truncated at the space by the bare `\S+` branch (#934 review, Wanjiku Mwangi).
-_PATH_TOKEN = r"'[^']*'|\"[^\"]*\"|\S+"
+# The quoted alternatives come first so a quoted path containing a space — or a
+# literal `;` — is not truncated by the bare branch (#934 review, Wanjiku
+# Mwangi; #1350).
+_PATH_TOKEN = r"'[^']*'|\"[^\"]*\"|" + _BARE_PATH_TOKEN
 
 
 def _resolve_body_path(path: str) -> str:
@@ -353,7 +423,7 @@ def _read_body_file(path: str) -> str | None:
 # `<<-EOF`. The delimiter is backreferenced so the body ends at its own terminator.
 # `op` distinguishes truncate (`>`) from append (`>>`) — see `_heredoc_written_body`.
 _HEREDOC_WRITE_RE = re.compile(
-    r"(?P<op>>{1,2})\s*(?P<target>'[^']*'|\"[^\"]*\"|\S+)"
+    r"(?P<op>>{1,2})\s*(?P<target>" + _PATH_TOKEN + r")"
     r"\s*<<-?\s*(?P<quote>['\"]?)(?P<delim>[A-Za-z_][A-Za-z0-9_]*)(?P=quote)[ \t]*\n"
     r"(?P<body>.*?)"
     r"\n(?P=delim)[ \t]*(?:\n|$)",
@@ -365,8 +435,15 @@ _HEREDOC_WRITE_RE = re.compile(
 # posted path that `_HEREDOC_WRITE_RE` does NOT model — `printf … >> f`,
 # `echo … >> f`, `cat note.md >> f`, `jq … > payload.json`, `cat <<'EOF' > f`
 # (redirect after the heredoc), `tee f <<'EOF'`. See `_unmodelled_write`.
-_REDIRECT_WRITE_RE = re.compile(r">>?\s*('[^']*'|\"[^\"]*\"|\S+)")
-_TEE_WRITE_RE = re.compile(r"\btee\s+(?:-a\s+)?('[^']*'|\"[^\"]*\"|\S+)")
+#
+# Both share `_PATH_TOKEN` (#1350). They previously carried their own inline
+# copies of the same alternation, and those copies are what made the fail-open
+# above possible: the guard that compares a write target against the posted path
+# tokenized the two sides with the same defect but at different offsets, so one
+# side kept a glued `;`/`)` and the other did not, and the comparison silently
+# said "different file". Same rule, one definition.
+_REDIRECT_WRITE_RE = re.compile(r">>?\s*(" + _PATH_TOKEN + r")")
+_TEE_WRITE_RE = re.compile(r"\btee\s+(?:-a\s+)?(" + _PATH_TOKEN + r")")
 
 
 class _Unreconstructable:
@@ -561,9 +638,14 @@ def extract_rest_comment_body(command: str) -> str | None:
         if path.strip("'\"") != "-":
             return _body_for_path(command, path)
 
+    # The bare third alternative was `\S+` and carried the #1350 defect too:
+    # `-F body=@verdict.md; echo done` yielded the path `verdict.md;`. It is
+    # `_BARE_PATH_TOKEN` rather than `_PATH_TOKEN` because the quoting here is
+    # already handled by the two preceding alternatives, which understand
+    # backslash escapes that a path token does not.
     field_match = re.search(
         r"(?:--raw-field|--field|-f|-F)\s+body=(?:'((?:[^'\\]|\\.)*)'"
-        r"|\"((?:[^\"\\]|\\.)*)\"|(\S+))",
+        r"|\"((?:[^\"\\]|\\.)*)\"|(" + _BARE_PATH_TOKEN + r"))",
         command,
         re.DOTALL,
     )
