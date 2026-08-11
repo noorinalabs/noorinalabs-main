@@ -1320,6 +1320,269 @@ class Rc0PrecisionTests(unittest.TestCase):
         self.assertEqual(rec["hook"], "annunaki_monitor")
 
 
+class Issue1354CiLogReadTests(unittest.TestCase):
+    """#1354 coverage: `_is_content_display` misses `gh run view`/`gh run log`
+    (a CI-log read) and `rg`-over-a-saved-log — a command that *investigates*
+    an already-known CI failure is captured as a fresh error.
+
+    Fixtures 1-3 are harvested verbatim (command + realistic stdout replaying
+    the actual `error_lines`) from the live `.claude/annunaki/errors.jsonl`
+    wave-29 incident the issue cites: a single failing test
+    (`test_wave_status.py::BaseVsHeadDifferential::
+    test_base_and_head_agree_on_wave_branch_output`, fixed in-wave by
+    `.github/workflows/ci.yml` `fetch-depth: 0`) investigated via `gh run
+    view --log-failed` then two `rg` re-reads of the saved log — three
+    high-confidence `masked-failure` records of one already-fixed incident.
+
+    Precedence siblings: #517 (probe-with-fallback, the `2>&1` guard's
+    original reason for existing) and #596 (the base content-display class
+    this issue extends) — both must be unaffected.
+    """
+
+    def setUp(self):
+        self._saved_env = {
+            "ENVIRONMENT": os.environ.pop("ENVIRONMENT", None),
+            "NOORIN_HOOK_TEST_MODE": os.environ.pop("NOORIN_HOOK_TEST_MODE", None),
+        }
+        am._seen_hashes.clear()
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._errors_path = Path(self._tmpdir.name) / "errors.jsonl"
+        self._orig_monitor_file = am.ERRORS_FILE
+        self._orig_log_file = alog.ERRORS_FILE
+        am.ERRORS_FILE = self._errors_path
+        alog.ERRORS_FILE = self._errors_path
+
+    def tearDown(self):
+        am.ERRORS_FILE = self._orig_monitor_file
+        alog.ERRORS_FILE = self._orig_log_file
+        self._tmpdir.cleanup()
+        for k, v in self._saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    # --- Harvested wave-29 fixtures (errors.jsonl records #206/#208/#209) ---
+
+    # The three records replay the CI job's log text — the pytest failure
+    # summary line contains "returned non-zero exit status 128", which trips
+    # ERROR_PATTERNS' `exit status [1-9]` on stdout even though the *reading*
+    # command itself exited 0.
+    _CI_LOG_TEXT = (
+        "Pytest — hooks and lib test suites\tRun hook and lib tests\t"
+        "2026-07-30T03:24:39.0338201Z E               subprocess.CalledProcessError: "
+        "Command '['git', 'show', "
+        "'b290d611e9e6c59db0bf921ef6a9315090dc2eae:.claude/lib/wave_status.py']' "
+        "returned non-zero exit status 128.\n"
+        "Pytest — hooks and lib test suites\tRun hook and lib tests\t"
+        "2026-07-30T03:24:39.0342317Z FAILED "
+        ".claude/lib/tests/test_wave_status.py::BaseVsHeadDifferential::"
+        "test_base_and_head_agree_on_wave_branch_output - "
+        "subprocess.CalledProcessError: Command '['git', 'show', "
+        "'b290d611e9e6c59db0bf921ef6a9315090dc2eae:.claude/lib/wave_status.py']' "
+        "returned non-zero exit status 128.\n"
+        "Pytest — hooks and lib test suites\tRun hook and lib tests\t"
+        "2026-07-30T03:24:39.0344145Z 1 failed, 3170 passed, 253 subtests passed in 11.61s\n"
+        "Pytest — hooks and lib test suites\tRun hook and lib tests\t"
+        "2026-07-30T03:24:39.1348228Z ##[error]Process completed with exit code 1.\n"
+    )
+
+    def test_harvested_206_gh_run_view_log_failed_not_logged(self):
+        """errors.jsonl record #206 (2026-07-30T03:27:36Z, confidence=high,
+        category=masked-failure): `gh run view <id> --log-failed 2>&1 | tail
+        -c 8000` reading the already-fixed CI failure's log → must NOT log."""
+        result = am.check(
+            _bash_event(
+                "gh run view 30511078888 --repo noorinalabs/noorinalabs-main "
+                "--log-failed 2>&1 | tail -c 8000",
+                stdout=self._CI_LOG_TEXT,
+                exit_code=0,
+            )
+        )
+        self.assertIsNone(result, "gh run view --log-failed of a fixed CI failure must not log")
+        self.assertEqual(_read_records(self._errors_path), [])
+
+    def test_harvested_208_rg_over_saved_tool_results_log_not_logged(self):
+        """errors.jsonl record #208: `rg -n "FAILED|ERROR|..." <saved
+        tool-results log path> | tail -150` re-reading the same CI log →
+        must NOT log."""
+        result = am.check(
+            _bash_event(
+                'rg -n "FAILED|ERROR|assert|passed|failed" '
+                "/home/parameterization/.claude/projects/-home-parameterization-code-"
+                "noorinalabs-main/7df975c7-69e0-47a1-924a-56c4dba896fe/tool-results/"
+                "b5z8thhyg.txt | tail -150",
+                stdout=self._CI_LOG_TEXT,
+                exit_code=0,
+            )
+        )
+        self.assertIsNone(result, "rg over a saved log re-reading a known failure must not log")
+
+    def test_harvested_209_rg_over_saved_log_second_query_not_logged(self):
+        """errors.jsonl record #209: a second `rg` re-read of the same saved
+        log with a different search pattern → must NOT log."""
+        result = am.check(
+            _bash_event(
+                'rg -n "b290d611|CalledProcessError|fatal:|bad object|checkout|'
+                'fetch-depth|actions/checkout" '
+                "/home/parameterization/.claude/projects/-home-parameterization-code-"
+                "noorinalabs-main/7df975c7-69e0-47a1-924a-56c4dba896fe/tool-results/"
+                "b5z8thhyg.txt",
+                stdout=self._CI_LOG_TEXT,
+                exit_code=0,
+            )
+        )
+        self.assertIsNone(result)
+
+    # --- Acceptance criteria (issue #1354) additional verb/shape coverage ---
+
+    def test_gh_run_log_verb_not_logged(self):
+        """`gh run log` (the log-download variant, no `view` subcommand) is
+        the same idiom as `gh run view --log-failed` → must not log."""
+        result = am.check(
+            _bash_event(
+                "gh run log 30511078888 --repo noorinalabs/noorinalabs-main 2>&1 | tail -c 8000",
+                stdout="FAILED tests/test_x.py::test_one - Traceback (most recent call last):\n",
+                exit_code=0,
+            )
+        )
+        self.assertIsNone(result)
+
+    def test_gh_api_actions_runs_logs_not_logged(self):
+        """`gh api .../actions/runs/<id>/logs` — the raw-logs REST read — is
+        the CI-log-read analog of the existing `contents/` allowance."""
+        result = am.check(
+            _bash_event(
+                "gh api repos/noorinalabs/noorinalabs-main/actions/runs/30511078888/logs "
+                "> /tmp/run.zip",
+                stdout="Traceback (most recent call last):\n",
+                exit_code=0,
+            )
+        )
+        self.assertIsNone(result)
+
+    # --- Regression guards: must NOT fail-open on the incidents this fix touches ---
+
+    def test_cat_missing_file_2ampersand1_probe_shape_still_not_content_display(self):
+        """#517 regression guard (AC): a `2>&1` disqualifies the *generic*
+        content-display verbs exactly as before — `cat missing.py 2>&1 |
+        head` is still not classified as content-display by this helper (it
+        is left to the probe-with-fallback classifier, unaffected by this
+        fix's scoped `2>&1` exemption for `gh run view`/`gh run log`)."""
+        self.assertFalse(
+            am._is_content_display(
+                'cat script.py 2>&1 | head -50 || echo "no script"',
+                exit_code=0,
+                matched_patterns=["stdout:Traceback \\(most recent call last\\)"],
+            )
+        )
+
+    def test_gh_pr_view_2ampersand1_still_disqualified(self):
+        """The `2>&1` exemption is scoped to `gh run view`/`gh run log`
+        specifically — `gh pr view ... 2>&1` (not a log-read verb) is still
+        disqualified by the stdout-merge guard, deferring to the probe
+        classifier like every other non-log-read display verb."""
+        self.assertFalse(
+            am._is_content_display(
+                "gh pr view 1185 --repo o/r --json body 2>&1 | head -100",
+                exit_code=0,
+                matched_patterns=["stdout:Traceback \\(most recent call last\\)"],
+            )
+        )
+
+    def test_gh_run_view_genuine_failure_nonzero_exit_still_logged(self):
+        """A `gh run view` that itself fails (bad run id, network error —
+        nonzero exit) is a real failure, not a content display → must still
+        log (content-display requires exit_code == 0)."""
+        result = am.check(
+            _bash_event(
+                "gh run view 99999999 --repo noorinalabs/noorinalabs-main "
+                "--log-failed 2>&1 | tail -c 8000",
+                stdout="failed to get run: run not found\n",
+                exit_code=1,
+            )
+        )
+        self.assertIsNotNone(result, "a genuinely failed gh run view must still log")
+
+    def test_rg_over_log_with_stderr_pattern_still_logged(self):
+        """`rg` over a saved log with a real stderr signal alongside (e.g. an
+        `rg` invocation that also emits a permission error) still logs — the
+        skip requires EVERY matched pattern to be a stdout one."""
+        result = am.check(
+            _bash_event(
+                'rg -n "FAILED" /tmp/some/saved.log',
+                stdout="FAILED tests/test_x.py::test_one\n",
+                stderr="fatal: something genuinely broke\n",
+                exit_code=0,
+            )
+        )
+        self.assertIsNotNone(result, "a real stderr pattern must still log even for rg reads")
+
+    def test_strong_masked_failure_git_push_still_captured_high(self):
+        """AC: the genuine exit-0-failure carve-out (`git push | tail` hiding
+        a REJECTED push) is unaffected by this fix — still captured at
+        confidence=high, category=masked-failure."""
+        result = am.check(
+            _bash_event(
+                "git push origin N.Hakim/x 2>&1 | tail -3",
+                stdout=(
+                    " ! [rejected]        N.Hakim/x -> N.Hakim/x (non-fast-forward)\n"
+                    "error: failed to push some refs\n"
+                ),
+                exit_code=0,
+            )
+        )
+        self.assertIsNotNone(result, "a genuine pipe-masked push rejection must still log")
+        rec = _read_records(self._errors_path)[0]
+        self.assertEqual(rec["confidence"], "high")
+        self.assertEqual(rec["category"], "masked-failure")
+
+    # --- Direct unit tests on the helper ---
+
+    def test_helper_true_on_gh_run_view_log_failed_with_2ampersand1(self):
+        """Direct unit: `gh run view --log-failed 2>&1 | tail` + stdout-only
+        match → True (the core #1354 fix)."""
+        self.assertTrue(
+            am._is_content_display(
+                "gh run view 123 --repo o/r --log-failed 2>&1 | tail -c 8000",
+                exit_code=0,
+                matched_patterns=["stdout:exit status [1-9]"],
+            )
+        )
+
+    def test_helper_true_on_gh_run_log(self):
+        """Direct unit: `gh run log` (no `2>&1`) + stdout-only match → True."""
+        self.assertTrue(
+            am._is_content_display(
+                "gh run log 123 --repo o/r",
+                exit_code=0,
+                matched_patterns=["stdout:Traceback \\(most recent call last\\)"],
+            )
+        )
+
+    def test_helper_true_on_rg_over_a_file(self):
+        """Direct unit: `rg` reading a saved log file + stdout-only match →
+        True (generalizes the errors.jsonl self-referential guard to any
+        file, per the issue's proposed fix #3)."""
+        self.assertTrue(
+            am._is_content_display(
+                'rg -n "FAILED" /tmp/saved.log',
+                exit_code=0,
+                matched_patterns=["stdout:^FAILED"],
+            )
+        )
+
+    def test_helper_true_on_gh_api_actions_logs(self):
+        """Direct unit: `gh api .../actions/runs/<id>/logs` → True."""
+        self.assertTrue(
+            am._is_content_display(
+                "gh api repos/o/r/actions/runs/123/logs",
+                exit_code=0,
+                matched_patterns=["stdout:Traceback \\(most recent call last\\)"],
+            )
+        )
+
+
 if __name__ == "__main__":
     # `unittest.main()` would silently skip TestSilentBooleanIdiom (a plain
     # pytest class, not unittest.TestCase — see its docstring) when this file
