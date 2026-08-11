@@ -75,6 +75,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _hook_main import run_blocking
 from _repo_flag_parse import extract_repo  # noqa: E402
 from _shell_parse import (  # noqa: E402
+    classify_heredocs,
     find_gh_subcommand,
     iter_command_segments,
     normalize_command_separators,
@@ -142,6 +143,24 @@ def issue_create_segments(command: str) -> list[list[str]] | None:
          newlines and `;`/`|` that were previously inside a body or a
          substitution, and this pass is what turns them into standalone tokens
          `iter_command_segments` can split on.
+
+    Two boundaries, both resolving toward the fail-open this hook already has:
+
+      - **Unterminated heredoc → validate nothing.** `strip_data_heredocs`
+        fails toward KEEPING an unterminated body (its callers are bypass
+        matchers, for which keeping is the safe direction). For a
+        false-positive-sensitive gate the safe direction is the opposite: the
+        retained body's prose would be scanned as option tokens, which is
+        defect B all over again. Such a command cannot run as written anyway,
+        so there is nothing to pre-flight.
+      - **A `$( … )` in the MIDDLE of a `gh issue create`'s own arguments
+        truncates the segment**, so flags after it are not seen and simply go
+        unvalidated (`--repo $(cat r) --label bug` yields no labels → allow).
+        That is a recall loss, never a false block, and it is the deliberate
+        trade: the alternative — splicing the substitution's words INTO the
+        outer segment — makes `--repo` resolve to `cat`, i.e. it would query
+        the wrong repo's label list and false-block. Losing coverage beats
+        confidently answering with the wrong repo.
     """
     # Cheap exact early-out. `find_gh_subcommand` matches only a literal `gh`
     # token, so a command with no `gh` substring cannot produce a segment —
@@ -150,6 +169,8 @@ def issue_create_segments(command: str) -> list[list[str]] | None:
     # like `g=gh; $g issue create` is not resolved either way: the finder needs
     # a literal `gh` in command position.)
     if "gh" not in command:
+        return []
+    if any(not span.terminated for span in classify_heredocs(command)):
         return []
     text = strip_data_heredocs(command)
     text = normalize_command_substitutions(text)

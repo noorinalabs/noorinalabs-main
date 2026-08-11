@@ -519,6 +519,22 @@ class DataHeredocBodyIsNotAnOptionListTests(unittest.TestCase):
             result = hook.check(self._input(cmd))
         self.assertIsNone(result, f"unexpected block: {result}")
 
+    def test_unterminated_heredoc_validates_nothing(self):
+        """`strip_data_heredocs` keeps an unterminated body; we must not scan it.
+
+        Its own callers are bypass matchers, for which retaining the body is
+        the safe direction. For a false-positive-sensitive gate it is the
+        unsafe one — the retained prose becomes option tokens, which is
+        defect B again. The command cannot run as written, so there is
+        nothing to pre-flight.
+        """
+        cmd = (
+            "cat > /tmp/x <<'EOF'\n"
+            "gh issue create --label ghost\n"
+            "gh issue create --repo o/r --label bug"
+        )
+        self.assertEqual(hook.extract_labels(cmd), [])
+
     def test_an_interpreter_heredoc_body_is_still_scanned(self):
         """`bash <<'EOF'` is CODE — its `gh issue create` genuinely runs.
 
@@ -606,6 +622,22 @@ class PrecisionRetainedTests(unittest.TestCase):
         self.assertIsNotNone(result, "the $( ) shape is still ungated")
         self.assertEqual(result["decision"], "block")
         self.assertIn("not-a-real-label", result["reason"])
+
+    def test_mid_argument_substitution_loses_coverage_but_never_false_blocks(self):
+        """Pinning the deliberate recall/precision trade, so it is a decision.
+
+        A `$( … )` inside the gh invocation's OWN arguments truncates the
+        segment, so later flags go unvalidated. That is a silent allow, never
+        a block. The alternative — splicing the substitution's words into the
+        outer segment — makes `--repo` resolve to `cat` and would query the
+        wrong repo's label list, i.e. it would trade a recall loss for a
+        false BLOCK. This test exists so a future change that "fixes" the
+        recall has to confront the repo-resolution consequence.
+        """
+        cmd = "gh issue create --repo $(cat /tmp/r) --label not-a-real-label"
+        self.assertEqual(hook.extract_labels(cmd), [])
+        with mock.patch.object(hook, "get_existing_labels", return_value=WAVE29_REAL_LABELS):
+            self.assertIsNone(hook.check(self._input(cmd)))
 
     def test_missing_label_in_a_heredoc_carrying_command_still_blocks(self):
         """The heredoc fix must not blanket-disable the gate for such commands."""
