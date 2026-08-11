@@ -70,6 +70,30 @@ __all__ = [
 
 _FENCE_MARKERS = ("```", "~~~")
 
+# The prefix a fence opener is allowed to sit behind and still count as
+# "starting a line" (main#1359 merge-gate review round 3, MF5). CommonMark
+# permits up to 3 leading spaces of indentation before a fence marker (4+ is
+# INDENTED CODE BLOCK territory, a different construct); GitHub-flavoured
+# Markdown additionally permits one or more nested blockquote markers
+# (`>`, optionally followed by a single space, repeatable for nesting) ahead
+# of that indentation. Anything else preceding the marker on its line — any
+# non-blockquote, non-whitespace prose character — means the marker is NOT
+# an opener; see `strip_code_regions` for why that distinction is load-bearing.
+_FENCE_OPENER_PREFIX_RE = re.compile(r"^(?:>[ \t]?)*[ \t]{0,3}$")
+
+
+def _is_fence_opener_position(body: str, i: int) -> bool:
+    """True if position `i` in `body` is where a fence opener is allowed.
+
+    "Allowed" means everything on the current line before `i` is only
+    blockquote markers and/or up to 3 spaces/tabs of indentation — the
+    CommonMark + GFM shape `strip_code_regions` treats as "starts a line"
+    for fence-opening purposes. A line's start is `i == 0` or the character
+    immediately after the nearest preceding newline.
+    """
+    line_start = body.rfind("\n", 0, i) + 1
+    return bool(_FENCE_OPENER_PREFIX_RE.match(body[line_start:i]))
+
 
 def strip_code_regions(body: str) -> str:
     """Strip fenced code blocks (```…``` or ~~~…~~~) and inline code (`…`).
@@ -120,10 +144,21 @@ def strip_code_regions(body: str) -> str:
         # own verdict trailer. The CLOSING search below is intentionally NOT
         # similarly anchored — that is unchanged, pre-existing behaviour and
         # not part of this fix.
-        at_line_start = i == 0 or body[i - 1] == "\n"
+        #
+        # "STARTS A LINE" MEANS UP TO 3 SPACES AND/OR A BLOCKQUOTE PREFIX,
+        # NOT COLUMN 0 EXACTLY (round-3 review, MF5). The first cut of the
+        # MF4 guard (`i == 0 or body[i - 1] == "\n"`) demanded column 0
+        # exactly, which is STRICTER than CommonMark and opened a new,
+        # worse-direction hole: an indented or blockquoted fence — exactly
+        # what GitHub's "Quote reply" button emits, no adversary needed — was
+        # no longer recognised as a fence at all, so a fabricated field
+        # inside one was left unstripped and could out-scope a genuine
+        # trailer above it via last-match-wins. `_is_fence_opener_position`
+        # accepts the CommonMark/GFM shape; a marker behind any OTHER prefix
+        # (ordinary prose text) still correctly fails to qualify.
         fence = (
             next((m for m in _FENCE_MARKERS if body.startswith(m, i)), None)
-            if at_line_start
+            if _is_fence_opener_position(body, i)
             else None
         )
         if fence is not None:

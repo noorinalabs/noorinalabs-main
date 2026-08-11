@@ -190,6 +190,101 @@ class FenceOpenerMustStartALineTests(unittest.TestCase):
         self.assertIn("Requestor: foo", result)
 
 
+class FenceOpenerAllowsBlockquoteAndIndentTests(unittest.TestCase):
+    """main#1359 merge-gate review round 3 (Aino Virtanen / coordinator —
+    MF5): the MF4 fix (`i == 0 or body[i - 1] == "\\n"`) demanded column 0
+    EXACTLY. CommonMark allows a code-fence opener up to 3 leading spaces of
+    indentation, and (GFM) inside a blockquote container's `>` prefix. The
+    over-strict anchor rejected BOTH real-world shapes as fence openers,
+    which is a FAIL-OPEN, not the fail-closed direction MF4 fixed:
+
+    A body with the real trailer FIRST, followed by a blockquoted or
+    indented fenced block containing a FABRICATED `Requestor:` line, used to
+    have that fabrication safely stripped (base, and PR head before MF4).
+    After the MF4 fix alone, an indented or blockquoted fence opener is no
+    longer recognised as a fence at all, so it is NOT stripped, and
+    last-match-wins hands `extract_charter_field` the fabricated name
+    instead of the real one — a spoofed reviewer identity reaching the
+    merge gate.
+
+    Every assertion below FAILS at head `975be2a` (verified directly before
+    writing this fix: both the blockquoted and 2-space-indented shapes
+    return the fabricated `"Fake Impostor"` instead of `"Real Reviewer"`)
+    and passes once the fence-opener check accepts a blockquote/indent
+    prefix.
+    """
+
+    @staticmethod
+    def _spoofed_body(prefix: str) -> str:
+        fence = f"{prefix}```"
+        return (
+            "---\n"
+            "Requestor: Real Reviewer\n"
+            "Requestee: Santiago Ferreira\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none\n\n"
+            f"{fence}\n"
+            "Requestor: Fake Impostor\n"
+            f"{fence}\n"
+        )
+
+    def test_blockquoted_fence_below_the_trailer_is_still_stripped(self) -> None:
+        """GitHub's "Quote reply" button emits exactly this shape — no
+        adversary required, an ordinary reviewer quoting an earlier comment
+        produces it by accident."""
+        body = self._spoofed_body("> ")
+        self.assertEqual(extract_charter_field("Requestor", body), "Real Reviewer")
+
+    def test_two_space_indented_fence_below_the_trailer_is_still_stripped(self) -> None:
+        body = self._spoofed_body("  ")
+        self.assertEqual(extract_charter_field("Requestor", body), "Real Reviewer")
+
+    def test_three_space_indented_fence_below_the_trailer_is_still_stripped(self) -> None:
+        """CommonMark's indentation ceiling for a fence is 3 spaces — the
+        boundary case."""
+        body = self._spoofed_body("   ")
+        self.assertEqual(extract_charter_field("Requestor", body), "Real Reviewer")
+
+    def test_nested_blockquote_fence_below_the_trailer_is_still_stripped(self) -> None:
+        body = self._spoofed_body("> > ")
+        self.assertEqual(extract_charter_field("Requestor", body), "Real Reviewer")
+
+    def test_tilde_marker_blockquoted_below_the_trailer_is_still_stripped(self) -> None:
+        """Both markers, not just the backtick one — MF4's own fix applied
+        to both, this must too."""
+        body = (
+            "---\n"
+            "Requestor: Real Reviewer\n"
+            "RequestOrReplied: Approved\n\n"
+            "> ~~~\n"
+            "Requestor: Fake Impostor\n"
+            "> ~~~\n"
+        )
+        self.assertEqual(extract_charter_field("Requestor", body), "Real Reviewer")
+
+    def test_four_space_indent_still_not_a_fence_opener(self) -> None:
+        """Regression guard for the boundary: 4+ spaces is CommonMark's
+        INDENTED CODE BLOCK territory, not a fence, and is correctly still
+        not recognised — this is unchanged, pre-existing behaviour, not a
+        new hole opened by widening the fence-opener check."""
+        body = self._spoofed_body("    ")
+        self.assertEqual(extract_charter_field("Requestor", body), "Fake Impostor")
+
+    def test_mid_sentence_marker_is_still_prose_not_a_fence(self) -> None:
+        """Regression guard for MF4: a marker prefixed by ordinary prose
+        text (not blockquote markers or pure whitespace) must still fail to
+        qualify as a fence opener."""
+        body = (
+            "Point A discusses the fence marker once.\n\n"
+            "Point B discusses the fence marker a second time.\n\n"
+            "Point C discusses the fence marker a third time (odd count).\n\n"
+            "---\n"
+            "Requestor: Nino Kavtaradze\n"
+            "RequestOrReplied: Approved\n"
+        ).replace("the fence marker", "the ~~~ fence marker")
+        self.assertEqual(extract_charter_field("Requestor", body), "Nino Kavtaradze")
+
+
 class NormalizeVerdictTokenTests(unittest.TestCase):
     def test_casefolds(self) -> None:
         self.assertEqual(normalize_verdict_token("ChangesRequested"), "changesrequested")
