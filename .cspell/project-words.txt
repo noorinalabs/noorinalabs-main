@@ -258,3 +258,6 @@ keyspace
 
 # --- generic-prompt pending ledger archive/reset (main#1140) ---
 genericized
+
+# --- validate_labels shared-finder rewrite (main#1351) ---
+metacharacter

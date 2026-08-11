@@ -1,0 +1,19 @@
+cd /home/parameterization/code/noorinalabs-main
+cat > /tmp/claude-1000/-home-parameterization-code-noorinalabs-main/7df975c7-69e0-47a1-924a-56c4dba896fe/scratchpad/issue-envS.txt <<'BODY'
+## Summary
+
+`env -S '<interpreter> <opts>' '<payload>'` **bypasses the commit-identity gate**, allowing an identity-less `git commit`. Pre-existing on `main`; **not** introduced or worsened by PR #1193, and deliberately left unfixed there.
+
+## Measured (orchestrator, 2026-07-30)
+
+Payloads assembled at runtime and fed through the wrapper:
+
+    env -S bash -lc 'git commit -m x'
+    env -S sh -lc 'git commit -m x'
+
+Any write-up that quotes `bash -lc` inline hits the same shape a third time.
+BODY
+gh issue create --repo noorinalabs/noorinalabs-main \
+  --title "security(commit-identity): env split-string wrapper bypasses the gate — its value IS the command but is modelled as an opaque value flag" \
+  --body-file /tmp/claude-1000/-home-parameterization-code-noorinalabs-main/7df975c7-69e0-47a1-924a-56c4dba896fe/scratchpad/issue-envS.txt \
+  --label bug --label security --label tech-debt 2>&1 | tail -2

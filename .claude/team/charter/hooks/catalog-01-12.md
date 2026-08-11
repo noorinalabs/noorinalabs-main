@@ -39,7 +39,8 @@
 - **What it automates:** GitHub Label Hygiene — validates that all `--label` values exist in the repository before `gh issue create` runs.
 - **Augments:** The label hygiene section. The manual rule to run `gh label list` first is now enforced automatically.
 - **Manual steps remaining:** None — the hook fetches labels and validates automatically.
-- **Emergency override:** Remove the hook entry from `.claude/settings.json`. If `gh label list` is unavailable (network issue), the hook allows the command with a warning.
+- **Scope of the label scan (main#1351):** only the `gh issue create` **segment** is scanned. A `--label` (or a `-lc`, which shlex reads as `-l c`) in a heredoc body fed to `cat`/`tee`, in a sibling command, or inside another flag's value is not a label. `$( )` / backtick / subshell edges are normalized before tokenizing, so `url=$(gh issue create … --label meta-issue)` no longer yields `meta-issue)` — and, as a side effect, that shape is now gated at all (it previously slipped the whole-command guard silently).
+- **Emergency override:** Remove the hook entry from `.claude/settings.json`. Three conditions make the hook ALLOW rather than block, by design — a label pre-flight is best-effort and `gh` rejects a missing label server-side, whereas a false block stops valid work: (1) `gh label list` unavailable (network) → allow with a warning; (2) the command fails to tokenize, e.g. an unbalanced quote (#661) → allow silently; (3) an extracted label carries a shell metacharacter → allow with a systemMessage, since that is evidence the hook mis-parsed rather than evidence of a missing label (main#1351).
 
 ## Hook 6: Validate Lockfile Paths (`validate_lockfile_paths.py`)
 

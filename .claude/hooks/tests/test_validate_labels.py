@@ -11,6 +11,7 @@ Or:  python3 .claude/hooks/tests/test_validate_labels.py
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import _test_helpers  # noqa: E402,F401
@@ -137,11 +138,34 @@ class NegativeMatchLabelsTests(unittest.TestCase):
             [],
         )
 
-    def test_unrelated_command_returns_empty(self):
-        self.assertEqual(
-            hook.extract_labels("echo hello --label world"),
-            ["world"],  # extract_labels is pure; the gate in check() filters
-        )
+    def test_label_flag_on_a_non_gh_command_is_not_a_label(self):
+        """`echo … --label world` contributes nothing (contract change, main#1351).
+
+        This assertion is inverted from its original form, deliberately. It
+        used to read `["world"]` with the comment "extract_labels is pure; the
+        gate in check() filters" — i.e. extraction matched a `--label` flag
+        ANYWHERE in the command string and relied on a separate `check()`
+        guard to decide whether the command was even a `gh issue create`.
+
+        That split is the defect. The `check()` guard is whole-command
+        (`is_gh_subcommand` over the raw token stream), so it says yes when the
+        words `gh issue create` appear ANYWHERE — including a heredoc body —
+        and then extraction, also whole-command, harvests `-l`-shaped tokens
+        from wherever they happen to sit. Two of the three wave-29 false
+        blocks are exactly that composition: a `bash -lc` in an issue BODY
+        became a label named `c` on a command whose real gh invocation was
+        three lines further down.
+
+        Extraction is now scoped to the `gh issue create` SEGMENT, so a
+        `--label` outside it is not a label, and purity now means "a pure
+        function of the command" rather than "unaware of which command it is".
+        """
+        self.assertEqual(hook.extract_labels("echo hello --label world"), [])
+
+    def test_label_flag_on_a_sibling_command_in_the_same_string(self):
+        """A real `--label` on a DIFFERENT gh subcommand must not leak in."""
+        cmd = "gh issue edit 7 --add-label stale && gh issue create --label bug"
+        self.assertEqual(hook.extract_labels(cmd), ["bug"])
 
 
 class TokenizeFailureFallbackTests(unittest.TestCase):
@@ -326,6 +350,277 @@ class CheckEndToEndTests(unittest.TestCase):
             result = hook.check(self._input("gh issue create --label any"))
         self.assertIsNotNone(result)
         self.assertEqual(result["decision"], "allow")
+
+
+# ---------------------------------------------------------------------------
+# Wave-29 live false-positive corpus (main#1351)
+# ---------------------------------------------------------------------------
+#
+# These are not invented shapes. They are the THREE `validate_labels` blocks
+# recorded in `.claude/annunaki/errors.jsonl` during wave 29 — the hook's
+# entire block population for the wave. All three were false positives: every
+# label the commands actually passed (`bug`, `security`, `tech-debt`,
+# `process`, `meta-issue`, `phase-10`) existed in the repo at the time
+# (verified 2026-08-10 via `gh label list`). Precision was 0/3.
+#
+# The first one blocked the filing of #1150 — the umbrella issue about hooks
+# hand-rolling command parsing, which names THIS hook as un-audited. A gate at
+# zero precision that also blocks the report of its own defect class is the
+# cleanest possible statement of the problem, so it is pinned here rather than
+# paraphrased.
+#
+# PROVENANCE, precisely. `annunaki_log` truncates the `command` it records at
+# 500 characters. The leading bytes of each fixture below are VERBATIM from
+# that record. Where the record is cut off, the continuation is reconstructed
+# from two independent recorded sources, not from imagination:
+#
+#   - the SUCCESSFUL RETRY of the same filing, captured in
+#     `.claude/annunaki/traces.jsonl` roughly a minute after each block, which
+#     supplies the exact `gh issue create` flag tail and label set;
+#   - the recorded BLOCK MESSAGE itself, which pins how many `-lc` occurrences
+#     the elided heredoc body contained and in what shape — `c, c, c` means
+#     three bare `bash -lc`; `c, c, c\`` means the third was inside a markdown
+#     code span, so shlex handed the tokenizer `-lc\``.
+#
+# Each fixture is asserted to reproduce its recorded block message under the
+# PRE-FIX implementation (that check is what makes them regression tests
+# rather than decoration; see the PR body for the captured pre-fix output) and
+# to be allowed under the current one.
+
+# The three commands live as VERBATIM BYTES in `tests/fixtures/`, matching the
+# `real_*` harvested-fixture convention this suite already uses. They are files
+# rather than string literals for two reasons: a recorded command must not be
+# reflowed to satisfy a line-length linter, and a reader comparing a fixture
+# against the log is comparing bytes, not an escaped Python literal.
+#
+#   real_label_block_w29a_dollar_paren.txt        recorded block: meta-issue)
+#   real_label_block_w29b_heredoc_lc_backtick.txt recorded block: c, c, c`
+#   real_label_block_w29c_heredoc_lc.txt          recorded block: c, c, c
+
+_FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+def _wave29(name: str) -> str:
+    """Load a harvested command, refusing to run against a dead instrument."""
+    body = (_FIXTURES / f"real_label_block_{name}.txt").read_text()
+    if "gh issue create" not in body:
+        raise AssertionError(f"fixture {name} lost its gh invocation — the instrument is dead")
+    return body
+
+
+# Capturing the new issue's URL into a variable is the ordinary "create it,
+# then add it to the board" idiom, so W29-A fires on a routine shape.
+W29_A_DOLLAR_PAREN = _wave29("w29a_dollar_paren")
+
+# W29-B's heredoc body is a write-up ABOUT shell parsing, so it quotes
+# `bash -lc` — twice bare and once inside a code span, which is why its third
+# minted label was `` c` ``. The gate is hardest on the work that hardens the
+# gates.
+W29_B_HEREDOC_DASH_LC_BACKTICK = _wave29("w29b_heredoc_lc_backtick")
+
+W29_C_HEREDOC_DASH_LC = _wave29("w29c_heredoc_lc")
+
+# Every label the three commands really passed. All existed at block time.
+WAVE29_REAL_LABELS = {"bug", "security", "tech-debt", "process", "meta-issue", "phase-10"}
+
+
+class Wave29FalsePositiveCorpusTests(unittest.TestCase):
+    """The hook's whole wave-29 block population, all three of them false.
+
+    Precision before: 0/3. After: 3/3. The true-positive guard rails live in
+    `PrecisionRetainedTests` — a gate that stops false-blocking by stopping
+    blocking has not been fixed, it has been removed.
+    """
+
+    _input = staticmethod(_test_helpers.bash_input)
+
+    def _assert_allowed(self, command):
+        with mock.patch.object(hook, "get_existing_labels", return_value=WAVE29_REAL_LABELS):
+            result = hook.check(self._input(command))
+        self.assertIsNone(result, f"unexpected block: {result}")
+
+    def test_w29a_dollar_paren_extracts_meta_issue_without_the_paren(self):
+        """Recorded block demanded a label named `meta-issue)`."""
+        labels = hook.extract_labels(W29_A_DOLLAR_PAREN)
+        self.assertEqual(labels, ["tech-debt", "process", "meta-issue"])
+        self.assertNotIn("meta-issue)", labels)
+
+    def test_w29a_does_not_block_the_filing_of_1150(self):
+        self._assert_allowed(W29_A_DOLLAR_PAREN)
+
+    def test_w29b_heredoc_dash_lc_contributes_no_labels(self):
+        """Recorded block demanded labels `c`, `c`, `c\\``."""
+        labels = hook.extract_labels(W29_B_HEREDOC_DASH_LC_BACKTICK)
+        self.assertEqual(labels, ["bug", "security", "tech-debt"])
+        self.assertNotIn("c", labels)
+        self.assertNotIn("c`", labels)
+
+    def test_w29b_does_not_block(self):
+        self._assert_allowed(W29_B_HEREDOC_DASH_LC_BACKTICK)
+
+    def test_w29c_heredoc_dash_lc_contributes_no_labels(self):
+        """Recorded block demanded labels `c`, `c`, `c`."""
+        labels = hook.extract_labels(W29_C_HEREDOC_DASH_LC)
+        self.assertEqual(labels, ["tech-debt", "process", "phase-10"])
+        self.assertNotIn("c", labels)
+
+    def test_w29c_does_not_block(self):
+        self._assert_allowed(W29_C_HEREDOC_DASH_LC)
+
+    def test_no_extracted_label_carries_a_shell_metacharacter(self):
+        """Acceptance criterion 4, across the whole corpus.
+
+        A label token holding a shell metacharacter can never reach the
+        `gh label create "<token>"` remediation line — the message that, in
+        W29-A, would have had the user mint a junk label named `meta-issue)`.
+        """
+        for name, command in (
+            ("W29-A", W29_A_DOLLAR_PAREN),
+            ("W29-B", W29_B_HEREDOC_DASH_LC_BACKTICK),
+            ("W29-C", W29_C_HEREDOC_DASH_LC),
+        ):
+            with self.subTest(case=name):
+                for label in hook.extract_labels(command):
+                    self.assertFalse(
+                        hook._SHELL_METACHARS.intersection(label),
+                        f"{name}: metacharacter survived into label {label!r}",
+                    )
+
+
+class DataHeredocBodyIsNotAnOptionListTests(unittest.TestCase):
+    """#1174's code-vs-data class, arriving in this hook (main#1351 defect B).
+
+    A heredoc body fed to `cat`/`tee` is DATA. It routinely contains prose
+    about gh commands — that is what a tech-debt write-up IS — and none of it
+    is an option list for the command that follows.
+    """
+
+    _input = staticmethod(_test_helpers.bash_input)
+
+    def test_documented_gh_issue_create_in_a_data_body_does_not_leak(self):
+        cmd = (
+            "cat > /tmp/note.md <<'EOF'\n"
+            "Reproduce with:\n"
+            "\n"
+            "    gh issue create --label ghost-label --title x\n"
+            "EOF\n"
+            "gh issue create --repo o/r --body-file /tmp/note.md --label bug"
+        )
+        self.assertEqual(hook.extract_labels(cmd), ["bug"])
+
+    def test_documented_gh_issue_create_in_a_data_body_does_not_block(self):
+        cmd = (
+            "cat > /tmp/note.md <<'EOF'\n"
+            "    gh issue create --label ghost-label\n"
+            "EOF\n"
+            "gh issue create --repo o/r --body-file /tmp/note.md --label bug"
+        )
+        with mock.patch.object(hook, "get_existing_labels", return_value={"bug"}):
+            result = hook.check(self._input(cmd))
+        self.assertIsNone(result, f"unexpected block: {result}")
+
+    def test_an_interpreter_heredoc_body_is_still_scanned(self):
+        """`bash <<'EOF'` is CODE — its `gh issue create` genuinely runs.
+
+        The complement of the test above, and the reason this uses
+        `strip_DATA_heredocs` rather than `strip_heredocs`: dropping every
+        body would blind the gate to a real invocation.
+        """
+        cmd = "bash <<'EOF'\ngh issue create --repo o/r --label really-not-a-label\nEOF"
+        self.assertEqual(hook.extract_labels(cmd), ["really-not-a-label"])
+
+
+class ShellMetacharGuardTests(unittest.TestCase):
+    """Layer 3: a metacharacter in a label means WE mis-parsed, not that the
+    label is missing. Skip validation, and say so — a gate that quietly stops
+    gating is this hook's own history."""
+
+    _input = staticmethod(_test_helpers.bash_input)
+
+    def test_metachar_label_allows_with_a_visible_note(self):
+        cmd = "gh issue create --repo o/r --label 'meta-issue)'"
+        with mock.patch.object(hook, "get_existing_labels", return_value={"meta-issue"}):
+            result = hook.check(self._input(cmd))
+        self.assertIsNotNone(result)
+        self.assertEqual(result["decision"], "allow")
+        self.assertIn("skipped label validation", result["systemMessage"])
+        self.assertIn("meta-issue)", result["systemMessage"])
+
+    def test_metachar_label_never_reaches_a_create_remediation(self):
+        cmd = "gh issue create --repo o/r --label 'meta-issue)'"
+        with mock.patch.object(hook, "get_existing_labels", return_value={"meta-issue"}):
+            result = hook.check(self._input(cmd))
+        self.assertNotIn("gh label create", result.get("systemMessage", ""))
+        self.assertNotIn("reason", result)
+
+    def test_guard_empties_the_whole_batch_not_just_the_bad_token(self):
+        """One garbage token discredits the parse, not merely itself."""
+        self.assertEqual(hook.extract_labels("gh issue create --label bug --label 'x)'"), [])
+
+    def test_a_label_with_spaces_is_not_suspect(self):
+        """GitHub ships `good first issue`; spaces are legal, metachars are not."""
+        self.assertEqual(
+            hook.extract_labels("gh issue create --label 'good first issue'"),
+            ["good first issue"],
+        )
+
+
+class PrecisionRetainedTests(unittest.TestCase):
+    """The gate must keep doing its job. Every false positive removed above is
+    only a fix if a genuinely missing label still blocks."""
+
+    _input = staticmethod(_test_helpers.bash_input)
+
+    def test_genuinely_missing_label_still_blocks(self):
+        with mock.patch.object(hook, "get_existing_labels", return_value=WAVE29_REAL_LABELS):
+            result = hook.check(
+                self._input(
+                    "gh issue create --repo noorinalabs/noorinalabs-main "
+                    '--title "t" --body "b" --label definitely-not-a-real-label'
+                )
+            )
+        self.assertIsNotNone(result, "the gate stopped gating")
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("definitely-not-a-real-label", result["reason"])
+
+    def test_missing_label_alongside_real_ones_still_blocks(self):
+        with mock.patch.object(hook, "get_existing_labels", return_value=WAVE29_REAL_LABELS):
+            result = hook.check(
+                self._input("gh issue create --label bug --label nope --label tech-debt")
+            )
+        self.assertIsNotNone(result)
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("nope", result["reason"])
+
+    def test_missing_label_inside_dollar_paren_now_blocks(self):
+        """A true positive the PRE-FIX gate silently missed.
+
+        `url=$(gh issue create …)` with no wrapper word after the paren
+        tokenizes with the head glued (`url=$(gh`), so the old whole-command
+        `is_gh_subcommand` guard never matched and `check()` returned early —
+        no validation at all. Scoping fixes precision in BOTH directions:
+        the $( ) shape is now gated for the first time.
+        """
+        with mock.patch.object(hook, "get_existing_labels", return_value=WAVE29_REAL_LABELS):
+            result = hook.check(self._input("url=$(gh issue create --label not-a-real-label)"))
+        self.assertIsNotNone(result, "the $( ) shape is still ungated")
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("not-a-real-label", result["reason"])
+
+    def test_missing_label_in_a_heredoc_carrying_command_still_blocks(self):
+        """The heredoc fix must not blanket-disable the gate for such commands."""
+        cmd = (
+            "cat > /tmp/note.md <<'EOF'\n"
+            "prose mentioning bash -lc and --label ghost\n"
+            "EOF\n"
+            "gh issue create --repo o/r --body-file /tmp/note.md --label not-a-real-label"
+        )
+        with mock.patch.object(hook, "get_existing_labels", return_value=WAVE29_REAL_LABELS):
+            result = hook.check(self._input(cmd))
+        self.assertIsNotNone(result, "the gate stopped gating on heredoc commands")
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("not-a-real-label", result["reason"])
+        self.assertNotIn("ghost", result["reason"])
 
 
 if __name__ == "__main__":
