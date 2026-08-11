@@ -271,7 +271,9 @@ from charter_trailer import (
     branch_author_first_initial,
     extract_branch_author_lastname,
     extract_charter_field,
+    is_approved,
     is_branch_author,
+    is_verdict_direction,
     is_wave_branch,
     name_first_initial,
     name_lastname,
@@ -1399,47 +1401,48 @@ class CommentReviewResult:
         self.undetermined: str = ""  # non-empty ⇒ scan incomplete, caller must fail closed
 
 
-# Only these RequestOrReplied values represent actual review verdicts that
-# REQUIRE the TechDebt attestation line. Request / Reply comments are
-# process metadata (review requests, author replies) and do NOT require it.
-# Issue #147: the prior implementation flagged any Requestee+RequestOrReplied
-# comment, which over-enforced TechDebt on Request/Replied traffic.
+# The verdict-direction questions have ONE implementation, in
+# `charter_trailer` (main#1359 extracted the vocabulary, main#1371 the
+# predicates). These module-level ALIASES keep the historical private names —
+# and their existing test surface, plus the read-back recipe the charter
+# prescribes (`agents/orchestration-model.md`, memory
+# `feedback_pr_review_verdict_format` §7, both of which import `_is_approved`
+# by name) — while making a second, drifting copy impossible. Do NOT
+# reimplement them here.
 #
-# Includes both the canonical `ChangesRequested` (one word, charter-line-14)
-# and the spaced/short variants observed in practice.
-_VERDICT_REQUIRING_TECH_DEBT = {
-    "approved",
-    "changes requested",
-    "changesrequested",
-    "changes",
-}
-
-
-def _is_verdict(value: str) -> bool:
-    """Return True if a RequestOrReplied value is an actual review verdict.
-
-    Comparison is case-insensitive and whitespace-trimmed. Accepts the
-    canonical `ChangesRequested` (per charter line 14), the spaced
-    `Changes Requested` form, and the shorter `Changes` variant noted in
-    charter discussion as seen in practice. Does NOT accept Request (a
-    review request) or Reply / Replied (an author's reply).
-    """
-    normalized = value.strip().lower()
-    # Strip trailing markdown markers and stray punctuation
-    normalized = normalized.rstrip("*").strip()
-    return normalized in _VERDICT_REQUIRING_TECH_DEBT
-
-
-def _is_approved(value: str) -> bool:
-    """Return True if a RequestOrReplied value is specifically Approved.
-
-    The 2-reviewer rule (charter line 36) counts distinct Requestor values
-    across `Approved` comments only — NOT ChangesRequested. A
-    ChangesRequested comment is a verdict (TechDebt required) but does not
-    contribute to the 2-reviewer threshold.
-    """
-    normalized = value.strip().lower().rstrip("*").strip()
-    return normalized == "approved"
+# What they replace:
+#   `_VERDICT_REQUIRING_TECH_DEBT` — a frozenset of four literal spellings,
+#       matched by lowercasing and `rstrip("*")`ing the WHOLE value, then
+#       testing exact membership. Issue #147 introduced it so TechDebt was
+#       demanded on verdicts (Approved / ChangesRequested) and not on
+#       Request/Reply process traffic; that scope is unchanged.
+#   `_is_verdict` / `_is_approved` — the two readers of it.
+#
+# THIS WIDENS WHAT THE MERGE GATE COUNTS, in both directions, because
+# `charter_trailer.verdict_kind` classifies the first token after stripping
+# non-alphanumerics rather than exact-matching the whole value. Reachable
+# end-to-end (these values survive `extract_charter_field`'s own bold and
+# trailing-parenthetical stripping and arrive here intact):
+#
+#   `Approved!`, `Approved with nits`, `Approved - see below`
+#       were NOT verdicts and NOT approvals; now both. **This enlarges the
+#       2-reviewer approver set** — the one loosening in main#1371, called
+#       out here rather than left to be discovered. The alternative is the
+#       main#932 shape: `validate_review_comment_format` has always matched
+#       these on the first token, so the reviewer is told their verdict is
+#       well-formed while this hook counts it as zero reviews.
+#   `Changes  Requested` (double space), `**Changes** Requested`,
+#   `Changes needed`, `ChangesRequested.`
+#       were NOT verdicts; now blocking verdicts requiring TechDebt. Strictly
+#       stricter, and the same narrow-capture defect main#1347/#1357 fixed in
+#       the sibling counters.
+#
+# A hedge that is not an approval is unaffected: `Not Approved` does not lead
+# with the token and classifies as nothing at all, before and after. See
+# `charter_trailer` § "The questions, as named predicates" for the bare-
+# `Changes` ruling and `test_verdict_direction_agreement.py` for the matrix.
+_is_verdict = is_verdict_direction
+_is_approved = is_approved
 
 
 # The charter trailer convention has ONE definition, shared with

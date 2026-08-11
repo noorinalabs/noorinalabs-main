@@ -74,16 +74,23 @@ _DEFAULT_STATUS = wave_state.DEFAULT_STATUS_PATH
 # (now ``charter_trailer.verdict_kind``, main#1359 — that private copy is
 # deleted), just reimplemented here as a jq regex instead of a Python one.
 # ``Changes(\s*Requested)?\b`` accepts all three spellings — the union of
-# what the org's own PR templates and hooks actually produce, NOT a claim
-# that every existing consumer already agrees on all three:
-# ``validate_pr_review.py``'s ``_VERDICT_REQUIRING_TECH_DEBT`` (~line 1410)
-# and ``charter_trailer.verdict_kind(..., include_bare_changes=True)`` (the
-# argument ``trust_signals.py`` now passes at its one call site) both accept
-# the bare short form, but ``validate_review_comment_format.py``'s
-# ``_VERDICT_DIRECTIONS`` (~line 664) deliberately excludes it (see main#1359
-# — the sibling consumers disagreeing with each other is itself evidence for
-# a single shared vocabulary owner, not a reason to assume copies stay in
-# sync). This counter counts every ChangesRequested verdict regardless of
+# what the org's own PR templates and hooks actually produce. As of main#1371
+# that union is also what every Python consumer answers: the four private
+# copies (``validate_pr_review._VERDICT_REQUIRING_TECH_DEBT``,
+# ``validate_review_comment_format._VERDICT_DIRECTIONS`` and their readers)
+# are gone, replaced by ``charter_trailer.is_verdict_direction`` /
+# ``.is_changes_requested`` / ``.is_approved`` over the one
+# ``charter_trailer.verdict_kind`` classifier, and the bare short form is now
+# INCLUDED everywhere (``_VERDICT_DIRECTIONS`` had excluded it — the sibling
+# consumers disagreeing with each other was itself the evidence for a single
+# shared vocabulary owner, not a reason to assume copies stay in sync).
+#
+# THIS JQ REGEX IS THE LAST NON-PYTHON SPELLING OF THE SAME QUESTION and is
+# NOT consolidated: it runs inside a ``jq`` filter, so it cannot call the
+# shared predicate. It is a genuine fifth expression of the vocabulary, kept
+# deliberately and pinned by ``test_changes_requested_regex_variants_via_real_jq``
+# — a Python rewrite of this counter is the only way to remove it (not filed;
+# reported on main#1371). This counter counts every ChangesRequested verdict regardless of
 # form, so it takes the wider set. The optional group matches "Requested"
 # immediately after "Changes" (no space — the unspaced form) or after a
 # space (the spaced form), and is skippable entirely for the bare short

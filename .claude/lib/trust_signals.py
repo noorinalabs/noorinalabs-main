@@ -420,10 +420,12 @@ def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
         # — pinned by `UnterminatedFenceDirectionChangeTests` in
         # `test_trust_signals.py` so it is not rediscovered as a surprise.
         scanned = charter_trailer.strip_code_regions(body)
-        is_changes_requested = (
-            charter_trailer.verdict_kind(verdict_str, include_bare_changes=True)
-            == "changesrequested"
-        )
+        # main#1371: the named shared predicate, not a hand-written comparison
+        # against the classifier's return value. The comparison was correct,
+        # but it was the same expression written out at two sites in this file
+        # and at four more in the two hooks — which is how the vocabulary came
+        # to have four implementations in the first place.
+        is_changes_requested = charter_trailer.is_changes_requested(verdict_str)
         is_false_positive = is_changes_requested and bool(_RETRACTION_RE.search(scanned))
         # `OrchestratorCaused:` is gated identically and for the same reason
         # (main#1366): there is no rework round to reattribute unless THIS
@@ -443,18 +445,21 @@ def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
     return out
 
 
-def _is_changes_requested(verdict: str | None) -> bool:
-    """True if *verdict* (a captured ``RequestOrReplied`` value) is ChangesRequested.
-
-    #1347: routes through :func:`charter_trailer.verdict_kind` so the three
-    spelling variants (``ChangesRequested`` / ``Changes Requested`` /
-    ``Changes``) all classify identically — the previous
-    ``verdict.lower() == "changesrequested"`` exact-match silently dropped
-    the spaced form because the capturing regex used to stop at the first
-    space. ``include_bare_changes=True`` preserves this module's original
-    (pre-main#1359) behaviour of counting bare ``Changes`` (main#1359).
-    """
-    return charter_trailer.verdict_kind(verdict, include_bare_changes=True) == "changesrequested"
+# The "is this comment BLOCKING?" question, asked once org-wide
+# (`charter_trailer.is_changes_requested`, main#1371) and merely re-exported
+# under this module's historical private name for its existing callers and
+# test surface.
+#
+# #1347: routing through the shared classifier is what makes the three
+# spelling variants (``ChangesRequested`` / ``Changes Requested`` /
+# ``Changes``) classify identically — the pre-#1347 ``verdict.lower() ==
+# "changesrequested"`` exact match silently dropped the spaced form because
+# the capturing regex used to stop at the first space. main#1359 moved the
+# classifier to `charter_trailer`; main#1371 replaced the hand-written
+# ``verdict_kind(...) == "changesrequested"`` comparison with the named
+# predicate, which defaults to ``include_bare_changes=True`` and so preserves
+# this module's original behaviour of counting bare ``Changes``.
+_is_changes_requested = charter_trailer.is_changes_requested
 
 
 def _pr_comment_bodies(repo: str, number: int) -> list[str]:

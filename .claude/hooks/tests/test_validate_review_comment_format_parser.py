@@ -215,13 +215,29 @@ class DirectionVerdictHelperTests(unittest.TestCase):
     def test_unknown_not_verdict(self):
         self.assertFalse(hook._direction_is_verdict(self._body("Asdf")))
 
-    def test_bare_changes_not_verdict(self):
-        """`Changes` alone (without `Requested`) is NOT a verdict — must NOT match.
+    def test_bare_changes_is_a_verdict(self):
+        """`Changes` alone IS a verdict direction as of main#1371 — INVERTED.
 
-        Defensive guard: tolerating the bare prefix would over-narrow and
-        leave legitimate non-verdict comments mis-classified as verdicts.
+        This assertion read `assertFalse` from #378 until main#1371, pinning
+        the retired `_VERDICT_DIRECTIONS` exclusion of the bare spelling on
+        the stated grounds that "tolerating the bare prefix would over-narrow
+        and leave legitimate non-verdict comments mis-classified as verdicts".
+
+        That reasoning does not survive contact with the consumer. This hook
+        does not adjudicate whether a verdict word is well-formed — its own
+        module docstring hands that to `validate_pr_review` and fails OPEN on
+        anything it does not recognize — and `validate_pr_review._is_verdict`
+        has counted bare `Changes` as a verdict since #147. So the exclusion
+        made the gate's grammar narrower than the consumer's (main#1150) and
+        the swap heuristic simply never ran on a bare-`Changes` verdict, while
+        `_direction_is_changes_requested` (main#1363) called the same comment
+        blocking. One comment, two answers, in one file.
+
+        Flipping it can only ADD blocks, never remove them: the swap check now
+        applies to a direction it previously skipped. See
+        `test_verdict_direction_agreement.py` for the cross-consumer matrix.
         """
-        self.assertFalse(hook._direction_is_verdict(self._body("Changes")))
+        self.assertTrue(hook._direction_is_verdict(self._body("Changes")))
 
     def test_empty_value_not_verdict(self):
         self.assertFalse(hook._direction_is_verdict("Requestor: A\nRequestOrReplied: "))
