@@ -125,6 +125,13 @@ class ReviewState:
     # carried so the report can NAME them. A stale verdict that is silently
     # subtracted reads to an operator as a broken tool (#950 diagnostic lesson).
     stale_verdicts: list[dict] = dataclasses.field(default_factory=list)
+    # Verdicts COUNTED toward `distinct_reviewer_count` but cast within
+    # `gate.NEAR_STALE_WINDOW_SECONDS` of T_content (#1272) — dicts of
+    # reviewer/verdict/created_at/delta_seconds/source, same shape family as
+    # `stale_verdicts`. Never subtracted from the count; carried purely so the
+    # report can name a verdict that is current by #950 but close enough to
+    # the head move that the reviewer may have started before it landed.
+    near_window_verdicts: list[dict] = dataclasses.field(default_factory=list)
     # Which comment-scan mode produced `comment_reviewers` (#1206) — one of the
     # gate's COMMENT_SCAN_* values. Carried so the report can distinguish "the
     # thread was read and nobody approved" from "the thread was never read",
@@ -264,6 +271,25 @@ def compute_review_state(pr_number: str, repo: str | None = None) -> ReviewState
         for sv in svs
     ]
 
+    # Near-window verdicts (#1272), same tag-by-source flattening as
+    # `stale_verdicts` immediately above — these are COUNTED, never subtracted,
+    # so they are carried as a separate list rather than folded into
+    # `stale_verdicts`, which would misreport them as excluded.
+    near_window_verdicts = [
+        {
+            "reviewer": nw.reviewer,
+            "verdict": nw.verdict,
+            "created_at": nw.created_at,
+            "delta_seconds": nw.delta_seconds,
+            "source": source,
+        }
+        for source, nws in (
+            ("comment", verdicts.near_window_verdicts_comment),
+            ("formal", verdicts.near_window_verdicts_formal),
+        )
+        for nw in nws
+    ]
+
     return ReviewState(
         pr_number=str(number),
         repo=repo,
@@ -280,6 +306,7 @@ def compute_review_state(pr_number: str, repo: str | None = None) -> ReviewState
         content_sha=verdicts.content_sha,
         content_ts=verdicts.content_ts.isoformat() if verdicts.content_ts else None,
         stale_verdicts=stale_verdicts,
+        near_window_verdicts=near_window_verdicts,
         comment_scan=verdicts.comment_scan,
         commit_authors=[identity.display for identity in verdicts.commit_author_identities],
     )
@@ -431,6 +458,34 @@ def _render_text(state: ReviewState) -> str:
             "  stale verdicts: NOT MEASURED for comment verdicts — the comment scan did "
             "not run (see above); only formal GitHub reviews were examined, and none of "
             "those were stale."
+        )
+
+    # Near-window disclosure (#1272). Distinct from the STALE block above on
+    # purpose: these verdicts are COUNTED, not excluded — #950's timestamp
+    # ordering rule is unchanged — but a verdict cast this close to T_content
+    # may have been written against the PREVIOUS head, if the reviewer began
+    # reading before the push landed. Named rather than silently folded into
+    # an ordinary "current" verdict.
+    if state.near_window_verdicts:
+        lines.append(
+            f"  NEAR-WINDOW verdicts (counted, but close to T_content): "
+            f"{len(state.near_window_verdicts)}"
+        )
+        for nw in sorted(state.near_window_verdicts, key=lambda v: v.get("created_at") or ""):
+            cast_at = nw.get("created_at") or "<no timestamp>"
+            delta = nw.get("delta_seconds")
+            delta_str = f"+{delta:.0f}s" if isinstance(delta, (int, float)) else "+?s"
+            lines.append(
+                f"    {nw.get('reviewer', '?')} — {nw.get('verdict', '?')}"
+                f" [{nw.get('source', '?')}] cast {cast_at}"
+                f" ({delta_str} after T_content) — COUNTS toward the threshold"
+            )
+        lines.append(
+            "    A verdict cast shortly AFTER the branch's latest non-merge commit is "
+            "CURRENT by #950 and still counts. But timestamp ordering alone cannot prove "
+            "the reviewer read that commit — they may have started before it landed. "
+            "This is not a defect; confirm with the reviewer that they read the current "
+            "head if it matters here (#1272)."
         )
 
     lines.append(

@@ -130,6 +130,37 @@ Verdict staleness — content binding (resolves #950):
   which is the same defect class (`a gate derived from an artifact it does not
   bind to`) that produced #950 in the first place.
 
+Near-window disclosure (resolves #1272):
+  The LIMITATION above is not hypothetical: `T_content` is a proxy, and a
+  verdict cast a few seconds AFTER it can still describe the code BEFORE it,
+  when the reviewer was mid-review while the head moved underneath them.
+  Live case (noorinalabs-main#1263, 2026-08-03): reviewer begins reviewing
+  head `2c113e7`; orchestrator pushes `60faad1` at 03:31:36Z; reviewer posts
+  `Approved` at 03:32:52Z — 76 seconds later, having read `2c113e7`. The gate
+  counted it as an ordinary current approval; nothing distinguished it from a
+  verdict that actually reviewed `60faad1`.
+
+  Considered and REJECTED: a `ReviewedHead: <sha>` trailer field, which would
+  let the gate compare SHAs instead of clocks. Rejected because it would be a
+  FIFTH mandatory trailer field on a block that already fails OPEN on every
+  near-miss (`feedback_pr_review_verdict_format`) — a missing or mistyped
+  value would silently UN-COUNT (or worse, silently admit) an otherwise valid
+  verdict. That failure mode is worse than the bug it would fix, and shipping
+  it would be the exact wave-30 defect class (a mechanism that reports success
+  while incapable of the outcome it describes), newly minted.
+
+  What ships instead: `NEAR_STALE_WINDOW_SECONDS` (below) marks a verdict
+  CURRENT by #950 (it still counts — the threshold rule does not change) but
+  cast within that window of `T_content` as a `NearWindowVerdict`. It is
+  never excluded from the count and never blocks a merge; it is surfaced —
+  in `check()`'s allow-path advisory (`_gate_allow_advisories`, mirroring the
+  #1211 comment-scan disclosure) and in `pr_review_state.py`'s report — so an
+  operator sees "this counted approval may have reviewed the previous head"
+  instead of a silent, indistinguishable pass. It converts an invisible
+  assumption into a visible one; it does not, and cannot, resolve the
+  ambiguity itself. Same LIMITATION as above: no timestamp proves what was
+  read, only when a comment was posted.
+
 Reviewer dedup key:
   The reviewer set is keyed on the FULL reviewer name (lowercased), not on
   the lastname. Two distinct reviewers with the same lastname (e.g.,
@@ -1366,6 +1397,47 @@ class StaleVerdict:
         self.created_at = created_at  # raw ISO timestamp, or "" if absent
 
 
+# The near-miss window for T_content staleness (#1272). A verdict cast within
+# this many seconds AFTER T_content still COUNTS — #950's rule is unchanged,
+# this is not a second staleness threshold — but is also recorded as a
+# `NearWindowVerdict` because timestamp ordering alone cannot prove the
+# reviewer's own copy was the post-push one (see "Near-window disclosure"
+# above). 5 minutes is a judgment call, not a measured constant: the live
+# case that motivated this (noorinalabs-main#1263) was 76 seconds; 5 minutes
+# gives headroom for "the reviewer was already mid-review" without flagging
+# every ordinary review that happens to land shortly after a routine push.
+NEAR_STALE_WINDOW_SECONDS = 300
+
+
+class NearWindowVerdict:
+    """A verdict CURRENT by T_content but cast within `NEAR_STALE_WINDOW_SECONDS`
+    of it (#1272).
+
+    #950 catches a verdict cast BEFORE T_content — proof the reviewer's own
+    copy predates the code being merged. It cannot catch the mirror case: a
+    verdict cast shortly AFTER T_content by a reviewer who started reading
+    before the push landed and had no way to know the head had moved.
+    Timestamp ordering alone cannot distinguish "read the current head,
+    posted quickly" from "read the previous head, posted moments after it
+    changed underneath them" — both produce a `created_at`/`submittedAt` a
+    few seconds after `T_content`.
+
+    This class does not, and cannot, resolve that ambiguity — nothing can,
+    short of binding the verdict to the sha the reviewer actually read
+    (exactly the gap the "Near-window disclosure" docstring section names).
+    It NAMES the ambiguity so a report can surface it, which is the whole of
+    what it is for. NEVER a reason to exclude a verdict from the reviewer
+    count — that is what `StaleVerdict` is for, and the two are disjoint per
+    verdict (see `check_comment_reviews` / `partition_formal_reviewers`).
+    """
+
+    def __init__(self, reviewer: str, verdict: str, created_at: str, delta_seconds: float) -> None:
+        self.reviewer = reviewer  # Requestor / GitHub login, as written
+        self.verdict = verdict  # the RequestOrReplied value / review state, as written
+        self.created_at = created_at  # raw ISO timestamp
+        self.delta_seconds = delta_seconds  # seconds after T_content the verdict was cast
+
+
 class CommentReviewResult:
     """Result of checking PR comments for charter-format reviews.
 
@@ -1396,6 +1468,10 @@ class CommentReviewResult:
         # silently indistinguishable from "no tech debt" (`TechDebt: none`).
         self.tech_debt_unparseable: list[tuple[str, str]] = []
         self.stale_verdicts: list[StaleVerdict] = []  # verdicts predating T_content (#950)
+        # CURRENT verdicts cast within NEAR_STALE_WINDOW_SECONDS of T_content (#1272)
+        # — counted, never excluded, but named so the report can flag the possible
+        # mid-review head move. Disjoint from `stale_verdicts`.
+        self.near_window_verdicts: list[NearWindowVerdict] = []
         self.undetermined: str = ""  # non-empty ⇒ scan incomplete, caller must fail closed
 
 
@@ -1604,6 +1680,21 @@ def check_comment_reviews(
                         )
                     )
                     continue
+                # #1272: CURRENT by #950 (created_at >= content_ts, checked
+                # above), but close enough to T_content that the reviewer may
+                # have started before the push landed. Still counts — no
+                # `continue` — but named so it is never a silent, ordinary
+                # "current" verdict.
+                delta_seconds = (created_at - content_ts).total_seconds()
+                if delta_seconds < NEAR_STALE_WINDOW_SECONDS:
+                    result.near_window_verdicts.append(
+                        NearWindowVerdict(
+                            reviewer=requestor,
+                            verdict=ror_value.strip(),
+                            created_at=created_raw,
+                            delta_seconds=delta_seconds,
+                        )
+                    )
 
             # Record this reviewer's latest CURRENT verdict (#940). The
             # reviewer set toward the 2-reviewer threshold (charter line 36,
@@ -1682,7 +1773,7 @@ def partition_formal_reviewers(
     reviews: list[dict],
     author: str,
     content_ts: datetime | None,
-) -> tuple[set[str], list[StaleVerdict]]:
+) -> tuple[set[str], list[StaleVerdict], list[NearWindowVerdict]]:
     """Split formal GitHub reviews into CURRENT reviewers and STALE verdicts (#950).
 
     Formal GitHub reviews are bound to `T_content` by the SAME rule as comment
@@ -1690,11 +1781,14 @@ def partition_formal_reviewers(
     reviewed code that has since been rewritten. Leaving formal reviews unbound
     would be a hole straight through the #950 fix.
 
-    Returns `(formal_reviewers, stale_formal)` where `formal_reviewers` holds
-    lowercased logins of non-author reviewers whose review is CURRENT, and
-    `stale_formal` holds a `StaleVerdict` per excluded review (for the
-    diagnostic). Self-reviews (login == `author`) and reviews with no login are
-    dropped entirely — they are not evidence and not staleness.
+    Returns `(formal_reviewers, stale_formal, near_window_formal)` where
+    `formal_reviewers` holds lowercased logins of non-author reviewers whose
+    review is CURRENT, `stale_formal` holds a `StaleVerdict` per excluded
+    review (for the diagnostic), and `near_window_formal` holds a
+    `NearWindowVerdict` per CURRENT review submitted within
+    `NEAR_STALE_WINDOW_SECONDS` of `content_ts` (#1272) — counted, not
+    excluded, but named. Self-reviews (login == `author`) and reviews with no
+    login are dropped entirely — they are not evidence and not staleness.
 
     `submittedAt` missing or unparseable while `content_ts` is known ⇒ STALE,
     not fresh (fail closed). `content_ts` is a REQUIRED positional argument
@@ -1713,6 +1807,7 @@ def partition_formal_reviewers(
     """
     formal_reviewers: set[str] = set()
     stale_formal: list[StaleVerdict] = []
+    near_window_formal: list[NearWindowVerdict] = []
     for review in reviews:
         login = review.get("author", {}).get("login", "")
         if not login or login == author:
@@ -1729,8 +1824,19 @@ def partition_formal_reviewers(
                     )
                 )
                 continue
+            # #1272: mirrors the comment-verdict near-window check above.
+            delta_seconds = (submitted_at - content_ts).total_seconds()
+            if delta_seconds < NEAR_STALE_WINDOW_SECONDS:
+                near_window_formal.append(
+                    NearWindowVerdict(
+                        reviewer=login,
+                        verdict=str(review.get("state", "REVIEW")),
+                        created_at=submitted_raw,
+                        delta_seconds=delta_seconds,
+                    )
+                )
         formal_reviewers.add(login.lower())
-    return formal_reviewers, stale_formal
+    return formal_reviewers, stale_formal, near_window_formal
 
 
 def _iter_roster_entries(
@@ -2094,6 +2200,14 @@ class ReviewVerdicts:
     # or the #950 "operator concludes the hook is broken" failure repeats with a
     # new cause. Defaulted so every existing construction keeps working.
     commit_author_identities: tuple[CommitAuthorIdentity, ...] = ()
+    # CURRENT verdicts (comment-based / formal) cast within
+    # `NEAR_STALE_WINDOW_SECONDS` of `content_ts` (#1272) — same
+    # comment/formal split as `stale_verdicts_*`, for the same reason (a
+    # caller tagging provenance shouldn't have to reconstruct it). Never an
+    # input to the merge decision — see `near_window_verdicts` below — only
+    # surfaced. Defaulted so every existing construction keeps working.
+    near_window_verdicts_comment: list[NearWindowVerdict] = dataclasses.field(default_factory=list)
+    near_window_verdicts_formal: list[NearWindowVerdict] = dataclasses.field(default_factory=list)
 
     @property
     def comment_scan_ran(self) -> bool:
@@ -2104,6 +2218,17 @@ class ReviewVerdicts:
     def stale_verdicts(self) -> list[StaleVerdict]:
         """Combined stale verdicts, comment-based then formal."""
         return self.stale_verdicts_comment + self.stale_verdicts_formal
+
+    @property
+    def near_window_verdicts(self) -> list[NearWindowVerdict]:
+        """Combined near-window verdicts, comment-based then formal (#1272).
+
+        Every entry here is ALSO counted in `distinct_reviewers` — being in
+        this list never removes a verdict from the threshold count, it only
+        flags it. Disjoint from `stale_verdicts`: a verdict is in exactly one
+        of the two, or neither.
+        """
+        return self.near_window_verdicts_comment + self.near_window_verdicts_formal
 
     @property
     def total_distinct(self) -> int:
@@ -2169,7 +2294,9 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
     content_ts = latest_content[1] if latest_content else None
     content_sha = latest_content[0] if latest_content else ""
 
-    formal_reviewers, stale_formal = partition_formal_reviewers(reviews, author, content_ts)
+    formal_reviewers, stale_formal, near_window_formal = partition_formal_reviewers(
+        reviews, author, content_ts
+    )
 
     # The comment verdict scan runs UNCONDITIONALLY (#1206). It used to be
     # dispatched only for two head-ref shapes — a `{Initial}.{Lastname}[-/]…`
@@ -2320,6 +2447,8 @@ def resolve_review_verdicts(pr_data: dict, repo: str | None = None) -> ReviewVer
         distinct_reviewers=distinct_reviewers,
         stale_verdicts_comment=list(comment_result.stale_verdicts),
         stale_verdicts_formal=list(stale_formal),
+        near_window_verdicts_comment=list(comment_result.near_window_verdicts),
+        near_window_verdicts_formal=list(near_window_formal),
         reviews_missing_tech_debt=list(comment_result.reviews_missing_tech_debt),
         tech_debt_issue_numbers=list(comment_result.tech_debt_issue_numbers),
         tech_debt_unparseable=list(comment_result.tech_debt_unparseable),
@@ -3045,6 +3174,35 @@ def _gate_allow_advisories(ctx: _GateContext) -> _Stop | None:
             f"recorded as ZERO tech-debt refs, not blocked: {detail}. Charter "
             "format: `TechDebt: none` or `TechDebt: #15, #16` (a bare `15, 16` "
             "is also accepted); free text is not."
+        )
+
+    # #1272: a verdict counted toward the threshold was cast within
+    # NEAR_STALE_WINDOW_SECONDS of T_content — CURRENT by #950 (it is not
+    # excluded, the rule is unchanged), but close enough that the reviewer
+    # may have started before the push landed and never known the head moved.
+    # Surfaced here, on the ALLOW path, because that is where it is
+    # load-bearing: it is disclosing a verdict that is part of WHY this merge
+    # is allowed, mirroring the #1211 comment-scan disclosure below. Rejected
+    # alternative: a `ReviewedHead:` trailer field that would let the gate
+    # BLOCK on this instead of disclosing it — rejected because it would add
+    # a fifth mandatory trailer field to a block that already fails OPEN on
+    # every near-miss, so a missing/mistyped value would silently un-count
+    # (or admit) an otherwise-valid verdict. See "Near-window disclosure"
+    # in this module's docstring for the full reasoning.
+    near_window = verdicts.near_window_verdicts
+    if near_window:
+        detail = "; ".join(
+            f"{nw.reviewer} ({nw.verdict}, +{nw.delta_seconds:.0f}s)" for nw in near_window
+        )
+        advisories.append(
+            f"NOTE: PR {pr_display} counts {len(near_window)} verdict(s) cast within "
+            f"{NEAR_STALE_WINDOW_SECONDS:.0f}s of T_content ({verdicts.content_sha or '?'}): "
+            f"{detail}. Each COUNTS toward the {total_distinct}/2 threshold — #950's "
+            "staleness rule is unchanged, this is not a block — but a verdict posted this "
+            "soon after a push may have been written against the PREVIOUS head if the "
+            "reviewer started before the push landed. This does not prove the verdict is "
+            "wrong; it names a possible mid-review head move so it can be confirmed rather "
+            "than silently trusted (#1272)."
         )
 
     # #1211: disclose the scan mode on the ALLOW path too.

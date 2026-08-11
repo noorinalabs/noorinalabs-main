@@ -679,13 +679,14 @@ class ContentTsRequiredTests(unittest.TestCase):
         self.assertEqual(result.undetermined, "")
 
     def test_partition_formal_reviewers_still_accepts_explicit_none(self):
-        formal, stale = hook.partition_formal_reviewers(
+        formal, stale, near_window = hook.partition_formal_reviewers(
             [{"author": {"login": "reviewer-a"}, "state": "APPROVED"}],
             "author-login",
             None,
         )
         self.assertEqual(formal, {"reviewer-a"})
         self.assertEqual(stale, [])
+        self.assertEqual(near_window, [], "content_ts=None means no near-window binding either")
 
     def test_check_comment_reviews_repo_is_keyword_only(self):
         """`repo` moved keyword-only alongside `content_ts` (#1050) — a
@@ -3044,6 +3045,69 @@ class ResolveReviewVerdictsSharedBoundaryTests(unittest.TestCase):
         assert result is not None  # narrow type for the asserts below
         self.assertEqual(result["decision"], "allow", "the advisory must NOT block the merge")
         self.assertIn("filed later", result["systemMessage"])
+
+    def test_check_surfaces_near_window_verdict_as_nonblocking_advisory(self):
+        """#1272: a verdict CURRENT by #950 but cast within
+        `NEAR_STALE_WINDOW_SECONDS` of T_content must reach `check()`'s
+        advisory path exactly like the main#1055 unparseable-TechDebt case
+        above — it counts toward the 2-reviewer threshold (never blocks) and
+        is disclosed via a non-blocking `systemMessage` (mirrors #1211's
+        allow-path disclosure pattern).
+        """
+        input_data = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "gh pr merge 1040 --repo noorinalabs/noorinalabs-main"},
+        }
+        fake_verdicts = hook.ReviewVerdicts(
+            number=1040,
+            head_ref="L.Ferreira/1040-x",
+            labels=[],
+            branch_author_lastname="Ferreira",
+            content_sha="ac8bcfa",
+            content_ts=None,
+            formal_reviewers=set(),
+            comment_reviewers={"nino kavtaradze", "weronika zielinska"},
+            non_roster_requestors=set(),
+            roster_comment_reviewers={"nino kavtaradze", "weronika zielinska"},
+            roster_names={"nino kavtaradze", "weronika zielinska"},
+            distinct_reviewers={"nino kavtaradze", "weronika zielinska"},
+            stale_verdicts_comment=[],
+            stale_verdicts_formal=[],
+            near_window_verdicts_comment=[
+                hook.NearWindowVerdict(
+                    reviewer="Nino Kavtaradze",
+                    verdict="Approved",
+                    created_at="2026-08-03T03:32:52Z",
+                    delta_seconds=76,
+                )
+            ],
+            near_window_verdicts_formal=[],
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=[],
+            tech_debt_unparseable=[],
+            wave_bootstrap_exception=False,
+        )
+        with (
+            mock.patch.object(
+                hook,
+                "get_pr_data",
+                return_value={
+                    "author": "someone",
+                    "number": 1040,
+                    "reviews": [],
+                    "headRefName": "L.Ferreira/1040-x",
+                    "labels": [],
+                },
+            ),
+            mock.patch.object(hook, "resolve_review_verdicts", return_value=fake_verdicts),
+        ):
+            result = hook.check(input_data)
+
+        self.assertIsNotNone(result, "a near-window verdict must surface a message")
+        assert result is not None  # narrow type for the asserts below
+        self.assertEqual(result["decision"], "allow", "the advisory must NOT block the merge")
+        self.assertIn("Nino Kavtaradze", result["systemMessage"])
+        self.assertIn("76", result["systemMessage"])
 
     def test_check_translates_stale_verdict_error_into_a_block(self):
         """`CommentScanUndeterminedError` from the shared boundary must reach

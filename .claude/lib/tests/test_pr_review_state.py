@@ -618,6 +618,117 @@ class ContentStalenessTests(unittest.TestCase):
         self.assertFalse(payload["passes"])
 
 
+class NearWindowStalenessTests(ContentStalenessTests):
+    """#1272: T_content staleness (#950) catches a verdict cast BEFORE the
+    head moved; it cannot catch the mirror case — a verdict cast AFTER
+    T_content by a reviewer who started reading before the push landed and
+    had no way to know the head had moved. `comment.created_at > T_content`
+    alone cannot distinguish that from an ordinary review that simply landed
+    after a routine push, because both produce a `created_at` a few seconds
+    after `T_content`.
+
+    Live case (noorinalabs-main#1263, 2026-08-03): the reviewer began
+    reviewing head `2c113e7`, the orchestrator pushed `60faad1` at
+    03:31:36Z, and the reviewer posted Approved at 03:32:52Z — 76 seconds
+    later, having read `2c113e7`. `pr_review_state.py` at `60faad1` reported
+    the verdict as a plain CURRENT approval, indistinguishable from one cast
+    by a reviewer who had actually read `60faad1`. Reused as a subclass of
+    `ContentStalenessTests` so `_compute_with_real_comment_check` drives the
+    REAL `check_comment_reviews` / `partition_formal_reviewers` pipeline
+    (the #1046 lesson: a mock that ignores its arguments cannot detect a
+    forwarding regression).
+    """
+
+    _NEAR = _NOW + timedelta(seconds=76)  # the exact PR #1263 delta
+
+    def test_near_window_comment_verdict_is_counted_and_surfaced(self):
+        """The near-window verdict counts toward the threshold (#950 stands)
+        AND is named as a possible mid-review head move (#1272) — never
+        silently indistinguishable from an ordinary fresh approval.
+        """
+        state = self._compute_with_real_comment_check(
+            [_charter_comment("Bereket Tadesse", "Approved", self._NEAR)],
+            roster={"bereket tadesse"},
+            commits=_CONTENT_COMMITS,
+        )
+
+        # #950's rule is unchanged: this verdict is CURRENT, not stale.
+        self.assertEqual(state.distinct_reviewer_count, 1)
+        self.assertEqual(state.stale_verdicts, [])
+
+        # #1272: but it must be NAMED as a near-window verdict, not silently
+        # folded into "current" like any other approval.
+        self.assertEqual(len(state.near_window_verdicts), 1)
+        near = state.near_window_verdicts[0]
+        self.assertEqual(near["reviewer"], "Bereket Tadesse")
+        self.assertEqual(near["source"], "comment")
+        self.assertAlmostEqual(near["delta_seconds"], 76, delta=1)
+
+    def test_near_window_formal_review_is_counted_and_surfaced(self):
+        """The formal-review half of the same rule (mirrors #950's own
+        formal/comment symmetry — `partition_formal_reviewers` is bound to
+        T_content by the identical rule as `check_comment_reviews`)."""
+        state = self._compute_with_real_comment_check(
+            [],
+            roster=set(),
+            commits=_CONTENT_COMMITS,
+            reviews=[
+                {
+                    "author": {"login": "near-reviewer"},
+                    "state": "APPROVED",
+                    "submittedAt": self._NEAR.isoformat().replace("+00:00", "Z"),
+                },
+            ],
+        )
+        self.assertEqual(state.formal_reviewers, ["near-reviewer"])
+        self.assertEqual(state.stale_verdicts, [])
+        self.assertEqual(len(state.near_window_verdicts), 1)
+        near = state.near_window_verdicts[0]
+        self.assertEqual(near["reviewer"], "near-reviewer")
+        self.assertEqual(near["source"], "formal")
+
+    def test_comfortably_fresh_verdict_is_not_flagged_near_window(self):
+        """A verdict well outside the window (the `_AFTER` fixture, +1h) must
+        NOT be flagged — the near-window disclosure is for the genuine
+        close-call, not every verdict that happens to postdate T_content.
+        """
+        state = self._compute_with_real_comment_check(
+            [_charter_comment("Nino Kavtaradze", "Approved", _AFTER)],
+            roster={"nino kavtaradze"},
+            commits=_CONTENT_COMMITS,
+        )
+        self.assertEqual(state.distinct_reviewer_count, 1)
+        self.assertEqual(state.near_window_verdicts, [])
+
+    def test_near_window_verdicts_are_visible_in_both_renders(self):
+        """Surfaced, never silently counted (#1272 acceptance criterion)."""
+        # A second, comfortably-fresh reviewer brings this to 2/2 so the test
+        # can assert the near-window verdict COUNTED toward an actual pass,
+        # not merely that it wasn't excluded from an already-failing count.
+        state = self._compute_with_real_comment_check(
+            [
+                _charter_comment("Bereket Tadesse", "Approved", self._NEAR),
+                _charter_comment("Nino Kavtaradze", "Approved", _AFTER),
+            ],
+            roster={"bereket tadesse", "nino kavtaradze"},
+            commits=_CONTENT_COMMITS,
+        )
+
+        text = prs._render_text(state)
+        self.assertIn("NEAR-WINDOW", text)
+        self.assertIn("Bereket Tadesse", text)
+        # It must read as COUNTED, not as a block/exclusion — distinct wording
+        # from the STALE block so an operator cannot confuse the two.
+        self.assertNotIn("x STALE", text.split("NEAR-WINDOW")[1] if "NEAR-WINDOW" in text else "")
+
+        payload = json.loads(prs._render_json(state))
+        self.assertEqual(len(payload["near_window_verdicts"]), 1)
+        self.assertEqual(payload["near_window_verdicts"][0]["reviewer"], "Bereket Tadesse")
+        self.assertTrue(
+            payload["passes"], "a near-window verdict must still COUNT (#950 unchanged)"
+        )
+
+
 class CliExitCodeTests(unittest.TestCase):
     def _main(self, state_or_exc):
         if isinstance(state_or_exc, Exception):
