@@ -432,16 +432,30 @@ W29_C_HEREDOC_DASH_LC = _wave29("w29c_heredoc_lc")
 # wild, in wave 30, on the reviewer, while reviewing the fix for it.
 W30_A_REVIEW_HEREDOC = _wave29("w30a_review_heredoc")
 
-# Every label the three commands really passed. All existed at block time.
-WAVE29_REAL_LABELS = {"bug", "security", "tech-debt", "process", "meta-issue", "phase-10"}
+# Every label the four commands really passed. All existed at block time.
+RECORDED_REAL_LABELS = {"bug", "security", "tech-debt", "process", "meta-issue", "phase-10"}
+
+# Retained under the old name: `WAVE29_REAL_LABELS` is referenced widely below
+# and the rename is cosmetic, so both point at one object rather than drifting.
+WAVE29_REAL_LABELS = RECORDED_REAL_LABELS
 
 
-class Wave29FalsePositiveCorpusTests(unittest.TestCase):
-    """The hook's whole wave-29 block population, all three of them false.
+class RecordedFalsePositiveCorpusTests(unittest.TestCase):
+    """Every `validate_labels` block on record, across two waves. All false.
 
-    Precision before: 0/3. After: 3/3. The true-positive guard rails live in
-    `PrecisionRetainedTests` — a gate that stops false-blocking by stopping
-    blocking has not been fixed, it has been removed.
+    Four commands, all harvested from `.claude/annunaki/errors.jsonl`:
+
+      - **Wave 29** — W29-A/B/C, the hook's ENTIRE block population for that
+        wave. Precision before 0/3, after 3/3.
+      - **Wave 30** — W30-A, produced during the merge-gate review of the very
+        PR that fixes this, when the pre-fix hook blocked the reviewer's own
+        filing. Not a wave-29 figure, which is why this class is no longer
+        named for wave 29 (main#1394 review round 3).
+
+    Combined recorded population: 4 blocks, 0 correct, before -> 0 blocks
+    after. The true-positive guard rails live in `PrecisionRetainedTests` — a
+    gate that stops false-blocking by stopping blocking has not been fixed, it
+    has been removed.
     """
 
     _input = staticmethod(_test_helpers.bash_input)
@@ -591,6 +605,13 @@ class DataHeredocBodyIsNotAnOptionListTests(unittest.TestCase):
         self.assertEqual(hook.extract_labels(cmd), ["really-not-a-label"])
 
 
+# The characters `validate_labels._SHELL_METACHARS` is expected to hold, written
+# out INDEPENDENTLY of the implementation. A test that derives its expectation
+# from the code under test cannot detect a change to that code — see the history
+# in `test_every_character_in_the_metachar_set_is_load_bearing`.
+EXPECTED_METACHARS = ("(", ")", "`", "$", ";", "|", "&", "<", ">", "\n", "\r", "\\")
+
+
 class ShellMetacharGuardTests(unittest.TestCase):
     """Layer 3: a metacharacter in a label means WE mis-parsed, not that the
     label is missing. Skip validation, and say so — a gate that quietly stops
@@ -618,20 +639,43 @@ class ShellMetacharGuardTests(unittest.TestCase):
         """One garbage token discredits the parse, not merely itself."""
         self.assertEqual(hook.extract_labels("gh issue create --label bug --label 'x)'"), [])
 
-    def test_every_character_in_the_metachar_set_is_load_bearing(self):
-        """Each member of `_SHELL_METACHARS` must be pinned, not just `)`.
+    def test_metachar_set_membership_matches_the_pinned_literal(self):
+        """The set must equal `EXPECTED_METACHARS`, member for member.
 
-        Nino Kavtaradze's per-character mutation of the set (main#1394 review
-        round 2, minor / #1411) found 11 of 12 members inert: every
-        `ShellMetacharGuardTests` case used a `)`-bearing token, so dropping
-        `(`, `` ` ``, `$`, `;`, `|`, `&`, `<`, `>`, `\\n`, `\\r` or `\\\\` from
-        the set was caught by nothing. The guard's own comment claims BOTH
-        wave-29 defect families land here (`meta-issue)` and `` c` ``), and
-        half of that claim was unpinned — the same defect as MF1 in miniature,
-        an artifact asserting more than it demonstrates. One subTest per
-        character closes it.
+        This assertion is what makes the loop below mean anything, and it is
+        the whole point of keeping the expectation in a LITERAL (main#1394
+        review round 3). Removing a character from `_SHELL_METACHARS` fails
+        here; adding one also fails here, so growing the set is a deliberate
+        act with a matching test edit rather than a silent widening.
         """
-        for char in sorted(hook._SHELL_METACHARS):
+        self.assertEqual(hook._SHELL_METACHARS, frozenset(EXPECTED_METACHARS))
+
+    def test_every_character_in_the_metachar_set_is_load_bearing(self):
+        """Each member of `EXPECTED_METACHARS` must be pinned, not just `)`.
+
+        HISTORY — this test was itself the defect twice (main#1394).
+
+        Round 2 found the guard's coverage claim half-unpinned (#1411): every
+        `ShellMetacharGuardTests` case used a `)`-bearing token, so dropping
+        any other member was caught by nothing. The fix I wrote then iterated
+        `sorted(hook._SHELL_METACHARS)` — **the very set it claims to pin**.
+        Deleting a member deleted its own test case, so the loop shrank in
+        silence and the file still reported all-green. Re-measured under
+        per-character mutation of the head tree, against the FULL hooks suite:
+        11 of 12 members survived deletion, and only `)` was caught — by the
+        wave-29 corpus, not by this test. The docstring meanwhile promised
+        "each member must be pinned": a stated guarantee the mechanism
+        structurally could not deliver, which is precisely the round-1 MF1
+        shape reproduced inside the fix for a round-2 finding.
+
+        The mechanism now: iterate a LITERAL tuple, and assert separately that
+        the set equals it. A deleted member no longer removes its own case —
+        it fails `test_metachar_set_membership_matches_the_pinned_literal`.
+        Verified by re-running the same mutation: 12 of 12 caught, 0 survivors.
+
+        Do not "simplify" this back to iterating `hook._SHELL_METACHARS`.
+        """
+        for char in EXPECTED_METACHARS:
             with self.subTest(char=repr(char)):
                 # INTERIOR placement is required, not incidental: label values
                 # are `.strip()`ed before the guard runs, so a TRAILING `\n` or
@@ -650,6 +694,40 @@ class ShellMetacharGuardTests(unittest.TestCase):
         self.assertEqual(
             hook.extract_labels("gh issue create --label 'good first issue'"),
             ["good first issue"],
+        )
+
+
+class IssueCreateSegmentsContractTests(unittest.TestCase):
+    """`None` (could not parse) and `[]` (parsed, no such command) differ.
+
+    The docstring states the distinction; nothing asserted it, so swapping the
+    early-out's `return []` for `return None` was a surviving mutant
+    (main#1394 review round 3). Both currently lead `check` to allow, which is
+    exactly why this needs a direct test: the contract is for the NEXT reader,
+    and a difference nothing observes is a difference that will be broken.
+    """
+
+    def test_no_gh_in_command_is_an_empty_list_not_none(self):
+        """Parsed fine; there is simply no `gh issue create` here."""
+        result = hook.issue_create_segments("echo hello --label world")
+        self.assertIsNotNone(result, "a parseable command must not report a parse failure")
+        self.assertEqual(result, [])
+
+    def test_gh_present_but_not_issue_create_is_an_empty_list(self):
+        self.assertEqual(hook.issue_create_segments("gh pr create --label bug"), [])
+
+    def test_untokenizable_command_is_none(self):
+        """Genuinely unparseable — the #661 fail-open, distinct from `[]`."""
+        cmd = "gh issue create --label bug --body 'gh's ambient repo'"
+        from _shell_parse import tokenize
+
+        self.assertIsNone(tokenize(cmd), "precondition: this must break shlex")
+        self.assertIsNone(hook.issue_create_segments(cmd))
+
+    def test_a_real_invocation_returns_its_post_verb_tokens(self):
+        self.assertEqual(
+            hook.issue_create_segments("gh issue create --repo o/r --label bug"),
+            [["--repo", "o/r", "--label", "bug"]],
         )
 
 
