@@ -1141,23 +1141,39 @@ def _holder(proposed: int, signals: ts.Signals) -> ts.Proposal:
     return ts.Proposal(old_score=ts.MAX_SCORE, proposed_score=proposed, signals=signals)
 
 
+def _whole_wave(proposals: dict[str, ts.Proposal]) -> ts.RankingPopulation:
+    """Ranking population == every engineer in the batch.
+
+    Correct *for these toy batches only*, where the batch genuinely is the whole
+    wave. Deliberately a test helper and not a library convenience: a
+    ``RankingPopulation.from_proposals`` shipped in ``trust_signals`` would be a
+    one-call re-entry to exactly the defect main#1370 closed.
+    """
+    return ts.RankingPopulation.declared(
+        {n: p.signals for n, p in proposals.items()},
+        origin="test fixture: this batch is the whole wave",
+    )
+
+
 class DistributionDiscipline(unittest.TestCase):
     def test_five_reserved_for_top_performer(self) -> None:
         proposals = {
             "Top": _entrant(5, ts.Signals(prs_merged=5, must_fix_caught=3)),
             "AlsoFive": _entrant(5, ts.Signals(prs_merged=2)),
         }
-        out = ts.apply_distribution_discipline(proposals)
+        out = ts.apply_distribution_discipline(proposals, ranking_population=_whole_wave(proposals))
         self.assertEqual(out["Top"], 5)
         self.assertEqual(out["AlsoFive"], 4)  # capped — not the top performer
 
     def test_four_passes_through(self) -> None:
         proposals = {"X": _entrant(4, ts.Signals(prs_merged=2))}
-        self.assertEqual(ts.apply_distribution_discipline(proposals)["X"], 4)
+        out = ts.apply_distribution_discipline(proposals, ranking_population=_whole_wave(proposals))
+        self.assertEqual(out["X"], 4)
 
     def test_no_five_when_top_is_not_positive(self) -> None:
         proposals = {"X": _entrant(5, ts.Signals())}
-        self.assertEqual(ts.apply_distribution_discipline(proposals)["X"], 4)
+        out = ts.apply_distribution_discipline(proposals, ranking_population=_whole_wave(proposals))
+        self.assertEqual(out["X"], 4)
 
     # ---- Entry gate, not eviction rule (main#1365) ----------------------- #
     # The ceiling-HOLDER path had no coverage at all before this.
@@ -1173,7 +1189,7 @@ class DistributionDiscipline(unittest.TestCase):
             "Aino": _holder(5, ts.Signals(prs_merged=9, must_fix_caught=12, must_fix_received=4)),
             "Nino": _holder(5, ts.Signals(prs_merged=8, must_fix_caught=11, must_fix_received=4)),
         }
-        out = ts.apply_distribution_discipline(proposals)
+        out = ts.apply_distribution_discipline(proposals, ranking_population=_whole_wave(proposals))
         self.assertEqual(out["Nino"], 5)  # holder — exempt despite composite 15 < 17
         self.assertEqual(out["Aino"], 5)  # top composite anyway
 
@@ -1183,36 +1199,131 @@ class DistributionDiscipline(unittest.TestCase):
             "Aino": _holder(5, ts.Signals(prs_merged=9, must_fix_caught=12, must_fix_received=4)),
             "Nurul": _entrant(5, ts.Signals(prs_merged=2, must_fix_received=2), old=4),
         }
-        self.assertEqual(ts.apply_distribution_discipline(proposals)["Nurul"], 4)
+        out = ts.apply_distribution_discipline(proposals, ranking_population=_whole_wave(proposals))
+        self.assertEqual(out["Nurul"], 4)
 
     def test_holder_exemption_does_not_rescue_a_dropping_score(self) -> None:
         # Exemption is from the CAP, not from the delta. A holder proposed
         # below the ceiling passes through at the proposed value.
         proposals = {"Held": _holder(3, ts.Signals(prs_merged=1, must_fix_received=9))}
-        self.assertEqual(ts.apply_distribution_discipline(proposals)["Held"], 3)
+        out = ts.apply_distribution_discipline(proposals, ranking_population=_whole_wave(proposals))
+        self.assertEqual(out["Held"], 3)
 
-    def test_top_is_batch_relative_so_feed_the_whole_roster(self) -> None:
-        """The one caller obligation the signature cannot enforce.
+    # ---- Anchoring population vs gated population (main#1370) ------------- #
+    # Supersedes test_top_is_batch_relative_so_feed_the_whole_roster, which
+    # pinned the defect as known behaviour instead of removing it.
 
-        `top` is the maximum composite *within the batch*. Restricted to the
-        two wave-29 ceiling entrants, Nadia (composite 8) becomes her own
-        maximum and keeps a 5 that the full-roster run caps to 4. Pinned as
-        known behaviour so the next reader meets it here rather than in a
-        trust score.
-        """
-        aino = ts.Signals(prs_merged=9, must_fix_caught=12, must_fix_received=4)  # composite 17
-        nadia = ts.Signals(prs_merged=4, must_fix_caught=5, must_fix_received=1)  # composite 8
-        nurul = ts.Signals(prs_merged=2, must_fix_received=2)  # composite 0
-
-        entrants_only = {
-            "Nadia": _entrant(5, nadia),
-            "Nurul": _entrant(5, nurul, old=4),
+    def _wave_29_three(self) -> tuple[dict[str, ts.Signals], dict[str, ts.Proposal]]:
+        """Wave-29's two ceiling entrants plus the engineer who set the maximum."""
+        wave = {
+            "Aino": ts.Signals(prs_merged=9, must_fix_caught=12, must_fix_received=4),  # 17
+            "Nadia": ts.Signals(prs_merged=4, must_fix_caught=5, must_fix_received=1),  # 8
+            "Nurul": ts.Signals(prs_merged=2, must_fix_received=2),  # 0
         }
-        self.assertEqual(ts.apply_distribution_discipline(entrants_only)["Nadia"], 5)
+        entrants = {
+            "Nadia": _entrant(5, wave["Nadia"]),
+            "Nurul": _entrant(5, wave["Nurul"], old=4),
+        }
+        return wave, entrants
 
-        whole_roster = dict(entrants_only, Aino=_holder(5, aino))
-        self.assertEqual(ts.apply_distribution_discipline(whole_roster)["Nadia"], 4)
-        self.assertEqual(ts.apply_distribution_discipline(whole_roster)["Nurul"], 4)
+    def test_gated_slice_is_ranked_against_the_wave_not_against_itself(self) -> None:
+        """#1370 acceptance 1 — the defect restated as behaviour, not as prose.
+
+        Capping only the ceiling entrants is a legitimate thing for a caller to
+        want. Before #1370 the only way to express it was to pass that slice as
+        the *whole* argument, and ``top`` then came from the slice: Nadia
+        (composite 8) became her own maximum and kept a 5 that the wave
+        (maximum 17, Aino) caps to 4 — the pre-fix run returns
+        ``{'Nadia': 5, 'Nurul': 4}``. The anchoring population is now its own
+        argument, so the same intent produces the wave's answer.
+        """
+        wave, entrants = self._wave_29_three()
+        out = ts.apply_distribution_discipline(
+            entrants,
+            ranking_population=ts.RankingPopulation.declared(wave, origin="P10W29 signals"),
+        )
+        self.assertEqual(out["Nadia"], 4)
+        self.assertEqual(out["Nurul"], 4)
+        # Only the gated set comes back — anchoring on someone does not score them.
+        self.assertEqual(set(out), {"Nadia", "Nurul"})
+
+    def test_capping_an_engineer_outside_the_ranking_population_is_refused(self) -> None:
+        """The detection the old single-argument shape could not perform.
+
+        Ranking over one population while capping against another is now a hard
+        error naming the uncovered engineer, not a silent answer.
+        """
+        wave, entrants = self._wave_29_three()
+        del wave["Nurul"]
+        with self.assertRaises(ValueError) as cm:
+            ts.apply_distribution_discipline(
+                entrants,
+                ranking_population=ts.RankingPopulation.declared(wave, origin="P10W29 partial"),
+            )
+        self.assertIn("Nurul", str(cm.exception))
+        self.assertIn("P10W29 partial", str(cm.exception))
+
+    def test_empty_ranking_population_is_refused(self) -> None:
+        _, entrants = self._wave_29_three()
+        with self.assertRaises(ValueError):
+            ts.apply_distribution_discipline(
+                entrants,
+                ranking_population=ts.RankingPopulation.declared({}, origin="nobody"),
+            )
+
+    def test_declared_population_demands_a_stated_origin(self) -> None:
+        """A hand-assembled population has to say where it came from."""
+        with self.assertRaises(ValueError):
+            ts.RankingPopulation.declared({"X": ts.Signals(prs_merged=1)}, origin="   ")
+
+    def test_from_wave_takes_the_whole_extract_and_records_its_provenance(self) -> None:
+        """The sanctioned production path cannot be handed a filtered map.
+
+        ``from_wave`` takes a wave, not a dict, so there is no argument for a
+        caller to filter on the way in.
+        """
+        extracted = {"A": ts.Signals(prs_merged=3), "B": ts.Signals(prs_merged=1)}
+        calls: list[tuple[str, str, object]] = []
+
+        def _fake(phase: str, wave: str, status_path: object) -> dict[str, ts.Signals]:
+            calls.append((phase, wave, status_path))
+            return dict(extracted)
+
+        original = ts.extract_signals
+        ts.extract_signals = _fake  # type: ignore[assignment]
+        try:
+            pop = ts.RankingPopulation.from_wave("10", "29", Path("status.json"))
+        finally:
+            ts.extract_signals = original  # type: ignore[assignment]
+
+        self.assertEqual(calls, [("10", "29", Path("status.json"))])
+        self.assertEqual(pop.signals, extracted)
+        self.assertIn("10", pop.origin)
+        self.assertIn("29", pop.origin)
+
+    def test_a_narrow_population_is_still_narrow_but_no_longer_silent(self) -> None:
+        """The residual, pinned — the sensitivity the superseded test showed.
+
+        Separating the arguments removes the *silent* failure, not the caller's
+        ability to be wrong deliberately: a caller who assembles a two-person
+        population and states an origin for it still gets the two-person answer
+        (Nadia keeps her 5). What is gone is getting there by omission — the
+        population is now a required argument that either comes from
+        :meth:`RankingPopulation.from_wave` (unfiltered by construction) or
+        carries a written justification at the call site.
+        """
+        _, entrants = self._wave_29_three()
+        narrow = ts.RankingPopulation.declared(
+            {n: p.signals for n, p in entrants.items()},
+            origin="deliberately the entrants only — pinning #1370's residual",
+        )
+        self.assertEqual(
+            ts.apply_distribution_discipline(entrants, ranking_population=narrow),
+            {
+                "Nadia": 5,
+                "Nurul": 4,
+            },
+        )
 
     def test_wave_29_applied_scores_are_unchanged_by_the_entry_gate(self) -> None:
         """The signature change must not move any applied wave-29 score.
@@ -1239,7 +1350,7 @@ class DistributionDiscipline(unittest.TestCase):
             sig = ts.Signals(prs_merged=prs, must_fix_caught=caught, must_fix_received=recv)
             proposed = max(ts.MIN_SCORE, min(ts.MAX_SCORE, old + ts.score_delta(sig)))
             proposals[name] = ts.Proposal(old_score=old, proposed_score=proposed, signals=sig)
-        out = ts.apply_distribution_discipline(proposals)
+        out = ts.apply_distribution_discipline(proposals, ranking_population=_whole_wave(proposals))
         self.assertEqual(out, {n: v[4] for n, v in wave_29.items()})
 
 
