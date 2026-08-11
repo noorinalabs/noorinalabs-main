@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import subprocess
 import sys
 from collections import Counter
@@ -95,6 +96,54 @@ _DEFAULT_STATUS = wave_state.DEFAULT_STATUS_PATH
 # wave-29 merged-PR set, where it now reproduces the retro's corrected 51
 # (was 49).
 _CHANGES_REQUESTED_RE = "RequestOrReplied:\\\\s*Changes(\\\\s*Requested)?\\\\b"
+
+
+# main#1362: `_changes_requested_cycles` below evaluates `_CHANGES_REQUESTED_RE`
+# through `gh --jq`, and gh embeds gojq (`itchyny/gojq`), which compiles
+# regexes through Go's `regexp` package — i.e. RE2. RE2 has no lookaround and
+# no backreferences. `test_changes_requested_regex_variants_via_real_jq`
+# (test_wave_status.py, Counters) validates this constant's *semantics*
+# against the system `jq` binary (Oniguruma), which accepts a strictly wider
+# syntax than RE2 — it demonstrated a lookahead compiles under jq but hard-
+# errors under `gh --jq`: "invalid or unsupported Perl syntax: `(?=`". So a
+# future widening of `_CHANGES_REQUESTED_RE` expressed with a lookahead would
+# pass that test green and hard-error live.
+#
+# `_re2_incompatible_reason` closes that gap as a syntax scan — not a full
+# RE2 parse — for the specific constructs RE2's parser rejects outright. This
+# was chosen over installing gojq (or a Go toolchain) in CI/pre-commit: gojq
+# is not otherwise a dependency of this repo, and mirroring it into
+# `.pre-commit-config.yaml` per the org's full local/CI parity rule would add
+# a new external binary everywhere this repo is worked on, for a check this
+# scan gets for free out of the standard library. It does not claim
+# RE2-completeness for constructs outside this known list — see the
+# `Counters` class's `test_re2_guard_*` tests in test_wave_status.py, which
+# exercise both the reject and the accept path against the real constant
+# above.
+_RE2_INCOMPATIBLE_CONSTRUCTS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\(\?<[=!]"), "lookbehind (?<= or (?<!"),
+    (re.compile(r"\(\?[=!]"), "lookahead (?= or (?!"),
+    (re.compile(r"\(\?P="), "named backreference (?P="),
+    (re.compile(r"\(\?>"), "atomic group (?>"),
+    (re.compile(r"\(\?\("), "conditional (?("),
+    (re.compile(r"\\[1-9]"), "backreference \\N"),
+)
+
+
+def _re2_incompatible_reason(pattern: str) -> str | None:
+    """Return the name of the first known RE2-incompatible construct found in
+    ``pattern``, or ``None`` if the scan finds none of them.
+
+    This is a syntax guard for the failure shape main#1362 documented (a
+    lookahead compiles under jq/Oniguruma but gojq/RE2 — the engine
+    ``gh --jq`` actually uses in production — hard-errors on it). It is
+    intentionally a regex-on-the-regex scan, not an actual RE2 compile, so it
+    adds no new dependency (no gojq, no Go toolchain) to CI or pre-commit.
+    """
+    for construct_re, name in _RE2_INCOMPATIBLE_CONSTRUCTS:
+        if construct_re.search(pattern):
+            return name
+    return None
 
 
 # The shared gh shim and status reader (main#1119). These stay module-level
