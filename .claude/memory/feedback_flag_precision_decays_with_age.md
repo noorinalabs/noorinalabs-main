@@ -29,9 +29,9 @@ force-removes, so a false `UNMERGED`/`DIRTY` costs at most a stale directory,
 while a false `merged` could cost work. What is wrong is *reading its output as a
 verdict*.
 
-**But "correctly biased" is not true in general — there is a known false-MERGED
-hole on a different axis (#1341, added 2026-08-09 within the hour of writing this
-note).** A **freshly-created worktree that has not committed yet** has
+**But "correctly biased" is not true in general — there WAS a false-MERGED hole on
+a different axis (#1341, added 2026-08-09 within the hour of writing this note;
+closed 2026-08-11).** A **freshly-created worktree that has not committed yet** has
 `HEAD == origin/main`, which is trivially an ancestor, so the `merge-base
 --is-ancestor` **fast path** classifies it `merged` and removes it — correct about
 ancestry, wrong about intent — and it fires *before* the richer patch-id
@@ -40,15 +40,29 @@ worktree for in-flight #1117. Non-force removal protects an agent that has alrea
 written files (removal refuses on uncommitted/untracked content → FLAGGED), so the
 exposed case is a **clean** fresh worktree, destroyed under an agent about to use it.
 
+**Fixed (#1341, 2026-08-11):** merged-ness and *removal candidacy* are now two
+orthogonal axes. A HEAD that is itself a commit on `origin/main`'s **first-parent**
+history has no commits of its own, so it still classifies `merged` (that is true —
+it has no unlanded content) but is no longer a reclaim candidate:
+`removal_block="no-own-commits"`, `safe_to_remove` False, CLI **exit 3**, and Step 0
+surfaces it as **FRESH** rather than removing it. First-parent membership, not
+`HEAD == origin/main` equality, because a worktree branched off an *older* main is
+the same zero-work case and equality misses it. Sweep at fix time: 5 of 17 live
+worktrees changed verdict, all of them fresh (3 owned by then-live agents), 12
+unchanged. The lesson below survives the fix — the *reading* rule is what
+generalizes, not the specific hole.
+
 So the two axes behave oppositely, and the safe reading is direction-specific:
 
 | axis | direction of error | cost |
 |---|---|---|
 | **age** (a landed branch) | false `UNMERGED` — over-flags | cheap: a stale directory |
-| **freshness** (an unstarted branch) | false `merged` — under-flags | destroys a clean live worktree |
+| **freshness** (an unstarted branch) | false `merged` — under-flags | destroys a clean live worktree (closed by #1341) |
 
 Treat `merged` as trustworthy only for a branch that has actually committed. Never
-generalize "this classifier errs safe" from the aged case to all cases.
+generalize "this classifier errs safe" from the aged case to all cases — the
+freshness hole was found *by* refusing that generalization, and the next one on
+some third axis will be too.
 
 **The operational rule:** a FLAGGED list is **candidates to verify, ordered by
 suspicion — never a batch to act on.** Verify content, not the flag: compare the

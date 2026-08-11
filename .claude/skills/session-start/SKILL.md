@@ -17,7 +17,7 @@ Execute all 7 steps below. Steps that are independent of each other SHOULD run i
 
 ### Step 0 — Worktree cleanup (parent + child repos)
 
-Worktrees accumulate in the parent AND every child repo (#526 — ~33 stale child worktrees found uncaught on 2026-05-24). The block iterates all 8 repos with a **verify-merged-then-remove guard**: auto-remove only a worktree whose HEAD is fully merged into that repo's `origin/main`; FLAG (never auto-remove) anything locked, unmerged, or that fails to remove cleanly. "Fully merged" is decided by `.claude/lib/check_worktree_merged.py` (#1212, sibling of #1177; guarantee revised by owner decision 2026-08-02, PR #1213 round 3): ancestry is the fast path (the merge-commit majority); the fallback classifies `merged` iff **the branch's cumulative diff since its merge-base is fully present on `origin/main`** — a net-content test, not a per-commit one, searched over `origin/main`'s own history (not a snapshot compare against its current tip, which would decay as unrelated later commits keep touching the same files) — so a squash-merged (single- or multi-commit), rebase-merged, or cherry-picked branch is recognized as landed instead of being flagged `UNMERGED` forever just because its tip is never an ancestor. Verdicts are **order-independent**: the same commit set in a different order always classifies identically, because the primary test depends only on the branch's final tree state, never on the order of the commits that produced it (and the per-commit fallback test is order-independent too, for the separate reason that `git patch-id --stable` is invariant to the line-number shifts a commutative reorder causes) — a per-commit design (tried in an earlier round) could not provide this. A branch's own internal merge commit (round 4, PR #1213) is checked for unique conflict-resolution content (`git diff-tree --cc --no-commit-id`) that `git cherry` structurally cannot see, since `git cherry` never examines merge commits at all — this closes the one path where a merge's resolution could carry unlanded content past both other tests undetected. The disclosed residual is `git patch-id`'s own whitespace-normalization (a change indistinguishable from an already-landed one, character-for-character after whitespace is stripped, is treated as landed — the same reason `--verbatim` is deliberately not used, since it would misclassify the real #1156 fixture as unmerged); see the module docstring for the full guarantee and its two coordinated tests. The check is 100% local git plumbing (no `gh`/network dependency) and degrades to the pre-fix ancestry-only result on any internal git-command failure. **Step 0 never force-removes** (owner decision, round 3): the plain `git worktree remove` call either succeeds or the worktree is FLAGGED — the `--force` fallback that used to destroy uncommitted content on a dirty worktree is gone, so the worst a misclassification can now cost is a stale worktree directory (a commit or branch was never at risk either way, since `worktree remove` never deletes the branch ref).
+Worktrees accumulate in the parent AND every child repo (#526 — ~33 stale child worktrees found uncaught on 2026-05-24). The block iterates all 8 repos with a **verify-merged-then-remove guard**: auto-remove only a worktree whose HEAD is fully merged into that repo's `origin/main`; FLAG (never auto-remove) anything locked, unmerged, or that fails to remove cleanly. "Fully merged" is decided by `.claude/lib/check_worktree_merged.py` (#1212, sibling of #1177; guarantee revised by owner decision 2026-08-02, PR #1213 round 3): ancestry is the fast path (the merge-commit majority); the fallback classifies `merged` iff **the branch's cumulative diff since its merge-base is fully present on `origin/main`** — a net-content test, not a per-commit one, searched over `origin/main`'s own history (not a snapshot compare against its current tip, which would decay as unrelated later commits keep touching the same files) — so a squash-merged (single- or multi-commit), rebase-merged, or cherry-picked branch is recognized as landed instead of being flagged `UNMERGED` forever just because its tip is never an ancestor. Verdicts are **order-independent**: the same commit set in a different order always classifies identically, because the primary test depends only on the branch's final tree state, never on the order of the commits that produced it (and the per-commit fallback test is order-independent too, for the separate reason that `git patch-id --stable` is invariant to the line-number shifts a commutative reorder causes) — a per-commit design (tried in an earlier round) could not provide this. A branch's own internal merge commit (round 4, PR #1213) is checked for unique conflict-resolution content (`git diff-tree --cc --no-commit-id`) that `git cherry` structurally cannot see, since `git cherry` never examines merge commits at all — this closes the one path where a merge's resolution could carry unlanded content past both other tests undetected. The disclosed residual is `git patch-id`'s own whitespace-normalization (a change indistinguishable from an already-landed one, character-for-character after whitespace is stripped, is treated as landed — the same reason `--verbatim` is deliberately not used, since it would misclassify the real #1156 fixture as unmerged); see the module docstring for the full guarantee and its two coordinated tests. The check is 100% local git plumbing (no `gh`/network dependency) and degrades to the pre-fix ancestry-only result on any internal git-command failure. **Step 0 never force-removes** (owner decision, round 3): the plain `git worktree remove` call either succeeds or the worktree is FLAGGED — the `--force` fallback that used to destroy uncommitted content on a dirty worktree is gone, so the worst a misclassification can now cost is a stale worktree directory (a commit or branch was never at risk either way, since `worktree remove` never deletes the branch ref). **Merged is not the removal decision (#1341).** A worktree that has not committed yet has `HEAD == origin/main` — trivially an ancestor, so the fast path answers `merged`, *correctly* (a branch with no commits of its own has no unlanded content) — and Step 0 removed a clean, live worktree out from under an agent working in another session. The helper therefore answers a **second, orthogonal** question: does this branch have any commits of its own to reclaim? A HEAD that is itself a commit on `origin/main`'s **first-parent** history has none, so removal is withheld and the worktree is surfaced as **FRESH**, not the misleading `UNMERGED` (CLI exit **3**; exit 0 now means merged *and* a reclaim candidate, 1 means not merged — so any caller that only knows the old `0 == remove` contract still fails safe). This does not touch the population the sweep exists for: a squash/rebase-merged tip is never an ancestor at all, and a merge-commit-merged tip is reachable only via the merge's *second* parent, so neither is on the first-parent chain. Sweep over this repo's 17 live worktrees: 5 verdicts changed, every one of them a fresh not-yet-committed worktree (3 belonging to agents live at the time), 12 unchanged.
 
 ```bash
 # Anchor REPO_ROOT to the PARENT org repo deterministically (#533). Using a
@@ -121,12 +121,39 @@ for repo in "${REPOS[@]}"; do
             _mrc=$?
           else
             # Helper missing (very old checkout) — degrade to the legacy
-            # ancestry-only test rather than failing closed.
-            git -C "$repo" merge-base --is-ancestor "$head" origin/main 2>/dev/null
-            _mrc=$?
+            # ancestry-only test rather than failing closed. The #1341 guard
+            # is replicated inline here, because ancestry ALONE removes a
+            # freshly-branched worktree that has not committed yet (its HEAD
+            # IS origin/main, hence trivially an ancestor). Mainline
+            # membership is tested with a `case` glob over the first-parent
+            # SHA list rather than a pipe to grep: every line is a full
+            # 40-char object name, so a substring hit implies equality, and
+            # a bare `grep` is hard-blocked in this org (#1008).
+            # The block between the sentinels below is extracted and executed
+            # verbatim by .claude/lib/tests/test_session_start_step0_fallback.py
+            # — keep both sentinels on their own lines, and keep the block
+            # dependent only on $repo and $head.
+            # BEGIN legacy-ancestry-fallback
+            _mrc=1
             _mreason="ancestry-only (helper not found)"
+            if git -C "$repo" merge-base --is-ancestor "$head" origin/main 2>/dev/null; then
+              _mainline="$(git -C "$repo" rev-list --first-parent origin/main 2>/dev/null)"
+              case "$_mainline" in
+                *"$head"*)
+                  _mrc=3
+                  _mreason="ancestry-only (helper not found) — HEAD is on origin/main's first-parent history: no commits of its own, not a removal candidate" ;;
+                *) _mrc=0 ;;
+              esac
+            fi
+            # END legacy-ancestry-fallback
           fi
-          if [ "$_mrc" -eq 0 ]; then
+          if [ "$_mrc" -eq 3 ]; then
+            # Merged, but nothing of its own to reclaim (#1341) — a fresh,
+            # not-yet-committed worktree, very likely one a live agent in
+            # ANOTHER session is about to write into. Removal is withheld and
+            # it is surfaced under its own label, not the misleading UNMERGED.
+            FLAGGED+=("FRESH  $repo :: $wt (HEAD ${head:-?}) [$_mreason]")
+          elif [ "$_mrc" -eq 0 ]; then
             # Never force-remove (owner decision, PR #1213 round 3): a
             # worktree that does not remove cleanly (uncommitted/untracked
             # content in the way) is FLAGGED for a manual decision instead.
@@ -169,7 +196,7 @@ if [ "${#FLAGGED[@]}" -gt 0 ]; then
 fi
 ```
 
-Report merged-worktree removals and surface the FLAGGED list (locked + unmerged) for a manual call — never force-remove a FLAGGED worktree without explicit confirmation. Also report the `check_child_checkouts.py` result (#832): children fast-forwarded vs FLAGGED (dirty/diverged/feature-branch — left untouched; a child many commits behind `origin/main` is the #816 stale-config root cause).
+Report merged-worktree removals and surface the FLAGGED list (locked + unmerged + FRESH) for a manual call — never force-remove a FLAGGED worktree without explicit confirmation. A **FRESH** entry is *not* a cleanup backlog item: it is a worktree with no commits of its own, which usually means a live agent is about to write into it (#1341). Leave it alone unless you know the session that owns it is gone. Also report the `check_child_checkouts.py` result (#832): children fast-forwarded vs FLAGGED (dirty/diverged/feature-branch — left untouched; a child many commits behind `origin/main` is the #816 stale-config root cause).
 
 ### Step 1 — Team orientation
 
