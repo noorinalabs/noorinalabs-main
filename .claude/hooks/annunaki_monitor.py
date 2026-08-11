@@ -21,8 +21,12 @@ Input Language:
                   matched pattern is `stdout:No such file or directory`),
                   content-display commands (#596 — exit=0 cat/head/tail/less,
                   `gh api .../contents/...`, or a read of errors.jsonl when the
-                  ONLY signals are stdout-pattern matches in displayed content),
-                  session-dedup hits
+                  ONLY signals are stdout-pattern matches in displayed content;
+                  #1354 extends this to `rg` over any file, `gh run view`/
+                  `gh run log` (a CI-log read, `2>&1` permitted for these two
+                  verbs specifically), and `gh api .../actions/runs/<id>/logs`
+                  — investigating an already-known CI failure is a content
+                  display too, not a fresh error), session-dedup hits
   Flag pass-through: stdin JSON is forwarded verbatim to `check()` by the
                      PostToolUse dispatcher (`post_dispatcher.py`)
   Confidence tag (#729): every logged record carries `confidence` in
@@ -214,8 +218,10 @@ CONTENT_DISPLAY_VERBS = re.compile(
     ^\s*
     (?:
         cat | head | tail | less | more | bat        # file pagers/dumpers
+      | rg                                           # #1354: file-content search/dump
       | git\s+show | git\s+diff | git\s+log          # git content display
       | gh\s+pr\s+diff | gh\s+pr\s+view              # gh PR content display
+      | gh\s+run\s+view | gh\s+run\s+log             # #1354: gh CI-log content display
     )
     \b
     """,
@@ -227,6 +233,11 @@ CONTENT_DISPLAY_VERBS = re.compile(
 # api invocations are commonly preceded by a variable-assignment prefix and the
 # `contents/` path segment is an unambiguous content-read marker.
 CONTENT_DISPLAY_GH_API_CONTENTS = re.compile(r"\bgh\s+api\b.*\bcontents/")
+
+# `gh api .../actions/runs/<id>/logs` — the raw-logs REST read, the API analog
+# of `gh run view --log-failed` / `gh run log` (#1354). Same content-read
+# reasoning as CONTENT_DISPLAY_GH_API_CONTENTS above.
+CONTENT_DISPLAY_GH_API_LOGS = re.compile(r"\bgh\s+api\b.*\bactions/runs/\d+/logs\b")
 
 # Self-referential meta-capture guard (#596): a command that reads the annunaki
 # error log itself will echo historical records containing "Traceback" etc.
@@ -243,6 +254,40 @@ CONTENT_DISPLAY_ERRORS_LOG = re.compile(r"errors\.jsonl")
 # but is a failed read whose merged error text (or an unrelated Traceback in the
 # merged stream) must still log on its own merits (#517 regression guard).
 CONTENT_DISPLAY_STDOUT_MERGE = re.compile(r"2>&1")
+
+# CI-log-read verbs (#1354): `gh run view --log-failed` / `gh run log` are the
+# canonical way to read a failed CI job's log, and routinely need `2>&1 |
+# tail -c N` to bound stdout size while still catching anything `gh` itself
+# writes to stderr (a warning, a rate-limit notice).
+#
+# IMPORTANT — this repo's shell has no `pipefail` (zsh, no `setopt pipefail`
+# in play here), so for the piped canonical form the `exit_code != 0` guard
+# above does NOT independently catch a failing `gh run view`: the observed
+# exit code is the last stage's (`tail`'s), which is 0 even when `gh` itself
+# failed. Measured live: `gh run view <bad-id> --log-failed 2>&1 | tail -c
+# 8000; echo $?` → `0`, with `gh`'s failure text on stdout. So this
+# exemption is NOT "safe because a real failure would still surface via a
+# nonzero exit" — for the piped form, it would not.
+#
+# The exemption is accepted anyway because the residual class is bounded and
+# already low-value: a `gh run view` that itself fails emits either (a) gh's
+# own "failed to get run: HTTP 404: ..." text, which trips NO ERROR_PATTERNS
+# entry at all (dropped identically pre- and post-fix), or (b) a line that
+# DOES match a pattern (e.g. "error connecting to api.github.com"), which
+# pre-fix was retained at confidence=low/category=pipe-mask-suspect (#835) —
+# already excluded from annunaki_parse's genuine-error count — and post-fix
+# is dropped entirely. The loss is confined to uncounted forensic records;
+# no `confidence=high` shape is lost. Every other content-display verb
+# (including the new `rg` verb, which is not a CI-log-specific idiom) keeps
+# the `2>&1` disqualifier unchanged.
+CONTENT_DISPLAY_LOG_READ_VERBS = re.compile(
+    r"""
+    ^\s*
+    gh\s+run\s+(?:view|log)
+    \b
+    """,
+    re.VERBOSE,
+)
 
 # The `No such file or directory` stdout match always signals a FAILED
 # filesystem read (a missing path), never error-shaped *content* we want to
@@ -319,7 +364,7 @@ JSON_BODY_LINE = re.compile(r'^\s*[+-]?\s*[{\[]\s*["{]')
 
 
 def _is_content_display(command: str, exit_code: int, matched_patterns: list[str]) -> bool:
-    """Return True if this matches the #596 content-display idiom.
+    """Return True if this matches the #596/#1354 content-display idiom.
 
     All of the following must hold:
       1. exit_code == 0 (the read/display succeeded)
@@ -327,18 +372,23 @@ def _is_content_display(command: str, exit_code: int, matched_patterns: list[str
          no `exit_code=` marker. A stderr pattern or non-zero exit means a real
          failure occurred alongside the display, so this skip does NOT apply.
       3. the command does NOT contain a `2>&1` stdout-merge AND no matched
-         pattern is the `No such file or directory` line. Both mark the #517
-         probe-with-fallback domain (an intentional/failed read of a missing
-         path) rather than displayed error-shaped content, so those cases are
-         left to the probe classifier. The `2>&1` guard catches the command
-         shape; the No-such-file guard catches the matched-signal even when the
-         command shape is absent (e.g. a bare `gh api .../contents/... > file`
-         that failed). Together they keep `cat missing.py 2>&1 | head` and the
-         non-trailer probe outliers from being mis-classified as displays.
+         pattern is the `No such file or directory` line — UNLESS the command
+         is a CI-log-read verb (`gh run view`/`gh run log`, #1354), which is
+         exempted from the `2>&1` sub-check specifically (see
+         CONTENT_DISPLAY_LOG_READ_VERBS). For every other verb, both guards
+         mark the #517 probe-with-fallback domain (an intentional/failed read
+         of a missing path) rather than displayed error-shaped content, so
+         those cases are left to the probe classifier. The `2>&1` guard
+         catches the command shape; the No-such-file guard catches the
+         matched-signal even when the command shape is absent (e.g. a bare
+         `gh api .../contents/... > file` that failed). Together they keep
+         `cat missing.py 2>&1 | head` and the non-trailer probe outliers from
+         being mis-classified as displays.
       4. the command is a recognized content-display operation: a leading
-         display verb (cat/head/tail/less/more/bat, git show|diff|log,
-         gh pr diff|view), a `gh api .../contents/...` read, OR a read of the
-         annunaki errors.jsonl log (self-referential meta-capture).
+         display verb (cat/head/tail/less/more/bat, rg, git show|diff|log,
+         gh pr diff|view, gh run view|log), a `gh api .../contents/...` or
+         `gh api .../actions/runs/<id>/logs` read, OR a read of the annunaki
+         errors.jsonl log (self-referential meta-capture).
 
     Condition 2 is the precedence guard mirroring the silent-boolean-test and
     probe-with-fallback families: any real failure signal bypasses the skip.
@@ -349,13 +399,17 @@ def _is_content_display(command: str, exit_code: int, matched_patterns: list[str
         return False
     if not all(p.startswith("stdout:") for p in matched_patterns):
         return False
-    if CONTENT_DISPLAY_STDOUT_MERGE.search(command):
-        return False
-    if CONTENT_DISPLAY_EXCLUDED_PATTERN in matched_patterns:
-        return False
+    is_log_read_verb = CONTENT_DISPLAY_LOG_READ_VERBS.search(command) is not None
+    if not is_log_read_verb:
+        if CONTENT_DISPLAY_STDOUT_MERGE.search(command):
+            return False
+        if CONTENT_DISPLAY_EXCLUDED_PATTERN in matched_patterns:
+            return False
     if CONTENT_DISPLAY_VERBS.search(command):
         return True
     if CONTENT_DISPLAY_GH_API_CONTENTS.search(command):
+        return True
+    if CONTENT_DISPLAY_GH_API_LOGS.search(command):
         return True
     if CONTENT_DISPLAY_ERRORS_LOG.search(command):
         return True
@@ -556,11 +610,13 @@ def check(input_data: dict) -> dict | None:
     if _is_probe_with_fallback(command, exit_code, matched_patterns):
         return None
 
-    # #596 content-display filter: a command that DISPLAYS content (cat/head/
-    # tail/less of a file, `gh api .../contents/...`, a read of errors.jsonl)
-    # and exits 0 with only stdout-pattern matches is echoing error-shaped
-    # content, not failing. The helper requires exit==0 AND every matched
-    # pattern be a stdout one, so a real stderr/exit-code signal bypasses this.
+    # #596/#1354 content-display filter: a command that DISPLAYS content
+    # (cat/head/tail/less/rg of a file, `gh api .../contents/...` or
+    # `.../actions/runs/<id>/logs`, `gh run view`/`gh run log`, a read of
+    # errors.jsonl) and exits 0 with only stdout-pattern matches is echoing
+    # error-shaped content, not failing. The helper requires exit==0 AND
+    # every matched pattern be a stdout one, so a real stderr/exit-code
+    # signal bypasses this.
     if _is_content_display(command, exit_code, matched_patterns):
         return None
 
