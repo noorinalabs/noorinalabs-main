@@ -908,13 +908,32 @@ def classify_section(
     threshold = signals.get("threshold", 5)
 
     if invocations < threshold:
+        # #1355: "wait for more operator-invoked runs" is only an accurate
+        # message when there is something an operator COULD invoke — i.e.
+        # a skill already scaffolded on disk at the prospective slug. For
+        # the common not-yet-promoted case (no `promoted-to` back-reference,
+        # no skill directory), the invocation count is structurally 0
+        # forever: promotion (creating the skill) is a deliberate human
+        # act, not something that accrues from waiting. Distinguish the
+        # two so the reader isn't told to wait for something that cannot
+        # arrive on its own.
+        target_configured = bool(signals.get("target_configured", 0))
+        if target_configured:
+            reason = "Invocation threshold not met; wait for more operator-invoked runs"
+        else:
+            reason = (
+                "Promotion target not configured — no skill exists at this slug yet, "
+                "so invocations cannot accrue; scaffolding the skill (a deliberate "
+                "human act) is required before this becomes evaluable"
+            )
         return Decision(
             kind="KEPT",
             item_id=f"{os.path.basename(section.path)} § {section.heading}",
             from_tier="charter",
             to_tier="skill",
             signal=f"skill_invocations={invocations} < {threshold}",
-            reason="Invocation threshold not met; wait for more operator-invoked runs",
+            reason=reason,
+            extra={"target_configured": target_configured},
         )
 
     return Decision(

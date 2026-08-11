@@ -789,6 +789,44 @@ class ClassifySectionTests(unittest.TestCase):
         d = h.classify_section(_make_section(promotion_target="hook"), {})
         self.assertEqual(d.kind, "KEPT")
 
+    def test_threshold_not_met_unconfigured_target_is_not_a_wait_message(self) -> None:
+        """#1355: a section whose prospective skill does not exist yet on
+        disk (`target_configured` false/absent) can never accumulate
+        invocations — the skill has nothing to invoke. The KEPT reason
+        must say the target is not configured, NOT tell the reader to
+        wait for more operator-invoked runs (a state that cannot arrive
+        for an artifact that doesn't exist).
+
+        Pre-fix, `classify_section` renders the identical
+        'Invocation threshold not met; wait for more operator-invoked
+        runs' message regardless of whether the target skill exists —
+        this assertion fails against that implementation."""
+        d = h.classify_section(
+            _make_section(), {"skill_invocations": 0, "threshold": 5, "target_configured": 0}
+        )
+        self.assertEqual(d.kind, "KEPT")
+        self.assertNotIn("wait for more operator-invoked runs", d.reason)
+        self.assertIn("not configured", d.reason.lower())
+
+    def test_threshold_not_met_configured_target_still_says_wait(self) -> None:
+        """NEG: once the target skill actually exists on disk (configured,
+        just below the invocation threshold), 'wait for more
+        operator-invoked runs' is an accurate message and must be kept."""
+        d = h.classify_section(
+            _make_section(), {"skill_invocations": 1, "threshold": 5, "target_configured": 1}
+        )
+        self.assertEqual(d.kind, "KEPT")
+        self.assertIn("wait for more operator-invoked runs", d.reason)
+
+    def test_threshold_not_met_target_configured_defaults_false(self) -> None:
+        """Absent `target_configured` in signals defaults to unconfigured
+        (the common case: prospective-only slug, skill never scaffolded) —
+        callers that don't wire the new signal get the safe, accurate
+        message rather than silently reverting to the misleading one."""
+        d = h.classify_section(_make_section(), {"skill_invocations": 0, "threshold": 5})
+        self.assertEqual(d.kind, "KEPT")
+        self.assertIn("not configured", d.reason.lower())
+
 
 # ---------------------------------------------------------------------------
 # Classification — skill

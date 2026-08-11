@@ -251,8 +251,21 @@ def run_audit(
     for sec in sections:
         slug = _section_signal_slug(sec)
         invocations = h.count_skill_invocations(slug, paths.repo_root)
+        # #1355: whether the prospective skill actually exists on disk yet
+        # gates which KEPT message classify_section renders — see the
+        # docstring on that branch. A not-yet-created skill (the common
+        # case for a not-yet-promoted section) can never accrue
+        # invocations, so "wait for more runs" would be misleading.
+        target_configured = os.path.isdir(os.path.join(paths.skills_dir, slug))
         decisions.append(
-            h.classify_section(sec, {"skill_invocations": invocations, "threshold": threshold})
+            h.classify_section(
+                sec,
+                {
+                    "skill_invocations": invocations,
+                    "threshold": threshold,
+                    "target_configured": int(target_configured),
+                },
+            )
         )
 
     # skill → hook (always DECIDE)

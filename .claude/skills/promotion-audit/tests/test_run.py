@@ -196,6 +196,31 @@ class EmptySlugRegression(unittest.TestCase):
         self.assertEqual(result.counts()["AUTO"], 0)
         self.assertEqual(result.counts()["DECIDE"], 0)
 
+    def test_unpromoted_section_with_no_skill_on_disk_reports_not_configured(self) -> None:
+        """#1355: the fixture's 'Some Procedure' section has no matching
+        skill directory (`some-procedure/`) anywhere under
+        `.claude/skills/` — the driver must wire `target_configured=False`
+        through to `classify_section` so the KEPT reason says the target
+        isn't configured, not that the reader should wait for more runs."""
+        paths, _ = _make_fixture_repo(self.tmp)
+        result = run.run_audit(paths, wave_name="p5-wave-5", audit_date="2026-06-16")
+        sec_decisions = [d for d in result.decisions if d.from_tier == "charter"]
+        self.assertEqual(len(sec_decisions), 1)
+        self.assertNotIn("wait for more operator-invoked runs", sec_decisions[0].reason)
+        self.assertIn("not configured", sec_decisions[0].reason.lower())
+
+    def test_section_with_skill_already_scaffolded_reports_wait(self) -> None:
+        """NEG: once the prospective slug's skill directory actually
+        exists on disk (created but not yet linked via `promoted-to:`),
+        the driver must report `target_configured=True` and preserve the
+        accurate 'wait for more operator-invoked runs' message."""
+        paths, _ = _make_fixture_repo(self.tmp)
+        os.makedirs(os.path.join(paths.skills_dir, "some-procedure"), exist_ok=True)
+        result = run.run_audit(paths, wave_name="p5-wave-5", audit_date="2026-06-16")
+        sec_decisions = [d for d in result.decisions if d.from_tier == "charter"]
+        self.assertEqual(len(sec_decisions), 1)
+        self.assertIn("wait for more operator-invoked runs", sec_decisions[0].reason)
+
 
 class FixtureAuditShape(unittest.TestCase):
     def setUp(self) -> None:
