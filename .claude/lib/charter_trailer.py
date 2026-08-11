@@ -99,18 +99,36 @@ _FENCE_MARKERS = ("```", "~~~")
 # indented-code-block recognition. Plain 4+-space-indented text with NO
 # triple marker anywhere is still never stripped, before or after this
 # change — that broader, marker-independent gap is tracked separately
-# (main#1420), out of scope here.
-_FENCE_OPENER_PREFIX_RE = re.compile(r"^(?:>[ \t]?)*[ \t]*$")
+# (main#1416), out of scope here.
+#
+# WHITESPACE IS ALLOWED BEFORE THE BLOCKQUOTE GROUP TOO, NOT ONLY AFTER IT
+# (main#1359 MF7). MF6's regex, `^(?:>[ \t]?)*[ \t]*$`, put its trailing
+# `[ \t]*` term downstream of the `(?:>...)*` group — so whitespace was only
+# recognized AFTER the blockquote markers ("> " then spaces: quote-then-
+# indent). The untested axis was indent-then-quote (spaces THEN ">"), which
+# had no whitespace allowance in front of the first `>` at all and so failed
+# to qualify as an opener. That is not exotic: CommonMark permits up to 3
+# spaces before a `>`, GitHub renders it as an ordinary blockquote, and a
+# blockquote INSIDE A LIST ITEM produces exactly this shape (the list
+# marker's own indentation precedes the quote marker). A fabricated block
+# behind that prefix, below a real trailer, is worse than a name swap — it
+# also flips `RequestOrReplied` (e.g. `Approved` on base to
+# `ChangesRequested` at the pre-MF7 head), and the identical unstripped-block
+# mechanism defeats `trust_signals.parse_verdicts`'s `Retracted:` scan. Fixed
+# by moving the whitespace term to also precede (and be repeatable between)
+# the blockquote markers, not only trail the group as a whole.
+_FENCE_OPENER_PREFIX_RE = re.compile(r"^[ \t]*(?:>[ \t]*)*$")
 
 
 def _is_fence_opener_position(body: str, i: int) -> bool:
     """True if position `i` in `body` is where a fence opener is allowed.
 
     "Allowed" means everything on the current line before `i` is only
-    blockquote markers and/or whitespace (any amount) — see
-    `_FENCE_OPENER_PREFIX_RE` for why indentation depth is deliberately
-    unbounded. A line's start is `i == 0` or the character immediately
-    after the nearest preceding newline.
+    blockquote markers and/or whitespace (any amount, in any relative
+    order — before, between, or after the blockquote markers; main#1359
+    MF7) — see `_FENCE_OPENER_PREFIX_RE` for why indentation depth is
+    deliberately unbounded. A line's start is `i == 0` or the character
+    immediately after the nearest preceding newline.
     """
     line_start = body.rfind("\n", 0, i) + 1
     return bool(_FENCE_OPENER_PREFIX_RE.match(body[line_start:i]))
@@ -167,12 +185,12 @@ def strip_code_regions(body: str) -> str:
         # not part of this fix.
         #
         # "STARTS A LINE" MEANS ANY AMOUNT OF WHITESPACE AND/OR A BLOCKQUOTE
-        # PREFIX, NOT COLUMN 0 EXACTLY (MF5, then MF6 removed MF5's own
-        # 3-space cap — see `_FENCE_OPENER_PREFIX_RE` for the full history
-        # and why the cap itself was a second fail-open regression). A
-        # marker behind any OTHER prefix (ordinary prose text) still
-        # correctly fails to qualify as an opener — that is MF4's fix, and
-        # neither MF5 nor MF6 touched it.
+        # PREFIX, IN EITHER ORDER, NOT COLUMN 0 EXACTLY (MF5, MF6, MF7 — see
+        # `_FENCE_OPENER_PREFIX_RE` for the full history of each fail-open
+        # regression the previous fix's own restriction opened). A marker
+        # behind any OTHER prefix (ordinary prose text) still correctly
+        # fails to qualify as an opener — that is MF4's fix, and none of
+        # MF5/MF6/MF7 touched it.
         fence = (
             next((m for m in _FENCE_MARKERS if body.startswith(m, i)), None)
             if _is_fence_opener_position(body, i)

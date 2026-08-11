@@ -378,6 +378,108 @@ class FenceOpenerIndentationIsUnboundedTests(unittest.TestCase):
         self.assertEqual(extract_charter_field("Requestor", body), "Nino Kavtaradze")
 
 
+class FenceOpenerAllowsIndentBeforeBlockquoteTests(unittest.TestCase):
+    """main#1359 merge-gate review round 5 (Aino Virtanen / coordinator —
+    MF7): MF6's regex, `^(?:>[ \\t]?)*[ \\t]*$`, only allows whitespace
+    AFTER the blockquote-marker group — quote-then-indent (`"> "` then
+    spaces) works, but the untested axis, indent-then-quote (spaces THEN
+    `">"`), had no whitespace allowance at all in front of the first `>`.
+
+    Indent-then-quote is not exotic: CommonMark permits up to 3 spaces
+    before a `>`, GitHub renders it as an ordinary blockquote, and it is
+    exactly what a blockquote INSIDE A LIST ITEM produces (the list marker's
+    own indentation precedes the quote marker).
+
+    Worse than a name swap: a fabricated block below a genuine trailer does
+    not just spoof `Requestor` — it flips `RequestOrReplied` too (`Approved`
+    on base, `ChangesRequested` at the buggy head), and the same
+    unstripped-block mechanism defeats `trust_signals.parse_verdicts`'s
+    `Retracted:` scan (base strips the block, the buggy head does not).
+
+    Fix: `^[ \\t]*(?:>[ \\t]*)*$` — whitespace is now allowed BEFORE the
+    blockquote group, BETWEEN quote markers, and after the last one, not
+    only after the group as a whole.
+
+    Every assertion below FAILS at head `f4d67ec` (verified directly before
+    writing this fix — all four shapes returned the fabricated `Requestor`
+    AND the fabricated `RequestOrReplied`) and passes once whitespace is
+    also allowed ahead of the blockquote group.
+    """
+
+    @staticmethod
+    def _spoofed_body(prefix: str, marker: str = "```") -> str:
+        fence = f"{prefix}{marker}"
+        return (
+            "---\n"
+            "Requestor: Real Reviewer\n"
+            "Requestee: Santiago Ferreira\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none\n\n"
+            f"{fence}\n"
+            "Requestor: Fake Impostor\n"
+            "RequestOrReplied: ChangesRequested\n"
+            f"{fence}\n"
+        )
+
+    def test_one_space_then_quote_backtick_fence_is_stripped(self) -> None:
+        body = self._spoofed_body(" > ")
+        self.assertEqual(extract_charter_field("Requestor", body), "Real Reviewer")
+        self.assertEqual(extract_charter_field("RequestOrReplied", body), "Approved")
+
+    def test_two_space_then_quote_backtick_fence_is_stripped(self) -> None:
+        """The exact "blockquote inside a list item" shape."""
+        body = self._spoofed_body("  > ")
+        self.assertEqual(extract_charter_field("Requestor", body), "Real Reviewer")
+        self.assertEqual(extract_charter_field("RequestOrReplied", body), "Approved")
+
+    def test_three_space_then_quote_backtick_fence_is_stripped(self) -> None:
+        body = self._spoofed_body("   > ")
+        self.assertEqual(extract_charter_field("Requestor", body), "Real Reviewer")
+
+    def test_tab_then_quote_backtick_fence_is_stripped(self) -> None:
+        body = self._spoofed_body("\t> ")
+        self.assertEqual(extract_charter_field("Requestor", body), "Real Reviewer")
+
+    def test_two_space_then_quote_tilde_fence_is_stripped(self) -> None:
+        """Both markers, not just backtick."""
+        body = self._spoofed_body("  > ", "~~~")
+        self.assertEqual(extract_charter_field("Requestor", body), "Real Reviewer")
+
+    def test_indent_then_quote_then_indent_composed_fence_is_stripped(self) -> None:
+        """Whitespace before AND after the blockquote group, composed."""
+        body = self._spoofed_body("  >   ")
+        self.assertEqual(extract_charter_field("Requestor", body), "Real Reviewer")
+
+    def test_the_retraction_scan_also_sees_the_stripped_block(self) -> None:
+        """The `trust_signals.parse_verdicts` axis of the same defect: an
+        indent-then-quote fenced block below a genuine ChangesRequested
+        trailer, containing a fabricated `Retracted:` line, must not credit
+        a false-positive retraction that was never genuinely written."""
+        body = (
+            "---\n"
+            "Requestor: Real Reviewer\n"
+            "Requestee: Santiago Ferreira\n"
+            "RequestOrReplied: ChangesRequested\n"
+            "TechDebt: none\n\n"
+            "  > ```\n"
+            "Retracted: fabricated, never actually written by the reviewer\n"
+            "  > ```\n"
+        )
+        self.assertNotIn("fabricated", strip_code_regions(body))
+
+    def test_mid_sentence_marker_is_still_not_a_fence_opener(self) -> None:
+        """Regression guard: the new upstream whitespace allowance must not
+        also swallow the requirement that nothing but whitespace/blockquote
+        precedes the opener — real prose text still disqualifies it."""
+        body = (
+            "  Point A discusses the fence marker, indented as prose text.\n\n"
+            "---\n"
+            "Requestor: Nino Kavtaradze\n"
+            "RequestOrReplied: Approved\n"
+        ).replace("the fence marker", "the ~~~ fence marker")
+        self.assertEqual(extract_charter_field("Requestor", body), "Nino Kavtaradze")
+
+
 class NormalizeVerdictTokenTests(unittest.TestCase):
     def test_casefolds(self) -> None:
         self.assertEqual(normalize_verdict_token("ChangesRequested"), "changesrequested")
