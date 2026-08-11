@@ -1214,6 +1214,57 @@ class DistributionDiscipline(unittest.TestCase):
         self.assertEqual(ts.apply_distribution_discipline(whole_roster)["Nadia"], 4)
         self.assertEqual(ts.apply_distribution_discipline(whole_roster)["Nurul"], 4)
 
+    # ---- Composite ranks on the ATTRIBUTED count (main#1369) ------------- #
+    # `composite()` used the raw `must_fix_received`, so a round the author did
+    # not cause still cost them a composite point — and the reserved 5 is
+    # allocated on composite. The ruling: the ceiling cap asks the same
+    # fairness question as `score_delta`, so it ranks on the same quantity.
+
+    def test_orchestrator_caused_rework_does_not_flip_the_ceiling_five(self) -> None:
+        """#1369 acceptance — a marked round must not reallocate the reserved 5.
+
+        Two ceiling entrants one point apart on the raw count. `Marked`'s two
+        blocking rounds both carry `OrchestratorCaused:`, so nothing they did
+        generated that rework:
+
+            raw        Marked = 5 + 3 - 2 = 6   Clean = 4 + 3 - 0 = 7
+            attributed Marked = 5 + 3 - 0 = 8   Clean = 4 + 3 - 0 = 7
+
+        Pre-fix the wave maximum is Clean's 7 and Marked is capped to 4;
+        the orchestrator's dispatch error, not Marked's work, decided it.
+        """
+        marked = ts.Signals(
+            prs_merged=5,
+            must_fix_caught=3,
+            must_fix_received=2,
+            orchestrator_caused_rework=2,
+        )
+        clean = ts.Signals(prs_merged=4, must_fix_caught=3)
+        proposals = {
+            "Marked": _entrant(5, marked, old=4),
+            "Clean": _entrant(5, clean, old=4),
+        }
+        out = ts.apply_distribution_discipline(proposals)
+        self.assertEqual(out["Marked"], 5)  # ranks on attributable_rework() == 0
+        self.assertEqual(out["Clean"], 4)  # 7 < 8 — no longer the wave maximum
+
+    def test_unmarked_rework_still_costs_a_composite_point(self) -> None:
+        """The change is scoped to *attributed* rounds — nothing else moves.
+
+        Same two engineers, same raw counts, no `OrchestratorCaused:` marker.
+        `attributable_rework()` then equals `must_fix_received`, the ranking is
+        exactly the pre-#1369 ranking, and `Clean` keeps the 5.
+        """
+        unmarked = ts.Signals(prs_merged=5, must_fix_caught=3, must_fix_received=2)
+        clean = ts.Signals(prs_merged=4, must_fix_caught=3)
+        proposals = {
+            "Unmarked": _entrant(5, unmarked, old=4),
+            "Clean": _entrant(5, clean, old=4),
+        }
+        out = ts.apply_distribution_discipline(proposals)
+        self.assertEqual(out["Unmarked"], 4)
+        self.assertEqual(out["Clean"], 5)
+
     def test_wave_29_applied_scores_are_unchanged_by_the_entry_gate(self) -> None:
         """The signature change must not move any applied wave-29 score.
 
