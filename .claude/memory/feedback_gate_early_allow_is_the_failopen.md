@@ -80,6 +80,39 @@ of the registered entry point: `check()` unit tests are blind to both holes
 Every hook built on `run_blocking` has both properties. #1243 closed Hook 17;
 the rest of `settings.json`'s blocking gates were not swept.
 
+### The fix for a fail-open contained two more of them (#1388 review, W30)
+
+Recorded because I wrote it, review caught it, and neither instance was subtle
+in hindsight:
+
+1. **I caught the class I reproduced, not the class that exists.** The issue
+   reproduced an ABSENT dependency (`mv org_repos.py /tmp/`), so I wrote
+   `except ImportError`. A dependency that is PRESENT but unloadable raises
+   `SyntaxError` — a *sibling* of `ImportError`, not a subclass — and still
+   exited 1. Unresolved merge-conflict markers in a lib file during a wave
+   merge is *more* reachable than a deleted file, and reachable exactly when
+   `/wave-wrapup` runs. **Rule: when you fix an error path, enumerate the
+   exception taxonomy, not the reproduction.** `except Exception` is the
+   correct blast radius for a gate's dependency init; `BaseException` is not
+   (`SystemExit`/`KeyboardInterrupt` must keep their semantics).
+2. **I silently reversed a carve-out the same file argues for.** My handler
+   blocked all gated skills uniformly, including `/handoff` — which the module
+   docstring, a few paragraphs up, explicitly exempts even at TOTAL audit
+   failure. Justified at the time as "a gate that never ran cannot reason about
+   which skill deserves which degradation," which was simply false: the skill
+   name is the one thing the broken path *does* recover. **Rule: a new failure
+   path must reuse the verdict split the module already documents, not invent a
+   stricter one.**
+
+And the meta-lesson: **the docstring was the more dangerous half.** I shipped
+"Every path in this module ends at 0 or 2" in the same commit that left a path
+ending at 1. A gate that fails open is bad; a gate that fails open while its own
+docstring certifies it cannot is worse, because the next maintainer reads the
+sentence instead of re-measuring. Fix: make the claim TRUE, then **pin it with a
+test** (a matrix asserting exit ∈ {0,2} over every breakage shape × dependency ×
+skill), and **name the residuals** you did not close rather than rounding them
+off. Never soften a guarantee into vagueness to make it technically true.
+
 **And mutation-test the constant, not just the logic.** The same PR found
 `_ORG_REPOS` had no SSOT-identity guard: a hand-copied 8-tuple with ONE typo'd
 repo name survived all 4185 tests while the audit swept a nonexistent repo.
