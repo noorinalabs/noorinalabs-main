@@ -32,18 +32,38 @@ Verdict policy (deterministic):
     deliberately NOT a STOP: a missing local checkout is an environment gap, not
     evidence the premise rotted — a false STOP there would block scope on
     tooling state, the opposite of the gate's purpose.
-  * a ``.claude/``-rooted path that MISSES in a child repo but resolves in the
-    parent (``noorinalabs-main``) -> ``CROSS_REPO`` -> verdict ``WARN`` (main#1047
-    da#427): very often a legitimate reference to org-wide config, worth a
+  * a ``.claude/``/``.github/``-rooted path that MISSES in one repo of an org
+    pair (parent<->child) but resolves in the other -> ``CROSS_REPO`` ->
+    verdict ``WARN`` (main#1047 da#427 child->parent; main#1138 wave-30
+    extends this symmetrically to parent->child, e.g. a ``noorinalabs-main``
+    issue naming a ``.github/workflows/`` file a Track-C story is hoisting
+    FROM a child repo): very often a legitimate cross-repo reference, worth a
     manual look rather than a hard block.
-  * a bare (slash-free) filename that misses at repo root but resolves
-    uniquely elsewhere in the tree -> ``EXISTS`` via a basename fallback
-    (main#1047 da#373).
+  * a relative fragment that misses at its literal location but is a real
+    suffix of some tracked path elsewhere in the tree (a bare basename per
+    main#1047 da#373, or a multi-segment fragment like
+    ``lib/check_agent_liveness.py`` per main#1138's 4th FP class) ->
+    ``EXISTS`` via the suffix fallback.
+  * a path that MISSES but is matched by a ``.gitignore`` rule (main#1138:
+    ``.claude/annunaki/errors.jsonl``) -> ``GITIGNORED`` -> verdict ``WARN``:
+    git can never see a gitignored path tracked, by design, so that alone is
+    not evidence of premise rot.
+  * a path listed in the issue's own ``creates`` array (main#1138 class 2: an
+    issue that PROPOSES to add a file names its own output, not an
+    already-holding premise) -> ``CREATES``, never checked against git, never
+    contributes to the verdict.
   * everything present, or no concrete refs to check -> ``OK``.
 
-An issue may also declare explicit ``paths`` / ``symbols`` arrays (deliberate
-named premises the orchestrator wants asserted even if the body phrasing is too
-loose for auto-extraction); a symbol may be scoped to a pathspec.
+Extraction also rejects three shapes that read as paths but never assert a
+repo premise (main#1138): a filesystem-absolute token (``/tmp/.../*.md`` — no
+``git cat-file`` target is ever absolute), a bare extension with nothing
+before the dot (``.py``, ``.yaml``), and a doc-placeholder filename (``X.md``,
+``foo.py``, ``example.py`` — the "insert your own name here" convention).
+
+An issue may also declare explicit ``paths`` / ``symbols`` / ``creates``
+arrays (deliberate named premises — or declared outputs — the orchestrator
+wants asserted even if the body phrasing is too loose for auto-extraction); a
+symbol may be scoped to a pathspec.
 
 CLI:
   premise_check.py check --issues ISSUES.json [--ref origin/main]
@@ -58,6 +78,9 @@ CLI:
       "symbols": [                              # optional explicit symbols
         {"name": "wave_key_reset", "pathspec": ".claude/lib/"}
       ],
+      "creates": [".claude/lib/org_repos.py"],  # optional: this issue's own
+                                                 # proposed output, exempt
+                                                 # from existence checks
       "repo_dir": "/abs/path",      # optional; overrides repos-root resolution
       "git_ref": "origin/main"      # optional per-issue ref override
     }
@@ -76,7 +99,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from org_repos import ALL_REPOS
+from org_repos import ALL_REPOS, CHILD_REPOS, MAIN_REPO
 
 # Repo root = two parents above .claude/lib/ (lib -> .claude -> root). Resolved
 # from this file so the default repos-root is correct from any cwd or worktree.
@@ -86,12 +109,25 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 EXISTS = "exists"
 MISSING = "missing"
 UNVERIFIABLE = "unverifiable"
-# A `.claude/`-rooted path that misses in a CHILD repo but resolves in the
-# parent (`noorinalabs-main`) — very often a legitimate reference to org-wide
-# config from a child-repo issue (main#1047 da#427). Treated as WARN, not
-# STOP: the reference is real, but reading it against the wrong repo is worth
-# a manual look, not a hard block.
+# A shared-root path (`.claude/`, `.github/`) that misses in one repo of an
+# org pair but resolves in the other — very often a legitimate cross-repo
+# reference (main#1047 da#427: child names a parent-owned org-wide config
+# path; main#1138 wave-30: a `noorinalabs-main` issue names a
+# `.github/workflows/` file a Track-C story is hoisting FROM a child repo,
+# i.e. the parent side of the same reference). Treated as WARN, not STOP: the
+# reference is real, but reading it against the wrong repo is worth a manual
+# look, not a hard block.
 CROSS_REPO = "cross_repo"
+# A path that git can never see tracked because it is deliberately
+# `.gitignore`d (main#1138 wave-30: `.claude/annunaki/errors.jsonl`) — cannot
+# be confirmed present via `git cat-file`, by design, so a bare MISSING would
+# read as premise rot on every single check forever. WARN, not STOP: the
+# reference may well be legitimate, but git cannot verify it either way.
+GITIGNORED = "gitignored"
+# An issue's own declared *output* (its `creates` array — main#1138 class 2):
+# a path this issue proposes to add, not a premise it asserts already holds.
+# Never checked against git, never contributes to the verdict.
+CREATES = "creates"
 
 # Per-issue verdicts.
 OK = "ok"
@@ -174,10 +210,31 @@ _KNOWN_ROOT_COMPONENTS = frozenset(
     }
 ) | frozenset(ALL_REPOS)
 
+# Root prefixes shared org-wide between the parent (`noorinalabs-main`) and
+# every child repo — org-wide tooling config (`.claude/`) and CI workflow
+# definitions (`.github/`, main#1138 wave-30: Track C hoists per-repo
+# `.github/workflows/*.yml` into `noorinalabs-main`). A path under one of
+# these that misses in one repo of an org pair but resolves in the other is
+# the CROSS_REPO downgrade's trigger set, symmetric in both directions
+# (child names a parent path: main#1047 da#427; parent names a child path:
+# main#1138).
+_CROSS_REPO_SHARED_PREFIXES = (".claude/", ".github/")
+
 # Known git refs / ref prefixes: `origin/main`, `refs/heads/x`, `HEAD` are
 # never file paths even though `origin/main` contains a slash (main#1047).
 _GIT_REF_LITERALS = frozenset({"HEAD"})
 _GIT_REF_PREFIXES = ("origin/", "refs/")
+
+# Doc-placeholder filenames used purely for illustration across this org's own
+# issues/docs (main#1138 wave-30 class: `X.md` is the exact stand-in main#1352
+# used for "insert your body-file path here"; the rest are the generic
+# prose convention). A token whose STEM (the part before the final dot,
+# case-insensitively) is exactly one of these is never asserted as a real
+# path, however plausible its extension looks. Deliberately narrow — a real
+# short name like `gh.py` or `db.py` is untouched.
+_PLACEHOLDER_STEMS = frozenset(
+    {"foo", "bar", "baz", "example", "sample", "placeholder", "dummy", "lorem"}
+)
 
 
 def _all_components_numeric(tok: str) -> bool:
@@ -200,14 +257,22 @@ def looks_like_path(token: str) -> bool:
     premise-rot purely because prose like ``A/B``, ``recall/precision``, or the
     git ref ``origin/main`` contains a ``/``). A token is accepted only when it
     is whitespace-free, path-character-only, not a bare git ref, not an
-    all-numeric fraction, and EITHER:
+    all-numeric fraction, not an absolute filesystem path, not a doc
+    placeholder, and EITHER:
 
-      * it ends in a known code/doc extension (``foo.py``, ``bar/baz.md``), OR
+      * it ends in a known code/doc extension AND has a non-empty stem before
+        that extension (``foo.py``, ``bar/baz.md`` — but not a bare ``.py``
+        with nothing before the dot), OR
       * it contains a ``/`` AND its leading component is a known repo-root
         directory (``src/``, ``docs/``, ``.claude/``, a child-repo name, …).
 
     A slash-containing token with neither signal (e.g. ``ism/kunya``,
-    ``boundary/particle``) is prose, not a path.
+    ``boundary/particle``) is prose, not a path. Every repo this gate checks
+    resolves paths as ``git cat-file -e <ref>:<path>``, which is always
+    repo-*relative* — a token starting with ``/`` is a filesystem-absolute
+    path (main#1138 wave-30: an ephemeral ``/tmp/.../scratchpad/*.md`` quoted
+    verbatim in an issue body) and can never be that kind of path, whatever
+    extension it happens to carry.
     """
     tok = token.strip()
     if not tok or " " in tok or "\t" in tok:
@@ -221,10 +286,35 @@ def looks_like_path(token: str) -> bool:
         return False
     if tok == "/":
         return False
+    # A filesystem-absolute path (main#1138: `/tmp/...`, `/var/...`) is never
+    # a repo-relative git path, regardless of what extension it carries.
+    if tok.startswith("/"):
+        return False
     if tok in _GIT_REF_LITERALS or tok.startswith(_GIT_REF_PREFIXES):
         return False
-    ext = tok.rsplit(".", 1)[-1].lower() if "." in tok else ""
-    if ext in _CODE_EXTENSIONS:
+    # Extension/stem/placeholder checks operate on the final path component
+    # (basename) — NOT the raw token — so a leading dot-directory
+    # (``.claude/lib/``) is never mistaken for a bare-extension token; only
+    # `.claude` (no trailing `/`) IS the basename in that case, and it has no
+    # dot to split on at all.
+    basename = tok.rsplit("/", 1)[-1]
+    stem, dot, ext_raw = basename.rpartition(".")
+    ext = ext_raw.lower() if dot else ""
+    # A bare extension with nothing before the dot (main#1138 class 3: a bare
+    # `.py`/`.yaml` mentioned in prose) is never a path — reject regardless of
+    # what follows.
+    if dot and not stem:
+        return False
+    # A doc-placeholder filename (main#1138 wave-30 class): a whole-word
+    # placeholder stem, or a single UPPERCASE-letter stem (`X.md`, `Y.py` —
+    # the "insert your own name" convention this org's own docs use, e.g.
+    # main#1352's `--body-file X.md`), reads as illustration, not a real
+    # asserted path. Lowercase single-letter stems (`a.py`, `c.py`) are left
+    # alone — this repo's own test fixtures use them as arbitrary real
+    # filenames, and the placeholder convention is specifically uppercase.
+    if stem and (stem.lower() in _PLACEHOLDER_STEMS or (len(stem) == 1 and stem.isupper())):
+        return False
+    if ext in _CODE_EXTENSIONS and stem:
         return True
     if "/" in tok and not _all_components_numeric(tok):
         first = tok.split("/", 1)[0]
@@ -302,20 +392,41 @@ def git_ref_exists(repo_dir: str, ref: str) -> bool:
     return proc.returncode == 0
 
 
-def _basename_resolves(repo_dir: str, ref: str, basename: str) -> bool:
-    """True when some tracked path at ``ref`` ends in ``/<basename>`` (or is it).
+def _suffix_resolves(repo_dir: str, ref: str, candidate: str) -> bool:
+    """True when some tracked path at ``ref`` equals ``candidate`` or ends in
+    ``/<candidate>``.
 
-    Basename fallback (main#1047 da#373): an issue naming a bare filename like
-    ``composition.py`` may not mean the repo root — the file can live at
-    ``src/parse/composition.py``. Only applies to slash-free candidates; a real
-    subpath that misses at its literal location is still MISSING, never
-    re-resolved by searching the whole tree.
+    Suffix fallback (main#1047 da#373 basename case, generalized by main#1138
+    4th FP class): an issue naming a bare filename like ``composition.py``
+    may not mean the repo root — the file can live at
+    ``src/parse/composition.py``. main#1138 widened this from slash-free
+    basenames to any relative fragment: a token like
+    ``lib/check_agent_liveness.py`` misses at its literal (repo-root-relative)
+    location but IS a real suffix of the tracked ``.claude/lib/
+    check_agent_liveness.py`` — the original basename-only fallback never
+    fired for it because the token was not slash-free. A candidate that
+    matches no tracked path anywhere is still MISSING, never re-resolved by
+    a coincidental partial match.
     """
     proc = _run_git(repo_dir, ["ls-tree", "-r", "--name-only", ref])
     if proc.returncode != 0:
         return False
-    suffix = "/" + basename
-    return any(line == basename or line.endswith(suffix) for line in proc.stdout.splitlines())
+    suffix = "/" + candidate
+    return any(line == candidate or line.endswith(suffix) for line in proc.stdout.splitlines())
+
+
+def git_path_is_ignored(repo_dir: str, path: str) -> bool:
+    """True when ``path`` is matched by a ``.gitignore`` rule in ``repo_dir``.
+
+    Checked against the *working tree's* current ``.gitignore`` (there is no
+    "ignored at a historical ref" concept — ignore rules are a property of
+    the tree, not of git history). ``git check-ignore`` exits 0 when the path
+    is ignored, 1 when it is not, and 128 on certain error conditions (all
+    folded into "not ignored" — this is a best-effort downgrade, never a
+    reason to assert MISSING harder).
+    """
+    proc = _run_git(repo_dir, ["check-ignore", "-q", "--", path])
+    return proc.returncode == 0
 
 
 def git_path_status(repo_dir: str, ref: str, path: str) -> str:
@@ -323,17 +434,23 @@ def git_path_status(repo_dir: str, ref: str, path: str) -> str:
 
     Returns :data:`UNVERIFIABLE` when the repo dir or ref cannot be read (an
     environment gap, never treated as premise rot), otherwise :data:`EXISTS` /
-    :data:`MISSING`. A slash-free ``path`` that misses at its literal location
-    gets one more chance via :func:`_basename_resolves` before being declared
-    MISSING (main#1047 basename fallback).
+    :data:`GITIGNORED` / :data:`MISSING`. A relative fragment that misses at
+    its literal location gets one more chance via :func:`_suffix_resolves`
+    before being declared MISSING (main#1047 da#373 / main#1138 suffix
+    fallback). Failing that, a path deliberately excluded from tracking via
+    ``.gitignore`` (main#1138: ``.claude/annunaki/errors.jsonl``) downgrades
+    to :data:`GITIGNORED` rather than MISSING — git can never see it
+    tracked, by design, so a bare MISSING there is not evidence of rot.
     """
     if not git_ref_exists(repo_dir, ref):
         return UNVERIFIABLE
     proc = _run_git(repo_dir, ["cat-file", "-e", f"{ref}:{path}"])
     if proc.returncode == 0:
         return EXISTS
-    if "/" not in path and _basename_resolves(repo_dir, ref, path):
+    if _suffix_resolves(repo_dir, ref, path):
         return EXISTS
+    if git_path_is_ignored(repo_dir, path):
+        return GITIGNORED
     return MISSING
 
 
@@ -368,7 +485,7 @@ SymbolChecker = Callable[[str, str, str, "str | None"], str]
 class CandidateResult:
     kind: str  # "path" | "symbol"
     value: str
-    status: str  # EXISTS | MISSING | UNVERIFIABLE | CROSS_REPO
+    status: str  # EXISTS | MISSING | UNVERIFIABLE | CROSS_REPO | GITIGNORED | CREATES
     pathspec: str | None = None
     note: str | None = None
 
@@ -394,11 +511,15 @@ class IssueResult:
     def cross_repo(self) -> list[CandidateResult]:
         return [c for c in self.candidates if c.status == CROSS_REPO]
 
+    @property
+    def gitignored(self) -> list[CandidateResult]:
+        return [c for c in self.candidates if c.status == GITIGNORED]
+
 
 def _verdict_for(candidates: list[CandidateResult]) -> str:
     if any(c.status == MISSING for c in candidates):
         return STOP
-    if any(c.status in (UNVERIFIABLE, CROSS_REPO) for c in candidates):
+    if any(c.status in (UNVERIFIABLE, CROSS_REPO, GITIGNORED) for c in candidates):
         return WARN
     return OK
 
@@ -445,6 +566,46 @@ def collect_candidates(issue: dict) -> list[tuple[str, str, str | None]]:
     return triples
 
 
+def _cross_repo_downgrade(
+    value: str,
+    repo_name: str,
+    repos_root: Path,
+    git_ref: str,
+    path_checker: PathChecker,
+) -> tuple[str, str] | None:
+    """Second-chance lookup for a MISSING shared-root path in the "other side"
+    of the parent/child pair (main#1047 da#427, extended symmetrically by
+    main#1138 wave-30). Returns ``(CROSS_REPO, note)`` on a hit, else ``None``.
+
+    * child repo, path misses locally -> check the parent (`noorinalabs-main`).
+    * parent repo (`noorinalabs-main`), path misses locally -> check every
+      child repo in turn; the first hit wins.
+
+    Only fires for a path under one of ``_CROSS_REPO_SHARED_PREFIXES`` — a
+    non-shared path missing in the wrong repo is not this class of reference.
+    """
+    if not value.startswith(_CROSS_REPO_SHARED_PREFIXES):
+        return None
+    if repo_name != MAIN_REPO:
+        parent_status = path_checker(str(repos_root), git_ref, value)
+        if parent_status == EXISTS:
+            return (
+                CROSS_REPO,
+                f"resolves in parent repo {MAIN_REPO}, not child repo "
+                f"{repo_name} — verify this is a deliberate cross-repo reference",
+            )
+        return None
+    for child in CHILD_REPOS:
+        child_status = path_checker(str(repos_root / child), git_ref, value)
+        if child_status == EXISTS:
+            return (
+                CROSS_REPO,
+                f"resolves in child repo {child}, not parent repo {MAIN_REPO} — "
+                "verify this is a deliberate cross-repo reference",
+            )
+    return None
+
+
 def check_issue(
     issue: dict,
     repos_root: Path,
@@ -454,33 +615,39 @@ def check_issue(
 ) -> IssueResult:
     """Verify every named premise of one scoped issue against its repo HEAD.
 
-    A `.claude/`-rooted path that MISSES in a child repo gets one more check
-    against the parent (`noorinalabs-main`) before being declared MISSING
-    (main#1047 da#427): a child-repo issue very often names a legitimate
-    org-wide config path. A parent-side hit downgrades that candidate to
-    :data:`CROSS_REPO` (-> WARN), not a bare pass — the reference is real, but
-    checking it against the wrong repo is still worth a manual look.
+    A shared-root (`.claude/`, `.github/`) path that MISSES in one repo of an
+    org pair gets one more check against the other side before being
+    declared MISSING (main#1047 da#427, symmetric extension main#1138
+    wave-30): a child-repo issue very often names a legitimate org-wide
+    config path, and a parent-repo issue can equally name a per-repo
+    workflow file a Track-C-shaped story is consolidating FROM a child. A
+    hit on the other side downgrades that candidate to :data:`CROSS_REPO`
+    (-> WARN), not a bare pass — the reference is real, but checking it
+    against the wrong repo is still worth a manual look.
+
+    An issue's own declared ``creates`` array (main#1138 class 2) exempts
+    those exact paths from verification entirely — they are the issue's
+    proposed output, not an asserted-to-already-exist premise, so a MISSING
+    checker result for one is never even consulted.
     """
     repo_dir = resolve_repo_dir(issue, repos_root)
     git_ref = issue.get("git_ref") or default_ref
-    repo_name = str(issue.get("repo") or "noorinalabs-main")
+    repo_name = str(issue.get("repo") or MAIN_REPO)
+    creates = {normalize_path(str(p)) for p in issue.get("creates", []) or []}
     candidates: list[CandidateResult] = []
     for kind, value, pathspec in collect_candidates(issue):
         if kind == "path":
+            if value in creates:
+                candidates.append(CandidateResult(kind, value, CREATES, pathspec))
+                continue
             status = path_checker(repo_dir, git_ref, value)
             note: str | None = None
-            if (
-                status == MISSING
-                and repo_name != "noorinalabs-main"
-                and value.startswith(".claude/")
-            ):
-                parent_status = path_checker(str(repos_root), git_ref, value)
-                if parent_status == EXISTS:
-                    status = CROSS_REPO
-                    note = (
-                        f"resolves in parent repo noorinalabs-main, not child repo "
-                        f"{repo_name} — verify this is a deliberate cross-repo reference"
-                    )
+            if status == MISSING:
+                downgrade = _cross_repo_downgrade(
+                    value, repo_name, repos_root, git_ref, path_checker
+                )
+                if downgrade is not None:
+                    status, note = downgrade
             candidates.append(CandidateResult(kind, value, status, pathspec, note))
         else:
             status = symbol_checker(repo_dir, git_ref, value, pathspec)
@@ -511,7 +678,9 @@ _STATUS_GLYPH = {
     EXISTS: "ok",
     MISSING: "MISSING",
     UNVERIFIABLE: "unverifiable",
-    CROSS_REPO: "cross-repo (found in parent)",
+    CROSS_REPO: "cross-repo (found in the other repo — see note)",
+    GITIGNORED: "gitignored (never tracked by git — cannot verify)",
+    CREATES: "declared creation (this issue's own output, not checked)",
 }
 
 
@@ -543,11 +712,13 @@ def render_report(results: list[IssueResult]) -> str:
     if warns:
         lines.append(
             f"WARN: {len(warns)} issue(s) could not be fully verified "
-            "(repo not cloned / ref not fetched / unreadable, or a cross-repo "
-            "reference). Verify manually:"
+            "(repo not cloned / ref not fetched / unreadable, a cross-repo "
+            "reference, or a gitignored path). Verify manually:"
         )
         for r in warns:
-            refs = ", ".join(f"{c.kind} {c.value}" for c in r.unverifiable + r.cross_repo)
+            refs = ", ".join(
+                f"{c.kind} {c.value}" for c in r.unverifiable + r.cross_repo + r.gitignored
+            )
             lines.append(f"  - {r.ref} ({r.repo_dir} @ {r.git_ref}): {refs}")
     if not stops and not warns:
         lines.append("All named files/symbols verified present at origin HEAD.")
