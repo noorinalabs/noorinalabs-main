@@ -1836,6 +1836,12 @@
       "last_resolved": "",
       "tracked_at": "2026-08-11T03:19:06.187271+00:00",
       "resolved_at": ""
+    },
+    ".claude/memory/feedback_shared_scratchpad_collides_across_agents.md": {
+      "last_tracked": "fc560c984ed6620b421e12c20fc100e07ff3f03ad28dbf9fa0aa7ba11f5d0e68",
+      "last_resolved": "",
+      "tracked_at": "2026-08-11T04:16:05.083164+00:00",
+      "resolved_at": ""
     }
   },
   "last_cleanup": {
