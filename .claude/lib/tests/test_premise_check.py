@@ -347,6 +347,169 @@ class CheckIssueVerdictTest(unittest.TestCase):
         self.assertEqual(res.verdict, pc.STOP)
 
 
+class Main1138LooksLikePathTest(unittest.TestCase):
+    """main#1138: the false-positive classes the wave-30 scope run hit.
+
+    Pure ``looks_like_path`` classification — no git involved.
+    """
+
+    def test_rejects_bare_extension_token(self) -> None:
+        # main#1138 class 3: a bare extension mentioned in prose (main#1112
+        # flagged a bare `.py`, main#1118 a bare `.yaml`) has no filename stem
+        # before the dot and must not parse as a path.
+        self.assertFalse(pc.looks_like_path(".py"))
+        self.assertFalse(pc.looks_like_path(".yaml"))
+        self.assertFalse(pc.looks_like_path(".md"))
+        # A real dotfile-style stem (non-empty content before the final dot)
+        # must still be accepted.
+        self.assertTrue(pc.looks_like_path("wave_key_reset.py"))
+        self.assertTrue(pc.looks_like_path(".pre-commit-config.yaml"))
+
+    def test_rejects_absolute_tmp_scratchpad_path(self) -> None:
+        # main#1138 wave-30 class: an ephemeral, session-scoped scratchpad
+        # path quoted verbatim in an issue body (the shape wave-29's own
+        # `block_stale_tmp_message_file` false-positive writeup used) is not
+        # a repo-relative path and must never resolve against git HEAD.
+        self.assertFalse(
+            pc.looks_like_path(
+                "/tmp/claude-1000/-home-parameterization-code-noorinalabs-main/"
+                "abc123/scratchpad/verdict_probe.md"
+            )
+        )
+        self.assertFalse(pc.looks_like_path("/tmp/foo.py"))
+        self.assertFalse(pc.looks_like_path("/var/log/out.txt"))
+
+    def test_rejects_deliberate_example_filenames(self) -> None:
+        # main#1138 wave-30 class: a doc-placeholder filename used purely for
+        # illustration (`X.md` is the exact placeholder wave-30's own #1352
+        # used for "insert your body-file path here"; `foo.py`/`example.py`
+        # are the generic org-wide convention) must not assert existence.
+        self.assertFalse(pc.looks_like_path("X.md"))
+        self.assertFalse(pc.looks_like_path("Y.py"))
+        self.assertFalse(pc.looks_like_path("foo.py"))
+        self.assertFalse(pc.looks_like_path("example.py"))
+        # A real, non-placeholder short name must still be accepted.
+        self.assertTrue(pc.looks_like_path("gh.py"))
+
+
+class Main1138VerdictLayerTest(unittest.TestCase):
+    """main#1138: verdict-layer fixes exercised with injected (fake) checkers."""
+
+    def test_cross_repo_symmetric_parent_misses_child_resolves(self) -> None:
+        """main#1138 class 1 (a.k.a. wave-30 "child-repo workflow paths").
+
+        A `noorinalabs-main` issue names a `.github/workflows/` file that is
+        MISSING in the parent but resolves in a child repo — the reverse of
+        the existing child-misses/parent-resolves rule (main#1047 da#427).
+        Must downgrade to CROSS_REPO -> WARN, not STOP.
+        """
+        target = ".github/workflows/ghcr-publish.yml"
+        issue = {"ref": "main#1110", "repo": "noorinalabs-main", "body": f"see `{target}`"}
+
+        def _path(repo_dir: str, _ref: str, _value: str) -> str:
+            # MISSING at the parent (repos_root itself); EXISTS under any
+            # child-repo subdirectory.
+            return pc.MISSING if repo_dir == "/repos" else pc.EXISTS
+
+        res = pc.check_issue(issue, Path("/repos"), "origin/main", _path, _checker({})[1])
+        self.assertEqual(res.verdict, pc.WARN)
+        self.assertEqual(res.candidates[0].status, pc.CROSS_REPO)
+        self.assertIsNotNone(res.candidates[0].note)
+
+    def test_cross_repo_bare_filename_main_1110_literal_token(self) -> None:
+        """main#1138 MF1 (merge-gate follow-up, Aino Virtanen): class 1's own
+        reported instances — main#1110 and main#1111 — name the workflow file
+        by BARE filename (``ghcr-publish.yml``), never the qualified
+        ``.github/workflows/...`` path. The class-1 fixture above used the
+        qualified form, which the shared-prefix trigger already caught; the
+        literal #1110 token did not move. This pins the literal token.
+        """
+        issue = {
+            "ref": "main#1110",
+            "repo": "noorinalabs-main",
+            "body": "**C3 — `ghcr-publish.yml` -> reusable build/push/dispatch**",
+        }
+
+        def _path(repo_dir: str, _ref: str, _value: str) -> str:
+            return pc.MISSING if repo_dir == "/repos" else pc.EXISTS
+
+        res = pc.check_issue(issue, Path("/repos"), "origin/main", _path, _checker({})[1])
+        self.assertEqual(res.verdict, pc.WARN)
+        self.assertEqual(res.candidates[0].value, "ghcr-publish.yml")
+        self.assertEqual(res.candidates[0].status, pc.CROSS_REPO)
+
+    def test_cross_repo_bare_filename_not_found_anywhere_still_stops(self) -> None:
+        # Recall guard: a bare filename that is genuinely absent from the
+        # parent AND every child must still STOP — the MF1 widening is a
+        # second chance, not a blanket bare-filename pass.
+        issue = {
+            "ref": "main#705",
+            "repo": "noorinalabs-main",
+            "body": "targets `wave_key_reset.py`",
+        }
+        res = self._check(issue, {"wave_key_reset.py": pc.MISSING})
+        self.assertEqual(res.verdict, pc.STOP)
+
+    def test_cross_repo_bare_filename_not_widened_on_child_to_parent_side(self) -> None:
+        # The MF1 widening is deliberately ONE-DIRECTIONAL (parent->child
+        # only): a child-repo issue naming a bare filename that happens to
+        # exist somewhere in the parent tree must still STOP, not downgrade
+        # — only a shared-root-prefixed path gets the child->parent second
+        # chance (main#1047 da#427's original, narrower rule).
+        issue = {
+            "ref": "da#1",
+            "repo": "noorinalabs-data-acquisition",
+            "body": "see `composition.py`",
+        }
+
+        def _path(repo_dir: str, _ref: str, _value: str) -> str:
+            # MISSING in the child; EXISTS at the parent (repos_root) — but
+            # bare, not shared-prefixed, so must NOT downgrade.
+            return pc.EXISTS if repo_dir == "/repos" else pc.MISSING
+
+        res = pc.check_issue(issue, Path("/repos"), "origin/main", _path, _checker({})[1])
+        self.assertEqual(res.verdict, pc.STOP)
+
+    def test_creates_array_prevents_stop_on_proposed_file(self) -> None:
+        """main#1138 class 2: an issue that PROPOSES a file (its own output)
+        must not premise-rot-STOP on that file being absent today.
+
+        main#1118 (G6) named `.claude/lib/org_repos.py` as the artifact it
+        would create; the gate read that as a rotted premise. An explicit
+        ``creates`` array marks the path as a declared creation: never
+        checked against git, never contributes to the verdict.
+        """
+        issue = {
+            "ref": "main#1118",
+            "repo": "noorinalabs-main",
+            "body": "extract the org repo list into `.claude/lib/org_repos.py`",
+            "creates": [".claude/lib/org_repos.py"],
+        }
+        # Checker would report MISSING if it were ever consulted for this
+        # path — proves the fix routes around the checker entirely, not that
+        # the checker happens to return a passing status.
+        res = self._check(issue, {".claude/lib/org_repos.py": pc.MISSING})
+        self.assertEqual(res.verdict, pc.OK)
+        self.assertEqual(res.candidates[0].status, pc.CREATES)
+
+    def test_creates_does_not_suppress_other_missing_paths(self) -> None:
+        # A `creates` entry only exempts the declared path(s); an unrelated
+        # named path that is genuinely missing must still STOP.
+        issue = {
+            "ref": "main#1118",
+            "repo": "noorinalabs-main",
+            "body": "extract into `.claude/lib/org_repos.py`, touches `gone.py`",
+            "creates": [".claude/lib/org_repos.py"],
+        }
+        res = self._check(issue, {".claude/lib/org_repos.py": pc.MISSING, "gone.py": pc.MISSING})
+        self.assertEqual(res.verdict, pc.STOP)
+        self.assertEqual([c.value for c in res.missing], ["gone.py"])
+
+    def _check(self, issue: dict, table: dict[str, str], default: str = pc.EXISTS):
+        path_fn, sym_fn = _checker(table, default)
+        return pc.check_issue(issue, Path("/repos"), "origin/main", path_fn, sym_fn)
+
+
 class ResolveRepoDirTest(unittest.TestCase):
     def test_main_maps_to_root(self) -> None:
         self.assertEqual(pc.resolve_repo_dir({"repo": "noorinalabs-main"}, Path("/r")), "/r")
@@ -482,6 +645,59 @@ class GitIntegrationTest(unittest.TestCase):
             res = pc.check_issue(issue, root, "HEAD")
             self.assertEqual(res.candidates[0].status, pc.MISSING)
             self.assertEqual(res.verdict, pc.STOP)
+
+    def test_gitignored_path_is_warn_not_stop(self) -> None:
+        """main#1138 wave-30 class: a legitimately gitignored path (e.g.
+        `.claude/annunaki/errors.jsonl`) can never be found by
+        `git cat-file`, since it is by design never tracked — that must not
+        read as premise rot. Downgrades to WARN, not STOP.
+        """
+        with TemporaryDirectory() as d:
+            root = Path(d)
+            self._git(root, "init", "-q")
+            self._git(root, "config", "user.email", "t@t")
+            self._git(root, "config", "user.name", "t")
+            (root / ".gitignore").write_text("annunaki/errors.jsonl\n")
+            self._git(root, "add", "-A")
+            self._git(root, "commit", "-q", "-m", "base")
+            (root / "annunaki").mkdir()
+            (root / "annunaki" / "errors.jsonl").write_text("{}\n")
+
+            issue = {
+                "ref": "main#1138",
+                "repo": "noorinalabs-main",
+                "body": "see `annunaki/errors.jsonl`",
+            }
+            res = pc.check_issue(issue, root, "HEAD")
+            self.assertEqual(res.candidates[0].status, pc.GITIGNORED)
+            self.assertEqual(res.verdict, pc.WARN)
+
+    def test_relative_fragment_suffix_resolves_under_claude(self) -> None:
+        """main#1138 4th FP class (not in the issue body): a slash-containing
+        relative fragment (`lib/check_agent_liveness.py`) whose basename
+        fallback never fires because the token is not slash-free, even
+        though the file exists at `.claude/lib/check_agent_liveness.py`.
+        """
+        with TemporaryDirectory() as d:
+            root = Path(d)
+            self._git(root, "init", "-q")
+            self._git(root, "config", "user.email", "t@t")
+            self._git(root, "config", "user.name", "t")
+            nested = root / ".claude" / "lib"
+            nested.mkdir(parents=True)
+            (nested / "check_agent_liveness.py").write_text("x = 1\n")
+            self._git(root, "add", "-A")
+            self._git(root, "commit", "-q", "-m", "base")
+
+            issue = {
+                "ref": "main#1138",
+                "repo": "noorinalabs-main",
+                "body": "the liveness check lives at `lib/check_agent_liveness.py`",
+            }
+            res = pc.check_issue(issue, root, "HEAD")
+            statuses = {c.value: c.status for c in res.candidates}
+            self.assertEqual(statuses["lib/check_agent_liveness.py"], pc.EXISTS)
+            self.assertEqual(res.verdict, pc.OK)
 
     def test_unknown_ref_is_unverifiable(self) -> None:
         with TemporaryDirectory() as d:
