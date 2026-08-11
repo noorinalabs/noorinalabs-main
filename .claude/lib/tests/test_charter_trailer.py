@@ -113,6 +113,83 @@ class StripCodeRegionsTildeFenceTests(unittest.TestCase):
         self.assertIsNone(extract_charter_field("TechDebt", body))
 
 
+class FenceOpenerMustStartALineTests(unittest.TestCase):
+    """main#1359 merge-gate review (Aino Virtanen — MF4): a fence marker that
+    does not open a line must NOT be treated as a fence at all, per
+    CommonMark (a code-fence opener is defined as a leading sequence on its
+    own line, optional indent aside — a marker occurring mid-sentence is
+    just prose).
+
+    Why this matters here specifically: before this fix, adding `~~~` to
+    `_FENCE_MARKERS` (main#1359) gave a mid-prose, unpaired tilde run a
+    SECOND path to the same failure mode the backtick marker already had —
+    an odd/unpaired marker anywhere in prose above a trailer is read as an
+    "unterminated fence" and strips to end-of-body, taking the real `---`
+    separator and the whole trailer with it. Live trace: this exact PR's own
+    review thread — a reviewer's comment discussing the fence marker being
+    widened by this PR tripped the marker three times in prose, the third
+    occurrence unpaired, and the reviewer's own verdict trailer was erased.
+
+    EVERY assertion in `test_unpaired_fence_marker_in_prose_no_longer_erases_the_trailer`
+    below FAILS at PR head `a4909f2` (verified directly — three fields
+    resolved to `None` where they should have resolved to real values) and
+    passes once the fence opener is line-anchored.
+    """
+
+    def test_unpaired_fence_marker_in_prose_no_longer_erases_the_trailer(self) -> None:
+        body = (
+            "Point A discusses the fence marker once.\n\n"
+            "Point B discusses the fence marker a second time.\n\n"
+            "Point C discusses the fence marker a third time (odd count).\n\n"
+            "---\n"
+            "Requestor: Nino Kavtaradze\n"
+            "Requestee: Santiago Ferreira\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none\n"
+        ).replace("the fence marker", "the ~~~ fence marker")
+        self.assertEqual(extract_charter_field("Requestor", body), "Nino Kavtaradze")
+        self.assertEqual(extract_charter_field("Requestee", body), "Santiago Ferreira")
+        self.assertEqual(extract_charter_field("RequestOrReplied", body), "Approved")
+        self.assertEqual(extract_charter_field("TechDebt", body), "none")
+
+    def test_unpaired_backtick_run_in_prose_also_no_longer_erases_the_trailer(self) -> None:
+        """The identical hazard already existed for the backtick marker
+        before main#1359 (main#1413's root cause) — the line-anchoring fix
+        closes it for BOTH markers, not just the one this PR added."""
+        body = (
+            "Discussing the marker once, mid-sentence: ``` looks like this.\n\n"
+            "Discussing it again: ``` and a third time: ``` (odd count).\n\n"
+            "---\n"
+            "Requestor: Nino Kavtaradze\n"
+            "RequestOrReplied: Approved\n"
+        )
+        self.assertEqual(extract_charter_field("Requestor", body), "Nino Kavtaradze")
+        self.assertEqual(extract_charter_field("RequestOrReplied", body), "Approved")
+
+    def test_line_start_fence_still_strips_a_genuine_block(self) -> None:
+        """Regression guard: a REAL fence — marker at the start of a line —
+        must still be recognized and stripped. Only mid-line occurrences
+        stop counting as fence openers."""
+        body = "before\n~~~\nRequestor: Ghost\n~~~\nafter"
+        self.assertNotIn("Requestor", strip_code_regions(body))
+
+    def test_fence_at_the_very_start_of_the_body_still_strips(self) -> None:
+        """Position 0 has no preceding newline but IS the start of a line."""
+        body = "~~~\nRequestor: Ghost\n~~~\nafter"
+        self.assertNotIn("Requestor", strip_code_regions(body))
+
+    def test_the_flagged_pre_existing_fixture_shape_is_now_prose(self) -> None:
+        """`test_validate_pr_review.py::StripCodeRegionsTests
+        ::test_unterminated_fenced_block_strips_rest` used a mid-line opener
+        (`"intro ```\\nRequestor: foo"`) — CommonMark would not treat that as
+        a fence either, so its old expectation (eats the rest) is no longer
+        correct; it now passes the marker through as literal prose. That
+        fixture is updated in the same change as this one."""
+        body = "intro ```\nRequestor: foo"
+        result = strip_code_regions(body)
+        self.assertIn("Requestor: foo", result)
+
+
 class NormalizeVerdictTokenTests(unittest.TestCase):
     def test_casefolds(self) -> None:
         self.assertEqual(normalize_verdict_token("ChangesRequested"), "changesrequested")

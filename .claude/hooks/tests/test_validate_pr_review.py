@@ -1555,11 +1555,25 @@ class StripCodeRegionsTests(unittest.TestCase):
         self.assertIn("Requestor: foo", result)
 
     def test_unterminated_fenced_block_strips_rest(self):
-        """An open ``` without a close conservatively eats the rest. Reviewer
-        error mode (forgot close fence) → fail safe by not matching trailing
-        chars as fields.
+        """An open ``` without a close, on its OWN LINE, conservatively eats
+        the rest. Reviewer error mode (forgot close fence) → fail safe by
+        not matching trailing chars as fields.
+
+        UPDATED (main#1359 merge-gate review, Aino Virtanen — MF4): this
+        fixture's opener used to be mid-line (`"intro ```\\n..."`), which is
+        no longer treated as a fence at all — CommonMark does not recognize
+        a mid-line marker as an opener either, and the old expectation
+        ("eats the rest") depended on that not being enforced. A mid-line
+        marker mentioned in ordinary prose (exactly what a reviewer writes
+        when discussing fence syntax — the live incident that motivated this
+        fix) must now pass through as literal text, not swallow everything
+        after it. The body below moves the opener to the start of its own
+        line so this fixture still exercises the "unterminated, eats the
+        rest" behaviour it is named for; `FenceOpenerMustStartALineTests` in
+        `test_charter_trailer.py` covers the mid-line-is-now-prose case this
+        fixture used to (accidentally) encode.
         """
-        body = "intro ```\nRequestor: foo"
+        body = "intro\n```\nRequestor: foo"
         result = hook._strip_code_regions(body)
         self.assertIn("intro", result)
         self.assertNotIn("Requestor", result)

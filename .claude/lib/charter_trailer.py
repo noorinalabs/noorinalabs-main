@@ -105,7 +105,27 @@ def strip_code_regions(body: str) -> str:
         # Fenced code: ```...``` or ~~~...~~~ (triple marker on its own or
         # with a language tag). Both markers use identical open/close/
         # unterminated handling — only the marker string differs.
-        fence = next((m for m in _FENCE_MARKERS if body.startswith(m, i)), None)
+        #
+        # THE OPENER MUST START A LINE (main#1359 merge-gate review, Aino
+        # Virtanen — MF4). Per CommonMark, a code-fence opener is a leading
+        # sequence on its own line; a marker occurring mid-sentence is prose,
+        # not a fence. Before this guard, a marker mentioned in ordinary
+        # prose — exactly what a reviewer writes when discussing fence
+        # syntax, which main#1359 makes MORE likely by widening the accepted
+        # marker set — could be read as an "unterminated fence" and strip
+        # from that point to end-of-body, taking a real `---` trailer
+        # separator (and the whole comment) with it. Live trace: this PR's
+        # own review thread — a reviewer's comment about the marker this PR
+        # adds tripped an odd/unpaired occurrence in prose and erased their
+        # own verdict trailer. The CLOSING search below is intentionally NOT
+        # similarly anchored — that is unchanged, pre-existing behaviour and
+        # not part of this fix.
+        at_line_start = i == 0 or body[i - 1] == "\n"
+        fence = (
+            next((m for m in _FENCE_MARKERS if body.startswith(m, i)), None)
+            if at_line_start
+            else None
+        )
         if fence is not None:
             end = body.find(fence, i + 3)
             if end == -1:
