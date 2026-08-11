@@ -202,7 +202,64 @@ Exit codes (per Claude Code hook convention):
         OR any audit-coverage gap — PARTIAL (some org repos queried, some not,
         #1226) or TOTAL (no repo queried at all, #1230) — for a
         _COVERAGE_BLOCKING_SKILLS skill. See § Block condition for the
-        all-vs-some history and why both now exit 2.)
+        all-vs-some history and why both now exit 2.
+        ALSO: /wave-wrapup or /wave-retro when one of this hook's own hard
+        dependencies (`_hook_main`, `annunaki_log`, `org_repos`) cannot be
+        loaded — see § Broken-dependency handling below.)
+
+    Exit 1 in particular is NOT a "the gate errored" signal here: PreToolUse
+    reads any non-2 exit as non-blocking, so a gate that exits 1 has allowed
+    the call while looking like it failed.
+
+    Exit-code invariant, and its exact limits
+    -----------------------------------------
+    Stated precisely, because a guarantee written in prose that the mechanism
+    does not implement is itself the defect this hook was hardened against —
+    and the first revision of that hardening shipped exactly such a sentence
+    here ("every path in this module ends at 0 or 2"), which was false for a
+    dependency that was present but unparseable (#1388 review).
+
+    HOLDS: every dependency-initialization path ends at 0 or 2. Anything raised
+    while importing the three hard dependencies — `ImportError` (absent),
+    `SyntaxError` (present but unparseable: unresolved merge-conflict markers,
+    a half-saved edit), or anything a dependency raises from its own module
+    body — is caught by `except Exception` and routed to
+    `_broken_dependency_exit`. This is not an assertion, it is pinned by
+    `BrokenDependencyFailsClosed.test_exit_code_is_0_or_2_across_the_breakage_matrix`,
+    which asserts exit ∈ {0, 2} over {absent, trailing garbage, conflict
+    markers, raises-at-import} × the three dependencies × gated/ungated skills.
+
+    DOES NOT HOLD, named rather than papered over:
+      - A `BaseException` escaping import (`SystemExit`, `KeyboardInterrupt`)
+        keeps its own exit code. Catching those would break the interpreter
+        contract for every caller; no dependency here raises them.
+      - `_hook_main.run_blocking` emits its JSON with `print()` before
+        `sys.exit(2)`. If that write itself raised, the exit would become 1.
+        That is shared machinery behind 35+ hooks, not this module's to change
+        — the generic `run_blocking` fail-open class is tracked by #1402.
+
+Broken-dependency handling (#1243, corrected by the #1388 review + #1405):
+    This module imports three things — `_hook_main` (its runner),
+    `annunaki_log` (its block recorder) and `org_repos` (the SSOT repo list it
+    audits). Before #1243, an unusable import raised out of the module body:
+    traceback on stderr and exit **1**, which PreToolUse does not treat as a
+    block. So the gate stopped gating precisely when it was broken, and the
+    outcome was indistinguishable from a clean approval.
+
+    The imports are now wrapped in `except Exception` — NOT `except
+    ImportError`, which covers only the *absent* case and let a *corrupt* one
+    (a `SyntaxError` sibling, not subclass) fail open through the second door.
+    The handler gives the SAME three-way verdict a degraded audit gets, rather
+    than inventing a stricter one: ungated skill or unparseable stdin → 0
+    silently; `/handoff` → 0 with a warning (#1405 — it is not blocked even at
+    TOTAL audit failure, and `session_handoff.py` imports `org_repos` too, so
+    blocking it over a broken `org_repos` would leave no handoff path at all);
+    `/wave-wrapup` and `/wave-retro` → 2.
+
+    The same principle is enforced one step later inside `_block`: a *raising*
+    (rather than missing) `annunaki_log` would propagate into `run_blocking`,
+    which swallows exceptions and exits 0 — the identical silent allow. The log
+    call is therefore wrapped there too; see `_block`.
 
 Promotion provenance:
     memory feedback_honest_audit_over_conclusion_claim (2026-04-22) →
@@ -221,16 +278,18 @@ import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import NoReturn
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _hook_main import run_blocking  # noqa: E402
-from annunaki_log import log_pretooluse_block  # noqa: E402
-
 _LIB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib")
 sys.path.insert(0, os.path.abspath(_LIB_DIR))
-from org_repos import ALL_REPOS  # noqa: E402
 
 # Skills gated by this hook. Exact match against tool_input.skill.
+#
+# Defined ABOVE the dependency imports on purpose (#1243): the fail-closed
+# path below has to decide whether the incoming call is one this gate claims
+# jurisdiction over, and it must be able to do that when those imports are the
+# very thing that failed. It depends on nothing but the stdlib.
 _GATED_SKILLS = frozenset({"wave-wrapup", "wave-retro", "handoff"})
 
 # Subset of _GATED_SKILLS for which an INCOMPLETE audit — any org repo the
@@ -255,12 +314,210 @@ _GATED_SKILLS = frozenset({"wave-wrapup", "wave-retro", "handoff"})
 # retro too. So /handoff degrades to a loud, explicit allow-with-warning naming
 # the repos it could not see (or that none could be seen at all): not green,
 # but not a dead end either.
+#
+# Moved ABOVE the guarded imports (#1405): `_broken_dependency_exit` consults
+# this same set, so a broken *dependency* now produces the same three-way
+# verdict a broken *audit* does. Previously the broken-dependency path blocked
+# all of `_GATED_SKILLS` uniformly, silently reversing the /handoff carve-out
+# this very comment argues for. ONE definition, deliberately — two constants
+# encoding "which skills are safe to strand" is exactly the drift this file
+# already fixed once for the repo list.
 _COVERAGE_BLOCKING_SKILLS = frozenset({"wave-wrapup", "wave-retro"})
+
+
+# The three modules this gate cannot run without. Named as data so the
+# broken-dependency reason can enumerate them even when the failure carries no
+# identifying attribute at all (#1388 review, Nino Kavtaradze: `<unknown>` is
+# not an actionable diagnosis).
+_HARD_DEPENDENCIES = (
+    "_hook_main (.claude/hooks/)",
+    "annunaki_log (.claude/hooks/)",
+    "org_repos (.claude/lib/)",
+)
+
+
+def _gated_skill_on_stdin() -> str:
+    """Return the gated skill name on stdin, or "".
+
+    Used only by `_broken_dependency_exit`. A deliberately minimal,
+    dependency-free re-read of the hook payload: this runs when `_hook_main`
+    may itself be the unusable import, so it cannot use
+    `_hook_main._read_stdin_json`. Any malformed / non-Skill / ungated input
+    yields "", which the caller treats as "not ours — allow", matching
+    `_hook_main`'s exit-0-on-malformed-stdin policy.
+    """
+    try:
+        payload = json.loads(sys.stdin.read())
+    except (ValueError, OSError, UnicodeDecodeError):
+        return ""
+    if not isinstance(payload, dict) or payload.get("tool_name") != "Skill":
+        return ""
+    tool_input = payload.get("tool_input")
+    if not isinstance(tool_input, dict):
+        return ""
+    skill_name = str(tool_input.get("skill", ""))
+    return skill_name if skill_name in _GATED_SKILLS else ""
+
+
+def _dependency_label(exc: BaseException) -> str:
+    """Best-effort name of the dependency that failed to load.
+
+    Only `ImportError`/`ModuleNotFoundError` carry `.name`; `SyntaxError`
+    carries `.filename` instead; an arbitrary exception raised from a
+    dependency's own module body carries neither (#1388 review). Falls back to
+    the empty string, and the caller then enumerates `_HARD_DEPENDENCIES`
+    rather than printing a useless `<unknown>`.
+    """
+    name = getattr(exc, "name", None)
+    if name:
+        return str(name)
+    filename = getattr(exc, "filename", None)
+    if filename:
+        return Path(str(filename)).stem
+    return ""
+
+
+def _broken_dependency_exit(exc: BaseException) -> NoReturn:
+    """Decide the verdict when a hard dependency of this gate cannot be loaded.
+
+    #1243 defect 2, plus the #1388-review corrections. This module is a
+    PreToolUse gate, and in that contract exit **2** blocks while every other
+    non-zero exit is a mere non-blocking error that lets the tool call proceed.
+    Before #1243, an unusable dependency raised straight out of the module
+    body: traceback on stderr, exit **1**, /wave-wrapup runs. The gate stopped
+    gating at exactly the moment it was broken, and from the outside that is
+    indistinguishable from a gate that ran and approved — the same silent-allow
+    shape #1226 and #1230 each closed one level up, in the audit's own
+    aggregation, reappearing here in the import statement.
+
+    Three-way verdict, mirroring the verdict split this module already applies
+    to a degraded *audit* (§ Failure modes) rather than inventing a new one:
+
+      - ungated skill, or stdin we cannot parse → exit 0, silent. This gate
+        never claimed jurisdiction over /ontology-larian et al (the registered
+        matcher is `Skill`, so every skill call reaches it), and a broken
+        deployment must not newly block calls it never gated.
+      - `/handoff` → exit 0 WITH a warning. Deliberately not blocked (#1405):
+        it is excluded from coverage-blocking even at TOTAL audit failure
+        (#1230), the most degraded audit state that exists, so a broken
+        dependency — which is not a starker fact than "no repo could be read
+        at all" — cannot earn it a stricter verdict. The stranding argument is
+        in fact stronger here: the "Stop hook writes a handoff regardless"
+        escape runs `session_handoff.py`, which imports `org_repos` itself, so
+        blocking /handoff over a broken `org_repos` would leave the session
+        with no handoff path at all. Allowed, but never bare — no degraded
+        path in this module is silent.
+      - `/wave-wrapup`, `/wave-retro` → exit 2, BLOCK. They write the durable
+        "wave concluded" record; an unknown is never green.
+
+    An earlier revision of this function blocked all three gated skills
+    uniformly, reasoning that a gate which never ran "cannot reason about which
+    skill deserves which degradation". It can: the skill name is precisely what
+    `_gated_skill_on_stdin` recovers with no dependency at all. That revision
+    also silently reversed the /handoff carve-out documented above it in this
+    same file — prose guaranteeing behaviour the mechanism did not implement,
+    inside the fix for that very class.
+
+    There is no in-band bypass, as everywhere else in this hook — the remedy is
+    to restore the dependency (all three are committed in this repo, in this
+    directory or the adjacent `.claude/lib/`) or, in a genuine emergency,
+    remove the hook entry from `.claude/settings.json`.
+    """
+    skill_name = _gated_skill_on_stdin()
+    if not skill_name:
+        sys.exit(0)
+
+    label = _dependency_label(exc)
+    named = f"`{label}`" if label else "one of its three hard dependencies"
+    detail = f"{type(exc).__name__}: {exc}"
+    dependencies = "\n".join(f"       - {dep}" for dep in _HARD_DEPENDENCIES)
+    diagnosis = (
+        f"The wave-audit gate could not load {named} ({detail}).\n\n"
+        "The cross-repo open-item audit did not run, and no part of it can "
+        "run: there is no count, no coverage list, nothing to reason about.\n\n"
+        "This gate depends on exactly three modules — check each is present "
+        f"AND loadable, not merely present:\n{dependencies}\n"
+        "     A dependency that exists but does not parse (unresolved "
+        "merge-conflict markers, a half-saved edit, a partial checkout) fails "
+        "the same way a missing one does.\n\n"
+    )
+
+    if skill_name not in _COVERAGE_BLOCKING_SKILLS:
+        # /handoff: degrade loudly, never block. See this function's docstring.
+        print(
+            json.dumps(
+                {
+                    "decision": "allow",
+                    "systemMessage": (
+                        f"WARNING: {diagnosis}"
+                        f"Allowing /{skill_name} to proceed, because recording session "
+                        "state must never be strandable — and with `org_repos` broken "
+                        "the Stop hook's automatic handoff is broken too, so blocking "
+                        "here would leave no handoff path at all. Do NOT state or imply "
+                        "the wave is clean or concluded: no audit ran."
+                    ),
+                }
+            )
+        )
+        sys.exit(0)
+
+    reason = (
+        f"BLOCKED: /{skill_name} cannot claim wave conclusion — the wave-audit "
+        f"gate is broken.\n\n"
+        f"{diagnosis}"
+        "This gate BLOCKS rather than passing the call through, because a "
+        "blocking gate that exits non-2 fails OPEN — from the outside that is "
+        "indistinguishable from a gate that ran and approved (#1243). An "
+        "unknown is never green (/session-start Step 5a).\n\n"
+        "To proceed:\n"
+        "  1. Restore or repair the dependency above, then re-run "
+        f"/{skill_name}.\n"
+        '  2. Verify with: `echo \'{"tool_name":"Skill","tool_input":'
+        '{"skill":"wave-wrapup"}}\' | python3 .claude/hooks/validate_wave_audit.py; '
+        "echo $?` — a healthy gate exits 0 or 2, never 1.\n\n"
+        "There is no in-band bypass flag — see charter/hooks/catalog-13-17.md "
+        "§ Hook 17 for emergency procedure."
+    )
+    print(json.dumps({"decision": "block", "reason": reason}))
+    sys.exit(2)
+
+
+try:
+    from _hook_main import run_blocking  # noqa: E402
+    from annunaki_log import log_pretooluse_block  # noqa: E402
+    from org_repos import ALL_REPOS  # noqa: E402
+except Exception as _exc:  # noqa: BLE001 — see below; pragma: no cover
+    # `except Exception`, NOT `except ImportError` (#1388 review, Aino Virtanen
+    # + Nino Kavtaradze). An ABSENT dependency raises ImportError; a PRESENT
+    # but unloadable one does not. `SyntaxError` (unresolved merge-conflict
+    # markers in `org_repos.py` during a wave merge — i.e. exactly when
+    # /wave-wrapup runs; a half-saved edit in a live session) is a *sibling* of
+    # ImportError, not a subclass, and so was propagating uncaught to exit 1 —
+    # fail-open, the very defect this block exists to close, one door over. So
+    # is anything a dependency raises from its own module body. Verified:
+    # `printf 'def broken(\n' >> org_repos.py` gave exit 1 pre-fix, exit 2 now.
+    #
+    # BaseException is deliberately NOT caught — SystemExit/KeyboardInterrupt
+    # must keep their own semantics, and no dependency here raises them.
+    #
+    # `_broken_dependency_exit` never returns, so every name imported above is
+    # bound for the rest of the module body whenever execution continues past
+    # here.
+    _broken_dependency_exit(_exc)
 
 # Org-known repos for cross-repo audit. Sourced from org_repos.py (main#1118
 # / audit G6) — the single source of truth for the org repo list; the charter
 # skills.md § Audit command example command should stay in sync with it too,
 # but this constant itself no longer hand-copies the list.
+#
+# Do NOT re-type this list here, ever. `test_validate_wave_audit.py`'s
+# `OrgReposSsotIdentity` asserts `_ORG_REPOS is org_repos.ALL_REPOS` because
+# the alternative is undetectable (#1243): replacing this line with a
+# hand-copied 8-tuple carrying a single typo'd repo name left the entire
+# 4185-test suite green, while the audit silently swept 7 real repos and one
+# that does not exist and reported the org clean. That is BUG-08 — the exact
+# drift org_repos.py was created to end — reproduced inside the gate whose job
+# is to notice unaudited repos.
 _ORG_REPOS = ALL_REPOS
 
 # Carry-forward detection patterns (case-insensitive). Any one suffices.
@@ -683,14 +940,27 @@ def _block(skill_name: str, args: str, reason: str) -> dict:
 
     Shared by the open-items block and the incomplete-coverage block (#1226) so
     a new blocking path cannot be added without also being logged.
+
+    The log call cannot be allowed to decide the verdict (#1243). `run_blocking`
+    catches every exception out of `check()` and exits 0 — a deliberate "a hook
+    must never crash" contract (see `_hook_main`) — so an exception raised here
+    would convert this BLOCK into a silent, output-free ALLOW. That is the same
+    fail-open the import wrapper at the top of this module closes, one step
+    later in the lifecycle: there, `annunaki_log` was missing; here, it is
+    present but raising (a full disk, a read-only checkout, a permissions
+    change). Logging is observability for a decision already made, so the
+    decision is built first and returned regardless.
     """
     result = {"decision": "block", "reason": reason}
-    log_pretooluse_block(
-        "validate_wave_audit",
-        f"skill={skill_name} args={args[:200] if args else '<empty>'}",
-        reason,
-        tool_name="Skill",
-    )
+    try:
+        log_pretooluse_block(
+            "validate_wave_audit",
+            f"skill={skill_name} args={args[:200] if args else '<empty>'}",
+            reason,
+            tool_name="Skill",
+        )
+    except Exception:  # noqa: BLE001 — the block must survive any logging failure
+        pass
     return result
 
 
