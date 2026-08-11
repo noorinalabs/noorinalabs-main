@@ -1225,8 +1225,16 @@ class MissingDependencyFailsClosed(unittest.TestCase):
     _HOOK_FILES = ("validate_wave_audit.py", "_hook_main.py", "annunaki_log.py")
     _LIB_FILES = ("org_repos.py",)
 
-    def _build_tree(self, omit: str = "") -> Path:
-        """Copy the hook + its 3 transitive deps into a temp tree, minus `omit`.
+    def _build_tree(self, omit: str = "", corrupt: str = "", corruption: str = "") -> Path:
+        """Copy the hook + its 3 transitive deps into a temp tree.
+
+        `omit` deletes a dependency outright (the ABSENT case #1243
+        reproduced). `corrupt` appends `corruption` to a dependency instead,
+        leaving the file present but unloadable (the BROKEN case — Aino
+        Virtanen's and Nino Kavtaradze's #1388 review finding, see
+        `BrokenDependencyFailsClosed`). The two are different failure classes:
+        absent raises `ImportError`, broken raises `SyntaxError` or whatever
+        the module body raises, and only the first is an `ImportError`.
 
         Returns the path of the copied hook script. The tree is deliberately
         minimal: `validate_wave_audit` imports only `_hook_main`,
@@ -1245,6 +1253,10 @@ class MissingDependencyFailsClosed(unittest.TestCase):
         for name in self._LIB_FILES:
             if name != omit:
                 shutil.copy2(_LIB_DIR / name, lib / name)
+        if corrupt:
+            target = lib / corrupt if corrupt in self._LIB_FILES else hooks / corrupt
+            with target.open("a", encoding="utf-8") as handle:
+                handle.write(corruption)
         return hooks / "validate_wave_audit.py"
 
     def _run(self, script: Path, payload: dict, extra_path: Path | None = None):
@@ -1300,14 +1312,49 @@ class MissingDependencyFailsClosed(unittest.TestCase):
         proc = self._run(self._build_tree(omit="org_repos.py"), _skill_input("wave-retro"))
         self._assert_blocks(proc, "org_repos")
 
-    def test_missing_org_repos_blocks_handoff(self) -> None:
-        """/handoff is outside _COVERAGE_BLOCKING_SKILLS, but that exemption is
-        about a *degraded audit* (the hook ran and could not see a repo). A
-        missing dependency means the gate did not run at all and cannot reason
-        about which skill deserves which degradation — so it blocks every gated
-        skill uniformly."""
+    def test_missing_org_repos_allows_handoff_loudly(self) -> None:
+        """#1405: /handoff must NOT be hard-blocked, not even by a broken gate.
+
+        An earlier revision of this fix blocked every member of `_GATED_SKILLS`
+        uniformly, on the reasoning that a gate which never ran "cannot reason
+        about which skill deserves which degradation". That was wrong twice
+        over, and it reversed a carve-out this very module argues for a few
+        paragraphs up in its own docstring:
+
+        1. It CAN reason about it — the skill name is the one thing
+           `_gated_skill_on_stdin` successfully recovers without any
+           dependency.
+        2. `/handoff` is excluded from coverage-blocking even at TOTAL audit
+           failure (#1230) — the most degraded audit state that exists, where
+           there is likewise no count at all. A missing dependency is not a
+           starker fact than that, so it cannot earn a stricter verdict.
+
+        And the stranding argument is *stronger* here than in the outage case
+        the carve-out was written for: the "Stop hook writes a handoff
+        regardless" escape depends on `session_handoff.py`, which imports
+        `org_repos` itself (`from org_repos import ALL_REPOS, ORG`). So when
+        `org_repos` is the broken dependency, blocking /handoff strands the
+        session with NO handoff path at all.
+
+        Allowed — but never bare, per the module's no-silent-degraded-path
+        rule.
+        """
         proc = self._run(self._build_tree(omit="org_repos.py"), _skill_input("handoff"))
-        self._assert_blocks(proc, "org_repos")
+        self.assertEqual(proc.returncode, 0, f"stdout={proc.stdout!r}")
+        result = json.loads(proc.stdout)
+        self.assertEqual(result["decision"], "allow")
+        self.assertIn("org_repos", result["systemMessage"])
+
+    def test_handoff_degraded_allow_is_never_silent(self) -> None:
+        """The other half of #1405: allowed, but loudly. A bare exit-0 here
+        would trade a wrong block for a silent allow — the very shape this
+        whole PR removes."""
+        proc = self._run(self._build_tree(omit="_hook_main.py"), _skill_input("handoff"))
+        self.assertEqual(proc.returncode, 0)
+        self.assertTrue(proc.stdout.strip(), "degraded /handoff must emit a warning, not exit bare")
+        message = json.loads(proc.stdout)["systemMessage"]
+        self.assertIn("wave-audit gate", message)
+        self.assertIn("_hook_main", message)
 
     def test_missing_annunaki_log_blocks(self) -> None:
         """#1243 names this second instance explicitly. Without the logger, the
@@ -1326,7 +1373,11 @@ class MissingDependencyFailsClosed(unittest.TestCase):
         proc = self._run(self._build_tree(omit="org_repos.py"), _skill_input("wave-wrapup"))
         reason = json.loads(proc.stdout)["reason"]
         self.assertIn("1243", reason)
-        self.assertIn("could not be imported", reason)
+        # "load", not "import": the same handler now covers a dependency that is
+        # present but unparseable, which is not an import failure in any sense
+        # the operator would recognise. The copy has to describe both.
+        self.assertIn("could not load", reason)
+        self.assertIn("present AND loadable", reason)
 
     def test_missing_dependency_does_not_block_an_ungated_skill(self) -> None:
         """NEG — fail closed, not fail loud-at-everything. The gate only ever
@@ -1366,6 +1417,144 @@ class MissingDependencyFailsClosed(unittest.TestCase):
             cwd=str(script.parent),
         )
         self.assertEqual(proc.returncode, 0, f"stderr={proc.stderr[-400:]!r}")
+
+
+# Three ways a dependency can be PRESENT but unloadable. None of them raise
+# `ImportError`, which is why the first revision of this fix — `except
+# ImportError` — let all three fail open (#1388 review, Aino Virtanen + Nino
+# Kavtaradze). Kept as module constants so the matrix test and the individual
+# cases cannot drift apart.
+_TRAILING_GARBAGE = "\ndef broken(\n    this is not valid python syntax\n"
+_CONFLICT_MARKERS = (
+    "\n<<<<<<< HEAD\n"
+    "ALL_REPOS = (MAIN_REPO, *CHILD_REPOS)\n"
+    "=======\n"
+    "ALL_REPOS = (MAIN_REPO,)\n"
+    ">>>>>>> other-branch\n"
+)
+_RAISES_AT_IMPORT = "\nraise RuntimeError('dependency exploded at import time')\n"
+
+
+class BrokenDependencyFailsClosed(MissingDependencyFailsClosed):
+    """A dependency that is PRESENT but unloadable must fail closed too.
+
+    #1388 review finding (Aino Virtanen, seconded by Nino Kavtaradze as MF1).
+    The first revision of this fix wrapped the imports in `except ImportError`,
+    which covers only the ABSENT case #1243 reproduced (`mv org_repos.py
+    /tmp/`). A *corrupt* dependency raises `SyntaxError` — a sibling of
+    `ImportError`, not a subclass — which propagated uncaught, exiting **1**:
+
+        $ printf 'def broken(\\n  not valid\\n' >> lib/org_repos.py
+        $ echo '{...,"skill":"wave-wrapup"}' | python3 hooks/validate_wave_audit.py
+        SyntaxError: '(' was never closed
+        $ echo $?
+        1
+
+    Reproduced independently before this class was written. Exit 1 is
+    non-blocking, so /wave-wrapup proceeded: the same fail-open, one door over,
+    inside the fix for that exact class — and directly contradicting the
+    "every path ends at 0 or 2" claim the same commit added to the module
+    docstring.
+
+    "Broken but present" is at least as reachable as "absent", and reachable at
+    precisely the wrong moment: unresolved merge-conflict markers in
+    `.claude/lib/org_repos.py` during a wave merge is exactly when
+    /wave-wrapup runs.
+
+    Inherits the whole `MissingDependencyFailsClosed` harness — including its
+    intact-tree premise check, so these cases cannot pass because the tree is
+    broken in some unintended way.
+    """
+
+    def test_unparseable_org_repos_blocks_wave_wrapup(self) -> None:
+        """THE MF1 assertion: SyntaxError is not an ImportError."""
+        tree = self._build_tree(corrupt="org_repos.py", corruption=_TRAILING_GARBAGE)
+        self._assert_blocks(self._run(tree, _skill_input("wave-wrapup")), "org_repos")
+
+    def test_conflict_markers_in_org_repos_block_wave_wrapup(self) -> None:
+        """The realistic shape: a half-merged dependency during a wave merge."""
+        tree = self._build_tree(corrupt="org_repos.py", corruption=_CONFLICT_MARKERS)
+        self._assert_blocks(self._run(tree, _skill_input("wave-wrapup")), "org_repos")
+
+    def test_dependency_raising_at_import_blocks_wave_retro(self) -> None:
+        """Not a compile error at all — an exception from the module body.
+        `except ImportError` misses this too, and so would `except (ImportError,
+        SyntaxError)`; only `except Exception` covers it."""
+        tree = self._build_tree(corrupt="org_repos.py", corruption=_RAISES_AT_IMPORT)
+        proc = self._run(tree, _skill_input("wave-retro"))
+        self.assertEqual(proc.returncode, 2, f"stderr={proc.stderr[-300:]!r}")
+        self.assertEqual(json.loads(proc.stdout)["decision"], "block")
+
+    def test_unparseable_annunaki_log_blocks(self) -> None:
+        tree = self._build_tree(corrupt="annunaki_log.py", corruption=_TRAILING_GARBAGE)
+        self._assert_blocks(self._run(tree, _skill_input("wave-wrapup")), "annunaki_log")
+
+    def test_unparseable_hook_main_blocks(self) -> None:
+        tree = self._build_tree(corrupt="_hook_main.py", corruption=_TRAILING_GARBAGE)
+        self._assert_blocks(self._run(tree, _skill_input("wave-wrapup")), "_hook_main")
+
+    def test_broken_dependency_names_something_useful(self) -> None:
+        """A generic exception carries no `.name` (only ImportError does), so the
+        reason must still identify what to look at rather than saying
+        `<unknown>` and stopping."""
+        tree = self._build_tree(corrupt="org_repos.py", corruption=_RAISES_AT_IMPORT)
+        reason = json.loads(self._run(tree, _skill_input("wave-wrapup")).stdout)["reason"]
+        self.assertIn("RuntimeError", reason)
+        for dependency in ("_hook_main", "annunaki_log", "org_repos"):
+            self.assertIn(dependency, reason)
+
+    def test_broken_dependency_does_not_block_an_ungated_skill(self) -> None:
+        tree = self._build_tree(corrupt="org_repos.py", corruption=_TRAILING_GARBAGE)
+        proc = self._run(tree, _skill_input("ontology-librarian"))
+        self.assertEqual(proc.returncode, 0, f"stdout={proc.stdout!r}")
+
+    def test_broken_dependency_allows_handoff_loudly(self) -> None:
+        """#1405 carve-out holds for the broken case as well as the absent one."""
+        tree = self._build_tree(corrupt="org_repos.py", corruption=_TRAILING_GARBAGE)
+        proc = self._run(tree, _skill_input("handoff"))
+        self.assertEqual(proc.returncode, 0, f"stdout={proc.stdout!r}")
+        self.assertEqual(json.loads(proc.stdout)["decision"], "allow")
+
+    def test_exit_code_is_0_or_2_across_the_breakage_matrix(self) -> None:
+        """The module docstring's exit-code invariant, made executable.
+
+        A prose guarantee the mechanism does not implement is the defect this
+        PR exists to remove, so the claim gets a test rather than a sentence.
+        Every combination of {absent, trailing garbage, conflict markers,
+        raises-at-import} x {the three dependencies} x {gated, ungated} must
+        land on 0 or 2 — never 1.
+        """
+        breakages: list[tuple[str, dict]] = [
+            ("absent", {"omit": "org_repos.py"}),
+            ("absent", {"omit": "annunaki_log.py"}),
+            ("absent", {"omit": "_hook_main.py"}),
+        ]
+        for corruption_name, corruption in (
+            ("garbage", _TRAILING_GARBAGE),
+            ("conflict", _CONFLICT_MARKERS),
+            ("raises", _RAISES_AT_IMPORT),
+        ):
+            for dependency in ("org_repos.py", "annunaki_log.py", "_hook_main.py"):
+                breakages.append(
+                    (
+                        f"{corruption_name}:{dependency}",
+                        {"corrupt": dependency, "corruption": corruption},
+                    )
+                )
+
+        for label, kwargs in breakages:
+            tree = self._build_tree(**kwargs)
+            for skill in ("wave-wrapup", "wave-retro", "handoff", "ontology-librarian"):
+                with self.subTest(breakage=label, skill=skill):
+                    proc = self._run(tree, _skill_input(skill))
+                    self.assertIn(
+                        proc.returncode,
+                        (0, 2),
+                        f"{label}/{skill} exited {proc.returncode} — a PreToolUse gate "
+                        f"must end at 0 (allow) or 2 (block); anything else is a "
+                        f"non-blocking error, i.e. a fail-open. "
+                        f"stderr={proc.stderr[-300:]!r}",
+                    )
 
 
 class IntactGateStillGatesEndToEnd(unittest.TestCase):
