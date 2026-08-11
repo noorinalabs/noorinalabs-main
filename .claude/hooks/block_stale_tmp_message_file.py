@@ -3,22 +3,88 @@
 
 Refuses commands of the form ``git commit -F /tmp/...`` and ``gh {pr,issue}
 {create,comment,edit} --body-file /tmp/...`` (plus ``gh api ... --input
-/tmp/...``) when the target file's mtime is older than ~30s. Such files are
-almost always leftovers from a prior task or session that the current command
-is about to consume by mistake — see ``feedback_tmp_msg_file_stale.md`` for
-the three documented surfaces and the 2026-05-03 ontology-rebuild recurrence
-that motivated this hook.
+/tmp/...``) when the target file's mtime is older than ~30s AND the target
+path does not contain the CURRENT session's id as a path segment. Such
+files are almost always leftovers from a prior task or session that the
+current command is about to consume by mistake — see
+``feedback_tmp_msg_file_stale.md`` for the three documented surfaces and
+the 2026-05-03 ontology-rebuild recurrence that motivated this hook.
+
+Session-identity exemption (#1352)
+===================================
+
+Wave-29 measured **0/11 precision** on the mtime check: every single block
+that wave was a false positive, and all 11 were body files under the
+INVOKING SESSION's own scratchpad
+(``/tmp/claude-<uid>/<repo-slug>/<session-id>/scratchpad/...``) that the
+agent had simply spent more than 30s composing and verifying before
+posting — the write-then-verify-then-post shape, not the same-command
+heredoc shape the original threshold was calibrated for.
+:func:`_is_current_session_path` checks whether the CURRENT session's id
+appears as a path segment anywhere in the target path and, if so, skips
+the mtime check entirely — no threshold value can substitute for this,
+because the threshold cannot tell "still composing" apart from
+"abandoned" by age alone (raising it to 15 minutes just moves the
+false-negative/false-positive line, it doesn't remove it; see the
+wave-29 harvested fixtures in
+``tests/test_block_stale_tmp_message_file_wave29.py``, several of which
+individually exceed a very generous retuned threshold).
+
+**What the exemption does and does not guarantee (read this before
+assuming "by construction" covers more than it does):**
+
+A file under the current session's id cannot be a leftover from a *prior
+session* — that is true by construction (only the current session can
+produce a path containing its own id), and it is the entire wave-29
+false-positive class this fix closes. It can **still** be a leftover from
+an *earlier task in the same session*: the check is "does the current
+session's id appear anywhere in the path", not "is the path under the
+current session's scratchpad directory" (issue #1352 proposal 1's
+narrower ask). An 8-hour-old file at
+``/tmp/claude-<uid>/<slug>/<session-id>/scratchpad/verdict_1153_nino.md``
+is exempt just as readily as one written 20 seconds ago. That narrower
+class — a stale file from an earlier task in the SAME session — is
+deliberately surrendered here, not accidentally: wave-29 showed it is
+indistinguishable from "still composing" by age, and produced 0 true
+positives across 11 firings. Hard-coding the scratchpad root path was
+considered and rejected as its own fragility (the root is
+environment/uid-dependent); the id-as-path-segment check trades that
+narrower, position-dependent guarantee for a broader, position-independent
+one that is simpler to reason about and to keep correct.
+
+A body file under a DIFFERENT session's id, or a bare /tmp path with no
+session structure at all, is unaffected — the mtime check (and the
+existing 30s threshold) still applies, preserving the true positive the
+hook exists to catch.
+
+The ``touch <path> && gh ... --body-file <path>`` "workaround" (observed in
+wave-29) does NOT work and CANNOT be made to work by retuning the
+threshold: this is a PreToolUse hook, so it stats the file BEFORE the
+gated Bash command runs — the ``touch`` embedded in that same command has
+not executed yet when the hook checks, so it can never refresh the mtime
+the hook sees. The session-identity exemption above fixes the cases that
+actually occurred in wave-29 (the touched file was always under the
+agent's own session id) as a side effect of being path-identity-based
+rather than mtime-based; for a file whose path does NOT contain the
+current session's id, no in-command ``touch`` can ever help, no matter the
+threshold — see the override paths below.
 
 Override paths the user can take when blocked:
   - rename the file to a non-/tmp path (e.g. .claude/scratch/msg.txt)
   - pass ``--message`` / ``--body`` inline instead of from a file
-  - use a /tmp path that is genuinely fresh (Write the file again, then re-run
-    the command — the freshness window resets to the new mtime)
+  - use a /tmp path that is genuinely fresh: re-run the Write tool call to
+    refresh the mtime, THEN issue the gh/git command as a SEPARATE,
+    subsequent tool call — a shell ``touch`` inside the SAME command being
+    gated cannot help (see above); the refresh must happen in a prior tool
+    call the hook has already seen.
 
-The 30-second threshold is configurable via the ``STALE_TMP_THRESHOLD_SECONDS``
-constant. Chosen as a balance between: long enough that a Write+Bash batched
-in parallel always passes (Bash sees the file at <1s mtime), short enough that
-a leftover file from a prior task in the same session is reliably caught.
+The 30-second threshold (``STALE_TMP_THRESHOLD_SECONDS``) still governs the
+non-exempted case: long enough that a Write+Bash batched in parallel always
+passes (Bash sees the file at <1s mtime), short enough that a leftover file
+from a prior task is reliably caught. It is deliberately NOT retuned by
+this fix — the session exemption above removes the guesswork for the case
+that was actually producing false positives, rather than trading one guess
+for another.
 
 Parser pattern (#316)
 =====================
@@ -35,9 +101,11 @@ shlex parse failure (`tokenize` returns None) fails OPEN — the command is
 allowed through and the downstream tool surfaces any real error itself.
 
 Exit codes:
-  0 — allow (no /tmp/* body-file argument, or file is fresh, or file missing,
-       or shlex parse failed)
-  2 — block (target file mtime older than threshold)
+  0 — allow (no /tmp/* body-file argument, target path contains the
+       current session's id as a path segment, file is fresh, file is
+       missing, or shlex parse failed)
+  2 — block (target file mtime older than threshold AND target path does
+       NOT contain the current session's id as a path segment)
 """
 
 from __future__ import annotations
@@ -150,6 +218,52 @@ def _extract_tmp_paths(command: str) -> list[str]:
     return paths
 
 
+def _session_id(input_data: dict) -> str:
+    """Resolve a stable session identifier for the current PreToolUse call.
+
+    Priority (mirrors ``validate_edit_completion.py``'s ``_session_id``):
+      1. ``input_data["session_id"]`` (Claude Code hook-input convention)
+      2. Filename stem of ``input_data["transcript_path"]``
+      3. ``""`` (no exemption possible without a stable id — fails closed,
+         i.e. the mtime check still applies)
+    """
+    sid = input_data.get("session_id")
+    if isinstance(sid, str) and sid:
+        return sid
+    tpath = input_data.get("transcript_path")
+    if isinstance(tpath, str) and tpath:
+        try:
+            return Path(tpath).stem
+        except (OSError, ValueError):
+            return ""
+    return ""
+
+
+def _is_current_session_path(path: str, session_id: str) -> bool:
+    """True if `session_id` appears as a full path segment of `path`.
+
+    The Claude Code scratchpad convention nests session-scoped tmp files
+    under a path containing the session's UUID as a segment (e.g.
+    ``/tmp/claude-<uid>/<repo-slug>/<session-id>/scratchpad/...``). A
+    /tmp/* file whose path contains the CURRENT session's id cannot, by
+    construction, be a leftover from a PRIOR SESSION — only the current
+    session can produce a path containing its own id. That is the narrower,
+    true guarantee; it is NOT "cannot be a leftover from a prior task in
+    the same session" — this check matches the session id ANYWHERE in the
+    path, not just under the session's scratchpad directory, so an old file
+    from an earlier task this same session is exempt too. That broader
+    exemption is intentional (see module docstring "What the exemption
+    does and does not guarantee", #1352) — the id-as-any-segment shape
+    trades a scratchpad-path-dependent guarantee for a simpler,
+    position-independent one. Matching on `session_id` as a path SEGMENT
+    (not a substring) avoids a session id that happens to be a substring of
+    an unrelated directory name from spuriously matching.
+    """
+    if not session_id:
+        return False
+    return session_id in Path(path).parts
+
+
 def _is_stale(path: str, now: float | None = None) -> bool:
     """True if the file exists and its mtime is older than the threshold."""
     try:
@@ -189,8 +303,13 @@ def check(input_data: dict) -> dict | None:
     if not tmp_paths:
         return None
 
+    session_id = _session_id(input_data)
     now = time.time()
-    stale = [p for p in tmp_paths if _is_stale(p, now=now)]
+    stale = [
+        p
+        for p in tmp_paths
+        if not _is_current_session_path(p, session_id) and _is_stale(p, now=now)
+    ]
     if not stale:
         return None
 
@@ -205,9 +324,15 @@ def check(input_data: dict) -> dict | None:
             f"{offending}\n\n"
             "This is the /tmp/* race captured in `feedback_tmp_msg_file_stale.md`: "
             "a Write+Bash pair batched in parallel can let Bash consume a stale "
-            "file written days ago. To proceed, take one of:\n"
-            "  1. Re-write the message/body to the same path (Write tool) and re-run "
-            "this command — the freshness window resets.\n"
+            "file written days ago. Files under YOUR OWN current session's "
+            "scratchpad are already exempt from this check regardless of age — "
+            "this file is not one of those, so a threshold or `touch` cannot "
+            "help: this hook stats the file BEFORE your command runs, so a "
+            "`touch` inside the SAME command being gated can never refresh the "
+            "mtime it sees. To proceed, take one of:\n"
+            "  1. Re-run the Write tool call to refresh the message/body at the "
+            "same path, THEN issue the git/gh command as a SEPARATE, later tool "
+            "call — the freshness window resets to the new mtime.\n"
             "  2. Use a non-/tmp path (e.g. .claude/scratch/msg.txt) so the hook "
             "no longer matches.\n"
             "  3. Pass the content inline with `--message`/`-m` (git) or "
