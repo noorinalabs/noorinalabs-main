@@ -32,6 +32,19 @@ Verifies:
      dedicated test pins both halves of that distinction together — advisory
      orphan drift alongside a genuine forward violation still exits 1, driven
      by the forward finding alone.
+  8. Observability (#1254): the report is invisible unless someone opens a
+     green job's log, and its two streams interleaved out of order. Two
+     dedicated test classes cover the fix: `StreamOrderingRegressionTest`
+     drives the script as a REAL subprocess (fake `gh` on PATH, no network)
+     with stdout+stderr merged onto one pipe — the actual CI I/O shape — and
+     asserts the `OK ...` context line prints BEFORE the `MANIFEST ORPHAN`
+     block that must be read against it (an in-process `redirect_stdout`
+     capture, as every other test here uses, does NOT reproduce this bug —
+     `StringIO` has no buffering semantics, so only a real OS pipe shows it).
+     `JobSummaryTests` asserts the report also renders on
+     `$GITHUB_STEP_SUMMARY`, and that a SKIPPED (did-not-run) verdict and a
+     CLEAN (zero-orphans) verdict use disjoint, distinguishable text there —
+     the exact "did not run must never read like clean" requirement.
 """
 
 from __future__ import annotations
@@ -39,6 +52,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -549,6 +563,208 @@ class RealMeasuredDriftRegressionTests(unittest.TestCase):
             out = stderr.getvalue()
             for name in set(self.REAL_UNBACKED_18) - {"Annunaki", "Steven French"}:
                 self.assertIn(name, out)
+
+
+class StreamOrderingRegressionTest(unittest.TestCase):
+    """#1254: the MANIFEST ORPHAN block (stderr) must not print ABOVE the
+    `OK ...` context line (stdout) it needs to be read against.
+
+    Reproduces the ACTUAL CI I/O shape: the script run as a real subprocess
+    with stdout and stderr merged onto ONE pipe (`stderr=subprocess.STDOUT`,
+    matching how a GitHub Actions log captures a step's combined output).
+    Pre-fix, CPython block-buffers stdout when it is not a tty (true of a
+    pipe) but leaves stderr unbuffered, so the `OK ...` line is only flushed
+    to the pipe at process exit — AFTER every stderr `MANIFEST ORPHAN` line
+    has already landed, reproducing the exact reordering measured in #1254
+    deterministically (not a timing-dependent flake): stdout's total output
+    here is far under the block-buffer threshold, so it is guaranteed to sit
+    unflushed until exit regardless of machine speed. A `redirect_stdout` /
+    `redirect_stderr` in-process capture, as every other test in this file
+    uses, does NOT reproduce this — `StringIO` has no buffering semantics,
+    so the bug is only observable through a real OS pipe.
+
+    No network: a fake `gh` shim script is put first on PATH and answers
+    every `gh api .../contents/...` call the script issues.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.repo_root = Path(self._tmp.name) / "repo"
+        _write_parent_roster(
+            self.repo_root,
+            {
+                "Backed Person": "parametrization+Backed.Person@gmail.com",
+                "Orphan Person": "parametrization+Orphan.Person@gmail.com",
+            },
+        )
+        self._install_fake_gh()
+
+    def _install_fake_gh(self) -> None:
+        """Write a fake `gh` on PATH answering the exact `api` calls main() issues.
+
+        Deterministic: every roster.json / card-directory / card-file fetch
+        the script performs for `noorinalabs-isnad-graph` (via --repos) and
+        `noorinalabs-deploy` (always added for the #1181 card pass) succeeds,
+        so the run reaches the real MANIFEST ORPHAN branch rather than the
+        SKIPPED branch.
+        """
+        bin_dir = Path(self._tmp.name) / "bin"
+        bin_dir.mkdir()
+        roster_b64 = base64.b64encode(json.dumps({"Backed Person": "b@x"}).encode()).decode()
+        graph_card = base64.b64encode(b"# Filler Graph - Role\n").decode()
+        deploy_card = base64.b64encode(b"# Filler Deploy - Role\n").decode()
+        fake_gh = f"""#!/usr/bin/env python3
+import sys
+argv = sys.argv[1:]
+path = argv[1] if len(argv) > 1 else ""
+jq = argv[-1] if argv else ""
+graph = "noorinalabs-isnad-graph"
+deploy = "noorinalabs-deploy"
+if path.endswith(graph + "/contents/.claude/team/roster.json") and jq == ".content":
+    print({roster_b64!r})
+elif path.endswith(graph + "/contents/.claude/team/roster") and jq == ".[].name":
+    print("filler.md")
+elif path.endswith(graph + "/contents/.claude/team/roster/filler.md") and jq == ".content":
+    print({graph_card!r})
+elif path.endswith(deploy + "/contents/.claude/team/roster") and jq == ".[].name":
+    print("filler2.md")
+elif path.endswith(deploy + "/contents/.claude/team/roster/filler2.md") and jq == ".content":
+    print({deploy_card!r})
+else:
+    sys.exit(1)
+"""
+        gh_path = bin_dir / "gh"
+        gh_path.write_text(fake_gh)
+        gh_path.chmod(0o755)
+        self.env = dict(os.environ)
+        self.env["PATH"] = f"{bin_dir}{os.pathsep}{self.env.get('PATH', '')}"
+
+    def _run_script(self) -> str:
+        script = Path(roster_union_sync.__file__)
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                "--repo-root",
+                str(self.repo_root),
+                "--repos",
+                "noorinalabs-isnad-graph",
+            ],
+            env=self.env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=30,
+        )
+        return proc.stdout
+
+    def test_ok_context_line_precedes_manifest_orphan_block(self) -> None:
+        merged = self._run_script()
+        ok_idx = merged.find("OK      noorinalabs-isnad-graph: 1 persona(s).")
+        orphan_idx = merged.find("MANIFEST ORPHAN")
+        self.assertNotEqual(ok_idx, -1, merged)
+        self.assertNotEqual(orphan_idx, -1, merged)
+        self.assertLess(
+            ok_idx,
+            orphan_idx,
+            "the OK context line must print BEFORE the MANIFEST ORPHAN block it "
+            "is read against, not after — pipe buffering must not reorder the "
+            f"two streams (#1254). Full merged output:\n{merged}",
+        )
+
+
+class JobSummaryTests(unittest.TestCase):
+    """#1254: the manifest-orphan report also renders on `$GITHUB_STEP_SUMMARY`,
+    and a SKIPPED (did-not-run) verdict must never read like a CLEAN one there.
+    """
+
+    def _run_with_summary(
+        self,
+        parent: dict[str, str],
+        fetched: dict[str, dict | None],
+        repos: str,
+        card_fetched: dict[str, set[str] | None] | None = None,
+    ) -> str:
+        with TemporaryDirectory() as td:
+            repo = Path(td) / "repo"
+            summary_path = Path(td) / "summary.md"
+            summary_path.write_text("")  # GHA pre-creates this file; simulate that
+            _write_parent_roster(repo, parent)
+            orig_roster = roster_union_sync.fetch_child_roster
+            orig_cards = roster_union_sync.fetch_child_card_names
+            roster_union_sync.fetch_child_roster = lambda owner, r: fetched.get(r)  # type: ignore[assignment]
+            roster_union_sync.fetch_child_card_names = lambda owner, r: (  # type: ignore[assignment]
+                card_fetched or {}
+            ).get(r)
+            try:
+                with patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(summary_path)}):
+                    stdout, stderr = io.StringIO(), io.StringIO()
+                    with redirect_stdout(stdout), redirect_stderr(stderr):
+                        main(["--repo-root", str(repo), "--repos", repos])
+            finally:
+                roster_union_sync.fetch_child_roster = orig_roster
+                roster_union_sync.fetch_child_card_names = orig_cards
+            return summary_path.read_text()
+
+    def test_skipped_run_renders_did_not_run_not_clean(self) -> None:
+        summary = self._run_with_summary(
+            {"Persona X": "parametrization+Persona.X@gmail.com"},
+            {"noorinalabs-isnad-graph": {}, "noorinalabs-user-service": None},
+            "noorinalabs-isnad-graph,noorinalabs-user-service",
+        )
+        self.assertIn("DID NOT RUN", summary)
+        self.assertNotIn("CLEAN", summary)
+        self.assertNotIn("ORPHANS FOUND", summary)
+
+    def test_clean_run_renders_clean_not_did_not_run(self) -> None:
+        summary = self._run_with_summary(
+            {"Wanjiku Mwangi": "parametrization+Wanjiku.Mwangi@gmail.com"},
+            {"noorinalabs-isnad-graph": {}},
+            "noorinalabs-isnad-graph",
+            card_fetched={
+                "noorinalabs-isnad-graph": {"Wanjiku Mwangi"},
+                "noorinalabs-deploy": set(),
+            },
+        )
+        self.assertIn("CLEAN", summary)
+        self.assertNotIn("DID NOT RUN", summary)
+        self.assertNotIn("ORPHANS FOUND", summary)
+
+    def test_orphans_found_run_renders_orphans_found_with_name(self) -> None:
+        summary = self._run_with_summary(
+            {"Persona X": "parametrization+Persona.X@gmail.com"},
+            {"noorinalabs-isnad-graph": {}},
+            "noorinalabs-isnad-graph",
+            card_fetched={
+                "noorinalabs-isnad-graph": set(),
+                "noorinalabs-deploy": set(),
+            },
+        )
+        self.assertIn("ORPHANS FOUND", summary)
+        self.assertIn("Persona X", summary)
+        self.assertNotIn("DID NOT RUN", summary)
+        self.assertNotIn("**Status: CLEAN**", summary)
+
+    def test_no_env_var_is_silent_noop(self) -> None:
+        with TemporaryDirectory() as td:
+            repo = Path(td) / "repo"
+            _write_parent_roster(
+                repo, {"Wanjiku Mwangi": "parametrization+Wanjiku.Mwangi@gmail.com"}
+            )
+            orig_roster = roster_union_sync.fetch_child_roster
+            orig_cards = roster_union_sync.fetch_child_card_names
+            roster_union_sync.fetch_child_roster = lambda owner, r: {}  # type: ignore[assignment]
+            roster_union_sync.fetch_child_card_names = lambda owner, r: set()  # type: ignore[assignment]
+            env = dict(os.environ)
+            env.pop("GITHUB_STEP_SUMMARY", None)
+            try:
+                with patch.dict(os.environ, env, clear=True):
+                    rc = main(["--repo-root", str(repo), "--repos", "noorinalabs-isnad-graph"])
+            finally:
+                roster_union_sync.fetch_child_roster = orig_roster
+                roster_union_sync.fetch_child_card_names = orig_cards
+            self.assertEqual(rc, 0)
 
 
 if __name__ == "__main__":

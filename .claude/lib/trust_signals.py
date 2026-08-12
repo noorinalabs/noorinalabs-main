@@ -54,7 +54,8 @@ Signals per engineer (all integers, all countable from the merged-PR set):
                                comment carried ``OrchestratorCaused:`` — the
                                block stemmed from a dispatch/brief error, not
                                the author's work (main#1366). Excluded from
-                               the rate bars via
+                               the rate bars and from the ceiling-5 ranking
+                               key (main#1369) via
                                ``Signals.attributable_rework()``; the raw
                                must_fix_received count is unchanged.
   ===========================  ============================================
@@ -297,7 +298,10 @@ class Signals:
         ``OrchestratorCaused:`` on the blocking comment. This is what the rate
         bars measure — the question they are asking is "how much rework did
         this engineer's work generate", and a round caused by an unbatched
-        dispatch or a wrong brief is not an answer to it.
+        dispatch or a wrong brief is not an answer to it. Since main#1369 it is
+        also what ``apply_distribution_discipline``'s ``composite()`` ranking
+        key charges, so every place rework is *scored against* an engineer
+        reads this method and not the raw field.
 
         ``must_fix_received`` itself stays the raw, honest count and is what
         :meth:`has_negative` and :func:`negative_signal_line` report, so the
@@ -424,10 +428,12 @@ def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
         # — pinned by `UnterminatedFenceDirectionChangeTests` in
         # `test_trust_signals.py` so it is not rediscovered as a surprise.
         scanned = charter_trailer.strip_code_regions(body)
-        is_changes_requested = (
-            charter_trailer.verdict_kind(verdict_str, include_bare_changes=True)
-            == "changesrequested"
-        )
+        # main#1371: the named shared predicate, not a hand-written comparison
+        # against the classifier's return value. The comparison was correct,
+        # but it was the same expression written out at two sites in this file
+        # and at four more in the two hooks — which is how the vocabulary came
+        # to have four implementations in the first place.
+        is_changes_requested = charter_trailer.is_changes_requested(verdict_str)
         is_false_positive = is_changes_requested and bool(_RETRACTION_RE.search(scanned))
         # `OrchestratorCaused:` is gated identically and for the same reason
         # (main#1366): there is no rework round to reattribute unless THIS
@@ -447,18 +453,21 @@ def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
     return out
 
 
-def _is_changes_requested(verdict: str | None) -> bool:
-    """True if *verdict* (a captured ``RequestOrReplied`` value) is ChangesRequested.
-
-    #1347: routes through :func:`charter_trailer.verdict_kind` so the three
-    spelling variants (``ChangesRequested`` / ``Changes Requested`` /
-    ``Changes``) all classify identically — the previous
-    ``verdict.lower() == "changesrequested"`` exact-match silently dropped
-    the spaced form because the capturing regex used to stop at the first
-    space. ``include_bare_changes=True`` preserves this module's original
-    (pre-main#1359) behaviour of counting bare ``Changes`` (main#1359).
-    """
-    return charter_trailer.verdict_kind(verdict, include_bare_changes=True) == "changesrequested"
+# The "is this comment BLOCKING?" question, asked once org-wide
+# (`charter_trailer.is_changes_requested`, main#1371) and merely re-exported
+# under this module's historical private name for its existing callers and
+# test surface.
+#
+# #1347: routing through the shared classifier is what makes the three
+# spelling variants (``ChangesRequested`` / ``Changes Requested`` /
+# ``Changes``) classify identically — the pre-#1347 ``verdict.lower() ==
+# "changesrequested"`` exact match silently dropped the spaced form because
+# the capturing regex used to stop at the first space. main#1359 moved the
+# classifier to `charter_trailer`; main#1371 replaced the hand-written
+# ``verdict_kind(...) == "changesrequested"`` comparison with the named
+# predicate, which defaults to ``include_bare_changes=True`` and so preserves
+# this module's original behaviour of counting bare ``Changes``.
+_is_changes_requested = charter_trailer.is_changes_requested
 
 
 def _pr_comment_bodies(repo: str, number: int) -> list[str]:
@@ -824,27 +833,39 @@ def apply_distribution_discipline(
     """
 
     def composite(s: Signals) -> int:
-        # Reward output + good reviewing; penalise the negatives. Pure ranking
-        # key, not a trust score.
-        #
-        # Uses the RAW must_fix_received, not the orchestrator-adjusted
-        # attributable count (main#1366).
-        #
-        # **Tracked as main#1369, not settled here.** The #1363 reviewers split
-        # on it — one judging the raw count correct (composite is a relative
-        # ranking key for one cap, the attribution was ruled for the absolute
-        # rate bars, and the `2x` weights below are themselves uncalibrated, so
-        # this is a heuristic and not an instrument), the other quantifying the
-        # exposure (one marked round is worth one composite point, so with a
-        # gap as narrow as 2 between adjacent engineers, two marks could flip
-        # which of them keeps the ceiling 5 while leaving both score_delta
-        # bands untouched). Both arguments are recorded on #1369 on their
-        # merits. Leaving the behaviour unchanged and the decision tracked
-        # rather than buried in this comment.
+        """Rank engineers by **the wave's work they are answerable for**.
+
+        Reward output + good reviewing; penalise the negatives. A pure relative
+        ranking key for the one cap below — not a trust score, and the ``2x``
+        weights are judgment, not calibration.
+
+        **Rework enters as** :meth:`Signals.attributable_rework`, not as the
+        raw ``must_fix_received`` (settled at main#1369; it was the raw count
+        until then). The cap decides who receives the reserved 5, so it is a
+        fairness-sensitive allocation, and it asks the same question
+        :func:`score_delta`'s rate bars ask — *how much rework did this
+        engineer's own work generate* — so it must read the same quantity. A
+        round marked ``OrchestratorCaused:`` is by construction not an answer
+        to that question: the block came from a dispatch or brief error. At
+        weight 1 per marked round, and with adjacent engineers as close as 2
+        composite points apart in wave-29, two such rounds could move the
+        ceiling 5 from one engineer to another while leaving both
+        ``score_delta`` bands untouched — the instrument charging someone for
+        the orchestrator's mistake, in the one place the charge is invisible.
+
+        The counter-argument recorded at #1369 — that a heuristic ranking key
+        need not inherit an attribution ruled for the absolute rate bars — is
+        why this is stated rather than assumed. It does not survive the
+        allocation being fairness-sensitive: uncalibrated weights are an
+        argument about how much a signal should count, never a licence to
+        count it against the wrong person. ``must_fix_received`` stays the raw,
+        honest count everywhere it is *reported* (:meth:`Signals.has_negative`,
+        :func:`negative_signal_line`); this is the one place it is *charged*.
+        """
         return (
             s.prs_merged
             + s.must_fix_caught
-            - s.must_fix_received
+            - s.attributable_rework()
             - 2 * s.ci_red_merges
             - 2 * s.review_false_positives
         )

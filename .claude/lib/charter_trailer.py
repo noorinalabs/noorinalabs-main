@@ -53,11 +53,15 @@ from __future__ import annotations
 import re
 
 __all__ = [
+    "VERDICT_DIRECTION_KINDS",
     "VERDICT_KIND",
     "branch_author_first_initial",
     "extract_branch_author_lastname",
     "extract_charter_field",
+    "is_approved",
     "is_branch_author",
+    "is_changes_requested",
+    "is_verdict_direction",
     "is_wave_branch",
     "name_first_initial",
     "name_lastname",
@@ -333,15 +337,20 @@ def extract_charter_field(field_name: str, body: str) -> str | None:
 #     three raw implementations.
 #
 # `verdict_kind` below is the one classifier. The bare-`Changes` disagreement
-# is real and deliberate (a well-formed-verdict question vs. a
-# does-this-comment-block question, per main#1371) — it is kept as the
-# `include_bare_changes` ARGUMENT, not as a fourth silently-forked table, so
-# a caller states which of the two questions it is asking. `trust_signals`
-# migrates onto this in the same change that defines it (its three private
-# copies deleted); `validate_pr_review` and `validate_review_comment_format`
-# migrate their four remaining copies onto it under main#1371 — that
-# consolidation is sequenced to land AFTER this module gains the shared
-# definition, so it lands ONTO one owner rather than creating a fourth.
+# is carried as the `include_bare_changes` ARGUMENT, not as a fourth
+# silently-forked table, so a caller states which question it is asking.
+# `trust_signals` migrated onto this in the same change that defined it (its
+# three private copies deleted); `validate_pr_review` and
+# `validate_review_comment_format` migrated their four remaining copies under
+# main#1371, landing ONTO one owner rather than creating a fourth.
+#
+# main#1371 ALSO RULED ON THE DISAGREEMENT ITSELF, and the ruling is not the
+# one this comment originally anticipated: the bare-`Changes` exclusion was
+# NOT a second legitimate question, it was a gate narrower than its consumer,
+# and every production caller now passes `include_bare_changes=True`. The
+# evidence, the retracted premise and the full behaviour-change table live in
+# the § "The questions, as named predicates" block below — read it before
+# reintroducing an excluding caller.
 VERDICT_KIND: dict[str, str] = {
     "approved": "approved",
     "changesrequested": "changesrequested",
@@ -412,6 +421,155 @@ def verdict_kind(value: str | None, *, include_bare_changes: bool = True) -> str
             return "changesrequested"
         return "changesrequested" if include_bare_changes else ""
     return VERDICT_KIND.get(token, "")
+
+
+# ---------------------------------------------------------------------------
+# The questions, as named predicates over the one classifier (main#1371)
+# ---------------------------------------------------------------------------
+#
+# main#1359 (above) made `verdict_kind` the one classifier and migrated
+# `trust_signals`. main#1371 migrates the two hooks' four remaining copies:
+#
+#   validate_review_comment_format._VERDICT_DIRECTIONS + ._direction_is_verdict
+#   validate_review_comment_format._direction_is_changes_requested
+#   validate_pr_review._VERDICT_REQUIRING_TECH_DEBT + ._is_verdict
+#   validate_pr_review._is_approved
+#
+# Each answered a QUESTION, and the questions are what get names here — a
+# caller asks `is_verdict_direction(...)`, not `verdict_kind(...) in {...}`,
+# so the set membership has one definition too. Three questions, because
+# three are asked in production:
+#
+#   is_verdict_direction  Does the charter Direction table bind
+#                         Requestor=reviewer / Requestee=PR-author here?
+#                         (the swap heuristic's scope, and the counter's
+#                         "this comment is a verdict, TechDebt required")
+#   is_changes_requested  Is this comment BLOCKING? (the conditional-field
+#                         gate, main#1363; trust_signals' retraction and
+#                         orchestrator-attribution gating)
+#   is_approved           Does this count toward the 2-reviewer threshold?
+#
+# THE BARE `Changes` RESOLUTION — READ THIS BEFORE CHANGING A DEFAULT
+# ===================================================================
+#
+# main#1371 was filed on the premise that the exclusion of bare `Changes` in
+# `validate_review_comment_format._VERDICT_DIRECTIONS` "is not a bug — it
+# serves a different question (which spellings constitute a well-formed
+# declared verdict) from the one the counter asks (which comments count as
+# blocking)". THAT PREMISE IS RETRACTED, on evidence, and the consolidation
+# adopts INCLUDE-bare-`Changes` at every production call site.
+#
+# Why: nothing in `validate_review_comment_format` asks a well-formedness
+# question. Its own module docstring disclaims it — "Unrecognized
+# `RequestOrReplied` values (typos, future verdict types the hook doesn't
+# know about) fail OPEN … Validating the verdict word itself is covered by a
+# sibling hook (`validate_pr_review`)". And the sibling does not reject bare
+# `Changes`; it counts it (`_VERDICT_REQUIRING_TECH_DEBT` included it). So
+# the exclusion was a gate whose grammar was NARROWER THAN THE CONSUMER IT
+# GUARDS — the main#1150 defect class the issue itself cites — with no
+# backstop anywhere, and it was live:
+#
+#     RequestOrReplied: Changes, with Requestor = the PR author
+#       `_direction_is_changes_requested`  True  (main#1363 fixed this half)
+#       `_direction_is_verdict`            False → check() returned early,
+#                                                 the SWAP CHECK NEVER RAN
+#       `validate_pr_review._is_verdict`   True  → counted as a verdict,
+#                                                 Requestor self-excluded,
+#                                                 the real reviewer's verdict
+#                                                 recorded under the author's
+#                                                 name and evaporating.
+#
+# One comment, simultaneously a blocking ChangesRequested (so `Retracted:`
+# was accepted on it) and not-a-verdict (so the swap gate skipped it).
+#
+# The fix direction is also the SAFE one: including bare `Changes` can only
+# make the format gate examine MORE comments, never fewer. Excluding it is
+# the allowing direction. A gate does not get to pick the allowing direction
+# to preserve a distinction no consumer asked for.
+#
+# `include_bare_changes` SURVIVES anyway, on both direction predicates, and
+# `verdict_kind` keeps it. main#1359 documented it at length, the excluding
+# question stays expressible and tested, and deleting a parameter is a
+# separate decision from migrating call sites. But be aware, and do not read
+# the parameter as evidence of a live disagreement: AFTER main#1371 NO
+# PRODUCTION CALLER PASSES `include_bare_changes=False`. If a future reader
+# is looking for the second answer's consumer, there isn't one — that is
+# reported on main#1371, not hidden here.
+#
+# `is_approved` deliberately takes NO `include_bare_changes` knob, and needs
+# none: bare `Changes` cannot classify as `approved` under either setting.
+# The parameter is load-bearing only on the changesrequested branch, which is
+# why there are two direction questions and not three
+# (`test_include_bare_changes_is_only_load_bearing_for_changesrequested`).
+#
+# WHAT ELSE CHANGED, BECAUSE ONE ALGORITHM REPLACED FOUR
+# ======================================================
+#
+# The four copies did not merely disagree on bare `Changes`; they used three
+# different normalisations. `verdict_kind` classifies the FIRST token
+# (or first two, for `Changes Requested`) after stripping non-alphanumerics,
+# so migrating widens every exact-set consumer. Reachable end-to-end (i.e.
+# surviving `extract_charter_field`'s own bold/parenthetical stripping):
+#
+#   value                    _is_verdict  _is_approved   after
+#   `Approved!`                  False       False       verdict + approval
+#   `Approved with nits`         False       False       verdict + approval
+#   `Approved - see below`       False       False       verdict + approval
+#   `Changes  Requested` (2 sp)  False       False       verdict, blocking
+#   `**Changes** Requested`      False       False       verdict, blocking
+#   `Changes needed`             False       False       verdict, blocking
+#   `ChangesRequested.`          False       False       verdict, blocking
+#
+# The `_is_approved` rows WIDEN THE 2-REVIEWER APPROVER SET — the only
+# loosening in this change, and it is stated here rather than discovered.
+# It is the direction the org has ruled for repeatedly (main#1347, #1357,
+# #1359 each widened a narrow verdict capture) and the alternative is worse:
+# `RequestOrReplied: Approved with nits` is a verdict to the format gate
+# (which has always matched on the first token) and zero reviews to the
+# counter — the main#932 uncountable-verdict shape, with the reviewer
+# believing they approved. A first token of `Approved` is an approval; a
+# hedge that is not one (`Not Approved`) does not start with the token and
+# classifies as nothing at all, before and after.
+VERDICT_DIRECTION_KINDS = frozenset({"approved", "changesrequested"})
+
+
+def is_verdict_direction(value: str | None, *, include_bare_changes: bool = True) -> bool:
+    """True when `value` is an Approved / ChangesRequested direction.
+
+    These are the rows of the charter `pull-requests.md` § Comment-Based
+    Reviews Direction table where the binding is `Requestor = reviewer,
+    Requestee = PR-author`. `Request` / `Reply` invert that binding and are
+    NOT verdict directions; an unrecognized value is not one either.
+
+    See the block comment above for why `include_bare_changes` defaults to
+    True here — a gate scoping itself with a narrower grammar than the
+    counter it guards is the main#1150 defect, and it was live on bare
+    `Changes`.
+    """
+    return verdict_kind(value, include_bare_changes=include_bare_changes) in VERDICT_DIRECTION_KINDS
+
+
+def is_changes_requested(value: str | None, *, include_bare_changes: bool = True) -> bool:
+    """True when `value` is specifically a ChangesRequested direction.
+
+    Narrower than :func:`is_verdict_direction`, which also accepts Approved.
+    This is the "is this comment BLOCKING?" question: whether a must-fix was
+    raised, hence whether `Retracted:` / `OrchestratorCaused:` mean anything
+    on it (main#1363/#1364/#1366) and whether the reviewer currently blocks.
+    """
+    return verdict_kind(value, include_bare_changes=include_bare_changes) == "changesrequested"
+
+
+def is_approved(value: str | None) -> bool:
+    """True when `value` is specifically an Approved direction.
+
+    This is the whole input to the charter's 2-reviewer threshold — a
+    reviewer counts only when their LATEST current verdict is Approved
+    (main#940). No `include_bare_changes` parameter, because bare `Changes`
+    can never classify as `approved`; adding one would suggest a distinction
+    that does not exist here.
+    """
+    return verdict_kind(value) == "approved"
 
 
 # ---------------------------------------------------------------------------

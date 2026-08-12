@@ -116,6 +116,37 @@ disposition of the 16 (§ above) could reasonably promote them to blocking;
 that is a separate, explicit decision, not a side effect of this check
 existing.
 
+Observability: job summary + stream ordering (#1254)
+======================================================================
+The orphan report above is advisory in EXIT STATUS (previous section), but
+that left it advisory in VISIBILITY too: its only channel was text in the
+log of a job that is ALWAYS green (continue-on-error, forward section
+above), and a fetch failure (any roster.json or card-directory SKIP)
+suppresses the whole orphan check — which, at every surface except the log
+text, was indistinguishable from a clean pass. Two fixes:
+
+1. Every line of the orphan-check verdict is ALSO written, Markdown-
+   structured, to `$GITHUB_STEP_SUMMARY` (a file GitHub Actions provides to
+   every step automatically — no workflow YAML change needed), so it renders
+   on the workflow run's Summary page without opening any job's log, green
+   or not. The verdict is always exactly one of three explicit, disjoint
+   states — `DID NOT RUN`, `CLEAN`, or `ORPHANS FOUND (N)` — so "did not
+   run" can never render like "clean" (the requirement recorded in #1254).
+   `_write_step_summary` is a silent no-op when the env var is unset (local
+   runs, unit tests, non-GHA CI) — never raises, never touches `exit_code`.
+2. Every `print()` call in `main` now passes `flush=True`. Pre-fix, the
+   per-repo `OK`/`SKIPPED` context lines went to stdout (block-buffered
+   under a pipe — CI's actual I/O shape) while the DRIFT/MANIFEST-ORPHAN
+   blocks went to stderr (unbuffered), so stdout's buffered lines were only
+   written at process exit — AFTER every stderr line had already landed.
+   Measured on a live run (#1254): the `MANIFEST ORPHAN` block printed
+   ABOVE the `OK ...` context lines it must be read against. `flush=True`
+   forces each print's underlying `write()` syscall to happen at the point
+   of the call (program order) rather than being deferred by Python's stdio
+   buffering, so the two streams interleave in the order the script
+   actually emits them regardless of which fd a downstream consumer (e.g. a
+   CI log that merges a step's stdout+stderr onto one pipe) merges them onto.
+
 Input Language
 ==============
 CLI:  roster_union_sync.py [--repo-root <dir>] [--repos a,b,c] [--owner <org>]
@@ -138,6 +169,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import re
 import subprocess
 import sys
@@ -389,6 +421,29 @@ def compute_drift(
     return {name: sorted(repos) for name, repos in sorted(missing.items())}
 
 
+def _write_step_summary(lines: list[str]) -> None:
+    """Append the manifest-orphan report to the GitHub Actions job summary (#1254).
+
+    `GITHUB_STEP_SUMMARY` is a file path GitHub Actions sets for every step
+    automatically (no workflow YAML change needed) — content appended to it
+    renders on the workflow run's Summary page, visible without opening any
+    job's log, green or not. Best-effort / advisory-safe: if the env var is
+    unset (local runs, unit tests, non-GHA CI) or the file can't be opened,
+    this is a silent no-op — it never raises and never touches `exit_code`.
+    Appends (never truncates), matching GHA's own convention of accumulating
+    one summary file across every step in a job.
+    """
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+    try:
+        with open(summary_path, "a", encoding="utf-8") as fh:
+            fh.write("\n".join(lines))
+            fh.write("\n")
+    except OSError:
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", default=".", help="repo root hosting the parent roster.json")
@@ -408,6 +463,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"ERROR: no parent roster names loaded from {repo_root}/{ROSTER_PATH_IN_REPO}.",
             file=sys.stderr,
+            flush=True,
         )
         return 2
 
@@ -423,10 +479,10 @@ def main(argv: list[str] | None = None) -> int:
         roster = fetch_child_roster(args.owner, repo)
         if roster is None:
             skipped.append(repo)
-            print(f"SKIPPED {repo}: no readable {ROSTER_PATH_IN_REPO} (fail-open).")
+            print(f"SKIPPED {repo}: no readable {ROSTER_PATH_IN_REPO} (fail-open).", flush=True)
         else:
             child_rosters[repo] = roster
-            print(f"OK      {repo}: {len(roster)} persona(s).")
+            print(f"OK      {repo}: {len(roster)} persona(s).", flush=True)
 
     exit_code = 0
 
@@ -439,21 +495,24 @@ def main(argv: list[str] | None = None) -> int:
             "commit-identity gate (verify_commit_identity.py) recognizes them on a "
             "cross-repo main PR (#634):",
             file=sys.stderr,
+            flush=True,
         )
         for name, owners in drift.items():
-            print(f'  - "{name}"  (canonical in: {", ".join(owners)})', file=sys.stderr)
+            print(f'  - "{name}"  (canonical in: {", ".join(owners)})', file=sys.stderr, flush=True)
         exit_code = 1
     else:
         observed = sum(len(r) for r in child_rosters.values())
         if not child_rosters:
             print(
                 f"\nNo child roster could be read ({len(skipped)} skipped); "
-                "nothing to cross-check for drift. Passing (advisory)."
+                "nothing to cross-check for drift. Passing (advisory).",
+                flush=True,
             )
         else:
             print(
                 f"\nParent roster covers all {observed} observed child persona(s) "
-                f"across {len(child_rosters)} repo(s). No drift."
+                f"across {len(child_rosters)} repo(s). No drift.",
+                flush=True,
             )
 
     # Reverse direction (#1181): manifest ⊆ (this repo's cards) ∪ (every
@@ -471,17 +530,36 @@ def main(argv: list[str] | None = None) -> int:
             names = fetch_child_card_names(args.owner, repo)
             if names is None:
                 card_skipped.append(repo)
-                print(f"SKIPPED {repo}: no readable {CARD_PATH_IN_REPO}/*.md (fail-open).")
+                print(
+                    f"SKIPPED {repo}: no readable {CARD_PATH_IN_REPO}/*.md (fail-open).",
+                    flush=True,
+                )
             else:
                 child_cards[repo] = names
-                print(f"OK      {repo}: {len(names)} card(s).")
+                print(f"OK      {repo}: {len(names)} card(s).", flush=True)
+
+    # #1254: the job-summary rendering of the orphan-check verdict below is
+    # ALWAYS exactly one of three disjoint, explicitly-labelled states — a
+    # SKIPPED (did-not-run) verdict must never share text with a CLEAN
+    # (zero-orphans) one, so a summary reader can never mistake "this check
+    # made no claim" for "this check looked and found nothing."
+    summary_lines = ["### Manifest-orphan check (#1181)", ""]
 
     if skipped or card_skipped:
         unreadable = len(skipped) + len(card_skipped)
-        print(
-            f"\nManifest-orphan check (#1181) SKIPPED: {unreadable} repo/directory fetch(es) "
+        skip_msg = (
+            f"Manifest-orphan check (#1181) SKIPPED: {unreadable} repo/directory fetch(es) "
             "unreadable — an orphan report over partial data could wrongly flag a name backed "
             "only by something we failed to fetch."
+        )
+        print(f"\n{skip_msg}", flush=True)
+        summary_lines.extend(
+            [
+                f"**Status: DID NOT RUN** — {unreadable} repo/directory fetch(es) unreadable.",
+                "",
+                "_This is NOT the same as a clean pass — the check did not execute, so it "
+                "made no claim about orphans either way._",
+            ]
         )
     else:
         card_names = local_card_names(repo_root)
@@ -489,13 +567,19 @@ def main(argv: list[str] | None = None) -> int:
             card_names |= names
         orphans = compute_manifest_orphans(parent_map, card_names, child_rosters)
         if orphans["non_persona"]:
-            print(
-                "\nManifest carries non-persona entrie(s) (#1181) — informational only, never "
+            non_persona_header = (
+                "Manifest carries non-persona entrie(s) (#1181) — informational only, never "
                 "a reconciliation target (pruning would break their own use, e.g. the "
                 "annunaki-attack skill's own commit identity):"
             )
+            print(f"\n{non_persona_header}", flush=True)
+            summary_lines.append(
+                f"**Non-persona entries** (informational only): {non_persona_header}"
+            )
             for name in orphans["non_persona"]:
-                print(f'  - "{name}"')
+                print(f'  - "{name}"', flush=True)
+                summary_lines.append(f'- "{name}"')
+            summary_lines.append("")
         if orphans["unreconciled"]:
             # Advisory ONLY (owner correction, PR #1240 review): this must NOT
             # move exit_code. continue-on-error at the WORKFLOW level does not
@@ -517,14 +601,30 @@ def main(argv: list[str] | None = None) -> int:
                 "  (a) onboard the persona — add a real roster card in the repo it belongs to, or\n"
                 "  (b) the persona is retired — remove the row from .claude/team/roster.json.",
                 file=sys.stderr,
+                flush=True,
+            )
+            summary_lines.extend(
+                [
+                    f"**Status: ORPHANS FOUND** ({len(orphans['unreconciled'])} unreconciled) "
+                    "— advisory, does not fail this job.",
+                    "",
+                    "Pick one: (a) onboard the persona with a real roster card, or (b) remove "
+                    "the row from `.claude/team/roster.json` if the persona is retired.",
+                    "",
+                ]
             )
             for name in orphans["unreconciled"]:
-                print(f'  - "{name}"', file=sys.stderr)
+                print(f'  - "{name}"', file=sys.stderr, flush=True)
+                summary_lines.append(f'- "{name}"')
         else:
-            print(
-                "\nManifest-orphan check (#1181): every persona-shaped manifest entry is backed "
+            clean_msg = (
+                "Manifest-orphan check (#1181): every persona-shaped manifest entry is backed "
                 "by a card or a child roster.json. No unreconciled orphans."
             )
+            print(f"\n{clean_msg}", flush=True)
+            summary_lines.append(f"**Status: CLEAN** — {clean_msg}")
+
+    _write_step_summary(summary_lines)
 
     return exit_code
 

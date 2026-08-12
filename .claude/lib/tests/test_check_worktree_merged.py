@@ -288,6 +288,125 @@ class CheckWorktreeMergedTest(unittest.TestCase):
         self.assertEqual(result.status, "merged")
         self.assertEqual(result.reason, "ancestor")
         self.assertTrue(result.merged)
+        # A genuinely merged feature branch IS a reclaim candidate — the
+        # #1341 guard below must not touch this (#526's whole motivation).
+        self.assertEqual(result.removal_block, "")
+        self.assertTrue(result.safe_to_remove)
+
+    # ---- removal candidacy: the orthogonal freshness axis (#1341) -----------
+
+    def test_fresh_worktree_at_remote_tip_is_not_a_removal_candidate(self) -> None:
+        """THE #1341 CASE. A worktree branched off `remote_ref` that has not
+        committed yet has HEAD == remote_ref, which is trivially an ancestor
+        — the fast path calls it `merged` (correct about ancestry) and Step 0
+        removes a live, clean worktree out from under an active agent.
+
+        Merged-ness itself is NOT contested here: a branch with no commits of
+        its own genuinely has no unlanded content, so `status`/`merged` must
+        stay `merged` (that is the PR #1213 net-content guarantee, preserved
+        verbatim). What the fix adds is a SECOND, orthogonal predicate — is
+        there any work here to reclaim? — which is what the removal decision
+        (the CLI exit code Step 0 reads) consults."""
+        _git(["checkout", "-b", "agent-worktree"], self.repo)
+        fresh_head = _head(self.repo)
+        self.assertEqual(fresh_head, _git_ok(["rev-parse", "main"], self.repo).stdout.strip())
+
+        result = self._classify(fresh_head)
+        # Unchanged classification (the #1213 guarantee is not traded away).
+        self.assertEqual(result.status, "merged")
+        self.assertEqual(result.reason, "ancestor")
+        self.assertTrue(result.merged)
+        # ...but it is NOT a removal candidate.
+        self.assertEqual(result.removal_block, "no-own-commits")
+        self.assertFalse(result.safe_to_remove)
+
+    def test_fresh_worktree_off_older_remote_tip_is_not_a_removal_candidate(self) -> None:
+        """The aged form of the same hole: the worktree was branched off
+        `remote_ref` and `remote_ref` has since moved on, so HEAD is no
+        longer *equal* to the remote tip — only an ancestor of it. A bare
+        `HEAD == remote_ref` guard would miss this; the branch still has zero
+        commits of its own, so there is still nothing to reclaim. Sessions in
+        this org run long enough for main to advance under an idle worktree,
+        so this is the common shape, not the exotic one."""
+        _git(["checkout", "-b", "agent-worktree"], self.repo)
+        fresh_head = _head(self.repo)
+        _git(["checkout", "main"], self.repo)
+        _commit(self.repo, "later.txt", "main moved on\n", "unrelated main commit")
+        self.assertNotEqual(fresh_head, _git_ok(["rev-parse", "main"], self.repo).stdout.strip())
+
+        result = self._classify(fresh_head)
+        self.assertEqual(result.status, "merged")
+        self.assertTrue(result.merged)
+        self.assertEqual(result.removal_block, "no-own-commits")
+        self.assertFalse(result.safe_to_remove)
+
+    def test_squash_merged_branch_stays_a_removal_candidate(self) -> None:
+        """No regression on the population the sweep exists for: a squash-
+        merged branch has commits of its own (it is not on `remote_ref`'s
+        mainline at all), so it remains auto-removable."""
+        feature_tip = self._multi_commit_squash()
+
+        result = self._classify(feature_tip)
+        self.assertEqual(result.status, "merged")
+        self.assertEqual(result.reason, "content-equivalent")
+        self.assertEqual(result.removal_block, "")
+        self.assertTrue(result.safe_to_remove)
+
+    def test_unmerged_branch_is_never_a_removal_candidate(self) -> None:
+        _git(["checkout", "-b", "feature"], self.repo)
+        _commit(self.repo, "a.txt", "A\n", "never merged")
+        feature_tip = _head(self.repo)
+
+        result = self._classify(feature_tip)
+        self.assertEqual(result.status, "unmerged")
+        self.assertFalse(result.safe_to_remove)
+
+    def test_mainline_probe_failure_blocks_removal(self) -> None:
+        """The freshness guard's own `git rev-list --first-parent` failing
+        must degrade toward FLAG, not toward remove — a probe that could not
+        be run is not evidence that the branch has work of its own. The
+        merged *classification* is deliberately left intact; only removal
+        candidacy degrades."""
+        _git(["checkout", "-b", "agent-worktree"], self.repo)
+        fresh_head = _head(self.repo)
+
+        runner = _runner_intercepting("rev-list", occurrence=1, mode="fail")
+        result = classify_merged(
+            self.repo, fresh_head, "main", runner=runner, pipe_runner=_git_pipe_real
+        )
+        self.assertEqual(result.status, "merged")
+        self.assertEqual(result.removal_block, "mainline-check-failed")
+        self.assertFalse(result.safe_to_remove)
+
+    def test_mainline_probe_empty_output_blocks_removal(self) -> None:
+        """`git rev-list` over a resolvable ref always lists at least that
+        ref's own commit, so a successful-but-EMPTY chain is an unknown
+        state. Reading it as "head is not on the mainline" would fail open
+        into a removal — the exact shape of the fail-open guard the patch-id
+        path already carries."""
+        _git(["checkout", "-b", "agent-worktree"], self.repo)
+        fresh_head = _head(self.repo)
+
+        runner = _runner_intercepting("rev-list", occurrence=1, mode="empty")
+        result = classify_merged(
+            self.repo, fresh_head, "main", runner=runner, pipe_runner=_git_pipe_real
+        )
+        self.assertEqual(result.removal_block, "mainline-check-failed")
+        self.assertFalse(result.safe_to_remove)
+
+    def test_head_resolution_failure_blocks_removal(self) -> None:
+        """Same stance for the `git rev-parse --verify` that resolves HEAD to
+        a comparable SHA (Step 0 passes a raw SHA, but the CLI accepts any
+        rev): unresolvable HEAD -> flag, never remove."""
+        _git(["checkout", "-b", "agent-worktree"], self.repo)
+        fresh_head = _head(self.repo)
+
+        runner = _runner_intercepting("rev-parse", occurrence=1, mode="fail")
+        result = classify_merged(
+            self.repo, fresh_head, "main", runner=runner, pipe_runner=_git_pipe_real
+        )
+        self.assertEqual(result.removal_block, "mainline-check-failed")
+        self.assertFalse(result.safe_to_remove)
 
     # ---- test 1: net-content match ------------------------------------------
 
@@ -1036,6 +1155,21 @@ class CheckWorktreeMergedTest(unittest.TestCase):
     def test_cli_usage_error(self) -> None:
         rc = cli_main([str(self.repo)])
         self.assertEqual(rc, 2)
+
+    def test_cli_exit_code_fresh_worktree_is_not_zero(self) -> None:
+        """THE #1341 CASE, at the seam Step 0 actually reads. Step 0's whole
+        remove-vs-FLAG decision is `rc == 0`, so the exit code — not the
+        dataclass — is the load-bearing contract: a fresh, uncommitted
+        worktree must NOT return 0. It returns the dedicated code 3
+        ("merged, but nothing of its own to reclaim") so a caller can label
+        it FRESH rather than the misleading UNMERGED; every caller that only
+        knows the old `0 == remove` rule still fails safe."""
+        _git(["checkout", "-b", "agent-worktree"], self.repo)
+        fresh_head = _head(self.repo)
+
+        rc = cli_main([str(self.repo), fresh_head, "main"])
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(rc, 3)
 
 
 if __name__ == "__main__":
