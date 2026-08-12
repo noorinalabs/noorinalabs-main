@@ -333,28 +333,40 @@ class ConditionalFieldGateFollowsTrustSignalsTests(unittest.TestCase):
         "Retracted: my finding was wrong.\n"
     )
 
-    def test_line_anchored_mention_is_the_known_residual_divergence(self) -> None:
-        """The shape where the gate and its consumer still disagree — PINNED
-        so it is a documented residual, not a latent surprise (main#1371).
+    def test_line_anchored_mention_no_longer_diverges(self) -> None:
+        """FLIPPED AT main#1372, exactly as main#1371 instructed.
 
-        `trust_signals._FIELD_RE["verdict"]` is line-anchored over the RAW
-        body and first-match, so it reads the stray line and silently drops
-        the retraction. The gate reads the trailer and stays quiet. Nothing
-        merges wrongly — the author simply is not warned that their
-        `Retracted:` will be ignored.
+        This was the one shape where the gate and its consumer still
+        disagreed, pinned by main#1371 as a documented residual:
+        `trust_signals._FIELD_RE["verdict"]` was line-anchored over the RAW
+        body and first-match, so it read the stray `RequestOrReplied:
+        Approved` line, classified the comment as Approved, and silently
+        dropped the `Retracted:` in the trailer. The gate read the trailer,
+        saw ChangesRequested, and stayed quiet — harmless (nothing merged
+        wrongly) but the author was never warned their retraction would be
+        ignored.
 
-        The repair is `trust_signals` routing through
-        `charter_trailer.extract_charter_field` (#932/#934's declared single
-        source of truth for field extraction), which is the same axis main#1372
-        owns for the presence pair. When that lands, THIS TEST MUST FLIP: the
-        `assertFalse` becomes `assertTrue` and the gate's silence becomes
-        correct rather than merely harmless.
+        main#1371's docstring named the repair — `trust_signals` routing
+        through `charter_trailer.extract_charter_field`, #932/#934's declared
+        single source of truth — and said "when that lands, THIS TEST MUST
+        FLIP: the `assertFalse` becomes `assertTrue` and the gate's silence
+        becomes correct rather than merely harmless." That landed in
+        main#1372. Both consumers now read the trailer, so the retraction is
+        honoured and the gate's silence is correct.
+
+        Kept (not deleted) as the regression guard for the divergence:
+        reverting the routing reds this immediately.
         """
         body = self._LINE_ANCHORED_MENTION_ABOVE_A_RETRACTING_TRAILER
-        self.assertFalse(
+        self.assertTrue(
             ts.parse_verdicts([body])[0].false_positive,
-            "trust_signals now honours this retraction — the divergence is gone, "
-            "so flip this test rather than deleting it",
+            "trust_signals dropped this retraction again — field extraction has "
+            "left charter_trailer.extract_charter_field (main#1372)",
+        )
+        self.assertEqual(
+            ct.verdict_kind(ts.parse_verdicts([body])[0].verdict),
+            "changesrequested",
+            "the stray above-trailer line outranked the real trailer again",
         )
         self.assertIsNone(self._check(body))
 

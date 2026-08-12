@@ -1171,17 +1171,72 @@ class ConditionalFieldGrammarAgreementTests(unittest.TestCase):
     blocked a comment for a field nobody wrote.
 
     Two of the three axes that caused that (main#1359): anchoring and scope
-    remain a deliberate hook-local mirror of `trust_signals._RETRACTION_RE` /
-    `._ORCHESTRATOR_CAUSED_RE` (a blocking PreToolUse gate should not take a
-    dependency for one regex pair, and full consolidation of THIS pair is
-    main#1371/#1372, not main#1359). The THIRD axis — code fences — is no
-    longer a mirror: `hook._strip_code_for_field_scan` now calls
+    remain a hook-local mirror of `trust_signals._RETRACTION_RE` /
+    `._ORCHESTRATOR_CAUSED_RE`. Consolidating THAT pair is **main#1459**.
+
+    The mirror's original justification — "a blocking PreToolUse gate should
+    not take a dependency for one regex pair" — is RETIRED, not restated
+    (main#1459, raised at the main#1372 merge gate; I agree with it). The
+    hook already imports eight symbols from `charter_trailer`
+    (`validate_review_comment_format.py` § imports), one of which is
+    `strip_code_regions` — the function `_conditional_fields_present` calls
+    on every invocation. The dependency exists and is on this predicate's own
+    hot path, so the marginal cost of moving one more regex pair behind it is
+    zero and the stated reason no longer describes why the copy survives.
+    What actually keeps it alive is that nobody has written the shared
+    whole-body helper yet.
+
+    THE TRAP FOR WHOEVER TAKES main#1459: consolidation must NOT route this
+    pair through `charter_trailer.extract_charter_field`. That narrows to the
+    trailer block — the axis-3 divergence that re-opens main#1363 MF1, and
+    exactly the mutation the `SEPARATOR_*` corpus rows below exist to catch.
+    The shared owner must be a WHOLE-BODY, line-anchored presence helper.
+
+    The THIRD axis — code fences — is no longer a mirror:
+    `hook._strip_code_for_field_scan` now calls
     `charter_trailer.strip_code_regions` directly, the same function
     `trust_signals.parse_verdicts` calls, since main#1359 folded `~~~`
     support into it and deleted `trust_signals`'s private stripper. This
     drives both implementations over one corpus so the remaining mirror
     cannot drift silently.
+
+    THE SCOPE AXIS NEEDS A `---` IN THE CORPUS TO BE COVERED (main#1372)
+    -------------------------------------------------------------------
+    Until main#1372 the 15-case corpus contained no body with a trailer
+    separator, so the paragraph above claimed more than the corpus proved.
+    The #1363 merge gate ran nine one-sided mutations against this class;
+    eight red it and **the ninth passed** — re-narrowing
+    `_conditional_fields_present`'s scan to
+    `charter_trailer.trailer_block_substring(...)`, i.e. reintroducing the
+    very "scope" divergence axis this class names in its own docstring. A
+    narrowing is invisible to a corpus in which no body has a separator to
+    narrow to; the mutation was caught only by this class's NEIGHBOUR,
+    `ConditionalVerdictFieldTests
+    .test_genuine_field_above_the_trailer_separator_still_blocks`, doing
+    double duty as the over-correction guard.
+
+    Re-measured at main#1372 by applying that mutation to
+    `_conditional_fields_present`: against the pre-#1372 corpus this class
+    passed 3 tests / 30 subtests under it, while the neighbour failed.
+    With the `SEPARATOR_*` rows below, `test_presence_detection_agrees_
+    field_by_field` reds directly on the above-separator subtests.
+
+    RESIDUAL, NAMED RATHER THAN BLURRED: this class certifies PRESENCE
+    DETECTION of the `Retracted:` / `OrchestratorCaused:` pair, plus the
+    code-stripping step they share. It does NOT certify the two
+    implementations' *value extraction*, their verdict-direction
+    classification, or their person-identity parsing — those are separate
+    symbols with separate owners (`charter_trailer.extract_charter_field`,
+    `.verdict_kind`, `.is_branch_author`). A green run here means the
+    mirror agrees about what is PRESENT, and nothing more.
     """
+
+    # A field ABOVE the last `---`: present to the counter (whole body,
+    # line-anchored) and present to the hook only because the hook
+    # deliberately does NOT narrow to the trailer block. These two rows are
+    # what make the scope-re-narrowing mutation red THIS class.
+    SEPARATOR_FIELD_ABOVE = "Retracted: withdrawn.\n\n---\nRequestOrReplied: Approved\n"
+    SEPARATOR_FIELD_ON_BOTH_SIDES = "Retracted: above.\n\n---\nOrchestratorCaused: below.\n"
 
     CORPUS = (
         "Retracted: withdrawn.",
@@ -1199,6 +1254,23 @@ class ConditionalFieldGrammarAgreementTests(unittest.TestCase):
         "TechDebt: none",
         "",
         "Retracted: a\nOrchestratorCaused: b",
+        # ---- main#1372: bodies carrying a `---` trailer separator ---------
+        # Mutation-killers: narrowing the hook's scan to the trailer block
+        # drops the above-separator field that the counter still sees.
+        SEPARATOR_FIELD_ABOVE,
+        SEPARATOR_FIELD_ON_BOTH_SIDES,
+        # In-trailer control. Both implementations agree on this one with or
+        # without the narrowing, so a red on the two rows above is the SCOPE
+        # axis specifically and not "any separator breaks the corpus".
+        "---\nRetracted: in the trailer block.\n",
+        # Two separators: `trailer_block_substring` narrows to the LAST one,
+        # so a field above the FIRST is dropped twice over by the mutation.
+        "OrchestratorCaused: stale brief.\n\n---\nnotes\n\n---\nRequestOrReplied: Approved\n",
+        # The only `---` sits inside a fence, so `strip_code_regions` blanks
+        # it and no separator survives. Pins the STRIP-THEN-SCOPE ordering:
+        # narrowing before stripping would find a `---` here and drop a
+        # genuine field the counter reads.
+        "```\n---\n```\nRetracted: withdrawn.\n",
     )
 
     def test_presence_detection_agrees_field_by_field(self):
@@ -1220,6 +1292,58 @@ class ConditionalFieldGrammarAgreementTests(unittest.TestCase):
             ]
             with self.subTest(body=body):
                 self.assertEqual(hook_says, counter_says)
+
+    def test_corpus_covers_the_trailer_separator_scope_axis(self):
+        """main#1372: the corpus must keep a body whose field sits ABOVE a `---`.
+
+        `test_presence_detection_agrees_field_by_field` is only as strong as
+        its corpus, and the corpus's coverage of the SCOPE axis is carried
+        entirely by rows that (a) contain a sole `---` separator line and
+        (b) put a conditional field above the LAST one. Trim those and the
+        class silently stops covering the axis its docstring names — which
+        is exactly the state main#1372 was filed against.
+
+        Asserted structurally rather than by a row count, so re-wording or
+        re-ordering the corpus does not red this, but removing the shape
+        does.
+        """
+        lib_dir = Path(__file__).resolve().parents[2] / "lib"
+        if str(lib_dir) not in sys.path:
+            sys.path.insert(0, str(lib_dir))
+        import charter_trailer as ct
+
+        def present_in(scan):
+            return [
+                name
+                for name in hook._CONDITIONAL_VERDICT_FIELDS
+                if hook._CONDITIONAL_FIELD_RE[name].search(scan)
+            ]
+
+        def whole_body(body):
+            """The counter's scope: entire code-stripped body."""
+            return present_in(ct.strip_code_regions(body))
+
+        def narrowed(body):
+            """What the ninth main#1363 mutation would have the hook see."""
+            return present_in(ct.trailer_block_substring(ct.strip_code_regions(body)))
+
+        # Deliberately computed from the two SCOPES directly, not from
+        # `hook._conditional_fields_present`. This asserts a property of the
+        # CORPUS, so it must stay green under the very mutation it exists to
+        # make catchable — otherwise it would just be a second, noisier copy
+        # of `test_presence_detection_agrees_field_by_field`.
+        discriminating = [
+            body
+            for body in self.CORPUS
+            if any(line.strip() == "---" for line in body.splitlines())
+            and whole_body(body) != narrowed(body)
+        ]
+        self.assertTrue(
+            discriminating,
+            "no corpus body distinguishes whole-body from trailer-scoped presence "
+            "detection: the scope axis is uncovered and the ninth main#1363 "
+            "mutation passes again (main#1372)",
+        )
 
     def test_code_stripper_agrees_with_the_counters(self):
         lib_dir = Path(__file__).resolve().parents[2] / "lib"

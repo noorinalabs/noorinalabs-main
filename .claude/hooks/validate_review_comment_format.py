@@ -807,36 +807,59 @@ def get_branch_name(pr_number: str, repo: str | None = None) -> str | None:
 #
 #   validate_pr_review   via `charter_trailer.extract_charter_field` —
 #                        code-stripped, trailer-scoped, LAST match.
-#   trust_signals        via its own private `_FIELD_RE["verdict"]` —
-#                        raw body, line-anchored (`^…$`, MULTILINE), FIRST
-#                        match. NOT the shared extractor.
+#   trust_signals        AS OF main#1372, via the SAME
+#                        `charter_trailer.extract_charter_field`.
 #
-# On a well-formed comment (fields only in the trailer) the two agree and so
-# does this gate. They diverge on a comment that carries a `RequestOrReplied:`
-# line ABOVE its trailer, and no single reading can match both:
+# RESOLVED AT main#1372 — the two consumers no longer disagree. This block
+# was written at main#1371, when `trust_signals` still read the direction
+# through a private `_FIELD_RE["verdict"]` (raw body, line-anchored, FIRST
+# match) and the divergence was unresolvable from this side: a
+# `RequestOrReplied:` line above the trailer was read as the verdict by one
+# consumer and as prose by the other, and no single reading here could match
+# both. main#1371 correctly declined to "tidy" it in passing and reported it
+# instead; main#1372 did the repair it named — routing `trust_signals` onto
+# the declared single source of truth for charter field extraction
+# (#932/#934) — after measuring the divergence at 27 verdict-kind and 22
+# `Requestor:` disagreements across this repo's 1,475 PR comments. See the
+# migration block above `_RETRACTION_RE` in `.claude/lib/trust_signals.py`.
 #
-#   prose mid-sentence ("…post RequestOrReplied: Approved here — not yet")
-#       trust_signals: not line-anchored, so it reads the TRAILER. The old raw
-#       `re.search` here read the prose and BLOCKED a legitimate retraction
-#       comment its consumer would have honoured. main#1371 fixes that.
-#   a line-anchored `RequestOrReplied: Approved` above the trailer
-#       trust_signals reads the PROSE line and silently drops the retraction;
-#       this gate now reads the trailer and stays quiet, so the author is not
-#       warned. Advisory shortfall, not a merge-gate fail-open — the strictly
-#       better trade against an unblockable false positive.
-#
-# The real repair is `trust_signals._FIELD_RE` routing through
-# `charter_trailer.extract_charter_field`, the declared single source of truth
-# for charter field extraction (#932/#934). That is the SAME axis-3 scope
-# question main#1372 owns for the presence pair, is out of scope here, and is
-# reported on main#1371 rather than fixed in passing. Do not "tidy" these two
-# halves onto one scope before it lands.
+# So the DIRECTION half of this gate is now single-sourced, and the PRESENCE
+# half below is still deliberately not (see the next block).
 #
 # The field-presence definitions below still mirror the counter's regexes
 # (axis 1 + axis 3 remain open) and are pinned against it by
 # `ConditionalFieldGrammarAgreementTests`, which drives both implementations
 # over one corpus so a future divergence reds rather than silently
-# false-blocks. Full consolidation of this remaining pair is main#1372.
+# false-blocks.
+#
+# THE AXIS-3 PIN IS ONLY AS REAL AS THE CORPUS (main#1372). Until main#1372
+# that corpus held no body with a `---` trailer separator, so re-narrowing
+# this predicate's scan to `charter_trailer.trailer_block_substring(...)` —
+# reintroducing axis 3 outright — left the agreement class GREEN; it was
+# caught only by the neighbouring over-correction guard
+# (`test_genuine_field_above_the_trailer_separator_still_blocks`). The
+# corpus now carries above-separator bodies and the class reds on the
+# narrowing directly. Do not trim those rows:
+# `test_corpus_covers_the_trailer_separator_scope_axis` fails if the shape
+# leaves the corpus.
+#
+# REMOVING THIS MIRROR IS main#1459. Earlier revisions of this comment
+# deferred "full consolidation of this remaining pair" to main#1371 and then
+# to main#1372; #1371 landed and consolidated the verdict-DIRECTION
+# classifiers, #1372 landed and fixed the corpus plus the `trust_signals`
+# field-extraction copy — neither removes the presence pair below. main#1459
+# was filed at #1372's merge gate to own exactly that, and also retires the
+# mirror's old justification ("a blocking PreToolUse gate should not take a
+# dependency for one regex pair"): this module already imports eight symbols
+# from `charter_trailer`, one of them the `strip_code_regions` that
+# `_conditional_fields_present` calls on every invocation, so the dependency
+# is already here and on this predicate's hot path.
+#
+# main#1459 MUST land as a shared WHOLE-BODY, line-anchored presence helper.
+# Routing this pair through `charter_trailer.extract_charter_field` narrows it
+# to the trailer block — axis 3, re-opening main#1363 MF1, and the exact
+# mutation the corpus rows above now catch. Until #1459 lands, that corpus IS
+# the mechanism, which is why its coverage is asserted rather than assumed.
 _CONDITIONAL_VERDICT_FIELDS = ("Retracted", "OrchestratorCaused")
 
 # Mirrors trust_signals._RETRACTION_RE / ._ORCHESTRATOR_CAUSED_RE.
