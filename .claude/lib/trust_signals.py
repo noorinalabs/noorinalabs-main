@@ -16,7 +16,10 @@ Two cleanly separated layers:
     no-shell / list-arg-vector contract of main#688 are inherited unchanged) and
     parses each PR's verdict comments for the org's ``Requestor:`` /
     ``RequestOrReplied:`` shape (the same shape Hook 4 and ``wave_status``'s
-    ChangesRequested counter read).
+    ChangesRequested counter read). :meth:`RankingPopulation.from_wave` also
+    lives here: building distribution discipline's anchoring population *from a
+    wave* rather than from a caller-supplied mapping is what makes it
+    unfilterable (main#1370), and that requires extraction.
 
   * **Scoring** (pure, no I/O) — :func:`score_delta`, :func:`decay`,
     :func:`apply_distribution_discipline`, :func:`negative_signal_line`,
@@ -75,6 +78,7 @@ import json
 import re
 import subprocess
 import sys
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -795,33 +799,108 @@ class Proposal:
         return self.old_score >= MAX_SCORE
 
 
+@dataclass(frozen=True)
+class RankingPopulation:
+    """The population the wave maximum is ranked over — **not** the set capped.
+
+    Distribution discipline has two populations, and until main#1370 they were
+    the same argument. ``top`` was the maximum composite *within the batch
+    handed in*, so a caller who narrowed the batch to "the engineers the cap
+    could apply to" silently moved the maximum. Over wave-29's two ceiling
+    entrants alone the maximum becomes 8 (Nadia's own composite) instead of 17
+    (Aino's), and Nadia keeps a 5 the wave caps to 4. Nothing inside the
+    function could tell a filtered slice from a whole wave, so "feed it the
+    whole roster" was an obligation it could state and never check — which is
+    why #1363 and #1365 both left it as labelled prose.
+
+    Splitting the two populations buys three things a docstring cannot:
+
+      * the anchoring population is a **required keyword argument**, so it is
+        chosen at every call site instead of defaulting to whatever was capped;
+      * :meth:`from_wave` builds it *from a wave*, not from a mapping — there
+        is no argument for a caller to filter on the way in, and it is the path
+        the shipped caller uses;
+      * anything hand-assembled goes through :meth:`declared`, which demands a
+        non-blank ``origin`` naming what the mapping is. That string is quoted
+        back in :func:`apply_distribution_discipline`'s refusal messages, so a
+        population that turns out to be wrong says where it came from.
+
+    **What this deliberately does not claim.** A pure function cannot verify
+    that a mapping handed to it is the whole wave; no signature can. A caller
+    who assembles a two-person population and writes an ``origin`` for it still
+    gets the two-person answer — pinned by
+    ``DistributionDiscipline::test_a_narrow_population_is_still_narrow_but_no_longer_silent``.
+    What is removed is arriving there *by omission*: the narrow answer now
+    costs a written justification at the call site, and capping anyone the
+    population does not cover is a hard error rather than a quiet number.
+    """
+
+    signals: Mapping[str, Signals]
+    origin: str
+
+    @classmethod
+    def from_wave(cls, phase: str, wave: str, status_path: Path) -> RankingPopulation:
+        """Every engineer with signals in one wave — the sanctioned path.
+
+        Takes the wave, not a mapping, so the population cannot arrive
+        pre-filtered. Extraction is gh-dependent, which is exactly why it lives
+        on this type rather than inside :func:`apply_distribution_discipline`:
+        the scoring function stays pure and receives the population as a value
+        (self-fetching inside the scorer was rejected on #1363 review).
+        """
+        return cls(
+            signals=dict(extract_signals(phase, wave, status_path)),
+            origin=f"wave extract P{phase}W{wave}",
+        )
+
+    @classmethod
+    def declared(cls, signals: Mapping[str, Signals], *, origin: str) -> RankingPopulation:
+        """A hand-assembled population, with a written statement of provenance.
+
+        ``origin`` is mandatory and non-blank. Assembling the ranking
+        population by hand — what ``/wave-retro`` Step 5 does from the retro
+        table — is the step that used to go wrong invisibly, so it now costs a
+        phrase naming the mapping (e.g. ``"P10W29 retro table, all 10
+        engineers"``).
+        """
+        if not origin.strip():
+            raise ValueError(
+                "RankingPopulation.declared needs a non-blank origin naming where the "
+                "population came from (e.g. 'P10W29 retro table, all 10 engineers'). "
+                "Prefer RankingPopulation.from_wave, which cannot be filtered."
+            )
+        return cls(signals=dict(signals), origin=origin.strip())
+
+
 def apply_distribution_discipline(
     proposals: dict[str, Proposal],
+    *,
+    ranking_population: RankingPopulation,
 ) -> dict[str, int]:
     """Cap 5 to the wave's exceptional **relative** performers (distribution
     discipline). 5 is reserved — it is not handed out for merely-clean work.
 
+    **Two populations, two arguments (main#1370).** ``ranking_population`` is
+    what the wave maximum is computed over; ``proposals`` is the set actually
+    capped. They used to be the same dict, which made "feed it the whole
+    roster" an unenforceable caller obligation — see :class:`RankingPopulation`
+    for the defect, what the split does and does not guarantee, and why the
+    scorer does not fetch the roster itself.
+
     A proposed 5 is allowed only for the engineer(s) whose composite signal
-    score is the wave maximum AND strictly positive; every other proposed 5 is
-    capped to 4. Scores of 4 and below pass through untouched, and so does any
-    :class:`Proposal` whose ``old_score`` is already at the ceiling
-    (:meth:`Proposal.is_ceiling_holder` — this is an entry gate, not an
-    eviction rule).
+    score is the maximum **across the ranking population** AND strictly
+    positive; every other proposed 5 is capped to 4. Scores of 4 and below pass
+    through untouched, and so does any :class:`Proposal` whose ``old_score`` is
+    already at the ceiling (:meth:`Proposal.is_ceiling_holder` — this is an
+    entry gate, not an eviction rule). The return value covers ``proposals``
+    only: being in the ranking population anchors the maximum, it does not
+    score you.
 
-    **The one caller obligation this signature does not carry: feed it the
-    whole roster.** ``top`` is the maximum composite *within the batch*, so a
-    restricted batch silently changes the answer — an engineer can become their
-    own maximum and keep a 5 the full-roster run would cap. Concretely, over
-    wave-29's two ceiling entrants alone the batch maximum becomes 8 (Nadia's
-    own composite) instead of 17 (Aino's), and Nadia keeps a 5. Pinned by
-    ``DistributionDiscipline::test_top_is_batch_relative_so_feed_the_whole_roster``
-    so it is known behaviour rather than a surprise.
-
-    Labelling it is the terminus **for this change**, not the end state:
-    **main#1370** carries the next iteration — take the full signal map
-    separately from the set being capped, which makes the anchoring population
-    an argument and the obligation detectable rather than documented. Same
-    defect shape as the one main#1365 just closed, one parameter over.
+    Raises :class:`ValueError` — never a quiet number — when the ranking
+    population is empty, or when it does not cover every engineer being capped.
+    That second refusal is the check the single-argument shape could not
+    perform at all: it was structurally impossible for the gated set to fall
+    outside the anchoring set when they were one object.
     """
 
     def composite(s: Signals) -> int:
@@ -864,7 +943,22 @@ def apply_distribution_discipline(
 
     if not proposals:
         return {}
-    top = max(composite(p.signals) for p in proposals.values())
+    ranked = ranking_population.signals
+    if not ranked:
+        raise ValueError(
+            f"empty ranking population ({ranking_population.origin!r}): the wave "
+            f"maximum is undefined over nobody, so there is no relative bar to cap "
+            f"against. Build it with RankingPopulation.from_wave."
+        )
+    uncovered = sorted(set(proposals) - set(ranked))
+    if uncovered:
+        raise ValueError(
+            f"ranking population {ranking_population.origin!r} does not cover "
+            f"{uncovered}: capping an engineer against a population they are not in "
+            f"ranks them on someone else's wave. Pass the whole wave "
+            f"(RankingPopulation.from_wave), not a filter of it."
+        )
+    top = max(composite(s) for s in ranked.values())
     out: dict[str, int] = {}
     for name, p in proposals.items():
         capped = (
@@ -955,7 +1049,11 @@ def _cmd_extract(args: argparse.Namespace) -> int:
 
 
 def _cmd_score(args: argparse.Namespace) -> int:
-    sigs = extract_signals(args.phase, args.wave, args.status)
+    # The anchoring population is built from the wave, and the proposals are
+    # derived from it — so this command cannot rank against a filtered slice,
+    # and the single extraction is shared by both (main#1370).
+    population = RankingPopulation.from_wave(args.phase, args.wave, args.status)
+    sigs = population.signals
     # This command reports what each engineer would score *seeded from neutral*
     # — it has no access to real old scores — so every proposal is a ceiling
     # entrant by construction (NEUTRAL < MAX_SCORE) and the cap applies to all
@@ -965,7 +1063,7 @@ def _cmd_score(args: argparse.Namespace) -> int:
         n: Proposal(old_score=NEUTRAL, proposed_score=NEUTRAL + score_delta(s), signals=s)
         for n, s in sigs.items()
     }
-    disciplined = apply_distribution_discipline(proposals)
+    disciplined = apply_distribution_discipline(proposals, ranking_population=population)
     report = {
         n: {
             "signals": asdict(s),

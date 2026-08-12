@@ -26,14 +26,41 @@ decisions.
 Signal derivation, fixed in this driver
 =======================================
 - memory → charter: `count_retro_citations(memory, feedback_log)`.
-- charter → skill: the candidate skill slug is `section.promoted_to`
-  (with the `skills/` prefix stripped) when the section is already
-  promoted, else `_slugify(section.heading)` — the *prospective* skill
-  name. A not-yet-existent skill never appears in commit messages, so its
-  invocation count is naturally ~0. The empty-slug footgun is also closed
-  at the root in `helpers.count_skill_invocations` (blank slug → 0).
+- charter → skill: `count_section_citations(section, feedback_log)` (#1355)
+  — retro citations of the SOURCE section's own heading, the actual
+  evidence a section has earned promotion. `_section_signal_slug` still
+  resolves the prospective/promoted skill slug, but only to compute
+  `target_configured` (an informational disk-existence check, not a
+  signal input) — see main#1355 below for why the destination-invocation
+  signal this driver used pre-fix was structurally incapable of ever
+  reaching threshold for a not-yet-promoted section, and #1383/#1355 for
+  the fix history.
 - skill → hook: `count_skill_invocations(skill.name, repo_root)`
-  (always DECIDE per D6, never AUTO).
+  (always DECIDE per D6, never AUTO). This tier is unaffected by #1355 —
+  the destination (the skill) already exists by definition once it has a
+  `SKILL.md`, so measuring its own invocations is the correct signal
+  there; only the charter→skill tier had the destination-doesn't-exist-
+  yet inversion.
+
+Signal semantics, corrected (main#1355)
+========================================
+#1383 (the first #1355 PR) added a `target_configured` existence check on
+the prospective skill slug so a not-yet-scaffolded target renders a
+distinct "configuration gap" KEPT message instead of a misleading "wait
+for more operator-invoked runs" one. But the underlying *signal* was
+still `count_skill_invocations(prospective_slug, repo_root)` — usage of
+the DESTINATION, which by construction does not exist yet for any
+not-yet-promoted section, so the count was 0 for all 25 skill-targeted
+charter sections and could never rise. This residual (main#1355) replaces
+that signal with `count_section_citations`: citations of the SOURCE
+section's own heading in the feedback log (live + per-phase archives,
+#964) — the same mechanism `count_retro_citations` already uses for
+memories, which genuinely accumulates as operators reference a section in
+retros, independent of whether the destination skill has been scaffolded.
+This also closes the main#1389 collision path for free: the old signal
+could inherit an unrelated existing skill's real invocation count merely
+because a heading happened to slugify onto that skill's directory name;
+the citation count has no slug/skills-dir dependency at all.
 
 Usage
 =====
@@ -249,19 +276,29 @@ def run_audit(
 
     # charter → skill
     for sec in sections:
+        # #1355: the signal is now computed from the SOURCE section (retro
+        # citations of its heading) — the actual evidence for promotion —
+        # not from `count_skill_invocations` against the prospective
+        # destination slug (structurally 0 forever for every not-yet-
+        # promoted section; see `count_section_citations`'s docstring).
+        # This computation has no dependency on `slug` at all, which also
+        # closes the main#1389 collision path: the old destination-based
+        # signal could inherit an unrelated existing skill's real
+        # invocation count merely because a heading happened to slugify
+        # onto that skill's directory name. The citation count below is
+        # never touched by that coincidence.
+        citations = h.count_section_citations(sec, paths.feedback_log)
+        # `target_configured` is retained as informational context only
+        # (does a skill already exist on disk at the prospective slug?) —
+        # it selects which KEPT message classify_section renders, but no
+        # longer gates whether the signal itself can accrue.
         slug = _section_signal_slug(sec)
-        invocations = h.count_skill_invocations(slug, paths.repo_root)
-        # #1355: whether the prospective skill actually exists on disk yet
-        # gates which KEPT message classify_section renders — see the
-        # docstring on that branch. A not-yet-created skill (the common
-        # case for a not-yet-promoted section) can never accrue
-        # invocations, so "wait for more runs" would be misleading.
         target_configured = os.path.isdir(os.path.join(paths.skills_dir, slug))
         decisions.append(
             h.classify_section(
                 sec,
                 {
-                    "skill_invocations": invocations,
+                    "section_citations": citations,
                     "threshold": threshold,
                     "target_configured": int(target_configured),
                 },

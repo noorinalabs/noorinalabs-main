@@ -15,7 +15,7 @@ The project's enforcement hierarchy is **hook > skill > charter > memory** (see 
 | From | To | Trigger |
 |---|---|---|
 | memory | charter | `promotion_target: charter` AND `retro_citations >= threshold` AND `status: active` |
-| charter | skill | Section marker `<!-- promotion-target: skill -->` AND skill-invocation signal >= threshold |
+| charter | skill | Section marker `<!-- promotion-target: skill -->` AND section-citation signal (retro citations of the section's own heading, #1355) >= threshold |
 | skill | hook | `promotion-target: hook` in skill frontmatter AND invocation signal >= threshold |
 
 Skill-to-hook **ALWAYS** produces a DECIDE-tier draft issue — never auto-applies (D6, hooks are security-sensitive).
@@ -76,14 +76,24 @@ each transition has a distinct signature because the signal sources differ:
 | Function | Signature | `signals` keys consumed |
 |---|---|---|
 | `classify_memory(memory, signals, already_promoted)` | `(Memory, dict[str,int], set[str]) -> Decision` | `retro_citations` |
-| `classify_section(section, signals)` | `(CharterSection, dict[str,int]) -> Decision` | `skill_invocations`, `threshold` |
+| `classify_section(section, signals)` | `(CharterSection, dict[str,int]) -> Decision` | `section_citations`, `threshold`, `target_configured` |
 | `classify_skill(skill, signals, already_promoted)` | `(Skill, dict[str,int], set[str]) -> Decision` | `skill_invocations`, `threshold` |
 
 Signal derivation (wired once in `run.py`): memory→charter uses
-`count_retro_citations`; charter→skill counts invocations of the section's
-candidate-skill slug (`promoted_to` with the `skills/` prefix stripped if
-already promoted, else `_slugify(heading)` — never an empty slug);
-skill→hook counts invocations of the skill name (always DECIDE, D6).
+`count_retro_citations`; charter→skill uses `count_section_citations`
+(#1355) — retro citations of the SOURCE section's own heading in the
+feedback log (live + per-phase archives, #964), the genuine evidence a
+section has earned promotion. `target_configured` (does a skill already
+exist on disk at the prospective slug?) is derived separately from
+`_section_signal_slug` + a disk check, but is informational only — it
+selects which KEPT message renders when the section is below threshold;
+it does not gate whether the citation signal itself can accrue. (Pre-#1355
+this tier counted invocations of the *prospective destination* skill slug
+— structurally 0 forever for a not-yet-promoted section, since the skill
+doesn't exist yet to be invoked; see `run.py`'s module docstring for the
+full history.) skill→hook counts invocations of the skill name (always
+DECIDE, D6) — unaffected by #1355, since a skill already exists once it
+has a `SKILL.md`.
 
 > `charter_parent` is the directory CONTAINING `charter/` (e.g.
 > `.claude/team`), NOT `charter/` itself — passing `.claude/team/charter`

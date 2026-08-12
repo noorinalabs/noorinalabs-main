@@ -201,7 +201,9 @@ class EmptySlugRegression(unittest.TestCase):
         skill directory (`some-procedure/`) anywhere under
         `.claude/skills/` — the driver must wire `target_configured=False`
         through to `classify_section` so the KEPT reason says the target
-        isn't configured, not that the reader should wait for more runs."""
+        isn't configured, not that the reader should wait for more runs.
+        The fixture's feedback_log.md has zero citations of the heading,
+        so it also stays below threshold either way."""
         paths, _ = _make_fixture_repo(self.tmp)
         result = run.run_audit(paths, wave_name="p5-wave-5", audit_date="2026-06-16")
         sec_decisions = [d for d in result.decisions if d.from_tier == "charter"]
@@ -219,6 +221,85 @@ class EmptySlugRegression(unittest.TestCase):
         result = run.run_audit(paths, wave_name="p5-wave-5", audit_date="2026-06-16")
         sec_decisions = [d for d in result.decisions if d.from_tier == "charter"]
         self.assertEqual(len(sec_decisions), 1)
+        self.assertIn("wait for more operator-invoked runs", sec_decisions[0].reason)
+
+    def test_section_signal_is_source_citations_not_destination_invocations(self) -> None:
+        """#1355 item 1: the driver must compute the charter->skill signal
+        from `count_section_citations` (the SOURCE section's heading cited
+        in the feedback log), not `count_skill_invocations` against the
+        destination slug. Proven by a fixture where the commit history
+        would spuriously satisfy the OLD (destination) signal (a commit
+        message containing `/some-procedure`) while the feedback log has
+        ZERO citations of the heading — under the fixed signal this must
+        stay KEPT with `section_citations=0`, not accidentally cross
+        threshold via the old slug-grep path."""
+        paths, repo_root = _make_fixture_repo(self.tmp)
+        _git(Path(repo_root), "commit", "--allow-empty", "-m", "chore: touch /some-procedure x5")
+        for _ in range(4):
+            _git(
+                Path(repo_root),
+                "commit",
+                "--allow-empty",
+                "-m",
+                "chore: touch /some-procedure again",
+            )
+        result = run.run_audit(paths, wave_name="p5-wave-5", audit_date="2026-06-16")
+        sec_decisions = [d for d in result.decisions if d.from_tier == "charter"]
+        self.assertEqual(len(sec_decisions), 1)
+        self.assertEqual(sec_decisions[0].kind, "KEPT")
+        self.assertIn("section_citations=0", sec_decisions[0].signal)
+
+    def test_heavily_cited_section_crosses_threshold_via_source_signal(self) -> None:
+        """#1355 acceptance criterion 2: a section whose heading is cited
+        >= threshold times in the feedback log (the genuine source signal)
+        actually crosses threshold and is classified AUTO — even though
+        the fixture has NO matching skill directory (`target_configured`
+        stays False) and NO commit history referencing the slug at all.
+        This is the concrete proof that at least one section is now
+        genuinely evaluable, where pre-fix every not-yet-promoted section
+        was structurally stuck at 0 forever."""
+        paths, _ = _make_fixture_repo(self.tmp)
+        citing_log = "\n".join(
+            f"- retro cites charter § Some Procedure again ({i})" for i in range(5)
+        )
+        with open(paths.feedback_log, "w", encoding="utf-8") as f:
+            f.write(citing_log + "\n")
+        result = run.run_audit(paths, wave_name="p5-wave-5", audit_date="2026-06-16")
+        sec_decisions = [d for d in result.decisions if d.from_tier == "charter"]
+        self.assertEqual(len(sec_decisions), 1)
+        self.assertEqual(sec_decisions[0].kind, "AUTO")
+        self.assertIn("section_citations=5 >= 5", sec_decisions[0].signal)
+
+    def test_section_citation_signal_immune_to_skill_slug_collision(self) -> None:
+        """main#1389: confirm — do not assume — that the source-signal fix
+        removes the collision risk where a charter heading slugifying onto
+        an EXISTING, unrelated skill directory inherits that skill's real
+        invocation count. Build a fixture where a skill directory exists
+        at the exact prospective slug (`some-procedure/`) and git history
+        would give the OLD destination-invocation signal a huge count
+        (10 commits referencing `/some-procedure`), while the feedback log
+        has zero citations of the section's own heading. Under the fixed
+        signal this must stay KEPT at 0 citations, proving the citation
+        count is untouched by the collision — only the (already-existing,
+        informational-only) `target_configured` flag is affected, which
+        flips the KEPT message wording, never the kind."""
+        paths, repo_root = _make_fixture_repo(self.tmp)
+        os.makedirs(os.path.join(paths.skills_dir, "some-procedure"), exist_ok=True)
+        for _ in range(10):
+            _git(
+                Path(repo_root),
+                "commit",
+                "--allow-empty",
+                "-m",
+                "feat: exercise /some-procedure heavily",
+            )
+        result = run.run_audit(paths, wave_name="p5-wave-5", audit_date="2026-06-16")
+        sec_decisions = [d for d in result.decisions if d.from_tier == "charter"]
+        self.assertEqual(len(sec_decisions), 1)
+        self.assertEqual(sec_decisions[0].kind, "KEPT")
+        self.assertIn("section_citations=0", sec_decisions[0].signal)
+        # The collision only changes the message (target now looks
+        # configured), never the underlying citation-based decision.
         self.assertIn("wait for more operator-invoked runs", sec_decisions[0].reason)
 
 
@@ -289,18 +370,46 @@ class MainEntrypoint(unittest.TestCase):
     "steady-state test requires the project's memory directory",
 )
 class SteadyStateThroughDriver(unittest.TestCase):
-    """The driver must reproduce the smoke-test invariant: 0 AUTO / 0 DECIDE
-    on the real working tree — proving the canonical wiring matches the
-    hand-driven expectation while closing the empty-slug mis-fire."""
+    """#1355: pre-fix, the driver's charter->skill signal was structurally
+    0 forever for every not-yet-promoted section (destination-invocation
+    count against a slug that, by definition, doesn't exist yet), so
+    0 AUTO / 0 DECIDE on the real tree was the ONLY possible outcome — it
+    proved nothing about whether any section had actually earned promotion.
+    Post-fix, the signal is real (retro citations of each section's own
+    heading), and the live repo has one section that has genuinely
+    accumulated enough evidence: `wave-merge.md § Cross-Contract PRs`
+    (cited 5 times across the live feedback log + phase-2/phase-3 archives,
+    threshold 5). This is the concrete, denominator-honest evidence for
+    #1355 acceptance criterion 2: of 25 skill-targeted charter sections,
+    1 crosses today; all 25 are now genuinely evaluable (the signal can
+    reach threshold for any of them, whereas pre-fix 0 of 25 ever could).
+    memory->charter and skill->hook tiers are untouched by this fix and
+    still yield 0 AUTO / 0 DECIDE on the real tree."""
 
-    def test_zero_auto_zero_decide(self) -> None:
+    def test_current_repo_state_yields_exactly_one_auto_section(self) -> None:
         paths = run.resolve_paths(_REPO_ROOT)
         result = run.run_audit(paths, wave_name="p5-wave-5", audit_date="2026-06-16")
         counts = result.counts()
         auto = [d.item_id for d in result.decisions if d.kind == "AUTO"]
         decide = [d.item_id for d in result.decisions if d.kind == "DECIDE"]
-        self.assertEqual(counts["AUTO"], 0, f"unexpected AUTO: {auto}")
+        self.assertEqual(counts["AUTO"], 1, f"unexpected AUTO set: {auto}")
+        self.assertTrue(
+            any("Cross-Contract PRs" in item for item in auto),
+            f"expected the AUTO item to be Cross-Contract PRs, got: {auto}",
+        )
         self.assertEqual(counts["DECIDE"], 0, f"unexpected DECIDE: {decide}")
+
+    def test_memory_and_skill_tiers_still_yield_zero_auto_zero_decide(self) -> None:
+        """The fix is scoped to the charter->skill tier only — memory and
+        skill decisions are unaffected and keep the pre-existing
+        zero-AUTO/zero-DECIDE invariant."""
+        paths = run.resolve_paths(_REPO_ROOT)
+        result = run.run_audit(paths, wave_name="p5-wave-5", audit_date="2026-06-16")
+        non_charter = [d for d in result.decisions if d.from_tier != "charter"]
+        auto = [d.item_id for d in non_charter if d.kind == "AUTO"]
+        decide = [d.item_id for d in non_charter if d.kind == "DECIDE"]
+        self.assertEqual(len(auto), 0, f"unexpected AUTO: {auto}")
+        self.assertEqual(len(decide), 0, f"unexpected DECIDE: {decide}")
 
 
 if __name__ == "__main__":
