@@ -532,30 +532,46 @@ class VerdictKindTests(unittest.TestCase):
         is no divergence on `"Approved (post-merge)"` specifically. The
         genuinely reachable divergences — `"Approved!"`,
         `"Approved with nits"`, `"Approved - see below"`,
-        `"Changes  Requested"` (double space), `"Changes needed"` — are all
-        `False` under `validate_pr_review._is_verdict`/`._is_approved` today
-        and would become `True` under this function; see
-        `main#1371` for the full table and the `_is_approved` /
-        2-reviewer-approver-set consequence.
+        `"Changes  Requested"` (double space), `"Changes needed"` — were all
+        `False` under `validate_pr_review._is_verdict`/`._is_approved` at the
+        time this was written, and BECAME `True` when main#1371 migrated those
+        two names onto this function. That migration has landed; the full
+        table, and the fact that the `_is_approved` rows enlarge the
+        2-reviewer approver set, are recorded in `charter_trailer` §
+        "The questions, as named predicates" and pinned by
+        `.claude/hooks/tests/test_verdict_direction_agreement.py`.
         """
         self.assertEqual(verdict_kind("Approved (post-merge)"), "approved")
 
     def test_bold_markers_do_not_defeat_the_match(self) -> None:
         self.assertEqual(verdict_kind("**ChangesRequested**"), "changesrequested")
 
-    # -- The deliberate divergence (main#1371): bare "Changes" -- #
+    # -- The bare "Changes" divergence, RULED ON by main#1371 -- #
 
     def test_bare_changes_included_by_default(self) -> None:
-        """Default matches `trust_signals`'s pre-migration behaviour and
-        `validate_pr_review._VERDICT_REQUIRING_TECH_DEBT` (both include it)."""
+        """The default is what every production caller now passes.
+
+        It matched `trust_signals`' pre-#1359 behaviour and the retired
+        `validate_pr_review._VERDICT_REQUIRING_TECH_DEBT`; as of main#1371 it
+        also matches both `validate_review_comment_format` predicates, whose
+        `_VERDICT_DIRECTIONS` used to be the lone excluder."""
         self.assertEqual(verdict_kind("Changes"), "changesrequested")
 
     def test_bare_changes_included_when_requested_explicitly(self) -> None:
         self.assertEqual(verdict_kind("Changes", include_bare_changes=True), "changesrequested")
 
     def test_bare_changes_excluded_when_requested(self) -> None:
-        """Matches `validate_review_comment_format._VERDICT_DIRECTIONS`, which
-        deliberately excludes the bare form ("not a verdict on its own")."""
+        """The excluding answer stays REACHABLE and pinned, with no production
+        caller (main#1371).
+
+        `validate_review_comment_format._VERDICT_DIRECTIONS` was the only one,
+        and it was retired: this hook fails open on unrecognized directions by
+        design and does not adjudicate well-formedness, so excluding a
+        spelling the counter accepts made it a gate narrower than its consumer
+        (main#1150) rather than a second legitimate question. Keeping the
+        parameter tested means reinstating that answer stays a one-argument
+        change if a caller ever genuinely needs it — but DO NOT read this test
+        as evidence that one currently does."""
         self.assertEqual(verdict_kind("Changes", include_bare_changes=False), "")
 
     def test_exclusion_does_not_affect_the_full_spelling(self) -> None:
