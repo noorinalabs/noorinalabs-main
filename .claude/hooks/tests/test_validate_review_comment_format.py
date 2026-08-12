@@ -1045,9 +1045,9 @@ class ConditionalVerdictFieldTests(unittest.TestCase):
 
     def test_spaced_and_bare_changes_spellings_are_accepted(self):
         # Must agree with `_direction_is_changes_requested` (and, through it,
-        # `charter_trailer.verdict_kind(..., include_bare_changes=True)`,
-        # main#1359), which counts all three spellings — including the bare
-        # `Changes` that `_VERDICT_DIRECTIONS` deliberately excludes.
+        # `charter_trailer.is_changes_requested`, main#1359/#1371), which
+        # counts all three spellings — including the bare `Changes` that the
+        # retired `_VERDICT_DIRECTIONS` excluded.
         for direction in ("ChangesRequested", "Changes Requested", "Changes"):
             with self.subTest(direction=direction):
                 result = self._check(

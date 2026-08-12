@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import subprocess
 import sys
 from collections import Counter
@@ -74,16 +75,23 @@ _DEFAULT_STATUS = wave_state.DEFAULT_STATUS_PATH
 # (now ``charter_trailer.verdict_kind``, main#1359 — that private copy is
 # deleted), just reimplemented here as a jq regex instead of a Python one.
 # ``Changes(\s*Requested)?\b`` accepts all three spellings — the union of
-# what the org's own PR templates and hooks actually produce, NOT a claim
-# that every existing consumer already agrees on all three:
-# ``validate_pr_review.py``'s ``_VERDICT_REQUIRING_TECH_DEBT`` (~line 1410)
-# and ``charter_trailer.verdict_kind(..., include_bare_changes=True)`` (the
-# argument ``trust_signals.py`` now passes at its one call site) both accept
-# the bare short form, but ``validate_review_comment_format.py``'s
-# ``_VERDICT_DIRECTIONS`` (~line 664) deliberately excludes it (see main#1359
-# — the sibling consumers disagreeing with each other is itself evidence for
-# a single shared vocabulary owner, not a reason to assume copies stay in
-# sync). This counter counts every ChangesRequested verdict regardless of
+# what the org's own PR templates and hooks actually produce. As of main#1371
+# that union is also what every Python consumer answers: the four private
+# copies (``validate_pr_review._VERDICT_REQUIRING_TECH_DEBT``,
+# ``validate_review_comment_format._VERDICT_DIRECTIONS`` and their readers)
+# are gone, replaced by ``charter_trailer.is_verdict_direction`` /
+# ``.is_changes_requested`` / ``.is_approved`` over the one
+# ``charter_trailer.verdict_kind`` classifier, and the bare short form is now
+# INCLUDED everywhere (``_VERDICT_DIRECTIONS`` had excluded it — the sibling
+# consumers disagreeing with each other was itself the evidence for a single
+# shared vocabulary owner, not a reason to assume copies stay in sync).
+#
+# THIS JQ REGEX IS THE LAST NON-PYTHON SPELLING OF THE SAME QUESTION and is
+# NOT consolidated: it runs inside a ``jq`` filter, so it cannot call the
+# shared predicate. It is a genuine fifth expression of the vocabulary, kept
+# deliberately and pinned by ``test_changes_requested_regex_variants_via_real_jq``
+# — a Python rewrite of this counter is the only way to remove it (not filed;
+# reported on main#1371). This counter counts every ChangesRequested verdict regardless of
 # form, so it takes the wider set. The optional group matches "Requested"
 # immediately after "Changes" (no space — the unspaced form) or after a
 # space (the spaced form), and is skippable entirely for the bare short
@@ -95,6 +103,54 @@ _DEFAULT_STATUS = wave_state.DEFAULT_STATUS_PATH
 # wave-29 merged-PR set, where it now reproduces the retro's corrected 51
 # (was 49).
 _CHANGES_REQUESTED_RE = "RequestOrReplied:\\\\s*Changes(\\\\s*Requested)?\\\\b"
+
+
+# main#1362: `_changes_requested_cycles` below evaluates `_CHANGES_REQUESTED_RE`
+# through `gh --jq`, and gh embeds gojq (`itchyny/gojq`), which compiles
+# regexes through Go's `regexp` package — i.e. RE2. RE2 has no lookaround and
+# no backreferences. `test_changes_requested_regex_variants_via_real_jq`
+# (test_wave_status.py, Counters) validates this constant's *semantics*
+# against the system `jq` binary (Oniguruma), which accepts a strictly wider
+# syntax than RE2 — it demonstrated a lookahead compiles under jq but hard-
+# errors under `gh --jq`: "invalid or unsupported Perl syntax: `(?=`". So a
+# future widening of `_CHANGES_REQUESTED_RE` expressed with a lookahead would
+# pass that test green and hard-error live.
+#
+# `_re2_incompatible_reason` closes that gap as a syntax scan — not a full
+# RE2 parse — for the specific constructs RE2's parser rejects outright. This
+# was chosen over installing gojq (or a Go toolchain) in CI/pre-commit: gojq
+# is not otherwise a dependency of this repo, and mirroring it into
+# `.pre-commit-config.yaml` per the org's full local/CI parity rule would add
+# a new external binary everywhere this repo is worked on, for a check this
+# scan gets for free out of the standard library. It does not claim
+# RE2-completeness for constructs outside this known list — see the
+# `Counters` class's `test_re2_guard_*` tests in test_wave_status.py, which
+# exercise both the reject and the accept path against the real constant
+# above.
+_RE2_INCOMPATIBLE_CONSTRUCTS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\(\?<[=!]"), "lookbehind (?<= or (?<!"),
+    (re.compile(r"\(\?[=!]"), "lookahead (?= or (?!"),
+    (re.compile(r"\(\?P="), "named backreference (?P="),
+    (re.compile(r"\(\?>"), "atomic group (?>"),
+    (re.compile(r"\(\?\("), "conditional (?("),
+    (re.compile(r"\\[1-9]"), "backreference \\N"),
+)
+
+
+def _re2_incompatible_reason(pattern: str) -> str | None:
+    """Return the name of the first known RE2-incompatible construct found in
+    ``pattern``, or ``None`` if the scan finds none of them.
+
+    This is a syntax guard for the failure shape main#1362 documented (a
+    lookahead compiles under jq/Oniguruma but gojq/RE2 — the engine
+    ``gh --jq`` actually uses in production — hard-errors on it). It is
+    intentionally a regex-on-the-regex scan, not an actual RE2 compile, so it
+    adds no new dependency (no gojq, no Go toolchain) to CI or pre-commit.
+    """
+    for construct_re, name in _RE2_INCOMPATIBLE_CONSTRUCTS:
+        if construct_re.search(pattern):
+            return name
+    return None
 
 
 # The shared gh shim and status reader (main#1119). These stay module-level
@@ -169,7 +225,11 @@ def _canonical_issue_numbers_by_repo(
     reconciliation warning (main#1190) unless its count is carried out
     alongside the parsed rows, so :func:`_reconciliation_warning_from_claims`
     can report against the wave's actual declared row count rather than
-    silently reporting against only the rows that happened to parse.
+    silently reporting against only the rows that happened to parse. main#1255
+    extends this one structural level up: a ``tier_*`` key whose VALUE is not
+    a list at all (a bare dict, or a plain string) is the same silent-zero
+    shape as an unparseable row and is folded into ``unparseable`` the same
+    way, rather than being skipped wholesale by the container-level guard.
     """
     data = _load_status(status_path)
     scope = data.get(f"wave_{wave}_scope")
@@ -179,7 +239,18 @@ def _canonical_issue_numbers_by_repo(
     by_repo: dict[str, set[int]] = {}
     unparseable = 0
     for key, value in scope.items():
-        if not key.startswith("tier_") or not isinstance(value, list):
+        if not key.startswith("tier_"):
+            continue
+        if not isinstance(value, list):
+            # main#1255: a tier_* value that is not a list at all (a bare
+            # dict, or a plain string) is the same failure shape as an
+            # unparseable ROW (main#1201 Edge 1), one structural level up --
+            # `continue`-ing past it silently drops it from both the
+            # numerator and the denominator. Count it as one unparseable
+            # "row" standing in for the whole malformed tier so
+            # `_reconciliation_warning_from_claims` sees it instead of
+            # returning `None` on an empty canonical set.
+            unparseable += 1
             continue
         for row in value:
             if not isinstance(row, dict):
