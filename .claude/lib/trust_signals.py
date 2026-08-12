@@ -182,6 +182,11 @@ CALIBRATION_MIN_AUTHORS = 5
 #               form reviewers actually type — `Requestor: X / Requestee: Y /
 #               RequestOrReplied: Approved` — puts no field at a line start,
 #               so `^` DROPPED genuine verdicts the merge gate counted.
+#               HALF A WIN, not a clean one: the VERDICT is now recovered
+#               correctly, but these bodies carry no `---`, so the requestor
+#               captured off that same line is the whole rest of it and
+#               `extract_signals` buckets on the composite string. See the
+#               main#1456 residual in `parse_verdicts`' docstring.
 #   raw body    1 comment / 1 PR (#204); 5 over the whole 2,748. A verdict
 #               read out of a fenced EXAMPLE — the #511 Bereket-on-deploy#339
 #               class — i.e. a verdict nobody cast.
@@ -199,7 +204,12 @@ CALIBRATION_MIN_AUTHORS = 5
 #               both.
 #
 # After routing, `parse_verdicts` and `extract_charter_field` disagree on
-# 0 of those 1,475 PR comments.
+# 0 of those 1,475 PR comments — which is AGREEMENT, not correctness. They
+# now also agree where the shared extractor is wrong: on the 809
+# separator-less comments its no-separator fallback can hand both of them a
+# prose line (main#1456). That residual is stated in full in
+# `parse_verdicts`' docstring and pinned by
+# `test_separator_less_body_lets_prose_outrank_the_trailer`.
 #
 # Why routing is the right direction and not merely the tidier one: an
 # uncountable verdict "counts as zero reviews" is this org's settled position
@@ -221,8 +231,17 @@ CALIBRATION_MIN_AUTHORS = 5
 # are mirrored on purpose by `validate_review_comment_format
 # ._CONDITIONAL_FIELD_RE`, and that mirror is pinned by
 # `ConditionalFieldGrammarAgreementTests`. Narrowing them to the trailer block
-# is precisely the mutation main#1372's corpus exists to catch. Consolidating
-# THAT pair is main#1371, and it is not a change to make incidentally here.
+# is precisely the mutation main#1372's corpus exists to catch, and it is not
+# a change to make incidentally here.
+#
+# NO OPEN ISSUE OWNS CONSOLIDATING THAT PAIR. Earlier revisions of this
+# comment deferred it to main#1371; #1371 landed (PR #1429) and consolidated
+# the verdict-DIRECTION classifiers, which are different symbols. Saying so
+# beats pointing at a closed issue — a stale pointer reads as "tracked" and
+# is how work disappears. Until something opens, the agreement corpus
+# (`ConditionalFieldGrammarAgreementTests`) IS the mechanism keeping the two
+# copies honest, which is why main#1372 made its coverage of the scope axis
+# an assertion rather than an assumption.
 
 # Canonical verdict-kind vocabulary for the `RequestOrReplied:` field —
 # extracted to `charter_trailer.VERDICT_KIND` / `.verdict_kind()` (main#1359).
@@ -461,7 +480,41 @@ def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
     The two CONDITIONAL fields are not read this way. ``Retracted:`` and
     ``OrchestratorCaused:`` below are line-anchored presence scans over the
     whole code-stripped body, deliberately unscoped to the trailer, and
-    ``validate_review_comment_format`` mirrors them on purpose (main#1371).
+    ``validate_review_comment_format._CONDITIONAL_FIELD_RE`` mirrors them on
+    purpose — pinned by ``ConditionalFieldGrammarAgreementTests``, and owned
+    by no open issue (see the block above ``_RETRACTION_RE``).
+
+    KNOWN RESIDUAL — a prose line can be read as the requestor (main#1456)
+    ------------------------------------------------------------------------
+    ``charter_trailer.trailer_block_substring`` falls back to the WHOLE BODY
+    when a comment has no sole ``---`` line, and ``extract_charter_field``
+    then applies last-match-wins across it. So on a separator-less comment a
+    field-shaped line sitting in PROSE — a markdown table cell, a quoted
+    template, a slash-joined one-liner — can outrank the genuine trailer.
+
+    This is not a corner. Measured over this repo's PR comments at main#1372:
+    **809 of 1,398 verdict-bearing PR comments (58%) carry no sole ``---``**,
+    and 19 of them yield a requestor that is not a person's name:
+
+      * **PR #364 is a true regression** of this migration: the requestor goes
+        from ``Wanjiku Mwangi`` to a fragment of a markdown table row, on an
+        ``Approved`` comment. #167 and #277 are the same shape.
+      * The other 18 are comments the deleted line-anchored regex SKIPPED
+        entirely, so no engineer loses credit relative to before — but
+        :func:`extract_signals` keys its per-engineer buckets on
+        ``v.requestor`` verbatim, so each one now opens a PHANTOM bucket
+        (``"Nadia Khoury / Requestee: … / RequestOrReplied: Approved"``) that
+        collects ``must_fix_caught`` / ``review_false_positives``.
+
+    An earlier revision of main#1372 claimed this residual was "0 on PRs, no
+    measured regression". That was FALSE and is corrected here rather than in
+    a PR body nobody re-reads: it was falsified end-to-end against both real
+    engines during review.
+
+    NOT fixed here, deliberately: the fallback belongs to
+    ``charter_trailer.trailer_block_substring`` and changing it would move the
+    MERGE GATE's reading of every separator-less comment at the same time.
+    That is main#1456's call to make, not a side effect of this migration.
     """
     out: list[Verdict] = []
     for body in comment_bodies:

@@ -556,8 +556,15 @@ class FieldExtractionIsTheSharedSSoT(unittest.TestCase):
     2,748 issue comments in the repo, of which 1,475 sit on a PR (the only
     ones `_pr_comment_bodies` ever feeds this function). The two
     implementations disagreed on the verdict kind of 27 comments (18 PRs) and
-    the `Requestor:` value of 22 comments (19 PRs). Each test names the PRs it
-    came from. After routing, the disagreement count on those 1,475 is 0.
+    the requestor-field value of 22 comments (19 PRs). Each test names the PRs
+    it came from.
+
+    After routing, `parse_verdicts` and the merge gate agree on the verdict
+    kind of all 1,475 — but that is agreement, NOT correctness, and the two
+    are easy to conflate. They now agree everywhere including where the
+    shared extractor is wrong: on the 809 separator-less comments the
+    no-separator fallback can hand BOTH of them a prose line. See
+    `test_separator_less_body_lets_prose_outrank_the_trailer` (main#1456).
     """
 
     def test_one_line_slash_separated_verdict_is_read(self) -> None:
@@ -656,7 +663,13 @@ class FieldExtractionIsTheSharedSSoT(unittest.TestCase):
         `ConditionalFieldGrammarAgreementTests`. Narrowing them to the trailer
         block is precisely the mutation main#1372's corpus exists to catch, so
         a `Retracted:` ABOVE the separator must still count while the verdict
-        itself is read from the trailer. Consolidating that pair is main#1371.
+        itself is read from the trailer.
+
+        No open issue owns consolidating that pair. This docstring used to
+        defer it to main#1371, which has since landed (PR #1429) and
+        consolidated the verdict-DIRECTION classifiers — different symbols.
+        A pointer at a closed issue reads as "tracked" and is how work
+        disappears, so the state is named instead.
         """
         body = (
             "Retracted: on reflection this finding was invalid, my mistake.\n\n"
@@ -668,6 +681,47 @@ class FieldExtractionIsTheSharedSSoT(unittest.TestCase):
         v = ts.parse_verdicts([body])[0]
         self.assertEqual(ct.verdict_kind(v.verdict), "changesrequested")
         self.assertTrue(v.false_positive)
+
+    def test_separator_less_body_lets_prose_outrank_the_trailer(self) -> None:
+        """KNOWN RESIDUAL, pinned rather than described (main#1456).
+
+        `charter_trailer.trailer_block_substring` falls back to the whole body
+        when there is no sole `---`, and last-match-wins then lets a
+        field-shaped line in PROSE outrank the genuine trailer. Measured at
+        main#1372: 809 of 1,398 verdict-bearing PR comments (58%) have no
+        separator, and 19 yield a non-name requestor.
+
+        This shape is main PR #364 reduced — a markdown table whose cell
+        contains the literal field label, below a real trailer, in a comment
+        with no separator. The requestor `extract_signals` would bucket on is
+        the TABLE CELL, not `Wanjiku Mwangi`.
+
+        An earlier revision of main#1372 claimed this was "0 on PRs, no
+        measured regression". It is 1 regression (#364) plus 18 comments that
+        were skipped entirely before and now open phantom buckets. Asserting
+        the WRONG value on purpose: when main#1456 fixes the fallback this
+        test reds, which is the intended signal to update it — not a
+        licence to delete it.
+        """
+        body = (
+            "Requestor: Wanjiku Mwangi\n"
+            "Requestee: Nadia Khoury\n"
+            "RequestOrReplied: Approved\n\n"
+            "Reference table (note: no sole `- - -` separator anywhere):\n\n"
+            "| field | rule |\n"
+            "|---|---|\n"
+            "| Requestor: the reviewer | pull-requests.md |\n"
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertEqual(ct.verdict_kind(v.verdict), "approved")
+        self.assertNotEqual(
+            v.requestor,
+            "Wanjiku Mwangi",
+            "main#1456 appears fixed — the no-separator fallback no longer lets "
+            "prose outrank the trailer. Update this residual (and the "
+            "parse_verdicts docstring) rather than deleting the guard.",
+        )
+        self.assertIn("pull-requests.md", v.requestor or "")
 
     def test_no_private_field_regex_dict_remains(self) -> None:
         """Singularity, asserted rather than reviewed for.
