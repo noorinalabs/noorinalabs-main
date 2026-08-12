@@ -67,6 +67,30 @@ def test_base_positive_pool_above_target_applies_intake():
     assert result["target"] == 2
 
 
+def test_pool_equals_target_boundary_is_healthy():
+    """Boundary pin (merge-gate fold-in, PR #1419): POOL == TARGET is the
+    inclusive edge of the `<=` comparison at `td_intake_gate.py`'s state-1/
+    state-2 branch. State 1 and state 2's existing tests use pool=1 and
+    pool=5 against target=2, so neither one exercises `pool == target`
+    itself — the exact boundary the branch is written to distinguish.
+    Un-pinned, `if pool <= target` -> `if pool < target` survives the
+    suite: an at-target wave would silently reclassify healthy -> applies.
+    """
+    result = td_intake_verdict(base=10, pool=2)  # target = 2, POOL == TARGET
+    assert result["state"] == "healthy"
+
+
+def test_pool_one_over_target_boundary_applies_intake():
+    """Boundary pin (merge-gate fold-in, PR #1419): POOL == TARGET + 1 is
+    the first value on the `applies` side of the same branch. Un-pinned,
+    `if pool <= target` -> `if pool <= target + 1` survives the suite: an
+    over-target wave would render `healthy` — #1374's exact failure shape
+    one boundary over, inside the fix for that same defect class.
+    """
+    result = td_intake_verdict(base=10, pool=3)  # target = 2, POOL == TARGET + 1
+    assert result["state"] == "applies"
+
+
 def test_compute_target_matches_skill_md_ceil_arithmetic():
     """Mirrors the SKILL.md bash: `(BASE * 20 + 99) / 100` == ceil(0.20*base)."""
     assert compute_target(0) == 0
