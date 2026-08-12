@@ -169,7 +169,11 @@ def _canonical_issue_numbers_by_repo(
     reconciliation warning (main#1190) unless its count is carried out
     alongside the parsed rows, so :func:`_reconciliation_warning_from_claims`
     can report against the wave's actual declared row count rather than
-    silently reporting against only the rows that happened to parse.
+    silently reporting against only the rows that happened to parse. main#1255
+    extends this one structural level up: a ``tier_*`` key whose VALUE is not
+    a list at all (a bare dict, or a plain string) is the same silent-zero
+    shape as an unparseable row and is folded into ``unparseable`` the same
+    way, rather than being skipped wholesale by the container-level guard.
     """
     data = _load_status(status_path)
     scope = data.get(f"wave_{wave}_scope")
@@ -179,7 +183,18 @@ def _canonical_issue_numbers_by_repo(
     by_repo: dict[str, set[int]] = {}
     unparseable = 0
     for key, value in scope.items():
-        if not key.startswith("tier_") or not isinstance(value, list):
+        if not key.startswith("tier_"):
+            continue
+        if not isinstance(value, list):
+            # main#1255: a tier_* value that is not a list at all (a bare
+            # dict, or a plain string) is the same failure shape as an
+            # unparseable ROW (main#1201 Edge 1), one structural level up --
+            # `continue`-ing past it silently drops it from both the
+            # numerator and the denominator. Count it as one unparseable
+            # "row" standing in for the whole malformed tier so
+            # `_reconciliation_warning_from_claims` sees it instead of
+            # returning `None` on an empty canonical set.
+            unparseable += 1
             continue
         for row in value:
             if not isinstance(row, dict):

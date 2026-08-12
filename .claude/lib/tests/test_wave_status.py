@@ -671,6 +671,45 @@ class CanonicalIssueNumbers(unittest.TestCase):
         self.assertEqual(by_repo, {"noorinalabs-main": {1160}})
         self.assertEqual(unparseable, 3)
 
+    def test_non_list_tier_value_counted_not_silently_skipped(self) -> None:
+        """main#1255: #1201 Edge 1 fixed the ROW-level silent zero (a row
+        within a `tier_*` list that fails to parse). This is the same
+        failure shape one structural level up -- a `tier_*` KEY whose value
+        is not a list at all (a bare dict, or a plain string) used to hit
+        the `not isinstance(value, list)` half of the container guard and
+        `continue` past the whole tier, contributing to neither `by_repo`
+        NOR `unparseable`. If it is the only `tier_*` key, `_canonical_pairs`
+        returns `(set(), 0)`, `_reconciliation_warning_from_claims`'s
+        `if not canonical and not unparseable: return None` guard fires, and
+        a real reconciliation problem prints nothing at all -- the exact
+        silent zero #1201 was filed to close, just one level up.
+
+        A malformed *tier value* must count toward `unparseable` (as one
+        unparseable "row" standing in for the whole malformed tier) exactly
+        like a malformed row does, so the container-level guard in
+        `_reconciliation_warning_from_claims` fires instead of returning
+        `None`."""
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            data = {
+                "wave_29_scope": {
+                    # tier value is a dict, not a list
+                    "tier_1_dict_shaped": {"id": "noorinalabs-main#1160"},
+                    # tier value is a plain string, not a list
+                    "tier_2_string_shaped": "noorinalabs-main#1161",
+                    # a normal, correctly-shaped tier alongside the two
+                    # malformed ones, proving they don't clobber real rows
+                    "tier_3_normal": [{"id": "noorinalabs-main#1200"}],
+                }
+            }
+            status.write_text(json.dumps(data))
+            by_repo, unparseable = wave_status._canonical_issue_numbers_by_repo("29", status)
+        self.assertEqual(by_repo, {"noorinalabs-main": {1200}})
+        # Pre-fix: unparseable == 0 here (both malformed tiers vanished
+        # silently) -- this assertion is what fails against the unmodified
+        # implementation.
+        self.assertEqual(unparseable, 2)
+
 
 class MergedPrsDirectToMain(unittest.TestCase):
     """merged_prs() for a direct-to-main wave, driven by the canonical scope
