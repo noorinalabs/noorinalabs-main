@@ -798,7 +798,18 @@ _VERDICT_DIRECTIONS = frozenset(
 # (axis 1 + axis 3 remain open) and are pinned against it by
 # `ConditionalFieldGrammarAgreementTests`, which drives both implementations
 # over one corpus so a future divergence reds rather than silently
-# false-blocks. Full consolidation of this remaining pair is main#1371/#1372.
+# false-blocks. Full consolidation of this remaining pair is main#1371.
+#
+# THE AXIS-3 PIN IS ONLY AS REAL AS THE CORPUS (main#1372). Until main#1372
+# that corpus held no body with a `---` trailer separator, so re-narrowing
+# this predicate's scan to `charter_trailer.trailer_block_substring(...)` —
+# reintroducing axis 3 outright — left the agreement class GREEN; it was
+# caught only by the neighbouring over-correction guard
+# (`test_genuine_field_above_the_trailer_separator_still_blocks`). The
+# corpus now carries above-separator bodies and the class reds on the
+# narrowing directly. Do not trim those rows:
+# `test_corpus_covers_the_trailer_separator_scope_axis` fails if the shape
+# leaves the corpus.
 _CONDITIONAL_VERDICT_FIELDS = ("Retracted", "OrchestratorCaused")
 
 # Mirrors trust_signals._RETRACTION_RE / ._ORCHESTRATOR_CAUSED_RE.
