@@ -1199,6 +1199,229 @@ class IndirectExecExtensionTests(unittest.TestCase):
         self.assertIn("eval", result["reason"])
 
 
+class EvalUnquotedPayloadTests(unittest.TestCase):
+    """Issue #1399: an UNQUOTED multi-word `eval` payload bypassed the gate.
+
+    `_EVAL_RE`'s bare alternative was `\\S+`, so `eval git commit -m x` handed
+    the detector the lone word `git`; `_payload_looks_like_commit` never saw the
+    `commit` verb and `check()` returned None = ALLOW. POSIX `eval` concatenates
+    ALL of its arguments and evaluates the result, so the command committed for
+    real — a fail-open in the gate that enforces commit identity.
+
+    Every BLOCK case below returns None (ALLOW) against the pre-fix
+    implementation; the 196-case suite that shipped with it passes either way,
+    which is why the fix needs its own cases rather than regression cover.
+
+    Exploitability was settled with an execution oracle (real temp repo, real
+    `zsh -c <shape>`, count HEAD afterwards), not from the man page:
+
+        eval git commit -m x        COMMITTED
+        eval 'git commit -m x'      COMMITTED
+        bash -c git commit -m x     no commit   <- args become $0/$1/$2
+        sh   -c git commit -m x     no commit
+        bash <<< git commit -m x    no commit   <- here-string body is `git`
+
+    So only the `eval` site is a live hole. `_DASH_C_RE` / `_HERESTRING_RE`
+    share the `\\S+` under-capture shape but the commands they under-capture
+    provably do not commit; `NonCommittingSiblingShapes` below pins that
+    deliberate non-coverage so a future reader doesn't read it as an oversight.
+    """
+
+    _input = staticmethod(_test_helpers.bash_input)
+
+    # An identity-less commit: every wrapper carrying this must block.
+    _NO_ID = "git commit -m x"
+    _WITH_ID = 'git -c user.name="X" -c user.email="Y" commit -m x'
+
+    def _assert_eval_block(self, cmd: str) -> None:
+        result = hook.check(self._input(cmd))
+        self.assertIsNotNone(result, f"identity gate failed open on: {cmd!r}")
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("indirect-exec", result["reason"])
+        self.assertIn("eval", result["reason"])
+
+    # --- the bypass (each row ALLOWs pre-fix) ------------------------------
+
+    def test_eval_unquoted_payload_blocks(self):
+        """POS/#1399: `eval git commit -m x` — the reported bypass."""
+        self._assert_eval_block(f"eval {self._NO_ID}")
+
+    def test_eval_unquoted_payload_with_trailing_segment_blocks(self):
+        """POS/#1399: a following `; echo done` must not shake the detector
+        off — the eval segment ends at the `;` and still carries the commit."""
+        self._assert_eval_block(f"eval {self._NO_ID}; echo done")
+
+    def test_eval_unquoted_payload_carrying_identity_blocks(self):
+        """POS/#1399: identity flags do NOT rescue an indirect-exec wrapper.
+        `check()` blocks on the wrapper before it ever reads `-c` pairs — the
+        hook can only validate flags it can attribute to a real commit segment,
+        so the contract is "run git directly", not "run it through eval with
+        the right flags"."""
+        self._assert_eval_block(f"eval {self._WITH_ID}")
+
+    def test_eval_unquoted_after_operator_blocks(self):
+        """POS/#1399: `cd /repo && eval git commit …` — the wrapper is not at
+        the start of the command. The walker resolves segments, so an operator
+        prefix does not hide it."""
+        self._assert_eval_block(f"cd /tmp && eval {self._NO_ID}")
+
+    def test_eval_unquoted_inside_compound_blocks(self):
+        """POS/#1399: `if …; then eval git commit …; fi` — a compound body is
+        still a segment whose command is `eval`."""
+        self._assert_eval_block(f"if true; then eval {self._NO_ID}; fi")
+
+    def test_eval_split_quoting_blocks(self):
+        """POS/#1399: `eval git com"mit" -m x` — quoting that hides the literal
+        token `commit` from a string sweep. The payload is resolved from parsed
+        words, so the detector sees `git commit` even though the raw command
+        text contains no `commit` token for the perf prefilter to match on."""
+        self._assert_eval_block('eval git com"mit" -m x')
+
+    # --- controls that must NOT regress (all pass pre-fix) ----------------
+
+    def test_eval_quoted_payload_still_blocks(self):
+        """CONTROL: the quoted spelling was already caught. Still is."""
+        self._assert_eval_block(f"eval '{self._NO_ID}'")
+
+    def test_plain_commit_still_blocks_on_identity(self):
+        """CONTROL: an unwrapped identity-less commit blocks on the identity
+        flags, NOT as an indirect-exec wrapper."""
+        result = hook.check(self._input(self._NO_ID))
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertIn("user.name", result["reason"])
+        self.assertNotIn("indirect-exec", result["reason"])
+
+    def test_plain_valid_commit_still_allowed(self):
+        """CONTROL: a correctly-identified direct commit is untouched."""
+        aino = "Aino Virtanen"
+        cmd = (
+            f'git -c user.name="{aino}" '
+            f'-c user.email="parametrization+Aino.Virtanen@gmail.com" commit -m ok'
+        )
+        self.assertIsNone(hook.check(self._input(cmd)))
+
+    def test_eval_variable_payload_still_allowed(self):
+        """CONTROL: `eval $cmd` stays the documented punt — the substitution
+        happens after the hook fires, and blocking it would false-block every
+        legitimate `eval $(ssh-agent -s)`-shaped line."""
+        self.assertIsNone(hook.check(self._input("eval $cmd")))
+        self.assertIsNone(hook.check(self._input('eval "$CMD"')))
+        self.assertIsNone(hook.check(self._input("eval $(direnv hook zsh)")))
+
+    def test_eval_innocent_payload_still_allowed(self):
+        """CONTROL: quoted and unquoted innocent eval bodies."""
+        self.assertIsNone(hook.check(self._input("eval echo hello")))
+        self.assertIsNone(hook.check(self._input("eval 'echo hello'")))
+
+
+class EvalDetectionFalsePositiveTests(unittest.TestCase):
+    """Issue #1399: the fix must not fire on commands that merely NAME the shape.
+
+    This is the axis that decided the implementation. Widening `_EVAL_RE`'s bare
+    branch to a segment-bounded `[^;&|\\n]+` — the fix the issue originally
+    proposed — closes the hole, but the regex sweeps scan the whole command
+    STRING, so it also blocks five realistic commands measured below, including
+    the commit message and the PR body for this very fix. An indirect-exec match
+    blocks UNCONDITIONALLY (identity flags are never read), so each false
+    positive is a hard stop on legitimate work — the failure mode that gets a
+    security gate worked around. Resolving `eval`'s payload from parsed segments
+    instead costs zero of them ON THE BASHLEX PATH: after quote-stripping, an
+    `eval` inside an argument is a word, never a segment head.
+
+    That qualifier is load-bearing and the "zero" is not unconditional. With
+    bashlex ABSENT the walker falls to shlex, which does not split `zsh);` into
+    a standalone `;` token, so an `eval` segment swallows the real command
+    behind it. 3 legitimate commands are blocked in degraded mode that `main`
+    allows: the eval-line-then-newline case in `EvalDetectionFalsePositiveTests`
+    (1 of that class's own 6) and the two pinned by
+    `EvalDegradedModeOverBlockTests`. Full probe set in #1445. The cases in THIS
+    class are otherwise the bashlex-path measurement.
+
+    Every case here passes pre-fix too. They are here to fail if someone later
+    "simplifies" the walker back into a string sweep.
+    """
+
+    _input = staticmethod(_test_helpers.bash_input)
+
+    _ID = '-c user.name="Aino Virtanen" -c user.email="parametrization+Aino.Virtanen@gmail.com"'
+
+    def test_commit_message_describing_the_eval_bypass_allowed(self):
+        """NEG: committing the fix for #1399 must not be blocked BY #1399."""
+        cmd = f'git {self._ID} commit -m "fix: unquoted eval git commit payload bypassed the gate"'
+        self.assertIsNone(hook.check(self._input(cmd)))
+
+    def test_commit_message_describing_the_dash_c_shape_allowed(self):
+        """NEG: same for prose naming the `bash -c` sibling shape."""
+        cmd = f'git {self._ID} commit -m "note: bash -c git commit -m x does not commit"'
+        self.assertIsNone(hook.check(self._input(cmd)))
+
+    def test_pr_body_describing_the_bypass_allowed(self):
+        """NEG: `gh pr create --body "eval git commit -m x …"` — the write-up
+        of the vulnerability is not an exploit of it."""
+        cmd = 'gh pr create --title t --body "eval git commit -m x slipped past the gate"'
+        self.assertIsNone(hook.check(self._input(cmd)))
+
+    def test_issue_comment_describing_the_bypass_allowed(self):
+        """NEG: same shape through `gh issue comment`."""
+        cmd = 'gh issue comment 1399 --body "bash -c git commit -m x is latent, not live"'
+        self.assertIsNone(hook.check(self._input(cmd)))
+
+    def test_printf_of_the_shape_into_a_file_allowed(self):
+        """NEG: writing the shape into a note file, then committing normally.
+        `printf` to a FILE is not `printf | bash` — the text is data."""
+        cmd = f'printf "%s" "eval git commit" > /tmp/note.txt\ngit {self._ID} commit -F /tmp/m.txt'
+        self.assertIsNone(hook.check(self._input(cmd)))
+
+    def test_unquoted_eval_line_does_not_swallow_a_later_commit(self):
+        """NEG: an unquoted `eval` on one line and a legitimate commit on the
+        next. A newline ends an unquoted eval's word list, and segment
+        resolution gets that right for free."""
+        cmd = f"eval $(direnv hook zsh)\ngit {self._ID} commit -m x"
+        self.assertIsNone(hook.check(self._input(cmd)))
+
+
+class NonCommittingSiblingShapes(unittest.TestCase):
+    """Issue #1399: `bash -c <unquoted>` / `bash <<< <unquoted>` stay ALLOWED.
+
+    Pinned deliberately, with the execution-oracle result as the reason, so the
+    non-coverage reads as a decision rather than a gap. In all three shapes the
+    trailing words become positional parameters ($0/$1/$2) or, for the
+    here-string, are simply not part of the one-word body — the shell runs bare
+    `git` (or `bash` with a `git` stdin line) and no commit is created. There is
+    nothing to fail closed on, and blocking them costs the false positives
+    pinned in `EvalDetectionFalsePositiveTests`.
+
+    If a future change makes any of these actually commit, this test turning red
+    is the intended signal — re-run the oracle, then extend the walker.
+    """
+
+    _input = staticmethod(_test_helpers.bash_input)
+
+    def test_bash_dash_c_unquoted_payload_allowed(self):
+        self.assertIsNone(hook.check(self._input("bash -c git commit -m x")))
+
+    def test_sh_dash_c_unquoted_payload_allowed(self):
+        self.assertIsNone(hook.check(self._input("sh -c git commit -m x")))
+
+    def test_bash_herestring_unquoted_payload_allowed(self):
+        self.assertIsNone(hook.check(self._input("bash <<< git commit -m x")))
+
+    def test_quoted_siblings_still_block(self):
+        """CONTROL: the QUOTED spellings of both siblings do commit, and both
+        still block — the sibling regexes are untouched by this change."""
+        for cmd in (
+            "bash -c 'git commit -m x'",
+            "bash <<<'git commit -m x'",
+        ):
+            with self.subTest(cmd=cmd):
+                result = hook.check(self._input(cmd))
+                self.assertIsNotNone(result, cmd)
+                assert result is not None
+                self.assertIn("indirect-exec", result["reason"])
+
+
 class CwdFallbackTests(unittest.TestCase):
     """Issue #475 fix 1: when no literal `cd <path>` prefix is present, fall
     back to the tool-call cwd for roster resolution. Lets operators commit
