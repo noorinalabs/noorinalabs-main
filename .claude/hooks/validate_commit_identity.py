@@ -425,12 +425,13 @@ _HERESTRING_RE = re.compile(
 # does not split `zsh);` or `hi;` into a standalone `;` token. The `eval`
 # segment therefore never ends and swallows the real command behind it, so
 # `_INNER_COMMIT_RE`'s `[^;&|]` bridge is satisfied by the `git … commit` that
-# follows. Measured over the same 11-command legitimate corpus: 3 are blocked in
-# degraded mode that `main` allows, e.g.
-#     eval $(direnv hook zsh); git -c user.name=… -c user.email=… commit -m x
+# follows. 3 legitimate commands are blocked in degraded mode that `main`
+# allows: the eval-line-then-newline case in `EvalDetectionFalsePositiveTests`
+# (1 of that class's own 6) and the two pinned by
+# `EvalDegradedModeOverBlockTests`. Full probe set in #1445.
 # These are hard stops on correctly-identified commits — the exact failure mode
 # this comment argues against — and they are a regression against `main`, not a
-# pre-existing hole. Tracked by #1445; unfixed here.
+# pre-existing hole. Unfixed here.
 _EVAL_RE = re.compile(
     r"\beval\s+(?P<payload>(?P<q>['\"]).*?(?P=q)|\S+)",
     re.DOTALL,

@@ -1333,10 +1333,11 @@ class EvalDetectionFalsePositiveTests(unittest.TestCase):
     That qualifier is load-bearing and the "zero" is not unconditional. With
     bashlex ABSENT the walker falls to shlex, which does not split `zsh);` into
     a standalone `;` token, so an `eval` segment swallows the real command
-    behind it: 3 of the same 11-command legitimate corpus are blocked in
-    degraded mode that `main` allows. `EvalDegradedModeOverBlockTests` in
-    test_validate_commit_identity_ast.py pins that regression; #1445 tracks the
-    fix. The cases in THIS class are the bashlex-path measurement.
+    behind it. 3 legitimate commands are blocked in degraded mode that `main`
+    allows: the eval-line-then-newline case in `EvalDetectionFalsePositiveTests`
+    (1 of that class's own 6) and the two pinned by
+    `EvalDegradedModeOverBlockTests`. Full probe set in #1445. The cases in THIS
+    class are otherwise the bashlex-path measurement.
 
     Every case here passes pre-fix too. They are here to fail if someone later
     "simplifies" the walker back into a string sweep.
