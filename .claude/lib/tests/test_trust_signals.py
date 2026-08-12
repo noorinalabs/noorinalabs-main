@@ -1355,7 +1355,7 @@ class DistributionDiscipline(unittest.TestCase):
             "Marked": _entrant(5, marked, old=4),
             "Clean": _entrant(5, clean, old=4),
         }
-        out = ts.apply_distribution_discipline(proposals)
+        out = ts.apply_distribution_discipline(proposals, ranking_population=_whole_wave(proposals))
         self.assertEqual(out["Marked"], 5)  # ranks on attributable_rework() == 0
         self.assertEqual(out["Clean"], 4)  # 7 < 8 — no longer the wave maximum
 
@@ -1372,7 +1372,7 @@ class DistributionDiscipline(unittest.TestCase):
             "Unmarked": _entrant(5, unmarked, old=4),
             "Clean": _entrant(5, clean, old=4),
         }
-        out = ts.apply_distribution_discipline(proposals)
+        out = ts.apply_distribution_discipline(proposals, ranking_population=_whole_wave(proposals))
         self.assertEqual(out["Unmarked"], 4)
         self.assertEqual(out["Clean"], 5)
 
