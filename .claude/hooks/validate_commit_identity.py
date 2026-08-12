@@ -56,7 +56,11 @@ Indirect-exec bypass detection (#475 fix 2, extended in #482):
   truncated at the first space, and passed the lone word `git` to the
   commit-shape check. The gate returned ALLOW. The payload is now resolved from
   parsed command segments (`_eval_payloads`), which is what the shell itself
-  does; the regex stays as the fail-closed fallback for unparseable input.
+  does; the regex is retained below the walker, but it backstops the QUOTED
+  spelling ONLY — its bare branch is still the `\\S+` this issue is about, so
+  when the walker resolves no payload the unquoted spelling is ALLOWED. Named
+  residual, not a covered path: see `_eval_payloads` for the three mechanisms
+  that reach it and the issues tracking each.
 
   The extension-agnostic script read is the highest-severity #482 change:
   the prior `.sh` restriction was trivially circumvented by renaming the
@@ -410,9 +414,23 @@ _HERESTRING_RE = re.compile(
 # widening blocks any command whose *prose* names the shape (`git … commit -m
 # "fix: unquoted eval git commit bypass"`, `gh pr create --body "eval git commit
 # -m x slipped past the gate"`, `printf "%s" "eval git commit" > note.txt`).
-# Five such false positives on realistic commands, against zero for the walker —
-# and since an indirect-exec match blocks UNCONDITIONALLY (the identity flags
-# are never even read), each one is a hard stop on legitimate work.
+# Five such false positives on realistic commands, against zero for the walker
+# ON THE BASHLEX PATH — and since an indirect-exec match blocks UNCONDITIONALLY
+# (the identity flags are never even read), each one is a hard stop on
+# legitimate work.
+#
+# That "zero" is NOT unconditional, and the qualifier is load-bearing. With
+# bashlex ABSENT — a mode `_shell_parse.py` explicitly supports so a fresh
+# checkout's hooks work with no install step — the walker falls to shlex, which
+# does not split `zsh);` or `hi;` into a standalone `;` token. The `eval`
+# segment therefore never ends and swallows the real command behind it, so
+# `_INNER_COMMIT_RE`'s `[^;&|]` bridge is satisfied by the `git … commit` that
+# follows. Measured over the same 11-command legitimate corpus: 3 are blocked in
+# degraded mode that `main` allows, e.g.
+#     eval $(direnv hook zsh); git -c user.name=… -c user.email=… commit -m x
+# These are hard stops on correctly-identified commits — the exact failure mode
+# this comment argues against — and they are a regression against `main`, not a
+# pre-existing hole. Tracked by #1445; unfixed here.
 _EVAL_RE = re.compile(
     r"\beval\s+(?P<payload>(?P<q>['\"]).*?(?P=q)|\S+)",
     re.DOTALL,
@@ -491,9 +509,38 @@ def _eval_payloads(command: str) -> list[str]:
 
     Resolution order mirrors `_find_commit_segment`: bashlex AST first (it
     resolves `;`/`&&`/`then` bodies structurally), shlex tokenize + segment
-    split second, and — deliberately — nothing third. On input neither parser
-    can read, this returns [] and `_EVAL_RE`'s sweep below is the fail-closed
-    fallback, exactly as `_DASH_C_RE` backstops the interpreter walker.
+    split second, and — deliberately — nothing third.
+
+    WHEN THIS RETURNS [], THE UNQUOTED SPELLING IS ALLOWED. `_EVAL_RE`'s sweep
+    below is NOT a fail-closed backstop for it: that regex's bare branch is
+    still `\\S+`, the exact truncation #1399 exists to fix, so it catches the
+    QUOTED payload only. Measured with both parsers forced off:
+
+        _eval_payloads("eval git commit -m x") -> []
+        check("eval 'git commit -m x'")        -> BLOCK
+        check("eval git commit -m x")          -> ALLOW   <- named residual
+
+    Two distinct mechanisms reach the empty return, and they are NOT one bug.
+    Each was verified against real `zsh -c` in a fresh repo — every shape below
+    creates a real commit:
+
+      1. `eval` is not the segment HEAD, so the `seg[0] == "eval"` filter misses
+         it even though parsing succeeded: `builtin eval …`, `time eval …`,
+         `exec eval …`, and the brace group `{ eval git commit -m x }` (bashlex
+         fails, but shlex tokenizes and heads that segment `{`). Tracked by
+         #1443.
+      2. BOTH parsers fail, so there are no segments at all — a single trailing
+         backslash (`eval git -c … commit -m x\\`) makes bashlex raise on EOF
+         and shlex raise "No escaped character". Tracked by #1444.
+
+    Widening `_EVAL_RE` on the parse-failure path closes (2) ONLY. It cannot
+    close (1): those inputs parse, so they never reach the fallback sweep at
+    all. That is why the two are separate issues rather than one, and why
+    closing either alone must not be read as closing this residual.
+
+    Both mechanisms also fail open on `main`, and this walker strictly narrows
+    the hole rather than widening it — of the 14 command shapes an execution
+    oracle confirmed create a real commit, this blocks 13 against `main`'s 2.
     """
     segments = iter_command_segments_ast(command)
     if segments is None:

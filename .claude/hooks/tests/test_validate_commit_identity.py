@@ -1327,8 +1327,16 @@ class EvalDetectionFalsePositiveTests(unittest.TestCase):
     blocks UNCONDITIONALLY (identity flags are never read), so each false
     positive is a hard stop on legitimate work — the failure mode that gets a
     security gate worked around. Resolving `eval`'s payload from parsed segments
-    instead costs zero of them: after quote-stripping, an `eval` inside an
-    argument is a word, never a segment head.
+    instead costs zero of them ON THE BASHLEX PATH: after quote-stripping, an
+    `eval` inside an argument is a word, never a segment head.
+
+    That qualifier is load-bearing and the "zero" is not unconditional. With
+    bashlex ABSENT the walker falls to shlex, which does not split `zsh);` into
+    a standalone `;` token, so an `eval` segment swallows the real command
+    behind it: 3 of the same 11-command legitimate corpus are blocked in
+    degraded mode that `main` allows. `EvalDegradedModeOverBlockTests` in
+    test_validate_commit_identity_ast.py pins that regression; #1445 tracks the
+    fix. The cases in THIS class are the bashlex-path measurement.
 
     Every case here passes pre-fix too. They are here to fail if someone later
     "simplifies" the walker back into a string sweep.
