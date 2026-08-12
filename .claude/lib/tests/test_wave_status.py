@@ -337,6 +337,35 @@ class Counters(unittest.TestCase):
                 )
         self.assertEqual(rc, 0)
 
+    # -- main#1362: production runs `_CHANGES_REQUESTED_RE` through `gh --jq`
+    # (gojq -> Go's `regexp`, i.e. RE2), not the system `jq` binary the
+    # semantics test above shells out to (Oniguruma). RE2 has no lookaround
+    # or backreferences; Oniguruma has both, so a future widening of the
+    # constant with e.g. a lookahead would compile fine under the test above
+    # and hard-error live. `_re2_incompatible_reason` is a cheap syntax scan
+    # (not a full RE2 parse, and not a new gojq/Go-toolchain dependency in
+    # CI/pre-commit) for the specific constructs RE2's parser rejects
+    # outright. These three tests demonstrate it catches the exact failure
+    # shape #1362 documented and stays quiet on the real pattern.
+    def test_re2_guard_rejects_lookahead(self) -> None:
+        # The exact construct from #1362's repro: compiles under jq
+        # (Oniguruma) but `gh --jq` (gojq/RE2) hard-errors with "invalid or
+        # unsupported Perl syntax: `(?='".
+        reason = wave_status._re2_incompatible_reason(r"RequestOrReplied:\s*(?=Changes)Changes")
+        self.assertIsNotNone(reason)
+
+    def test_re2_guard_rejects_lookbehind_and_backreference(self) -> None:
+        self.assertIsNotNone(wave_status._re2_incompatible_reason(r"(?<=Foo)Bar"))
+        self.assertIsNotNone(wave_status._re2_incompatible_reason(r"(?<!Foo)Bar"))
+        self.assertIsNotNone(wave_status._re2_incompatible_reason(r"(Foo)\1"))
+
+    def test_re2_guard_accepts_current_changes_requested_pattern(self) -> None:
+        # Regression guard: if `_CHANGES_REQUESTED_RE` is ever widened to
+        # include one of the forbidden constructs, this fails fast in CI
+        # instead of passing green and hard-erroring in the live gh --jq
+        # call the way an unguarded lookahead would.
+        self.assertIsNone(wave_status._re2_incompatible_reason(wave_status._CHANGES_REQUESTED_RE))
+
 
 class Write(unittest.TestCase):
     def test_write_upserts_three_canonical_keys(self) -> None:
