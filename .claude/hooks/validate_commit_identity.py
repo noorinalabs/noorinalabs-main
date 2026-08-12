@@ -59,7 +59,7 @@ Indirect-exec bypass detection (#475 fix 2, extended in #482):
   does; the regex is retained below the walker, but it backstops the QUOTED
   spelling ONLY — its bare branch is still the `\\S+` this issue is about, so
   when the walker resolves no payload the unquoted spelling is ALLOWED. Named
-  residual, not a covered path: see `_eval_payloads` for the three mechanisms
+  residual, not a covered path: see `_eval_payloads` for the two mechanisms
   that reach it and the issues tracking each.
 
   The extension-agnostic script read is the highest-severity #482 change:
@@ -533,14 +533,29 @@ def _eval_payloads(command: str) -> list[str]:
          backslash (`eval git -c … commit -m x\\`) makes bashlex raise on EOF
          and shlex raise "No escaped character". Tracked by #1444.
 
-    Widening `_EVAL_RE` on the parse-failure path closes (2) ONLY. It cannot
-    close (1): those inputs parse, so they never reach the fallback sweep at
-    all. That is why the two are separate issues rather than one, and why
-    closing either alone must not be read as closing this residual.
+    The two are separately TRACKED, but they are not separately REACHED, and
+    the distinction is only about how the empty return is arrived at — not
+    about which code a fix would touch. `_EVAL_RE`'s sweep in
+    `_detect_indirect_commit` is NOT gated on why this returned []; it is not
+    gated on a parse failure at all, only on the `"commit" in scanned`
+    prefilter. So every shape above reaches it. Measured by widening the bare
+    branch to `[^;&|\\n]+` and re-running `_detect_indirect_commit`: all four
+    (1) shapes AND the (2) shape flip from None to blocked — 5 of 5. A fix at
+    the sweep therefore closes both mechanisms at once; only a fix at the
+    `seg[0]` filter is specific to (1).
+
+    That widening is still the wrong fix, for the reason measured above rather
+    than for any reachability reason: it reintroduces 3 of the 6 cases in
+    `EvalDetectionFalsePositiveTests`, hard-blocking commands that merely name
+    the shape in a `-m` message or a `--body`.
 
     Both mechanisms also fail open on `main`, and this walker strictly narrows
     the hole rather than widening it — of the 14 command shapes an execution
     oracle confirmed create a real commit, this blocks 13 against `main`'s 2.
+    Do not take that ratio on faith: the corpus is 20 shapes run as real
+    `zsh -c` against a fresh repo each, and the method plus the per-shape
+    results are in the merge-gate review on PR #1425,
+    https://github.com/noorinalabs/noorinalabs-main/pull/1425#issuecomment-5272754878
     """
     segments = iter_command_segments_ast(command)
     if segments is None:

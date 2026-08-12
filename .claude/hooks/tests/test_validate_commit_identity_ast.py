@@ -260,14 +260,19 @@ class EvalPayloadParserPathTests(unittest.TestCase):
         self.assertFalse(self._blocked(cmd))
 
     def test_eval_not_at_segment_head_is_allowed(self):
-        """#1443's mechanism, kept distinct from #1444's — a DIFFERENT bug.
+        """#1443's mechanism: these PARSE fine, `eval` just is not `seg[0]`,
+        so the filter in `_eval_payloads` skips the segment.
 
-        These parse fine; `eval` just is not `seg[0]`, so the filter in
-        `_eval_payloads` skips the segment. They therefore never reach the
-        `_EVAL_RE` fallback, and widening that regex on the parse-failure path
-        would not close them. Both shapes create a real commit under `zsh -c`.
-        This is here so that fixing #1444 alone cannot be mistaken for closing
-        the residual.
+        That is a different route to the empty return than #1444's (where both
+        parsers fail outright), but NOT a separate reachability class: the
+        `_EVAL_RE` sweep in `_detect_indirect_commit` is gated only on
+        `"commit" in scanned`, never on a parse failure, so these reach it too.
+        Widening its bare branch flips all four of these to blocked along with
+        #1444's shape — measured, 5 of 5. The widening is rejected on false
+        positives (it reintroduces 3 of 6 of `EvalDetectionFalsePositiveTests`),
+        not on reachability.
+
+        Both shapes create a real commit under `zsh -c`.
         """
         for cmd in ("{ eval git commit -m x }", "builtin eval git commit -m x"):
             with self.subTest(cmd=cmd):
