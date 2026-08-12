@@ -85,10 +85,16 @@ class SmokeTests(unittest.TestCase):
             decisions.append(h.classify_memory(m, {"retro_citations": cites}, self.already))
 
         for s in self.sections:
-            # Charter sections — we intentionally pass zero invocation
-            # signal for the smoke run; a separate future enhancement may
-            # wire up `count_skill_invocations` once the signal matures.
-            decisions.append(h.classify_section(s, {"skill_invocations": 0, "threshold": 5}))
+            # Charter sections — this smoke test intentionally passes a
+            # zero `section_citations` signal so it stays isolated to the
+            # memory-classification behavior under test above; the real,
+            # wired-through signal (`count_section_citations`, #1355) is
+            # exercised end-to-end by
+            # `test_run.SteadyStateThroughDriver` and
+            # `test_helpers.CountSectionCitationsTests` instead, where it
+            # correctly reports 1 AUTO (`Cross-Contract PRs`) on the real
+            # tree — a result this test deliberately does not reproduce.
+            decisions.append(h.classify_section(s, {"section_citations": 0, "threshold": 5}))
 
         for sk in self.skills:
             decisions.append(
@@ -112,6 +118,44 @@ class SmokeTests(unittest.TestCase):
             0,
             f"Expected zero DECIDE decisions on first run, got: {[d.item_id for d in decide]}",
         )
+
+    def test_hook_target_sections_no_longer_misreport_promoted_to_skill(self) -> None:
+        """#1355 item 3: `Agent Liveness Checkpoint` and `Throttle-Stall
+        Recovery — Trigger Thresholds` (both `promotion-target: hook`) used
+        to carry a nested `### Enforcement (mechanized) <!-- promoted-to:
+        lib/check_agent_liveness.py -->` marker whose HTML-comment syntax
+        collided with the charter->skill `promoted-to:` back-reference
+        regex — `lib/check_agent_liveness.py` is a deterministic checker
+        script, not a skill slug. That collision made `classify_section`
+        report ALREADY-PROMOTED with `to_tier="skill"` (hardcoded) for a
+        section that was never eligible for charter->skill promotion at
+        all. The marker is now `enforced-by:` (informational, not parsed
+        by `_PROMOTED_TO_RE`), so both sections fall through to the
+        "hook-targeted, invalid transition" KEPT branch that every other
+        hook-target section already renders.
+
+        This is a hygiene fix only: neither section was ever reachable by
+        the invocation gate (hook-targeted sections never were, before or
+        after) and neither becomes eligible for charter->skill promotion
+        now — they simply stop being mislabeled."""
+        targets = [
+            s
+            for s in self.sections
+            if s.heading
+            in ("Agent Liveness Checkpoint", "Throttle-Stall Recovery — Trigger Thresholds")
+        ]
+        self.assertEqual(
+            len(targets), 2, f"expected both sections, found: {[t.heading for t in targets]}"
+        )
+        for sec in targets:
+            self.assertEqual(sec.promotion_target, "hook")
+            self.assertEqual(
+                sec.promoted_to, "", f"{sec.heading} still carries a promoted_to back-reference"
+            )
+            d = h.classify_section(sec, {"section_citations": 0, "threshold": 5})
+            self.assertEqual(d.kind, "KEPT")
+            self.assertEqual(d.to_tier, "hook")
+            self.assertIn("only promote to skill", d.reason)
 
     def test_render_is_deterministic(self) -> None:
         """Core spec: same inputs, byte-identical output."""
