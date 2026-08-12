@@ -604,13 +604,28 @@ class TrailerHelperSingularityTests(unittest.TestCase):
         private `_verdict_kind` / `_normalize_verdict_token` pair this exact
         sweep would have caught (verified against the pre-#1359 tree — the
         sweep found `lib/trust_signals.py:normalize_verdict_token` and
-        `lib/trust_signals.py:verdict_kind`)."""
+        `lib/trust_signals.py:verdict_kind`).
+
+        The three PREDICATES joined in main#1371. The `_?` prefix is what
+        makes them worth listing: the copies that change removed were named
+        `_is_verdict` / `_is_approved` (`validate_pr_review`) and
+        `_is_changes_requested` (`trust_signals`), so a reintroduced `def
+        _is_approved(` or `def _is_changes_requested(` is caught here by the
+        underscore branch. `_is_verdict` is a different WORD, not a prefixed
+        form of `is_verdict_direction`, so this sweep cannot see it — that one
+        is pinned by identity instead
+        (`test_verdict_direction_agreement.PredicateSingularityTests`), which
+        is the stronger guard and the reason a name-based sweep is never the
+        only one."""
         defs = {
             "strip_code_regions",
             "trailer_block_substring",
             "extract_charter_field",
             "verdict_kind",
             "normalize_verdict_token",
+            "is_verdict_direction",
+            "is_changes_requested",
+            "is_approved",
         }
         searched = sorted(_HOOKS_DIR.glob("*.py")) + sorted(_LIB_DIR.glob("*.py"))
         self.assertGreater(len(searched), 20, "file sweep found almost nothing — verify the glob")
