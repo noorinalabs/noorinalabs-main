@@ -22,6 +22,7 @@ Covers:
 
 from __future__ import annotations
 
+import ast
 import json
 import sys
 import unittest
@@ -177,21 +178,28 @@ class ParseVerdicts(unittest.TestCase):
     # named after the specific line the mutant strips.
 
     def test_bold_only_verdict_value_still_classifies(self) -> None:
-        """`charter_trailer.normalize_verdict_token`'s alnum-stripping, not just casefold.
+        """A fully-bolded verdict value classifies as ChangesRequested.
 
-        A verdict field with no surrounding whitespace before the bold
-        marker (`RequestOrReplied: **ChangesRequested**`) is captured with
-        its LEADING `**` intact — only the trailing `**` is stripped by the
-        field regex's `\\**\\s*$` tail, so the captured token is literally
-        `"**ChangesRequested"`. Removing `charter_trailer.normalize_verdict_token`'s
-        `re.sub(r"[^a-z0-9]", "", ...)` step (leaving only `.casefold()`)
-        does not fail any other test in this file —
-        `charter_trailer.normalize_verdict_token` needs its own direct
-        assertion (see `test_charter_trailer.py`, main#1359).
+        VALUE CHANGED AT main#1372, deliberately. This test used to assert
+        `v.verdict == "**ChangesRequested"` — the LEADING `**` survived,
+        because the deleted private `_FIELD_RE` only stripped the trailing
+        one (`\\**\\s*$`). `parse_verdicts` now extracts through
+        `charter_trailer.extract_charter_field`, which strips bold from both
+        ends, so the captured value is the clean `"ChangesRequested"`.
+
+        The mutant this test was originally written for (main#1358 — dropping
+        `charter_trailer.normalize_verdict_token`'s `re.sub(r"[^a-z0-9]", "",
+        ...)` and leaving only `.casefold()`) is therefore no longer reachable
+        from THIS file, because nothing here now hands `verdict_kind` a token
+        with punctuation still attached. That mutant is covered directly, on
+        this exact input, by `test_charter_trailer.py`'s
+        `normalize_verdict_token("**ChangesRequested") == "changesrequested"`
+        — which is where main#1358's own docstring already pointed. The
+        coverage moved to its owner; it was not dropped.
         """
         body = "Requestor: A\nRequestee: B\nRequestOrReplied: **ChangesRequested**\n"
         v = ts.parse_verdicts([body])[0]
-        self.assertEqual(v.verdict, "**ChangesRequested")
+        self.assertEqual(v.verdict, "ChangesRequested")
         self.assertEqual(ct.verdict_kind(v.verdict, include_bare_changes=True), "changesrequested")
         self.assertTrue(ts._is_changes_requested(v.verdict))
 
@@ -531,6 +539,174 @@ class UnterminatedFenceDirectionChangeTests(unittest.TestCase):
         )
         v = ts.parse_verdicts([body])[0]
         self.assertTrue(v.false_positive)
+
+
+class FieldExtractionIsTheSharedSSoT(unittest.TestCase):
+    """main#1372 (Aino Virtanen, reviewing main#1371): `parse_verdicts` reads
+    its three fields through `charter_trailer.extract_charter_field`, not a
+    private regex dict.
+
+    The deleted `_FIELD_RE` was a fourth copy of a rule `charter_trailer`
+    declares itself the single owner of, and it diverged from that owner on
+    three axes: line-anchored vs unanchored, raw body vs code-stripped, and
+    first-match-over-the-whole-body vs last-match-inside-the-trailer-block.
+
+    Every case below is a SHAPE HARVESTED FROM REAL noorinalabs-main PR
+    comments, not an invented fixture: the divergence was measured across all
+    2,748 issue comments in the repo, of which 1,475 sit on a PR (the only
+    ones `_pr_comment_bodies` ever feeds this function). The two
+    implementations disagreed on the verdict kind of 27 comments (18 PRs) and
+    the `Requestor:` value of 22 comments (19 PRs). Each test names the PRs it
+    came from. After routing, the disagreement count on those 1,475 is 0.
+    """
+
+    def test_one_line_slash_separated_verdict_is_read(self) -> None:
+        """16 comments across main PRs #167, #235, #270, #275, #276, #277,
+        #279 (28 comments over all 2,748 in the repo).
+
+        The largest divergence class. Reviewers write the whole verdict on
+        ONE line, so no field starts a line and `_FIELD_RE`'s `^` anchor
+        matched nothing — `parse_verdicts` silently skipped a verdict the
+        merge gate (which reads through the same SSoT) counted.
+        """
+        body = "Requestor: Wanjiku Mwangi / Requestee: Aino Virtanen / RequestOrReplied: Approved"
+        verdicts = ts.parse_verdicts([body])
+        self.assertEqual(len(verdicts), 1)
+        self.assertEqual(ct.verdict_kind(verdicts[0].verdict), "approved")
+
+    def test_verdict_quoted_inside_a_fence_is_not_a_verdict(self) -> None:
+        """1 comment on main PR #204 (5 over all 2,748 in the repo): a charter
+        template pasted into a fenced block. `_FIELD_RE` searched the RAW body
+        and invented a verdict nobody cast — the #511 Bereket-on-deploy#339
+        class."""
+        body = (
+            "Here is the shape a verdict comment takes:\n\n"
+            "```\n"
+            "Requestor: <reviewer>\n"
+            "Requestee: <author>\n"
+            "RequestOrReplied: Approved\n"
+            "```\n\n"
+            "No verdict from me yet.\n"
+        )
+        self.assertEqual(ts.parse_verdicts([body]), [])
+
+    def test_header_stub_above_the_trailer_does_not_outrank_it(self) -> None:
+        """main PR #1126, exactly. The comment opens with a `RequestOrReplied:
+        Request` header stub and closes with the real `Approved` trailer after
+        a `---`. First-match-wins read the stub; the gate read the trailer."""
+        body = (
+            "Requestor: Nino Kavtaradze\n"
+            "Requestee: Weronika Zielinska\n"
+            "RequestOrReplied: Request\n\n"
+            "**Merge-gate review: LGTM**\n\n"
+            "---\n"
+            "Requestor: Nino Kavtaradze\n"
+            "Requestee: Weronika Zielinska\n"
+            "RequestOrReplied: Approved\n"
+            "TechDebt: none\n"
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertEqual(ct.verdict_kind(v.verdict), "approved")
+
+    def test_role_parenthetical_does_not_open_a_second_bucket(self) -> None:
+        """22 real comments. `extract_signals` keys its per-engineer `Signals`
+        on `v.requestor` verbatim, so an un-stripped role annotation splits
+        one person's `must_fix_caught` credit across two rows."""
+        plain = ts.parse_verdicts([_verdict("Aino Virtanen", "Nadia Khoury", "ChangesRequested")])[
+            0
+        ]
+        annotated = ts.parse_verdicts(
+            [
+                _verdict(
+                    "Aino Virtanen (Standards & Quality Lead)",
+                    "Nadia Khoury",
+                    "ChangesRequested",
+                )
+            ]
+        )[0]
+        self.assertEqual(annotated.requestor, plain.requestor)
+
+    def test_above_separator_fields_no_longer_count(self) -> None:
+        """NAMED BEHAVIOUR CHANGE, pinned so it is not rediscovered.
+
+        10 real PR comments (main PRs #28, #282, #350, #444, #446, #468,
+        #873, #880, #884, #1126) put their charter fields ABOVE a later
+        prose `---`, #1126 alongside a real trailer. `_FIELD_RE` counted
+        them; `extract_charter_field` scopes to the text after the LAST
+        separator (#511) and reads None, which is what the merge gate has
+        always read them as and what `validate_review_comment_format` gate 2
+        now hard-BLOCKS at creation time. Recomputing a pre-main#1372 wave's
+        signals can therefore move.
+        """
+        body = (
+            "Requestor: Aino Virtanen\n"
+            "Requestee: Nadia Khoury\n"
+            "RequestOrReplied: Approved\n\n"
+            "Some closing prose.\n\n"
+            "---\n\n"
+            "A postscript below a horizontal rule.\n"
+        )
+        self.assertEqual(ts.parse_verdicts([body]), [])
+
+    def test_retraction_pair_is_deliberately_not_routed(self) -> None:
+        """`_RETRACTION_RE` / `_ORCHESTRATOR_CAUSED_RE` stay whole-body.
+
+        They are PRESENCE detection, mirrored on purpose by
+        `validate_review_comment_format._CONDITIONAL_FIELD_RE` and pinned by
+        `ConditionalFieldGrammarAgreementTests`. Narrowing them to the trailer
+        block is precisely the mutation main#1372's corpus exists to catch, so
+        a `Retracted:` ABOVE the separator must still count while the verdict
+        itself is read from the trailer. Consolidating that pair is main#1371.
+        """
+        body = (
+            "Retracted: on reflection this finding was invalid, my mistake.\n\n"
+            "---\n"
+            "Requestor: Aino Virtanen\n"
+            "Requestee: Nadia Khoury\n"
+            "RequestOrReplied: ChangesRequested\n"
+        )
+        v = ts.parse_verdicts([body])[0]
+        self.assertEqual(ct.verdict_kind(v.verdict), "changesrequested")
+        self.assertTrue(v.false_positive)
+
+    def test_no_private_field_regex_dict_remains(self) -> None:
+        """Singularity, asserted rather than reviewed for.
+
+        The same shape as `validate_review_comment_format`'s
+        `test_no_second_definition_anywhere`: a reintroduced private
+        extraction table must fail immediately, not four months later when it
+        has drifted (the `extract_branch_author_lastname` lesson, main#1175).
+
+        Checked over the AST's `re.compile(<literal>)` calls rather than over
+        the file text, because the migration comment in `trust_signals` quotes
+        the deleted pattern verbatim — and a guard that a truthful comment
+        about the removal can trip is a guard that gets deleted.
+        """
+        self.assertFalse(
+            hasattr(ts, "_FIELD_RE"),
+            "trust_signals._FIELD_RE is back — field extraction has ONE owner, "
+            "charter_trailer.extract_charter_field (main#1372)",
+        )
+        tree = ast.parse(Path(ts.__file__).read_text(encoding="utf-8"))
+        compiled = [
+            node.args[0].value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "compile"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        ]
+        self.assertTrue(compiled, "no re.compile(<literal>) found — the guard is inert")
+        for pattern in compiled:
+            for label in ("Requestor", "Requestee", "RequestOrReplied"):
+                self.assertNotIn(
+                    label,
+                    pattern,
+                    f"a local regex for the `{label}:` field reappeared in "
+                    f"trust_signals: {pattern!r}",
+                )
 
 
 # --------------------------------------------------------------------------- #

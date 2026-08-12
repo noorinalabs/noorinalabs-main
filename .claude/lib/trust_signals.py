@@ -144,23 +144,80 @@ CALIBRATION_DRIFT_TOLERANCE = 0.5
 # this many authors the check reports "insufficient sample", never "drifted".
 CALIBRATION_MIN_AUTHORS = 5
 
-# A verdict comment field, e.g. ``Requestor: Aino Virtanen`` or the bold form
-# ``**Requestor:** Aino Virtanen`` (feedback_pr_review_verdict_format). Optional
-# surrounding ``**`` on the label AND the value; value trimmed of trailing bold.
+# Verdict-comment FIELD EXTRACTION — `charter_trailer.extract_charter_field`
+# (main#1372; found by Aino Virtanen reviewing main#1371).
 #
-# #1347: ``verdict`` used to capture only ``(\w+)`` — the first word — so
-# ``RequestOrReplied: Changes Requested`` captured just ``"Changes"`` and the
-# equality check against ``"changesrequested"`` silently failed, dropping the
-# verdict from every counter. Widened to a full-line capture mirroring
-# requestor/requestee; classification of the captured text into a verdict
-# kind is now a separate step (`charter_trailer.verdict_kind`, main#1359) so
-# trailing text past the first word (e.g. ``Approved (post-merge)``) doesn't
-# defeat an exact match either.
-_FIELD_RE = {
-    "requestor": re.compile(r"^\**Requestor\**:\**\s*(.+?)\**\s*$", re.MULTILINE),
-    "requestee": re.compile(r"^\**Requestee\**:\**\s*(.+?)\**\s*$", re.MULTILINE),
-    "verdict": re.compile(r"^\**RequestOrReplied\**:\**\s*(.+?)\**\s*$", re.MULTILINE),
-}
+# This module used to carry a private `_FIELD_RE` dict —
+# `^\**Requestor\**:\**\s*(.+?)\**\s*$` and friends, MULTILINE — and search it
+# over the RAW body, first match wins. That is a fourth copy of a rule
+# `.claude/lib/charter_trailer.py` is the declared single owner of, and it
+# diverged from that owner on three axes at once:
+#
+#   1. line-anchored (`^`)      vs `extract_charter_field`'s unanchored pattern
+#   2. raw body                 vs code-stripped (`strip_code_regions`)
+#   3. first match, whole body  vs last match, narrowed to the trailer block
+#
+# Divergence is not theoretical here; it was measured (main#1372) over all
+# 2,748 issue comments in noorinalabs-main (`repos/.../issues/comments`),
+# then restricted to the 1,475 sitting on a PR — the only bodies
+# `_pr_comment_bodies` ever hands `parse_verdicts`. On those 1,475 the
+# private regexes and the SSoT disagreed about:
+#
+#   * the classified verdict KIND (`charter_trailer.verdict_kind`) of 27
+#     comments, across 18 distinct PRs;
+#   * the `Requestor:` value of 22 comments across 19 PRs — i.e. WHICH
+#     ENGINEER `extract_signals` credits `must_fix_caught` and debits
+#     `review_false_positives` to.
+#
+# Every disagreement had a mechanism, and all three favour the SSoT. Counts
+# are PR-only unless stated, because that is the live consumer path:
+#
+#   anchoring   16 comments / 7 PRs (#167, #235, #270, #275, #276, #277,
+#               #279); 28 comments over the whole 2,748. The one-line verdict
+#               form reviewers actually type — `Requestor: X / Requestee: Y /
+#               RequestOrReplied: Approved` — puts no field at a line start,
+#               so `^` DROPPED genuine verdicts the merge gate counted.
+#   raw body    1 comment / 1 PR (#204); 5 over the whole 2,748. A verdict
+#               read out of a fenced EXAMPLE — the #511 Bereket-on-deploy#339
+#               class — i.e. a verdict nobody cast.
+#   scope       10 comments / 10 PRs (#28, #282, #350, #444, #446, #468,
+#               #873, #880, #884, #1126). Fields above a later `---`. On
+#               #1126 the comment carries BOTH a `RequestOrReplied: Request`
+#               header stub and the real `Approved` trailer, and first-match
+#               -wins read the stub while the gate read the trailer.
+#   value       the private capture kept a role parenthetical, so
+#               `Requestor: Aino Virtanen (Standards & Quality Lead)` opened
+#               a SECOND `extract_signals` bucket for the same person, and
+#               one comment bucketed review credit under the literal string
+#               `Nadia Khoury (Program Director) | Requestee: Aino Virtanen
+#               (R1), Wanjiku Mwangi (R2)`. `extract_charter_field` strips
+#               both.
+#
+# After routing, `parse_verdicts` and `extract_charter_field` disagree on
+# 0 of those 1,475 PR comments.
+#
+# Why routing is the right direction and not merely the tidier one: an
+# uncountable verdict "counts as zero reviews" is this org's settled position
+# (main#932/#934), and `validate_pr_review` — the merge gate — reads verdicts
+# through `extract_charter_field`. A trust instrument scoring engineers off a
+# DIFFERENT verdict set than the gate enforced has no principled defence for
+# the difference. `charter_trailer` was already verified to reproduce this
+# module's value at PR #1356 head `0478497` (see the note below).
+#
+# NAMED BEHAVIOUR CHANGE, not a pure refactor: 10 historical PR comments
+# whose fields sit ABOVE a later `---` stop being counted as verdicts, because
+# that is what the gate already reads them as (#511) and what
+# `validate_review_comment_format` gate 2 now hard-BLOCKS at creation time.
+# Recomputing a pre-main#1372 wave's signals can therefore move. Pinned by
+# `FieldExtractionIsTheSharedSSoT` in `test_trust_signals.py`.
+#
+# NOT ROUTED, deliberately: `_RETRACTION_RE` / `_ORCHESTRATOR_CAUSED_RE`
+# below. Those are PRESENCE detection over the whole code-stripped body, they
+# are mirrored on purpose by `validate_review_comment_format
+# ._CONDITIONAL_FIELD_RE`, and that mirror is pinned by
+# `ConditionalFieldGrammarAgreementTests`. Narrowing them to the trailer block
+# is precisely the mutation main#1372's corpus exists to catch. Consolidating
+# THAT pair is main#1371, and it is not a change to make incidentally here.
 
 # Canonical verdict-kind vocabulary for the `RequestOrReplied:` field —
 # extracted to `charter_trailer.VERDICT_KIND` / `.verdict_kind()` (main#1359).
@@ -379,21 +436,35 @@ class Verdict:
 def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
     """Parse the org's verdict-comment shape out of a PR's comment bodies.
 
-    Pure function — no I/O. Accepts both the bare (``Requestor: Name``) and bold
-    (``**Requestor:** Name``) forms so it matches everything Hook 4 accepts. A
-    comment with no ``RequestOrReplied`` line is not a verdict and is skipped —
-    this still builds a :class:`Verdict` for ``Request``/``Reply`` comments
-    (some callers want the full set), but see :func:`charter_trailer.verdict_kind`:
-    those two kinds can never carry ``false_positive=True`` (main#1348).
+    Pure function — no I/O. Fields are read through
+    :func:`charter_trailer.extract_charter_field`, so this sees exactly what
+    Hook 4 (``validate_pr_review``) sees: bare and bold label forms, code
+    regions stripped, scoped to the trailer block, last match wins. Before
+    main#1372 that claim was "matches everything Hook 4 accepts" and was
+    approximately true via a private regex copy — it disagreed with Hook 4 on
+    27 of this repo's 1,475 PR comments. It is now true by construction.
+
+    A comment from which no ``RequestOrReplied`` value can be extracted is not
+    a verdict and is skipped — this still builds a :class:`Verdict` for
+    ``Request``/``Reply`` comments (some callers want the full set), but see
+    :func:`charter_trailer.verdict_kind`: those two kinds can never carry
+    ``false_positive=True`` (main#1348).
+
+    The two CONDITIONAL fields are not read this way. ``Retracted:`` and
+    ``OrchestratorCaused:`` below are line-anchored presence scans over the
+    whole code-stripped body, deliberately unscoped to the trailer, and
+    ``validate_review_comment_format`` mirrors them on purpose (main#1371).
     """
     out: list[Verdict] = []
     for body in comment_bodies:
-        verdict_m = _FIELD_RE["verdict"].search(body)
-        if not verdict_m:
+        # One owner for field extraction (main#1372) — see the block above
+        # `_RETRACTION_RE` for the three axes the deleted private `_FIELD_RE`
+        # diverged on and the 27+22 real PR comments it got wrong.
+        verdict_str = charter_trailer.extract_charter_field("RequestOrReplied", body)
+        if verdict_str is None:
             continue
-        req_m = _FIELD_RE["requestor"].search(body)
-        ree_m = _FIELD_RE["requestee"].search(body)
-        verdict_str = verdict_m.group(1).strip()
+        requestor = charter_trailer.extract_charter_field("Requestor", body)
+        requestee = charter_trailer.extract_charter_field("Requestee", body)
         # A retraction only counts on a ChangesRequested comment — the
         # reviewer must have actually raised a finding on THIS comment for
         # there to be anything to retract. Approved never raised one;
@@ -433,8 +504,8 @@ def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
         )
         out.append(
             Verdict(
-                requestor=req_m.group(1).strip() if req_m else None,
-                requestee=ree_m.group(1).strip() if ree_m else None,
+                requestor=requestor,
+                requestee=requestee,
                 verdict=verdict_str,
                 false_positive=is_false_positive,
                 orchestrator_caused=is_orchestrator_caused,
