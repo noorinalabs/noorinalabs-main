@@ -419,8 +419,17 @@ echo "un-scheduled TD pool: $POOL  |  target: $TARGET"
 ```
 
 **3. Select + confirm (owner-judgment gate, same as Step 7).**
-- `POOL <= TARGET` → select **all** pool items. Report: `TD intake: <POOL> of <POOL> available — debt backlog below the 20% target (healthy)`.
-- `POOL > TARGET` → surface the top `TARGET` oldest candidates to the owner for confirmation; the owner may swap in higher-priority debt. Final selection = `TARGET` items. **On the final wave of a phase, `TARGET` is a floor, not the cap** (see the relaxation note above) — surface the whole pool and let the owner pull in as much debt as phase-exit cleanup warrants.
+
+Render the verdict through `td_intake_gate.py` rather than a hand-written comparison — a TD-saturated wave (`BASE == 0`) must never print as `healthy` (#1374: measured `/wave-scope 10 30` printing `TD intake: 0 of 0 available … (healthy)` over a 174-item real backlog):
+
+```bash
+python3 "$REPO_ROOT/.claude/skills/wave-scope/td_intake_gate.py" --base "$BASE" --pool "$POOL"
+```
+
+Branch on the printed `state`:
+- **`healthy`** (`BASE > 0`, `POOL <= TARGET`) → select **all** pool items. This is the only state that legitimately means "debt backlog below target."
+- **`applies`** (`BASE > 0`, `POOL > TARGET`) → surface the top `TARGET` oldest candidates to the owner for confirmation; the owner may swap in higher-priority debt. Final selection = `TARGET` items. **On the final wave of a phase, `TARGET` is a floor, not the cap** (see the relaxation note above) — surface the whole pool and let the owner pull in as much debt as phase-exit cleanup warrants.
+- **`not_applicable`** (`BASE == 0`, TD-saturated wave) → the 20%-of-feature-scope ratio is undefined; do **not** auto-select and do **not** report healthy. Surface the full `POOL` to the owner (mirroring the last-wave-of-phase relaxation: with no feature/bug base to ratio against, the un-scheduled debt pool itself is the only meaningful signal) and record the state as `not_applicable` in Step 12/13, not as a numeric `td_intake` ratio — a reader of the wave summary must be able to tell "not measured" from "measured and fine" (same requirement as #1254 for the manifest-orphan report).
 
 This is a blocking owner-judgment gate exactly like Step 7 — present, don't auto-apply.
 
@@ -429,7 +438,7 @@ This is a blocking owner-judgment gate exactly like Step 7 — present, don't au
 - add it to the `tier_3_tech_debt` array of `WAVE_SCOPE_STRUCTURED` as an assignment-row dict (§ 13.1), assigning implementer/reviewers from the **owning repo's** roster;
 - add it to project board 2 (`gh project item-add 2 --owner noorinalabs --url <url>`).
 
-Record `td_intake: <selected>/<target>` (and `td_pool: <POOL>`) for the Step 12 summary and Step 13 `wave_{M}_scope`.
+Record `td_intake: <selected>/<target>` (and `td_pool: <POOL>`) for the Step 12 summary and Step 13 `wave_{M}_scope` — or, in the `not_applicable` state, record `td_intake: not_applicable (BASE=0)` plus `td_pool: <POOL>` so the summary shows an un-measured ratio rather than a numeric one that looks clean.
 
 **Interaction with phase criterion #6.** This step is the operational mechanism behind the TD goal. The cumulative-ratio reading stays *informational*, but the gate the team actually works to is "did the wave take its 20% intake," not a brittle ratio threshold — which avoids the small-backlog whipsaw the owner flagged. Cross-ref `phase-4.md` § criterion #6.
 
