@@ -123,6 +123,43 @@ looks only at patch-id (diff content), `git cherry`'s own explicit
 verdicts, or a merge's own combined diff, never at commit graph shape or a
 fixed strategy label as such.
 
+**Removal candidacy is a SECOND, ORTHOGONAL axis (#1341) — merged-ness is
+not the removal decision.** Everything above answers *"is this branch's
+content already on `remote_ref`?"*. Step 0 asks a different question:
+*"is there anything here worth reclaiming?"*. Those came apart on a
+**freshly-created worktree that has not committed yet**: its HEAD *is*
+`origin/main`, so it is trivially an ancestor, the fast path answers
+`merged` — **correctly**, since a branch with no commits of its own has, by
+construction, no unlanded content — and Step 0 removed a clean, live
+worktree out from under an active agent (observed on in-flight #1117 during
+wave-29). The false verdict was never about merged-ness; it was about
+reading merged-ness as a reclaim decision.
+
+So the merged classification above is **unchanged and untraded** — a fresh
+worktree still classifies `merged`/`ancestor`, exactly as the #1213
+guarantee requires. What is added is a separate predicate that gates the
+*removal* decision only:
+
+    a branch whose HEAD is itself a commit on `remote_ref`'s own
+    first-parent (mainline) history has produced **no commits of its own**,
+    so there is nothing to reclaim -> `removal_block = "no-own-commits"`,
+    `safe_to_remove` False, CLI exit 3 (not 0).
+
+Why the first-parent chain rather than the `HEAD == remote_ref` equality
+the issue proposed: equality only catches a worktree branched off the
+*current* tip. Sessions here run long enough that `origin/main` advances
+under an idle worktree, after which HEAD is an ancestor but no longer equal
+— same zero-own-work branch, same live agent, and equality would have
+missed it. Mainline membership covers both, and it does not touch the
+population the sweep exists for (#526): a squash- or rebase-merged branch
+tip is not an ancestor at all (it never reaches this guard), and a
+merge-commit-merged tip is reachable only through the merge's **second**
+parent, so it is an ancestor but *not* on the mainline chain — it stays a
+removal candidate. The one shape this over-flags is a fast-forward-merged
+branch (its tip literally becomes a mainline commit); GitHub's three merge
+buttons never fast-forward, and over-flagging costs a stale directory,
+which is the accepted-cheap direction.
+
 **Safety stance (never relaxed):**
 
   * A branch whose net content since `merge_base` is not fully present on
@@ -157,18 +194,39 @@ fixed strategy label as such.
   * The whole test is 100% local git plumbing — no `gh`/network calls, so it
     works offline and never blocks the mandatory session-start step on
     network/auth availability.
+  * The removal-candidacy probe (#1341) degrades in the same direction:
+    if either of its two git calls fails, the result is
+    ``removal_block = "mainline-check-failed"`` — a probe that could not be
+    run is not evidence that the branch has work of its own, so removal is
+    withheld and the worktree is flagged. Note the *classification* is left
+    intact in that case (still `merged`); only removal candidacy degrades,
+    because the two axes are independent and a failure on one is not
+    evidence about the other.
   * **Step 0 no longer force-removes** (owner decision, PR #1213 round 3): a
     worktree that does not remove cleanly is FLAGGED for a manual decision.
     Since `git worktree remove` never deletes the branch ref either way,
     this means a misclassification by this module can cost, at worst, a
     stale worktree *directory* — never a commit, never a branch, and (with
     the force fallback gone) never even uncommitted content, since a dirty
-    worktree that fails a plain `remove` is simply left alone.
+    worktree that fails a plain `remove` is simply left alone. That bound
+    holds for *committed* work; it never covered the #1341 case, where the
+    worktree being destroyed was clean precisely because its agent had not
+    written anything yet.
 
 CLI: ``python3 check_worktree_merged.py <repo_root> <head> [remote_ref]``
 (default ``remote_ref`` is ``origin/main``). Prints one line
-``<status> (<reason>): <detail>`` and exits 0 iff merged, 1 otherwise — the
-exit code is the only thing a caller needs to decide auto-remove vs FLAG.
+``<status> (<reason>)[ [not-a-removal-candidate: <block>]]: <detail>``.
+Exit codes — the exit code is the only thing a caller needs to decide
+auto-remove vs FLAG:
+
+  * ``0`` — merged **and** a removal candidate: safe to auto-remove.
+  * ``1`` — not merged (``unmerged`` or ``error``).
+  * ``2`` — usage error.
+  * ``3`` — merged, but **not** a removal candidate (#1341: no commits of
+    its own, or the candidacy probe failed). Non-zero, so a caller that
+    only knows the old ``0 == remove`` contract still fails safe; a caller
+    that distinguishes it can label the worktree FRESH rather than the
+    misleading UNMERGED.
 """
 
 from __future__ import annotations
@@ -322,16 +380,38 @@ class MergeClassification:
     truly empty commit (explicitly filtered even though `git cherry` does
     mark it `+`) or a merge commit with no unique content of its own — see
     the module docstring's per-commit-corroboration section.
+
+    ``removal_block`` — the SECOND, orthogonal axis (#1341). Empty means
+    "nothing blocks reclaiming this worktree"; non-empty is a short machine-
+    readable reason why it must not be auto-removed even though its content
+    is fully landed:
+
+      * ``no-own-commits``       — HEAD is a commit on ``remote_ref``'s own
+        first-parent history, so the branch has produced nothing of its own
+        (a fresh, not-yet-committed worktree — very likely live).
+      * ``mainline-check-failed`` — the candidacy probe itself errored;
+        withhold removal rather than assume there is work here.
+
+    It never affects ``status``/``merged``: a fresh worktree is genuinely
+    merged, it is just not a reclaim candidate. Callers deciding
+    auto-remove-vs-FLAG must read :attr:`safe_to_remove`, not
+    :attr:`merged`.
     """
 
     status: str
     reason: str
     detail: str = ""
     unmatched_commits: list[str] = field(default_factory=list)
+    removal_block: str = ""
 
     @property
     def merged(self) -> bool:
         return self.status == "merged"
+
+    @property
+    def safe_to_remove(self) -> bool:
+        """The auto-remove predicate: fully landed AND has work to reclaim."""
+        return self.merged and not self.removal_block
 
 
 def _parse_patch_ids(text: str) -> list[tuple[str, str]]:
@@ -352,6 +432,65 @@ def _degrade(reason: str, detail: str) -> MergeClassification:
     return MergeClassification("unmerged", reason, detail)
 
 
+def _removal_block(root: Path, head: str, remote_ref: str, runner: GitRunner) -> tuple[str, str]:
+    """Removal-candidacy probe (#1341) — the axis orthogonal to merged-ness.
+
+    Returns ``(block_reason, block_detail)``; ``("", "")`` means the branch
+    has commits of its own and is a genuine reclaim candidate.
+
+    Only meaningful once ``head`` is known to be an ancestor of
+    ``remote_ref`` (mainline membership implies ancestry, so calling it off
+    that path would always answer "not blocked" at the cost of two git
+    invocations). The test: is ``head`` itself one of the commits on
+    ``remote_ref``'s **first-parent** chain? If so the branch has never
+    committed anything of its own — nothing to reclaim, and very likely a
+    worktree an agent is about to write into.
+
+    Both git calls degrade toward *withholding removal* (never toward
+    removing): a probe we could not run is not evidence of work.
+    """
+    head_res = runner(["rev-parse", "--verify", f"{head}^{{commit}}"], root)
+    head_sha = head_res.stdout.strip() if head_res.returncode == 0 else ""
+    if not head_sha:
+        return (
+            "mainline-check-failed",
+            f"could not resolve {head} to a commit "
+            f"(exit {head_res.returncode}): {head_res.stderr.strip()} — "
+            f"cannot confirm this worktree has commits of its own, so removal is withheld",
+        )
+
+    # First-parent chain of remote_ref. Membership is an exact SHA-set test:
+    # every line is a full 40-char object name, so no prefix/substring
+    # ambiguity is possible.
+    chain = runner(["rev-list", "--first-parent", remote_ref], root)
+    if chain.returncode != 0:
+        return (
+            "mainline-check-failed",
+            f"git rev-list --first-parent {remote_ref} failed "
+            f"(exit {chain.returncode}): {chain.stderr.strip()} — "
+            f"cannot confirm this worktree has commits of its own, so removal is withheld",
+        )
+    mainline = set(chain.stdout.split())
+    if not mainline:
+        # `git rev-list` over a resolvable ref always lists at least that
+        # ref's own commit, so a successful-but-empty result is an unknown
+        # state — never read it as "head is not on the mainline, remove away"
+        # (the same fail-open guard the patch-id path carries).
+        return (
+            "mainline-check-failed",
+            f"git rev-list --first-parent {remote_ref} succeeded but listed no commits — "
+            f"unexpected state, so removal is withheld",
+        )
+    if head_sha in mainline:
+        return (
+            "no-own-commits",
+            f"{head_sha[:12]} is itself a commit on {remote_ref}'s first-parent history, "
+            f"so this branch has no commits of its own — a fresh/unstarted worktree with "
+            f"nothing to reclaim (very likely in active use), not a removal candidate",
+        )
+    return ("", "")
+
+
 def classify_merged(
     repo_root: str | Path,
     head: str,
@@ -367,7 +506,15 @@ def classify_merged(
     # ---- fast path: plain ancestry (covers the merge-commit majority) ------
     anc = runner(["merge-base", "--is-ancestor", head, remote_ref], root)
     if anc.returncode == 0:
-        return MergeClassification("merged", "ancestor", f"{head} is an ancestor of {remote_ref}")
+        # Merged — but ancestry alone does not mean there is anything here to
+        # reclaim. A worktree that has not committed yet sits ON remote_ref's
+        # mainline, which is trivially an ancestor (#1341). Classification is
+        # untouched; only removal candidacy is gated.
+        block_reason, block_detail = _removal_block(root, head, remote_ref, runner)
+        detail = f"{head} is an ancestor of {remote_ref}"
+        if block_reason:
+            detail = f"{detail}; {block_detail}"
+        return MergeClassification("merged", "ancestor", detail, removal_block=block_reason)
     if anc.returncode != 1:
         # `--is-ancestor` signals a true negative with exit 1; anything else
         # (bad rev, corrupt repo, ...) is a plumbing error, not "not merged".
@@ -576,8 +723,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     remote_ref = args[2] if len(args) > 2 else "origin/main"
 
     result = classify_merged(repo_root, head, remote_ref)
-    print(f"{result.status} ({result.reason}): {result.detail}")
-    return 0 if result.merged else 1
+    prefix = f"{result.status} ({result.reason})"
+    if result.removal_block:
+        prefix = f"{prefix} [not-a-removal-candidate: {result.removal_block}]"
+    print(f"{prefix}: {result.detail}")
+    if result.safe_to_remove:
+        return 0
+    # Merged but not a reclaim candidate gets its own non-zero code (#1341)
+    # so a caller can say FRESH instead of the misleading UNMERGED; a caller
+    # that only knows `0 == remove` still fails safe on it.
+    return 3 if result.merged else 1
 
 
 if __name__ == "__main__":
