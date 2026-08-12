@@ -447,6 +447,44 @@ def count_retro_citations(memory: Memory, feedback_log_path: str) -> int:
     return max(by_title, by_file, len(memory.referenced_in_retros))
 
 
+def count_section_citations(section: CharterSection, feedback_log_path: str) -> int:
+    """Count occurrences of a charter section's heading in the feedback log.
+
+    #1355: the charter -> skill transition's actual evidence for promotion
+    is how heavily the SOURCE section is exercised -- not usage of the
+    PROSPECTIVE destination skill slug. A not-yet-created skill can never
+    accrue invocations of itself (`count_skill_invocations` on an
+    empty/prospective slug is structurally 0 forever, by definition, for
+    every not-yet-promoted section -- see `run.py`'s `_section_signal_slug`
+    docstring for the full history of that inversion). This mirrors
+    `count_retro_citations`'s mechanism for memories -- scanning the live
+    feedback log AND its per-phase archives (`_feedback_log_corpus`, #964)
+    for literal occurrences of the heading text -- which genuinely
+    accumulates: operators cite a charter section by its heading when they
+    reference it during a retro, and that citation count grows over time
+    independent of whether the destination skill has been scaffolded yet.
+
+    Deliberately independent of any skill slug or `.claude/skills/` lookup:
+    unlike the old destination-invocation signal, this count cannot inherit
+    an unrelated skill's invocation history just because a heading happens
+    to slugify onto an existing skill directory name (main#1389's
+    collision risk) -- there is no slug in this computation at all.
+
+    An empty or whitespace-only heading returns 0 -- never the corpus
+    length. `text.count("")` returns `len(text) + 1`, which would make a
+    blank heading look like it trivially crossed any threshold. This
+    should never occur in practice (`read_charter_sections` requires
+    non-empty heading text to match `_SECTION_MARKER_RE`), but the guard
+    is the same defensive shape as the main#690 blank-slug guard below.
+    """
+    if not section.heading or not section.heading.strip():
+        return 0
+    text = _feedback_log_corpus(feedback_log_path)
+    if not text:
+        return 0
+    return text.count(section.heading)
+
+
 def count_skill_invocations(skill_name: str, repo_root: str) -> int:
     """Count git log commits that reference the skill by slash-name.
 
@@ -873,7 +911,17 @@ def classify_section(
     section: CharterSection,
     signals: dict[str, int],
 ) -> Decision:
-    """Classify a charter section for the charter → skill transition."""
+    """Classify a charter section for the charter → skill transition.
+
+    #1355: `signals["section_citations"]` is expected to come from
+    `count_section_citations` (retro citations of THIS section's heading) —
+    the actual evidence for promotion — not from `count_skill_invocations`
+    against the prospective destination slug, which is structurally 0
+    forever for every not-yet-promoted section (see `count_section_citations`
+    docstring for the full rationale). Callers passing the legacy
+    `skill_invocations` key are silently treated as 0 citations; see
+    `run.py`'s `run_audit` for the canonical wiring.
+    """
     if section.promoted_to:
         return Decision(
             kind="ALREADY-PROMOTED",
@@ -904,34 +952,36 @@ def classify_section(
             reason="Charter sections only promote to skill",
         )
 
-    invocations = signals.get("skill_invocations", 0)
+    citations = signals.get("section_citations", 0)
     threshold = signals.get("threshold", 5)
 
-    if invocations < threshold:
-        # #1355: "wait for more operator-invoked runs" is only an accurate
-        # message when there is something an operator COULD invoke — i.e.
-        # a skill already scaffolded on disk at the prospective slug. For
-        # the common not-yet-promoted case (no `promoted-to` back-reference,
-        # no skill directory), the invocation count is structurally 0
-        # forever: promotion (creating the skill) is a deliberate human
-        # act, not something that accrues from waiting. Distinguish the
-        # two so the reader isn't told to wait for something that cannot
-        # arrive on its own.
+    if citations < threshold:
+        # #1383's target_configured distinction is preserved as informational
+        # context (does a skill already exist on disk at the prospective
+        # slug?), but it no longer gates *whether* evidence can accrue —
+        # `section_citations` is computed from the SOURCE section and
+        # genuinely accumulates regardless of scaffold status (#1355 fixes
+        # the prior inversion where the destination-invocation signal really
+        # was structurally 0 without a target). The unconfigured message is
+        # corrected accordingly: it no longer claims evidence "cannot
+        # accrue" without scaffolding — it can, and does.
         target_configured = bool(signals.get("target_configured", 0))
         if target_configured:
             reason = "Invocation threshold not met; wait for more operator-invoked runs"
         else:
             reason = (
                 "Promotion target not configured — no skill exists at this slug yet, "
-                "so invocations cannot accrue; scaffolding the skill (a deliberate "
-                "human act) is required before this becomes evaluable"
+                f"but that no longer blocks evidence from accruing: {citations} retro "
+                f"citation(s) of this section are already recorded ({citations}/{threshold} "
+                "toward threshold). Scaffolding the skill remains a deliberate human "
+                "act, but it is not a precondition for the signal itself"
             )
         return Decision(
             kind="KEPT",
             item_id=f"{os.path.basename(section.path)} § {section.heading}",
             from_tier="charter",
             to_tier="skill",
-            signal=f"skill_invocations={invocations} < {threshold}",
+            signal=f"section_citations={citations} < {threshold}",
             reason=reason,
             extra={"target_configured": target_configured},
         )
@@ -941,7 +991,7 @@ def classify_section(
         item_id=f"{os.path.basename(section.path)} § {section.heading}",
         from_tier="charter",
         to_tier="skill",
-        signal=f"skill_invocations={invocations} >= {threshold}",
+        signal=f"section_citations={citations} >= {threshold}",
         reason="Thresholds met; skill scaffold is safe to auto-generate",
     )
 
