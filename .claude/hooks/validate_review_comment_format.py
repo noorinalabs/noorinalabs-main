@@ -843,13 +843,23 @@ def get_branch_name(pr_number: str, repo: str | None = None) -> str | None:
 # `test_corpus_covers_the_trailer_separator_scope_axis` fails if the shape
 # leaves the corpus.
 #
-# NO OPEN ISSUE OWNS REMOVING THIS MIRROR, and saying so beats pointing at a
-# closed one. Earlier revisions of this comment deferred "full consolidation
-# of this remaining pair" to main#1371 and then to main#1372; #1371 landed and
-# consolidated the verdict-DIRECTION classifiers, #1372 landed and fixed the
-# corpus plus the `trust_signals` field-extraction copy — neither removes the
-# presence-detection mirror below. Until something does, the agreement corpus
-# IS the mechanism, which is why its coverage is asserted rather than assumed.
+# REMOVING THIS MIRROR IS main#1459. Earlier revisions of this comment
+# deferred "full consolidation of this remaining pair" to main#1371 and then
+# to main#1372; #1371 landed and consolidated the verdict-DIRECTION
+# classifiers, #1372 landed and fixed the corpus plus the `trust_signals`
+# field-extraction copy — neither removes the presence pair below. main#1459
+# was filed at #1372's merge gate to own exactly that, and also retires the
+# mirror's old justification ("a blocking PreToolUse gate should not take a
+# dependency for one regex pair"): this module already imports eight symbols
+# from `charter_trailer`, one of them the `strip_code_regions` that
+# `_conditional_fields_present` calls on every invocation, so the dependency
+# is already here and on this predicate's hot path.
+#
+# main#1459 MUST land as a shared WHOLE-BODY, line-anchored presence helper.
+# Routing this pair through `charter_trailer.extract_charter_field` narrows it
+# to the trailer block — axis 3, re-opening main#1363 MF1, and the exact
+# mutation the corpus rows above now catch. Until #1459 lands, that corpus IS
+# the mechanism, which is why its coverage is asserted rather than assumed.
 _CONDITIONAL_VERDICT_FIELDS = ("Retracted", "OrchestratorCaused")
 
 # Mirrors trust_signals._RETRACTION_RE / ._ORCHESTRATOR_CAUSED_RE.

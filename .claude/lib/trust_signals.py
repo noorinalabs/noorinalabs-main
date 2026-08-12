@@ -234,13 +234,19 @@ CALIBRATION_MIN_AUTHORS = 5
 # is precisely the mutation main#1372's corpus exists to catch, and it is not
 # a change to make incidentally here.
 #
-# NO OPEN ISSUE OWNS CONSOLIDATING THAT PAIR. Earlier revisions of this
-# comment deferred it to main#1371; #1371 landed (PR #1429) and consolidated
-# the verdict-DIRECTION classifiers, which are different symbols. Saying so
-# beats pointing at a closed issue — a stale pointer reads as "tracked" and
-# is how work disappears. Until something opens, the agreement corpus
-# (`ConditionalFieldGrammarAgreementTests`) IS the mechanism keeping the two
-# copies honest, which is why main#1372 made its coverage of the scope axis
+# CONSOLIDATING THAT PAIR IS main#1459. An earlier revision of this comment
+# deferred it to main#1371 — which had already landed (PR #1429) and
+# consolidated the verdict-DIRECTION classifiers, different symbols — and the
+# revision after that said no open issue owned it, which was true when
+# written. main#1459 was filed at this PR's merge gate to be that owner.
+#
+# main#1459 MUST NOT be implemented by routing this pair through
+# `charter_trailer.extract_charter_field`: that narrows to the trailer block,
+# which is the axis-3 divergence re-opening main#1363 MF1 and precisely the
+# mutation main#1372's corpus rows catch. The shared owner has to be a
+# WHOLE-BODY, line-anchored presence helper. Until it exists, the agreement
+# corpus (`ConditionalFieldGrammarAgreementTests`) is what keeps the two
+# copies honest — which is why main#1372 made its coverage of the scope axis
 # an assertion rather than an assumption.
 
 # Canonical verdict-kind vocabulary for the `RequestOrReplied:` field —
@@ -482,7 +488,9 @@ def parse_verdicts(comment_bodies: list[str]) -> list[Verdict]:
     whole code-stripped body, deliberately unscoped to the trailer, and
     ``validate_review_comment_format._CONDITIONAL_FIELD_RE`` mirrors them on
     purpose — pinned by ``ConditionalFieldGrammarAgreementTests``, and owned
-    by no open issue (see the block above ``_RETRACTION_RE``).
+    by main#1459, which must consolidate onto a shared WHOLE-BODY helper and
+    never onto :func:`charter_trailer.extract_charter_field` (see the block
+    above ``_RETRACTION_RE``).
 
     KNOWN RESIDUAL — a prose line can be read as the requestor (main#1456)
     ------------------------------------------------------------------------

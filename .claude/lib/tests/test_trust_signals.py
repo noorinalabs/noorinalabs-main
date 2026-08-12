@@ -665,11 +665,15 @@ class FieldExtractionIsTheSharedSSoT(unittest.TestCase):
         a `Retracted:` ABOVE the separator must still count while the verdict
         itself is read from the trailer.
 
-        No open issue owns consolidating that pair. This docstring used to
-        defer it to main#1371, which has since landed (PR #1429) and
-        consolidated the verdict-DIRECTION classifiers — different symbols.
-        A pointer at a closed issue reads as "tracked" and is how work
-        disappears, so the state is named instead.
+        Consolidating that pair is main#1459 — filed at this PR's merge gate
+        to own the work. This docstring previously deferred it to main#1371
+        (already landed as PR #1429, and about the verdict-DIRECTION
+        classifiers — different symbols), then said nothing owned it, which
+        was true at the time. main#1459 must NOT be implemented by routing
+        the pair through `charter_trailer.extract_charter_field`: that
+        narrows to the trailer block and re-opens main#1363 MF1. A shared
+        WHOLE-BODY presence helper is the only consolidation that keeps this
+        test passing for the right reason.
         """
         body = (
             "Retracted: on reflection this finding was invalid, my mistake.\n\n"

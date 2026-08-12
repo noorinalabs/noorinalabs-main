@@ -1171,11 +1171,29 @@ class ConditionalFieldGrammarAgreementTests(unittest.TestCase):
     blocked a comment for a field nobody wrote.
 
     Two of the three axes that caused that (main#1359): anchoring and scope
-    remain a deliberate hook-local mirror of `trust_signals._RETRACTION_RE` /
-    `._ORCHESTRATOR_CAUSED_RE` (a blocking PreToolUse gate should not take a
-    dependency for one regex pair, and full consolidation of THIS pair is
-    main#1371/#1372, not main#1359). The THIRD axis — code fences — is no
-    longer a mirror: `hook._strip_code_for_field_scan` now calls
+    remain a hook-local mirror of `trust_signals._RETRACTION_RE` /
+    `._ORCHESTRATOR_CAUSED_RE`. Consolidating THAT pair is **main#1459**.
+
+    The mirror's original justification — "a blocking PreToolUse gate should
+    not take a dependency for one regex pair" — is RETIRED, not restated
+    (main#1459, raised at the main#1372 merge gate; I agree with it). The
+    hook already imports eight symbols from `charter_trailer`
+    (`validate_review_comment_format.py` § imports), one of which is
+    `strip_code_regions` — the function `_conditional_fields_present` calls
+    on every invocation. The dependency exists and is on this predicate's own
+    hot path, so the marginal cost of moving one more regex pair behind it is
+    zero and the stated reason no longer describes why the copy survives.
+    What actually keeps it alive is that nobody has written the shared
+    whole-body helper yet.
+
+    THE TRAP FOR WHOEVER TAKES main#1459: consolidation must NOT route this
+    pair through `charter_trailer.extract_charter_field`. That narrows to the
+    trailer block — the axis-3 divergence that re-opens main#1363 MF1, and
+    exactly the mutation the `SEPARATOR_*` corpus rows below exist to catch.
+    The shared owner must be a WHOLE-BODY, line-anchored presence helper.
+
+    The THIRD axis — code fences — is no longer a mirror:
+    `hook._strip_code_for_field_scan` now calls
     `charter_trailer.strip_code_regions` directly, the same function
     `trust_signals.parse_verdicts` calls, since main#1359 folded `~~~`
     support into it and deleted `trust_signals`'s private stripper. This
