@@ -183,9 +183,9 @@
     },
     "cross-repo-status.json": {
       "last_tracked": "97ea945e59d12c6dd7963c5ac8e85e96da1cd5f18168b74f2f88de494cf80c5d",
-      "last_resolved": "38bd550a9a2a868490fdc0ed2f705d4fab93bba3c3acec82af39aba712bba281",
+      "last_resolved": "97ea945e59d12c6dd7963c5ac8e85e96da1cd5f18168b74f2f88de494cf80c5d",
       "tracked_at": "2026-08-11T22:47:47.808209+00:00",
-      "resolved_at": "2026-07-27T03:59:20.837701+00:00"
+      "resolved_at": "2026-08-12T22:31:45.781434+00:00"
     },
     "dependencies.yml": {
       "last_resolved": "f4b53ffd3e1f81e055130ae2f53ff08ba9b5f651782434bbf3ac8b3eab4276e8",
@@ -446,10 +446,10 @@
       "tracked_at": "2026-04-16T21:36:05.052302+00:00"
     },
     "ontology/conventions.md": {
-      "last_tracked": "5c5675b4010b74cf70716db6bf44cd186f505869a53ea1ce344e5103905bc76b",
-      "last_resolved": "5c5675b4010b74cf70716db6bf44cd186f505869a53ea1ce344e5103905bc76b",
-      "tracked_at": "2026-07-30T02:51:44.515593+00:00",
-      "resolved_at": "2026-07-30T02:51:53.713584+00:00"
+      "last_tracked": "96038df0e20691e0a7a4edfb214d138204a90fb266b607e578d5340aee380f5c",
+      "last_resolved": "96038df0e20691e0a7a4edfb214d138204a90fb266b607e578d5340aee380f5c",
+      "tracked_at": "2026-08-12T22:32:58.032667+00:00",
+      "resolved_at": "2026-08-12T22:33:13.558605+00:00"
     },
     "ontology/domain.yaml": {
       "last_resolved": "6fedad509f80b9570d0385fb5759e861d8b6f7b219ecc425b8dd472173ca536c",
@@ -849,9 +849,9 @@
     },
     ".claude/memory/MEMORY.md": {
       "last_tracked": "b2b46c45ce1b324c89d2e6e04e6845ebafaf76e0d9479986bdc3848d526d7d5d",
-      "last_resolved": "278bd6045d09139a264b820ee0fbd6790fc36bc09050007d54efc372b05ca64f",
+      "last_resolved": "b2b46c45ce1b324c89d2e6e04e6845ebafaf76e0d9479986bdc3848d526d7d5d",
       "tracked_at": "2026-08-10T23:44:22.883287+00:00",
-      "resolved_at": "2026-08-09T21:56:19.917511+00:00"
+      "resolved_at": "2026-08-12T22:31:45.781434+00:00"
     },
     "noorinalabs-isnad-graph/.claude/lib/tests/test_pre_commit_ci_sync.py": {
       "last_tracked": "aa209279deec3844b51e384157ba3e67a6d0f325410941f63f38d57535e6498c",
@@ -1791,9 +1791,9 @@
     },
     ".claude/memory/feedback_gh_cli_gotchas.md": {
       "last_tracked": "c7611c3ee0ecb5ccddd0b9edc0172d40832117e28c8dc32cb058cd131972757d",
-      "last_resolved": "cbaecd58aa4afed2086e7431a2762cde24359e1ac8e9064cc9922cd1aefe23eb",
+      "last_resolved": "c7611c3ee0ecb5ccddd0b9edc0172d40832117e28c8dc32cb058cd131972757d",
       "tracked_at": "2026-08-11T02:52:22.399709+00:00",
-      "resolved_at": "2026-08-09T21:56:19.917511+00:00"
+      "resolved_at": "2026-08-12T22:31:45.781434+00:00"
     },
     ".claude/memory/feedback_flag_precision_decays_with_age.md": {
       "last_tracked": "0a91e849d3542354f89e0be903a111f536d7e06292ff6f32a24b9d4d7724383c",
@@ -1809,45 +1809,51 @@
     },
     ".claude/memory/feedback_orchestration_vs_product_balance.md": {
       "last_tracked": "46d0eaebec06d6506b840b882b85e70e4e42e5aa023dc213c74393864cac14f7",
-      "last_resolved": "",
+      "last_resolved": "46d0eaebec06d6506b840b882b85e70e4e42e5aa023dc213c74393864cac14f7",
       "tracked_at": "2026-08-10T23:44:14.989744+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-08-12T22:31:45.781434+00:00"
     },
     ".claude/memory/section_wave_process.md": {
       "last_tracked": "23909a7380004d09ea67899f35c89dfada2fde7fa3c29753c332c2c863e334d8",
-      "last_resolved": "",
+      "last_resolved": "23909a7380004d09ea67899f35c89dfada2fde7fa3c29753c332c2c863e334d8",
       "tracked_at": "2026-08-10T23:44:19.152752+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-08-12T22:31:45.781434+00:00"
     },
     ".claude/memory/feedback_graphql_quota_ceiling_on_agent_fanout.md": {
       "last_tracked": "19205c53890cc793f8cee2f31c04a6437e940b9921cf347a26d87b4e6d619904",
-      "last_resolved": "",
+      "last_resolved": "19205c53890cc793f8cee2f31c04a6437e940b9921cf347a26d87b4e6d619904",
       "tracked_at": "2026-08-11T02:13:24.337298+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-08-12T22:31:45.781434+00:00"
     },
     ".claude/memory/feedback_no_head_sha_in_review_briefs.md": {
       "last_tracked": "bb03375d2328e814d123ef48e9b6dbf51c6573ccb5cc294114b9edb31bd270dd",
-      "last_resolved": "",
+      "last_resolved": "bb03375d2328e814d123ef48e9b6dbf51c6573ccb5cc294114b9edb31bd270dd",
       "tracked_at": "2026-08-11T02:20:25.567390+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-08-12T22:31:45.781434+00:00"
     },
     ".claude/memory/feedback_agent_liveness_signals_are_unreliable.md": {
       "last_tracked": "43d123d83a1a6318d127811926f05368241d8cacff70a71b594856fab3975979",
-      "last_resolved": "",
+      "last_resolved": "43d123d83a1a6318d127811926f05368241d8cacff70a71b594856fab3975979",
       "tracked_at": "2026-08-11T03:19:06.187271+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-08-12T22:31:45.781434+00:00"
     },
     ".claude/memory/feedback_shared_scratchpad_collides_across_agents.md": {
       "last_tracked": "fc560c984ed6620b421e12c20fc100e07ff3f03ad28dbf9fa0aa7ba11f5d0e68",
-      "last_resolved": "",
+      "last_resolved": "fc560c984ed6620b421e12c20fc100e07ff3f03ad28dbf9fa0aa7ba11f5d0e68",
       "tracked_at": "2026-08-11T04:16:05.083164+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-08-12T22:31:45.781434+00:00"
     },
     ".claude/memory/feedback_compare_against_the_consumer_not_the_predecessor.md": {
       "last_tracked": "fc7a08d6890b29568f74f47cc3a5d29816d77a465ede3cd00d2c591f50d3fb91",
-      "last_resolved": "",
+      "last_resolved": "fc7a08d6890b29568f74f47cc3a5d29816d77a465ede3cd00d2c591f50d3fb91",
       "tracked_at": "2026-08-11T04:59:30.077159+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-08-12T22:31:45.781434+00:00"
+    },
+    ".claude/memory/feedback_relay_a_reviewer_list_verbatim.md": {
+      "last_tracked": "74e1552ded46b297249b199f0c904a836ba54ccbd6959b18730a7ac76d7b8e06",
+      "last_resolved": "74e1552ded46b297249b199f0c904a836ba54ccbd6959b18730a7ac76d7b8e06",
+      "tracked_at": "2026-08-12T21:58:23.071909+00:00",
+      "resolved_at": "2026-08-12T22:31:45.781434+00:00"
     }
   },
   "last_cleanup": {
