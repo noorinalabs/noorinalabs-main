@@ -777,43 +777,67 @@ class ClassifySectionTests(unittest.TestCase):
         self.assertEqual(d.kind, "ALREADY-PROMOTED")
 
     def test_threshold_not_met(self) -> None:
-        d = h.classify_section(_make_section(), {"skill_invocations": 1, "threshold": 5})
+        # #1355: the signal key is `section_citations` (source-section
+        # evidence), not `skill_invocations` (destination-slug usage).
+        d = h.classify_section(_make_section(), {"section_citations": 1, "threshold": 5})
         self.assertEqual(d.kind, "KEPT")
 
     def test_threshold_met(self) -> None:
-        d = h.classify_section(_make_section(), {"skill_invocations": 7, "threshold": 5})
+        d = h.classify_section(_make_section(), {"section_citations": 7, "threshold": 5})
         self.assertEqual(d.kind, "AUTO")
+        self.assertIn("section_citations=7 >= 5", d.signal)
+
+    def test_legacy_skill_invocations_key_is_ignored_not_zero_workaround(self) -> None:
+        """NEG: a caller still passing the pre-#1355 `skill_invocations` key
+        (instead of `section_citations`) must NOT accidentally cross
+        threshold — the key is simply absent from `classify_section`'s
+        perspective and defaults to 0 citations, same as passing nothing."""
+        d = h.classify_section(_make_section(), {"skill_invocations": 99, "threshold": 5})
+        self.assertEqual(d.kind, "KEPT")
 
     def test_hook_target_not_valid_for_section(self) -> None:
         """NEG: charter sections only promote to skill."""
         d = h.classify_section(_make_section(promotion_target="hook"), {})
         self.assertEqual(d.kind, "KEPT")
 
-    def test_threshold_not_met_unconfigured_target_is_not_a_wait_message(self) -> None:
-        """#1355: a section whose prospective skill does not exist yet on
-        disk (`target_configured` false/absent) can never accumulate
-        invocations — the skill has nothing to invoke. The KEPT reason
-        must say the target is not configured, NOT tell the reader to
-        wait for more operator-invoked runs (a state that cannot arrive
-        for an artifact that doesn't exist).
+    def test_threshold_not_met_unconfigured_target_names_the_gap(self) -> None:
+        """#1355 acceptance criterion 1 (delivered by #1383, re-pinned here
+        against the corrected signal): a section whose prospective skill
+        does not exist yet on disk (`target_configured` false/absent)
+        still renders distinctly as a configuration gap — NOT the
+        "wait for more operator-invoked runs" message.
 
-        Pre-fix, `classify_section` renders the identical
-        'Invocation threshold not met; wait for more operator-invoked
-        runs' message regardless of whether the target skill exists —
-        this assertion fails against that implementation."""
+        Post-#1355, this is no longer because evidence "cannot accrue"
+        without a target (it now demonstrably can — `section_citations`
+        is computed from the SOURCE section, independent of whether the
+        skill exists) — the message says so explicitly rather than
+        repeating the now-inaccurate pre-#1355 claim."""
         d = h.classify_section(
-            _make_section(), {"skill_invocations": 0, "threshold": 5, "target_configured": 0}
+            _make_section(), {"section_citations": 0, "threshold": 5, "target_configured": 0}
         )
         self.assertEqual(d.kind, "KEPT")
         self.assertNotIn("wait for more operator-invoked runs", d.reason)
         self.assertIn("not configured", d.reason.lower())
+        # The corrected claim: evidence is NOT blocked by the missing target.
+        self.assertIn("no longer blocks evidence", d.reason)
+
+    def test_threshold_not_met_unconfigured_target_reports_actual_citations(self) -> None:
+        """The config-gap message must surface the real citation count
+        (not a placeholder) — proof the signal is genuinely wired through
+        even when the target isn't configured yet."""
+        d = h.classify_section(
+            _make_section(), {"section_citations": 3, "threshold": 5, "target_configured": 0}
+        )
+        self.assertIn("3", d.reason)
+        self.assertIn("3/5", d.reason)
 
     def test_threshold_not_met_configured_target_still_says_wait(self) -> None:
         """NEG: once the target skill actually exists on disk (configured,
-        just below the invocation threshold), 'wait for more
-        operator-invoked runs' is an accurate message and must be kept."""
+        just below the citation threshold), 'wait for more
+        operator-invoked runs' is retained verbatim (#1383 delivered
+        wording, not redone here)."""
         d = h.classify_section(
-            _make_section(), {"skill_invocations": 1, "threshold": 5, "target_configured": 1}
+            _make_section(), {"section_citations": 1, "threshold": 5, "target_configured": 1}
         )
         self.assertEqual(d.kind, "KEPT")
         self.assertIn("wait for more operator-invoked runs", d.reason)
@@ -823,9 +847,111 @@ class ClassifySectionTests(unittest.TestCase):
         (the common case: prospective-only slug, skill never scaffolded) —
         callers that don't wire the new signal get the safe, accurate
         message rather than silently reverting to the misleading one."""
-        d = h.classify_section(_make_section(), {"skill_invocations": 0, "threshold": 5})
+        d = h.classify_section(_make_section(), {"section_citations": 0, "threshold": 5})
         self.assertEqual(d.kind, "KEPT")
         self.assertIn("not configured", d.reason.lower())
+
+    def test_threshold_met_regardless_of_target_configured(self) -> None:
+        """#1355 acceptance criterion 2: crossing threshold produces AUTO
+        even when the prospective skill has never been scaffolded — the
+        source-section signal does not require the destination to exist
+        first (the whole point of the fix)."""
+        d = h.classify_section(
+            _make_section(), {"section_citations": 5, "threshold": 5, "target_configured": 0}
+        )
+        self.assertEqual(d.kind, "AUTO")
+
+
+# ---------------------------------------------------------------------------
+# Source-section citation counting (#1355)
+# ---------------------------------------------------------------------------
+
+
+class CountSectionCitationsTests(unittest.TestCase):
+    def _section(self, **kwargs: object) -> h.CharterSection:
+        defaults: dict[str, object] = {
+            "path": "/fake/charter/wave-merge.md",
+            "heading": "Cross-Contract PRs",
+            "promotion_target": "skill",
+            "body": "body",
+            "promoted_to": "",
+        }
+        defaults.update(kwargs)
+        return h.CharterSection(**defaults)  # type: ignore[arg-type]
+
+    def test_counts_heading_occurrences(self) -> None:
+        log = (
+            "See charter § Cross-Contract PRs for the rule.\n"
+            "Cross-Contract PRs applies here too.\n"
+            "Unrelated line.\n"
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(log)
+            path = f.name
+        try:
+            self.assertEqual(h.count_section_citations(self._section(), path), 2)
+        finally:
+            os.unlink(path)
+
+    def test_counts_include_per_phase_archives(self) -> None:
+        """Same archive-scan mechanism as `count_retro_citations` (#964) —
+        live log + archive/feedback_log_*.md are summed."""
+        with tempfile.TemporaryDirectory() as d:
+            live = os.path.join(d, "feedback_log.md")
+            with open(live, "w", encoding="utf-8") as f:
+                f.write("cites Cross-Contract PRs once\n")
+            arch = os.path.join(d, "archive")
+            os.makedirs(arch)
+            with open(os.path.join(arch, "feedback_log_phase-2.md"), "w", encoding="utf-8") as f:
+                f.write("old retro cites Cross-Contract PRs, then Cross-Contract PRs again\n")
+            self.assertEqual(h.count_section_citations(self._section(), live), 3)
+
+    def test_no_citations_returns_zero(self) -> None:
+        log = "nothing relevant here\n"
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(log)
+            path = f.name
+        try:
+            self.assertEqual(h.count_section_citations(self._section(), path), 0)
+        finally:
+            os.unlink(path)
+
+    def test_missing_log_returns_zero(self) -> None:
+        self.assertEqual(h.count_section_citations(self._section(), "/nonexistent"), 0)
+
+    def test_blank_heading_returns_zero_not_corpus_length(self) -> None:
+        """Defensive guard mirroring main#690's blank-slug fix:
+        `text.count("")` would otherwise return `len(text) + 1`, making a
+        blank heading look like it crossed any threshold trivially."""
+        log = "some reasonably long corpus text so the bug would be obvious\n" * 10
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(log)
+            path = f.name
+        try:
+            self.assertEqual(h.count_section_citations(self._section(heading=""), path), 0)
+            self.assertEqual(h.count_section_citations(self._section(heading="   "), path), 0)
+        finally:
+            os.unlink(path)
+
+    def test_independent_of_skill_slug_collision(self) -> None:
+        """main#1389: the OLD destination-invocation signal could inherit
+        an unrelated existing skill's real invocation count merely because
+        a heading slugified onto that skill's directory name. This signal
+        has no slug/skills-dir dependency at all — a heading that would
+        collide with a real skill name still counts only its own literal
+        citations, proving the collision path is closed for this number."""
+        section = self._section(heading="Handoff")
+        log = "no citation of that heading here, just unrelated retro prose\n"
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(log)
+            path = f.name
+        try:
+            # Regardless of how many times /handoff (the real skill) was
+            # invoked in git history, this function never looks at git log
+            # or any skills directory — only the feedback-log corpus.
+            self.assertEqual(h.count_section_citations(section, path), 0)
+        finally:
+            os.unlink(path)
 
 
 # ---------------------------------------------------------------------------

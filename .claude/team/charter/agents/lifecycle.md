@@ -126,7 +126,7 @@ This section covers the **zero-artifact stall**: the implementer has produced no
 - Orchestrator misses a zero-artifact stall because `TaskList` is empty (Part (a) violated): **moderate** — the stall the task list was designed to surface goes unreported.
 - Orchestrator infers "still working" from a second zero-artifact idle notification and takes no action (Part (b) violated): **moderate** — wave-level deadline risk; the P5W2 and P5W3 instances were both narrow misses on shipping the keystone deliverable.
 
-### Enforcement (mechanized) <!-- promoted-to: lib/check_agent_liveness.py -->
+### Enforcement (mechanized) <!-- enforced-by: lib/check_agent_liveness.py -->
 
 Both parts are mechanized by `.claude/lib/check_agent_liveness.py` (main#745, follow-up to #735). There is **no clean tool boundary** to hang a PreToolUse hook on — Part (a)'s violation (a spawn with no matching task) is a cross-tool reconciliation of the `TaskList` ledger against the set of spawned implementers, and Part (b) is driven off artifact counts + idle-notification count, not off any single tool's arguments. The deterministic enforcement surface is therefore a checker the orchestrator runs at each **status sweep** (`/retro`, the `/wave-wrapup` open-item pass, or any in-flight-agent review), fed a snapshot it assembles from tools it already calls (`TaskList` + the `gh`/`git` artifact reads):
 
@@ -178,7 +178,7 @@ Normal **idle-after-turn-completion** does NOT trigger this — an implementer w
 
 Reactive-only detection (no cadence, stall discovered at the next state review): **minor-to-moderate** depending on deadline proximity — the work is recoverable via takeover, but the idle gap is dead time that compounds against wave deadlines (especially hard cutovers like the node24 June-2 class).
 
-### Enforcement (mechanized) <!-- promoted-to: lib/check_agent_liveness.py -->
+### Enforcement (mechanized) <!-- enforced-by: lib/check_agent_liveness.py -->
 
 The 30/45/60-min cadence is mechanized by `.claude/lib/check_agent_liveness.py` (main#745, follow-up to #735) — the same status-sweep checker that enforces § Agent Liveness Checkpoint. Per § Out of scope above this is **not** a hook (the trigger is orchestrator-side elapsed-time off artifact state, with no tool event to intercept); the lib is the deterministic surface the orchestrator runs at each sweep. For an implementer that is mid-task **with pending work** (`worktree_dirty`, or branch-pushed-no-PR, or committed-not-pushed), the checker emits a `throttle-stall` finding keyed to `idle_minutes`: `first-ping` (≥30), `second-ping` (≥45), `auto-takeover` (≥60). Idle after a clean handoff (no pending work) and reviewer agents do not trigger. The `auto-takeover` finding directs the orchestrator into `feedback_throttle_takeover` (the mechanic); this section + the lib are the trigger.
 
