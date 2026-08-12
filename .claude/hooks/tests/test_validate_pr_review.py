@@ -3065,12 +3065,19 @@ class ResolveReviewVerdictsSharedBoundaryTests(unittest.TestCase):
             branch_author_lastname="Ferreira",
             content_sha="ac8bcfa",
             content_ts=None,
-            formal_reviewers=set(),
+            # A formal reviewer (`aino-virtanen`) alongside the two comment
+            # reviewers, so this fixture exercises BOTH near-window halves
+            # (comment + formal) at once — a mutation that drops the formal
+            # half from `ReviewVerdicts.near_window_verdicts` (M5, #1424) must
+            # fail this test, not just the count-only formal-path unit test,
+            # since the `check()` advisory is the property's only production
+            # consumer.
+            formal_reviewers={"aino-virtanen"},
             comment_reviewers={"nino kavtaradze", "weronika zielinska"},
             non_roster_requestors=set(),
             roster_comment_reviewers={"nino kavtaradze", "weronika zielinska"},
             roster_names={"nino kavtaradze", "weronika zielinska"},
-            distinct_reviewers={"nino kavtaradze", "weronika zielinska"},
+            distinct_reviewers={"nino kavtaradze", "weronika zielinska", "aino-virtanen"},
             stale_verdicts_comment=[],
             stale_verdicts_formal=[],
             near_window_verdicts_comment=[
@@ -3081,7 +3088,14 @@ class ResolveReviewVerdictsSharedBoundaryTests(unittest.TestCase):
                     delta_seconds=76,
                 )
             ],
-            near_window_verdicts_formal=[],
+            near_window_verdicts_formal=[
+                hook.NearWindowVerdict(
+                    reviewer="aino-virtanen",
+                    verdict="APPROVED",
+                    created_at="2026-08-03T03:33:10Z",
+                    delta_seconds=94,
+                )
+            ],
             reviews_missing_tech_debt=[],
             tech_debt_issue_numbers=[],
             tech_debt_unparseable=[],
@@ -3108,6 +3122,14 @@ class ResolveReviewVerdictsSharedBoundaryTests(unittest.TestCase):
         self.assertEqual(result["decision"], "allow", "the advisory must NOT block the merge")
         self.assertIn("Nino Kavtaradze", result["systemMessage"])
         self.assertIn("76", result["systemMessage"])
+        # M5 (#1424): the formal-path entry must ALSO surface. Dropping
+        # `near_window_verdicts_formal` from the combined property (M5)
+        # previously survived the full suite because no existing advisory
+        # fixture populated the formal half — this assertion, and the
+        # `counts 2 verdict(s)` count below, both fail under that mutation.
+        self.assertIn("aino-virtanen", result["systemMessage"])
+        self.assertIn("94", result["systemMessage"])
+        self.assertIn("counts 2 verdict(s)", result["systemMessage"])
 
     def test_check_translates_stale_verdict_error_into_a_block(self):
         """`CommentScanUndeterminedError` from the shared boundary must reach

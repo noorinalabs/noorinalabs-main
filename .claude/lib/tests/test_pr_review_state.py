@@ -687,6 +687,40 @@ class NearWindowStalenessTests(ContentStalenessTests):
         self.assertEqual(near["reviewer"], "near-reviewer")
         self.assertEqual(near["source"], "formal")
 
+    def test_superseded_near_window_formal_review_is_not_flagged(self):
+        """#1424 formal-path mirror of `test_superseded_near_window_verdict_is_not_flagged`.
+
+        GitHub allows one login to submit multiple formal reviews on a PR.
+        `formal_reviewers` counts the login on the presence of any non-stale
+        review, so it stays correct either way — but before the reconciliation
+        fix, `near_window_formal` flagged EVERY non-stale review within the
+        window, per review, so a login's EARLIER in-window
+        `CHANGES_REQUESTED` stayed reported as "the" near-window verdict even
+        after a LATER, comfortably-fresh `APPROVED` superseded it.
+        """
+        state = self._compute_with_real_comment_check(
+            [],
+            roster=set(),
+            commits=_CONTENT_COMMITS,
+            reviews=[
+                {
+                    "author": {"login": "same-reviewer"},
+                    "state": "CHANGES_REQUESTED",
+                    "submittedAt": self._NEAR.isoformat().replace("+00:00", "Z"),
+                },
+                {
+                    "author": {"login": "same-reviewer"},
+                    "state": "APPROVED",
+                    "submittedAt": _AFTER.isoformat().replace("+00:00", "Z"),
+                },
+            ],
+        )
+        self.assertEqual(state.formal_reviewers, ["same-reviewer"])
+        self.assertEqual(state.stale_verdicts, [])
+        # The login's current review (the comfortably-fresh APPROVED) is well
+        # outside the window, so nothing should be flagged near-window.
+        self.assertEqual(state.near_window_verdicts, [])
+
     def test_comfortably_fresh_verdict_is_not_flagged_near_window(self):
         """A verdict well outside the window (the `_AFTER` fixture, +1h) must
         NOT be flagged — the near-window disclosure is for the genuine
@@ -727,6 +761,55 @@ class NearWindowStalenessTests(ContentStalenessTests):
         self.assertTrue(
             payload["passes"], "a near-window verdict must still COUNT (#950 unchanged)"
         )
+
+    def test_superseded_near_window_verdict_is_not_flagged(self):
+        """#1424: a near-window Approved later WITHDRAWN by a comfortably-fresh
+        ChangesRequested must not still be reported as counting.
+
+        Before the reconciliation fix, `near_window_verdicts` was appended to
+        per COMMENT — ahead of the later-verdict-supersedes filter that decides
+        `distinct_reviewers` — so a withdrawn approval stayed flagged as
+        "COUNTS toward the threshold" even though the reviewer's actual
+        (ChangesRequested) position never reaches the count. Reproduced live
+        on noorinalabs-main#1343 during the #1424 review: a ChangesRequested
+        printed as "COUNTS toward the threshold" while the Approved that
+        actually counted, cast outside the window, went unflagged.
+        """
+        state = self._compute_with_real_comment_check(
+            [
+                _charter_comment("Bereket Tadesse", "Approved", self._NEAR),
+                _charter_comment("Bereket Tadesse", "ChangesRequested", _AFTER),
+            ],
+            roster={"bereket tadesse"},
+            commits=_CONTENT_COMMITS,
+        )
+        # The withdrawn approval must not count toward the threshold (#940 —
+        # unchanged by this fix, just re-pinned here as the premise).
+        self.assertEqual(state.distinct_reviewer_count, 0)
+        # And the withdrawn approval must not be reported as a near-window
+        # verdict that counts — it was superseded, so there is nothing
+        # near-window left to disclose about this reviewer.
+        self.assertEqual(state.near_window_verdicts, [])
+
+    def test_reaffirmed_near_window_verdict_is_not_flagged(self):
+        """The lesser manifestation of the same root cause (#1424): a reviewer
+        who posts a near-window Approved, then REAFFIRMS with a comfortably-
+        fresh Approved, must not have the earlier, superseded verdict flagged
+        — spurious noise, not a false claim, but the same missing-
+        reconciliation defect as the withdrawn-approval case above.
+        """
+        state = self._compute_with_real_comment_check(
+            [
+                _charter_comment("Bereket Tadesse", "Approved", self._NEAR),
+                _charter_comment("Bereket Tadesse", "Approved", _AFTER),
+            ],
+            roster={"bereket tadesse"},
+            commits=_CONTENT_COMMITS,
+        )
+        self.assertEqual(state.distinct_reviewer_count, 1)
+        # The reviewer's counted verdict is the comfortably-fresh reaffirming
+        # Approved, cast well outside the window — nothing should be flagged.
+        self.assertEqual(state.near_window_verdicts, [])
 
 
 class CliExitCodeTests(unittest.TestCase):

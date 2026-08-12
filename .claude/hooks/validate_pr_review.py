@@ -1615,6 +1615,18 @@ def check_comment_reviews(
     # likewise have the approval win. `comments` is already chronological, so
     # the last write for a given key IS that reviewer's latest verdict.
     latest_verdict: dict[str, str] = {}
+    # Reviewer -> the NearWindowVerdict for their current latest verdict, IFF
+    # that verdict is within the window (#1424 reconciliation fix). Populated
+    # and overwritten/cleared in lockstep with `latest_verdict` below — never
+    # accumulated per-comment — so a superseded near-window verdict (withdrawn
+    # by a later ChangesRequested, or reaffirmed by a later comfortably-fresh
+    # Approved) cannot outlive the verdict that actually determines this
+    # reviewer's counted position. Before this fix `result.near_window_verdicts`
+    # was appended to per COMMENT, ahead of the self-review / latest-verdict /
+    # roster filters that decide `result.reviewers` — so it could name a
+    # verdict as "counting" that had already been withdrawn, or flag a
+    # self-review that was never going to count at all. See PR #1424 / #1343.
+    near_window_by_reviewer: dict[str, NearWindowVerdict] = {}
     try:
         owner_repo = _resolve_owner_repo(repo)
         if owner_repo is None:
@@ -1662,6 +1674,34 @@ def check_comment_reviews(
 
             is_verdict_comment = _is_verdict(ror_value)
 
+            # Self-review exclusion (#1172): computed ONCE per comment, ahead of
+            # both the near-window check and the latest-verdict update below, so
+            # the two can never disagree about whether this Requestor is the
+            # branch author. Before #1424 the near-window check ran BEFORE this
+            # decision, so a self-review's own verdict comment could still be
+            # recorded in `result.near_window_verdicts` even though it could
+            # never reach `result.reviewers` — a flagged verdict that was never
+            # going to count. "Is this reviewer the branch author?" is a
+            # question about a PERSON, not a surname. Keyed on surname alone,
+            # Santiago Ferreira's verdict on Lucas Ferreira's `L.Ferreira/…`
+            # branch was discarded as a self-review and the PR sat one approval
+            # short. `is_branch_author` compares first-initial + lastname — the
+            # full discriminator the branch prefix carries — and still excludes
+            # a real self-review, whose initial and surname both match.
+            #
+            # #1210: the branch author is asked for from BOTH the ref prefix and
+            # the PR's commit authors, because on a ref without the prefix the
+            # first source is silent and the author's own verdict used to walk
+            # straight into `latest_verdict`. This is the ONLY place the
+            # exclusion is applied, and it can only ever REMOVE a reviewer — so
+            # no input to it can make the gate pass something it blocked before.
+            is_self = is_verdict_comment and is_self_review(
+                requestor,
+                branch_author_lastname,
+                branch_author_initial,
+                commit_author_identities,
+            )
+
             # Content binding (#950): a verdict cast before the branch's latest
             # AUTHORED commit reviewed code that has since been rewritten. It is
             # not evidence about the code being merged, so it neither counts
@@ -1685,46 +1725,42 @@ def check_comment_reviews(
                 # have started before the push landed. Still counts — no
                 # `continue` — but named so it is never a silent, ordinary
                 # "current" verdict.
-                delta_seconds = (created_at - content_ts).total_seconds()
-                if delta_seconds < NEAR_STALE_WINDOW_SECONDS:
-                    result.near_window_verdicts.append(
-                        NearWindowVerdict(
+                #
+                # #1424 reconciliation fix: recorded per REVIEWER, not per
+                # comment. This comment's entry OVERWRITES (once comfortably
+                # fresh, CLEARS) any earlier near-window entry for the same
+                # reviewer, so only their chronologically-last current verdict
+                # can ever end up flagged — never a verdict a later comment
+                # already superseded. Before this fix the append was
+                # unconditional and per-comment, so an in-window Approved later
+                # withdrawn by a ChangesRequested (or reaffirmed by a
+                # comfortably-fresh Approved) stayed flagged as "counting" after
+                # it no longer determined anything (PR #1343 reproduced this
+                # live: a ChangesRequested printed as "COUNTS toward the
+                # threshold" while the Approved that actually counted, cast
+                # outside the window, went unflagged). A self-review is skipped
+                # here too — see `is_self` above — since it can never reach
+                # `result.reviewers` and flagging it would be false on its face.
+                if not is_self:
+                    key = requestor.lower()
+                    delta_seconds = (created_at - content_ts).total_seconds()
+                    if delta_seconds < NEAR_STALE_WINDOW_SECONDS:
+                        near_window_by_reviewer[key] = NearWindowVerdict(
                             reviewer=requestor,
                             verdict=ror_value.strip(),
                             created_at=created_raw,
                             delta_seconds=delta_seconds,
                         )
-                    )
+                    else:
+                        near_window_by_reviewer.pop(key, None)
 
             # Record this reviewer's latest CURRENT verdict (#940). The
             # reviewer set toward the 2-reviewer threshold (charter line 36,
             # resolves #244) is derived from `latest_verdict` AFTER the loop —
             # not accumulated here — so a later ChangesRequested can withdraw
             # an earlier Approved (and vice versa) instead of only ever adding.
-            if is_verdict_comment:
-                # Self-review exclusion (#1172): "is this reviewer the branch
-                # author?" is a question about a PERSON, not a surname. Keyed on
-                # surname alone, Santiago Ferreira's verdict on Lucas Ferreira's
-                # `L.Ferreira/…` branch was discarded as a self-review and the PR
-                # sat one approval short. `is_branch_author` compares
-                # first-initial + lastname — the full discriminator the branch
-                # prefix carries — and still excludes a real self-review, whose
-                # initial and surname both match.
-                #
-                # #1210: the branch author is asked for from BOTH the ref prefix
-                # and the PR's commit authors, because on a ref without the
-                # prefix the first source is silent and the author's own verdict
-                # used to walk straight into `latest_verdict`. This is the ONLY
-                # place the exclusion is applied, and it can only ever REMOVE a
-                # reviewer — so no input to it can make the gate pass something
-                # it blocked before.
-                if not is_self_review(
-                    requestor,
-                    branch_author_lastname,
-                    branch_author_initial,
-                    commit_author_identities,
-                ):
-                    latest_verdict[requestor.lower()] = ror_value
+            if is_verdict_comment and not is_self:
+                latest_verdict[requestor.lower()] = ror_value
 
             # TechDebt attestation is required on every verdict
             # (Approved + ChangesRequested) — issue #147 fix.
@@ -1757,6 +1793,20 @@ def check_comment_reviews(
         result.reviewers = {
             reviewer for reviewer, verdict in latest_verdict.items() if _is_approved(verdict)
         }
+        # #1424: surface a near-window entry ONLY for a reviewer whose latest
+        # verdict actually counts toward the threshold — i.e. is in
+        # `result.reviewers`. `near_window_by_reviewer` may still hold an entry
+        # for a reviewer whose latest verdict is ChangesRequested (never
+        # counts) or who is excluded some other way; reporting one of those as
+        # "COUNTS toward the threshold" would be the same false claim the
+        # per-comment append made. Iterating `near_window_by_reviewer` (not
+        # `result.reviewers`) preserves the order each reviewer's flagged
+        # verdict first appeared in the comment thread.
+        result.near_window_verdicts = [
+            near_window_by_reviewer[reviewer]
+            for reviewer in near_window_by_reviewer
+            if reviewer in result.reviewers
+        ]
         return result
 
     except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError) as exc:
@@ -1807,7 +1857,24 @@ def partition_formal_reviewers(
     """
     formal_reviewers: set[str] = set()
     stale_formal: list[StaleVerdict] = []
-    near_window_formal: list[NearWindowVerdict] = []
+    # Login -> the NearWindowVerdict for that login's chronologically LATEST
+    # non-stale review, IFF that review is within the window (#1424
+    # reconciliation fix — mirrors `check_comment_reviews`' near-window fix).
+    # GitHub allows a login to submit MULTIPLE formal reviews on one PR (e.g.
+    # CHANGES_REQUESTED, then a later APPROVED); `formal_reviewers` counts the
+    # login on the presence of ANY non-stale review, so it does not itself go
+    # wrong here — but before this fix a near-window entry was appended
+    # unconditionally, per REVIEW, so an EARLIER in-window review could still
+    # be reported as the reason the login "COUNTS toward the threshold" even
+    # after a LATER, comfortably-fresh review superseded it. Reproduced: a
+    # login with an in-window CHANGES_REQUESTED review followed by a
+    # comfortably-fresh APPROVED review flagged the withdrawn
+    # CHANGES_REQUESTED as the near-window verdict. Tracked by submittedAt
+    # comparison rather than list order — unlike PR comments, nothing in this
+    # module documents `reviews` as pre-sorted by GitHub, so this does not
+    # lean on an unstated ordering assumption.
+    near_window_by_login: dict[str, NearWindowVerdict] = {}
+    latest_current_at: dict[str, datetime] = {}
     for review in reviews:
         login = review.get("author", {}).get("login", "")
         if not login or login == author:
@@ -1825,17 +1892,24 @@ def partition_formal_reviewers(
                 )
                 continue
             # #1272: mirrors the comment-verdict near-window check above.
-            delta_seconds = (submitted_at - content_ts).total_seconds()
-            if delta_seconds < NEAR_STALE_WINDOW_SECONDS:
-                near_window_formal.append(
-                    NearWindowVerdict(
+            key = login.lower()
+            prior_at = latest_current_at.get(key)
+            if prior_at is None or submitted_at >= prior_at:
+                latest_current_at[key] = submitted_at
+                delta_seconds = (submitted_at - content_ts).total_seconds()
+                if delta_seconds < NEAR_STALE_WINDOW_SECONDS:
+                    near_window_by_login[key] = NearWindowVerdict(
                         reviewer=login,
                         verdict=str(review.get("state", "REVIEW")),
                         created_at=submitted_raw,
                         delta_seconds=delta_seconds,
                     )
-                )
+                else:
+                    near_window_by_login.pop(key, None)
         formal_reviewers.add(login.lower())
+    near_window_formal = [
+        near_window_by_login[login] for login in near_window_by_login if login in formal_reviewers
+    ]
     return formal_reviewers, stale_formal, near_window_formal
 
 
