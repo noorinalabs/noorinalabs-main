@@ -250,6 +250,8 @@ from charter_trailer import (
     extract_branch_author_lastname,
     extract_charter_field,
     is_branch_author,
+    is_changes_requested,
+    is_verdict_direction,
     name_lastname,
     strip_code_regions,
 )
@@ -733,23 +735,20 @@ def get_branch_name(pr_number: str, repo: str | None = None) -> str | None:
 # asserts this module's binding IS `charter_trailer`'s.
 
 
-# Verdict direction values from charter `pull-requests.md` § Comment-Based
-# Reviews Direction table. These are the rows where the swap heuristic is
-# sound (Requestee = PR-author).
+# The verdict-direction vocabulary lives in `charter_trailer` (main#1359,
+# main#1371) — do NOT reintroduce a local table here.
 #
-# Tolerated form variants: validate_pr_review counts the literal
-# "Changes Requested" (with space) per `feedback_pr_review_verdict_format`,
-# while some templates and older fixtures use the camelCase "ChangesRequested".
-# Both are accepted here. Comparison is case-insensitive on the canonical token
-# match. The bare "Changes" prefix is NOT a verdict on its own — we require
-# the full token (with or without internal space) to avoid false-narrowing.
-_VERDICT_DIRECTIONS = frozenset(
-    {
-        "approved",
-        "changesrequested",
-        "changes requested",
-    }
-)
+# What used to sit at this line was `_VERDICT_DIRECTIONS`, a frozenset matched
+# by joining the first one-or-two tokens of the value, which deliberately
+# EXCLUDED bare `Changes` on the grounds that it "is NOT a verdict on its own".
+# main#1371 retracted that: this hook validates FORM and explicitly fails open
+# on unrecognized directions ("Validating the verdict word itself is covered by
+# a sibling hook", § Scope above), and the sibling counts bare `Changes` as a
+# verdict — so the exclusion was a gate scoped more narrowly than the consumer
+# it guards (main#1150), not a second question. It let a swapped bare-`Changes`
+# verdict past the swap gate while `validate_pr_review` counted it. See
+# `charter_trailer` § "The questions, as named predicates" for the evidence and
+# the full behaviour-change table.
 
 
 # main#1364 / main#1366: two OPTIONAL trailer fields that `trust_signals.py`
@@ -792,13 +791,52 @@ _VERDICT_DIRECTIONS = frozenset(
 #      `._ORCHESTRATOR_CAUSED_RE`, because `charter_trailer.extract_charter_field`
 #      narrows to the trailer block and this predicate deliberately does not
 #      (main#1359 extracted the STRIPPER and the verdict-KIND vocabulary, not
-#      this presence-detection pair — tracked separately, main#1371/#1372).
+#      this presence-detection pair — tracked separately, main#1372).
+#
+# NOTE (main#1371): the scope split above is now asymmetric WITHIN this gate.
+# `_direction_is_changes_requested` reads the trailer-scoped, code-stripped,
+# last-match value (`charter_trailer.extract_charter_field`) while
+# `_conditional_fields_present` still scans the WHOLE code-stripped body. The
+# presence half is right by construction — `trust_signals._RETRACTION_RE` /
+# `._ORCHESTRATOR_CAUSED_RE` are whole-body, so scoping it to the trailer
+# would re-open MF1.
+#
+# THE DIRECTION HALF IS A CHOICE BETWEEN TWO CONSUMERS THAT DISAGREE WITH EACH
+# OTHER, and it is worth stating plainly rather than implying agreement it
+# does not have. This comment's verdict direction is read by:
+#
+#   validate_pr_review   via `charter_trailer.extract_charter_field` —
+#                        code-stripped, trailer-scoped, LAST match.
+#   trust_signals        via its own private `_FIELD_RE["verdict"]` —
+#                        raw body, line-anchored (`^…$`, MULTILINE), FIRST
+#                        match. NOT the shared extractor.
+#
+# On a well-formed comment (fields only in the trailer) the two agree and so
+# does this gate. They diverge on a comment that carries a `RequestOrReplied:`
+# line ABOVE its trailer, and no single reading can match both:
+#
+#   prose mid-sentence ("…post RequestOrReplied: Approved here — not yet")
+#       trust_signals: not line-anchored, so it reads the TRAILER. The old raw
+#       `re.search` here read the prose and BLOCKED a legitimate retraction
+#       comment its consumer would have honoured. main#1371 fixes that.
+#   a line-anchored `RequestOrReplied: Approved` above the trailer
+#       trust_signals reads the PROSE line and silently drops the retraction;
+#       this gate now reads the trailer and stays quiet, so the author is not
+#       warned. Advisory shortfall, not a merge-gate fail-open — the strictly
+#       better trade against an unblockable false positive.
+#
+# The real repair is `trust_signals._FIELD_RE` routing through
+# `charter_trailer.extract_charter_field`, the declared single source of truth
+# for charter field extraction (#932/#934). That is the SAME axis-3 scope
+# question main#1372 owns for the presence pair, is out of scope here, and is
+# reported on main#1371 rather than fixed in passing. Do not "tidy" these two
+# halves onto one scope before it lands.
 #
 # The field-presence definitions below still mirror the counter's regexes
 # (axis 1 + axis 3 remain open) and are pinned against it by
 # `ConditionalFieldGrammarAgreementTests`, which drives both implementations
 # over one corpus so a future divergence reds rather than silently
-# false-blocks. Full consolidation of this remaining pair is main#1371/#1372.
+# false-blocks. Full consolidation of this remaining pair is main#1372.
 _CONDITIONAL_VERDICT_FIELDS = ("Retracted", "OrchestratorCaused")
 
 # Mirrors trust_signals._RETRACTION_RE / ._ORCHESTRATOR_CAUSED_RE.
@@ -848,75 +886,77 @@ def _conditional_fields_present(body: str) -> list[str]:
     ]
 
 
+def _direction_value(body: str) -> str | None:
+    """The `RequestOrReplied:` value THE COUNTING HOOK reads, not the first hit.
+
+    Both direction predicates below classify this. They used to classify a raw
+    ``re.search(r"RequestOrReplied:\\s*(.+)", body)`` — the FIRST occurrence
+    anywhere in the un-stripped body — while `validate_pr_review` reads
+    `extract_charter_field`'s code-stripped, trailer-scoped, last-match-wins
+    value. Sharing the vocabulary but not the TEXT is half an agreement, and
+    the half that was missing broke this hook in both directions (main#1371):
+
+      fail-OPEN    a reviewer narrating an earlier direction above their
+                   trailer — "Earlier I posted RequestOrReplied: Reply" —
+                   made `_direction_is_verdict` False, so `check()` returned
+                   at the verdict-scope gate and the swap heuristic never ran
+                   on the genuine `Approved` trailer below it. The counter
+                   read that trailer, counted the verdict, and self-review-
+                   excluded the swapped Requestor: the real reviewer's
+                   approval recorded under the author's name and evaporating,
+                   which is the main#932 uncountable-verdict shape reached
+                   through the one gate built to catch it.
+
+      fail-CLOSED  the mirror image — prose mentioning `Approved` above a
+                   genuine `Reply` trailer dragged a correctly-formed reply
+                   into verdict scope, where Requestor IS the PR author by
+                   the Direction table's own binding (#378), and BLOCKED it.
+                   No observable-body workaround: the prose is the comment.
+
+    Also inherits code-region stripping for free, so a fenced example of the
+    charter template no longer decides the direction (main#1359/#1361).
+
+    This is #934's `Requestor:` fix — "the swap heuristic must read the
+    Requestor the COUNTING hook reads … never the first `re.search` hit over
+    the whole body" — finally applied to the sibling field it left behind.
+    `check()` reaches these predicates only after gate 2 has established that
+    this field parses, so the value is non-None there.
+    """
+    return extract_charter_field(CHARTER_FIELD, body)
+
+
 def _direction_is_changes_requested(body: str) -> bool:
     """True if the `RequestOrReplied:` value is specifically ChangesRequested.
 
     Narrower than :func:`_direction_is_verdict`, which also accepts Approved.
-    Accepts the bare ``Changes`` spelling that `_VERDICT_DIRECTIONS`
-    deliberately excludes, because `trust_signals.parse_verdicts` (via
-    `charter_trailer.verdict_kind(..., include_bare_changes=True)`, main#1359)
-    DOES count it as ChangesRequested — this predicate must agree with the
-    consumer whose behaviour it is protecting, not with the sibling
-    verdict-set.
+    One line over `charter_trailer.is_changes_requested`, the shared predicate
+    `trust_signals` also asks (main#1371) — this gate protects that consumer's
+    behaviour, so it must not merely resemble it.
 
-    That makes **two** verdict-direction classifiers left in this file
-    (`_VERDICT_DIRECTIONS` here and this function), disagreeing on bare
-    ``Changes`` *by design* — `trust_signals`'s own former third copy was
-    deleted in main#1359, which also added `charter_trailer.verdict_kind(...,
-    include_bare_changes=...)` as the shared classifier these two migrate
-    onto. Consolidating them is tracked as **main#1371**; it is not a change
-    to make incidentally, because the divergence is intentional per-consumer
-    and collapsing it wrongly would silently re-scope two hooks.
+    The VOCABULARY is now identical to its consumer's. The EXTRACTION is not,
+    on one shape: `trust_signals` reads its own line-anchored first match over
+    the raw body rather than the shared `extract_charter_field`. See the
+    § main#1371 note above `_CONDITIONAL_VERDICT_FIELDS` for which shape, which
+    way each errs, and why this reading is still the better of the two.
     """
-    match = re.search(r"RequestOrReplied:\s*(.+)", body)
-    if not match:
-        return False
-    raw = match.group(1).strip().strip("*").strip().lower()
-    if not raw:
-        return False
-    parts = raw.split()
-    if not parts:
-        return False
-    return re.sub(r"[^a-z0-9]", "", parts[0]) in {"changesrequested", "changes"}
+    return is_changes_requested(_direction_value(body))
 
 
 def _direction_is_verdict(body: str) -> bool:
     """True if the comment body's `RequestOrReplied:` value is a verdict direction.
 
-    Matches the value on the same line as the `RequestOrReplied:` label. The
-    value is stripped of trailing markdown bolding / whitespace and lowercased
-    before comparison against `_VERDICT_DIRECTIONS`. If no value is captured
-    (label present but value empty), returns False (fail-out-of-scope —
-    consistent with the path-2 stance of narrowing rather than blocking on
-    ambiguous shapes).
+    Scope gate for the Requestor/Requestee swap heuristic (#378): Approved and
+    ChangesRequested bind `Requestor = reviewer`, while Request/Reply invert
+    the binding and unrecognized values are out of scope entirely. Absent or
+    empty field ⇒ False (fail-out-of-scope, unchanged).
+
+    One line over `charter_trailer.is_verdict_direction`, the shared predicate
+    `validate_pr_review._is_verdict` also is (main#1371), so this gate cannot
+    scope itself more narrowly than the counter it guards. That is why bare
+    ``Changes`` — which the retired local `_VERDICT_DIRECTIONS` excluded — is
+    now in scope here.
     """
-    match = re.search(r"RequestOrReplied:\s*(.+)", body)
-    if not match:
-        return False
-    raw = match.group(1).strip()
-    raw = raw.strip("*").strip()
-    if not raw:
-        return False
-    # Take the leading verdict word(s). The value may be followed by additional
-    # text on the same line in some custom shapes; we only look at what comes
-    # before a newline (already handled by `.+` group consuming up to EOL).
-    # Lowercase for case-insensitive match against the canonical set.
-    canonical = raw.lower()
-    # Direct match against the canonical set covers both "approved",
-    # "changesrequested", and "changes requested" forms.
-    if canonical in _VERDICT_DIRECTIONS:
-        return True
-    # Tolerate trailing-token noise: e.g. "Approved (post-merge)" should still
-    # be treated as Approved. Split on whitespace and join the first 1-2 tokens
-    # to attempt the camelCase / two-word verdict match.
-    parts = canonical.split()
-    if not parts:
-        return False
-    if parts[0] in _VERDICT_DIRECTIONS:
-        return True
-    if len(parts) >= 2 and " ".join(parts[:2]) in _VERDICT_DIRECTIONS:
-        return True
-    return False
+    return is_verdict_direction(_direction_value(body))
 
 
 def _unreadable_cause(command: str) -> str:
@@ -1100,7 +1140,11 @@ def check(input_data: dict) -> dict | None:
     # of the misplacements worth catching.
     misplaced = _conditional_fields_present(body)
     if misplaced and not _direction_is_changes_requested(body):
-        direction = extract_charter_field(CHARTER_FIELD, body) or "(unreadable)"
+        # Same extraction the predicate just used (main#1371). Before that,
+        # the predicate read the first raw `RequestOrReplied:` hit while this
+        # line read the trailer-scoped value, so a block message could NAME a
+        # direction that was not the one it blocked on.
+        direction = _direction_value(body) or "(unreadable)"
         result = {
             "decision": "block",
             "reason": (

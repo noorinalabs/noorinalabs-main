@@ -337,6 +337,35 @@ class Counters(unittest.TestCase):
                 )
         self.assertEqual(rc, 0)
 
+    # -- main#1362: production runs `_CHANGES_REQUESTED_RE` through `gh --jq`
+    # (gojq -> Go's `regexp`, i.e. RE2), not the system `jq` binary the
+    # semantics test above shells out to (Oniguruma). RE2 has no lookaround
+    # or backreferences; Oniguruma has both, so a future widening of the
+    # constant with e.g. a lookahead would compile fine under the test above
+    # and hard-error live. `_re2_incompatible_reason` is a cheap syntax scan
+    # (not a full RE2 parse, and not a new gojq/Go-toolchain dependency in
+    # CI/pre-commit) for the specific constructs RE2's parser rejects
+    # outright. These three tests demonstrate it catches the exact failure
+    # shape #1362 documented and stays quiet on the real pattern.
+    def test_re2_guard_rejects_lookahead(self) -> None:
+        # The exact construct from #1362's repro: compiles under jq
+        # (Oniguruma) but `gh --jq` (gojq/RE2) hard-errors with "invalid or
+        # unsupported Perl syntax: `(?='".
+        reason = wave_status._re2_incompatible_reason(r"RequestOrReplied:\s*(?=Changes)Changes")
+        self.assertIsNotNone(reason)
+
+    def test_re2_guard_rejects_lookbehind_and_backreference(self) -> None:
+        self.assertIsNotNone(wave_status._re2_incompatible_reason(r"(?<=Foo)Bar"))
+        self.assertIsNotNone(wave_status._re2_incompatible_reason(r"(?<!Foo)Bar"))
+        self.assertIsNotNone(wave_status._re2_incompatible_reason(r"(Foo)\1"))
+
+    def test_re2_guard_accepts_current_changes_requested_pattern(self) -> None:
+        # Regression guard: if `_CHANGES_REQUESTED_RE` is ever widened to
+        # include one of the forbidden constructs, this fails fast in CI
+        # instead of passing green and hard-erroring in the live gh --jq
+        # call the way an unguarded lookahead would.
+        self.assertIsNone(wave_status._re2_incompatible_reason(wave_status._CHANGES_REQUESTED_RE))
+
 
 class Write(unittest.TestCase):
     def test_write_upserts_three_canonical_keys(self) -> None:
@@ -670,6 +699,45 @@ class CanonicalIssueNumbers(unittest.TestCase):
             by_repo, unparseable = wave_status._canonical_issue_numbers_by_repo("29", status)
         self.assertEqual(by_repo, {"noorinalabs-main": {1160}})
         self.assertEqual(unparseable, 3)
+
+    def test_non_list_tier_value_counted_not_silently_skipped(self) -> None:
+        """main#1255: #1201 Edge 1 fixed the ROW-level silent zero (a row
+        within a `tier_*` list that fails to parse). This is the same
+        failure shape one structural level up -- a `tier_*` KEY whose value
+        is not a list at all (a bare dict, or a plain string) used to hit
+        the `not isinstance(value, list)` half of the container guard and
+        `continue` past the whole tier, contributing to neither `by_repo`
+        NOR `unparseable`. If it is the only `tier_*` key, `_canonical_pairs`
+        returns `(set(), 0)`, `_reconciliation_warning_from_claims`'s
+        `if not canonical and not unparseable: return None` guard fires, and
+        a real reconciliation problem prints nothing at all -- the exact
+        silent zero #1201 was filed to close, just one level up.
+
+        A malformed *tier value* must count toward `unparseable` (as one
+        unparseable "row" standing in for the whole malformed tier) exactly
+        like a malformed row does, so the container-level guard in
+        `_reconciliation_warning_from_claims` fires instead of returning
+        `None`."""
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            data = {
+                "wave_29_scope": {
+                    # tier value is a dict, not a list
+                    "tier_1_dict_shaped": {"id": "noorinalabs-main#1160"},
+                    # tier value is a plain string, not a list
+                    "tier_2_string_shaped": "noorinalabs-main#1161",
+                    # a normal, correctly-shaped tier alongside the two
+                    # malformed ones, proving they don't clobber real rows
+                    "tier_3_normal": [{"id": "noorinalabs-main#1200"}],
+                }
+            }
+            status.write_text(json.dumps(data))
+            by_repo, unparseable = wave_status._canonical_issue_numbers_by_repo("29", status)
+        self.assertEqual(by_repo, {"noorinalabs-main": {1200}})
+        # Pre-fix: unparseable == 0 here (both malformed tiers vanished
+        # silently) -- this assertion is what fails against the unmodified
+        # implementation.
+        self.assertEqual(unparseable, 2)
 
 
 class MergedPrsDirectToMain(unittest.TestCase):
