@@ -126,6 +126,30 @@
       "detail": "GENERIC_HOOK_SESSION_START_PROMPT.md",
       "wave": "P7W19"
     },
+    "hooks/tests/fixtures/real_label_block_w29a_dollar_paren.txt": {
+      "decided_at": "2026-08-13T21:45:34Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
+    },
+    "hooks/tests/fixtures/real_label_block_w29b_heredoc_lc_backtick.txt": {
+      "decided_at": "2026-08-13T21:45:35Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
+    },
+    "hooks/tests/fixtures/real_label_block_w29c_heredoc_lc.txt": {
+      "decided_at": "2026-08-13T21:45:35Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
+    },
+    "hooks/tests/fixtures/real_label_block_w30a_review_heredoc.txt": {
+      "decided_at": "2026-08-13T21:45:35Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
+    },
     "hooks/tests/test__wave_label_parse.py": {
       "decided_at": "2026-06-26T00:37:43Z",
       "decision": "skipped",
@@ -155,6 +179,12 @@
       "decision": "skipped",
       "detail": "test file",
       "wave": "P7W19"
+    },
+    "hooks/tests/test_block_stale_tmp_message_file_wave29.py": {
+      "decided_at": "2026-08-13T21:45:33Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
     },
     "hooks/tests/test_enforce_librarian_consulted.py": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -204,11 +234,29 @@
       "detail": "test file",
       "wave": "P7W19"
     },
+    "hooks/tests/test_shell_parse.py": {
+      "decided_at": "2026-08-13T21:45:34Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
+    },
+    "hooks/tests/test_validate_commit_identity.py": {
+      "decided_at": "2026-08-13T21:45:34Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
+    },
     "hooks/tests/test_validate_commit_identity_ast.py": {
       "decided_at": "2026-06-26T00:37:43Z",
       "decision": "skipped",
       "detail": "test file",
       "wave": "P7W19"
+    },
+    "hooks/tests/test_validate_labels.py": {
+      "decided_at": "2026-08-13T21:45:34Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
     },
     "hooks/tests/test_validate_pr_ci_status.py": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -222,6 +270,24 @@
       "detail": "test file",
       "wave": "P7W19"
     },
+    "hooks/tests/test_validate_review_comment_format.py": {
+      "decided_at": "2026-08-13T21:45:34Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
+    },
+    "hooks/tests/test_validate_review_comment_format_failopen.py": {
+      "decided_at": "2026-08-13T21:45:34Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
+    },
+    "hooks/tests/test_validate_review_comment_format_parser.py": {
+      "decided_at": "2026-08-13T21:45:34Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
+    },
     "hooks/tests/test_validate_wave_audit.py": {
       "decided_at": "2026-06-26T00:37:43Z",
       "decision": "skipped",
@@ -233,6 +299,12 @@
       "decision": "skipped",
       "detail": "test file",
       "wave": "P7W19"
+    },
+    "hooks/tests/test_verdict_direction_agreement.py": {
+      "decided_at": "2026-08-13T21:45:34Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
     },
     "hooks/tests/test_warn_ghcr_image.py": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -270,6 +342,12 @@
       "detail": "GENERIC_HOOK_VALIDATE_PR_REVIEW_PROMPT.md",
       "wave": "P7W19"
     },
+    "hooks/validate_review_comment_format.py": {
+      "decided_at": "2026-08-13T21:45:37Z",
+      "decision": "skipped",
+      "detail": "enforces the charter-specific verdict-comment grammar",
+      "wave": "P10W30"
+    },
     "hooks/validate_wave_audit.py": {
       "decided_at": "2026-06-26T00:37:43Z",
       "decision": "genericized",
@@ -305,6 +383,12 @@
       "decision": "genericized",
       "detail": "GENERIC_LIB_ANNUNAKI_PARSE_PROMPT.md",
       "wave": "P7W19"
+    },
+    "lib/charter_trailer.py": {
+      "decided_at": "2026-08-13T21:45:36Z",
+      "decision": "skipped",
+      "detail": "implements the noorinalabs charter verdict grammar specifically",
+      "wave": "P10W30"
     },
     "lib/check_agent_liveness.py": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -444,6 +528,12 @@
       "detail": "GENERIC_LIB_PR_CI_STATE_PROMPT.md",
       "wave": "P7W19"
     },
+    "lib/pr_review_state.py": {
+      "decided_at": "2026-08-13T21:45:36Z",
+      "decision": "skipped",
+      "detail": "coupled to the charter's reviewer-roster + verdict-trailer model",
+      "wave": "P10W30"
+    },
     "lib/pre_commit_ci_sync.py": {
       "decided_at": "2026-06-26T00:37:43Z",
       "decision": "genericized",
@@ -456,6 +546,12 @@
       "detail": "GENERIC_LIB_PREMISE_CHECK_PROMPT.md",
       "wave": "P7W19"
     },
+    "lib/roster_union_sync.py": {
+      "decided_at": "2026-08-13T21:45:36Z",
+      "decision": "skipped",
+      "detail": "coupled to the per-repo roster manifest layout",
+      "wave": "P10W30"
+    },
     "lib/sync_main.py": {
       "decided_at": "2026-06-26T00:37:43Z",
       "decision": "genericized",
@@ -467,6 +563,12 @@
       "decision": "skipped",
       "detail": "test file",
       "wave": "P7W19"
+    },
+    "lib/tests/test_charter_trailer.py": {
+      "decided_at": "2026-08-13T21:45:33Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
     },
     "lib/tests/test_check_agent_liveness.py": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -497,6 +599,12 @@
       "decision": "skipped",
       "detail": "test file",
       "wave": "P7W19"
+    },
+    "lib/tests/test_check_worktree_merged.py": {
+      "decided_at": "2026-08-13T21:45:33Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
     },
     "lib/tests/test_doc_freshness.py": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -558,6 +666,12 @@
       "detail": "test file",
       "wave": "P7W19"
     },
+    "lib/tests/test_pr_review_state.py": {
+      "decided_at": "2026-08-13T21:45:33Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
+    },
     "lib/tests/test_pre_commit_ci_sync.py": {
       "decided_at": "2026-06-26T00:37:43Z",
       "decision": "skipped",
@@ -569,6 +683,18 @@
       "decision": "skipped",
       "detail": "test file",
       "wave": "P7W19"
+    },
+    "lib/tests/test_roster_union_sync.py": {
+      "decided_at": "2026-08-13T21:45:33Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
+    },
+    "lib/tests/test_session_start_step0_fallback.py": {
+      "decided_at": "2026-08-13T21:45:33Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
     },
     "lib/tests/test_sync_main.py": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -611,6 +737,12 @@
       "decision": "skipped",
       "detail": "test file",
       "wave": "P7W19"
+    },
+    "lib/tests/test_wave_status.py": {
+      "decided_at": "2026-08-13T21:45:33Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
     },
     "lib/tests/test_wave_unwrapped.py": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -659,6 +791,12 @@
       "decision": "genericized",
       "detail": "GENERIC_LIB_WAVE_SEQ_PROMPT.md",
       "wave": "P7W19"
+    },
+    "lib/wave_status.py": {
+      "decided_at": "2026-08-13T21:45:36Z",
+      "decision": "skipped",
+      "detail": "coupled to cross-repo-status.json wave-key schema",
+      "wave": "P10W30"
     },
     "lib/wave_unwrapped.py": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -756,11 +894,23 @@
       "detail": "GENERIC_SKILL_PROMOTION_AUDIT_PROMPT.md",
       "wave": "P7W19"
     },
+    "skills/promotion-audit/helpers.py": {
+      "decided_at": "2026-08-13T21:45:35Z",
+      "decision": "skipped",
+      "detail": "already covered by GENERIC_SKILL_PROMOTION_AUDIT_PROMPT.md + _RUN_PROMPT.md",
+      "wave": "P10W30"
+    },
     "skills/promotion-audit/run.py": {
       "decided_at": "2026-06-26T00:37:43Z",
       "decision": "genericized",
       "detail": "GENERIC_SKILL_PROMOTION_AUDIT_RUN_PROMPT.md",
       "wave": "P7W19"
+    },
+    "skills/promotion-audit/tests/test_helpers.py": {
+      "decided_at": "2026-08-13T21:45:35Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
     },
     "skills/promotion-audit/tests/test_run.py": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -773,6 +923,12 @@
       "decision": "skipped",
       "detail": "test file",
       "wave": "P7W19"
+    },
+    "skills/review-pr/SKILL.md": {
+      "decided_at": "2026-08-13T21:45:36Z",
+      "decision": "skipped",
+      "detail": "coupled to the charter verdict format",
+      "wave": "P10W30"
     },
     "skills/session-start/SKILL.md": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -804,6 +960,18 @@
       "detail": "GENERIC_SKILL_WAVE_SCOPE_PROMPT.md",
       "wave": "P7W19"
     },
+    "skills/wave-scope/td_intake_gate.py": {
+      "decided_at": "2026-08-13T21:45:36Z",
+      "decision": "skipped",
+      "detail": "coupled to the wave-scope tech-debt intake formula",
+      "wave": "P10W30"
+    },
+    "skills/wave-scope/tests/test_td_intake_gate.py": {
+      "decided_at": "2026-08-13T21:45:35Z",
+      "decision": "skipped",
+      "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
+      "wave": "P10W30"
+    },
     "skills/wave-start/SKILL.md": {
       "decided_at": "2026-06-26T00:37:43Z",
       "decision": "genericized",
@@ -821,6 +989,18 @@
       "decision": "skipped",
       "detail": "marker-only provenance edit this wave; genericization deferred to P6 Claude-Efficiency",
       "wave": "P5W5"
+    },
+    "team/charter/agents/lifecycle.md": {
+      "decided_at": "2026-08-13T21:45:35Z",
+      "decision": "skipped",
+      "detail": "already covered by GENERIC_CHARTER_LIFECYCLE_PROMPT.md",
+      "wave": "P10W30"
+    },
+    "team/charter/agents/orchestration-model.md": {
+      "decided_at": "2026-08-13T21:45:36Z",
+      "decision": "skipped",
+      "detail": "tightly coupled to the noorinalabs single-leader roster + spawn model",
+      "wave": "P10W30"
     },
     "team/charter/artifact-ownership.md": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -840,6 +1020,18 @@
       "detail": "GENERIC_CHARTER_HOOKS_PROMPT.md",
       "wave": "P7W19"
     },
+    "team/charter/hooks/catalog-01-12.md": {
+      "decided_at": "2026-08-13T21:45:35Z",
+      "decision": "skipped",
+      "detail": "already covered by GENERIC_CHARTER_HOOKS_PROMPT.md",
+      "wave": "P10W30"
+    },
+    "team/charter/hooks/catalog-13-17.md": {
+      "decided_at": "2026-08-13T21:45:35Z",
+      "decision": "skipped",
+      "detail": "already covered by GENERIC_CHARTER_HOOKS_PROMPT.md",
+      "wave": "P10W30"
+    },
     "team/charter/issues.md": {
       "decided_at": "2026-06-26T00:37:43Z",
       "decision": "genericized",
@@ -851,6 +1043,12 @@
       "decision": "genericized",
       "detail": "GENERIC_CHARTER_PULL_REQUESTS_PROMPT.md",
       "wave": "P7W19"
+    },
+    "team/charter/pull-requests/reviews.md": {
+      "decided_at": "2026-08-13T21:45:36Z",
+      "decision": "skipped",
+      "detail": "tightly coupled to the noorinalabs charter verdict-trailer grammar",
+      "wave": "P10W30"
     },
     "team/charter/state-claims.md": {
       "decided_at": "2026-06-20T00:23:38Z",
