@@ -136,6 +136,35 @@ Merge-ready-PR exemption (issue #664, owner-adopted P4W7 retro):
     be derived, or any of the PR queries fail, NO exemption is applied (fail
     toward the stricter count — never false-exempt).
 
+Wave-meta-issue exemption (issue #1460):
+    The wave's own meta-issue — the cross-repo tracking issue `/wave-scope`
+    opens and `/wave-retro` closes — is the wave *container*, not a unit of
+    wave work. It is open for exactly as long as the wave is, /wave-wrapup
+    included, so counting it makes a legitimately complete wave un-wrappable.
+    Wave 30 hit this with 20/20 stories closed and 0 open PRs org-wide: the
+    gate reported "Open items: 1", that 1 being #1353, its own meta-issue. The
+    kickoff sibling `post_wave_kickoff_comment` had already carried a
+    meta-issue concept (`skip_meta_issue`) since main#1053; this gate had none,
+    so the two gates held incompatible assumptions about the same artifact.
+
+    Latent, not new: the meta-issue simply never carried a wave label before
+    (#1125/wave-28 and #1133/wave-29 have no wave-label event; #1353 was
+    labeled `wave-30` at kickoff). Un-labelling it would clear the block
+    without fixing the defect — the invariant "the wave container is not wave
+    work" should hold whether or not the label is present.
+
+    Resolution is from the `wave_{M}_meta_issue` SSOT key, NOT the `meta-issue`
+    label: the label is hand-applied and a label-driven exemption would let any
+    work item be exempted by mislabelling it. Scoped to `noorinalabs-main`,
+    dual-shape tolerant (main#1053), fail-closed on every unresolvable input,
+    and capped at the ONE resolved number — no title or label heuristics. See
+    `_wave_meta_issue_number` and `_meta_issue_exempt_for_repo`.
+
+    Rejected alternatives, recorded so they are not re-proposed: a
+    carry-forward marker naming #1353 is the "theater-marker rationalization"
+    shape the charter names as re-open condition (3) on #220 — there is no
+    genuine carry-forward when the wave is complete.
+
 Failure modes (never silent — every degraded path emits operator-visible text):
     - `gh` not installed / not authenticated, or EVERY repo query failed
       (TOTAL coverage failure, `_audit_open_count` returns `total is None`) →
@@ -543,6 +572,11 @@ _CLOSING_KEYWORD_RE = re.compile(
 # Path to cross-repo-status.json relative to this hook file.
 _STATUS_PATH = Path(__file__).resolve().parent.parent.parent / "cross-repo-status.json"
 
+# The repo wave meta-issues live in (CLAUDE.md § Cross-Repo Coordination, step
+# 1: "Program Director creates a meta-issue in noorinalabs-main"). The #1460
+# exemption is scoped to it, mirroring `post_wave_kickoff_comment`'s guard.
+_META_ISSUE_REPO = "noorinalabs-main"
+
 # gh subprocess timeout per repo (seconds). 8 repos × this = total budget.
 _PER_REPO_TIMEOUT_SECONDS = 3
 
@@ -570,21 +604,36 @@ def _read_phase_num(data: dict) -> int | None:
     return None
 
 
-def _read_phase_wave_nums() -> tuple[int, int] | None:
-    """Return the active (phase_num, wave_num) from cross-repo-status.json or None.
+def _read_status_data() -> dict | None:
+    """Return the parsed cross-repo-status.json, or None if it cannot be read.
 
-    Reads `cross-repo-status.json`, requires `wave_active` truthy, and parses
-    the authoritative `current_phase` integer (via `_read_phase_num`) and the
-    `current_wave` ("wave-<M>") field. Returns None on any failure (missing
-    file, malformed JSON, inactive wave, missing or unparseable fields). Single
-    source of truth for both the wave *label* and the wave *branch* derivations
-    below so they cannot drift apart.
+    One reader for all three status-derived facts this module needs — the wave
+    label, the wave branch, and the wave's meta-issue (#1460) — so they cannot
+    disagree about what the status file says. Returns None on a missing file,
+    malformed JSON, an OS-level read failure, or a top-level shape that is not
+    an object; every caller here treats None as "cannot determine", never as a
+    default.
     """
     try:
         data = json.loads(_STATUS_PATH.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return None
+    return data if isinstance(data, dict) else None
 
+
+def _phase_wave_nums_from_data(data: dict) -> tuple[int, int] | None:
+    """Return the active (phase_num, wave_num) from a LOADED status dict, or None.
+
+    Requires `wave_active` truthy, the authoritative `current_phase` integer
+    (via `_read_phase_num`) and a parseable `current_wave` ("wave-<M>").
+
+    Split out from `_read_phase_wave_nums` so `_wave_meta_issue_number` (#1460)
+    can derive the wave number from the SAME dict it reads the meta-issue key
+    out of — one file read, one derivation. Re-deriving the wave number from a
+    second read would let the two disagree, and duplicating the `wave_active` /
+    phase-fallback rules would be the drift this module already fixed once for
+    the repo list.
+    """
     if not data.get("wave_active"):
         return None
 
@@ -594,6 +643,20 @@ def _read_phase_wave_nums() -> tuple[int, int] | None:
         return None
 
     return phase_num, int(wave_match.group(1))
+
+
+def _read_phase_wave_nums() -> tuple[int, int] | None:
+    """Return the active (phase_num, wave_num) from cross-repo-status.json or None.
+
+    Reads `cross-repo-status.json` and applies `_phase_wave_nums_from_data`.
+    Returns None on any failure (missing file, malformed JSON, inactive wave,
+    missing or unparseable fields). Single source of truth for both the wave
+    *label* and the wave *branch* derivations below so they cannot drift apart.
+    """
+    data = _read_status_data()
+    if data is None:
+        return None
+    return _phase_wave_nums_from_data(data)
 
 
 def _read_current_wave_labels() -> list[str] | None:
@@ -627,6 +690,76 @@ def _read_current_wave_branch() -> str | None:
         return None
     phase_num, wave_num = nums
     return f"deployments/phase-{phase_num}/wave-{wave_num}"
+
+
+def _wave_meta_issue_number() -> int | None:
+    """Return the ACTIVE wave's meta-issue number, or None. Fails CLOSED (#1460).
+
+    The wave meta-issue is the wave's *container* — the cross-repo tracking
+    issue `/wave-scope` opens and `/wave-retro` closes — not a unit of wave
+    work. It is open for exactly as long as the wave is, including at the
+    moment /wave-wrapup runs, so counting it against the open-item gate makes a
+    legitimately complete wave un-wrappable: wave 30 had 20/20 stories closed
+    and 0 open PRs org-wide, and the gate still reported "Open items: 1", that 1
+    being #1353.
+
+    Resolved from the `wave_{M}_meta_issue` status key, NEVER from the
+    `meta-issue` *label*. The label is hand-applied, so a label-driven
+    exemption would let any real work item be exempted by mislabelling it; the
+    key names exactly one issue per wave and is the same source the kickoff
+    sibling (`post_wave_kickoff_comment`, `skip_meta_issue`) already trusts.
+
+    Dual-shape read (main#1053): the key is written as a bare integer in some
+    waves (`1353`, `1125`, `904`) and as a qualified string in others
+    (`"noorinalabs-main#821"`, `"noorinalabs-main#928"`) — BOTH shapes are live
+    in cross-repo-status.json today. A `str(meta) == str(n)` comparison is False
+    for the qualified shape, which is precisely the bug main#1053 fixed in the
+    sibling: the skip silently never fired for a qualified-form wave. So match
+    on the trailing digit run, which is present in both shapes, and no data
+    migration is needed.
+
+    Fail-closed contract: a missing/unparseable status file, an absent key, a
+    null value, or a value with no trailing digit run all return None — NO
+    exemption, the item counts. This is deliberately the opposite stance from
+    `_open_issue_numbers_for_label`, which returns None to fail *open* per repo
+    on a transport failure. The two are consistent at the level that matters:
+    both degrade *toward blocking*. An unreadable SSOT must never be able to
+    exempt a real work item from a gate whose entire job is to notice it.
+    """
+    data = _read_status_data()
+    if data is None:
+        return None
+    nums = _phase_wave_nums_from_data(data)
+    if nums is None:
+        return None
+    _, wave_num = nums
+
+    meta = data.get(f"wave_{wave_num}_meta_issue")
+    if meta is None:
+        return None
+    meta_digits = re.search(r"(\d+)$", str(meta))
+    if meta_digits is None:
+        return None
+    return int(meta_digits.group(1))
+
+
+def _meta_issue_exempt_for_repo(repo: str) -> set[int]:
+    """Return the meta-issue exemption set for `repo` — at most one number (#1460).
+
+    Scoped to `noorinalabs-main`, mirroring the kickoff sibling's
+    `repo == "noorinalabs-main"` guard: meta-issues are created in the parent
+    repo by definition (CLAUDE.md § Cross-Repo Coordination step 1), so an
+    identically-numbered issue in a child repo is ordinary wave work and must
+    still count.
+
+    Returns at most the ONE resolved number. No label matching, no title
+    matching, no heuristics — a second exempted item would mean the gate had
+    started guessing which work does not count.
+    """
+    if repo != _META_ISSUE_REPO:
+        return set()
+    meta = _wave_meta_issue_number()
+    return set() if meta is None else {meta}
 
 
 def _open_issue_numbers_for_label(repo: str, label: str) -> list[int] | None:
@@ -845,20 +978,31 @@ def _count_open_for_repo(repo: str, labels: list[str], wave_branch: str | None) 
     """Return the *blocking* open-issue count for `noorinalabs/<repo>`.
 
     Counts open issues carrying ANY accepted wave-label form in `labels` (#810),
-    minus those exempted by a merge-ready PR targeting `wave_branch` (issue
-    #664). Returns the integer count on success, None on issue-list subprocess
-    failure (so the caller can fail-open on full infrastructure failure). When
-    `wave_branch` is None, no exemption is applied (every open wave issue counts).
+    minus two disjoint exemptions:
+
+      - the wave's own meta-issue (#1460) — the wave container, not wave work.
+        Resolved from the `wave_{M}_meta_issue` SSOT key and scoped to
+        `noorinalabs-main`; see `_wave_meta_issue_number`. Independent of
+        `wave_branch`: the meta-issue is not wave work whether or not the wave
+        branch is derivable, so this exemption still applies when
+        `wave_branch is None`.
+      - issues with a merge-ready PR targeting `wave_branch` (#664). Requires
+        the branch, so it is skipped entirely when `wave_branch is None`.
+
+    Returns the integer count on success, None on issue-list subprocess failure
+    (so the caller can fail-open on full infrastructure failure — the #1226
+    None-vs-`[]` contract is unchanged: a repo that could not be queried never
+    becomes a count, exempted or otherwise).
     """
     numbers = _open_issue_numbers_for_repo(repo, labels)
     if numbers is None:
         return None
     if not numbers:
         return 0
-    if wave_branch is None:
-        return len(numbers)
 
-    exempt = _mergeready_exempt_issues(repo, wave_branch)
+    exempt = _meta_issue_exempt_for_repo(repo)
+    if wave_branch is not None:
+        exempt |= _mergeready_exempt_issues(repo, wave_branch)
     return sum(1 for n in numbers if n not in exempt)
 
 
