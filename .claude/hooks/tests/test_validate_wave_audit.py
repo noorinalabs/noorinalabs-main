@@ -1116,6 +1116,304 @@ class CheckEndToEndExemption(unittest.TestCase):
         self.assertIn("Open items across the org: 1", result["reason"])
 
 
+def _status_file(payload: dict) -> Path:
+    """Write a temp cross-repo-status.json for the meta-issue tests below.
+
+    Mirrors `WaveLabelDerivation._write_status`; hoisted to module scope because
+    three separate classes below need it (#1460).
+    """
+    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8")
+    json.dump(payload, tmp)
+    tmp.close()
+    return Path(tmp.name)
+
+
+_ABSENT = object()
+
+
+def _wave30_status(**overrides) -> dict:
+    """A minimal ACTIVE wave-30 status payload; `overrides` patch/remove keys.
+
+    Passing a key with value `_ABSENT` removes it, so a test can model an
+    absent `wave_30_meta_issue` rather than a present-but-null one.
+    """
+    payload = {
+        "wave_active": True,
+        "current_wave": "wave-30",
+        "current_phase": 10,
+        "wave_30_meta_issue": 1353,
+    }
+    payload.update(overrides)
+    return {k: v for k, v in payload.items() if v is not _ABSENT}
+
+
+class WaveMetaIssueResolution(unittest.TestCase):
+    """Coverage on `_wave_meta_issue_number` — SSOT resolution, fail-closed (#1460).
+
+    The wave's own meta-issue is the wave *container*, not wave work, so it must
+    not count against the wrapup gate. It is resolved from the
+    `wave_{M}_meta_issue` status key and NEVER from the `meta-issue` label: the
+    label is hand-applied, so a label-driven exemption would let any real work
+    item be exempted by mislabelling it. The key names exactly one issue per
+    wave and is the same source `post_wave_kickoff_comment` already trusts.
+
+    Every unresolvable input returns None — i.e. NO exemption, the item counts.
+    That is deliberately the OPPOSITE stance from
+    `_open_issue_numbers_for_label`, which returns None (fail-open per repo) on
+    a transport failure. The shared invariant is not "fail open" or "fail
+    closed" in the abstract, it is that both degrade *toward blocking*.
+    """
+
+    def _resolve(self, payload: dict | None) -> int | None:
+        if payload is None:
+            with mock.patch.object(hook, "_STATUS_PATH", Path("/tmp/nonexistent-1460.json")):
+                return hook._wave_meta_issue_number()
+        path = _status_file(payload)
+        try:
+            with mock.patch.object(hook, "_STATUS_PATH", path):
+                return hook._wave_meta_issue_number()
+        finally:
+            path.unlink()
+
+    def test_bare_int_shape_resolves(self) -> None:
+        """POS: `wave_30_meta_issue: 1353` — the shape wave 30 actually uses."""
+        self.assertEqual(self._resolve(_wave30_status()), 1353)
+
+    def test_qualified_string_shape_resolves(self) -> None:
+        """POS: `"noorinalabs-main#1353"` — main#1053's other live shape.
+
+        A `str(meta) == number` comparison is False for this shape, which is the
+        exact bug main#1053 fixed in the kickoff sibling: the skip silently
+        never fired for any wave written in qualified form. Both shapes are
+        present in cross-repo-status.json TODAY (waves 30/28/22 bare; waves
+        25/24/21/20/19/16 qualified), so this is not a hypothetical.
+        """
+        self.assertEqual(
+            self._resolve(_wave30_status(wave_30_meta_issue="noorinalabs-main#1353")), 1353
+        )
+
+    def test_absent_key_returns_none(self) -> None:
+        """NEG (fail-closed): no `wave_30_meta_issue` key → no exemption."""
+        self.assertIsNone(self._resolve(_wave30_status(wave_30_meta_issue=_ABSENT)))
+
+    def test_null_value_returns_none(self) -> None:
+        """NEG (fail-closed): an explicit null → no exemption."""
+        self.assertIsNone(self._resolve(_wave30_status(wave_30_meta_issue=None)))
+
+    def test_garbage_value_returns_none(self) -> None:
+        """NEG (fail-closed): a value with no trailing digit run → no exemption."""
+        for garbage in ("TBD", "", "noorinalabs-main#", "#", "wave-30-meta"):
+            with self.subTest(value=garbage):
+                self.assertIsNone(self._resolve(_wave30_status(wave_30_meta_issue=garbage)))
+
+    def test_missing_status_file_returns_none(self) -> None:
+        """NEG (fail-closed): an unreadable SSOT must never exempt real work."""
+        self.assertIsNone(self._resolve(None))
+
+    def test_malformed_json_returns_none(self) -> None:
+        """NEG (fail-closed): a half-written status file exempts nothing."""
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8")
+        tmp.write('{"wave_active": true, "current_wave": ')
+        tmp.close()
+        path = Path(tmp.name)
+        try:
+            with mock.patch.object(hook, "_STATUS_PATH", path):
+                self.assertIsNone(hook._wave_meta_issue_number())
+        finally:
+            path.unlink()
+
+    def test_inactive_wave_returns_none(self) -> None:
+        """NEG: no active wave → no active meta-issue to exempt."""
+        self.assertIsNone(self._resolve(_wave30_status(wave_active=False)))
+
+    def test_other_waves_key_is_not_read(self) -> None:
+        """NEG: only the ACTIVE wave's meta-issue is exempt, not last wave's.
+
+        Guards the off-by-one where the gate reads `wave_29_meta_issue` while
+        auditing wave 30 — which would leave the real meta-issue counted AND
+        exempt an unrelated (possibly still-open) issue from the prior wave.
+        """
+        payload = _wave30_status(wave_30_meta_issue=_ABSENT)
+        payload["wave_29_meta_issue"] = 1133
+        self.assertIsNone(self._resolve(payload))
+
+
+class MetaIssueExemptionInCount(unittest.TestCase):
+    """`_count_open_for_repo` must not count the wave's own meta-issue (#1460).
+
+    Pre-fix these FAIL: the gate counted #1353 and blocked /wave-wrapup on a
+    wave with 20/20 stories closed and 0 open PRs org-wide.
+    """
+
+    _LABELS = ["p10-wave-30", "wave-30"]
+    _BRANCH = "deployments/phase-10/wave-30"
+
+    def _count(
+        self, repo: str, numbers: list[int], payload: dict, exempt=frozenset()
+    ) -> int | None:
+        path = _status_file(payload)
+        try:
+            with (
+                mock.patch.object(hook, "_STATUS_PATH", path),
+                mock.patch.object(hook, "_open_issue_numbers_for_repo", return_value=numbers),
+                mock.patch.object(hook, "_mergeready_exempt_issues", return_value=set(exempt)),
+            ):
+                return hook._count_open_for_repo(repo, self._LABELS, self._BRANCH)
+        finally:
+            path.unlink()
+
+    def test_meta_issue_alone_is_not_counted(self) -> None:
+        """POS (FAILS pre-fix): the wave-30 reproduction — 1 open item, all of it
+        the meta-issue → blocking count 0."""
+        self.assertEqual(self._count("noorinalabs-main", [1353], _wave30_status()), 0)
+
+    def test_meta_issue_qualified_shape_is_not_counted(self) -> None:
+        """POS (FAILS pre-fix AND fails a bare-int-only fix): main#1053 guard."""
+        self.assertEqual(
+            self._count(
+                "noorinalabs-main",
+                [1353],
+                _wave30_status(wave_30_meta_issue="noorinalabs-main#1353"),
+            ),
+            0,
+        )
+
+    def test_non_meta_issue_is_still_counted(self) -> None:
+        """NEG: real open wave work is untouched — no over-exemption."""
+        self.assertEqual(self._count("noorinalabs-main", [1353, 1459], _wave30_status()), 1)
+
+    def test_absent_key_exempts_nothing(self) -> None:
+        """NEG (fail-closed): key absent → the meta-issue counts, as today."""
+        self.assertEqual(
+            self._count("noorinalabs-main", [1353], _wave30_status(wave_30_meta_issue=_ABSENT)),
+            1,
+        )
+
+    def test_mismatched_key_exempts_nothing(self) -> None:
+        """NEG: the key names a DIFFERENT issue → #1353 still counts, and the
+        named issue is not open so nothing is silently dropped."""
+        self.assertEqual(
+            self._count("noorinalabs-main", [1353], _wave30_status(wave_30_meta_issue=9999)),
+            1,
+        )
+
+    def test_garbage_key_exempts_nothing(self) -> None:
+        """NEG (fail-closed): unparseable value → no exemption."""
+        self.assertEqual(
+            self._count("noorinalabs-main", [1353], _wave30_status(wave_30_meta_issue="TBD")),
+            1,
+        )
+
+    def test_unreadable_status_exempts_nothing(self) -> None:
+        """NEG (fail-closed): a missing SSOT must not exempt a real work item."""
+        with (
+            mock.patch.object(hook, "_STATUS_PATH", Path("/tmp/nonexistent-1460.json")),
+            mock.patch.object(hook, "_open_issue_numbers_for_repo", return_value=[1353]),
+            mock.patch.object(hook, "_mergeready_exempt_issues", return_value=set()),
+        ):
+            self.assertEqual(
+                hook._count_open_for_repo("noorinalabs-main", self._LABELS, self._BRANCH), 1
+            )
+
+    def test_child_repo_gets_no_meta_exemption(self) -> None:
+        """NEG: meta-issues live in noorinalabs-main. A child-repo issue that
+        happens to share the number is real work and must still count —
+        mirroring the kickoff hook's `repo == "noorinalabs-main"` guard."""
+        for repo in ("noorinalabs-isnad-graph", "noorinalabs-deploy"):
+            with self.subTest(repo=repo):
+                self.assertEqual(self._count(repo, [1353], _wave30_status()), 1)
+
+    def test_meta_exemption_composes_with_mergeready(self) -> None:
+        """POS: #664's exemption still applies alongside the meta exemption, and
+        neither swallows the other — 3 open, 1 meta + 1 merge-ready → 1 counts."""
+        self.assertEqual(
+            self._count("noorinalabs-main", [1353, 1459, 1461], _wave30_status(), exempt={1459}),
+            1,
+        )
+
+    def test_meta_exemption_applies_without_a_wave_branch(self) -> None:
+        """POS: the meta-issue is not wave work whether or not the wave branch is
+        derivable — the #664 exemption needs the branch, this one does not."""
+        path = _status_file(_wave30_status())
+        try:
+            with (
+                mock.patch.object(hook, "_STATUS_PATH", path),
+                mock.patch.object(hook, "_open_issue_numbers_for_repo", return_value=[1353, 1459]),
+            ):
+                self.assertEqual(
+                    hook._count_open_for_repo("noorinalabs-main", self._LABELS, None), 1
+                )
+        finally:
+            path.unlink()
+
+    def test_issue_list_failure_still_returns_none(self) -> None:
+        """NEG (#1226 unchanged): a query failure is still None, not a count.
+
+        The meta exemption must not convert an unqueryable repo into a
+        confident zero — that is the silent-zero shape #1226 closed.
+        """
+        path = _status_file(_wave30_status())
+        try:
+            with (
+                mock.patch.object(hook, "_STATUS_PATH", path),
+                mock.patch.object(hook, "_open_issue_numbers_for_repo", return_value=None),
+            ):
+                self.assertIsNone(
+                    hook._count_open_for_repo("noorinalabs-main", self._LABELS, self._BRANCH)
+                )
+        finally:
+            path.unlink()
+
+
+class CheckEndToEndMetaIssueExemption(unittest.TestCase):
+    """check() integration for #1460 — the literal wave-30 wrapup block.
+
+    Drives the real `_audit_open_count` → `_count_open_for_repo` path, stubbing
+    only the subprocess-touching leaves.
+    """
+
+    def _run(self, numbers_for_main: list[int], payload: dict):
+        path = _status_file(payload)
+
+        def _issues(repo, labels):
+            return list(numbers_for_main) if repo == "noorinalabs-main" else []
+
+        try:
+            with (
+                mock.patch.object(hook, "_STATUS_PATH", path),
+                mock.patch.object(
+                    hook, "_read_current_wave_labels", return_value=["p10-wave-30", "wave-30"]
+                ),
+                mock.patch.object(
+                    hook, "_read_current_wave_branch", return_value="deployments/phase-10/wave-30"
+                ),
+                mock.patch.object(hook, "_open_issue_numbers_for_repo", side_effect=_issues),
+                mock.patch.object(hook, "_mergeready_exempt_issues", return_value=set()),
+            ):
+                return hook.check(_skill_input("wave-wrapup"))
+        finally:
+            path.unlink()
+
+    def test_meta_issue_only_allows_wrapup(self) -> None:
+        """POS (FAILS pre-fix): wave 30's observed state — every story closed, no
+        open PR, the meta-issue the only open wave-labelled item → wrapup runs."""
+        self.assertIsNone(self._run([1353], _wave30_status()))
+
+    def test_meta_issue_only_qualified_shape_allows_wrapup(self) -> None:
+        """POS (FAILS pre-fix and on a bare-int-only fix)."""
+        self.assertIsNone(
+            self._run([1353], _wave30_status(wave_30_meta_issue="noorinalabs-main#1353"))
+        )
+
+    def test_real_open_work_still_blocks(self) -> None:
+        """NEG: the meta-issue plus one real open story still blocks, and the
+        count reported is 1 — the meta-issue subtracted, the story kept."""
+        result = self._run([1353, 1459], _wave30_status())
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("Open items across the org: 1", result["reason"])
+
+
 class OrgReposSsotIdentity(unittest.TestCase):
     """#1243 defect 1: `_ORG_REPOS` must BE the org_repos SSOT object.
 
