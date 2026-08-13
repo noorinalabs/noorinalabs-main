@@ -817,3 +817,13 @@ It is the **residual of #1354**, whose fix demonstrably worked: `git`-related `C
 
 **1 AUTO · 0 DECIDE · 255 KEPT · 22 SUPERSEDED.** The AUTO is `wave-merge.md § Cross-Contract PRs` (charter → skill, `section_citations=5 >= 5`) — **the first AUTO promotion in ~20 recorded waves**, and the direct product of this wave's #1355 fix. The artifact itself was not generated in this run; promotion of a charter section is an owner decision and is surfaced, not auto-applied.
 
+### Step 7.9 — Memory content-staleness judge (`/memory-judge`)
+
+**87 due notes** (no `last_verified`, not `superseded_by`). Classification: **87 Still-current · 0 Partially-stale · 0 Fully-stale.**
+
+The judge's own automated pass first flagged **45 notes** as carrying stale references; manual review per the calibration protocol cleared **all 45** — illustrative code examples, angle-bracket placeholders (`<team-name>`, `<branch>`), CLI flags never resolvable by `git grep`, and child-repo paths (the 7 children are `.gitignore`d sibling repos, so their symbols cannot appear in this repo's index).
+
+This is the **second consecutive clean run**, and the 45 → 0 correction is the strongest evidence yet that the calibration warning carried in the brief is load-bearing rather than ceremonial: at wave-28, without it, the same pass produced 9 "fully-stale" flags of which **9 were wrong**. `feedback_memory_judge_overflags_fully_stale` should be **retained**, not retired on two clean runs — the clean runs are what the warning buys, not evidence the failure mode is gone.
+
+**The `last_verified` bump on all 87 was NOT applied.** Stamping `last_verified: 2026-08-13` suppresses a note from judge selection for the next 60 days, so a bulk stamp on the strength of a single pass that cleared 100% of its population would silence the detector across the whole corpus at once. The asymmetry matters: an unstamped note costs one re-check next wave; a wrongly-stamped one is invisible for two months. Recommended instead: stamp incrementally as notes are genuinely re-read in the course of work, which is what the frontmatter is documented to mean ("re-read and re-confirmed against the code/repo, not merely re-read for context").
+
