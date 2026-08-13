@@ -708,3 +708,112 @@ The main#690 blank-slug guard is correct and must stay; the defect is that it re
 | #1355 | `skill_invocations` | the gate measures the wrong side of the transition; 0/25 can qualify |
 
 Each is a mechanism that **reports success or benign inaction while being incapable of the outcome it describes**. None would fail a test that only asserts "it runs without error"; all four survived because the passing state and the broken state are observationally identical from outside. That is the generalizable lesson of wave-29, and it applies to the process tooling exactly as it applied to the shell classifiers the wave was themed on.
+
+---
+
+## Retrospective: Phase 10 Wave 30 — 2026-08-13
+
+**Theme:** Gate precision — gates that can actually fail, and can actually pass.
+
+### Team Performance
+
+| metric | value |
+|---|---|
+| PRs merged | **21** (canonical scope set; 20 declared + #1460 mid-wave) |
+| Repos in scope | 1 (`noorinalabs-main`), merge model `direct-to-main` |
+| Issues closed | 21 of 21 scope rows |
+| CI-red merges | **0** |
+| `review_false_positives` | **0** |
+| Changes-requested cycles | 27 |
+| Top-implementer concentration | **19%** (Aino Virtanen and Nino Kavtaradze, 4/21 each) — far below the 60% fragility line |
+| Tech-debt filed this wave | 6 (#1450, #1455, #1462, #1463, #1464, #1465) |
+
+The wave delivered its acceptance bar: **a fix lands only with a test that FAILS against the pre-fix implementation.** Spot-verified on #1461, where the merge-gate reviewer independently reproduced the 21-failed/7-passed pre-fix split and confirmed the failures were load-bearing counting assertions, not `AttributeError`-on-a-missing-function.
+
+### Per-Engineer Assessments
+
+Mechanical, from `trust_signals.py score 10 30`. Calibration gate passed (observed median 1.00 must-fix/PR vs calibrated 1.00; band [0.50, 1.50]).
+
+| Engineer | PRs | caught | recv | rate | CI-red | FP | delta | Needs Improvement (forced) |
+|---|---|---|---|---|---|---|---|---|
+| Aino Virtanen | 4 | 15 | 3 | 0.75 | 0 | 0 | **+2** | 3 must-fix received |
+| Nino Kavtaradze | 4 | 7 | 8 | 2.00 | 0 | 0 | **0** | 8 must-fix received |
+| Wanjiku Mwangi | 3 | 0 | 2 | 0.67 | 0 | 0 | **+1** | 2 must-fix received |
+| Lucas Ferreira | 3 | 0 | 1 | 0.33 | 0 | 0 | **+1** | 1 must-fix received |
+| Weronika Zielinska | 2 | 4 | 2 | 1.00 | 0 | 0 | **+2** | 2 must-fix received |
+| Nadia Khoury | 2 | 2 | 4 | 2.00 | 0 | 0 | **0** | 4 must-fix received |
+| Santiago Ferreira | 2 | 0 | 7 | 3.50 | 0 | 0 | **−1** | 7 must-fix received |
+| Nurul Hakim | 1 | 0 | 1 | 1.00 | 0 | 0 | **0** | 1 must-fix received |
+
+Negative-signal pass validated by `validate_negative_signal_pass` — **clean**, no bare "None".
+
+Santiago's −1 is the only ding: 3.50 must-fix/PR is above the 2× penalty bar. Context, not excuse: both his PRs were in the `charter_trailer` consolidation cluster (#1359/#1361), the wave's most contested surface, and one of them absorbed a second scope row that was not his (see substitution below).
+
+### Implementer substitution
+
+**main#1361** — declared *Nino Kavtaradze*, delivered by *Santiago Ferreira* in PR #1393, bundled with #1359. This wave's own execution order flagged that #1361/#1372 touch `charter_trailer.py` alongside #1359 and instructed implementers to sequence or coordinate; the bundle *was* that coordination. Benign, recorded per charter § Implementer-Substitution Reconciliation rather than left silent. Recorded at `wave_30_decisions.implementer_substitutions`.
+
+### Top 3 Going Well
+
+1. **The theme's acceptance bar held, and was independently verified.** Every Tier-1 fix shipped with a failing-before test. On #1461 the merge-gate reviewer re-ran the pre-fix suite from a clean revert and confirmed the failure set was behavioral, not existence-proof — then went further and mutation-tested the fix (bare-int-only parse → 3 killed; repo-guard dropped → 2 killed). A bar that is checked by the reviewer rather than asserted by the author is the difference between this wave and wave-29's four escapes.
+
+2. **Two wave-30 fixes demonstrably worked in production, measured not assumed.** #1355's promotion-gate fix produced the **first AUTO promotion in ~20 recorded waves** (`wave-merge.md § Cross-Contract PRs`, `section_citations=5 >= 5`) — a gate that was structurally 0-of-25-eligible now passes. #1354's content-display fix cut the monitor's false-record family from **25 to 1** across the merge boundary. Both are before/after measurements on the live instrument, which is the standard this wave was trying to set.
+
+3. **Reviewers found what authors and the issue body missed.** Weronika caught that the #1460 fix was adding a *third* copy of a dual-shape parser the org had just spent five issues de-duplicating — and disproved the "lib cannot import hooks" premise the author had cited (#1462). Nino caught that six pre-existing #664 tests now silently read the live `cross-repo-status.json` and pass only because fixture numbers don't collide (#1463). Neither was in the issue's diagnosis.
+
+### Top 3 Pain Points
+
+1. **The wave could not be wrapped by its own tooling — twice.** `/wave-wrapup` blocked first on a genuine defect (the open-item gate counting the wave's own meta-issue, #1460), then on an exhausted GraphQL quota. The second block was *correct* (#1230: a total audit outage is not a zero), but together they mean a fully-delivered wave sat unwrappable. The first was latent since Hook 17's introduction and only surfaced because wave-30 was the first wave to label its meta-issue.
+
+2. **Scope↔PR linkage decayed silently and would have corrupted the trust matrix.** Three merged PRs (#1424, #1453, #1383) carried no closing keyword, so the `direct-to-main` matcher could not link them to their scope rows. The wrapup counter reported **17** merged PRs against a true **21**. `wave_status` did emit `scope rows with no matching merged PR: main#1272, main#1372` — the warning worked — but nothing *blocks* on it, and Step 4 derives per-engineer trust signals from the same undercounted set. Left uncorrected, four PRs of authorship and review credit would have vanished from a permanent file.
+
+3. **A gate whose name asserts a guarantee it does not implement (#1464).** The ruleset protecting `main` in `noorinalabs-main` and `noorinalabs-deploy` is named *"Protect main — require PR + green CI"* but has **no `required_status_checks` rule** — 6 of 8 repos have it, these two do not. Discovered because a wrapup bookkeeping push reported `Bypassed rule violations`. The repo hosting the no-force-merge charter clause is one of the two missing the enforcement, and **#322**, the end-state criterion that mandated it, is **closed** with that DoD item unmet.
+
+### Proposed Process Changes
+
+1. **Make the scope↔PR reconciliation warning blocking at wrapup, or gate the trust extraction on it.** — *Rationale:* pain point 2. The warning already exists and already fired; it simply had no teeth, and the artifact it protects (the trust matrix) is permanent and hand-corrected only by accident. Cheapest form: `/wave-wrapup` Step 10.5 refuses to write counters while any scope row is unclaimed, unless the operator records an explicit exemption — the same shape as the carry-forward marker on the open-item gate.
+
+2. **Require a closing keyword on every PR that delivers a scope row, checked at PR-open time.** — *Rationale:* the upstream cause of pain point 2. A PR-time hook comparing the branch's `{NNNN}` prefix against the PR body's closing refs would have caught all three misses at authoring time, when the fix is one line, rather than at wrapup, when it is archaeology.
+
+3. **Add an `enforcement_matches_name` audit for branch rulesets.** — *Rationale:* pain point 3 / #1464. This wave's whole theme is mechanisms that report a guarantee they cannot deliver; a ruleset named for a rule it does not contain is that failure shape in the merge gate itself. A periodic check that each ruleset's name-asserted guarantees appear in its rule list would have caught it without a bypass message to trip over.
+
+### Wave-shape table
+
+| dimension | value |
+|---|---|
+| PRs merged | 21 |
+| Top-implementer concentration | 19% (Aino 4/21, Nino 4/21) — theme-fit, no redistribution action |
+| CI-red merges | 0 |
+| Changes-requested cycles | 27 |
+| Scope rows | 21 (20 declared + 1 mid-wave) |
+| Tech-debt filed | 6 |
+| Admin overrides | ≥1 (bookkeeping push; **unmeasured** — see #1464) |
+
+### Step 7.6 — Annunaki attack (691 genuine records, window 2026-07-27 → 2026-08-13, spanning waves 28–30)
+
+| class | count | verdict |
+|---|---|---|
+| `pretooluse_block` | 507 | gates firing as designed — `block_bare_grep` 146, `validate_commit_identity` 104, `validate_review_comment_format` 87, `smart_grep_ontology` 65, `gh_quota_gate` 28. Benign. |
+| `posttooluse_event` | 77 | hook events (`post_label_change_wave_field_sync` 72). Benign. |
+| monitor `masked-failure` | 107 | 106 benign — agent scratch probes (`<string>`/`<stdin>` heredocs, `mutate.py`, `probe6.py`, this wave's own mutation testing) and transient push races. **1 genuine defect → #1465.** |
+
+**#1465 — the monitor records errors about reading its own error log.** An exit-0 `rg -rn --hidden … .claude/` sweep matched lines *inside* `.claude/annunaki/errors.jsonl` and the monitor logged those matches as a fresh `confidence: high`, `category: masked-failure` record. Self-referential: each `.claude/`-wide search that hits the log can append a record, enlarging the log and raising the odds the next sweep hits it. The org's own documented search idiom (`--hidden`, mandatory to avoid a silent zero on the dotted directory) makes the collision routine.
+
+It is the **residual of #1354**, whose fix demonstrably worked: `git`-related `CalledProcessError` false records number **25 before** PR #1385 merged and **1 after**. That measurement is the reason to call this a remainder rather than a regression.
+
+**Log NOT archived/reset.** Step 13a permits the archive-then-reset only once the wave's records are triaged **all benign**; #1465 is a live defect whose automation has not landed, so the records stay in the live log until it does.
+
+### Step 7.7 — Memory-to-automation audit → #1466
+
+1. **Five org-wide lessons stranded in user-space memory.** `feedback_zsh_status_readonly_in_monitor`, `feedback_child_repo_spawn_no_isolation`, `feedback_owner_merge_gate_review_first`, `feedback_commit_identity_roster_from_cwd`, `feedback_memory_judge_overflags_fully_stale` all describe traps in *this repo's own tooling* but live in the cwd-keyed user-space store, so they never reach a teammate, a fresh clone, or CI — contrary to `CLAUDE.md` § Project Memory.
+2. **`feedback_fixture_makes_guard_assertion_inert` flagged by two orthogonal instruments** — `promotion_target=none` while cited 6× (stale opt-out), and 22,005 B against a 14,336 B soft ceiling. A lesson cited six times across retros is charter material.
+3. **`feedback_actionlint_needs_shellcheck` declares `promotion_target: hook`** — an invalid memory transition that will never be evaluated, emitting a false verdict line on every audit run.
+
+### Step 7.8 — Memory size/age sweep
+
+5 of 132 topic files flagged, all on **size**, none on age. Largest: `project_narrator_chokepoints_enrich.md` (52,024 B, 26 d) — a Phase-9 data-quality artifact and the clearest archive candidate now that Phase 10 is `noorinalabs-main`-only. Carried forward; archiving is a human decision and was not taken automatically.
+
+### Step 7.5 — Promotion audit
+
+**1 AUTO · 0 DECIDE · 255 KEPT · 22 SUPERSEDED.** The AUTO is `wave-merge.md § Cross-Contract PRs` (charter → skill, `section_citations=5 >= 5`) — **the first AUTO promotion in ~20 recorded waves**, and the direct product of this wave's #1355 fix. The artifact itself was not generated in this run; promotion of a charter section is an owner decision and is surfaced, not auto-applied.
+
