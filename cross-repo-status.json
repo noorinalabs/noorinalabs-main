@@ -1,4 +1,5 @@
 {
+  "wave_31_meta_issue": 1468,
   "wave_30_meta_issue": 1353,
   "wave_30_phase": 10,
   "wave_30_phase_ordinal": 3,
@@ -130,6 +131,9 @@
   "wave_30_decisions": {"implementer_substitutions":[{"repo":"noorinalabs-main","issue":"main#1361","declared":"Nino Kavtaradze","actual":"Santiago Ferreira","pr":1393,"swapped_at":"2026-08-11T22:43:45Z","rationale":"Bundled into Santiago Ferreira's #1359 PR (verdict-vocabulary extraction). The wave-30 meta-issue execution order flagged that #1361/#1372 touch charter_trailer.py alongside #1359 and told implementers to sequence or coordinate to avoid collision; bundling the two charter_trailer changes into one PR was that coordination. Benign - recorded per charter Implementer-Substitution Reconciliation rather than left silent."}]},
   "wave_30_wrapped_at": "2026-08-13T21:48:26Z",
   "wave_30_scope_amendment_1460": "Mid-wave addition 2026-08-13: #1460 (wrapup gate counted the wave meta-issue as unfinished work) filed and delivered by PR #1461 during this wave own wrapup. Added as a tier_1 row mirroring #1399. Also repaired three missing closing-reference linkages (#1272->PR1424, #1372->PR1453, #1355->PR1383) so the direct-to-main merged-PR set reconciles at 21.",
+  "wave_30_annunaki_attack_ran_at": "2026-08-13T22:41:19Z",
+  "wave_30_memory_audit_ran_at": "2026-08-13T22:41:19Z",
+  "wave_30_retro_completed_at": "2026-08-13T22:41:19Z",
   "wave_29_meta_issue": 1133,
   "wave_29_phase": 10,
   "wave_29_phase_ordinal": 2,
