@@ -3,7 +3,7 @@ name: feedback_actionlint_needs_shellcheck
 description: actionlint silently skips its shellcheck integration if the binary isn't on PATH locally — local "clean" claim can be wrong vs CI
 type: feedback
 originSessionId: 2e011116-89b1-4ac2-b2fc-1d5649d609c7
-promotion_target: hook
+promotion_target: charter
 promotion_threshold:
   retro_citations: 3
 status: active

@@ -4,7 +4,7 @@ description: Workflows that check out sibling repos for cross-repo tests must re
 type: feedback
 last_verified: 2026-07-27
 originSessionId: af6f52a7-e25c-41f4-9365-06539062b665
-promotion_target: hook
+promotion_target: charter
 promotion_threshold:
   retro_citations: 3
 status: active

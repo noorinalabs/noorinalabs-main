@@ -3,7 +3,7 @@ name: feedback_rg_dash_r_is_replace_not_recursive
 description: "`rg -rn <pat>` is not grep's recursive+line-numbers — `-r` is --replace and eats the next token, silently rewriting every match to that string. Output stays plausible, so corrupted identifiers get transcribed as verified fact."
 type: feedback
 last_verified: 2026-07-27
-promotion_target: hook
+promotion_target: charter
 promotion_threshold:
   retro_citations: 2
 status: active
