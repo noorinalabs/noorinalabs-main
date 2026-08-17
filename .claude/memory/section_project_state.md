@@ -5,7 +5,18 @@
      Do NOT auto-inject this file at session start (that re-adds the whole
      always-loaded index the #1016 two-tier split removed). -->
 
-- [Narrator choke-points enrich](project_narrator_chokepoints_enrich.md) — **✅ PROD CUTOVER FULLY COMPLETE 2026-07-17** (deploy#610+#611 both CLOSED; main#928 choke-point program live on prod, 107,951 canonical nodes; prod over_merged flag op done, bidirectional-verified). Bare-name over-merge FLAGGED not split — corpus-internally unsplittable (spike NO/NO); #337 flag-now, #443 external-evidence split deferred to W27. Non-blockers: ig#1185, ~7.5h resolve re-run, da#446/#443. Full cutover changelog + cypher-shell gotchas retained in-file.
+<!-- ARCHIVED 2026-08-17 (#1466): [Narrator choke-points enrich] moved to
+     archive/project_narrator_chokepoints_enrich.md — cold tier: still
+     git-tracked and grep-able, no longer index-loaded or budget-counted.
+     Rationale: the program it tracks COMPLETED on prod 2026-07-17
+     (deploy#610 + #611 both closed) and Phase 10 is noorinalabs-main-only,
+     so it is history rather than live state. At 52,024 B it was the largest
+     note in the corpus (3.6x the soft ceiling) and had been decay-flagged
+     for several waves. The still-live operational detail it carried is not
+     orphaned: cypher-shell / graph-ops gotchas are in
+     [[reference_graph_ops_cypher_shell]]. Read the archived file directly
+     for the full cutover changelog. -->
+
 - [Ontology system](project_ontology_system.md) — two-layer model: curate-semantic (/ontology-rebuild + checksums) + generate-structural (ontology_gen + aggregate); librarian surfaces both; lifecycle integrated by #862; Hook 15 ADVISORY since #857. Structural llms.txt now leads with a PageRank "Hub files" view (main#1002).
 - [Vector index deferred](project_vector_index_deferred.md) — token-eff Move #10 (prose vector index) DEFERRED-by-design 2026-07-19; trigger unmet (grep=6ms, MEMORY.md 98/132 & shrinking; Anthropic dropped RAG; egress cost). Revisit only on named tripwires. main#986.
 - [Bootstrap repo](project_bootstrap_repo.md) — separate repo to dogfood the team/workflow/ontology pattern for reuse across projects.

@@ -848,10 +848,10 @@
       "resolved_at": "2026-06-21T21:02:19.551435+00:00"
     },
     ".claude/memory/MEMORY.md": {
-      "last_tracked": "dcb94c9192cd1bb95db299387959e4b49eafc1063755bf4adc32256a63d1d968",
-      "last_resolved": "dcb94c9192cd1bb95db299387959e4b49eafc1063755bf4adc32256a63d1d968",
-      "tracked_at": "2026-08-17T22:18:42.375366+00:00",
-      "resolved_at": "2026-08-17T22:21:00.047561+00:00"
+      "last_tracked": "0c819e2854f0fb9a31472299c45645ca86c9ea0f5665043dbc6b0249159f6e8c",
+      "last_resolved": "0c819e2854f0fb9a31472299c45645ca86c9ea0f5665043dbc6b0249159f6e8c",
+      "tracked_at": "2026-08-17T22:27:02.829886+00:00",
+      "resolved_at": "2026-08-17T22:27:13.666664+00:00"
     },
     "noorinalabs-isnad-graph/.claude/lib/tests/test_pre_commit_ci_sync.py": {
       "last_tracked": "aa209279deec3844b51e384157ba3e67a6d0f325410941f63f38d57535e6498c",
@@ -1177,12 +1177,6 @@
       "tracked_at": "2026-07-09T18:08:28.197914+00:00",
       "resolved_at": "2026-07-10T21:45:55Z"
     },
-    ".claude/memory/project_narrator_chokepoints_enrich.md": {
-      "last_tracked": "6f15b35dc0b54a253f14c13e486a639b2f827ad693b14ffc0159500c1441aa7a",
-      "last_resolved": "6f15b35dc0b54a253f14c13e486a639b2f827ad693b14ffc0159500c1441aa7a",
-      "tracked_at": "2026-07-18T01:44:32.660264+00:00",
-      "resolved_at": "2026-07-18T20:17:55Z"
-    },
     "noorinalabs-deploy/.github/workflows/deploy-data-load.yml": {
       "last_tracked": "6b4df198ba39a7fbdff6def6a1133f9c574f2adf03be831e085fa561f96a9dd4",
       "last_resolved": "6b4df198ba39a7fbdff6def6a1133f9c574f2adf03be831e085fa561f96a9dd4",
@@ -1310,10 +1304,10 @@
       "resolved_at": "2026-07-17T03:45:37Z"
     },
     ".claude/lib/memory_budget.py": {
-      "last_tracked": "384b69e534482a8678ccc3ec9fb5167379eb9f3d29079c90f26b8dac856036c8",
-      "last_resolved": "384b69e534482a8678ccc3ec9fb5167379eb9f3d29079c90f26b8dac856036c8",
-      "tracked_at": "2026-07-19T04:25:05.792644+00:00",
-      "resolved_at": "2026-07-19T13:55:00Z"
+      "last_tracked": "eeac3fe76e8b19d899aedb64ddfad3aaf89792e2b650296d308283d994f9e1b5",
+      "last_resolved": "eeac3fe76e8b19d899aedb64ddfad3aaf89792e2b650296d308283d994f9e1b5",
+      "tracked_at": "2026-08-17T22:26:29.577185+00:00",
+      "resolved_at": "2026-08-17T22:27:13.666664+00:00"
     },
     "ontology/lifecycle.md": {
       "last_tracked": "f9ff452434b8d33e600381f7e80a9beaeea71f53efb2d360765bddc1a977246a",
@@ -1884,6 +1878,12 @@
       "last_resolved": "9515d0ab1cda774f96058542fdbf332c6e3cd64adcc53f28fe9b3d77194ae7e4",
       "tracked_at": "2026-08-17T22:20:16.503756+00:00",
       "resolved_at": "2026-08-17T22:21:00.047561+00:00"
+    },
+    ".claude/memory/section_project_state.md": {
+      "last_tracked": "b982fcbb0f9b3b267446033405d83b16dff44009299e732977562ac9e00ebd68",
+      "last_resolved": "b982fcbb0f9b3b267446033405d83b16dff44009299e732977562ac9e00ebd68",
+      "tracked_at": "2026-08-17T22:26:56.025237+00:00",
+      "resolved_at": "2026-08-17T22:27:13.666664+00:00"
     }
   },
   "last_cleanup": {

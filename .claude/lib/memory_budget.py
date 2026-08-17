@@ -106,6 +106,42 @@ index entries = 98,  topic files = 98,  ToC MEMORY.md = 2,502 bytes,  sections =
         This is the cap that actively keeps the per-turn always-loaded cost small.
     MAX_TOC_SECTIONS  = 12  → NEW; ~4 rows / 50% headroom over the 8 sections.
 
+Raise 2026-08-17 (owner decision, P10W30 close, #1466) — 132 → 136, WITH a
+consolidation pass
+================================================================================
+The gate fired at index = 135 / files = 135 when three org-wide lessons were
+migrated OUT of the cwd-keyed user-space auto-memory store and INTO
+``.claude/memory/`` (#1466 — they were contrary to ``CLAUDE.md`` § Project
+Memory, reaching only one user in one directory).
+
+The P8W24 block above says the next overflow "should be met with a consolidation
+pass, not another bump — a cap that is raised on every overflow is not a forcing
+function, it is a formality." That guidance is honoured here, on both counts:
+
+1. **This overflow is a bookkeeping correction, not growth.** The three notes
+   were ALREADY being loaded into every session, from the user-space store. The
+   effective corpus was 135 before the migration and 135 after; only the
+   *measured* denominator changed, because the gate globs ``.claude/memory/``
+   and could not see the notes sitting outside it. Paying for that correction by
+   retiring unrelated memories would conflate two decisions.
+2. **A consolidation pass was run anyway, on its own merits.**
+   ``project_narrator_chokepoints_enrich.md`` (52,024 B — 3.6x the soft per-file
+   ceiling, the largest note in the corpus, a Phase-9 data-quality artifact
+   flagged by the decay sweep for several waves running) moved to the cold
+   ``archive/`` tier now that Phase 10 is ``noorinalabs-main``-only. The P10W30
+   retro named it "the clearest archive candidate" and left it as a human
+   decision; this is that decision.
+
+    MAX_INDEX_ENTRIES = 136  → 2 entries of headroom over the post-archive 134.
+    MAX_MEMORY_FILES  = 136  → 2 files   of headroom over the post-archive 134.
+
+The headroom is deliberately *tighter still* than the P8W24 raise (~1.5% vs
+~10%): the corpus did not genuinely grow this time, so the cap should not
+genuinely grow either. The standing guidance is unchanged and now doubly earned
+— **the next overflow needs a consolidation pass, not a bump.** Four size-flagged
+notes remain above the soft ceiling (``feedback_fixture_makes_guard_assertion_inert``
+at 23 KB is the largest); they are the natural next candidates.
+
 The headroom is deliberately modest: enough that a normal wave's memory intake
 does not trip the gate, but tight enough that it forces a consolidate/retire
 decision before the corpus drifts back toward its pre-audit bloat. Raising a cap
@@ -138,8 +174,8 @@ from pathlib import Path
 from typing import NamedTuple
 
 # --- Budget: the single source of truth. Edit a number here and nowhere else. ---
-MAX_INDEX_ENTRIES = 132
-MAX_MEMORY_FILES = 132
+MAX_INDEX_ENTRIES = 136
+MAX_MEMORY_FILES = 136
 MAX_MEMORY_BYTES = 6_144  # 6 KiB — the always-loaded ToC only (#1016)
 MAX_TOC_SECTIONS = 12  # ToC section rows in MEMORY.md (#1016)
 
