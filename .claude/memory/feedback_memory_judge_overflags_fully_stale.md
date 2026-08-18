@@ -14,6 +14,7 @@ status: active
 > 2. **Its `charter` signal was an artifact.** At `charter` the note classified AUTO on `retro_citations=3 >= 3`, but one of those 3 (`feedback_log.md:808`) is #1466's own bookkeeping line listing this file as stranded in user-space — i.e. the promotion was triggered by the housekeeping ticket that moved it, not by anyone citing the lesson. Corrected count: 2, below threshold. Same provenance-blind counter defect as noorinalabs-main#1469.
 >
 > This note's value is as a **calibration warning read alongside the judge's output**, which is where `/memory-judge`'s brief already points. That is a memory's job, not a charter rule's.
+
 `/memory-judge` (`.claude/skills/memory-judge/`, `.claude/agents/memory-judge.md`) resolves a note's backtick-quoted citations by grepping **this repo only**. Anything it cannot resolve that way it reports as stale. Its **fully-stale** bucket is therefore a list of *candidates to verify*, and must never be executed as a delete list. **Few or zero deletions is a success outcome, not a shortfall** (owner, standing).
 
 **Track record — 18 flags, 18 false positives:**

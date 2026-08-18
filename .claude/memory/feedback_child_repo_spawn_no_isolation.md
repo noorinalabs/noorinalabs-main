@@ -28,7 +28,7 @@ The 3 **parent-repo** agents in the same batch (work under `.claude/hooks/`, `.g
 
 The parenthetical is exactly the case that does not work. The parent worktree is not cosmetic for child-repo work — it is **load-bearing in the wrong direction**, making the child repo unreachable. An orchestrator following the charter literally will lose every child-repo spawn in the batch.
 
-The charter's stated rationale (workspace presentation — non-isolated agents render as generic "background tasks") is a real UI cost, but it is traded against total functional failure, so it cannot win for child-repo spawns. Tracked as a charter-correction issue; until that lands, **this note overrides the charter for child-repo spawns** per the enforcement hierarchy's intent (a rule that cannot be complied with is not binding). See [[feedback_enforcement_hierarchy]].
+The charter's stated rationale (workspace presentation — non-isolated agents render as generic "background tasks") is a real UI cost, but it is traded against total functional failure, so it cannot win for child-repo spawns. Tracked as a charter-correction issue (noorinalabs-main#1471); until that lands, **this note overrides the charter for child-repo spawns**, on the narrow ground that a rule which cannot be complied with cannot be binding — the charter's instruction here does not merely produce a worse outcome, it produces no outcome at all. That argument stands on its own; it is not an application of [[feedback_enforcement_hierarchy]], which ranks hook > skill > charter when choosing where to *author* new enforcement and says nothing about memory-vs-charter precedence.
 
 ## How to apply
 
