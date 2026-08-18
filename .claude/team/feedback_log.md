@@ -868,6 +868,6 @@ Deliberately noted: writing this entry increments the citation counts of every m
 
 ### Residual not closed
 
-#1466's acceptance criterion "0 unreviewed stale opt-outs" is **not met and cannot be met as written**: the audit has no mechanism to mark an opt-out as reviewed. The rationale now lives in each note's frontmatter, but the tool cannot see it, so the advisory recurs every wave. Flagged on #1466 for folding into #1469's fix rather than being quietly claimed as satisfied.
+Issue #1466's acceptance criterion "0 unreviewed stale opt-outs" is **not met and cannot be met as written**: the audit has no mechanism to mark an opt-out as reviewed. The rationale now lives in each note's frontmatter, but the tool cannot see it, so the advisory recurs every wave. Flagged on #1466 for folding into #1469's fix rather than being quietly claimed as satisfied.
 
 **Artifacts:** #1469 (self-incrementing citation signal, both tiers) · #1470 (PR — memory migration, 5 target repairs, budget raise + archive) · #1471 (charter spawn-isolation defect) · comments on #1450, #1455, #1466.
