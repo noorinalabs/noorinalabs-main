@@ -1214,10 +1214,10 @@
       "resolved_at": "2026-07-17T03:45:37Z"
     },
     ".claude/memory/feedback_fixture_makes_guard_assertion_inert.md": {
-      "last_tracked": "6eab20dc9dd7b9668ac40184c0c0f1dbc740afe2cbc48a32582e96ffa6d12a92",
-      "last_resolved": "6eab20dc9dd7b9668ac40184c0c0f1dbc740afe2cbc48a32582e96ffa6d12a92",
-      "tracked_at": "2026-08-17T22:18:20.930522+00:00",
-      "resolved_at": "2026-08-17T22:21:00.047561+00:00"
+      "last_tracked": "c995a43b8a84c192fdcae54be03577981be3bcd537e7699ba79e511d28726cb8",
+      "last_resolved": "c995a43b8a84c192fdcae54be03577981be3bcd537e7699ba79e511d28726cb8",
+      "tracked_at": "2026-08-18T22:19:39.699964+00:00",
+      "resolved_at": "2026-08-18T22:19:45.225752+00:00"
     },
     ".claude/memory/feedback_sweep_expensive_stage_before_launch.md": {
       "last_tracked": "9d7c4156166e161d7f437ce2df4167c99aa9136880e6888cc5b23343dc93705d",
@@ -1850,10 +1850,10 @@
       "resolved_at": "2026-08-12T22:31:45.781434+00:00"
     },
     ".claude/memory/feedback_child_repo_spawn_no_isolation.md": {
-      "last_tracked": "599119ca46d2ed35ef2e4c7425ef32551c601cac48eccfec8794ec6b91eec45a",
-      "last_resolved": "599119ca46d2ed35ef2e4c7425ef32551c601cac48eccfec8794ec6b91eec45a",
-      "tracked_at": "2026-08-17T22:17:13.565040+00:00",
-      "resolved_at": "2026-08-17T22:21:00.047561+00:00"
+      "last_tracked": "0e13a0266ba3e2bf8d56df9bdb6fc3f8031d024d23690cc8cb60f5470edc3e75",
+      "last_resolved": "0e13a0266ba3e2bf8d56df9bdb6fc3f8031d024d23690cc8cb60f5470edc3e75",
+      "tracked_at": "2026-08-18T22:19:24.673776+00:00",
+      "resolved_at": "2026-08-18T22:19:45.225752+00:00"
     },
     ".claude/memory/feedback_commit_identity_roster_from_cwd.md": {
       "last_tracked": "ec6ea9b596a61ac9f1cb73d7af7b9e169e80ed25092ccdec1f84d31789aa8627",
@@ -1874,10 +1874,10 @@
       "resolved_at": "2026-08-17T22:21:00.047561+00:00"
     },
     ".claude/memory/feedback_memory_judge_overflags_fully_stale.md": {
-      "last_tracked": "9515d0ab1cda774f96058542fdbf332c6e3cd64adcc53f28fe9b3d77194ae7e4",
-      "last_resolved": "9515d0ab1cda774f96058542fdbf332c6e3cd64adcc53f28fe9b3d77194ae7e4",
-      "tracked_at": "2026-08-17T22:20:16.503756+00:00",
-      "resolved_at": "2026-08-17T22:21:00.047561+00:00"
+      "last_tracked": "082c587aca3ccb9406089a3b621fcffa1eab4bc19c500f49d644aab48544820e",
+      "last_resolved": "082c587aca3ccb9406089a3b621fcffa1eab4bc19c500f49d644aab48544820e",
+      "tracked_at": "2026-08-18T22:19:24.425585+00:00",
+      "resolved_at": "2026-08-18T22:19:45.225752+00:00"
     },
     ".claude/memory/section_project_state.md": {
       "last_tracked": "b982fcbb0f9b3b267446033405d83b16dff44009299e732977562ac9e00ebd68",
