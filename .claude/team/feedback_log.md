@@ -827,3 +827,47 @@ This is the **second consecutive clean run**, and the 45 → 0 correction is the
 
 **The `last_verified` bump on all 87 was NOT applied.** Stamping `last_verified: 2026-08-13` suppresses a note from judge selection for the next 60 days, so a bulk stamp on the strength of a single pass that cleared 100% of its population would silence the detector across the whole corpus at once. The asymmetry matters: an unstamped note costs one re-check next wave; a wrongly-stamped one is invisible for two months. Recommended instead: stamp incrementally as notes are genuinely re-read in the course of work, which is what the frontmatter is documented to mean ("re-read and re-confirmed against the code/repo, not merely re-read for context").
 
+
+---
+
+## P10W30 — owner decisions on the three outstanding retro calls (2026-08-18)
+
+The wave-30 retro left three items explicitly to the owner. All three were taken in a single session; two produced work, one closed as no-action.
+
+### Call 1 — the AUTO promotion (`wave-merge.md` § Cross-Contract PRs) → NOT promoted
+
+The retro celebrated this as "the first AUTO promotion in ~20 recorded waves" and "the direct product of this wave's #1355 fix." Re-running the driver before acting showed the signal had moved on its own: **5 → 7**, and the delta was exactly the two lines the retro itself wrote about the 5.
+
+Tracing all 7 occurrences: 2 are the section's creation record, 1 is a genuine application (P2 alembic merge migration), 1 is a wave summary listing the § among that wave's charter edits, 1 is a *proposal to house a different rule* there, and 2 are the retro reporting the verdict. **Honest count of "an operator invoked this rule during real work": 1**, against a threshold of 5. The rule also governs cross-repo contracts (Kafka topics, Parquet schemas, wire formats) and Phase 10 is `noorinalabs-main`-only, so it is not currently being exercised at all.
+
+**The gate is self-incrementing.** #1355 replaced a signal that was structurally 0-forever (invocations of a skill that cannot exist until after promotion) with one that is unbounded in the opposite direction (heading mentions in a corpus the audit writes to). Once a section crosses, retro reporting alone keeps it above threshold permanently. It governs all 25 `promotion-target: skill` sections. Filed **#1469**; correction posted to **#1450**, whose "5 genuine citations" hand-verification this falsifies, and cross-referenced on **#1455**.
+
+The lesson for future retros: *the first artifact through a newly repaired gate deserves the same scrutiny as the gate repair itself.* A gate that starts passing is evidence it can pass, not evidence that what passed deserved to.
+
+### Call 2 — memory drift (#1466) → all three sub-items actioned, PR #1470
+
+Two of the issue's own counts were wrong, in the same direction: it reported **1** invalid `promotion_target` (there were **5**) and treated a 6× citation count as evidence of use (2 substantive, 5 bookkeeping).
+
+**The memory tier has the same defect as call 1, in a worse form.** `/wave-retro` Step 7.8's size sweep prints a flagged file's *name* every wave, and `count_retro_citations` counts `text.count(filename)` — so **a memory accrues +1 citation per wave for being large**. File size and citation-worthiness are unrelated signals and the counter couples them. Measurement posted to #1469, which now covers both tiers; the shared root cause is that the citation counter is **provenance-blind** — it cannot tell "an operator invoked this rule" from "an automated sweep printed this name."
+
+This bit twice more during the session itself. Setting `feedback_memory_judge_overflags_fully_stale` to `charter` (the correct-looking fix for its invalid `skill` target) immediately classified it **AUTO** at `retro_citations=3 >= 3` — where the third citation was #1466's *own* bookkeeping line listing the file as stranded. The housekeeping ticket that moved a file would have promoted it. Set to `none` instead, per the retro's own "retained, not retired."
+
+**The migration paid for itself on the first note.** `feedback_child_repo_spawn_no_isolation` documents a **live, uncorrected charter defect** — `orchestration-model.md:31` § Spawn Isolation Default still mandates `isolation: "worktree"` for child-repo spawns, the exact form that failed **7/7** at W28 kickoff (the harness refuses every route to a nested child repo; `dangerouslyDisableSandbox` does not lift it). The correction was diagnosed three weeks ago and then *lost*, because it was written to the cwd-keyed user-space store that only one user in one directory can read. Filed **#1471**, correcting the closed #290 that introduced the rule.
+
+That is the concrete answer to "does misfiling a memory actually cost anything" — cite it the next time the question comes up. Note also that two of the five "stranded" notes did not need migrating at all (one was already in-repo and strictly richer, one folded into an existing note), so the issue's framing of five orphans was itself half right.
+
+Budget raised **132 → 136** paired with a consolidation pass, not instead of one: the 3 migrated notes were already loaded every session from user-space, so the effective corpus was 135 before *and* after — only the measured denominator changed. Independently, `project_narrator_chokepoints_enrich` (52 KB, largest in corpus) moved to the cold `archive/` tier, closing call 3 below. Post-state 134/136.
+
+### Call 3 — remaining memory archive candidates → NO ACTION, carry-forward closed
+
+The retro's named candidate was archived under call 2. The 4 that remain are **size-only, zero age flags**, and none has the property that made the narrator note archivable: its *subject matter ended* (Phase 9 completed, Phase 10 is main-only, so it became history). The rest are live guidance that happens to be long — and length is the weakest available retirement signal, since it mostly tracks how much has been learned about a topic. Archiving `feedback_gh_cli_gotchas` to satisfy a size advisory would remove the note you most want loaded when you are about to hit gotcha #13.
+
+**A measurement gap worth carrying, though not worth acting on yet.** The sweep's own advisory concedes "age is edit-recency, not reference-recency" — so a note nobody reads but that gets mechanically touched looks fresh, while a stable heavily-read note looks stale. Combined with the citation coupling above, the two instruments now actively contradict each other on the same files: `feedback_fixture_makes_guard_assertion_inert` is flagged as too big *and* was flagged as over-cited, and **the second flag was caused by the first**.
+
+Deliberately noted: writing this entry increments the citation counts of every memory named in it. That is #1469 in miniature, recorded here on purpose as further evidence rather than avoided by not naming the files.
+
+### Residual not closed
+
+Issue #1466's acceptance criterion "0 unreviewed stale opt-outs" is **not met and cannot be met as written**: the audit has no mechanism to mark an opt-out as reviewed. The rationale now lives in each note's frontmatter, but the tool cannot see it, so the advisory recurs every wave. Flagged on #1466 for folding into #1469's fix rather than being quietly claimed as satisfied.
+
+**Artifacts:** #1469 (self-incrementing citation signal, both tiers) · #1470 (PR — memory migration, 5 target repairs, budget raise + archive) · #1471 (charter spawn-isolation defect) · comments on #1450, #1455, #1466.

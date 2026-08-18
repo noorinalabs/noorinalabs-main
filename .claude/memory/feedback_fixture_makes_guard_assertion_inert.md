@@ -3,7 +3,15 @@ name: feedback_fixture_makes_guard_assertion_inert
 description: "A negative-guard assertion (`assert not id.startswith(BAD_PREFIX)`) is only meaningful if some fixture in the suite CAN produce BAD_PREFIX. An unrealistic fixture silently renders the guard structurally unreachable — it sits green forever while the defect it names runs in production."
 metadata:
   type: feedback
+last_verified: 2026-08-17
+promotion_target: none
+status: active
 ---
+
+> **Opt-out rationale (owner decision 2026-08-17 — do not re-litigate without new evidence).**
+> `/promotion-audit` flags this note as a *stale opt-out*: `promotion_target=none` while `retro_citations=7`, over the `2 × threshold` line. **The citation count is inflated and is not evidence of use.** Exactly **2 occurrences are substantive** (`feedback_log.md:633,656` — the wave that derived the lesson); **every other occurrence is bookkeeping**: `/wave-retro` Step 7.8 *size-sweep* listings that print this filename every wave purely because the file is over the 14 KB soft ceiling, plus the Step 7.7 audit reporting the citation count itself, plus each retro entry that discusses this decision. The total is deliberately not quoted here — it rises every wave without the substantive count changing, which is the whole point.
+> Because `count_retro_citations` counts `text.count(memory.filename)`, **a large memory file accrues +1 citation per wave forever, for being large.** Corrected count: **2**, below threshold. The opt-out stands.
+> The 22 KB size flag is a **separate and valid** finding — this note is a genuine consolidation candidate on its own merits, not because of citations. Counter defect tracked at noorinalabs-main#1469; intake at noorinalabs-main#1466.
 
 **An assertion about a value the fixture cannot produce is not a test. It is a comment that costs CI time.**
 

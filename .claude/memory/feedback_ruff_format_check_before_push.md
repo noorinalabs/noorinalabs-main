@@ -3,7 +3,7 @@ name: feedback_ruff_format_check_before_push
 description: Pre-push muscle memory — `uvx ruff@<pinned> format --check .claude/hooks/` catches what hooks-lint CI will block on, avoiding additive format-fix commits
 type: feedback
 originSessionId: 327bdb0e-5fea-4971-8f0f-e1e28b937e1c
-promotion_target: hook
+promotion_target: charter
 promotion_threshold:
   retro_citations: 3
 status: active
