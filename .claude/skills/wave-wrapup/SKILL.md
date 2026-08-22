@@ -598,7 +598,25 @@ if [ -z "$WAVE_SINCE" ]; then
   exit 1
 fi
 
-WAVE_REPOS_IN_SCOPE=$(jq -r ".wave_{M}_repos_in_scope[]" "$STATUS")
+# Scope must be a NON-EMPTY list. An absent key makes jq print "Cannot iterate
+# over null" and exit non-zero; a `[]` value makes it exit 0 with no output.
+# BOTH leave the variable empty, the loop below runs zero times, and — before
+# main#1478's review — the block then reported and PERSISTED `verified` over an
+# audit that examined nothing. That is the exact fail-open this gate exists to
+# detect, in the gate's own entry point, and it is worse here than in 11.5a
+# because 11.5b's verdict is written to cross-repo-status.json and read back by
+# /wave-retro, so a false clean outlives the run. `repos_in_scope` is also the
+# MORE fallible of the two window keys in practice: 13 waves carry it, only 5
+# carry `started_at` (which was already guarded, two lines above).
+WAVE_REPOS_IN_SCOPE=$(jq -er ".wave_{M}_repos_in_scope[]" "$STATUS" 2>/dev/null) || WAVE_REPOS_IN_SCOPE=""
+if [ -z "$WAVE_REPOS_IN_SCOPE" ]; then
+  echo "BLOCKED: wave_{M}_repos_in_scope is absent or empty in cross-repo-status.json,"
+  echo "  so there is nothing to audit. A zero-repo audit is NOT a clean audit."
+  echo "  /wave-kickoff writes this key — set it and re-run."
+  exit 1
+fi
+GATE_REPOS_EXPECTED=$(jq -r ".wave_{M}_repos_in_scope | length" "$STATUS")
+GATE_REPOS_AUDITED=0
 GATE_FINDINGS=()
 GATE_RESULT="verified"
 
@@ -612,17 +630,47 @@ GATE_REPO_LIST=$(mktemp)
 printf '%s\n' "$WAVE_REPOS_IN_SCOPE" > "$GATE_REPO_LIST"
 while IFS= read -r R; do
   [ -z "$R" ] && continue
+  GATE_REPOS_AUDITED=$((GATE_REPOS_AUDITED + 1))
   # Exit codes: 0 = every merge in the window is PASS or EXEMPT; 1 = at least one
   # UNREVIEWED; 2 = UNDETERMINED (a gh/API failure, an unparseable payload, or a
   # truncated population — surfaced as blocking, never as "no problems found").
+  # Captured to a variable, not read inside `case $?`, so the code can be NAMED
+  # in the unexpected-status diagnostic below.
   python3 "$AUDIT" "noorinalabs/$R" --since "$WAVE_SINCE"
-  case $? in
+  GATE_RC=$?
+  case "$GATE_RC" in
     0) echo "$R: gate integrity verified — every merge PASS or EXEMPT" ;;
     1) GATE_FINDINGS+=("$R — UNREVIEWED merge(s): the gate did not bind and no exception was declared") ;;
     2) GATE_FINDINGS+=("$R — UNDETERMINED: the audit could not be completed, so any count above is a LOWER BOUND, not a clean result") ;;
+    # Anything outside the documented set is not a verdict. Without this arm a
+    # killed (137), crashed, or wrong-binary run fell through and counted as
+    # CLEAN — the module docstring's promise that no failure renders as "no
+    # problems found" was broken here, in the wrapper, not in the Python.
+    # Deliberately NOT folded into the exit-2 wording: "gh/API error" sends the
+    # operator to re-check `gh auth status`, which is the wrong instruction for
+    # a process that was killed (main#981 — name the defect you actually have).
+    *) GATE_FINDINGS+=("$R — UNEXPECTED audit exit status $GATE_RC (outside the documented 0/1/2): the audit was killed, crashed, or is not the expected binary. Not a verdict, and not a clean result") ;;
   esac
 done < "$GATE_REPO_LIST"
 rm -f "$GATE_REPO_LIST"
+
+# POSITIVE assertion on what was actually examined, not merely on what was
+# planned. The pre-check above rejects an absent/empty key, but only this
+# catches a scope list that is non-empty yet yields no audited repo (all-blank
+# entries, a read that terminated early, a failed mktemp). "Zero repos audited"
+# and "zero problems found" must never be the same observable outcome — and the
+# count is compared against the declared scope, so a PARTIAL walk is caught too.
+if [ "$GATE_REPOS_AUDITED" -eq 0 ] || [ "$GATE_REPOS_AUDITED" -ne "$GATE_REPOS_EXPECTED" ]; then
+  echo "════════════════════════════════════════════════════════════"
+  echo "BLOCKED: /wave-wrapup cannot close wave {M} — the gate-integrity audit"
+  echo "  examined $GATE_REPOS_AUDITED repo(s) but wave_{M}_repos_in_scope declares"
+  echo "  $GATE_REPOS_EXPECTED. An audit that did not examine its whole scope has not"
+  echo "  measured anything, and must not be recorded as verified. This is NOT"
+  echo "  overridable by GATE_INTEGRITY_OVERRIDE_RATIONALE — that override"
+  echo "  acknowledges a FINDING, not a missing measurement."
+  echo "════════════════════════════════════════════════════════════"
+  exit 1
+fi
 
 if [ ${#GATE_FINDINGS[@]} -gt 0 ]; then
   echo "════════════════════════════════════════════════════════════"
@@ -663,6 +711,8 @@ python3 "$UPSERT" "$STATUS" \
 # Read-back verify (feedback_gh_cli_gotchas family).
 jq -r --arg m "{M}" '"wave_" + $m + "_gate_integrity = " + (.["wave_" + $m + "_gate_integrity"] | tostring)' "$STATUS"
 ```
+
+**A zero-repo audit is not a clean audit, and is not overridable.** The wrapper guards its own inputs the way the classifier guards its verdicts: an absent or `[]` `wave_{M}_repos_in_scope` blocks before the loop, and after it a positive assertion requires the number of repos actually audited to equal the number the scope declares. Both were fail-open in the first cut of this step — an audit that examined nothing exited 0 and *persisted* `verified`, which `/wave-retro`'s carry-forward then read back as a measured result (found in merge-gate review of main#1478). An exit status outside the documented `0/1/2` set — a killed or crashed audit — is likewise a finding with its own diagnostic, not a pass. Neither guard is reachable by `GATE_INTEGRITY_OVERRIDE_RATIONALE`: the override acknowledges a **finding**, never a **missing measurement**. All three paths are pinned by `tests/test_step_11_5b_gate_integrity.py`, which extracts and executes this very block rather than a paraphrase of it, so the block cannot drift away from its own tests.
 
 **Override mechanism** (when an unreviewed merge is acknowledged rather than repaired):
 
