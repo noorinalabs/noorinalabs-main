@@ -174,11 +174,20 @@ class ZeroRepoAuditTests(_WrapperHarness):
         self.assertNotFalselyClean(proc, persisted, audited)
         self.assertEqual(audited, [])
 
-    def test_all_blank_repo_entries_block(self):
-        """Belt-and-braces: a list that is non-empty but yields no audited repo.
+    def test_blank_scope_entries_block_via_count_mismatch(self):
+        """Belt-and-braces: a scope list that is not audited in full.
 
-        The pre-check alone passes this (the variable is non-empty); only a
-        POSITIVE assertion on how many repos were actually audited catches it.
+        Note WHICH guard catches this, because that is the whole point of the
+        case. The fixture is `["", "  "]`: the empty string is skipped by
+        `[ -z "$R" ]`, but `"  "` is two spaces — NOT empty to `test -z` — so it
+        IS audited, as a bogus repo name. So one repo is audited against a
+        declared scope of two, and it is the count-vs-declared MISMATCH arm that
+        blocks, not the zero-audited arm and not blankness.
+
+        (An earlier version of this docstring claimed the fixture "yields no
+        audited repo". Fail-closed either way, but a test whose stated mechanism
+        is not its actual mechanism teaches the next reader the wrong thing —
+        found in review of PR #1478.)
         """
         proc, persisted, audited = self._run(
             {
@@ -275,6 +284,23 @@ class DocumentedExitCodeTests(_WrapperHarness):
         self.assertEqual(persisted[f"wave_{_WAVE}_gate_integrity"], "overridden")
         self.assertIn("#1476", persisted[f"wave_{_WAVE}_gate_integrity_override_rationale"])
 
+    def test_override_does_not_rescue_a_partial_scope_walk(self):
+        """The SECOND new guard (count-vs-declared) is override-proof too.
+
+        The sibling test below covers the pre-loop guard; this one covers the
+        post-loop assertion, so the narrowed claim in SKILL.md — that *these two
+        guards* are unreachable by the override — is backed at both sites rather
+        than at one and assumed at the other.
+        """
+        proc, persisted, audited = self._run(
+            {
+                f"wave_{_WAVE}_started_at": _SINCE,
+                f"wave_{_WAVE}_repos_in_scope": ["", "  "],
+            },
+            override="unrelated acknowledgement carried over from an earlier run",
+        )
+        self.assertNotFalselyClean(proc, persisted, audited)
+
     def test_override_does_not_rescue_a_zero_repo_audit(self):
         """The override acknowledges a FINDING, not a missing measurement.
 
@@ -295,6 +321,120 @@ class DocumentedExitCodeTests(_WrapperHarness):
         self.assertEqual(proc.returncode, 1)
         self.assertIn("started_at", proc.stdout)
         self.assertNotIn(f"wave_{_WAVE}_gate_integrity", persisted)
+
+
+@unittest.skipIf(_SHELL is None, "no shell available")
+class RemedyPointerTests(_WrapperHarness):
+    """Each block diagnostic must name the command that ACTUALLY writes its key.
+
+    Added after the second review round of PR #1478, where the `repos_in_scope`
+    diagnostic told the operator "/wave-kickoff writes this key". It does not:
+    `/wave-scope` writes it (`lifecycle.py wave scope`), while `/wave-kickoff`
+    Step 0 only READS it and STOPs. An operator following that guidance would
+    re-run wave-kickoff, hit its own stop, and be no closer to fixed.
+
+    Same failure class as the `*)` arm naming a SIGKILL as a gh/API error, which
+    `UnexpectedExitStatusTests` already pins: a diagnostic that names the wrong
+    remedy wastes the reader at exactly the moment the gate fired. It escaped a
+    careful author, an Opus merge-gate review, and a second reviewer's first
+    pass — evidence that reading alone does not catch it.
+
+    BOTH HALVES, deliberately. Each test asserts the right pointer is PRESENT
+    and (where one exists) the wrong pointer is ABSENT. An absence-only
+    assertion is vacuous: it passes just as happily against a diagnostic that
+    names nothing at all, i.e. against deleting the remedy sentence outright.
+    The positive half is the one that pins the operator instruction. This
+    mirrors the `*)`-arm test, which pairs `assertNotIn("gh/API error")` with
+    `assertIn("UNEXPECTED")` rather than relying on the absence alone.
+
+    On brittleness: these do not pin wording. They pin the CLAIM — whatever the
+    diagnostic names must correspond to a source that really writes the key, and
+    a read-only consumer must not be named. Reword freely; move the write and
+    the test tells you to update the pointer, which is the maintenance you want.
+    """
+
+    #: key suffix -> the claim the diagnostic makes about who writes it.
+    #:
+    #: `writer_source` is where the LITERAL write lives. For both keys that is
+    #: `lifecycle.py`, not the skill markdown — `/wave-start` § 6 describes its
+    #: write in prose ("set the active-wave fields via jq") and the concrete
+    #: assignment is `lifecycle.py::start`. An earlier draft of this map checked
+    #: only the skill markdown and failed on `started_at` for exactly that
+    #: reason; the guard-on-the-guard below caught it, which is why it exists.
+    _OWNERS = {
+        "repos_in_scope": {
+            "remedy": "/wave-scope",
+            "forbidden": ("/wave-kickoff",),
+            "writer_source": ("lib/lifecycle.py", "wave_{wave}_repos_in_scope"),
+            "reader_source": ("skills/wave-kickoff/SKILL.md", "wave_{M}_repos_in_scope"),
+        },
+        "started_at": {
+            "remedy": "/wave-start",
+            "forbidden": (),
+            "writer_source": ("lib/lifecycle.py", "wave_{wave}_started_at"),
+            "reader_source": None,
+        },
+    }
+
+    def _source(self, rel: str) -> str:
+        return (_CLAUDE_ROOT / rel).read_text(encoding="utf-8")
+
+    def test_owner_map_matches_the_sources_on_disk(self):
+        """Guard on the guard — the map above is checked, not merely asserted.
+
+        Without this, `_OWNERS` could drift into a second copy of the same wrong
+        claim and these tests would enforce it with a straight face.
+        """
+        for key, claim in self._OWNERS.items():
+            with self.subTest(key=key):
+                rel, needle = claim["writer_source"]
+                self.assertIn(
+                    needle,
+                    self._source(rel),
+                    f"{rel} is named as the writer of wave_*_{key} but does not contain that write",
+                )
+                if claim["reader_source"] is not None:
+                    read_rel, read_needle = claim["reader_source"]
+                    text = self._source(read_rel)
+                    self.assertIn(
+                        read_needle,
+                        text,
+                        f"{read_rel} is listed as a reader of wave_*_{key} but never "
+                        "mentions it — update _OWNERS",
+                    )
+                    self.assertNotIn(
+                        f"{read_needle}=",
+                        text,
+                        f"{read_rel} is listed as READ-ONLY for wave_*_{key} but "
+                        "assigns it — update _OWNERS",
+                    )
+
+    def test_repos_in_scope_diagnostic_names_the_writing_command(self):
+        proc, _persisted, _audited = self._run({f"wave_{_WAVE}_started_at": _SINCE})
+        claim = self._OWNERS["repos_in_scope"]
+        self.assertIn("repos_in_scope", proc.stdout)
+        # Positive half — the operator is told where to actually go.
+        self.assertIn(
+            claim["remedy"],
+            proc.stdout,
+            "the diagnostic must name the command that writes the key",
+        )
+        # Negative half — the dead end is gone.
+        for wrong in claim["forbidden"]:
+            self.assertNotIn(
+                wrong,
+                proc.stdout,
+                f"{wrong} only reads this key and STOPs — naming it as the remedy "
+                "sends the operator to a dead end",
+            )
+
+    def test_started_at_diagnostic_names_the_writing_command(self):
+        proc, _persisted, _audited = self._run(
+            {f"wave_{_WAVE}_repos_in_scope": ["noorinalabs-main"]}
+        )
+        claim = self._OWNERS["started_at"]
+        self.assertIn("started_at", proc.stdout)
+        self.assertIn(claim["remedy"], proc.stdout)
 
 
 if __name__ == "__main__":

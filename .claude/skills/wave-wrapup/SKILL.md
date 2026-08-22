@@ -612,7 +612,7 @@ WAVE_REPOS_IN_SCOPE=$(jq -er ".wave_{M}_repos_in_scope[]" "$STATUS" 2>/dev/null)
 if [ -z "$WAVE_REPOS_IN_SCOPE" ]; then
   echo "BLOCKED: wave_{M}_repos_in_scope is absent or empty in cross-repo-status.json,"
   echo "  so there is nothing to audit. A zero-repo audit is NOT a clean audit."
-  echo "  /wave-kickoff writes this key — set it and re-run."
+  echo "  /wave-scope writes this key (lifecycle.py wave scope) — set it and re-run."
   exit 1
 fi
 GATE_REPOS_EXPECTED=$(jq -r ".wave_{M}_repos_in_scope | length" "$STATUS")
@@ -712,7 +712,11 @@ python3 "$UPSERT" "$STATUS" \
 jq -r --arg m "{M}" '"wave_" + $m + "_gate_integrity = " + (.["wave_" + $m + "_gate_integrity"] | tostring)' "$STATUS"
 ```
 
-**A zero-repo audit is not a clean audit, and is not overridable.** The wrapper guards its own inputs the way the classifier guards its verdicts: an absent or `[]` `wave_{M}_repos_in_scope` blocks before the loop, and after it a positive assertion requires the number of repos actually audited to equal the number the scope declares. Both were fail-open in the first cut of this step — an audit that examined nothing exited 0 and *persisted* `verified`, which `/wave-retro`'s carry-forward then read back as a measured result (found in merge-gate review of main#1478). An exit status outside the documented `0/1/2` set — a killed or crashed audit — is likewise a finding with its own diagnostic, not a pass. Neither guard is reachable by `GATE_INTEGRITY_OVERRIDE_RATIONALE`: the override acknowledges a **finding**, never a **missing measurement**. All three paths are pinned by `tests/test_step_11_5b_gate_integrity.py`, which extracts and executes this very block rather than a paraphrase of it, so the block cannot drift away from its own tests.
+**A zero-repo audit is not a clean audit.** The wrapper guards its own inputs the way the classifier guards its verdicts: an absent or `[]` `wave_{M}_repos_in_scope` blocks before the loop, and after it a positive assertion requires the number of repos actually audited to equal the number the scope declares. Both were fail-open in the first cut of this step — an audit that examined nothing exited 0 and *persisted* `verified`, which `/wave-retro`'s carry-forward then read back as a measured result (found in merge-gate review of main#1478). An exit status outside the documented `0/1/2` set — a killed or crashed audit — is likewise a finding with its own diagnostic, not a pass. **Neither of those two scope guards is reachable by `GATE_INTEGRITY_OVERRIDE_RATIONALE`** — both exit before the override is ever consulted, so an override exported for an unrelated reason cannot convert "nothing was audited" into a closed wave.
+
+That claim is deliberately narrow, and it is worth being precise about what it does NOT cover. `GATE_INTEGRITY_OVERRIDE_RATIONALE` still rescues **every non-zero audit status** — measured, not inferred: exit 1 (UNREVIEWED), exit 2 (UNDETERMINED), and the unexpected-status bucket above (a killed or crashed audit) all persist `overridden` and close the wave. For exit 1 that is the intended design: there is a finding, and the override acknowledges it. For exit 2 and for an unexpected status it is questionable — a killed audit measured nothing, and UNDETERMINED says outright that it could not tell, so in neither case is there a finding to acknowledge. That overridability **predates this step** (the `*)` arm inherits the exit-2 decision rather than making it) and changing it is a real semantic change, so it is tracked separately as **#1483** rather than altered here. Until it is decided, read an `overridden` value in the wave history row as "a human accepted this", not as "the gate measured this".
+
+The scope guards, the unexpected-status arm, and the override's inability to reach the scope guards are all pinned by `tests/test_step_11_5b_gate_integrity.py`, which extracts and executes this very block rather than a paraphrase of it, so the block cannot drift away from its own tests.
 
 **Override mechanism** (when an unreviewed merge is acknowledged rather than repaired):
 
