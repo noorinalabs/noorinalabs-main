@@ -562,6 +562,179 @@ fi
 
 A genuinely external red (e.g. a newly-published advisory the fix has not yet propagated for — `feedback_pip_audit_strict_advisory_db_drift`, `feedback_trivy_base_image_cve_org_wide_gate`) is the only case for the override, and it MUST name a tracking issue. A red caused by the wave's own change is fixed forward — never overridden. Include the per-repo result in the Step 10 report; `/wave-retro` records it in the wave history row.
 
+### 11.5b. Gate-integrity audit — did the review gate actually bind? (every wave)
+
+Every other post-merge property has a wrapup gate: reachability (11.5), deployable-merge green (11.5a), staging promotion (11.6). **The review gate's own enforcement rate had none** — nothing measured whether the 2-reviewer gate actually bound on the PRs that merged, so when it did not bind, nobody found out. Three PRs merged with zero review artifacts and no declared exception (`main#1467` — the wave-30 retrospective — plus `main#1088` and `deploy#706`) and sat undetected for six weeks; they surfaced only because an unrelated audit was requested on 2026-08-22 (main#1477). A gate whose enforcement rate is never measured degrades silently — `feedback_enforcement_hierarchy`'s "rules without enforcement decay", applied to an enforcement mechanism itself.
+
+This step runs **after Step 11**, deliberately, so the wave→main merges are themselves in scope. For every PR merged during the wave it re-runs the merge gate's own verdict resolution via `.claude/lib/gate_integrity.py` and classifies each merge **PASS** (the gate would have allowed it), **EXEMPT** (a charter admin-merge exception class covers it) or **UNREVIEWED** (neither — the gate did not bind and no exception was declared). The tool calls the shared entry point `pr_review_state.compute_review_state` → `validate_pr_review.resolve_review_verdicts`; it does not reimplement the verdict logic, because a fork drifts from the gate silently (main#1046 — a driver that re-assembled the pipeline omitted `content_ts` and reported PASS on approvals the gate rejects).
+
+**wave→main integration PRs are EXEMPT, not failures.** `charter/pull-requests/wave-merge.md` § Wave Merge PR Verification point 5: fresh 2-reviewer approval is not required there and the 0/2 block is "expected and audited". The exemption is keyed off the same predicate the gate uses (`charter_trailer.is_wave_branch`), so both `deployments/phase-10/wave-30` and the undashed `deployments/phase10/wave-4` spelling are covered. It is deliberately **not** keyed off the `wave-integration` comment-scan mode — that mode governs self-review *exclusion* (main#1216), which makes reaching 2 easier, not unnecessary.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+STATUS="$REPO_ROOT/cross-repo-status.json"
+UPSERT="$REPO_ROOT/.claude/lib/upsert_status_keys.py"
+AUDIT="$REPO_ROOT/.claude/lib/gate_integrity.py"
+
+# Run from the ROOT checkout. The gate resolves a child repo's roster relative to
+# the directory holding the parent `.claude/`, and recognises
+# `noorinalabs/noorinalabs-main` as the PARENT only when that directory is
+# literally named `noorinalabs-main`. From a worktree it is not, so every PR
+# replays as a roster-resolution error and every row lands UNDETERMINED —
+# fail-closed, but not a measurement. Say so instead of auditing nothing.
+if [ "$(basename "$REPO_ROOT")" != "noorinalabs-main" ]; then
+  echo "BLOCKED: Step 11.5b must run from the noorinalabs-main root checkout, not"
+  echo "  $REPO_ROOT — child-repo roster resolution is path-relative to it."
+  exit 1
+fi
+
+# Window start = when the wave started. An absent value must NOT degrade to an
+# unbounded window (which re-flags every historical breach every wave) or to an
+# empty one (which reports clean over nothing) — both are fail-open shapes.
+WAVE_SINCE=$(jq -r '.wave_{M}_started_at // empty' "$STATUS")
+if [ -z "$WAVE_SINCE" ]; then
+  echo "BLOCKED: wave_{M}_started_at is absent from cross-repo-status.json, so the"
+  echo "  audit window cannot be bounded. /wave-start writes it — set it and re-run."
+  exit 1
+fi
+
+# Scope must be a NON-EMPTY list. An absent key makes jq print "Cannot iterate
+# over null" and exit non-zero; a `[]` value makes it exit 0 with no output.
+# BOTH leave the variable empty, the loop below runs zero times, and — before
+# main#1478's review — the block then reported and PERSISTED `verified` over an
+# audit that examined nothing. That is the exact fail-open this gate exists to
+# detect, in the gate's own entry point, and it is worse here than in 11.5a
+# because 11.5b's verdict is written to cross-repo-status.json and read back by
+# /wave-retro, so a false clean outlives the run. `repos_in_scope` is also the
+# MORE fallible of the two window keys in practice: 13 waves carry it, only 5
+# carry `started_at` (which was already guarded, two lines above).
+WAVE_REPOS_IN_SCOPE=$(jq -er ".wave_{M}_repos_in_scope[]" "$STATUS" 2>/dev/null) || WAVE_REPOS_IN_SCOPE=""
+if [ -z "$WAVE_REPOS_IN_SCOPE" ]; then
+  echo "BLOCKED: wave_{M}_repos_in_scope is absent or empty in cross-repo-status.json,"
+  echo "  so there is nothing to audit. A zero-repo audit is NOT a clean audit."
+  echo "  /wave-scope writes this key (lifecycle.py wave scope) — set it and re-run."
+  exit 1
+fi
+GATE_REPOS_EXPECTED=$(jq -r ".wave_{M}_repos_in_scope | length" "$STATUS")
+GATE_REPOS_AUDITED=0
+GATE_FINDINGS=()
+GATE_RESULT="verified"
+
+# zsh-safe iteration via a TEMP FILE into `while IFS= read -r` (main#688 — zsh
+# does not word-split an unquoted parameter, so `for R in $LIST` collapses the
+# whole list into one bogus repo). A plain redirect, NOT a here-string and NOT
+# `<(...)`: both trip the permission engine's "cannot be statically analyzed"
+# path (/session-start Step 0). The redirect also keeps the loop in the current
+# shell, so GATE_FINDINGS survives past `done`.
+GATE_REPO_LIST=$(mktemp)
+printf '%s\n' "$WAVE_REPOS_IN_SCOPE" > "$GATE_REPO_LIST"
+while IFS= read -r R; do
+  [ -z "$R" ] && continue
+  GATE_REPOS_AUDITED=$((GATE_REPOS_AUDITED + 1))
+  # Exit codes: 0 = every merge in the window is PASS or EXEMPT; 1 = at least one
+  # UNREVIEWED; 2 = UNDETERMINED (a gh/API failure, an unparseable payload, or a
+  # truncated population — surfaced as blocking, never as "no problems found").
+  # Captured to a variable, not read inside `case $?`, so the code can be NAMED
+  # in the unexpected-status diagnostic below.
+  python3 "$AUDIT" "noorinalabs/$R" --since "$WAVE_SINCE"
+  GATE_RC=$?
+  case "$GATE_RC" in
+    0) echo "$R: gate integrity verified — every merge PASS or EXEMPT" ;;
+    1) GATE_FINDINGS+=("$R — UNREVIEWED merge(s): the gate did not bind and no exception was declared") ;;
+    2) GATE_FINDINGS+=("$R — UNDETERMINED: the audit could not be completed, so any count above is a LOWER BOUND, not a clean result") ;;
+    # Anything outside the documented set is not a verdict. Without this arm a
+    # killed (137), crashed, or wrong-binary run fell through and counted as
+    # CLEAN — the module docstring's promise that no failure renders as "no
+    # problems found" was broken here, in the wrapper, not in the Python.
+    # Deliberately NOT folded into the exit-2 wording: "gh/API error" sends the
+    # operator to re-check `gh auth status`, which is the wrong instruction for
+    # a process that was killed (main#981 — name the defect you actually have).
+    *) GATE_FINDINGS+=("$R — UNEXPECTED audit exit status $GATE_RC (outside the documented 0/1/2): the audit was killed, crashed, or is not the expected binary. Not a verdict, and not a clean result") ;;
+  esac
+done < "$GATE_REPO_LIST"
+rm -f "$GATE_REPO_LIST"
+
+# POSITIVE assertion on what was actually examined, not merely on what was
+# planned. The pre-check above rejects an absent/empty key, but only this
+# catches a scope list that is non-empty yet yields no audited repo (all-blank
+# entries, a read that terminated early, a failed mktemp). "Zero repos audited"
+# and "zero problems found" must never be the same observable outcome — and the
+# count is compared against the declared scope, so a PARTIAL walk is caught too.
+if [ "$GATE_REPOS_AUDITED" -eq 0 ] || [ "$GATE_REPOS_AUDITED" -ne "$GATE_REPOS_EXPECTED" ]; then
+  echo "════════════════════════════════════════════════════════════"
+  echo "BLOCKED: /wave-wrapup cannot close wave {M} — the gate-integrity audit"
+  echo "  examined $GATE_REPOS_AUDITED repo(s) but wave_{M}_repos_in_scope declares"
+  echo "  $GATE_REPOS_EXPECTED. An audit that did not examine its whole scope has not"
+  echo "  measured anything, and must not be recorded as verified. This is NOT"
+  echo "  overridable by GATE_INTEGRITY_OVERRIDE_RATIONALE — that override"
+  echo "  acknowledges a FINDING, not a missing measurement."
+  echo "════════════════════════════════════════════════════════════"
+  exit 1
+fi
+
+if [ ${#GATE_FINDINGS[@]} -gt 0 ]; then
+  echo "════════════════════════════════════════════════════════════"
+  echo "BLOCKED: /wave-wrapup cannot close wave {M} — gate integrity NOT verified:"
+  for g in "${GATE_FINDINGS[@]}"; do echo "  $g"; done
+  echo ""
+  echo "One or more PRs merged this wave without the 2-reviewer gate binding, and"
+  echo "without a charter admin-merge exception the audit can see on the PR."
+  echo "These merges cannot be undone — this is a DETECTIVE control — but an"
+  echo "unreviewed merge is a real process breach, and a warning that closes the"
+  echo "wave anyway is a checklist item (feedback_enforcement_hierarchy)."
+  echo "Fix-forward options:"
+  echo "  (a) Get the missing reviews posted NOW on the merged PR, then re-run. A"
+  echo "      post-merge verdict counts on the replay (T_content is frozen at the"
+  echo "      merge), so a genuine catch-up review clears the finding honestly."
+  echo "  (b) If the merge was legitimately covered by a charter exception that"
+  echo "      left no mark on the PR (a doc-sweep without its sweep line, an"
+  echo "      emergency without its [EMERGENCY] title prefix), fix the PR's marker"
+  echo "      and re-run — the marker is what makes the exception auditable."
+  echo "  (c) Acknowledge it: set GATE_INTEGRITY_OVERRIDE_RATIONALE=\"<reason +"
+  echo "      what changes so it does not recur>\" and re-invoke. The override is"
+  echo "      logged to the wrapup report and persisted under"
+  echo "      wave_{M}_gate_integrity_override_rationale for /wave-retro."
+  echo "════════════════════════════════════════════════════════════"
+  [ -z "${GATE_INTEGRITY_OVERRIDE_RATIONALE:-}" ] && exit 1
+  GATE_RESULT="overridden"
+  echo "OVERRIDDEN: $GATE_INTEGRITY_OVERRIDE_RATIONALE"
+fi
+
+# Persist for /wave-retro Step 2.5 + audit passes. Compact-inline preserved via
+# upsert_status_keys.py (NOT jq>tmp>mv — see main#332).
+python3 "$UPSERT" "$STATUS" \
+    "wave_{M}_gate_integrity=\"${GATE_RESULT}\"" \
+    "wave_{M}_gate_integrity_window=\"${WAVE_SINCE}\""
+[ "$GATE_RESULT" = "overridden" ] && python3 "$UPSERT" "$STATUS" \
+    "wave_{M}_gate_integrity_override_rationale=\"${GATE_INTEGRITY_OVERRIDE_RATIONALE}\""
+
+# Read-back verify (feedback_gh_cli_gotchas family).
+jq -r --arg m "{M}" '"wave_" + $m + "_gate_integrity = " + (.["wave_" + $m + "_gate_integrity"] | tostring)' "$STATUS"
+```
+
+**A zero-repo audit is not a clean audit.** The wrapper guards its own inputs the way the classifier guards its verdicts: an absent or `[]` `wave_{M}_repos_in_scope` blocks before the loop, and after it a positive assertion requires the number of repos actually audited to equal the number the scope declares. Both were fail-open in the first cut of this step — an audit that examined nothing exited 0 and *persisted* `verified`, which `/wave-retro`'s carry-forward then read back as a measured result (found in merge-gate review of main#1478). An exit status outside the documented `0/1/2` set — a killed or crashed audit — is likewise a finding with its own diagnostic, not a pass. **Neither of those two scope guards is reachable by `GATE_INTEGRITY_OVERRIDE_RATIONALE`** — both exit before the override is ever consulted, so an override exported for an unrelated reason cannot convert "nothing was audited" into a closed wave.
+
+That claim is deliberately narrow, and it is worth being precise about what it does NOT cover. `GATE_INTEGRITY_OVERRIDE_RATIONALE` still rescues **every non-zero audit status** — measured, not inferred: exit 1 (UNREVIEWED), exit 2 (UNDETERMINED), and the unexpected-status bucket above (a killed or crashed audit) all persist `overridden` and close the wave. For exit 1 that is the intended design: there is a finding, and the override acknowledges it. For exit 2 and for an unexpected status it is questionable — a killed audit measured nothing, and UNDETERMINED says outright that it could not tell, so in neither case is there a finding to acknowledge. That overridability **predates this step** (the `*)` arm inherits the exit-2 decision rather than making it) and changing it is a real semantic change, so it is tracked separately as **#1483** rather than altered here. Until it is decided, read an `overridden` value in the wave history row as "a human accepted this", not as "the gate measured this".
+
+The scope guards, the unexpected-status arm, and the override's inability to reach the scope guards are all pinned by `tests/test_step_11_5b_gate_integrity.py`, which extracts and executes this very block rather than a paraphrase of it, so the block cannot drift away from its own tests.
+
+**Override mechanism** (when an unreviewed merge is acknowledged rather than repaired):
+
+```bash
+# Only after the finding has been read and understood — the rationale must say
+# WHY it happened and WHAT changes, not merely that it is accepted.
+export GATE_INTEGRITY_OVERRIDE_RATIONALE="deploy#706 is a dependabot auto-merge; \
+  the auto-merge-vs-2-reviewer policy question is open on #1476 and this wave will \
+  not resolve it. No other unreviewed merge this wave."
+# Re-invoke /wave-wrapup — the gate sees the rationale, logs it, and proceeds.
+```
+
+**Backfill — the known population (main#1477).** Run over the 8 org repos with `--since 2026-07-11T04:25:50Z` (commit `695d6ad2`, where content-binding verdict staleness became enforceable) through 2026-08-22: **225** merged PRs — 210 PASS, 6 EXEMPT (all `wave-merge`), **9 UNREVIEWED**, 0 UNDETERMINED; a 95.9% enforcement rate over the 219 non-exempt merges. The population was cross-checked against an independent instrument (`gh pr list --search`, summed over the 8 repos) and agrees exactly; the "236" quoted while scoping the issue was a day-boundary artifact of the hand sweep. The 9 UNREVIEWED are a strict superset of the hand sweep's 3, because the two ask different questions — the hand sweep asked whether any review artifact existed, this tool asks whether the gate would have *bound*. See the module docstring for the per-PR breakdown (3 with no countable verdict at all, 1 whose two comments carried the `Request` verdict value rather than `Approved`, 3 whose approvals were all excluded as stale against `T_content`, 2 at 1/2 reviewers).
+
+**Known noise source, deliberately not suppressed:** a dependabot PR auto-merged without two reviews classifies UNREVIEWED. Whether that *should* be an exception class is open on #1476 and out of scope here — until it is decided, the honest answer is that the gate did not bind, and the override is the acknowledgement path. Suppressing it in the classifier would be deciding #1476 by omission. Include the per-repo result in the Step 10 report; `/wave-retro` records `wave_{M}_gate_integrity` in the wave history row.
+
+**Cost:** roughly three API calls per non-exempt merged PR (PR view, commit list, comment thread). A 40-PR wave is ~120 calls — well inside the 5000/hr budget, but check `python3 .claude/lib/gh_quota.py check` first on a heavy-fan-out day: under exhaustion a failed `gh` call's empty output reads as a legitimate zero, and this tool's exit-2 path exists precisely so that never renders as "no unreviewed merges".
+
 ### 11.6. Staging-promotion gate (Phase-3 end-state criterion #3)
 
 A wave is **not closeable until its merged code has been promoted to staging green**. This is the wrapup-time enforcement of Phase-3 end-state criterion #3 (`main#325`) and the charter rule `pull-requests.md § Wave-Wrapup Staging-Promotion Gate`. It runs AFTER the Step 11.5 reachability-to-main gate (code must be on main before it can be promoted to staging) and BEFORE the ontology rebuild.

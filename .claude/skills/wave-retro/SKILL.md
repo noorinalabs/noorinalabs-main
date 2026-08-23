@@ -50,6 +50,28 @@ fi
 # ... same for CR cycles, concentration
 ```
 
+**Gate-integrity carry-forward (main#1477).** `/wave-wrapup` Step 11.5b measures whether the 2-reviewer merge gate actually *bound* on this wave's merges and persists the verdict. Carry it into the wave history row alongside PR count and admin overrides — a rate that is measured but never read decays exactly like one that is never measured.
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+GATE_INTEGRITY=$(jq -r ".wave_${M}_gate_integrity // empty" "$REPO_ROOT/cross-repo-status.json")
+GATE_WINDOW=$(jq -r ".wave_${M}_gate_integrity_window // empty" "$REPO_ROOT/cross-repo-status.json")
+GATE_OVERRIDE=$(jq -r ".wave_${M}_gate_integrity_override_rationale // empty" "$REPO_ROOT/cross-repo-status.json")
+
+if [ -z "$GATE_INTEGRITY" ]; then
+  # NOT the same as "verified" — say so. An absent key means wrapup never
+  # reached Step 11.5b (or the wave predates main#1477), so the enforcement
+  # rate for this wave is UNKNOWN, not clean.
+  echo "gate integrity: NOT MEASURED for wave ${M} — wave_${M}_gate_integrity is absent."
+  echo "  Check whether /wave-wrapup reached Step 11.5b; if it did not, re-run that step."
+else
+  echo "gate integrity: $GATE_INTEGRITY (window from $GATE_WINDOW)"
+  [ -n "$GATE_OVERRIDE" ] && echo "  OVERRIDDEN: $GATE_OVERRIDE"
+fi
+```
+
+Record the value in the retro's wave history row. An `overridden` value MUST be narrated in the feedback-log entry with its rationale — an acknowledged unreviewed merge is a process breach that was accepted, and a retro that omits it turns the override into a silent habit.
+
 **Required handling per drift case:**
 
 1. **Counter mismatch ≤ ±2 or ≤ ±5%**: log the correction in the retro feedback_log entry under "Top 3 pain points" or "Orchestrator Needs Improvement", and rewrite the counter in `cross-repo-status.json` with a `wave_{N}_counter_corrections` array entry recording the (claimed, actual, corrected_at) triple.
