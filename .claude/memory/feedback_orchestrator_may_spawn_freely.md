@@ -37,6 +37,22 @@ The constraints that still bind are the real ones, not permission:
 
 Cost is not the gate; reaching the goal is. Scale the fan-out to the work.
 
+**Corroborated first-hand by the owner, 2026-09-04 (#1488 merge gate).** The merge-gate
+reviewer flagged a real provenance limit: the 2026-08-03 directive was **single-source and
+self-attested** — this note was its own only evidence, and the phrase appears nowhere else in
+the tree, not even `feedback_log.md`. A doctrine promoted into every session's prefix should
+not rest on one unwitnessed note. It no longer does: in the session that landed #1486 the
+owner stated the policy directly and unprompted — *"I want you to be able to spawn freely"* —
+and then authorized the promotion. So the policy is now **doubly attested** (this note, plus a
+live owner statement); the verbatim 2026-08-03 quotation above remains single-source and
+should be cited as a quotation, not as independent evidence.
+
+Recorded HERE rather than in the PR thread deliberately, on the reviewer's point: **#1486's
+whole finding was that a directive in a place nobody reads loses to one that is always
+present — so a corroboration in a place nobody reads has the identical failure mode.** Note
+also what the merge gate did and did not certify: it approved the text and the safety
+analysis, and explicitly did NOT certify this provenance. Keep the two claims separable.
+
 **Promoted to the always-loaded prefix, 2026-09-03 (#1486).** This note alone did not
 hold: it lives in tier-2 `section_spawn_delegation.md`, which loads on demand, while the
 conflicting *"do not call the Agent tool unless the user requested it"* guidance is present
