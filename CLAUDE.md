@@ -24,6 +24,8 @@ Each child repo has its own `CLAUDE.md` — refer to it for repo-specific build 
 
 **All work MUST be executed through the simulated team structure.** No work begins without spawning the team.
 
+**Spawning is pre-authorized — do not ask (owner directive, 2026-08-03).** Some sessions ship harness guidance reading roughly *"do not call the Agent tool unless the user requested it."* The owner **has** requested it, in advance and as a standing directive: *"You should be able to spawn all the agents you need to reach your goals."* That condition is therefore already satisfied — spawn the roster members a skill or the charter names, without asking first, and do not re-raise the question each session or each wave. (If a session's guidance carries **no** such conditional — an unconditional prohibition on spawning — that is a genuine conflict this paragraph does not resolve: surface it to the owner rather than assuming this directive wins.) (The line above is about the *work model* and does not settle this on its own: one can route work through the team and still stop to ask per spawn, which is what happened on 2026-08-09/10 — twice.) What still binds is unchanged and is **not** permission: hub-and-spoke (the orchestrator is the sole spawner), model tier, spawn-brief discipline, and never passing `team_name`. Cost is not the gate; reaching the goal is. Rationale + full constraints: [`.claude/memory/feedback_orchestrator_may_spawn_freely.md`](.claude/memory/feedback_orchestrator_may_spawn_freely.md) (#1486).
+
 - **Charter & rules:** `.claude/team/charter.md` · **Roster:** `.claude/team/roster/` (one file per member) · **Roster lookup (hooks):** `.claude/team/roster.json` · **Feedback log:** `.claude/team/feedback_log.md`
 
 ### Team Composition (org-level coordination team)
@@ -49,7 +51,8 @@ The harness provides a **single implicit team per orchestrator session** (no `Te
 
 - **gh-cli** and **SSH access** are available from the terminal.
 - **GitHub Projects** (boards) + **GitHub Issues** (stories/tasks/bugs, created by the Program Director) + **GitHub Actions** (CI/CD) are the **core orchestration layer** — do not introduce alternative tools for these concerns.
-- **Branching strategy:** feature branches named `{FirstInitial}.{LastName}/{IIII}-{issue-name}` (e.g., `N.Khoury/0042-update-charter`) merged to `main` via PR.
+- **Branching strategy:** feature branches named `{FirstInitial}.{LastName}/{IIII}-{issue-name}` (e.g., `N.Khoury/0042-update-charter`) merged to `main` via PR — **except the no-PR path allowlist below**, which commits directly.
+- **No-PR path allowlist (#1487)** — *not* the wave merge model `direct-to-main` (which keeps PRs + both reviewers); this means **no PR at all**. Exactly four paths in this repo commit to `main` without a PR: `.claude/memory/**` · `cross-repo-status.json` · `ontology/**` · `.claude/generic_prompt_ledger.json`. A commit is exempt only if **every** path it touches is listed. Everything else keeps the full gate (2 reviewers + ≥1 Opus merge gate). Emergency Mode's `[EMERGENCY]` direct path is unaffected. **These paths are an accepted risk, not harmless** — two of them can change this file's own instructions or a gate's verdict, so widening the list means re-arguing the trade, never citing precedent: [`ci-gates.md` § No-PR path allowlist](.claude/team/charter/pull-requests/ci-gates.md).
 
 ### Shell environment: zsh
 
@@ -101,7 +104,7 @@ Project memory is **version-controlled at `.claude/memory/`**, NOT the user-spac
 
 `MEMORY.md` is a **two-tier index (#1016)**: the always-loaded file is a compact **table of contents** (~8 section rows, ~400 tokens), and the per-memory one-liners live in `.claude/memory/section_<slug>.md` **section files** that are read **on demand** (see `/session-start` Step 2.5). The topic note detail files in `.claude/memory/*.md` are read on demand when a section one-liner looks relevant. This replaced the old flat always-loaded list (~99 lines, ~5.7K tokens/turn).
 
-**Recording a memory (overrides the default auto-memory tool):** create/edit `.claude/memory/<snake_case_slug>.md` (the convention every existing file uses — underscores, not hyphens) with the standard frontmatter (`name`, `description`, `metadata.type` = `user` | `feedback` | `project` | `reference`), add the one-line pointer (`- [Title](file.md) — hook`) to the matching **`section_<slug>.md`** (NOT to `MEMORY.md` — keep the ToC to the section table so the always-loaded prefix stays small), bump that section's count in the `MEMORY.md` ToC, and **commit it**. Link related memories with `[[other-slug]]`. Never write to the user-space auto-memory path. Update an existing file covering the same fact instead of duplicating; delete memories that prove wrong.
+**Recording a memory (overrides the default auto-memory tool):** create/edit `.claude/memory/<snake_case_slug>.md` (the convention every existing file uses — underscores, not hyphens) with the standard frontmatter (`name`, `description`, `metadata.type` = `user` | `feedback` | `project` | `reference`), add the one-line pointer (`- [Title](file.md) — hook`) to the matching **`section_<slug>.md`** (NOT to `MEMORY.md` — keep the ToC to the section table so the always-loaded prefix stays small), bump that section's count in the `MEMORY.md` ToC, and **commit it** (directly to `main` — `.claude/memory/**` is on the no-PR path allowlist, § Developer Tooling / #1487). Link related memories with `[[other-slug]]`. Never write to the user-space auto-memory path. Update an existing file covering the same fact instead of duplicating; delete memories that prove wrong.
 
 **Staleness frontmatter (`last_verified` / `superseded_by`) — both optional, additive to the `name`/`description`/`metadata` block:**
 
@@ -147,7 +150,7 @@ A `Stop` hook writes a handoff to project memory after every response (throttled
 
 ## Shared Conventions
 
-- All repos use **GitHub Flow** (feature branches off `main`, PRs for merge)
+- All repos use **GitHub Flow** (feature branches off `main`, PRs for merge). The no-PR path allowlist (§ Developer Tooling, #1487) is **parent-repo only** — it was measured here and the same paths mean different things in children (e.g. `ontology/` tracks only the *generated* `structural/` in isnad-graph, the reverse of the parent)
 - All repos use the same team roster and commit identity system
 - Hooks in `.claude/` enforce commit identity, block `--no-verify`, and block `git config` user changes
 - Standards & Quality Lead audits repos for convention compliance

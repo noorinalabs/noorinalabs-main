@@ -36,3 +36,12 @@ The constraints that still bind are the real ones, not permission:
   unverified state assertion ([[feedback_patch_id_after_rebase_not_ancestry]]).
 
 Cost is not the gate; reaching the goal is. Scale the fan-out to the work.
+
+**Promoted to the always-loaded prefix, 2026-09-03 (#1486).** This note alone did not
+hold: it lives in tier-2 `section_spawn_delegation.md`, which loads on demand, while the
+conflicting *"do not call the Agent tool unless the user requested it"* guidance is present
+every turn — so on 2026-08-09/10 the orchestrator asked for spawn permission twice anyway.
+`CLAUDE.md` § Team Workflow now carries the directive itself, resolving the conflict on its
+own terms: the guidance says *unless the user requested it*, and the user requested it in
+advance as a standing directive, so the condition is already met — nothing is being overridden. This
+note stays as the rationale and the full constraint list; the prefix carries the directive.
