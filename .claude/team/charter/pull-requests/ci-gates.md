@@ -83,6 +83,26 @@ Never commit, push, or merge a PR with a **known-failing check** without explici
 
 ## Org-Wide Branch Protection + Admin-Merge Exceptions (Mandatory) <!-- promotion-target: none -->
 
+### No-PR path allowlist — the four exempt paths and why it is a risk, not a nothing (#1487) <!-- promotion-target: none -->
+
+Four paths in **`noorinalabs-main` only** commit to `main` without a PR: `.claude/memory/**`, `cross-repo-status.json`, `ontology/**`, `.claude/generic_prompt_ledger.json`. A commit is exempt only if **every** path it touches is on the list. `CLAUDE.md` § Developer Tooling carries the rule; this section carries the reasoning, and **anyone proposing to widen the list must re-argue the trade below rather than cite precedent.**
+
+**Do not justify this as "generated files" or "records of work already reviewed elsewhere."** That was the original rationale on #1487 and it is **false for three of the four members**:
+
+| path | why the original rationale is wrong |
+|---|---|
+| `.claude/memory/**` | `@import`-ed at `CLAUDE.md:100` via `MEMORY.md` — it is **prompt**, carrying the same authority as `CLAUDE.md` itself. The rule PR-gates `CLAUDE.md` and un-gates its own import target. |
+| `cross-repo-status.json` | Read by `validate_wave_audit` (PreToolUse, blocks `/wave-wrapup`), which **allows** when `wave_active == false` or when the file is missing/malformed. A one-token unreviewed edit can flip a blocking gate to ALLOW. |
+| `ontology/**` | Tracks **13 hand-curated files**, including `conventions.md`, which `CLAUDE.md` cites as normative for shell rules. The *generated* layer `ontology/structural/` is gitignored and tracked **zero** times in this repo — the premise was inverted. |
+| `.claude/generic_prompt_ledger.json` | The one member the original rationale actually fits — a wave-wrapup artifact. |
+
+**The real reasons this is tolerable** are narrower than the original claim: these are high-churn coordination artifacts the lifecycle skills write inline; post-push CI still runs on `main`; and the measured practice has held for a month. **The residual risk is real and deliberately accepted** — an unreviewed commit to these paths can change the model's own instructions or a gate's verdict.
+
+**Measured basis, with its denominator.** Over the 60 most recent first-parent commits on `main` (2026-09-03): 31 via PR, 29 direct, and those 29 touched only the four paths. **That holds only since 2026-08-03.** Over 200 commits there are **16** off-allowlist direct commits (2026-07-26 → 08-02) touching hooks, lib, skills, charter and CI — and **none** on or after 08-03. No policy commit explains the cutoff; the tightening appears emergent. So this rule **locks in a one-month-old tightening**, and the 16 July commits are the evidence that the regression it prevents is real.
+
+Branch protection stays **ON**: an exempt commit still prints `Bypassed rule violations`. A visible, auditable bypass over a known-good set beats silently widening who may push. Emergency Mode's `[EMERGENCY]` direct path is unaffected.
+
+
 Phase-3 end-state criterion #4 (`noorinalabs-main#322`): **CI failures block all merges** on every repo's default branch, org-wide — not just by team discipline, but enforced server-side by GitHub. As of W13, 7 of 8 repos (all child repos + `noorinalabs-main`) had NO branch protection and relied SOLELY on the Hook 4 comment-gate; that single-layer gap is what let the W11 batch-loop merge evade review (`feedback_batch_loop_merge_evades_pr_review_hook`). This section is the canonical spec that closes that gap; the live pilot proves it and the remaining repos adopt it per the application-status note (the spec, not a blanket apply, is the durable artifact).
 
 This section is the **canonical ruleset spec** — the shape every repo's protection must take. It is the high-value deliverable of #322 because it resolves a real tension: GitHub's native "require approvals" counts formal reviews our team structurally cannot produce, so a naive protection rule would deadlock our merge flow. The spec below defines a shape that enforces protection *without* that deadlock.

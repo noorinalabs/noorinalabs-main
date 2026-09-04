@@ -80,7 +80,7 @@ Each child repository has its own team with its own manager. The Program Directo
 
 ### Trust Identity Matrix
 
-Each team member maintains a directional trust score (1-5) for every other team member they interact with. Default is 3 (neutral). Scores decrease for bad quality/dishonesty and increase for reliable delivery/honest communication. The full matrix lives in `.claude/team/trust_matrix.md` on `main`. All trust updates are committed directly to `main` — no separate branches.
+Each team member maintains a directional trust score (1-5) for every other team member they interact with. Default is 3 (neutral). Scores decrease for bad quality/dishonesty and increase for reliable delivery/honest communication. The full matrix lives in `.claude/team/trust_matrix.md` on `main`. **Trust updates land in the retro PR's diff**, not as direct-to-`main` commits (#1487): `.claude/team/` is not on the no-PR allowlist, and [`wave-merge.md`](charter/pull-requests/wave-merge.md) § retro already requires retro-ratified charter/skill/trust-matrix edits to land in that PR. The prior wording — *"committed directly to `main` — no separate branches"* — described practice before 2026-08-07; every trust-matrix commit since has been PR-routed.
 
 ### Per-Phase Archival
 
