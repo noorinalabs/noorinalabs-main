@@ -28,6 +28,7 @@ from annunaki_parse import (  # noqa: E402
     count_errors,
     is_low_confidence,
     is_pipe_mask_suspect,
+    is_self_referential,
     is_trace,
     iter_records,
     main,
@@ -231,6 +232,118 @@ class PipeMaskSuspectFilter(unittest.TestCase):
         self.assertFalse(is_pipe_mask_suspect(_LOW_CONF_ECHO))  # low but echoed, not suspect
         self.assertFalse(is_pipe_mask_suspect(_HIGH_CONF_MASKED))
         self.assertFalse(is_pipe_mask_suspect(_GENUINE_MONITOR))
+
+
+# #1465: a `.claude/`-wide `rg` sweep matching text stored inside this
+# monitor's own log is self-referential, not a live failure. Records written
+# AFTER the writer-side #1465 fix are tagged confidence="low" (like the two
+# classes above); records written BEFORE it were mistagged confidence="high"
+# + category="masked-failure" because the self-referential text itself
+# routinely contains the STRONG masked-failure phrases the monitor looks for
+# (a stored "exit status 1", a stored "Traceback ..."). `is_self_referential`
+# re-derives the classification from `error_lines` so BOTH vintages are
+# excluded from the genuine count at read time, without rewriting the log.
+_POST_FIX_SELF_REFERENTIAL = {
+    "timestamp": "t",
+    "hook": "annunaki_monitor",
+    "command": 'REPO_ROOT="$(pwd)"\nrg -rn --hidden "x" "$REPO_ROOT/.claude/"',
+    "exit_code": 0,
+    "matched_patterns": ["stdout:exit status [1-9]"],
+    "confidence": "low",
+    "category": "self-referential-log-read",
+    "error_lines": ['.claude/annunaki/errors.jsonl:{"error_lines": ["exit status 1"]}'],
+}
+# The HISTORICAL shape: written by a pre-#1465 monitor, mistagged high/masked-
+# failure even though its error_lines are entirely self-referential.
+_PRE_FIX_MISTAGGED_HIGH_SELF_REFERENTIAL = {
+    "timestamp": "t",
+    "hook": "annunaki_monitor",
+    "command": 'REPO_ROOT="$(pwd)"\nrg -rn --hidden "x" "$REPO_ROOT/.claude/"',
+    "exit_code": 0,
+    "matched_patterns": ["stdout:exit status [1-9]"],
+    "confidence": "high",
+    "category": "masked-failure",
+    "error_lines": ['.claude/annunaki/errors.jsonl:{"error_lines": ["exit status 1"]}'],
+}
+
+
+class SelfReferentialFilter(unittest.TestCase):
+    def _write(self, path: Path) -> None:
+        lines = [
+            json.dumps(_GENUINE_MONITOR),  # legacy, no confidence -> counted
+            json.dumps(_POST_FIX_SELF_REFERENTIAL),  # excluded (low-confidence path)
+            json.dumps(_PRE_FIX_MISTAGGED_HIGH_SELF_REFERENTIAL),  # excluded (re-derived)
+            json.dumps(_HIGH_CONF_MASKED),  # genuine masked failure -> counted
+        ]
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def test_count_excludes_both_vintages(self) -> None:
+        with TemporaryDirectory() as td:
+            p = Path(td) / "errors.jsonl"
+            self._write(p)
+            # legacy + genuine masked failure = 2; BOTH self-referential
+            # records excluded, including the mistagged-high historical one.
+            self.assertEqual(count_errors(p), 2)
+
+    def test_iter_default_skips_both_vintages(self) -> None:
+        with TemporaryDirectory() as td:
+            p = Path(td) / "errors.jsonl"
+            self._write(p)
+            cmds = [r["command"] for r in iter_records(p)]
+            self.assertEqual(cmds, ["pytest", "git push ... | tail"])
+
+    def test_include_self_referential_retains_both_vintages(self) -> None:
+        with TemporaryDirectory() as td:
+            p = Path(td) / "errors.jsonl"
+            self._write(p)
+            recs = list(iter_records(p, include_self_referential=True, include_low_confidence=True))
+            self.assertEqual(len(recs), 4)
+
+    def test_include_low_confidence_alone_does_not_leak_either_vintage(self) -> None:
+        """A caller who only asks for `include_low_confidence=True` (NOT
+        `include_self_referential=True`) must not see EITHER self-referential
+        record: the self-referential filter is independent and checked first
+        in `iter_records`, so it governs both the post-fix (confidence="low")
+        and the mistagged historical (confidence="high") vintage regardless
+        of the low-confidence flag. Only `include_self_referential=True`
+        (exercised above) retrieves them."""
+        with TemporaryDirectory() as td:
+            p = Path(td) / "errors.jsonl"
+            self._write(p)
+            recs = list(iter_records(p, include_low_confidence=True))
+            categories = [r.get("category") for r in recs]
+            self.assertNotIn("masked-failure", categories, "the mistagged historical record leaked")
+            self.assertNotIn(
+                "self-referential-log-read",
+                categories,
+                "the post-fix self-referential record leaked without include_self_referential=True",
+            )
+            self.assertEqual([r["command"] for r in recs], ["pytest", "git push ... | tail"])
+
+    def test_is_self_referential_helper(self) -> None:
+        self.assertTrue(is_self_referential(_POST_FIX_SELF_REFERENTIAL))
+        self.assertTrue(is_self_referential(_PRE_FIX_MISTAGGED_HIGH_SELF_REFERENTIAL))
+        self.assertFalse(is_self_referential(_HIGH_CONF_MASKED))
+        self.assertFalse(is_self_referential(_GENUINE_MONITOR))
+
+    def test_is_self_referential_false_when_error_lines_missing_or_not_list(self) -> None:
+        self.assertFalse(is_self_referential({"timestamp": "t"}))
+        self.assertFalse(is_self_referential({"timestamp": "t", "error_lines": "not-a-list"}))
+
+    def test_is_self_referential_false_on_mixed_lines(self) -> None:
+        rec = {
+            "error_lines": [
+                '.claude/annunaki/errors.jsonl:{"a": 1}',
+                ".claude/lib/real_module.py:Traceback (most recent call last):",
+            ]
+        }
+        self.assertFalse(is_self_referential(rec))
+
+    def test_cli_count_self_referential_flag(self) -> None:
+        with TemporaryDirectory() as td:
+            p = Path(td) / "errors.jsonl"
+            self._write(p)
+            self.assertEqual(main([str(p), "--count-self-referential"]), 0)
 
 
 class TraceTypeSourceOfTruth(unittest.TestCase):

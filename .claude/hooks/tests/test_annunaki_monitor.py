@@ -1615,6 +1615,217 @@ class Issue1354CiLogReadTests(unittest.TestCase):
         )
 
 
+class Issue1465SelfReferentialLogReadTests(unittest.TestCase):
+    """#1465 coverage: the monitor's own error log becomes its own evidence.
+
+    A `.claude/`-wide `rg` sweep (with the org-mandated `REPO_ROOT=... &&`
+    setup prefix, per CLAUDE.md § Shell environment) routinely re-surfaces
+    HISTORICAL records stored inside `.claude/annunaki/errors.jsonl` itself.
+    Two pre-existing guards both miss this shape:
+
+      - `_is_content_display`'s CONTENT_DISPLAY_VERBS anchor is the command's
+        FIRST token — a `REPO_ROOT="$(pwd)" && rg ...` prefix means the first
+        token is the assignment, not `rg`, so the leading-verb check misses;
+        and CONTENT_DISPLAY_ERRORS_LOG never fires either, because the
+        COMMAND string never mentions "errors.jsonl" — only the matched
+        OUTPUT lines do.
+      - `_is_echoed_content`'s JSON_BODY_LINE signal requires `{`/`[` at LINE
+        START, but rg/grep-style output is `<path>:<content>` — the leading
+        `.claude/annunaki/errors.jsonl:` prefix means `{` is never at
+        position 0, so that signal misses too.
+
+    The fix works on `error_lines`, not the command string: `is_self_referential_match`
+    resolves each matched line's rg-style `<path>:<content>` prefix and
+    classifies the record `confidence="low"` + `category=
+    "self-referential-log-read"` — excluded from the genuine-error count
+    (same reader machinery as #729/#835) but still WRITTEN, so a suppressed
+    self-reference stays distinguishable from "no error occurred" (the wave
+    acceptance bar) rather than vanishing into a silent drop.
+    """
+
+    def setUp(self):
+        self._saved_env = {
+            "ENVIRONMENT": os.environ.pop("ENVIRONMENT", None),
+            "NOORIN_HOOK_TEST_MODE": os.environ.pop("NOORIN_HOOK_TEST_MODE", None),
+        }
+        am._seen_hashes.clear()
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._errors_path = Path(self._tmpdir.name) / "errors.jsonl"
+        self._orig_monitor_file = am.ERRORS_FILE
+        self._orig_log_file = alog.ERRORS_FILE
+        am.ERRORS_FILE = self._errors_path
+        alog.ERRORS_FILE = self._errors_path
+
+    def tearDown(self):
+        am.ERRORS_FILE = self._orig_monitor_file
+        alog.ERRORS_FILE = self._orig_log_file
+        self._tmpdir.cleanup()
+        for k, v in self._saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    # A `REPO_ROOT=... &&`-prefixed `.claude/`-wide rg sweep, exactly the
+    # shape the issue's live incident used. `rg -r` (no `-n`) output is
+    # `<path>:<content>` with no line number, matching the harvested record.
+    _SWEEP_COMMAND = (
+        'REPO_ROOT="$(pwd)"\n'
+        'rg -rn --hidden "reconciliation_warning|_canonical_pairs" '
+        "\"$REPO_ROOT/.claude/\" --glob '!*/tests/*' | head -40"
+    )
+
+    # --- AC #1: the exact reported shape must not mint a genuine record ---
+
+    def test_repo_root_prefixed_sweep_over_own_error_log_not_counted(self):
+        """AC #1: an exit-0 `REPO_ROOT=... && rg -rn --hidden ... .claude/`
+        sweep whose output includes a historical `errors.jsonl` line must
+        produce NO NEW GENUINE record — the historical line's own stored text
+        ("... exit status 1 ...") is what trips ERROR_PATTERNS in the first
+        place, exactly reproducing the issue's self-incrementing shape."""
+        stdout = (
+            '.claude/annunaki/errors.jsonl:{"timestamp": '
+            '"2026-07-30T03:52:19.800252+00:00", "hook": "annunaki_monitor", '
+            '"error_lines": ["Command failed: returned non-zero exit status 1"]}\n'
+        )
+        result = am.check(_bash_event(self._SWEEP_COMMAND, stdout=stdout, exit_code=0))
+
+        # Still written (AC #4 — observable, not a silent drop)...
+        self.assertIsNotNone(
+            result, "the sweep must still produce a record, just not a genuine one"
+        )
+        rec = _read_records(self._errors_path)[0]
+        self.assertEqual(rec["confidence"], "low")
+        self.assertEqual(rec["category"], "self-referential-log-read")
+        # ...but excluded from the genuine-error count annunaki_parse reports.
+        self.assertEqual(
+            ap.count_errors(self._errors_path),
+            0,
+            "a self-referential log-read must not inflate the genuine-error count",
+        )
+
+    def test_repo_root_prefixed_sweep_content_display_command_side_misses(self):
+        """Direct unit pinning WHY the pre-existing command-side guard cannot
+        fire for this shape: the `REPO_ROOT=` prefix defeats the leading-verb
+        anchor, and the command text never contains "errors.jsonl" (only the
+        matched OUTPUT lines do)."""
+        self.assertFalse(
+            am._is_content_display(
+                self._SWEEP_COMMAND,
+                exit_code=0,
+                matched_patterns=["stdout:exit status [1-9]"],
+            )
+        )
+
+    def test_repo_root_prefixed_sweep_echoed_content_line_side_misses(self):
+        """Direct unit pinning the SECOND pre-existing gap: `_is_echoed_content`'s
+        JSON_BODY_LINE requires `{`/`[` at line start, but the rg path prefix
+        means it never is for this shape."""
+        line = '.claude/annunaki/errors.jsonl:{"error_lines": ["boom"]}'
+        self.assertFalse(am._is_echoed_content(self._SWEEP_COMMAND, [line]))
+
+    # --- AC #2: no over-suppression — the SAME command shape, real content ---
+
+    def test_repo_root_prefixed_sweep_over_real_source_file_still_high(self):
+        """AC #2: the identical `REPO_ROOT=... && rg ... .claude/` command
+        shape, but the matched OUTPUT line comes from a REAL source file, not
+        the error log — must still log at confidence=high/category=
+        masked-failure, exactly as before this fix. Pins that the guard is
+        keyed on the matched line's origin, not the command shape alone."""
+        stdout = (
+            ".claude/lib/wave_status.py:E   subprocess.CalledProcessError: "
+            "Command returned non-zero exit status 1\n"
+        )
+        result = am.check(_bash_event(self._SWEEP_COMMAND, stdout=stdout, exit_code=0))
+        self.assertIsNotNone(result)
+        rec = _read_records(self._errors_path)[0]
+        self.assertEqual(rec["confidence"], "high")
+        self.assertEqual(rec["category"], "masked-failure")
+        self.assertEqual(ap.count_errors(self._errors_path), 1)
+
+    def test_mixed_self_log_and_genuine_line_still_high(self):
+        """AC #2 (mix guard): ONE self-log line plus ONE genuine new-failure
+        line in the same match set must NOT suppress — `is_self_referential_match`
+        requires EVERY line to resolve to the monitor's own artifacts."""
+        stdout = (
+            '.claude/annunaki/errors.jsonl:{"error_lines": ["exit status 1"]}\n'
+            ".claude/lib/other_module.py:Traceback (most recent call last):\n"
+        )
+        result = am.check(_bash_event(self._SWEEP_COMMAND, stdout=stdout, exit_code=0))
+        self.assertIsNotNone(result)
+        rec = _read_records(self._errors_path)[0]
+        self.assertEqual(rec["confidence"], "high")
+        self.assertEqual(rec["category"], "masked-failure")
+
+    def test_nonzero_exit_with_self_log_content_still_logged_high(self):
+        """A REAL nonzero-exit failure whose stdout happens to also carry
+        self-log text must still log at high/nonzero-exit — self-reference
+        can never downgrade a genuine hard-failure signal."""
+        stdout = '.claude/annunaki/errors.jsonl:{"error_lines": ["exit status 1"]}\n'
+        result = am.check(_bash_event(self._SWEEP_COMMAND, stdout=stdout, exit_code=2))
+        self.assertIsNotNone(result)
+        rec = _read_records(self._errors_path)[0]
+        self.assertEqual(rec["confidence"], "high")
+        self.assertEqual(rec["category"], "nonzero-exit")
+
+    def test_traces_jsonl_self_reference_also_suppressed(self):
+        """The guard covers ALL of this monitor's own artifacts, not just
+        errors.jsonl — a sweep hitting `.claude/annunaki/traces.jsonl` is
+        equally self-referential."""
+        stdout = '.claude/annunaki/traces.jsonl:{"outcome": {"raised": "exit status 1"}}\n'
+        result = am.check(_bash_event(self._SWEEP_COMMAND, stdout=stdout, exit_code=0))
+        self.assertIsNotNone(result)
+        rec = _read_records(self._errors_path)[0]
+        self.assertEqual(rec["confidence"], "low")
+        self.assertEqual(rec["category"], "self-referential-log-read")
+
+    def test_archive_tier_self_reference_also_suppressed(self):
+        """The cold `.claude/annunaki/archive/**` tier is covered too — a
+        sweep re-matching an archived wave's log is the same self-reference."""
+        stdout = '.claude/annunaki/archive/wave-28.jsonl:{"error_lines": ["exit status 1"]}\n'
+        result = am.check(_bash_event(self._SWEEP_COMMAND, stdout=stdout, exit_code=0))
+        self.assertIsNotNone(result)
+        rec = _read_records(self._errors_path)[0]
+        self.assertEqual(rec["confidence"], "low")
+        self.assertEqual(rec["category"], "self-referential-log-read")
+
+    # --- Direct unit tests on the helpers ---
+
+    def test_helper_true_when_every_line_is_self_log(self):
+        lines = [
+            '.claude/annunaki/errors.jsonl:{"a": 1}',
+            '.claude/annunaki/traces.jsonl:{"b": 2}',
+        ]
+        self.assertTrue(am.is_self_referential_match(lines))
+
+    def test_helper_false_on_empty_error_lines(self):
+        self.assertFalse(am.is_self_referential_match([]))
+
+    def test_helper_false_when_one_line_is_not_self_log(self):
+        lines = [
+            '.claude/annunaki/errors.jsonl:{"a": 1}',
+            ".claude/lib/other_module.py:Traceback (most recent call last):",
+        ]
+        self.assertFalse(am.is_self_referential_match(lines))
+
+    def test_helper_false_on_bare_line_with_no_path_prefix(self):
+        """A line with no rg-style `<path>:` prefix is conservatively NOT
+        self-referential — we only suppress a match positively attributed to
+        our own log."""
+        self.assertFalse(am.is_self_referential_match(["Traceback (most recent call last):"]))
+
+    def test_path_helper_true_for_archive_tier(self):
+        self.assertTrue(
+            am._self_referential_log_path('.claude/annunaki/archive/wave-28.jsonl:{"x": 1}')
+        )
+
+    def test_path_helper_false_for_unrelated_jsonl(self):
+        """A `.jsonl` file that is NOT one of the monitor's own artifacts
+        must not be treated as self-referential just because it shares the
+        extension."""
+        self.assertFalse(am._self_referential_log_path(".claude/some_other_data.jsonl:{}"))
+
+
 if __name__ == "__main__":
     # `unittest.main()` would silently skip TestSilentBooleanIdiom (a plain
     # pytest class, not unittest.TestCase — see its docstring) when this file
