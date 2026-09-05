@@ -118,17 +118,24 @@ def iter_records(
       - records whose `type` is in `TRACE_RECORD_TYPES` (the #625 benign-trace
         filter) — pass `include_traces=True` to keep them;
       - records that are self-referential (#1465 — `error_lines` resolve
-        entirely to this monitor's own log artifacts, regardless of the
-        `confidence` tag stored on the record) — pass
-        `include_self_referential=True` to keep them for forensics. Checked
-        BEFORE the low-confidence filter below so a HISTORICAL record mistagged
-        `confidence: "high"` (written before this fix) is still excluded;
+        entirely to this monitor's own log artifacts, and NOT a hard-failure
+        category/nonzero exit_code — see `is_self_referential`) — pass
+        `include_self_referential=True` to keep them for forensics. This flag
+        is the SOLE gate for a self-referential record: once `is_self_
+        referential` says True, `include_low_confidence` plays no further
+        part, so `--include-self-referential` alone retrieves BOTH the
+        post-fix `confidence="low"` vintage AND the historical mistagged
+        `confidence="high"` vintage (a merge-gate finding on the earlier
+        design, where the low-confidence vintage still needed
+        `include_low_confidence=True` too — surprising and undocumented);
       - records whose `confidence` is "low" (the #729 exit-0 echoed-output
         false-positive class — a trigger word matched in displayed source/body
         at exit 0) — pass `include_low_confidence=True` to keep them for
-        forensics. Records with no `confidence` field (legacy logs written
-        before #729) are treated as genuine and kept, so historical errors are
-        never silently dropped.
+        forensics. Only applies to a record `is_self_referential` says False;
+        a self-referential record's confidence is governed entirely by
+        `include_self_referential` above. Records with no `confidence` field
+        (legacy logs written before #729) are treated as genuine and kept, so
+        historical errors are never silently dropped.
 
     A missing file yields nothing. Each line is `.strip()`-ed before parsing,
     because the log has historically contained blank lines from manual edits;
@@ -151,7 +158,19 @@ def iter_records(
                 continue
             if not include_traces and rec.get("type") in TRACE_RECORD_TYPES:
                 continue
-            if not include_self_referential and is_self_referential(rec):
+            # Self-referential records get their OWN branch, not just an
+            # earlier check, because they must NOT also fall through to the
+            # low-confidence filter below (Nadia Khoury's #1498 merge-gate
+            # BLOCKING finding): `--include-self-referential` alone used to
+            # surface only the mistagged-high HISTORICAL vintage, since the
+            # post-fix confidence="low" vintage would still be caught by the
+            # low-confidence check immediately after. Once a record is
+            # positively identified as self-referential, `include_self_
+            # referential` is the ONLY flag that governs it -- both vintages,
+            # regardless of their stored `confidence` field.
+            if is_self_referential(rec):
+                if include_self_referential:
+                    yield rec
                 continue
             if not include_low_confidence and rec.get("confidence") == "low":
                 continue
@@ -169,21 +188,61 @@ def is_trace(record: dict) -> bool:
     return record.get("type") in TRACE_RECORD_TYPES
 
 
+# Nadia Khoury's #1498 merge-gate BLOCKING finding: the writer's own
+# `_classify_confidence` docstring states the invariant "a real failure
+# signal always outranks a log-read attribution" -- nonzero-exit and
+# stderr-match are checked BEFORE the self-referential branch, precisely so a
+# genuine hard failure is never downgraded just because its output also
+# happens to carry self-log text (see `test_nonzero_exit_with_self_log_
+# content_still_logged_high` in test_annunaki_monitor.py). `is_self_referential`
+# re-derived its verdict from `error_lines` ALONE and ignored `exit_code`/
+# `category` entirely -- so a record the writer correctly stamped
+# `confidence="high"`/`category="nonzero-exit"` was reclassified
+# self-referential at read time and silently dropped from the genuine count.
+# That is the writer's precedence being undone one layer down: the two-
+# boundary-drift shape #1465 itself exists to fix, recurring in the fix.
+#
+# The reader must CONSUME the writer's precedence, not re-derive it from a
+# narrower signal. These are the two writer-side categories that already
+# outrank self-reference in `_classify_confidence` (checked first, before
+# STRONG_MASKED_FAILURE / self-referential / echoed-content / pipe-mask-
+# suspect); a record carrying a category in HARD_FAILURE_CATEGORIES is never
+# self-referential regardless of its `error_lines` shape, and a nonzero
+# `exit_code` is the same signal for a record with no `category` field at
+# all (defensive -- the writer always sets `category` for command-failure
+# records, but the guard should not rely on that being universally true
+# across every past/future record shape).
+HARD_FAILURE_CATEGORIES = frozenset({"nonzero-exit", "stderr-match"})
+
+
 def is_self_referential(record: dict) -> bool:
     """True iff `record`'s `error_lines` resolve entirely to this monitor's
     own log artifacts (#1465) — a `.claude/`-wide sweep re-matching text
     stored inside errors.jsonl/traces.jsonl/archive/**, not a live failure.
 
-    Independent of the stored `confidence`/`category` fields deliberately:
-    records written AFTER the writer-side #1465 fix are tagged
-    `confidence: "low"` + `category: "self-referential-log-read"` and would
-    already be caught by `is_low_confidence`, but records written BEFORE the
-    fix were mistagged `confidence: "high"` + `category: "masked-failure"`
-    (the self-referential text itself routinely contains the STRONG
-    masked-failure phrases the monitor looks for). Re-deriving the
+    Independent of the stored `confidence` field deliberately (see below for
+    the exception): records written AFTER the writer-side #1465 fix are
+    tagged `confidence: "low"` + `category: "self-referential-log-read"` and
+    would already be caught by `is_low_confidence`, but records written
+    BEFORE the fix were mistagged `confidence: "high"` + `category:
+    "masked-failure"` (the self-referential text itself routinely contains
+    the STRONG masked-failure phrases the monitor looks for). Re-deriving the
     classification from `error_lines` at read time excludes both vintages
     from the genuine count without rewriting the historical log.
+
+    NOT independent of `category`/`exit_code`, however: a record in
+    `HARD_FAILURE_CATEGORIES` (`nonzero-exit`, `stderr-match`) — or, as a
+    defensive fallback for a record with no `category` at all, one with a
+    nonzero `exit_code` — is never self-referential, full stop, regardless of
+    what its `error_lines` contain. This consumes the writer's own
+    precedence (`_classify_confidence` checks these two categories before
+    the self-referential branch) instead of re-deriving a narrower judgement
+    that could contradict it.
     """
+    if record.get("category") in HARD_FAILURE_CATEGORIES:
+        return False
+    if (record.get("exit_code") or 0) != 0:
+        return False
     error_lines = record.get("error_lines")
     if not isinstance(error_lines, list):
         return False

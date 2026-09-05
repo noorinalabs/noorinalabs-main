@@ -1760,13 +1760,28 @@ class Issue1465SelfReferentialLogReadTests(unittest.TestCase):
     def test_nonzero_exit_with_self_log_content_still_logged_high(self):
         """A REAL nonzero-exit failure whose stdout happens to also carry
         self-log text must still log at high/nonzero-exit — self-reference
-        can never downgrade a genuine hard-failure signal."""
+        can never downgrade a genuine hard-failure signal.
+
+        Asserts the ROUND TRIP through `annunaki_parse.count_errors`, not
+        just the stored `confidence`/`category` fields (Nadia Khoury's #1498
+        merge-gate BLOCKING #1 finding): asserting only the stored fields is
+        exactly the gap that let the reader silently undo this precedence in
+        the first place -- `annunaki_parse.is_self_referential` used to
+        re-derive its verdict from `error_lines` alone, ignoring `exit_code`/
+        `category` entirely, so this same record round-tripped to a genuine
+        count of 0 even though the writer stamped it high/nonzero-exit."""
         stdout = '.claude/annunaki/errors.jsonl:{"error_lines": ["exit status 1"]}\n'
         result = am.check(_bash_event(self._SWEEP_COMMAND, stdout=stdout, exit_code=2))
         self.assertIsNotNone(result)
         rec = _read_records(self._errors_path)[0]
         self.assertEqual(rec["confidence"], "high")
         self.assertEqual(rec["category"], "nonzero-exit")
+        self.assertEqual(
+            ap.count_errors(self._errors_path),
+            1,
+            "a genuine nonzero-exit failure must round-trip as counted, "
+            "even when its output also carries self-log text",
+        )
 
     def test_traces_jsonl_self_reference_also_suppressed(self):
         """The guard covers ALL of this monitor's own artifacts, not just
@@ -1840,6 +1855,53 @@ class Issue1465SelfReferentialLogReadTests(unittest.TestCase):
         `/annunaki/archive/`)."""
         self.assertFalse(am._self_referential_log_path("some/other/dir/errors.jsonl:{}"))
         self.assertFalse(am._self_referential_log_path("fixtures/traces.jsonl:{}"))
+
+    def test_path_helper_true_for_absolute_path(self):
+        """Nadia Khoury's #1498 merge-gate review: 2 of the 9 live
+        self-referential records carry ABSOLUTE paths. The directory scoping
+        added for `test_path_helper_false_for_protected_literal_name_at_unrelated_path`
+        must be a SUFFIX check, not a `.claude/annunaki/`-style prefix check --
+        a prefix check would stop matching absolute paths and reintroduce the
+        over-counting this PR exists to fix. `endswith("/annunaki/errors.jsonl")`
+        matches regardless of what precedes it."""
+        self.assertTrue(
+            am._self_referential_log_path(
+                "/home/parameterization/code/noorinalabs-main/.claude/annunaki/errors.jsonl:"
+                '{"error_lines": ["exit status 1"]}'
+            )
+        )
+        self.assertTrue(
+            am._self_referential_log_path(
+                "/home/parameterization/code/noorinalabs-main/.claude/annunaki/traces.jsonl:"
+                '{"outcome": {}}'
+            )
+        )
+
+    def test_path_helper_false_for_deeper_annunaki_descendant(self):
+        """The scoped suffix requires errors.jsonl/traces.jsonl to sit
+        DIRECTLY under an `annunaki/` directory -- a deeper descendant (an
+        extra path segment between `annunaki/` and the filename) does not
+        match. Narrower than a bare `/annunaki/` substring-anywhere check
+        would have allowed."""
+        self.assertFalse(am._self_referential_log_path(".claude/annunaki/sub/errors.jsonl:{}"))
+
+    def test_path_helper_false_for_other_components_own_logs(self):
+        """#1501's exact evidence table (Nadia Khoury's #1498 merge-gate
+        follow-up): the unscoped filename-only `endswith` check pre-dating
+        this fix classified ALL of these as self-referential -- a different
+        component's differently-purposed `errors.jsonl`/`traces.jsonl` would
+        have been silently excluded from the genuine count the first time a
+        child repo added a `logs/errors.jsonl` (an ordinary thing for the
+        ingest/data-acquisition pipelines to do). None of these end with
+        `/annunaki/errors.jsonl` or `/annunaki/traces.jsonl`."""
+        self.assertFalse(
+            am._self_referential_log_path("noorinalabs-isnad-graph/logs/errors.jsonl:{}")
+        )
+        self.assertFalse(am._self_referential_log_path("src/ingest/my_errors.jsonl:{}"))
+        self.assertFalse(am._self_referential_log_path("/var/log/app/errors.jsonl:{}"))
+        self.assertFalse(
+            am._self_referential_log_path("noorinalabs-data-acquisition/out/traces.jsonl:{}")
+        )
 
 
 if __name__ == "__main__":

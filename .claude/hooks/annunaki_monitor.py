@@ -404,29 +404,45 @@ JSON_BODY_LINE = re.compile(r'^\s*[+-]?\s*[{\[]\s*["{]')
 # for these logs, because the JSON payload's own colons (`"timestamp": "..."`)
 # come strictly after the path/content delimiter.
 SELF_LOG_FILENAMES = ("errors.jsonl", "traces.jsonl")
-SELF_LOG_DIR_MARKER = "/annunaki/"
+# Scoped SUFFIX (not a prefix, and not a bare "/annunaki/" substring-anywhere
+# check either) -- `path.endswith("/annunaki/errors.jsonl")` matches a path
+# whose LAST TWO segments are "annunaki/errors.jsonl", regardless of what
+# comes before: both the relative `.claude/annunaki/errors.jsonl` and an
+# absolute `/home/user/repo/.claude/annunaki/errors.jsonl` end with it, so a
+# suffix check (unlike a `.claude/annunaki/`-prefix check) does not break on
+# either shape. Nadia Khoury's #1498 merge-gate review confirmed 2 of the 9
+# live self-referential records carry absolute paths -- a prefix requirement
+# would have stopped matching those and reintroduced the very over-counting
+# this PR exists to fix. A DEEPER descendant of annunaki/ (e.g.
+# `.claude/annunaki/sub/errors.jsonl`) deliberately does NOT match: it ends
+# with "/sub/errors.jsonl", not "/annunaki/errors.jsonl" -- narrower than a
+# bare substring check would allow.
+SELF_LOG_SCOPED_SUFFIXES = tuple(f"/annunaki/{name}" for name in SELF_LOG_FILENAMES)
 SELF_LOG_ARCHIVE_MARKER = "/annunaki/archive/"
 _RG_PATH_PREFIX = re.compile(r"^([^\s:]+):")
 
 
 def _self_referential_log_path(line: str) -> bool:
     """True if `line` is `<path>:<content>` output whose <path> is one of
-    this monitor's own log artifacts: errors.jsonl or traces.jsonl UNDER an
-    `/annunaki/` directory segment, or anything under the cold
+    this monitor's own log artifacts: errors.jsonl or traces.jsonl directly
+    under an `annunaki/` directory (relative or absolute path, see
+    `SELF_LOG_SCOPED_SUFFIXES`), or anything under the cold
     `.claude/annunaki/archive/` tier. A line with no leading `<path>:` prefix
     (e.g. bare displayed text, no rg/grep-style attribution) is conservatively
     NOT self-referential — we only ever suppress a match we can positively
     attribute to our own log.
 
-    The `/annunaki/` segment requirement on the filename branch (added at
-    Lucas Ferreira's #1498 review) matters: without it, `path.endswith(...)`
-    alone matches ANY path ending in one of those two literal names, anywhere
-    in any tree -- a test fixture or another repo's differently-purposed
-    `errors.jsonl` at `some/other/dir/errors.jsonl` would be misclassified as
-    self-referential and a genuine failure read from it silently excluded.
-    That is the same defect class this PR exists to fix, one level removed.
-    The archive branch already required a path segment (`/annunaki/archive/`);
-    this brings the filename branch to the same standard.
+    The directory-scoping on the filename branch (added at Lucas Ferreira's
+    and Nadia Khoury's independent #1498 review findings) matters: without
+    it, `path.endswith(("errors.jsonl", "traces.jsonl"))` alone matches ANY
+    path ending in one of those two literal names, anywhere in any tree -- a
+    test fixture or another repo's differently-purposed `errors.jsonl` at
+    `some/other/dir/errors.jsonl` would be misclassified as self-referential
+    and a genuine failure read from it silently excluded. That is the same
+    defect class this PR exists to fix, one level removed. The archive
+    branch already required a path segment (`/annunaki/archive/`); this
+    brings the filename branch to the same standard, scoped as a SUFFIX so
+    it keeps matching absolute paths too.
     """
     match = _RG_PATH_PREFIX.match(line)
     if not match:
@@ -434,7 +450,7 @@ def _self_referential_log_path(line: str) -> bool:
     path = match.group(1)
     if SELF_LOG_ARCHIVE_MARKER in path:
         return True
-    return SELF_LOG_DIR_MARKER in path and path.endswith(SELF_LOG_FILENAMES)
+    return path.endswith(SELF_LOG_SCOPED_SUFFIXES)
 
 
 def is_self_referential_match(error_lines: list[str]) -> bool:
