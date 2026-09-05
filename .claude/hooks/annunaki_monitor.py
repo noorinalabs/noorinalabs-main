@@ -52,6 +52,22 @@ Input Language:
                      excluded from the count. The genuine exit-0-failure
                      carve-out (STRONG masked-failure) stays "high"/counted as
                      `category="masked-failure"`.
+  Self-reference (#1465): a `.claude/`-wide sweep (`REPO_ROOT=... && rg -rn
+                     --hidden ... .claude/`) whose OUTPUT lines happen to be
+                     drawn from this monitor's own log (errors.jsonl /
+                     traces.jsonl / archive/**) is classified
+                     `confidence="low"` + `category="self-referential-log-read"`
+                     — the #1354/#596 command-side content-display guard
+                     cannot see this shape, because neither the leading verb
+                     (defeated by a `REPO_ROOT=... &&` setup prefix) nor the
+                     literal string "errors.jsonl" (never present — only the
+                     matched OUTPUT lines carry it) appears in the command
+                     itself. Detection instead inspects `error_lines`
+                     (`is_self_referential_match`): every matched line's
+                     rg-style `<path>:<content>` prefix must resolve to a
+                     monitor log artifact. Left unfixed this is
+                     self-incrementing — each captured self-reference grows
+                     the log, making the next sweep more likely to hit it.
 
 Exit codes:
   0 — always (advisory hook, never blocks)
@@ -89,6 +105,13 @@ CATEGORY_ECHOED_CONTENT = "echoed-content"  # #729 displayed source/body (low)
 # not positively-recognized echoed content — e.g. a pytest `FAILED` surfacing
 # through `… | tail` rc-masking, or benign demo output. Retained but NOT counted.
 CATEGORY_PIPE_MASK_SUSPECT = "pipe-mask-suspect"
+# #1465: an exit-0 stdout match whose matched OUTPUT lines resolve entirely to
+# this monitor's OWN log artifacts (errors.jsonl / traces.jsonl / archive/**) —
+# a `.claude/`-wide sweep re-surfacing a past record's text, not a live
+# failure. Distinct from CATEGORY_ECHOED_CONTENT: that class recognizes the
+# *displayed* line shape (source clause / JSON body); this one recognizes the
+# *source file* the line came from via its rg-style `<path>:<content>` prefix.
+CATEGORY_SELF_REFERENTIAL_LOG_READ = "self-referential-log-read"
 
 # Session-level dedup: skip errors we've already logged this session
 _seen_hashes: set = set()
@@ -362,6 +385,92 @@ SOURCE_CLAUSE_LINE = re.compile(
 # alongside a real failing build/test step is NOT demoted on that substring.
 JSON_BODY_LINE = re.compile(r'^\s*[+-]?\s*[{\[]\s*["{]')
 
+# Self-referential meta-capture guard, OUTPUT side (#1465 — the #1354/#596
+# residual). CONTENT_DISPLAY_ERRORS_LOG (above) matches "errors.jsonl" in the
+# COMMAND string, and CONTENT_DISPLAY_VERBS recognizes a leading `rg`/`cat`/
+# etc. verb — but a `.claude/`-wide sweep with a setup prefix
+# (`REPO_ROOT="$(...)" && rg -rn --hidden ... .claude/`) defeats BOTH: the
+# command never mentions errors.jsonl, and the leading token is the
+# assignment, not the display verb (CONTENT_DISPLAY_VERBS is deliberately
+# anchored to the command's first token, see its docstring). When such a
+# sweep's OUTPUT happens to include lines from this monitor's own log, the
+# monitor is reading its own history as evidence of a live failure — and
+# writing a new record about it grows the log, making the next sweep more
+# likely to hit it too (the self-incrementing shape the issue documents).
+#
+# The fix works on `error_lines`, not `command`: `rg`/`grep`-style output has
+# the form `<path>:<content>` (or `<path>:<line_no>:<content>` with `-n`).
+# Capturing everything up to the FIRST colon always isolates <path> correctly
+# for these logs, because the JSON payload's own colons (`"timestamp": "..."`)
+# come strictly after the path/content delimiter.
+SELF_LOG_FILENAMES = ("errors.jsonl", "traces.jsonl")
+# Scoped SUFFIX (not a prefix, and not a bare "/annunaki/" substring-anywhere
+# check either) -- `path.endswith("/annunaki/errors.jsonl")` matches a path
+# whose LAST TWO segments are "annunaki/errors.jsonl", regardless of what
+# comes before: both the relative `.claude/annunaki/errors.jsonl` and an
+# absolute `/home/user/repo/.claude/annunaki/errors.jsonl` end with it, so a
+# suffix check (unlike a `.claude/annunaki/`-prefix check) does not break on
+# either shape. Nadia Khoury's #1498 merge-gate review confirmed 2 of the 9
+# live self-referential records carry absolute paths -- a prefix requirement
+# would have stopped matching those and reintroduced the very over-counting
+# this PR exists to fix. A DEEPER descendant of annunaki/ (e.g.
+# `.claude/annunaki/sub/errors.jsonl`) deliberately does NOT match: it ends
+# with "/sub/errors.jsonl", not "/annunaki/errors.jsonl" -- narrower than a
+# bare substring check would allow.
+SELF_LOG_SCOPED_SUFFIXES = tuple(f"/annunaki/{name}" for name in SELF_LOG_FILENAMES)
+SELF_LOG_ARCHIVE_MARKER = "/annunaki/archive/"
+_RG_PATH_PREFIX = re.compile(r"^([^\s:]+):")
+
+
+def _self_referential_log_path(line: str) -> bool:
+    """True if `line` is `<path>:<content>` output whose <path> is one of
+    this monitor's own log artifacts: errors.jsonl or traces.jsonl directly
+    under an `annunaki/` directory (relative or absolute path, see
+    `SELF_LOG_SCOPED_SUFFIXES`), or anything under the cold
+    `.claude/annunaki/archive/` tier. A line with no leading `<path>:` prefix
+    (e.g. bare displayed text, no rg/grep-style attribution) is conservatively
+    NOT self-referential — we only ever suppress a match we can positively
+    attribute to our own log.
+
+    The directory-scoping on the filename branch (added at Lucas Ferreira's
+    and Nadia Khoury's independent #1498 review findings) matters: without
+    it, `path.endswith(("errors.jsonl", "traces.jsonl"))` alone matches ANY
+    path ending in one of those two literal names, anywhere in any tree -- a
+    test fixture or another repo's differently-purposed `errors.jsonl` at
+    `some/other/dir/errors.jsonl` would be misclassified as self-referential
+    and a genuine failure read from it silently excluded. That is the same
+    defect class this PR exists to fix, one level removed. The archive
+    branch already required a path segment (`/annunaki/archive/`); this
+    brings the filename branch to the same standard, scoped as a SUFFIX so
+    it keeps matching absolute paths too.
+    """
+    match = _RG_PATH_PREFIX.match(line)
+    if not match:
+        return False
+    path = match.group(1)
+    if SELF_LOG_ARCHIVE_MARKER in path:
+        return True
+    return path.endswith(SELF_LOG_SCOPED_SUFFIXES)
+
+
+def is_self_referential_match(error_lines: list[str]) -> bool:
+    """Return True (#1465) iff `error_lines` is non-empty and EVERY line
+    resolves to this monitor's own log artifacts, per
+    `_self_referential_log_path`.
+
+    Conservative by design, matching the precedence rule every sibling
+    classifier in this module follows: a MIX of one self-log line and one
+    line from a genuine new failure does NOT trigger this — that record
+    still logs on its own merits (no over-suppression). Exported
+    (no leading underscore) because `annunaki_parse` imports it directly to
+    re-derive the same classification against HISTORICAL records written
+    before this fix shipped — mirroring the TRACE_RECORD_TYPES contract
+    between this module's sibling `annunaki_log` and its reader.
+    """
+    if not error_lines:
+        return False
+    return all(_self_referential_log_path(line) for line in error_lines)
+
 
 def _is_content_display(command: str, exit_code: int, matched_patterns: list[str]) -> bool:
     """Return True if this matches the #596/#1354 content-display idiom.
@@ -510,6 +619,10 @@ def _classify_confidence(
 
       nonzero-exit     — exit_code != 0                          → high
       stderr-match     — a stderr-pattern match                  → high
+      self-referential- — exit-0 stdout match whose OUTPUT lines  → low
+      log-read           resolve entirely to this monitor's own
+                         log artifacts (#1465 — a `.claude/`-wide
+                         sweep re-matching its own history)
       masked-failure   — exit-0 stdout match with a STRONG       → high
                          masked-failure signal (the genuine
                          exit-0-failure carve-out, e.g. a
@@ -529,11 +642,22 @@ def _classify_confidence(
     from the genuine-error count. Recall is preserved for any RECOGNIZABLE
     failure signal: a non-zero exit, a stderr pattern, or a STRONG masked-
     failure phrase all still count.
+
+    #1465 self-referential-log-read is checked BEFORE masked-failure
+    deliberately: a self-referential match's `error_lines` are literally past
+    log records, which routinely contain the very phrases STRONG_MASKED_FAILURE
+    looks for (a stored "exit status 1", a stored "Traceback ..." from some
+    earlier genuinely-failed command) — the self-reference IS what would
+    otherwise mis-trip masked-failure. Like every classifier in this module,
+    the check is conservative and does not touch nonzero-exit/stderr-match: a
+    real failure signal always outranks a log-read attribution.
     """
     if exit_code and exit_code != 0:
         return "high", CATEGORY_NONZERO_EXIT
     if any(p.startswith("stderr:") for p in matched_patterns):
         return "high", CATEGORY_STDERR_MATCH
+    if is_self_referential_match(error_lines):
+        return "low", CATEGORY_SELF_REFERENTIAL_LOG_READ
     if STRONG_MASKED_FAILURE.search("\n".join(error_lines)):
         return "high", CATEGORY_MASKED_FAILURE
     if _is_echoed_content(command, error_lines):
