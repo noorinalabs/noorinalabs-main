@@ -861,6 +861,10 @@ _OLD_KIND_PATTERNS = {
         "skill-graphql-pagination",
     ),
     "checksums-ascii": ("check_checksums_ascii", "checksums-ascii"),
+    "skill-bash-dialect": (
+        "lint_skill_bash_dialect",
+        "skill-bash-dialect",
+    ),
 }
 _OLD_RUN_BLOCK_OPEN_RE = re.compile(r"^(?P<indent>\s*)-?\s*run:\s*[|>][+\-0-9]*\s*$")
 
@@ -956,6 +960,7 @@ _EXPECTED_KINDS = {
             "pytest",
             "ruff-format",
             "ruff-lint",
+            "skill-bash-dialect",
             "skill-graphql-pagination",
         },
         "ci": {
@@ -973,6 +978,7 @@ _EXPECTED_KINDS = {
             "pytest",
             "ruff-format",
             "ruff-lint",
+            "skill-bash-dialect",
             "skill-graphql-pagination",
         },
     },

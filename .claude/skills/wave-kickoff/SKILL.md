@@ -37,17 +37,56 @@ if [ -z "$SCOPE_TS" ]; then
   exit 1
 fi
 
-if [ -n "$PRIOR_RETRO_TS" ] && [ "$SCOPE_TS" \< "$PRIOR_RETRO_TS" ]; then
-  echo "ERROR: wave_{M}_scope_reconciled_at ($SCOPE_TS) predates last retro ($PRIOR_RETRO_TS)."
-  echo "  Re-run /wave-scope {P} {M} so the reconciliation reflects the current carry-forward + memory-must-include state."
-  exit 1
+# BEGIN wave-kickoff-step0a-staleness
+# `[ "$A" \< "$B" ]` is a bash-only string-comparison operator inside `[ ]`.
+# Under zsh — this org's shell for both the interactive prompt and the agent
+# Bash tool (CLAUDE.md § Shell environment) — it does not evaluate; it
+# ERRORS ("condition expected: <"). An errored test is non-zero, so the `if`
+# never fired and a genuinely stale scope passed kickoff silently (#1485).
+# Both timestamps are ISO-8601 Z (e.g. 2026-08-23T17:09:43Z), so
+# lexicographic ordering == chronological ordering. `sort`+`head -1` finds
+# the earlier of the two without any shell-specific comparison operator —
+# portable across POSIX sh, bash and zsh alike. `ORDER_CHECK_TS` is the
+# earlier (or tied) timestamp; if it equals `$SCOPE_TS` and the two values
+# are not themselves equal, `$SCOPE_TS` is strictly the earlier one, i.e.
+# it predates `$PRIOR_RETRO_TS`.
+if [ -n "$PRIOR_RETRO_TS" ]; then
+  if command -v sort >/dev/null 2>&1 && command -v head >/dev/null 2>&1; then
+    ORDER_CHECK_TS=$(printf '%s\n%s\n' "$SCOPE_TS" "$PRIOR_RETRO_TS" | sort | head -1)
+    if [ "$ORDER_CHECK_TS" = "$SCOPE_TS" ] && [ "$SCOPE_TS" != "$PRIOR_RETRO_TS" ]; then
+      echo "ERROR: wave_{M}_scope_reconciled_at ($SCOPE_TS) predates last retro ($PRIOR_RETRO_TS)."
+      echo "  Re-run /wave-scope {P} {M} so the reconciliation reflects the current carry-forward + memory-must-include state."
+      exit 1
+    fi
+    ORDER_CHECK_STATE=ok
+  else
+    # `sort`/`head` unavailable — the comparison could not be evaluated at
+    # all. This must fail CLOSED, not just render distinctly: exit code is
+    # the channel the caller actually consumes (Step 0a's own absent-scope
+    # check enforces with `exit 1`; Step 0b captures `RC=$?` and branches on
+    # it), and a rendered warning alone repeats the #1485 shape one channel
+    # over — an operator can misread stdout, an `if [ "$RC" -ne 0 ]` cannot.
+    # The `case` below is what actually exits — see the `failed)` arm.
+    ORDER_CHECK_STATE=failed
+  fi
+else
+  ORDER_CHECK_STATE=skipped
 fi
 
-if [ -z "$PRIOR_RETRO_TS" ]; then
-  echo "  Scope reconciled at: $SCOPE_TS (no prior-wave timestamp — first wave of phase or fresh project; staleness check skipped)"
-else
-  echo "  Scope reconciled at: $SCOPE_TS (post-dates last retro: $PRIOR_RETRO_TS)"
-fi
+case "$ORDER_CHECK_STATE" in
+  skipped)
+    echo "  Scope reconciled at: $SCOPE_TS (no prior-wave timestamp — first wave of phase or fresh project; staleness check skipped)"
+    ;;
+  ok)
+    echo "  Scope reconciled at: $SCOPE_TS (post-dates last retro: $PRIOR_RETRO_TS)"
+    ;;
+  failed)
+    echo "ERROR: staleness comparison against last retro ($PRIOR_RETRO_TS) could not be evaluated (sort/head unavailable) — ordering NOT verified."
+    echo "  Re-run /wave-kickoff in a shell where sort and head are on PATH, or verify the ordering manually."
+    exit 1
+    ;;
+esac
+# END wave-kickoff-step0a-staleness
 ```
 
 This check is a deterministic JSON read — no GitHub API calls, no side effects. It catches the off-path case where `/wave-kickoff` is invoked without a recent `/wave-scope` (drift signal: meta-issue out of sync with labels). The common path is covered by `/wave-retro` Step 9, which **recommends** `/wave-scope {P} {M+1}` at end-of-wave (the auto-invoke was dropped in #1022 — this Step 0a check is exactly the backstop for a skipped/deferred `/wave-scope`).

@@ -290,6 +290,35 @@ jobs:
           # shellcheck disable=SC2086  # word-splitting is intended (one path per arg)
           python3 .claude/lib/lint_skill_graphql_pagination.py $files
 
+  skill-bash-dialect:
+    name: Skill bash-dialect lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Skill/hooks-markdown bash-dialect guard (noorinalabs-main#1485). Flags
+      # `[ "$A" \< "$B" ]` / `[ "$A" \> "$B" ]` — a bash-only string-comparison
+      # operator inside a POSIX `[ ]` test — in any shell-tagged fenced code
+      # block. Under zsh (this org's shell for both the interactive prompt and
+      # the agent Bash tool) the operator errors instead of evaluating, so an
+      # `if` guarding on it silently takes the "false" branch: `/wave-kickoff`
+      # Step 0a's staleness guard had been fail-open in exactly this shape.
+      # Mirrors the `skill-bash-dialect` pre-commit hook (the sync-drift gate
+      # classifies the kind, so this mirror is mandatory). The lint self-scopes
+      # to shell-tagged/untagged fenced code blocks and skips comment lines, so
+      # prose or a comment explaining the bug does not self-trigger.
+      - name: "Lint skill/hooks markdown for bash-only [ \\< ] / [ \\> ] operators"
+        run: |
+          files=$(find .claude/skills .claude/hooks -name '*.md' -print)
+          if [ -z "$files" ]; then
+            echo "No skill/hooks markdown files found — bash-dialect lint is a no-op here."
+            exit 0
+          fi
+          # shellcheck disable=SC2086  # word-splitting is intended (one path per arg)
+          python3 .claude/lib/lint_skill_bash_dialect.py $files
+
   precommit-ci-sync:
     name: Pre-commit ⇄ CI sync-drift gate
     runs-on: ubuntu-latest

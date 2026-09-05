@@ -48,7 +48,7 @@ kind tokens so they compare:
     ruff-lint, ruff-format, mypy, pytest, eslint, typescript, prettier,
     terraform-fmt, gitleaks, actionlint, astro-check, pip-audit, build,
     cspell, dockerfile-base-pin, fixture-realism, skill-graphql-pagination,
-    checksums-ascii
+    checksums-ascii, skill-bash-dialect
 
 Unknown tools are ignored (neither side gates on a kind we can't classify),
 which keeps the gate conservative — it never fails on something it doesn't
@@ -181,6 +181,21 @@ _KIND_PATTERNS: dict[str, tuple[str, ...]] = {
     "skill-graphql-pagination": (
         "lint_skill_graphql_pagination",
         "skill-graphql-pagination",
+    ),
+    # `skill-bash-dialect` is the skill/hooks-markdown bash-only `[ \<]`/`[ \>]`
+    # operator lint (`.claude/lib/lint_skill_bash_dialect.py`, noorinalabs-main
+    # #1485): it flags a bash-only string-comparison operator inside a POSIX
+    # `[ ]` test, which errors (rather than evaluates) under zsh — the exact
+    # fail-open shape that made `/wave-kickoff` Step 0a's staleness guard
+    # silently pass through a genuinely stale scope. Same contract as
+    # `skill-graphql-pagination` above — a CI run of the lint with no
+    # pre-commit hook is harmful drift (#684), not a silently-ignored
+    # unknown, so classifying it makes the drift gate actively DEMAND the
+    # local⇄CI mirror. Patterns match the script basename (present on both
+    # sides' invoke line) and the hook id / job name.
+    "skill-bash-dialect": (
+        "lint_skill_bash_dialect",
+        "skill-bash-dialect",
     ),
     # `checksums-ascii` is the ontology/checksums.json no-`\u`-escape gate
     # (`.claude/lib/check_checksums_ascii.py`, #1044 — follow-up to #1038/#1042):

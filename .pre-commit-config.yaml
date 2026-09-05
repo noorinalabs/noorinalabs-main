@@ -139,6 +139,31 @@ repos:
         files: ^\.claude/skills/.*\.md$
         exclude: ^\.claude/worktrees/
         pass_filenames: true
+      # skill-bash-dialect mirrors the `Skill bash-dialect lint` CI job in
+      # ci.yml (the sync-drift gate classifies the `skill-bash-dialect` kind,
+      # so a CI-enforced lint not mirrored here turns the gate red, same
+      # contract as the two prose gates above). Flags `[ "$A" \< "$B" ]` /
+      # `[ "$A" \> "$B" ]` — a bash-only string-comparison operator inside a
+      # POSIX `[ ]` test — in any shell-tagged (or untagged) fenced code
+      # block in a skill/hooks markdown file. Under zsh (this org's shell for
+      # both the interactive prompt and the agent Bash tool) the operator
+      # errors instead of evaluating, so an `if` guarding on it silently
+      # takes the "false" branch rather than failing loudly — the exact
+      # fail-open shape of noorinalabs-main#1485's `/wave-kickoff` Step 0a
+      # staleness guard. Adjacent to #1479 (skill bash blocks tripping the
+      # permission engine's static-analysis path via process substitution/
+      # here-strings) — a different construct in the same neighborhood, NOT
+      # covered by this lint. Commit-stage (cheap static scan); `files:`
+      # restricts candidates to skill/hooks markdown, `pass_filenames` hands
+      # the changed *.md to the lint (whose CLI takes file args, like the
+      # prose gates above).
+      - id: skill-bash-dialect
+        name: skill-bash-dialect
+        entry: python3 .claude/lib/lint_skill_bash_dialect.py
+        language: system
+        files: ^\.claude/(skills|hooks)/.*\.md$
+        exclude: ^\.claude/worktrees/
+        pass_filenames: true
       # checksums-ascii mirrors the `Assert ontology/checksums.json holds no
       # \u escapes` step of the `Config — YAML/JSON syntax` CI job in
       # .github/workflows/docs.yml (#1044, follow-up to #1038/#1042 — the
