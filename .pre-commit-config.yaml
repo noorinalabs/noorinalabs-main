@@ -150,11 +150,13 @@ repos:
       # errors instead of evaluating, so an `if` guarding on it silently
       # takes the "false" branch rather than failing loudly — the exact
       # fail-open shape of noorinalabs-main#1485's `/wave-kickoff` Step 0a
-      # staleness guard, and the same root class as #1479 (skill bash blocks
-      # authored in bash dialect, executed under zsh). Commit-stage (cheap
-      # static scan); `files:` restricts candidates to skill/hooks markdown,
-      # `pass_filenames` hands the changed *.md to the lint (whose CLI takes
-      # file args, like the prose gates above).
+      # staleness guard. Adjacent to #1479 (skill bash blocks tripping the
+      # permission engine's static-analysis path via process substitution/
+      # here-strings) — a different construct in the same neighborhood, NOT
+      # covered by this lint. Commit-stage (cheap static scan); `files:`
+      # restricts candidates to skill/hooks markdown, `pass_filenames` hands
+      # the changed *.md to the lint (whose CLI takes file args, like the
+      # prose gates above).
       - id: skill-bash-dialect
         name: skill-bash-dialect
         entry: python3 .claude/lib/lint_skill_bash_dialect.py

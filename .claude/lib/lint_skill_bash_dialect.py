@@ -11,9 +11,12 @@ instead of failing loudly (noorinalabs-main#1485 — `/wave-kickoff` Step 0a's
 staleness guard was fail-open in exactly this shape: the gate had never been
 able to fail under zsh).
 
-This is the same root class as #1479 (skill bash blocks authored in bash
-dialect, executed under zsh) but for the `[ ]` test-builtin operator set
-specifically, rather than process substitution.
+Adjacent to, but distinct from, #1479 (skill bash blocks tripping the
+permission engine's "cannot be statically analyzed" path via process
+substitution and here-strings, plus a doc-accuracy defect). #1479 is not a
+zsh-dialect evaluation bug, and this lint detects neither process
+substitution nor here-strings — it is scoped strictly to the `[ ]`
+test-builtin operator set this docstring describes above.
 
 What it flags
 =============
