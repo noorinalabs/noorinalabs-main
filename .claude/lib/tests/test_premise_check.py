@@ -741,5 +741,430 @@ class GitIntegrationTest(unittest.TestCase):
             self.assertEqual(rc2, 0)
 
 
+# --- main#1484: escape-sequence gluing + transcript/fixture operands --------
+
+# Verbatim-shaped excerpts of the two issue bodies the wave-31 `/wave-scope`
+# run STOPped on. Kept as fixtures (not paraphrases) so a future change to the
+# classifier is measured against the text that actually tripped the gate.
+
+_ISSUE_1262_BODY = "\n".join(
+    [
+        "`.claude/lib/roster_union_sync.py::fetch_child_card_names` ends with:",
+        "",
+        "```python",
+        "return names if names else None",
+        "```",
+        "",
+        "That `else None` is the fail-open guard ... verified live:",
+        "",
+        "```",
+        "listing returns 'a.md\\nb.md', every per-file fetch raises CalledProcessError",
+        "-> fetch_child_card_names(...) == None   (SKIPPED, safe)",
+        "```",
+        "",
+        "Add one unit test to `.claude/lib/tests/test_roster_union_sync.py`:",
+        "",
+        "```python",
+        "def test_non_empty_listing_but_no_names_parsed_returns_none(self) -> None:",
+        "    def fake_run(cmd, **kwargs):",
+        '        result.stdout = "alpha.md\\nbeta.md\\n"',
+        "        return result",
+        "```",
+    ]
+)
+
+_ISSUE_1285_BODY = "\n".join(
+    [
+        "`checksums_io.py`'s `mark-resolved` is the one subcommand that does",
+        "**not** validate its arguments.",
+        "",
+        "| Invocation | rc | Default ledger | Target ledger |",
+        "|---|---|---|---|",
+        "| `mark-resolved --checksums PATH b.txt` | 0 | unchanged | **written** |",
+        "| `mark-resolved --bogus b.txt` | 0 | **written** | - |",
+        "",
+        "```",
+        "$ python3 checksums_io.py mark-resolved --bogus b.txt",
+        "Resolved 1 file(s) in <default>/ontology/checksums.json.",
+        "Skipped (not tracked): --bogus",
+        "$ echo $?",
+        "0",
+        "```",
+        "",
+        "An operator who types the `=` form believes they targeted a scratch",
+        "file while the committed `ontology/checksums.json` is what gets written.",
+    ]
+)
+
+
+class Main1484EscapeSequenceTest(unittest.TestCase):
+    r"""main#1484 defect 1: a literal ``\n`` is a token SEPARATOR, not a path
+    character, and never part of the following filename.
+
+    ``_PATH_TOKEN_RE`` excludes the backslash from its character class, so the
+    old extractor stopped at the ``\`` and restarted at the ``n`` —
+    ``a.md\nb.md`` yielded ``a.md`` and ``nb.md``. ``nb.md`` has never existed
+    at any ref in any repo, so none of the gate's three documented remedies
+    (re-point, re-scope, close) could ever clear the STOP it produced: the
+    gate was unclearable by its own instructions.
+    """
+
+    def test_literal_backslash_n_yields_both_names_and_never_glues(self) -> None:
+        got = pc.extract_path_candidates("listing returns 'a.md\\nb.md', then it raises")
+        self.assertNotIn("nb.md", got)
+        self.assertEqual(set(got), {"a.md", "b.md"})
+
+    def test_literal_backslash_n_inside_a_python_string_literal(self) -> None:
+        got = pc.extract_path_candidates('result.stdout = "alpha.md\\nbeta.md\\n"')
+        self.assertNotIn("nbeta.md", got)
+        self.assertEqual(set(got), {"alpha.md", "beta.md"})
+
+    def test_backslash_t_and_backslash_r_share_the_shape(self) -> None:
+        got = pc.extract_path_candidates('"one.md\\ttwo.md" and "three.md\\rfour.md"')
+        for glued in ("ttwo.md", "rfour.md"):
+            self.assertNotIn(glued, got)
+        self.assertEqual(set(got), {"one.md", "two.md", "three.md", "four.md"})
+
+    def test_escape_is_a_separator_not_a_deletion(self) -> None:
+        # Dropping the escape instead of replacing it with a separator would
+        # merge the two names into a *different* invented filename.
+        got = pc.extract_path_candidates("'a.md\\nb.md'")
+        self.assertNotIn("a.mdb.md", got)
+        self.assertEqual(set(got), {"a.md", "b.md"})
+
+    def test_issue_1262_body_invents_no_filename(self) -> None:
+        got = pc.extract_path_candidates(_ISSUE_1262_BODY)
+        for invented in ("nb.md", "nbeta.md"):
+            self.assertNotIn(invented, got)
+        # The real premise in the same body is still extracted.
+        self.assertIn(".claude/lib/roster_union_sync.py", got)
+
+    def test_escape_split_does_not_disturb_ordinary_bodies(self) -> None:
+        # No backslash anywhere -> same behaviour as before the fix.
+        body = "Touches `.claude/lib/premise_check.py` and ontology/repos/deploy.yaml."
+        self.assertEqual(
+            pc.extract_path_candidates(body),
+            [".claude/lib/premise_check.py", "ontology/repos/deploy.yaml"],
+        )
+
+
+class Main1484TranscriptOperandTest(unittest.TestCase):
+    """main#1484 defect 2: placeholder BY POSITION, not by name.
+
+    A path-shaped token whose only occurrences are a non-program operand on a
+    fenced shell-transcript command line, or a value inside a quoted string
+    literal in a fenced code block, is illustrative — it is the data the
+    example passes, not a file the issue asserts exists. #1138 established the
+    same principle for placeholder *names* (``X.md``, ``foo.py``); this is the
+    positional case.
+
+    The suppression requires POSITIVE evidence (at least one illustrative
+    occurrence) AND the absence of any premise-position occurrence anywhere in
+    the body — so a token mentioned in prose, in a bare backtick span, or as
+    the program a transcript runs is never suppressed.
+    """
+
+    def _check(self, issue: dict, table: dict[str, str], default: str = pc.EXISTS):
+        path_fn, sym_fn = _checker(table, default)
+        return pc.check_issue(issue, Path("/repos"), "origin/main", path_fn, sym_fn)
+
+    def _status(self, res, value: str) -> str | None:
+        return {c.value: c.status for c in res.candidates}.get(value)
+
+    # --- the two live-observed instances ---------------------------------
+
+    def test_issue_1285_transcript_operand_does_not_stop(self) -> None:
+        """`b.txt` is the dummy operand of `mark-resolved --bogus b.txt` — the
+        whole point of the repro is that an unknown flag gets eaten as a path.
+        """
+        res = self._check(
+            {"ref": "main#1285", "repo": "noorinalabs-main", "body": _ISSUE_1285_BODY},
+            {"b.txt": pc.MISSING},
+        )
+        self.assertEqual(res.verdict, pc.OK)
+        self.assertEqual(self._status(res, "b.txt"), pc.ILLUSTRATIVE)
+
+    def test_issue_1285_real_premises_in_the_same_body_are_still_checked(self) -> None:
+        res = self._check(
+            {"ref": "main#1285", "repo": "noorinalabs-main", "body": _ISSUE_1285_BODY},
+            {"checksums_io.py": pc.MISSING},
+        )
+        # The script the transcript RUNS, and the ledger named in prose, are
+        # premises — suppressing them would gut the gate.
+        self.assertEqual(res.verdict, pc.STOP)
+        self.assertEqual(self._status(res, "checksums_io.py"), pc.MISSING)
+        self.assertEqual(self._status(res, "ontology/checksums.json"), pc.EXISTS)
+
+    def test_issue_1262_fixture_string_literals_do_not_stop(self) -> None:
+        res = self._check(
+            {"ref": "main#1262", "repo": "noorinalabs-main", "body": _ISSUE_1262_BODY},
+            {
+                "a.md": pc.MISSING,
+                "b.md": pc.MISSING,
+                "alpha.md": pc.MISSING,
+                "beta.md": pc.MISSING,
+            },
+        )
+        self.assertEqual(res.verdict, pc.OK)
+        for tok in ("a.md", "b.md", "alpha.md", "beta.md"):
+            self.assertEqual(self._status(res, tok), pc.ILLUSTRATIVE, tok)
+        self.assertEqual(self._status(res, ".claude/lib/roster_union_sync.py"), pc.EXISTS)
+
+    # --- the boundary: what must NOT be suppressed ------------------------
+
+    def test_rotted_premise_in_prose_still_stops(self) -> None:
+        res = self._check(
+            {"ref": "main#705", "body": "#705 targets `wave_key_reset.py`, deleted by #804."},
+            {"wave_key_reset.py": pc.MISSING},
+        )
+        self.assertEqual(res.verdict, pc.STOP)
+
+    def test_program_position_in_a_fenced_transcript_is_still_checked(self) -> None:
+        """The sharpest boundary case: one fenced command line carrying BOTH a
+        rotted premise (the script being run) and an illustrative operand. An
+        implementation that suppresses "anything inside a fence" passes the two
+        defect tests above and fails here.
+        """
+        body = "\n".join(["```", "$ python3 .claude/lib/wave_key_reset.py --out b.txt", "```"])
+        res = self._check(
+            {"ref": "main#705", "body": body},
+            {".claude/lib/wave_key_reset.py": pc.MISSING, "b.txt": pc.MISSING},
+        )
+        self.assertEqual(res.verdict, pc.STOP)
+        self.assertEqual([c.value for c in res.missing], [".claude/lib/wave_key_reset.py"])
+        self.assertEqual(self._status(res, "b.txt"), pc.ILLUSTRATIVE)
+
+    def test_bare_script_in_program_position_is_still_checked(self) -> None:
+        """Isolates the program-position exemption from the shape clause.
+
+        `test_program_position_in_a_fenced_transcript_is_still_checked` uses a
+        QUALIFIED script path, so the slash-free shape clause protects it even
+        with the program exemption removed — mutation-testing showed that test
+        does not actually prove the exemption works. This one does: `tool.py`
+        is BARE, appears nowhere else in the body, and sits in the only
+        position that can save it. Deleting the program-position exemption
+        turns this STOP into an OK.
+        """
+        body = "\n".join(["```", "$ python3 tool.py --out scratch.txt", "```"])
+        res = self._check(
+            {"ref": "main#1", "body": body},
+            {"tool.py": pc.MISSING, "scratch.txt": pc.MISSING},
+        )
+        self.assertEqual(res.verdict, pc.STOP)
+        self.assertEqual([c.value for c in res.missing], ["tool.py"])
+        self.assertEqual(self._status(res, "scratch.txt"), pc.ILLUSTRATIVE)
+
+    def test_bare_program_of_an_unprompted_interpreter_line_is_still_checked(self) -> None:
+        # Same exemption, reached via the interpreter lead rather than a prompt.
+        body = "\n".join(["```", "python3 tool.py --out scratch.txt", "```"])
+        res = self._check(
+            {"ref": "main#1", "body": body},
+            {"tool.py": pc.MISSING, "scratch.txt": pc.MISSING},
+        )
+        self.assertEqual(res.verdict, pc.STOP)
+        self.assertEqual([c.value for c in res.missing], ["tool.py"])
+
+    def test_path_on_a_non_command_fenced_line_is_still_checked(self) -> None:
+        # A fence is not itself a suppression: a tree listing, a diff, or a
+        # bare path line inside a fence still asserts the path.
+        body = "\n".join(["```", ".claude/lib/", "  wave_key_reset.py", "```"])
+        res = self._check({"ref": "main#705", "body": body}, {"wave_key_reset.py": pc.MISSING})
+        self.assertEqual(res.verdict, pc.STOP)
+
+    def test_operand_also_named_in_prose_is_not_suppressed(self) -> None:
+        # One premise-position occurrence anywhere in the body defeats the
+        # suppression, however many illustrative occurrences accompany it.
+        body = "\n".join(
+            [
+                "The gate reads `gone.py` as a premise.",
+                "```",
+                "$ python3 run.py --out gone.py",
+                "```",
+            ]
+        )
+        res = self._check({"ref": "main#1", "body": body}, {"gone.py": pc.MISSING})
+        self.assertEqual(res.verdict, pc.STOP)
+        self.assertEqual(self._status(res, "gone.py"), pc.MISSING)
+
+    def test_multi_token_inline_span_alone_is_not_a_suppression(self) -> None:
+        # An inline `cmd --flag gone.py` span is NEUTRAL — it neither asserts
+        # nor illustrates. Suppression needs positive evidence (a fenced
+        # transcript / fixture literal), not the mere absence of prose.
+        body = "Running `mark-resolved --bogus gone.py` writes the default ledger."
+        res = self._check({"ref": "main#1", "body": body}, {"gone.py": pc.MISSING})
+        self.assertEqual(res.verdict, pc.STOP)
+        self.assertEqual(self._status(res, "gone.py"), pc.MISSING)
+
+    def test_explicit_paths_override_the_suppression(self) -> None:
+        # A declared premise is deliberate; positional heuristics never veto it.
+        body = "\n".join(["```", "$ python3 run.py --out gone.py", "```"])
+        res = self._check(
+            {"ref": "main#1", "body": body, "paths": ["gone.py"]}, {"gone.py": pc.MISSING}
+        )
+        self.assertEqual(res.verdict, pc.STOP)
+        self.assertEqual(self._status(res, "gone.py"), pc.MISSING)
+
+    def test_quoted_literal_outside_a_fence_is_not_suppressed(self) -> None:
+        # The literal rule is scoped to fenced code. Prose quoting a filename
+        # ("the 'gone.py' helper") is still a premise.
+        res = self._check(
+            {"ref": "main#1", "body": "the 'gone.py' helper was deleted"},
+            {"gone.py": pc.MISSING},
+        )
+        self.assertEqual(res.verdict, pc.STOP)
+
+    def test_qualified_path_as_a_transcript_operand_is_still_checked(self) -> None:
+        """The rule is conjunctive — position AND shape. A slash-carrying token
+        is positive evidence in itself, so it keeps its pre-main#1484 treatment
+        wherever it sits. Measured on the live wave-31 slate: main#1244 names
+        `.claude/annunaki/errors.jsonl` as the operand of a fenced pseudo-command
+        (`$ tally of ... records in .claude/annunaki/errors.jsonl`) and must keep
+        reaching the checker, where it earns the #1138 GITIGNORED -> WARN
+        downgrade rather than vanishing.
+        """
+        body = "\n".join(["```", "$ tally of records in .claude/annunaki/errors.jsonl", "```"])
+        res = self._check(
+            {"ref": "main#1244", "body": body}, {".claude/annunaki/errors.jsonl": pc.GITIGNORED}
+        )
+        self.assertEqual(res.verdict, pc.WARN)
+        self.assertEqual(self._status(res, ".claude/annunaki/errors.jsonl"), pc.GITIGNORED)
+
+    def test_qualified_path_in_a_fenced_string_literal_is_still_checked(self) -> None:
+        body = "\n".join(["```json", '{"file_path": ".claude/lib/wave_key_reset.py"}', "```"])
+        res = self._check(
+            {"ref": "main#705", "body": body}, {".claude/lib/wave_key_reset.py": pc.MISSING}
+        )
+        self.assertEqual(res.verdict, pc.STOP)
+
+    def test_apostrophes_in_a_fenced_comment_do_not_forge_a_string_literal(self) -> None:
+        """Found by adversarial probe, not by reasoning: two apostrophes in
+        ordinary contractions pair into a bogus "string literal" spanning the
+        real filename between them. `# don't touch gone.py; it's load-bearing`
+        must not suppress `gone.py`.
+        """
+        body = "\n".join(["```python", "# don't touch gone.py; it's load-bearing", "```"])
+        res = self._check({"ref": "main#1", "body": body}, {"gone.py": pc.MISSING})
+        self.assertEqual(res.verdict, pc.STOP)
+        self.assertEqual(self._status(res, "gone.py"), pc.MISSING)
+
+    def test_a_fence_nested_in_a_longer_fence_does_not_close_it_early(self) -> None:
+        """A ``` block quoted inside a ```` block (how this org's own issues
+        quote a gate's output) must not close the outer fence — otherwise the
+        transcript lines are read as prose and every operand in them is treated
+        as an asserted premise.
+        """
+        body = "\n".join(["````", "```", "$ tool --out scratch.txt", "```", "````"])
+        res = self._check({"ref": "main#1", "body": body}, {"scratch.txt": pc.MISSING})
+        self.assertEqual(res.verdict, pc.OK)
+        self.assertEqual(self._status(res, "scratch.txt"), pc.ILLUSTRATIVE)
+
+    def test_tilde_fence_is_recognised(self) -> None:
+        body = "\n".join(["~~~", "$ tool --out scratch.txt", "~~~"])
+        res = self._check({"ref": "main#1", "body": body}, {"scratch.txt": pc.MISSING})
+        self.assertEqual(res.verdict, pc.OK)
+
+    def test_non_transcript_fenced_line_with_a_command_shaped_lead(self) -> None:
+        # `rg -n foo gone.py` in a fence has no prompt and no interpreter lead,
+        # so it is not a transcript: every path on it stays a premise.
+        body = "\n".join(["```bash", "rg -n foo gone.py", "```"])
+        res = self._check({"ref": "main#1", "body": body}, {"gone.py": pc.MISSING})
+        self.assertEqual(res.verdict, pc.STOP)
+
+    def test_cp_style_transcript_suppresses_both_operands_visibly(self) -> None:
+        """Pins the ACCEPTED LIMITATION documented beside `_POS_PREMISE`, and
+        pins the condition on which it is accepted.
+
+        `$ cp old_name.py new_name.py` names two real files, and both are
+        operands, so both are suppressed when neither appears elsewhere in the
+        body. That is a knowing trade, not an oversight — and it holds ONLY
+        because the loss is visible. So this test asserts both halves: the
+        suppression, AND that the report names each suppressed candidate and
+        counts them. If a future change ever makes the suppression silent, the
+        second half fails and the trade has to be re-argued rather than
+        silently inherited.
+        """
+        body = "\n".join(["```", "$ cp old_name.py new_name.py", "```"])
+        res = self._check(
+            {"ref": "main#1", "body": body},
+            {"old_name.py": pc.MISSING, "new_name.py": pc.MISSING},
+        )
+        self.assertEqual(res.verdict, pc.OK)
+        self.assertEqual(self._status(res, "old_name.py"), pc.ILLUSTRATIVE)
+        self.assertEqual(self._status(res, "new_name.py"), pc.ILLUSTRATIVE)
+
+        report = pc.render_report([res])
+        self.assertIn("old_name.py", report)
+        self.assertIn("new_name.py", report)
+        self.assertIn("2 suppressed as illustrative", report)
+        self.assertIn("0 premise(s) checked", report)
+
+    def test_prior_fp_exclusions_survive(self) -> None:
+        # The three prior FP generations must remain excluded, unchanged.
+        for tok in ("recall/precision", "origin/main", "986/650", "/tmp/x/scratch.md", ".py"):
+            self.assertFalse(pc.looks_like_path(tok), tok)
+        self.assertFalse(pc.looks_like_path("X.md"))
+        self.assertFalse(pc.looks_like_path("foo.py"))
+
+
+class Main1484SuppressionVisibilityTest(unittest.TestCase):
+    """main#1484 acceptance bar 4: a suppressed candidate and a candidate that
+    was never extracted must not read the same, and an OK reached by extracting
+    nothing must not read like an OK that verified real premises.
+    """
+
+    def _result(self, issue: dict, table: dict[str, str], default: str = pc.EXISTS):
+        path_fn, sym_fn = _checker(table, default)
+        return pc.check_issue(issue, Path("/repos"), "origin/main", path_fn, sym_fn)
+
+    def test_suppressed_candidate_is_named_in_the_report(self) -> None:
+        res = self._result({"ref": "main#1285", "body": _ISSUE_1285_BODY}, {"b.txt": pc.MISSING})
+        report = pc.render_report([res])
+        self.assertIn("b.txt", report)
+        self.assertIn("illustrative", report)
+        self.assertIn("suppressed as illustrative", report)
+
+    def test_suppressed_only_issue_differs_from_extracted_nothing(self) -> None:
+        body = "\n".join(["```", "$ python3 tool.py --out b.txt", "```"])
+        suppressed = self._result({"ref": "main#A", "body": body}, {"b.txt": pc.MISSING})
+        nothing = self._result({"ref": "main#B", "body": "No files are named here."}, {})
+        self.assertEqual(suppressed.verdict, pc.OK)
+        self.assertEqual(nothing.verdict, pc.OK)
+        r_sup = pc.render_report([suppressed])
+        r_none = pc.render_report([nothing])
+        self.assertNotEqual(r_sup, r_none)
+        self.assertIn("no concrete file/symbol refs to verify", r_none)
+        self.assertNotIn("no concrete file/symbol refs to verify", r_sup)
+        self.assertIn("0 suppressed as illustrative", r_none)
+        self.assertIn("1 suppressed as illustrative", r_sup)
+        # Layers 2 and 3 of the visibility contract, which nothing pinned until
+        # the merge gate mutation-tested them (main#1496 review, B1/B2). The
+        # assertions above all match the TALLY line, so the counted `NOTE:`
+        # block could be deleted wholesale and the suppressed count could
+        # include the suppressed candidate itself, both silently.
+        self.assertIn("extracted then NOT checked", r_sup)  # B2: the NOTE block exists
+        self.assertIn("  - main#A: path b.txt", r_sup)  # B2: with its enumeration
+        # B1: `b.txt` is suppressed, so `tool.py` is the ONLY checked premise.
+        # Counting a suppressed candidate as checked would read "2" here — an
+        # OK claiming to have verified a premise it deliberately did not.
+        self.assertIn("1 premise(s) checked", r_sup)
+
+    def test_ok_by_extracting_nothing_differs_from_ok_with_verified_premises(self) -> None:
+        nothing = self._result({"ref": "main#B", "body": "No files are named here."}, {})
+        verified = self._result(
+            {"ref": "main#C", "body": "touches `.claude/lib/premise_check.py`"}, {}
+        )
+        r_none = pc.render_report([nothing])
+        r_ver = pc.render_report([verified])
+        self.assertNotEqual(r_none, r_ver)
+        self.assertIn("0 premise(s) checked", r_none)
+        self.assertIn("1 premise(s) checked", r_ver)
+
+    def test_illustrative_status_reaches_the_json_output(self) -> None:
+        res = self._result({"ref": "main#1285", "body": _ISSUE_1285_BODY}, {"b.txt": pc.MISSING})
+        payload = pc._result_to_dict(res)
+        statuses = {c["value"]: c["status"] for c in payload["candidates"]}
+        self.assertEqual(statuses["b.txt"], pc.ILLUSTRATIVE)
+
+
 if __name__ == "__main__":
     unittest.main()
