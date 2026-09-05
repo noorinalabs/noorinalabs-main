@@ -1006,6 +1006,40 @@ class Main1484TranscriptOperandTest(unittest.TestCase):
         )
         self.assertEqual(res.verdict, pc.STOP)
 
+    def test_apostrophes_in_a_fenced_comment_do_not_forge_a_string_literal(self) -> None:
+        """Found by adversarial probe, not by reasoning: two apostrophes in
+        ordinary contractions pair into a bogus "string literal" spanning the
+        real filename between them. `# don't touch gone.py; it's load-bearing`
+        must not suppress `gone.py`.
+        """
+        body = "\n".join(["```python", "# don't touch gone.py; it's load-bearing", "```"])
+        res = self._check({"ref": "main#1", "body": body}, {"gone.py": pc.MISSING})
+        self.assertEqual(res.verdict, pc.STOP)
+        self.assertEqual(self._status(res, "gone.py"), pc.MISSING)
+
+    def test_a_fence_nested_in_a_longer_fence_does_not_close_it_early(self) -> None:
+        """A ``` block quoted inside a ```` block (how this org's own issues
+        quote a gate's output) must not close the outer fence — otherwise the
+        transcript lines are read as prose and every operand in them is treated
+        as an asserted premise.
+        """
+        body = "\n".join(["````", "```", "$ tool --out scratch.txt", "```", "````"])
+        res = self._check({"ref": "main#1", "body": body}, {"scratch.txt": pc.MISSING})
+        self.assertEqual(res.verdict, pc.OK)
+        self.assertEqual(self._status(res, "scratch.txt"), pc.ILLUSTRATIVE)
+
+    def test_tilde_fence_is_recognised(self) -> None:
+        body = "\n".join(["~~~", "$ tool --out scratch.txt", "~~~"])
+        res = self._check({"ref": "main#1", "body": body}, {"scratch.txt": pc.MISSING})
+        self.assertEqual(res.verdict, pc.OK)
+
+    def test_non_transcript_fenced_line_with_a_command_shaped_lead(self) -> None:
+        # `rg -n foo gone.py` in a fence has no prompt and no interpreter lead,
+        # so it is not a transcript: every path on it stays a premise.
+        body = "\n".join(["```bash", "rg -n foo gone.py", "```"])
+        res = self._check({"ref": "main#1", "body": body}, {"gone.py": pc.MISSING})
+        self.assertEqual(res.verdict, pc.STOP)
+
     def test_prior_fp_exclusions_survive(self) -> None:
         # The three prior FP generations must remain excluded, unchanged.
         for tok in ("recall/precision", "origin/main", "986/650", "/tmp/x/scratch.md", ".py"):

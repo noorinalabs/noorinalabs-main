@@ -307,7 +307,13 @@ _FENCE_RE = re.compile(r"^\s*(?P<fence>`{3,}|~{3,})")
 
 # A single-line quoted string literal. Only consulted INSIDE a fence — prose
 # that quotes a filename ("the 'gone.py' helper") still asserts it.
-_QUOTED_LITERAL_RE = re.compile(r"'[^'\n]*'|\"[^\"\n]*\"")
+#
+# A single-quoted region is dropped when either quote is glued to a word
+# character: that is an APOSTROPHE in a contraction, not a string delimiter.
+# Without this, a fenced comment like `# don't touch gone.py; it's important`
+# pairs the two apostrophes into a bogus "literal" spanning the real filename
+# between them and silently suppresses it — measured, not hypothesised.
+_QUOTED_LITERAL_RE = re.compile(r"(?<!\w)'[^'\n]*'(?!\w)|\"[^\"\n]*\"")
 
 # An interactive shell prompt introducing a transcript line.
 _PROMPT_RE = re.compile(r"^\s*[$%]\s+")
@@ -587,11 +593,15 @@ def scan_path_candidates(text: str) -> list[tuple[str, bool]]:
     for line in text.splitlines():
         fence = _FENCE_RE.match(line)
         if fence is not None:
-            marker = fence.group("fence")[:3]
+            marker = fence.group("fence")
             if not in_fence:
                 in_fence, fence_marker = True, marker
                 continue
-            if marker == fence_marker:
+            # CommonMark: a closing fence uses the same character and is at
+            # least as long as the opening one. Comparing full length (not a
+            # truncated prefix) is what keeps a ``` fence NESTED inside a
+            # ```` fence from closing the outer block early.
+            if marker[0] == fence_marker[0] and len(marker) >= len(fence_marker):
                 in_fence, fence_marker = False, ""
                 continue
         for value, occurrence in _line_occurrences(line, in_fence):
