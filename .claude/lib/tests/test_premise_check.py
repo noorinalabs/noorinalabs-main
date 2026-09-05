@@ -934,6 +934,36 @@ class Main1484TranscriptOperandTest(unittest.TestCase):
         self.assertEqual([c.value for c in res.missing], [".claude/lib/wave_key_reset.py"])
         self.assertEqual(self._status(res, "b.txt"), pc.ILLUSTRATIVE)
 
+    def test_bare_script_in_program_position_is_still_checked(self) -> None:
+        """Isolates the program-position exemption from the shape clause.
+
+        `test_program_position_in_a_fenced_transcript_is_still_checked` uses a
+        QUALIFIED script path, so the slash-free shape clause protects it even
+        with the program exemption removed — mutation-testing showed that test
+        does not actually prove the exemption works. This one does: `tool.py`
+        is BARE, appears nowhere else in the body, and sits in the only
+        position that can save it. Deleting the program-position exemption
+        turns this STOP into an OK.
+        """
+        body = "\n".join(["```", "$ python3 tool.py --out scratch.txt", "```"])
+        res = self._check(
+            {"ref": "main#1", "body": body},
+            {"tool.py": pc.MISSING, "scratch.txt": pc.MISSING},
+        )
+        self.assertEqual(res.verdict, pc.STOP)
+        self.assertEqual([c.value for c in res.missing], ["tool.py"])
+        self.assertEqual(self._status(res, "scratch.txt"), pc.ILLUSTRATIVE)
+
+    def test_bare_program_of_an_unprompted_interpreter_line_is_still_checked(self) -> None:
+        # Same exemption, reached via the interpreter lead rather than a prompt.
+        body = "\n".join(["```", "python3 tool.py --out scratch.txt", "```"])
+        res = self._check(
+            {"ref": "main#1", "body": body},
+            {"tool.py": pc.MISSING, "scratch.txt": pc.MISSING},
+        )
+        self.assertEqual(res.verdict, pc.STOP)
+        self.assertEqual([c.value for c in res.missing], ["tool.py"])
+
     def test_path_on_a_non_command_fenced_line_is_still_checked(self) -> None:
         # A fence is not itself a suppression: a tree listing, a diff, or a
         # bare path line inside a fence still asserts the path.
@@ -1039,6 +1069,34 @@ class Main1484TranscriptOperandTest(unittest.TestCase):
         body = "\n".join(["```bash", "rg -n foo gone.py", "```"])
         res = self._check({"ref": "main#1", "body": body}, {"gone.py": pc.MISSING})
         self.assertEqual(res.verdict, pc.STOP)
+
+    def test_cp_style_transcript_suppresses_both_operands_visibly(self) -> None:
+        """Pins the ACCEPTED LIMITATION documented beside `_POS_PREMISE`, and
+        pins the condition on which it is accepted.
+
+        `$ cp old_name.py new_name.py` names two real files, and both are
+        operands, so both are suppressed when neither appears elsewhere in the
+        body. That is a knowing trade, not an oversight — and it holds ONLY
+        because the loss is visible. So this test asserts both halves: the
+        suppression, AND that the report names each suppressed candidate and
+        counts them. If a future change ever makes the suppression silent, the
+        second half fails and the trade has to be re-argued rather than
+        silently inherited.
+        """
+        body = "\n".join(["```", "$ cp old_name.py new_name.py", "```"])
+        res = self._check(
+            {"ref": "main#1", "body": body},
+            {"old_name.py": pc.MISSING, "new_name.py": pc.MISSING},
+        )
+        self.assertEqual(res.verdict, pc.OK)
+        self.assertEqual(self._status(res, "old_name.py"), pc.ILLUSTRATIVE)
+        self.assertEqual(self._status(res, "new_name.py"), pc.ILLUSTRATIVE)
+
+        report = pc.render_report([res])
+        self.assertIn("old_name.py", report)
+        self.assertIn("new_name.py", report)
+        self.assertIn("2 suppressed as illustrative", report)
+        self.assertIn("0 premise(s) checked", report)
 
     def test_prior_fp_exclusions_survive(self) -> None:
         # The three prior FP generations must remain excluded, unchanged.

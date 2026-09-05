@@ -333,6 +333,27 @@ _INTERPRETER_RE = re.compile(r"(?:python|python3(?:\.\d+)?|bash|sh|zsh|node)")
 #                  path nor demonstrates it as sample data.
 # Suppression requires >=1 ILLUSTRATIVE and 0 PREMISE occurrences across the
 # whole body: it needs positive evidence, never merely the absence of prose.
+#
+# ACCEPTED LIMITATION — do not "fix" this without reading why it stands.
+# A transcript line whose operands are all real files, e.g. `$ cp old.py
+# new.py`, suppresses BOTH operands when neither name appears anywhere else in
+# the body. That is deliberate, and it is accepted for one specific reason: the
+# loss is VISIBLE. Every suppressed candidate is printed with its reason,
+# repeated in a counted `NOTE:` block, and summed in the `Extraction tally:`
+# line, so an operator can see exactly what this gate did not check. The defect
+# class main#1484 exists to remove is the INVISIBLE one — a candidate that
+# silently vanishes, or an OK that reads identically whether it verified real
+# premises or extracted nothing. A limitation that renders in the output is the
+# gate being honest about its own coverage, which is all any instrument here is
+# asked for.
+#
+# Narrowing it further would require distinguishing `cp`'s operands from
+# `--out`'s by modelling each command's argument semantics — a model this gate
+# has no business carrying, and one whose own errors would be silent.
+# `test_cp_style_transcript_suppresses_both_operands_visibly` pins BOTH halves:
+# the suppression AND its visibility. If a future change ever stops rendering
+# the suppression count, this trade collapses and the limitation becomes a real
+# defect that needs its own issue.
 _POS_PREMISE = "premise"
 _POS_ILLUSTRATIVE = "illustrative"
 _POS_NEUTRAL = "neutral"
