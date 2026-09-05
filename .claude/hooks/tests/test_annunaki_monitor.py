@@ -1825,6 +1825,22 @@ class Issue1465SelfReferentialLogReadTests(unittest.TestCase):
         extension."""
         self.assertFalse(am._self_referential_log_path(".claude/some_other_data.jsonl:{}"))
 
+    def test_path_helper_false_for_protected_literal_name_at_unrelated_path(self):
+        """Lucas Ferreira's #1498 review finding: `path.endswith(SELF_LOG_FILENAMES)`
+        alone matches ANY path ending in "errors.jsonl"/"traces.jsonl", anywhere
+        in any tree -- not just this monitor's own `.claude/annunaki/` log. A
+        test fixture or another repo's differently-purposed `errors.jsonl` at
+        an unrelated path must NOT be classified self-referential; doing so
+        would silently exclude a genuine failure read from that file. This is
+        distinct from `test_path_helper_false_for_unrelated_jsonl` above (a
+        DIFFERENT filename that merely shares the .jsonl extension) -- this
+        fixture uses the exact PROTECTED literal name, just at a path with no
+        `/annunaki/` directory segment, which is what the filename branch
+        must additionally require (the archive branch already requires
+        `/annunaki/archive/`)."""
+        self.assertFalse(am._self_referential_log_path("some/other/dir/errors.jsonl:{}"))
+        self.assertFalse(am._self_referential_log_path("fixtures/traces.jsonl:{}"))
+
 
 if __name__ == "__main__":
     # `unittest.main()` would silently skip TestSilentBooleanIdiom (a plain

@@ -404,24 +404,37 @@ JSON_BODY_LINE = re.compile(r'^\s*[+-]?\s*[{\[]\s*["{]')
 # for these logs, because the JSON payload's own colons (`"timestamp": "..."`)
 # come strictly after the path/content delimiter.
 SELF_LOG_FILENAMES = ("errors.jsonl", "traces.jsonl")
+SELF_LOG_DIR_MARKER = "/annunaki/"
 SELF_LOG_ARCHIVE_MARKER = "/annunaki/archive/"
 _RG_PATH_PREFIX = re.compile(r"^([^\s:]+):")
 
 
 def _self_referential_log_path(line: str) -> bool:
     """True if `line` is `<path>:<content>` output whose <path> is one of
-    this monitor's own log artifacts: errors.jsonl, traces.jsonl, or anything
-    under the cold `.claude/annunaki/archive/` tier. A line with no leading
-    `<path>:` prefix (e.g. bare displayed text, no rg/grep-style attribution)
-    is conservatively NOT self-referential — we only ever suppress a match we
-    can positively attribute to our own log."""
+    this monitor's own log artifacts: errors.jsonl or traces.jsonl UNDER an
+    `/annunaki/` directory segment, or anything under the cold
+    `.claude/annunaki/archive/` tier. A line with no leading `<path>:` prefix
+    (e.g. bare displayed text, no rg/grep-style attribution) is conservatively
+    NOT self-referential — we only ever suppress a match we can positively
+    attribute to our own log.
+
+    The `/annunaki/` segment requirement on the filename branch (added at
+    Lucas Ferreira's #1498 review) matters: without it, `path.endswith(...)`
+    alone matches ANY path ending in one of those two literal names, anywhere
+    in any tree -- a test fixture or another repo's differently-purposed
+    `errors.jsonl` at `some/other/dir/errors.jsonl` would be misclassified as
+    self-referential and a genuine failure read from it silently excluded.
+    That is the same defect class this PR exists to fix, one level removed.
+    The archive branch already required a path segment (`/annunaki/archive/`);
+    this brings the filename branch to the same standard.
+    """
     match = _RG_PATH_PREFIX.match(line)
     if not match:
         return False
     path = match.group(1)
-    if path.endswith(SELF_LOG_FILENAMES):
+    if SELF_LOG_ARCHIVE_MARKER in path:
         return True
-    return SELF_LOG_ARCHIVE_MARKER in path
+    return SELF_LOG_DIR_MARKER in path and path.endswith(SELF_LOG_FILENAMES)
 
 
 def is_self_referential_match(error_lines: list[str]) -> bool:
