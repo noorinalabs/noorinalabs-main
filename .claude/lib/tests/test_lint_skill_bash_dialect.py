@@ -29,6 +29,49 @@ fi
 ```
 """
 
+# The GENUINE pre-#1485 `/wave-kickoff` Step 0a block, verbatim (the exact
+# text `main` carried before this fix — not a paraphrase). Aino Virtanen's
+# #1494 merge-gate review verified this catch by running the lint against
+# unmodified `main`, finding exactly one hit at the right line with zero
+# false positives tree-wide; that verification lived only in the PR
+# comment. Pinning the real historical shape here moves that evidence into
+# CI so it persists past the review thread.
+_HISTORICAL_PRE_1485_BLOCK = "\n".join(
+    [
+        "### 0a. Verify next-wave scope is reconciled (Mandatory precondition — added P3W5 #273)",
+        "",
+        "```bash",
+        'REPO_ROOT="$(git rev-parse --show-toplevel)"',
+        "SCOPE_TS=$(jq -r '.wave_{M}_scope_reconciled_at // empty' "
+        '"$REPO_ROOT/cross-repo-status.json")',
+        "PRIOR_RETRO_TS=$(jq -r '.wave_$(({M} - 1))_retro_completed_at "
+        "// .wave_$(({M} - 1))_completed_at // empty' "
+        '"$REPO_ROOT/cross-repo-status.json")',
+        "",
+        'if [ -z "$SCOPE_TS" ]; then',
+        '  echo "ERROR: wave_{M}_scope_reconciled_at missing in cross-repo-status.json."',
+        '  echo "  Run /wave-scope {P} {M} before /wave-kickoff."',
+        "  exit 1",
+        "fi",
+        "",
+        'if [ -n "$PRIOR_RETRO_TS" ] && [ "$SCOPE_TS" \\< "$PRIOR_RETRO_TS" ]; then',
+        '  echo "ERROR: wave_{M}_scope_reconciled_at ($SCOPE_TS) predates last retro '
+        '($PRIOR_RETRO_TS)."',
+        '  echo "  Re-run /wave-scope {P} {M} so the reconciliation reflects the current '
+        'carry-forward + memory-must-include state."',
+        "  exit 1",
+        "fi",
+        "",
+        'if [ -z "$PRIOR_RETRO_TS" ]; then',
+        '  echo "  Scope reconciled at: $SCOPE_TS (no prior-wave timestamp — first wave of '
+        'phase or fresh project; staleness check skipped)"',
+        "else",
+        '  echo "  Scope reconciled at: $SCOPE_TS (post-dates last retro: $PRIOR_RETRO_TS)"',
+        "fi",
+        "```",
+    ]
+)
+
 
 class BashOnlyOperatorIsFlagged(unittest.TestCase):
     def test_lt_operator_in_bash_block_flagged(self) -> None:
@@ -115,6 +158,27 @@ echo "fixed"
 ```
 """
         self.assertEqual(check_markdown_text("SKILL.md", md), [])
+
+
+class HistoricalPre1485BugIsCaught(unittest.TestCase):
+    """Pins the catching direction against the GENUINE historical bug shape,
+    not a synthetic stand-in — the same thing Aino Virtanen's #1494 review
+    verified by hand against unmodified `main` (exactly one hit, right line,
+    zero false positives). `test_real_wave_kickoff_skill_is_clean_after_1485_fix`
+    and `test_all_skill_files_are_clean` below only prove the clean-tree
+    direction trivially; this fixture is what proves the lint actually
+    catches the real thing, in CI, persistently."""
+
+    def test_catches_the_real_pre_1485_line(self) -> None:
+        v = check_markdown_text("SKILL.md", _HISTORICAL_PRE_1485_BLOCK)
+        self.assertEqual(len(v), 1)
+        self.assertIn('[ "$SCOPE_TS" \\< "$PRIOR_RETRO_TS" ]', v[0].text)
+
+    def test_only_the_operator_line_flagged_not_the_whole_block(self) -> None:
+        # The historical block has several `[ ]` tests; only the one with
+        # the bash-only `\<` operator should trip the lint.
+        v = check_markdown_text("SKILL.md", _HISTORICAL_PRE_1485_BLOCK)
+        self.assertEqual(len(v), 1)
 
 
 class CliExitCodes(unittest.TestCase):
