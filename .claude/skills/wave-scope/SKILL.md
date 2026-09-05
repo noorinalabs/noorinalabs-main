@@ -295,6 +295,37 @@ environment gap or a likely legitimate reference, deliberately not a STOP);
 everything present, or a path the issue's own `creates` array declares as
 its proposed output (main#1138 class 2), → **OK**.
 
+Two further extraction rules come from **main#1484** (wave-31), both found live
+on a scope run:
+
+- **A literal `\n`/`\t`/`\r` in a body is a token SEPARATOR, not a path
+  character.** The backslash is not in the path-token character class, so the
+  extractor used to end one token at the `\` and begin the next at the `n`:
+  `'a.md\nb.md'` yielded `a.md` and **`nb.md`**, a filename that has never
+  existed at any ref in any repo. That made the STOP **unclearable by any of
+  the three remedies below** — you cannot re-point, re-scope, or close an issue
+  onto a file that never existed. Escape sequences are now substituted with a
+  separator before tokenizing.
+- **Placeholder by POSITION → `ILLUSTRATIVE`** (the positional twin of #1138's
+  placeholder-by-*name* rule). A **bare, slash-free** filename whose every
+  occurrence is a non-program operand on a fenced shell-transcript line, or a
+  value inside a quoted string literal in a fenced code block, is the data an
+  example passes — not a premise. It is extracted, then **not** checked, and
+  never contributes to the verdict. The rule is conjunctive and needs positive
+  evidence: at least one illustrative occurrence AND **no** premise-position
+  occurrence anywhere in the body (prose, a bare backtick span, a path on a
+  non-transcript fenced line, or the program a command runs each defeat it),
+  AND the token must be slash-free — a *qualified* path keeps its pre-#1484
+  treatment wherever it sits. An explicit `paths` entry always overrides it.
+
+A suppressed candidate is **never silent**: it is listed with its reason, then
+repeated in a counted `NOTE:` block, and every run ends with an
+`Extraction tally:` line (premises checked / issues naming none / suppressed /
+declared creations). Read that tally — an `OK` reached by extracting *nothing*
+is not the same result as an `OK` that verified real premises, and the tally is
+what tells them apart. If a suppressed candidate really was a premise, declare
+it in that issue's `paths` array to force the check.
+
 Run it over the actual labeled scope (Step 4 output). Fetch each in-scope repo's
 `origin` first so the check resolves against real HEADs (an unfetched repo only
 downgrades to WARN, never a false STOP):
