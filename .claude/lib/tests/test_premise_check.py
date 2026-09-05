@@ -1136,6 +1136,17 @@ class Main1484SuppressionVisibilityTest(unittest.TestCase):
         self.assertNotIn("no concrete file/symbol refs to verify", r_sup)
         self.assertIn("0 suppressed as illustrative", r_none)
         self.assertIn("1 suppressed as illustrative", r_sup)
+        # Layers 2 and 3 of the visibility contract, which nothing pinned until
+        # the merge gate mutation-tested them (main#1496 review, B1/B2). The
+        # assertions above all match the TALLY line, so the counted `NOTE:`
+        # block could be deleted wholesale and the suppressed count could
+        # include the suppressed candidate itself, both silently.
+        self.assertIn("extracted then NOT checked", r_sup)  # B2: the NOTE block exists
+        self.assertIn("  - main#A: path b.txt", r_sup)  # B2: with its enumeration
+        # B1: `b.txt` is suppressed, so `tool.py` is the ONLY checked premise.
+        # Counting a suppressed candidate as checked would read "2" here — an
+        # OK claiming to have verified a premise it deliberately did not.
+        self.assertIn("1 premise(s) checked", r_sup)
 
     def test_ok_by_extracting_nothing_differs_from_ok_with_verified_premises(self) -> None:
         nothing = self._result({"ref": "main#B", "body": "No files are named here."}, {})
