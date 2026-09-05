@@ -23,9 +23,15 @@ would test a shell nobody runs it in and would hide this exact bug.
 
 Renders are pinned as text, not just exit code (per the #1478 review feedback
 the issue cites: an absence-only assertion is vacuous). All three outcomes —
-verified-in-order, no-prior-timestamp skip, and evaluation failure — must
-render three *visibly different* strings, and ``post-dates last retro`` must
-never appear unless the comparison actually ran and succeeded.
+verified-in-order, no-prior-timestamp skip, and evaluation failure — render
+three *visibly different* strings, and ``post-dates last retro`` never
+appears unless the comparison actually ran and succeeded.
+
+Evaluation failure additionally fails CLOSED (non-zero exit), not merely
+distinctly (#1494 Finding 1, Aino Virtanen): exit code is the channel Step 0a
+and Step 0b's own preconditions actually consume, and a rendered warning at
+exit 0 repeats the #1485 shape one channel over. "Cannot evaluate" is not a
+pass.
 """
 
 from __future__ import annotations
@@ -144,19 +150,21 @@ class WaveKickoffStep0aStalenessTest(unittest.TestCase):
         self.assertNotIn("post-dates last retro", res.stdout)
         self.assertNotIn("could not be evaluated", res.stdout)
 
-    def test_evaluation_failure_renders_a_third_distinct_string(self) -> None:
+    def test_evaluation_failure_cannot_evaluate_means_stop(self) -> None:
         """When `sort`/`head` are unavailable, the comparison cannot be
-        evaluated at all. This must render as neither the verified-pass nor
-        the skipped-check text — exactly the #1485 bug shape (an
-        unevaluated comparison rendering the success text) must not
-        recur for this failure mode either."""
+        evaluated at all — this must fail CLOSED (non-zero exit), not just
+        render distinctly. Exit code is the channel the caller actually
+        consumes (Step 0a's own absent-scope check uses `exit 1`; Step 0b
+        captures `RC=$?` and branches on it); a rendered warning alone
+        repeats the #1485 shape one channel over. Per Aino's #1494 Finding
+        1: "cannot evaluate" is not a pass."""
         res = self._run("2026-08-23T17:09:43Z", "2026-08-13T22:41:19Z", path_override="")
-        self.assertEqual(res.returncode, 0)
+        self.assertEqual(res.returncode, 1)
         self.assertIn("could not be evaluated", res.stdout)
         self.assertIn("ordering NOT verified", res.stdout)
+        self.assertIn("ERROR", res.stdout)
         self.assertNotIn("post-dates last retro", res.stdout)
         self.assertNotIn("check skipped", res.stdout)
-        self.assertNotIn("ERROR", res.stdout)
 
 
 if __name__ == "__main__":

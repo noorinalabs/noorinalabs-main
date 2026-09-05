@@ -61,9 +61,12 @@ if [ -n "$PRIOR_RETRO_TS" ]; then
     ORDER_CHECK_STATE=ok
   else
     # `sort`/`head` unavailable — the comparison could not be evaluated at
-    # all. This must NOT render identically to a verified pass (that was
-    # exactly the #1485 bug: an unevaluated comparison rendering the
-    # success-path text unconditionally).
+    # all. This must fail CLOSED, not just render distinctly: exit code is
+    # the channel the caller actually consumes (Step 0a's own absent-scope
+    # check enforces with `exit 1`; Step 0b captures `RC=$?` and branches on
+    # it), and a rendered warning alone repeats the #1485 shape one channel
+    # over — an operator can misread stdout, an `if [ "$RC" -ne 0 ]` cannot.
+    # The `case` below is what actually exits — see the `failed)` arm.
     ORDER_CHECK_STATE=failed
   fi
 else
@@ -78,7 +81,9 @@ case "$ORDER_CHECK_STATE" in
     echo "  Scope reconciled at: $SCOPE_TS (post-dates last retro: $PRIOR_RETRO_TS)"
     ;;
   failed)
-    echo "  Scope reconciled at: $SCOPE_TS (WARNING: staleness comparison against last retro ($PRIOR_RETRO_TS) could not be evaluated — ordering NOT verified; check manually)"
+    echo "ERROR: staleness comparison against last retro ($PRIOR_RETRO_TS) could not be evaluated (sort/head unavailable) — ordering NOT verified."
+    echo "  Re-run /wave-kickoff in a shell where sort and head are on PATH, or verify the ordering manually."
+    exit 1
     ;;
 esac
 # END wave-kickoff-step0a-staleness
