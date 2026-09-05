@@ -36,6 +36,7 @@ pass.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import unittest
@@ -44,8 +45,6 @@ from pathlib import Path
 SKILL_MD = Path(__file__).resolve().parents[3] / ".claude" / "skills" / "wave-kickoff" / "SKILL.md"
 _BEGIN = "# BEGIN wave-kickoff-step0a-staleness"
 _END = "# END wave-kickoff-step0a-staleness"
-
-_HAS_ZSH = shutil.which("zsh") is not None
 
 
 def _extract_block() -> str:
@@ -63,11 +62,26 @@ def _extract_block() -> str:
     return "\n".join(lines)
 
 
-@unittest.skipUnless(_HAS_ZSH, "zsh (the org's shell) not available")
 class WaveKickoffStep0aStalenessTest(unittest.TestCase):
     """Execute the real Step 0a staleness block under zsh with $SCOPE_TS /
     $PRIOR_RETRO_TS set as fixture inputs, exactly as the skill's jq reads
-    would set them in production."""
+    would set them in production.
+
+    zsh availability is checked per-run, not via a class-level
+    `skipUnless` — a collection-time skip decorator would report green
+    whether or not zsh is actually installed, which is this wave's own
+    thesis recurring one layer up (the `pytest` CI job installs zsh, but
+    nothing asserts these five load-bearing tests actually ran rather than
+    silently skipped — #1494 throughline, Aino Virtanen). In CI (`CI` env
+    var set) a missing zsh FAILS the test instead of skipping it; locally
+    it still skips, so a laptop without zsh isn't forced to install one."""
+
+    def setUp(self) -> None:
+        if shutil.which("zsh") is not None:
+            return
+        if os.environ.get("CI"):
+            self.fail("zsh missing in CI — these tests must not skip; check the Install-zsh step")
+        self.skipTest("zsh (the org's shell) not available locally")
 
     def _run(
         self, scope_ts: str, prior_retro_ts: str, *, path_override: str | None = None
