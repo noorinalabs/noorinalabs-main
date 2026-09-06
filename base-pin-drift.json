@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "checked_at": "2026-09-06T08:54:35Z",
+  "repos_checked": [
+    "noorinalabs-main",
+    "noorinalabs-isnad-graph",
+    "noorinalabs-user-service",
+    "noorinalabs-deploy",
+    "noorinalabs-design-system",
+    "noorinalabs-data-acquisition",
+    "noorinalabs-isnad-ingest-platform",
+    "noorinalabs-landing-page"
+  ],
+  "repos_errors": [],
+  "pins_checked": 14,
+  "findings": [
+    {
+      "kind": "behind_current_tag",
+      "image_key": "docker.io/library/nginx:alpine",
+      "detail": "noorinalabs-landing-page:Dockerfile:17 pinned 2026-06-22 is 72d behind the tag's current digest (2026-09-02)",
+      "days": 72.0
+    },
+    {
+      "kind": "behind_current_tag",
+      "image_key": "docker.io/library/node:22-alpine",
+      "detail": "noorinalabs-landing-page:Dockerfile:4 pinned 2026-06-18 is 41d behind the tag's current digest (2026-07-29)",
+      "days": 41.2
+    },
+    {
+      "kind": "behind_current_tag",
+      "image_key": "docker.io/library/node:24-alpine",
+      "detail": "noorinalabs-isnad-graph:frontend/Dockerfile:8 pinned 2026-06-24 is 64d behind the tag's current digest (2026-08-27)",
+      "days": 64.0
+    },
+    {
+      "kind": "behind_current_tag",
+      "image_key": "docker.io/library/python:3.12-slim",
+      "detail": "noorinalabs-user-service:Dockerfile:26 pinned 2026-06-11 is 82d behind the tag's current digest (2026-09-01)",
+      "days": 82.0
+    },
+    {
+      "kind": "behind_current_tag",
+      "image_key": "docker.io/library/python:3.12-slim",
+      "detail": "noorinalabs-deploy:integration-tests/Dockerfile.runner:5 pinned 2026-06-11 is 82d behind the tag's current digest (2026-09-01)",
+      "days": 82.0
+    },
+    {
+      "kind": "cross_repo",
+      "image_key": "docker.io/library/python:3.14-slim",
+      "detail": "noorinalabs-isnad-graph:Dockerfile:12 pinned 2026-06-11 vs noorinalabs-deploy:integration-tests/fake_oauth/Dockerfile:4 pinned 2026-09-01",
+      "days": 82.0
+    },
+    {
+      "kind": "behind_current_tag",
+      "image_key": "docker.io/library/python:3.14-slim",
+      "detail": "noorinalabs-isnad-graph:Dockerfile:12 pinned 2026-06-11 is 82d behind the tag's current digest (2026-09-01)",
+      "days": 82.0
+    },
+    {
+      "kind": "behind_current_tag",
+      "image_key": "docker.io/library/python:3.14-slim",
+      "detail": "noorinalabs-data-acquisition:Dockerfile.load:23 pinned 2026-06-11 is 82d behind the tag's current digest (2026-09-01)",
+      "days": 82.0
+    },
+    {
+      "kind": "behind_current_tag",
+      "image_key": "docker.io/library/python:3.14-slim",
+      "detail": "noorinalabs-isnad-ingest-platform:Dockerfile:50 pinned 2026-06-11 is 82d behind the tag's current digest (2026-09-01)",
+      "days": 82.0
+    },
+    {
+      "kind": "behind_current_tag",
+      "image_key": "docker.io/library/python:3.14-slim",
+      "detail": "noorinalabs-isnad-ingest-platform:workers/dedup/Dockerfile:27 pinned 2026-06-11 is 82d behind the tag's current digest (2026-09-01)",
+      "days": 82.0
+    },
+    {
+      "kind": "behind_current_tag",
+      "image_key": "docker.io/library/python:3.14-slim",
+      "detail": "noorinalabs-isnad-ingest-platform:workers/enrich/Dockerfile:27 pinned 2026-06-11 is 82d behind the tag's current digest (2026-09-01)",
+      "days": 82.0
+    },
+    {
+      "kind": "behind_current_tag",
+      "image_key": "docker.io/library/python:3.14-slim",
+      "detail": "noorinalabs-isnad-ingest-platform:workers/ingest/Dockerfile:27 pinned 2026-06-11 is 82d behind the tag's current digest (2026-09-01)",
+      "days": 82.0
+    },
+    {
+      "kind": "behind_current_tag",
+      "image_key": "docker.io/library/python:3.14-slim",
+      "detail": "noorinalabs-isnad-ingest-platform:workers/normalize/Dockerfile:27 pinned 2026-06-11 is 82d behind the tag's current digest (2026-09-01)",
+      "days": 82.0
+    }
+  ],
+  "unknown": []
+}
