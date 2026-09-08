@@ -43,9 +43,19 @@ This skill derives the ontology and the auto-updatable docs **FROM the code**. W
 **Do not `cat` the file and compare fields by hand (#1142).** Ask the shared reader:
 
 ```bash
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+# READ side — anchor to the MAIN checkout, same derivation the `prune` step
+# below uses and for the same reason: `--show-toplevel` resolves to the
+# WORKTREE under agent isolation, which is the org's default working style,
+# and the parent .gitignore's the child-repo clones. Since #1505 the reader
+# hashes each tracked file, so from a worktree ~140 tracked paths are
+# structurally absent and report (honestly, but uselessly) as undeterminable
+# at exit 4. Falls back to --show-toplevel outside a worktree.
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
+[ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel)"
 python3 "$REPO_ROOT/.claude/lib/checksums_io.py" status
 ```
+
+The **write** steps below (`mark-resolved`, step 4) deliberately keep their own `REPO_ROOT` derivation — you commit the ledger from wherever you are working, so a write targets the tree you are in, while a read has to see the whole tree to answer at all. Do not "fix" step 4 to match this block.
 
 It prints `N tracked, N dirty, N drifted, N malformed, N undeterminable` plus the offending paths and a `VERDICT:` line, and exits **0** when clean, **1** when there are dirty/malformed entries to process, **3** when the ledger could not be read, **4** when entries have **drifted** or are **undeterminable** (#1505). Add `--json` if you want to consume it programmatically.
 

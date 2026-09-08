@@ -30,6 +30,7 @@ reads the real repo's ontology and `log_pretooluse_block` is stubbed out.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -119,6 +120,45 @@ def repo(tmp_path, monkeypatch):
         }
 
     return _build
+
+
+def _sync_tracked_file(tmp_path: Path, rel: str, contents: str) -> None:
+    """Create the tracked file AND stamp its real hash into the ledger.
+
+    The fixture ledger describes `pkg/mod.py` and `pkg/caller.py` with
+    placeholder hashes and never creates the files. That was invisible while
+    the reader only compared the ledger's two stored values to each other;
+    since #1505 it hashes, so both entries are UNDETERMINABLE — already
+    not-current. A test that wants to isolate ONE not-current entry has to
+    bring the rest into genuine sync first, or its "[STALE]" could be coming
+    from the fixture rather than from the state under test.
+    """
+    path = tmp_path / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(contents, encoding="utf-8")
+    _set_entry(
+        tmp_path,
+        rel,
+        {
+            "last_tracked": hashlib.sha256(contents.encode("utf-8")).hexdigest(),
+            "last_resolved": hashlib.sha256(contents.encode("utf-8")).hexdigest(),
+            "tracked_at": "2026-09-08T00:00:00Z",
+            "resolved_at": "2026-09-08T00:00:00Z",
+        },
+    )
+
+
+def _set_entry(tmp_path: Path, rel: str, entry: dict) -> None:
+    checksums_file = tmp_path / "ontology" / "checksums.json"
+    checksums = json.loads(checksums_file.read_text())
+    checksums["files"][rel] = entry
+    checksums_file.write_text(json.dumps(checksums), encoding="utf-8")
+
+
+def _sync_whole_fixture(tmp_path: Path) -> None:
+    """Both fixture entries genuinely clean — hashed, and matching."""
+    _sync_tracked_file(tmp_path, "pkg/mod.py", "def foo_bar():\n    pass\n")
+    _sync_tracked_file(tmp_path, "pkg/caller.py", "def do_thing():\n    foo_bar()\n")
 
 
 def _mark_dirty(tmp_path: Path) -> None:
@@ -315,6 +355,71 @@ def test_malformed_checksum_entry_is_flagged_stale_not_current(repo, tmp_path) -
         "resolved_at": "2026-06-14T00:00:00Z",
     }
     (tmp_path / "ontology" / "checksums.json").write_text(json.dumps(checksums), encoding="utf-8")
+    result = mod.check(repo("rg foo_bar ."))
+    assert result is not None
+    assert "STALE" in result["reason"]
+
+
+def test_drifted_checksum_entry_is_flagged_stale_not_current(repo, tmp_path) -> None:
+    """#1505: a DRIFTED entry must drive the "[STALE]" annotation too.
+
+    This hook is the third consumer of `checksums_io.read_status`, and the
+    only one that RE-DERIVES which subset of the status to surface rather
+    than forwarding the verdict — so its own output is a channel, and the
+    instrument's tests cannot answer its correctness question. `_dirty_files`
+    moved from `dirty | malformed` to `status.not_current`; reverting that one
+    expression left the whole suite green, which is what this test closes.
+
+    Drifted is the largest not-current population by far (158 of 314 real
+    entries) and the one the stored-values predicate could never see, so a
+    subset that omits it under-annotates precisely where the marker matters
+    most: the "[STALE]" line is what tells an agent mid-Grep that the
+    ontology's answer about this file may describe the overlay's memory of it
+    rather than the file.
+    """
+    _sync_whole_fixture(tmp_path)
+
+    # Baseline: everything hashed and matching, so nothing is annotated. This
+    # guards the test itself — without it, a "[STALE]" from the fixture's own
+    # unmaterialized entries would look like a pass.
+    baseline = mod.check(repo("rg foo_bar ."))
+    assert baseline is not None
+    assert "STALE" not in baseline["reason"]
+
+    # Now the #1505 shape on exactly one entry: the two stored values agree
+    # with each other and with nothing on disk. The file is present and
+    # readable, so this is DRIFTED, not undeterminable.
+    stale_hash = hashlib.sha256(b"what pkg/mod.py used to contain").hexdigest()
+    _set_entry(
+        tmp_path,
+        "pkg/mod.py",
+        {
+            "last_tracked": stale_hash,
+            "last_resolved": stale_hash,
+            "tracked_at": "2026-06-14T00:00:00Z",
+            "resolved_at": "2026-06-14T00:00:00Z",
+        },
+    )
+    result = mod.check(repo("rg foo_bar ."))
+    assert result is not None
+    assert "STALE" in result["reason"]
+
+
+def test_untrackable_checksum_entry_is_flagged_stale_not_current(repo, tmp_path) -> None:
+    """#1505: an UNDETERMINABLE entry annotates too — not measured is not fresh.
+
+    The companion to the drifted case on the same channel. A tracked path
+    that cannot be hashed at all was never checked against the ontology's
+    claim about it, so presenting the answer as current is the same
+    reassurance-over-an-unexamined-reading this wave exists to remove.
+    """
+    _sync_whole_fixture(tmp_path)
+    baseline = mod.check(repo("rg foo_bar ."))
+    assert baseline is not None
+    assert "STALE" not in baseline["reason"]
+
+    (tmp_path / "pkg" / "mod.py").unlink()
+
     result = mod.check(repo("rg foo_bar ."))
     assert result is not None
     assert "STALE" in result["reason"]
