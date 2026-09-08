@@ -362,9 +362,48 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
+#: Exit code for the "corpus could not be read" precondition failure (#1469,
+#: wave-31 acceptance clause 2a). Distinct from 0 (success) and from the
+#: default argparse usage-error code (2 is also argparse's, chosen
+#: deliberately -- both mean "did not produce the thing you asked for").
+NOT_MEASURED_EXIT_CODE = 2
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     paths = resolve_paths(args.repo_root)
+
+    # #1469 / wave-31 acceptance clause (2)/(2a): a missing or unreadable
+    # feedback-log corpus makes count_retro_citations/count_section_citations
+    # silently return 0 for every memory and section -- indistinguishable,
+    # on this channel, from a real "nothing has ever cited this" outcome.
+    # Check corpus health BEFORE classification and refuse to render a
+    # normal 0-citations KEPT verdict when the corpus itself is broken: an
+    # instrument that cannot evaluate its condition must not return success
+    # on the channel its caller (this exit code) branches on.
+    corpus_issue = h.check_corpus_health(paths.feedback_log)
+    if corpus_issue is not None:
+        if args.json:
+            print(
+                json.dumps(
+                    {"status": "NOT-MEASURED", "reason": corpus_issue},
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+        else:
+            print("## Promotion Audit — NOT MEASURED")
+            print()
+            print(f"Citation corpus could not be read: {corpus_issue}")
+            print()
+            print(
+                "No AUTO / DECIDE / KEPT classification was performed. A missing or "
+                "unreadable feedback-log corpus means every citation count would "
+                'silently read as 0 -- indistinguishable from a genuine "never cited" '
+                "outcome. Fix the corpus and re-run."
+            )
+        return NOT_MEASURED_EXIT_CODE
+
     wave_name = resolve_wave_name(args.wave, paths.status_path)
     audit_date = args.date or resolve_audit_date(wave_name, paths.status_path)
     result = run_audit(paths, wave_name=wave_name, audit_date=audit_date)

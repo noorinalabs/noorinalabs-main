@@ -53,6 +53,10 @@ python3 .claude/skills/promotion-audit/run.py [wave] --json
 - **Audit date** is pinned to the wave boundary (`wave_{M}_kicked_off_at`,
   else `_started_at`, else `_scope_reconciled_at`) — never `datetime.now()`,
   so re-runs on unchanged state are byte-identical. Override with `--date`.
+- **Exit code.** `0` on a normal run (any mix of AUTO/DECIDE/KEPT/SUPERSEDED
+  is still exit `0` — those are all successful classifications). A non-zero
+  exit (`2`) means the run could NOT classify at all — see § Corpus-health
+  gate — NOT-MEASURED below — never proceed to step 4 on a non-zero exit.
 - The driver performs ONLY the deterministic classification + rendering. It
   makes no `gh` calls and emits no artifacts — that is step 4, which reads
   the driver's `--json` output.
@@ -99,6 +103,72 @@ has a `SKILL.md`.
 > `.claude/team`), NOT `charter/` itself — passing `.claude/team/charter`
 > raises ValueError (#418). The driver resolves this correctly; this note
 > matters only if you call the helpers directly in a one-off.
+
+#### Provenance-aware citation filtering (#1469)
+
+Both `count_section_citations` and `count_retro_citations` scan the same
+`feedback_log.md` + `archive/feedback_log_*.md` corpus that `/wave-retro`
+Step 7.5/7.7/7.8 and this skill's own audit-log output WRITE TO. Left as a
+bare substring count, that is a positive-feedback loop: the audit reports a
+verdict by heading/filename, the retro documents that verdict in the log,
+and the next audit run counts its own prior report as evidence — `wave-merge.md
+§ Cross-Contract PRs` climbed 5 -> 7 -> 8 across two retros purely from being
+discussed, while the honest count of operator-invoked citations stayed at 1
+the entire time.
+
+`helpers.count_genuine_citations(text, needle)` is the shared primitive both
+counters call instead of `text.count(needle)`. It excludes four non-evidence
+shapes, each classified by inspecting the text around a candidate match
+(`helpers._is_self_generated_occurrence` and its four sub-checks):
+
+1. **Forward reference** — reuses the existing `_is_forward_reference` check
+   (a proposal to house a *different* rule at this name is not a citation).
+2. **Creation record** — the log entry announcing a section's/rule's
+   addition (`"Charter home:"`, `"new §"`, `"per process-change"`).
+3. **Audit self-report** — this module's own vocabulary
+   (`section_citations=`, `retro_citations=`, an AUTO/DECIDE/KEPT verdict
+   line, `"flagged (advisory"`, a byte-size table cell from the Step 7.8
+   sweep, `"cited Nx"`). A verdict or a citation *count* is not itself a
+   citation.
+4. **Wave-summary listing** — a bullet enumerating several charter sections
+   touched in one wave (recognized by >= 2 `"§"` marks on the same line as
+   the match) reads as a listing, not a citation of any one of them.
+
+This is a heuristic over known corpus shapes, not a formal provenance
+marker — it has no dependency on the writers (`/wave-retro`, this skill's
+own log-append step) emitting anything special, so it applies retroactively
+to the existing corpus. The tradeoff: a genuinely novel phrasing of a
+report/creation line that doesn't match these markers will still be
+miscounted as a citation. A more robust long-term fix — the retro/audit
+writers emitting their bookkeeping inside a delimited region the corpus
+reader strips outright — was considered and is tracked as a hardening
+follow-up rather than required here (see the PR's linked follow-up issue).
+
+**Named entry point for #1450** (substring-overlap on short/generic
+headings): `count_genuine_citations(text, needle)` does the provenance
+filtering; #1450's boundary-matching fix should replace the `text.find`
+scan inside it with a boundary-aware regex `finditer` and keep classifying
+each match through `_is_self_generated_occurrence` unchanged — the two
+defects are independent and compose at this one call site.
+
+#### Corpus-health gate — NOT-MEASURED (#1469)
+
+`_feedback_log_corpus` treats a missing feedback log as a valid *empty*
+corpus, which both citation counters then read as "genuinely zero
+citations" — indistinguishable from a real never-cited outcome on the exact
+channel that gates AUTO promotion. `run.py`'s `main()` checks
+`helpers.check_corpus_health(feedback_log_path)` BEFORE classification. If
+the corpus can't be read (feedback log missing, or any
+`archive/feedback_log_*.md` file unreadable/not valid UTF-8), the driver:
+
+- renders a `## Promotion Audit — NOT MEASURED` block (not the normal
+  table) on stdout, or `{"status": "NOT-MEASURED", "reason": ...}` (not
+  `{counts, decisions}`) under `--json`;
+- returns exit code `2` (`run.NOT_MEASURED_EXIT_CODE`), never `0`.
+
+Never write a NOT-MEASURED result to `.claude/team/promotion_audit_log/` as
+if it were a normal audit — it is a signal that the run needs the corpus
+fixed and re-run, not a wave's promotion outcome.
 
 Each `Decision` has one of these kinds:
 

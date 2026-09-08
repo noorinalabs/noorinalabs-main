@@ -365,39 +365,126 @@ class MainEntrypoint(unittest.TestCase):
         self.assertIn("decisions", payload)
 
 
+class CorpusHealthGate(unittest.TestCase):
+    """#1469 / wave-31 acceptance clause (2)/(2a): a missing feedback-log
+    corpus must not render/return the same thing as a genuine zero-citations
+    run, on EITHER channel `main()` produces (stdout table, `--json`) AND on
+    the exit-code channel its caller branches on."""
+
+    def setUp(self) -> None:
+        self._tmp = TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _make_repo_without_feedback_log(self) -> Path:
+        """A repo tree with everything `run_audit` needs EXCEPT
+        `.claude/team/feedback_log.md` -- the file that both citation
+        counters read via `_feedback_log_corpus`."""
+        repo = self.tmp / "repo"
+        _write(
+            repo / ".claude" / "team" / "charter.md",
+            "# Charter\n\n## Some Procedure <!-- promotion-target: skill -->\n\nBody.\n",
+        )
+        _write(
+            repo / ".claude" / "skills" / "demo-skill" / "SKILL.md",
+            "---\nname: demo-skill\ndescription: demo\n---\n\nbody\n",
+        )
+        _write(
+            repo / "cross-repo-status.json",
+            '{"current_phase": 5, "current_wave": "wave-5", '
+            '"wave_5_started_at": "2026-06-16T22:51:14Z"}\n',
+        )
+        # No .claude/team/feedback_log.md is written here — that's the point.
+        return repo
+
+    def test_missing_feedback_log_is_not_measured_on_stdout_and_exit_code(self) -> None:
+        # PRE-FIX: `_feedback_log_corpus` treats a missing log as a valid
+        # empty corpus, so `main()` renders a normal-looking table with
+        # every KEPT decision reading `_citations=0 < 5` and returns 0 --
+        # the exact same channel value a genuinely-clean run produces.
+        repo = self._make_repo_without_feedback_log()
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = run.main(["wave-5", "--repo-root", str(repo), "--date", "2026-06-16"])
+        self.assertNotEqual(rc, 0, "a missing corpus must not report the success exit code")
+        out = buf.getvalue()
+        self.assertIn("NOT MEASURED", out)
+        self.assertNotIn("AUTO ·", out, "must never render the normal audit summary line")
+        self.assertNotIn(
+            "### KEPT (no action",
+            out,
+            "must never render the classification table itself",
+        )
+
+    def test_missing_feedback_log_is_not_measured_in_json(self) -> None:
+        import json
+
+        repo = self._make_repo_without_feedback_log()
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = run.main(["wave-5", "--json", "--repo-root", str(repo), "--date", "2026-06-16"])
+        self.assertNotEqual(rc, 0, "a missing corpus must not report the success exit code")
+        payload = json.loads(buf.getvalue())
+        self.assertEqual(payload["status"], "NOT-MEASURED")
+        self.assertNotIn("counts", payload, "must never fabricate a 0-everywhere counts object")
+        self.assertNotIn("decisions", payload)
+
+    def test_healthy_corpus_is_unaffected(self) -> None:
+        """Sanity check the gate doesn't fire on the ordinary fixture path."""
+        paths, _ = _make_fixture_repo(self.tmp)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = run.main(["p5-wave-5", "--repo-root", paths.repo_root, "--date", "2026-06-16"])
+        self.assertEqual(rc, 0)
+        self.assertNotIn("NOT MEASURED", buf.getvalue())
+
+
 @unittest.skipUnless(
     os.path.isdir(_MEMORY_DIR),
     "steady-state test requires the project's memory directory",
 )
 class SteadyStateThroughDriver(unittest.TestCase):
-    """#1355: pre-fix, the driver's charter->skill signal was structurally
-    0 forever for every not-yet-promoted section (destination-invocation
-    count against a slug that, by definition, doesn't exist yet), so
-    0 AUTO / 0 DECIDE on the real tree was the ONLY possible outcome — it
-    proved nothing about whether any section had actually earned promotion.
-    Post-fix, the signal is real (retro citations of each section's own
-    heading), and the live repo has one section that has genuinely
-    accumulated enough evidence: `wave-merge.md § Cross-Contract PRs`
-    (cited 5 times across the live feedback log + phase-2/phase-3 archives,
-    threshold 5). This is the concrete, denominator-honest evidence for
-    #1355 acceptance criterion 2: of 25 skill-targeted charter sections,
-    1 crosses today; all 25 are now genuinely evaluable (the signal can
-    reach threshold for any of them, whereas pre-fix 0 of 25 ever could).
-    memory->charter and skill->hook tiers are untouched by this fix and
-    still yield 0 AUTO / 0 DECIDE on the real tree."""
+    """#1355 replaced a signal that was structurally 0 forever (destination-
+    invocation count against a slug that, by definition, doesn't exist yet
+    for a not-yet-promoted section) with retro citations of the section's
+    OWN heading. That signal was real, but unfiltered: it counted the
+    audit's and the retro's own reporting of `wave-merge.md § Cross-Contract
+    PRs` alongside the section's creation record and a wave-summary listing,
+    so the reported count climbed 5 -> 7 -> 8 across two retros discussing
+    it, with the section's honest evidence never rising above 1 genuine
+    operator citation the whole time (#1469).
 
-    def test_current_repo_state_yields_exactly_one_auto_section(self) -> None:
+    Post-#1469, `count_section_citations` filters those four non-evidence
+    shapes out (see `helpers.count_genuine_citations`), and the live repo's
+    honest count for `Cross-Contract PRs` is 1 — below the threshold of 5.
+    NO section crosses today; the OLD test asserting `counts["AUTO"] == 1`
+    for this section encoded the self-inflating bug's output as the
+    expected outcome, not a genuine promotion. memory->charter and
+    skill->hook tiers are unaffected by #1469 and still yield 0 AUTO /
+    0 DECIDE on the real tree, same as before."""
+
+    def test_current_repo_state_yields_zero_auto_after_provenance_filter(self) -> None:
         paths = run.resolve_paths(_REPO_ROOT)
         result = run.run_audit(paths, wave_name="p5-wave-5", audit_date="2026-06-16")
         counts = result.counts()
         auto = [d.item_id for d in result.decisions if d.kind == "AUTO"]
         decide = [d.item_id for d in result.decisions if d.kind == "DECIDE"]
-        self.assertEqual(counts["AUTO"], 1, f"unexpected AUTO set: {auto}")
-        self.assertTrue(
-            any("Cross-Contract PRs" in item for item in auto),
-            f"expected the AUTO item to be Cross-Contract PRs, got: {auto}",
-        )
+        self.assertEqual(counts["AUTO"], 0, f"unexpected AUTO set: {auto}")
         self.assertEqual(counts["DECIDE"], 0, f"unexpected DECIDE: {decide}")
+
+    def test_cross_contract_prs_honest_citation_count_is_one(self) -> None:
+        """Pins the specific section this issue was filed about: the
+        provenance-filtered signal reports the same honest count (1) the
+        issue's own manual trace arrived at, not the self-inflated 7/8 the
+        unfiltered counter reported across the wave-30/31 retros."""
+        sections = h.read_all_charter_sections(str(_REPO_ROOT / ".claude" / "team"))
+        target = [s for s in sections if s.heading == "Cross-Contract PRs"]
+        self.assertEqual(len(target), 1, "expected the Cross-Contract PRs section to exist")
+        feedback_log = str(_REPO_ROOT / ".claude" / "team" / "feedback_log.md")
+        citations = h.count_section_citations(target[0], feedback_log)
+        self.assertEqual(citations, 1, f"expected the honest count of 1, got {citations}")
 
     def test_memory_and_skill_tiers_still_yield_zero_auto_zero_decide(self) -> None:
         """The fix is scoped to the charter->skill tier only — memory and

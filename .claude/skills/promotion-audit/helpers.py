@@ -427,6 +427,226 @@ def _feedback_log_corpus(feedback_log_path: str) -> str:
     return "\n".join(parts)
 
 
+def check_corpus_health(feedback_log_path: str) -> str | None:
+    """Return `None` if the citation corpus can be read, else a reason it can't.
+
+    `_feedback_log_corpus` treats a missing feedback log as a valid empty
+    corpus (`""`), which every caller downstream of it — `count_retro_citations`,
+    `count_section_citations` — then reads as "genuinely zero citations".
+    Those two things are NOT the same: a missing or unreadable corpus means
+    the entire citation-based signal is undeterminable, not zero, and an
+    undeterminable signal must not render as a clean KEPT/AUTO verdict (wave-31
+    acceptance bar, clause 2a — "CANNOT EVALUATE is not a pass"). This check is
+    the gate `run.py`'s `main()` runs BEFORE classification so it can render a
+    distinct NOT-MEASURED outcome and return non-zero instead.
+
+    Checks, in order:
+      1. the feedback log file exists and is readable as UTF-8;
+      2. every `archive/feedback_log_*.md` file beside it (if the archive
+         directory exists) is also readable as UTF-8.
+
+    The single-memory/single-section helpers above intentionally keep their
+    existing "missing log -> 0 / frontmatter floor" contract for isolated
+    unit use (e.g. a caller testing one memory against a scratch path) —
+    this function is the whole-corpus precondition the CLI driver checks
+    once per run, not a replacement for that per-item contract.
+    """
+    if not os.path.isfile(feedback_log_path):
+        return f"feedback log not found: {feedback_log_path}"
+    try:
+        with open(feedback_log_path, encoding="utf-8") as f:
+            f.read()
+    except OSError as exc:
+        return f"feedback log unreadable: {feedback_log_path} ({exc})"
+    except UnicodeDecodeError as exc:
+        return f"feedback log is not valid UTF-8: {feedback_log_path} ({exc})"
+
+    archive_dir = os.path.join(os.path.dirname(feedback_log_path), "archive")
+    if os.path.isdir(archive_dir):
+        for name in sorted(os.listdir(archive_dir)):
+            if not (name.startswith("feedback_log_") and name.endswith(".md")):
+                continue
+            path = os.path.join(archive_dir, name)
+            try:
+                with open(path, encoding="utf-8") as f:
+                    f.read()
+            except OSError as exc:
+                return f"archive file unreadable: {path} ({exc})"
+            except UnicodeDecodeError as exc:
+                return f"archive file is not valid UTF-8: {path} ({exc})"
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Provenance-aware citation filtering (#1469)
+#
+# `count_section_citations` and `count_retro_citations` used to be a bare
+# `text.count(needle)` over `_feedback_log_corpus`. That corpus is WRITTEN BY
+# the same instruments that read it: `/wave-retro` Step 7.5 reports every
+# AUTO/DECIDE/KEPT verdict by heading or filename, Step 7.7 reports citation
+# counts back into the log, and Step 7.8's size/age sweep prints a flagged
+# file's bare name every wave regardless of whether anyone cited it. A bare
+# substring count cannot tell "an operator invoked this rule during real
+# work" from "an automated report printed this name" -- so once a section or
+# memory crosses threshold once, the audit's own bookkeeping (and the
+# retro's bookkeeping OF the audit) keeps it above threshold forever,
+# independent of real use. Measured live: `wave-merge.md § Cross-Contract
+# PRs` went from an honest 1 operator citation to a reported 7, then 8,
+# purely from two retros documenting the number (main#1469).
+#
+# `_is_self_generated_occurrence` classifies a single substring match by
+# inspecting a window of surrounding text for four non-evidence shapes,
+# using the same windowed-marker technique `_is_forward_reference` already
+# uses for the already-promoted scan:
+#
+#   1. forward reference    -- delegates to the existing `_is_forward_reference`.
+#      A proposal to house a DIFFERENT rule at this heading/name is not a
+#      citation of this one.
+#   2. creation record      -- the log entry that announces a section's or
+#      rule's *addition* ("Charter home: ...", "new § ... per
+#      process-change #N").
+#   3. audit self-report    -- this module's own vocabulary
+#      (`section_citations=`, `retro_citations=`, an "AUTO"/"DECIDE"/"KEPT"
+#      verdict-count line, "flagged (advisory", a byte-size cell from the
+#      Step 7.8 sweep table, "cited Nx"). A verdict or a citation COUNT is
+#      not itself a citation.
+#   4. wave-summary listing -- a bullet enumerating several charter
+#      sections touched in one wave reads as a listing, not a citation of
+#      any one of them; recognized by >= 2 "§" marks sharing the match's line.
+#
+# This is a heuristic over known shapes, not a formal proof of intent --
+# documented in SKILL.md alongside its limitations.
+# ---------------------------------------------------------------------------
+
+_CREATION_RECORD_MARKERS = (
+    "charter home:",
+    "new §",
+    "per process-change",
+    "proposed charter change",
+)
+
+_AUDIT_SELF_REPORT_MARKERS = (
+    "_citations=",  # section_citations=, retro_citations=
+    "skill_invocations=",
+    "the auto is",
+    "auto promotion",
+    "→ not promoted",
+    "auto ·",
+    "decide ·",
+    "kept ·",
+    "stale-opt-out",
+    "stale opt-out",
+    "orthogonal instruments",
+    "flagged (advisory",
+    "topic files flagged",
+    "size sweep",
+    "size/age sweep",
+    "soft ceiling",
+    "promotion audit",
+)
+
+_CITED_N_TIMES_RE = re.compile(r"cited\s+\d+x", re.IGNORECASE)
+_SIZE_UNIT_CELL_RE = re.compile(r"\b\d[\d,]*\s*(KB|B)\b")
+
+_SELF_REPORT_WINDOW = 100
+_CREATION_RECORD_WINDOW = 80
+
+
+def _window(text: str, start: int, end: int, back: int, forward: int) -> str:
+    """A `back`/`forward`-char window around `text[start:end]`, clipped to
+    the containing LINE.
+
+    Clipping to the line matters: these markers (`_CREATION_RECORD_MARKERS`,
+    `_AUDIT_SELF_REPORT_MARKERS`) are short strings that can appear on an
+    UNRELATED neighboring bullet in a dense retro corpus. An unclipped
+    character-distance window leaks the previous or next line's vocabulary
+    into the current match's classification — e.g. a genuine citation on a
+    short line, immediately followed by a Step 7.8 sweep bullet starting
+    "N files flagged (advisory...", would otherwise inherit that neighbor's
+    "flagged (advisory" marker and be wrongly excluded.
+    """
+    line_start, line_end = _line_span(text, start)
+    lo = max(line_start, start - back)
+    hi = min(line_end, end + forward)
+    return text[lo:hi]
+
+
+def _line_span(text: str, pos: int) -> tuple[int, int]:
+    """Return the (start, end) offsets of the line in `text` containing `pos`."""
+    line_start = text.rfind("\n", 0, pos) + 1
+    line_end = text.find("\n", pos)
+    if line_end == -1:
+        line_end = len(text)
+    return line_start, line_end
+
+
+def _is_creation_record(text: str, start: int, end: int) -> bool:
+    window = _window(text, start, end, _CREATION_RECORD_WINDOW, 20).lower()
+    return any(marker in window for marker in _CREATION_RECORD_MARKERS)
+
+
+def _is_audit_self_report(text: str, start: int, end: int) -> bool:
+    window = _window(text, start, end, _SELF_REPORT_WINDOW, _SELF_REPORT_WINDOW)
+    lower = window.lower()
+    if any(marker in lower for marker in _AUDIT_SELF_REPORT_MARKERS):
+        return True
+    if _CITED_N_TIMES_RE.search(window):
+        return True
+    return bool(_SIZE_UNIT_CELL_RE.search(window))
+
+
+def _is_wave_summary_listing(text: str, start: int, end: int) -> bool:
+    line_start, line_end = _line_span(text, start)
+    return text.count("§", line_start, line_end) >= 2
+
+
+def _is_self_generated_occurrence(text: str, start: int, end: int) -> bool:
+    """Return True if `text[start:end]` is not an operator citation.
+
+    See the module-level note above for the four excluded shapes.
+    """
+    if _is_forward_reference(text, start):
+        return True
+    if _is_creation_record(text, start, end):
+        return True
+    if _is_audit_self_report(text, start, end):
+        return True
+    return _is_wave_summary_listing(text, start, end)
+
+
+def count_genuine_citations(text: str, needle: str) -> int:
+    """Count non-overlapping occurrences of `needle` in `text`, excluding
+    self-generated provenance (see `_is_self_generated_occurrence`).
+
+    The shared primitive both `count_section_citations` (charter tier) and
+    `count_retro_citations` (memory tier) call instead of `text.count(...)`
+    (#1469). Mirrors `str.count`'s non-overlapping-match semantics, and its
+    own blank-needle guard: `text.count("")` returns `len(text) + 1`, which
+    would make an empty needle look like it trivially crossed any
+    threshold -- the same defensive shape as the main#690 blank-slug guard
+    and `count_section_citations`'s blank-heading guard.
+
+    Named entry point for noorinalabs-main#1450 (substring-overlap false
+    positives on short/generic headings): swap the `text.find` scan below
+    for a boundary-aware regex `finditer` and keep classifying each match
+    through `_is_self_generated_occurrence` unchanged -- the two defects
+    are independent and compose at this call site.
+    """
+    if not needle:
+        return 0
+    count = 0
+    pos = 0
+    while True:
+        idx = text.find(needle, pos)
+        if idx == -1:
+            break
+        end = idx + len(needle)
+        if not _is_self_generated_occurrence(text, idx, end):
+            count += 1
+        pos = end
+    return count
+
+
 def count_retro_citations(memory: Memory, feedback_log_path: str) -> int:
     """Count occurrences of the memory name or filename in the feedback log.
 
@@ -435,15 +655,24 @@ def count_retro_citations(memory: Memory, feedback_log_path: str) -> int:
       - occurrences of `memory.name` (title string)
       - occurrences of `memory.filename` (e.g., feedback_enforcement_hierarchy.md)
 
+    Both counts go through `count_genuine_citations` (#1469), which excludes
+    occurrences originating from `/wave-retro`'s own bookkeeping — the
+    Step 7.8 size/age sweep prints a flagged file's bare name every wave
+    purely because it is large, and Step 7.7 reports the citation count
+    itself back into the log. Neither is an operator invoking the memory's
+    lesson. See the module-level note above `count_genuine_citations` for
+    the full discrimination.
+
     Also adds `len(memory.referenced_in_retros)` as a floor — authors can
     manually record retro citations in frontmatter for cases where the log
-    doesn't spell out the filename.
+    doesn't spell out the filename. This floor is NOT provenance-filtered:
+    it is a deliberate, hand-entered claim, not a corpus scan.
     """
     text = _feedback_log_corpus(feedback_log_path)
     if not text:
         return len(memory.referenced_in_retros)
-    by_title = text.count(memory.name) if memory.name else 0
-    by_file = text.count(memory.filename)
+    by_title = count_genuine_citations(text, memory.name) if memory.name else 0
+    by_file = count_genuine_citations(text, memory.filename)
     return max(by_title, by_file, len(memory.referenced_in_retros))
 
 
@@ -476,13 +705,19 @@ def count_section_citations(section: CharterSection, feedback_log_path: str) -> 
     should never occur in practice (`read_charter_sections` requires
     non-empty heading text to match `_SECTION_MARKER_RE`), but the guard
     is the same defensive shape as the main#690 blank-slug guard below.
+
+    The count goes through `count_genuine_citations` (#1469), which
+    excludes occurrences originating from the promotion-audit's own
+    reporting of this section's verdict, `/wave-retro`'s bookkeeping of
+    that report, creation records, and multi-section wave-summary
+    listings -- see the module-level note above `count_genuine_citations`.
     """
     if not section.heading or not section.heading.strip():
         return 0
     text = _feedback_log_corpus(feedback_log_path)
     if not text:
         return 0
-    return text.count(section.heading)
+    return count_genuine_citations(text, section.heading)
 
 
 def count_skill_invocations(skill_name: str, repo_root: str) -> int:
