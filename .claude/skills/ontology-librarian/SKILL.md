@@ -39,10 +39,17 @@ printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(pwd)" > .claude/.consulted/
 
 #### 1a. Semantic overlay (checksums.json)
 
-Ask the shared reader for the dirty count. **Do not `cat` the file and compare fields by hand (#1142)** — the predicate is `last_tracked != last_resolved`, the field names are not guessable, and every way of getting the read wrong returns a plausible `0`, which is also the healthy value. Two consecutive sessions reported a wrong `0` that way; a staleness reporter that under-reports staleness is worse than no reporter.
+Ask the shared reader. **Do not `cat` the file and compare fields by hand (#1142)** — the predicate is `last_tracked != last_resolved`, the field names are not guessable, and every way of getting the read wrong returns a plausible `0`, which is also the healthy value. Two consecutive sessions reported a wrong `0` that way; a staleness reporter that under-reports staleness is worse than no reporter.
+
+**And do not treat the dirty count as an answer about the tree (#1505).** `last_tracked` only advances when the `ontology_tracker` PostToolUse hook fires — an Edit/Write in this checkout. A file changed by a pull, a merge, or another session leaves the entry self-consistent and therefore "clean" forever. The reader hashes each tracked file now, which is the only way this class is visible at all: 158 of 314 entries were in that state when #1505 was filed.
 
 ```bash
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+# Anchor to the MAIN checkout, not the worktree (#1505). The parent
+# .gitignore's the child-repo clones, so from inside a worktree ~140 tracked
+# paths are structurally absent and report (honestly, but uselessly) as
+# undeterminable. Falls back to --show-toplevel outside a worktree.
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
+[ -f "$REPO_ROOT/cross-repo-status.json" ] || REPO_ROOT="$(git rev-parse --show-toplevel)"
 python3 "$REPO_ROOT/.claude/lib/checksums_io.py" status
 ```
 
@@ -50,16 +57,24 @@ Report semantic overlay staleness from the counts it prints — and branch on it
 
 | Exit | Meaning | Report |
 |---|---|---|
-| 0 | clean | "Semantic overlay: current." |
+| 0 | clean — every tracked file hashed and matching | "Semantic overlay: current." |
 | 1 | dirty and/or malformed | Use the bands below |
 | 3 | ledger missing/unparseable | "Semantic overlay: checksums.json unreadable — cannot assess staleness." **Never** report this as current |
+| 4 | drifted and/or undeterminable (#1505) | "Semantic overlay: {N} drifted / {M} undeterminable — the ledger disagrees with the tree." **Never** report this as current, and do **not** recommend `mark-resolved` |
+| other non-zero | unrecognized | Report it as unassessed; never round an unrecognized code down to "current" |
 
 Bands for a dirty ledger:
 - **1–5 dirty files**: "{N} files pending — semantic overlay slightly behind; run `/ontology-rebuild`."
 - **6–15 dirty files**: "{N} files pending — consider running `/ontology-rebuild`."
 - **16+ dirty files**: "{N} files pending — strongly recommend `/ontology-rebuild` before starting work."
 
-**Malformed entries** (unrecognized shape — a missing `last_tracked`, a `null` hash) are counted separately and block "current" deliberately: an entry that cannot be classified is unknown state, not resolved state. Report the count and name the paths; `/ontology-rebuild` step 1 documents the repair.
+"Current" requires **all four** counts at zero, not just `dirty`:
+
+- **Malformed** (unrecognized shape — a missing `last_tracked`, a `null` hash) — an entry that cannot be classified is unknown state, not resolved state. `/ontology-rebuild` step 1 documents the repair.
+- **Drifted** (#1505) — both stored hashes agree with each other and neither agrees with the file. Report the count and the paths; the remediation is reconciling the overlay against those files, NOT `mark-resolved`, which would record agreement between two values that both already disagree with the file.
+- **Undeterminable** (#1505) — a tracked path that could not be hashed (absent from this tree, unreadable). Not measured is not clean. If the count is large and the paths are all under child-repo directories, the status was run from a worktree — re-run against the main checkout or pass `--repo-root <main-checkout>`.
+
+A **drifted** entry means any answer this skill gives about that file may be describing the overlay's memory of it rather than the file. Name the drifted paths in the § Stale reference warnings section below when they intersect the query.
 
 **Important:** The librarian does NOT trigger the resolver. It reports staleness so the user can decide.
 

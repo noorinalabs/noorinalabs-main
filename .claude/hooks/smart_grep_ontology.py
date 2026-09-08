@@ -244,15 +244,21 @@ def _dirty_files() -> set[str]:
 
     Malformed entries join the dirty set on purpose: this drives a "[STALE]"
     annotation, and an entry whose shape the reader cannot classify is
-    not-known-current, which is what the annotation says. Empty on any read
-    error (advisory only; never blocks the hook itself).
+    not-known-current, which is what the annotation says. Since #1505 the same
+    argument extends to DRIFTED entries (the file matches neither stored hash
+    — the largest source of not-known-current here, and the one the
+    stored-values predicate could never see) and to UNDETERMINABLE ones
+    (tracked, but not hashable from this tree). ``status.not_current`` is that
+    union, kept in the shared module so this hook cannot quietly annotate a
+    subset. Empty on any read error (advisory only; never blocks the hook
+    itself).
     """
     path = _ontology_dir() / "checksums.json"
     try:
         status = checksums_io.read_status(path)
     except checksums_io.ChecksumsUnreadable:
         return set()
-    return set(status.dirty) | {rel for rel, _ in status.malformed}
+    return set(status.not_current)
 
 
 def _lookup_symbol(graph: dict, pattern: str) -> list[dict]:

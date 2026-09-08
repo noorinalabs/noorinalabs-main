@@ -23,6 +23,7 @@ Run from the repo root:
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 import tempfile
@@ -137,12 +138,26 @@ class OntologyStalenessTests(unittest.TestCase):
     memory, and two consecutive sessions reproduced it wrong.
     """
 
+    #: See the same constants in test_session_handoff.py. Since #1505 the
+    #: shared reader hashes each tracked file, so the ledger's entries have to
+    #: be paired with real files on disk — and the fixture has to put the
+    #: ledger at `<root>/ontology/checksums.json`, because that is the layout
+    #: the repo root is derived from.
+    CONTENT = "tracked content\n"
+    CLEAN_SHA = hashlib.sha256(CONTENT.encode("utf-8")).hexdigest()
+
     @contextlib.contextmanager
-    def _checksums(self, payload: str) -> Iterator[Path]:
+    def _checksums(self, payload: str, materialize: tuple[str, ...] = ()) -> Iterator[Path]:
         """Point the hook at a temporary ledger for the duration of the block."""
         with tempfile.TemporaryDirectory() as d:
-            path = Path(d) / "checksums.json"
+            root = Path(d)
+            (root / "ontology").mkdir()
+            path = root / "ontology" / "checksums.json"
             path.write_text(payload, encoding="utf-8")
+            for rel in materialize:
+                target = root / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(self.CONTENT, encoding="utf-8")
             original = hook._CHECKSUMS
             try:
                 hook._CHECKSUMS = path
@@ -160,13 +175,65 @@ class OntologyStalenessTests(unittest.TestCase):
         """Not an isinstance ceremony — the point is that the hook returns the
         shared module's type, so there is nothing left here to drift."""
         payload = json.dumps(
-            {"version": 1, "files": {"a.md": {"last_tracked": "1", "last_resolved": "1"}}}
+            {
+                "version": 1,
+                "files": {
+                    "a.md": {"last_tracked": self.CLEAN_SHA, "last_resolved": self.CLEAN_SHA}
+                },
+            }
         )
-        with self._checksums(payload):
+        with self._checksums(payload, ("a.md",)):
             status = hook._ontology_staleness()
+            out = self._capture_main()
         self.assertIsInstance(status, hook.checksums_io.ChecksumsStatus)
         assert status is not None
         self.assertTrue(status.clean)
+        self.assertTrue(status.verified)
+        # The rendered line must say the check RAN, not merely that it found
+        # nothing — the two were indistinguishable before #1505.
+        self.assertIn("current (0/1 dirty, 0 drifted; 1 hash-verified)", out)
+
+    def test_drifted_entry_is_not_reported_as_current(self) -> None:
+        """#1505 on the line this hook exists to print.
+
+        The ledger's two stored values agree, so `last_tracked !=
+        last_resolved` is False and the pre-fix hook printed
+        "Ontology overlay: current (0/1 dirty)". The file on disk matches
+        neither value — the state 158 of 314 real entries were in, every
+        session, while this line said the overlay was current.
+        """
+        stale = hashlib.sha256(b"what a.md used to contain").hexdigest()
+        payload = json.dumps(
+            {"version": 1, "files": {"a.md": {"last_tracked": stale, "last_resolved": stale}}}
+        )
+        with self._checksums(payload, ("a.md",)):
+            status = hook._ontology_staleness()
+            out = self._capture_main()
+        assert status is not None
+        self.assertFalse(status.clean)
+        self.assertEqual([rel for rel, _ in status.drifted], ["a.md"])
+        self.assertNotIn("current (", out)
+        self.assertIn("1 drifted", out)
+        # And it must not be pointed at the remediation that would hide it.
+        self.assertIn("NOT a mark-resolved job", out)
+
+    def test_untrackable_file_is_not_reported_as_current(self) -> None:
+        """A tracked path absent from the tree was not measured at all."""
+        payload = json.dumps(
+            {
+                "version": 1,
+                "files": {
+                    "gone.md": {"last_tracked": self.CLEAN_SHA, "last_resolved": self.CLEAN_SHA}
+                },
+            }
+        )
+        with self._checksums(payload):
+            status = hook._ontology_staleness()
+            out = self._capture_main()
+        assert status is not None
+        self.assertFalse(status.clean)
+        self.assertNotIn("current (", out)
+        self.assertIn("1 undeterminable", out)
 
     def test_dirty_entry_is_counted(self) -> None:
         payload = json.dumps(

@@ -164,7 +164,6 @@ Exit codes:
   0 — always (advisory hook, never blocks)
 """
 
-import hashlib
 import json
 import os
 import subprocess
@@ -534,18 +533,6 @@ def _should_skip(file_path: str) -> bool:
     return False
 
 
-def _compute_sha256(file_path: Path) -> str | None:
-    """Compute SHA256 hash of a file. Returns None if file doesn't exist."""
-    try:
-        h = hashlib.sha256()
-        with open(file_path, "rb") as f:
-            for chunk in iter(lambda: f.read(8192), b""):
-                h.update(chunk)
-        return h.hexdigest()
-    except (OSError, PermissionError):
-        return None
-
-
 def _relative_path(file_path: str) -> str:
     """Convert absolute path to relative from repo root."""
     try:
@@ -574,7 +561,11 @@ def check(input_data: dict) -> dict | None:
     if _should_skip(file_path):
         return None
 
-    sha = _compute_sha256(Path(file_path))
+    # THE shared hasher (#1505). It used to be a private `_compute_sha256`
+    # here; the reader (`checksums_io.classify_against_file`) now compares the
+    # value this writes against the file, so the two MUST hash identically —
+    # a second copy free to drift would report every entry as drifted.
+    sha = checksums_io.compute_sha256(Path(file_path))
     if sha is None:
         return None
 

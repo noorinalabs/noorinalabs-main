@@ -208,6 +208,13 @@ def _get_ontology_staleness() -> str:
     session reads first, so a wrong "Ontology is current (0 dirty files)" here
     is a wrong belief carried across a session boundary — which is exactly how
     the #1142 miscount propagated into a handoff in the first place.
+
+    Since #1505 the shared reader also hashes each tracked file, so this
+    reports ``drifted`` and ``undeterminable`` too. Both had been silently
+    folded into "current": the stored-values predicate cannot see a file
+    changed by a pull, a merge, or another session, so the sentence this
+    function writes was carrying no information about the drifted half of
+    the corpus.
     """
     checksums_file = REPO_ROOT / "ontology" / "checksums.json"
     if not checksums_file.exists():
@@ -217,15 +224,28 @@ def _get_ontology_staleness() -> str:
     except checksums_io.ChecksumsUnreadable:
         return "Could not read checksums"
     if status.clean:
-        return "Ontology is current (0 dirty files)"
+        return f"Ontology is current (0 dirty, 0 drifted; {status.total} files hash-verified)"
+
+    def _names(group: tuple[tuple[str, str], ...]) -> str:
+        suffix = "..." if len(group) > 5 else ""
+        return f"{', '.join(rel for rel, _ in group[:5])}{suffix}"
+
     parts = []
     if status.dirty:
         suffix = "..." if len(status.dirty) > 5 else ""
         parts.append(f"{len(status.dirty)} dirty files: {', '.join(status.dirty[:5])}{suffix}")
+    if status.drifted:
+        parts.append(
+            f"{len(status.drifted)} drifted files (content matches neither stored hash — "
+            f"NOT a mark-resolved job): {_names(status.drifted)}"
+        )
     if status.malformed:
-        names = [rel for rel, _ in status.malformed[:5]]
-        suffix = "..." if len(status.malformed) > 5 else ""
-        parts.append(f"{len(status.malformed)} malformed entries: {', '.join(names)}{suffix}")
+        parts.append(f"{len(status.malformed)} malformed entries: {_names(status.malformed)}")
+    if status.undeterminable:
+        parts.append(
+            f"{len(status.undeterminable)} undeterminable entries (tracked but could not be "
+            f"hashed — not measured, not clean): {_names(status.undeterminable)}"
+        )
     return f"Ontology has {'; '.join(parts)}"
 
 
