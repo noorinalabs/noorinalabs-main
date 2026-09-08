@@ -14,10 +14,12 @@ Verifies:
 from __future__ import annotations
 
 import contextlib
+import importlib.util
 import io
 import json
 import sys
 import unittest
+import unittest.mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -26,6 +28,7 @@ from tempfile import TemporaryDirectory
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from annunaki_parse import (  # noqa: E402
+    HARD_FAILURE_CATEGORIES,
     TRACE_RECORD_TYPES,
     count_errors,
     is_low_confidence,
@@ -483,10 +486,15 @@ class TraceTypeSourceOfTruth(unittest.TestCase):
 
 class SelfReferentialMatchSourceOfTruth(unittest.TestCase):
     """#1502 (Nadia Khoury's #1498 merge-gate tech debt): `is_self_referential_match`
-    has a vendored-fallback duplicate (for when the hooks dir isn't
+    used to have a vendored-fallback duplicate (for when the hooks dir isn't
     importable) with no test asserting it stays in sync with the writer's
     original -- unlike `TRACE_RECORD_TYPES` above, which has exactly this
-    test. Follows that established pattern rather than inventing a new one."""
+    test. #1501/#1502 (this class): the fallback was DELETED rather than
+    synced -- it had already drifted to the pre-#1498-fix unscoped predicate
+    and no test could reach it (`test_matches_writer_function` below is only
+    reachable via `assertIs` when the import succeeds). The import is now
+    unconditional; `test_import_unconditional_no_fallback_on_writer_failure`
+    pins that there is no longer a fallback path to drift."""
 
     def test_matches_writer_function(self) -> None:
         # annunaki_parse must use the SAME predicate object the writer
@@ -506,6 +514,64 @@ class SelfReferentialMatchSourceOfTruth(unittest.TestCase):
         # object for a differently-behaving one under the same name).
         self.assertTrue(is_self_referential_match(['.claude/annunaki/errors.jsonl:{"a": 1}']))
         self.assertFalse(is_self_referential_match(["some/other/dir/errors.jsonl:{}"]))
+
+    def test_import_unconditional_no_fallback_on_writer_failure(self) -> None:
+        """#1501/#1502: force `annunaki_monitor` to be unimportable and
+        confirm a fresh load of `annunaki_parse` RAISES ImportError instead
+        of silently falling back.
+
+        FAILS against the pre-fix implementation: pre-fix, the top-level
+        `from annunaki_monitor import is_self_referential_match` was wrapped
+        in `try/except Exception`, so this same forced failure was caught
+        and a local vendored copy took over -- the module load SUCCEEDED
+        (this test's `assertRaises` would see no exception and fail) and
+        that vendored copy disagreed with the writer on #1501's own evidence
+        table (e.g. `some/other/dir/errors.jsonl` -> True in the fallback,
+        False per the writer -- see `test_writer_function_behavior_sanity`
+        above for the writer's answer on that exact case). Post-fix, the
+        import is unconditional: forcing `annunaki_monitor` unimportable
+        now propagates ImportError with nothing left to silently diverge.
+        """
+        module_path = Path(__file__).resolve().parents[1] / "annunaki_parse.py"
+        spec = importlib.util.spec_from_file_location(
+            "annunaki_parse_force_reload_1501", module_path
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        assert module.__file__ is not None
+        self.assertEqual(Path(module.__file__).resolve(), module_path.resolve())
+
+        # sys.modules[name] = None forces any `import annunaki_monitor` (or
+        # `from annunaki_monitor import ...`) to raise ImportError immediately,
+        # regardless of what's on sys.path -- this is the standard mechanism
+        # for simulating "the writer module cannot be imported" without
+        # touching the real hooks directory.
+        with unittest.mock.patch.dict(sys.modules, {"annunaki_monitor": None}):
+            with self.assertRaises(ImportError):
+                spec.loader.exec_module(module)
+
+
+class HardFailureCategoriesSourceOfTruth(unittest.TestCase):
+    """#1508: `HARD_FAILURE_CATEGORIES` used to re-declare the writer's
+    `CATEGORY_NONZERO_EXIT` / `CATEGORY_STDERR_MATCH` constants as string
+    literals -- a second copy of the writer's precedence rule that could
+    drift silently. Mirrors `TraceTypeSourceOfTruth.test_matches_writer_constant`."""
+
+    def test_matches_writer_constants(self) -> None:
+        hooks_dir = Path(__file__).resolve().parents[2] / "hooks"
+        sys.path.insert(0, str(hooks_dir))
+        from annunaki_monitor import (  # noqa: E402
+            CATEGORY_NONZERO_EXIT as writer_nonzero_exit,
+        )
+        from annunaki_monitor import (  # noqa: E402
+            CATEGORY_STDERR_MATCH as writer_stderr_match,
+        )
+
+        self.assertEqual(
+            HARD_FAILURE_CATEGORIES,
+            {writer_nonzero_exit, writer_stderr_match},
+        )
+        self.assertEqual(HARD_FAILURE_CATEGORIES, frozenset({"nonzero-exit", "stderr-match"}))
 
 
 class Cli(unittest.TestCase):

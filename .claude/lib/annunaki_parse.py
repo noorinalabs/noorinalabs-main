@@ -59,7 +59,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -76,32 +75,40 @@ except Exception:  # noqa: BLE001 — vendored-without-hooks fallback
         {"posttooluse_dispatch", "pretooluse_diagnostic", "pretooluse_dispatch"}
     )
 
-# Single source of truth for the #1465 self-referential-match predicate lives
-# with the writer (annunaki_monitor.py under .claude/hooks/, same dir already
-# added to sys.path above for TRACE_RECORD_TYPES). Import it so reader and
-# writer classify identically; fall back to a local copy (same logic,
-# duplicated deliberately — mirrors the TRACE_RECORD_TYPES fallback above) if
-# the hooks dir isn't importable.
-try:
-    from annunaki_monitor import is_self_referential_match  # type: ignore[import-not-found]
-except Exception:  # noqa: BLE001 — vendored-without-hooks fallback
-    _SELF_LOG_FILENAMES = ("errors.jsonl", "traces.jsonl")
-    _SELF_LOG_ARCHIVE_MARKER = "/annunaki/archive/"
-    _RG_PATH_PREFIX = re.compile(r"^([^\s:]+):")
-
-    def _self_referential_log_path(line: str) -> bool:
-        match = _RG_PATH_PREFIX.match(line)
-        if not match:
-            return False
-        path = match.group(1)
-        if path.endswith(_SELF_LOG_FILENAMES):
-            return True
-        return _SELF_LOG_ARCHIVE_MARKER in path
-
-    def is_self_referential_match(error_lines: list[str]) -> bool:
-        if not error_lines:
-            return False
-        return all(_self_referential_log_path(line) for line in error_lines)
+# Single source of truth for the #1465 self-referential-match predicate AND
+# the #1498 hard-failure category constants lives with the writer
+# (annunaki_monitor.py under .claude/hooks/, same dir already added to
+# sys.path above for TRACE_RECORD_TYPES). UNLIKE TRACE_RECORD_TYPES, this
+# import is unconditional — no vendored fallback.
+#
+# #1501/#1502 found that a vendored fallback copy of
+# `is_self_referential_match` had silently drifted from the writer: it still
+# ran the PRE-#1498-fix unscoped `path.endswith(("errors.jsonl",
+# "traces.jsonl"))`, and no test could reach it (`SelfReferentialMatchSource
+# OfTruth.test_matches_writer_function` used `assertIs`, only reachable when
+# this import succeeds). #1508 found the same shape for
+# `HARD_FAILURE_CATEGORIES`, re-declared as string literals rather than
+# imported — a writer-side rename of `CATEGORY_STDERR_MATCH` survived the
+# full 152-test suite.
+#
+# Every real caller of this module already runs with `.claude/hooks/`
+# alongside `.claude/lib/`: the CLI below, the `/annunaki` and
+# `/annunaki-attack` skills' inline snippets, and both test suites. The
+# writer module's own references to `annunaki_parse` are comments/docstrings
+# only (verified: no `import annunaki_parse` anywhere in that module), so
+# there is no circular-import hazard that would ever force a fallback path to
+# execute. A duplicate that no real caller can exercise is worse than an
+# `ImportError` at import time — it drifts silently and renders identically
+# to the correct case on every channel a caller consumes. If a genuine
+# vendored-without-hooks deployment is ever introduced, restore a fallback
+# WITH the same source-of-truth test this module's `TraceTypeSourceOfTruth`
+# precedent requires for `TRACE_RECORD_TYPES` — do not reintroduce it
+# untested.
+from annunaki_monitor import (  # type: ignore[import-not-found]
+    CATEGORY_NONZERO_EXIT,
+    CATEGORY_STDERR_MATCH,
+    is_self_referential_match,
+)
 
 
 def iter_records(
@@ -212,7 +219,13 @@ def is_trace(record: dict) -> bool:
 # all (defensive -- the writer always sets `category` for command-failure
 # records, but the guard should not rely on that being universally true
 # across every past/future record shape).
-HARD_FAILURE_CATEGORIES = frozenset({"nonzero-exit", "stderr-match"})
+#
+# #1508: built from the writer's own `CATEGORY_NONZERO_EXIT` /
+# `CATEGORY_STDERR_MATCH` constants (imported above), not re-declared as
+# string literals — a writer-side rename must be reflected here automatically
+# instead of drifting silently. See `HardFailureCategoriesSourceOfTruth` in
+# test_annunaki_parse.py for the equality pin.
+HARD_FAILURE_CATEGORIES = frozenset({CATEGORY_NONZERO_EXIT, CATEGORY_STDERR_MATCH})
 
 
 def is_self_referential(record: dict) -> bool:
