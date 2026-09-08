@@ -93,6 +93,9 @@ Runtime security guards land in the PR itself; followup issues are tracking, not
 ## Live-Trace Evidence > Synthetic-Test Acceptance (Mandatory)
 Prefer the gate firing on a real in-the-wild artifact over synthetic-test acceptance. → [pull-requests/evidence-standards.md](pull-requests/evidence-standards.md#live-trace-evidence--synthetic-test-acceptance-mandatory)
 
+## Distinguishable on Every Channel the Caller Consumes (Mandatory)
+A gate's result must differ on every channel its caller consumes — rendered output AND exit status; "cannot evaluate" is not a pass. → [pull-requests/evidence-standards.md](pull-requests/evidence-standards.md#distinguishable-on-every-channel-the-caller-consumes-mandatory)
+
 ## Text-Processing / NER / Graph Fixtures Must Use Production-Realistic Input (Mandatory)
 Fixtures derive from real upstream samples, never hand-authored to the parser's own schema. → [pull-requests/evidence-standards.md](pull-requests/evidence-standards.md#text-processing--ner--graph-fixtures-must-use-production-realistic-input-mandatory)
 
