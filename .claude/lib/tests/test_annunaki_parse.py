@@ -573,6 +573,48 @@ class HardFailureCategoriesSourceOfTruth(unittest.TestCase):
         )
         self.assertEqual(HARD_FAILURE_CATEGORIES, frozenset({"nonzero-exit", "stderr-match"}))
 
+    def test_derivation_tracks_writer_constant_not_a_frozen_literal(self) -> None:
+        """Nadia Khoury's #1512 merge-gate finding: `test_matches_writer_constants`
+        above passes even against a mutant that reverts ONLY the
+        `HARD_FAILURE_CATEGORIES` assignment to the hardcoded
+        `frozenset({"nonzero-exit", "stderr-match"})` literal, leaving the
+        writer imports otherwise intact -- today's literal and the writer's
+        current constant VALUES happen to coincide, so an equality check
+        against the writer's constants is true by construction whether or
+        not the reader actually derives the set from them at read time.
+
+        This test breaks that coincidence: patch the writer's
+        `CATEGORY_STDERR_MATCH` to a sentinel value no pre-existing literal
+        could contain, force-reload `annunaki_parse` fresh (so the module
+        body -- including the `HARD_FAILURE_CATEGORIES = frozenset({...})`
+        line -- re-executes against the patched writer), and assert the
+        reader's `HARD_FAILURE_CATEGORIES` reflects the sentinel.
+
+        FAILS against the revert-mutant (HARD_FAILURE_CATEGORIES hardcoded,
+        writer imports untouched): the reverted line ignores whatever
+        `CATEGORY_STDERR_MATCH` resolves to and always yields the literal
+        `"stderr-match"`, so the sentinel never appears. Also fails against
+        the true pre-fix module (this constant was never imported at all).
+        """
+        hooks_dir = Path(__file__).resolve().parents[2] / "hooks"
+        sys.path.insert(0, str(hooks_dir))
+        import annunaki_monitor  # noqa: E402
+
+        sentinel = "SENTINEL-9f3d2a-stderr-match"
+        module_path = Path(__file__).resolve().parents[1] / "annunaki_parse.py"
+        with unittest.mock.patch.object(annunaki_monitor, "CATEGORY_STDERR_MATCH", sentinel):
+            spec = importlib.util.spec_from_file_location(
+                "annunaki_parse_force_reload_1508", module_path
+            )
+            assert spec is not None and spec.loader is not None
+            module = importlib.util.module_from_spec(spec)
+            assert module.__file__ is not None
+            self.assertEqual(Path(module.__file__).resolve(), module_path.resolve())
+            spec.loader.exec_module(module)
+
+            self.assertIn(sentinel, module.HARD_FAILURE_CATEGORIES)
+            self.assertNotIn("stderr-match", module.HARD_FAILURE_CATEGORIES)
+
 
 class Cli(unittest.TestCase):
     def test_count_flag(self) -> None:
