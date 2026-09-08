@@ -11,10 +11,12 @@ Or:  python3 .claude/hooks/tests/test_ontology_tracker.py
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -315,8 +317,15 @@ class ShouldSkipSessionHandoffTests(_FakeRepoRootMixin, unittest.TestCase):
         try:
             before = checksums.read_bytes()
             result = hook.check({"tool_name": "Write", "tool_input": {"file_path": str(handoff)}})
-            self.assertIsNone(result)
             self.assertEqual(checksums.read_bytes(), before)
+            # UPDATED for #1219: the load-bearing assertion is the untouched
+            # ledger above. The return was `None` before; it now NAMES the
+            # skip, because `None` is also what the hook returns for a tool it
+            # was never registered for, and `post_dispatcher` only records a
+            # trace for a dict. Asserting `None` here pinned that collision as
+            # intended behaviour.
+            self.assertEqual(result["action"], "skipped")
+            self.assertEqual(result["reason"], "skip_pattern")
         finally:
             hook.CHECKSUMS_FILE = orig_checksums_file
 
@@ -661,8 +670,14 @@ class GitCheckIgnoreGeneralizationTests(_FakeRepoRootMixin, unittest.TestCase):
         try:
             before = checksums.read_bytes()
             result = hook.check({"tool_name": "Write", "tool_input": {"file_path": str(f)}})
-            self.assertIsNone(result)
             self.assertEqual(checksums.read_bytes(), before)
+            # UPDATED for #1219, same reason as
+            # `test_check_writes_no_entry_for_handoff`: "writes nothing" is the
+            # claim this test is named for and it still holds; "returns
+            # nothing" was a separate, weaker claim that made a gitignored
+            # edit indistinguishable from a hook that did not run.
+            self.assertEqual(result["action"], "skipped")
+            self.assertEqual(result["reason"], "gitignored")
         finally:
             hook.CHECKSUMS_FILE = orig_checksums_file
 
@@ -1391,7 +1406,22 @@ class LinkedWorktreeTests(_FakeRepoRootMixin, unittest.TestCase):
             shutil.rmtree(lonely, ignore_errors=True)
 
     def test_check_does_not_write_an_entry_for_a_worktree_file(self):
-        """End-to-end: the hook records nothing for a worktree-resident edit."""
+        """End-to-end: the hook writes NO LEDGER ENTRY for a worktree-resident edit.
+
+        UPDATED for #1219, and the reason is the wave-31 bar's clause 2a. This
+        test previously also asserted ``assertIsNone(hook.check(...))``. That
+        half was pinning the fail-open value: ``None`` is what
+        ``post_dispatcher`` reads as "this hook did not apply", so the
+        assertion specified "a worktree edit leaves no evidence anywhere" as
+        intended behaviour, which is the defect #1219 describes.
+
+        The half that is still correct — and is what this test exists for —
+        is that the LEDGER is untouched, byte for byte. Skipping the worktree
+        KEY stays (#523/#525). What changes is only the return channel, now
+        asserted positively: an explicit ``skipped_worktree`` action carrying
+        the canonical key the edit will land under. See
+        ``CheckReturnChannelTests`` for the full vocabulary.
+        """
         wt = self._fake_root / "da-wt-490"
         self._git("worktree", "add", "-q", "-b", "wt-branch2", str(wt), cwd=self._fake_root)
 
@@ -1406,12 +1436,716 @@ class LinkedWorktreeTests(_FakeRepoRootMixin, unittest.TestCase):
         hook.CHECKSUMS_FILE = checksums
         try:
             before = checksums.read_bytes()
-            self.assertIsNone(
-                hook.check({"tool_name": "Write", "tool_input": {"file_path": str(f)}})
-            )
+            result = hook.check({"tool_name": "Write", "tool_input": {"file_path": str(f)}})
             self.assertEqual(checksums.read_bytes(), before)
+            self.assertEqual(result["action"], "skipped_worktree")
+            self.assertEqual(result["reason"], "linked_worktree")
+            self.assertEqual(result["canonical_path"], "src/graph/load_edges.py")
         finally:
             hook.CHECKSUMS_FILE = orig
+
+
+##############################################################################
+# #1219 — the worktree catch-up path.
+#
+# Every test below fails against the pre-#1219 implementation. The failures
+# split into two shapes and the PR body states which is which, because they
+# are not equally strong evidence:
+#
+#   VALUE-SHAPED  — the symbol existed before and returned the wrong value.
+#                   `check()` returning None on the skip path; the dispatcher
+#                   emitting no trace record for it. These are the ones that
+#                   prove a behaviour changed.
+#   SIGNATURE-SHAPED — the symbol did not exist before (`catch-up`,
+#                   `plan_catch_up`, `_skip_reason`). A test of a new entry
+#                   point can only fail pre-fix by AttributeError/exit 2. It
+#                   proves the mechanism does what it claims, not that
+#                   something used to be wrong; the ledger/status channels
+#                   are unavoidably in this class, because no pre-existing
+#                   entry point could ever have caught a worktree edit up.
+##############################################################################
+
+
+def _sha_of(text: str) -> str:
+    """Hash via THE shared hasher, never a second implementation (#1505)."""
+    base = Path.home() / ".cache" / "noorinalabs-test-ontology-tracker"
+    base.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", dir=str(base), suffix=".probe", delete=False) as fh:
+        fh.write(text)
+        probe = Path(fh.name)
+    try:
+        digest = checksums_io.compute_sha256(probe)
+    finally:
+        probe.unlink(missing_ok=True)
+    assert digest is not None
+    return digest
+
+
+class _MergeScenarioMixin(_FakeRepoRootMixin):
+    """A real main checkout, a real linked worktree, and a real merge.
+
+    Not a simulation of git's layout — ``git init`` + ``git worktree add`` +
+    ``git merge``, following the fixture style the ``da-wt-490`` regression
+    tests established at the bottom of ``LinkedWorktreeTests``. The whole
+    point of #1219 is a property of git's worktree layout, so a fabricated
+    ``.git`` pointer would prove the predicate's shape rather than the
+    scenario.
+
+    Layout after ``setUp``:
+
+      <root>/.claude/hooks/tracked_hook.py   — content "v1", CLEAN in the
+                                               ledger (both hashes == sha(v1))
+      <root>/ontology/checksums.json         — the ledger
+      <root>/wt/                             — linked worktree on branch `wt`
+    """
+
+    TRACKED_REL = ".claude/hooks/tracked_hook.py"
+    NEW_REL = ".claude/hooks/brand_new_hook.py"
+    V1 = "# v1\nVALUE = 1\n"
+    V2 = "# v2 — edited in a worktree\nVALUE = 2\nEXTRA = 'added'\n"
+    NEW_BODY = "# created only in a worktree\nNEW = True\n"
+
+    def _git(self, *args: str, cwd: Path) -> None:
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                *args,
+            ],
+            cwd=str(cwd),
+            check=True,
+            capture_output=True,
+            env=hook._hermetic_git_env(),
+        )
+
+    def setUp(self):
+        super().setUp()
+        subprocess.run(
+            ["git", "init", "-q", str(self._fake_root)],
+            check=True,
+            capture_output=True,
+            env=hook._hermetic_git_env(),
+        )
+        tracked = self._fake_root / self.TRACKED_REL
+        tracked.parent.mkdir(parents=True, exist_ok=True)
+        tracked.write_text(self.V1, encoding="utf-8")
+
+        self.sha_v1 = _sha_of(self.V1)
+        self.sha_v2 = _sha_of(self.V2)
+        self.sha_new = _sha_of(self.NEW_BODY)
+
+        self.ledger = self._fake_root / "ontology" / "checksums.json"
+        self.ledger.parent.mkdir(parents=True, exist_ok=True)
+        self._write_ledger(
+            {
+                self.TRACKED_REL: {
+                    "last_tracked": self.sha_v1,
+                    "last_resolved": self.sha_v1,
+                    "tracked_at": "2026-07-19T17:16:51+00:00",
+                    "resolved_at": "2026-07-19T17:15:00+00:00",
+                }
+            }
+        )
+        self._git("add", "-A", cwd=self._fake_root)
+        self._git("commit", "-qm", "seed", cwd=self._fake_root)
+
+        self._orig_checksums = hook.CHECKSUMS_FILE
+        hook.CHECKSUMS_FILE = self.ledger
+
+        self.wt = self._fake_root / "wt"
+        self._git("worktree", "add", "-q", "-b", "wt", str(self.wt), cwd=self._fake_root)
+
+    def tearDown(self):
+        hook.CHECKSUMS_FILE = self._orig_checksums
+        super().tearDown()
+
+    # -- helpers ---------------------------------------------------------
+
+    def _write_ledger(self, files: dict) -> None:
+        self.ledger.write_text(
+            json.dumps({"version": 1, "files": files}, indent=2) + "\n", encoding="utf-8"
+        )
+
+    def _entries(self) -> dict:
+        return json.loads(self.ledger.read_text(encoding="utf-8"))["files"]
+
+    def _head_sha(self) -> str:
+        proc = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(self._fake_root),
+            check=True,
+            capture_output=True,
+            text=True,
+            env=hook._hermetic_git_env(),
+        )
+        return proc.stdout.strip()
+
+    def _edit_in_worktree_and_merge(self) -> str:
+        """The whole #1219 scenario. Returns the pre-merge SHA on the main branch.
+
+        1. Edit a tracked file and create a new one, both inside the worktree.
+        2. Fire the PostToolUse hook on each, exactly as the dispatcher would.
+        3. Commit in the worktree and merge into the main branch.
+        """
+        (self.wt / self.TRACKED_REL).write_text(self.V2, encoding="utf-8")
+        new_file = self.wt / self.NEW_REL
+        new_file.write_text(self.NEW_BODY, encoding="utf-8")
+
+        self.hook_results = [
+            hook.check(
+                {"tool_name": "Edit", "tool_input": {"file_path": str(self.wt / self.TRACKED_REL)}}
+            ),
+            hook.check({"tool_name": "Write", "tool_input": {"file_path": str(new_file)}}),
+        ]
+
+        self._git("add", "-A", cwd=self.wt)
+        self._git("commit", "-qm", "worktree work", cwd=self.wt)
+        pre_merge = self._head_sha()
+        self._git("merge", "--no-ff", "-q", "-m", "merge wt", "wt", cwd=self._fake_root)
+        return pre_merge
+
+    def _run_cli(self, *args: str) -> tuple[int, str, str]:
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(sys, "stdout", out), mock.patch.object(sys, "stderr", err):
+            try:
+                hook.main(list(args))
+                code = 0
+            except SystemExit as exc:
+                code = int(exc.code) if exc.code is not None else 0
+        return code, out.getvalue(), err.getvalue()
+
+    def _catch_up(self, *args: str) -> tuple[int, str, str]:
+        return self._run_cli(
+            "catch-up",
+            "--checksums",
+            str(self.ledger),
+            "--repo-root",
+            str(self._fake_root),
+            *args,
+        )
+
+
+class WorktreeCatchUpScenarioTests(_MergeScenarioMixin, unittest.TestCase):
+    """The three channels of #1219, before and after the catch-up runs.
+
+    The pre-catch-up assertions in each test are the PRE-FIX state verbatim:
+    they are what the ledger, ``status`` and the hook's return said on
+    2026-09-08 for every worktree-authored edit in this org, and they still
+    say it immediately after the merge. The post-catch-up assertions are the
+    ones that fail without this PR.
+    """
+
+    def test_channel_i_ledger_entry_is_frozen_at_the_pre_edit_hash_until_catch_up(self):
+        """(i) The ledger. Pre: last_tracked still sha(v1). Post: sha(v2)."""
+        pre_merge = self._edit_in_worktree_and_merge()
+
+        # Pre-catch-up — the state this row exists to fix. The file on the
+        # main checkout is v2; the ledger still remembers v1 and says so
+        # nowhere, because both stored hashes agree with each other.
+        entry = self._entries()[self.TRACKED_REL]
+        self.assertEqual(entry["last_tracked"], self.sha_v1)
+        self.assertEqual(entry["last_resolved"], self.sha_v1)
+        self.assertEqual((self._fake_root / self.TRACKED_REL).read_text(encoding="utf-8"), self.V2)
+
+        code, out, _ = self._catch_up("--since", pre_merge, "--apply")
+        self.assertEqual(code, hook.CATCH_UP_EXIT_OK, out)
+
+        entry = self._entries()[self.TRACKED_REL]
+        self.assertEqual(entry["last_tracked"], self.sha_v2)
+        # THE invariant: catching up records that the file changed, never
+        # that anyone read it. Touching either of these two fields would
+        # manufacture the false clean #1513 exists to prevent.
+        self.assertEqual(entry["last_resolved"], self.sha_v1)
+        self.assertEqual(entry["resolved_at"], "2026-07-19T17:15:00+00:00")
+
+    def test_channel_ii_status_says_drifted_before_and_dirty_after(self):
+        """(ii) ``status``: the WRONG remedy before, the right one after.
+
+        Drifted routes to "reconcile the overlay against the file" (exit 4).
+        Dirty routes to ``/ontology-rebuild`` (exit 1). An ordinary edit is
+        the second thing, and before this PR it was reported as the first.
+        """
+        pre_merge = self._edit_in_worktree_and_merge()
+
+        before = checksums_io.read_status(self.ledger, self._fake_root)
+        self.assertEqual([p for p, _ in before.drifted], [self.TRACKED_REL])
+        self.assertEqual(list(before.dirty), [])
+        self.assertFalse(before.clean)
+
+        self._catch_up("--since", pre_merge, "--apply")
+
+        after = checksums_io.read_status(self.ledger, self._fake_root)
+        self.assertEqual(list(after.drifted), [])
+        self.assertIn(self.TRACKED_REL, after.dirty)
+        self.assertFalse(after.clean)
+
+    def test_channel_ii_a_worktree_only_new_file_is_absent_then_present_and_dirty(self):
+        """(ii-b) The worse half of the gap: NO entry at all.
+
+        A file created only in a worktree is not drifted, not dirty, not
+        undeterminable — it is absent from ``status --json`` entirely, which
+        is byte-identical to how the reader renders a path the overlay was
+        never meant to describe. There is no channel on which those two
+        differ, which is why case (b) is worse than drift.
+        """
+        pre_merge = self._edit_in_worktree_and_merge()
+
+        self.assertNotIn(self.NEW_REL, self._entries())
+        before = checksums_io.read_status(self.ledger, self._fake_root)
+        self.assertNotIn(self.NEW_REL, before.not_current)
+
+        self._catch_up("--since", pre_merge, "--apply")
+
+        entry = self._entries()[self.NEW_REL]
+        self.assertEqual(entry["last_tracked"], self.sha_new)
+        self.assertEqual(entry["last_resolved"], "")
+        after = checksums_io.read_status(self.ledger, self._fake_root)
+        self.assertIn(self.NEW_REL, after.dirty)
+
+    def test_channel_ii_json_payload_moves_the_path_from_drifted_to_dirty(self):
+        """The ``--json`` channel specifically — a consumer that re-derives.
+
+        ``status``'s JSON is its own channel: ``/session-start`` reads the
+        exit code, but anything scripting the reader subsets these lists. Both
+        have to move or the correction is invisible to one of them.
+        """
+        pre_merge = self._edit_in_worktree_and_merge()
+        payload = self._status_json()
+        self.assertEqual([d["path"] for d in payload["drifted"]], [self.TRACKED_REL])
+        self.assertEqual(payload["dirty"], [])
+        self.assertNotIn(self.NEW_REL, json.dumps(payload))
+
+        self._catch_up("--since", pre_merge, "--apply")
+
+        payload = self._status_json()
+        self.assertEqual(payload["drifted"], [])
+        self.assertEqual(sorted(payload["dirty"]), sorted([self.NEW_REL, self.TRACKED_REL]))
+        self.assertTrue(payload["verified"])
+        self.assertFalse(payload["clean"])
+
+    def _status_json(self) -> dict:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(_test_helpers.HOOKS_DIR.parent / "lib" / "checksums_io.py"),
+                "status",
+                "--checksums",
+                str(self.ledger),
+                "--repo-root",
+                str(self._fake_root),
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            env=hook._hermetic_git_env(),
+        )
+        self.assertIn(proc.returncode, (1, 4), proc.stderr)
+        return json.loads(proc.stdout)
+
+    def test_channel_iii_hook_return_names_the_skip_instead_of_returning_none(self):
+        """(iii) The hook's own return — the VALUE-shaped pre-fix failure.
+
+        Pre-#1219 both of these calls returned ``None``, the same value the
+        hook returns for a NotebookEdit it was never registered for. A caller
+        had to infer "an edit happened that I did not record" from the absence
+        of any signal, which is not an inference anything downstream makes.
+        """
+        self._edit_in_worktree_and_merge()
+        edited, created = self.hook_results
+
+        self.assertEqual(edited["action"], "skipped_worktree")
+        self.assertEqual(edited["canonical_path"], self.TRACKED_REL)
+        self.assertEqual(created["action"], "skipped_worktree")
+        self.assertEqual(created["canonical_path"], self.NEW_REL)
+
+        # And it is distinguishable from the SUCCESS action, which is the
+        # comparison clause 2 actually asks for.
+        main_side = self._fake_root / "ontology" / "domain.yaml"
+        main_side.write_text("entities: []\n", encoding="utf-8")
+        tracked = hook.check({"tool_name": "Write", "tool_input": {"file_path": str(main_side)}})
+        self.assertEqual(tracked["action"], "tracked")
+
+    def test_channel_iii_render_fires_only_when_the_ledger_actually_diverges(self):
+        """The rendered half of channel (iii), and its deliberate bound.
+
+        An edit to a TRACKED file whose bytes no longer match ``last_tracked``
+        is a real, silent loss — it gets a ``systemMessage``. A brand-new file
+        has no entry to diverge from, so it stays quiet on the render channel
+        and is carried on the return value alone; ``catch-up --since`` is what
+        picks it up, once the merge makes a canonical file exist to hash.
+        """
+        self._edit_in_worktree_and_merge()
+        edited, created = self.hook_results
+
+        self.assertTrue(edited.get("diverged_from_ledger"))
+        self.assertIn("will NOT reach ontology/checksums.json", edited["systemMessage"])
+        self.assertIn(self.TRACKED_REL, edited["systemMessage"])
+        self.assertIn("catch-up", edited["systemMessage"])
+
+        self.assertNotIn("systemMessage", created)
+        self.assertNotIn("diverged_from_ledger", created)
+
+    def test_worktree_edit_still_writes_no_worktree_keyed_entry(self):
+        """The deliberate skip semantics that STAY (#523/#525).
+
+        The whole failure mode the skip was added for is a ``wt/…`` key
+        outliving the tree it named. Nothing in this PR may re-admit one, and
+        the ledger must be byte-identical across the worktree edits.
+        """
+        before = self.ledger.read_bytes()
+        self._edit_in_worktree_and_merge()
+        self.assertEqual(self.ledger.read_bytes(), before)
+        self.assertEqual(set(self._entries()), {self.TRACKED_REL})
+
+    def test_catch_up_never_creates_a_worktree_keyed_entry_either(self):
+        """--all sweeps the ledger; the worktree copy must not become a key."""
+        pre_merge = self._edit_in_worktree_and_merge()
+        self._catch_up("--since", pre_merge, "--apply")
+        for key in self._entries():
+            self.assertFalse(key.startswith("wt/"), key)
+            self.assertFalse(hook._is_worktree_path(key), key)
+
+
+class CatchUpCliTests(_MergeScenarioMixin, unittest.TestCase):
+    """The CLI's own contract: scope, dry-run, exit codes, refusals."""
+
+    def test_dry_run_is_the_default_and_writes_nothing(self):
+        pre_merge = self._edit_in_worktree_and_merge()
+        before = self.ledger.read_bytes()
+
+        code, out, _ = self._catch_up("--since", pre_merge)
+
+        self.assertEqual(self.ledger.read_bytes(), before)
+        self.assertEqual(code, hook.CATCH_UP_EXIT_PENDING)
+        self.assertIn("DRY RUN", out)
+        self.assertIn("VERDICT: PENDING", out)
+
+    def test_pending_dry_run_exit_is_distinguishable_from_a_clean_one(self):
+        """Exit 1 vs exit 0 — the channel a gate would branch on."""
+        pre_merge = self._edit_in_worktree_and_merge()
+        self.assertEqual(self._catch_up("--since", pre_merge)[0], hook.CATCH_UP_EXIT_PENDING)
+        self._catch_up("--since", pre_merge, "--apply")
+        code, out, _ = self._catch_up("--since", pre_merge)
+        self.assertEqual(code, hook.CATCH_UP_EXIT_OK, out)
+        self.assertIn("VERDICT: NOTHING TO CATCH UP", out)
+        self.assertIn("measured zero", out)
+
+    def test_an_empty_scope_is_not_reported_as_a_clean_one(self):
+        """The silent-zero guard: 0 hashed != 0 behind.
+
+        Naming only paths the include policy filters out hashes nothing. The
+        pre-#1219 shape of this bug is exactly a count of zero that reads as
+        health, so the verdict has to say which zero it is.
+        """
+        code, out, _ = self._catch_up("--paths", "ontology/checksums.json")
+        self.assertEqual(code, hook.CATCH_UP_EXIT_OK)
+        self.assertIn("VERDICT: NOTHING MEASURED", out)
+        self.assertIn("EMPTY SCOPE, not a clean one", out)
+        self.assertNotIn("NOTHING TO CATCH UP", out)
+
+    def test_missing_scope_selector_is_a_usage_error_not_a_wholesale_run(self):
+        code, _, err = self._catch_up()
+        self.assertEqual(code, hook.CATCH_UP_EXIT_USAGE)
+        self.assertIn("#1513", err)
+
+    def test_unresolvable_since_ref_exits_3_rather_than_reporting_an_empty_scope(self):
+        """ "Could not evaluate" is not a pass (bar clause 2a).
+
+        A bad ref makes ``git diff`` fail. Treating its empty stdout as an
+        empty scope would print "nothing to catch up" and exit 0 — the exact
+        fail-open the amended clause was written for.
+        """
+        code, out, err = self._catch_up("--since", "no-such-ref-deadbeef")
+        self.assertEqual(code, hook.CATCH_UP_EXIT_UNREADABLE)
+        self.assertIn("could not evaluate", err)
+        self.assertNotIn("NOTHING", out)
+
+    def test_unreadable_ledger_exits_3(self):
+        self.ledger.write_text("{ not json", encoding="utf-8")
+        code, _, err = self._catch_up("--paths", self.TRACKED_REL)
+        self.assertEqual(code, hook.CATCH_UP_EXIT_UNREADABLE)
+        self.assertIn("error:", err)
+
+    def test_a_tracked_path_absent_from_this_tree_is_unmeasurable_not_caught_up(self):
+        """Exit 4, and the entry is left exactly as it was — never pruned."""
+        entries = self._entries()
+        entries["noorinalabs-deploy/terraform/main.tf"] = {
+            "last_tracked": "a" * 64,
+            "last_resolved": "a" * 64,
+            "tracked_at": "2026-01-01T00:00:00+00:00",
+            "resolved_at": "2026-01-01T00:00:00+00:00",
+        }
+        self._write_ledger(entries)
+
+        code, out, _ = self._catch_up("--all", "--apply")
+
+        self.assertEqual(code, hook.CATCH_UP_EXIT_UNMEASURABLE)
+        self.assertIn("unmeasurable", out)
+        self.assertIn("noorinalabs-deploy/terraform/main.tf", self._entries())
+        self.assertEqual(
+            self._entries()["noorinalabs-deploy/terraform/main.tf"]["last_tracked"], "a" * 64
+        )
+
+    def test_unmeasurable_outranks_pending_on_the_exit_code(self):
+        """4 over 1, for the same reason ``status``'s 4 outranks its 1: a
+        partly-measured scope must not report as a measured one."""
+        pre_merge = self._edit_in_worktree_and_merge()
+        entries = self._entries()
+        entries["gone/file.py"] = {
+            "last_tracked": "b" * 64,
+            "last_resolved": "b" * 64,
+            "tracked_at": "",
+            "resolved_at": "",
+        }
+        self._write_ledger(entries)
+        code, _, _ = self._catch_up("--since", pre_merge, "--paths", "gone/file.py")
+        self.assertEqual(code, hook.CATCH_UP_EXIT_UNMEASURABLE)
+
+    def test_self_entry_for_checksums_json_is_skipped_not_advanced(self):
+        """The fixpoint hazard: advancing the ledger's own entry chases a
+        hash that the write itself changes. ``SKIP_PATTERNS`` already says
+        this file is not the overlay's business; catch-up honours the same
+        predicate rather than a second copy of the policy."""
+        entries = self._entries()
+        entries["ontology/checksums.json"] = {
+            "last_tracked": "c" * 64,
+            "last_resolved": "c" * 64,
+            "tracked_at": "",
+            "resolved_at": "",
+        }
+        self._write_ledger(entries)
+
+        _, out, _ = self._catch_up("--all")
+
+        self.assertIn("ontology/checksums.json: skip_pattern", out)
+        self.assertEqual(self._entries()["ontology/checksums.json"]["last_tracked"], "c" * 64)
+
+    def test_all_says_out_loud_that_the_wholesale_pass_belongs_to_1513(self):
+        _, out, _ = self._catch_up("--all")
+        self.assertIn("#1513", out)
+
+    def test_running_against_a_linked_worktree_root_is_refused(self):
+        """From a worktree every path is filtered by the very skip catch-up
+        compensates for, so the run could only report an empty scope."""
+        code, out, err = self._run_cli(
+            "catch-up", "--checksums", str(self.ledger), "--repo-root", str(self.wt), "--all"
+        )
+        self.assertEqual(code, hook.CATCH_UP_EXIT_UNREADABLE)
+        self.assertIn("linked worktree", err)
+        self.assertEqual(out, "")
+
+    def test_json_channel_carries_the_same_verdict_as_the_render(self):
+        pre_merge = self._edit_in_worktree_and_merge()
+        code, out, _ = self._catch_up("--since", pre_merge, "--json")
+        payload = json.loads(out)
+        self.assertEqual(code, hook.CATCH_UP_EXIT_PENDING)
+        self.assertFalse(payload["applied"])
+        self.assertEqual(payload["written"], 0)
+        self.assertEqual([a["path"] for a in payload["advanced"]], [self.TRACKED_REL])
+        self.assertEqual([c["path"] for c in payload["created"]], [self.NEW_REL])
+
+    def test_unknown_subcommand_is_a_usage_error(self):
+        code, _, err = self._run_cli("mark-resolved", "x")
+        self.assertEqual(code, hook.CATCH_UP_EXIT_USAGE)
+        self.assertIn("usage:", err)
+
+    def test_apply_catch_up_never_writes_the_resolved_fields(self):
+        """Unit-level guard on the invariant the whole design rests on."""
+        data = {"version": 1, "files": dict(self._entries())}
+        plan = hook.plan_catch_up(data, self._fake_root, [self.TRACKED_REL])
+        (self._fake_root / self.TRACKED_REL).write_text(self.V2, encoding="utf-8")
+        plan = hook.plan_catch_up(data, self._fake_root, [self.TRACKED_REL])
+        self.assertEqual([p for p, _ in plan.advanced], [self.TRACKED_REL])
+
+        hook.apply_catch_up(data, plan, "2026-09-08T00:00:00+00:00")
+        entry = data["files"][self.TRACKED_REL]
+        self.assertEqual(entry["last_tracked"], self.sha_v2)
+        self.assertEqual(entry["last_resolved"], self.sha_v1)
+        self.assertEqual(entry["resolved_at"], "2026-07-19T17:15:00+00:00")
+        self.assertEqual(entry["tracked_at"], "2026-09-08T00:00:00+00:00")
+
+
+class CheckReturnChannelTests(_FakeRepoRootMixin, unittest.TestCase):
+    """The full ``check()`` action vocabulary — every non-applicable return.
+
+    Pre-#1219 every row below except ``tracked``/``skip_noop`` returned a bare
+    ``None``. ``post_dispatcher`` writes a ``posttooluse_dispatch`` trace
+    record iff ``isinstance(result, dict)``, so ``None`` meant no evidence
+    survived the call at all.
+
+    ``CHECKSUMS_FILE`` is redirected to a temp ledger for the whole class, not
+    just the tests that expect a write. ``_is_git_ignored`` fails OPEN, so any
+    fixture whose ``git check-ignore`` does not resolve takes the TRACKED
+    branch instead of the skip branch under test — and with the real
+    ``CHECKSUMS_FILE`` still in place that writes a fixture path into the
+    repository's committed ledger. That is not hypothetical: it happened while
+    writing these tests and put ``generated/out.md`` into
+    ``ontology/checksums.json``.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self._ledger = self._fake_root / "ontology" / "checksums.json"
+        self._ledger.parent.mkdir(parents=True, exist_ok=True)
+        self._ledger.write_text('{"version": 1, "files": {}}\n', encoding="utf-8")
+        self._orig_checksums = hook.CHECKSUMS_FILE
+        hook.CHECKSUMS_FILE = self._ledger
+
+    def tearDown(self):
+        hook.CHECKSUMS_FILE = self._orig_checksums
+        super().tearDown()
+
+    def test_non_edit_tool_is_still_none(self):
+        """The one honest ``None``: this hook is registered for Edit/Write
+        only, so a Bash payload genuinely did not apply to it."""
+        self.assertIsNone(hook.check({"tool_name": "Bash", "tool_input": {"command": "ls"}}))
+
+    def test_missing_file_path_is_still_none(self):
+        self.assertIsNone(hook.check({"tool_name": "Edit", "tool_input": {}}))
+
+    def test_gitignored_skip_names_its_reason(self):
+        """A real ``git init`` — ``_is_git_ignored`` shells out to git and
+        fails OPEN, so a fabricated ``.git`` directory would silently take the
+        tracked branch and make this assertion about nothing."""
+        subprocess.run(
+            ["git", "init", "-q", str(self._fake_root)],
+            check=True,
+            capture_output=True,
+            env=hook._hermetic_git_env(),
+        )
+        (self._fake_root / ".gitignore").write_text("generated/\n", encoding="utf-8")
+        f = self._fake_root / "generated" / "out.md"
+        f.parent.mkdir(parents=True)
+        f.write_text("x\n", encoding="utf-8")
+
+        result = hook.check({"tool_name": "Write", "tool_input": {"file_path": str(f)}})
+        self.assertEqual(result["action"], "skipped")
+        self.assertEqual(result["reason"], "gitignored")
+
+    def test_tmp_skip_names_its_reason(self):
+        result = hook.check(
+            {"tool_name": "Write", "tool_input": {"file_path": "/tmp/issue-body-1219.md"}}
+        )
+        self.assertEqual(result["action"], "skipped")
+        self.assertEqual(result["reason"], "tmp_prefix")
+
+    def test_unhashable_in_scope_file_reports_unreadable_not_nothing(self):
+        """ "Could not evaluate" is not "nothing to do" (bar clause 2a).
+
+        Pre-#1219 a tracked file the hasher could not read returned ``None``,
+        which is what the hook also returns for a tool it does not handle.
+        """
+        f = self._fake_root / "ontology" / "domain.yaml"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("entities: []\n", encoding="utf-8")
+        with mock.patch.object(hook.checksums_io, "compute_sha256", return_value=None):
+            result = hook.check({"tool_name": "Write", "tool_input": {"file_path": str(f)}})
+        self.assertEqual(result["action"], "unreadable")
+        self.assertEqual(result["path"], "ontology/domain.yaml")
+
+    def test_every_action_string_is_distinct(self):
+        """A vocabulary whose members collide distinguishes nothing."""
+        actions = [
+            hook.ACTION_TRACKED,
+            hook.ACTION_SKIP_NOOP,
+            hook.ACTION_SKIPPED,
+            hook.ACTION_SKIPPED_WORKTREE,
+            hook.ACTION_UNREADABLE,
+        ]
+        self.assertEqual(len(set(actions)), len(actions))
+
+
+class DispatcherTraceChannelTests(_MergeScenarioMixin, unittest.TestCase):
+    """(iv) The consumer's channel: ``post_dispatcher``'s trace branch.
+
+    ``post_dispatcher.main`` computes
+    ``should_trace = _TRACE_EVERY or raised or isinstance(result, dict)`` and
+    only then writes a ``posttooluse_dispatch`` annunaki record. That is a
+    genuine control-flow branch in a caller, not a rendering detail, so a
+    worktree edit returning ``None`` left no record anywhere — the forensic
+    channel `/annunaki` reads was as blind as the ledger.
+    """
+
+    def test_a_worktree_skip_now_produces_a_dispatch_trace_record(self):
+        import post_dispatcher as pd
+
+        f = self.wt / self.TRACKED_REL
+        f.write_text(self.V2, encoding="utf-8")
+        payload = {"tool_name": "Edit", "tool_input": {"file_path": str(f)}}
+
+        recorded: list[dict] = []
+
+        def _capture(module_name, command, outcome, tool_name="Bash"):
+            recorded.append({"module": module_name, "outcome": outcome, "tool_name": tool_name})
+
+        stdin, stdout = io.StringIO(json.dumps(payload)), io.StringIO()
+        with (
+            mock.patch.object(pd, "log_posttooluse_dispatch", _capture),
+            mock.patch("suggest_generic_prompt.check", return_value=None),
+            mock.patch("validate_edit_completion.check", return_value=None),
+            mock.patch.object(sys, "stdin", stdin),
+            mock.patch.object(sys, "stdout", stdout),
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                pd.main()
+
+        self.assertEqual(int(ctx.exception.code or 0), 0)
+        tracker_records = [r for r in recorded if r["module"] == "ontology_tracker"]
+        self.assertEqual(len(tracker_records), 1)
+        self.assertIn("skipped_worktree", tracker_records[0]["outcome"]["returned"])
+        # Pre-#1219 this was the literal string "None" — the same value the
+        # dispatcher records for a hook that did not apply, when it records
+        # anything at all.
+        self.assertNotEqual(tracker_records[0]["outcome"]["returned"], "None")
+
+    def test_the_render_channel_surfaces_the_divergence_advisory(self):
+        """The dispatcher aggregates ``systemMessage`` into its stdout — the
+        channel a human actually sees. A dict with no message reaches the
+        trace channel only; a divergence reaches both."""
+        import post_dispatcher as pd
+
+        f = self.wt / self.TRACKED_REL
+        f.write_text(self.V2, encoding="utf-8")
+        payload = {"tool_name": "Edit", "tool_input": {"file_path": str(f)}}
+
+        stdin, stdout = io.StringIO(json.dumps(payload)), io.StringIO()
+        with (
+            mock.patch.object(pd, "log_posttooluse_dispatch", lambda *a, **k: None),
+            mock.patch("suggest_generic_prompt.check", return_value=None),
+            mock.patch("validate_edit_completion.check", return_value=None),
+            mock.patch.object(sys, "stdin", stdin),
+            mock.patch.object(sys, "stdout", stdout),
+        ):
+            with self.assertRaises(SystemExit):
+                pd.main()
+
+        emitted = json.loads(stdout.getvalue())
+        self.assertIn("will NOT reach ontology/checksums.json", emitted["systemMessage"])
+
+
+class LedgerFieldNameCouplingTests(unittest.TestCase):
+    """The writer and the classifier must name the same field.
+
+    #1142's failure was a reader comparing a ``sha256`` key that has never
+    existed in this schema and getting a plausible zero. ``catch-up`` writes
+    ``last_tracked``; ``classify_entry`` reads it. This module does not import
+    that private constant, so the coupling is pinned here instead of assumed.
+    """
+
+    def test_tracker_and_checksums_io_agree_on_last_tracked(self):
+        self.assertEqual(hook._LAST_TRACKED, checksums_io._TRACKED_KEY)
+
+    def test_apply_catch_up_writes_the_field_classify_entry_reads(self):
+        data = {"version": 1, "files": {}}
+        plan = hook.CatchUpPlan(
+            advanced=(), created=(("a/b.py", "d" * 64),), in_sync=(), unmeasurable=(), skipped=()
+        )
+        hook.apply_catch_up(data, plan, "2026-09-08T00:00:00+00:00")
+        state, _ = checksums_io.classify_entry(data["files"]["a/b.py"])
+        self.assertEqual(state, checksums_io.ENTRY_DIRTY)
 
 
 if __name__ == "__main__":

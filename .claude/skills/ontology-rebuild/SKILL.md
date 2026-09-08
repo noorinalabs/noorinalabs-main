@@ -67,7 +67,7 @@ If `status` exits 0, report "Ontology is up to date — no dirty files" and stop
 
 Handle exit 4 as follows, and **never with `mark-resolved`** — see step 4's warning:
 
-- **drifted** — the work is to reconcile the overlay against what actually changed in each listed file, which is step 2's normal read-and-extract pass, just entered from the drifted list instead of the dirty one. It is a content judgement per file; do not bulk-process it to make the number go down. The standing backlog (158 entries as of #1505) is tracked by **#1513**, not by this skill's per-run scope.
+- **drifted** — the work is to reconcile the overlay against what actually changed in each listed file, which is step 2's normal read-and-extract pass, just entered from the drifted list instead of the dirty one. It is a content judgement per file; do not bulk-process it to make the number go down. The standing backlog (158 entries as of #1505) is tracked by **#1513**, not by this skill's per-run scope. Step 4 has the two-command per-file finish (`catch-up --paths … --apply`, then `mark-resolved`) that replaces the synthetic re-Edit this used to require (#1219).
 - **undeterminable** — the file is not there to read. If the paths are child-repo clones, you are running from a worktree: re-run from the main checkout (see the `REPO_ROOT` note under "Orphan entries" below). If a path is genuinely deleted, it is a `prune` candidate, subject to the same verify-before-`--apply` discipline.
 
 **Malformed entries** are entries whose shape the reader does not recognize (a missing `last_tracked`, a `null` hash). They are counted separately and they block "clean" on purpose: an entry that cannot be classified is unknown state, not resolved state. Fix the entry — usually by deleting it so the tracker re-creates it on the next Edit/Write of that file — rather than `mark-resolved`ing it, which cannot work (there is no `last_tracked` to copy).
@@ -117,7 +117,17 @@ Pass every dirty path resolved in this run as a separate argument (a path not pr
 
 **`mark-resolved` copies `last_tracked` into `last_resolved` — it does NOT re-read the file (#1505).** So resolving an entry whose file changed after it was last tracked produces an entry that is self-consistent and still disagrees with the file: a **drifted** entry, i.e. a false clean one layer along. Two consequences:
 
-- Never `mark-resolved` a path that `status` reported as **drifted**. Reconcile the overlay against the file first; the entry only becomes genuinely clean once the tracker re-hashes it (any Edit/Write of that file) and that fresh hash is resolved.
+- Never `mark-resolved` a path that `status` reported as **drifted**. Reconcile the overlay against the file first; the entry only becomes genuinely clean once the tracker re-hashes it and that fresh hash is resolved. Pre-#1219 the only way to make it re-hash was to Edit/Write the file on the main checkout — a synthetic edit whose only purpose was to trigger a hook. The honest way is now one command, run **after** you have read the file in step 2 and made whatever overlay change it warranted:
+
+  ```bash
+  # advance last_tracked to the file's current hash — leaves last_resolved
+  # alone, so the entry becomes DIRTY, which is what "I read it, the overlay
+  # is updated, now resolve it" needs as its starting state
+  python3 .claude/hooks/ontology_tracker.py catch-up --paths <the-file-you-just-read> --apply
+  python3 .claude/lib/checksums_io.py mark-resolved <the-file-you-just-read>
+  ```
+
+  **Per file, after reading it — never as a bulk pass.** `catch-up --all` exists, but running it across the standing drifted backlog is #1513's decision, not this skill's: it would move every one of those entries from drifted to dirty in a single unreviewed step. Dry run (no `--apply`) is the default and exits 1 when there is pending work, 4 when something in scope could not be hashed.
 - After this step, re-run `status`. It exits 4, not 0, if this pass created or left any drift — which is the check that the rebuild actually landed rather than merely quieted the counter.
 
 **Orphan entries (paths that no longer exist).** A dirty path whose file is gone cannot be resolved by reading it — there is nothing to read. These come from an edit inside an ephemeral tree the tracker's skip filters missed (the `da-wt-490/*` case: a worktree parked outside `.worktrees/`, so the name-based filter did not catch it — since fixed structurally by `ontology_tracker._is_linked_worktree`) or from genuinely deleted source. Do NOT `mark-resolved` an orphan — that quiets the symptom and leaves the entry to report dirty again. Prune it:
