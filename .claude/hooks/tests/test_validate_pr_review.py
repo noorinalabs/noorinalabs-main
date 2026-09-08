@@ -3164,6 +3164,156 @@ class ResolveReviewVerdictsSharedBoundaryTests(unittest.TestCase):
         self.assertIn("HTTP 403: Forbidden", result["reason"])
 
 
+class GateOrderPinningTests(unittest.TestCase):
+    """#1336: `_GATES` ordering is behaviour for the last 3 adjacent pairs.
+
+    `check()` is a first-blocker-wins loop over the `_GATES` tuple (#1123).
+    Each test here constructs a `ReviewVerdicts` fixture where BOTH of one
+    adjacent pair's conditions are simultaneously true, then asserts which
+    gate's outcome the caller actually observes — on the channel that gate's
+    caller consumes (the block `reason` text, or the `ensure_issues_on_board`
+    call count), never on an inference from a side effect merely not
+    happening in isolation. Swapping the corresponding pair inside a scratch
+    copy of `_GATES` (see the PR body's mutation table) turns exactly the
+    matching test here red; the harness used is committed in the PR body,
+    not in this file, per the repro-scripts convention #1336 itself set.
+    """
+
+    REPO = "noorinalabs/noorinalabs-main"
+    _INPUT = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "gh pr merge 1040 --repo noorinalabs/noorinalabs-main"},
+    }
+
+    @staticmethod
+    def _pr_data() -> dict:
+        return {
+            "author": "someone",
+            "number": 1040,
+            "reviews": [],
+            "headRefName": "L.Ferreira/1040-x",
+            "labels": [],
+        }
+
+    def _verdicts(self, **overrides) -> "hook.ReviewVerdicts":
+        base = hook.ReviewVerdicts(
+            number=1040,
+            head_ref="L.Ferreira/1040-x",
+            labels=[],
+            branch_author_lastname="Ferreira",
+            content_sha="ac8bcfa",
+            content_ts=None,
+            formal_reviewers=set(),
+            comment_reviewers=set(),
+            non_roster_requestors=set(),
+            roster_comment_reviewers=set(),
+            roster_names=set(),
+            distinct_reviewers=set(),
+            stale_verdicts_comment=[],
+            stale_verdicts_formal=[],
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=[],
+            tech_debt_unparseable=[],
+            wave_bootstrap_exception=False,
+        )
+        # `dataclasses.replace` rather than a `**dict` unpack into the
+        # constructor — mypy cannot type-check `**dict[str, object]` against
+        # `ReviewVerdicts`'s per-field types (each override site here passes
+        # a different concrete type), and `replace`'s stub is `**changes:
+        # Any` by design.
+        return dataclasses.replace(base, **overrides)
+
+    def test_reviewer_threshold_wins_over_tech_debt_attestation(self):
+        """Gate 8 (`_gate_reviewer_threshold`) vs Gate 9 (`_gate_tech_debt_attestation`).
+
+        BOTH conditions true: only 1 distinct reviewer (< 2, no wave-bootstrap
+        exception) AND that same reviewer's verdict is missing `TechDebt:`.
+        The operator must see the THRESHOLD diagnostic — one approval short —
+        not the attestation diagnostic, which would send them to file
+        tech-debt issues that do not fix their actual problem (#1336's #950
+        citation). Pinned on the block `reason` text, not merely on
+        `decision == "block"`, which both gates would produce identically.
+        """
+        fake_verdicts = self._verdicts(
+            distinct_reviewers={"lucas ferreira"},
+            reviews_missing_tech_debt=["Lucas Ferreira"],
+        )
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "resolve_review_verdicts", return_value=fake_verdicts),
+        ):
+            result = hook.check(dict(self._INPUT))
+
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        assert_peer_review_count(self, result["reason"], pr_display="#1040", count=1)
+        self.assertNotIn("missing the mandatory TechDebt", result["reason"])
+
+    def test_tech_debt_attestation_wins_over_board_sync_side_effect(self):
+        """Gate 9 (`_gate_tech_debt_attestation`) vs Gate 10 (`_gate_board_sync`).
+
+        BOTH conditions true: 2 distinct reviewers (threshold passes) with a
+        missing `TechDebt:` line (attestation blocks) AND a non-empty
+        `tech_debt_issue_numbers` (board-sync would act on it if reached).
+        `_gate_board_sync`'s own docstring states the side effect is
+        "ordered AFTER every block above on purpose" — a PR about to be
+        BLOCKED must not have its referenced issues added to the board as
+        though the review had been accepted. Pinned as a call-count fact on
+        `ensure_issues_on_board`, not an inference from the block firing.
+        """
+        fake_verdicts = self._verdicts(
+            distinct_reviewers={"lucas ferreira", "aino virtanen"},
+            reviews_missing_tech_debt=["Lucas Ferreira"],
+            tech_debt_issue_numbers=["123"],
+        )
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "resolve_review_verdicts", return_value=fake_verdicts),
+            mock.patch.object(hook, "ensure_issues_on_board") as board_mock,
+        ):
+            result = hook.check(dict(self._INPUT))
+
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("missing the mandatory TechDebt", result["reason"])
+        board_mock.assert_not_called()
+
+    def test_board_sync_side_effect_wins_over_allow_advisories(self):
+        """Gate 10 (`_gate_board_sync`) vs Gate 11 (`_gate_allow_advisories`).
+
+        BOTH conditions true: no blocker remains (threshold and attestation
+        both pass) AND a non-empty `tech_debt_issue_numbers` (board-sync acts)
+        AND an unparseable-TechDebt advisory condition is also true
+        (advisories would return first and short-circuit `check()` if it ran
+        before board-sync). The current order runs the side effect BEFORE the
+        terminal allow-with-advisory `_Stop`, so the referenced issue reaches
+        the board on every PR that had an advisory to report — #1336's third
+        named gap ("silently never reach the board"). Pinned as a call-count
+        fact on `ensure_issues_on_board` (IS called), plus the advisory
+        content still present in the result.
+        """
+        fake_verdicts = self._verdicts(
+            distinct_reviewers={"lucas ferreira", "aino virtanen"},
+            reviews_missing_tech_debt=[],
+            tech_debt_issue_numbers=["123"],
+            tech_debt_unparseable=[("Lucas Ferreira", "filed later")],
+        )
+        with (
+            mock.patch.object(hook, "get_pr_data", return_value=self._pr_data()),
+            mock.patch.object(hook, "resolve_review_verdicts", return_value=fake_verdicts),
+            mock.patch.object(hook, "ensure_issues_on_board") as board_mock,
+        ):
+            result = hook.check(dict(self._INPUT))
+
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["decision"], "allow")
+        self.assertIn("filed later", result["systemMessage"])
+        board_mock.assert_called_once_with("noorinalabs-main", ["123"])
+
+
 class StaleVerdictBindingTests(unittest.TestCase):
     """A verdict cast before the latest non-merge commit does not count (#950)."""
 
@@ -4800,6 +4950,27 @@ class CommitAuthorIdentityDerivationTests(unittest.TestCase):
         )
         self.assertEqual(self._names(identities), {("ferreira", "l"), ("virtanen", "a")})
 
+    def test_same_surname_different_initial_authors_are_both_retained(self):
+        """#1217 M14: the dedupe key must include the initial, not just the surname.
+
+        Mutating `commit_author_identities`'s dedupe key from
+        `(identity.lastname.lower(), identity.initial)` to `identity.lastname.lower()`
+        alone keeps the whole suite green (`test_every_non_merge_author_is_returned_
+        not_just_the_latest` above uses two DIFFERENT surnames, Ferreira/Virtanen, so
+        it cannot see this). Under that mutation, a branch authored by BOTH Lucas and
+        Santiago Ferreira collapses to whichever commit appeared first, so the second
+        one's `Approved` comment is no longer excluded as a self-review — recreating
+        the main#1172 collision inside the dedupe rather than in the comparison it
+        exists to prevent. Both authors must survive with their initials intact.
+        """
+        identities = hook.commit_author_identities(
+            [
+                _api_commit("c1", "2026-07-20T00:00:00Z", author_name="Lucas Ferreira"),
+                _api_commit("c2", "2026-07-20T01:00:00Z", author_name="Santiago Ferreira"),
+            ]
+        )
+        self.assertEqual(self._names(identities), {("ferreira", "l"), ("ferreira", "s")})
+
     def test_name_and_matching_alias_dedupe_to_one_person(self):
         identities = hook.commit_author_identities(
             [
@@ -4893,6 +5064,23 @@ class IsSelfReviewTests(unittest.TestCase):
 
     def test_no_author_from_either_source_excludes_nobody(self):
         self.assertFalse(hook.is_self_review("Lucas Ferreira", "", "", ()))
+
+    def test_unknown_initial_commit_author_still_over_excludes(self):
+        """#1217 M10: a mononym commit author must still be treated as the branch author.
+
+        `CommitAuthorIdentity`'s docstring states `initial` is `""` when none is
+        derivable (a single-token author name), which `is_branch_author` reads as
+        "unknown" and falls back to lastname-only — the OVER-excluding, fail-closed
+        direction (#1210: "Over-exclusion is the safe direction here"). Mutating
+        `is_self_review` to require `identity.initial != ""` before delegating to
+        `is_branch_author` flips that direction: a commit authored with a mononym
+        (`git -c user.name="Virtanen"`) would stop being excluded, so a self-approval
+        from that branch would be counted as a genuine review. The mutation keeps the
+        whole suite green because `IsSelfReviewTests` never constructs an
+        unknown-initial commit author.
+        """
+        mononym = hook.CommitAuthorIdentity(lastname="Virtanen", initial="", display="Virtanen")
+        self.assertTrue(hook.is_self_review("Aino Virtanen", "", "", (mononym,)))
 
 
 class RefineCommentScanScopeTests(unittest.TestCase):
