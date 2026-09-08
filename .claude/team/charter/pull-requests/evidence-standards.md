@@ -82,6 +82,51 @@ When reviewing a new gate, ask "what wild artifact did this fire on?" If the onl
 
 `noorinalabs-main#194` Hook 14 (`validate_pr_ci_status.py`) fan-out, 2026-04-28. Marisol's PR landed the strongest acceptance signal across the entire fan-out series by **live-tracing `classify_check` against an actual in-flight failed security-audit CI run** at the time — not against a fabricated failure. The live-trace caught a behavior pattern that synthetic tests would have missed because the author didn't think to test for it. Aino flagged this as the strongest acceptance proof in the entire fan-out — distinct enough that it materially changed Hook 14's confidence floor.
 
+## Distinguishable on Every Channel the Caller Consumes (Mandatory) <!-- promotion-target: skill -->
+
+A gate does not have *a* result — it has one result **per channel**. The line a human reads and the exit status / return value / raised-or-not control flow a caller branches on are separate channels, and correcting one does not correct the other. When a fix's whole purpose is to make two outcomes distinguishable — "clean" versus "did not run", "passed" versus "was never evaluated" — they MUST become distinguishable on **every channel that instrument's caller actually consumes**, and a test MUST pin the difference on each of them.
+
+### The rule
+
+- **Enumerate the channels before writing the fix.** A skill's shell block: rendered output AND `exit`. A `PreToolUse` hook: the `systemMessage` AND the exit code the dispatcher branches on (`0` allow, `2` block, anything else a non-blocking error). A library function: the returned value AND whether it raises. A CI job: the log AND the job conclusion. Name them in the PR body.
+- **One pinning test per consumed channel.** A test asserting only on rendered text leaves the gating channel unpinned; a test asserting only on `returncode` leaves the operator-facing channel unpinned. Each alone is half a fix.
+- **Corollary — "cannot evaluate" is not a pass.** An instrument that fails to *determine* its condition MUST NOT return success on the channel that gates the work. It stops, or it returns a value the caller genuinely branches on. Rendering an honest warning and then falling through at exit `0` fails this rule exactly as loudly as rendering nothing: the caller reads `$?`, and `$?` said everything was fine.
+- **Never pin the fail-open value.** A test asserting `returncode == 0` on a could-not-evaluate path does not merely miss the defect, it *specifies* it — whoever later tries to tighten the guard must first rewrite a test whose own docstring calls exit `0` correct.
+
+### Why
+
+Rendering is the channel a reviewer looks at; the exit status is the channel the system obeys. The two diverge precisely when the instrument is degraded, which is the only moment it matters. So an acceptance criterion stated over rendering alone is satisfiable by a fail-open gate: one that reports its own failure clearly, in a well-formatted line, and then permits the step anyway. Honesty on the human channel buys nothing from a caller branching on `$?`.
+
+This is the same shape as the import-time failure documented at `hooks/catalog-13-17.md` § Hook 17 — a blocking gate whose unusable dependency raised straight out of the module body at exit `1`, which `PreToolUse` treats as a non-blocking error rather than a block, so the gate stopped gating at exactly the moment it broke and was, from the outside, indistinguishable from a gate that ran and approved. Same defect one layer down: the channel the caller reads carried "fine" while nothing had been measured.
+
+### How to apply
+
+- **Implementer:** in the PR body, list the instrument's channels, name the consumer of each (the caller, by file and line — not "the system"), and point at the test pinning the difference on each. If a channel has no consumer today, say so explicitly and say what happens when one appears. An unconsumed channel is a defensible omission; an unexamined one is not.
+- **When the honest answer is "the instrument cannot tell":** choose a failing outcome on the gating channel by default. Failing open is a decision that needs a stated reason, not a fall-through that happens because no branch was written.
+- **This is a floor under every per-wave acceptance bar.** A wave bar (`cross-repo-status.json` → `wave_{N}_scope.acceptance_bar`) may add to this rule and may not weaken it; it need not restate it to inherit it.
+
+### Reviewer enforcement
+
+Ask two questions of any gate, guard, precondition, or check under review: **"who calls this, and what do they read?"** and **"what does it do when it cannot tell?"** If the new assertions are all on rendered text while the caller branches on a return value or an exit code, that is **Changes Requested** — the fix has not been shown to reach the channel that decides anything. If a test pins a success value on a could-not-evaluate path, that is **Changes Requested** regardless of how well the outcome renders.
+
+### Severity if violated
+
+- Implementer ships a fix that corrects only the rendered channel while the gating channel stays fail-open: **moderate** — the instrument still permits the step it exists to stop, and now reads as fixed.
+- A test that pins the fail-open value as intended behaviour: **moderate-to-severe** — it converts a defect into a specification and raises the cost of the real fix.
+- Reviewer approves a gate fix without asking which channels its caller consumes: **minor**, **moderate** if a fail-open path merges as a result.
+
+### Worked example
+
+`noorinalabs-main#1485` / PR #1494, pre-rework, 2026-09-04. `/wave-kickoff` Step 0a's staleness guard was inert under `zsh`, and the fix gave it three visibly distinct rendered outcomes — verified-in-order, no-prior-timestamp-so-skipped, and could-not-be-evaluated — which satisfied the wave-31 acceptance bar of the day exactly. But the could-not-be-evaluated arm printed its warning and fell through at exit `0`, and `test_evaluation_failure_renders_a_third_distinct_string` asserted `returncode == 0`, pinning that as intended. The exit code was demonstrably a consumed channel: Step 0a's own absent-scope check enforces with `exit 1`, and Step 0b immediately below captures `RC=$?` and branches on it. This was caught by the Opus merge gate on reviewer judgment, not by the criterion — the bar as written permitted it. The rework replaced the test with `test_evaluation_failure_cannot_evaluate_means_stop` asserting `returncode == 1`; the criterion itself was then amended under `noorinalabs-main#1500`, which is what this section makes durable.
+
+### Cross-references
+
+- `evidence-standards.md` § Live-Trace Evidence > Synthetic-Test Acceptance — companion on the same axis: that rule governs what a gate's *acceptance evidence* must be, this one governs what its *result* must be.
+- `hooks/catalog-13-17.md` § Hook 17 — the same fail-open shape at the import boundary, with the exit-code matrix that pins it.
+- `ci-gates.md` § Full Local⇄CI Tooling Parity + No Force-Merging Failing Checks — a red check is a stop, not a speed bump: the same refusal to let an undetermined result read as success.
+
+**Promotion provenance:** codified from `noorinalabs-main#1500` (2026-09-08), raised by Aino Virtanen during the Opus merge-gate review of PR #1494 (`noorinalabs-main#1485`) and rowed into wave-31 batch 2. Generalises the wave-31 acceptance bar's clauses (2) and (2a) out of `cross-repo-status.json` and into the charter, so the criterion outlives the wave that produced it. Augments § Live-Trace Evidence > Synthetic-Test Acceptance rather than superseding it; corroborated at the hook layer by `noorinalabs-main#1243` / `noorinalabs-main#1405` (`hooks/catalog-13-17.md` § Hook 17) and at the wave-lifecycle layer by `noorinalabs-main#1483`, where an override rescued a missing measurement.
+
 ## Origin > Local Clone for "Still-Has-X" File-Content Claims (Mandatory) <!-- promotion-target: none -->
 
 When asserting a "still has X" / "still at Y" / "still missing Z" property about a PR's file content, query origin directly via `gh api repos/<owner>/<repo>/contents/<path>?ref=<head_sha>` (or `gh api .../pulls/<N>/files`). Do NOT grep a local checkout, worktree, or `/tmp/` clone of the PR branch.
