@@ -224,7 +224,9 @@ The in-repo memory index `.claude/memory/MEMORY.md` is a **two-tier** index (#10
 
 Two independent layers, two checks (#820/C×T2, #862):
 
-**3a. Semantic overlay** — ask the shared reader for the dirty count. **Do not read `checksums.json` by hand (#1142)** — the predicate is `last_tracked != last_resolved`, and every way of getting that read wrong (a field name that is not in the schema, the wrong nesting level) returns a plausible `0`, which is also the healthy value. Two consecutive sessions reported a wrong `0` that way.
+**3a. Semantic overlay** — ask the shared reader. **Do not read `checksums.json` by hand (#1142)** — the predicate is `last_tracked != last_resolved`, and every way of getting that read wrong (a field name that is not in the schema, the wrong nesting level) returns a plausible `0`, which is also the healthy value. Two consecutive sessions reported a wrong `0` that way.
+
+**And do not read the dirty count as an answer about the tree (#1505).** `last_tracked` only moves when the `ontology_tracker` PostToolUse hook fires — an Edit/Write **in this checkout**. A file changed by a pull, a merge, another session's commit, or a worktree never moves it, so the entry stays `last_tracked == last_resolved` and reports clean **permanently**. The reader now also HASHES each tracked file, which is what makes a drifted entry visible at all: when #1505 was filed, 158 of 314 tracked entries matched neither stored hash while this step printed "Semantic overlay: current" — every session, for months.
 
 ```bash
 REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
@@ -236,11 +238,19 @@ Interpret the exit code, not the vibe of the output:
 
 | Exit | Meaning | Action |
 |---|---|---|
-| 0 | clean | Report "Semantic overlay: current" |
+| 0 | clean — every tracked file was hashed and matches | Report "Semantic overlay: current"; the output names how many files were hashed to earn that |
 | 1 | dirty and/or malformed entries | Run `/ontology-rebuild`, process them, commit the result |
 | 3 | ledger missing/unparseable | Report it as a problem — this is **not** an empty work list |
+| 4 | **drifted** and/or **undeterminable** entries (#1505) | Report the counts. Do **not** route this to `mark-resolved` — see below. This is **not** an empty work list either |
+| other non-zero | unrecognized | Treat as not-current and report it; never round a code you do not recognize down to "current" |
 
-A **malformed** entry (unrecognized shape — missing `last_tracked`, a `null` hash) counts separately and blocks "clean" deliberately: unknown state is not resolved state. `/ontology-rebuild` step 1 documents the repair.
+**"Semantic overlay: current" requires exit 0**, which now requires `drifted == 0` and `undeterminable == 0` as well as `dirty == 0`. The three other states each block it for the same reason: a state the reader did not establish must not be reported as a state it established.
+
+- **malformed** — an unrecognized entry shape (missing `last_tracked`, a `null` hash). Unknown state is not resolved state. `/ontology-rebuild` step 1 documents the repair.
+- **drifted** (#1505) — the two stored hashes agree with each other and neither agrees with the file. The remediation is to reconcile the overlay against the changed files; `mark-resolved` here would stamp `last_resolved = last_tracked` on values that *both* already disagree with the file, i.e. manufacture a false clean one layer along. That is why 4 is a separate code from 1 rather than a flavour of it.
+- **undeterminable** (#1505) — a tracked path that could not be hashed at all: absent from this tree, or unreadable. Not measured is not clean. Note the snippet above deliberately anchors `REPO_ROOT` to the **main checkout**; run from a linked worktree instead and the gitignored child-repo clones are structurally absent, which is a real and honest ~140-entry undeterminable count, not a bug. `checksums_io.py status --repo-root <main-checkout>` is the explicit escape.
+
+Reconciling the standing drifted backlog is tracked by **#1513** — it is a content question (what actually changed in each file), not something this step can clear.
 
 **3b. Structural index** — regenerate the generated index from the current source tree. It is a gitignored build product (main#939 — never committed; nothing to compare or commit), so just rebuild it locally; the aggregator refreshes every in-scope repo's index before rolling up:
 

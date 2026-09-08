@@ -47,11 +47,18 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 python3 "$REPO_ROOT/.claude/lib/checksums_io.py" status
 ```
 
-It prints `N tracked, N dirty, N malformed` plus the offending paths, and exits **0** when clean, **1** when there is something to process, **3** when the ledger could not be read. Add `--json` if you want to consume it programmatically.
+It prints `N tracked, N dirty, N drifted, N malformed, N undeterminable` plus the offending paths and a `VERDICT:` line, and exits **0** when clean, **1** when there are dirty/malformed entries to process, **3** when the ledger could not be read, **4** when entries have **drifted** or are **undeterminable** (#1505). Add `--json` if you want to consume it programmatically.
 
 The dirty list it prints IS the work list — take it verbatim. Hand-rolling this read is how the count has gone wrong twice: the predicate is `last_tracked != last_resolved`, the field names are not guessable (an earlier pass compared a `sha256` key that does not exist in the schema), and **every way of guessing wrong yields a plausible `0`** — which is also the healthy value, so a mistake here does not fail loudly, it just reports "nothing to do".
 
 If `status` exits 0, report "Ontology is up to date — no dirty files" and stop. If it exits 3, the ledger is missing/unparseable — that is a real problem to report, **not** an empty work list.
+
+**If it exits 4, the dirty list is NOT the work list (#1505).** Exit 4 means at least one entry has **drifted** (its two stored hashes agree with each other and neither agrees with the file) or is **undeterminable** (tracked, but could not be hashed at all). Both can occur with `dirty == 0`, so taking the dirty list verbatim here yields an empty work list over a ledger that is demonstrably out of step with the tree — the same "plausible zero" shape as the by-hand read, one layer along.
+
+Handle exit 4 as follows, and **never with `mark-resolved`** — see step 4's warning:
+
+- **drifted** — the work is to reconcile the overlay against what actually changed in each listed file, which is step 2's normal read-and-extract pass, just entered from the drifted list instead of the dirty one. It is a content judgement per file; do not bulk-process it to make the number go down. The standing backlog (158 entries as of #1505) is tracked by **#1513**, not by this skill's per-run scope.
+- **undeterminable** — the file is not there to read. If the paths are child-repo clones, you are running from a worktree: re-run from the main checkout (see the `REPO_ROOT` note under "Orphan entries" below). If a path is genuinely deleted, it is a `prune` candidate, subject to the same verify-before-`--apply` discipline.
 
 **Malformed entries** are entries whose shape the reader does not recognize (a missing `last_tracked`, a `null` hash). They are counted separately and they block "clean" on purpose: an entry that cannot be classified is unknown state, not resolved state. Fix the entry — usually by deleting it so the tracker re-creates it on the next Edit/Write of that file — rather than `mark-resolved`ing it, which cannot work (there is no `last_tracked` to copy).
 
@@ -97,6 +104,11 @@ PYTHONPATH="$REPO_ROOT/.claude/lib" python3 "$REPO_ROOT/.claude/lib/checksums_io
 ```
 
 Pass every dirty path resolved in this run as a separate argument (a path not present in `checksums.json` is silently skipped, not an error — see `checksums_io.mark_resolved`'s docstring). Use `--checksums <path>` before the path list only if resolving a non-default `checksums.json` location.
+
+**`mark-resolved` copies `last_tracked` into `last_resolved` — it does NOT re-read the file (#1505).** So resolving an entry whose file changed after it was last tracked produces an entry that is self-consistent and still disagrees with the file: a **drifted** entry, i.e. a false clean one layer along. Two consequences:
+
+- Never `mark-resolved` a path that `status` reported as **drifted**. Reconcile the overlay against the file first; the entry only becomes genuinely clean once the tracker re-hashes it (any Edit/Write of that file) and that fresh hash is resolved.
+- After this step, re-run `status`. It exits 4, not 0, if this pass created or left any drift — which is the check that the rebuild actually landed rather than merely quieted the counter.
 
 **Orphan entries (paths that no longer exist).** A dirty path whose file is gone cannot be resolved by reading it — there is nothing to read. These come from an edit inside an ephemeral tree the tracker's skip filters missed (the `da-wt-490/*` case: a worktree parked outside `.worktrees/`, so the name-based filter did not catch it — since fixed structurally by `ontology_tracker._is_linked_worktree`) or from genuinely deleted source. Do NOT `mark-resolved` an orphan — that quiets the symptom and leaves the entry to report dirty again. Prune it:
 
