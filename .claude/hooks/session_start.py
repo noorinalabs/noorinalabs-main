@@ -54,6 +54,14 @@ def _ontology_staleness() -> checksums_io.ChecksumsStatus | None:
     * An unreadable ledger returns None (reported as such) instead of being
       folded into a count. `read_status` raises rather than failing open, so
       "could not read" can never surface as "0 dirty".
+    * Since #1505, `read_status` also HASHES each tracked file, so the status
+      carries `drifted` and `undeterminable` alongside `dirty`. This line is
+      the org's only routine overlay-freshness check, and before that it was
+      structurally incapable of reporting a problem for any file whose change
+      arrived by a pull or a merge rather than by Edit/Write — it printed
+      "current" over 158 drifted entries out of 314. `main()` below must not
+      print "current" unless `status.clean`, which now requires all four
+      lists empty AND the files actually hashed.
     """
     try:
         return checksums_io.read_status(_CHECKSUMS)
@@ -123,12 +131,26 @@ def main() -> None:
     if overlay is None:
         ontology = "checksums.json missing or unreadable — run /ontology-rebuild"
     elif overlay.clean:
-        ontology = f"current (0/{overlay.total} dirty)"
+        # "0 dirty" alone never distinguished a verified-clean ledger from an
+        # unexamined one (#1505) — say how many files were hashed to get here.
+        ontology = f"current (0/{overlay.total} dirty, 0 drifted; {overlay.total} hash-verified)"
     else:
         counts = f"{len(overlay.dirty)}/{overlay.total} dirty"
+        if overlay.drifted:
+            counts += f", {len(overlay.drifted)} drifted"
         if overlay.malformed:
             counts += f", {len(overlay.malformed)} malformed"
-        ontology = f"{counts} — /session-start Step 3 resolves"
+        if overlay.undeterminable:
+            counts += f", {len(overlay.undeterminable)} undeterminable"
+        # Drift and undeterminable are NOT what Step 3's mark-resolved pass
+        # fixes — pointing at it would route them into the remediation that
+        # hides them (see checksums_io.EXIT_DRIFTED).
+        tail = (
+            "— /session-start Step 3a: NOT a mark-resolved job"
+            if (overlay.drifted or overlay.undeterminable)
+            else "— /session-start Step 3 resolves"
+        )
+        ontology = f"{counts} {tail}"
 
     errors = _annunaki_error_count()
     annunaki = (

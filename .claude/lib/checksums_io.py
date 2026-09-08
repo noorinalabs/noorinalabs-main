@@ -55,11 +55,35 @@ Three things close that class:
    ``read_status`` raise ``ChecksumsUnreadable`` and are for READERS — a
    missing or unparseable ledger must never be reported as "0 dirty", which
    is exactly what a fail-open read would produce.
+4. ``compute_status`` HASHES each tracked file and compares the result to the
+   stored values (#1505). Closer (1) compares the ledger's two stored values
+   **to each other**, never to the file, so it answers "has an agent edited
+   this file through Edit/Write in this checkout since the last rebuild" —
+   while every reader treats it as "the overlay is in sync with the tree".
+   Those are different claims. A file changed by a pull, by a merge, by
+   another session, or inside a worktree never moves ``last_tracked``, so the
+   entry stays ``last_tracked == last_resolved`` and reports clean forever.
+   When #1505 was filed, 158 of 314 tracked entries were in exactly that
+   state while ``status`` printed ``0 dirty`` at exit 0.
+
+Entry states, in the order ``classify_against_file`` decides them::
+
+    malformed        the entry's shape is not one the reader understands
+    dirty            last_tracked != last_resolved (an agent edited it)
+    undeterminable   stored values agree, but the file could not be hashed
+                     (absent from the tree, or unreadable) - NOT clean
+    drifted          stored values agree, and the file matches NEITHER
+    clean            stored values agree AND the file hashes to them
+
+Only the last is clean. ``ChecksumsStatus.clean`` additionally requires
+``verified`` — a status computed without a repo root hashed nothing, and a
+measurement that was never taken must not read as a passing one.
 """
 
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import sys
 from dataclasses import dataclass
@@ -82,6 +106,13 @@ _EMPTY: dict[str, Any] = {"version": 1, "files": {}}
 ENTRY_CLEAN = "clean"
 ENTRY_DIRTY = "dirty"
 ENTRY_MALFORMED = "malformed"
+# Two more states, added by #1505, both deliberately outside "clean":
+# DRIFTED is the file disagreeing with a ledger that agrees with itself, and
+# UNDETERMINABLE is a tracked file the reader could not hash at all. The
+# second is the load-bearing one — "I could not measure this entry" has to be
+# distinguishable from "I measured it and it was fine", on every channel.
+ENTRY_DRIFTED = "drifted"
+ENTRY_UNDETERMINABLE = "undeterminable"
 
 # The two fields the dirty predicate compares. `tracked_at` / `resolved_at` are
 # timestamps, informational only — the predicate never looks at them.
@@ -94,6 +125,15 @@ EXIT_CLEAN = 0
 EXIT_NEEDS_ATTENTION = 1
 EXIT_USAGE = 2
 EXIT_UNREADABLE = 3
+# 4 is its own code, not a flavour of 1, because the REMEDIATIONS DIFFER and
+# applying 1's remediation to a 4 manufactures a false clean: a dirty entry is
+# fixed by `/ontology-rebuild` + `mark-resolved`, whereas `mark-resolved` on a
+# DRIFTED entry stamps last_resolved = last_tracked — recording agreement
+# between two values that BOTH already disagree with the file. The skill
+# tables (`/session-start` 3a, `/ontology-librarian` 1a) prescribe different
+# actions for the two, so the exit channel has to let a caller tell them
+# apart; folding drift into 1 routes it into the action that hides it.
+EXIT_DRIFTED = 4
 
 
 class ChecksumsUnreadable(Exception):
@@ -148,6 +188,36 @@ def read_checksums(path: Path) -> dict[str, Any]:
         return copy.deepcopy(_EMPTY)
 
 
+def compute_sha256(file_path: Path) -> str | None:
+    """SHA-256 of a file's bytes, or ``None`` if it cannot be read.
+
+    THE single hashing function for this ledger (#1505). It used to be
+    ``ontology_tracker._compute_sha256`` — private to the WRITER, while the
+    reader hashed nothing at all, so there was no second copy only because
+    there was no second implementation. Adding the reader's hash check as a
+    fresh copy would have created exactly the duplicate-copy-drift class this
+    repo is closing elsewhere: a divergence in chunking is harmless, a
+    divergence in how bytes are opened or normalized is not, and the symptom
+    would be every entry reading as drifted forever. The tracker now imports
+    this one.
+
+    Returns ``None`` — never raises, never a partial digest — on any
+    ``OSError``: a missing file, a directory, a permission error. Callers MUST
+    treat ``None`` as "could not determine", never as "unchanged"
+    (``classify_against_file`` maps it to ``ENTRY_UNDETERMINABLE``).
+    """
+    try:
+        h = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        # PermissionError, IsADirectoryError and FileNotFoundError are all
+        # OSError subclasses; naming them separately adds nothing.
+        return None
+
+
 def classify_entry(entry: Any) -> tuple[str, str]:
     """Classify one ``files`` entry. THE single dirty predicate (#1142).
 
@@ -165,6 +235,13 @@ def classify_entry(entry: Any) -> tuple[str, str]:
     MALFORMED — not clean. ``last_resolved: ""`` is well-formed and DIRTY
     against any non-empty ``last_tracked``: that is the legitimate shape of a
     freshly (re-)tracked file, and the tracker writes it on purpose.
+
+    SCOPE (#1505): this function only ever compares the ledger to ITSELF. Its
+    ``ENTRY_CLEAN`` therefore means "no agent edited this file through
+    Edit/Write in this checkout since the last rebuild" — NOT "the file
+    matches what the ledger stores". ``classify_against_file`` is the one that
+    opens the file; every reader that is going to report freshness must go
+    through that one instead.
     """
     if not isinstance(entry, dict):
         return ENTRY_MALFORMED, f"entry is {type(entry).__name__}, expected an object"
@@ -179,31 +256,116 @@ def classify_entry(entry: Any) -> tuple[str, str]:
     return (ENTRY_DIRTY, "") if tracked != resolved else (ENTRY_CLEAN, "")
 
 
+def classify_against_file(entry: Any, file_path: Path) -> tuple[str, str]:
+    """Classify an entry against the FILE, not only against its own two hashes.
+
+    ``classify_entry`` compares the ledger's two stored values to each other;
+    this compares the agreed-upon value to the bytes on disk. Precedence, and
+    why each step is where it is:
+
+    * MALFORMED and DIRTY short-circuit before the file is touched. Both
+      already block "clean" and both already carry a remediation, so hashing
+      could only add a second reason for a verdict that will not change. This
+      is also the non-regression #1505 asks for by name: a dirty entry stays
+      DIRTY and is never reclassified as drifted.
+    * UNDETERMINABLE when the stored values agree but the file cannot be
+      hashed — absent from the tree, or unreadable. This is NOT clean, and
+      that is the whole point: an entry the reader failed to measure must not
+      be counted with the entries it measured and found fine. It is a
+      different thing from ``prune``'s "the path is gone, drop the entry":
+      ``prune`` is an explicit, guarded, preview-by-default WRITE, while
+      ``status`` merely has to refuse to call an unmeasured entry measured.
+    * DRIFTED when the file hashes to neither stored value. This is the 158.
+    * CLEAN only when the stored values agree AND the file hashes to them.
+
+    One consequence worth naming: ``mark_resolved`` sets ``last_resolved =
+    last_tracked`` without re-reading the file, so resolving a dirty entry
+    whose file changed after it was tracked yields an entry that is clean by
+    the stored-values predicate and DRIFTED here. That false-clean is now
+    visible on the very next ``status`` run instead of permanently invisible.
+    """
+    state, detail = classify_entry(entry)
+    if state != ENTRY_CLEAN:
+        return state, detail
+
+    if not file_path.exists():
+        return ENTRY_UNDETERMINABLE, "tracked path is absent from this tree — nothing to hash"
+
+    actual = compute_sha256(file_path)
+    if actual is None:
+        return ENTRY_UNDETERMINABLE, "tracked path could not be read — hash not computed"
+
+    stored = entry[_TRACKED_KEY]
+    if actual != stored:
+        return ENTRY_DRIFTED, f"file hashes to {actual[:12]}..., ledger stores {stored[:12]}..."
+    return ENTRY_CLEAN, ""
+
+
 @dataclass(frozen=True)
 class ChecksumsStatus:
     """Reader-facing summary of a checksums ledger.
 
-    ``dirty`` and ``malformed`` are sorted for stable output. ``malformed``
-    carries ``(path, reason)`` pairs so the report says *why* an entry could
-    not be classified rather than just how many there were.
+    Every list is sorted for stable output. ``malformed``, ``drifted`` and
+    ``undeterminable`` carry ``(path, reason)`` pairs so the report says *why*
+    an entry landed there rather than just how many did.
+
+    ``verified`` records whether the files were actually hashed. It defaults
+    to ``False`` on purpose: a ``ChecksumsStatus`` constructed without that
+    evidence must not be able to claim ``clean`` (#1505).
     """
 
     total: int
     dirty: tuple[str, ...]
     malformed: tuple[tuple[str, str], ...]
+    drifted: tuple[tuple[str, str], ...] = ()
+    undeterminable: tuple[tuple[str, str], ...] = ()
+    verified: bool = False
 
     @property
     def clean(self) -> bool:
-        """True only when nothing is dirty AND nothing is malformed.
+        """True only when every tracked file was hashed and every one agreed.
 
-        A malformed entry blocks "clean" deliberately: an entry the reader
-        cannot classify is unknown state, and reporting unknown as fine is the
-        bug this module exists to prevent.
+        Four conditions block it, all for the same reason — a reader must not
+        report a state it did not establish:
+
+        * ``dirty`` — an agent edited the file since the last rebuild.
+        * ``malformed`` — an entry the reader cannot classify is unknown
+          state, and reporting unknown as fine is the bug (#1142) this module
+          exists to prevent.
+        * ``drifted`` — the file matches neither stored hash (#1505).
+        * ``undeterminable`` — a tracked file that could not be hashed at all.
+          "Could not evaluate" is not a pass.
+
+        And ``verified`` gates all of it: with no repo root, no file was
+        opened, so the three empty file-derived lists are the empty result of
+        a check that never ran — indistinguishable, without this flag, from
+        the empty result of a check that ran and found nothing.
         """
-        return not self.dirty and not self.malformed
+        return (
+            self.verified
+            and not self.dirty
+            and not self.malformed
+            and not self.drifted
+            and not self.undeterminable
+        )
+
+    @property
+    def not_current(self) -> tuple[str, ...]:
+        """Every tracked path not known to be in sync — sorted, de-duplicated.
+
+        The union the annotating readers want (``smart_grep_ontology``'s
+        "[STALE]" marker): dirty, malformed, drifted and undeterminable all
+        mean "not known to be current", which is exactly what those callers
+        are asking. Keeping the union here stops each of them from picking a
+        subset and quietly under-reporting.
+        """
+        paths = set(self.dirty)
+        for group in (self.malformed, self.drifted, self.undeterminable):
+            paths.update(rel for rel, _ in group)
+        return tuple(sorted(paths))
 
 
-def compute_status(data: dict[str, Any]) -> ChecksumsStatus:
+def compute_status(data: dict[str, Any], repo_root: Path | None = None) -> ChecksumsStatus:
     """Summarize an already-parsed ledger. Raises on an unrecognized shape.
 
     ``data["files"]`` must be present and a mapping. A ledger without it is
@@ -212,6 +374,17 @@ def compute_status(data: dict[str, Any]) -> ChecksumsStatus:
     turns a shape mismatch into a plausible zero, which is the #1142 failure.
     Every ledger this module writes has a ``files`` mapping, and ``_EMPTY``
     seeds one, so the strict reading costs nothing real.
+
+    ``repo_root`` is the directory the entry keys are relative to (what
+    ``ontology_tracker._relative_path`` writes them against). Given one, every
+    entry that the stored-values predicate calls clean is additionally HASHED
+    and compared to the file — the #1505 check. Given ``None``, no file is
+    opened; the result is a shape-only summary with ``verified=False``, which
+    can never be ``clean``. That asymmetry is the guard: the caller who omits
+    the root gets an explicitly-unverified answer, not a quietly passing one.
+
+    ``read_status`` supplies the root by default, so no in-repo reader has to
+    remember to.
     """
     files = data.get("files")
     if not isinstance(files, dict):
@@ -219,22 +392,58 @@ def compute_status(data: dict[str, Any]) -> ChecksumsStatus:
         raise ChecksumsUnreadable(f"checksums document has no 'files' object ('files' is {kind})")
     dirty: list[str] = []
     malformed: list[tuple[str, str]] = []
+    drifted: list[tuple[str, str]] = []
+    undeterminable: list[tuple[str, str]] = []
     for rel in sorted(files):
-        state, detail = classify_entry(files[rel])
+        entry = files[rel]
+        if repo_root is None:
+            state, detail = classify_entry(entry)
+        else:
+            state, detail = classify_against_file(entry, repo_root / rel)
         if state == ENTRY_DIRTY:
             dirty.append(rel)
         elif state == ENTRY_MALFORMED:
             malformed.append((rel, detail))
-    return ChecksumsStatus(total=len(files), dirty=tuple(dirty), malformed=tuple(malformed))
+        elif state == ENTRY_DRIFTED:
+            drifted.append((rel, detail))
+        elif state == ENTRY_UNDETERMINABLE:
+            undeterminable.append((rel, detail))
+    return ChecksumsStatus(
+        total=len(files),
+        dirty=tuple(dirty),
+        malformed=tuple(malformed),
+        drifted=tuple(drifted),
+        undeterminable=tuple(undeterminable),
+        verified=repo_root is not None,
+    )
 
 
-def read_status(path: Path) -> ChecksumsStatus:
-    """Strict read + summarize. The one call a reader needs (#1142).
+def repo_root_for(checksums_path: Path) -> Path:
+    """``<root>/ontology/checksums.json`` -> ``<root>``.
+
+    The same derivation ``prune`` has always used for ``--repo-root``, hoisted
+    so the reader and the pruner cannot disagree about which tree an entry key
+    is relative to.
+    """
+    return checksums_path.resolve().parent.parent
+
+
+def read_status(path: Path, repo_root: Path | None = None) -> ChecksumsStatus:
+    """Strict read + summarize, WITH the on-disk hash check. The one call a
+    reader needs (#1142, #1505).
+
+    ``repo_root`` defaults to ``repo_root_for(path)``, so the three hook
+    readers keep calling ``read_status(checksums_file)`` and get drift
+    detection without changing their call. Pass it explicitly to check a
+    ledger against a different tree (e.g. from a linked worktree, where the
+    gitignored child-repo clones are structurally absent and would otherwise
+    all report undeterminable).
 
     Raises ``ChecksumsUnreadable`` if the file is missing, unparseable, or not
     shaped like a checksums ledger.
     """
-    return compute_status(read_checksums_strict(path))
+    root = repo_root_for(path) if repo_root is None else repo_root
+    return compute_status(read_checksums_strict(path), root)
 
 
 def write_checksums(path: Path, data: dict[str, Any]) -> None:
@@ -395,7 +604,8 @@ def main(argv: list[str]) -> int:
     plausible ``0``.
 
     Usage:
-        python3 .claude/lib/checksums_io.py status [--checksums <file>] [--json]
+        python3 .claude/lib/checksums_io.py status
+            [--checksums <file>] [--repo-root <dir>] [--json]
         python3 .claude/lib/checksums_io.py mark-resolved <path> [<path> ...]
         python3 .claude/lib/checksums_io.py mark-resolved --checksums <file> <path> ...
         python3 .claude/lib/checksums_io.py prune
@@ -410,17 +620,25 @@ def main(argv: list[str]) -> int:
 
     Exit codes:
         0 — success (including "nothing to resolve/prune", still 0); for
-            ``status``, additionally means the ledger is clean
-        1 — ``status``: the ledger is dirty and/or has malformed entries.
+            ``status``, additionally means every tracked file was hashed and
+            agrees with the ledger
+        1 — ``status``: the ledger is dirty and/or has malformed entries —
+            the ``/ontology-rebuild`` + ``mark-resolved`` path.
             ``prune``: the sanity threshold refused the run
         2 — usage error
         3 — ``status``: the ledger could not be read (missing, unparseable,
             or not shaped like a checksums document). Deliberately distinct
             from 0 — "could not read" must never look like "clean"
+        4 — ``status``: at least one tracked file has DRIFTED (its content
+            matches neither stored hash) or was UNDETERMINABLE (tracked, but
+            could not be hashed). Distinct from 1 because the remediation
+            differs and 1's remediation applied here manufactures a false
+            clean; distinct from 0 because a file that could not be measured
+            is not a file that was measured and found fine (#1505)
     """
     if len(argv) < 2 or argv[1] not in ("mark-resolved", "prune", "status"):
         print(
-            "usage: checksums_io.py status [--checksums PATH] [--json]\n"
+            "usage: checksums_io.py status [--checksums PATH] [--repo-root DIR] [--json]\n"
             "       checksums_io.py mark-resolved [--checksums PATH] <rel-path> [<rel-path> ...]\n"
             "       checksums_io.py prune [--checksums PATH] [--repo-root DIR] "
             "[--apply] [--dry-run] [--force]",
@@ -464,27 +682,45 @@ def main(argv: list[str]) -> int:
 def _status_cli(checksums_path: Path, rest: list[str]) -> int:
     """``status`` subcommand body. ``--checksums`` is already consumed by ``main``.
 
-    Read-only. Prints ``total`` / ``dirty`` / ``malformed`` counts plus the
-    offending paths, and returns an exit code that distinguishes the three
-    outcomes a caller actually cares about: clean (0), needs attention (1),
-    unreadable (3). The 0/3 split is the point — a reader that answers
-    "0 dirty" for a file it failed to parse is the #1142 bug.
+    Read-only. Prints the five per-state counts plus the offending paths, and
+    returns an exit code that distinguishes the outcomes a caller acts on
+    differently: clean (0), dirty/malformed (1), usage (2), unreadable (3),
+    drifted/undeterminable (4).
 
-    ``--json`` emits the same summary as a machine-readable object, so a hook
-    or a future wrap-time gate (#1086) consumes this instead of re-parsing
-    prose or, worse, re-deriving the predicate from the raw JSON.
+    Every channel this CLI's callers consume has to move together, or the
+    correction is invisible to whichever one they actually branch on:
+
+    * the printed summary — a human reads it, and it now names the drifted
+      and undeterminable counts and ends in an explicit VERDICT line stating
+      whether the files were hashed at all;
+    * the exit code — the ``/session-start`` 3a and ``/ontology-librarian``
+      1a tables branch on it, and 4 keeps drift out of the branch whose
+      remediation would hide it;
+    * ``--json`` — gains ``drifted``, ``undeterminable`` and ``verified``
+      alongside the existing ``clean``.
+
+    Printing honest counts while still returning 0, or returning 4 while
+    still printing "0 dirty", would each leave one of those callers exactly
+    as misinformed as before (#1500, wave-31 bar clause 2).
     """
     as_json = False
+    repo_root = repo_root_for(checksums_path)
     while rest:
         if rest[0] == "--json":
             as_json = True
             rest = rest[1:]
+        elif rest[0] == "--repo-root":
+            if len(rest) < 2:
+                print("error: --repo-root requires a DIR argument", file=sys.stderr)
+                return EXIT_USAGE
+            repo_root = Path(rest[1]).resolve()
+            rest = rest[2:]
         else:
             print(f"error: unexpected argument {rest[0]!r} for status", file=sys.stderr)
             return EXIT_USAGE
 
     try:
-        status = read_status(checksums_path)
+        status = read_status(checksums_path, repo_root)
     except ChecksumsUnreadable as exc:
         # NOT exit 0 with a zero count — see the module's no-silent-zeros contract.
         print(f"error: {exc}", file=sys.stderr)
@@ -494,9 +730,15 @@ def _status_cli(checksums_path: Path, rest: list[str]) -> int:
         json.dump(
             {
                 "checksums": str(checksums_path),
+                "repo_root": str(repo_root),
                 "total": status.total,
                 "dirty": list(status.dirty),
+                "drifted": [{"path": rel, "reason": why} for rel, why in status.drifted],
                 "malformed": [{"path": rel, "reason": why} for rel, why in status.malformed],
+                "undeterminable": [
+                    {"path": rel, "reason": why} for rel, why in status.undeterminable
+                ],
+                "verified": status.verified,
                 "clean": status.clean,
             },
             sys.stdout,
@@ -507,18 +749,81 @@ def _status_cli(checksums_path: Path, rest: list[str]) -> int:
     else:
         print(
             f"{checksums_path}: {status.total} tracked, {len(status.dirty)} dirty, "
-            f"{len(status.malformed)} malformed"
+            f"{len(status.drifted)} drifted, {len(status.malformed)} malformed, "
+            f"{len(status.undeterminable)} undeterminable"
         )
         if status.dirty:
-            print("dirty (last_tracked != last_resolved):")
+            print("dirty (last_tracked != last_resolved — edited since the last rebuild):")
             for rel in status.dirty:
                 print(f"  - {rel}")
+        if status.drifted:
+            print("drifted (stored hashes agree with each other, NOT with the file — #1505):")
+            for rel, why in status.drifted:
+                print(f"  - {rel}: {why}")
         if status.malformed:
             print("malformed (unrecognized entry schema — NOT counted clean):")
             for rel, why in status.malformed:
                 print(f"  - {rel}: {why}")
+        if status.undeterminable:
+            print("undeterminable (tracked, but could NOT be hashed — NOT counted clean):")
+            for rel, why in status.undeterminable:
+                print(f"  - {rel}: {why}")
+        _print_status_verdict(status, repo_root)
 
-    return EXIT_CLEAN if status.clean else EXIT_NEEDS_ATTENTION
+    if not status.verified or status.drifted or status.undeterminable:
+        return EXIT_DRIFTED
+    if status.dirty or status.malformed:
+        return EXIT_NEEDS_ATTENTION
+    return EXIT_CLEAN
+
+
+def _print_status_verdict(status: ChecksumsStatus, repo_root: Path) -> None:
+    """The rendered channel's answer to "was this actually measured?".
+
+    A count line alone cannot say the difference between "0 drifted because
+    every file was hashed and matched" and "0 drifted because nothing was
+    hashed". The VERDICT line says which, in words, every time — the human
+    channel's equivalent of the exit code's 0-vs-4 split.
+    """
+    if status.clean:
+        print(
+            f"VERDICT: CLEAN - all {status.total} tracked file(s) were hashed "
+            f"against {repo_root} and match their stored values."
+        )
+        return
+
+    if not status.verified:
+        print(
+            "VERDICT: NOT VERIFIED - no repo root was supplied, so no file was hashed. "
+            "This is not a clean reading; it is an absent one."
+        )
+        return
+
+    print(
+        f"VERDICT: NOT CLEAN - {len(status.dirty)} dirty, {len(status.drifted)} drifted, "
+        f"{len(status.malformed)} malformed, {len(status.undeterminable)} undeterminable "
+        f"(all {status.total} entries were checked against {repo_root})."
+    )
+    if status.drifted:
+        print(
+            "  Drifted entries are NOT a `mark-resolved` job: stamping "
+            "last_resolved = last_tracked records agreement between two values that both "
+            "already disagree with the file, which is a false clean one layer along. "
+            "Reconcile the overlay against the changed files first "
+            "(/ontology-rebuild step 1; the standing backlog is tracked by #1513)."
+        )
+    if status.undeterminable:
+        print(
+            "  Undeterminable entries were not measured at all - they are neither clean "
+            "nor dirty. `prune` (preview-by-default) is the tool for entries whose path is "
+            "genuinely gone; verify each candidate before applying it."
+        )
+        if is_linked_worktree_root(repo_root):
+            print(
+                f"  NOTE: {repo_root} is a linked worktree. The gitignored child-repo "
+                "clones do not exist there, so their entries cannot be hashed from here. "
+                "Re-run from the main checkout, or pass --repo-root <main-checkout>."
+            )
 
 
 # Refuse a prune that would remove more than this fraction of the tracked
@@ -580,7 +885,7 @@ def _prune_cli(checksums_path: Path, rest: list[str]) -> int:
     guards apply to the preview too: a preview that reports a 141-entry wipe
     as normal output is exactly how the mistake gets rubber-stamped.
     """
-    repo_root = checksums_path.resolve().parent.parent
+    repo_root = repo_root_for(checksums_path)
     apply_changes = False
     explicit_dry_run = False
     force = False

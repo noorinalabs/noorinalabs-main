@@ -11,6 +11,7 @@ byte-stability contract is enforced by code on BOTH writers, not just one.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -53,6 +54,42 @@ def _capture_stderr():
     buf = io.StringIO()
     with contextlib.redirect_stderr(buf):
         yield buf
+
+
+# --- #1505 helpers -----------------------------------------------------------
+# The pre-#1505 tests seeded ledgers describing files that were never created,
+# because nothing ever opened them. Now that the reader hashes, an entry has to
+# be paired with a real file for its state to mean anything — a ledger entry
+# with no file on disk is UNDETERMINABLE, which is a legitimate state but not
+# the one those tests were about.
+
+
+def _materialize(root: Path, rel: str, contents: str) -> str:
+    """Write a real file under ``root`` and return its sha256 hex digest."""
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(contents, encoding="utf-8")
+    return hashlib.sha256(contents.encode("utf-8")).hexdigest()
+
+
+def _clean_entry(root: Path, rel: str, contents: str = "content\n") -> dict[str, str]:
+    """An entry clean on BOTH predicates: the stored values agree with each
+    other AND with the file that is actually on disk."""
+    sha = _materialize(root, rel, contents)
+    return {"last_tracked": sha, "last_resolved": sha}
+
+
+def _drifted_entry(root: Path, rel: str, contents: str = "changed by a merge\n") -> dict[str, str]:
+    """THE #1505 shape, and the one the old predicate calls clean.
+
+    The two stored values agree with each other — so `last_tracked !=
+    last_resolved` is False and the entry reports clean — and neither agrees
+    with the file, which has moved on by some route that is not an Edit/Write
+    in this checkout. 158 of 314 real entries were in this state.
+    """
+    _materialize(root, rel, contents)
+    stale = hashlib.sha256(b"what the file used to contain").hexdigest()
+    return {"last_tracked": stale, "last_resolved": stale}
 
 
 class ReadChecksumsTests(unittest.TestCase):
@@ -828,6 +865,129 @@ class ClassifyEntryTests(unittest.TestCase):
                 self.assertEqual(state, checksums_io.ENTRY_MALFORMED)
                 self.assertIn("expected an object", detail)
 
+    def test_stored_values_alone_cannot_see_drift(self) -> None:
+        """The scope boundary #1505 turns on, asserted rather than assumed.
+
+        `classify_entry` is still allowed to call this entry clean — it only
+        ever compares the ledger to itself, and by that comparison the entry
+        IS clean. What was wrong was every reader treating that answer as
+        "the file matches". `classify_against_file` is the one that opens the
+        file, and the next test is the same entry through it.
+        """
+        stale = hashlib.sha256(b"what the file used to contain").hexdigest()
+        state, _ = checksums_io.classify_entry({"last_tracked": stale, "last_resolved": stale})
+        self.assertEqual(state, checksums_io.ENTRY_CLEAN)
+
+
+class ClassifyAgainstFileTests(unittest.TestCase):
+    """#1505: the predicate that opens the file.
+
+    Pre-fix there was no such function — no reader hashed anything, so the
+    only question ever asked was whether the ledger agreed with itself. Every
+    test here fails against the pre-fix module (with an AttributeError, since
+    the entry point does not exist), which is the point: the states it
+    distinguishes were not distinguishable at all.
+    """
+
+    def test_agreeing_stored_values_that_match_the_file_are_clean(self) -> None:
+        with _tmp_dir() as root:
+            entry = _clean_entry(root, "a.md")
+            state, detail = checksums_io.classify_against_file(entry, root / "a.md")
+        self.assertEqual(state, checksums_io.ENTRY_CLEAN)
+        self.assertEqual(detail, "")
+
+    def test_agreeing_stored_values_that_match_neither_are_drifted(self) -> None:
+        """The 158. Pre-fix this entry was clean, at exit 0, forever."""
+        with _tmp_dir() as root:
+            entry = _drifted_entry(root, "a.md")
+            state, detail = checksums_io.classify_against_file(entry, root / "a.md")
+        self.assertEqual(state, checksums_io.ENTRY_DRIFTED)
+        self.assertIn("ledger stores", detail)
+
+    def test_missing_tracked_file_is_undeterminable_not_clean(self) -> None:
+        """ "I could not measure this" is not "I measured it and it was fine".
+
+        The entry is well-formed and its stored values agree, so every
+        shape-only predicate calls it clean. Nothing was hashed, because
+        there is nothing to hash.
+        """
+        with _tmp_dir() as root:
+            sha = hashlib.sha256(b"gone").hexdigest()
+            state, detail = checksums_io.classify_against_file(
+                {"last_tracked": sha, "last_resolved": sha}, root / "absent.md"
+            )
+        self.assertEqual(state, checksums_io.ENTRY_UNDETERMINABLE)
+        self.assertIn("absent", detail)
+
+    def test_unreadable_tracked_path_is_undeterminable(self) -> None:
+        """A directory where a file is tracked: exists, cannot be hashed.
+
+        Deliberately not a chmod-000 file — the test suite may run as root,
+        where mode bits are not enforced and that variant silently passes for
+        the wrong reason.
+        """
+        with _tmp_dir() as root:
+            (root / "adir").mkdir()
+            sha = hashlib.sha256(b"x").hexdigest()
+            state, detail = checksums_io.classify_against_file(
+                {"last_tracked": sha, "last_resolved": sha}, root / "adir"
+            )
+        self.assertEqual(state, checksums_io.ENTRY_UNDETERMINABLE)
+        self.assertIn("could not be read", detail)
+
+    def test_dirty_entry_is_never_reclassified_as_drifted(self) -> None:
+        """The non-regression #1505 names: dirty short-circuits before the file.
+
+        Other tooling branches on `dirty`, and its remediation
+        (`/ontology-rebuild`) already covers this entry. Hashing here could
+        only add a second reason for a verdict that does not change.
+        """
+        with _tmp_dir() as root:
+            _materialize(root, "a.md", "some third content\n")
+            state, _ = checksums_io.classify_against_file(
+                {"last_tracked": "aaa", "last_resolved": "bbb"}, root / "a.md"
+            )
+        self.assertEqual(state, checksums_io.ENTRY_DIRTY)
+
+    def test_dirty_entry_with_no_file_stays_dirty(self) -> None:
+        """Short-circuit again, from the other side: an orphaned dirty entry
+        (`prune`'s domain) does not become undeterminable and lose its
+        existing, correct remediation."""
+        with _tmp_dir() as root:
+            state, _ = checksums_io.classify_against_file(
+                {"last_tracked": "aaa", "last_resolved": "bbb"}, root / "absent.md"
+            )
+        self.assertEqual(state, checksums_io.ENTRY_DIRTY)
+
+    def test_malformed_entry_short_circuits_before_the_file(self) -> None:
+        with _tmp_dir() as root:
+            state, detail = checksums_io.classify_against_file(
+                {"last_resolved": None}, root / "absent.md"
+            )
+        self.assertEqual(state, checksums_io.ENTRY_MALFORMED)
+        self.assertIn("missing last_tracked", detail)
+
+    def test_writer_and_reader_share_one_hash_function(self) -> None:
+        """`compute_sha256` is the module's own, and it is what the tracker calls.
+
+        A second copy of the hashing would be free to drift from this one, and
+        the symptom would be every entry reading as drifted forever. The
+        end-to-end pin lives in test_ontology_tracker.py; this is the local
+        half — the digest this module computes is a plain sha256 of the bytes.
+        """
+        with _tmp_dir() as root:
+            path = root / "a.md"
+            path.write_bytes(b"exact bytes\n")
+            self.assertEqual(
+                checksums_io.compute_sha256(path),
+                hashlib.sha256(b"exact bytes\n").hexdigest(),
+            )
+
+    def test_compute_sha256_returns_none_rather_than_raising(self) -> None:
+        with _tmp_dir() as root:
+            self.assertIsNone(checksums_io.compute_sha256(root / "absent.md"))
+            self.assertIsNone(checksums_io.compute_sha256(root))
+
 
 class ComputeStatusTests(unittest.TestCase):
     def test_counts_dirty_and_reports_paths_sorted(self) -> None:
@@ -845,15 +1005,29 @@ class ComputeStatusTests(unittest.TestCase):
         self.assertEqual(status.malformed, ())
         self.assertFalse(status.clean)
 
-    def test_clean_ledger_is_clean(self) -> None:
+    def test_agreeing_stored_values_are_not_dirty(self) -> None:
+        """Was `test_clean_ledger_is_clean` before #1505.
+
+        Nothing about the shape-only reading changed — the entry is still not
+        dirty and not malformed. What changed is the conclusion drawn from
+        that: with no repo root nothing was hashed, so this cannot be
+        `clean`. `StatusObjectChannelTests` covers the verified case.
+        """
         status = checksums_io.compute_status(
             {"files": {"a.md": {"last_tracked": "1", "last_resolved": "1"}}}
         )
-        self.assertTrue(status.clean)
         self.assertEqual((status.total, status.dirty, status.malformed), (1, (), ()))
+        self.assertFalse(status.verified)
+        self.assertFalse(status.clean)
 
-    def test_empty_ledger_is_clean(self) -> None:
+    def test_empty_ledger_has_nothing_to_report(self) -> None:
         status = checksums_io.compute_status({"files": {}})
+        self.assertEqual(status.total, 0)
+        self.assertEqual((status.dirty, status.malformed, status.drifted), ((), (), ()))
+
+    def test_empty_ledger_is_clean_once_verified(self) -> None:
+        with _tmp_dir() as root:
+            status = checksums_io.compute_status({"files": {}}, root)
         self.assertTrue(status.clean)
         self.assertEqual(status.total, 0)
 
@@ -886,6 +1060,139 @@ class ComputeStatusTests(unittest.TestCase):
     def test_non_dict_files_raises(self) -> None:
         with self.assertRaises(checksums_io.ChecksumsUnreadable):
             checksums_io.compute_status({"files": ["a.md"]})
+
+
+class StatusObjectChannelTests(unittest.TestCase):
+    """#1505 on the object channel — the one three hooks branch on.
+
+    `session_start`, `session_handoff` and `smart_grep_ontology` never see the
+    CLI's exit code or its stdout; they read `ChecksumsStatus` members
+    directly. Correcting the printed counts without moving `.clean` would
+    leave all three rendering "current" over a drifted ledger, so the
+    difference has to be pinned here too, not only at the CLI.
+    """
+
+    def test_drifted_entry_blocks_clean_and_is_listed(self) -> None:
+        with _tmp_dir() as root:
+            status = checksums_io.compute_status(
+                {
+                    "files": {
+                        "a.md": _clean_entry(root, "a.md"),
+                        "b.md": _drifted_entry(root, "b.md"),
+                    }
+                },
+                root,
+            )
+        self.assertEqual(status.total, 2)
+        self.assertEqual(status.dirty, ())
+        self.assertEqual(status.malformed, ())
+        self.assertEqual([rel for rel, _ in status.drifted], ["b.md"])
+        self.assertTrue(status.verified)
+        self.assertFalse(status.clean)
+
+    def test_undeterminable_entry_blocks_clean(self) -> None:
+        """Every file present and matching except one, which is not there at
+        all. Pre-fix: clean. "Cannot evaluate" is not a pass."""
+        sha = hashlib.sha256(b"gone").hexdigest()
+        with _tmp_dir() as root:
+            status = checksums_io.compute_status(
+                {
+                    "files": {
+                        "a.md": _clean_entry(root, "a.md"),
+                        "gone.md": {"last_tracked": sha, "last_resolved": sha},
+                    }
+                },
+                root,
+            )
+        self.assertEqual(status.drifted, ())
+        self.assertEqual([rel for rel, _ in status.undeterminable], ["gone.md"])
+        self.assertFalse(status.clean)
+
+    def test_verified_matching_ledger_is_clean(self) -> None:
+        """The other half of the pin — the fix must not make everything dirty."""
+        with _tmp_dir() as root:
+            status = checksums_io.compute_status(
+                {"files": {"a.md": _clean_entry(root, "a.md"), "b.md": _clean_entry(root, "b.md")}},
+                root,
+            )
+        self.assertTrue(status.verified)
+        self.assertTrue(status.clean)
+        self.assertEqual((status.dirty, status.drifted, status.undeterminable), ((), (), ()))
+
+    def test_a_status_that_hashed_nothing_can_never_be_clean(self) -> None:
+        """Without a repo root no file was opened, so the three empty
+        file-derived lists are the empty result of a check that never ran.
+        `verified` is what tells those two empties apart."""
+        status = checksums_io.compute_status(
+            {"files": {"a.md": {"last_tracked": "1", "last_resolved": "1"}}}
+        )
+        self.assertFalse(status.verified)
+        self.assertFalse(status.clean)
+        self.assertEqual(status.drifted, ())
+
+    def test_default_constructed_status_is_not_clean(self) -> None:
+        """The dataclass default fails closed: a `ChecksumsStatus` assembled
+        without hash evidence cannot claim to have any."""
+        self.assertFalse(checksums_io.ChecksumsStatus(total=0, dirty=(), malformed=()).clean)
+
+    def test_dirty_entry_is_still_dirty_when_hashing_is_on(self) -> None:
+        with _tmp_dir() as root:
+            _materialize(root, "b.md", "anything\n")
+            status = checksums_io.compute_status(
+                {
+                    "files": {
+                        "a.md": _clean_entry(root, "a.md"),
+                        "b.md": {"last_tracked": "1", "last_resolved": "2"},
+                    }
+                },
+                root,
+            )
+        self.assertEqual(status.dirty, ("b.md",))
+        self.assertEqual(status.drifted, ())
+        self.assertFalse(status.clean)
+
+    def test_not_current_is_the_union_the_annotating_readers_want(self) -> None:
+        sha = hashlib.sha256(b"gone").hexdigest()
+        with _tmp_dir() as root:
+            _materialize(root, "dirty.md", "x\n")
+            status = checksums_io.compute_status(
+                {
+                    "files": {
+                        "ok.md": _clean_entry(root, "ok.md"),
+                        "dirty.md": {"last_tracked": "1", "last_resolved": "2"},
+                        "drifted.md": _drifted_entry(root, "drifted.md"),
+                        "broken.md": {"last_resolved": None},
+                        "gone.md": {"last_tracked": sha, "last_resolved": sha},
+                    }
+                },
+                root,
+            )
+        self.assertEqual(status.not_current, ("broken.md", "dirty.md", "drifted.md", "gone.md"))
+
+    def test_read_status_hashes_by_default(self) -> None:
+        """The three hooks call `read_status(path)` with no root — the drift
+        check has to be the default, not an opt-in they must remember."""
+        with _tmp_dir() as root:
+            ledger = root / "ontology" / "checksums.json"
+            ledger.parent.mkdir(parents=True)
+            ledger.write_text(
+                json.dumps({"version": 1, "files": {"a.md": _drifted_entry(root, "a.md")}}),
+                encoding="utf-8",
+            )
+            status = checksums_io.read_status(ledger)
+        self.assertTrue(status.verified)
+        self.assertEqual([rel for rel, _ in status.drifted], ["a.md"])
+        self.assertFalse(status.clean)
+
+    def test_read_status_accepts_an_explicit_root(self) -> None:
+        """The linked-worktree escape: check a ledger against another tree."""
+        with _tmp_dir() as tree, _tmp_dir() as elsewhere:
+            entry = _clean_entry(tree, "a.md")
+            ledger = elsewhere / "ontology" / "checksums.json"
+            ledger.parent.mkdir(parents=True)
+            ledger.write_text(json.dumps({"version": 1, "files": {"a.md": entry}}), "utf-8")
+            self.assertFalse(checksums_io.read_status(ledger).clean)
+            self.assertTrue(checksums_io.read_status(ledger, tree).clean)
 
 
 class StrictReadTests(unittest.TestCase):
@@ -944,19 +1251,33 @@ class StatusCliTests(unittest.TestCase):
         return path
 
     def test_clean_ledger_exits_zero(self) -> None:
+        """Clean now means measured-and-matching, and says so in words.
+
+        The entry is paired with a real file whose hash is what the ledger
+        stores — pre-#1505 the file did not need to exist for this to pass,
+        which is precisely how "clean" stopped meaning anything.
+        """
         with _tmp_dir() as root:
-            path = self._seed(root, {"a.md": {"last_tracked": "1", "last_resolved": "1"}})
+            path = self._seed(root, {"a.md": _clean_entry(root, "a.md")})
             with _capture_stdout() as out:
                 rc = checksums_io.main(["checksums_io.py", "status", "--checksums", str(path)])
+        printed = out.getvalue()
         self.assertEqual(rc, 0)
-        self.assertIn("1 tracked, 0 dirty, 0 malformed", out.getvalue())
+        self.assertIn("1 tracked, 0 dirty, 0 drifted, 0 malformed, 0 undeterminable", printed)
+        self.assertIn("VERDICT: CLEAN", printed)
+        self.assertIn("1 tracked file(s) were hashed", printed)
 
     def test_dirty_ledger_reports_count_and_paths(self) -> None:
         with _tmp_dir() as root:
+            # The dirty entry's file is materialized with content matching
+            # NEITHER stored hash: dirty short-circuits before the file is
+            # read, so this stays 1 dirty / 0 drifted and exit 1 — the
+            # `/ontology-rebuild` branch, not the reconcile branch.
+            _materialize(root, "team/trust_matrix.md", "content that matches neither\n")
             path = self._seed(
                 root,
                 {
-                    "a.md": {"last_tracked": "1", "last_resolved": "1"},
+                    "a.md": _clean_entry(root, "a.md"),
                     "team/trust_matrix.md": {"last_tracked": "3fe1", "last_resolved": "d35e"},
                 },
             )
@@ -964,8 +1285,112 @@ class StatusCliTests(unittest.TestCase):
                 rc = checksums_io.main(["checksums_io.py", "status", "--checksums", str(path)])
         printed = out.getvalue()
         self.assertEqual(rc, 1)
-        self.assertIn("2 tracked, 1 dirty, 0 malformed", printed)
+        self.assertIn("2 tracked, 1 dirty, 0 drifted, 0 malformed, 0 undeterminable", printed)
         self.assertIn("team/trust_matrix.md", printed)
+        self.assertIn("VERDICT: NOT CLEAN", printed)
+
+    def test_drifted_ledger_exits_four_and_names_the_paths(self) -> None:
+        """THE #1505 test. Pre-fix: "2 tracked, 0 dirty, 0 malformed", exit 0.
+
+        Both entries have `last_tracked == last_resolved`, so the ledger
+        agrees with itself and the old predicate had nothing to report. One
+        file has since changed by a route that is not an Edit/Write in this
+        checkout — a pull, a merge, another session, a worktree — and 158 of
+        314 real entries were in exactly that state while `/session-start`
+        printed "Semantic overlay: current".
+
+        Pinned on both channels at once: exit 4 (not 0, and not 1 either —
+        `mark-resolved` on a drifted entry manufactures a false clean) and a
+        rendered report that names the state and the path.
+        """
+        with _tmp_dir() as root:
+            path = self._seed(
+                root,
+                {
+                    "a.md": _clean_entry(root, "a.md"),
+                    "ontology/domain.yaml": _drifted_entry(root, "ontology/domain.yaml"),
+                },
+            )
+            with _capture_stdout() as out:
+                rc = checksums_io.main(["checksums_io.py", "status", "--checksums", str(path)])
+        printed = out.getvalue()
+        # Ordered so the pre-fix failure names the defect (exit 0 over a
+        # drifted ledger) rather than a missing constant.
+        self.assertNotEqual(rc, 0, "a drifted ledger must not exit 0")
+        self.assertNotEqual(rc, 1, "drift is not the mark-resolved branch")
+        self.assertEqual(rc, 4)
+        self.assertEqual(rc, checksums_io.EXIT_DRIFTED)
+        self.assertIn("2 tracked, 0 dirty, 1 drifted, 0 malformed, 0 undeterminable", printed)
+        self.assertIn("ontology/domain.yaml", printed)
+        self.assertIn("NOT with the file", printed)
+        self.assertIn("not a `mark-resolved` job", printed.lower())
+        self.assertNotIn("VERDICT: CLEAN", printed)
+
+    def test_missing_tracked_file_exits_nonzero_and_is_not_called_clean(self) -> None:
+        """A tracked path absent from the tree is unmeasured, not fine.
+
+        Pre-fix: "1 tracked, 0 dirty, 0 malformed" at exit 0 — the reader
+        never opened the file, so its absence was invisible. `prune` is the
+        separate, guarded operation for removing such entries; `status` just
+        must not count them with the entries it actually checked.
+        """
+        sha = hashlib.sha256(b"gone").hexdigest()
+        with _tmp_dir() as root:
+            path = self._seed(root, {"gone.md": {"last_tracked": sha, "last_resolved": sha}})
+            with _capture_stdout() as out:
+                rc = checksums_io.main(["checksums_io.py", "status", "--checksums", str(path)])
+        printed = out.getvalue()
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(rc, checksums_io.EXIT_DRIFTED)
+        self.assertIn("1 undeterminable", printed)
+        self.assertIn("gone.md", printed)
+        self.assertIn("could NOT be hashed", printed)
+        self.assertNotIn("VERDICT: CLEAN", printed)
+
+    def test_drift_outranks_dirty_on_the_exit_channel(self) -> None:
+        """When both are present the caller must be sent to the branch whose
+        remediation is safe for both, not the one that hides half of it."""
+        with _tmp_dir() as root:
+            _materialize(root, "dirty.md", "x\n")
+            path = self._seed(
+                root,
+                {
+                    "dirty.md": {"last_tracked": "1", "last_resolved": "2"},
+                    "drifted.md": _drifted_entry(root, "drifted.md"),
+                },
+            )
+            with _capture_stdout() as out:
+                rc = checksums_io.main(["checksums_io.py", "status", "--checksums", str(path)])
+        self.assertEqual(rc, checksums_io.EXIT_DRIFTED)
+        self.assertIn("1 dirty, 1 drifted", out.getvalue())
+
+    def test_repo_root_flag_checks_the_ledger_against_another_tree(self) -> None:
+        """The documented escape for a linked worktree, where the gitignored
+        child-repo clones are structurally absent."""
+        with _tmp_dir() as tree, _tmp_dir() as elsewhere:
+            entry = _clean_entry(tree, "a.md")
+            path = self._seed(elsewhere, {"a.md": entry})
+            with _capture_stdout():
+                without = checksums_io.main(["checksums_io.py", "status", "--checksums", str(path)])
+            with _capture_stdout() as out:
+                with_root = checksums_io.main(
+                    [
+                        "checksums_io.py",
+                        "status",
+                        "--checksums",
+                        str(path),
+                        "--repo-root",
+                        str(tree),
+                    ]
+                )
+        self.assertEqual(without, checksums_io.EXIT_DRIFTED)
+        self.assertEqual(with_root, 0)
+        self.assertIn("VERDICT: CLEAN", out.getvalue())
+
+    def test_repo_root_flag_requires_a_value(self) -> None:
+        with _capture_stderr():
+            rc = checksums_io.main(["checksums_io.py", "status", "--repo-root"])
+        self.assertEqual(rc, 2)
 
     def test_malformed_entry_does_not_silently_count_as_clean(self) -> None:
         """The whole point of #1142, at the CLI boundary.
@@ -981,7 +1406,7 @@ class StatusCliTests(unittest.TestCase):
             path = self._seed(
                 root,
                 {
-                    "ok.md": {"last_tracked": "1", "last_resolved": "1"},
+                    "ok.md": _clean_entry(root, "ok.md"),
                     "broken.md": {"last_resolved": None, "resolved_at": "2026-06-14T00:16:00Z"},
                 },
             )
@@ -1033,11 +1458,68 @@ class StatusCliTests(unittest.TestCase):
         self.assertEqual(payload["dirty"], ["dirty.md"])
         self.assertEqual(payload["malformed"][0]["path"], "broken.md")
         self.assertFalse(payload["clean"])
+        # #1505 additions — a JSON consumer must be able to see the new states
+        # and, separately, whether any hashing happened at all.
+        self.assertEqual(payload["drifted"], [])
+        self.assertEqual(payload["undeterminable"], [])
+        self.assertTrue(payload["verified"])
+
+    def test_json_channel_reports_drift(self) -> None:
+        """The machine-readable channel moves with the other three.
+
+        Pre-fix the object was `{total, dirty, malformed, clean}` with
+        `clean: true` for exactly this ledger — a consumer branching on
+        `payload["clean"]` had no way to see the drift, whatever the prose
+        said.
+        """
+        with _tmp_dir() as root:
+            path = self._seed(
+                root,
+                {
+                    "ok.md": _clean_entry(root, "ok.md"),
+                    "drifted.md": _drifted_entry(root, "drifted.md"),
+                },
+            )
+            with _capture_stdout() as out:
+                rc = checksums_io.main(
+                    ["checksums_io.py", "status", "--checksums", str(path), "--json"]
+                )
+        payload = json.loads(out.getvalue())
+        self.assertFalse(payload["clean"], "a drifted ledger must not serialize as clean")
+        self.assertEqual(rc, checksums_io.EXIT_DRIFTED)
+        self.assertTrue(payload["verified"])
+        self.assertEqual([d["path"] for d in payload["drifted"]], ["drifted.md"])
+        self.assertEqual(payload["dirty"], [])
+        self.assertIn("repo_root", payload)
+
+    def test_json_channel_reports_undeterminable(self) -> None:
+        sha = hashlib.sha256(b"gone").hexdigest()
+        with _tmp_dir() as root:
+            path = self._seed(root, {"gone.md": {"last_tracked": sha, "last_resolved": sha}})
+            with _capture_stdout() as out:
+                rc = checksums_io.main(
+                    ["checksums_io.py", "status", "--checksums", str(path), "--json"]
+                )
+        payload = json.loads(out.getvalue())
+        self.assertEqual(rc, checksums_io.EXIT_DRIFTED)
+        self.assertFalse(payload["clean"])
+        self.assertEqual([d["path"] for d in payload["undeterminable"]], ["gone.md"])
 
     def test_status_never_writes_the_ledger(self) -> None:
-        """A reader is read-only — including its byte-for-byte non-touching."""
+        """A reader is read-only — including its byte-for-byte non-touching.
+
+        Hashing gave `status` a reason to open files (#1505); it still has
+        none to open this one for writing. The drifted entry is here on
+        purpose: detecting drift must not tempt the reader into "fixing" it.
+        """
         with _tmp_dir() as root:
-            path = self._seed(root, {"a.md": {"last_tracked": "1", "last_resolved": "2"}})
+            path = self._seed(
+                root,
+                {
+                    "a.md": {"last_tracked": "1", "last_resolved": "2"},
+                    "drifted.md": _drifted_entry(root, "drifted.md"),
+                },
+            )
             before = path.read_bytes()
             with _capture_stdout():
                 checksums_io.main(["checksums_io.py", "status", "--checksums", str(path)])
@@ -1051,21 +1533,28 @@ class StatusCliTests(unittest.TestCase):
     def test_status_is_reachable_as_a_subprocess(self) -> None:
         """The skills shell out to this — the in-process `main()` call is not
         proof the real invocation works."""
+        script = str(Path(__file__).resolve().parent.parent / "checksums_io.py")
         with _tmp_dir() as root:
-            path = self._seed(root, {"a.md": {"last_tracked": "1", "last_resolved": "1"}})
-            proc = subprocess.run(
-                [
-                    sys.executable,
-                    str(Path(__file__).resolve().parent.parent / "checksums_io.py"),
-                    "status",
-                    "--checksums",
-                    str(path),
-                ],
+            path = self._seed(root, {"a.md": _clean_entry(root, "a.md")})
+            clean = subprocess.run(
+                [sys.executable, script, "status", "--checksums", str(path)],
                 capture_output=True,
                 text=True,
             )
-        self.assertEqual(proc.returncode, 0)
-        self.assertIn("1 tracked, 0 dirty, 0 malformed", proc.stdout)
+        with _tmp_dir() as root:
+            path = self._seed(root, {"a.md": _drifted_entry(root, "a.md")})
+            drifted = subprocess.run(
+                [sys.executable, script, "status", "--checksums", str(path)],
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(clean.returncode, 0)
+        self.assertIn("1 tracked, 0 dirty, 0 drifted, 0 malformed, 0 undeterminable", clean.stdout)
+        self.assertIn("VERDICT: CLEAN", clean.stdout)
+        # The real process exit status, not just `main()`'s return value —
+        # this is the byte the skills' `$?` actually sees.
+        self.assertEqual(drifted.returncode, 4)
+        self.assertIn("1 drifted", drifted.stdout)
 
 
 if __name__ == "__main__":

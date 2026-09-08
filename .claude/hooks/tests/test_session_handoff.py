@@ -13,6 +13,7 @@ Run from the repo root:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import unittest
 from pathlib import Path
@@ -272,13 +273,25 @@ class OntologyStalenessTests(unittest.TestCase):
     suspected "instrument disagreement".
     """
 
-    def _with_checksums(self, payload: str) -> str:
+    #: Content for the files these fixtures materialize, and its digest. Since
+    #: #1505 the shared reader HASHES each tracked file, so an entry whose file
+    #: was never created is UNDETERMINABLE — a real state, but not the one
+    #: these tests are about. `CLEAN_SHA` is what the ledger must store for an
+    #: entry to be genuinely clean rather than merely self-consistent.
+    CONTENT = "tracked content\n"
+    CLEAN_SHA = hashlib.sha256(CONTENT.encode("utf-8")).hexdigest()
+
+    def _with_checksums(self, payload: str, materialize: tuple[str, ...] = ()) -> str:
         import tempfile
 
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             (root / "ontology").mkdir()
             (root / "ontology" / "checksums.json").write_text(payload, encoding="utf-8")
+            for rel in materialize:
+                target = root / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(self.CONTENT, encoding="utf-8")
             original = hook.REPO_ROOT
             try:
                 hook.REPO_ROOT = root
@@ -288,15 +301,53 @@ class OntologyStalenessTests(unittest.TestCase):
 
     def test_clean_ledger_reports_current(self) -> None:
         payload = json.dumps(
-            {"version": 1, "files": {"a.md": {"last_tracked": "1", "last_resolved": "1"}}}
+            {
+                "version": 1,
+                "files": {
+                    "a.md": {"last_tracked": self.CLEAN_SHA, "last_resolved": self.CLEAN_SHA}
+                },
+            }
         )
-        self.assertEqual(self._with_checksums(payload), "Ontology is current (0 dirty files)")
+        self.assertEqual(
+            self._with_checksums(payload, ("a.md",)),
+            "Ontology is current (0 dirty, 0 drifted; 1 files hash-verified)",
+        )
+
+    def test_drifted_entry_is_not_reported_as_current(self) -> None:
+        """#1505 on the handoff channel — the sentence the next session reads.
+
+        The ledger agrees with itself and disagrees with the file, which is
+        how 158 of 314 real entries stood while this function wrote "Ontology
+        is current (0 dirty files)" into every handoff.
+        """
+        stale = hashlib.sha256(b"what a.md used to contain").hexdigest()
+        payload = json.dumps(
+            {"version": 1, "files": {"a.md": {"last_tracked": stale, "last_resolved": stale}}}
+        )
+        result = self._with_checksums(payload, ("a.md",))
+        self.assertNotIn("current", result)
+        self.assertIn("1 drifted files", result)
+        self.assertIn("a.md", result)
+
+    def test_untrackable_file_is_not_reported_as_current(self) -> None:
+        """A tracked path that is not in the tree was not measured at all."""
+        payload = json.dumps(
+            {
+                "version": 1,
+                "files": {
+                    "gone.md": {"last_tracked": self.CLEAN_SHA, "last_resolved": self.CLEAN_SHA}
+                },
+            }
+        )
+        result = self._with_checksums(payload)
+        self.assertNotIn("current", result)
+        self.assertIn("1 undeterminable entries", result)
 
     def test_dirty_entry_is_named(self) -> None:
         payload = json.dumps(
             {"version": 1, "files": {"a.md": {"last_tracked": "1", "last_resolved": "2"}}}
         )
-        result = self._with_checksums(payload)
+        result = self._with_checksums(payload, ("a.md",))
         self.assertIn("1 dirty files", result)
         self.assertIn("a.md", result)
 
@@ -306,12 +357,12 @@ class OntologyStalenessTests(unittest.TestCase):
             {
                 "version": 1,
                 "files": {
-                    "a.md": {"last_tracked": "1", "last_resolved": "1"},
+                    "a.md": {"last_tracked": self.CLEAN_SHA, "last_resolved": self.CLEAN_SHA},
                     "b.md": {"last_resolved": None, "resolved_at": "2026-06-14T00:16:00Z"},
                 },
             }
         )
-        result = self._with_checksums(payload)
+        result = self._with_checksums(payload, ("a.md", "b.md"))
         self.assertNotIn("current", result)
         self.assertIn("1 malformed entries", result)
         self.assertIn("b.md", result)

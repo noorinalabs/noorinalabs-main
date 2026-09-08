@@ -22,6 +22,7 @@ from unittest import mock
 
 import _test_helpers  # noqa: E402,F401
 import ontology_tracker as hook  # noqa: E402
+from ontology_tracker import checksums_io  # noqa: E402
 
 
 class ShouldSkipNegativeTests(unittest.TestCase):
@@ -345,6 +346,75 @@ class ShouldSkipSessionHandoffTests(_FakeRepoRootMixin, unittest.TestCase):
         """
         anchored = str(self._fake_root / "docs" / "memory" / "session_handoff.md")
         self.assertFalse(hook._should_skip(anchored))
+
+
+class WriterReaderHashAgreementTests(_FakeRepoRootMixin, unittest.TestCase):
+    """#1505: the tracker WRITES a hash the reader then CHECKS. One function.
+
+    Before #1505 nothing read `last_tracked` back against the file, so a
+    second hashing implementation would have been silently harmless. Now the
+    reader compares the two, and any divergence between writer and reader —
+    a different chunk size is fine, a different encoding or normalization is
+    not — would report every entry in the corpus as drifted forever. The
+    tracker therefore calls `checksums_io.compute_sha256` rather than owning
+    a copy, and this is the end-to-end pin on that.
+    """
+
+    def _track(self, rel: str, contents: str) -> tuple[Path, Path]:
+        target = self._fake_root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(contents, encoding="utf-8")
+        checksums = self._fake_root / "ontology" / "checksums.json"
+        checksums.parent.mkdir(parents=True, exist_ok=True)
+        checksums.write_text('{"version": 1, "files": {}}\n', encoding="utf-8")
+        orig = hook.CHECKSUMS_FILE
+        hook.CHECKSUMS_FILE = checksums
+        try:
+            hook.check({"tool_name": "Write", "tool_input": {"file_path": str(target)}})
+        finally:
+            hook.CHECKSUMS_FILE = orig
+        return target, checksums
+
+    def test_freshly_tracked_then_resolved_file_reads_back_as_clean(self) -> None:
+        """Write -> track -> mark-resolved -> the reader agrees it is clean.
+
+        If the two sides hashed differently this would come back DRIFTED,
+        which is what makes it a real check rather than a tautology.
+        """
+        _, checksums = self._track("ontology/domain.yaml", "entities:\n  - narrator\n")
+
+        status = checksums_io.read_status(checksums, self._fake_root)
+        self.assertEqual(status.dirty, ("ontology/domain.yaml",))  # never resolved yet
+        self.assertEqual(status.drifted, ())
+
+        data = checksums_io.read_checksums(checksums)
+        checksums_io.mark_resolved(data, ["ontology/domain.yaml"], "2026-09-08T00:00:00Z")
+        checksums_io.write_checksums(checksums, data)
+
+        resolved = checksums_io.read_status(checksums, self._fake_root)
+        self.assertTrue(resolved.clean)
+        self.assertTrue(resolved.verified)
+
+    def test_a_change_the_tracker_never_saw_reads_back_as_drifted(self) -> None:
+        """The #1505 route, end to end: the file moves without the hook firing.
+
+        This is what a pull, a merge, another session's commit, or an edit
+        made in a worktree looks like from here — the tracker is never
+        invoked, so `last_tracked` cannot move, and the entry stays
+        self-consistent while the file walks away from it.
+        """
+        target, checksums = self._track("ontology/domain.yaml", "entities:\n  - narrator\n")
+        data = checksums_io.read_checksums(checksums)
+        checksums_io.mark_resolved(data, ["ontology/domain.yaml"], "2026-09-08T00:00:00Z")
+        checksums_io.write_checksums(checksums, data)
+        self.assertTrue(checksums_io.read_status(checksums, self._fake_root).clean)
+
+        target.write_text("entities:\n  - narrator\n  - transmitter\n", encoding="utf-8")
+
+        status = checksums_io.read_status(checksums, self._fake_root)
+        self.assertFalse(status.clean)
+        self.assertEqual(status.dirty, ())
+        self.assertEqual([rel for rel, _ in status.drifted], ["ontology/domain.yaml"])
 
 
 class ChecksumsSerializationTests(_FakeRepoRootMixin, unittest.TestCase):
