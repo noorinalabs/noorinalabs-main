@@ -1347,6 +1347,28 @@ class CountGenuineCitationsTests(unittest.TestCase):
         self.assertEqual(h.count_genuine_citations(text, "Cross-Contract PRs"), 1)
 
     def test_forward_reference_excluded(self) -> None:
+        """Single-clause fixture: only `_is_forward_reference` fires here.
+
+        PR #1519 merge-gate review (Nadia Khoury, mutant b1): the original
+        fixture for this test ("Proposed location: charter
+        `pull-requests.md` § Cross-Contract PRs OR new § Design-Rationale
+        Blocks.") is classified by THREE clauses at once
+        (`_is_forward_reference` True via "Proposed", `_is_creation_record`
+        True via "new §", `_is_wave_summary_listing` True via its two "§"
+        marks), so disabling the forward-reference clause alone left the
+        whole suite green -- the test never actually exercised it. This
+        fixture has no "new §"/"Charter home:"/"per process-change" phrase
+        and only one "§" mark, so only the forward-reference clause can
+        classify it as non-genuine."""
+        text = "Proposed location: charter `pull-requests.md` under Cross-Contract PRs.\n"
+        self.assertEqual(h.count_genuine_citations(text, "Cross-Contract PRs"), 0)
+
+    def test_forward_reference_still_excluded_alongside_other_clauses(self) -> None:
+        """The original multi-clause fixture stays green as a second,
+        non-load-bearing sanity check that multiple simultaneously-firing
+        exclusion clauses don't conflict — but it is NOT what pins the
+        forward-reference clause (see `test_forward_reference_excluded`
+        above for the single-clause fixture that does)."""
         text = (
             "Proposed location: charter `pull-requests.md` § Cross-Contract PRs OR "
             "new § Design-Rationale Blocks.\n"
