@@ -2000,6 +2000,22 @@ class CatchUpCliTests(_MergeScenarioMixin, unittest.TestCase):
         self.assertIsNone(self._entries()["ontology/null_hash.yaml"]["last_tracked"])
         self.assertEqual(self._entries()["ontology/not_an_object.yaml"], "definitely not a dict")
 
+    def test_a_paths_argument_outside_the_repo_root_is_rejected(self):
+        """#1521 review item 3 — the out-of-root guard was inert.
+
+        Without it the path is silently dropped from the scope and the run
+        reports the empty-scope verdict, so a typo'd or absolute path reads as
+        "checked, nothing to do" instead of "I did not check what you asked
+        for". Exit 2 and name the path.
+        """
+        outside = str(Path(self._tmp.name).parent / "not-in-this-repo.py")
+        code, out, err = self._catch_up("--paths", outside)
+
+        self.assertEqual(code, hook.CATCH_UP_EXIT_USAGE)
+        self.assertIn("does not resolve inside", err)
+        self.assertIn("not-in-this-repo.py", err)
+        self.assertEqual(out, "")
+
     def test_all_says_out_loud_that_the_wholesale_pass_belongs_to_1513(self):
         _, out, _ = self._catch_up("--all")
         self.assertIn("#1513", out)
