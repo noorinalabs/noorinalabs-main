@@ -617,7 +617,15 @@ if [ -z "$WAVE_REPOS_IN_SCOPE" ]; then
 fi
 GATE_REPOS_EXPECTED=$(jq -r ".wave_{M}_repos_in_scope | length" "$STATUS")
 GATE_REPOS_AUDITED=0
+# TWO buckets, deliberately (main#1483). `GATE_FINDINGS` holds outcomes an
+# operator can meaningfully ACKNOWLEDGE — the audit ran, it measured, and it
+# found unreviewed merges. `GATE_UNMEASURED` holds outcomes where the audit
+# produced NO measurement at all. Only the first is reachable by
+# GATE_INTEGRITY_OVERRIDE_RATIONALE; there is nothing in the second to
+# acknowledge, and an override that closed it would be recording a human
+# decision about a fact nobody established.
 GATE_FINDINGS=()
+GATE_UNMEASURED=()
 GATE_RESULT="verified"
 
 # zsh-safe iteration via a TEMP FILE into `while IFS= read -r` (main#688 — zsh
@@ -640,8 +648,13 @@ while IFS= read -r R; do
   GATE_RC=$?
   case "$GATE_RC" in
     0) echo "$R: gate integrity verified — every merge PASS or EXEMPT" ;;
+    # A MEASURED breach: the audit ran to completion and found merges the gate
+    # did not bind on. This is the one bucket an override can acknowledge.
     1) GATE_FINDINGS+=("$R — UNREVIEWED merge(s): the gate did not bind and no exception was declared") ;;
-    2) GATE_FINDINGS+=("$R — UNDETERMINED: the audit could not be completed, so any count above is a LOWER BOUND, not a clean result") ;;
+    # NOT a finding — an ABSENT measurement. Exit 2 says outright "I could not
+    # tell", so there is no breach here to acknowledge and no clean result to
+    # record; it goes in the non-overridable bucket (main#1483).
+    2) GATE_UNMEASURED+=("$R — UNDETERMINED: the audit could not be completed, so any count above is a LOWER BOUND, not a clean result") ;;
     # Anything outside the documented set is not a verdict. Without this arm a
     # killed (137), crashed, or wrong-binary run fell through and counted as
     # CLEAN — the module docstring's promise that no failure renders as "no
@@ -649,7 +662,9 @@ while IFS= read -r R; do
     # Deliberately NOT folded into the exit-2 wording: "gh/API error" sends the
     # operator to re-check `gh auth status`, which is the wrong instruction for
     # a process that was killed (main#981 — name the defect you actually have).
-    *) GATE_FINDINGS+=("$R — UNEXPECTED audit exit status $GATE_RC (outside the documented 0/1/2): the audit was killed, crashed, or is not the expected binary. Not a verdict, and not a clean result") ;;
+    # Also non-overridable: a killed audit measured even less than an
+    # UNDETERMINED one.
+    *) GATE_UNMEASURED+=("$R — UNEXPECTED audit exit status $GATE_RC (outside the documented 0/1/2): the audit was killed, crashed, or is not the expected binary. Not a verdict, and not a clean result") ;;
   esac
 done < "$GATE_REPO_LIST"
 rm -f "$GATE_REPO_LIST"
@@ -668,6 +683,40 @@ if [ "$GATE_REPOS_AUDITED" -eq 0 ] || [ "$GATE_REPOS_AUDITED" -ne "$GATE_REPOS_E
   echo "  measured anything, and must not be recorded as verified. This is NOT"
   echo "  overridable by GATE_INTEGRITY_OVERRIDE_RATIONALE — that override"
   echo "  acknowledges a FINDING, not a missing measurement."
+  echo "════════════════════════════════════════════════════════════"
+  exit 1
+fi
+
+# NON-OVERRIDABLE, and placed BEFORE the findings block so the override is
+# never consulted for these (main#1483). An audit that exited 2 said it could
+# not tell; one that exited 137 was killed before it could say anything. Neither
+# is a finding, so `GATE_INTEGRITY_OVERRIDE_RATIONALE` — which acknowledges a
+# finding — has nothing here to acknowledge. Persisting `overridden` for one of
+# these would hand /wave-retro's carry-forward a value it narrates as an
+# accepted result, when nothing was ever measured. Exiting here means NOTHING is
+# persisted, so the retro reads the key as absent and says "NOT MEASURED",
+# which is the true answer.
+if [ ${#GATE_UNMEASURED[@]} -gt 0 ]; then
+  echo "════════════════════════════════════════════════════════════"
+  echo "BLOCKED: /wave-wrapup cannot close wave {M} — the gate-integrity audit"
+  echo "  produced NO MEASUREMENT for:"
+  for g in "${GATE_UNMEASURED[@]}"; do echo "  $g"; done
+  echo ""
+  echo "This is NOT overridable by GATE_INTEGRITY_OVERRIDE_RATIONALE — that"
+  echo "override acknowledges a FINDING, and there is no finding here. An audit"
+  echo "that could not determine its answer has not produced one to accept."
+  echo "Nothing has been persisted, so /wave-retro will report this wave's gate"
+  echo "integrity as NOT MEASURED rather than as an accepted result."
+  echo "Fix-forward options:"
+  echo "  (a) Re-run this step. UNDETERMINED is usually a transient gh/API"
+  echo "      failure or an exhausted quota; the audit is a detective control"
+  echo "      over merged PRs, so re-running later gives the same answer."
+  echo "  (b) Narrow the window or the repo list if the walk hit its page"
+  echo "      ceiling, then re-run — a truncated population is an undercount of"
+  echo "      unreviewed merges, not a clean result."
+  echo "  (c) For an UNEXPECTED status: check that \$AUDIT is the real"
+  echo "      gate_integrity.py and that the process was not killed (OOM, a"
+  echo "      session timeout), then re-run."
   echo "════════════════════════════════════════════════════════════"
   exit 1
 fi
@@ -712,11 +761,24 @@ python3 "$UPSERT" "$STATUS" \
 jq -r --arg m "{M}" '"wave_" + $m + "_gate_integrity = " + (.["wave_" + $m + "_gate_integrity"] | tostring)' "$STATUS"
 ```
 
-**A zero-repo audit is not a clean audit.** The wrapper guards its own inputs the way the classifier guards its verdicts: an absent or `[]` `wave_{M}_repos_in_scope` blocks before the loop, and after it a positive assertion requires the number of repos actually audited to equal the number the scope declares. Both were fail-open in the first cut of this step — an audit that examined nothing exited 0 and *persisted* `verified`, which `/wave-retro`'s carry-forward then read back as a measured result (found in merge-gate review of main#1478). An exit status outside the documented `0/1/2` set — a killed or crashed audit — is likewise a finding with its own diagnostic, not a pass. **Neither of those two scope guards is reachable by `GATE_INTEGRITY_OVERRIDE_RATIONALE`** — both exit before the override is ever consulted, so an override exported for an unrelated reason cannot convert "nothing was audited" into a closed wave.
+**A zero-repo audit is not a clean audit.** The wrapper guards its own inputs the way the classifier guards its verdicts: an absent or `[]` `wave_{M}_repos_in_scope` blocks before the loop, and after it a positive assertion requires the number of repos actually audited to equal the number the scope declares. Both were fail-open in the first cut of this step — an audit that examined nothing exited 0 and *persisted* `verified`, which `/wave-retro`'s carry-forward then read back as a measured result (found in merge-gate review of main#1478).
 
-That claim is deliberately narrow, and it is worth being precise about what it does NOT cover. `GATE_INTEGRITY_OVERRIDE_RATIONALE` still rescues **every non-zero audit status** — measured, not inferred: exit 1 (UNREVIEWED), exit 2 (UNDETERMINED), and the unexpected-status bucket above (a killed or crashed audit) all persist `overridden` and close the wave. For exit 1 that is the intended design: there is a finding, and the override acknowledges it. For exit 2 and for an unexpected status it is questionable — a killed audit measured nothing, and UNDETERMINED says outright that it could not tell, so in neither case is there a finding to acknowledge. That overridability **predates this step** (the `*)` arm inherits the exit-2 decision rather than making it) and changing it is a real semantic change, so it is tracked separately as **#1483** rather than altered here. Until it is decided, read an `overridden` value in the wave history row as "a human accepted this", not as "the gate measured this".
+**The override acknowledges a FINDING, never a MISSING MEASUREMENT (main#1483).** The four audit outcomes split into two buckets, and only one of them is overridable:
 
-The scope guards, the unexpected-status arm, and the override's inability to reach the scope guards are all pinned by `tests/test_step_11_5b_gate_integrity.py`, which extracts and executes this very block rather than a paraphrase of it, so the block cannot drift away from its own tests.
+| Audit exit | Bucket | Overridable? | On block: exit / persisted |
+|---|---|---|---|
+| `0` — every merge PASS or EXEMPT | measured, clean | n/a | `0` / `verified` |
+| `1` — UNREVIEWED merge(s) | measured **finding** | **yes** → `0` / `overridden` + rationale | `1` / nothing |
+| `2` — UNDETERMINED | **no measurement** | **no** | `1` / nothing |
+| anything else (`137`, `3`, …) | **no measurement** | **no** | `1` / nothing |
+
+Exit 1 is a fact an operator can accept responsibility for: the audit ran, it measured, and it found merges the gate did not bind on. Exit 2 says outright that it could not tell, and an unexpected status means the process was killed or was never the right binary — in neither case is there anything to acknowledge, so an override there would be recording a human decision about a fact nobody established. The two missing-measurement statuses therefore block ahead of the findings block, before `GATE_INTEGRITY_OVERRIDE_RATIONALE` is ever consulted, and the same is true of the two scope guards above (absent/empty scope, and audited-vs-declared count mismatch): **an override exported for an unrelated reason cannot convert "nothing was audited" into a closed wave.**
+
+The difference has to hold on **every channel this step's callers consume**, not just the one a human reads (`charter/pull-requests/evidence-standards.md` § Distinguishable on Every Channel the Caller Consumes). There are three: the rendered block (distinct BLOCKED banner naming the status and stating that it is not overridable); the step's **exit status**, which is what stops `/wave-wrapup` (`1`, never `0`); and the persisted `wave_{M}_gate_integrity` key, which `/wave-retro`'s gate-integrity carry-forward reads back — on the non-overridable path **nothing is persisted**, neither the verdict key nor the rationale, so the retro reports `NOT MEASURED` rather than narrating an accepted result. This partition replaced the earlier behaviour in which exit 2 and the unexpected-status bucket both persisted `overridden` at exit `0`; that was the state measured on main#1483, and prose narrowed to describe it would have documented a fail-open rather than closed it.
+
+Read an `overridden` value in the wave history row as "a human accepted a measured breach" — it can no longer mean "the gate failed to measure and we moved on".
+
+The scope guards, the unexpected-status arm, and the override's inability to reach **any** of the four non-overridable paths — absent/empty scope, count mismatch, exit 2, unexpected status — are all pinned by `tests/test_step_11_5b_gate_integrity.py`, on each of the three channels above, and the exit-1 override is pinned as a positive control so the partition cannot collapse into "block always". Those tests extract and execute this very block rather than a paraphrase of it, so the block cannot drift away from them.
 
 **Override mechanism** (when an unreviewed merge is acknowledged rather than repaired):
 
@@ -728,6 +790,8 @@ export GATE_INTEGRITY_OVERRIDE_RATIONALE="deploy#706 is a dependabot auto-merge;
   not resolve it. No other unreviewed merge this wave."
 # Re-invoke /wave-wrapup — the gate sees the rationale, logs it, and proceeds.
 ```
+
+This reaches the exit-1 (UNREVIEWED) bucket only. Exporting it makes no difference to an audit that exited 2, exited with an unexpected status, or never examined its declared scope — those block regardless, and persist nothing (see the table above).
 
 **Backfill — the known population (main#1477).** Run over the 8 org repos with `--since 2026-07-11T04:25:50Z` (commit `695d6ad2`, where content-binding verdict staleness became enforceable) through 2026-08-22: **225** merged PRs — 210 PASS, 6 EXEMPT (all `wave-merge`), **9 UNREVIEWED**, 0 UNDETERMINED; a 95.9% enforcement rate over the 219 non-exempt merges. The population was cross-checked against an independent instrument (`gh pr list --search`, summed over the 8 repos) and agrees exactly; the "236" quoted while scoping the issue was a day-boundary artifact of the hand sweep. The 9 UNREVIEWED are a strict superset of the hand sweep's 3, because the two ask different questions — the hand sweep asked whether any review artifact existed, this tool asks whether the gate would have *bound*. See the module docstring for the per-PR breakdown (3 with no countable verdict at all, 1 whose two comments carried the `Request` verdict value rather than `Approved`, 3 whose approvals were all excluded as stale against `T_content`, 2 at 1/2 reviewers).
 

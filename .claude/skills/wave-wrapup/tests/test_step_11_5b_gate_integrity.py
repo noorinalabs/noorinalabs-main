@@ -18,6 +18,15 @@ the gate's own entry point — and unlike Step 11.5a, 11.5b PERSISTS its verdict
 and `/wave-retro`'s carry-forward reads it back, so a false clean outlives the
 run.
 
+A fourth was left open by that same review and is closed here (main#1483):
+
+  4. an exported `GATE_INTEGRITY_OVERRIDE_RATIONALE` rescued *every* non-zero
+     audit status — including exit 2 (UNDETERMINED) and the unexpected-status
+     bucket — persisting `overridden` at exit 0 over an audit that measured
+     nothing. The override acknowledges a FINDING; a missing measurement is not
+     one, so it is now partitioned out and blocks ahead of the override.
+     `OverrideReachesFindingsOnlyTests` covers it on all three consumed channels.
+
 These tests run the block **as it is written in SKILL.md** — extracted from the
 file, not paraphrased into a Python mirror — against a sandbox status file and a
 stub audit binary whose exit code the test chooses. A mirror would let SKILL.md
@@ -144,6 +153,61 @@ class _WrapperHarness(unittest.TestCase):
             "as a measured clean result",
         )
 
+    def assertMissingMeasurementIsNotOverridable(self, proc, persisted):
+        """A missing measurement must differ from a pass on EVERY consumed channel.
+
+        `charter/pull-requests/evidence-standards.md` § Distinguishable on Every
+        Channel the Caller Consumes: correcting the rendered line and leaving the
+        gating channel at 0 is half a fix. Step 11.5b has three consumers, and
+        this asserts on all three:
+
+          1. **rendered stdout** — the operator reads it. It must say BLOCKED and
+             say the outcome is not overridable, so the reader is not sent to
+             re-export the rationale.
+          2. **the block's exit status** — this is what stops `/wave-wrapup`; the
+             sibling guards in this very block enforce with `exit 1`. Asserted
+             `== 1` explicitly rather than `!= 0`, so a crash in the wrapper
+             cannot be mistaken for the guard firing.
+          3. **`wave_{M}_gate_integrity`** — read back by `/wave-retro`'s
+             gate-integrity carry-forward (`skills/wave-retro/SKILL.md`, the
+             `GATE_INTEGRITY=$(jq -r ".wave_${M}_gate_integrity // empty" ...)`
+             block), which branches on absent -> "NOT MEASURED" versus present ->
+             narrate the value. Nothing may be persisted: not `verified`, not
+             `overridden`, and not the rationale — an `overridden` value there is
+             narrated by the retro as an accepted result, which is precisely the
+             claim an unmeasured audit cannot support (main#1483).
+        """
+        self.assertEqual(
+            proc.returncode,
+            1,
+            "channel 2 (exit status): a missing measurement must stop the wrapup.\n"
+            f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}",
+        )
+        self.assertIn("BLOCKED", proc.stdout, "channel 1 (rendered): no BLOCKED banner")
+        self.assertIn(
+            "NOT overridable",
+            proc.stdout,
+            "channel 1 (rendered): the banner must tell the operator the override "
+            "does not apply, or they will re-export it and re-run for nothing",
+        )
+        self.assertNotIn(
+            "OVERRIDDEN:",
+            proc.stdout,
+            "channel 1 (rendered): the override must not be announced as applied",
+        )
+        self.assertNotIn(
+            f"wave_{_WAVE}_gate_integrity",
+            persisted,
+            "channel 3 (status key): /wave-retro must read this wave as NOT "
+            "MEASURED, not as a value it can narrate",
+        )
+        self.assertNotIn(
+            f"wave_{_WAVE}_gate_integrity_override_rationale",
+            persisted,
+            "channel 3 (status key): a rationale persisted for an unmeasured "
+            "audit records an acknowledgement of nothing",
+        )
+
 
 @unittest.skipIf(_SHELL is None, "no shell available")
 class ZeroRepoAuditTests(_WrapperHarness):
@@ -211,6 +275,7 @@ class UnexpectedExitStatusTests(_WrapperHarness):
     def test_sigkill_status_137_blocks(self):
         proc, persisted, audited = self._run(self._scope(), stub_exit=137)
         self.assertNotFalselyClean(proc, persisted, audited)
+        self.assertMissingMeasurementIsNotOverridable(proc, persisted)
         self.assertEqual(len(audited), 1, "the audit should still have been invoked")
         self.assertIn("137", proc.stdout)
 
@@ -229,6 +294,7 @@ class UnexpectedExitStatusTests(_WrapperHarness):
         """Any code outside the documented set, not just signal-shaped ones."""
         proc, persisted, audited = self._run(self._scope(), stub_exit=3)
         self.assertNotFalselyClean(proc, persisted, audited)
+        self.assertMissingMeasurementIsNotOverridable(proc, persisted)
 
 
 @unittest.skipIf(_SHELL is None, "no shell available")
@@ -270,8 +336,7 @@ class DocumentedExitCodeTests(_WrapperHarness):
 
     def test_undetermined_blocks_and_persists_nothing(self):
         proc, persisted, _audited = self._run(self._scope(["noorinalabs-main"]), stub_exit=2)
-        self.assertEqual(proc.returncode, 1)
-        self.assertNotIn(f"wave_{_WAVE}_gate_integrity", persisted)
+        self.assertMissingMeasurementIsNotOverridable(proc, persisted)
         self.assertIn("UNDETERMINED", proc.stdout)
 
     def test_override_records_the_rationale(self):
@@ -321,6 +386,114 @@ class DocumentedExitCodeTests(_WrapperHarness):
         self.assertEqual(proc.returncode, 1)
         self.assertIn("started_at", proc.stdout)
         self.assertNotIn(f"wave_{_WAVE}_gate_integrity", persisted)
+
+
+@unittest.skipIf(_SHELL is None, "no shell available")
+class OverrideReachesFindingsOnlyTests(_WrapperHarness):
+    """main#1483 — the override may waive a FINDING, never an ABSENT MEASUREMENT.
+
+    Before this partition, `GATE_INTEGRITY_OVERRIDE_RATIONALE` rescued *every*
+    non-zero audit status. Measured at origin/main `a65ddeb` against the block
+    as written there:
+
+        stub_exit  override | rc | persisted gate_integrity | rationale
+                1       yes |  0 | overridden               | True      <- intended
+                2       yes |  0 | overridden               | True      <- the defect
+                3       yes |  0 | overridden               | True      <- the defect
+              137       yes |  0 | overridden               | True      <- the defect
+
+    Exit 2 is the audit saying outright that it could not tell; 137 is the audit
+    being killed before it could say anything. Neither is a finding an operator
+    can acknowledge, so an `overridden` value recorded for one of them hands
+    `/wave-retro`'s carry-forward a human decision about a fact nobody
+    established — the shape `charter/pull-requests/evidence-standards.md`
+    § Distinguishable on Every Channel the Caller Consumes calls out as
+    "'cannot evaluate' is not a pass".
+
+    The realistic trigger is not a deliberate abuse: it is an override exported
+    earlier in the session for an unrelated acknowledged finding and still live
+    in the environment on a later run — the same carryover
+    `test_override_does_not_rescue_a_zero_repo_audit` was written against, which
+    was blocked for a zero-repo audit and not for a killed one.
+
+    Every test here therefore exports the override and asserts on all three
+    consumed channels via `assertMissingMeasurementIsNotOverridable`.
+    """
+
+    _CARRYOVER = "unrelated acknowledgement carried over from an earlier run"
+
+    def _scope(self):
+        return {
+            f"wave_{_WAVE}_started_at": _SINCE,
+            f"wave_{_WAVE}_repos_in_scope": ["noorinalabs-main"],
+        }
+
+    def test_override_does_not_rescue_an_undetermined_audit(self):
+        """Exit 2 — the audit's own "I could not determine this"."""
+        proc, persisted, audited = self._run(self._scope(), stub_exit=2, override=self._CARRYOVER)
+        self.assertMissingMeasurementIsNotOverridable(proc, persisted)
+        self.assertEqual(len(audited), 1, "the audit should still have been invoked")
+        self.assertIn("UNDETERMINED", proc.stdout)
+        self.assertIn("NO MEASUREMENT", proc.stdout)
+
+    def test_override_does_not_rescue_a_killed_audit(self):
+        """Exit 137 — SIGKILL. The `*)` arm inherited exit 2's overridability."""
+        proc, persisted, _audited = self._run(
+            self._scope(), stub_exit=137, override=self._CARRYOVER
+        )
+        self.assertMissingMeasurementIsNotOverridable(proc, persisted)
+        self.assertIn("UNEXPECTED", proc.stdout)
+        self.assertIn("137", proc.stdout)
+        # The #981 diagnostic rule survives the partition: a killed process must
+        # not be described as a gh/API error.
+        self.assertNotIn("gh/API error", proc.stdout)
+
+    def test_override_does_not_rescue_any_undocumented_status(self):
+        """Not only the signal-shaped codes — anything outside {0,1,2}."""
+        for code in (3, 126, 127, 255):
+            with self.subTest(stub_exit=code):
+                proc, persisted, _audited = self._run(
+                    self._scope(), stub_exit=code, override=self._CARRYOVER
+                )
+                self.assertMissingMeasurementIsNotOverridable(proc, persisted)
+                self.assertIn(str(code), proc.stdout)
+
+    def test_the_partition_is_a_partition_not_a_blanket_block(self):
+        """Positive control — WITHOUT this, every assertion above is satisfied
+        by a wrapper that ignores the override entirely, which is a different
+        gate (and one that would strand a legitimately-acknowledged finding).
+
+        Exit 1 is a MEASURED breach: the audit ran, and it found merges the gate
+        did not bind on. That is a fact an operator can accept responsibility
+        for, so the override still reaches it — on all three channels, mirroring
+        the negative assertions above.
+        """
+        proc, persisted, _audited = self._run(
+            self._scope(), stub_exit=1, override="dependabot auto-merge; policy open on #1476"
+        )
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("OVERRIDDEN:", proc.stdout)
+        self.assertEqual(persisted[f"wave_{_WAVE}_gate_integrity"], "overridden")
+        self.assertIn("#1476", persisted[f"wave_{_WAVE}_gate_integrity_override_rationale"])
+
+    def test_an_unmeasured_repo_is_not_rescued_by_a_clean_sibling(self):
+        """Scope of two, both audited, both unmeasured — the block must not
+        average the window into a pass because some repo ran.
+
+        (The stub takes one exit code for the whole run, so this pins the
+        multi-repo shape rather than a genuinely mixed 1-and-2 window; the mixed
+        case is stated as unpinned in the PR body rather than claimed.)
+        """
+        proc, persisted, audited = self._run(
+            {
+                f"wave_{_WAVE}_started_at": _SINCE,
+                f"wave_{_WAVE}_repos_in_scope": ["noorinalabs-main", "noorinalabs-deploy"],
+            },
+            stub_exit=2,
+            override=self._CARRYOVER,
+        )
+        self.assertMissingMeasurementIsNotOverridable(proc, persisted)
+        self.assertEqual(len(audited), 2)
 
 
 @unittest.skipIf(_SHELL is None, "no shell available")
