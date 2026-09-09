@@ -1713,20 +1713,26 @@ class WorktreeCatchUpScenarioTests(_MergeScenarioMixin, unittest.TestCase):
         have to move or the correction is invisible to one of them.
         """
         pre_merge = self._edit_in_worktree_and_merge()
-        payload = self._status_json()
+        code, payload = self._status_json()
+        # EXIT CODE is its own channel — /session-start 3a and
+        # /ontology-librarian 1a branch on it, and 4 vs 1 is the difference
+        # between "reconcile the overlay" and "run /ontology-rebuild".
+        self.assertEqual(code, checksums_io.EXIT_DRIFTED)
         self.assertEqual([d["path"] for d in payload["drifted"]], [self.TRACKED_REL])
         self.assertEqual(payload["dirty"], [])
         self.assertNotIn(self.NEW_REL, json.dumps(payload))
 
         self._catch_up("--since", pre_merge, "--apply")
 
-        payload = self._status_json()
+        code, payload = self._status_json()
+        self.assertEqual(code, checksums_io.EXIT_NEEDS_ATTENTION)
         self.assertEqual(payload["drifted"], [])
         self.assertEqual(sorted(payload["dirty"]), sorted([self.NEW_REL, self.TRACKED_REL]))
         self.assertTrue(payload["verified"])
         self.assertFalse(payload["clean"])
 
-    def _status_json(self) -> dict:
+    def _status_json(self) -> tuple[int, dict]:
+        """Drive the reader as a SUBPROCESS, so the exit code is a real one."""
         proc = subprocess.run(
             [
                 sys.executable,
@@ -1742,8 +1748,7 @@ class WorktreeCatchUpScenarioTests(_MergeScenarioMixin, unittest.TestCase):
             text=True,
             env=hook._hermetic_git_env(),
         )
-        self.assertIn(proc.returncode, (1, 4), proc.stderr)
-        return json.loads(proc.stdout)
+        return proc.returncode, json.loads(proc.stdout)
 
     def test_channel_iii_hook_return_names_the_skip_instead_of_returning_none(self):
         """(iii) The hook's own return — the VALUE-shaped pre-fix failure.

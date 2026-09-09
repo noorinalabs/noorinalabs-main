@@ -1076,11 +1076,11 @@ def _render_catch_up(plan: CatchUpPlan, applied: bool, repo_root: Path) -> None:
             f"  {len(plan.unmeasurable)} in-scope path(s) could NOT be measured and were "
             "left exactly as they were. Not caught up, not clean, not pruned."
         )
-        if checksums_io.is_linked_worktree_root(repo_root):
-            print(
-                f"  NOTE: {repo_root} is a linked worktree. The gitignored child-repo "
-                "clones do not exist there. Re-run from the main checkout."
-            )
+        # No "you are in a worktree" hint here, deliberately: `_catch_up_cli`
+        # refuses a linked-worktree root before it ever renders, so a branch
+        # for that case would be unreachable. An earlier revision had one; a
+        # mutation sweep found no test could kill it, which is what dead code
+        # looks like from the outside. The advice lives on the refusal.
 
 
 def _catch_up_cli(argv: list[str]) -> int:
