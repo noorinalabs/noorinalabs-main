@@ -31,15 +31,10 @@ Path filtering (issue #143):
       relative path — e.g. ``.worktrees/deploy-0348-aisha/...`` or a
       child-repo file seen through a sibling worktree. These never resolve
       (``last_resolved: ""``) and once aborted a ``git merge --ff-only``
-      during W11 close-out (#525). The canonical entry for the underlying
-      file is updated whenever the file is next Edit/Written directly on the
-      main checkout (this is a PostToolUse hook on tool calls, NOT a git
-      post-merge hook, so a squash-merge of a worktree-only PR does not by
-      itself update the tracker — the next direct Edit on main does).
-      Skipping worktree paths is still the right call: it prevents
-      accumulation of stale paths in ``checksums.json`` after worktrees are
-      removed, and the slight latency in the canonical entry's
-      ``last_tracked`` is acceptable noise-vs-signal trade.
+      during W11 close-out (#525). Skipping the worktree KEY is still the
+      right call — it prevents accumulation of stale paths in
+      ``checksums.json`` after worktrees are removed — but see "Catch-up
+      after a worktree edit (#1219)" below for what does NOT follow from it.
     * Files inside a LINKED WORKTREE parked anywhere else — the structural
       generalization of the rule above, added after four ``da-wt-490/*``
       orphans survived it in wave-28 (a worktree at the repo root, so no
@@ -54,6 +49,48 @@ Path filtering (issue #143):
       truth. (Note: on macOS, ``/tmp`` is a symlink to ``/private/tmp``;
       the SKIP_PREFIXES check uses the resolved path so the filter still
       catches it.)
+
+Catch-up after a worktree edit (#1219):
+  This docstring used to assert a catch-up that does not exist. The claim was
+  that "the canonical entry for the underlying file is updated whenever the
+  file is next Edit/Written directly on the main checkout", and that the
+  resulting latency was "acceptable". Neither half survived measurement.
+
+  CLAUDE.md makes worktrees the preferred isolation for every code-writing
+  agent, so a subsequent DIRECT edit on the main checkout is now the
+  exception, not the rule. The latency is therefore unbounded: on
+  2026-09-08, 158 of 314 tracked entries disagree with the file on disk, and
+  41 of the 48 tracked ``.claude/{hooks,lib,skills}`` paths — the files an
+  agent edits in a worktree — are among them (``.claude/hooks/`` is 24 of
+  24). A merge is not a tool call, so a squash-merge of a worktree-only PR
+  does not update the tracker either.
+
+  What the skip actually leaves behind, stated precisely:
+
+    * An ALREADY-TRACKED file edited in a worktree keeps its pre-edit
+      ``last_tracked``. Once the PR merges, the ledger's two stored values
+      still agree with each other and no longer agree with the file, so
+      ``checksums_io.classify_against_file`` calls it DRIFTED (#1505/#1514)
+      — the reconcile remedy — when what happened was an ordinary edit whose
+      honest state is DIRTY, the ``/ontology-rebuild`` remedy.
+    * A file CREATED only in a worktree gets no entry at all. That is worse
+      than drift: it is invisible on every channel, indistinguishable from a
+      path the overlay was never meant to track.
+
+  The remedy is the ``catch-up`` subcommand of this module (see
+  :func:`plan_catch_up` and ``main``). It runs on a real checkout, advances
+  ``last_tracked`` to the file's current hash for in-scope paths, CREATES an
+  entry for an in-scope includable path that has none, and NEVER writes
+  ``last_resolved`` — so the entries it touches land as DIRTY and route to
+  ``/ontology-rebuild``, which is the honest destination for "an edit
+  happened and the overlay has not read it yet". It is dry-run by default
+  and refuses to run without an explicit scope selector; the wholesale pass
+  over today's 158 drifted entries is #1513's decision, not this module's.
+
+  This hook still does not write a worktree-keyed entry, and still returns
+  no ledger write on the skip path — but as of #1219 it no longer returns a
+  bare ``None`` there. See :func:`check` for the action vocabulary a caller
+  can branch on.
 
 Owning-repo check-ignore (#1039):
   ``SKIP_PATTERNS`` is a hand-maintained substring denylist. It has leaked
@@ -161,18 +198,35 @@ Input Language:
                      PostToolUse dispatcher (`post_dispatcher.py`)
 
 Exit codes:
-  0 — always (advisory hook, never blocks)
+  0 — always, in HOOK mode (advisory hook, never blocks)
+
+  In CLI mode (``python3 .claude/hooks/ontology_tracker.py catch-up …``, i.e.
+  argv is non-empty) the exit code is the catch-up verdict instead — 0 / 1 /
+  2 / 3 / 4, documented on :func:`_catch_up_cli`. The two modes are
+  discriminated by argv alone: the dispatcher imports this module and calls
+  :func:`check` directly, and the standalone hook invocation passes no
+  arguments, so neither can reach the CLI branch.
 """
 
 import json
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CHECKSUMS_FILE = REPO_ROOT / "ontology" / "checksums.json"
+
+# The ledger's tracked-hash field name. MUST equal `checksums_io._TRACKED_KEY`
+# — the writer and the classifier disagreeing about a field name is #1142's
+# exact failure, and every way of getting it wrong yields a comparison that
+# quietly evaluates to "no change". Not imported from there (it is private to
+# that module); the coupling is pinned instead by
+# `LedgerFieldNameCouplingTests` in the test module, which fails if the two
+# ever drift apart.
+_LAST_TRACKED = "last_tracked"
 
 # Memoizes (git_root, repo_relative_path) -> ignored? for the life of this
 # process. See "Owning-repo check-ignore (#1039)" in the module docstring.
@@ -233,6 +287,42 @@ SKIP_PREFIXES = ("/tmp/",)
 # is not skipped, while ``.worktrees/deploy-0348/x`` and
 # ``.claude/worktrees/foo/x`` both are.
 WORKTREE_DIR_NAMES = frozenset({".worktrees", "worktrees"})
+
+# Skip reasons (#1219). `_skip_reason` returns one of these instead of a bare
+# True, so `check()` can name what happened on its return channel and
+# `plan_catch_up` can report why an in-scope path was passed over. The two
+# WORKTREE_SKIP_REASONS are the pair this hook is silently lossy about — an
+# edit that WOULD have been tracked had it happened on the main checkout.
+SKIP_PATTERN = "skip_pattern"
+SKIP_WORKTREE_PATH = "worktree_path"
+SKIP_UNRESOLVABLE = "unresolvable"
+SKIP_TMP_PREFIX = "tmp_prefix"
+SKIP_OUT_OF_REPO = "out_of_repo"
+SKIP_LINKED_WORKTREE = "linked_worktree"
+SKIP_GITIGNORED = "gitignored"
+
+WORKTREE_SKIP_REASONS = frozenset({SKIP_WORKTREE_PATH, SKIP_LINKED_WORKTREE})
+
+# `check()` action vocabulary (#1219). Every non-applicable-tool return is
+# still None; every path that reached a decision about a real file now names
+# that decision. See `check()` for the per-action contract.
+ACTION_TRACKED = "tracked"
+ACTION_SKIP_NOOP = "skip_noop"
+ACTION_SKIPPED = "skipped"
+ACTION_SKIPPED_WORKTREE = "skipped_worktree"
+ACTION_UNREADABLE = "unreadable"
+
+# Per-path outcomes of a `catch-up` plan. `caught_up` is the union the CLI
+# reports as "would change / did change"; the plan keeps `advanced` and
+# `created` apart because they mean different things about the ledger's prior
+# knowledge of the path.
+CATCH_UP_ADVANCED = "advanced"
+CATCH_UP_CREATED = "created"
+CATCH_UP_IN_SYNC = "in_sync"
+CATCH_UP_UNMEASURABLE = "unmeasurable"
+CATCH_UP_SKIPPED = "skipped"
+
+_CATCH_UP_HINT = "python3 .claude/hooks/ontology_tracker.py catch-up --since <ref>"
 
 
 def _is_worktree_path(file_path: str) -> bool:
@@ -493,44 +583,71 @@ def _is_git_ignored(resolved_path: Path) -> bool:
     return file_ignored
 
 
-def _should_skip(file_path: str) -> bool:
-    """Return True if this file should not be tracked.
+def _skip_reason(file_path: str, repo_root: Path | None = None) -> str | None:
+    """Name WHY this file is not tracked, or ``None`` if it should be.
 
-    Filters in order: substring patterns (fast path), worktree path
-    components, /tmp/ prefix, out-of-repo paths, the linked-worktree
-    structural check, then the owning-repo check-ignore backstop (#1039).
-    See module docstring for the rationale behind each rule.
+    The single skip predicate (:func:`_should_skip` is now a thin
+    ``is not None`` over it). Splitting the boolean into a named reason is
+    what lets :func:`check` return an action a caller can branch on instead
+    of a bare ``None`` that means five different things (#1219), and what
+    lets :func:`plan_catch_up` report *why* an in-scope path was passed over.
+
+    Filters in order — unchanged from the pre-#1219 boolean, reason names in
+    parentheses: substring patterns (``skip_pattern``, the fast path),
+    worktree path components (``worktree_path``), an unresolvable path
+    (``unresolvable``), the /tmp/ prefix (``tmp_prefix``), out-of-repo paths
+    (``out_of_repo``), the linked-worktree structural check
+    (``linked_worktree``), then the owning-repo check-ignore backstop
+    (``gitignored``, #1039). See module docstring for the rationale behind
+    each rule.
+
+    ``repo_root`` overrides the module-level :data:`REPO_ROOT` for the
+    out-of-repo test. The ``catch-up`` CLI passes its ``--repo-root`` through
+    here so the include policy is evaluated against the tree being caught up,
+    rather than against whichever checkout this file was imported from.
     """
+    root = REPO_ROOT if repo_root is None else repo_root
+
     for pattern in SKIP_PATTERNS:
         if pattern in file_path:
-            return True
+            return SKIP_PATTERN
 
     if _is_worktree_path(file_path):
-        return True
+        return SKIP_WORKTREE_PATH
 
     try:
         resolved = Path(file_path).resolve()
     except (OSError, RuntimeError):
         # Cannot resolve (e.g. broken symlink) — be conservative and skip.
-        return True
+        return SKIP_UNRESOLVABLE
 
     resolved_str = str(resolved)
     for prefix in SKIP_PREFIXES:
         if resolved_str.startswith(prefix):
-            return True
+            return SKIP_TMP_PREFIX
 
     try:
-        resolved.relative_to(REPO_ROOT)
+        resolved.relative_to(root)
     except ValueError:
-        return True
+        return SKIP_OUT_OF_REPO
 
     if _is_linked_worktree(resolved):
-        return True
+        return SKIP_LINKED_WORKTREE
 
     if _is_git_ignored(resolved):
-        return True
+        return SKIP_GITIGNORED
 
-    return False
+    return None
+
+
+def _should_skip(file_path: str, repo_root: Path | None = None) -> bool:
+    """Return True if this file should not be tracked.
+
+    Preserved as the boolean face of :func:`_skip_reason` — every pre-#1219
+    caller and test keeps working unchanged, and there is still exactly one
+    place the ordering of the filters is written down.
+    """
+    return _skip_reason(file_path, repo_root) is not None
 
 
 def _relative_path(file_path: str) -> str:
@@ -542,13 +659,127 @@ def _relative_path(file_path: str) -> str:
         return file_path
 
 
+def _canonical_key(resolved: Path) -> str | None:
+    """The repo-relative key a worktree-resident file will have on ``main``.
+
+    A linked worktree mirrors the repository layout, so the file's path
+    relative to its OWN git root is the same key ``_relative_path`` would
+    produce for that file on the main checkout. Returns ``None`` when the
+    root cannot be determined (no ``.git`` ancestor, or the resolved path is
+    somehow not under the root it was found from) — callers must treat that
+    as "no breadcrumb available" rather than substituting a guess.
+
+    This is a BREADCRUMB, not a key to write under. Recording a worktree
+    file's hash against its canonical key in the MAIN checkout's ledger would
+    claim that main's copy holds bytes it does not yet hold — manufacturing a
+    drifted entry for a file that is perfectly in sync on main, which is the
+    one outcome worse than the gap #1219 describes. The key is emitted so a
+    reader (and `catch-up --paths`) knows which entry to look at later.
+    """
+    git_root = _find_git_root(resolved)
+    if git_root is None:
+        return None
+    try:
+        return resolved.relative_to(git_root).as_posix()
+    except ValueError:
+        return None
+
+
+def _worktree_skip_result(file_path: str, reason: str) -> dict:
+    """The ``skipped_worktree`` return, plus the render channel's share of it.
+
+    Two channels, deliberately split (#1219, wave-31 bar clause 2):
+
+    * The RETURN VALUE always carries ``action="skipped_worktree"`` and, when
+      resolvable, the ``canonical_path`` breadcrumb. ``post_dispatcher``
+      branches on ``isinstance(result, dict)`` to decide whether to write a
+      ``posttooluse_dispatch`` annunaki trace record, so a dict here is the
+      difference between a recorded event and no evidence at all. Pre-#1219
+      this path returned ``None`` and was therefore indistinguishable, on
+      that branch, from "the tool was not Edit/Write".
+    * The RENDERED ``systemMessage`` is added only when the skip is losing
+      something REAL: the canonical path already has a ledger entry and this
+      file's bytes hash to something other than its ``last_tracked``. That is
+      the #1219 case exactly — an overlay-described file changing without the
+      overlay learning — and it is the one an agent can act on before the PR
+      merges. Emitting on every worktree Edit instead would put a banner on
+      essentially every edit this org makes (CLAUDE.md § worktrees), which is
+      how ``EMIT_DISPATCH_SUMMARY`` came to be default-off in the first
+      place; a warning nobody can avoid gets switched off, and then the
+      channel is worse than silent.
+
+    A brand-new worktree-only file has no entry to diverge from, so it takes
+    the quiet branch here. It is not left unaddressed: ``catch-up --since``
+    creates its entry once the merge makes a canonical file exist to hash.
+    Before the merge there is nothing on ``main`` to record.
+
+    Never raises: any failure reading or hashing degrades to the quiet
+    branch, because a PostToolUse advisory must not become a source of
+    errors on the path it is advising about.
+    """
+    result: dict = {"action": ACTION_SKIPPED_WORKTREE, "reason": reason, "path": file_path}
+    try:
+        resolved = Path(file_path).resolve()
+    except (OSError, RuntimeError):
+        return result
+
+    canonical = _canonical_key(resolved)
+    if canonical is None:
+        return result
+    result["canonical_path"] = canonical
+
+    try:
+        entry = checksums_io.read_checksums(CHECKSUMS_FILE).get("files", {}).get(canonical)
+        if not isinstance(entry, dict):
+            return result
+        stored = entry.get("last_tracked")
+        if not isinstance(stored, str) or not stored:
+            return result
+        sha = checksums_io.compute_sha256(resolved)
+    except OSError:
+        return result
+    if sha is None or sha == stored:
+        return result
+
+    result["diverged_from_ledger"] = True
+    result["systemMessage"] = (
+        f"ontology_tracker: this worktree edit will NOT reach ontology/checksums.json. "
+        f"`{canonical}` is tracked and now hashes to {sha[:12]}…, ledger stores "
+        f"{stored[:12]}…. Worktree paths are skipped by design (#523/#525); the entry "
+        f"catches up only when someone runs, on the main checkout after this merges:\n"
+        f"  {_CATCH_UP_HINT}   (#1219)"
+    )
+    return result
+
+
 def check(input_data: dict) -> dict | None:
     """Dispatcher-compatible entry point for PostToolUse Edit/Write.
 
-    Returns None when the hook is not applicable (wrong tool, skip-path,
-    unreadable file); returns an advisory dict describing the checksum
-    update when an entry is written. The dispatcher treats non-None as
-    advisory only.
+    Returns ``None`` ONLY when the hook is genuinely not applicable — the
+    tool is not Edit/Write, or the payload carries no ``file_path``. Every
+    call that reached a decision about a real file returns a dict naming that
+    decision in ``action`` (#1219):
+
+    ==================== ==========================================
+    ``action``           meaning
+    ==================== ==========================================
+    ``tracked``          an entry was written for this file
+    ``skip_noop``        already tracked at this exact hash; no write
+    ``skipped_worktree`` in a worktree — deliberately not tracked,
+                         and the canonical entry is now behind
+    ``skipped``          out of scope for another reason (``reason``
+                         names which: gitignored, /tmp, out-of-repo…)
+    ``unreadable``       in scope, but the file could not be hashed
+    ==================== ==========================================
+
+    Pre-#1219 the middle three all returned a bare ``None``, which
+    ``post_dispatcher`` cannot tell apart from "this hook did not apply" —
+    it only emits a dispatch-trace record for a dict. A worktree edit,
+    a gitignored edit, an unhashable file and a NotebookEdit therefore all
+    left exactly the same evidence: none. ``unreadable`` in particular was
+    the "could not evaluate" case reporting as the "nothing to do" case.
+
+    The dispatcher treats non-None as advisory only; it can never block.
     """
     tool_name = input_data.get("tool_name", "")
     if tool_name not in ("Edit", "Write"):
@@ -558,8 +789,11 @@ def check(input_data: dict) -> dict | None:
     if not file_path:
         return None
 
-    if _should_skip(file_path):
-        return None
+    reason = _skip_reason(file_path)
+    if reason is not None:
+        if reason in WORKTREE_SKIP_REASONS:
+            return _worktree_skip_result(file_path, reason)
+        return {"action": ACTION_SKIPPED, "reason": reason, "path": file_path}
 
     # THE shared hasher (#1505). It used to be a private `_compute_sha256`
     # here; the reader (`checksums_io.classify_against_file`) now compares the
@@ -567,7 +801,10 @@ def check(input_data: dict) -> dict | None:
     # a second copy free to drift would report every entry as drifted.
     sha = checksums_io.compute_sha256(Path(file_path))
     if sha is None:
-        return None
+        # In scope, but not measurable. "Could not evaluate" is not "nothing
+        # to do" — returning None here made an unhashable tracked file look
+        # exactly like a NotebookEdit (#1219, wave-31 bar clause 2a).
+        return {"action": ACTION_UNREADABLE, "path": _relative_path(file_path)}
 
     rel_path = _relative_path(file_path)
     now = datetime.now(timezone.utc).isoformat()
@@ -588,7 +825,7 @@ def check(input_data: dict) -> dict | None:
         # last_resolved`, not by `tracked_at`, so re-writing the full 103 KB
         # file here would change zero meaningful state — skip the write
         # (the read above still had to happen, to learn this).
-        return {"action": "skip_noop", "path": rel_path}
+        return {"action": ACTION_SKIP_NOOP, "path": rel_path}
 
     files[rel_path] = {
         "last_tracked": sha,
@@ -602,10 +839,502 @@ def check(input_data: dict) -> dict | None:
     except OSError:
         pass  # Never fail the hook
 
-    return {"action": "tracked", "path": rel_path}
+    return {"action": ACTION_TRACKED, "path": rel_path}
 
 
-def main() -> None:
+##############################################################################
+# catch-up (#1219) — the writer's answer to the skip it cannot avoid.
+##############################################################################
+
+CATCH_UP_EXIT_OK = 0
+CATCH_UP_EXIT_PENDING = 1
+CATCH_UP_EXIT_USAGE = 2
+CATCH_UP_EXIT_UNREADABLE = 3
+# "The scope was not fully measured." Covers both an in-scope path that could
+# not be hashed AND a scope in which nothing was hashed at all (#1521 review,
+# item 1). One code on purpose: a caller has the same job in both cases —
+# widen or fix the scope, and do NOT read the run as evidence of sync.
+CATCH_UP_EXIT_UNMEASURABLE = 4
+
+
+@dataclass(frozen=True)
+class CatchUpPlan:
+    """What a ``catch-up`` run WOULD change, computed without writing anything.
+
+    Every list holds ``(rel_path, detail)`` pairs and is sorted, so the dry-run
+    render and the applied render are the same text and a caller diffing two
+    runs sees a stable ordering.
+
+    * ``advanced`` — tracked, present, and hashes to something other than
+      ``last_tracked``. ``detail`` is the new hash.
+    * ``created`` — NOT tracked, present, and passes the include policy.
+      ``detail`` is the hash. This is case (b): the worktree-only new file.
+    * ``in_sync`` — tracked and already hashes to ``last_tracked``.
+    * ``unmeasurable`` — in scope but could not be hashed (absent from this
+      tree, unreadable). NOT clean, NOT caught up, and never deleted here —
+      dropping an entry is ``checksums_io.prune``'s guarded, preview-by-
+      default job, not a side effect of catching up.
+    * ``skipped`` — the include policy says this path is not the overlay's
+      business. ``detail`` is the ``_skip_reason`` name.
+    """
+
+    advanced: tuple[tuple[str, str], ...]
+    created: tuple[tuple[str, str], ...]
+    in_sync: tuple[tuple[str, str], ...]
+    unmeasurable: tuple[tuple[str, str], ...]
+    skipped: tuple[tuple[str, str], ...]
+
+    @property
+    def pending(self) -> tuple[tuple[str, str], ...]:
+        """Everything an ``--apply`` would write, advanced and created alike."""
+        return tuple(sorted(self.advanced + self.created))
+
+    @property
+    def measured(self) -> int:
+        """How many in-scope paths were actually HASHED.
+
+        The denominator that makes a zero interpretable. ``advanced``,
+        ``created`` and ``in_sync`` are the three outcomes reachable only by
+        opening the file; ``unmeasurable`` was attempted and failed, and
+        ``skipped`` was never attempted. So ``measured == 0`` means no file was
+        opened at all — the scope was empty, not clean — and the CLI owes that
+        a different exit code from a scope it measured and found in sync
+        (#1521 review, item 1).
+        """
+        return len(self.advanced) + len(self.created) + len(self.in_sync)
+
+
+def plan_catch_up(data: dict, repo_root: Path, rel_paths: list[str]) -> CatchUpPlan:
+    """Classify each in-scope path against the ledger. Pure: writes nothing.
+
+    ``rel_paths`` are repo-relative keys in the same namespace
+    :func:`_relative_path` writes. The include policy is :func:`_skip_reason`
+    evaluated against ``repo_root`` — the same predicate the hook itself uses,
+    not a second copy of it. That matters in both directions:
+
+    * ``ontology/checksums.json`` is itself a tracked entry AND matches
+      ``SKIP_PATTERNS``. Advancing its ``last_tracked`` would be a fixpoint
+      chase — the write changes the file whose hash was just recorded — so it
+      lands in ``skipped``, not ``advanced``.
+    * A child-repo path is NOT skipped: ``_is_git_ignored`` asks the file's
+      OWNING repo, and a child's committed source is not ignored by its own
+      ``.gitignore`` (#1039). Child entries are caught up like any other when
+      the clone is present, and land in ``unmeasurable`` when it is not.
+    """
+    files = data.get("files")
+    if not isinstance(files, dict):
+        files = {}
+    advanced: list[tuple[str, str]] = []
+    created: list[tuple[str, str]] = []
+    in_sync: list[tuple[str, str]] = []
+    unmeasurable: list[tuple[str, str]] = []
+    skipped: list[tuple[str, str]] = []
+
+    for rel in sorted(set(rel_paths)):
+        abs_path = repo_root / rel
+        entry = files.get(rel)
+        reason = _skip_reason(str(abs_path), repo_root)
+        if reason is not None:
+            skipped.append((rel, reason))
+            continue
+        sha = checksums_io.compute_sha256(abs_path) if abs_path.exists() else None
+        if sha is None:
+            if entry is None:
+                # Not tracked and not there — a deletion, or a path the
+                # caller named speculatively. Nothing was lost; say nothing.
+                continue
+            unmeasurable.append((rel, "tracked path could not be hashed from this tree"))
+            continue
+        if entry is None:
+            created.append((rel, sha))
+            continue
+        if not isinstance(entry, dict) or not isinstance(entry.get(_LAST_TRACKED), str):
+            # Malformed is the reader's verdict to give and `/ontology-rebuild`
+            # step 1's to repair. Overwriting it here would erase the evidence.
+            unmeasurable.append((rel, "entry schema is unrecognized — see `status`"))
+            continue
+        if entry[_LAST_TRACKED] == sha:
+            in_sync.append((rel, sha))
+            continue
+        advanced.append((rel, sha))
+
+    return CatchUpPlan(
+        advanced=tuple(advanced),
+        created=tuple(created),
+        in_sync=tuple(in_sync),
+        unmeasurable=tuple(unmeasurable),
+        skipped=tuple(skipped),
+    )
+
+
+def apply_catch_up(data: dict, plan: CatchUpPlan, now: str) -> int:
+    """Write ``plan``'s advances and creations into ``data``. Returns the count.
+
+    THE invariant, and the reason this is a separate function with its own
+    test: ``last_resolved`` and ``resolved_at`` are never written. Catching up
+    records that the file CHANGED, not that anyone read it. An entry this
+    touches therefore satisfies ``last_tracked != last_resolved`` and is
+    DIRTY — routed to ``/ontology-rebuild``, which is what "an edit happened"
+    has always meant. Copying the new hash into ``last_resolved`` as well
+    would take ``status`` to exit 0 on the strength of nobody having read
+    anything, which is precisely the false clean #1505 fixed and #1513 exists
+    to avoid manufacturing one layer along.
+    """
+    files = data.setdefault("files", {})
+    for rel, sha in plan.advanced:
+        entry = files[rel]
+        entry[_LAST_TRACKED] = sha
+        entry["tracked_at"] = now
+    for rel, sha in plan.created:
+        files[rel] = {
+            _LAST_TRACKED: sha,
+            "last_resolved": "",
+            "tracked_at": now,
+            "resolved_at": "",
+        }
+    return len(plan.advanced) + len(plan.created)
+
+
+def _paths_changed_since(repo_root: Path, ref: str) -> list[str] | None:
+    """Repo-relative paths differing between ``ref`` and the working tree.
+
+    ``git diff --name-only <ref> --`` rather than a two-dot range, so a merge
+    that landed the change AND anything still uncommitted are both in scope —
+    the post-merge catch-up is exactly the case where both can be true.
+
+    Returns ``None`` when the scope could not be established (not a git repo,
+    unknown ref, git unavailable). The caller must exit non-zero on ``None``:
+    an empty scope and an unevaluable scope both produce "0 paths caught up",
+    and only one of them is good news (wave-31 bar clause 2a).
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "-c", "core.quotePath=false", "diff", "--name-only", ref, "--"],
+            cwd=str(repo_root),
+            capture_output=True,
+            encoding="utf-8",
+            errors="surrogateescape",
+            env=_hermetic_git_env(),
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    return [line for line in proc.stdout.splitlines() if line]
+
+
+def _normalize_scope_path(raw: str, repo_root: Path) -> str | None:
+    """Accept an absolute or repo-relative path; return the repo-relative key."""
+    candidate = Path(raw)
+    if not candidate.is_absolute():
+        candidate = repo_root / candidate
+    try:
+        return candidate.resolve().relative_to(repo_root.resolve()).as_posix()
+    except (ValueError, OSError, RuntimeError):
+        return None
+
+
+def _render_catch_up(plan: CatchUpPlan, applied: bool, repo_root: Path) -> None:
+    """The human channel. Says which of the two zeroes a zero is."""
+    verb = "caught up" if applied else "would catch up"
+    print(
+        f"catch-up ({'APPLIED' if applied else 'DRY RUN'}) against {repo_root}: "
+        f"{len(plan.advanced)} advanced, {len(plan.created)} created, "
+        f"{len(plan.in_sync)} already in sync, {len(plan.unmeasurable)} unmeasurable, "
+        f"{len(plan.skipped)} out of scope"
+    )
+    for label, rows in (
+        (f"advanced (last_tracked -> file hash; becomes DIRTY, {verb})", plan.advanced),
+        (f"created (was untracked entirely; becomes DIRTY, {verb})", plan.created),
+        ("unmeasurable (in scope, NOT hashed — neither clean nor caught up)", plan.unmeasurable),
+    ):
+        if rows:
+            print(f"{label}:")
+            for rel, detail in rows:
+                print(f"  - {rel}: {detail}")
+    if plan.skipped:
+        print(f"out of scope ({len(plan.skipped)} path(s), by _skip_reason):")
+        for rel, detail in plan.skipped:
+            print(f"  - {rel}: {detail}")
+
+    if not plan.pending and not plan.unmeasurable:
+        # Both branches below are driven by `plan.measured`, the SAME predicate
+        # `_catch_up_cli` returns its exit code from. Keeping them on one
+        # predicate is the fix for #1521 review item 1: the render already told
+        # these two zeroes apart while the exit code did not, so a consumer
+        # branching on the code (the #1284/#1285 wrap gate) saw one outcome
+        # where a human saw two.
+        if plan.measured == 0:
+            # The zero that is NOT good news: nothing was hashed at all. Every
+            # named path was filtered out by the include policy, or the scope
+            # selector matched nothing. Saying "nothing to catch up" here would
+            # be the same silent zero this whole row is about.
+            print(
+                f"VERDICT: NOTHING MEASURED (exit {CATCH_UP_EXIT_UNMEASURABLE}) - 0 "
+                f"in-scope path(s) were hashed ({len(plan.skipped)} filtered out by the "
+                "include policy). This is an EMPTY SCOPE, not a clean one; widen "
+                "--since/--paths or check the reasons above."
+            )
+            return
+        print(
+            f"VERDICT: NOTHING TO CATCH UP (exit {CATCH_UP_EXIT_OK}) - every one of the "
+            f"{plan.measured} in-scope path(s) was hashed and already matches its "
+            "last_tracked. This is a measured zero, not an empty scope."
+        )
+        return
+    if applied:
+        print(
+            f"VERDICT: APPLIED - {len(plan.pending)} entr(y/ies) now carry the file's "
+            "current hash in last_tracked. last_resolved was NOT written, so they read "
+            "DIRTY: run /ontology-rebuild to reconcile the overlay against them."
+        )
+    else:
+        print(
+            f"VERDICT: PENDING - {len(plan.pending)} entr(y/ies) are behind their file "
+            "and nothing was written (dry run). Re-run with --apply to record them as "
+            "DIRTY."
+        )
+    if plan.unmeasurable:
+        print(
+            f"  {len(plan.unmeasurable)} in-scope path(s) could NOT be measured and were "
+            "left exactly as they were. Not caught up, not clean, not pruned."
+        )
+        # No "you are in a worktree" hint here, deliberately: `_catch_up_cli`
+        # refuses a linked-worktree root before it ever renders, so a branch
+        # for that case would be unreachable. An earlier revision had one; a
+        # mutation sweep found no test could kill it, which is what dead code
+        # looks like from the outside. The advice lives on the refusal.
+
+
+def _catch_up_cli(argv: list[str]) -> int:
+    """``catch-up`` subcommand body (#1219).
+
+    Usage::
+
+        ontology_tracker.py catch-up --since <ref>  [--apply] [--json]
+        ontology_tracker.py catch-up --paths <p>... [--apply] [--json]
+        ontology_tracker.py catch-up --all          [--apply] [--json]
+            [--repo-root <dir>] [--checksums <file>]
+
+    Two safety properties are deliberate and tested, not incidental:
+
+    * DRY RUN BY DEFAULT. ``--apply`` is the only way to write. A tool that
+      rewrites half the ledger on a bare invocation is not one anybody should
+      run to find out what it would do.
+    * AN EXPLICIT SCOPE IS REQUIRED. There is no default scope, because the
+      only sensible default would be "everything", and running this over
+      everything today would convert all 158 drifted entries to dirty in one
+      unreviewed step. THAT DECISION BELONGS TO #1513, not to whoever types
+      the command; ``--all`` exists so #1513 has a mechanism to invoke, and
+      says so on every run.
+
+    Exit codes — a caller can branch on all five outcomes:
+        0 — at least one in-scope file was HASHED and nothing is behind (a
+            MEASURED zero), or ``--apply`` completed with everything in scope
+            measured. This is the ONLY code that means "in sync".
+        1 — dry run, and there is pending work
+        2 — usage error: a missing scope selector, an unknown flag, or a
+            ``--paths`` argument that does not resolve inside the repo root
+        3 — nothing could be evaluated at all: the ledger is unreadable, the
+            ``--repo-root`` is a linked worktree, or ``--since``'s ref did not
+            resolve. Never 0 — "could not evaluate" is not "nothing to do"
+            (wave-31 bar clause 2a)
+        4 — THE SCOPE WAS NOT FULLY MEASURED. Two ways in, deliberately
+            sharing one code because a caller must treat them alike:
+              * some in-scope tracked path could not be hashed (absent,
+                unreadable, or a malformed entry), or
+              * NOTHING was hashed — every named path was filtered out by the
+                include policy, or the selector matched nothing. An empty
+                scope is not a clean one, and before #1521's review it exited
+                0, identical to a scope that was measured and found in sync.
+                The render said "NOTHING MEASURED" vs "NOTHING TO CATCH UP";
+                the exit code said the same thing to both, which is the half a
+                gate actually branches on.
+            4 outranks 1 and 0 for the same reason ``status``'s 4 outranks its
+            1: a scope that was only partly measured, or not measured at all,
+            must not report as one that was measured.
+    """
+    apply_changes = False
+    as_json = False
+    scope_all = False
+    since: str | None = None
+    explicit_paths: list[str] = []
+    checksums_path = CHECKSUMS_FILE
+    repo_root_arg: Path | None = None
+
+    rest = list(argv)
+    while rest:
+        arg = rest[0]
+        if arg == "--apply":
+            apply_changes, rest = True, rest[1:]
+        elif arg == "--dry-run":
+            apply_changes, rest = False, rest[1:]
+        elif arg == "--json":
+            as_json, rest = True, rest[1:]
+        elif arg == "--all":
+            scope_all, rest = True, rest[1:]
+        elif arg in ("--since", "--repo-root", "--checksums"):
+            if len(rest) < 2:
+                print(f"error: {arg} requires an argument", file=sys.stderr)
+                return CATCH_UP_EXIT_USAGE
+            if arg == "--since":
+                since = rest[1]
+            elif arg == "--repo-root":
+                repo_root_arg = Path(rest[1])
+            else:
+                checksums_path = Path(rest[1])
+            rest = rest[2:]
+        elif arg == "--paths":
+            rest = rest[1:]
+            while rest and not rest[0].startswith("--"):
+                explicit_paths.append(rest[0])
+                rest = rest[1:]
+            if not explicit_paths:
+                print("error: --paths requires at least one path", file=sys.stderr)
+                return CATCH_UP_EXIT_USAGE
+        else:
+            print(f"error: unexpected argument {arg!r} for catch-up", file=sys.stderr)
+            return CATCH_UP_EXIT_USAGE
+
+    if not (scope_all or since or explicit_paths):
+        print(
+            "error: catch-up requires an explicit scope — one of --since <ref>, "
+            "--paths <p>..., or --all.\n"
+            "       There is no default scope on purpose: the only sensible default "
+            "would be everything,\n"
+            "       and the wholesale pass over the currently-drifted entries is "
+            "#1513's decision, not this\n"
+            "       command's. See --help on _catch_up_cli.",
+            file=sys.stderr,
+        )
+        return CATCH_UP_EXIT_USAGE
+
+    repo_root = (
+        checksums_io.repo_root_for(checksums_path) if repo_root_arg is None else repo_root_arg
+    ).resolve()
+
+    if checksums_io.is_linked_worktree_root(repo_root):
+        # Refuse rather than run. From a linked worktree EVERY path resolves
+        # through `_is_linked_worktree` and is filtered out, so the run would
+        # complete, write nothing, and report a large "out of scope" count —
+        # a zero that reads like success. The premise of catch-up is a real
+        # checkout; say so instead of producing an unusable clean run.
+        print(
+            f"error: {repo_root} is a linked worktree. Every path under it is filtered "
+            "out by the same worktree skip catch-up exists to compensate for, so this "
+            "run could only ever report an empty scope. Run from the main checkout, or "
+            "pass --repo-root <main-checkout> --checksums <main-checkout>/ontology/"
+            "checksums.json.",
+            file=sys.stderr,
+        )
+        return CATCH_UP_EXIT_UNREADABLE
+
+    try:
+        data = checksums_io.read_checksums_strict(checksums_path)
+    except checksums_io.ChecksumsUnreadable as exc:
+        # NOT exit 0 with a zero count. Nothing was evaluated.
+        print(f"error: {exc}", file=sys.stderr)
+        return CATCH_UP_EXIT_UNREADABLE
+
+    scope: set[str] = set()
+    if scope_all:
+        tracked = data.get("files")
+        scope.update(tracked if isinstance(tracked, dict) else ())
+    if since is not None:
+        changed = _paths_changed_since(repo_root, since)
+        if changed is None:
+            print(
+                f"error: could not evaluate --since {since!r} against {repo_root} "
+                "(not a git repository, unknown ref, or git unavailable). "
+                "Refusing to report an unevaluated scope as an empty one.",
+                file=sys.stderr,
+            )
+            return CATCH_UP_EXIT_UNREADABLE
+        scope.update(changed)
+    for raw in explicit_paths:
+        rel = _normalize_scope_path(raw, repo_root)
+        if rel is None:
+            print(f"error: {raw!r} does not resolve inside {repo_root}", file=sys.stderr)
+            return CATCH_UP_EXIT_USAGE
+        scope.add(rel)
+
+    plan = plan_catch_up(data, repo_root, sorted(scope))
+
+    written = 0
+    if apply_changes and plan.pending:
+        written = apply_catch_up(data, plan, datetime.now(timezone.utc).isoformat())
+        checksums_io.write_checksums(checksums_path, data)
+
+    if as_json:
+        json.dump(
+            {
+                "checksums": str(checksums_path),
+                "repo_root": str(repo_root),
+                "applied": apply_changes,
+                "written": written,
+                "scope_size": len(scope),
+                "advanced": [{"path": p, "hash": h} for p, h in plan.advanced],
+                "created": [{"path": p, "hash": h} for p, h in plan.created],
+                "in_sync": [p for p, _ in plan.in_sync],
+                "unmeasurable": [{"path": p, "reason": r} for p, r in plan.unmeasurable],
+                "skipped": [{"path": p, "reason": r} for p, r in plan.skipped],
+            },
+            sys.stdout,
+            indent=2,
+            ensure_ascii=False,
+        )
+        sys.stdout.write("\n")
+    else:
+        _render_catch_up(plan, applied=apply_changes, repo_root=repo_root)
+        if scope_all:
+            print(
+                "  NOTE: --all was used. Advancing every drifted entry in one pass is "
+                "the decision #1513 owns; this command is the mechanism, not the "
+                "authorization."
+            )
+
+    if plan.unmeasurable or plan.measured == 0:
+        # Two ways the scope was not fully measured, one exit code (#1521
+        # review, item 1). `plan.measured == 0` is the empty scope: the render
+        # already distinguished "NOTHING MEASURED" from "NOTHING TO CATCH UP",
+        # but both returned 0, so the channel a gate branches on could not tell
+        # them apart — and a test asserting that 0 specified the fail-open as
+        # intended behaviour. Live example: `ontology/checksums.json` is on the
+        # current drifted list AND is a SKIP_PATTERNS match, so
+        # `catch-up --paths ontology/checksums.json --apply` hashed nothing and
+        # still exited 0.
+        return CATCH_UP_EXIT_UNMEASURABLE
+    if plan.pending and not apply_changes:
+        return CATCH_UP_EXIT_PENDING
+    return CATCH_UP_EXIT_OK
+
+
+_CLI_USAGE = (
+    "usage: ontology_tracker.py catch-up (--since REF | --paths P... | --all)\n"
+    "                                    [--apply] [--dry-run] [--json]\n"
+    "                                    [--repo-root DIR] [--checksums PATH]\n"
+    "\n"
+    "With no arguments this module is a PostToolUse hook and reads its payload\n"
+    "from stdin. See the module docstring."
+)
+
+
+def main(argv: list[str] | None = None) -> None:
+    """Hook mode (no argv) or CLI mode (argv), discriminated by argv alone.
+
+    The PostToolUse dispatcher imports this module and calls :func:`check`
+    directly, and the standalone hook invocation passes no arguments, so
+    neither can reach the CLI branch. Hook mode keeps its unconditional exit
+    0 — an advisory hook must never fail the tool call it observes.
+    """
+    args = sys.argv[1:] if argv is None else list(argv)
+    if args:
+        if args[0] != "catch-up":
+            print(_CLI_USAGE, file=sys.stderr)
+            sys.exit(CATCH_UP_EXIT_USAGE)
+        sys.exit(_catch_up_cli(args[1:]))
+
     try:
         input_data = json.load(sys.stdin)
     except (json.JSONDecodeError, EOFError):
