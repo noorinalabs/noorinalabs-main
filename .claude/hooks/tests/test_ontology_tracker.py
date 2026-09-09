@@ -1959,6 +1959,47 @@ class CatchUpCliTests(_MergeScenarioMixin, unittest.TestCase):
         self.assertIn("ontology/checksums.json: skip_pattern", out)
         self.assertEqual(self._entries()["ontology/checksums.json"]["last_tracked"], "c" * 64)
 
+    def test_malformed_entries_are_unmeasurable_and_left_byte_identical(self):
+        """#1521 review item 2 — the malformed guard was inert.
+
+        Both shapes the reader classifies as MALFORMED, reachable on exactly
+        the ``--all`` run #1513 will make:
+
+        * ``"last_tracked": null`` — well-formed JSON, wrong type. Without the
+          guard, ``entry.get(...) == sha`` is False, so it is silently
+          ADVANCED to a real hash, erasing the malformed state
+          ``/ontology-rebuild`` step 1 exists to repair.
+        * a non-dict entry — without the guard, ``entry[_LAST_TRACKED]``
+          raises an uncaught ``TypeError`` whose traceback exits 1, colliding
+          with ``CATCH_UP_EXIT_PENDING``.
+
+        Malformed is the reader's verdict to give and step 1's to repair.
+        Catch-up's only correct move is to report it and touch nothing.
+        """
+        entries = self._entries()
+        entries["ontology/null_hash.yaml"] = {
+            "last_tracked": None,
+            "last_resolved": "",
+            "tracked_at": "",
+            "resolved_at": "",
+        }
+        entries["ontology/not_an_object.yaml"] = "definitely not a dict"
+        self._write_ledger(entries)
+        for rel in ("ontology/null_hash.yaml", "ontology/not_an_object.yaml"):
+            (self._fake_root / rel).write_text("entities: []\n", encoding="utf-8")
+        before = self.ledger.read_bytes()
+
+        code, out, _ = self._catch_up("--all", "--apply")
+
+        self.assertEqual(code, hook.CATCH_UP_EXIT_UNMEASURABLE)
+        self.assertIn("ontology/null_hash.yaml: entry schema is unrecognized", out)
+        self.assertIn("ontology/not_an_object.yaml: entry schema is unrecognized", out)
+        # Nothing else in scope was pending, so --apply must have written
+        # nothing at all: the malformed entries are preserved byte for byte.
+        self.assertEqual(self.ledger.read_bytes(), before)
+        self.assertIsNone(self._entries()["ontology/null_hash.yaml"]["last_tracked"])
+        self.assertEqual(self._entries()["ontology/not_an_object.yaml"], "definitely not a dict")
+
     def test_all_says_out_loud_that_the_wholesale_pass_belongs_to_1513(self):
         _, out, _ = self._catch_up("--all")
         self.assertIn("#1513", out)
