@@ -850,6 +850,10 @@ CATCH_UP_EXIT_OK = 0
 CATCH_UP_EXIT_PENDING = 1
 CATCH_UP_EXIT_USAGE = 2
 CATCH_UP_EXIT_UNREADABLE = 3
+# "The scope was not fully measured." Covers both an in-scope path that could
+# not be hashed AND a scope in which nothing was hashed at all (#1521 review,
+# item 1). One code on purpose: a caller has the same job in both cases —
+# widen or fix the scope, and do NOT read the run as evidence of sync.
 CATCH_UP_EXIT_UNMEASURABLE = 4
 
 
@@ -884,6 +888,20 @@ class CatchUpPlan:
     def pending(self) -> tuple[tuple[str, str], ...]:
         """Everything an ``--apply`` would write, advanced and created alike."""
         return tuple(sorted(self.advanced + self.created))
+
+    @property
+    def measured(self) -> int:
+        """How many in-scope paths were actually HASHED.
+
+        The denominator that makes a zero interpretable. ``advanced``,
+        ``created`` and ``in_sync`` are the three outcomes reachable only by
+        opening the file; ``unmeasurable`` was attempted and failed, and
+        ``skipped`` was never attempted. So ``measured == 0`` means no file was
+        opened at all — the scope was empty, not clean — and the CLI owes that
+        a different exit code from a scope it measured and found in sync
+        (#1521 review, item 1).
+        """
+        return len(self.advanced) + len(self.created) + len(self.in_sync)
 
 
 def plan_catch_up(data: dict, repo_root: Path, rel_paths: list[str]) -> CatchUpPlan:
@@ -1041,22 +1059,28 @@ def _render_catch_up(plan: CatchUpPlan, applied: bool, repo_root: Path) -> None:
             print(f"  - {rel}: {detail}")
 
     if not plan.pending and not plan.unmeasurable:
-        if not plan.in_sync:
+        # Both branches below are driven by `plan.measured`, the SAME predicate
+        # `_catch_up_cli` returns its exit code from. Keeping them on one
+        # predicate is the fix for #1521 review item 1: the render already told
+        # these two zeroes apart while the exit code did not, so a consumer
+        # branching on the code (the #1284/#1285 wrap gate) saw one outcome
+        # where a human saw two.
+        if plan.measured == 0:
             # The zero that is NOT good news: nothing was hashed at all. Every
             # named path was filtered out by the include policy, or the scope
             # selector matched nothing. Saying "nothing to catch up" here would
             # be the same silent zero this whole row is about.
             print(
-                f"VERDICT: NOTHING MEASURED - 0 in-scope tracked path(s) were hashed "
-                f"({len(plan.skipped)} filtered out by the include policy). This is an "
-                "EMPTY SCOPE, not a clean one; widen --since/--paths or check the "
-                "reasons above."
+                f"VERDICT: NOTHING MEASURED (exit {CATCH_UP_EXIT_UNMEASURABLE}) - 0 "
+                f"in-scope path(s) were hashed ({len(plan.skipped)} filtered out by the "
+                "include policy). This is an EMPTY SCOPE, not a clean one; widen "
+                "--since/--paths or check the reasons above."
             )
             return
         print(
-            f"VERDICT: NOTHING TO CATCH UP - every one of the "
-            f"{len(plan.in_sync)} in-scope tracked path(s) was hashed and already "
-            f"matches its last_tracked. This is a measured zero, not an empty scope."
+            f"VERDICT: NOTHING TO CATCH UP (exit {CATCH_UP_EXIT_OK}) - every one of the "
+            f"{plan.measured} in-scope path(s) was hashed and already matches its "
+            "last_tracked. This is a measured zero, not an empty scope."
         )
         return
     if applied:
@@ -1105,17 +1129,31 @@ def _catch_up_cli(argv: list[str]) -> int:
       the command; ``--all`` exists so #1513 has a mechanism to invoke, and
       says so on every run.
 
-    Exit codes — a caller can branch on all four outcomes:
-        0 — the scope was evaluated and nothing is behind (a MEASURED zero)
-            or ``--apply`` completed with everything in scope measured
+    Exit codes — a caller can branch on all five outcomes:
+        0 — at least one in-scope file was HASHED and nothing is behind (a
+            MEASURED zero), or ``--apply`` completed with everything in scope
+            measured. This is the ONLY code that means "in sync".
         1 — dry run, and there is pending work
-        2 — usage error (including a missing scope selector)
-        3 — nothing could be evaluated: the ledger is unreadable, or
-            ``--since``'s ref did not resolve. Never 0 — "could not evaluate"
-            is not "nothing to do" (wave-31 bar clause 2a)
-        4 — some in-scope paths could not be measured. Outranks 1 and 0 for
-            the same reason ``status``'s 4 outranks its 1: a scope that was
-            only partly measured must not report as one that was measured.
+        2 — usage error: a missing scope selector, an unknown flag, or a
+            ``--paths`` argument that does not resolve inside the repo root
+        3 — nothing could be evaluated at all: the ledger is unreadable, the
+            ``--repo-root`` is a linked worktree, or ``--since``'s ref did not
+            resolve. Never 0 — "could not evaluate" is not "nothing to do"
+            (wave-31 bar clause 2a)
+        4 — THE SCOPE WAS NOT FULLY MEASURED. Two ways in, deliberately
+            sharing one code because a caller must treat them alike:
+              * some in-scope tracked path could not be hashed (absent,
+                unreadable, or a malformed entry), or
+              * NOTHING was hashed — every named path was filtered out by the
+                include policy, or the selector matched nothing. An empty
+                scope is not a clean one, and before #1521's review it exited
+                0, identical to a scope that was measured and found in sync.
+                The render said "NOTHING MEASURED" vs "NOTHING TO CATCH UP";
+                the exit code said the same thing to both, which is the half a
+                gate actually branches on.
+            4 outranks 1 and 0 for the same reason ``status``'s 4 outranks its
+            1: a scope that was only partly measured, or not measured at all,
+            must not report as one that was measured.
     """
     apply_changes = False
     as_json = False
@@ -1256,7 +1294,16 @@ def _catch_up_cli(argv: list[str]) -> int:
                 "authorization."
             )
 
-    if plan.unmeasurable:
+    if plan.unmeasurable or plan.measured == 0:
+        # Two ways the scope was not fully measured, one exit code (#1521
+        # review, item 1). `plan.measured == 0` is the empty scope: the render
+        # already distinguished "NOTHING MEASURED" from "NOTHING TO CATCH UP",
+        # but both returned 0, so the channel a gate branches on could not tell
+        # them apart — and a test asserting that 0 specified the fail-open as
+        # intended behaviour. Live example: `ontology/checksums.json` is on the
+        # current drifted list AND is a SKIP_PATTERNS match, so
+        # `catch-up --paths ontology/checksums.json --apply` hashed nothing and
+        # still exited 0.
         return CATCH_UP_EXIT_UNMEASURABLE
     if plan.pending and not apply_changes:
         return CATCH_UP_EXIT_PENDING

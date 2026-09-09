@@ -1839,17 +1839,48 @@ class CatchUpCliTests(_MergeScenarioMixin, unittest.TestCase):
         self.assertIn("measured zero", out)
 
     def test_an_empty_scope_is_not_reported_as_a_clean_one(self):
-        """The silent-zero guard: 0 hashed != 0 behind.
+        """The silent-zero guard: 0 hashed != 0 behind, ON BOTH CHANNELS.
 
-        Naming only paths the include policy filters out hashes nothing. The
-        pre-#1219 shape of this bug is exactly a count of zero that reads as
-        health, so the verdict has to say which zero it is.
+        The fixture is the live case from the #1521 review: `ontology/
+        checksums.json` is on the real drifted list AND is a `SKIP_PATTERNS`
+        match, so `catch-up --paths ontology/checksums.json --apply` hashes
+        nothing whatsoever.
+
+        An earlier revision of this test asserted `code == CATCH_UP_EXIT_OK`
+        here. That distinguished the two zeroes on the RENDER while pinning
+        them as identical on the exit code — which the amended wave-31 bar
+        names verbatim as specifying the defect as intended behaviour, and the
+        exit code is precisely what the #1284/#1285 wrap gate will branch on.
         """
-        code, out, _ = self._catch_up("--paths", "ontology/checksums.json")
-        self.assertEqual(code, hook.CATCH_UP_EXIT_OK)
+        code, out, _ = self._catch_up("--paths", "ontology/checksums.json", "--apply")
+        self.assertEqual(code, hook.CATCH_UP_EXIT_UNMEASURABLE)
         self.assertIn("VERDICT: NOTHING MEASURED", out)
         self.assertIn("EMPTY SCOPE, not a clean one", out)
         self.assertNotIn("NOTHING TO CATCH UP", out)
+
+    def test_the_two_zeroes_differ_on_the_exit_code_not_only_the_render(self):
+        """The comparison the bar asks for, made directly.
+
+        Same command shape, same "nothing changed" outcome, two scopes: one
+        where a file was hashed and matched, one where no file was opened. If
+        these ever return the same code again, a gate that treats 0 as "in
+        sync" silently passes on a scope it never measured.
+        """
+        measured_code, measured_out, _ = self._catch_up("--paths", self.TRACKED_REL)
+        empty_code, empty_out, _ = self._catch_up("--paths", "ontology/checksums.json")
+
+        self.assertEqual(measured_code, hook.CATCH_UP_EXIT_OK)
+        self.assertEqual(empty_code, hook.CATCH_UP_EXIT_UNMEASURABLE)
+        self.assertNotEqual(measured_code, empty_code)
+        self.assertIn("NOTHING TO CATCH UP", measured_out)
+        self.assertIn("NOTHING MEASURED", empty_out)
+
+    def test_a_selector_that_matches_nothing_at_all_is_also_exit_4(self):
+        """`--since HEAD` on a clean tree names zero paths. Zero named is zero
+        hashed, which is the empty scope by another route."""
+        code, out, _ = self._catch_up("--since", "HEAD")
+        self.assertEqual(code, hook.CATCH_UP_EXIT_UNMEASURABLE)
+        self.assertIn("VERDICT: NOTHING MEASURED", out)
 
     def test_missing_scope_selector_is_a_usage_error_not_a_wholesale_run(self):
         code, _, err = self._catch_up()
