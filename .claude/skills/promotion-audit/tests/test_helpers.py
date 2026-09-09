@@ -1320,5 +1320,302 @@ class StripUrlBodiesTests(unittest.TestCase):
             os.unlink(path)
 
 
+# ---------------------------------------------------------------------------
+# Provenance-aware citation filtering (main#1469)
+#
+# `count_section_citations` and `count_retro_citations` used to be a bare
+# `text.count(...)` over the feedback-log corpus. That corpus is WRITTEN BY
+# the same instruments that read it — `/wave-retro` Step 7.5 reports every
+# AUTO/DECIDE/KEPT verdict by heading or filename, Step 7.7 reports citation
+# counts back into the log, and Step 7.8's size/age sweep prints a flagged
+# file's bare name every wave regardless of whether anyone cited it. A fix
+# that filters these self-generated shapes must be pinned against a FIXTURE
+# corpus that reproduces the shape — the live feedback_log.md changes every
+# wave and would make these tests non-deterministic.
+# ---------------------------------------------------------------------------
+
+
+class CountGenuineCitationsTests(unittest.TestCase):
+    """Direct unit tests of the shared primitive, isolating each of the
+    four excluded shapes plus the genuine-citation case."""
+
+    def test_plain_genuine_citation_counts(self) -> None:
+        text = (
+            "Cross-Contract cited: per Charter § Cross-Contract PRs, alembic merge "
+            "migration is now in main.\n"
+        )
+        self.assertEqual(h.count_genuine_citations(text, "Cross-Contract PRs"), 1)
+
+    def test_forward_reference_excluded(self) -> None:
+        """Single-clause fixture: only `_is_forward_reference` fires here.
+
+        PR #1519 merge-gate review (Nadia Khoury, mutant b1): the original
+        fixture for this test ("Proposed location: charter
+        `pull-requests.md` § Cross-Contract PRs OR new § Design-Rationale
+        Blocks.") is classified by THREE clauses at once
+        (`_is_forward_reference` True via "Proposed", `_is_creation_record`
+        True via "new §", `_is_wave_summary_listing` True via its two "§"
+        marks), so disabling the forward-reference clause alone left the
+        whole suite green -- the test never actually exercised it. This
+        fixture has no "new §"/"Charter home:"/"per process-change" phrase
+        and only one "§" mark, so only the forward-reference clause can
+        classify it as non-genuine."""
+        text = "Proposed location: charter `pull-requests.md` under Cross-Contract PRs.\n"
+        self.assertEqual(h.count_genuine_citations(text, "Cross-Contract PRs"), 0)
+
+    def test_forward_reference_still_excluded_alongside_other_clauses(self) -> None:
+        """The original multi-clause fixture stays green as a second,
+        non-load-bearing sanity check that multiple simultaneously-firing
+        exclusion clauses don't conflict — but it is NOT what pins the
+        forward-reference clause (see `test_forward_reference_excluded`
+        above for the single-clause fixture that does)."""
+        text = (
+            "Proposed location: charter `pull-requests.md` § Cross-Contract PRs OR "
+            "new § Design-Rationale Blocks.\n"
+        )
+        self.assertEqual(h.count_genuine_citations(text, "Cross-Contract PRs"), 0)
+
+    def test_creation_record_excluded(self) -> None:
+        text = (
+            "   - Charter home: `charter/pull-requests.md` § Cross-Contract PRs.\n"
+            '2. `charter/pull-requests.md`: new § "Cross-Contract PRs" per process-change #2.\n'
+        )
+        self.assertEqual(h.count_genuine_citations(text, "Cross-Contract PRs"), 0)
+
+    def test_audit_self_report_signal_shape_excluded(self) -> None:
+        text = (
+            "#1355's promotion-gate fix produced the first AUTO promotion "
+            "(`wave-merge.md § Cross-Contract PRs`, `section_citations=5 >= 5`) "
+            "— a gate that was structurally 0-of-25-eligible now passes.\n"
+        )
+        self.assertEqual(h.count_genuine_citations(text, "Cross-Contract PRs"), 0)
+
+    def test_audit_self_report_verdict_prose_excluded(self) -> None:
+        text = (
+            "### Call 1 — the AUTO promotion (`wave-merge.md` § Cross-Contract PRs) "
+            "→ NOT promoted\n"
+        )
+        self.assertEqual(h.count_genuine_citations(text, "Cross-Contract PRs"), 0)
+
+    def test_audit_self_report_cited_nx_shape_excluded(self) -> None:
+        text = (
+            "`feedback_fixture_makes_guard_assertion_inert` flagged by two "
+            "orthogonal instruments — `promotion_target=none` while cited 6x "
+            "(stale opt-out)\n"
+        )
+        self.assertEqual(
+            h.count_genuine_citations(text, "feedback_fixture_makes_guard_assertion_inert"), 0
+        )
+
+    def test_audit_self_report_size_sweep_shape_excluded(self) -> None:
+        text = (
+            "3 files flagged (advisory, non-blocking): `project_x.md`, "
+            "`feedback_fixture_makes_guard_assertion_inert.md`, `feedback_y.md`.\n"
+            "| feedback_fixture_makes_guard_assertion_inert.md | 22,005 B | 1d | Keep |\n"
+        )
+        self.assertEqual(
+            h.count_genuine_citations(text, "feedback_fixture_makes_guard_assertion_inert"), 0
+        )
+
+    def test_wave_summary_listing_excluded(self) -> None:
+        text = (
+            "- Ontology rebuilds across the wave; charter updates (agents.md, "
+            "hooks.md, issues.md) for single-session-team delegation pattern + "
+            "Cross-Contract PRs § + Load-Bearing Followups §.\n"
+        )
+        self.assertEqual(h.count_genuine_citations(text, "Cross-Contract PRs"), 0)
+
+    def test_empty_needle_returns_zero_not_corpus_length(self) -> None:
+        """Mirrors `count_section_citations`'s blank-heading guard: an empty
+        needle must never fall through to `str.count`'s `len(text) + 1`
+        behavior."""
+        text = "some reasonably long corpus text so the bug would be obvious\n" * 10
+        self.assertEqual(h.count_genuine_citations(text, ""), 0)
+
+    def test_mixed_corpus_counts_only_the_genuine_occurrence(self) -> None:
+        """The wave-30 `Cross-Contract PRs` shape, reproduced as a fixture
+        (not the live feedback log, which changes every wave): 2 creation
+        records, 1 genuine application, 1 wave-summary listing, 1 forward
+        reference, 3 self-generated audit/retro report lines. Honest count
+        per the issue's own tracing: 1."""
+        text = "\n".join(
+            [
+                "   - Charter home: `charter/pull-requests.md` § Cross-Contract PRs.",
+                '2. `charter/pull-requests.md`: new § "Cross-Contract PRs" per process-change #2.',
+                "- Cross-Contract cited: per Charter § Cross-Contract PRs, alembic merge "
+                "migration is now in main (was P2W10 critical-path).",
+                "- Ontology rebuilds across the wave; charter updates (agents.md, hooks.md, "
+                "issues.md) for single-session-team delegation pattern + Cross-Contract PRs "
+                "§ + Load-Bearing Followups §.",
+                "Proposed location: charter `pull-requests.md` § Cross-Contract PRs OR new "
+                "§ Design-Rationale Blocks.",
+                "#1355's promotion-gate fix produced the first AUTO promotion in ~20 recorded "
+                "waves (`wave-merge.md § Cross-Contract PRs`, `section_citations=5 >= 5`) — a "
+                "gate that was structurally 0-of-25-eligible now passes.",
+                "**1 AUTO · 0 DECIDE · 255 KEPT · 22 SUPERSEDED.** The AUTO is `wave-merge.md "
+                "§ Cross-Contract PRs` (charter → skill, `section_citations=5 >= 5`) — the "
+                "first AUTO promotion in ~20 recorded waves.",
+                "### Call 1 — the AUTO promotion (`wave-merge.md` § Cross-Contract PRs) "
+                "→ NOT promoted",
+            ]
+        )
+        self.assertEqual(h.count_genuine_citations(text, "Cross-Contract PRs"), 1)
+
+
+class CountSectionCitationsProvenanceTests(unittest.TestCase):
+    """`count_section_citations` wired through the provenance filter."""
+
+    def _section(self, **kwargs: object) -> h.CharterSection:
+        defaults: dict[str, object] = {
+            "path": "/fake/charter/wave-merge.md",
+            "heading": "Cross-Contract PRs",
+            "promotion_target": "skill",
+            "body": "body",
+            "promoted_to": "",
+        }
+        defaults.update(kwargs)
+        return h.CharterSection(**defaults)  # type: ignore[arg-type]
+
+    def test_wave30_shape_falls_below_threshold(self) -> None:
+        """PRE-FIX: `count_section_citations` was a bare `text.count(...)`
+        and returned 8 for this fixture (every literal heading occurrence,
+        including the audit's own reporting of the AUTO verdict it produced).
+        POST-FIX: only the one genuine application counts."""
+        log = "\n".join(
+            [
+                "   - Charter home: `charter/pull-requests.md` § Cross-Contract PRs.",
+                '2. `charter/pull-requests.md`: new § "Cross-Contract PRs" per process-change #2.',
+                "- Cross-Contract cited: per Charter § Cross-Contract PRs, alembic merge "
+                "migration is now in main (was P2W10 critical-path).",
+                "- Ontology rebuilds across the wave; charter updates (agents.md, hooks.md, "
+                "issues.md) for single-session-team delegation pattern + Cross-Contract PRs "
+                "§ + Load-Bearing Followups §.",
+                "Proposed location: charter `pull-requests.md` § Cross-Contract PRs OR new "
+                "§ Design-Rationale Blocks.",
+                "#1355's promotion-gate fix produced the first AUTO promotion in ~20 recorded "
+                "waves (`wave-merge.md § Cross-Contract PRs`, `section_citations=5 >= 5`) — a "
+                "gate that was structurally 0-of-25-eligible now passes.",
+                "**1 AUTO · 0 DECIDE · 255 KEPT · 22 SUPERSEDED.** The AUTO is `wave-merge.md "
+                "§ Cross-Contract PRs` (charter → skill, `section_citations=5 >= 5`) — the "
+                "first AUTO promotion in ~20 recorded waves.",
+                "### Call 1 — the AUTO promotion (`wave-merge.md` § Cross-Contract PRs) "
+                "→ NOT promoted",
+            ]
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(log)
+            path = f.name
+        try:
+            citations = h.count_section_citations(self._section(), path)
+            self.assertEqual(citations, 1, f"expected the honest count of 1, got {citations}")
+            self.assertLess(citations, 5, "must fall below the wave-31 threshold of 5")
+        finally:
+            os.unlink(path)
+
+
+class CountRetroCitationsProvenanceTests(unittest.TestCase):
+    """`count_retro_citations` wired through the provenance filter."""
+
+    def _mem(self, **kwargs: object) -> h.Memory:
+        defaults: dict[str, object] = {
+            "path": "/fake/feedback_fixture_makes_guard_assertion_inert.md",
+            "name": "feedback_fixture_makes_guard_assertion_inert",
+            "description": "",
+            "type_": "feedback",
+            "promotion_target": "none",
+            "promotion_threshold": {"retro_citations": 3, "skill_invocations": 5},
+            "referenced_in_retros": (),
+            "status": "active",
+            "superseded_by": "",
+            "supersedes": "",
+            "requires_decision": False,
+            "body": "",
+        }
+        defaults.update(kwargs)
+        return h.Memory(**defaults)  # type: ignore[arg-type]
+
+    def test_size_sweep_shape_returns_honest_count(self) -> None:
+        """PRE-FIX: `count_retro_citations` returned 7 for this fixture (the
+        real note's shape, per the #1469 filing comment) — 2 genuine
+        engagements plus 5 bookkeeping occurrences (3 size-sweep listings, 1
+        size-sweep table row, 1 Step 7.7 self-report of the citation count).
+        POST-FIX: the honest count is 2, still below the `2 * threshold`
+        stale-opt-out line (threshold 3 -> line at 6)."""
+        log = "\n".join(
+            [
+                "The wave derived the lesson from "
+                "feedback_fixture_makes_guard_assertion_inert.md — the strongest "
+                "candidate for charter promotion out of this wave.",
+                "Further analysis of feedback_fixture_makes_guard_assertion_inert.md's "
+                "failure mode confirms the fixture-realism principle.",
+                "3 files flagged (advisory, non-blocking): `project_x.md`, "
+                "`feedback_fixture_makes_guard_assertion_inert.md`, `feedback_y.md`.",
+                "4 files flagged (advisory, non-blocking): `project_x.md`, "
+                "`feedback_fixture_makes_guard_assertion_inert.md`, `feedback_z.md`.",
+                "5 files flagged (advisory, non-blocking): `project_x.md`, "
+                "`feedback_fixture_makes_guard_assertion_inert.md`, `feedback_w.md`.",
+                "| feedback_fixture_makes_guard_assertion_inert.md | 22,005 B | 1d | Keep |",
+                "`feedback_fixture_makes_guard_assertion_inert` flagged by two orthogonal "
+                "instruments — `promotion_target=none` while cited 6x (stale opt-out)",
+            ]
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(log)
+            path = f.name
+        try:
+            citations = h.count_retro_citations(self._mem(), path)
+            self.assertEqual(citations, 2, f"expected the honest count of 2, got {citations}")
+            threshold = self._mem().promotion_threshold["retro_citations"]
+            self.assertLess(
+                citations, 2 * threshold, "must fall below the stale-opt-out 2x threshold line"
+            )
+        finally:
+            os.unlink(path)
+
+    def test_genuine_citation_alone_still_counts(self) -> None:
+        log = (
+            "The wave derived the lesson from "
+            "feedback_fixture_makes_guard_assertion_inert.md — the strongest "
+            "candidate for charter promotion out of this wave.\n"
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(log)
+            path = f.name
+        try:
+            self.assertEqual(h.count_retro_citations(self._mem(), path), 1)
+        finally:
+            os.unlink(path)
+
+
+class CorpusHealthTests(unittest.TestCase):
+    """`check_corpus_health` — the clause (2)/(2a) NOT-MEASURED gate."""
+
+    def test_missing_feedback_log_reports_a_reason(self) -> None:
+        self.assertIsNotNone(h.check_corpus_health("/definitely/does/not/exist.md"))
+
+    def test_present_readable_log_no_archive_is_healthy(self) -> None:
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write("hi\n")
+            path = f.name
+        try:
+            self.assertIsNone(h.check_corpus_health(path))
+        finally:
+            os.unlink(path)
+
+    def test_unreadable_archive_file_reports_a_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            live = os.path.join(d, "feedback_log.md")
+            with open(live, "w", encoding="utf-8") as f:
+                f.write("hi\n")
+            arch = os.path.join(d, "archive")
+            os.makedirs(arch)
+            bad = os.path.join(arch, "feedback_log_phase-9.md")
+            with open(bad, "wb") as f:
+                f.write(b"\xff\xfe not valid utf-8 \x80\x81")
+            reason = h.check_corpus_health(live)
+            self.assertIsNotNone(reason)
+            self.assertIn("feedback_log_phase-9.md", reason or "")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

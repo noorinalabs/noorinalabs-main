@@ -88,12 +88,13 @@ class SmokeTests(unittest.TestCase):
             # Charter sections — this smoke test intentionally passes a
             # zero `section_citations` signal so it stays isolated to the
             # memory-classification behavior under test above; the real,
-            # wired-through signal (`count_section_citations`, #1355) is
-            # exercised end-to-end by
+            # wired-through signal (`count_section_citations`, #1355,
+            # provenance-filtered per #1469) is exercised end-to-end by
             # `test_run.SteadyStateThroughDriver` and
-            # `test_helpers.CountSectionCitationsTests` instead, where it
-            # correctly reports 1 AUTO (`Cross-Contract PRs`) on the real
-            # tree — a result this test deliberately does not reproduce.
+            # `test_helpers.CountSectionCitationsProvenanceTests` instead,
+            # where the honest citation count for `Cross-Contract PRs` is 1
+            # (below the threshold of 5) on the real tree — a result this
+            # test deliberately does not reproduce.
             decisions.append(h.classify_section(s, {"section_citations": 0, "threshold": 5}))
 
         for sk in self.skills:
