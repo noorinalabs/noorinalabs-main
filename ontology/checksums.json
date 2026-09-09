@@ -1884,6 +1884,12 @@
       "last_resolved": "b982fcbb0f9b3b267446033405d83b16dff44009299e732977562ac9e00ebd68",
       "tracked_at": "2026-08-17T22:26:56.025237+00:00",
       "resolved_at": "2026-08-17T22:27:13.666664+00:00"
+    },
+    ".claude/memory/feedback_same_persona_resident_coordinator_double_gates.md": {
+      "last_tracked": "07893d9ab15dfa4ad622998a4685e9cd407b6c0160de67081f3a12ce44e07e4b",
+      "last_resolved": "",
+      "tracked_at": "2026-09-09T00:03:37.072548+00:00",
+      "resolved_at": ""
     }
   },
   "last_cleanup": {
