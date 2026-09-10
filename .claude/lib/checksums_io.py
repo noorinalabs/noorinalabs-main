@@ -618,6 +618,28 @@ def main(argv: list[str]) -> int:
     destructive CLI is a trap, so the flag is now extracted positionally-
     agnostically instead.
 
+    ``--checksums=PATH`` and ``--checksums PATH`` are BOTH accepted, for ALL
+    THREE subcommands (#1285). Uniformly accepting the ``=`` spelling removes
+    the class rather than erroring on it, and the class was not theoretical:
+    the extraction used to match the flag by exact token, so
+    ``mark-resolved --checksums=/tmp/x ontology/domain.yaml`` matched nothing,
+    the ``=`` token fell through unfiltered into the path list, and the
+    command wrote the DEFAULT committed ledger while printing
+    ``Resolved 1 file(s)`` and exiting 0. ``status`` and ``prune`` rejected
+    the same spelling with exit 2, so the one lax surface was the only one
+    that WRITES. A second ``--checksums`` in either spelling is left in the
+    argument list and rejected by the subcommand as an unknown flag rather
+    than silently losing to a precedence rule.
+
+    Every subcommand — ``mark-resolved`` included since #1285 — rejects an
+    unrecognized leading-``-`` token with exit 2 instead of treating it as a
+    path. ``mark-resolved`` used to swallow ``--bogus``/``--apply``/a
+    mistyped flag as a ``<rel-path>``, where the only signal was a
+    ``Skipped (not tracked):`` line that reads as ordinary output (the
+    resolver legitimately passes path lists wider than what the tracker has
+    seen). An entry key is a repo-relative path, so a path that genuinely
+    begins with ``-`` is not a case this ledger has or can have.
+
     Exit codes:
         0 — success (including "nothing to resolve/prune", still 0); for
             ``status``, additionally means every tracked file was hashed and
@@ -638,9 +660,10 @@ def main(argv: list[str]) -> int:
     """
     if len(argv) < 2 or argv[1] not in ("mark-resolved", "prune", "status"):
         print(
-            "usage: checksums_io.py status [--checksums PATH] [--repo-root DIR] [--json]\n"
-            "       checksums_io.py mark-resolved [--checksums PATH] <rel-path> [<rel-path> ...]\n"
-            "       checksums_io.py prune [--checksums PATH] [--repo-root DIR] "
+            "usage: checksums_io.py status [--checksums[=]PATH] [--repo-root DIR] [--json]\n"
+            "       checksums_io.py mark-resolved [--checksums[=]PATH] <rel-path> "
+            "[<rel-path> ...]\n"
+            "       checksums_io.py prune [--checksums[=]PATH] [--repo-root DIR] "
             "[--apply] [--dry-run] [--force]",
             file=sys.stderr,
         )
@@ -649,19 +672,44 @@ def main(argv: list[str]) -> int:
     subcommand = argv[1]
     rest = argv[2:]
     checksums_path = _default_checksums_path()
-    if "--checksums" in rest:
-        i = rest.index("--checksums")
-        if i + 1 >= len(rest):
-            print("error: --checksums requires a PATH argument", file=sys.stderr)
-            return EXIT_USAGE
-        checksums_path = Path(rest[i + 1])
-        rest = rest[:i] + rest[i + 2 :]
+    for i, token in enumerate(rest):
+        if token == "--checksums":
+            if i + 1 >= len(rest):
+                print("error: --checksums requires a PATH argument", file=sys.stderr)
+                return EXIT_USAGE
+            checksums_path = Path(rest[i + 1])
+            rest = rest[:i] + rest[i + 2 :]
+            break
+        if token.startswith("--checksums="):
+            value = token[len("--checksums=") :]
+            if not value:
+                print("error: --checksums= requires a PATH argument", file=sys.stderr)
+                return EXIT_USAGE
+            checksums_path = Path(value)
+            rest = rest[:i] + rest[i + 1 :]
+            break
 
     if subcommand == "status":
         return _status_cli(checksums_path, rest)
 
     if subcommand == "prune":
         return _prune_cli(checksums_path, rest)
+
+    # `mark-resolved` is the WRITER, and until #1285 it was the only
+    # subcommand that treated anything it did not recognize as a <rel-path>.
+    # An unknown flag therefore selected the DEFAULT committed ledger and
+    # wrote it at exit 0. Reject instead — same contract `_status_cli` and
+    # `_prune_cli` have had since #1283.
+    for token in rest:
+        if token.startswith("-") and token != "-":
+            print(
+                f"error: unexpected argument {token!r} for mark-resolved. Only "
+                "--checksums PATH / --checksums=PATH is recognized; every other "
+                "argument must be a repo-relative path, and entry keys never begin "
+                "with '-'.",
+                file=sys.stderr,
+            )
+            return EXIT_USAGE
 
     if not rest:
         print("error: at least one <rel-path> is required", file=sys.stderr)

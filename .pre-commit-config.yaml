@@ -164,6 +164,28 @@ repos:
         files: ^\.claude/(skills|hooks)/.*\.md$
         exclude: ^\.claude/worktrees/
         pass_filenames: true
+      # checksums-consumers mirrors the `Checksums consumer lint` CI job in
+      # ci.yml (the sync-drift gate classifies the `checksums-consumers` kind,
+      # so a CI-enforced lint not mirrored here turns the gate red, same
+      # contract as the gates above). Flags a re-derived
+      # `last_tracked != last_resolved` comparison, or a direct read of
+      # ontology/checksums.json, anywhere outside the sanctioned reader
+      # `.claude/lib/checksums_io.py` — plus the prose form, a `cat`/`jq`/
+      # `Read` of the ledger in a skill markdown. The defect class has no
+      # loud failure: every wrong hand-rolled read of this ledger returns a
+      # plausible `0` dirty files, which is also the healthy value, so
+      # #1142 shipped two wrong reads in two consecutive sessions and the
+      # #1283 sweep found three more sites nobody had listed
+      # (noorinalabs-main#1284). Commit-stage (cheap AST + line scan);
+      # `files:` covers both the Python consumer surface and the skill
+      # markdown, `pass_filenames` hands the changed files to the lint.
+      - id: checksums-consumers
+        name: checksums-consumers
+        entry: python3 .claude/lib/lint_checksums_consumers.py
+        language: system
+        files: ^\.claude/(lib|hooks)/.*\.py$|^\.claude/(skills|hooks)/.*\.md$
+        exclude: ^\.claude/worktrees/
+        pass_filenames: true
       # checksums-ascii mirrors the `Assert ontology/checksums.json holds no
       # \u escapes` step of the `Config — YAML/JSON syntax` CI job in
       # .github/workflows/docs.yml (#1044, follow-up to #1038/#1042 — the

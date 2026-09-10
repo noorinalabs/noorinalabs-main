@@ -351,25 +351,103 @@ class PruneCliTests(unittest.TestCase):
             self.assertIn("kept.md", data["files"])
             self.assertNotIn("gone.md", data["files"])
 
+    def _two_root_fixture(self, root: Path) -> tuple[Path, Path]:
+        """A fixture where the two candidate roots disagree about WHICH entry is an orphan.
+
+        #1284's discriminating-observable fixture. Ballast exists under BOTH
+        roots (never an orphan either way), and exactly one entry is orphaned
+        under each root:
+
+            only_in_root.md       present under `root`, absent under `elsewhere`
+            only_in_elsewhere.md  present under `elsewhere`, absent under `root`
+
+        So the prune set is 1-of-14 whichever root wins — Guard 3's 25%
+        threshold cannot fire, the exit code is 0 either way, and the ONLY
+        channel that distinguishes an honored `--repo-root` from an ignored
+        one is the preview list naming the orphan. That is the point: see
+        `test_explicit_repo_root_is_honored`.
+        """
+        elsewhere = root / "elsewhere"
+        elsewhere.mkdir()
+        files: dict[str, Any] = {}
+        for i in range(12):
+            (root / f"ballast{i}.md").write_text("x", encoding="utf-8")
+            (elsewhere / f"ballast{i}.md").write_text("x", encoding="utf-8")
+            files[f"ballast{i}.md"] = {"last_tracked": "s"}
+        (root / "only_in_root.md").write_text("x", encoding="utf-8")
+        (elsewhere / "only_in_elsewhere.md").write_text("x", encoding="utf-8")
+        files["only_in_root.md"] = {"last_tracked": "s"}
+        files["only_in_elsewhere.md"] = {"last_tracked": "s"}
+        return elsewhere, self._seed(root, files)
+
     def test_explicit_repo_root_is_honored(self) -> None:
+        """`--repo-root` decides WHICH entry is an orphan — assert that, not the exit code.
+
+        #1284 carried a claim that this test "seeds no orphan, so it passes
+        whether or not --repo-root is honored". The claim is INVERTED, and
+        both merge-gate comments on that issue reproduced the inversion: the
+        old 1-entry fixture DID kill a `--repo-root`-ignoring mutant, but
+        entirely via Guard 3's 25% sanity threshold tripping on a 1-of-1
+        prune. Neither of its assertions tested `--repo-root` semantics, so
+        the "obvious fix" — giving the fixture realistic ballast, as the four
+        sibling tests have — drops the ratio below the threshold and the
+        mutation SURVIVES. The coverage was accidental.
+
+        This asserts the discriminating observable directly: with ballast
+        present (so the exit code is 0 under both the correct and the
+        mutated implementation), the preview list names `only_in_root.md`
+        and NOT `only_in_elsewhere.md`. Honoring the flag is now the only
+        way to produce that output.
+        """
         with _tmp_dir() as root:
-            elsewhere = root / "elsewhere"
-            elsewhere.mkdir()
-            (elsewhere / "kept.md").write_text("x", encoding="utf-8")
-            path = self._seed(root, {"kept.md": {"last_tracked": "s"}})
-            rc = checksums_io.main(
-                [
-                    "checksums_io.py",
-                    "prune",
-                    "--checksums",
-                    str(path),
-                    "--repo-root",
-                    str(elsewhere),
-                ]
-            )
+            elsewhere, path = self._two_root_fixture(root)
+            with _capture_stdout() as out:
+                rc = checksums_io.main(
+                    [
+                        "checksums_io.py",
+                        "prune",
+                        "--checksums",
+                        str(path),
+                        "--repo-root",
+                        str(elsewhere),
+                    ]
+                )
+            printed = out.getvalue()
+            # Exit code deliberately does NOT discriminate here (that is the
+            # whole finding) — it is asserted only to prove the run completed
+            # normally rather than being refused by a guard.
+            self.assertEqual(rc, 0)
+            self.assertIn("only_in_root.md", printed)
+            self.assertNotIn("only_in_elsewhere.md", printed)
+            self.assertIn(str(elsewhere), printed)
+
+    def test_explicit_repo_root_is_honored_in_the_applied_write(self) -> None:
+        """Same discrimination on the OTHER channel a caller consumes: the written file.
+
+        The preview list is what a human reads; the mutated ledger is what
+        every later reader consumes. `--apply` on the same fixture must
+        delete the entry orphaned under the EXPLICIT root and keep the other
+        one — a `--repo-root`-ignoring implementation writes the exact
+        inverse, at the same exit code.
+        """
+        with _tmp_dir() as root:
+            elsewhere, path = self._two_root_fixture(root)
+            with _capture_stdout():
+                rc = checksums_io.main(
+                    [
+                        "checksums_io.py",
+                        "prune",
+                        "--checksums",
+                        str(path),
+                        "--repo-root",
+                        str(elsewhere),
+                        "--apply",
+                    ]
+                )
             self.assertEqual(rc, 0)
             data = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(list(data["files"]), ["kept.md"])
+            self.assertNotIn("only_in_root.md", data["files"])
+            self.assertIn("only_in_elsewhere.md", data["files"])
 
     def test_dry_run_leaves_the_file_untouched(self) -> None:
         with _tmp_dir() as root:
@@ -796,6 +874,150 @@ class MainCliTests(unittest.TestCase):
 
     def test_checksums_flag_missing_value_is_usage_error(self) -> None:
         self.assertEqual(checksums_io.main(["checksums_io.py", "mark-resolved", "--checksums"]), 2)
+
+
+class MarkResolvedArgumentTests(unittest.TestCase):
+    """#1285: `mark-resolved` was the one subcommand that swallowed unknown flags.
+
+    It is also the only one that WRITES. Anything it did not recognize became
+    a `<rel-path>`, so `--checksums=PATH` (a spelling `status` and `prune`
+    both rejected with exit 2) selected the DEFAULT committed ledger,
+    modified it, and reported `Resolved 1 file(s)` at exit 0. The only signal
+    was a `Skipped (not tracked):` line that reads as ordinary output,
+    because the resolver legitimately passes path lists wider than what the
+    tracker has seen.
+
+    "Wrote the wrong file at exit 0" has to be impossible on every channel,
+    so each test below pins the exit code AND the bytes of the ledger that
+    must not have been touched.
+
+    These never point at the real `ontology/checksums.json`: the "default"
+    ledger under test is a copy of `checksums_io`'s default path, taken and
+    restored around each case, and the assertions are on that copy.
+    """
+
+    ENTRY = {"last_tracked": "shaXYZ", "last_resolved": "", "tracked_at": "t", "resolved_at": ""}
+
+    @contextmanager
+    def _isolated_default(self):
+        """Run with `_default_checksums_path` pointed at a temp ledger.
+
+        Patching the module function is what keeps the REAL committed ledger
+        out of reach: the defect under test is precisely "wrote the default
+        ledger", so the test has to be able to observe a default-ledger write
+        without risking one.
+        """
+        with _tmp_dir() as root:
+            default = root / "default-ledger.json"
+            target = root / "target-ledger.json"
+            payload = json.dumps({"version": 1, "files": {"ontology/domain.yaml": self.ENTRY}})
+            default.write_text(payload, encoding="utf-8")
+            target.write_text(payload, encoding="utf-8")
+            original = checksums_io._default_checksums_path
+            checksums_io._default_checksums_path = lambda: default  # type: ignore[assignment]
+            try:
+                yield default, target
+            finally:
+                checksums_io._default_checksums_path = original  # type: ignore[assignment]
+
+    @staticmethod
+    def _resolved(path: Path) -> str:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return str(data["files"]["ontology/domain.yaml"]["last_resolved"])
+
+    def test_equals_form_targets_the_named_ledger_not_the_default(self) -> None:
+        """The #1285 headline: `--checksums=PATH` wrote the DEFAULT ledger at exit 0."""
+        with self._isolated_default() as (default, target):
+            before = default.read_bytes()
+            with _capture_stdout() as out:
+                rc = checksums_io.main(
+                    [
+                        "checksums_io.py",
+                        "mark-resolved",
+                        f"--checksums={target}",
+                        "ontology/domain.yaml",
+                    ]
+                )
+            self.assertEqual(rc, 0)
+            self.assertEqual(default.read_bytes(), before, "the default ledger must be untouched")
+            self.assertEqual(self._resolved(target), "shaXYZ")
+            self.assertIn(str(target), out.getvalue())
+            self.assertNotIn("Skipped", out.getvalue())
+
+    def test_equals_form_is_accepted_by_status_and_prune_too(self) -> None:
+        """One spelling rule for all three subcommands, not three (#1285)."""
+        with self._isolated_default() as (default, target):
+            with _capture_stdout() as out:
+                status_rc = checksums_io.main(
+                    ["checksums_io.py", "status", f"--checksums={target}"]
+                )
+            self.assertEqual(status_rc, 1, "one dirty entry in the NAMED ledger")
+            self.assertIn(str(target), out.getvalue())
+            with _capture_stdout() as out:
+                prune_rc = checksums_io.main(["checksums_io.py", "prune", f"--checksums={target}"])
+            self.assertIn(prune_rc, (0, 1))
+            self.assertNotIn(str(default), out.getvalue())
+
+    def test_unknown_flag_is_rejected_and_writes_nothing(self) -> None:
+        with self._isolated_default() as (default, _target):
+            before = default.read_bytes()
+            with _capture_stderr() as err:
+                rc = checksums_io.main(
+                    ["checksums_io.py", "mark-resolved", "--bogus", "ontology/domain.yaml"]
+                )
+            self.assertEqual(rc, 2)
+            self.assertEqual(default.read_bytes(), before)
+            self.assertIn("--bogus", err.getvalue())
+            self.assertIn("--checksums=PATH", err.getvalue())
+
+    def test_prune_flag_typed_at_mark_resolved_is_rejected(self) -> None:
+        """`--apply` is a `prune` flag; at `mark-resolved` it used to become a path."""
+        with self._isolated_default() as (default, _target):
+            before = default.read_bytes()
+            with _capture_stderr():
+                rc = checksums_io.main(
+                    ["checksums_io.py", "mark-resolved", "--apply", "ontology/domain.yaml"]
+                )
+            self.assertEqual(rc, 2)
+            self.assertEqual(default.read_bytes(), before)
+
+    def test_second_checksums_flag_is_rejected_rather_than_silently_losing(self) -> None:
+        """Only the first `--checksums` is consumed; a second must not be swallowed."""
+        with self._isolated_default() as (default, target):
+            before = default.read_bytes()
+            with _capture_stderr() as err:
+                rc = checksums_io.main(
+                    [
+                        "checksums_io.py",
+                        "mark-resolved",
+                        f"--checksums={target}",
+                        "--checksums",
+                        str(default),
+                        "ontology/domain.yaml",
+                    ]
+                )
+            self.assertEqual(rc, 2)
+            self.assertEqual(default.read_bytes(), before)
+            self.assertIn("--checksums", err.getvalue())
+
+    def test_empty_equals_value_is_a_usage_error(self) -> None:
+        with self._isolated_default() as (default, _target):
+            before = default.read_bytes()
+            with _capture_stderr() as err:
+                rc = checksums_io.main(
+                    ["checksums_io.py", "mark-resolved", "--checksums=", "ontology/domain.yaml"]
+                )
+            self.assertEqual(rc, 2)
+            self.assertEqual(default.read_bytes(), before)
+            self.assertIn("requires a PATH", err.getvalue())
+
+    def test_a_bare_path_still_resolves_against_the_default(self) -> None:
+        """The ordinary path stays ordinary — the guard rejects flags, not work."""
+        with self._isolated_default() as (default, _target):
+            with _capture_stdout():
+                rc = checksums_io.main(["checksums_io.py", "mark-resolved", "ontology/domain.yaml"])
+            self.assertEqual(rc, 0)
+            self.assertEqual(self._resolved(default), "shaXYZ")
 
 
 class ClassifyEntryTests(unittest.TestCase):

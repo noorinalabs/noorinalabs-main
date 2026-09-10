@@ -319,6 +319,35 @@ jobs:
           # shellcheck disable=SC2086  # word-splitting is intended (one path per arg)
           python3 .claude/lib/lint_skill_bash_dialect.py $files
 
+  checksums-consumers:
+    name: Checksums consumer lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Structural gate for the ontology ledger's single-reader property
+      # (noorinalabs-main#1284). Flags a re-derived `last_tracked !=
+      # last_resolved` comparison or a direct read of ontology/checksums.json
+      # outside `.claude/lib/checksums_io.py`, and the prose form (a
+      # `cat`/`jq`/`Read` of the ledger) in skill markdown. Mirrors the
+      # `checksums-consumers` pre-commit hook (the sync-drift gate classifies
+      # the kind, so this mirror is mandatory).
+      #
+      # There is deliberately NO `if [ -z "$files" ]; then exit 0` escape
+      # here, unlike the older lint jobs above: an empty file list means the
+      # scan did not happen, and this wave's whole subject is that "clean"
+      # and "did not run" must not share an exit code. With no arguments the
+      # lint exits non-zero and renders NOT EVALUATED, which is the correct
+      # reading of a `find` that matched nothing.
+      - name: Lint for hand-rolled ontology/checksums.json reads
+        run: |
+          files=$(find .claude/lib .claude/hooks -name '*.py' -print)
+          files="$files $(find .claude/skills .claude/hooks -name '*.md' -print)"
+          # shellcheck disable=SC2086  # word-splitting is intended (one path per arg)
+          python3 .claude/lib/lint_checksums_consumers.py $files
+
   precommit-ci-sync:
     name: Pre-commit ⇄ CI sync-drift gate
     runs-on: ubuntu-latest

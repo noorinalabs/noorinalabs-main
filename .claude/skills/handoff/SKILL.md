@@ -36,8 +36,13 @@ done
 - Read `cross-repo-status.json` if it exists
 - Check for active wave labels on open issues
 
-**Ontology staleness:**
-- Read `ontology/checksums.json` — count dirty files
+**Ontology staleness:** ask the shared reader — do not open the ledger and count by hand (#1142/#1284). The predicate is not guessable and every way of getting it wrong returns a plausible `0`, which is also the healthy value.
+
+```bash
+python3 .claude/lib/checksums_io.py status
+```
+
+Branch on its **exit code**, never on the shape of its output: `0` current · `1` dirty/malformed · `3` unreadable · `4` drifted/undeterminable. Only `0` may be written into a handoff as "current" — `3` and `4` mean the staleness was not established, which is not the same as there being none.
 
 **Recent issues:**
 ```bash
