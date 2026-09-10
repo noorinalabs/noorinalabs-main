@@ -290,6 +290,48 @@ def _get_wave_status() -> str:
         return "Could not read status file"
 
 
+def _build_display_lines(
+    date_str: str,
+    git: dict,
+    wave: str,
+    ontology: str,
+    pr_result: PrQueryResult,
+    issues: list[str],
+) -> list[str]:
+    """Build the compact conversation-display summary (the in-conversation
+    `systemMessage` channel `main()` prints, distinct from the file channel
+    `_render_prs_section` builds).
+
+    Pure extraction from `main()` (main#1261) — no behaviour change from the
+    inline version it replaces, done only so this channel is independently
+    testable without mocking subprocess/filesystem I/O. Mirrors
+    `_render_prs_section`'s failed-vs-empty distinction (main#1120) on THIS
+    channel too: a failed PR query must render as "QUERY FAILED", never as
+    "Open PRs: 0", which would misreport an unknown state as a confirmed
+    empty one.
+    """
+    display_lines = [
+        f"[Session Handoff — {date_str}]",
+        f"Branch: {git['branch']} | Uncommitted: {'Yes' if git['uncommitted'] else 'No'}",
+        f"Wave: {wave} | Ontology: {ontology}",
+    ]
+    if pr_result.failed:
+        display_lines.append("Open PRs: QUERY FAILED — see handoff file, NOT confirmed empty")
+    else:
+        suffix = " (truncated at cap)" if pr_result.truncated else ""
+        display_lines.append(f"Open PRs: {len(pr_result.lines)}{suffix}")
+        display_lines.extend(pr_result.lines[:5])
+        if pr_result.unknown_repos:
+            display_lines.append(
+                f"Unknown repos in PR results: {', '.join(pr_result.unknown_repos)}"
+            )
+    if issues:
+        display_lines.append(f"Open issues (main): {len(issues)}")
+        display_lines.extend(issues[:5])
+    display_lines.append("Handoff saved to project memory — next session will auto-load it.")
+    return display_lines
+
+
 THROTTLE_SECONDS = 300  # Only regenerate if file is older than 5 minutes
 
 
@@ -366,25 +408,7 @@ def main() -> None:
     # /handoff skill so this Stop hook never dirties a version-controlled file.
 
     # Build a compact display version for the conversation
-    display_lines = [
-        f"[Session Handoff — {date_str}]",
-        f"Branch: {git['branch']} | Uncommitted: {'Yes' if git['uncommitted'] else 'No'}",
-        f"Wave: {wave} | Ontology: {ontology}",
-    ]
-    if pr_result.failed:
-        display_lines.append("Open PRs: QUERY FAILED — see handoff file, NOT confirmed empty")
-    else:
-        suffix = " (truncated at cap)" if pr_result.truncated else ""
-        display_lines.append(f"Open PRs: {len(pr_result.lines)}{suffix}")
-        display_lines.extend(pr_result.lines[:5])
-        if pr_result.unknown_repos:
-            display_lines.append(
-                f"Unknown repos in PR results: {', '.join(pr_result.unknown_repos)}"
-            )
-    if issues:
-        display_lines.append(f"Open issues (main): {len(issues)}")
-        display_lines.extend(issues[:5])
-    display_lines.append("Handoff saved to project memory — next session will auto-load it.")
+    display_lines = _build_display_lines(date_str, git, wave, ontology, pr_result, issues)
 
     result = {
         "systemMessage": "\n".join(display_lines),
