@@ -244,6 +244,142 @@ class GetOpenPrsSingleSearchCallTests(unittest.TestCase):
         self.assertIs(hook.ALL_REPOS, org_repos.ALL_REPOS)
 
 
+class BuildDisplayLinesTests(unittest.TestCase):
+    """main#1261(a): `test_failed_query_is_distinct_from_empty_result` above
+    pins ONLY `_render_prs_section` — the FILE channel `main()` writes to
+    `session_handoff.md`. `main()` also renders a SEPARATE, re-derived
+    in-conversation `systemMessage` summary (`display_lines`), and prior to
+    this test suite nothing pinned that channel at all: a mutant that
+    rendered a failed PR query as `Open PRs: 0` there would pass every
+    existing test while still handing the conversation a false "zero open
+    PRs" reading. `_build_display_lines` is the pure function `main()` was
+    refactored (no behaviour change) to call, so this channel is testable
+    without mocking subprocess/filesystem I/O."""
+
+    _GIT = {
+        "branch": "main",
+        "uncommitted": False,
+        "recent_commits": "abc1234 some commit",
+        "status": "",
+    }
+
+    def test_failed_query_renders_query_failed_text_verbatim(self) -> None:
+        """FAILS against a mutant that renders the failed-query case as
+        `Open PRs: 0` instead of the honest QUERY FAILED sentence."""
+        pr_result = hook.PrQueryResult(lines=[], failed=True, truncated=False, unknown_repos=())
+        lines = hook._build_display_lines(
+            "2026-09-09 00:00 UTC",
+            self._GIT,
+            "Phase 10, Wave wave-31",
+            "Ontology is current",
+            pr_result,
+            [],
+        )
+        self.assertIn("Open PRs: QUERY FAILED — see handoff file, NOT confirmed empty", lines)
+        # Negative control: the exact text must not appear for a genuinely
+        # empty (not failed) result — the two states must render differently
+        # on this channel too, mirroring the file-channel guarantee.
+        empty_result = hook.PrQueryResult(lines=[], failed=False, truncated=False, unknown_repos=())
+        empty_lines = hook._build_display_lines(
+            "2026-09-09 00:00 UTC",
+            self._GIT,
+            "Phase 10, Wave wave-31",
+            "Ontology is current",
+            empty_result,
+            [],
+        )
+        self.assertNotIn(
+            "Open PRs: QUERY FAILED — see handoff file, NOT confirmed empty", empty_lines
+        )
+        self.assertIn("Open PRs: 0", empty_lines)
+
+    def test_main_uses_build_display_lines_for_the_printed_systemmessage(self) -> None:
+        """`main()`'s printed `systemMessage` must actually be built FROM
+        `_build_display_lines` (not a separately-maintained inline copy that
+        happens to look the same today) — patch the pure function and show
+        its output surfaces verbatim in `main()`'s stdout."""
+        from unittest.mock import patch
+
+        with (
+            patch.object(hook, "_get_git_state", return_value=self._GIT),
+            patch.object(
+                hook,
+                "_get_open_prs",
+                return_value=hook.PrQueryResult(
+                    lines=[], failed=True, truncated=False, unknown_repos=()
+                ),
+            ),
+            patch.object(hook, "_get_open_issues", return_value=[]),
+            patch.object(hook, "_get_ontology_staleness", return_value="Ontology is current"),
+            patch.object(hook, "_get_wave_status", return_value="Phase 10, Wave wave-31"),
+            patch.object(hook, "_build_display_lines", return_value=["SENTINEL_LINE"]),
+            patch("builtins.print") as mock_print,
+        ):
+            import tempfile
+
+            with tempfile.TemporaryDirectory() as d:
+                original_memory_dir = hook.MEMORY_DIR
+                original_handoff_file = hook.HANDOFF_FILE
+                try:
+                    hook.MEMORY_DIR = Path(d)
+                    hook.HANDOFF_FILE = Path(d) / "session_handoff.md"
+                    try:
+                        hook.main()
+                    except SystemExit:
+                        pass
+                finally:
+                    hook.MEMORY_DIR = original_memory_dir
+                    hook.HANDOFF_FILE = original_handoff_file
+
+        printed = mock_print.call_args[0][0]
+        parsed = json.loads(printed)
+        self.assertEqual(parsed["systemMessage"], "SENTINEL_LINE")
+
+
+class GetOpenPrsUsesAllReposTests(unittest.TestCase):
+    """main#1261(b): `test_all_repos_is_org_repos_ssot` (above) pins only
+    `assertIs(hook.ALL_REPOS, org_repos.ALL_REPOS)` — an object-identity
+    binding check. It would still pass if `_get_open_prs()` computed
+    `unknown_repos` against some OTHER, separately-frozen list instead of
+    actually reading `hook.ALL_REPOS` live at call time. This is the missing
+    USE test: patch `hook.ALL_REPOS` itself (not `org_repos.ALL_REPOS`) and
+    show `_get_open_prs()`'s output changes accordingly."""
+
+    def test_unknown_repos_computed_against_patched_all_repos(self) -> None:
+        from unittest.mock import patch
+
+        import org_repos
+
+        # Drop one real repo from the list `_get_open_prs()` consults — NOT
+        # noorinalabs-isnad-ingest-platform, the repo #1243's own fixture
+        # (test_parses_items_across_repos, above) happens to include, which
+        # would let a broken binding pass by fixture luck alone.
+        reduced = tuple(r for r in org_repos.ALL_REPOS if r != "noorinalabs-design-system")
+        self.assertIn("noorinalabs-design-system", org_repos.ALL_REPOS)
+        self.assertNotIn("noorinalabs-design-system", reduced)
+
+        raw = json.dumps(
+            [
+                {
+                    "number": 5,
+                    "title": "Some design work",
+                    "repository": {"name": "noorinalabs-design-system"},
+                },
+            ]
+        )
+        with (
+            patch.object(hook, "_run", return_value=raw),
+            patch.object(hook, "ALL_REPOS", reduced),
+        ):
+            result = hook._get_open_prs()
+
+        # A genuinely-known repo now reads as "unknown" once ALL_REPOS is
+        # patched to omit it — proof `_get_open_prs()` reads `hook.ALL_REPOS`
+        # live at call time, not a copy frozen at import or a separately
+        # maintained list. If it did, this would fail with unknown_repos==().
+        self.assertEqual(result.unknown_repos, ("noorinalabs-design-system",))
+
+
 class HandoffPathLocationTests(unittest.TestCase):
     """#741: the Stop hook must write the handoff into the in-repo,
     version-controlled .claude/memory/ — NOT the user-space auto-memory dir —
