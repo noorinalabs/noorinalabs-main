@@ -396,6 +396,34 @@ class FetchChildCardNamesTests(unittest.TestCase):
             names = fetch_child_card_names("noorinalabs", "noorinalabs-deploy")
         self.assertEqual(names, {"Beta Two"})
 
+    def test_non_empty_listing_but_no_names_parsed_returns_none(self) -> None:
+        """#1262: the directory listing is non-empty (`filenames` is
+        populated, so the EARLIER `if not filenames: return None` guard at
+        the top of the function is skipped — this is a genuinely different
+        path from `test_empty_directory_returns_none`), but EVERY per-file
+        fetch either raises or parses to zero names — one raises, the other
+        "succeeds" with content that matches neither card-name regex. `names`
+        is therefore an empty set after the loop, reaching the line-405
+        fallback `return names if names else None`, which must return `None`
+        (SKIPPED), not an empty set."""
+
+        def fake_run(cmd, **kwargs):
+            if cmd[-1] == ".[].name":
+                result = subprocess.CompletedProcess(cmd, 0)
+                result.stdout = "alpha.md\nbeta.md\n"
+                return result
+            if cmd[2].endswith("/alpha.md"):
+                raise subprocess.CalledProcessError(1, cmd)
+            # beta.md's fetch succeeds, but its content is not card-shaped —
+            # neither `_CARD_NAME_RE` nor `_CARD_H1_RE` matches it.
+            result = subprocess.CompletedProcess(cmd, 0)
+            result.stdout = base64.b64encode(b"No name-shaped content here at all.\n").decode()
+            return result
+
+        with patch("subprocess.run", side_effect=fake_run):
+            result = fetch_child_card_names("noorinalabs", "noorinalabs-deploy")
+        self.assertIsNone(result)
+
 
 class ParentRosterMapTests(unittest.TestCase):
     def test_reads_raw_map(self) -> None:
