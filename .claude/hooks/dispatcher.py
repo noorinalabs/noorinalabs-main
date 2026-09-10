@@ -46,6 +46,26 @@ for someone already debugging a specific hook, not a routine-count signal.
 Exit codes:
   0 — allow (all hooks passed, or aggregated warnings)
   2 — block (first blocking hook wins)
+
+Advisories surviving a block (main#1245): a hook earlier in the module list
+can return an allow decision carrying a `systemMessage` (an advisory nudge —
+e.g. `enforce_librarian_consulted`'s once-per-cwd reminder, which burns its
+throttle marker the moment it fires, whether or not anything downstream ends
+up blocking). Before #1245, if a LATER hook in the same dispatch then
+blocked, `main()` printed only that blocker's own result and exited — the
+earlier advisory's `systemMessage` was accumulated into `warnings` but never
+reached the aggregation branch below (which only runs on the all-allow path),
+so it was silently discarded even though its throttle had already fired and
+would suppress it from firing again. Now, when a blocker fires with one or
+more advisories already collected, the printed result's `systemMessage` is
+the MERGE of: the block's own message (its own `systemMessage` if it set
+one, else its `reason`) FIRST, then a separator line, then the advisories
+joined with blank lines — in that order, so the block's own reason is never
+displaced or lost. The block result's `reason` key (the field a caller
+actually branches a denial on) is left untouched. When there are no
+advisories to merge, the block result is printed exactly as before (no
+`systemMessage` key added) — the merge only activates when it has something
+to add. `decision` stays `"block"` and the exit code stays 2 either way.
 """
 
 import importlib
@@ -141,7 +161,24 @@ def main() -> None:
         decision = result.get("decision", "allow")
 
         if decision == "block":
-            # First blocker wins — print and exit immediately
+            # First blocker wins — print and exit immediately. Merge in any
+            # advisory systemMessages already collected from earlier allow
+            # decisions in THIS dispatch (main#1245) — a nudge that fired and
+            # burned its throttle must still be shown, not discarded just
+            # because a later hook happened to block. Own message first, then
+            # the advisories, clearly separated; `reason` is left untouched.
+            # See the module docstring's "Advisories surviving a block"
+            # section for the full rationale.
+            if warnings:
+                own_message = result.get("systemMessage") or result.get("reason", "")
+                result = {
+                    **result,
+                    "systemMessage": (
+                        f"{own_message}\n\n"
+                        "--- Advisories from earlier checks in this dispatch ---\n\n"
+                        + "\n\n".join(warnings)
+                    ),
+                }
             print(json.dumps(result))
             sys.exit(2)
 
