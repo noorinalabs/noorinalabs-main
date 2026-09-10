@@ -1250,7 +1250,22 @@ class ReconciliationWarningEdges(unittest.TestCase):
         self.assertIn("main#1160", warning)
         self.assertNotIn("main#1172", warning.split(";")[0])  # claimed -- absent from the row list
         self.assertIn("1 of 4", warning)  # denominator now reflects ALL 4 declared rows
-        self.assertIn("2 scope rows unparseable", warning)
+        # main#1256 item 1: the appended clause now names the denominator
+        # instead of the old ambiguous "(excluded from the count above)",
+        # which left a reader unable to tell whether `unparseable` was
+        # excluded from `total_declared` (false) or the unclaimed numerator
+        # (true).
+        self.assertIn("2 of the 4 declared scope rows unparseable", warning)
+        self.assertNotIn("excluded from the count above", warning)
+        # main#1256 review item 2 (PR #1542): pin the explanatory half of
+        # the clause too -- deleting "and could not be matched against
+        # merged PRs" from the source left the suite green pre-fix (a
+        # mutation survivor), since nothing asserted on it.
+        self.assertIn(
+            "2 of the 4 declared scope rows unparseable and could not be "
+            "matched against merged PRs",
+            warning,
+        )
 
     def test_edge1_all_rows_unparseable_still_warns(self) -> None:
         """Degenerate case: every declared row is unparseable, so `canonical`
@@ -1274,10 +1289,111 @@ class ReconciliationWarningEdges(unittest.TestCase):
                 warning = wave_status.reconciliation_warning("10", "29", status)
         self.assertIsNotNone(warning)
         assert warning is not None  # narrows the type for the checks below
-        self.assertIn("2 scope rows unparseable", warning)
+        # main#1256 item 2: the degenerate all-unparseable case must lead
+        # with the unparseable clause, not the vacuous "0 scope rows
+        # unclaimed" all-clear over the empty `canonical` set -- nothing
+        # here was ever checkable in the first place.
+        self.assertFalse(
+            warning.startswith("0 scope rows unclaimed"),
+            "must not lead with the all-clear when every declared row is unparseable",
+        )
+        # main#1256 review item 2 (PR #1542): pin the full clause, including
+        # the explanatory half -- see the twin note on the denominator test
+        # above.
+        self.assertIn(
+            "2 of 2 declared scope rows unparseable and could not be matched against merged PRs",
+            warning,
+        )
         # No `gh` call of any kind was made -- nothing parseable could ever
         # match (main#1200's early-skip, main#1131) -- yet the warning fires.
         self.assertEqual(fake.calls, [])
+
+    def test_edge1_exactly_one_unparseable_row_uses_singular_grammar(self) -> None:
+        """main#1256 item 3 added this fixture; PR #1542 review item 1
+        (Aino Virtanen) caught that the original version pinned the WRONG
+        answer -- `plural` was governed by `unparseable` (== 1 here), but
+        the noun phrase's head is "the {total_declared} declared scope
+        row(s)", and `total_declared` is 2 in this fixture (1 unparseable +
+        1 claimed). Singular can never agree with a denominator of 2, so the
+        grammatically-correct rendering is plural: "1 of the 2 declared
+        scope rows unparseable". `plural` is now governed by
+        `total_declared`, not `unparseable`, so this fixture -- which has
+        `unparseable == 1` but `total_declared == 2` -- is exactly the shape
+        that discriminates the two possible governing variables: governing
+        by `unparseable` alone would (wrongly) render singular here, while
+        governing by `total_declared` correctly renders plural. The negative
+        assertion below directly catches a regression back to governing by
+        `unparseable` (which would render "declared scope row unparseable"
+        -- note the immediate space after "row", which is NOT a substring of
+        the correct "rows unparseable"). See
+        :meth:`test_edge1_true_singular_shape_still_renders_singular` below
+        for the complementary genuinely-singular shape, where the two
+        governing variables coincide and both would (correctly) render
+        singular -- proving this fix didn't just flip every case to plural."""
+        prs = [
+            {
+                "repo": "noorinalabs-main",
+                "number": 1173,
+                "sha": "sha1173",
+                "mergedAt": "2026-07-30T02:16:40Z",
+                "login": "octocat",
+                "commit_author": "Nino Kavtaradze",
+                "closes": [1172],
+            }
+        ]
+        fake = _FakeGhDirectToMain(prs)
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            data = {
+                "current_wave": 29,
+                "wave_29_repos_in_scope": ["noorinalabs-main"],
+                "wave_29_kicked_off_at": "2026-07-27T22:56:17Z",
+                "wave_29_merge_model": "direct-to-main",
+                "wave_29_scope": {
+                    "tier_1_backlog": [
+                        "main#322",  # exactly ONE unparseable row
+                        {"id": "noorinalabs-main#1172"},  # claimed
+                    ]
+                },
+            }
+            status.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            with mock.patch.object(wave_status.subprocess, "run", fake):
+                warning = wave_status.reconciliation_warning("10", "29", status)
+        self.assertIsNotNone(warning)
+        assert warning is not None  # narrows the type for the checks below
+        self.assertIn("1 of the 2 declared scope rows unparseable", warning)
+        self.assertNotIn("declared scope row unparseable", warning)
+
+    def test_edge1_true_singular_shape_still_renders_singular(self) -> None:
+        """Complement to the test above: the genuinely-singular shape (main#1255's
+        own case -- a single non-list `tier_*` value is the only declared
+        row, so `canonical` is empty and `total_declared == unparseable ==
+        1`) must still render singular. Here the two candidate governing
+        variables (`unparseable` and `total_declared`) coincide, so this
+        alone would not distinguish them -- it exists to prove the item-1
+        fix didn't overcorrect by making the appended/early-return clause
+        plural unconditionally."""
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            data = {
+                "current_wave": 29,
+                "wave_29_repos_in_scope": ["noorinalabs-main"],
+                "wave_29_kicked_off_at": "2026-07-27T22:56:17Z",
+                "wave_29_merge_model": "direct-to-main",
+                "wave_29_scope": {
+                    "tier_1_only_tier": "noorinalabs-main#1161",  # non-list value -- unparseable
+                },
+            }
+            status.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            fake = _FakeGhDirectToMain([])
+            with mock.patch.object(wave_status.subprocess, "run", fake):
+                warning = wave_status.reconciliation_warning("10", "29", status)
+        self.assertIsNotNone(warning)
+        assert warning is not None  # narrows the type for the checks below
+        self.assertEqual(
+            warning,
+            "1 of 1 declared scope row unparseable and could not be matched against merged PRs",
+        )
 
     def test_edge3_repo_absent_from_repos_in_scope_is_flagged_distinctly(self) -> None:
         """A canonical row naming a repo NOT in `repos_in_scope` can never be
