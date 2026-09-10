@@ -15,6 +15,8 @@ Test classes:
 - LogPretoolUseBlockCallTests — log_pretooluse_block fires exactly once on
   every entry path (check() for Edit/Write/NotebookEdit/Bash, main() for
   SendMessage), zero times on allow (#1244)
+- BlockPathSurvivesLoggerFailure — a raising log_pretooluse_block must not
+  turn a block into a silent allow, on either check() or main() (#1243/#1528)
 """
 
 from __future__ import annotations
@@ -700,11 +702,11 @@ class LogPretoolUseBlockCallTests(_SentinelHarness):
         self.assertIsNotNone(result)
         assert result is not None
         # tool_input carries `notebook_path`, not `file_path`/`command` — the
-        # command fallback chain yields "" here, matching pre-existing
-        # fallback shape (not a new defect introduced by this fix).
+        # fallback chain now includes `notebook_path` (Aino, PR #1528 item 2)
+        # so a blocked NotebookEdit no longer logs a blank command field.
         mock_log.assert_called_once_with(
             "validate_edit_completion",
-            "",
+            abs_path,
             result["reason"],
             tool_name="NotebookEdit",
         )
@@ -791,6 +793,75 @@ class LogPretoolUseBlockCallTests(_SentinelHarness):
         self.assertEqual(code, 0)
         self.assertEqual(out, "")
         mock_log.assert_not_called()
+
+
+class BlockPathSurvivesLoggerFailure(_SentinelHarness):
+    """A raising logger must not decide the verdict (#1243, mirroring
+    `validate_wave_audit.py`'s `BlockPathSurvivesLoggerFailure`).
+
+    `_pre_tool_use_blocks` is the single choke point both `check()` (the
+    dispatcher.py entry for Bash/Edit/Write/NotebookEdit) and `main()` (the
+    standalone settings.json entry for SendMessage) route through, and it is
+    also where `log_pretooluse_block` now lives (#1244) — so a `log_pretooluse_block`
+    that raises must not propagate out of `_pre_tool_use_blocks` and convert
+    the block into a silent, output-free ALLOW on EITHER entry path. These
+    tests FAIL without the `try`/`except Exception: pass` guard around that
+    call (the exception propagates and the block dict, or exit 2, is never
+    produced); deleting the guard is the mutation this class exists to kill.
+    """
+
+    def _seed_error(self, path: str) -> str:
+        abs_path = str(Path(path).resolve())
+        sf = self._sentinel_file()
+        sf.parent.mkdir(parents=True, exist_ok=True)
+        sf.write_text(
+            json.dumps({"path": abs_path, "tool": "Edit", "error": "boom", "ts": _now_iso()})
+            + "\n",
+            encoding="utf-8",
+        )
+        return abs_path
+
+    def _run_main(self, stdin_text: str) -> tuple[int, str]:
+        stdin = io.StringIO(stdin_text)
+        stdout = io.StringIO()
+        with (
+            mock.patch.object(sys, "stdin", stdin),
+            mock.patch.object(sys, "stdout", stdout),
+        ):
+            try:
+                hook.main()
+            except SystemExit as e:
+                code = int(e.code) if e.code is not None else 0
+                return code, stdout.getvalue()
+        raise AssertionError("main() returned without calling sys.exit()")
+
+    def test_check_still_blocks_when_logger_raises(self) -> None:
+        """The `check()`-routed dispatcher path (Bash/Edit/Write/NotebookEdit)."""
+        abs_path = self._seed_error("/tmp/RAISING_LOGGER_CHECK.py")
+        inp = self._input(
+            hook_event_name="PreToolUse",
+            tool_name="Edit",
+            tool_input={"file_path": abs_path},
+        )
+        with mock.patch.object(hook, "log_pretooluse_block", side_effect=RuntimeError("boom")):
+            result = hook.check(inp)
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+
+    def test_main_sendmessage_still_exits_2_when_logger_raises(self) -> None:
+        """The `main()`-routed standalone SendMessage path."""
+        self._seed_error("/tmp/RAISING_LOGGER_SENDMSG.py")
+        inp = self._input(
+            hook_event_name="PreToolUse",
+            tool_name="SendMessage",
+            tool_input={"to": "team-lead", "message": "PR #100 is at v3"},
+        )
+        with mock.patch.object(hook, "log_pretooluse_block", side_effect=RuntimeError("boom")):
+            code, out = self._run_main(json.dumps(inp))
+        self.assertEqual(code, 2, f"stdout={out!r}")
+        self.assertNotEqual(out, "")
+        result = json.loads(out)
+        self.assertEqual(result["decision"], "block")
 
 
 if __name__ == "__main__":

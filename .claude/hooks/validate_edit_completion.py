@@ -481,14 +481,28 @@ def _pre_tool_use_blocks(input_data: dict) -> dict | None:
     # its result untouched — so logging here, rather than in either caller,
     # guarantees every entry path logs a block exactly once, with no
     # double-logging risk from a caller-side call.
-    log_pretooluse_block(
-        "validate_edit_completion",
-        tool_input.get("command", "")
-        or tool_input.get("file_path", "")
-        or tool_input.get("message", ""),
-        reason,
-        tool_name=tool_name,
-    )
+    #
+    # The log call cannot be allowed to decide the verdict (#1243, mirroring
+    # `validate_wave_audit._block()`'s established guard). This is now the
+    # single choke point BOTH entry paths route through, so a raising logger
+    # here (a full disk, `.claude/annunaki` unwritable or existing as a
+    # regular file — `append_jsonl_record`'s `mkdir` sits outside its own
+    # `except OSError`) would propagate out of this function and silently
+    # convert this BLOCK into an ALLOW on every path, not just one. Logging
+    # is observability for a decision already made, so the decision is built
+    # first and returned regardless of whether the log call itself succeeds.
+    try:
+        log_pretooluse_block(
+            "validate_edit_completion",
+            tool_input.get("command", "")
+            or tool_input.get("file_path", "")
+            or tool_input.get("notebook_path", "")
+            or tool_input.get("message", ""),
+            reason,
+            tool_name=tool_name,
+        )
+    except Exception:  # noqa: BLE001 — the block must survive any logging failure
+        pass
     return {"decision": "block", "reason": reason}
 
 
