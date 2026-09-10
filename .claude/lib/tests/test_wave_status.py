@@ -1250,7 +1250,13 @@ class ReconciliationWarningEdges(unittest.TestCase):
         self.assertIn("main#1160", warning)
         self.assertNotIn("main#1172", warning.split(";")[0])  # claimed -- absent from the row list
         self.assertIn("1 of 4", warning)  # denominator now reflects ALL 4 declared rows
-        self.assertIn("2 scope rows unparseable", warning)
+        # main#1256 item 1: the appended clause now names the denominator
+        # instead of the old ambiguous "(excluded from the count above)",
+        # which left a reader unable to tell whether `unparseable` was
+        # excluded from `total_declared` (false) or the unclaimed numerator
+        # (true).
+        self.assertIn("2 of the 4 declared scope rows unparseable", warning)
+        self.assertNotIn("excluded from the count above", warning)
 
     def test_edge1_all_rows_unparseable_still_warns(self) -> None:
         """Degenerate case: every declared row is unparseable, so `canonical`
@@ -1274,10 +1280,61 @@ class ReconciliationWarningEdges(unittest.TestCase):
                 warning = wave_status.reconciliation_warning("10", "29", status)
         self.assertIsNotNone(warning)
         assert warning is not None  # narrows the type for the checks below
-        self.assertIn("2 scope rows unparseable", warning)
+        # main#1256 item 2: the degenerate all-unparseable case must lead
+        # with the unparseable clause, not the vacuous "0 scope rows
+        # unclaimed" all-clear over the empty `canonical` set -- nothing
+        # here was ever checkable in the first place.
+        self.assertFalse(
+            warning.startswith("0 scope rows unclaimed"),
+            "must not lead with the all-clear when every declared row is unparseable",
+        )
+        self.assertIn("2 of 2 declared scope rows unparseable", warning)
         # No `gh` call of any kind was made -- nothing parseable could ever
         # match (main#1200's early-skip, main#1131) -- yet the warning fires.
         self.assertEqual(fake.calls, [])
+
+    def test_edge1_exactly_one_unparseable_row_uses_singular_grammar(self) -> None:
+        """main#1256 item 3: `plural = "s" if unparseable != 1 else ""` had no
+        singular fixture anywhere in the suite -- both existing hits above
+        used `unparseable == 2`, so mutating the ternary to an unconditional
+        `"s"` left the suite green. One declared row here is unparseable
+        (`main#322`), one is claimed (`noorinalabs-main#1172`), so
+        `unclaimed` is empty and the appended unparseable clause is the only
+        thing that can carry the plural. Confirmed failing against the
+        unconditional-`"s"` mutant (`assertNotIn` below trips)."""
+        prs = [
+            {
+                "repo": "noorinalabs-main",
+                "number": 1173,
+                "sha": "sha1173",
+                "mergedAt": "2026-07-30T02:16:40Z",
+                "login": "octocat",
+                "commit_author": "Nino Kavtaradze",
+                "closes": [1172],
+            }
+        ]
+        fake = _FakeGhDirectToMain(prs)
+        with TemporaryDirectory() as td:
+            status = Path(td) / "cross-repo-status.json"
+            data = {
+                "current_wave": 29,
+                "wave_29_repos_in_scope": ["noorinalabs-main"],
+                "wave_29_kicked_off_at": "2026-07-27T22:56:17Z",
+                "wave_29_merge_model": "direct-to-main",
+                "wave_29_scope": {
+                    "tier_1_backlog": [
+                        "main#322",  # exactly ONE unparseable row
+                        {"id": "noorinalabs-main#1172"},  # claimed
+                    ]
+                },
+            }
+            status.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            with mock.patch.object(wave_status.subprocess, "run", fake):
+                warning = wave_status.reconciliation_warning("10", "29", status)
+        self.assertIsNotNone(warning)
+        assert warning is not None  # narrows the type for the checks below
+        self.assertIn("1 of the 2 declared scope row unparseable", warning)
+        self.assertNotIn("declared scope rows unparseable", warning)
 
     def test_edge3_repo_absent_from_repos_in_scope_is_flagged_distinctly(self) -> None:
         """A canonical row naming a repo NOT in `repos_in_scope` can never be
