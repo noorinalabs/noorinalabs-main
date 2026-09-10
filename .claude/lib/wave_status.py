@@ -615,7 +615,18 @@ def _reconciliation_warning_from_claims(
         return None
 
     total_declared = len(canonical) + unparseable
-    plural = "s" if unparseable != 1 else ""
+    # main#1256 review (Aino Virtanen, PR #1542 item 1): the plural must be
+    # governed by the number the noun phrase's head counts -- in BOTH
+    # branches below that head noun is "the {total_declared} declared scope
+    # row(s)", never `unparseable` on its own. The appended-clause branch is
+    # reached only when `canonical` is non-empty and `unparseable >= 1`, so
+    # `total_declared >= 2` there always -- singular can never be correct in
+    # that branch. The empty-`canonical` branch has `total_declared ==
+    # unparseable` by construction, so governing by `total_declared` still
+    # renders the genuinely-singular main#1255 shape ("1 of 1 declared scope
+    # row unparseable") correctly; it was previously right only by
+    # coincidence, since the two numbers happen to agree there.
+    plural = "s" if total_declared != 1 else ""
 
     if not canonical:
         # main#1256 item 2: every declared row is unparseable -- lead with
