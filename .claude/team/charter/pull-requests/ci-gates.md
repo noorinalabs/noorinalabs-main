@@ -102,7 +102,19 @@ Four paths in **`noorinalabs-main` only** commit to `main` without a PR: `.claud
 
 This warning is here because the trap was sprung on this very rule: a shape-based re-derivation counted **16** off-allowlist commits, of which **10** were reviewed squash-merged PRs (#1126, #1127, #1128, #1130, #1136, #1143, #1154, #1155, #1156, #1173). That produced a false "the practice tightened on 2026-08-03" story, when the real discontinuity is `2d8bd91` — eleven minutes after the last squash-merge, with zero squash-shaped commits after it. So this allowlist codifies a **long-standing narrow practice that was never written down**, not a recent trend.
 
-Branch protection stays **ON**: an exempt commit still prints `Bypassed rule violations`. A visible, auditable bypass over a known-good set beats silently widening who may push. Emergency Mode's `[EMERGENCY]` direct path is unaffected.
+Branch protection stays **ON** — ruleset `17139856` is `active` — but that fact does not enforce the allowlist. **The allowlist is a policy, enforced by nothing at any layer (#1493):**
+
+- **Not the ruleset.** `rules: ["deletion", "non_fast_forward", "pull_request"]` carries no path condition, and GitHub rulesets cannot express a path-scoped push exemption — a ruleset can only forbid all direct pushes to `main` or permit all of them for a bypass actor, never "these four paths only." The bypass actor here is the built-in Repository-admin role at `bypass_mode: "always"`, over every path equally, not just the four listed.
+- **Not a local hook.** `hooks.pre_bash` in `.claude/framework.config.json` holds **23** hooks; none of them inspects the paths touched by a push resolving to `main` against this allowlist. The four that look adjacent — `validate_pr_review`, `validate_pr_ci_status`, `validate_branch_freshness`, `block_squash_wave_merge` — are all PR-shaped and never fire on a bare push.
+- **Not CI.** CI runs `on: push` / `on: pull_request` after a change has already landed on `main` — it can observe, never prevent.
+
+So **"a commit is exempt only if every path it touches is listed" is honour-system, not a checked precondition.** What `Bypassed rule violations` actually attests is only that the push bypassed the ruleset's `pull_request` rule — it says nothing about which paths were touched or whether every one of them was on the list.
+
+**Owner ruling (2026-09-09, #1493).** The owner's verbatim word answering this question was **"ratified."** The reading that the current honour-system state is what's ratified — the allowlist stays honour-system, and no hook, CI check, or path rule is added on the strength of this ruling — is the *orchestrator's interpretation*, recorded separately from the owner's own word (`#1493` comments; `cross-repo-status.json`).
+
+**This paragraph is documentation-only.** It states the honour-system status honestly; it does **not** close a tier-1 enforcement gap, because none is closed here — the gap is ratified, not fixed. The `pre_bash` hook design proposed in #1493 (block a push to `main` unless every touched path is allowlisted, failing closed on an unparseable range) remains a valid future option; it is simply not scheduled.
+
+Emergency Mode's `[EMERGENCY]` direct path is unaffected.
 
 
 Phase-3 end-state criterion #4 (`noorinalabs-main#322`): **CI failures block all merges** on every repo's default branch, org-wide — not just by team discipline, but enforced server-side by GitHub. As of W13, 7 of 8 repos (all child repos + `noorinalabs-main`) had NO branch protection and relied SOLELY on the Hook 4 comment-gate; that single-layer gap is what let the W11 batch-loop merge evade review (`feedback_batch_loop_merge_evades_pr_review_hook`). This section is the canonical spec that closes that gap; the live pilot proves it and the remaining repos adopt it per the application-status note (the spec, not a blanket apply, is the durable artifact).
