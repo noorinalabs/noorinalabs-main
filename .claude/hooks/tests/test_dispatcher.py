@@ -268,6 +268,91 @@ class BlockAndWarningTests(unittest.TestCase):
         self.assertEqual(out, "")
 
 
+class AdvisoriesSurviveABlockTests(unittest.TestCase):
+    """main#1245: an advisory `systemMessage` collected from an earlier allow
+    decision must still be shown when a LATER hook in the same dispatch
+    blocks — pre-fix it was silently discarded because the aggregation
+    branch only ran on the all-allow path."""
+
+    def test_advisory_then_block_carries_both(self) -> None:
+        """FAILS pre-fix: hook A (enforce_librarian_consulted) returns allow
+        + systemMessage, hook B (validate_edit_completion) blocks. The
+        printed JSON must carry BOTH the block's own reason AND the
+        advisory — pre-fix it carried only the block."""
+        input_data = {
+            "tool_name": "Edit",
+            "hook_event_name": "PreToolUse",
+            "tool_input": {"file_path": "/tmp/x.py"},
+        }
+        with (
+            mock.patch(
+                "enforce_librarian_consulted.check",
+                return_value={"decision": "allow", "systemMessage": "ADVISE_A"},
+            ),
+            mock.patch(
+                "validate_edit_completion.check",
+                return_value={"decision": "block", "reason": "BLOCKED"},
+            ),
+        ):
+            code, out = _run_dispatcher(input_data)
+        self.assertEqual(code, 2, "exit code stays 2 even when advisories are merged in")
+        parsed = json.loads(out)
+        self.assertEqual(parsed["decision"], "block")
+        # The block's own reason must survive unchanged — merging advisories
+        # in must never displace or lose it (the "reorder loses reason"
+        # mutant this guards against).
+        self.assertEqual(parsed["reason"], "BLOCKED")
+        self.assertIn("ADVISE_A", parsed["systemMessage"])
+        self.assertIn("BLOCKED", parsed["systemMessage"])
+        # Own message comes first, advisories after — pin the ordering too.
+        self.assertLess(
+            parsed["systemMessage"].index("BLOCKED"), parsed["systemMessage"].index("ADVISE_A")
+        )
+
+    def test_positive_control_advisory_with_no_block_still_aggregates(self) -> None:
+        """All-allow path is unaffected by the #1245 change — same behavior
+        as `test_write_warnings_aggregate_and_allow`, restated here as this
+        row's explicit positive control."""
+        input_data = {
+            "tool_name": "Write",
+            "hook_event_name": "PreToolUse",
+            "tool_input": {"file_path": "/tmp/x.py"},
+        }
+        with (
+            mock.patch(
+                "enforce_librarian_consulted.check",
+                return_value={"decision": "allow", "systemMessage": "ADVISE_A"},
+            ),
+            mock.patch("validate_edit_completion.check", return_value=None),
+        ):
+            code, out = _run_dispatcher(input_data)
+        self.assertEqual(code, 0)
+        parsed = json.loads(out)
+        self.assertEqual(parsed["decision"], "allow")
+        self.assertIn("ADVISE_A", parsed["systemMessage"])
+
+    def test_negative_control_block_with_no_advisory_prints_only_block(self) -> None:
+        """No advisory fired before the block — output must be byte-for-byte
+        identical to the pre-#1245 shape (no `systemMessage` key added)."""
+        input_data = {
+            "tool_name": "Edit",
+            "hook_event_name": "PreToolUse",
+            "tool_input": {"file_path": "/tmp/x.py"},
+        }
+        with (
+            mock.patch("enforce_librarian_consulted.check", return_value=None),
+            mock.patch(
+                "validate_edit_completion.check",
+                return_value={"decision": "block", "reason": "BLOCKED"},
+            ),
+        ):
+            code, out = _run_dispatcher(input_data)
+        self.assertEqual(code, 2)
+        parsed = json.loads(out)
+        self.assertEqual(parsed, {"decision": "block", "reason": "BLOCKED"})
+        self.assertNotIn("systemMessage", parsed)
+
+
 class FailOpenTests(unittest.TestCase):
     """Individual hook exceptions and missing modules must not crash the
     dispatcher, matching the pre-existing Bash-only behavior."""
