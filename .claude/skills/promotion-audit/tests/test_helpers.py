@@ -1462,6 +1462,120 @@ class CountGenuineCitationsTests(unittest.TestCase):
         self.assertEqual(h.count_genuine_citations(text, "Cross-Contract PRs"), 1)
 
 
+class CountGenuineCitationsBoundaryTests(unittest.TestCase):
+    """#1450: boundary-aware scan. Two fixtures below FAIL against the
+    pre-fix `text.find` implementation (a bare substring scan with no
+    boundary check at all counts every literal occurrence not otherwise
+    excluded by `_is_self_generated_occurrence`); the rest pin edge-case
+    behavior the fix must NOT break, and are separately used to kill
+    plausible incorrect variants of the fix (see the PR body's mutant
+    table)."""
+
+    def test_short_heading_substring_of_longer_hyphenated_heading_excluded(
+        self,
+    ) -> None:
+        """FAILS PRE-FIX (bare `text.find`, no boundary check): the needle
+        "Contract PRs" is a literal substring of "Cross-Contract PRs" (the
+        heading tail after the hyphen), so the pre-fix scan finds it TWICE
+        -- once embedded in the longer, hyphen-joined heading, once as the
+        genuine standalone citation -- and neither occurrence trips any of
+        the four `_is_self_generated_occurrence` exclusions, so pre-fix
+        returns 2. Post-fix, the embedded occurrence is preceded by `-`,
+        which the heading-continuation class treats as NOT a boundary (a
+        plain `\\b` would wrongly treat `-` as a boundary here and miss
+        this case entirely -- see `_HEADING_CONTINUATION_RE`'s docstring),
+        so only the standalone occurrence counts: 1."""
+        text = (
+            "Per Charter § Cross-Contract PRs, alembic merge migration "
+            "landed successfully. Contract PRs was filed as a separate "
+            "item today.\n"
+        )
+        self.assertEqual(h.count_genuine_citations(text, "Contract PRs"), 1)
+
+    def test_heading_embedded_in_prose_word_excluded(self) -> None:
+        """FAILS PRE-FIX: needle "PRs" is a literal substring of the prose
+        word "PRsomething", so the pre-fix bare scan counts it as a
+        citation alongside the genuine "Cross-Contract PRs" occurrence,
+        returning 2. Post-fix, "PRsomething"'s embedded match is followed
+        immediately by the letter "o" -- a heading-continuation char, not
+        a boundary -- so it is excluded: 1."""
+        text = (
+            "The PRsomething flag toggles behavior. Cross-Contract PRs "
+            "was cited separately today.\n"
+        )
+        self.assertEqual(h.count_genuine_citations(text, "PRs"), 1)
+
+    def test_citation_followed_by_punctuation_still_counts(self) -> None:
+        """Does not fail against the literal pre-fix scan (which never
+        checked boundaries), but pins the correct edge behavior against an
+        over-strict variant of the fix that requires literal whitespace
+        (rather than "not a heading-continuation char") on both sides --
+        that variant would wrongly exclude all three of these, since none
+        of them are followed by whitespace."""
+        for suffix in (":", ",", ")"):
+            with self.subTest(suffix=suffix):
+                text = f"See Charter § Cross-Contract PRs{suffix} for details.\n"
+                self.assertEqual(h.count_genuine_citations(text, "Cross-Contract PRs"), 1)
+
+    def test_citation_inside_backticks_still_counts(self) -> None:
+        """A backtick is not a heading-continuation char, so a citation
+        wrapped in inline-code backticks still counts on both sides."""
+        text = "See `Cross-Contract PRs` in the charter file.\n"
+        self.assertEqual(h.count_genuine_citations(text, "Cross-Contract PRs"), 1)
+
+    def test_citation_at_start_of_text_counts(self) -> None:
+        text = "Cross-Contract PRs was the first thing mentioned today.\n"
+        self.assertEqual(h.count_genuine_citations(text, "Cross-Contract PRs"), 1)
+
+    def test_citation_at_end_of_text_ending_exactly_on_needle_counts(self) -> None:
+        text = "Today's topic was Cross-Contract PRs"
+        self.assertEqual(h.count_genuine_citations(text, "Cross-Contract PRs"), 1)
+
+    def test_underscore_and_digit_continuation_excluded(self) -> None:
+        """PR #1529 review item 1 (Nadia Khoury, merge-gate): the
+        underscore and digit members of `_HEADING_CONTINUATION_RE`'s
+        character class were the only two with no pinning fixture, and
+        mutation testing showed the underscore branch is the one carrying
+        the entire live-corpus behaviour change this PR produces --
+        dropping `_` from the class restores all four affected
+        `.claude/memory/` rows to their exact base counts while the rest
+        of the suite stays green.
+
+        Needle "feedback_x" is a genuine standalone citation in
+        "feedback_x.md" (the character after the match is `.`, a
+        boundary), but is a substring of a longer, underscore-joined slug
+        in "feedback_x_y.md" (next char `_`) and of a longer,
+        digit-suffixed slug in "feedback_x2.md" (next char `2`) -- both
+        excluded because `_` and `2` are heading-continuation characters.
+        Folding the digit case into this same fixture per the review
+        (it "survives identically" to the underscore case) kills both
+        the underscore-removed and the digits-removed mutants with one
+        test."""
+        text = (
+            "cites feedback_x.md directly, and separately mentions "
+            "feedback_x_y.md and feedback_x2.md, which are different notes.\n"
+        )
+        self.assertEqual(h.count_genuine_citations(text, "feedback_x"), 1)
+
+    def test_non_overlapping_match_semantics_pinned(self) -> None:
+        """PR #1529 review item 4 (Nadia Khoury, merge-gate, optional):
+        `count_genuine_citations`'s docstring explicitly guarantees
+        `str.count`-style non-overlapping-match semantics (`pos = end`
+        after each match, whether or not it was counted), but nothing
+        pinned it before this test. Needle "Retro Retro" against text
+        "Retro Retro Retro" has a second, overlapping candidate match
+        starting at index 6 (sharing the middle "Retro"); non-overlapping
+        semantics must skip it, since after the first match (ending at
+        index 11) the remaining text " Retro" (6 chars) is too short to
+        contain the 11-char needle again. An `pos = idx + 1` mutant
+        re-scans from index 1 and finds the overlapping match, taking the
+        count from 1 to 2 with the rest of the suite still green. This
+        line is unchanged from base -- a pre-existing hole the new
+        docstring merely promotes into a stated promise."""
+        text = "Retro Retro Retro"
+        self.assertEqual(h.count_genuine_citations(text, "Retro Retro"), 1)
+
+
 class CountSectionCitationsProvenanceTests(unittest.TestCase):
     """`count_section_citations` wired through the provenance filter."""
 

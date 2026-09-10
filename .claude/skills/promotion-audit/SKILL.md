@@ -335,7 +335,7 @@ The audit MUST produce byte-identical output when re-run on unchanged repo state
 - Never read transcript files (per D4(i)).
 - Never invoke external tools with nondeterministic output (no `gh api` except for issue creation at the end).
 
-Tests in `.claude/skills/promotion-audit/tests/` cover each helper (`test_helpers.py`), a smoke test verifying the first-run expected outcome (zero AUTO, zero DECIDE on current repo state — `test_smoke.py`), and the driver itself including the empty-slug regression and steady-state-through-the-driver (`test_run.py`).
+Tests in `.claude/skills/promotion-audit/tests/` cover each helper (`test_helpers.py`), a smoke test verifying the first-run classification shape with `section_citations` deliberately hardcoded to 0 by design rather than measured (`test_smoke.py`), and the driver itself including the empty-slug regression and the *measured* current-repo-state claim — zero AUTO, zero DECIDE — pinned by `test_run.py::SteadyStateThroughDriver::test_current_repo_state_yields_zero_auto_after_provenance_filter` (`test_run.py`).
 
 ## Integration
 
