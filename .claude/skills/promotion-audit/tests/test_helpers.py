@@ -1531,6 +1531,50 @@ class CountGenuineCitationsBoundaryTests(unittest.TestCase):
         text = "Today's topic was Cross-Contract PRs"
         self.assertEqual(h.count_genuine_citations(text, "Cross-Contract PRs"), 1)
 
+    def test_underscore_and_digit_continuation_excluded(self) -> None:
+        """PR #1529 review item 1 (Nadia Khoury, merge-gate): the
+        underscore and digit members of `_HEADING_CONTINUATION_RE`'s
+        character class were the only two with no pinning fixture, and
+        mutation testing showed the underscore branch is the one carrying
+        the entire live-corpus behaviour change this PR produces --
+        dropping `_` from the class restores all four affected
+        `.claude/memory/` rows to their exact base counts while the rest
+        of the suite stays green.
+
+        Needle "feedback_x" is a genuine standalone citation in
+        "feedback_x.md" (the character after the match is `.`, a
+        boundary), but is a substring of a longer, underscore-joined slug
+        in "feedback_x_y.md" (next char `_`) and of a longer,
+        digit-suffixed slug in "feedback_x2.md" (next char `2`) -- both
+        excluded because `_` and `2` are heading-continuation characters.
+        Folding the digit case into this same fixture per the review
+        (it "survives identically" to the underscore case) kills both
+        the underscore-removed and the digits-removed mutants with one
+        test."""
+        text = (
+            "cites feedback_x.md directly, and separately mentions "
+            "feedback_x_y.md and feedback_x2.md, which are different notes.\n"
+        )
+        self.assertEqual(h.count_genuine_citations(text, "feedback_x"), 1)
+
+    def test_non_overlapping_match_semantics_pinned(self) -> None:
+        """PR #1529 review item 4 (Nadia Khoury, merge-gate, optional):
+        `count_genuine_citations`'s docstring explicitly guarantees
+        `str.count`-style non-overlapping-match semantics (`pos = end`
+        after each match, whether or not it was counted), but nothing
+        pinned it before this test. Needle "Retro Retro" against text
+        "Retro Retro Retro" has a second, overlapping candidate match
+        starting at index 6 (sharing the middle "Retro"); non-overlapping
+        semantics must skip it, since after the first match (ending at
+        index 11) the remaining text " Retro" (6 chars) is too short to
+        contain the 11-char needle again. An `pos = idx + 1` mutant
+        re-scans from index 1 and finds the overlapping match, taking the
+        count from 1 to 2 with the rest of the suite still green. This
+        line is unchanged from base -- a pre-existing hole the new
+        docstring merely promotes into a stated promise."""
+        text = "Retro Retro Retro"
+        self.assertEqual(h.count_genuine_citations(text, "Retro Retro"), 1)
+
 
 class CountSectionCitationsProvenanceTests(unittest.TestCase):
     """`count_section_citations` wired through the provenance filter."""

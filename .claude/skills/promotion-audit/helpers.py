@@ -625,7 +625,19 @@ def _is_self_generated_occurrence(text: str, start: int, end: int) -> bool:
 # whitespace, `§`, backticks, and sentence punctuation (`.`, `,`, `:`,
 # `)`) -- is deliberately left OUT of this class, so a legitimate citation
 # immediately followed by punctuation, or wrapped in backticks, still
-# counts (see `CountGenuineCitationsTests` boundary-edge fixtures).
+# counts (see `CountGenuineCitationsBoundaryTests` boundary-edge fixtures,
+# line 1338 `CountGenuineCitationsTests` holds the non-boundary fixtures).
+#
+# The cost side of the hyphen decision (PR #1529 review item 5, Nadia
+# Khoury): putting `-` in this class buys the #1450 exclusion at the price
+# of a symmetric false negative on a heading that is itself hyphen-suffixed
+# by something else -- needle "Cross-Contract PRs" against text "...
+# Cross-Contract PRs-detail..." counted 1 before this change and counts 0
+# after, because the trailing `-` is now read as a continuation of the
+# citation rather than a boundary. That is the accepted trade (the #1450
+# false-positive class was judged worse than this false-negative class),
+# not an oversight -- naming it here so a reader deciding whether to widen
+# or narrow this class later has both sides of the ledger.
 _HEADING_CONTINUATION_RE = re.compile(r"[A-Za-z0-9_-]")
 
 
