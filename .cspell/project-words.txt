@@ -261,3 +261,7 @@ genericized
 
 # --- validate_labels shared-finder rewrite (main#1351) ---
 metacharacter
+
+# --- admin-merge audit-trail correction (main#1476) — British spelling used
+# by gate_integrity.recognise_exception_class ---
+recognise
