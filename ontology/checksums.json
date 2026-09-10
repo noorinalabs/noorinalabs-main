@@ -1538,9 +1538,9 @@
       "resolved_at": "2026-07-20T16:36:08.072015+00:00"
     },
     ".claude/memory/section_spawn_delegation.md": {
-      "last_tracked": "4b7948becc7e5dd6541d38d58bd29894dd3ae568c75c4b4b12bdcd187b06293a",
+      "last_tracked": "11b8a8c3cb64a2f487aa7828bbfea71141fc7f9f5d1a659bfe62d4b6075f4438",
       "last_resolved": "4b7948becc7e5dd6541d38d58bd29894dd3ae568c75c4b4b12bdcd187b06293a",
-      "tracked_at": "2026-08-03T03:42:03.449557+00:00",
+      "tracked_at": "2026-09-10T03:36:10.308331+00:00",
       "resolved_at": "2026-08-03T13:48:04.666256+00:00"
     },
     "noorinalabs-data-acquisition/src/utils/arabic.py": {
@@ -1856,9 +1856,9 @@
       "resolved_at": "2026-08-18T22:19:45.225752+00:00"
     },
     ".claude/memory/feedback_commit_identity_roster_from_cwd.md": {
-      "last_tracked": "ec6ea9b596a61ac9f1cb73d7af7b9e169e80ed25092ccdec1f84d31789aa8627",
+      "last_tracked": "893147fd1e7e825498da0ca9dd33d1ecb727493034170e57d14b1572f886f20d",
       "last_resolved": "ec6ea9b596a61ac9f1cb73d7af7b9e169e80ed25092ccdec1f84d31789aa8627",
-      "tracked_at": "2026-08-17T22:17:27.354216+00:00",
+      "tracked_at": "2026-09-10T03:36:35.601186+00:00",
       "resolved_at": "2026-08-17T22:21:00.047561+00:00"
     },
     ".claude/memory/feedback_owner_merge_gate_review_first.md": {
