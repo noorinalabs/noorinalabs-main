@@ -76,6 +76,11 @@ either way (it never writes) but will itself report "would CREATE" until the
 live rename lands, which is a stale-name artifact, not a sign the script is
 broken.
 
+**Status:** this repo's live rename landed 2026-09-10T10:34:52-04:00
+(ruleset `17139856`, owner-executed); `DRY_RUN=1` now correctly reports
+"would UPDATE ruleset 17139856". `noorinalabs-deploy`'s matching rename
+(ruleset `17139848`) is still outstanding, tracked on `#1464`.
+
 ```bash
 # From a window with NO in-flight default-branch merge (post-wave-wrapup):
 .github/branch-protection/apply-ruleset.sh            # create or update
