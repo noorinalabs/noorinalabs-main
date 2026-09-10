@@ -614,9 +614,39 @@ def _is_self_generated_occurrence(text: str, start: int, end: int) -> bool:
     return _is_wave_summary_listing(text, start, end)
 
 
+# #1450: a heading-run continuation character. Charter headings routinely
+# join words with a hyphen ("Cross-Contract", "Load-Bearing"), so a plain
+# regex `\b` is the WRONG boundary primitive here -- `\b`'s `\w` class
+# treats `-` as a non-word char, i.e. as a boundary, which would let a
+# short heading match as "genuine" when it is really the tail of a longer
+# hyphen-joined heading run (e.g. needle "Contract PRs" sitting inside
+# "Cross-Contract PRs"). Extending the continuation class to include `-`
+# closes that gap. Everything else that can flank a citation in practice --
+# whitespace, `§`, backticks, and sentence punctuation (`.`, `,`, `:`,
+# `)`) -- is deliberately left OUT of this class, so a legitimate citation
+# immediately followed by punctuation, or wrapped in backticks, still
+# counts (see `CountGenuineCitationsTests` boundary-edge fixtures).
+_HEADING_CONTINUATION_RE = re.compile(r"[A-Za-z0-9_-]")
+
+
+def _is_citation_boundary(text: str, idx: int) -> bool:
+    """Return True if position `idx` in `text` is a citation boundary --
+    i.e. NOT a continuation of a heading-like identifier run.
+
+    Out-of-bounds (before the start / at-or-past the end of `text`) is
+    always a boundary: a needle flush against either edge of the corpus
+    has nothing to be embedded in.
+    """
+    if idx < 0 or idx >= len(text):
+        return True
+    return _HEADING_CONTINUATION_RE.match(text[idx]) is None
+
+
 def count_genuine_citations(text: str, needle: str) -> int:
     """Count non-overlapping occurrences of `needle` in `text`, excluding
-    self-generated provenance (see `_is_self_generated_occurrence`).
+    self-generated provenance (see `_is_self_generated_occurrence`) AND
+    occurrences that are merely a substring of a longer heading-like run
+    (see `_is_citation_boundary`, #1450).
 
     The shared primitive both `count_section_citations` (charter tier) and
     `count_retro_citations` (memory tier) call instead of `text.count(...)`
@@ -626,22 +656,33 @@ def count_genuine_citations(text: str, needle: str) -> int:
     threshold -- the same defensive shape as the main#690 blank-slug guard
     and `count_section_citations`'s blank-heading guard.
 
-    Named entry point for noorinalabs-main#1450 (substring-overlap false
-    positives on short/generic headings): swap the `text.find` scan below
-    for a boundary-aware regex `finditer` and keep classifying each match
-    through `_is_self_generated_occurrence` unchanged -- the two defects
-    are independent and compose at this call site.
+    #1450: a bare substring scan double-counts a short heading that is
+    embedded in a longer one (a false "genuine" citation of the short
+    heading when the operator actually cited the longer one) and counts a
+    heading embedded in an unrelated prose word (e.g. "PRs" inside
+    "PRsomething"). Both are closed by requiring a `_is_citation_boundary`
+    on BOTH sides of the match, in addition to the existing
+    `_is_self_generated_occurrence` classification -- the two defects are
+    independent and compose at this call site. Non-overlapping-match
+    semantics are preserved by always advancing `pos` to the end of a
+    found match, whether or not it was counted (mirrors the prior
+    `text.find` loop's advance).
     """
     if not needle:
         return 0
     count = 0
     pos = 0
+    pattern = re.compile(re.escape(needle))
     while True:
-        idx = text.find(needle, pos)
-        if idx == -1:
+        match = pattern.search(text, pos)
+        if match is None:
             break
-        end = idx + len(needle)
-        if not _is_self_generated_occurrence(text, idx, end):
+        idx, end = match.start(), match.end()
+        if (
+            _is_citation_boundary(text, idx - 1)
+            and _is_citation_boundary(text, end)
+            and not _is_self_generated_occurrence(text, idx, end)
+        ):
             count += 1
         pos = end
     return count
