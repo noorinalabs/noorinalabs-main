@@ -48,7 +48,7 @@ kind tokens so they compare:
     ruff-lint, ruff-format, mypy, pytest, eslint, typescript, prettier,
     terraform-fmt, gitleaks, actionlint, astro-check, pip-audit, build,
     cspell, dockerfile-base-pin, fixture-realism, skill-graphql-pagination,
-    checksums-ascii, skill-bash-dialect
+    checksums-ascii, skill-bash-dialect, checksums-consumers
 
 Unknown tools are ignored (neither side gates on a kind we can't classify),
 which keeps the gate conservative — it never fails on something it doesn't
@@ -207,6 +207,19 @@ _KIND_PATTERNS: dict[str, tuple[str, ...]] = {
     # silently-ignored unknown. Patterns match the script basename (present on
     # both sides' invoke line) and the hook id/job name.
     "checksums-ascii": ("check_checksums_ascii", "checksums-ascii"),
+    # `checksums-consumers` is the ontology-ledger single-reader gate
+    # (`.claude/lib/lint_checksums_consumers.py`, noorinalabs-main#1284): it
+    # flags a re-derived `last_tracked != last_resolved` comparison, a direct
+    # read of `ontology/checksums.json` outside the sanctioned
+    # `checksums_io.py`, and the prose form of either in a skill markdown.
+    # Same contract as `skill-bash-dialect` above — a CI run of the lint with
+    # no pre-commit hook is harmful drift (#684), not a silently-ignored
+    # unknown, so classifying it makes the drift gate actively DEMAND the
+    # local⇄CI mirror. Patterns match the script basename (present on both
+    # sides' invoke line) and the hook id / job name. Distinct from
+    # `checksums-ascii` above: that one gates the ensure_ascii byte
+    # convention of the committed file, this one gates who may read it.
+    "checksums-consumers": ("lint_checksums_consumers", "checksums-consumers"),
 }
 
 

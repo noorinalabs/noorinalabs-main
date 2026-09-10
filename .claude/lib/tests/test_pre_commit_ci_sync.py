@@ -865,6 +865,7 @@ _OLD_KIND_PATTERNS = {
         "lint_skill_bash_dialect",
         "skill-bash-dialect",
     ),
+    "checksums-consumers": ("lint_checksums_consumers", "checksums-consumers"),
 }
 _OLD_RUN_BLOCK_OPEN_RE = re.compile(r"^(?P<indent>\s*)-?\s*run:\s*[|>][+\-0-9]*\s*$")
 
@@ -948,6 +949,7 @@ _EXPECTED_KINDS = {
         "precommit": {
             "actionlint",
             "checksums-ascii",
+            "checksums-consumers",
             "cspell",
             "dockerfile-base-pin",
             "doc-freshness",
@@ -966,6 +968,7 @@ _EXPECTED_KINDS = {
         "ci": {
             "actionlint",
             "checksums-ascii",
+            "checksums-consumers",
             "cspell",
             "dockerfile-base-pin",
             "doc-freshness",
