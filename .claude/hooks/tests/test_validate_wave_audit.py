@@ -1972,15 +1972,22 @@ class LogPretoolUseBlockCallArgsTests(unittest.TestCase):
         """Non-empty args (a carry-forward attempt that doesn't clear the
         block, e.g. an unrelated non-matching string) are passed through
         rather than rendered as '<empty>' — distinguishes the args branch of
-        the f-string from the always-<empty> case above."""
+        the f-string from the always-<empty> case above. The fixture is
+        250 characters — over the `args[:200]` cutoff in `_block` — so this
+        actually exercises truncation (Aino, PR #1528 item 3): a fixture at
+        or under 200 chars passes whether truncation ever fires or not,
+        which is what made the untruncated 20-char string here previously
+        inert against an `args[:200]` -> `args[:500]` mutation."""
+        long_args = "not a carry-forward, just filler text to push this past the two " * 4
+        self.assertGreater(len(long_args), 200)
         with _patch_label("p2-wave-10"), _patch_audit(5, {"noorinalabs-deploy": 5}):
             with mock.patch.object(hook, "log_pretooluse_block") as mock_log:
-                result = hook.check(_skill_input("wave-wrapup", args="not a carry-forward"))
+                result = hook.check(_skill_input("wave-wrapup", args=long_args))
         assert result is not None
         self.assertEqual(result["decision"], "block")
         mock_log.assert_called_once_with(
             "validate_wave_audit",
-            "skill=wave-wrapup args=not a carry-forward",
+            f"skill=wave-wrapup args={long_args[:200]}",
             result["reason"],
             tool_name="Skill",
         )
