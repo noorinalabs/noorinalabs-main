@@ -49,6 +49,37 @@ What it flags
     An escape-hatch pragma with no stated reason. The hatch exists, but it
     cannot be a magic word you type to make the lint quiet.
 
+Known not to flag (residual gap, #1537)
+========================================
+The ``skill-ledger-read`` rule looks for a READ VERB — a shell reader command,
+a pipe into one, an inline ``json.load``, or the ``Read`` tool — next to the
+ledger. It has no rule for bare English that *conditions on* the dirty count
+without naming any of those verbs. The historical, pre-#1142/#1283 form of
+``session-start/SKILL.md`` Step 3a read (verbatim, before ``2bf0353``)::
+
+    If 0 dirty files in `checksums.json`, report "Semantic overlay: current"
+
+This scans CLEAN today (no reader verb, no fenced shell block) and is the one
+historical instance on record that reproduces cleanly against this lint —
+``test_the_documented_residual_prose_gap_still_scans_clean`` below pins that
+fact so a future change that starts catching it shows up as an intentional
+test update, not silent drift either way.
+
+This is deliberately NOT closed by widening the regex. The false-positive risk
+is not hypothetical: `wave-wrapup/SKILL.md` step 12a reads "If no dirty files,
+report \"Semantic overlay: up to date\" and skip" — lexically almost identical
+to the historical violation above, `if`/`dirty files`/`report` and all — but it
+is legitimate, because the count it conditions on was already obtained by the
+correctly-delegating `/ontology-rebuild` call one line earlier in the same
+step, not hand-derived on the spot. Telling those two apart is a question
+about what produced the count elsewhere in the document, which a per-line
+lexical pattern cannot answer; a pattern loose enough to catch the violation
+also catches the legitimate delegation, which is exactly the trade this
+module's own escape-hatch section warns against (a pragma cannot substitute
+for a lint that fires on the wrong lines to begin with). See #1537 for the
+tracked follow-up (also covering shell-variable ledger paths, `rg` as a de
+facto reader, `pathlib.Path.open()`, and `.claude/skills/**/*.py` scope).
+
 Name tainting is FUNCTION-SCOPED, not module-global, and that is load-bearing:
 ``smart_grep_ontology.py`` binds a local named ``path`` to
 ``structural/code-graph.json`` in one function and to ``checksums.json`` in

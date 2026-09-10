@@ -238,6 +238,33 @@ class SkillProseRuleTests(unittest.TestCase):
         md = "A file is dirty when `last_tracked != last_resolved` in `checksums.json`.\n"
         self.assertEqual(lint.check_markdown_text("SKILL.md", md), [])
 
+    def test_the_documented_residual_prose_gap_still_scans_clean(self) -> None:
+        """Pins the module docstring's "Known not to flag" claim (#1537).
+
+        Verbatim `session-start/SKILL.md` Step 3a wording, pre-`2bf0353`
+        (before #1142/#1283 retargeted it to the shared reader). It is bare
+        English that CONDITIONS on the dirty count without using any reader
+        verb (`cat`/`jq`/`json.load`/the `Read` tool) this rule looks for, so
+        it is not caught — deliberately not closed by widening the regex, per
+        the docstring: a pattern loose enough to catch this also catches
+        `wave-wrapup/SKILL.md` step 12a's lexically near-identical but
+        legitimate "If no dirty files, report ..." (which conditions on a
+        count already obtained by a correctly-delegating `/ontology-rebuild`
+        call earlier in the same step).
+
+        This test is an explicit PIN, not an aspiration: if a future change to
+        `check_markdown_text` starts catching this line, update this
+        assertion (and the docstring section) rather than let it silently
+        flip — the point is that a detection-surface change here is a
+        decision made on purpose, never a silent side effect.
+        """
+        md = (
+            "**3a. Semantic overlay** — run `/ontology-rebuild` to resolve dirty "
+            'checksums. If 0 dirty files in `checksums.json`, report "Semantic '
+            'overlay: current"; otherwise process them and commit the result.\n'
+        )
+        self.assertEqual(lint.check_markdown_text("SKILL.md", md), [])
+
 
 class PragmaEscapeHatchTests(unittest.TestCase):
     def test_a_reasoned_pragma_suppresses_the_finding(self) -> None:
