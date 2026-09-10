@@ -64,6 +64,18 @@ A **repository ruleset** targeting `~DEFAULT_BRANCH`, `enforcement: active`:
 
 ## How to apply (owner)
 
+**Rename guard:** `apply-ruleset.sh` looks up an existing ruleset **by `name`**
+(`select(.name == "$RULESET_NAME")`). If `ruleset-main.json`'s `name` is ever
+changed (as it was on `#1464`, to drop the "green CI" claim this repo's ruleset
+does not enforce), the **live** ruleset must be renamed to match FIRST — via a
+direct `gh api -X PUT repos/<repo>/rulesets/<id>` carrying only the name change
+— before running this script for real. Renaming the payload first and running
+the (non-dry) script second makes the by-name lookup find nothing and **POST a
+duplicate ruleset** rather than updating the existing one. `DRY_RUN=1` is safe
+either way (it never writes) but will itself report "would CREATE" until the
+live rename lands, which is a stale-name artifact, not a sign the script is
+broken.
+
 ```bash
 # From a window with NO in-flight default-branch merge (post-wave-wrapup):
 .github/branch-protection/apply-ruleset.sh            # create or update
@@ -75,5 +87,8 @@ gh api repos/noorinalabs/noorinalabs-main/rulesets \
 gh api repos/noorinalabs/noorinalabs-main/rulesets/<id>
 ```
 
-`#322` stays **OPEN** as the org-wide rollout tracker until all 8 default
-branches carry the protection and the phase review closes the criterion.
+`#322` closed 2026-06-02 — the rollout is complete; all 8 default branches
+carry a ruleset (`ci-gates.md` § Application status has the per-repo id
+table). The remaining items — the push-side bypass-count gap and the
+`noorinalabs-deploy` ruleset rename that mirrors this repo's — are tracked on
+**`#1464`**, not `#322`.
