@@ -1921,6 +1921,88 @@ class IntactGateStillGatesEndToEnd(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, f"stdout={proc.stdout!r}")
 
 
+class LogPretoolUseBlockCallArgsTests(unittest.TestCase):
+    """#1233: `_block()` must actually CALL `log_pretooluse_block` with the
+    exact args, through BOTH mutually-exclusive block branches, plus an
+    allow-path zero-calls control.
+
+    `BlockPathSurvivesLoggerFailure` above proves resilience-to-a-RAISING
+    logger only — it never asserts the call itself fires with real (non-
+    exception) args, so a change deleting the `log_pretooluse_block(...)` call
+    from `_block()` would leave that class, and the rest of the suite, green.
+    These tests close that gap: channel = the annunaki call itself (mock +
+    assert_called_once_with on exact positional/keyword args), because exit
+    code and printed reason are identical whether logging ran or not.
+
+    Mutant: delete the `log_pretooluse_block(...)` call in `_block()` — every
+    test below goes red (`assert_called_once_with` on an uncalled mock).
+    """
+
+    def test_open_items_branch_logs_with_exact_args(self) -> None:
+        with _patch_label("p2-wave-10"), _patch_audit(5, {"noorinalabs-deploy": 5}):
+            with mock.patch.object(hook, "log_pretooluse_block") as mock_log:
+                result = hook.check(_skill_input("wave-wrapup"))
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        mock_log.assert_called_once_with(
+            "validate_wave_audit",
+            "skill=wave-wrapup args=<empty>",
+            result["reason"],
+            tool_name="Skill",
+        )
+
+    def test_incomplete_coverage_branch_logs_with_exact_args(self) -> None:
+        with (
+            _patch_label("p2-wave-10"),
+            _patch_audit(0, {}, unqueried=["noorinalabs-main"]),
+        ):
+            with mock.patch.object(hook, "log_pretooluse_block") as mock_log:
+                result = hook.check(_skill_input("wave-wrapup"))
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        self.assertIn("INCOMPLETE", result["reason"])
+        mock_log.assert_called_once_with(
+            "validate_wave_audit",
+            "skill=wave-wrapup args=<empty>",
+            result["reason"],
+            tool_name="Skill",
+        )
+
+    def test_open_items_branch_with_args_logs_truncated_args(self) -> None:
+        """Non-empty args (a carry-forward attempt that doesn't clear the
+        block, e.g. an unrelated non-matching string) are passed through
+        rather than rendered as '<empty>' — distinguishes the args branch of
+        the f-string from the always-<empty> case above. The fixture is
+        250 characters — over the `args[:200]` cutoff in `_block` — so this
+        actually exercises truncation (Aino, PR #1528 item 3): a fixture at
+        or under 200 chars passes whether truncation ever fires or not,
+        which is what made the untruncated 20-char string here previously
+        inert against an `args[:200]` -> `args[:500]` mutation."""
+        long_args = "not a carry-forward, just filler text to push this past the two " * 4
+        self.assertGreater(len(long_args), 200)
+        with _patch_label("p2-wave-10"), _patch_audit(5, {"noorinalabs-deploy": 5}):
+            with mock.patch.object(hook, "log_pretooluse_block") as mock_log:
+                result = hook.check(_skill_input("wave-wrapup", args=long_args))
+        assert result is not None
+        self.assertEqual(result["decision"], "block")
+        mock_log.assert_called_once_with(
+            "validate_wave_audit",
+            f"skill=wave-wrapup args={long_args[:200]}",
+            result["reason"],
+            tool_name="Skill",
+        )
+
+    def test_zero_open_items_allow_path_does_not_log(self) -> None:
+        """Positive control for the two block tests above: same gated skill,
+        genuinely-clean audit (full coverage, zero open items) → silent
+        allow, zero calls."""
+        with _patch_label("p2-wave-10"), _patch_audit(0, {}):
+            with mock.patch.object(hook, "log_pretooluse_block") as mock_log:
+                result = hook.check(_skill_input("wave-wrapup"))
+        self.assertIsNone(result)
+        mock_log.assert_not_called()
+
+
 class BlockPathSurvivesLoggerFailure(unittest.TestCase):
     """The import wrapper closes a MISSING annunaki_log; a RAISING one is the
     same fail-open one step later, so `_block` must not depend on the log call.
