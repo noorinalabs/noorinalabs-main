@@ -474,6 +474,21 @@ def _pre_tool_use_blocks(input_data: dict) -> dict | None:
         f"\nThis hook prevents tool-error-soft-accept (W10 retro-mandated). "
         f"Sentinel: {sentinel_path}"
     )
+    # Single choke point for annunaki logging (#1244): both `check()` (the
+    # dispatcher.py entry for PreToolUse Bash/Edit/Write/NotebookEdit) and
+    # `main()` (the standalone settings.json entry for PreToolUse
+    # SendMessage) call this function exactly once per invocation and return
+    # its result untouched — so logging here, rather than in either caller,
+    # guarantees every entry path logs a block exactly once, with no
+    # double-logging risk from a caller-side call.
+    log_pretooluse_block(
+        "validate_edit_completion",
+        tool_input.get("command", "")
+        or tool_input.get("file_path", "")
+        or tool_input.get("message", ""),
+        reason,
+        tool_name=tool_name,
+    )
     return {"decision": "block", "reason": reason}
 
 
@@ -504,6 +519,11 @@ def check(input_data: dict) -> dict | None:
     Returns None to allow, or a block dict for a state-sensitive PreToolUse
     call. For PostToolUse the return is always None (side-effect only:
     sentinel append).
+
+    Logging is a side effect of `_pre_tool_use_blocks` itself (#1244), so a
+    "block" return from this function has already been recorded via
+    `log_pretooluse_block` before it gets here — this function does not log
+    separately.
     """
     tool_name = input_data.get("tool_name", "")
     event = input_data.get("hook_event_name", "")
@@ -541,20 +561,14 @@ def main() -> None:
         _post_tool_use(input_data)
         sys.exit(0)
 
-    # PreToolUse path
+    # PreToolUse path. `_pre_tool_use_blocks` itself logs the block via
+    # `log_pretooluse_block` on the "block" branch (#1244) — do not log again
+    # here, or every SendMessage block would be recorded twice.
     result = _pre_tool_use_blocks(input_data)
     if result is None:
         sys.exit(0)
     print(json.dumps(result))
     if result.get("decision") == "block":
-        log_pretooluse_block(
-            "validate_edit_completion",
-            (input_data.get("tool_input") or {}).get("command", "")
-            or (input_data.get("tool_input") or {}).get("file_path", "")
-            or (input_data.get("tool_input") or {}).get("message", ""),
-            result["reason"],
-            tool_name=input_data.get("tool_name", ""),
-        )
         sys.exit(2)
     sys.exit(0)
 

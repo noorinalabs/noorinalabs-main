@@ -12,11 +12,16 @@ Test classes:
 - AckTranscriptTests     — Read / Bash-verb / explicit-marker prune sentinel
 - TtlAndStaleTests       — entries past TTL are dropped on read
 - BashAcksPathTests      — _bash_acks_path positive/negative coverage
+- LogPretoolUseBlockCallTests — log_pretooluse_block fires exactly once on
+  every entry path (check() for Edit/Write/NotebookEdit/Bash, main() for
+  SendMessage), zero times on allow (#1244)
 """
 
 from __future__ import annotations
 
+import io
 import json
+import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -614,6 +619,178 @@ class CheckDispatchTests(_SentinelHarness):
 
     def test_dispatched_pre_tools_matches_edit_tools_plus_bash(self):
         self.assertEqual(hook._DISPATCHED_PRE_TOOLS, hook._EDIT_TOOLS | {"Bash"})
+
+
+class LogPretoolUseBlockCallTests(_SentinelHarness):
+    """log_pretooluse_block must fire exactly once on EVERY entry path that
+    reaches a block decision, and zero times on an allow (#1244).
+
+    Channel note: exit code and printed reason are IDENTICAL whether logging
+    ran, failed, or never ran — so these tests assert on the annunaki call
+    itself (mock + assert_called_once_with on exact args), the only channel
+    that distinguishes "blocked and logged" from "blocked, never recorded".
+
+    Pre-fix, `check()` (the dispatcher.py entry for Edit/Write/NotebookEdit/
+    Bash) never logs at all — the sole `log_pretooluse_block` call sits in
+    `main()`, which only the standalone SendMessage registration enters. Every
+    `test_check_*_logs_once_with_expected_args` test below FAILS pre-fix
+    (assert_called_once_with raises: not called). The SendMessage/main()
+    tests pass pre-fix (that path already logged) and pin exactly-once so a
+    fix that duplicates the call there is also caught.
+    """
+
+    def _seed_error(self, path: str) -> str:
+        abs_path = str(Path(path).resolve())
+        sf = self._sentinel_file()
+        sf.parent.mkdir(parents=True, exist_ok=True)
+        sf.write_text(
+            json.dumps({"path": abs_path, "tool": "Edit", "error": "boom", "ts": _now_iso()})
+            + "\n",
+            encoding="utf-8",
+        )
+        return abs_path
+
+    # -- check() path: Edit / Write / NotebookEdit / Bash --------------------
+
+    def test_check_edit_logs_once_with_expected_args(self):
+        abs_path = self._seed_error("/tmp/LOG_EDIT.py")
+        inp = self._input(
+            hook_event_name="PreToolUse",
+            tool_name="Edit",
+            tool_input={"file_path": abs_path},
+        )
+        with mock.patch.object(hook, "log_pretooluse_block") as mock_log:
+            result = hook.check(inp)
+        self.assertIsNotNone(result)
+        assert result is not None
+        mock_log.assert_called_once_with(
+            "validate_edit_completion",
+            abs_path,
+            result["reason"],
+            tool_name="Edit",
+        )
+
+    def test_check_write_logs_once_with_expected_args(self):
+        abs_path = self._seed_error("/tmp/LOG_WRITE.py")
+        inp = self._input(
+            hook_event_name="PreToolUse",
+            tool_name="Write",
+            tool_input={"file_path": abs_path},
+        )
+        with mock.patch.object(hook, "log_pretooluse_block") as mock_log:
+            result = hook.check(inp)
+        self.assertIsNotNone(result)
+        assert result is not None
+        mock_log.assert_called_once_with(
+            "validate_edit_completion",
+            abs_path,
+            result["reason"],
+            tool_name="Write",
+        )
+
+    def test_check_notebook_edit_logs_once_with_expected_args(self):
+        abs_path = self._seed_error("/tmp/LOG_NB.ipynb")
+        inp = self._input(
+            hook_event_name="PreToolUse",
+            tool_name="NotebookEdit",
+            tool_input={"notebook_path": abs_path},
+        )
+        with mock.patch.object(hook, "log_pretooluse_block") as mock_log:
+            result = hook.check(inp)
+        self.assertIsNotNone(result)
+        assert result is not None
+        # tool_input carries `notebook_path`, not `file_path`/`command` — the
+        # command fallback chain yields "" here, matching pre-existing
+        # fallback shape (not a new defect introduced by this fix).
+        mock_log.assert_called_once_with(
+            "validate_edit_completion",
+            "",
+            result["reason"],
+            tool_name="NotebookEdit",
+        )
+
+    def test_check_bash_logs_once_with_expected_args(self):
+        self._seed_error("/tmp/LOG_BASH.py")
+        inp = self._input(
+            hook_event_name="PreToolUse",
+            tool_name="Bash",
+            tool_input={"command": "git commit -m x"},
+        )
+        with mock.patch.object(hook, "log_pretooluse_block") as mock_log:
+            result = hook.check(inp)
+        self.assertIsNotNone(result)
+        assert result is not None
+        mock_log.assert_called_once_with(
+            "validate_edit_completion",
+            "git commit -m x",
+            result["reason"],
+            tool_name="Bash",
+        )
+
+    def test_check_edit_allow_does_not_log(self):
+        """Positive control for test_check_edit_logs_once_with_expected_args:
+        same seeded-error setup, but the target path does not match, so the
+        call must never fire."""
+        self._seed_error("/tmp/LOG_EDIT_OTHER.py")
+        inp = self._input(
+            hook_event_name="PreToolUse",
+            tool_name="Edit",
+            tool_input={"file_path": "/tmp/LOG_EDIT_UNRELATED.py"},
+        )
+        with mock.patch.object(hook, "log_pretooluse_block") as mock_log:
+            result = hook.check(inp)
+        self.assertIsNone(result)
+        mock_log.assert_not_called()
+
+    # -- main() path: SendMessage (standalone settings.json registration) ----
+
+    def _run_main(self, stdin_text: str) -> tuple[int, str]:
+        stdin = io.StringIO(stdin_text)
+        stdout = io.StringIO()
+        with (
+            mock.patch.object(sys, "stdin", stdin),
+            mock.patch.object(sys, "stdout", stdout),
+        ):
+            try:
+                hook.main()
+            except SystemExit as e:
+                code = int(e.code) if e.code is not None else 0
+                return code, stdout.getvalue()
+        raise AssertionError("main() returned without calling sys.exit()")
+
+    def test_main_sendmessage_logs_once_with_expected_args(self):
+        self._seed_error("/tmp/LOG_SENDMSG.py")
+        inp = self._input(
+            hook_event_name="PreToolUse",
+            tool_name="SendMessage",
+            tool_input={"to": "team-lead", "message": "PR #100 is at v3"},
+        )
+        with mock.patch.object(hook, "log_pretooluse_block") as mock_log:
+            code, out = self._run_main(json.dumps(inp))
+        self.assertEqual(code, 2)
+        self.assertNotEqual(out, "")
+        result = json.loads(out)
+        self.assertEqual(result["decision"], "block")
+        mock_log.assert_called_once_with(
+            "validate_edit_completion",
+            "PR #100 is at v3",
+            result["reason"],
+            tool_name="SendMessage",
+        )
+
+    def test_main_sendmessage_allow_does_not_log(self):
+        """Positive control for test_main_sendmessage_logs_once_with_expected_args:
+        empty sentinel, allow path, must never call the logger."""
+        inp = self._input(
+            hook_event_name="PreToolUse",
+            tool_name="SendMessage",
+            tool_input={"to": "team-lead", "message": "ok"},
+        )
+        with mock.patch.object(hook, "log_pretooluse_block") as mock_log:
+            code, out = self._run_main(json.dumps(inp))
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "")
+        mock_log.assert_not_called()
 
 
 if __name__ == "__main__":
