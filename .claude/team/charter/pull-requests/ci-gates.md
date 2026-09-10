@@ -123,11 +123,24 @@ This section is the **canonical ruleset spec** — the shape every repo's protec
 
 ### Application status
 
-The spec, the hook-side admin-merge gate, and a de-risked live pilot all land in **W13** (this PR, **`Refs #322`**); the org-wide application to the remaining repos is the **W14 fast-follow**, so `#322` stays **OPEN** as the rollout tracker until all 8 repos carry the protection. Mid-wave caution: applying default-branch protection to a repo with in-flight wave-branch PRs or before the wave→main wrapup merge can block our own merges, so org-wide application is staged rather than blanket-applied in one shot.
+The spec, the hook-side admin-merge gate, and the live pilot landed in **W13** (`Refs #322`); the org-wide rollout to the remaining repos followed as the **W14 fast-follow**. **`#322` closed 2026-06-02T02:15:09Z** — criterion #4 is met: all 8 default branches carry a ruleset, per a read-only sweep of `gh api repos/noorinalabs/<repo>/rulesets` re-run on `#1464` (2026-09-10):
+
+| Repo | Ruleset id | Enforcement |
+|---|---|---|
+| noorinalabs-main | `17139856` | active |
+| noorinalabs-deploy | `17139848` | active |
+| noorinalabs-data-acquisition | `17091263` | active |
+| noorinalabs-user-service | `17139747` | active |
+| noorinalabs-design-system | `17139787` | active |
+| noorinalabs-landing-page | `17140822` | active |
+| noorinalabs-isnad-ingest-platform | `17139757` | active |
+| noorinalabs-isnad-graph | `17139768` (plus its pre-existing `14482071` deployments-branch rule) | active |
+
+The remaining open work is the **push-side** gaps named on `#1464` (§ Two path-filtered repos below) — org-wide *rollout* is complete; org-wide *enforcement completeness* is not, and that distinction is the reason `#1464`, not `#322`, stays open.
 
 **Pilot (W13, live):** the spec is proven live on **one** repo with no in-flight W13 PRs — `noorinalabs-data-acquisition` (ruleset id `17091263`): `~DEFAULT_BRANCH`, active, `pull_request` (0 reviews) + `required_status_checks` (strict; `Lint`, `Type Check`, `Test`, `Integration Tests`) + `deletion` + `non_fast_forward` + Repository-admin `always` bypass. Read-back-verified at origin. `noorinalabs-isnad-graph` already carried its own pre-existing protection and is untouched.
 
-**Remaining 6 repos:** the apply is **mechanical re-creation from this spec** — `gh api -X POST repos/<repo>/rulesets --input <json>` per repo with the required-check contexts tabulated below, read-back-verified, scheduled for whenever that repo has no in-flight default-branch merge in flight (post-wrapup is the safe window). This is execution of a fully-specified plan, not open design — but it is still execution that has not yet happened, so **criterion #4 is met only when the W14 rollout has applied the ruleset to all 8 default branches**; until then `#322` stays OPEN as the rollout tracker. This PR delivers the spec, the hook, and the pilot — not the org-wide enforcement.
+**Remaining 6 repos (historical — landed W14):** the apply was **mechanical re-creation from this spec** — `gh api -X POST repos/<repo>/rulesets --input <json>` per repo with the required-check contexts tabulated below, read-back-verified. All 6 landed during the W14 fast-follow (see the per-repo table above for current ids); this paragraph documents the apply method, not an open TODO.
 
 ### The ruleset shape (and why it's shaped this way)
 
@@ -141,6 +154,8 @@ The ruleset each repo adopts is a **repository ruleset** targeting `~DEFAULT_BRA
 The load-bearing design decision is **0 required approvals, not 1.** GitHub's "require approvals" counts **formal GitHub PR reviews** — which our team cannot produce: the `gh` auth principal IS the PR author (`parametrization`), so a formal self-approval 422s (`feedback_gh_cli_gotchas`), and our review discipline runs on **issue-comment verdicts** validated by Hook 4 (`validate_pr_review`), not formal reviews. A naive "require 1 approval" rule would therefore **deadlock every merge**. So the ruleset enforces only what it can enforce without breaking us — *a PR must exist* + *CI must be green* — and leaves reviewer-count enforcement to Hook 4, where the issue's own scope note ("Required-reviewer count beyond charter — already covered by `validate_pr_review`") puts it.
 
 The **Repository-admin `always` bypass** is what keeps the established flow working: the orchestrator's `--admin` wave→main wrapup merges, the wave-bootstrap and doc-sweep single-reviewer exceptions, and Emergency-Mode restore merges all run as admin. The bypass is the GitHub-side counterpart to the hook-side exception list below — protection for everyone, an audited escape valve for the established exceptions.
+
+**Naming convention (owner ruling, 2026-09-10, `#1464`):** every repo's ruleset was originally named `Protect main — require PR + green CI (P3 end-state #4, main#322)`. For the two path-filtered repos (`noorinalabs-main`, `noorinalabs-deploy` — see below), that name overclaimed: the ruleset itself enforces no CI-green condition on those two, since `required_status_checks` is omitted there by design. The owner ruled the name should be renamed to match the shape it actually enforces rather than the aspiration. `noorinalabs-main`'s ruleset (`17139856`) was renamed live on 2026-09-10T10:34:52-04:00 to `Protect main — require PR; CI green enforced by validate_pr_ci_status hook (P3 end-state #4, main#322, tracker #1464)` — read-back-verified: only `name` and `updated_at` changed, `rules`/`conditions`/`bypass_actors`/`enforcement` byte-identical to before — PR-only + no-force-push at the ruleset layer, CI-green enforced one layer down by the hook, named as such. `noorinalabs-deploy`'s matching rename (ruleset `17139848`, same stale name) is tracked as a follow-up in that repo's own PR, not this one.
 
 ### Two path-filtered repos require PR-before-merge only
 
@@ -157,6 +172,8 @@ The **Repository-admin `always` bypass** is what keeps the established flow work
 | **noorinalabs-deploy** | path-filtered | (none — PR-before-merge only) |
 
 (Contexts enumerated from each repo's default-branch check-runs at 2026-05-31; the rollout re-confirms them at apply time, since a repo's CI job names can change.)
+
+**Known measurement gap (`#1464`):** "0 admin overrides per wave" (§ Admin-merge exception list, below) is measured for **merges** only (`gh_quota_gate`/gate-integrity audit counts `gh pr merge --admin` invocations) — a **push** that bypasses the ruleset (`Bypassed rule violations`, printed on any direct push to `main` by the admin-bypass role, including but not limited to the no-PR allowlist paths, § above) is counted by nothing. This is an unmeasured gap, not a fixed one; it is filed and tracked on `#1464`, not resolved by this PR.
 
 ### Admin-merge exception list (hook-validated)
 
