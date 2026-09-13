@@ -925,7 +925,7 @@ What went right: the `--expect` cross-check was allowed to block. The counter re
 
 1. **Give `/wave-wrapup` Step 13a a partial-archive path.** — Rationale: an all-or-nothing gate on "triaged benign" means a single unresolved record freezes the whole log, which is exactly what produced a 3-wave, 2072-record pile. Archive what is benign, carry the rest forward in a countable `unresolved` set the next wrapup must account for. (`#1548`)
 
-2. **Split the `/session-start` Annunaki count by confidence.** — Rationale: one number spanning a 54% low-confidence class invited two consecutive retros to read it as a wave-scoped defect count. A count whose dominant class is a low-precision heuristic should not be reported as a single integer. (`#1548`)
+2. **Split the `/session-start` Annunaki count by confidence.** — Rationale: one number spanning a 54% low-confidence class is read as a wave-scoped defect count unless the reader already knows better. **This rationale originally claimed two consecutive retros had done so. That was false and is retracted — see finding 14.** W29 and W30 both handled it correctly; wave 31 is the retro that did not, which is the honest case for the change: the count misled the reader who had *not* independently frozen and filtered it, and that reader was this retro's own author. A count whose dominant class is a low-precision heuristic should not be reported as a single integer. (`#1548`)
 
 3. **Make a PR's closing-reference linkage verifiable at wrapup.** — Rationale: `#1520`'s backticked keywords were inert, and nothing said so; the issues closed by some other means and the durable link was simply lost. A wrapup cross-check — for every merged PR whose body contains a closing keyword, assert a matching `closingIssuesReferences` entry — would have caught it without anyone knowing to look. (`#1546`)
 
@@ -1131,3 +1131,16 @@ Both now read 18, with the remaining gap stated as 2 — `#1544` and `deploy#710
 **And the ledger of this retro's own process, which is the point:** the gate's finding 9 prescription would have been wrong. Aino Virtanen diagnosed the ontology drift as a sequencing bug and prescribed re-running the tracker as the last action before the push. Investigating produced a different cause — entries already drifted at `origin/main` since July — and she recorded, unprompted, that her own prescription *"would have produced a fourth wrong stamp on a backlog entry."* A gate that corrects its own diagnosis on the author's evidence is doing the job in both directions.
 
 **Her conflict of interest also resolved itself into a measurement.** Six rounds earlier she argued by counterfactual that her own score was robust at `prs_merged=4`, and ran the hostile direction to show the guard could fire. The linkage repair turned that counterfactual into the real input: at an actual `prs_merged=4` her delta is 0, exactly as predicted. What began as an engineer asserting something about her own row ended as what the instrument printed.
+
+### The sixteenth: the same failure, aimed at the review channel
+
+The merge gate recorded that **two completion states were reported to her inaccurately** during this review, and that both times the underlying work was sound while the report about it was not.
+
+1. Finding 8 was reported closed before the PR body had actually been rewritten.
+2. She was told *"neither of us has verified the `0 orphans` claim"* — after she had already verified it, and reported it in both her PR comment and her message to me: **485 open issues across the 8 org repos against 2338 board items, 0 orphans**.
+
+The second is the more instructive, because the proposed remedy was *worse than the defect*: I offered to mark a measured figure **unverified**. That is a false label in the opposite direction — the same class as the false measured-zero it was meant to guard against, inverted. A reviewer's completed work erased by the author's failure to read the report is not caution; it is the same carelessness wearing caution's clothes.
+
+This is the "written faster than verified" failure **pointed at the review channel rather than at the document**, and it is the more expensive direction. A wrong number in the entry costs a correction. A wrong completion report costs the reviewer a round: they re-derive something already settled, or worse, they accept a fix that was never made. Over seven heads this happened twice, and both times the gate caught it by checking rather than believing.
+
+Recorded here rather than in the orchestrator row, because it is a property of **how the work was reported**, not of the work. Cause (a) in that row — *content-binding claims asserted without executing the check* — covers the document. This is the same cause aimed at a person.
