@@ -2,8 +2,10 @@
 # /session-start Step 5a's per-session 8-repo gh-api loop.
 #
 # Every 6h (and on manual dispatch) this sweeps the latest default-branch run
-# of every publish/deploy/release-class workflow across all canonical org
-# repos, classifies red runs (base-image-drift vs code/other, main#647), and
+# of every in-scope workflow across all canonical org repos — in scope being
+# trigger-based since main#1584 (schedule-triggered, or workflow_dispatch-only,
+# union the publish/deploy/release name class), not a workflow-name match —
+# classifies red runs (base-image-drift vs code/other, main#647), and
 # persists the small JSON verdict to the dedicated lightweight ref
 # `refs/meta/red-sweep` as a single-file tree on a parentless commit
 # (force-updated each run — O(1) storage, invisible to branch UX, and a
@@ -34,6 +36,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
+      # red_sweep reads each candidate workflow's `on:` block to decide scope
+      # (main#1584). Its `import yaml` is guarded so /session-start's `check`
+      # never needs PyYAML, and an absent PyYAML degrades every trigger read to
+      # UNKNOWN -> swept IN unclassified. That degrade is safe but noisy, so the
+      # cron installs PyYAML explicitly rather than betting on the runner image.
+      - run: pip install pyyaml
 
       - name: Run sweep (shared implementation, .claude/lib/red_sweep.py)
         env:
