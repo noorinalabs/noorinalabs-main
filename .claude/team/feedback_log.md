@@ -938,3 +938,24 @@ Corpus at **136 / 136** on both index entries and file count — **at cap**. Fou
 ### Promotion audit (Step 7.5)
 
 **0 AUTO · 0 DECIDE · 261 KEPT · 22 SUPERSEDED.** Nothing crossed a threshold. See "Going well" #2 for why a zero here is the notable result rather than an absence of one. Noted gap: the audit's standalone log at `.claude/team/promotion_audit_log/` holds `wave-27`, `wave-28`, `wave-29` — **no `wave-30` or `wave-31` file**, so the per-wave log the skill promises has silently stopped being written for two waves.
+
+### Board freshness (Step 1.5)
+
+**Clean, with denominators.** 481 open issues across the 8 org repos checked against 2334 board items: **0 orphans**, **0** stale active-column items, **25** Wave-field drift rows (labels present, field unset — waves 21, 22, 23, 24, 30, P5W4, P5W5) all repaired and read-back verified, 9 closed items correctly retaining their labels per main#902. **Zero open issues carry the `wave-31` label**, independently confirming the wave's scope is delivered and closed. Labels stayed authoritative throughout; only the derived Wave field was written.
+
+### Memory content-staleness judge (Step 7.9) — the run is NOT usable, and that is this wave's finding
+
+The judge's output was **rejected**, not applied. It recommended pruning 10 notes on the grounds that they carry `superseded_by`. **Four of the ten carry no such field**, verified with `rg -n --hidden '^superseded_by:'`:
+
+- `feedback_memory_judge_overflags_fully_stale.md`
+- `feedback_no_head_in_surface_enumeration.md`
+- `feedback_no_head_sha_in_review_briefs.md`
+- `feedback_verify_diagnosis_before_delegating.md`
+
+A 40% false-positive rate on a **deletion** recommendation, against a field that is one grep away from being checked. Three further defects in the same run: it included `feedback_memory_judge_overflags_fully_stale.md` despite that note carrying `last_verified: 2026-08-17`, well inside its own 60-day selection window; its fully-stale count moved from "0–2, negligible" to **10** across three reports with no stated cause; and it classified `feedback_actionlint_needs_shellcheck.md` as **Still-current** in one report and **Fully-stale** in another (actionlint is live at `.github/workflows/docs.yml:200-201` — the first call was right).
+
+`.claude/memory/feedback_memory_judge_overflags_fully_stale.md` already records this failure mode at "9/9 false positives twice running". This is the **third** recorded instance and the first on the prune axis rather than the fully-stale axis. The note the judge most wanted deleted is the note that exists to warn about the judge — which is the strongest available argument for keeping it.
+
+**No `last_verified` bumps were applied either.** The judge proposed bumping "~47–50" still-current notes in one commit. A range is not a list, and stamping `last_verified` asserts the claims were re-confirmed — doing that over an unenumerated set would manufacture exactly the verification the field exists to record. Filed as **#1552**; the six genuine `superseded_by` notes remain unpruned and PR-gated, as the standing rule requires.
+
+**Not a reason to retire the instrument.** Its spot-checked still-current validations held, and it found the six real `superseded_by` notes. The owner already ruled (2026-08-17) that two clean runs are not evidence the failure mode is gone; the same reasoning says three noisy runs are not grounds to delete the tool. What is unfit is its precision on **write-shaped** recommendations, which is what #1552 targets.
