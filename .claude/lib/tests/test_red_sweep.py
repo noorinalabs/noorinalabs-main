@@ -310,7 +310,8 @@ class SweepTests(unittest.TestCase):
         `verdict["red"] == []`: the workflow was discarded by name inside
         `latest_class_runs` before any classification ran, which is exactly how
         the live sweep reported "All publish/deploy/release workflows green"
-        while this workflow had failed 63 of its last 64 default-branch runs.
+        while this workflow had never once succeeded on the default branch
+        (94 runs, 93 `failure` + 1 `cancelled`, 2026-06-13 to 2026-09-13).
         A patch that only adds `e2e` to the regex leaves that contract broken
         and is caught by `ScopePredicateTests` above.
         """
