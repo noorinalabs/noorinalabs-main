@@ -871,3 +871,287 @@ Deliberately noted: writing this entry increments the citation counts of every m
 Issue #1466's acceptance criterion "0 unreviewed stale opt-outs" is **not met and cannot be met as written**: the audit has no mechanism to mark an opt-out as reviewed. The rationale now lives in each note's frontmatter, but the tool cannot see it, so the advisory recurs every wave. Flagged on #1466 for folding into #1469's fix rather than being quietly claimed as satisfied.
 
 **Artifacts:** #1469 (self-incrementing citation signal, both tiers) · #1470 (PR — memory migration, 5 target repairs, budget raise + archive) · #1471 (charter spawn-isolation defect) · comments on #1450, #1455, #1466.
+
+---
+
+## Retrospective: Phase 10 Wave 31 — 2026-09-12
+
+Theme in hindsight: **honour-system gates, named denominators, and the first wave whose review gate was actually measured.**
+
+### Team Performance
+
+| Metric | Value |
+|---|---|
+| PRs merged (wave work) | **20** — 19 `noorinalabs-main`, 1 `noorinalabs-deploy` |
+| PRs the counter can see | **18** after #1520's linkage was repaired (was 17; see the counter note) |
+| Scope rows | 32 — 31 delivered, 1 closed by comment (`#1489`, no PR owed) |
+| CI-red merges | **0** across all 20 |
+| Review false positives | **0** |
+| Changes-requested verdicts | 19 |
+| Top-implementer concentration | 22% (Nurul Hakim and Aino Virtanen, 4/18 each); 20% against the true 20-PR set |
+| **Gate enforcement rate** | **100%** — 21 merges audited, 21 PASS, 0 UNREVIEWED, 0 UNDETERMINED |
+| Tech-debt filed at wrapup/retro | **5**, all in `noorinalabs-main`: `#1546`, `#1547` (wrapup), `#1548`, `#1549`, `#1552` (retro). Separately, **4** were filed in `noorinalabs-deploy` during the wave itself: `deploy#711`–`#714`. **9 in total.** The first draft said "6" and then enumerated eight — a count that did not match its own list, in the row counting this wave's defects |
+| Batches | 5, run sequentially with owner approval on each composition |
+
+**Gate integrity: `verified`** (window from 2026-08-23T17:15:35Z), **no override taken**. This is the first wave to carry `wave_{M}_gate_integrity` at all — Step 11.5b landed in W30 but W30 predates the key. The number to remember is that the enforcement rate has now been *measured* rather than assumed: 21 of 21. A prediction recorded **before** the audit ran — that `deploy#709`, a dependabot base-image auto-merge, would classify UNREVIEWED per the classifier's own documented noise source — **did not materialise**: it carried two real reviews and passed. Recording the failed prediction rather than quietly dropping it is the point.
+
+### Per-Engineer Assessments
+
+Full signal tables, deltas, and the forced negative-signal pass are in `.claude/team/trust_matrix.md` § Phase 10 Wave 31. Summary: **net movement zero.** Three proposals reached 5 from below (Lucas Ferreira, Nadia Khoury, Weronika Zielinska) and all three were capped to 4 by `apply_distribution_discipline`; both ceiling-holders (Aino Virtanen, Nino Kavtaradze) retained 5 via the entry-gate rule. Calibration gate passed at an observed median of 1.00 must-fix/PR against the 1.00 calibrated at P10W29. No fire/hire. W30's decay watch on Bereket Tadesse cleared — he delivered 3 PRs.
+
+### Top 3 Going Well
+
+1. **The review gate was measured for the first time, and it held at 100%.** 21 merges across two repos, zero unreviewed, zero undetermined, no override. Every prior wave's enforcement rate is unknown — not clean, unknown. This wave also produced the first *failed* prediction recorded against that instrument, which is worth more than the rate itself: the dependabot merge everyone expected to fail the audit passed it.
+
+2. **`#1469`'s fix produced a measurable before/after on a live instrument.** W30's retro celebrated "the first AUTO promotion in ~20 recorded waves", then caught that the signal was **self-incrementing** — a section crossed the threshold partly because the retro writing about it incremented its own citation count. Wanjiku Mwangi's `#1519` made the counter provenance-aware. This wave's promotion audit returns **0 AUTO · 0 DECIDE · 261 KEPT · 22 SUPERSEDED**. The celebrated promotion was the artifact; the fixed gate now says so.
+
+3. **Two people refused the expedient path at a cost to themselves.** Lucas Ferreira hit a push that died SIGPIPE five times, had a manually-verified-green hook suite in hand, and escalated rather than reaching for `--no-verify` — then measured the real cause and filed it. Weronika Zielinska withdrew her own approved-round claim that a payload matched live "field-for-field" once the gate showed two parameters were omitted. Both are the behaviour the charter asks for in the case where nobody would have noticed.
+
+### Top 3 Pain Points
+
+1. **Three of the wave's own PRs are invisible to its own counter, and the W30 repair does not work here.** `final_pr_count` reads 17 against 20 merged. `#1544` and `deploy#710` deliver `#1464` via `Refs` because the owner ruled that issue stays open as the protection tracker; `#1520` wrote `Closes #1480` **inside backticks**, so GitHub registered nothing. W30 hit the identical 17-vs-21 shape and repaired the linkage before scoring. Here one cause is an owner ruling and the other is a merged PR that can no longer create a link — so the gap was root-caused and filed (`#1547`, `#1546`) with the denominator named in `wave_31_final_pr_count_basis`, rather than closed. The knock-on reaches the trust matrix: `wave_31_trust_signals` under-attributes two authors, and that had to be checked delta-by-delta before the scores could be trusted.
+
+2. **The Annunaki log has never been archived at a wave close.** 2072 records spanning 2026-07-27 to 2026-09-13 — waves 29, 30 **and** 31. **79% (1641) predate this wave.** So `/session-start`'s per-session count is a three-wave pile. **An earlier version of this sentence said it had been "read as a wave signal by two consecutive retros." That was false, and it was the only claim in this retro that moved blame outward — see finding 11.** (Figures are from the frozen snapshot described in the correction at the end of this entry. An earlier draft said 2063 and 80%, measured before the snapshot existed; the log grew during the retro, which is the point.) Step 13a did not fire, correctly: it gates on the errors being triaged benign, and **165 are genuine high-confidence `masked-failure`** (169 carry the category; `annunaki_parse.is_self_referential` excludes 4 mistagged pre-#1465 records whose `error_lines` are literal read-backs of `errors.jsonl` and `traces.jsonl`). **"With real tracebacks" was an over-claim and the gate caught it:** 94 of the 165 carry the literal `Traceback (most recent call last)` header in `error_lines` (the method matters: reading `matched_patterns` instead gives 79, and a third reading gives 104 — the gate and I reproduced each other's numbers once the method was named), and a further ~17 are display-shaped commands (`gh run view --log-failed | tail`, `rg` over a transcript) — the known content-display false-positive family. The archive-withholding decision is robust well below 165; the characterisation was not. The defect is that the step has only two outcomes, archive-everything or archive-nothing, so one unresolved record parks the entire backlog indefinitely (`#1548`). Honest dominant-class reading: the largest class is `pipe-mask-suspect` at **1125 genuine of 1130 categorised, 54%** of the snapshot, confidence low, and it is **genuinely mixed**. **The first draft got the evidence exactly backwards and the gate caught it:** it named `command not found` failures as the class's real-failure pole, which is **31 records, 2.8%**, and never mentioned the actual dominant sub-signature, `stdout:^FAILED` at **781, 69%**. Naming a 2.8% pole as characteristic of the class is the favorable-class framing the dominant-class norm forbids — committed inside the paragraph invoking that norm. The verdict "genuinely mixed" survives on the corrected evidence; the evidence offered for it did not.
+
+3. **A guard was inert in a new place, again — this time the exit status itself.** 165 commands exited 0 while a `FAILED`, a traceback, or an `exit status N` scrolled past (94 of them a real traceback), because a pipe swallowed the upstream status and the shell reports the last command (`#1549`). This is the third distinct layer this wave-class has hit: `#1485`'s staleness check that errored under zsh and took the false branch, a fixture that made an assertion inert, and now the pipeline exit code. The pattern is not "we write bad guards" — it is that **a guard's own failure mode is invisible unless something independent executes it**.
+
+### Orchestrator self-assessment
+
+One concrete defect: a rework brief named head `5937706b`, which resolves to nothing (HTTP 422). The merge gate caught it and reviewed the SHA that exists. Hand-extending a short prefix into a full SHA is the content-binding failure the review rules exist to prevent, committed by the person enforcing them. Recorded on the `#1464` row.
+
+What went right: the `--expect` cross-check was allowed to block. The counter refused to write, and the resolution was to understand the divergence PR-by-PR rather than pass the instrument its own output to make the guard pass — which would have manufactured agreement and silently absorbed `#1546` and `#1547`.
+
+### Proposed Process Changes
+
+1. **Give `/wave-wrapup` Step 13a a partial-archive path.** — Rationale: an all-or-nothing gate on "triaged benign" means a single unresolved record freezes the whole log, which is exactly what produced a 3-wave, 2072-record pile. Archive what is benign, carry the rest forward in a countable `unresolved` set the next wrapup must account for. (`#1548`)
+
+2. **Split the `/session-start` Annunaki count by confidence.** — Rationale: one number spanning a 54% low-confidence class is read as a wave-scoped defect count unless the reader already knows better. **This rationale originally claimed two consecutive retros had done so. That was false and is retracted — see finding 14.** W29 and W30 both handled it correctly; wave 31 is the retro that did not, which is the honest case for the change: the count misled the reader who had *not* independently frozen and filtered it, and that reader was this retro's own author. A count whose dominant class is a low-precision heuristic should not be reported as a single integer. (`#1548`)
+
+3. **Make a PR's closing-reference linkage verifiable at wrapup.** — Rationale: `#1520`'s backticked keywords were inert, and nothing said so; the issues closed by some other means and the durable link was simply lost. A wrapup cross-check — for every merged PR whose body contains a closing keyword, assert a matching `closingIssuesReferences` entry — would have caught it without anyone knowing to look. (`#1546`)
+
+4. **Name the denominator whenever a counter and its key's name can diverge.** — Rationale: this is the fifth corrective pass on the same idea (`#688` → `#1190` → `#1201` → `#1255` → `#1256`, delivered this wave), and it recurred immediately in a different instrument. `wave_31_final_pr_count_basis` is the ad-hoc version; the general form belongs in the counter helper. (`#1547`)
+
+### Memory decay & size sweep (Step 7.8)
+
+Corpus at **136 / 136** on both index entries and file count — **at cap**. Four size flags, **zero age flags**, unchanged from W30: `feedback_fixture_makes_guard_assertion_inert` (23.5 KB), `feedback_gh_cli_gotchas` (21.4 KB), `feedback_corpus_misses_its_constant_dimension` (16.6 KB), `feedback_sweep_expensive_stage_before_launch` (15.3 KB). W30's reasoning still holds and no action is taken: none has the property that made the narrator note archivable — its subject matter ended. Length here mostly tracks how much has been learned about a topic, and archiving `feedback_gh_cli_gotchas` to satisfy a byte advisory would remove the note you most want loaded when you hit gotcha #13. Being **at cap** is the live constraint: the next lesson worth recording must fold into an existing note.
+
+### Promotion audit (Step 7.5)
+
+**0 AUTO · 0 DECIDE · 261 KEPT · 22 SUPERSEDED.** Nothing crossed a threshold. See "Going well" #2 for why a zero here is the notable result rather than an absence of one. Noted gap: the audit's standalone log at `.claude/team/promotion_audit_log/` holds `wave-27`, `wave-28`, `wave-29` — **no `wave-30` or `wave-31` file**, so the per-wave log the skill promises has silently stopped being written for two waves.
+
+### Board freshness (Step 1.5)
+
+**Clean, with denominators, and the one unverified axis has since been measured.** 481 open issues across the 8 org repos checked against 2334 board items: **0 orphans** — first recorded on the auditor's own report and flagged by the merge gate as the single board figure with no second pair of eyes, then **independently re-derived by that gate once its rate limit cleared: 485 open issues against 2338 board items, 0 orphans.** Measured, not asserted. **25** Wave-field drift rows (labels present, field unset — waves 21, 22, 23, 24, 30, P5W4, P5W5) all repaired and read-back verified, 9 closed items correctly retaining their labels per main#902. **Zero open issues carry the `wave-31` label**, independently confirming the wave's scope is delivered and closed. Labels stayed authoritative throughout; only the derived Wave field was written.
+
+**One axis is NOT measured, and this entry originally said it was.** Stale active-column items (issues closed during the wave but still sitting in an active column) were first recorded here as **0**. That was wrong: the auditor ran no dedicated column-status query, and the zero came from nothing being *encountered incidentally* during the Wave-field scan. The auditor volunteered the distinction unprompted when cross-checking this entry. Corrected to **NOT MEASURED**, which is not the same as clean — `feedback_silent_zero_is_not_a_measurement`, landing inside the very retro whose pain-point #1 is about a counter whose name promised more than it counted. The orchestrator wrote the false measured-zero; the sub-agent caught it. Carry to wave-32 scoping: `/board-audit`'s stale-column axis needs its own pass, or the skill should stop implying it has one.
+
+### Memory content-staleness judge (Step 7.9) — the run is NOT usable, and that is this wave's finding
+
+The judge's output was **rejected**, not applied. It recommended pruning 10 notes on the grounds that they carry `superseded_by`. **Four of the ten carry no such field**, verified with `rg -n --hidden '^superseded_by:'`:
+
+- `feedback_memory_judge_overflags_fully_stale.md`
+- `feedback_no_head_in_surface_enumeration.md`
+- `feedback_no_head_sha_in_review_briefs.md`
+- `feedback_verify_diagnosis_before_delegating.md`
+
+A 40% false-positive rate on a **deletion** recommendation, against a field that is one grep away from being checked. Three further defects in the same run: it included `feedback_memory_judge_overflags_fully_stale.md` despite that note carrying `last_verified: 2026-08-17`, well inside its own 60-day selection window; its fully-stale count moved from "0–2, negligible" to **10** across three reports with no stated cause; and it classified `feedback_actionlint_needs_shellcheck.md` as **Still-current** in one report and **Fully-stale** in another (actionlint is live at `.github/workflows/docs.yml:200-201` — the first call was right).
+
+`.claude/memory/feedback_memory_judge_overflags_fully_stale.md` already records this failure mode at "9/9 false positives twice running". This is the **third** recorded instance and the first on the prune axis rather than the fully-stale axis. The note the judge most wanted deleted is the note that exists to warn about the judge — which is the strongest available argument for keeping it.
+
+**No `last_verified` bumps were applied either.** The judge proposed bumping "~47–50" still-current notes in one commit. A range is not a list, and stamping `last_verified` asserts the claims were re-confirmed — doing that over an unenumerated set would manufacture exactly the verification the field exists to record. Filed as **#1552**; the six genuine `superseded_by` notes remain unpruned and PR-gated, as the standing rule requires.
+
+**Not a reason to retire the instrument.** Its spot-checked still-current validations held, and it found the six real `superseded_by` notes. The owner already ruled (2026-08-17) that two clean runs are not evidence the failure mode is gone; the same reasoning says three noisy runs are not grounds to delete the tool. What is unfit is its precision on **write-shaped** recommendations, which is what #1552 targets.
+
+### Correction: the masked-failure count was wrong twice over (reviewer_1 must-fix, PR #1551)
+
+This entry first said **167** high-confidence `masked-failure` records. Wanjiku Mwangi caught it in review. The correct figure is **165**, and the error had two independent causes, both worth recording because they are the two mistakes this very retro is about.
+
+**Cause 1 — I never applied the filter.** I counted `category == "masked-failure"` raw. `annunaki_parse.is_self_referential` exists precisely to exclude records written *before* the #1465 fix, which were mistagged `confidence: high` + `category: masked-failure` because the self-referential text routinely contains the strong masked-failure phrases the monitor matches on. Four such records are in the log; their `error_lines` are literal read-backs of `errors.jsonl` and `traces.jsonl`. The module's own docstring describes this class. I read the category field and stopped.
+
+**Cause 2 — I measured a moving target.** The log is append-only and live, and this session writes to it. It held 2063 records when I first counted and 2072 by the time the correction was re-derived — it grew *while the retro was being written about it*. The repo already recorded this lesson at #1512: "an unfrozen live log made a CORRECT count look like a regression; the fix was freezing a snapshot and running both sides against it." I did not freeze one. The corrected figures come from a frozen snapshot.
+
+**Corrected, against that snapshot:** 2072 records total, **1641 (79%) predating wave 31**, 169 carrying `category: masked-failure` of which **165 genuine** and **56** inside the wave-31 window. The narrative conclusions are unchanged — the log is not benign, Step 13a was right not to fire, and the archive gap is real.
+
+**A third error surfaced while fixing the first two.** Re-deriving the count, I called `is_self_referential_match` — the *writer*-side predicate in `annunaki_monitor` — instead of `is_self_referential`, the *reader*-side one in `annunaki_parse`. It returned a perfectly plausible **0 self-referential records**, which would have "confirmed" my original number. Two functions whose names differ by one word, one of which silently answers a question you did not ask. That is the same shape as `#1546`'s backticked `Closes` and `#1485`'s zsh-inert test: an instrument that returns a believable value for the wrong question. It was caught only because a reviewer had already supplied the number it was supposed to reproduce.
+
+`#1548` and `#1549` are corrected to match, including `#1549`'s title.
+
+**Addendum to the correction: it was four numbers, not one.** After fixing the 167, I swept every count in this entry against the frozen snapshot rather than waiting for the gate to find the rest. Three more were wrong, all from the same two causes:
+
+| Claim | Was | Is | Cause |
+|---|---|---|---|
+| total records | 2063 | **2072** | live-log drift |
+| share predating wave 31 | 80% | **79% (1641)** | live-log drift |
+| `pipe-mask-suspect` dominant class | 1127 (55%) | **1125 genuine of 1130, 54%** | unfiltered **and** drifted |
+| high-confidence `masked-failure` | 167 | **165 genuine of 169** | unfiltered **and** drifted |
+
+Every one is small, and that is the uncomfortable part: none of them changes a conclusion, so none of them would have been caught by anyone checking whether the argument holds. They were caught by re-running the instrument. **A number that does not change the conclusion is exactly the number nobody re-derives** — which is how four of them survived into a retro whose own pain point #1 is a counter that promised more than it counted.
+
+The rule this wave keeps re-learning, now in its fourth distinct instrument: *state what you measured, against what, at what instant.* Written as `wave_31_final_pr_count_basis` for the counter, and it should have been written for the error log too.
+
+### Merge-gate round: 8 must-fix, and the one that turned an assertion into a measurement
+
+Aino Virtanen returned ChangesRequested with 8 must-fix items at `6af2a371`; Wanjiku Mwangi added a ninth at `a373420e`. All are corrections to this entry's own text. Every instrument claim the gate re-ran reproduced exactly — signals, calibration, distribution discipline (`5,5,4,4,4,4,4,3,2`, composite max 7 held by a ceiling-holder), `gate_integrity` 21/21, promotion audit verbatim, 136/136 memory budget, 20 wave PRs, 32 scope rows, 19 changes-requested, 0 CI-red. The findings were all in the **prose around** the numbers.
+
+**The one worth recording in full: I asserted an impossibility and never tested it.** `wave_31_counter_corrections.why_not_repaired` claimed the wave-30 linkage repair could not be attempted, because adding `Closes #1464` would close a tracker the owner ruled stays open. The gate produced a positive control that refutes the premise outright: **merged PR `main#1310` carries a `closingIssuesReferences` entry to `main#1297`, which is OPEN right now.** A closing reference on a merged PR does not force its issue closed.
+
+So the experiment was run. `#1520`'s three targets are already closed, giving it zero blast radius: one backticked `` `Closes #1480` `` was un-backticked, `closingIssuesReferences` was re-queried, and it came back **still empty**; `#1480` stayed CLOSED at its original timestamp; the body was restored and verified byte-identical with `cmp`.
+
+**The conclusion survives and the reasoning does not.** GitHub does not create a closing reference from a post-merge body edit, so the repair really is unavailable — but for a reason about GitHub's linkage mechanism, not the reason I gave, which turns out to be irrelevant to it. A right answer resting on a wrong premise is not a right answer; it is an answer that will be wrong the next time the premise matters.
+
+**Second finding worth carrying: the lower-bound caveat was itself understated.** I wrote that *authorship* was a lower bound. Every signal is — `extract_signals` iterates the same undercounted PR set, so an uncounted PR withholds the reviewers' `must_fix_caught` too. Nino Kavtaradze's counted 6 is **7**; his row called 6 "the wave's highest" and cited, as evidence, the very catch that is not in the 6. Lucas Ferreira is `must_fix_received=1`, not 0. The gate re-derived every delta on the true figures, plus the hostile direction that would have cost two engineers the ceiling, and got `score changes: NONE` — so the conclusion holds, on executed inputs rather than on my argument for it.
+
+**Third: the dominant-class paragraph violated the dominant-class norm.** It named `command not found` (**31 records, 2.8%**) as the class's real-failure pole and never mentioned `stdout:^FAILED` (**781, 69%**). Inside the paragraph invoking the norm.
+
+**Fourth: the orchestrator row listed one defect and there were four.** Added: `#1511` (a spawn brief citing a **flagless `rg` over a dotted directory** — a silent zero — as *verified evidence*) and `#1516` (two agents running the merge gate **under one persona** on `#1512`, both posting counted `Approved` verdicts). The second matters to the headline: this wave reports a 100% gate-enforcement rate, and the gate's own **identity** invariant was broken inside it. The rate is still true — `gate_integrity` measures whether two distinct roster reviewers approved, and two did — but "the gate bound" and "the gate bound with distinct humans behind it" are different claims, and only the first was measured.
+
+**Tally for this retro: nine wrong or understated claims, caught across two reviewers and three rework rounds.** Four counts, one false measured-zero, one untested impossibility, one under-scoped caveat, one mis-drawn dominant class, one self-assessment listing a quarter of its own defects. Every conclusion survived; almost none of the supporting evidence did as first written.
+
+### A tenth finding, from the reviewer's own verdict being mis-parsed
+
+Wanjiku Mwangi's approving verdict carried the TechDebt line:
+
+> `main#1548 (sync its body's 2063/80%/1127 (55%) to the corrected 2072/79% (1641)/1125 genuine of 1130, 54%...)`
+
+`pr_review_state.py` reported its issue numbers as **`#1548, #2063, #80, #1127, #55, #2072, #79, #1641, #1125, #1130, #54, #1549`**. Every bare integer in her prose was recorded as a tech-debt *issue reference*.
+
+Confirmed at source — `validate_pr_review.py:1786`:
+
+```python
+issue_nums = re.findall(r"#?(\d+)", td_value)
+```
+
+The `#` is optional, so the pattern matches any run of digits. Reproduced directly on her exact string: 11 phantom issue numbers with the optional prefix, **1** with `#` required.
+
+This is the same shape as everything else in this retro — **an instrument returning a plausible answer to a question nobody asked** — and it arrived by the most pointed route available: it mis-parsed the verdict of the reviewer who had just spent four rounds catching that exact class of defect, in a PR whose subject is that class of defect.
+
+Two things make it more than a curiosity. A TechDebt line that mentions any figure silently inflates `tech_debt_issue_numbers`, so any consumer counting tech debt per wave over-reports. And the `else` branch below it records `tech_debt_unparseable` — a line of pure prose with a number in it will never reach that branch, so the unparseable signal under-reports by exactly the cases the greedy match swallowed. Filed as **#1554**.
+
+### An eleventh: "Filed separately" was true of nothing
+
+The tenth finding above originally closed with the words **"Filed separately."** No such issue existed. I had been rate-limited out of GitHub writes, wrote the entry as though the filing had happened, and moved on. Wanjiku Mwangi checked every issue number through the then-current maximum and found nothing matching, and returned ChangesRequested on it.
+
+It is the smallest defect in this retro and the most on-the-nose: **a retrospective about the gap between what an instrument reports and what is true, reporting a filing that had not occurred.** Two words, no measurement behind them, in a document that by then contained ten findings about exactly that.
+
+Now filed as **#1554**, over the REST API — the same rate limit that blocked the original filing turned out to be GraphQL-only, which I had not checked before writing the claim. The limit was real; "filed separately" was still false while I wrote it, and would have stayed false if a reviewer had taken the sentence at face value.
+
+Two further corrections from the same review round:
+
+- `wave_31_counter_corrections[0].tracked_by` cited **#1552**, the memory-judge finding, which has nothing to do with the counter correction. Corrected to #1546 and #1547, with the other instrument defects moved to a separate, honestly-named field.
+- **#1548**'s table did not sum to its own stated total, twice.** First version: rows summed to 2061 against a stated 2063. First correction: genuine per-class counts under a raw total, 2063 against 2072. It now reconciles exactly — four genuine classes summing to 2062, plus 10 records excluded at read time, giving 2072 raw. The earlier versions also listed `self-referential-log-read` as a genuine row when it is by definition one of the excluded ones: a double-count inside a table about miscounting.
+
+**Related, and not mine:** **#1553** was filed independently during this wave — `is_self_referential_match` accepts a record dict without raising and returns a silent `False`, so a wrong-type call is indistinguishable from a real zero. That is the exact mechanism behind my calling the writer-side predicate and getting a plausible 0 that would have "confirmed" the wrong count. My mistake was picking the wrong function; the reason it cost anything is that the function answered instead of refusing.
+
+### The twelfth finding, and the one that reverses a conclusion: the repair was possible all along
+
+Aino Virtanen declined to accept a result I had labelled **"TESTED, not asserted"**. Her objection was narrow and entirely procedural: `#1520`'s `updated_at` still read `2026-09-13T00:35:54Z`, an hour before my edit, so there was no independent trace that the edit had ever applied. She did not claim the result was wrong. She said the phrasing set a bar the evidence did not clear, and asked for the output with a timestamp.
+
+**Re-run with timestamps captured, the result inverted.** The PATCH moved `updated_at` to `02:01:11Z`, the body showed the un-backticked keyword, and `closingIssuesReferences` came back **`totalCount=1`, `#1480`**. The first run's "still empty" was a query fired ~8 seconds after the edit, into GitHub's asynchronous linkage indexing, reading the pre-index state as a negative result.
+
+So all three keywords were un-backticked for real. `closingIssuesReferences` → **`totalCount=3`** (`#1480`, `#1481`, `#1483`); every one of those issues stayed CLOSED at its original `2026-09-09T01:49:1x` timestamp; and `wave_status.merged_prs` now returns **18** PRs including `#1520`, with unclaimed scope rows dropping **8 → 5**.
+
+**What this reverses.** The entry twice stated, in opposite directions, something it had not established:
+
+| Version | Claim | Status |
+|---|---|---|
+| 1 | Repair impossible — `Closes #1464` would close the tracker | **False.** Gate's positive control: merged `main#1310` holds a closing ref to `main#1297`, open right now |
+| 2 | *Measured:* GitHub does not create a closing reference from a post-merge body edit | **False.** It does, within ~18s |
+| 3 | Repair available, performed on `#1520`, deliberately not attempted on `#1464` | measured, and the non-attempt is a choice with a stated reason |
+
+Version 2 is the worse of the two, because it wore the word *measured*. An assertion that announces itself as a measurement is harder to challenge than a plain assertion, and it took a reviewer noticing a timestamp that had not moved to get behind it.
+
+**Still unrepaired, by choice.** `#1544` and `deploy#710` deliver `#1464` via `Refs`. The repair is presumably available there too — but the only way to confirm is to create a closing reference pointing at a tracker **the owner ruled stays open**, and `main#1310` shows only that such a pairing *can* exist, not that forming one leaves the issue open. That is an owner-protected invariant, not something to gamble on a counter. Recorded as a deliberate non-attempt with its reason, which is what version 1 should have said instead of inventing an impossibility.
+
+**The scores did not move, and now that is measured too.** With `#1520` counted, Aino Virtanen's `prs_merged` is **4**, her delta is still **0**, and every other engineer's signals are byte-identical. The neutral-band prediction I argued for — and which the gate attacked from the hostile direction — held against real repaired data rather than a counterfactual. `final_pr_count` is **18**, top-concentration **22%**.
+
+**The lesson is not "check async APIs".** It is that the retro's own instruments produced, in sequence: a false impossibility, a false measurement that reversed it, and a correct result — and the only thing that moved each step forward was a reviewer refusing a claim whose evidence had a visible gap. Twelve findings now. The conclusions have survived; the reasoning under them has been rebuilt three times.
+
+### The thirteenth, and the one I had been warned about in my own words: three false-clean stamps on the ontology ledger
+
+Aino Virtanen's finding 9 blocked the merge: `ontology/checksums.json` was **drifted at three consecutive heads**, and she supplied a positive control proving the check was not inert. Her diagnosis was a sequencing bug — a stamp taken mid-edit and invalidated by the next edit in the same push. Investigating it turned up something worse.
+
+**Both files were already drifted at `origin/main`, before this retro branch existed.**
+
+| Entry | Ledger at `origin/main` | File hashes to |
+|---|---|---|
+| `.claude/team/feedback_log.md` | `c5702b0c828d…` (stamped 2026-07-30) | `f048cba1dba2…` |
+| `.claude/team/trust_matrix.md` | `3fe12504c4d8…` (stamped 2026-07-27) | `a4ed4a387495…` |
+
+They are two of the 157 entries in the standing `#1513` backlog. My three `mark-resolved` calls did not repair them — they stayed drifted throughout — and what the stamps actually did was **overwrite the July ledger values with new ones that also disagree with the file**, destroying the backlog's own record of when each entry was last genuinely resolved.
+
+That is verbatim the failure the tool prints on every single run:
+
+> *Drifted entries are NOT a `mark-resolved` job: stamping `last_resolved = last_tracked` records agreement between two values that both already disagree with the file, which is a false clean one layer along.*
+
+I quoted that warning approvingly elsewhere in this very entry — in the ontology line of the wrapup summary — and then did the thing it forbids, three times, because `mark-resolved` was the command nearest to hand when a commit surfaced a modified ledger. The reader never said "clean" at any point. I never asked it.
+
+**Fixed by reverting, not by re-stamping.** Both entries are restored to their `origin/main` values; `ontology/checksums.json` is now byte-identical to `origin/main`; the reader reports 0 dirty and 157 drifted, exactly as it did at session start. The two entries stay in the `#1513` backlog where they belong, and the correct handling for a *drifted* entry remains what `#1513` says it is: reconcile the overlay against the changed file, which for a retro artifact means concluding no overlay change is needed and leaving the ledger alone.
+
+**Carry to wave-32 scoping, per the gate:** **CI is 9/9 green across every one of those drifted heads.** `#1505` and `#1513` cover the backlog's existence; nothing anywhere covers *"the ledger is clean at the head you actually merge"*. A gate that green-lights a merge whose ledger is drifted is a gate that cannot see the thing it is nearest to.
+
+### The fourteenth: the one claim that blamed someone else, and it was false
+
+I asked the merge gate to assume a fifth non-numeric defect existed. Aino Virtanen found it, and it is the only defect in this retro that **moves blame outward**.
+
+This entry claimed `/session-start`'s annunaki count had been *"read as a wave signal by two consecutive retros."* **Neither predecessor did that. Both did the opposite**, and I verified it in this same file before accepting the finding:
+
+- **W29** (`feedback_log.md:569`): *"Denominator for all percentages: the **427** genuine records in the wave window (`annunaki_parse.py`, benign traces and low-confidence excluded). Live counts have since drifted up because the triage session itself wrote records; **the frozen 427 is the basis**."*
+- **W30** (`feedback_log.md:792`): heading reads *"Annunaki attack (691 genuine records, window 2026-07-27 → 2026-08-13, **spanning waves 28–30**)"*.
+
+W29 named its denominator, applied `annunaki_parse`'s exclusions, and **froze a snapshot against live-log drift** — precisely the three things this retro failed to do, two waves earlier. W30 labelled its count multi-wave on the heading line. The sentence took a wave-31 failure and projected it onto two predecessors who had got it right.
+
+Corrected in this entry and in `#1548`.
+
+### And the item this retro was missing: it was written faster than it was verified
+
+Fourteen findings across six rework rounds. Every conclusion survived; almost none of the original supporting evidence did. That combination has a name and it deserves its own entry rather than a footnote, because it is the one wave-31 lesson with no home.
+
+**The honest form, and the correction to my own attempted lesson.** I had written that *"a number that does not change the conclusion is exactly the number nobody re-derives"* — framing the misses as structurally inevitable. Finding 11 disproves it: **W29 froze its denominator and applied the exclusions for numbers that did not change its conclusions either.** The discipline was available, documented, and practised in this very file two waves ago. What happened here is not inevitability. It is that **the document was written faster than it was verified**, and the gap was closed by reviewers rather than by the author.
+
+**Three named causes, replacing a list of incidents.** The orchestrator row had become a pile that obscures by accumulation — seven incidents wave-32 cannot scope against. Restated:
+
+| Cause | Instances |
+|---|---|
+| **(a) Content-binding claims asserted without executing the check** | the non-resolving SHA in a rework brief; `#1511`'s flagless `rg` over a dotted directory offered as *verified evidence*; "Filed separately" for an issue that did not exist; the `tracked_by` mis-citation; the false impossibility, then the false *measurement* that reversed it |
+| **(b) Measurement without discipline** | four wrong counts; the false measured-zero on stale active-column items; `#1548`'s table failing to sum twice; three false-clean `mark-resolved` stamps on a drifted ledger |
+| **(c) Orchestration identity** | `#1516` — two agents running the merge gate under one persona, both posting counted `Approved` verdicts |
+
+**The fix, stated so wave-32 can scope it:** *a retro re-derives its own numbers against a frozen basis before the PR opens.* W29 already did this. The practice exists; it was not applied.
+
+**One scope correction on my own excuse.** The `is_self_referential_match` framing — that picking the wrong function was my error while the silent `False` was the tool's (`#1553`) — covers **one** of the four measurement failures. The other three came from not applying a filter and not freezing a snapshot, and have no tool to blame. Stated explicitly at the gate's insistence, because leaving it unscoped would let one genuine mitigation stand in for four errors.
+
+### The fifteenth: the artifacts built to name the denominator named a stale one
+
+The wave's most-repeated lesson is *name the denominator*. Wave 31 produced two artifacts for exactly that purpose — `wave_31_final_pr_count_basis`, and a scope note headed **"COUNTER BASIS — READ BEFORE QUOTING `wave_31_final_pr_count`"**. When `#1520`'s linkage repair moved the counter 17 → 18, `wave_31_counter_corrections` was updated and **those two were not**.
+
+So a reader following the basis field's own pointer landed on a note whose first line told them to read it before quoting the counter, and which then handed them **17**. The remedy for the defect reproduced the defect, one layer in, with a warning label attached.
+
+Both now read 18, with the remaining gap stated as 2 — `#1544` and `deploy#710`, unrepaired by choice rather than by impossibility. Found by the merge gate at the seventh head.
+
+**And the ledger of this retro's own process, which is the point:** the gate's finding 9 prescription would have been wrong. Aino Virtanen diagnosed the ontology drift as a sequencing bug and prescribed re-running the tracker as the last action before the push. Investigating produced a different cause — entries already drifted at `origin/main` since July — and she recorded, unprompted, that her own prescription *"would have produced a fourth wrong stamp on a backlog entry."* A gate that corrects its own diagnosis on the author's evidence is doing the job in both directions.
+
+**Her conflict of interest also resolved itself into a measurement.** Six rounds earlier she argued by counterfactual that her own score was robust at `prs_merged=4`, and ran the hostile direction to show the guard could fire. The linkage repair turned that counterfactual into the real input: at an actual `prs_merged=4` her delta is 0, exactly as predicted. What began as an engineer asserting something about her own row ended as what the instrument printed.
+
+### The sixteenth: the same failure, aimed at the review channel
+
+The merge gate recorded that **two completion states were reported to her inaccurately** during this review, and that both times the underlying work was sound while the report about it was not.
+
+1. Finding 8 was reported closed before the PR body had actually been rewritten.
+2. She was told *"neither of us has verified the `0 orphans` claim"* — after she had already verified it, and reported it in both her PR comment and her message to me: **485 open issues across the 8 org repos against 2338 board items, 0 orphans**.
+
+The second is the more instructive, because the proposed remedy was *worse than the defect*: I offered to mark a measured figure **unverified**. That is a false label in the opposite direction — the same class as the false measured-zero it was meant to guard against, inverted. A reviewer's completed work erased by the author's failure to read the report is not caution; it is the same carelessness wearing caution's clothes.
+
+This is the "written faster than verified" failure **pointed at the review channel rather than at the document**, and it is the more expensive direction. A wrong number in the entry costs a correction. A wrong completion report costs the reviewer a round: they re-derive something already settled, or worse, they accept a fix that was never made. Over seven heads this happened twice, and both times the gate caught it by checking rather than believing.
+
+**A third instance, and the worst of them, arrived while this very section was being written.** The merge gate's finding 11 named a third live occurrence of the false "two consecutive retros" claim, at `:928`, in the rationale for Proposed Process Change #2. I replied that it had already been fixed at `20c1e708` and that she had gated one commit behind it. **That was false.** Her method, run afterwards:
+
+```
+git cat-file blob 20c1e708:.claude/team/feedback_log.md | sed -n '928p'
+git cat-file blob e4cd062d:.claude/team/feedback_log.md | sed -n '928p'
+```
+
+Both return the uncorrected clause, character for character. The line was fixed only at `8c4db95f`, after she pressed a second time. She had checked both blobs rather than trust her own note, which is why the claim did not survive.
+
+This is the one that matters most, because **it was used to explain away a finding that was still open**. The first two inaccurate reports cost a reviewer a round. This one, unchallenged, would have shipped a false rationale into the text wave-32 reads when it scopes that change — a process proposal justified by a failure two predecessor waves did not commit, sitting in this retro's own forward-looking half.
+
+Recorded here rather than in the orchestrator row, because it is a property of **how the work was reported**, not of the work. Cause (a) in that row — *content-binding claims asserted without executing the check* — covers the document. This is the same cause aimed at a person, and the pattern is now three deep: **the work has held up under scrutiny every round; the reports about the work have not.**
