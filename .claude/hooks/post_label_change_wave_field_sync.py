@@ -84,7 +84,8 @@ Design choices documented for reviewer pickup
 
 - **No per-issue opt-out.** "All wave-labeled issues are board-tracked"
   is treated as a wave-scope invariant (per
-  `feedback_wave_planning_from_board.md`). Adding an opt-out label like
+  charter `issues.md` § Wave Planning — Project Board Is
+  Authoritative). Adding an opt-out label like
   `noorin-no-board-sync` would silently drop wave-labeled issues off the
   board — contradicting `/wave-scope` and `/board-audit` semantics. If a
   wave-labeled issue genuinely should not be board-tracked, the right

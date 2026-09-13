@@ -291,11 +291,18 @@ Broken-dependency handling (#1243, corrected by the #1388 review + #1405):
     call is therefore wrapped there too; see `_block`.
 
 Promotion provenance:
-    memory feedback_honest_audit_over_conclusion_claim (2026-04-22) →
+    memory feedback_honest_audit_over_conclusion_claim (2026-04-22;
+    retired in #1550 once the charter section fully absorbed it) →
     charter skills.md § Wave Lifecycle — Open-Item Audit (PR #193) →
     this hook (issue #195). Second worked example of the
     memory→charter→hook promotion pipeline ratified 2026-04-19 (Hook 15
-    was the first).
+    was the first). The memory is named here as the historical first
+    link, not as a live pointer — the chain is only a worked example of
+    the pipeline if every link is recorded, and the memory link is the
+    one that was retired. This docstring is documentary only:
+    `find_already_promoted` scans `charter/**` and requires the bold
+    `**Promotion provenance:**` form, so it never reads this file. The
+    machine-read site for this slug is charter `skills.md`.
 """
 
 from __future__ import annotations

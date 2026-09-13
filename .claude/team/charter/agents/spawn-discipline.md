@@ -33,7 +33,7 @@ P3W9 instances 2026-05-12: orchestrator spawned `aino2` for issue #401 work, `wa
 
 ## Pre-Spawn State Check + Crossed-Message Race Protocol <!-- promotion-target: none -->
 
-Phase 3 Wave 1 surfaced a recurring failure shape: implementer ships work + status report → orchestrator's task_assignment for that same work was already in flight in the message bus → implementer receives "do X" message AFTER having shipped X. This is **architecturally distinct from `feedback_refresh_before_status_claim`** — no individual discipline fix prevents the race; verification-before-claim doesn't help when the message bus delivers messages in the order they were *queued*, not the order events resolved.
+Phase 3 Wave 1 surfaced a recurring failure shape: implementer ships work + status report → orchestrator's task_assignment for that same work was already in flight in the message bus → implementer receives "do X" message AFTER having shipped X. This is **architecturally distinct from [`state-claims.md` § Refresh State Before Claim](../state-claims.md)** — no individual discipline fix prevents the race; verification-before-claim doesn't help when the message bus delivers messages in the order they were *queued*, not the order events resolved.
 
 ### Default protocol — accept as cost-of-throughput
 
@@ -248,5 +248,5 @@ The two rules are complementary:
 
 #### Provenance
 
-P3W10 retro PR #441 § Proposed Process Changes #4. 22-substitution evidence (34% of 65 W10 PRs). Owner-adopted 2026-05-16 (PR #444). Sibling memory: `feedback_child_repo_implementer_rule.md` (which the parent § Child-Repo Implementer Rule + Spawn-Brief Verification already supersedes for roster-source rules; this sub-section adds the authority-source clarification).
+P3W10 retro PR #441 § Proposed Process Changes #4. 22-substitution evidence (34% of 65 W10 PRs). Owner-adopted 2026-05-16 (PR #444). The roster-source rules formerly held in memory `feedback_child_repo_implementer_rule.md` are fully absorbed by the parent § Child-Repo Implementer Rule + Spawn-Brief Verification above (that memory was retired in #1550); this sub-section adds the authority-source clarification.
 

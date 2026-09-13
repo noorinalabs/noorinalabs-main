@@ -9,6 +9,7 @@ promotion_threshold:
 status: enforced-elsewhere
 superseded_by: charter:pull-requests.md § Trust the Artifact, Not the Framing
 superseded_at: 2026-05-06
+last_verified: 2026-09-13
 ---
 When reviewing a PR, read the **artifact at PR head** as the source of truth — not the PR body's framing, the commit messages, or the line numbers the author cites.
 
@@ -32,6 +33,10 @@ Distinct from Pattern B (verify-spec-against-ground-truth) at the implementer va
 
 Companion to:
 - [[feedback_canonical_source_via_git_show]] (use gh api / `git show <sha>:<path>` at HEAD, not local clone)
-- `feedback_refresh_before_status_claim` (refresh PR state before any "still at X" assertion)
+- `charter:state-claims.md` § Refresh State Before Claim (refresh PR state before any "still at X" assertion)
 - [[feedback_verify_3p_integrity]] (don't claim a tool verifies SHA without grepping its source)
 - `feedback_verify_diagnosis_before_delegating` (Pattern B implementer-side equivalent)
+
+---
+
+**Judge pass 2026-09-13 (#1550) — KEPT, `superseded_by` is only PARTIAL.** `charter/pull-requests/evidence-standards.md` § Trust the Artifact, Not the Framing covers the core rule and the #206 example (and adds head-SHA anchoring), but two of the How-to-apply bullets below have **no** counterpart anywhere in `charter/pull-requests/`: (i) ordering/sequencing claims verified against **upstream docs / standard conventions** (cloud-init phase semantics, Actions step DAG, compose `depends_on`) — the only rule in the corpus directing verification against an *external* spec rather than a repo artifact, and the one that closed the #210 bootstrap-perms loop; and (ii) env-var/config wiring traced **producer -> consumer** through actual file references. Charter-broadening candidate.

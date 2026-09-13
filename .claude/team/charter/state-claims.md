@@ -20,6 +20,27 @@ Before any SendMessage, PR comment, or issue body containing a state-claim, the 
 
 If the verification disconfirms the claim, revise the message — do not send the original claim with caveats appended ("I think X but haven't checked"). The discipline is to assert only what verification confirms.
 
+#### Sub-rule: reviewer refresh goes immediately before the post, not at diff-dive start <!-- promotion-target: none -->
+
+<!-- Absorbed from memory: feedback_refresh_before_status_claim.md § Reviewer extension (Bereket-flagged 2026-04-28, deploy#181), retired in #1550. -->
+
+Before any **"I am the first reviewer" / "no prior review to align against" / "nobody has looked at this yet"** claim in your own review post, re-read the PR's comments **immediately before the `gh pr comment` call** — **not** at the start of the diff dive.
+
+The two are not the same moment. A dive over a non-trivial diff takes long enough for a sibling reviewer to post, and **PR comments lag inbox flush**: a fetch at review-start can return an empty comment set even when a sibling's verdict landed minutes earlier. A "first reviewer" claim anchored to the start of the dive is therefore a claim about the past stated in the present tense.
+
+Use the **issue-comments** endpoint, not `gh pr view --json reviews` — comment-form verdicts never appear in `.reviews`, so a PR can read "0 reviews" while already carrying two valid `Approved` verdicts (§ `feedback_pr_review_verdict_format` § 2; P5W5 lp#140 spawned redundant reviewers exactly this way):
+
+```bash
+gh api "repos/<owner>/<repo>/issues/<N>/comments" \
+  --jq '[.[] | select(.body | test("RequestOrReplied:"))] | length'
+```
+
+Count in `jq`, not with `rg -c`. `rg -c` counts **matching lines, not comments** (one comment body is many lines, and can carry the trailer more than once), and on zero matches it prints **nothing and exits 1** rather than printing `0` — so the "nobody has reviewed this yet" case, the exact case this sub-rule exists to check, is the one where the instrument returns a silent zero. A rule against stale reads should not model the trap it guards against (`feedback_silent_zero_is_not_a_measurement`).
+
+**The same staleness runs in the other direction, and is the more common loss:** if the head moves after you began, your verdict certifies a SHA that no longer exists (§ Confirm the PR head SHA before posting any verdict, in `pull-requests/evidence-standards.md`). Re-anchor both — the comment set *and* `headRefOid` — in the same pre-post refresh.
+
+**Severity:** posting a "first reviewer" claim that a pre-post refresh would have falsified is **minor** on its own, but it duplicates a sibling's work and can produce two conflicting verdicts on one head, which is moderate. Distinct from § Refresh State Before Acting item 2, which is the *orchestrator* avoiding a duplicate post — different actor, different recipe.
+
 ### Sub-rule: Manager class is NOT exempt
 
 The manager-pass review and orchestrator coordination roles are most exposed to this failure mode because:
@@ -184,8 +205,7 @@ P3W4 wave-bootstrap merge ceremony, 2026-05-05. Orchestrator checked wave-bootst
 
 ### Cross-references
 
-- § Refresh State Before Claim — claim-class umbrella; this rule is the action-class extension.
-- `feedback_refresh_before_status_claim.md` — implementer/reviewer-side foundational primitive that the § Refresh State Before Claim section above already encodes for the claim direction. This rule is the action-direction analogue.
+- § Refresh State Before Claim — the claim-class umbrella and the implementer/reviewer-side foundational primitive; this rule is its action-class extension. (Formerly also carried as memory `feedback_refresh_before_status_claim.md`, retired in #1550 once this file absorbed it — including its reviewer-timing sub-rule, now § Sub-rule: reviewer refresh goes immediately before the post.)
 - `feedback_stale_inbox_manager.md` (memory) — manager-class inbox-staleness failure mode, distinct from artifact-staleness; the inbox lags reality, the artifact IS reality.
 
 <!-- Promoted from memory: feedback_canonical_source_via_git_show.md (P3W5 retro 2026-05-06) -->

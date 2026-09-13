@@ -14,7 +14,7 @@ Automate the wave kickoff process for the `{team_name}` team.
 
 ### 0. Run `/board-audit` (Mandatory precondition — added per main#199)
 
-Run `/board-audit` once to ensure project 2 reflects current open-issue state and the `Wave` field is in sync with the wave labels (the new `wave-{X}` form and grandfathered `p{N}-wave-{M}`, #810). Without a current board, downstream steps (scope reconciliation, label application, kickoff comments) can silently miss orphan issues per memory `feedback_wave_planning_from_board.md` (the 37% drift discovery on 2026-04-23).
+Run `/board-audit` once to ensure project 2 reflects current open-issue state and the `Wave` field is in sync with the wave labels (the new `wave-{X}` form and grandfathered `p{N}-wave-{M}`, #810). Without a current board, downstream steps (scope reconciliation, label application, kickoff comments) can silently miss orphan issues per charter [`issues.md` § Wave Planning — Project Board Is Authoritative](../../team/charter/issues.md) (the 37% drift discovery on 2026-04-23).
 
 If `/board-audit` reports drift, address it before proceeding. Labels are canonical; the Wave field is a derived projection synced by the skill (charter `issues.md § Wave Planning — Project Board Is Authoritative`).
 
@@ -147,7 +147,7 @@ For each repo `R` in `$WAVE_REPOS_IN_SCOPE`:
 | # | Check | How to verify |
 |---|---|---|
 | 0.1 | **Wave branch exists in repo `R`** | `gh api repos/noorinalabs/$R/git/refs/heads/deployments/phase-{N}/wave-{M}` returns 200 (not 404). Step 1 is responsible for creation; this check confirms it landed before subsequent steps run. |
-| 0.2 | **Implementer roster confirmed for `R`** | Per child-repo-implementer rule (memory `feedback_child_repo_implementer_rule.md`): implementers come from `R`'s own team roster, not the orchestrator's parent team |
+| 0.2 | **Implementer roster confirmed for `R`** | Per charter `agents/spawn-discipline.md` § Child-Repo Implementer Rule + Spawn-Brief Verification: implementers come from `R`'s own team roster, not the orchestrator's parent team |
 | 0.3 | **Every scoped issue's `actual_repo_for_changes` is correct — RELOCATE if not** | Re-read every issue body; sibling-of references can mislead. Concrete example: deploy#242 was filed as "sibling-of isnad-graph" but the actual code change was in landing-page (caught by Idris-853 in P3W3 only after kickoff). **When an issue's code lands in a different repo than the one it's filed in, you MUST relocate it — do not just note it.** See § 0.3a. |
 | 0.4 | **2-reviewer slate drafted per PR** | `wave_3_scope.tier_*` entries each list `assignee` + `reviewer` (and a 2nd reviewer for charter compliance — see charter `pull-requests.md` § Two-Reviewer Assignment at Wave Kickoff) |
 | 0.5 | **Agent naming pattern** | `{FirstInitial}.{LastName}/{IIII}-{slug}` per CLAUDE.md § Branching Strategy. Verify in execution plan |
