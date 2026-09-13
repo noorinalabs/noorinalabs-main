@@ -3,7 +3,7 @@ name: feedback_short_flag_consumes_next_token
 description: "A typo'd short flag that TAKES AN ARGUMENT does not error — it silently consumes the next token and re-interprets your command. `rg -rl PATTERN .` is well-formed and means 'replace matches with the literal string l'. The tell is plausible-but-wrong output from a command that should have returned something structurally different."
 metadata:
   type: feedback
-last_verified: 2026-08-03
+last_verified: 2026-09-13
 ---
 
 **The general rule (Aino Virtanen, W29):** a flag that takes an argument will **silently consume the next token**, so a mistyped short flag does not produce an error — it produces a *different, well-formed command*. This is why the failure surfaces as output rather than a diagnostic, and why it survives a careful re-read of the command line.
@@ -36,5 +36,7 @@ A rule of "don't confuse `rg -r` and `-l`" catches exactly one instance. The arg
 - **Do not explain away odd output on a first sighting.** That is the cheapest moment to catch it; every later use inherits the corrupted result.
 
 Follow-up: this belongs in `docs/TOOLCHAIN.md` § Text search (and `ontology/conventions.md`) via a PR — recorded here first so it is not lost. The general framing is the one to codify, not the specific flag pair.
+
+**Third instance, 2026-09-13 (#1550) — the tell was explained away again, by a different agent, and by me.** `rg -rn` (not `-rl` this time) during a memory judge pass; every backticked identifier in the output was rewritten to `n`. The odd shape *was* noticed — and then falsified with a check that could not fail: re-running on a short temp file with `rg -n`, which is the correct invocation and so returned correct output, "clearing" the suspicion and pointing the diagnosis at harness redaction instead. A second agent hit the same flag the same hour and nearly filed the mangled quotation as a real charter defect. Sharpening for the § How to apply list below: **when odd output makes you suspect the tooling, the control must re-run the SAME command, not a corrected one.** Reproducing with a fixed command tests a different hypothesis than the one you hold, and it will exonerate the tool every time. Cf. the contaminated-control finding in [[feedback_enforcement_hierarchy]] (`find /etc -name zzz` exiting 1 for permissions, not for no-match, confirming a wrong rule).
 
 Related: [[feedback_prose_guarantee_vs_mechanism]] (same round; a mechanism that appears to work and does not), [[feedback_silent_zero_is_not_a_measurement]].
