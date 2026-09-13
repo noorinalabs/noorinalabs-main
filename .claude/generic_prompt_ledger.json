@@ -126,6 +126,12 @@
       "detail": "GENERIC_HOOK_SESSION_START_PROMPT.md",
       "wave": "P7W19"
     },
+    "hooks/smart_grep_ontology.py": {
+      "decided_at": "2026-09-13T00:38:19Z",
+      "decision": "skipped",
+      "detail": "routes grep through this org's ontology index; no product-neutral form without that index",
+      "wave": "P10W31"
+    },
     "hooks/tests/fixtures/real_label_block_w29a_dollar_paren.txt": {
       "decided_at": "2026-08-13T21:45:34Z",
       "decision": "skipped",
@@ -186,6 +192,12 @@
       "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
       "wave": "P10W30"
     },
+    "hooks/tests/test_dispatcher.py": {
+      "decided_at": "2026-09-13T00:38:20Z",
+      "decision": "skipped",
+      "detail": "test of a project-coupled module; a test is not a prompt artifact",
+      "wave": "P10W31"
+    },
     "hooks/tests/test_enforce_librarian_consulted.py": {
       "decided_at": "2026-06-26T00:37:43Z",
       "decision": "skipped",
@@ -240,6 +252,12 @@
       "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
       "wave": "P10W30"
     },
+    "hooks/tests/test_smart_grep_ontology.py": {
+      "decided_at": "2026-09-13T00:38:20Z",
+      "decision": "skipped",
+      "detail": "test of a project-coupled module; a test is not a prompt artifact",
+      "wave": "P10W31"
+    },
     "hooks/tests/test_validate_commit_identity.py": {
       "decided_at": "2026-08-13T21:45:34Z",
       "decision": "skipped",
@@ -251,6 +269,12 @@
       "decision": "skipped",
       "detail": "test file",
       "wave": "P7W19"
+    },
+    "hooks/tests/test_validate_edit_completion.py": {
+      "decided_at": "2026-09-13T00:38:20Z",
+      "decision": "skipped",
+      "detail": "test of a project-coupled module; a test is not a prompt artifact",
+      "wave": "P10W31"
     },
     "hooks/tests/test_validate_labels.py": {
       "decided_at": "2026-08-13T21:45:34Z",
@@ -329,6 +353,12 @@
       "decision": "skipped",
       "detail": "perf refactor of a pre-existing project-coupled hook; no new product-neutral prompt surface",
       "wave": "P10W28"
+    },
+    "hooks/validate_edit_completion.py": {
+      "decided_at": "2026-09-13T00:38:19Z",
+      "decision": "skipped",
+      "detail": "harness-specific PreToolUse payload shape and this org's dispatcher contract",
+      "wave": "P10W31"
     },
     "hooks/validate_pr_ci_status.py": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -414,6 +444,12 @@
       "detail": "GENERIC_LIB_CHECK_FIXTURE_REALISM_PROMPT.md",
       "wave": "P7W19"
     },
+    "lib/checksums_io.py": {
+      "decided_at": "2026-09-13T00:38:19Z",
+      "decision": "skipped",
+      "detail": "coupled to this org's two-layer ontology ledger (last_tracked/last_resolved + drifted state); the reader contract has no meaning without that schema",
+      "wave": "P10W31"
+    },
     "lib/doc_freshness.py": {
       "decided_at": "2026-06-26T00:37:43Z",
       "decision": "genericized",
@@ -437,6 +473,18 @@
       "decision": "skipped",
       "detail": "source no longer exists in repo (renamed/removed)",
       "wave": "P7W19"
+    },
+    "lib/lint_checksums_consumers.py": {
+      "decided_at": "2026-09-13T00:38:19Z",
+      "decision": "skipped",
+      "detail": "lints consumers of the ontology ledger above; inherits the same coupling",
+      "wave": "P10W31"
+    },
+    "lib/lint_skill_bash_dialect.py": {
+      "decided_at": "2026-09-13T00:38:18Z",
+      "decision": "genericized",
+      "detail": "GENERIC_LIB_LINT_SKILL_BASH_DIALECT_PROMPT.md",
+      "wave": "P10W31"
     },
     "lib/lint_skill_graphql_pagination.py": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -606,11 +654,23 @@
       "detail": "test asset / fixture \u2014 not an automation pattern; the parent artifact carries the genericizable behavior",
       "wave": "P10W30"
     },
+    "lib/tests/test_checksums_io.py": {
+      "decided_at": "2026-09-13T00:38:19Z",
+      "decision": "skipped",
+      "detail": "test of a project-coupled module; a test is not a prompt artifact",
+      "wave": "P10W31"
+    },
     "lib/tests/test_doc_freshness.py": {
       "decided_at": "2026-06-26T00:37:43Z",
       "decision": "skipped",
       "detail": "test file",
       "wave": "P7W19"
+    },
+    "lib/tests/test_gate_integrity.py": {
+      "decided_at": "2026-09-13T00:38:19Z",
+      "decision": "skipped",
+      "detail": "test of a project-coupled module; a test is not a prompt artifact",
+      "wave": "P10W31"
     },
     "lib/tests/test_generic_prompt_tracker.py": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -629,6 +689,18 @@
       "decision": "skipped",
       "detail": "source no longer exists in repo (renamed/removed)",
       "wave": "P7W19"
+    },
+    "lib/tests/test_lint_checksums_consumers.py": {
+      "decided_at": "2026-09-13T00:38:19Z",
+      "decision": "skipped",
+      "detail": "test of a project-coupled module; a test is not a prompt artifact",
+      "wave": "P10W31"
+    },
+    "lib/tests/test_lint_skill_bash_dialect.py": {
+      "decided_at": "2026-09-13T00:38:20Z",
+      "decision": "skipped",
+      "detail": "test body; the generic prompt for the tool itself carries the acceptance criteria instead",
+      "wave": "P10W31"
     },
     "lib/tests/test_lint_skill_graphql_pagination.py": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -725,6 +797,12 @@
       "decision": "skipped",
       "detail": "test file",
       "wave": "P7W19"
+    },
+    "lib/tests/test_wave_kickoff_step0a_staleness.py": {
+      "decided_at": "2026-09-13T00:38:20Z",
+      "decision": "skipped",
+      "detail": "test of a wave-lifecycle skill step; a test is not a prompt artifact",
+      "wave": "P10W31"
     },
     "lib/tests/test_wave_merge_model.py": {
       "decided_at": "2026-06-26T00:37:43Z",
@@ -870,6 +948,12 @@
       "detail": "GENERIC_SKILL_BOARD_AUDIT_PROMPT.md",
       "wave": "P7W19"
     },
+    "skills/handoff/SKILL.md": {
+      "decided_at": "2026-09-13T00:38:18Z",
+      "decision": "genericized",
+      "detail": "SESSION_HANDOFF_PROMPT.md",
+      "wave": "P10W31"
+    },
     "skills/ontology-librarian/SKILL.md": {
       "decided_at": "2026-06-26T00:37:43Z",
       "decision": "genericized",
@@ -984,6 +1068,18 @@
       "detail": "GENERIC_SKILL_WAVE_WRAPUP_PROMPT.md",
       "wave": "P7W19"
     },
+    "skills/wave-wrapup/tests/test_step_11_5b_gate_integrity.py": {
+      "decided_at": "2026-09-13T00:38:20Z",
+      "decision": "skipped",
+      "detail": "test that extracts and executes a wrapup step body; inseparable from this wave lifecycle",
+      "wave": "P10W31"
+    },
+    "team/charter.md": {
+      "decided_at": "2026-09-13T00:38:18Z",
+      "decision": "genericized",
+      "detail": "GENERIC_CHARTER_LIFECYCLE_PROMPT.md + GENERIC_CHARTER_* family",
+      "wave": "P10W31"
+    },
     "team/charter/agents.md": {
       "decided_at": "2026-06-20T00:23:38Z",
       "decision": "skipped",
@@ -1044,11 +1140,29 @@
       "detail": "GENERIC_CHARTER_PULL_REQUESTS_PROMPT.md",
       "wave": "P7W19"
     },
+    "team/charter/pull-requests/ci-gates.md": {
+      "decided_at": "2026-09-13T00:38:18Z",
+      "decision": "genericized",
+      "detail": "GENERIC_CHARTER_PULL_REQUESTS_PROMPT.md",
+      "wave": "P10W31"
+    },
+    "team/charter/pull-requests/evidence-standards.md": {
+      "decided_at": "2026-09-13T00:38:18Z",
+      "decision": "genericized",
+      "detail": "GENERIC_CHARTER_PULL_REQUESTS_PROMPT.md",
+      "wave": "P10W31"
+    },
     "team/charter/pull-requests/reviews.md": {
       "decided_at": "2026-08-13T21:45:36Z",
       "decision": "skipped",
       "detail": "tightly coupled to the noorinalabs charter verdict-trailer grammar",
       "wave": "P10W30"
+    },
+    "team/charter/pull-requests/wave-merge.md": {
+      "decided_at": "2026-09-13T00:38:18Z",
+      "decision": "genericized",
+      "detail": "GENERIC_CHARTER_PULL_REQUESTS_PROMPT.md",
+      "wave": "P10W31"
     },
     "team/charter/state-claims.md": {
       "decided_at": "2026-06-20T00:23:38Z",

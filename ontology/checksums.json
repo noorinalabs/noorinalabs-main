@@ -1539,9 +1539,9 @@
     },
     ".claude/memory/section_spawn_delegation.md": {
       "last_tracked": "11b8a8c3cb64a2f487aa7828bbfea71141fc7f9f5d1a659bfe62d4b6075f4438",
-      "last_resolved": "4b7948becc7e5dd6541d38d58bd29894dd3ae568c75c4b4b12bdcd187b06293a",
+      "last_resolved": "11b8a8c3cb64a2f487aa7828bbfea71141fc7f9f5d1a659bfe62d4b6075f4438",
       "tracked_at": "2026-09-10T03:36:10.308331+00:00",
-      "resolved_at": "2026-08-03T13:48:04.666256+00:00"
+      "resolved_at": "2026-09-13T00:36:19.765263+00:00"
     },
     "noorinalabs-data-acquisition/src/utils/arabic.py": {
       "last_tracked": "495f021204688b0e8611929271d9a701ad4455ee9d82716f3ba96aefa330bd06",
@@ -1857,9 +1857,9 @@
     },
     ".claude/memory/feedback_commit_identity_roster_from_cwd.md": {
       "last_tracked": "893147fd1e7e825498da0ca9dd33d1ecb727493034170e57d14b1572f886f20d",
-      "last_resolved": "ec6ea9b596a61ac9f1cb73d7af7b9e169e80ed25092ccdec1f84d31789aa8627",
+      "last_resolved": "893147fd1e7e825498da0ca9dd33d1ecb727493034170e57d14b1572f886f20d",
       "tracked_at": "2026-09-10T03:36:35.601186+00:00",
-      "resolved_at": "2026-08-17T22:21:00.047561+00:00"
+      "resolved_at": "2026-09-13T00:36:19.765263+00:00"
     },
     ".claude/memory/feedback_owner_merge_gate_review_first.md": {
       "last_tracked": "939ca2f601bc02f856bac13e4e7e76db883ba3d8367ae8797975f2d90ad179e9",
@@ -1887,9 +1887,9 @@
     },
     ".claude/memory/feedback_same_persona_resident_coordinator_double_gates.md": {
       "last_tracked": "07893d9ab15dfa4ad622998a4685e9cd407b6c0160de67081f3a12ce44e07e4b",
-      "last_resolved": "",
+      "last_resolved": "07893d9ab15dfa4ad622998a4685e9cd407b6c0160de67081f3a12ce44e07e4b",
       "tracked_at": "2026-09-09T00:03:37.072548+00:00",
-      "resolved_at": ""
+      "resolved_at": "2026-09-13T00:36:19.765263+00:00"
     }
   },
   "last_cleanup": {
