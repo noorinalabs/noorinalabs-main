@@ -379,6 +379,16 @@ def read_verdict(run_gh=_run_gh) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+def _version(verdict: dict) -> int:
+    """The verdict's schema version, 1 when absent or not an int.
+
+    Version 1 verdicts were produced by the pre-main#1584 name-only sweep, so
+    the reader must not describe them with the trigger-based scope.
+    """
+    raw = verdict.get("version")
+    return raw if isinstance(raw, int) else 1
+
+
 def verdict_age_hours(verdict: dict, now: datetime | None = None) -> float | None:
     """Age of the verdict in hours, or None when ``checked_at`` is unparseable."""
     raw = str(verdict.get("checked_at") or "")
@@ -461,13 +471,28 @@ def render_check(
         # Say what the green covers. The predecessor line claimed "All
         # publish/deploy/release workflows green", which was true and useless:
         # it was green over a set that excluded the red things (main#1584).
-        seen = verdict.get("workflows_seen")
-        seen_txt = f", {seen} workflow(s) examined" if isinstance(seen, int) else ""
-        lines.append(
-            "All in-scope default-branch workflows green — scope: schedule-triggered, "
-            "workflow_dispatch-only, or publish/deploy/release-class "
-            f"(as of {checked_at}, {len(repos_checked)} repo(s){seen_txt})."
-        )
+        #
+        # And say it about the scope that ACTUALLY produced this verdict. A
+        # version-1 verdict was swept by the pre-#1584 name-only predicate, so
+        # describing it with the new scope would reproduce the same
+        # over-claim one version later — for the up-to-6h window between this
+        # code landing and the next cron run overwriting the ref.
+        if _version(verdict) >= 2:
+            seen = verdict.get("workflows_seen")
+            seen_txt = f", {seen} workflow(s) examined" if isinstance(seen, int) else ""
+            lines.append(
+                "All in-scope default-branch workflows green — scope: schedule-triggered, "
+                "workflow_dispatch-only, or publish/deploy/release-class "
+                f"(as of {checked_at}, {len(repos_checked)} repo(s){seen_txt})."
+            )
+        else:
+            lines.append(
+                "All publish/deploy/release-NAME-class workflows green (as of "
+                f"{checked_at}, {len(repos_checked)} repo(s)) — this verdict predates the "
+                "main#1584 trigger-based scope, so schedule-only workflows were NOT "
+                "checked and are UNKNOWN, not green. The next scheduled sweep replaces it; "
+                "to refresh now:\n" + refresh
+            )
     if errors:
         lines.append(
             "WARNING: sweep could not fetch run lists for: "

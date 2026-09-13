@@ -497,7 +497,7 @@ class ReadVerdictTests(unittest.TestCase):
 class RenderCheckTests(unittest.TestCase):
     def _fresh(self, **overrides: object) -> dict:
         verdict: dict = {
-            "version": 1,
+            "version": 2,
             "checked_at": red_sweep._iso(_NOW - timedelta(hours=3)),
             "repos_checked": ["repo-a"],
             "errors": [],
@@ -541,6 +541,25 @@ class RenderCheckTests(unittest.TestCase):
         self.assertIn("workflow_dispatch-only", out)
         self.assertIn("publish/deploy/release-class", out)
         self.assertIn("12 workflow(s) examined", out)
+
+    def test_version_1_green_is_not_described_with_the_new_scope(self) -> None:
+        """A version-1 verdict was swept by the pre-#1584 name-only predicate.
+
+        Describing it with the trigger-based scope would reproduce the exact
+        over-claim this story fixed, one schema version later — during the
+        up-to-6h window between the code landing and the next cron run
+        overwriting the persisted ref.
+        """
+        out = red_sweep.render_check(self._fresh(version=1), now=_NOW)
+        self.assertNotIn("All in-scope default-branch workflows green", out)
+        self.assertIn("NAME-class", out)
+        self.assertIn("schedule-only workflows were NOT checked", out)
+        self.assertIn("UNKNOWN, not green", out)
+
+    def test_missing_version_is_treated_as_1(self) -> None:
+        verdict = self._fresh()
+        del verdict["version"]
+        self.assertIn("NAME-class", red_sweep.render_check(verdict, now=_NOW))
 
     def test_zero_repos_checked_is_warning_not_green(self) -> None:
         """A sweep that fetched nothing is UNKNOWN. Without this the empty
