@@ -871,3 +871,70 @@ Deliberately noted: writing this entry increments the citation counts of every m
 Issue #1466's acceptance criterion "0 unreviewed stale opt-outs" is **not met and cannot be met as written**: the audit has no mechanism to mark an opt-out as reviewed. The rationale now lives in each note's frontmatter, but the tool cannot see it, so the advisory recurs every wave. Flagged on #1466 for folding into #1469's fix rather than being quietly claimed as satisfied.
 
 **Artifacts:** #1469 (self-incrementing citation signal, both tiers) · #1470 (PR — memory migration, 5 target repairs, budget raise + archive) · #1471 (charter spawn-isolation defect) · comments on #1450, #1455, #1466.
+
+---
+
+## Retrospective: Phase 10 Wave 31 — 2026-09-12
+
+Theme in hindsight: **honour-system gates, named denominators, and the first wave whose review gate was actually measured.**
+
+### Team Performance
+
+| Metric | Value |
+|---|---|
+| PRs merged (wave work) | **20** — 19 `noorinalabs-main`, 1 `noorinalabs-deploy` |
+| PRs the counter can see | **17** (scope-claiming; see the counter note) |
+| Scope rows | 32 — 31 delivered, 1 closed by comment (`#1489`, no PR owed) |
+| CI-red merges | **0** across all 20 |
+| Review false positives | **0** |
+| Changes-requested verdicts | 19 |
+| Top-implementer concentration | 24% (Nurul Hakim 4/17); 20% against the true 20-PR set |
+| **Gate enforcement rate** | **100%** — 21 merges audited, 21 PASS, 0 UNREVIEWED, 0 UNDETERMINED |
+| Tech-debt filed at wrapup/retro | 6 (`#1546`, `#1547`, `#1548`, `#1549`, plus `deploy#711`–`#714` from the wave itself) |
+| Batches | 5, run sequentially with owner approval on each composition |
+
+**Gate integrity: `verified`** (window from 2026-08-23T17:15:35Z), **no override taken**. This is the first wave to carry `wave_{M}_gate_integrity` at all — Step 11.5b landed in W30 but W30 predates the key. The number to remember is that the enforcement rate has now been *measured* rather than assumed: 21 of 21. A prediction recorded **before** the audit ran — that `deploy#709`, a dependabot base-image auto-merge, would classify UNREVIEWED per the classifier's own documented noise source — **did not materialise**: it carried two real reviews and passed. Recording the failed prediction rather than quietly dropping it is the point.
+
+### Per-Engineer Assessments
+
+Full signal tables, deltas, and the forced negative-signal pass are in `.claude/team/trust_matrix.md` § Phase 10 Wave 31. Summary: **net movement zero.** Three proposals reached 5 from below (Lucas Ferreira, Nadia Khoury, Weronika Zielinska) and all three were capped to 4 by `apply_distribution_discipline`; both ceiling-holders (Aino Virtanen, Nino Kavtaradze) retained 5 via the entry-gate rule. Calibration gate passed at an observed median of 1.00 must-fix/PR against the 1.00 calibrated at P10W29. No fire/hire. W30's decay watch on Bereket Tadesse cleared — he delivered 3 PRs.
+
+### Top 3 Going Well
+
+1. **The review gate was measured for the first time, and it held at 100%.** 21 merges across two repos, zero unreviewed, zero undetermined, no override. Every prior wave's enforcement rate is unknown — not clean, unknown. This wave also produced the first *failed* prediction recorded against that instrument, which is worth more than the rate itself: the dependabot merge everyone expected to fail the audit passed it.
+
+2. **`#1469`'s fix produced a measurable before/after on a live instrument.** W30's retro celebrated "the first AUTO promotion in ~20 recorded waves", then caught that the signal was **self-incrementing** — a section crossed the threshold partly because the retro writing about it incremented its own citation count. Wanjiku Mwangi's `#1519` made the counter provenance-aware. This wave's promotion audit returns **0 AUTO · 0 DECIDE · 261 KEPT · 22 SUPERSEDED**. The celebrated promotion was the artifact; the fixed gate now says so.
+
+3. **Two people refused the expedient path at a cost to themselves.** Lucas Ferreira hit a push that died SIGPIPE five times, had a manually-verified-green hook suite in hand, and escalated rather than reaching for `--no-verify` — then measured the real cause and filed it. Weronika Zielinska withdrew her own approved-round claim that a payload matched live "field-for-field" once the gate showed two parameters were omitted. Both are the behaviour the charter asks for in the case where nobody would have noticed.
+
+### Top 3 Pain Points
+
+1. **Three of the wave's own PRs are invisible to its own counter, and the W30 repair does not work here.** `final_pr_count` reads 17 against 20 merged. `#1544` and `deploy#710` deliver `#1464` via `Refs` because the owner ruled that issue stays open as the protection tracker; `#1520` wrote `Closes #1480` **inside backticks**, so GitHub registered nothing. W30 hit the identical 17-vs-21 shape and repaired the linkage before scoring. Here one cause is an owner ruling and the other is a merged PR that can no longer create a link — so the gap was root-caused and filed (`#1547`, `#1546`) with the denominator named in `wave_31_final_pr_count_basis`, rather than closed. The knock-on reaches the trust matrix: `wave_31_trust_signals` under-attributes two authors, and that had to be checked delta-by-delta before the scores could be trusted.
+
+2. **The Annunaki log has never been archived at a wave close.** 2063 records spanning 2026-07-27 to 2026-09-13 — waves 29, 30 **and** 31. **80% predate this wave.** So `/session-start`'s per-session count, read as a wave signal by two consecutive retros, is a three-wave pile. Step 13a did not fire, correctly: it gates on the errors being triaged benign, and **167 are high-confidence `masked-failure` with real tracebacks**. The defect is that the step has only two outcomes, archive-everything or archive-nothing, so one unresolved record parks the entire backlog indefinitely (`#1548`). Honest dominant-class reading: the largest class is `pipe-mask-suspect` at 1127 (55%), confidence low, and it is **genuinely mixed** — real `command not found` failures inside broken shell-function bodies alongside correct expected-negative probe output. Calling it noise would be the favorable-class framing; calling it all-signal would be equally wrong.
+
+3. **A guard was inert in a new place, again — this time the exit status itself.** 167 commands exited 0 while a traceback, a `FAILED`, or an `exit status N` scrolled past, because a pipe swallowed the upstream status and the shell reports the last command (`#1549`). This is the third distinct layer this wave-class has hit: `#1485`'s staleness check that errored under zsh and took the false branch, a fixture that made an assertion inert, and now the pipeline exit code. The pattern is not "we write bad guards" — it is that **a guard's own failure mode is invisible unless something independent executes it**.
+
+### Orchestrator self-assessment
+
+One concrete defect: a rework brief named head `5937706b`, which resolves to nothing (HTTP 422). The merge gate caught it and reviewed the SHA that exists. Hand-extending a short prefix into a full SHA is the content-binding failure the review rules exist to prevent, committed by the person enforcing them. Recorded on the `#1464` row.
+
+What went right: the `--expect` cross-check was allowed to block. The counter refused to write, and the resolution was to understand the divergence PR-by-PR rather than pass the instrument its own output to make the guard pass — which would have manufactured agreement and silently absorbed `#1546` and `#1547`.
+
+### Proposed Process Changes
+
+1. **Give `/wave-wrapup` Step 13a a partial-archive path.** — Rationale: an all-or-nothing gate on "triaged benign" means a single unresolved record freezes the whole log, which is exactly what produced a 3-wave, 2063-record pile. Archive what is benign, carry the rest forward in a countable `unresolved` set the next wrapup must account for. (`#1548`)
+
+2. **Split the `/session-start` Annunaki count by confidence.** — Rationale: one number spanning a 55% low-confidence class invited two consecutive retros to read it as a wave-scoped defect count. A count whose dominant class is a low-precision heuristic should not be reported as a single integer. (`#1548`)
+
+3. **Make a PR's closing-reference linkage verifiable at wrapup.** — Rationale: `#1520`'s backticked keywords were inert, and nothing said so; the issues closed by some other means and the durable link was simply lost. A wrapup cross-check — for every merged PR whose body contains a closing keyword, assert a matching `closingIssuesReferences` entry — would have caught it without anyone knowing to look. (`#1546`)
+
+4. **Name the denominator whenever a counter and its key's name can diverge.** — Rationale: this is the fifth corrective pass on the same idea (`#688` → `#1190` → `#1201` → `#1255` → `#1256`, delivered this wave), and it recurred immediately in a different instrument. `wave_31_final_pr_count_basis` is the ad-hoc version; the general form belongs in the counter helper. (`#1547`)
+
+### Memory decay & size sweep (Step 7.8)
+
+Corpus at **136 / 136** on both index entries and file count — **at cap**. Four size flags, **zero age flags**, unchanged from W30: `feedback_fixture_makes_guard_assertion_inert` (23.5 KB), `feedback_gh_cli_gotchas` (21.4 KB), `feedback_corpus_misses_its_constant_dimension` (16.6 KB), `feedback_sweep_expensive_stage_before_launch` (15.3 KB). W30's reasoning still holds and no action is taken: none has the property that made the narrator note archivable — its subject matter ended. Length here mostly tracks how much has been learned about a topic, and archiving `feedback_gh_cli_gotchas` to satisfy a byte advisory would remove the note you most want loaded when you hit gotcha #13. Being **at cap** is the live constraint: the next lesson worth recording must fold into an existing note.
+
+### Promotion audit (Step 7.5)
+
+**0 AUTO · 0 DECIDE · 261 KEPT · 22 SUPERSEDED.** Nothing crossed a threshold. See "Going well" #2 for why a zero here is the notable result rather than an absence of one. Noted gap: the audit's standalone log at `.claude/team/promotion_audit_log/` holds `wave-27`, `wave-28`, `wave-29` — **no `wave-30` or `wave-31` file**, so the per-wave log the skill promises has silently stopped being written for two waves.
