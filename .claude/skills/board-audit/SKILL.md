@@ -449,4 +449,4 @@ detection logic is covered by `.claude/lib/tests/test_lint_skill_graphql_paginat
 
 ## Promotion provenance
 
-Memory `feedback_wave_planning_from_board.md` (2026-04-23 — the 37% drift discovery) → owner decision 2026-04-25 (labels canonical, Wave field derived) → this skill. Originating issue: main#199. Sibling-of: main#286 (hookify /wave-kickoff Steps 7+8, which depends on a current board); main#196 (/wave-scope, which depends on a current board). Class: same family as #286 — automation of cross-repo bookkeeping that decayed via in-band-repair patterns.
+Charter `issues.md` § Wave Planning — Project Board Is Authoritative (2026-04-23 — the 37% drift discovery) → owner decision 2026-04-25 (labels canonical, Wave field derived) → this skill. Originating issue: main#199. Sibling-of: main#286 (hookify /wave-kickoff Steps 7+8, which depends on a current board); main#196 (/wave-scope, which depends on a current board). Class: same family as #286 — automation of cross-repo bookkeeping that decayed via in-band-repair patterns.

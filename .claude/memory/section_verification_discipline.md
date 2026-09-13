@@ -6,9 +6,7 @@
      always-loaded index the #1016 two-tier split removed). -->
 
 - [Verify diagnosis before delegating](feedback_verify_diagnosis_before_delegating.md) — run git log -- <path> before spawning a fix agent; API state ≠ ground truth. #162.
-- [Honest audit before "concluded"](feedback_honest_audit_over_conclusion_claim.md) — cross-repo open-item count required before claiming wave done; explicit carry-forward if non-zero.
 - [Stale-inbox manager failure mode](feedback_stale_inbox_manager.md) — before correcting a teammate's state, re-verify via artifact (gh api, Read, grep); inbox lags reality.
-- [Refresh PR state before status claims](feedback_refresh_before_status_claim.md) — gh pr view <N> before any "still at X / blocked / already done" assertion.
 - [Verify third-party integrity claims against source](feedback_verify_3p_integrity.md) — don't claim a downloader verifies SHA/GPG without grepping its source.
 - [Full-read over tail for memory files](feedback_full_read_over_tail.md) — memory-file state-claims need full Read or rg -n, not tail; memory dir is outside repo.
 - [Test-mock injection masks production failure](feedback_test_mock_masks_prod_failure.md) — unit-test injection mocks bypass server-side validation; pair w/ static-analysis/real-call gate.

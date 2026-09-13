@@ -9,6 +9,7 @@ promotion_threshold:
 referenced_in_retros: ['W7', 'W8', 'P2W9']
 status: enforced-elsewhere
 superseded_by: "implicit in CLAUDE.md § Ontology + .claude/team/charter/hooks.md § Hook Authorship Requirements; first concrete enforcement instance is Hook 15 (enforce_librarian_consulted, 2026-04-19)"
+last_verified: 2026-09-13
 ---
 When introducing a new team behavior, evaluate enforcement options in this order:
 
@@ -69,3 +70,7 @@ Restated as the **shape** — *"any `VAR="$(grep …)"` that can legitimately ma
 - Skill is the right tier when the action requires judgment (e.g., `/wave-retro` writes a retro — can't be a hook)
 - Charter is the right tier when the rule is about *intent* or *structure* that no automation can verify (e.g., "Program Director coordinates across teams")
 - If you fall back to a lower tier, state the technical reason in the proposal so the user can challenge it
+
+---
+
+**Judge pass 2026-09-13 (#1550) — KEPT; the `superseded_by` was optimistic.** It claims the rule is *"implicit in CLAUDE.md § Ontology + charter/hooks.md § Hook Authorship Requirements"*. Verified: no charter file **states** the hook > skill > charter hierarchy — they all **cite this note as the authority** for it (`artifact-ownership.md`, `skills.md` ×3, `agents/spawn-discipline.md`, `agents/headcount.md`, `agents/lifecycle.md`, `hooks/authorship-and-audit.md`, `hooks/catalog-13-17.md` ×2, `tech-decisions.md`), as do `ontology/conventions.md:23` and `.claude/skills/board-audit/SKILL.md`. Separately, the whole 2026-07-11 *STATE THE SHAPE, NOT THE STORY* section (deploy#584 + Nino's deploy#591 correction and its grep/sed/find no-match exit-code table) has zero coverage anywhere. This note is load-bearing, not absorbed.

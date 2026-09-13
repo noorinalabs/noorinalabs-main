@@ -8,6 +8,7 @@ promotion_threshold:
   retro_citations: 3
 status: enforced-elsewhere
 superseded_by: charter:agents.md § Throttle-Stall Recovery — Trigger Thresholds
+last_verified: 2026-09-13
 ---
 When a spawned implementer agent goes idle mid-implementation due to API throttling (visible signs: idle_notification without a completion SendMessage, partial TaskList progress like "1-2 of 5 done with #3 in_progress", uncommitted-but-meaningful diff in their worktree), **the orchestrator should take over their work directly rather than respawning a fresh agent**.
 
@@ -20,3 +21,7 @@ When a spawned implementer agent goes idle mid-implementation due to API throttl
 4. Use TaskUpdate to mark their stale tasks completed if they're still showing as in_progress
 5. Skip respawn unless the remaining work is genuinely outside orchestrator-class scope (e.g., novel domain expertise the orchestrator lacks)
 6. Note: this is for *implementer* takeover — for reviewer/manager-class roles, prefer SendMessage to the existing idle agent (idle ≠ dead) before assuming takeover is needed
+
+---
+
+**Judge pass 2026-09-13 (#1550) — KEPT; the `superseded_by` target explicitly does NOT supersede this.** `charter/agents/lifecycle.md` § Throttle-Stall Recovery — Trigger Thresholds opens by saying *"`feedback_throttle_takeover` covers the takeover mechanic ... This section encodes the **trigger**"*, and its Provenance repeats the split (*charter = when, memory = how*). The charter names this note 5×, and `.claude/lib/check_agent_liveness.py` emits an `auto-takeover` finding that "directs the orchestrator into `feedback_throttle_takeover` (the mechanic)". The 6-step takeover procedure below exists nowhere else. Deleting it would leave the charter and the liveness checker pointing at a hole.

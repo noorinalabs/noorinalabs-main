@@ -7,7 +7,6 @@
 
 - [Self-loop task replay glitch](feedback_self_loop_task_replay_glitch.md) — team task system may replay own completed tasks as fresh; verify via TaskGet + ignore self-loops.
 - [Check accepted ADRs before spawn](feedback_check_accepted_adr_before_spawn.md) — an issue may propose what an accepted ADR rejected; that's an owner call, not implementer work.
-- [Child-repo implementer rule](feedback_child_repo_implementer_rule.md) — implementers for child-repo PRs come from that child's own roster, not the parent org team.
 - [Role-class-specific boundaries](feedback_role_class_specific_boundaries.md) — same person, different role classes (reviewer/escalation/advisor/implementer) → different rules.
 - [Throttle takeover by orchestrator](feedback_throttle_takeover.md) — when a spawned implementer throttle-stalls w/ sound partial work, finish directly w/ their identity.
 - [Agent color drift is UI quirk](feedback_agent_color_render_quirk.md) — same agent w/ different color tags ≠ duality; trust SendMessage routing.targetColor. PR#266.

@@ -291,7 +291,7 @@ Broken-dependency handling (#1243, corrected by the #1388 review + #1405):
     call is therefore wrapped there too; see `_block`.
 
 Promotion provenance:
-    memory feedback_honest_audit_over_conclusion_claim (2026-04-22) →
+    charter skills.md § Wave Lifecycle — Open-Item Audit (2026-04-22) →
     charter skills.md § Wave Lifecycle — Open-Item Audit (PR #193) →
     this hook (issue #195). Second worked example of the
     memory→charter→hook promotion pipeline ratified 2026-04-19 (Hook 15
