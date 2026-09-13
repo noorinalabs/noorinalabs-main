@@ -3,7 +3,7 @@ name: feedback_gate_early_allow_is_the_failopen
 description: A verify-gate's fail-open is usually an early allow-with-warning branch that short-circuits AHEAD of the hard-blocks added elsewhere — audit every `decision: allow` / warning return on a failed-fetch path, not just the function you think owns the check.
 metadata:
   type: feedback
-last_verified: 2026-07-20
+last_verified: 2026-09-13
 ---
 
 # The fail-open hides in an early allow-with-warning, not in the "verify" function
@@ -125,3 +125,42 @@ message-text assertion. That is not a guard.
 Related: [[feedback_safety_direction_over_ux_friction]],
 [[feedback_lint_gate_cover_all_syntactic_forms]], [[feedback_pr_review_verdict_format]],
 [[feedback_corpus_misses_its_constant_dimension]].
+
+## Recurrence 2026-09-13 (wave-32) — same shape, and a SECOND shape the rule did not cover
+
+**Instance of this note's rule (main#1589).** `validate_review_comment_format.py:1230`
+resolves the PR head ref via `gh pr view --json headRefName` — a **GraphQL** call.
+When GitHub's GraphQL *secondary* rate limit is exhausted the call returns non-zero,
+`get_branch_name()` returns `None`, and the hook takes `{"decision": "allow"}` with only
+a WARNING. A second identical fail-open sits at `:1241`. So for several hours the
+**self-review prohibition was unenforced on every PR in the org**, and it fired live:
+an Opus merge-gate reviewer posted a trailer naming the PR author as `Requestor` — the
+exact swap shape this hook blocks — and it passed. Caught only because the reviewer ran
+`is_branch_author()` by hand and drove the hook with a synthetic payload.
+
+Note the trigger: **not a bug in the check, but an upstream dependency being unavailable.**
+Audit `decision: allow` on *any* path where an external call can fail, not only where a
+fetch is obviously involved.
+
+**A SECOND shape this note did not previously cover: the gate that is never invoked.**
+`validate_pr_review.py` matches `gh pr merge` only. `gh api --method PUT
+repos/{o}/{r}/pulls/{n}/merge` merges the PR and the hook **never runs** — no fail-open
+branch is taken, because no branch is reached. The gate is perfect and irrelevant.
+
+Worse, it is **pressure-selecting**: `gh pr merge` routes through GraphQL, so when the
+quota is exhausted the *only working merge path is the ungated one*. Load pushes traffic
+away from enforcement. Three wave-32 PRs were merged this way (main#1576, da#519,
+main#1594); conditions were verified by hand with the hook's own parser
+(`trust_signals.parse_verdicts` + `charter_trailer.is_verdict_direction`), so the
+outcomes were right — but by checking, not by enforcement. Filed as main#1598.
+
+**How to apply, extended:** when auditing a gate, ask *two* questions, not one.
+1. On every path where something can fail, does it allow? (this note's original rule)
+2. **Is there an equivalent surface that reaches the same effect without matching the
+   matcher?** A gate keyed to one command spelling is a speed bump. Prefer matching on
+   *effect* over *spelling*, and enumerate the alternate surfaces (REST endpoint, raw
+   `curl`, a GraphQL mutation) with an explicit in/out-of-scope verdict per surface.
+
+Cross-ref [[feedback_silent_zero_is_not_a_measurement]]: both failures are the same
+family — the system returns something benign instead of admitting it could not check.
+
