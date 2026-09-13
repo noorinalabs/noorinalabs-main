@@ -297,9 +297,12 @@ Promotion provenance:
     this hook (issue #195). Second worked example of the
     memory→charter→hook promotion pipeline ratified 2026-04-19 (Hook 15
     was the first). The memory is named here as the historical first
-    link, not as a live pointer: `find_already_promoted` reads this
-    block, and the chain is only a worked example of the pipeline if
-    every link is recorded.
+    link, not as a live pointer — the chain is only a worked example of
+    the pipeline if every link is recorded, and the memory link is the
+    one that was retired. This docstring is documentary only:
+    `find_already_promoted` scans `charter/**` and requires the bold
+    `**Promotion provenance:**` form, so it never reads this file. The
+    machine-read site for this slug is charter `skills.md`.
 """
 
 from __future__ import annotations

@@ -31,8 +31,11 @@ The two are not the same moment. A dive over a non-trivial diff takes long enoug
 Use the **issue-comments** endpoint, not `gh pr view --json reviews` — comment-form verdicts never appear in `.reviews`, so a PR can read "0 reviews" while already carrying two valid `Approved` verdicts (§ `feedback_pr_review_verdict_format` § 2; P5W5 lp#140 spawned redundant reviewers exactly this way):
 
 ```bash
-gh api "repos/<owner>/<repo>/issues/<N>/comments" --jq '.[].body' | rg -c 'RequestOrReplied:'
+gh api "repos/<owner>/<repo>/issues/<N>/comments" \
+  --jq '[.[] | select(.body | test("RequestOrReplied:"))] | length'
 ```
+
+Count in `jq`, not with `rg -c`. `rg -c` counts **matching lines, not comments** (one comment body is many lines, and can carry the trailer more than once), and on zero matches it prints **nothing and exits 1** rather than printing `0` — so the "nobody has reviewed this yet" case, the exact case this sub-rule exists to check, is the one where the instrument returns a silent zero. A rule against stale reads should not model the trap it guards against (`feedback_silent_zero_is_not_a_measurement`).
 
 **The same staleness runs in the other direction, and is the more common loss:** if the head moves after you began, your verdict certifies a SHA that no longer exists (§ Confirm the PR head SHA before posting any verdict, in `pull-requests/evidence-standards.md`). Re-anchor both — the comment set *and* `headRefOid` — in the same pre-post refresh.
 
