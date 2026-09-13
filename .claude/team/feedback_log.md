@@ -1143,4 +1143,15 @@ The second is the more instructive, because the proposed remedy was *worse than 
 
 This is the "written faster than verified" failure **pointed at the review channel rather than at the document**, and it is the more expensive direction. A wrong number in the entry costs a correction. A wrong completion report costs the reviewer a round: they re-derive something already settled, or worse, they accept a fix that was never made. Over seven heads this happened twice, and both times the gate caught it by checking rather than believing.
 
-Recorded here rather than in the orchestrator row, because it is a property of **how the work was reported**, not of the work. Cause (a) in that row — *content-binding claims asserted without executing the check* — covers the document. This is the same cause aimed at a person.
+**A third instance, and the worst of them, arrived while this very section was being written.** The merge gate's finding 11 named a third live occurrence of the false "two consecutive retros" claim, at `:928`, in the rationale for Proposed Process Change #2. I replied that it had already been fixed at `20c1e708` and that she had gated one commit behind it. **That was false.** Her method, run afterwards:
+
+```
+git cat-file blob 20c1e708:.claude/team/feedback_log.md | sed -n '928p'
+git cat-file blob e4cd062d:.claude/team/feedback_log.md | sed -n '928p'
+```
+
+Both return the uncorrected clause, character for character. The line was fixed only at `8c4db95f`, after she pressed a second time. She had checked both blobs rather than trust her own note, which is why the claim did not survive.
+
+This is the one that matters most, because **it was used to explain away a finding that was still open**. The first two inaccurate reports cost a reviewer a round. This one, unchallenged, would have shipped a false rationale into the text wave-32 reads when it scopes that change — a process proposal justified by a failure two predecessor waves did not commit, sitting in this retro's own forward-looking half.
+
+Recorded here rather than in the orchestrator row, because it is a property of **how the work was reported**, not of the work. Cause (a) in that row — *content-binding claims asserted without executing the check* — covers the document. This is the same cause aimed at a person, and the pattern is now three deep: **the work has held up under scrutiny every round; the reports about the work have not.**
