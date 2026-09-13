@@ -146,10 +146,10 @@
       "resolved_at": "2026-05-16T22:20:43.893664+00:00"
     },
     ".claude/team/feedback_log.md": {
-      "last_tracked": "836b74afe6870e8bce489d117c632acf914b1e8b8cf4f6db8cd16a74f9cae79e",
-      "last_resolved": "836b74afe6870e8bce489d117c632acf914b1e8b8cf4f6db8cd16a74f9cae79e",
-      "tracked_at": "2026-09-13T01:32:05.970398+00:00",
-      "resolved_at": "2026-09-13T01:51:54.060434+00:00"
+      "last_tracked": "c5702b0c828dc50f792a41eb2a6081bc33457f786b7d480f6a68b280a3b0ba0d",
+      "last_resolved": "c5702b0c828dc50f792a41eb2a6081bc33457f786b7d480f6a68b280a3b0ba0d",
+      "tracked_at": "2026-07-30T02:31:47.402865+00:00",
+      "resolved_at": "2026-07-30T02:34:41.670408+00:00"
     },
     ".gitignore": {
       "last_tracked": "6c7b44a032b05b15324d9e037682ea591f36feeb55ff1a15b2e75a166f880503",
@@ -614,9 +614,9 @@
       "resolved_at": "2026-05-03T16:59:38.573672+00:00"
     },
     ".claude/team/trust_matrix.md": {
-      "last_tracked": "14233f4177dd798c20501f481d3dc9a0e655ad24dcef4bf52012eb0616a9a316",
+      "last_tracked": "3fe12504c4d8d52b8d5146e37fd3b9eecc0a7fba960ad3a5516b4f10a2003923",
       "last_resolved": "3fe12504c4d8d52b8d5146e37fd3b9eecc0a7fba960ad3a5516b4f10a2003923",
-      "tracked_at": "2026-09-13T01:37:06.799799+00:00",
+      "tracked_at": "2026-07-27T18:58:14.755769+00:00",
       "resolved_at": "2026-07-27T19:19:34.370839+00:00"
     },
     ".claude/team/charter/state-claims.md": {

@@ -1065,3 +1065,26 @@ Version 2 is the worse of the two, because it wore the word *measured*. An asser
 **The scores did not move, and now that is measured too.** With `#1520` counted, Aino Virtanen's `prs_merged` is **4**, her delta is still **0**, and every other engineer's signals are byte-identical. The neutral-band prediction I argued for — and which the gate attacked from the hostile direction — held against real repaired data rather than a counterfactual. `final_pr_count` is **18**, top-concentration **22%**.
 
 **The lesson is not "check async APIs".** It is that the retro's own instruments produced, in sequence: a false impossibility, a false measurement that reversed it, and a correct result — and the only thing that moved each step forward was a reviewer refusing a claim whose evidence had a visible gap. Twelve findings now. The conclusions have survived; the reasoning under them has been rebuilt three times.
+
+### The thirteenth, and the one I had been warned about in my own words: three false-clean stamps on the ontology ledger
+
+Aino Virtanen's finding 9 blocked the merge: `ontology/checksums.json` was **drifted at three consecutive heads**, and she supplied a positive control proving the check was not inert. Her diagnosis was a sequencing bug — a stamp taken mid-edit and invalidated by the next edit in the same push. Investigating it turned up something worse.
+
+**Both files were already drifted at `origin/main`, before this retro branch existed.**
+
+| Entry | Ledger at `origin/main` | File hashes to |
+|---|---|---|
+| `.claude/team/feedback_log.md` | `c5702b0c828d…` (stamped 2026-07-30) | `f048cba1dba2…` |
+| `.claude/team/trust_matrix.md` | `3fe12504c4d8…` (stamped 2026-07-27) | `a4ed4a387495…` |
+
+They are two of the 157 entries in the standing `#1513` backlog. My three `mark-resolved` calls did not repair them — they stayed drifted throughout — and what the stamps actually did was **overwrite the July ledger values with new ones that also disagree with the file**, destroying the backlog's own record of when each entry was last genuinely resolved.
+
+That is verbatim the failure the tool prints on every single run:
+
+> *Drifted entries are NOT a `mark-resolved` job: stamping `last_resolved = last_tracked` records agreement between two values that both already disagree with the file, which is a false clean one layer along.*
+
+I quoted that warning approvingly elsewhere in this very entry — in the ontology line of the wrapup summary — and then did the thing it forbids, three times, because `mark-resolved` was the command nearest to hand when a commit surfaced a modified ledger. The reader never said "clean" at any point. I never asked it.
+
+**Fixed by reverting, not by re-stamping.** Both entries are restored to their `origin/main` values; `ontology/checksums.json` is now byte-identical to `origin/main`; the reader reports 0 dirty and 157 drifted, exactly as it did at session start. The two entries stay in the `#1513` backlog where they belong, and the correct handling for a *drifted* entry remains what `#1513` says it is: reconcile the overlay against the changed file, which for a retro artifact means concluding no overlay change is needed and leaving the ledger alone.
+
+**Carry to wave-32 scoping, per the gate:** **CI is 9/9 green across every one of those drifted heads.** `#1505` and `#1513` cover the backlog's existence; nothing anywhere covers *"the ledger is clean at the head you actually merge"*. A gate that green-lights a merge whose ledger is drifted is a gate that cannot see the thing it is nearest to.
