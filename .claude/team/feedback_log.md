@@ -1025,4 +1025,19 @@ The `#` is optional, so the pattern matches any run of digits. Reproduced direct
 
 This is the same shape as everything else in this retro — **an instrument returning a plausible answer to a question nobody asked** — and it arrived by the most pointed route available: it mis-parsed the verdict of the reviewer who had just spent four rounds catching that exact class of defect, in a PR whose subject is that class of defect.
 
-Two things make it more than a curiosity. A TechDebt line that mentions any figure silently inflates `tech_debt_issue_numbers`, so any consumer counting tech debt per wave over-reports. And the `else` branch below it records `tech_debt_unparseable` — a line of pure prose with a number in it will never reach that branch, so the unparseable signal under-reports by exactly the cases the greedy match swallowed. Filed separately.
+Two things make it more than a curiosity. A TechDebt line that mentions any figure silently inflates `tech_debt_issue_numbers`, so any consumer counting tech debt per wave over-reports. And the `else` branch below it records `tech_debt_unparseable` — a line of pure prose with a number in it will never reach that branch, so the unparseable signal under-reports by exactly the cases the greedy match swallowed. Filed as **#1554**.
+
+### An eleventh: "Filed separately" was true of nothing
+
+The tenth finding above originally closed with the words **"Filed separately."** No such issue existed. I had been rate-limited out of GitHub writes, wrote the entry as though the filing had happened, and moved on. Wanjiku Mwangi checked every issue number through the then-current maximum and found nothing matching, and returned ChangesRequested on it.
+
+It is the smallest defect in this retro and the most on-the-nose: **a retrospective about the gap between what an instrument reports and what is true, reporting a filing that had not occurred.** Two words, no measurement behind them, in a document that by then contained ten findings about exactly that.
+
+Now filed as **#1554**, over the REST API — the same rate limit that blocked the original filing turned out to be GraphQL-only, which I had not checked before writing the claim. The limit was real; "filed separately" was still false while I wrote it, and would have stayed false if a reviewer had taken the sentence at face value.
+
+Two further corrections from the same review round:
+
+- `wave_31_counter_corrections[0].tracked_by` cited **#1552**, the memory-judge finding, which has nothing to do with the counter correction. Corrected to #1546 and #1547, with the other instrument defects moved to a separate, honestly-named field.
+- **#1548**'s table did not sum to its own stated total, twice.** First version: rows summed to 2061 against a stated 2063. First correction: genuine per-class counts under a raw total, 2063 against 2072. It now reconciles exactly — four genuine classes summing to 2062, plus 10 records excluded at read time, giving 2072 raw. The earlier versions also listed `self-referential-log-read` as a genuine row when it is by definition one of the excluded ones: a double-count inside a table about miscounting.
+
+**Related, and not mine:** **#1553** was filed independently during this wave — `is_self_referential_match` accepts a record dict without raising and returns a silent `False`, so a wrong-type call is indistinguishable from a real zero. That is the exact mechanism behind my calling the writer-side predicate and getting a plausible 0 that would have "confirmed" the wrong count. My mistake was picking the wrong function; the reason it cost anything is that the function answered instead of refusing.
