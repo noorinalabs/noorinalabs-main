@@ -291,11 +291,15 @@ Broken-dependency handling (#1243, corrected by the #1388 review + #1405):
     call is therefore wrapped there too; see `_block`.
 
 Promotion provenance:
-    charter skills.md § Wave Lifecycle — Open-Item Audit (2026-04-22) →
+    memory feedback_honest_audit_over_conclusion_claim (2026-04-22;
+    retired in #1550 once the charter section fully absorbed it) →
     charter skills.md § Wave Lifecycle — Open-Item Audit (PR #193) →
     this hook (issue #195). Second worked example of the
     memory→charter→hook promotion pipeline ratified 2026-04-19 (Hook 15
-    was the first).
+    was the first). The memory is named here as the historical first
+    link, not as a live pointer: `find_already_promoted` reads this
+    block, and the chain is only a worked example of the pipeline if
+    every link is recorded.
 """
 
 from __future__ import annotations
