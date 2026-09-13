@@ -33,7 +33,7 @@ Distinct from Pattern B (verify-spec-against-ground-truth) at the implementer va
 
 Companion to:
 - [[feedback_canonical_source_via_git_show]] (use gh api / `git show <sha>:<path>` at HEAD, not local clone)
-- `feedback_refresh_before_status_claim` (refresh PR state before any "still at X" assertion)
+- `charter:state-claims.md` § Refresh State Before Claim (refresh PR state before any "still at X" assertion)
 - [[feedback_verify_3p_integrity]] (don't claim a tool verifies SHA without grepping its source)
 - `feedback_verify_diagnosis_before_delegating` (Pattern B implementer-side equivalent)
 

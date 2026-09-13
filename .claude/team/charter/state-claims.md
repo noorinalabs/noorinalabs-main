@@ -185,7 +185,7 @@ P3W4 wave-bootstrap merge ceremony, 2026-05-05. Orchestrator checked wave-bootst
 ### Cross-references
 
 - § Refresh State Before Claim — claim-class umbrella; this rule is the action-class extension.
-- `feedback_refresh_before_status_claim.md` — implementer/reviewer-side foundational primitive that the § Refresh State Before Claim section above already encodes for the claim direction. This rule is the action-direction analogue.
+- § Refresh State Before Claim (above) — the implementer/reviewer-side foundational primitive for the claim direction; this rule is the action-direction analogue. (Formerly also carried as memory `feedback_refresh_before_status_claim.md`, retired in #1550 once this file fully absorbed it.)
 - `feedback_stale_inbox_manager.md` (memory) — manager-class inbox-staleness failure mode, distinct from artifact-staleness; the inbox lags reality, the artifact IS reality.
 
 <!-- Promoted from memory: feedback_canonical_source_via_git_show.md (P3W5 retro 2026-05-06) -->
