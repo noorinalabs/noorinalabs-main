@@ -324,9 +324,11 @@ python3 "$REPO_ROOT/.claude/lib/red_sweep.py" check
 
 The helper prints exactly one of:
 
-- **All-green line** (with the verdict's `checked_at`) — no action.
-- **RED run lines** (`repo :: workflow :: conclusion :: class :: url`) — stop-and-investigate: a red publish/deploy on a default branch means artifact consumers (staging, downstream pulls) are silently running stale or broken bits. A run tagged `base-image-drift` failed on a base-image-CVE signal (trivy/grype/apk/openssl-class) — fix-forward the base image, do not chase the wave diff (main#647).
-- **WARNING** when the verdict is missing or older than 24h — report it verbatim; the sweep is stale, red runs are UNKNOWN. Refresh with `gh workflow run red-sweep.yml --repo noorinalabs/noorinalabs-main`. NEVER treat a missing/stale verdict as green — the same degradation stance the in-session classifier had. Repos listed in the verdict's `errors` are likewise UNKNOWN, not green.
+- **All-green line** (with the verdict's `checked_at`, repo count, and how many workflows were examined) — no action. The line names the scope it is green over; a green claim that does not say what it covers is what main#1584 removed. A **version-1** verdict (one written before the #1584 scope fix — possible for up to 6h after it lands, until the next cron overwrites the ref) says so explicitly and reports schedule-only workflows as UNKNOWN rather than green.
+- **RED run lines** (`repo :: workflow :: conclusion :: class :: scope=... :: url`) — stop-and-investigate: a red default-branch run of a workflow nobody watches at PR time means artifact consumers (staging, downstream pulls) are silently running stale or broken bits. A run tagged `base-image-drift` failed on a base-image-CVE signal (trivy/grype/apk/openssl-class) — fix-forward the base image, do not chase the wave diff (main#647). `scope=` says **why** the workflow is watched: `schedule` / `dispatch-only` / `name-class` / `triggers-unreadable` (the last means the workflow file could not be read, so it was swept in unclassified — it may be a PR-visible job you already knew about).
+- **WARNING** when the verdict is missing, older than 24h, or covers **zero repos** — report it verbatim; the sweep is stale, red runs are UNKNOWN. Refresh with `gh workflow run red-sweep.yml --repo noorinalabs/noorinalabs-main`. NEVER treat a missing/stale/empty verdict as green — the same degradation stance the in-session classifier had. Repos listed in the verdict's `errors` are likewise UNKNOWN, not green.
+
+**Scope (main#1584).** The sweep covers any workflow whose redness a PR check does not surface: `schedule`-triggered, or `workflow_dispatch`-only, on the default branch — **regardless of name** — union the publish/deploy/release name class. It replaced a six-substring workflow-NAME filter that discarded candidates *before* classification, which is how the sweep reported "All publish/deploy/release workflows green" while `e2e-stg-smoke` had never once been green in its entire history (94 runs on isnad-graph's `main` — 93 `failure` + 1 `cancelled`, 2026-06-13 to 2026-09-13, not one success ever).
 
 ### Step 5b — Wave-merged-but-unwrapped nudge (P5W5 retro #1 / #730)
 
@@ -395,7 +397,7 @@ After all steps complete, present a single status block:
 | 3. Ontology | Semantic: {N dirty resolved / current}; Structural: {regenerated / regen-failed} |
 | 4. Annunaki | {N genuine errors (count-only)} |
 | 5. Wave | {active wave, stale?, issues} |
-| 5a. Red default-branch verdict | {all green as of T / N red (M base-image-drift) / WARNING stale-missing} |
+| 5a. Red default-branch verdict | {all green as of T over N repos / N red (M base-image-drift) / WARNING stale-missing-empty} |
 | 5b. Wave wrap state | {wave merged but unwrapped — run /wave-wrapup / in flight / wrapped} |
 | 5c. Wave reachability | {OK / N advisory (stranding risk) / VIOLATION (merge-model mixing) / skipped} |
 | 6. Charter | {current / proposals pending} |
