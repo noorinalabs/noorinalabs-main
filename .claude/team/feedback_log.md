@@ -941,7 +941,9 @@ Corpus at **136 / 136** on both index entries and file count — **at cap**. Fou
 
 ### Board freshness (Step 1.5)
 
-**Clean, with denominators.** 481 open issues across the 8 org repos checked against 2334 board items: **0 orphans**, **0** stale active-column items, **25** Wave-field drift rows (labels present, field unset — waves 21, 22, 23, 24, 30, P5W4, P5W5) all repaired and read-back verified, 9 closed items correctly retaining their labels per main#902. **Zero open issues carry the `wave-31` label**, independently confirming the wave's scope is delivered and closed. Labels stayed authoritative throughout; only the derived Wave field was written.
+**Clean, with denominators.** 481 open issues across the 8 org repos checked against 2334 board items: **0 orphans**, **25** Wave-field drift rows (labels present, field unset — waves 21, 22, 23, 24, 30, P5W4, P5W5) all repaired and read-back verified, 9 closed items correctly retaining their labels per main#902. **Zero open issues carry the `wave-31` label**, independently confirming the wave's scope is delivered and closed. Labels stayed authoritative throughout; only the derived Wave field was written.
+
+**One axis is NOT measured, and this entry originally said it was.** Stale active-column items (issues closed during the wave but still sitting in an active column) were first recorded here as **0**. That was wrong: the auditor ran no dedicated column-status query, and the zero came from nothing being *encountered incidentally* during the Wave-field scan. The auditor volunteered the distinction unprompted when cross-checking this entry. Corrected to **NOT MEASURED**, which is not the same as clean — `feedback_silent_zero_is_not_a_measurement`, landing inside the very retro whose pain-point #1 is about a counter whose name promised more than it counted. The orchestrator wrote the false measured-zero; the sub-agent caught it. Carry to wave-32 scoping: `/board-audit`'s stale-column axis needs its own pass, or the skill should stop implying it has one.
 
 ### Memory content-staleness judge (Step 7.9) — the run is NOT usable, and that is this wave's finding
 
