@@ -925,7 +925,7 @@ What went right: the `--expect` cross-check was allowed to block. The counter re
 
 1. **Give `/wave-wrapup` Step 13a a partial-archive path.** — Rationale: an all-or-nothing gate on "triaged benign" means a single unresolved record freezes the whole log, which is exactly what produced a 3-wave, 2072-record pile. Archive what is benign, carry the rest forward in a countable `unresolved` set the next wrapup must account for. (`#1548`)
 
-2. **Split the `/session-start` Annunaki count by confidence.** — Rationale: one number spanning a 55% low-confidence class invited two consecutive retros to read it as a wave-scoped defect count. A count whose dominant class is a low-precision heuristic should not be reported as a single integer. (`#1548`)
+2. **Split the `/session-start` Annunaki count by confidence.** — Rationale: one number spanning a 54% low-confidence class invited two consecutive retros to read it as a wave-scoped defect count. A count whose dominant class is a low-precision heuristic should not be reported as a single integer. (`#1548`)
 
 3. **Make a PR's closing-reference linkage verifiable at wrapup.** — Rationale: `#1520`'s backticked keywords were inert, and nothing said so; the issues closed by some other means and the durable link was simply lost. A wrapup cross-check — for every merged PR whose body contains a closing keyword, assert a matching `closingIssuesReferences` entry — would have caught it without anyone knowing to look. (`#1546`)
 
@@ -1006,3 +1006,23 @@ So the experiment was run. `#1520`'s three targets are already closed, giving it
 **Fourth: the orchestrator row listed one defect and there were four.** Added: `#1511` (a spawn brief citing a **flagless `rg` over a dotted directory** — a silent zero — as *verified evidence*) and `#1516` (two agents running the merge gate **under one persona** on `#1512`, both posting counted `Approved` verdicts). The second matters to the headline: this wave reports a 100% gate-enforcement rate, and the gate's own **identity** invariant was broken inside it. The rate is still true — `gate_integrity` measures whether two distinct roster reviewers approved, and two did — but "the gate bound" and "the gate bound with distinct humans behind it" are different claims, and only the first was measured.
 
 **Tally for this retro: nine wrong or understated claims, caught across two reviewers and three rework rounds.** Four counts, one false measured-zero, one untested impossibility, one under-scoped caveat, one mis-drawn dominant class, one self-assessment listing a quarter of its own defects. Every conclusion survived; almost none of the supporting evidence did as first written.
+
+### A tenth finding, from the reviewer's own verdict being mis-parsed
+
+Wanjiku Mwangi's approving verdict carried the TechDebt line:
+
+> `main#1548 (sync its body's 2063/80%/1127 (55%) to the corrected 2072/79% (1641)/1125 genuine of 1130, 54%...)`
+
+`pr_review_state.py` reported its issue numbers as **`#1548, #2063, #80, #1127, #55, #2072, #79, #1641, #1125, #1130, #54, #1549`**. Every bare integer in her prose was recorded as a tech-debt *issue reference*.
+
+Confirmed at source — `validate_pr_review.py:1786`:
+
+```python
+issue_nums = re.findall(r"#?(\d+)", td_value)
+```
+
+The `#` is optional, so the pattern matches any run of digits. Reproduced directly on her exact string: 11 phantom issue numbers with the optional prefix, **1** with `#` required.
+
+This is the same shape as everything else in this retro — **an instrument returning a plausible answer to a question nobody asked** — and it arrived by the most pointed route available: it mis-parsed the verdict of the reviewer who had just spent four rounds catching that exact class of defect, in a PR whose subject is that class of defect.
+
+Two things make it more than a curiosity. A TechDebt line that mentions any figure silently inflates `tech_debt_issue_numbers`, so any consumer counting tech debt per wave over-reports. And the `else` branch below it records `tech_debt_unparseable` — a line of pure prose with a number in it will never reach that branch, so the unparseable signal under-reports by exactly the cases the greedy match swallowed. Filed separately.
