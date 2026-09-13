@@ -20,8 +20,10 @@ Semantics preserved from the in-skill implementation:
   ~12 days); only the predicate is. The name-only predicate answered "is this
   called something deploy-ish?" when the question is "will anyone notice this
   going red?", and so structurally excluded `e2e-stg-smoke` (isnad-graph, daily
-  cron), which had failed 63 of its last 64 default-branch runs — 2026-07-12 to
-  2026-09-13, no intervening success — while the sweep reported all-green.
+  cron). Measured 2026-09-13 over that workflow's COMPLETE run history on
+  `main` — 94 runs, 93 ``failure`` + 1 ``cancelled``, 2026-06-13 to 2026-09-13,
+  not one success ever — while the sweep reported all-green. Its sibling
+  `e2e-stg-sweep`: 14 runs, 14 failures, likewise never green.
   Triggers are read from the workflow FILE's `on:` block, not from a run's
   `event` field: a run carries the one event that started it, never the
   workflow's full trigger set, and PR-event runs never appear in a
