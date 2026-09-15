@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "checked_at": "2026-09-15T21:22:47Z",
+  "repos_checked": [
+    "noorinalabs-main",
+    "noorinalabs-isnad-graph",
+    "noorinalabs-user-service",
+    "noorinalabs-deploy",
+    "noorinalabs-design-system",
+    "noorinalabs-data-acquisition",
+    "noorinalabs-isnad-ingest-platform",
+    "noorinalabs-landing-page"
+  ],
+  "errors": [],
+  "workflows_seen": 43,
+  "red": [
+    {
+      "repo": "noorinalabs-isnad-graph",
+      "workflow": "e2e-stg-smoke",
+      "conclusion": "failure",
+      "class": "code/other",
+      "scope": "schedule",
+      "url": "https://github.com/noorinalabs/noorinalabs-isnad-graph/actions/runs/34965472465"
+    },
+    {
+      "repo": "noorinalabs-isnad-graph",
+      "workflow": "e2e-stg-sweep",
+      "conclusion": "failure",
+      "class": "code/other",
+      "scope": "schedule",
+      "url": "https://github.com/noorinalabs/noorinalabs-isnad-graph/actions/runs/34852401546"
+    }
+  ]
+}
