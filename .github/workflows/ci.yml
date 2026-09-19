@@ -29,8 +29,8 @@ jobs:
     name: Ruff lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       # Pin to the exact ruff the pre-commit hook uses (.pre-commit-config.yaml
@@ -49,8 +49,8 @@ jobs:
     name: Ruff format check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       # Pin to the exact ruff the pre-commit hook uses (.pre-commit-config.yaml
@@ -64,8 +64,8 @@ jobs:
     name: Mypy type check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       # types-PyYAML: pre_commit_ci_sync.py imports `yaml` (PyYAML, #748 D3).
@@ -101,8 +101,8 @@ jobs:
     name: Smoke test — hooks compile and exit cleanly
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Verify all hooks, lib, and skill files compile
@@ -145,7 +145,7 @@ jobs:
     env:
       ENVIRONMENT: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # Full history (main#1131): test_wave_status.py's
           # BaseVsHeadDifferential execs the pre-fix wave_status.py straight
@@ -156,7 +156,7 @@ jobs:
           # locally against a complete clone. Same reason the doc-freshness
           # job below already sets this.
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       # pyyaml: the .claude/lib test suite imports pre_commit_ci_sync, which now
@@ -213,8 +213,8 @@ jobs:
     name: Dockerfile base-image pinning lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       # Charter-prose→code gate (#735, tech-decisions.md § Base Image Pinning).
@@ -242,8 +242,8 @@ jobs:
     name: Arabic fixture production-realism lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       # Charter-prose→code gate (#735, pull-requests.md § Production-Realistic
@@ -269,8 +269,8 @@ jobs:
     name: GraphQL pagination over-cap lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       # Skill-markdown GraphQL over-cap guard (#888/#892, wired by #893). Flags any
@@ -294,8 +294,8 @@ jobs:
     name: Skill bash-dialect lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       # Skill/hooks-markdown bash-dialect guard (noorinalabs-main#1485). Flags
@@ -323,8 +323,8 @@ jobs:
     name: Checksums consumer lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       # Structural gate for the ontology ledger's single-reader property
@@ -352,8 +352,8 @@ jobs:
     name: Pre-commit ⇄ CI sync-drift gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       # pyyaml: the gate now parses both sides structurally with `yaml.safe_load`
@@ -369,8 +369,8 @@ jobs:
     name: Memory budget gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Enforce the project-memory corpus size/count budget (#733)
@@ -383,8 +383,8 @@ jobs:
     name: Headcount budget gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Enforce the persona-roster headcount budget (#841)
@@ -406,12 +406,12 @@ jobs:
     # (#684 parity) — the advisory check is mirrored, not exempt.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # Full history so the merge-base three-dot diff against the PR base
           # resolves (the default shallow checkout has no merge-base).
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Report code surfaces changed without a matching doc update (#768)

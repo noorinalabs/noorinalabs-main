@@ -115,7 +115,7 @@ Set `ONTOLOGY_GEN_LIB=<path-to>/noorinalabs-main/.claude/lib` before running
 to point at the sibling-checkout path:
 
 ```yaml
-- uses: actions/checkout@v4
+- uses: actions/checkout@v6
   with:
     repository: noorinalabs/noorinalabs-main
     path: _main

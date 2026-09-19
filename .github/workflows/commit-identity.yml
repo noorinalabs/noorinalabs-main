@@ -24,12 +24,12 @@ jobs:
     name: Verify commit authors are roster members
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # Need both base and head reachable to enumerate the PR's commit
           # range with `git log base..head`. fetch-depth: 0 = full history.
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Verify commit author names against the roster
@@ -55,8 +55,8 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Verify the parent roster covers every child-repo persona (#634)
