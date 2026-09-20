@@ -75,7 +75,7 @@ jobs:
       # bashlex (#748 D3b): the commit-identity hooks import it for the Bash-AST
       # parse. Installed here so mypy resolves the real module; its missing
       # stubs are handled by the `bashlex.*` override in pyproject.toml.
-      - run: pip install mypy types-PyYAML bashlex
+      - run: pip install mypy==1.19.1 types-PyYAML==6.0.12.20260518 bashlex==0.18
       - run: mypy .claude/hooks/ .claude/lib/ --ignore-missing-imports --no-error-summary
       # .claude/skills/ added per #326. mypy is run PER-SKILL-DIRECTORY (not as
       # one flat tree) because two skills each ship a `tests/__init__.py`, which
@@ -166,7 +166,7 @@ jobs:
       # bashlex (#748 D3b): required so the commit-identity tests exercise the
       # ENFORCED structural Bash-AST parse path (the bashlex-specific cases
       # skip when it is absent; this install makes CI run them, not skip them).
-      - run: pip install pytest pyyaml bashlex
+      - run: pip install pytest==9.0.2 pyyaml==6.0.3 bashlex==0.18
       # zsh (main#1151): `CdRoutingAgainstShellTruth` runs every `cd`-routing
       # shape in a REAL shell and takes the resulting cwd as ground truth. The
       # org's harness shell is zsh, not bash, and at least one construct
@@ -359,7 +359,7 @@ jobs:
       # pyyaml: the gate now parses both sides structurally with `yaml.safe_load`
       # (#748 D3). Declared explicitly — setup-python's interpreter has no PyYAML
       # preinstalled, and the gate must not depend on the runner's system Python.
-      - run: pip install pyyaml
+      - run: pip install pyyaml==6.0.3
       - name: Verify pre-commit config mirrors CI-enforced checks (#327)
         # Fails if a check CI enforces (ruff/mypy/pytest/…) is missing from
         # .pre-commit-config.yaml, so local hooks can't silently drift behind CI.
